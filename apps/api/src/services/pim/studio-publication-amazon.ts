@@ -2,7 +2,7 @@ import type { PublicationFacts } from './studio-publication-plan.js'
 import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { object } from './studio-publication-plan.js'
 import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../amazon/cockpit-publish-row.js'
-import { AmazonFlatFileService } from '../amazon/flat-file.service.js'
+import { AmazonFlatFileService, normalizeVariationTheme } from '../amazon/flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import prisma from '../../db.js'
@@ -14,6 +14,7 @@ import { getAmazonSellerId, getAmazonSpClient } from '../../lib/amazon-sp-client
 import { AmazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { getAmazonRegion } from '../../lib/amazon-sp-client.js'
 import { attributesFromCells } from './mapping/schema-requirements.js'
+import { shapeAmazonStudioAttributes, type AmazonFamilyRow } from './studio-publication-amazon-shape.js'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { publicationImages } from './studio-publication-media.js'
@@ -179,11 +180,15 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     // RRP is a saved pricing fact; serialize it without changing selling prices.
     for (const field of spec.fields.filter(f => f.attribute === 'list_price')) ownedKeys.add(field.key)
     const owned = attributesFromCells(spec, Object.fromEntries(Object.entries(values).filter(([key]) => ownedKeys.has(key))))
-    if (product.parentId && Array.isArray(owned.child_parent_sku_relationship)) {
-      owned.child_parent_sku_relationship = owned.child_parent_sku_relationship.map(value => ({ ...value, parent_sku: sellerSkus.get(parent.id) }))
-    } else delete owned.child_parent_sku_relationship
-    delete owned.variation_theme // the shared variation resolver is authoritative
+    // The family shape is not a saved cell: the shared variation resolver is authoritative (`shapeAmazonStudioAttributes`).
+    delete owned.child_parent_sku_relationship
+    delete owned.variation_theme
     Object.assign(base.messages[0].attributes, owned)
+    // 2026-10-03 — every family row carries its relationship and the theme (the parent's spelling, normalised as the legacy
+    // builder normalises it); every row, standalone included, drops a `marketplace_id` the schema does not declare.
+    const family: AmazonFamilyRow | null = projection?.theme ? { theme: normalizeVariationTheme(projection.theme.code, hints.enumCodeMap?.variation_theme ?? {}),
+      ...(product.id === parent.id ? { role: 'parent' as const } : { role: 'child' as const, parentSku: sellerSkus.get(parent.id)! }) } : null
+    base.messages[0].attributes = shapeAmazonStudioAttributes(spec, base.messages[0].attributes, family)
     const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
     const catalogue = resolved[0].catalogue && excludedRoots.size ? { ...resolved[0].catalogue, fields: resolved[0].catalogue.fields.filter(f => !excludedRoots.has(amazonRootOf(f.fieldKey))) } : resolved[0].catalogue
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)

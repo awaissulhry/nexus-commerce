@@ -15,7 +15,7 @@ vi.mock('./studio-publication-plan.js', async () => {
 vi.mock('../amazon/flat-file.service.js', () => ({ AmazonFlatFileService: class {
   async getFeedSchemaHints() { return {} }
   buildJsonFeedBody(rows: any[], _mp?: string, _seller?: string, _expanded?: unknown, hints?: unknown) { m.row(rows[0]); m.hints(hints); return JSON.stringify({ header: {}, messages: [{ sku: rows[0].item_sku, operationType: rows[0]._isNew || rows[0].record_action === 'full_update' ? 'UPDATE' : 'PARTIAL_UPDATE', attributes: {} }] }) }
-} }))
+}, normalizeVariationTheme: (theme: string) => theme }))
 vi.mock('../categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
 vi.mock('../marketplaces/amazon.service.js', () => ({ AmazonService: class {} }))
 vi.mock('./channel-specs/index.js', () => ({ loadAmazonSpec: m.spec, loadEbaySpec: vi.fn() }))
@@ -432,6 +432,7 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
     list_price: { type: 'array', selectors: ['marketplace_id', 'currency'], items: { properties: { value_with_tax: { type: 'number' }, currency: { const: 'EUR' }, marketplace_id: { const: 'MARKET' } } } },
     child_parent_sku_relationship: { type: 'array', items: { properties: { parent_sku: { type: 'string' }, child_relationship_type: { type: 'string' }, marketplace_id: { const: 'MARKET' } } } },
+    variation_theme: { type: 'array', items: { type: 'object', required: ['name'], properties: { name: { type: 'string' } }, additionalProperties: false } },
   } } }))
   const theme = 'SIZE/COLOR'
   const input: any = {
@@ -455,6 +456,9 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   }
   const prepared = await prepareAmazonPublication(facts)
   expect(prepared.feed.messages[1].attributes).toMatchObject({ list_price: [{ value_with_tax: 128.1, currency: 'EUR', marketplace_id: 'MARKET' }], child_parent_sku_relationship: [{ parent_sku: 'PARENT', child_relationship_type: 'variation', marketplace_id: 'MARKET' }] })
+  // 2026-10-03 — every family row carries the relationship (the parent without a parent SKU) and the theme, with no marketplace_id.
+  expect(prepared.feed.messages[0].attributes?.child_parent_sku_relationship).toEqual([{ child_relationship_type: 'variation', marketplace_id: 'MARKET' }])
+  for (const message of prepared.feed.messages) expect(message.attributes?.variation_theme, message.sku).toEqual([{ name: theme }])
   facts.listings = facts.listings.reverse().map((listing: any) => ({ ...listing, offers: [{ isActive: true, sku: `SELLER-${listing.productId}` }] }))
   const sellerMapped = await prepareAmazonPublication(facts)
   expect(sellerMapped.products).toEqual([{ productId: 'p', sku: 'SELLER-p' }, { productId: 'xs', sku: 'SELLER-xs' }, { productId: 'xxs', sku: 'SELLER-xxs' }])

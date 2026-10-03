@@ -319,7 +319,10 @@ const removeDraftListings: AgentTool = {
 // ── set-listing-fields ───────────────────────────────────────────────────────────────────────────────
 
 const FIELD_CAP = 40
-const fieldValue = z.union([z.string().max(2000), z.number(), z.boolean(), z.array(z.string().max(500)).max(30)])
+// A measure (Amazon `item_package_weight`, `item_package_dimensions__length`) is { value, unit }; the product writer
+// refuses a bare number or a unit the field does not take.
+const fieldValue = z.union([z.string().max(2000), z.number(), z.boolean(), z.array(z.string().max(500)).max(30),
+  z.object({ value: z.number().positive().max(100_000), unit: z.string().trim().min(1).max(40) }).strict()])
 /** Stock, price and fulfilment have their own tools; titles, descriptions, bullets and keywords their content door. */
 const NOT_HERE = /quantity|price|fulfil|stock/i
 const isAttributeKey = (key: string) => /^attr_[A-Za-z0-9_.:\- ]{1,120}$/.test(key)

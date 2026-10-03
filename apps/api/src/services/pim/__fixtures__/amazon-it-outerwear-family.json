@@ -1,0 +1,1019 @@
+{
+ "$comment": "Trimmed from the cached AMAZON-IT OUTERWEAR product-type definition (read from the local schema cache on 2026-10-03): item_name, the variation family roots, fulfillment_availability and compliance_media, verbatim; root required narrowed to these properties; only the allOf conditions whose requirements name nothing else; provenance removed.",
+ "$schema": "https://schemas.amazon.com/selling-partners/definitions/product-types/meta-schema/v1",
+ "$id": "https://schemas.amazon.com/selling-partners/definitions/product-types/schema/v1/OUTERWEAR",
+ "type": "object",
+ "$defs": {
+  "language_tag": {
+   "type": "string",
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "enum": [
+      "it_IT"
+     ],
+     "type": "string",
+     "enumNames": [
+      "italiano (Italia)"
+     ]
+    }
+   ],
+   "hidden": true,
+   "default": "it_IT",
+   "editable": false,
+   "examples": [
+    "italiano (Italia)"
+   ]
+  },
+  "marketplace_id": {
+   "type": "string",
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "enum": [
+      "APJ6JRA9NG5V4"
+     ],
+     "type": "string",
+     "enumNames": [
+      "Amazon.it"
+     ]
+    }
+   ],
+   "hidden": true,
+   "default": "APJ6JRA9NG5V4",
+   "editable": false,
+   "examples": [
+    "Amazon.it"
+   ]
+  }
+ },
+ "required": [
+  "item_name"
+ ],
+ "allOf": [
+  {
+   "if": {
+    "not": {
+     "required": [
+      "parentage_level"
+     ],
+     "properties": {
+      "parentage_level": {
+       "contains": {
+        "required": [
+         "value"
+        ],
+        "properties": {
+         "value": {
+          "enum": [
+           "child"
+          ]
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "child_parent_sku_relationship": {
+      "items": {
+       "not": {
+        "required": [
+         "parent_sku"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "required": [
+     "parentage_level"
+    ],
+    "properties": {
+     "parentage_level": {
+      "contains": {
+       "required": [
+        "value"
+       ],
+       "properties": {
+        "value": {
+         "enum": [
+          "child"
+         ]
+        }
+       }
+      }
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "child_parent_sku_relationship": {
+      "items": {
+       "required": [
+        "parent_sku"
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "required": [
+     "parentage_level"
+    ],
+    "properties": {
+     "parentage_level": {
+      "items": {
+       "required": [
+        "value"
+       ]
+      }
+     }
+    }
+   },
+   "then": {
+    "required": [
+     "child_parent_sku_relationship",
+     "variation_theme"
+    ]
+   }
+  },
+  {
+   "if": {
+    "allOf": [
+     {
+      "not": {
+       "required": [
+        "parentage_level"
+       ],
+       "properties": {
+        "parentage_level": {
+         "contains": {
+          "required": [
+           "value"
+          ],
+          "properties": {
+           "value": {
+            "enum": [
+             "parent"
+            ]
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     {
+      "not": {
+       "required": [
+        "skip_offer"
+       ],
+       "properties": {
+        "skip_offer": {
+         "contains": {
+          "required": [
+           "value"
+          ],
+          "properties": {
+           "value": {
+            "enum": [
+             true
+            ]
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    ]
+   },
+   "then": {
+    "required": [
+     "fulfillment_availability"
+    ]
+   }
+  }
+ ],
+ "__propertyGroups": {
+  "offer": {
+   "title": "Offerta",
+   "description": "Offerta di prodotti",
+   "propertyNames": [
+    "fulfillment_availability"
+   ]
+  },
+  "variations": {
+   "title": "Variazioni",
+   "description": "Variazioni che saranno utilizzate per il prodotto",
+   "propertyNames": [
+    "parentage_level",
+    "child_parent_sku_relationship",
+    "variation_theme"
+   ]
+  },
+  "product_identity": {
+   "title": "Identità prodotto",
+   "description": "Identità prodotto",
+   "propertyNames": [
+    "item_name"
+   ]
+  },
+  "safety_and_compliance": {
+   "title": "Conformità e sicurezza",
+   "description": "Conformità e sicurezza",
+   "propertyNames": [
+    "compliance_media"
+   ]
+  }
+ },
+ "properties": {
+  "item_name": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "language_tag",
+     "value"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "title": "Nome dell’articolo",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "Vitigno toscano tela dipinta a mano"
+      ],
+      "maxLength": 200,
+      "minLength": 0,
+      "description": "Fornire il nome del prodotto"
+     },
+     "language_tag": {
+      "$ref": "#/$defs/language_tag"
+     },
+     "marketplace_id": {
+      "$ref": "#/$defs/marketplace_id"
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Titolo",
+   "examples": [
+    "Scarpe da ginnastica Adidas blu"
+   ],
+   "minItems": 1,
+   "selectors": [
+    "marketplace_id",
+    "language_tag"
+   ],
+   "description": "Fornire il titolo del prodotto",
+   "maxUniqueItems": 1,
+   "minUniqueItems": 1
+  },
+  "parentage_level": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "value"
+    ],
+    "properties": {
+     "value": {
+      "enum": [
+       "parent",
+       "child"
+      ],
+      "type": "string",
+      "title": "Livello di parentela",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "Articolo parent"
+      ],
+      "enumNames": [
+       "Articolo parent",
+       "Bambino"
+      ],
+      "description": "Specificare se un codice si riferisce a un parent oppure a un child."
+     },
+     "marketplace_id": {
+      "$ref": "#/$defs/marketplace_id"
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Livello di parentela",
+   "examples": [
+    "Articolo parent"
+   ],
+   "minItems": 1,
+   "selectors": [
+    "marketplace_id"
+   ],
+   "description": "Specificare se un codice si riferisce a un parent oppure a un child.",
+   "maxUniqueItems": 1,
+   "minUniqueItems": 1
+  },
+  "child_parent_sku_relationship": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "child_relationship_type"
+    ],
+    "properties": {
+     "parent_sku": {
+      "type": "string",
+      "title": "SKU (codice identificativo magazzino) articolo Parent (principale)",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "ABC123"
+      ],
+      "maxLength": 40,
+      "minLength": 1,
+      "description": "Il codice SKU dell'articolo parent",
+      "maxUtf8ByteLength": 40,
+      "minUtf8ByteLength": 1
+     },
+     "marketplace_id": {
+      "$ref": "#/$defs/marketplace_id"
+     },
+     "child_relationship_type": {
+      "enum": [
+       "variation"
+      ],
+      "type": "string",
+      "title": "Tipologia di relazione con l'articolo Child (variante)",
+      "hidden": true,
+      "editable": false,
+      "examples": [
+       "accessorio"
+      ],
+      "enumNames": [
+       "Variazione"
+      ],
+      "description": "La relazione che l'articolo child ha con l'articolo parent."
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Tipologia di relazione con l'articolo Child (variante)",
+   "examples": [
+    "Accessorio"
+   ],
+   "minItems": 1,
+   "selectors": [
+    "marketplace_id"
+   ],
+   "description": "Fornire il tipo di relazione",
+   "maxUniqueItems": 1,
+   "minUniqueItems": 1
+  },
+  "variation_theme": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "name"
+    ],
+    "properties": {
+     "name": {
+      "enum": [
+       "ITEM_PACKAGE_QUANTITY",
+       "ITEM_PACKAGE_QUANTITY/SIZE_NAME",
+       "ITEM_PACKAGE_QUANTITY/MATERIAL_TYPE",
+       "ITEM_WEIGHT",
+       "COLOR",
+       "COLOR/ITEM_PACKAGE_QUANTITY",
+       "COLOR/SIZE",
+       "COLOR/MATERIAL",
+       "COLOR/NUMBER_OF_ITEMS",
+       "COLOR_NAME",
+       "COLOR_NAME/ITEM_PACKAGE_QUANTITY",
+       "COLOR_NAME/SIZE_NAME",
+       "COLOR_NAME/MATERIAL_TYPE",
+       "COLOR_NAME/NUMBER_OF_ITEMS",
+       "COLOR_NAME/STYLE_NAME",
+       "ITEM_PACKAGE_QUANTITY/SIZE",
+       "SIZE/NUMBER_OF_ITEMS",
+       "SIZE/MATERIAL",
+       "SIZE",
+       "SIZE/COLOR",
+       "SIZE_NAME",
+       "SIZE_NAME/COLOR_NAME",
+       "SIZE_NAME/COLOR_NAME/NUMBER_OF_ITEMS",
+       "SIZE_NAME/MATERIAL_TYPE",
+       "SIZE_NAME/STYLE_NAME",
+       "SIZE_NAME/STYLE_NAME/COLOR_NAME",
+       "MATERIAL/COLOR",
+       "MATERIAL/SIZE",
+       "MATERIAL/SIZE/COLOR",
+       "MATERIAL_TYPE",
+       "MATERIAL_TYPE/COLOR_NAME/SIZE_NAME",
+       "TEAM_NAME/COLOR",
+       "TEAM_NAME/SIZE",
+       "TEAM_NAME/SIZE/COLOR",
+       "NUMBER_OF_ITEMS/COLOR_NAME/SIZE_NAME",
+       "NUMBER_OF_ITEMS/SIZE/COLOR",
+       "NUMBER_OF_ITEMS",
+       "NUMBER_OF_ITEMS/STYLE_NAME",
+       "MODEL_NUMBER/SIZE",
+       "MODEL_NUMBER/STYLE/PART_NUMBER",
+       "SPECIAL_SIZE_TYPE/COLOR_NAME",
+       "SPECIAL_SIZE_TYPE/SIZE_NAME/COLOR_NAME",
+       "TEAM_NAME",
+       "TEAM_NAME/COLOR_NAME",
+       "TEAM_NAME/SIZE_NAME",
+       "TEAM_NAME/SIZE_NAME/COLOR_NAME",
+       "STYLE/MODEL_NUMBER/NUMBER_OF_ITEMS/PART_NUMBER",
+       "STYLE_NAME",
+       "STYLE_NAME/COLOR_NAME",
+       "STYLE_NAME/SIZE_NAME"
+      ],
+      "type": "string",
+      "title": "Variazone del Tema del Nome",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "TAGLIA_NOME/COLORE_NOME"
+      ],
+      "enumNames": [
+       "ARTICOLO_PACCHETTO_QUANTITÀ",
+       "ARTICOLO_PACCHETTO_QUANTITÀ/FORMATO_NOME",
+       "ARTICOLO_PACCHETTO_QUANTITÀ/MATERIALE_TIPO",
+       "ARTICOLO_PESO",
+       "COLORE",
+       "COLORE/CONFEZIONE_ARTICOLO_QUANTITÀ",
+       "COLORE/DIMENSIONI",
+       "COLORE/MATERIALE",
+       "COLORE/NUMERO_DI_ARTICOLI",
+       "COLORE_NOME",
+       "COLORE_NOME/ARTICOLO_PACCHETTO_QUANTITÀ",
+       "COLORE_NOME/FORMATO_NOME",
+       "COLORE_NOME/MATERIALE_TIPO",
+       "COLORE_NOME/NUMERO_DI_ARTICOLI",
+       "COLORE_NOME/STILE_NOME",
+       "CONFEZIONE_ARTICOLO_QUANTITÀ/DIMENSIONI",
+       "DIMENSIONE/NUMERO_DI_ARTICOLI",
+       "DIMENSIONI/MATERIALE",
+       "FORMATO",
+       "FORMATO/COLORE",
+       "FORMATO_NOME",
+       "FORMATO_NOME/COLORE_NOME",
+       "FORMATO_NOME/COLORE_NOME/NUMERO_DI_ARTICOLI",
+       "FORMATO_NOME/MATERIALE_TIPO",
+       "FORMATO_NOME/STILE_NOME",
+       "FORMATO_NOME/STILE_NOME/COLORE_NOME",
+       "MATERIALE/COLORE",
+       "MATERIALE/DIMENSIONI",
+       "MATERIALE/DIMENSIONI/COLORE",
+       "MATERIALE_TIPO",
+       "MATERIALE_TIPO/COLORE_NOME/FORMATO_NOME",
+       "NOME_SQUADRA/COLORE",
+       "NOME_SQUADRA/DIMENSIONI",
+       "NOME_SQUADRA/DIMENSIONI/COLORE",
+       "NUMERO_DI_ARTICOLI/COLORE_NOME/FORMATO_NOME",
+       "NUMERO_DI_ARTICOLI/DIMENSIONI/COLORE",
+       "NUMERO_DI_PEZZI",
+       "NUMERO_DI_PEZZI/STILE_NOME",
+       "NUMERO_MODELLO/DIMENSIONI",
+       "NUMERO_MODELLO/STILE/NUMERO_PARTE",
+       "SPECIAL_SIZE_TYPE/COLOR_NAME",
+       "SPECIALE_FORMATO_TIPO/FORMATO_NOME/COLORE_NOME",
+       "SQUADRA_NOME",
+       "SQUADRA_NOME/COLORE_NOME",
+       "SQUADRA_NOME/FORMATO_NOME",
+       "SQUADRA_NOME/FORMATO_NOME/COLORE_NOME",
+       "STILE/NUMERO_MODELLO/NUMERO_DI_ARTICOLI/NUMERO_PARTE",
+       "STILE_NOME",
+       "STILE_NOME/COLORE_NOME",
+       "STILE_NOME/FORMATO_NOME"
+      ],
+      "$lifecycle": {
+       "enumDeprecated": [
+        "COLOR/ITEM_PACKAGE_QUANTITY",
+        "COLOR_NAME",
+        "COLOR_NAME/ITEM_PACKAGE_QUANTITY",
+        "COLOR_NAME/MATERIAL_TYPE",
+        "COLOR_NAME/NUMBER_OF_ITEMS",
+        "COLOR_NAME/SIZE_NAME",
+        "COLOR_NAME/STYLE_NAME",
+        "ITEM_PACKAGE_QUANTITY",
+        "ITEM_PACKAGE_QUANTITY/MATERIAL_TYPE",
+        "ITEM_PACKAGE_QUANTITY/SIZE",
+        "ITEM_PACKAGE_QUANTITY/SIZE_NAME",
+        "MATERIAL_TYPE/COLOR_NAME/SIZE_NAME",
+        "MODEL_NUMBER/STYLE/PART_NUMBER",
+        "NUMBER_OF_ITEMS/COLOR_NAME/SIZE_NAME",
+        "NUMBER_OF_ITEMS/STYLE_NAME",
+        "SIZE_NAME",
+        "SIZE_NAME/COLOR_NAME",
+        "SIZE_NAME/MATERIAL_TYPE",
+        "SIZE_NAME/STYLE_NAME",
+        "SIZE_NAME/STYLE_NAME/COLOR_NAME",
+        "SPECIAL_SIZE_TYPE/SIZE_NAME/COLOR_NAME",
+        "STYLE/MODEL_NUMBER/NUMBER_OF_ITEMS/PART_NUMBER",
+        "STYLE_NAME",
+        "STYLE_NAME/COLOR_NAME",
+        "STYLE_NAME/SIZE_NAME",
+        "TEAM_NAME/COLOR_NAME",
+        "TEAM_NAME/SIZE_NAME",
+        "TEAM_NAME/SIZE_NAME/COLOR_NAME"
+       ]
+      },
+      "description": "Specificare la variazione del tema che il prodotto utilizzerà. Gli attributi del tema devono essere compilati per tutti gli articoli nel raggruppamento."
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Tema della variante",
+   "examples": [
+    "FORMATO_NOME/COLORE_NOME"
+   ],
+   "maxItems": 1,
+   "minItems": 1,
+   "description": "Specificare il tema della variante che il prodotto può utilizzare. Gli attributi del tema devono essere compilati per tutti gli articoli nel raggruppamento."
+  },
+  "fulfillment_availability": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "fulfillment_channel_code"
+    ],
+    "properties": {
+     "quantity": {
+      "type": "integer",
+      "title": "Quantità",
+      "hidden": false,
+      "minimum": 0,
+      "editable": true,
+      "examples": [
+       "152"
+      ],
+      "description": "Inserisci la quantità del prodotto che desideri mettere in vendita. Questa è la quantità di articoli che sei sicuro di poter gestire (come numero intero)"
+     },
+     "restock_date": {
+      "type": "string",
+      "oneOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "string",
+        "format": "date-time"
+       }
+      ],
+      "title": "Data di rifornimento",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "2020-05-05"
+      ],
+      "description": "Indica la data in cui il prodotto sarà rifornito usando il formato AAAA-MM-GG"
+     },
+     "is_inventory_available": {
+      "enum": [
+       true,
+       false
+      ],
+      "type": "boolean",
+      "title": "Inventario sempre disponibile",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "Disabilitato"
+      ],
+      "enumNames": [
+       "Abilitato",
+       "Disabilitato"
+      ],
+      "description": "L'inventario sempre disponibile è un'alternativa alla quantità e fa sì che l'inventario non sia mai esaurito. L'attivazione o la disattivazione attiverà/disattiverà questa funzione. Da notare che una quantità non può essere specificata quando viene fornita."
+     },
+     "fulfillment_channel_code": {
+      "enum": [
+       "AMAZON_EU",
+       "DEFAULT"
+      ],
+      "type": "string",
+      "title": "Codice canale di gestione",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "AMAZON_NA"
+      ],
+      "enumNames": [
+       "AMAZON_EU",
+       "DEFAULT"
+      ],
+      "description": "Per i venditori che usano i servizi di gestione Amazon, questo dato indica quale rete di gestione sarà utilizzata. Specificando un valore diverso da DEFAULT, l'offerta gestita dal venditore verrà annullata. I prodotti gestiti dai venditori non dovrebbero occupare questo campo."
+     },
+     "lead_time_to_ship_max_days": {
+      "type": "integer",
+      "title": "Tempo di gestione",
+      "hidden": false,
+      "maximum": 120,
+      "minimum": 0,
+      "editable": true,
+      "examples": [
+       "5"
+      ],
+      "description": "Indicare il tempo, in giorni, tra quando ricevi un ordine per un articolo e quando puoi spedirlo"
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Disponibilità di evasione",
+   "minItems": 1,
+   "selectors": [
+    "fulfillment_channel_code"
+   ],
+   "description": "Indica le informazioni logistiche associate per i venditori che usano i servizi di evasione Amazon.",
+   "maxUniqueItems": 1,
+   "minUniqueItems": 1
+  },
+  "compliance_media": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "content_language",
+     "content_type",
+     "source_location"
+    ],
+    "properties": {
+     "content_type": {
+      "enum": [
+       "emergency_use_authorization",
+       "certificate_of_analysis",
+       "certificate_of_compliance",
+       "product_certificate_of_conformity",
+       "data_transparency_declaration",
+       "biobased_biodegradable_substantiation",
+       "repairability_claim_substantiation",
+       "energy_efficiency_claim_substantiation",
+       "recyclability_claim_substantiation",
+       "pfas_free_claim_substantiation",
+       "warranty",
+       "application_guide",
+       "compatibility_guide",
+       "troubleshooting_guide",
+       "user_guide",
+       "safety_information",
+       "instructions_for_use",
+       "user_manual",
+       "installation_manual",
+       "emergency_use_authorization_amendment",
+       "specification_sheet",
+       "repairability_index_calculation_sheet",
+       "safety_data_sheet",
+       "provider_fact_sheet",
+       "patient_fact_sheet"
+      ],
+      "type": "string",
+      "title": "Conformità del tipo di contenuto dei supporti multimediali",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "Scheda di dati di sicurezza"
+      ],
+      "enumNames": [
+       "Autorizzazione all'uso per i casi di emergenza",
+       "Certificato di analisi",
+       "Certificato di conformità",
+       "Certificato di conformità del prodotto",
+       "Dichiarazione sulla trasparenza Data Act",
+       "ECGT - Dichiarazioni Bio-based e Biodegradabili - Documento di comprovazione",
+       "ECGT - Dichiarazioni di durabilità e riparabilità - Documento di comprovazione",
+       "ECGT - Dichiarazioni di efficienza energetica - Documento di comprovazione",
+       "ECGT - Dichiarazioni di riciclabilità - Documento di comprovazione",
+       "ECGT - Dichiarazioni PFAS-Free - Documento di comprovazione",
+       "Garanzia",
+       "Guida all'applicazione",
+       "Guida alla compatibilità",
+       "Guida alla risoluzione dei problemi",
+       "Guida per l'utente",
+       "Informazioni sulla sicurezza",
+       "Istruzioni per l'uso",
+       "Manuale dell'utente",
+       "Manuale per l’installazione",
+       "Modifica dell'autorizzazione all'uso per i casi di emergenza",
+       "Scheda delle specifiche",
+       "Scheda di Calcolo dell'Indice di Riparabilità",
+       "Scheda di dati di sicurezza",
+       "Scheda informativa del fornitore",
+       "Scheda informativa per il paziente"
+      ],
+      "description": "Inserire il tipo di contenuto del documento di conformità."
+     },
+     "marketplace_id": {
+      "$ref": "#/$defs/marketplace_id"
+     },
+     "source_location": {
+      "type": "string",
+      "title": "Percorso di origine dei supporti per la conformità",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "http://example.eg/sds_1.pdf"
+      ],
+      "description": "Indica la posizione di origine dei supporti per la conformità."
+     },
+     "content_language": {
+      "enum": [
+       "ar_AE",
+       "ar_BH",
+       "ar_DZ",
+       "ar_EG",
+       "ar_IQ",
+       "ar_JO",
+       "ar_KW",
+       "ar_LB",
+       "ar_LY",
+       "ar_MA",
+       "ar_OM",
+       "ar_QA",
+       "ar_SA",
+       "ar_SD",
+       "ar_SY",
+       "ar_TN",
+       "ar_YE",
+       "az_AZ",
+       "be_BY",
+       "bg_BG",
+       "bn_IN",
+       "bs_BA",
+       "ca_AD",
+       "ca_ES",
+       "cs_CZ",
+       "da_DK",
+       "de_AT",
+       "de_CH",
+       "de_DE",
+       "de_LU",
+       "el_CY",
+       "el_GR",
+       "en_AE",
+       "en_AU",
+       "en_CA",
+       "en_GB",
+       "en_IE",
+       "en_IN",
+       "en_MT",
+       "en_NG",
+       "en_NZ",
+       "en_PH",
+       "en_SG",
+       "en_US",
+       "en_ZA",
+       "es_AR",
+       "es_BO",
+       "es_CL",
+       "es_CO",
+       "es_CR",
+       "es_DO",
+       "es_EC",
+       "es_ES",
+       "es_GT",
+       "es_HN",
+       "es_MX",
+       "es_NI",
+       "es_PA",
+       "es_PE",
+       "es_PR",
+       "es_PY",
+       "es_SV",
+       "es_US",
+       "es_UY",
+       "es_VE",
+       "et_EE",
+       "fi_FI",
+       "fil",
+       "fil_PH",
+       "fr_BE",
+       "fr_CA",
+       "fr_CH",
+       "fr_FR",
+       "fr_LU",
+       "ga_IE",
+       "gu_IN",
+       "he_IL",
+       "hi_IN",
+       "hr_HR",
+       "hu_HU",
+       "id_ID",
+       "in_ID",
+       "is_IS",
+       "it_CH",
+       "it_IT",
+       "iw_IL",
+       "ja_JP",
+       "ka_GE",
+       "kn_IN",
+       "ko_KR",
+       "lt_LT",
+       "lv_LV",
+       "mk_MK",
+       "ml_IN",
+       "mr_IN",
+       "ms_MY",
+       "mt_MT",
+       "nb_NO",
+       "nl_BE",
+       "nl_NL",
+       "no_NO",
+       "pl_PL",
+       "pt_BR",
+       "pt_PT",
+       "ro_RO",
+       "ru_RU",
+       "sk_SK",
+       "sl_SI",
+       "sq_AL",
+       "sr_BA",
+       "sr_CS",
+       "sr_ME",
+       "sr_RS",
+       "sv_SE",
+       "ta_IN",
+       "te_IN",
+       "th_TH",
+       "tr_TR",
+       "uk_UA",
+       "vi_VN",
+       "zh_CN",
+       "zh_HK",
+       "zh_SG",
+       "zh_TW"
+      ],
+      "type": "string",
+      "title": "Conformità della lingua del supporto multimediale",
+      "hidden": false,
+      "editable": true,
+      "examples": [
+       "en_US"
+      ],
+      "enumNames": [
+       "ar_AE",
+       "ar_BH",
+       "ar_DZ",
+       "ar_EG",
+       "ar_IQ",
+       "ar_JO",
+       "ar_KW",
+       "ar_LB",
+       "ar_LY",
+       "ar_MA",
+       "ar_OM",
+       "ar_QA",
+       "ar_SA",
+       "ar_SD",
+       "ar_SY",
+       "ar_TN",
+       "ar_YE",
+       "az_AZ",
+       "be_BY",
+       "bg_BG",
+       "bn_IN",
+       "bs_BA",
+       "ca_AD",
+       "ca_ES",
+       "cs_CZ",
+       "da_DK",
+       "de_AT",
+       "de_CH",
+       "de_DE",
+       "de_LU",
+       "el_CY",
+       "el_GR",
+       "en_AE",
+       "en_AU",
+       "en_CA",
+       "en_GB",
+       "en_IE",
+       "en_IN",
+       "en_MT",
+       "en_NG",
+       "en_NZ",
+       "en_PH",
+       "en_SG",
+       "en_US",
+       "en_ZA",
+       "es_AR",
+       "es_BO",
+       "es_CL",
+       "es_CO",
+       "es_CR",
+       "es_DO",
+       "es_EC",
+       "es_ES",
+       "es_GT",
+       "es_HN",
+       "es_MX",
+       "es_NI",
+       "es_PA",
+       "es_PE",
+       "es_PR",
+       "es_PY",
+       "es_SV",
+       "es_US",
+       "es_UY",
+       "es_VE",
+       "et_EE",
+       "fi_FI",
+       "fil",
+       "fil_PH",
+       "fr_BE",
+       "fr_CA",
+       "fr_CH",
+       "fr_FR",
+       "fr_LU",
+       "ga_IE",
+       "gu_IN",
+       "he_IL",
+       "hi_IN",
+       "hr_HR",
+       "hu_HU",
+       "id_ID",
+       "in_ID",
+       "is_IS",
+       "it_CH",
+       "it_IT",
+       "iw_IL",
+       "ja_JP",
+       "ka_GE",
+       "kn_IN",
+       "ko_KR",
+       "lt_LT",
+       "lv_LV",
+       "mk_MK",
+       "ml_IN",
+       "mr_IN",
+       "ms_MY",
+       "mt_MT",
+       "nb_NO",
+       "nl_BE",
+       "nl_NL",
+       "no_NO",
+       "pl_PL",
+       "pt_BR",
+       "pt_PT",
+       "ro_RO",
+       "ru_RU",
+       "sk_SK",
+       "sl_SI",
+       "sq_AL",
+       "sr_BA",
+       "sr_CS",
+       "sr_ME",
+       "sr_RS",
+       "sv_SE",
+       "ta_IN",
+       "te_IN",
+       "th_TH",
+       "tr_TR",
+       "uk_UA",
+       "vi_VN",
+       "zh_CN",
+       "zh_HK",
+       "zh_SG",
+       "zh_TW"
+      ],
+      "description": "Indica la lingua utilizzata per il contenuto del supporto di conformità."
+     }
+    },
+    "additionalProperties": false
+   },
+   "title": "Conformità dei supporti multimediali",
+   "examples": [
+    "Manuale per l’installazione"
+   ],
+   "minItems": 1,
+   "selectors": [
+    "marketplace_id",
+    "content_type",
+    "content_language"
+   ],
+   "description": "Indica informazioni sulla documentazione del prodotto che si desidera mostrare nella pagina prodotto per la conformità al GPSR (Regolamento generale sulla sicurezza dei prodotti). In alternativa, è possibile caricare immagini nelle varianti PS01-PS06 in Image Manager.",
+   "maxUniqueItems": 1,
+   "minUniqueItems": 1
+  }
+ },
+ "additionalProperties": false,
+ "__requirementsEnforced": "ENFORCED"
+}
