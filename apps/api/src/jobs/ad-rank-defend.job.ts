@@ -34,6 +34,7 @@ import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConf
 import { deltaBidCents } from '../services/advertising/ads-placement-math.js'
 import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
+import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -269,6 +270,18 @@ async function baseBidDeltaWouldMove(campaignId: string, deltaPct: number): Prom
   return groups.some((g) => moves(g.defaultBidCents, g.baseBidFromCents)) || targets.some((t) => moves(t.bidCents, t.baseBidFromCents))
 }
 
+// 2b — the out-of-budget hold is logged once per key (schedule actor + campaign) per UTC day: the tick runs every 15
+// minutes and a warning per tick would bury it. Only today's keys are kept.
+let budgetNoticeDay = ''
+const budgetNoticed = new Set<string>()
+export function firstOutOfBudgetNoticeToday(key: string, now: Date = new Date()): boolean {
+  const day = now.toISOString().slice(0, 10)
+  if (day !== budgetNoticeDay) { budgetNoticeDay = day; budgetNoticed.clear() }
+  if (budgetNoticed.has(key)) return false
+  budgetNoticed.add(key)
+  return true
+}
+
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
   ctx: { write: boolean; permit: CampaignPermit; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null>; maxBaseBidByCampaign?: Map<string, number> },
@@ -285,6 +298,16 @@ async function decideAndMaybeApply(
   const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
   let applied = 0
+  // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders the slot): a placement
+  // raise waits, a lowering and a floor still land. 2b (review N2) — read from Amazon's real codes (delivery-reasons.ts);
+  // the bare 'OUT_OF_BUDGET' matched here before is not one Amazon sends, so this never held a raise.
+  const budgetWords = outOfBudgetWords(camp.deliveryReasons)
+  const campOutOfBudget = isOutOfBudget(camp.deliveryReasons)
+  const budgetWait = (what: string): string => `${budgetWords} — the ${what} raise waits until the budget resets or is raised`
+  // Logged once per schedule (a plan: per campaign) per UTC day, not every tick; a dry run logs nothing.
+  const logBudgetHold = (what: string): void => {
+    if (ctx.write && firstOutOfBudgetNoticeToday(`${ctx.actor}|${camp.id}`)) logger.warn('[rank-defend] campaign out of budget — placement raise waits (logged once a day per schedule)', { campaignId: camp.id, campaign: camp.name, actor: ctx.actor, deliveryReasons: camp.deliveryReasons, held: what })
+  }
   // 2a (review N1) — a floor this engine did not set (a person's, the out-of-stock check's, budget enforcement's) is not
   // its to lift, move or build on: no restore, no re-floor, no base-bid or placement change while it holds. The serve
   // path used to restore any floor at all.
@@ -323,9 +346,16 @@ async function decideAndMaybeApply(
     // what every already-saved schedule has.
     let placeNote = ''
     let placed = false
+    let placeHeld = false
     if (spec.biasPct != null) {
       const want = Math.max(0, Math.min(900, Math.round(spec.biasPct)))
-      if (currentPct !== want) {
+      if (campOutOfBudget && want > currentPct) {
+        // 2b — the floor above still lands; only the placement raise waits.
+        const move = `${shortPlace(spec.placement)} ${currentPct}→${want}%`
+        placeHeld = true
+        placeNote = ` · ${budgetWait(move)}`
+        logBudgetHold(move)
+      } else if (currentPct !== want) {
         placeNote = ` · ${shortPlace(spec.placement)} ${currentPct}→${want}%`
         if (allow('forward')) {
           // Floor first, then the multiplier: for one tick the campaign is at the floored bid
@@ -335,7 +365,7 @@ async function decideAndMaybeApply(
       } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
     }
     const reason = `target = Min bid → bids at floor €${(floor / 100).toFixed(2)} (campaign live, restorable)${placeNote}`
-    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
+    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null && !placeHeld ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
   }
   // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
   // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
@@ -368,9 +398,6 @@ async function decideAndMaybeApply(
     // tick would bury the alert it is trying to raise.
     logger.warn('[rank-defend] base bid alone exceeds the CPC ceiling', { campaignId: camp.id, campaign: camp.name, maxCpcCents: spec.maxCpcCents, maxBaseBidCents: ctx.maxBaseBidByCampaign?.get(camp.id), strategy: camp.biddingStrategy })
   }
-  // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders
-  // the slot). Shared by both paths.
-  const campOutOfBudget = (camp.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
 
   // ── BL — blended path: drive Top + Rest of Search + Product pages SIMULTANEOUSLY ──
   // in one combined placement write. Each lane gets its own feedback signal: Top = Amazon
@@ -379,6 +406,7 @@ async function decideAndMaybeApply(
     const laneDecisions: NonNullable<RankDefendDecision['lanes']> = []
     const driven: Array<{ placement: string; percentage: number }> = []
     const capped: string[] = [] // MB.4 — lanes the CPC ceiling pulled back, named in the reason
+    const budgetHeld: string[] = [] // 2b — lane raises waiting on an out-of-budget campaign, named in the reason
     for (const lane of spec.lanes) {
       const laneCur = cdb.placementBidding?.find((x) => x.placement === lane.placement)?.percentage ?? 0
       const lTop = lane.placement === 'PLACEMENT_TOP'
@@ -386,6 +414,7 @@ async function decideAndMaybeApply(
       const laneIS = lTop ? sigRaw.topIS : lRest ? (ctx.sqpByCampaign?.get(camp.id) ?? null) : null
       const dd = computeStep(laneToSpec(spec, lane), { currentPct: laneCur, achievedISFraction: laneIS, achievedAcosFraction: lTop ? sigRaw.topAcos : null, lossDetected: lTop ? loss : false })
       let toPct = dd.nextPct, act = dd.action
+      if (campOutOfBudget && act === 'raise') budgetHeld.push(`${shortPlace(lane.placement)} ${laneCur}→${toPct}%`)
       if ((ctx.suppressRaise || campOutOfBudget) && act === 'raise') { toPct = laneCur; act = 'hold' }
       // MB.4 — the ceiling binds every lane. The cap is a property of the campaign's bids,
       // not of one placement, so a lane may not exceed it even while another sits below.
@@ -401,7 +430,8 @@ async function decideAndMaybeApply(
     const changed = !samePlacements(cdb.placementBidding ?? [], adjustments)
     // HX.1 — computed BEFORE the write so the audit row carries the same explanation the console
     // shows in the decision preview. A history entry without a reason is just a number moving.
-    const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
+    if (budgetHeld.length) logBudgetHold(budgetHeld.join(', '))
+    const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${budgetHeld.length ? ` · ${budgetWait(budgetHeld.join(', '))}` : ''}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
     const placeAllowed = changed && allow('forward')
     if (placeAllowed) {
       try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
@@ -421,8 +451,10 @@ async function decideAndMaybeApply(
   const d = computeStep(spec, { currentPct, achievedISFraction: achievedIS, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
   let action = d.action, nextPct = d.nextPct, reason = d.reason
   if ((ctx.suppressRaise || campOutOfBudget) && action === 'raise') {
+    const move = `${shortPlace(spec.placement)} ${currentPct}→${nextPct}%`
     action = 'hold'; nextPct = currentPct
-    reason = campOutOfBudget ? 'campaign OUT_OF_BUDGET — holding (raise the daily budget to hold this slot)' : 'family daily budget reached — holding (no raise)'
+    if (campOutOfBudget) logBudgetHold(move)
+    reason = campOutOfBudget ? budgetWait(move) : 'family daily budget reached — holding (no raise)'
   }
   // MB.4 — the CPC ceiling binds LAST, after every other adjustment, so nothing downstream
   // can put the bid back over it. The action is re-derived rather than preserved: a target
