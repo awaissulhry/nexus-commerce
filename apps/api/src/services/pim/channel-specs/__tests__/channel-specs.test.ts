@@ -310,7 +310,8 @@ describe('eBay adapter — conformance', () => {
   })
 
   it('the two dead registry placeholders have real successors', () => {
-    expect(byKey.get('listingFormat')!.options).toEqual(['FIXED_PRICE', 'AUCTION'])
+    // E1 (2026-10-05): fixed price only — Publish cannot create auctions, so the sheet no longer offers one.
+    expect(byKey.get('listingFormat')!.options).toEqual(['FIXED_PRICE'])
     expect(byKey.get('listingDuration')!.options).toContain('GTC')
   })
 })
