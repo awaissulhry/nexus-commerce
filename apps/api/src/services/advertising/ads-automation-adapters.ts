@@ -16,7 +16,8 @@ import {
   type ExplainOptions, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
 } from '../automation/automation-levels.js'
 import { isRefused } from '../automation/service-outcome.js'
-import { breakerLimits, breakerLimitsText } from './ads-engine-actors.js'
+import { breakerLimits, breakerLimitsText, engineCaps } from './ads-engine-actors.js'
+import { engineCapsText } from './ads-engine-guard.js'
 
 // ── Env checks every Amazon ads engine shares ─────────────────────────────────────────────────────────
 
@@ -61,20 +62,34 @@ async function adsDial(): Promise<AdsDial> {
  * How the dial bears on an ads automation.
  *   rules    the rule evaluator: a halt or OFF skips the tick; SUGGEST demotes AUTO rules to proposals
  *   honours  auto-bid: a halt or OFF stands it down; SUGGEST makes it a dry run that only reports
+ *   guarded  rank-defend and classic dayparting (1c, ads-engine-guard.ts): SUGGEST makes each run compute and write
+ *            nothing new, though it still gives back its own floors; a halt or OFF leaves it only lowering bids to
+ *            their floors, restores waiting for Resume; and it keeps its own caps per run and per day
  *   gated    every other engine: it still runs, but while halted or OFF the write gate refuses its writes;
  *            SUGGEST does not reach it
  */
-function dialCap(dial: AdsDial, effect: 'rules' | 'honours' | 'gated'): { cap: AutomationLevel; why: string | null } {
-  if (dial.halted) return { cap: 'OFF', why: `Ads automation is halted${dial.haltReason ? `: ${dial.haltReason}` : ''}.` }
-  if (dial.autonomy === 'OFF') return { cap: 'OFF', why: 'The account ads dial is OFF.' }
+type DialEffect = 'rules' | 'honours' | 'guarded' | 'gated'
+function dialCap(dial: AdsDial, effect: DialEffect): { cap: AutomationLevel; why: string | null } {
+  const floorsOnly = effect === 'guarded' ? ' It only lowers bids to their floors; restores wait for Resume.' : ''
+  if (dial.halted) return { cap: 'OFF', why: `Ads automation is halted${dial.haltReason ? `: ${dial.haltReason}` : ''}.${floorsOnly}` }
+  if (dial.autonomy === 'OFF') return { cap: 'OFF', why: `The account ads dial is OFF.${floorsOnly}` }
+  if (dial.autonomy === 'SUGGEST' && effect === 'guarded') {
+    return { cap: 'PROPOSE', why: `The account ads dial is SUGGEST${dial.set ? '' : ' (never set)'} — it computes and writes nothing new, but still gives back its own floors.` }
+  }
   if (dial.autonomy === 'SUGGEST' && effect !== 'gated') {
     return { cap: 'PROPOSE', why: `The account ads dial is SUGGEST${dial.set ? '' : ' (never set)'} — it proposes, nothing acts.` }
   }
   return { cap: 'AUTO', why: null }
 }
 
+/** 1c — an engine that keeps its own caps says them, beside its level and in its reason. */
+function withEngineCaps(s: BusinessState, engine: 'rank-defend' | 'dayparting'): BusinessState {
+  const { perTick, perDay } = engineCaps(engine)
+  return { ...s, reason: `${s.reason} Honours the account dial; ${engineCapsText(engine)}.`, caps: { ...(s.caps ?? {}), changesPerRun: perTick, changesPerDay: perDay } }
+}
+
 /** A business state whose level is the rows' highest, held under the dial. */
-function underDial(rows: AutomationRow[], dial: AdsDial, effect: 'rules' | 'honours' | 'gated', none: string, extra: Partial<BusinessState> = {}): BusinessState {
+function underDial(rows: AutomationRow[], dial: AdsDial, effect: DialEffect, none: string, extra: Partial<BusinessState> = {}): BusinessState {
   const s = summarise(rows)
   const { cap, why } = dialCap(dial, effect)
   const level = lowest(s.level, cap)
@@ -412,7 +427,7 @@ const A6: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No classic dayparting schedules (goal-mode schedules belong to rank-defend).')
+    return withEngineCaps(underDial(rows, dial, 'guarded', 'No classic dayparting schedules (goal-mode schedules belong to rank-defend).'), 'dayparting')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => `automation:dayparting-${row.id}`)
@@ -584,7 +599,7 @@ const A10: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No goal-mode schedules or product rank plans.')
+    return withEngineCaps(underDial(rows, dial, 'guarded', 'No goal-mode schedules or product rank plans.'), 'rank-defend')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => (row.kind === 'plan' ? `automation:rank-plan-${row.id}` : `automation:rank-defend-${row.id}`))
