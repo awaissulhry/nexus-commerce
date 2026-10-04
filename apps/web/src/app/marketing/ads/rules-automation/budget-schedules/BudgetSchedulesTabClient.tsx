@@ -30,7 +30,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { SchedulesSection } from './SchedulesSection'
 
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -43,8 +43,7 @@ export function BudgetSchedulesTabClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Budget Pacing & Schedules"
-        subtitle="When budgets change through the day, and the schedules that change them"
+        {...rulesTabHeader('budget-schedules')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

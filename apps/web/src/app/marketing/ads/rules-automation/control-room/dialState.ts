@@ -14,7 +14,8 @@ export type Dial = 'OFF' | 'SUGGEST' | 'AUTO'
 export interface AccountGlobal { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean }
 
 export const DIAL_LEVELS: readonly Dial[] = ['OFF', 'SUGGEST', 'AUTO']
-export const DIAL_LABEL: Record<Dial, string> = { OFF: 'Off', SUGGEST: 'Suggest', AUTO: 'Auto' }
+/** Ads fix 7d (review 8.8) — SUGGEST is shown as "Propose", the word the rules use for the same thing. */
+export const DIAL_LABEL: Record<Dial, string> = { OFF: 'Off', SUGGEST: 'Propose', AUTO: 'Auto' }
 export const isDial = (v: string): v is Dial => (DIAL_LEVELS as readonly string[]).includes(v)
 
 /**
@@ -50,9 +51,9 @@ export function accountStatus(g: AccountGlobal, acting: number, total: number, c
         ? 'Halted, and the dial is at Off. Resume clears the halt; then turn the dial up to start again.'
         : 'Halted. No engine can write to Amazon until you resume.'
       : off
-        ? 'The dial is at Off. Turn the dial to Suggest or Auto to start again.'
+        ? `The dial is at Off. Turn the dial to ${DIAL_LABEL.SUGGEST} or ${DIAL_LABEL.AUTO} to start again.`
         : g.autonomy === 'SUGGEST'
-          ? `The dial is at Suggest. ${DIAL_MEANS.SUGGEST}`
+          ? `The dial is at ${DIAL_LABEL.SUGGEST}. ${DIAL_MEANS.SUGGEST}`
           : `${acting} of ${total} engines are acting on their own.`
   return {
     stopped,

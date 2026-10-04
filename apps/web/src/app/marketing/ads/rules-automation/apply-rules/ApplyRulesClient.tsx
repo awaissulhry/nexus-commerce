@@ -798,7 +798,7 @@ export function ApplyRulesClient() {
         return (
           <span className={`h10-ar-pill dl-${live ? 'on' : 'off'}`}
             title={shut
-              ? 'Enabled, not delivering, and the write gate is shut — automation matches this campaign and every write to it is refused at campaign_allowlist. Resuming a campaign does not re-open the gate.'
+              ? 'Enabled, not delivering, and the write gate is shut: automation matches this campaign, and the gate refuses every write to it because the campaign is not on the allowlist. Resuming a campaign does not reopen the gate.'
               : DELIVERY_LABEL[r.deliveryStatus] ?? r.deliveryStatus}
           >
             {DELIVERY_LABEL[r.deliveryStatus] ?? r.deliveryStatus}
@@ -811,7 +811,7 @@ export function ApplyRulesClient() {
       key: 'portfolio',
       label: 'Portfolio',
       metric: false,
-      tip: 'The portfolio grain, on a campaign row. 148 of 220 campaigns carry no portfolio at all, so no portfolio-scoped rule can reach them.',
+      tip: 'The campaign’s portfolio. A rule scoped to a portfolio cannot reach a campaign that has no portfolio.',
       sortValue: (r) => (r.portfolioId ? (r.portfolioName ?? portfolioNames.get(r.portfolioId) ?? '') : '￿'),
       render: (r) => (r.portfolioId
         ? (
@@ -854,7 +854,7 @@ export function ApplyRulesClient() {
       key: 'bidRule',
       label: 'Bid Rule',
       metric: false,
-      tip: 'The SAME cell the Ad Manager renders. The bid algorithm (H10\'s Adtomic picker), stored in `dynamicBidding.bidAlgorithm` — Amazon has no such field, so it reaches our database and no further. A second chip names whoever actually holds these bids, and appears ONLY when somebody does: measured 2026-08-20, that is 38 of 220 campaigns (32 held by one of 4 rank plans, 6 manual). The rest are unowned or not covered by the bid grid, and say so in the tooltip rather than with a chip.',
+      tip: 'The bid algorithm set on this campaign, the same cell as on the Ad Manager. Nexus stores it; Amazon has no such setting, so it is not sent to Amazon. A second chip names who holds this campaign’s bids, and shows only when someone does. The pencil changes the algorithm.',
       sortValue: (r) => `${bidAlgoLabel(r.bidAlgorithm)} ${bidOwners?.get(r.id)?.bidderName ?? ''}`,
       // 🔴 U14 — `known` is false for the 137 campaigns the bid grid does not cover, and while the
       // fetch is still out. Both are "we have not been told", which is not "nobody owns them".
@@ -884,7 +884,7 @@ export function ApplyRulesClient() {
       key: 'tacos',
       label: 'Target ACoS',
       metric: false,
-      tip: 'The campaign\'s DECLARED target ACoS, from the guardrail grid. A dash means unset — the optimiser falls back to a flat 30% when asked, but a fallback is not a setting and this column no longer asserts it on 220 rows.',
+      tip: 'The target ACoS set on this campaign. A dash means none is set: the bid optimiser then uses a flat 30%, which is a fallback, not a setting. The pencil sets it.',
       sortValue: (r) => r.targetAcosPct ?? -1,
       // 🔴 The guardrail grid returns a PERCENTAGE (`targetAcosPct`); the shared cell takes the
       // FRACTION the campaigns payload stores. Converted here, once, rather than leaning on the
@@ -905,7 +905,7 @@ export function ApplyRulesClient() {
       // operator scanning both pages is concerned.
       label: 'Min/Max Bid',
       metric: false,
-      tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "None" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
+      tip: 'The lowest and highest bid the write gate allows on this campaign. The gate refuses a bid outside this band; it does not change the bid to fit. "None" means no band is set, so only the €0.02 floor bounds the bids. The pencil sets both ends.',
       sortValue: (r) => r.maxBidCents ?? -1,
       // U11c — reading, pencil AND popover are all the Ad Manager's now (`h10-edcell` /
       // `h10-editpen` / `RangePopover`), so the hover affordance, the anchor, the copy and the
@@ -924,7 +924,7 @@ export function ApplyRulesClient() {
       key: 'bidAutomation',
       label: 'Bid Automation',
       metric: false,
-      tip: 'H10\'s bid-automation switch (`bidAutomation`), writable per row and in bulk. ⚠ NOT the write gate — that is the Automations column beside it, and the bulk [Automation] button writes THAT one. Measured 2026-08-20: OFF on all 220. It records the decision on the campaign; no bid optimizer reads the field yet, so it does not by itself apply a suggestion.',
+      tip: 'An on/off switch recorded on the campaign, per row or in bulk. It is not the write gate: that is the Automation Access column, which the bulk Automation button sets. No bid optimiser reads this switch yet, so on its own it applies nothing.',
       sortValue: (r) => (r.bidAutomation ? 1 : 0),
       render: (r) => <BidAutomationCell on={r.bidAutomation} busy={autoBusy.has(r.id)} onToggle={(next) => void setBidAutomation(r, next)} />,
     },
@@ -932,7 +932,7 @@ export function ApplyRulesClient() {
       key: 'budgetRule',
       label: 'Budget Rule',
       metric: false,
-      tip: 'The budget rule ASSIGNED to this campaign — H10\'s own column. A budget rule does nothing until it is assigned, so "None" means no rule may move this budget at all. One assigned rule shows its name and links to its configuration; several show a count and are named in the tooltip. Choosing in the pencil STAGES the change; the Apply bar at the foot of the page commits every staged row in one transaction.',
+      tip: 'The budget rules assigned to this campaign. A budget rule does nothing until it is assigned, so "None" means no rule may move this budget at all. One assigned rule shows its name and links to its configuration; several show a count and are named in the tooltip. Choosing in the pencil STAGES the change; the Apply bar at the foot of the page commits every staged row in one transaction.',
       // Sorts by how much is assigned; a staged row sorts by what it WILL be, which is what the
       // operator is looking at.
       sortValue: (r) => assignedIdsFor(r.id).length,
@@ -963,7 +963,7 @@ export function ApplyRulesClient() {
       // the inert "Bid Automation" column on BOTH grids. See CampaignsGrid's ALL_COLS.
       label: 'Automation Access',
       metric: false,
-      tip: 'The write gate\'s verdict, which is the most useful sentence on this grid: MANAGED means armed automation can write to this campaign; OFF-LIMITS means rules still match it and every write is refused at campaign_allowlist. Resuming a paused campaign does NOT re-open the gate.',
+      tip: 'The write gate’s verdict. Managed: automation that is switched on may write to this campaign. Off-limits: rules still match it, and the gate refuses every write because the campaign is not on the allowlist. Resuming a paused campaign does not reopen the gate.',
       sortValue: (r) => (r.managed ? 1 : 0),
       // C2 — the Ad Manager's cell, not a second one shaped like it. The `h10-ar-pill mg-on/mg-off`
       // pills this replaced said the same thing in different pixels; the pins and the suppression
@@ -1143,7 +1143,7 @@ export function ApplyRulesClient() {
           title: g === 'campaign'
             ? 'One row per campaign — the grain the write gate, the bounds and the pins are set at'
             : g === 'portfolio'
-              ? 'One row per portfolio. 148 of 220 campaigns carry none, so they group under "No portfolio".'
+              ? 'One row per portfolio. Campaigns with no portfolio are grouped under "No portfolio".'
               : g === 'line'
                 ? 'One row per product line. A campaign advertising two lines appears under both, so these rows sum to more than the account.'
                 : 'One row per marketplace.',
@@ -1212,7 +1212,7 @@ export function ApplyRulesClient() {
         <p className="h10-ar-said">
           <b>{resolution}</b>
           {' · '}
-          <span className="h10-ar-floor" title="GET /advertising/campaigns is cached for 300 seconds behind an L1 memory + L2 Redis cache, and the invalidating hook runs after the response is sent. Five minutes is the floor whatever this page does.">
+          <span className="h10-ar-floor" title="Nexus keeps campaign data for up to 5 minutes before it reads it again, so a change can take that long to show on this page.">
             campaign data can be up to 5 minutes old
           </span>
           {appliedScope.length > 0 && (

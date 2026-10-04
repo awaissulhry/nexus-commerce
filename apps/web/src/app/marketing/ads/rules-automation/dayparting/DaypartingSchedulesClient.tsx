@@ -18,7 +18,7 @@
 import { useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RankGrid } from './RankGrid'
 import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
 import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
@@ -95,7 +95,7 @@ function DaypartingSchedulesBody() {
   const dpBaseline = useCursorBaseline<Record<string, unknown>>(dpCursorUrl, dpCursorParams, groups.length)
   const dpRefresh = useCursorPoll<Record<string, unknown>>({ url: dpCursorUrl, params: dpCursorParams, baseline: dpBaseline })
 
-  const subtitle = useMemo(() => rulesTabByKey('dayparting')?.subtitle ?? '', [])
+  const header = useMemo(() => rulesTabHeader('dayparting'), [])
 
   /**
    * FB.3d — the page's date range, from the SHARED header picker (the same dual-calendar +
@@ -145,8 +145,7 @@ function DaypartingSchedulesBody() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Rules & Automation"
-        subtitle={subtitle}
+        {...header}
         markets={markets}
         market={market}
         onMarketChange={(m) => setUrl({ market: m })}

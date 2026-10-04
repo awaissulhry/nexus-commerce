@@ -406,7 +406,7 @@ export function ReplicateBuilder() {
     <div className="h10-spw h10-rep">
       <header className="h10-spw-top">
         <div className="hl">
-          <span className="eyebrow">Helium 10 Ads</span>
+          <span className="eyebrow">Amazon Ads</span>
           <h1>Campaign Builder : Replicate Structure</h1>
         </div>
         <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>

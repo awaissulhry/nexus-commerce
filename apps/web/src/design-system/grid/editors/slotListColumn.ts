@@ -18,9 +18,9 @@
  */
 import type { ColDef, ValueFormatterParams, ValueGetterParams, ValueSetterParams } from 'ag-grid-community'
 
-import type { CellProvenance } from '../renderers/provenance'
+import { provenanceClassRules, type CellProvenance } from '../renderers/provenance'
 import type { CellSaveTracker } from './roundTrip'
-import { SlotListEditor, SlotListValue, slotListSaveState, slotListSummary, type SlotCellLike, type SlotListEditorParams } from './SlotListEditor'
+import { SlotListEditor, SlotListValue, slotListProvenance, slotListSaveState, slotListSummary, type SlotCellLike, type SlotListEditorParams, type SlotMarkText } from './SlotListEditor'
 import { slotListChanges, slotListKey, slotListText, slotListValue, suppressSlotListKeys, type SlotGroup } from './slotList'
 import { sameValue } from './writeGate'
 
@@ -39,6 +39,13 @@ export interface SlotListColumnOptions<T> {
   tracker?: CellSaveTracker
   /** One slot's provenance, from the builder's own classifier. */
   provenanceOf?: (row: T, key: string) => CellProvenance
+  /**
+   * One slot's mark text — the `from` / `tooltip` that slot's own cell gives its mark. When every filled position shares
+   * one member, the cell's mark reads the FIRST filled position's text, so a uniform list keeps that member's full words
+   * (a refusal's server reason, a pending or attention sentence, a pin's "— where"). Optional: without it a uniform
+   * list's mark says the member's default words.
+   */
+  markOf?: (row: T, key: string) => SlotMarkText | null | undefined
   /** Is the list required on this row (the requirement lives on position 1)? */
   required?: (row: T) => boolean
 }
@@ -61,6 +68,12 @@ export function slotListColumnDef<T>(group: SlotGroup, options: SlotListColumnOp
     slotList: { mode: 'slots', max: group.max, maxLength: group.maxLength ?? null, itemLabel: options.itemLabel ?? 'Bullet', label: options.label },
   }
   const saveState = (p: { data?: T }) => (p.data ? slotListSaveState(options.tracker, options.rowIdOf(p.data), group.keys).state : null)
+  /* 2026-10-04 (channel cell marks) — the one cell wears the TINT of the member its mark shows (the strongest among the
+     filled positions), like every other cell of the sheet: a bullets cell with pinned positions is tinted as pinned. The
+     provenance keys never collide with the save-state keys below (`classRuleKeys.vitest.test.ts`). */
+  const provenanceRules = options.provenanceOf
+    ? provenanceClassRules<T>((row) => slotListProvenance(row, group, valueOf(row) ?? [], options.provenanceOf))
+    : {}
   return {
     colId,
     headerName: options.label,
@@ -71,6 +84,7 @@ export function slotListColumnDef<T>(group: SlotGroup, options: SlotListColumnOp
     cellClass: (p) => `nds-ag-cell ${editable(p.data ?? undefined) ? 'nds-cell-is-editable' : 'nds-cell-is-locked'}`,
     /* The positions' round-trip states, read together: the worst one is this cell's. */
     cellClassRules: {
+      ...provenanceRules,
       'nds-cell-is-saving': (p) => saveState(p) === 'saving',
       'nds-cell-is-saved': (p) => saveState(p) === 'saved',
       'nds-cell-is-refused': (p) => saveState(p) === 'refused',
@@ -96,7 +110,7 @@ export function slotListColumnDef<T>(group: SlotGroup, options: SlotListColumnOp
     suppressKeyboardEvent: suppressSlotListKeys as ColDef<T>['suppressKeyboardEvent'],
     suppressFillHandle: true,
     cellRenderer: SlotListValue,
-    cellRendererParams: { group, cellOf: options.cellOf, rowIdOf: options.rowIdOf, tracker: options.tracker, provenanceOf: options.provenanceOf, required: options.required },
+    cellRendererParams: { group, cellOf: options.cellOf, rowIdOf: options.rowIdOf, tracker: options.tracker, provenanceOf: options.provenanceOf, markOf: options.markOf, required: options.required, itemLabel: options.itemLabel ?? 'Bullet' },
     tooltipValueGetter: (p) => {
       const values = valueOf(p.data ?? undefined)
       if (!values || !p.data) return ''

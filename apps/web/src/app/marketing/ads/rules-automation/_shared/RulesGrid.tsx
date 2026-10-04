@@ -82,8 +82,8 @@
  *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Button, Tag, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Banner, Modal } from '@/design-system/components'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
@@ -105,6 +105,7 @@ import { RuleTypeModal } from './RuleTypeModal'
 import { NoDataIllus } from './NoDataIllus'
 import { HistoryDrawer } from '../tabs/RuleListTab'
 import { emitAdsChange, useAdsSync } from './adsBus'
+import { ANY_MARKET_CHIP, ANY_MARKET_WHY, hiddenRulesLine, rulesForMarket } from './ruleMarket'
 
 /**
  * B5 — the rule builder, mounted OVER this grid rather than navigated to.
@@ -133,6 +134,8 @@ interface RuleRow {
   /** engine rules only — the autonomy level the toggle is reporting */
   level: string
   enabled: boolean
+  /** 7d (review I.1) — the rule's `scopeMarketplace`; null when it sets no market. */
+  market: string | null
   criteria: string
   /** P1 — the Criteria cell's tooltip. The cell used to be its own title, so "Always" was unexplainable. */
   criteriaWhy: string
@@ -529,6 +532,7 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
       && (a as { control?: string } | null)?.control !== 'manual',
     level: String(rule.autonomyLevel ?? ''),
     enabled: rule.enabled !== false,
+    market: typeof rule.scopeMarketplace === 'string' && rule.scopeMarketplace ? rule.scopeMarketplace : null,
     criteria: crit.text,
     criteriaWhy: crit.why,
     thresholds: readThresholds(tabAction, (Array.isArray(rule.conditions) ? rule.conditions : []) as RuleCondition[]),
@@ -690,6 +694,11 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   const params = useSearchParams()
   const openRuleId = params.get('ruleId')
   /**
+   * 7d (review I.1) — the header's market picker. It wrote `?market=` and this grid never read it. A rule scoped to
+   * another market is left out and counted (`ruleMarket.ts`); the count is stated above the rows, never dropped.
+   */
+  const market = params.get('market') || 'all'
+  /**
    * B5 — bumped to re-run the reads below. The builder emits `ads.rule.changed` on both of its
    * save paths, and before this the grid only ever fetched on mount: saving in the overlay closed
    * it onto a row still showing the OLD criteria, which reads as "the save did not work". The
@@ -722,6 +731,9 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
    */
   const noticeRef = useRef<HTMLDivElement | null>(null)
   const nounLower = noun.toLowerCase()
+  const { shown, hidden } = useMemo(() => rulesForMarket(rows, market), [rows, market])
+  // A selection made under one market must not carry rows the next market leaves out into a bulk verb.
+  useEffect(() => { setSel(new Set()) }, [market])
   /**
    * B1 — the builder slug for this tab, taken from the href the caller already passes rather than
    * from a new prop. The last segment of `builderHref` IS the slug on all seven call sites
@@ -1224,6 +1236,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         {!r.enabled && (
           <span className="h10-bd7-posture off" title="This rule is disabled — it is never evaluated, whatever its Automation mode says. Enable it on the Automations page.">off</span>
         )}
+        {market !== 'all' && !r.market && <span title={ANY_MARKET_WHY}><Tag>{ANY_MARKET_CHIP}</Tag></span>}
         <span className="h10-nt-acts">
           <a className="h10-nt-open" href={href} onClick={overlay}><ExternalLink size={11} /> Open</a>
           <Button size="xs" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
@@ -1261,8 +1274,22 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
           <span>{notice}</span>
         </div>
       )}
+      {/* 7d (review I.1) — rules left out by the market picker are counted here, with the way back. */}
+      {market !== 'all' && hidden > 0 && (
+        <Banner
+          tone="info"
+          action={(
+            <Button size="sm" variant="secondary" onClick={() => {
+              const next = new URLSearchParams(params.toString())
+              next.delete('market')
+              const q = next.toString()
+              router.replace(q ? `?${q}` : '?', { scroll: false })
+            }}>Show all markets</Button>
+          )}
+        >{hiddenRulesLine(hidden, market, nounLower)}</Banner>
+      )}
       <AdsDataGrid<RuleRow>
-        rows={rows}
+        rows={shown}
         loading={loading}
         rowId={(r) => r.id}
         enabledFirst={(r) => r.automation}

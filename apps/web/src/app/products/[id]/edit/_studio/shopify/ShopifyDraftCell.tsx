@@ -20,6 +20,7 @@ import { informationValueLabel, informationDraftCellError } from './informationE
 import { linkedEndpoint, linkedRequest } from './api'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { isShopifyHistoryValue, noteShopifyEdit, noteShopifyReplay, replayShopifyHistory } from './draftHistory'
+import { optimisticCell } from '../sheet/channel/savedCellPatch'
 import styles from './information.module.css'
 
 export const shopifyRawValue = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -294,7 +295,8 @@ export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Clo
         p.data.values = { ...p.data.values, [column.key]: replay.cell }
         return true
       }
-      const next = { ...old, value: p.newValue, pinned: true, inherited: false }
+      // The sheet's one optimistic cell: an edit Shopify does not have yet reads `pending` before the save answers.
+      const next = optimisticCell(old, p.newValue, p.data.rowKind)
       noteShopifyEdit(old, next)
       p.data.values = { ...p.data.values, [column.key]: next }
       return true

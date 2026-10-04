@@ -275,7 +275,7 @@ function ThisWeek({ d, onSend, sending, sent }: {
             </a>
           </Button>
           <Button size="sm" onClick={onSend} disabled={sending}>
-            <Send size={13} /> {sending ? 'Sending…' : 'Send me a test'}
+            <Send size={13} /> {sending ? 'Sending…' : 'Send to all recipients now'}
           </Button>
           {sent && <span className="acr-digest-sent"><CheckCircle2 size={13} /> {sent}</span>}
         </div>

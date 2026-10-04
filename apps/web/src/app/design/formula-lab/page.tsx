@@ -21,9 +21,10 @@
  *          `ag-grid-*` outside `design-system/grid/` and `app/design/grid-lab/` is a guard
  *          violation (`check-ag-grid-import-boundary.mjs`), and this page does not need a grid to
  *          show a cell. The box is a token-built approximation; the MARKS on it are real.
- *   DRAWN  the `ƒ` mark itself. `CellProvenance` is eight members today and `formula` is not one
- *          of them (`renderers/provenance.ts:49`). Adding it is PES.2's, so this page draws the
- *          proposal rather than editing the engine to make its own mock true.
+ *   DRAWN  the `ƒ` mark itself. When this page was written `CellProvenance` had eight members and
+ *          `formula` was not one of them, so it drew the proposal. Today it has fifteen
+ *          (`@nexus/shared/cell-provenance`), `formula` among them, and the engine's `ProvenanceMark`
+ *          draws the same `ƒ`; this page keeps its own copy (corrected 2026-10-04).
  *   MOCK   the preview line evaluates LOCALLY over a fixed attribute map. The real editor calls
  *          `POST /api/pim/formulas/preview`, which exists and is live. Labelled on the page.
  *
@@ -166,7 +167,7 @@ function Mark({ icon: Icon, cls, title }: { icon: typeof Sigma; cls: string; tit
  * 🔴 NOT lucide's `FunctionSquare`, which was the first thing tried and is wrong here on the
  * screen rather than in principle: every other member of this vocabulary is an UNBOXED glyph
  * (Σ mapped, ✎ pinned, 🔗 inherited, ✦ ai), and a boxed icon at 11px reads as a checkbox before it
- * reads as a function. lucide 0.263.1 — the version apps/web actually resolves — has no unboxed
+ * reads as a function. lucide (0.469.0, the version both apps resolve) has no unboxed
  * variant, so the character itself is both the closer match to the spec and the closer match to
  * its siblings. Measured by zooming the rendered mark, not by reasoning about the icon set.
  *
@@ -399,9 +400,10 @@ export default function FormulaLabPage() {
             <code> /api/pim/formulas/*</code> registered at <code>index.ts:756</code>.
           </li>
           <li>
-            <strong>Drawn, not real:</strong> the <code>ƒ</code> mark. <code>CellProvenance</code>{' '}is eight
-            members today (<code>renderers/provenance.ts:49</code>) and <code>formula</code>{' '}is not one of
-            them. This page draws the proposal rather than editing the engine to make its own mock true.
+            <strong>Drawn, not real:</strong> the <code>ƒ</code> mark on this page. <code>CellProvenance</code>{' '}has
+            fifteen members today (<code>@nexus/shared/cell-provenance</code>) and <code>formula</code>{' '}is one of
+            them: the sheet draws it with the engine&rsquo;s <code>ProvenanceMark</code>. This page keeps the copy it
+            drew while the member was still a proposal.
           </li>
           <li>
             <strong>Drawn, not real:</strong>{' '}the cell box (height, padding, borders). AG&rsquo;s stylesheet is

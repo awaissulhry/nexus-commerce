@@ -242,7 +242,7 @@ export function GuidedBuilder() {
     <div className="h10-spw h10-gcb">
       <header className="h10-spw-top">
         <div className="hl">
-          <span className="eyebrow">Helium 10 Ads</span>
+          <span className="eyebrow">Amazon Ads</span>
           <h1>Campaign Builder : Guided</h1>
         </div>
         {/* APS.2a — the launch target, always on screen. */}

@@ -97,8 +97,10 @@
   height: 100%;
 }
 
-/* The mapped-value cell reuses `.nds-cascade` (the sheet's layout for value · chevron · source);
-   this adds nothing to it and exists so the page can be found in the DOM. */
+/* The mapped-value cell lays out value · chevron · source with `.nds-cascade` / `.nds-cascade-value`, defined in
+   `sheet/channel/channel-sheet.css` and kept there for this cell alone (since 2026-10-04 the product sheet's channel
+   cells draw the design system's `MarkedValue`, not `.nds-cascade`). This adds nothing to it and exists so the page can
+   be found in the DOM. */
 .nds-vp-value {
   width: 100%;
 }

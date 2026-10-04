@@ -58,7 +58,7 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
     },
     {
       name: 'Strict performance ladder',
-      desc: '≥3 orders with ACoS ≤ 20% — H10’s performance-tier bar',
+      desc: '≥3 orders with ACoS ≤ 20% — a stricter performance bar',
       payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '3' }, { metric: 'ACOS', op: 'lte', value: '20' }], action: { op: 'set', value: '' } }] },
     },
     {
@@ -125,7 +125,7 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
     },
     {
       name: 'Click sink, no sales',
-      desc: 'Zero orders on ≥20 clicks — H10’s own default bar (Sales = 0, Clicks ≥ 20)',
+      desc: 'Zero orders on ≥20 clicks (Sales = 0, Clicks ≥ 20)',
       payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }], action: { op: 'set', value: '' } }] },
     },
   ],
@@ -192,7 +192,7 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
     },
     {
       name: 'Back proven converters where the rank engine won’t undo it',
-      desc: 'ACoS ≤ 25% with ≥2 orders over 30 days → set Product Pages to 25% — the only lane the rank engine leaves alone (2 writes in 30 days, against 12,197 on Top of Search)',
+      desc: 'ACoS ≤ 25% with ≥2 orders over 30 days → set Product Pages to 25% — the only lane the rank engine leaves alone',
       /**
        * 🔴 `set`, not `incPct`, and the preview is why. Of the 11 campaigns this matches, Product
        * Pages sits at **0 on 8 of them** — and increasing 0 by 25% is 0. Shipped as a raise, the
@@ -1655,7 +1655,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {scopeNote === g.id && g.conditions.some((x) => x.scope && x.scope !== 'campaign') && (
                       <p className="h10-rb-heldnote" role="status">
                         <Info size={13} aria-hidden />
-                        <span>A lane-scoped condition is measured from Amazon&rsquo;s <b>placement report</b> — that one lane&rsquo;s own impressions, clicks, spend and sales — not the campaign&rsquo;s totals. Lane data is thinner: over 7 settled days only <b>16 of 122</b> campaign-and-lane combinations in this account carry 20+ clicks, against <b>51 of 123</b> over 30. A lane with no data in the window is <b>not measured as zero</b> — it is left alone. Widen the <b>Lookback period</b> in Advanced Settings if a lane rule matches nothing.</span>
+                        <span>A lane-scoped condition is measured from Amazon&rsquo;s <b>placement report</b> — that one lane&rsquo;s own impressions, clicks, spend and sales — not the campaign&rsquo;s totals. Lane data is thinner: over 7 settled days, few campaign-and-lane combinations carry 20 or more clicks, and over 30 days more of them do. A lane with no data in the window is <b>not measured as zero</b> — it is left alone. Widen the <b>Lookback period</b> in Advanced Settings if a lane rule matches nothing.</span>
                       </p>
                     )}
                     <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>

@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -52,8 +52,7 @@ export function NegativeRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Negative Targeting"
-        subtitle="Rules that create negatives — what each one blocks, and whether it acts on its own"
+        {...rulesTabHeader('negative-targeting')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

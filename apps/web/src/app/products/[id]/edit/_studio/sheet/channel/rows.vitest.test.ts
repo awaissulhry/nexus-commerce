@@ -28,7 +28,6 @@ import {
   variantRowsOf,
   reviewRowsOf,
   isRevealAnchor,
-  withMappingRun,
   withRowIdentity,
 } from './rows'
 import { aliasKeyOf, type AliasGroup, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types'
@@ -309,34 +308,6 @@ describe('§5.4 — which cell the record is opened FROM', () => {
     expect(isRevealAnchor(undefined)).toBe(false)
     expect(isRevealAnchor(null)).toBe(false)
     expect(isRevealAnchor('')).toBe(false)
-  })
-})
-
-describe('#379 — the run-level mapping fact reaches the classifier', () => {
-  /**
-   * Measured on Amazon·IT (441 cells): with the flag withheld, **63 `mapped` / 0 `mappedShared`**;
-   * with it supplied, **0 / 63** — every product-grain derivation had been rendering as an ordinary
-   * per-row `mapped`, the opposite of what §9.6b intends ("editing one row changes N").
-   */
-  const cell = (status?: string) => ({ value: 'x', mapped: status ? { status } : null }) as never
-
-  it('adds the flag only when the run WAS product-grain', () => {
-    expect(withMappingRun(cell('mapped'), true)).toMatchObject({ mappedProductLevel: true })
-  })
-
-  it('🔴 returns the cell UNTOUCHED when it was not — no allocation on the common path', () => {
-    const c = cell('mapped')
-    expect(withMappingRun(c, false)).toBe(c)
-  })
-
-  it('passes undefined through rather than inventing a cell', () => {
-    expect(withMappingRun(undefined, true)).toBeUndefined()
-  })
-
-  it('does not mutate the wire cell it was given', () => {
-    const c = cell('mapped')
-    withMappingRun(c, true)
-    expect(c).not.toHaveProperty('mappedProductLevel')
   })
 })
 

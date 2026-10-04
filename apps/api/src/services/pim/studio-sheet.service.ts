@@ -160,7 +160,21 @@ export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' 
   translation?: importResolvedContent['translation']
 
   resettable?: boolean
+  /** Shopify: Nexus holds a value for this cell — a saved pin, or an edit Shopify does not have yet (see `unsentDraft`). */
   nexusDraft?: boolean
+  /**
+   * Shopify (2026-10-04, channel cell marks): an edit saved in Nexus that Shopify does not have yet — it waits for
+   * Review synchronization. Set only when true. A saved pin that synchronization already sent has `nexusDraft` without
+   * it, so the sheet can tell "waits to be sent" from "pinned".
+   */
+  unsentDraft?: boolean
+  /**
+   * Shopify (2026-10-04, channel cell marks): the Shared product supplies no value for this field on this listing — no
+   * Shared mapping reaches it, or a Shopify sharing rule decides it (`channel-sheet-projection.ts`). Its value is
+   * Shopify's own (or Nexus's pin or edit of it), and a reset returns Shopify's value, never the Shared product's. Set
+   * only when true. The projection sends `mapped: null` for every value Nexus holds, so `mapped.sourceOwner` cannot say it.
+   */
+  channelOnly?: boolean
   shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite
   /**
    * The operator-authored formula for this cell, WITHOUT its leading `=`

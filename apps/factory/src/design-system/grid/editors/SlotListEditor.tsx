@@ -29,8 +29,8 @@ import { Button, Textarea } from '../../primitives'
 import { OrderedList } from '../../components/OrderedList'
 import { CellSaveMark } from '../renderers/CellSaveMark'
 import { CellSaveReason, EmptyValue, RequiredValue } from '../renderers/cells'
-import { ProvenanceMark } from '../renderers/provenanceMark'
-import type { CellProvenance } from '../renderers/provenance'
+import { MarkedValue } from '../renderers/MarkedValue'
+import { PROVENANCE_PRECEDENCE, provenanceLabel, strongestProvenance, type CellProvenance } from '../renderers/provenance'
 import type { CellSaveState, CellSaveTracker } from './roundTrip'
 import { editorBox, roomToRightOf } from './editorBox'
 import { EDITOR_KEY_HINT_FORM } from './editorHint'
@@ -218,6 +218,12 @@ export const SlotListEditor = forwardRef<unknown, SlotListEditorParams>(function
 
 export interface SlotCellLike { value?: unknown; editable?: boolean; writable?: boolean }
 
+/**
+ * One position's mark text, exactly as that position's own cell would give it to `ProvenanceMark`: `from` (the source
+ * by name, or the server's sentence for refused / pending / attention) and/or a whole `tooltip`.
+ */
+export interface SlotMarkText { from?: string | null; tooltip?: string }
+
 export interface SlotListValueParams<T> {
   group: SlotGroup
   cellOf: (row: T, key: string) => SlotCellLike | null | undefined
@@ -225,6 +231,10 @@ export interface SlotListValueParams<T> {
   tracker?: CellSaveTracker
   provenanceOf?: (row: T, key: string) => CellProvenance
   required?: (row: T) => boolean
+  /** One position's name (`Bullet`), for the mark's text on a mixed list. */
+  itemLabel?: string
+  /** One position's mark text, from the builder (its own cells' `from` / `tooltip`) — read for a UNIFORM list. */
+  markOf?: (row: T, key: string) => SlotMarkText | null | undefined
 }
 
 const SAVE_ORDER: readonly CellSaveState[] = ['refused', 'unknown', 'waiting', 'saving', 'saved']
@@ -238,12 +248,68 @@ export function slotListSaveState(tracker: CellSaveTracker | undefined, rowId: s
   return { state, reasons }
 }
 
-/** One provenance for the cell: the one every non-empty position shares, else `own` (a mixed list wears no single mark). */
+/** Each FILLED position's provenance, position 1 first. An empty position says nothing about the list. */
+function filledProvenance<T>(row: T, group: SlotGroup, values: readonly string[], provenanceOf: (row: T, key: string) => CellProvenance): { position: number; member: CellProvenance }[] {
+  return group.keys.flatMap((k, i) => ((values[i] ?? '').trim() !== '' ? [{ position: i + 1, member: provenanceOf(row, k) }] : []))
+}
+
+/**
+ * One provenance for the cell: the STRONGEST member among the filled positions, by `PROVENANCE_PRECEDENCE`
+ * (refused › attention › pending › AI › outdated › formula › listing level › listing value › mapped › inherited › pinned).
+ *
+ * 🔴 2026-10-04: a mixed list used to wear NO mark (`own`), so a bullets cell with two pinned positions looked exactly
+ * like one that simply follows. Now it wears the strongest member, and `slotListMarkText` names which positions carry
+ * which member — the mark never claims the whole list when only part of it differs.
+ */
 export function slotListProvenance<T>(row: T, group: SlotGroup, values: readonly string[], provenanceOf?: (row: T, key: string) => CellProvenance): CellProvenance {
   if (!provenanceOf) return 'own'
-  const marks = group.keys.filter((_, i) => (values[i] ?? '').trim() !== '').map((k) => provenanceOf(row, k))
-  if (!marks.length) return 'own'
-  return marks.every((m) => m === marks[0]) ? marks[0] : marks.includes('refused') ? 'refused' : 'own'
+  return strongestProvenance(filledProvenance(row, group, values, provenanceOf).map((p) => p.member))
+}
+
+/** "1", "1 and 3", "1, 3 and 4". */
+function positionsText(positions: readonly number[]): string {
+  return positions.length < 2 ? positions.join('') : `${positions.slice(0, -1).join(', ')} and ${positions[positions.length - 1]}`
+}
+
+/**
+ * The mark's text for a MIXED list: every marked member with its positions, strongest first —
+ * "Bullet 2: Pinned · Bullets 4 and 5: Inherited". `undefined` when every filled position shares one member (the mark's
+ * own label says it) or nothing is marked. Positions with no mark (`own`) are not listed: no mark means they follow.
+ */
+export function slotListMarkText<T>(row: T, group: SlotGroup, values: readonly string[], provenanceOf?: (row: T, key: string) => CellProvenance, itemLabel = 'Position'): string | undefined {
+  if (!provenanceOf) return undefined
+  const filled = filledProvenance(row, group, values, provenanceOf)
+  const members = new Set(filled.map((p) => p.member))
+  if (members.size < 2) return undefined
+  const parts = PROVENANCE_PRECEDENCE.filter((m) => m !== 'own' && members.has(m)).map((m) => {
+    const positions = filled.filter((p) => p.member === m).map((p) => p.position)
+    return `${itemLabel}${positions.length > 1 ? 's' : ''} ${positionsText(positions)}: ${provenanceLabel(m)}`
+  })
+  return parts.length ? parts.join(' · ') : undefined
+}
+
+/**
+ * The one bullets cell's mark text, on both scopes (2026-10-04):
+ *
+ *   MIXED list (filled positions carry different members) → "Bullet 2: Pinned · Bullets 4 and 5: Inherited" — the
+ *     mark never claims the whole list when only part of it differs.
+ *   UNIFORM list (every filled position shares one member) → the FIRST filled position's own text (`markOf`), so the
+ *     cell reads exactly as that position's own cell would: a refusal keeps the server's reason verbatim (#780),
+ *     pending / attention keep their sentence, a pin names what it no longer follows. With no `markOf`, the member's
+ *     own sentence with no source.
+ *
+ * `{}` when nothing is marked.
+ */
+export function slotListMark<T>(
+  row: T, group: SlotGroup, values: readonly string[], provenanceOf?: (row: T, key: string) => CellProvenance,
+  markOf?: (row: T, key: string) => SlotMarkText | null | undefined, itemLabel = 'Position',
+): SlotMarkText {
+  if (!provenanceOf) return {}
+  const mixed = slotListMarkText(row, group, values, provenanceOf, itemLabel)
+  if (mixed) return { tooltip: mixed }
+  const first = filledProvenance(row, group, values, provenanceOf)[0]
+  if (!first || first.member === 'own' || !markOf) return {}
+  return markOf(row, group.keys[first.position - 1]) ?? {}
 }
 
 /** `3 of 10 · First bullet` — the count of filled positions and the first one. */
@@ -277,16 +343,22 @@ export function SlotListValue<T>(p: ICellRendererParams<T> & SlotListValueParams
   if (!row || group.keys.every((k) => !p.cellOf(row, k))) return null
   const summary = slotListSummary(values, group.max)
   const provenance = slotListProvenance(row, group, values, p.provenanceOf)
+  const mark = slotListMark(row, group, values, p.provenanceOf, p.markOf, p.itemLabel)
+  /* 2026-10-04 — `MarkedValue`, the ONE marked-cell layout every sheet cell draws (Shared and channel scopes), not a
+     hand copy of it: same mark, spacing and save-mark slot as the cells beside it. */
   return (
-    <span className="nds-cell-value nds-slotlist-cell">
-      <ProvenanceMark provenance={provenance} />
-      <span className="nds-cell-value-text">
-        {summary.filled === 0
-          ? <>{`0 of ${group.max} `}{p.required?.(row) ? <RequiredValue /> : <EmptyValue />}</>
-          : summary.text}
-      </span>
-      <CellSaveReason reason={reasonText || undefined} />
-      <CellSaveMark state={state} />
-    </span>
+    <MarkedValue
+      provenance={provenance}
+      tooltip={mark.tooltip}
+      from={mark.from}
+      after={<>
+        <CellSaveReason reason={reasonText || undefined} />
+        <CellSaveMark state={state} />
+      </>}
+    >
+      {summary.filled === 0
+        ? <>{`0 of ${group.max} `}{p.required?.(row) ? <RequiredValue /> : <EmptyValue />}</>
+        : summary.text}
+    </MarkedValue>
   )
 }

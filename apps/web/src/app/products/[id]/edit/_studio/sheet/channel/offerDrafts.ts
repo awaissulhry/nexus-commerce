@@ -6,7 +6,7 @@
  *   - the toolbar mark ("3 changes wait for Publish") and its "Show these rows" filter (the `withRejectedFilter` pattern);
  *   - the ⋯ items: the same filter (a mark folded into "+N" cannot be pressed) and "Discard saved changes…", confirmed,
  *     which leaves through the sheet writer as resets (the bulk save's reset discards a live listing's saved change);
- *   - a waiting cell's words (its source mark, Cell details, its reset offer) and the Last publish column's "Edited".
+ *   - a waiting cell's words (its "waits for Publish" mark, Cell details, its reset offer) and the Last publish column's "Edited".
  *
  * Mode / Qty / Buffer never wait: they write at once through the Matrix door. Pure: no React, no AG at runtime.
  */
@@ -73,7 +73,7 @@ export function liveChangedLine(pending: OfferPendingPublish): string | null {
   return moved.note?.trim() || OFFER_DRAFT_COPY.liveChanged(offerValueText(moved.from), offerValueText(moved.to))
 }
 
-/** What a waiting cell's source mark and Cell details say: the server's sentence, the D7 line, both values, when. */
+/** What a waiting cell's mark and Cell details say: the server's sentence, the D7 line, both values, when. */
 export function offerDraftCellWords(pending: OfferPendingPublish, now: number = Date.now()): { label: string; description: string; notSent: boolean } {
   const notSent = pending.sent === false
   const parts = [

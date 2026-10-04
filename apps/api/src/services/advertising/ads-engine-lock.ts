@@ -39,7 +39,7 @@ const ADS_CRON: ArmFlag = { name: 'NEXUS_ENABLE_AMAZON_ADS_CRON', isEnabled: fla
  * (runtime/scheduler.ts, and each job's own start function), parsed the way the scheduler parses them.
  */
 export const LOCKED_ENGINES: Record<LockedEngine, { name: string; arm: readonly ArmFlag[] }> = {
-  'rank-defend': { name: 'Rank & Dayparting', arm: [ADS_CRON, { name: 'NEXUS_ENABLE_RANK_DEFEND', isEnabled: flagIs.one }] },
+  'rank-defend': { name: 'Hourly bid plans', arm: [ADS_CRON, { name: 'NEXUS_ENABLE_RANK_DEFEND', isEnabled: flagIs.one }] },
   'tos-defense': { name: 'Top-of-Search defense', arm: [ADS_CRON, { name: 'NEXUS_ENABLE_TOS_DEFENSE_CRON', isEnabled: flagIs.tolerant }] },
   'auto-bid': { name: 'Bid optimiser', arm: [ADS_CRON] },
   // Its tick reads its own switch and NEXUS_BUDGET_ENFORCE_APPLY (observe or apply); it only needs the lock.

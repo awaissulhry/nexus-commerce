@@ -31,7 +31,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -98,8 +98,7 @@ export function SovRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Share of Voice"
-        subtitle="Rules that bid on share of voice — what each one does, and whether it acts on its own"
+        {...rulesTabHeader('share-of-voice')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

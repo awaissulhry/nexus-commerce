@@ -23,7 +23,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -59,8 +59,7 @@ export function BudgetRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Budget Rules"
-        subtitle="Rules that change budgets — what each one does, and whether it acts on its own"
+        {...rulesTabHeader('budget')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

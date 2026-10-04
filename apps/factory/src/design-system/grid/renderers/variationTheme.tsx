@@ -336,7 +336,18 @@ export function variationThemeTooltip(cell: VariationThemeCell | null | undefine
 export interface VariationThemeValueParams {
   /** Set by the host when the row is a CHILD, so the `—` carries its reason without a value. */
   childReason?: string
+  /** The host's own verdict (`variationThemeColumnDef`'s `provenanceOf`); absent = `variationThemeProvenanceMember`. */
+  provenanceOf?: (row: any) => CellProvenance
+  /**
+   * The host's text for the mark (`variationThemeColumnDef`'s `markOf`), read only for a member that names a CAUSE —
+   * `refused`, `attention`, `pending` — whose sentence is the host's (a mapping error, a change waiting for Publish), not
+   * the theme's source. Every other member keeps the theme's server-stated tooltip. Absent (the Variants tab) = unchanged.
+   */
+  markOf?: (row: any) => { from?: string | null; tooltip?: string } | null | undefined
 }
+
+/** The members whose mark says why the cell needs a look — their words are the host's, never the theme's source. */
+const CAUSE_MEMBERS: ReadonlySet<CellProvenance> = new Set<CellProvenance>(['refused', 'attention', 'pending'])
 
 /**
  * The cell. `.nds-cell-value` + `.nds-cell-value-text` are the ENGINE's own wrappers (grid.css:843)
@@ -369,8 +380,10 @@ export const VariationThemeValue = memo(function VariationThemeValue(
   }
 
   const state = variationThemeState(cell)
-  const member = variationThemeProvenanceMember(cell)
+  const member = p.provenanceOf && p.data ? p.provenanceOf(p.data) : variationThemeProvenanceMember(cell)
   const tooltip = variationThemeTooltip(cell)
+  // A cause (a mapping error, a refusal, a change waiting for Publish) reads the host's sentence, so icon and words agree.
+  const cause = CAUSE_MEMBERS.has(member) && p.markOf && p.data ? p.markOf(p.data) : null
 
   if (state === 'unset') {
     const tone = variationThemeUnsetTone(cell)
@@ -398,7 +411,9 @@ export const VariationThemeValue = memo(function VariationThemeValue(
   return (
     <span className="nds-cell-value nds-axes-cell">
       {/* `from` is the server's sentence — the mark's tooltip is the reason and nothing else (#780). */}
-      <ProvenanceMark provenance={member} tooltip={tooltip} from={cell.source.label} />
+      {cause
+        ? <ProvenanceMark provenance={member} tooltip={cause.tooltip} from={cause.from} />
+        : <ProvenanceMark provenance={member} tooltip={tooltip} from={cell.source.label} />}
       <span className="nds-cell-value-text">
         {shown.map((a, i) => (
           <span key={a.axisKey}>

@@ -130,9 +130,12 @@ export function LedgerView() {
             ]}
           />
           {data.rows.length === 0 && <p className="h10-au-limitempty">No writes match this filter in the window.</p>}
+          {/* 7d (review I.5) — the old sentence pointed at the Keyword Tracker drawer (parked) and named one 24-hour
+              window; budgets and placements have 7 days (`rollbackWindowMsFor` in rollback.service.ts). */}
           <p className="h10-au-ledgerfoot">
-            Undo lives beside each page&rsquo;s own change control (the Keyword Tracker drawer, a rule&rsquo;s history
-            drawer) — the paths where the 24-hour windows and display-id rules are already enforced.
+            To undo one change, use Undo on the Control Room&rsquo;s Activity tab or on the Change Log: a bid change can
+            be undone for 24 hours, a budget or placement change for 7 days. A rule&rsquo;s History can undo one whole
+            run for 24 hours.
           </p>
         </>
       )}

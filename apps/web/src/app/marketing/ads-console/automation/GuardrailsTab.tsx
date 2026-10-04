@@ -8,17 +8,13 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Gauge, Pause, Play, Save, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input } from '@/design-system/primitives'
+import { DIAL_LABEL, isDial } from '../../ads/rules-automation/control-room/dialState'
 
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null; effectivelyStopped?: boolean }
-const LEVELS = [
-  { k: 'OFF', label: 'Manual', desc: 'Engine suggests nothing acts on its own. You drive everything.' },
-  { k: 'SUGGEST', label: 'Suggest', desc: 'Engine surfaces recommendations; you approve each one.' },
-  { k: 'AUTO', label: 'Auto', desc: 'Enabled live rules act within these guardrails. Dry-run rules still only preview.' },
-]
 const post = (path: string, body?: unknown) => fetch(`${getBackendUrl()}/api/advertising/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : '{}' })
 
 export function GuardrailsTab() {
@@ -40,7 +36,8 @@ export function GuardrailsTab() {
         {/* 1g — the dial moves only on Control Room, behind a confirm. This old console used to post a
             field the route ignored, so these cards never did anything; they now say where the dial is. */}
         <p>
-          How much the engine is allowed to do without you. Current: <b>{LEVELS.find((l) => l.k === s?.autonomy)?.label ?? s?.autonomy ?? '—'}</b>.
+          {/* 7d — the dial's own names (Off / Propose / Auto), as the Control Room shows them; this said "Manual" for Off. */}
+          How much the engine is allowed to do without you. Current: <b>{s?.autonomy && isDial(s.autonomy) ? DIAL_LABEL[s.autonomy] : s?.autonomy ?? '—'}</b>.
           {' '}Change it with the account dial on <Link href="/marketing/ads/rules-automation/control-room">Control Room</Link>; it asks before every change.
         </p>
       </div>

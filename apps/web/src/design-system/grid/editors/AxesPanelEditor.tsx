@@ -52,6 +52,7 @@ import {
   type VariationThemeCell,
 } from '../renderers/variationTheme'
 import { ProvenanceMark } from '../renderers/provenanceMark'
+import { provenanceLabel } from '../renderers/provenance'
 import { editorBox } from './editorBox'
 import { variationThemeChange } from './sheetWriter'
 import { axisRemovalRefusal, familyAxisFor, filterVariants, orderValues, valueOrderAfterDrag, type VariationFamilyLoader, type VariationFamilyState } from './variationFamily'
@@ -1074,7 +1075,9 @@ export function AxesPanel({ cell, host, family, ownSources, onRequestOwnSources,
           </div>
 
           <div className="nds-axes-source">
-            {!master && <ProvenanceMark provenance={variationThemeProvenanceMember(draft)} from={draft.source.label} />}
+            {/* `tooltip`, not `from`: `source.label` is the server's whole sentence, not a layer name — as `from` it would be
+                read into the member's own sentence ("Inherited from Derived from the family axes …"). */}
+            {!master && <ProvenanceMark provenance={variationThemeProvenanceMember(draft)} tooltip={`${provenanceLabel(variationThemeProvenanceMember(draft))} — ${draft.source.label}`} />}
             {/* 🔴 `source.label` VERBATIM. Contract §1.1: the sentences are server-stated and this panel
                 never composes one — the same rule `describeCellSource()` follows for every other cell. */}
             <span className="nds-axes-sourcetext">{master ? AXES_EDITOR_COPY.masterStrap : draft.source.label}</span>

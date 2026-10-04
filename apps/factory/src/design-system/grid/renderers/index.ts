@@ -65,8 +65,9 @@ export { readinessMeta, readyPillTone, ROW_READINESS_STATES, SCOPE_READINESS_STA
 export { projectionMeta, isProjectionState, PROJECTION_STATES, type ProjectionState, type ProjectionMeta } from './projection'
 export { ProjectionCell, type ProjectionFacts, type ProjectionCellParams } from './ProjectionCell'
 // PES.2 — cell provenance: the verdict (pure, tested) and the glyph that draws it.
-export { describeCellSource, classifyProvenance, provenanceTooltip, provenanceClassRules, type CellProvenance, type ProvenanceLike } from './provenance'
+export { describeCellSource, classifyProvenance, provenanceTooltip, provenanceClassRules, provenanceLabel, strongestProvenance, PROVENANCE_PRECEDENCE, type CellProvenance, type ProvenanceLike } from './provenance'
 export { ProvenanceMark, type ProvenanceMarkProps } from './provenanceMark'
+export { MarkedValue, type MarkedValueProps } from './MarkedValue'
 export {
   VariationThemeValue, variationThemeText, variationThemeTooltip, variationThemeState, variationThemeUnsetTone,
   variationThemeProvenance, variationThemeProvenanceMember, isMasterProjection, VARIATION_THEME_CHILD_REASON,

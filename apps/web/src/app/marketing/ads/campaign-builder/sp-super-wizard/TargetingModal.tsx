@@ -105,7 +105,7 @@ function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup
             <div className="nm"><span className="t">{meta.label}</span><span className="d">{meta.desc}</span></div>
             <div className="bid">
               <Input inputMode="decimal" prefix={currency} value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} fieldClassName="h10-spw-bidnum" />
-              {sugCents != null && <Button variant="link" size="sm" disabled={!g.enabled} title="Use Helium 10's data-grounded suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</Button>}
+              {sugCents != null && <Button variant="link" size="sm" disabled={!g.enabled} title="Use the suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</Button>}
             </div>
           </div>
         )

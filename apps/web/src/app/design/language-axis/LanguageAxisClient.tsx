@@ -9,7 +9,7 @@
  *
  * ── DS ────────────────────────────────────────────────────────────────────────────────────────
  * Every control is a DS component: `ScopeBar`, `GridToolbar`, `FilterChip`, `Listbox`, `Pill`,
- * `Button`, `Banner`, `Card`, `DataGrid`, `SegmentedControl`, `SourceIndicator`; the sheets are
+ * `Button`, `Banner`, `Card`, `DataGrid`, `SegmentedControl`; the sheets are
  * `NexusGrid` with the engine's `IdentityBand`, `ProvenanceMark`, `CompletenessPill` and the ONE
  * `provenanceClassRules`. Sizes come from `language-axis.module.css`, which reads the DS scale.
  * Nothing imports the grid engine's package directly (scripts/check-ag-grid-import-boundary.mjs).
@@ -18,7 +18,7 @@
  * 1. Language chips INSIDE every scope (today: a listbox on master/Shopify/Etsy, nothing on
  *    Amazon/eBay). 2. The Languages side-by-side view (approved 09-01, never built). 3. A channel
  *    scope that resolves THROUGH the shared language text. 4. One provenance member the build adds,
- *    `outdated` — mocked here with the existing `SourceIndicator` and labelled as new in the legend.
+ *    `outdated` — built since (LX.10), so drawn here with the sheet's own `ProvenanceMark` (2026-10-04).
  *    5. Readiness per coordinate × language. 6. Compare targets fed. 7. A catalogue-level language
  *    column and a bulk translate verb with a preview. 8. The resolver chain, written out.
  */
@@ -30,7 +30,7 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
 import { Button, FilterChip, Pill, SegmentedControl } from '@/design-system/primitives'
-import { Banner, Card, DataGrid, Listbox, SourceIndicator } from '@/design-system/components'
+import { Banner, Card, DataGrid, Listbox } from '@/design-system/components'
 import { GridToolbar, ScopeBar, type ScopeBarItem } from '@/design-system/patterns'
 import {
   CompletenessPill,
@@ -74,11 +74,18 @@ import {
 const SCOPE_STATE: Record<ScopeState, ScopeReadinessState> = { live: 'ready', ready: 'ready', pending: 'warn', errors: 'blocked' }
 const ROW_STATE: Record<ScopeState, RowReadinessState> = { live: 'live', ready: 'ready', pending: 'missing', errors: 'errors' }
 
-/** The one classification for a language cell. `outdated` is the member the build adds; until then its class is `own`. */
+/** The one classification for a language cell — the sheet's members, `outdated` included (LX.10). */
 const provOfState = (state: LangState): CellProvenance =>
-  state === 'inherited' ? 'inherited' : state === 'ai' ? 'ai' : state === 'aiStale' ? 'aiStale' : 'own'
+  state === 'inherited' ? 'inherited' : state === 'ai' ? 'ai' : state === 'aiStale' ? 'aiStale' : state === 'outdated' ? 'outdated' : 'own'
 
-const SOURCE = 'Italian · source'
+/** What the mark names as its source, per member — the same `from` for the cell, its hover and the legend. */
+const fromOf = (prov: CellProvenance): string | undefined =>
+  prov === 'inherited' ? SOURCE : prov === 'aiStale' || prov === 'outdated' ? 'the Italian source' : undefined
+
+/* The mark names a source the way the product sheet does — "the Italian text", never a server tier string ("Italian ·
+   source"): it is read into the mark's one sentence ("Inherited from the Italian text — edit to …"). */
+const SOURCE = 'the Italian text'
+const SHARED_DUTCH = 'the shared Dutch text'
 
 /* ── scaffolding ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -187,12 +194,7 @@ function LangCellView({ p, field, code }: { p: ICellRendererParams<FamilyRow>; f
   const prov = provOfState(cell.state)
   return (
     <span className="nds-cell-value">
-      {cell.state === 'outdated' ? (
-        <SourceIndicator kind="warning" tabIndex={-1} label="Out of date"
-          description="The Italian source changed after this translation was written. Open Compare to see what moved, or translate again." />
-      ) : (
-        <ProvenanceMark provenance={prov} from={prov === 'inherited' ? SOURCE : prov === 'aiStale' ? 'the Italian source' : undefined} />
-      )}
+      <ProvenanceMark provenance={prov} from={fromOf(prov)} />
       <span className="nds-cell-value-text">{shown == null || shown === '' ? <EmptyValue /> : shown}</span>
     </span>
   )
@@ -253,9 +255,8 @@ function LanguagesSheet() {
         tooltipValueGetter: (p) => {
           const cell = p.data?.content[f.key][code]
           if (!cell) return ''
-          if (cell.state === 'outdated') return 'Out of date — the Italian source changed after this translation was written'
           const prov = provOfState(cell.state)
-          return prov === 'own' ? '' : provenanceTooltip(prov, prov === 'inherited' ? SOURCE : prov === 'aiStale' ? 'the Italian source' : undefined)
+          return prov === 'own' ? '' : provenanceTooltip(prov, fromOf(prov))
         },
         cellRenderer: (p: ICellRendererParams<FamilyRow>) => <LangCellView p={p} field={f.key} code={code} />,
       })),
@@ -321,11 +322,13 @@ function familyPct(row: FamilyRow, languages: string[]): number {
 
 /* ── S3: a channel scope resolving THROUGH the language tier ─────────────────────────────────── */
 
-const CHANNEL_PROV: Record<ChannelRow['title']['state'], { prov: CellProvenance; from: string }> = {
-  inheritedLanguage: { prov: 'inherited', from: 'Dutch · shared' },
-  inheritedSource: { prov: 'inherited', from: 'Italian · source — no Dutch text yet' },
-  pinned: { prov: 'pinned', from: 'Dutch · shared' },
-  mapped: { prov: 'mapped', from: 'the rule "Dutch bullet caps"' },
+/* `from` is what the value follows or came from, named as the product sheet names it — read into the mark's sentence;
+   `by` names a reusable rule as the sentence's author ("Derived by the reusable rule … from the Shared product"). */
+const CHANNEL_PROV: Record<ChannelRow['title']['state'], { prov: CellProvenance; from: string; by?: string }> = {
+  inheritedLanguage: { prov: 'inherited', from: SHARED_DUTCH },
+  inheritedSource: { prov: 'inherited', from: SOURCE },
+  pinned: { prov: 'pinned', from: SHARED_DUTCH },
+  mapped: { prov: 'mapped', from: 'the Shared product', by: 'the reusable rule “Dutch bullet caps”' },
 }
 
 function ChannelSheet() {
@@ -346,12 +349,12 @@ function ChannelSheet() {
       colId: f.key, headerName: f.label, width: f.width, editable: true, cellClass: 'nds-ag-cell', cellClassRules: prov,
       valueGetter: (p) => p.data?.[f.key].value ?? null,
       valueSetter: (p) => { if (!p.data) return false; p.data[f.key] = { value: String(p.newValue ?? ''), state: 'pinned' }; return true },
-      tooltipValueGetter: (p) => { const s = p.data?.[f.key].state; return s ? provenanceTooltip(CHANNEL_PROV[s].prov, CHANNEL_PROV[s].from) : '' },
+      tooltipValueGetter: (p) => { const s = p.data?.[f.key].state; return s ? provenanceTooltip(CHANNEL_PROV[s].prov, CHANNEL_PROV[s].from, CHANNEL_PROV[s].by) : '' },
       cellRenderer: (p: ICellRendererParams<ChannelRow>) => {
         const c = p.data?.[f.key]
         if (!c) return null
         const m = CHANNEL_PROV[c.state]
-        return <span className="nds-cell-value"><ProvenanceMark provenance={m.prov} from={m.from} /><span className="nds-cell-value-text">{c.value}</span></span>
+        return <span className="nds-cell-value"><ProvenanceMark provenance={m.prov} from={m.from} tooltip={m.by ? provenanceTooltip(m.prov, m.from, m.by) : undefined} /><span className="nds-cell-value-text">{c.value}</span></span>
       },
     }))]
   }, [])
@@ -388,14 +391,20 @@ function Legend() {
   const rows: LegendRow[] = [
     { mark: <span className={css.muted}>—</span>, name: 'own', tooltip: 'No mark. The value is this cell\'s own, in this language.', next: 'Edit changes this value.' },
     { mark: <ProvenanceMark provenance="inherited" from={SOURCE} />, name: 'inherited · from the source language', tooltip: provenanceTooltip('inherited', SOURCE), next: 'Edit writes this language\'s own value; the source is untouched.' },
-    { mark: <ProvenanceMark provenance="inherited" from="Dutch · shared" />, name: 'inherited · from the shared language text', tooltip: provenanceTooltip('inherited', 'Dutch · shared'), next: 'On a channel scope: acknowledge (edit the shared text) or pin on this coordinate. Declining reverts.' },
-    { mark: <ProvenanceMark provenance="pinned" from="Dutch · shared" />, name: 'pinned · on (channel, market, language)', tooltip: provenanceTooltip('pinned', 'Dutch · shared'), next: 'Edit changes the pin; Reset returns the cell to the shared text.' },
+    { mark: <ProvenanceMark provenance="inherited" from={SHARED_DUTCH} />, name: 'inherited · from the shared language text', tooltip: provenanceTooltip('inherited', SHARED_DUTCH), next: 'On a channel scope: acknowledge (edit the shared text) or pin on this coordinate. Declining reverts.' },
+    { mark: <ProvenanceMark provenance="pinned" from={SHARED_DUTCH} />, name: 'pinned · on (channel, market, language)', tooltip: provenanceTooltip('pinned', SHARED_DUTCH), next: 'Edit changes the pin; Reset returns the cell to the shared text.' },
     { mark: <ProvenanceMark provenance="ai" />, name: 'ai · machine draft awaiting review', tooltip: provenanceTooltip('ai'), next: 'Approve, edit, or reject. It never reaches a listing unreviewed.' },
     { mark: <ProvenanceMark provenance="aiStale" from="the Italian source" />, name: 'aiStale · draft from an older source', tooltip: provenanceTooltip('aiStale', 'the Italian source'), next: 'Compare with the source before approving.' },
-    { mark: <SourceIndicator kind="warning" tabIndex={-1} label="Out of date" description="The source changed after this translation was written." />, name: 'outdated · translation older than its source', isNew: true, tooltip: 'Out of date — the Italian source changed after this translation was written.', next: 'Compare with the source; translate again or mark reviewed.' },
-    { mark: <ProvenanceMark provenance="mapped" from="a mapping rule" />, name: 'mapped · derived by a rule', tooltip: provenanceTooltip('mapped', 'a mapping rule'), next: 'Unchanged. Language never changes where a rule is edited.' },
+    { mark: <ProvenanceMark provenance="outdated" from="the Italian source" />, name: 'outdated · translation older than its source', tooltip: provenanceTooltip('outdated', 'the Italian source'), next: 'Compare with the source; translate again or mark reviewed.' },
+    { mark: <ProvenanceMark provenance="mapped" from="the Shared product" />, name: 'mapped · derived by a rule', tooltip: provenanceTooltip('mapped', 'the Shared product'), next: 'Unchanged. Language never changes where a rule is edited.' },
     { mark: <ProvenanceMark provenance="formula" from="=UPPER(title)" />, name: 'formula', tooltip: provenanceTooltip('formula', '=UPPER(title)'), next: 'Unchanged. A formula can target one language (ruled D16).' },
     { mark: <ProvenanceMark provenance="refused" from="German title exceeds 200 bytes for Amazon · DE" />, name: 'refused', tooltip: 'The server\'s own sentence, verbatim.', next: 'Unchanged.' },
+    /* 2026-10-04 (channel cell marks) — the four channel-scope members. The sheet's channel verdict produces them;
+       the hover words are the DS's own sentences (`provenanceTooltip`). */
+    { mark: <ProvenanceMark provenance="pending" from="Live until you publish: Gale Jacket" />, name: 'pending · waits for Publish (channel scopes)', isNew: true, tooltip: 'The server\'s own sentence, verbatim — e.g. what the listing shows until you publish.', next: 'Publish sends it; editing again changes what Publish will send.' },
+    { mark: <ProvenanceMark provenance="attention" from="Saved in Nexus, not sent" />, name: 'attention · needs attention (channel scopes)', isNew: true, tooltip: 'The server\'s own sentence, verbatim — saved but not sent, a reported FBA listing, or a mapping error.', next: 'Read the reason in Cell details, then fix the cause.' },
+    { mark: <ProvenanceMark provenance="listingValue" />, name: 'listingValue · the listing\'s own older text (channel scopes)', isNew: true, tooltip: provenanceTooltip('listingValue'), next: 'Follow Shared uses the Shared product’s text now.' },
+    { mark: <ProvenanceMark provenance="listingLevel" from="GALE-JACKET" />, name: 'listingLevel · one value for the whole listing (channel scopes)', isNew: true, tooltip: provenanceTooltip('listingLevel', 'GALE-JACKET'), next: 'Edit changes the value for every variation of the listing.' },
   ]
   return (
     <div className={css.legend}>
@@ -471,9 +480,7 @@ function CatalogueGrid() {
   const [language, setLanguage] = useState('de')
   const cell = (c: CatalogueRow['titleDe'], source: string) => (
     <span className="nds-cell-value">
-      {c.state === 'outdated'
-        ? <SourceIndicator kind="warning" tabIndex={-1} label="Out of date" description="The Italian source changed after this translation was written." />
-        : <ProvenanceMark provenance={provOfState(c.state)} from={c.state === 'inherited' ? SOURCE : undefined} />}
+      <ProvenanceMark provenance={provOfState(c.state)} from={fromOf(provOfState(c.state))} />
       <span className="nds-cell-value-text">{c.state === 'inherited' ? source : c.value}</span>
     </span>
   )

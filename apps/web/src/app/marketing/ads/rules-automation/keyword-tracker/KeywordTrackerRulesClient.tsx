@@ -29,7 +29,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -104,8 +104,7 @@ export function KeywordTrackerRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Keyword Tracker"
-        subtitle="Rules that bid on organic and paid rank — what each one does, and whether it acts on its own"
+        {...rulesTabHeader('keyword-tracker')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

@@ -132,8 +132,9 @@ export async function haltAutomation(reason: string, by: string): Promise<void> 
   logger.warn('[ads-automation] HALTED', { reason, by })
   // Notify operators (best-effort; loose import to avoid cycles).
   try {
+    // 7d — no href: the notice links to the Control Room by default (the old link had no page).
     const { notifyAutomation } = await import('./ads-automation-notify.service.js')
-    await notifyAutomation({ type: 'ads-automation-halt', severity: 'danger', title: 'Ad automation halted', body: reason, href: '/marketing/trading-desk/automation' })
+    await notifyAutomation({ type: 'ads-automation-halt', severity: 'danger', title: 'Ad automation halted', body: reason })
   } catch { /* notify is best-effort */ }
 }
 

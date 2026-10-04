@@ -134,7 +134,15 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
         ...(rule ? { contentAddress: undefined, contentAcknowledgement: undefined, contentVersion: undefined, contentAcknowledged: undefined,
           tier: undefined, language: undefined, requested: undefined, provenance: undefined, translation: undefined } : {}),
         divergence: sharedConflict ? { publishesAs: sharedConflict.value, note: conflictMessage } : rule ? undefined : base?.divergence,
-        value, nexusDraft: pending !== undefined || !!pin, source: pinned || !mapped ? 'channelExplicit' : base.source,
+        // `unsentDraft`: an edit saved in Nexus that Shopify does not have yet (a finished synchronization clears the
+        // draft's edits and keeps the value as a saved pin). Additive, set only when true.
+        value, nexusDraft: pending !== undefined || !!pin, ...(pending !== undefined ? { unsentDraft: true } : {}),
+        // `channelOnly`: the Shared product supplies no value for this field here — no Shared mapping reaches it (`mapped`
+        // above is false: no rule, a listing-owned source, inventory, or a Shopify sharing rule decides it). The value is
+        // Shopify's own, or Nexus's pin or edit of it, and a reset returns Shopify's value, never the Shared product's.
+        // `mapped` below is null for every value Nexus holds, so it cannot say this. Additive, set only when true.
+        ...(!mapped ? { channelOnly: true } : {}),
+        source: pinned || !mapped ? 'channelExplicit' : base.source,
         layer: sharedValue ? 'linked' : pinned || !mapped ? 'channel' : base.layer, pinned,
         inherited: !!sharedValue || !pinned && mapped, inheritedFrom: sharedValue ? productRows.get(sharedValue.sourceProductId) ?? null : mapped ? base.inheritedFrom : null, follows: sharedValue ? true : pinned ? false : mapped ? true : null,
         resettable: pinned || pending !== undefined || mapped, linkGroupId: null, mapped: rule || ownValue ? null : base.mapped, affectsAllChannels: false,

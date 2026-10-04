@@ -103,6 +103,12 @@ describe('notification dedupe', () => {
     expect(n).toBe(2)
   })
 
+  it('7d — a notice with no href links to the Control Room, not the old page that does not exist', async () => {
+    await notifyAutomation({ type: 'ads-automation-halt', severity: 'danger', title: 'Ad automation halted' })
+    const data = (notifCreateMany.mock.calls[0]?.[0] as { data: Array<{ href: string }> }).data
+    expect(data.map((d) => d.href)).toEqual(['/marketing/ads/rules-automation/control-room', '/marketing/ads/rules-automation/control-room'])
+  })
+
   it('no users: creates nothing and claims nothing', async () => {
     userFindMany.mockResolvedValueOnce([])
     const r = await notifyAutomationDetailed({ type: 'ads-automation-rule', title: 'x' })

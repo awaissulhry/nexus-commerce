@@ -12,6 +12,7 @@ import { SheetUndoHistory, writeHistoryValues, isHistoryOnly } from '../sheet/sh
 import type { ChannelSheetRow, SheetColumn, StudioCellValue } from '../sheet/channel/types'
 import { shopifyDraftColumn } from './ShopifyDraftCell'
 import { isShopifyHistoryValue, shopifyDraftState, shopifyHistoryChange, takeShopifyReplayIntent } from './draftHistory'
+import { channelCellProvenance } from '../sheet/channel/channelCellProvenance'
 
 vi.mock('@/lib/backend-url', () => ({ getBackendUrl: () => '' }))
 const schema = { revision: 'synthetic', currency: 'EUR', metaobjectDefinitions: [], types: [], locales: [{ locale: 'en', primary: true }], definitions: [
@@ -153,5 +154,23 @@ describe('the private history value never leaves the history', () => {
     expect(isShopifyHistoryValue(envelope)).toBe(true)
     writeHistoryValues({ getRowNode: () => ({ setDataValue: set }), getColumn: () => ({ getColDef: () => ({}) }) }, [{ rowId: 'r', colId: 'brand', value: envelope }, { rowId: 'r', colId: 'brand', value: 'plain' }], 'undo')
     expect(set.mock.calls).toEqual([['brand', 'plain', 'undo']])
+  })
+})
+
+/**
+ * 2026-10-04 (channel cell marks, review D) — an edit reads as what the save will answer: an edit Shopify does not have
+ * yet (`pending`), from the moment it is typed. A variant's Shared value (`layer: 'variant'`) kept its layer, so the
+ * edited cell wore no mark until the save returned.
+ */
+describe('a Shopify edit waits for Review synchronization from the moment it is typed', () => {
+  it('reads `pending` through the real column value setter, whatever layer the cell had', () => {
+    const variantShared = { ...cell('Shared', null, false), source: 'variant', layer: 'variant', pinned: true, inherited: false } as StudioCellValue
+    for (const before of [variantShared, cell('Shared', null, false), cell('Mine', null, true)]) {
+      const data = row(before), g = grid(data)
+      expect(g.edit('Typed')).toBe(true)
+      expect(data.values[key]).toMatchObject({ value: 'Typed', pinned: true, nexusDraft: true, unsentDraft: true })
+      expect(channelCellProvenance(data.values[key])).toBe('pending')
+      expect(shopifyDraftState(data.values[key])).toBe('own')
+    }
   })
 })
