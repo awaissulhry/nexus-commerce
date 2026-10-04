@@ -63,6 +63,12 @@ vi.mock('../../jobs/cron-registry.js', () => ({
   },
 }))
 
+// 1e — the question a live run asks first (ads-engine-lock.vitest.test.ts proves the answers); null = it may run.
+const runNowRefusal = vi.fn(async (_key: string) => null as string | null)
+vi.mock('./ads-engine-lock.js', () => ({
+  get runNowRefusal() { return runNowRefusal },
+}))
+
 const { getEngineDetail } = await import('./ads-control-room-detail.service.js')
 
 beforeEach(() => {
@@ -71,6 +77,7 @@ beforeEach(() => {
   cronCount.mockReset(); cronCount.mockResolvedValue(0)
   actionLogFindMany.mockReset(); actionLogFindMany.mockResolvedValue([])
   campaignFindMany.mockReset(); campaignFindMany.mockResolvedValue([])
+  runNowRefusal.mockReset(); runNowRefusal.mockResolvedValue(null)
 })
 
 describe('ACR.1.2e — the engine list cannot drift from the rows that open it', () => {
@@ -107,6 +114,48 @@ describe('ACR.1.2e — "Run now" offers only what the trigger route will accept'
     expect(d!.run.available).toBe(false)
     expect(d!.run.jobName).toBeNull()
     expect(d!.run.why).toBeTruthy()
+  })
+})
+
+describe('1e — Run now is not offered on an engine that is off, or whose run would be refused', () => {
+  const leversWith = (lever: Record<string, unknown>) => getEngineLevers.mockResolvedValueOnce({
+    levers: [{ key: 'rank-defend', name: 'Rank & Dayparting', cron: 'ad-rank-defend', ...lever }], global: {},
+  } as never)
+
+  it('THE FINDING: the lever reads OFF (here, switched off for this business) → no button, and the reason in words', async () => {
+    leversWith({ mode: 'OFF', modeReason: 'Switched to OFF for this business (user:u-1e)' })
+    const d = await getEngineDetail('rank-defend')
+    expect(d!.run).toEqual({ available: false, jobName: null, why: 'Not offered while this engine is off: Switched to OFF for this business (user:u-1e)' })
+  })
+
+  it('the account halt / dial stopping it counts as off too', async () => {
+    leversWith({ mode: 'OFF', modeReason: 'Halted: 264 actions in the last hour' })
+    expect((await getEngineDetail('rank-defend'))!.run).toMatchObject({ available: false, why: expect.stringContaining('Halted: 264 actions') })
+  })
+
+  it('the lever reads on but the scheduler does not have it armed → withheld with the same sentence a run would record', async () => {
+    leversWith({ mode: 'AUTO', modeReason: 'Armed' })
+    runNowRefusal.mockResolvedValueOnce("Rank & Dayparting is switched off on the server (the scheduler's NEXUS_ENABLE_RANK_DEFEND is not on)")
+    const d = await getEngineDetail('rank-defend')
+    expect(runNowRefusal).toHaveBeenCalledWith('rank-defend')
+    expect(d!.run).toEqual({ available: false, jobName: null, why: "Not offered: Rank & Dayparting is switched off on the server (the scheduler's NEXUS_ENABLE_RANK_DEFEND is not on)" })
+  })
+
+  it('a check that cannot be made withholds the button rather than offering it', async () => {
+    leversWith({ mode: 'AUTO', modeReason: 'Armed' })
+    runNowRefusal.mockRejectedValueOnce(new Error('database unavailable'))
+    expect((await getEngineDetail('rank-defend'))!.run).toMatchObject({ available: false, why: expect.stringContaining('could not be checked (database unavailable)') })
+  })
+
+  it('on and armed → offered, as before', async () => {
+    leversWith({ mode: 'AUTO', modeReason: 'Armed' })
+    expect((await getEngineDetail('rank-defend'))!.run).toEqual({ available: true, jobName: 'ad-rank-defend', why: null })
+  })
+
+  it('an unregistered cron keeps its own reason and asks nothing more', async () => {
+    const d = await getEngineDetail('tos-defense')
+    expect(d!.run.why).toBe('No manual trigger is registered for this job.')
+    expect(runNowRefusal).not.toHaveBeenCalled()
   })
 })
 

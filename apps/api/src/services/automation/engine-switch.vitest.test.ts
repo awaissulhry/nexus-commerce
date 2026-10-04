@@ -38,6 +38,12 @@ vi.mock('../advertising/ads-auto-bid.service.js', () => ({ runAutoBidOnce: work.
 vi.mock('../advertising/ads-top-of-search.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), defendTopOfSearch: work.tos }))
 vi.mock('../advertising/ads-budget-enforce.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), applyBudgetEnforcement: work.enforce }))
 vi.mock('../agent-fleet/orchestrator.js', async (importOriginal) => ({ ...(await importOriginal<object>()), runFleet: work.fleet }))
+// 1e — the engine lock and the scheduler's arm flags are proven in ads-engine-lock.vitest.test.ts; every run gets through them here.
+vi.mock('../advertising/ads-engine-lock.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  guardLiveRun: async (_engine: string, fn: () => Promise<unknown>) => ({ ran: true, value: await fn() }),
+  withEngineLock: async (_workspaceId: string, _engine: string, fn: () => Promise<unknown>) => ({ ran: true, value: await fn() }),
+}))
 
 const svc = await import('./engine-switch.service.js')
 
