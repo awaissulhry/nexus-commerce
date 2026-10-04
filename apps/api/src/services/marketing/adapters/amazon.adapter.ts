@@ -34,6 +34,7 @@ import {
   type DateRange,
 } from './types.js'
 import { AMAZON_CAMPAIGN_STATUS_MAP as STATUS_MAP } from '../../ads-core/campaign-status.js'
+import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 
 // Legacy CampaignType (SP|SB|SD) → MktSurface. type is non-null on
 // Campaign so it's the reliable surface source; adProduct (which may
@@ -174,6 +175,20 @@ class AmazonAdapter implements ChannelAdapter {
    * sandbox-style success (no external write).
    */
   async applyMutation(mutation: NormalizedMutation, ctx: AdapterCtx): Promise<MutationResult> {
+    // 6a — `updateCampaign` below PUTs to /sp/campaigns with a DAILY budget, whatever CAPABILITIES above claims for
+    // SB/SD lifetime budgets. A Sponsored Brands or Display campaign is refused with the shared sentence, before the
+    // sandbox-style no-op as well, so a refusal never reads as a success.
+    if (mutation.externalId) {
+      const owner = await prisma.campaign.findFirst({
+        where: { externalCampaignId: mutation.externalId },
+        select: { name: true, adProduct: true, type: true },
+      })
+      const refusal = adProductRefusal(owner, { unknown: 'allow' })
+      if (refusal) {
+        logger.warn('[UM][AMAZON] refused: not a Sponsored Products campaign', { marketplace: ctx.marketplace, externalId: mutation.externalId })
+        return { ok: false, status: 'FAILED', externalId: mutation.externalId, error: refusal }
+      }
+    }
     const conn = await prisma.amazonAdsConnection.findFirst({
       where: { marketplace: ctx.marketplace, isActive: true },
       select: { profileId: true, region: true, mode: true, writesEnabledAt: true },
