@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { budgetDayKey } from '@nexus/shared/ads-budget-day'
-import { deliveryCell, describeYields, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { deliveryCell, describeYields, restoreSummary, scheduleStatus, type ScheduleDelivery } from './scheduleState'
 
 const delivery = (o: Partial<ScheduleDelivery> = {}): ScheduleDelivery => ({
   campaigns: 0, applied: 0, held: 0, yielded: 0, refused: 0, failed: 0,
@@ -104,7 +104,9 @@ describe('deliveryCell', () => {
     expect(c.word).toBe('3 not at Amazon')
     expect(c.cls).toBe('bad')
     expect(c.why).toContain('budget_day_move')
-    expect(c.why).toContain('The local budget was changed; the channel was not.')
+    // 3c — since 4k a write the gate refused is undone in Nexus too: the old "the local budget was changed" is not true of it.
+    expect(c.why).toContain('Amazon’s budget did not change; a write the gate refused is also undone in Nexus.')
+    expect(c.why).not.toContain('The local budget was changed')
   })
 
   it('a non-delivery outranks a partial success — half-landed is not landed', () => {
@@ -116,6 +118,19 @@ describe('deliveryCell', () => {
     expect(c.why).toContain('not given back: 25 tries did not reach Amazon')
     expect(c.why).toContain('a refused give-back once an hour, up to 24 times')
     expect(c.why).not.toContain('before they were queued')
+  })
+
+  it('3c — a window change the write gate refused is tried again at the next window, not every run', () => {
+    expect(deliveryCell(delivery({ campaigns: 1, refused: 1 })).why).toContain('one the write gate refused, at the next window')
+  })
+
+  it('3c — a budget someone changed before the window closed is "kept a later change", apart from an in-window yield', () => {
+    const c = deliveryCell(delivery({ campaigns: 3, kept: 2, delivered: 1 }))
+    expect(c.word).toBe('2 kept a later change')
+    expect(c.why).toContain('gave nothing back when the window closed and that change stays')
+    expect(deliveryCell(delivery({ campaigns: 3, kept: 1, yielded: 1 })).word).toBe('1 yielded')
+    // A kept change is the window closing as designed, not a schedule out of force.
+    expect(scheduleStatus({ name: 'S', enabled: true, startDate: '2026-08-01', endDate: '—', delivery: delivery({ campaigns: 2, kept: 2 }) }, '2026-08-21').word).toBe('Active')
   })
 
   it('a refusal outranks a yield, and a yield outranks in-flight', () => {
@@ -222,6 +237,7 @@ describe('tooltip prose is well-formed', () => {
     delivery({ campaigns: 4, unknown: 2 }),
     delivery({ campaigns: 4, delivered: 4 }),
     delivery({ campaigns: 4, held: 4 }),
+    delivery({ campaigns: 4, kept: 1 }),
   ]
 
   it('no tooltip contains a doubled period, a doubled space, or a dangling separator', () => {
@@ -239,6 +255,46 @@ describe('tooltip prose is well-formed', () => {
   it('describeYields is a CLAUSE — it never punctuates its own end', () => {
     for (const d of cases.filter((x) => x.yielded > 0)) {
       expect(describeYields(d)).not.toMatch(/[.;]$/)
+    }
+  })
+})
+
+/**
+ * 3c (review 6.5) — the pause/delete give-back result, which the API always answered and the screen dropped: a pause
+ * that gave nothing back looked exactly like one that gave every budget back.
+ */
+describe('restoreSummary', () => {
+  it('no answer, no banner', () => {
+    expect(restoreSummary(null, 'Paused “S”')).toBeNull()
+  })
+
+  it('counts all three outcomes in one line and explains each one that happened', () => {
+    const s = restoreSummary({ restored: 2, kept: 1, refused: 0 }, 'Paused “Weekend boost”')!
+    expect(s.title).toBe('Paused “Weekend boost”: 2 given back · 1 kept a later change · 0 refused')
+    expect(s.tone).toBe('success')
+    expect(s.text).toContain('Given back: the budget from before the window is queued for Amazon')
+    expect(s.text).toContain('Kept a later change: someone changed the budget after this schedule set it')
+    expect(s.text).not.toContain('Refused')
+  })
+
+  it('🔴 a refused give-back is a warning that says the campaign keeps the schedule’s budget', () => {
+    const s = restoreSummary({ restored: 0, kept: 0, refused: 3 }, 'Deleted 2 schedules')!
+    expect(s.tone).toBe('warning')
+    expect(s.title).toBe('Deleted 2 schedules: 0 given back · 0 kept a later change · 3 refused')
+    expect(s.text).toContain('the campaign keeps the schedule’s budget')
+  })
+
+  it('a schedule that held nothing says nothing needed giving back — not "0 given back" as if it failed', () => {
+    const s = restoreSummary({ restored: 0, kept: 0, refused: 0 }, 'Paused “S”')!
+    expect(s.title).toBe('Paused “S”.')
+    expect(s.text).toBe('It held no budget it had set, so nothing needed to be given back.')
+  })
+
+  it('the prose is well-formed', () => {
+    for (const r of [{ restored: 1, kept: 1, refused: 1 }, { restored: 1, kept: 0, refused: 0 }, { restored: 0, kept: 0, refused: 0 }]) {
+      const s = restoreSummary(r, 'Paused “S”')!
+      expect(s.text).toMatch(/\.$/)
+      expect(s.text).not.toMatch(/\.\.|  /)
     }
   })
 })
