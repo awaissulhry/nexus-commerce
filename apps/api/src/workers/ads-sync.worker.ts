@@ -369,6 +369,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   const intendedBudgetCents = budgetChange?.newValue != null && Number.isFinite(Number(budgetChange.newValue))
     ? Math.round(Number(budgetChange.newValue) * 100)
     : null
+  // 6.1 — and the budget it replaces: Nexus already wrote its own copy (N1), so the campaign row holds the new value.
+  const previousBudgetCents = budgetChange?.oldValue != null && Number.isFinite(Number(budgetChange.oldValue))
+    ? Math.round(Number(budgetChange.oldValue) * 100)
+    : null
   const gate = await checkAdsWriteGate({
     marketplace,
     payloadValueCents,
@@ -386,6 +390,11 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // and counts only when every value in the write goes down: restores and base-bid deltas
     // are forced too, and those can raise bids.
     isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges),
+    // 6.1 — a budget schedule's give-back is recognised from the action log: who writes, the value it
+    // replaces, and which queue row is this write's own (its log row is not part of its history).
+    actor: payload.actor ?? null,
+    previousValueCents: previousBudgetCents,
+    queueId,
   })
   if (gate.allowed === false) {
     logGateDeny(
