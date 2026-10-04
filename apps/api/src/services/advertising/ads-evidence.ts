@@ -38,6 +38,12 @@ export interface AdWriteEvidence {
   sampleUnit?: 'rows' | 'days' | 'impressions'
   /** Free text for the part that is genuinely not numeric. */
   note?: string
+  /**
+   * 6.1 — on a budget schedule's give-back: the window entry it gives back, so the history can say
+   * so. A record for the reader only: the write gate never trusts it, and recognises a give-back
+   * from the action log itself (ads-budget-giveback.ts).
+   */
+  giveBackOf?: string
 }
 
 /**

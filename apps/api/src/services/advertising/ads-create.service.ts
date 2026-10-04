@@ -29,6 +29,7 @@ import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
+import { AD_PRODUCT_UNSUPPORTED, adProductOf, adProductRefusal } from '@nexus/shared/ads-ad-product'
 
 /**
  * The currency a new campaign's budget is in: its market's (`Marketplace.currency`) — Amazon reads the number it is
@@ -1057,7 +1058,7 @@ export interface PlacementBiddingResult {
   deniedAt?: string
 }
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
-  const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
+  const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } })
   if (!c) throw new Error('campaign not found')
   // G.4 — `let`: on a live push this becomes the array merged onto Amazon's current one, i.e. what was sent.
   let adjustments = input.adjustments
@@ -1088,11 +1089,13 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
    * NOT the same as sandbox: sandbox SHOULD write locally — that is what sandbox is for.
    * Only a genuine refusal suppresses the local mutation.
    */
-  let gateDenial: string | null = null
+  // 6a — placement bias is a Sponsored Products setting, PUT to /sp/campaigns. A Sponsored Brands or Display campaign is
+  // refused down the same path as a gate denial: nothing changes here or on Amazon, and the sentence is returned.
+  let gateDenial: string | null = adProductRefusal(c, { unknown: 'allow' })
   // PLC.3 — which gate refused, kept beside the sentence so the UI can link to the control that
   // clears it (`authority_pin` → this page's pin toggle; `campaign_allowlist` → Apply Rules).
-  let gateDeniedAt: string | null = null
-  if (c.externalCampaignId && c.marketplace) {
+  let gateDeniedAt: string | null = gateDenial ? AD_PRODUCT_UNSUPPORTED : null
+  if (!gateDenial && c.externalCampaignId && c.marketplace) {
     const ctx = await resolveCtx(c.marketplace)
     if (ctx) {
       // C1 — pass campaignId so placement writes honour the SAME per-campaign live-write allowlist
@@ -1296,7 +1299,7 @@ export async function resolveSbTemplate(marketplace: string): Promise<SbTemplate
 
 export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }
 export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
   // H.5 — idempotent: a negative product target is identified by ad group + ASIN.
   const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: input.adGroupId, kind: 'PRODUCT', isNegative: true, expressionValue: input.asin }, select: { id: true, externalTargetId: true } })
@@ -1305,7 +1308,8 @@ export async function createNegativeProductTargetLocal(input: NewNegativeProduct
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      // 6a — /sp/negativeTargets: the gate refuses an SB/SD campaign by its ad product (no campaignId — that would bind the allowlist).
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, adProduct: adProductOf(ag.campaign) })
       if (gate.allowed) { const r = await createNegativeProductTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, asin: input.asin, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
     }
   }
@@ -1364,13 +1368,14 @@ export async function mirrorNegativeKeywordLocal(input: {
 }
 
 export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
   let externalId: string | null = null, mode = 'local'
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      // 6a — /sp/negativeKeywords: refused for an SB/SD campaign by its ad product, as above.
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, adProduct: adProductOf(ag.campaign) })
       if (gate.allowed) { const r = await createNegativeKeyword(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
     }
   }

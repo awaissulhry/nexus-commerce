@@ -27,6 +27,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
+import { adProductOf } from '@nexus/shared/ads-ad-product'
 
 export type NegativeMatchType = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
 export type NegativeScope = 'AD_GROUP' | 'CAMPAIGN'
@@ -167,6 +168,13 @@ export async function createNegative(
 
   // 2. Write gate. Even sandbox calls go through so the same audit
   // trail applies; gate returns mode=sandbox for env=sandbox.
+  // 6a — the endpoints below are Sponsored Products ones, so the gate gets the campaign's ad product and refuses a
+  // Sponsored Brands or Display campaign. Its ad product, not its id: the id binds the live-write allowlist, which is
+  // `nexusCampaignId`'s separate decision. A campaign Nexus does not hold is not checked here, as before.
+  const owner = await prisma.campaign.findFirst({
+    where: { externalCampaignId: args.externalCampaignId },
+    select: { adProduct: true, type: true },
+  })
   const gate = await checkAdsWriteGate({
     marketplace: args.marketplace,
     payloadValueCents: 0, // negative-keyword creation is a structural
@@ -177,6 +185,7 @@ export async function createNegative(
     isNegation: true,
     keywordText: args.keywordText ?? null,
     ...(args.nexusCampaignId ? { campaignId: args.nexusCampaignId } : {}),
+    adProduct: adProductOf(owner),
   })
   if (gate.allowed === false) {
     logger.warn('[ads-negative-kw] write gate denied', {
