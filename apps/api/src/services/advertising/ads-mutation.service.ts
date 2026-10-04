@@ -66,28 +66,17 @@ export type AdsActor = `user:${string}` | `automation:${string}`
  *
  * Only `status` is refused. These actors legitimately write bids, budgets and placement.
  *
- * ── The two exempt actors, and why they are NOT the same thing ──────────────────────────────────
+ * ── No exemptions (2a, review 3.3) ──────────────────────────────────────────────────────────────
  *
- * `automation:dayparting-disable` / `-delete` share the prefix but are not ticks: they are one-shot
- * handlers for an operator PATCHing or DELETEing a schedule (advertising.routes.ts), and each is
- * gated on `AdSchedule.lastApplied === 'PAUSED'` — dayparting's own bookkeeping saying dayparting
- * paused this campaign. That is precisely the ownership check the cron blocks lacked, so they resume
- * only what they themselves paused, at a human's request. Refusing them would strand a campaign
- * paused by a legacy schedule with no way back, which is a worse failure than the one being fixed.
- *
- * The cron actors always end in an `AdSchedule` cuid; these end in a literal verb. Listing them
- * explicitly keeps the audit vocabulary in AdvertisingActionLog unchanged.
+ * `automation:dayparting-disable` / `-delete` were exempt: one-shot resumes when a person switched a schedule off or
+ * deleted it, gated on `AdSchedule.lastApplied === 'PAUSED'`. That was no ownership check: since the no-pause rule
+ * the dayparting cron records PAUSED for a closed window it only floored bids, so the resume re-enabled campaigns a
+ * person had paused. Both now give back the floored bids instead (rank-release.service.ts) and write no status, so
+ * every actor with these prefixes is refused here, the literal verbs included.
  */
 const ENGINE_CRON_ACTOR_PREFIXES = ['automation:rank-defend-', 'automation:dayparting-'] as const
 
-/** Operator-initiated, ownership-checked, one-shot — not a tick. See above. */
-const ENGINE_ACTOR_EXEMPTIONS = new Set<string>([
-  'automation:dayparting-disable',
-  'automation:dayparting-delete',
-])
-
 export function isSchedulingEngineActor(actor: string): boolean {
-  if (ENGINE_ACTOR_EXEMPTIONS.has(actor)) return false
   return ENGINE_CRON_ACTOR_PREFIXES.some((p) => actor.startsWith(p))
 }
 

@@ -122,7 +122,8 @@ describe('R10 — turn-up-automation / turn-down-automation', () => {
     expect(brake.preview).toMatchObject({ from: 'PROPOSE', to: 'OFF', brake: 'it holds spend down (bid_down): turning it down can raise spend' })
     expect(tool.withinLimits!(brake.preview, tool.limits!.parse({}))).toBe('turning a brake down can raise spend (it holds spend down (bid_down): turning it down can raise spend): a person decides')
     const schedule = await down({ automation: 'A6', rowId: ids.schedule, level: 'OFF' })
-    expect(schedule.preview!.brake).toContain('lifts its closed windows')
+    // 2a — read from the release preview: nothing is floored on this campaign now, and the status is never touched.
+    expect(schedule.preview!.brake).toBe("switched off, it floors no more bids in closed windows, and nothing it floored is floored now; placement percentages and the campaign's status stay as they are")
     const plain = await down({ automation: 'A1', rowId: ids.raiser, level: 'OFF' })
     expect(tool.withinLimits!(plain.preview, tool.limits!.parse({}))).toBeNull()
   })

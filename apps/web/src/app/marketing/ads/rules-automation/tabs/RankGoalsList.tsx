@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
+import { Banner } from '@/design-system/components'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
@@ -20,7 +21,7 @@ import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from '../dayparti
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
-import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
+import { scheduleHealth, relTime, releaseOutcomeLine, type Health, type ReleaseReport } from '../dayparting/scheduleHealth'
 import { useRdData } from '../dayparting/_rd/RdData'
 import { GrainSwitch } from '../dayparting/_rd/GrainSwitch'
 import { ModeSpreadCell, SignalCell } from '../dayparting/_rd/RuntimeCells'
@@ -119,14 +120,26 @@ export function RankGoalsList() {
 
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
+  // 2a — a pause gives back the bids each schedule floored; the answer says what came back and what waits.
+  const [pauseNote, setPauseNote] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null)
   const setEnabled = useCallback(async (ids: string[], enabled: boolean) => {
     const idset = new Set(ids)
     setRows((rs) => rs.map((r) => (idset.has(r.id) ? { ...r, enabled } : r)))
+    setPauseNote(null)
     const results = await Promise.all(ids.map((id) =>
       fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) })
-        .then((r) => r.ok).catch(() => false)))
-    const failed = new Set(ids.filter((_, i) => !results[i]))
+        .then(async (r) => (r.ok ? { ok: true, release: ((await r.json().catch(() => null)) as { release?: ReleaseReport } | null)?.release ?? null } : { ok: false, release: null }))
+        .catch(() => ({ ok: false, release: null }))))
+    const failed = new Set(ids.filter((_, i) => !results[i].ok))
     if (failed.size) setRows((rs) => rs.map((r) => (failed.has(r.id) ? { ...r, enabled: !enabled } : r)))
+    const released = results.map((r) => r.release).filter((r): r is ReleaseReport => !!r)
+    if (!enabled && released.length) {
+      const sum = released.reduce((t, r) => ({
+        restored: t.restored + r.restored, keptByOthers: t.keptByOthers + r.keptByOthers, failed: t.failed + r.failed,
+        deferred: t.deferred + r.deferred, deferredWhy: t.deferredWhy ?? r.deferredWhy, writes: t.writes + r.writes,
+      }), { restored: 0, keptByOthers: 0, failed: 0, deferred: 0, deferredWhy: null as string | null, writes: 0 })
+      setPauseNote({ tone: sum.deferred || sum.failed ? 'warning' : 'success', text: releaseOutcomeLine(released.length, sum) })
+    }
   }, [])
 
   // HX.8 — one palette object, shared with the drawer so a historical week shape is coloured by the
@@ -377,6 +390,7 @@ export function RankGoalsList() {
 
   return (
     <>
+    {pauseNote && <Banner tone={pauseNote.tone} onDismiss={() => setPauseNote(null)}>{pauseNote.text}</Banner>}
     <AdsDataGrid<RankRow>
       rows={visibleRows}
       loading={loading}

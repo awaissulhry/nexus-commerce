@@ -7797,16 +7797,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { patchAdSchedule } = await import('../services/advertising/ads-schedule.service.js')
     return answer(reply, await patchAdSchedule(id, request.body as Record<string, unknown>))
   })
+  // 2a (review 3.3) — deleting gives back the bids the schedule floored; it no longer writes the campaign's status.
   fastify.delete('/advertising/schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const before = await prisma.adSchedule.findUnique({ where: { id }, select: { campaignId: true, lastApplied: true } })
-    if (before?.lastApplied === 'PAUSED') {
-      try {
-        const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
-        await updateCampaignWithSync({ campaignId: before.campaignId, patch: { status: 'ENABLED' }, actor: 'automation:dayparting-delete', reason: 'dayparting schedule deleted — resume', applyImmediately: true } as never)
-      } catch { /* best-effort resume */ }
-    }
-    try { await prisma.adSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+    const { deleteAdSchedule } = await import('../services/advertising/ads-schedule.service.js')
+    return answer(reply, await deleteAdSchedule(id))
   })
 
   // ── BS — Budget Schedules (Helium 10 "Budget Schedules" tab) ──────────
@@ -9349,6 +9344,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
         if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })
+        // 2a (review 3.2) — pausing gives back what the group floored on every member, once the members say paused.
+        let release: unknown
+        if (b.enabled === false) {
+          const { releaseGroupMembers } = await import('../services/advertising/rank-release.service.js')
+          release = await releaseGroupMembers(id, 'its rank schedule was paused')
+        }
         /**
          * RD.P7 — the most consequential click on the page (Enable/Pause) took this lightweight
          * path and wrote NO version, so the history could not answer "who paused this and when".
@@ -9370,7 +9371,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
             })
           }
         } catch (e) { logger.warn('[RD.P7] version snapshot failed on lightweight PATCH', { id, error: (e as Error).message }) }
-        return g
+        return release ? { ...g, release } : g
       } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
     }
     if (b.name !== undefined && !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
@@ -9381,6 +9382,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const { deleteRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
     try { return await deleteRankScheduleGroup(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+  })
+  // 2a — what deleting or pausing this group would give back now, read before it happens: the bids Rank & Dayparting
+  // floored per member, the members someone else floored (kept), whether the give-back would wait (ads automation
+  // stopped, Rank & Dayparting switched off), and the placements, which stay as last set. Nothing is written.
+  fastify.get('/advertising/rank-schedule-groups/:id/release-preview', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { previewGroupRelease } = await import('../services/advertising/rank-release.service.js')
+    const preview = await previewGroupRelease(id)
+    if (!preview) { reply.status(404); return { error: 'not found' } }
+    reply.header('Cache-Control', 'no-store')
+    return preview
   })
 
   // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──

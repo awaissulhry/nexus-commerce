@@ -17,6 +17,8 @@
  * nothing new; halted / OFF only floors bids, restores wait for Resume; at most N changes a run and a day.
  * 1e — a live run, Run now included, also needs the business switch on and the scheduler's arm flags, and holds the
  * engine lock (ads-engine-lock.ts): a Run now during a tick answers "skipped: a run is already in progress".
+ * 2a — it gives back what it floored when nothing is due (no window open and no baseline, or a deleted target), leaves
+ * a floor it did not set alone, and ends each live run with the orphan sweep (rank-release.service.ts).
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -30,7 +32,8 @@ import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ad
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 import { deltaBidCents } from '../services/advertising/ads-placement-math.js'
-import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
+import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
+import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -159,11 +162,14 @@ export interface RankDefendDecision {
 export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[]; selfCompetition?: SelfCompetitionConflict[] }
 // 1c — `guard` (live runs only): the dial posture and the caps this run ran under, and what they held back.
 // 1e — `skipped`: a live run that did not start (switched off, not armed on the scheduler, or a run already in progress), in words.
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string }
+// 2a — `release` (live runs only): what it gave back where nothing was due, and what the orphan sweep gave back (`swept`
+// = campaigns the sweep looked at).
+export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: number }
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary }
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -279,6 +285,12 @@ async function decideAndMaybeApply(
   const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
   let applied = 0
+  // 2a (review N1) — a floor this engine did not set (a person's, the out-of-stock check's, budget enforcement's) is not
+  // its to lift, move or build on: no restore, no re-floor, no base-bid or placement change while it holds. The serve
+  // path used to restore any floor at all.
+  if (camp.bidsSuppressedAt && !isRankOwnedFloor(camp.bidsSuppressedBy)) {
+    return { decision: { ...base, action: 'hold', reason: `bids held at a floor set by ${floorOwnerWords(camp.bidsSuppressedBy)} — rank leaves this campaign alone until that floor is lifted`, nextPct: currentPct, lossDetected: false, applied: false }, applied: 0, held }
+  }
   // NP — no-pause: a Pause target (or OOS/lost-buybox via effectiveSpec) drops every
   // bid to the floor (~2¢) and keeps the campaign ENABLED — NEVER status=PAUSED, which
   // disrupts Amazon's algorithm. Prior bids are remembered for exact restore. Idempotent.
@@ -507,7 +519,13 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // and the enabled filter, so even a disabled plan can be previewed or manually applied.
   const schedules = opts.onlyPlanId ? [] : (await prisma.adSchedule.findMany({ where: { enabled: true } })).filter((s) => isGoalMode(s.windows, s.defaultTargetKey))
   const plans = await prisma.productRankPlan.findMany({ where: opts.onlyPlanId ? { id: opts.onlyPlanId } : { enabled: true } })
-  if (schedules.length === 0 && plans.length === 0) return { evaluated: 0, applied: 0, decisions: [], plans: [] }
+  if (schedules.length === 0 && plans.length === 0) {
+    // 2a — nothing to run, but a floor left behind (every schedule deleted while halted, say) still needs the sweep.
+    if (dryRun || opts.onlyPlanId) return { evaluated: 0, applied: 0, decisions: [], plans: [] }
+    const guard = await openEngineGuard('rank-defend')
+    const release = await giveBack(guard, [], new Set())
+    return { evaluated: 0, applied: 0, decisions: [], plans: [], guard: guard.report(), release }
+  }
 
   // Authoritative clock for ALL window resolution in this run (not the container process clock).
   const clockNow = await dbNow()
@@ -520,6 +538,8 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
   const planFamilies: Array<{ plan: (typeof plans)[number]; campaigns: Array<{ id: string }> }> = []
   const governed = new Set<string>()
+  // 2a — a plan whose family could not be resolved leaves `governed` incomplete, so the orphan sweep sits this run out.
+  let familyUnknown = false
   for (const plan of plans) {
     try {
       const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
@@ -546,12 +566,12 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
       }
       planFamilies.push({ plan, campaigns: camps })
       for (const c of camps) governed.add(c.id)
-    } catch (e) { logger.warn('[rank-defend] family resolve failed', { planId: plan.id, error: (e as Error).message }) }
+    } catch (e) { familyUnknown = true; logger.warn('[rank-defend] family resolve failed', { planId: plan.id, error: (e as Error).message }) }
   }
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, deliveryReasons: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
   const schedOverrides = new Map<string, TargetOverrideMap>()
@@ -669,6 +689,8 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // 1c — the account dial and this engine's caps, read once per run. Each campaign asks for its permit once, before
   // its first write, so a campaign is never split; a dry run reads neither (it writes nothing).
   const guard = dryRun ? null : await openEngineGuard('rank-defend')
+  // 2a — campaigns where nothing is due this hour: what this engine floored there is given back after the loops.
+  const idle: IdleCampaign[] = []
 
   // RD.5 — retail-readiness (OOS/lost-buybox) per market, memoised across plans.
   const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
@@ -686,10 +708,14 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
     const planDecisions: RankDefendDecision[] = []
     let planConflicts: SelfCompetitionConflict[] = []
+    const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
+    if (write && (!key || !targetByKey.get(key))) {
+      const why = key ? `its plan names "${key}", which no longer exists` : 'its plan holds nothing at this hour'
+      for (const fc of famCamps) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
+    }
     if (key) {
       const target = targetByKey.get(key)
       if (target) {
-        const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
         // RD.5 — family pre-flight guards (once per plan, shared by every campaign):
         // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap,
         // family ACOS vs cap.
@@ -776,10 +802,12 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     // Stamped even when the schedule resolves to nothing — "we looked, nothing was due"
     // is what distinguishes an idle schedule from a cron that has stopped running.
     receipts.set(s.id, key)
-    if (!key) continue
+    // 2a — nothing is held, so what this schedule floored is given back (it used to stay floored until a window opened).
+    if (!key) { idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: 'its schedule holds nothing at this hour' }); continue }
     // A resolved key with no RankTarget behind it is a dangling reference (the target was
     // deleted after the schedule was authored). Nothing is held, so record nothing held.
-    const target = targetByKey.get(key); if (!target) { receipts.set(s.id, null); continue }
+    const target = targetByKey.get(key)
+    if (!target) { receipts.set(s.id, null); idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: `its schedule names "${key}", which no longer exists` }); continue }
     const permit = guard ? guard.permit() : DRY_RUN
     const { decision, applied: a, held } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, permit, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign })
     guard?.settle(permit, a, held)
@@ -796,13 +824,44 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     }
   }
 
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report() } : {}) }
+  // 2a — a one-plan run does not know who else holds a campaign, nor does a run that could not resolve a plan's family:
+  // neither sweeps.
+  if (familyUnknown && !opts.onlyPlanId) logger.warn('[rank-defend] a plan family could not be resolved — orphan sweep skipped this run')
+  const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed) : undefined
+
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report() } : {}), ...(release ? { release } : {}) }
+}
+
+interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
+
+/**
+ * 2a — the end of every live run: give back what this engine floored where nothing is due, then the orphan sweep
+ * (`sweepGoverned` = campaigns enabled plans hold; null skips it). Both ask the guard per campaign: counted against the
+ * caps and never refused by one; while stopped they wait, and the sweep of the first run after Resume gives them back.
+ */
+async function giveBack(guard: EngineGuard, idle: IdleCampaign[], sweepGoverned: Set<string> | null): Promise<RankReleaseSummary> {
+  const out = emptyRelease()
+  for (const why of new Set(idle.map((i) => i.why))) addRelease(out, await releaseCampaigns(idle.filter((i) => i.why === why), { reason: `rank release — ${why}`, guard }))
+  let swept = 0
+  if (sweepGoverned) {
+    try { const sw = await sweepOrphanReleases({ guard, governed: sweepGoverned }); swept = sw.orphans; addRelease(out, sw) }
+    catch (e) { logger.warn('[rank-defend] orphan sweep failed', { error: (e as Error).message }) }
+  }
+  const { campaigns: _detail, ...counts } = out
+  return { ...counts, swept }
+}
+
+/** 2a — what the run gave back, in the summary line; nothing extra when it gave back nothing. */
+export function rankReleaseNote(r: RankReleaseSummary | null | undefined): string {
+  if (!r || !(r.restored || r.failed || r.deferred)) return ''
+  const restored = r.restored ? ` released=${r.restored}${r.writes ? ` (${r.writes} bid${r.writes === 1 ? '' : 's'} back)` : ''}` : ''
+  return `${restored}${r.swept ? ` swept=${r.swept}` : ''}${r.failed ? ` release-failed=${r.failed} (kept for the next run)` : ''}${r.deferred ? ` release-waiting=${r.deferred} (${r.deferredWhy ?? 'stopped'})` : ''}`
 }
 
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${engineGuardNote(r.guard)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

@@ -91,7 +91,8 @@ async function seedCampaign(id: string, groupBid: number, targetBids: number[], 
       data: {
         id, name: id, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`,
         dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true,
-        ...(suppressed ? { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'automation:test' } : {}),
+        // 2a — floored by the engine itself: rank-defend lifts only its own floors (review N1).
+        ...(suppressed ? { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'automation:rank-defend-test' } : {}),
       },
     })
     await db().adGroup.create({
@@ -266,7 +267,10 @@ describe('rank-defend caps (review 2.5): per run and per day, a campaign never s
 
     const r = await inside(() => runRankDefendOnce())
     expect(r.guard!.todayBefore).toBeGreaterThanOrEqual(5)
-    expect(r.guard).toMatchObject({ deferredByCap: 1, changes: 2 })
+    // 2a — the run-cap arm's two floored campaigns lost their schedules to `only()` above: the orphan sweep gives them
+    // back past the day cap too (never refused, only counted), so the run's changes are the restore's 2 plus the sweep's.
+    expect(r.release).toMatchObject({ restored: 2, swept: 2, writes: 6 })
+    expect(r.guard).toMatchObject({ deferredByCap: 1, changes: 2 + 6 })
     expect((await bids('rd-day-floor')).suppressed).toBe(false)
     expect(await bids('rd-day-restore')).toMatchObject({ suppressed: false, group: { defaultBidCents: 40 }, targets: [{ bidCents: 35 }] })
   })

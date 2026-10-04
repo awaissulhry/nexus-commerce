@@ -381,6 +381,9 @@ export const ENTRIES: Entry[] = [
   // reports above, and it must precede the read-only rule so POST and DELETE do
   // not fall through to ads.campaigns.manage.
   P(F.adsView, (m, p) => p.startsWith('/api/advertising/reporting/shares')),
+  // 2a — what deleting or pausing a rank schedule would give back: a read (it writes nothing), named on its own so no
+  // reorder of the rules below can make the delete dialog need a write permission to show it.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/rank-schedule-groups\/[^/]+\/release-preview$/.test(p)),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
   // R16 — a person's per-business engine switch (the Control Room lever drawer): ads.automation.manage, named on its own

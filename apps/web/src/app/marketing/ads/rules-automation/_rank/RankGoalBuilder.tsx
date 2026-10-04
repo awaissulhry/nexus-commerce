@@ -23,6 +23,7 @@ import { detectScheduleConflicts, type MembershipMap } from './scheduleConflicts
 import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
 import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
 import { ScheduleEvents } from '../dayparting/ScheduleEvents'
+import { releaseHoldLine, type ReleasePreview } from '../dayparting/scheduleHealth'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
 
@@ -208,6 +209,19 @@ export function RankGoalBuilder() {
     name: (k: string) => tmeta[k]?.name ?? k,
   }), [tmeta])
 
+  // 2a — for a saved schedule, how many of its campaigns it holds at a bid floor now (what removing, pausing or
+  // deleting would give back).
+  const [release, setRelease] = useState<ReleasePreview | null>(null)
+  useEffect(() => {
+    if (!groupId) { setRelease(null); return }
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/release-preview`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p: ReleasePreview | null) => { if (alive) setRelease(p) })
+      .catch(() => { if (alive) setRelease(null) })
+    return () => { alive = false }
+  }, [groupId])
+
   // RGD.7 — the builder owns ONE action + a Manual/Automate Control section, matching every other
   // rule type. The rank plan body exposes save(enabled) via a ref + reports its status up.
   const [control, setControl] = useState<'manual' | 'automate'>('manual')
@@ -317,7 +331,7 @@ export function RankGoalBuilder() {
                   name="rgdcontrol" checked={control === 'manual'} selected={control === 'manual'}
                   onChange={() => setControl('manual')}
                   title="Manual"
-                  description={<>Save the plan but don&apos;t run it — nothing changes on Amazon until you switch it to Automate.</>}
+                  description={<>Save the plan but don&apos;t run it — it sets nothing new on Amazon until you switch it to Automate, and gives back any bid it floored on these campaigns.</>}
                 />
                 <RadioCard
                   variant="row" className="h10-rb-ctrl"
@@ -336,7 +350,10 @@ export function RankGoalBuilder() {
                 targets={targetRows}
                 showSchedule={!!savedPlan}
               />
-              <p className="h10-rb-hint-note">Removing a campaign here, or deleting the schedule, stops the engine holding that rank — current Amazon bids stay as last set (nothing is reverted).</p>
+              <p className="h10-rb-hint-note">
+                Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off. Placement percentages stay as last set.
+                {release && <> {releaseHoldLine(release)}</>}
+              </p>
             </section>
 
             {/* HX.8 — what the OPERATOR changed, right where the plan is edited. Distinct from the

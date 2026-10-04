@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveSpec, applyTargetOverrides, groupReceipts, isGoalMode, pickActiveEvents } from './ad-rank-defend.job.js'
+import { effectiveSpec, applyTargetOverrides, groupReceipts, isGoalMode, pickActiveEvents, rankDefendSummaryLine, rankReleaseNote } from './ad-rank-defend.job.js'
 import type { RankTargetSpec } from '../services/advertising/rank-controller.js'
 
 // RD.5 — family guardrail target transform (pure). OOS/lost-buybox → pause (stop
@@ -203,5 +203,21 @@ describe('G2 pickActiveEvents — which event governs right now', () => {
     const picked = pickActiveEvents([ev({ groupId: 'g1', name: 'bf' }), ev({ groupId: 'g2', name: 'launch' })], at)
     expect(picked.get('g1')?.name).toBe('bf')
     expect(picked.get('g2')?.name).toBe('launch')
+  })
+})
+
+// 2a — what a run gave back, in its summary line. A run that gave nothing back keeps the line it always had.
+describe('2a rankReleaseNote — the give-back in the summary line', () => {
+  const none = { restored: 0, keptByOthers: 0, failed: 0, deferred: 0, deferredWhy: null, writes: 0, swept: 0 }
+  it('adds nothing when nothing was given back — kept-by-others alone is not an action', () => {
+    expect(rankReleaseNote(undefined)).toBe('')
+    expect(rankReleaseNote({ ...none, keptByOthers: 3 })).toBe('')
+    expect(rankDefendSummaryLine({ evaluated: 4, applied: 2, decisions: [], release: none })).toBe('evaluated=4 applied=2')
+  })
+  it('names what came back, what the sweep looked at, what failed and what waits, and why', () => {
+    expect(rankReleaseNote({ ...none, restored: 2, writes: 6, swept: 1 })).toBe(' released=2 (6 bids back) swept=1')
+    expect(rankReleaseNote({ ...none, restored: 1, writes: 1 })).toBe(' released=1 (1 bid back)')
+    expect(rankReleaseNote({ ...none, failed: 1 })).toBe(' release-failed=1 (kept for the next run)')
+    expect(rankReleaseNote({ ...none, deferred: 2, swept: 2, deferredWhy: 'ads automation is stopped (halted: x)' })).toBe(' swept=2 release-waiting=2 (ads automation is stopped (halted: x))')
   })
 })
