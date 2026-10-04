@@ -200,13 +200,15 @@ function onOffSwitch(opts: {
   read: (rowId: string) => Promise<{ id: string; name: string; on: boolean; updatedAt: Date } | null>
   write: (rowId: string, on: boolean, actorUserId: string | null) => Promise<string | null | { note: string }>
   entityType: string
-  brake?: string
+  /** A fixed sentence, or one read for the row now (2a: what switching it off would give back). */
+  brake?: string | ((rowId: string) => Promise<string>)
 }): LevelSwitch {
   return {
     levels: ['OFF', 'AUTO'], needsRow: true, manage: FEATURES.adsAutomationManage,
     async read(rowId) {
       const r = rowId ? await opts.read(rowId) : null
-      return r ? { id: r.id, name: r.name, level: r.on ? 'AUTO' : 'OFF', basis: r.updatedAt.toISOString(), brake: opts.brake ?? null } : null
+      const brake = typeof opts.brake === 'function' ? (r ? await opts.brake(r.id) : null) : opts.brake ?? null
+      return r ? { id: r.id, name: r.name, level: r.on ? 'AUTO' : 'OFF', basis: r.updatedAt.toISOString(), brake } : null
     },
     async write(row, level, actorUserId) {
       const written = await opts.write(row.id, level === 'AUTO', actorUserId)
@@ -456,7 +458,9 @@ const A6: AutomationAdapter = {
   },
   levelSwitch: onOffSwitch({
     entityType: 'SCHEDULE',
-    brake: 'switching a dayparting schedule off lifts its closed windows: bids come back, and a campaign it holds paused is resumed',
+    // 2a — read from the release preview: switching it off gives back what it floored; the campaign keeps its status
+    // (the old resume that re-enabled a paused campaign is gone, review 3.3).
+    brake: async (rowId) => (await import('./rank-release.service.js')).scheduleSwitchBrake(rowId),
     async read(rowId) {
       const { isGoalMode } = await import('../../jobs/ad-rank-defend.job.js')
       const s = await prisma.adSchedule.findUnique({ where: { id: rowId } })
@@ -621,7 +625,7 @@ const A10: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return withEngineCaps(underDial(rows, dial, 'rank-defend', 'No goal-mode schedules or product rank plans.'), 'rank-defend')
+    return withEngineCaps(underDial(rows, dial, 'rank-defend', 'No goal-mode schedules or product rank plans.', await (await import('./rank-release.service.js')).enabledOrphanScope()), 'rank-defend')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => (row.kind === 'plan' ? `automation:rank-plan-${row.id}` : `automation:rank-defend-${row.id}`))
@@ -640,7 +644,7 @@ const A10: AutomationAdapter = {
   },
   // R16 — the engine's per-business switch. Its plans and goal schedules are switched in Nexus.
   engine: 'rank-defend',
-  noSwitch: 'turning a rank plan or goal schedule off must also restore the bids it suppressed, which this tool does not do: switch it in Nexus — the engine itself switches with no rowId',
+  noSwitch: 'a rank plan or goal schedule is switched in Nexus, where switching it off also gives back the bids it floored (2a) — the engine itself switches with no rowId',
 }
 
 const A11: AutomationAdapter = {

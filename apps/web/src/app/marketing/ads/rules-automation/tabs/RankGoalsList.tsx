@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
+import { Banner } from '@/design-system/components'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
@@ -20,7 +21,9 @@ import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from '../dayparti
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
-import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
+import { scheduleHealth, relTime, releaseOutcomeLine, type Health, type ReleaseReport } from '../dayparting/scheduleHealth'
+import { LiveOrphansReview } from '../dayparting/LiveOrphansReview'
+import { liveOrphanHeadline, liveOrphanWhy, type LiveOrphanList } from '../dayparting/liveOrphans'
 import { useRdData } from '../dayparting/_rd/RdData'
 import { GrainSwitch } from '../dayparting/_rd/GrainSwitch'
 import { ModeSpreadCell, SignalCell } from '../dayparting/_rd/RuntimeCells'
@@ -117,17 +120,46 @@ export function RankGoalsList() {
     }))
   }, [groups, tmetaState, groupRuntime])
 
+  // Owner 2026-10-04 — live campaigns that still carry bids rank changed, with no schedule or plan holding them. The
+  // rank loop never changes a live campaign by itself, so the banner below lists them for a person. Re-read after a
+  // pause or a delete, which can leave one behind (a give-back that waited, or one not taken in full).
+  const [orphans, setOrphans] = useState<LiveOrphanList | null>(null)
+  const [orphansErr, setOrphansErr] = useState<string | null>(null)
+  const [orphansOpen, setOrphansOpen] = useState(false)
+  const loadOrphans = useCallback(async () => {
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/rank-release/enabled-orphans`, { cache: 'no-store' })
+      const body = await r.json().catch(() => null) as (LiveOrphanList & { error?: string }) | null
+      // A failed re-read keeps the last list (and an open review) on screen, under the banner saying it is not current.
+      if (r.ok && body) { setOrphans(body); setOrphansErr(null) } else setOrphansErr(body?.error ?? `Could not check for live campaigns that still carry bids rank changed (${r.status}).`)
+    } catch { setOrphansErr('Could not check for live campaigns that still carry bids rank changed: the request did not reach Nexus.') }
+  }, [])
+  useEffect(() => { void loadOrphans() }, [loadOrphans])
+
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
+  // 2a — a pause gives back the bids each schedule floored; the answer says what came back and what waits.
+  const [pauseNote, setPauseNote] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null)
   const setEnabled = useCallback(async (ids: string[], enabled: boolean) => {
     const idset = new Set(ids)
     setRows((rs) => rs.map((r) => (idset.has(r.id) ? { ...r, enabled } : r)))
+    setPauseNote(null)
     const results = await Promise.all(ids.map((id) =>
       fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) })
-        .then((r) => r.ok).catch(() => false)))
-    const failed = new Set(ids.filter((_, i) => !results[i]))
+        .then(async (r) => (r.ok ? { ok: true, release: ((await r.json().catch(() => null)) as { release?: ReleaseReport } | null)?.release ?? null } : { ok: false, release: null }))
+        .catch(() => ({ ok: false, release: null }))))
+    const failed = new Set(ids.filter((_, i) => !results[i].ok))
     if (failed.size) setRows((rs) => rs.map((r) => (failed.has(r.id) ? { ...r, enabled: !enabled } : r)))
-  }, [])
+    const released = results.map((r) => r.release).filter((r): r is ReleaseReport => !!r)
+    if (!enabled && released.length) {
+      const sum = released.reduce((t, r) => ({
+        restored: t.restored + r.restored, keptByOthers: t.keptByOthers + r.keptByOthers, failed: t.failed + r.failed,
+        deferred: t.deferred + r.deferred, deferredWhy: t.deferredWhy ?? r.deferredWhy, writes: t.writes + r.writes,
+      }), { restored: 0, keptByOthers: 0, failed: 0, deferred: 0, deferredWhy: null as string | null, writes: 0 })
+      setPauseNote({ tone: sum.deferred || sum.failed ? 'warning' : 'success', text: releaseOutcomeLine(released.length, sum) })
+    }
+    if (!enabled) void loadOrphans()
+  }, [loadOrphans])
 
   // HX.8 — one palette object, shared with the drawer so a historical week shape is coloured by the
   // same swatches as the live one. Memoised: passing a fresh object each render would re-run the
@@ -158,7 +190,8 @@ export function RankGoalsList() {
     setRows((rs) => rs.filter((r) => r.id !== id))
     // A deleted row must not linger in the selection and get swept into a later bulk Enable/Pause.
     setSel((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n })
-  }, [])
+    void loadOrphans()
+  }, [loadOrphans])
 
   const columns: GridColumn<RankRow>[] = useMemo(() => [
     {
@@ -377,6 +410,13 @@ export function RankGoalsList() {
 
   return (
     <>
+    {pauseNote && <Banner tone={pauseNote.tone} onDismiss={() => setPauseNote(null)}>{pauseNote.text}</Banner>}
+    {orphans && orphans.items.length > 0 && (
+      <Banner tone="warning" title={liveOrphanHeadline(orphans.items.length)} action={<Button size="sm" onClick={() => setOrphansOpen(true)}>Review</Button>}>
+        {liveOrphanWhy(orphans.items.length)}
+      </Banner>
+    )}
+    {orphansErr && <Banner tone="warning" onDismiss={() => setOrphansErr(null)}>{orphansErr}</Banner>}
     <AdsDataGrid<RankRow>
       rows={visibleRows}
       loading={loading}
@@ -445,6 +485,7 @@ export function RankGoalsList() {
         onClose={closeRow}
       />
     )}
+    {orphansOpen && orphans && <LiveOrphansReview list={orphans} onClose={() => setOrphansOpen(false)} onChanged={loadOrphans} />}
     {tplFor && (
       <TemplateLibrary
         groupIds={tplFor}

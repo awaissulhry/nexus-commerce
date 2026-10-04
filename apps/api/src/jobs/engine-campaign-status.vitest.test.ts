@@ -49,18 +49,13 @@ describe('SYNC.1 — which actors may set Campaign.status', () => {
     expect(isSchedulingEngineActor('automation:my-rank-defend-rule')).toBe(false)
   })
 
-  // These share the dayparting prefix but are one-shot operator handlers (schedule PATCH/DELETE in
-  // advertising.routes.ts), each gated on `AdSchedule.lastApplied === 'PAUSED'` — dayparting's own
-  // record that dayparting paused this campaign. Refusing them would strand a campaign paused by a
-  // legacy schedule with no route back: a false POSITIVE, and a worse bug than the one being fixed.
-  it('ALLOWS the ownership-checked schedule disable/delete resume', () => {
-    expect(isSchedulingEngineActor('automation:dayparting-disable')).toBe(false)
-    expect(isSchedulingEngineActor('automation:dayparting-delete')).toBe(false)
-  })
-
-  it('the exemption is exact — a cron tick cannot borrow it as a prefix', () => {
+  // 2a (review 3.3) — these were exempt one-shot resumes when a person switched a schedule off or deleted it, gated on
+  // `lastApplied === 'PAUSED'`. Since no-pause the dayparting cron records PAUSED for a closed window it only floored, so
+  // the resume re-enabled campaigns a person had paused. The schedule paths now give bids back and write no status.
+  it('REFUSES the old schedule disable/delete resume actors too — there is no exemption', () => {
+    expect(isSchedulingEngineActor('automation:dayparting-disable')).toBe(true)
+    expect(isSchedulingEngineActor('automation:dayparting-delete')).toBe(true)
     expect(isSchedulingEngineActor('automation:dayparting-disabled-cms450kg9002rqt019f1outpu')).toBe(true)
-    expect(isSchedulingEngineActor('automation:dayparting-deleteXYZ')).toBe(true)
   })
 })
 
@@ -85,7 +80,7 @@ describe('1f — which actors may PAUSE a campaign or an ad group', () => {
     expect(isAutomatedPause('user:awais', 'PAUSED')).toBe(false)
   })
 
-  it('ALLOWS a rule to enable — enable_campaign, resume_campaign and the schedule resume stay', () => {
+  it('ALLOWS a rule to enable — enable_campaign and resume_campaign stay', () => {
     expect(isAutomatedPause('automation:cms450kg9002rqt019f1outpu', 'ENABLED')).toBe(false)
     expect(isAutomatedPause('automation:dayparting-delete', 'ENABLED')).toBe(false)
     expect(isAutomatedPause('automation:cms450kg9002rqt019f1outpu', undefined)).toBe(false)
@@ -134,6 +129,12 @@ describe('SYNC.1 — the engine crons contain no campaign-status write', () => {
 
   it('ad-dayparting.job.ts', () => {
     expect(campaignStatusWrites(codeOnly('./ad-dayparting.job.ts'))).toEqual([])
+  })
+
+  // 2a (review 3.3) — switching a schedule off or deleting it gives bids back; neither path writes a campaign status.
+  it('the schedule disable / delete paths and the release they call', () => {
+    expect(campaignStatusWrites(codeOnly('../services/advertising/ads-schedule.service.ts'))).toEqual([])
+    expect(campaignStatusWrites(codeOnly('../services/advertising/rank-release.service.ts'))).toEqual([])
   })
 
   // A guard that cannot fail proves nothing. This is the exact line deleted from ad-rank-defend.

@@ -21,7 +21,8 @@ import { createPortal } from 'react-dom'
 import { MoreHorizontal, Pencil, Trash2, BookmarkPlus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input } from '@/design-system/primitives'
-import { Menu, Modal } from '@/design-system/components'
+import { Banner, Menu, Modal } from '@/design-system/components'
+import { releasePreviewLines, type ReleasePreview } from './scheduleHealth'
 
 export interface RowTarget {
   id: string
@@ -90,6 +91,18 @@ function RowDialog({ kind, row, onClose, onRenamed, onDeleted }: {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState('')
+  // 2a — what deleting gives back, read before the click: the bids it floored, who else holds a floor, the placements.
+  const [preview, setPreview] = useState<ReleasePreview | null>(null)
+  const [previewFailed, setPreviewFailed] = useState(false)
+  useEffect(() => {
+    if (kind !== 'delete') return
+    let live = true
+    fetch(api(`/rank-schedule-groups/${row.id}/release-preview`), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`release preview: ${r.status}`))))
+      .then((p: ReleasePreview) => { if (live) setPreview(p) })
+      .catch(() => { if (live) setPreviewFailed(true) })
+    return () => { live = false }
+  }, [kind, row.id])
 
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }, [onClose, busy])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
@@ -148,16 +161,26 @@ function RowDialog({ kind, row, onClose, onRenamed, onDeleted }: {
       <p className="h10-ntm-say">
         {kind === 'rename' && <>Renaming changes the schedule only — its campaigns, windows and baseline are untouched.</>}
         {kind === 'template' && <>Saves this schedule&rsquo;s {windowCount} window{windowCount === 1 ? '' : 's'} and its baseline as a reusable template. The schedule itself is not changed.</>}
-        {/* Every consequence, stated. A campaign is not "released" to some default — the engine
-            simply stops holding a rank for it, and whatever bid it last set on Amazon stays. */}
+        {/* Every consequence, stated. 2a — the bids it floored come back (the banner below says how many, and
+            whether they wait); placements stay as last set, because nothing stored what they were before. */}
         {kind === 'delete' && (
           <>
             Deletes <b>{row.name}</b> and removes the schedule from its <b>{row.campaigns}</b> campaign{row.campaigns === 1 ? '' : 's'}.
-            The rank loop stops holding a rank for {row.campaigns === 1 ? 'it' : 'them'}; the bids it last set on Amazon <b>stay as they are</b> — nothing is reverted.
-            This cannot be undone.
+            The rank loop stops holding a rank for {row.campaigns === 1 ? 'it' : 'them'}. This cannot be undone.
           </>
         )}
       </p>
+      {kind === 'delete' && (preview ? (
+        <Banner tone={preview.waitWhy || preview.keptByOthers ? 'warning' : 'info'} title="What happens to the bids">
+          {releasePreviewLines(preview).map((line, i) => <div key={i}>{line}</div>)}
+        </Banner>
+      ) : (
+        <Banner tone={previewFailed ? 'warning' : 'info'}>
+          {previewFailed
+            ? 'Could not read what deleting gives back. Deleting still gives back the bids this schedule floored; placement percentages stay as last set.'
+            : 'Checking what deleting gives back…'}
+        </Banner>
+      ))}
 
       {done ? <div className="h10-ntm-ok">{done}</div> : kind === 'delete' ? null : (
         <Input

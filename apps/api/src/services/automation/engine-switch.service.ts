@@ -148,7 +148,9 @@ export function engineLevelSwitch(key: EngineKey, env: () => { ceiling: Automati
     manage: def.manage,
     async read(): Promise<SwitchRow> {
       const row = await readEngineSwitch(key)
-      return { id: key, name: `${def.name} (this business's switch)`, level: row?.mode ?? top(def), basis: row?.setAt ?? null, brake: def.brake }
+      // 2a (Owner S7) — switched off, rank-defend's floors freeze until it is back on: its brake says how many there are now.
+      const brake = key === 'rank-defend' ? await (await import('../advertising/rank-release.service.js')).rankSwitchBrake(def.brake) : def.brake
+      return { id: key, name: `${def.name} (this business's switch)`, level: row?.mode ?? top(def), basis: row?.setAt ?? null, brake }
     },
     async refusal(_row, level) {
       const e = env()
