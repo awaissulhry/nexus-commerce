@@ -125,6 +125,11 @@ export interface PriceCell {
   /** The `=` expression when `source === 'formula'`. */
   formula: string | null
   clamped: 'floor' | 'ceiling' | null
+  /**
+   * A product sheet change saved on a LIVE Amazon listing that goes to Amazon only on Publish (D4=B). Tooltip only: the
+   * cell keeps showing `value`, the live price (`MATRIX_COPY.waitingForPublish`). `value: null` = back to the base price.
+   */
+  waiting?: { value: number | null } | null
 }
 
 export interface SaleCell {
@@ -132,6 +137,8 @@ export interface SaleCell {
   /** ISO dates, inclusive. */
   start: string | null
   end: string | null
+  /** As `PriceCell.waiting`: the saved sale, sent on Publish (`value: null` = remove the sale). Tooltip only. */
+  waiting?: { value: number | null; start: string | null; end: string | null } | null
 }
 
 /** Everything one row says about one coordinate. */
@@ -230,9 +237,12 @@ export interface MatrixWriteCell {
   cell: MatrixWritableKind
   value: unknown
   expectedVersion: number
+  /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a `conflict`. */
+  expectedListingId?: string
 }
 
-export interface MatrixWriteRequest { cells: MatrixWriteCell[] }
+/** `accountId` = the account the caller's read used (the GET's `?accountId=`), so the write resolves the same listings. */
+export interface MatrixWriteRequest { cells: MatrixWriteCell[]; accountId?: string | null }
 
 export type WriteOutcome = 'applied' | 'refused' | 'noop' | 'conflict'
 
@@ -246,7 +256,11 @@ export interface MatrixWriteOutcome {
   version: number
   /** A region-inventory write lands on every market it carries. */
   expandedTo?: readonly CoordinateKey[]
+  /** Every listing row the write moved, with its version AFTER the write (an EU cell: every EU row it landed on). */
+  listings?: MatrixListingVersion[]
 }
+
+export interface MatrixListingVersion { listingId: string; productId: string; version: number }
 
 export interface MatrixWriteResult { results: MatrixWriteOutcome[]; version: number }
 
@@ -363,6 +377,12 @@ export const MATRIX_COPY = {
   absentBusinessUnchecked: (market: string) => `Business pricing could not be checked on ${market} — no product-type schema is cached for this family`,
   absentBusinessNotBuilt: (pt: string, market: string) => `Amazon allows business pricing here (the ${pt} schema on ${market}) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
+  /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
+  changedElsewhere: 'Changed elsewhere — reloaded',
+  /** A sheet row whose listing is not the one the Matrix read holds for its market (another account). */
+  accountMismatch: "The Matrix shows another account's listing for this market, so this cell cannot be changed here",
+  /** The tooltip line of a Price or Sale cell whose product sheet change waits for Publish (`PriceCell.waiting`). */
+  waitingForPublish: (value: string) => `Product sheet change waits for Publish: ${value}`,
   noAccountConnected: 'No account is connected',
   pinnedThisSession: (n: number) => `${n} pinned this session · Undo`,
   simulated: 'Preview — nothing is sent',

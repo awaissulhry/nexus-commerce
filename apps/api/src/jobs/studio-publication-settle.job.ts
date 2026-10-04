@@ -1,70 +1,118 @@
 /**
- * MCP full control L4 — the studio publication settle sweep (plan section 02, step 4).
+ * Sheet publish parity, step 2 — the result sweep for product sheet publications.
  *
- * A publication's result is settled when someone reads it (`studio-publication.service.ts`): an Amazon feed reports what
- * it accepted, an eBay item is read back. A publish Claude asked for and a person approved is read by nobody, so its
- * Amazon draft would stay a draft in Nexus and the prices held for it would never be sent. This sweep is that reader:
- * every 5 minutes, per business, publications left SUBMITTED (Amazon) or UNVERIFIED (eBay Trading) for more than
- * 2 minutes — sent within the last 30 days, at most 50 a run — settle through `publicationResultFor`, the same step the
- * studio's status read runs. A settled one leaves the set; one the channel has not finished stays for the next run.
+ * An Amazon feed is processed minutes after Nexus sends it; an eBay item may need a second read-back. Until now only
+ * the submitter's own "Check publication status" settled either, so a publication nobody checked stayed SUBMITTED
+ * and blocked its destination. This sweep settles them by itself, through the same core the status read uses
+ * (`settleStudioPublication`), so a result is stored ONCE whoever gets there first.
  *
- * OFF by default: settling reads Amazon feed results and eBay items through the channel gateway, and a draft that goes
- * live sends its held prices once. `NEXUS_STUDIO_PUBLICATION_SETTLE=1` turns it on; `NEXUS_STUDIO_PUBLICATION_SETTLE_SCHEDULE`
- * moves it. Scheduled only through lib/cron/clustered.ts (once per active business when business profiles are on).
+ * - Clustered (hard rule 7): one tick per business per schedule, on one replica.
+ * - Due rows only: `nextCheckAt <= now`, oldest due first, 20 per business per tick. A row is CLAIMED by moving its
+ *   `nextCheckAt` five minutes ahead (a lease) and counting the claim; a second replica, or an overlapping tick,
+ *   reads no row it can claim and makes no channel call.
+ * - First-deploy safety: a publication made before this step has `nextCheckAt` null and is never swept — unless
+ *   NEXUS_STUDIO_PUBLICATION_SETTLE=1 (the switch of main's earlier MCP sweep, #251, which this sweep replaces): then
+ *   each tick first gives every still-open publication of the last 30 days a due time, so none it used to settle is lost.
+ *
+ * Schedule: NEXUS_PUBLICATION_SETTLE_SCHEDULE (default every 2 minutes). NEXUS_PUBLICATION_SETTLE=0 turns it off.
  */
 import cron from '../lib/cron/clustered.js'
-import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { IN_FLIGHT, PUBLICATION_KIND, reschedulePublication, settleStudioPublication } from '../services/pim/studio-publication-settle.js'
 
-const JOB_NAME = 'studio-publication-settle'
-/** A publication younger than this is left to the request that sent it. */
-export const SETTLE_AFTER_MS = 2 * 60_000
-const HORIZON_MS = 30 * 24 * 60 * 60_000
-const BATCH = 50
-const PENDING = new Set(['SUBMITTED', 'UNVERIFIED', 'PUBLISHING'])
+const LEASE_MS = 5 * 60_000
+const PER_TICK = 20
+const ADOPT_HORIZON_MS = 30 * 24 * 60 * 60_000
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
-export async function runStudioPublicationSettleOnce(): Promise<{ summary: string }> {
-  return recordCronRun(JOB_NAME, async () => {
-    const { publicationResultFor, unsettledPublicationIds } = await import('../services/pim/studio-publication.service.js')
-    const totals = { read: 0, settled: 0, pending: 0, error: 0 }
-    await visitActiveWorkspaces(async () => {
-      const ids = await unsettledPublicationIds({ minAgeMs: SETTLE_AFTER_MS, horizonMs: HORIZON_MS, limit: BATCH })
-      for (const id of ids) {
-        totals.read += 1
-        try {
-          const result = await publicationResultFor(id)
-          if (PENDING.has(result.status)) totals.pending += 1
-          else totals.settled += 1
-        } catch (error) {
-          // One publication's failure never stops the others; it stays in the set for the next run.
-          totals.error += 1
-          logger.warn(`${JOB_NAME}: a publication could not be settled; the next run tries again`, {
-            publicationId: id, error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-    })
-    return { summary: `read ${totals.read} · settled ${totals.settled} · still pending ${totals.pending} · errors ${totals.error}` }
-  })
+export interface PublicationSettleTick {
+  due: number
+  claimed: number
+  settled: number
+  failed: number
+  /** Accepted publications whose missed offer promotion ran now. */
+  offersRecovered?: number
 }
 
-export function startStudioPublicationSettleCron(): void {
-  if (process.env.NEXUS_STUDIO_PUBLICATION_SETTLE !== '1') {
-    logger.info(`${JOB_NAME}: cron off (NEXUS_STUDIO_PUBLICATION_SETTLE=1 turns it on; it reads Amazon and eBay results)`)
+/** One sweep in the current business. Exported for tests and for a manual run. */
+export async function runPublicationSettleTick(now = new Date()): Promise<PublicationSettleTick> {
+  if (process.env.NEXUS_STUDIO_PUBLICATION_SETTLE === '1') {
+    await prisma.bulkOperation.updateMany({
+      where: { kind: PUBLICATION_KIND, status: { in: IN_FLIGHT }, nextCheckAt: null, createdAt: { gte: new Date(now.getTime() - ADOPT_HORIZON_MS) } },
+      data: { nextCheckAt: now },
+    })
+  }
+  const due = await prisma.bulkOperation.findMany({
+    where: { kind: PUBLICATION_KIND, status: { in: IN_FLIGHT }, nextCheckAt: { lte: now } },
+    orderBy: [{ nextCheckAt: 'asc' }, { createdAt: 'asc' }],
+    take: PER_TICK,
+    select: { id: true, status: true },
+  })
+  const tick: PublicationSettleTick = { due: due.length, claimed: 0, settled: 0, failed: 0 }
+  for (const row of due) {
+    // The claim: only the caller that moves this row's due time owns this look at it.
+    const claim = await prisma.bulkOperation.updateMany({
+      where: { id: row.id, status: row.status, nextCheckAt: { lte: now } },
+      data: { nextCheckAt: new Date(now.getTime() + LEASE_MS), checkCount: { increment: 1 } },
+    })
+    if (claim.count !== 1) continue
+    tick.claimed += 1
+    try {
+      const outcome = await settleStudioPublication(row.id, { actorUserId: null })
+      // A stored result scheduled its own next look (or none, when it is final).
+      if (outcome?.stored) { tick.settled += 1; continue }
+      await reschedulePublication(row.id, now)
+    } catch (error) {
+      tick.failed += 1
+      logger.warn('[publication-settle] check failed; it is tried again later', { publicationId: row.id, error: error instanceof Error ? error.message : String(error) })
+      try { await reschedulePublication(row.id, now) }
+      catch (again) { logger.warn('[publication-settle] could not reschedule; the lease expires and the next tick retries', { publicationId: row.id, error: again instanceof Error ? again.message : String(again) }) }
+    }
+  }
+  // Amazon sheet gaps — an accepted publication whose offer promotion never committed (a crash after the result was
+  // stored) is promoted now, once (`studio-publication-offer-promotion.ts`).
+  // Loaded here, not at the top: the price and fulfilment doors load the outbound queue.
+  try {
+    const { recoverOfferPromotions } = await import('../services/pim/studio-publication-offer-promotion.js')
+    const recovered = await recoverOfferPromotions(now)
+    if (recovered.promoted) tick.offersRecovered = recovered.promoted
+    if (recovered.failed) tick.failed += recovered.failed
+  } catch (error) {
+    logger.warn('[publication-settle] offer promotion recovery failed; the next tick tries again', { error: error instanceof Error ? error.message : String(error) })
+  }
+  if (tick.due || tick.offersRecovered) logger.info('[publication-settle] tick', { ...tick })
+  return tick
+}
+
+export function startPublicationSettleCron(): void {
+  if (process.env.NEXUS_PUBLICATION_SETTLE === '0') {
+    logger.info('publication-settle cron: off (NEXUS_PUBLICATION_SETTLE=0)')
     return
   }
-  const schedule = process.env.NEXUS_STUDIO_PUBLICATION_SETTLE_SCHEDULE || '*/5 * * * *'
+  if (scheduledTask) {
+    logger.warn('publication-settle cron already started')
+    return
+  }
+  const schedule = process.env.NEXUS_PUBLICATION_SETTLE_SCHEDULE ?? '*/2 * * * *'
+  if (!cron.validate(schedule)) {
+    logger.error('publication-settle cron: invalid schedule', { schedule })
+    return
+  }
   scheduledTask = cron.schedule(schedule, async () => {
-    await runStudioPublicationSettleOnce().catch(error =>
-      logger.error(`${JOB_NAME}: run failed`, { error: error instanceof Error ? error.message : String(error) }))
+    await recordCronRun('publication-settle', async () => {
+      const r = await runPublicationSettleTick()
+      return `due=${r.due} claimed=${r.claimed} settled=${r.settled} failed=${r.failed} offersRecovered=${r.offersRecovered ?? 0}`
+    })
   })
-  logger.info(`${JOB_NAME}: scheduled (${schedule})`)
+  logger.info('publication-settle cron: scheduled', { schedule })
 }
 
-export function stopStudioPublicationSettleCron(): void {
-  scheduledTask?.stop()
-  scheduledTask = null
+export function stopPublicationSettleCron(): void {
+  if (scheduledTask) {
+    scheduledTask.stop()
+    scheduledTask = null
+  }
 }

@@ -33,6 +33,13 @@ export interface Column<T> {
      * else to the left. Ignored unless `customizable`.
      */
     prefsLocked?: boolean;
+    /**
+     * Customisable grids (`grid/datagrid`): the column starts HIDDEN and is listed in Customise, so an
+     * operator can switch it on (e.g. a long channel reference). A saved layout keeps the operator's
+     * choice; a hidden-by-default column that is new to a saved layout is not switched on. Ignored
+     * unless `customizable`, and by the retiring `components/DataGrid`.
+     */
+    defaultHidden?: boolean;
     /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
     sticky?: boolean;
     /** pin this column to the right (sticky); give a numeric `width` so offsets stack */

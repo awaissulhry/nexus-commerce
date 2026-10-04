@@ -287,7 +287,9 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   const prepared = await prepareAmazonPublication(facts)
   expect(prepared.products).toEqual([{ productId: 'p', sku: 'ALIAS-SKU' }])
-  expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00', fulfillment_availability__quantity: 3 }))
+  expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00' }))
+  // Amazon sheet gaps: the row carries no quantity; the stock job's quantity is injected at send (`withSendQuantities`).
+  expect(m.row.mock.calls[0][0]).not.toHaveProperty('fulfillment_availability__quantity')
   expect(m.row.mock.calls[0][0]).not.toHaveProperty('main_product_image_locator')
   expect(m.row.mock.calls[0][0]).not.toHaveProperty('purchasable_offer__condition_type')
   expect(prepared.feed.messages[0]).toMatchObject({ sku: 'ALIAS-SKU', operationType: 'PARTIAL_UPDATE', attributes: { item_name: [{ value: 'Saved localized title', language_tag: 'it_IT' }] } })
@@ -304,7 +306,7 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
 })
 
-it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even when the product flag says FBM', async () => {
+it('an existing (live) Amazon listing is never sent a fulfilment code by Publish, whatever the flags say (design §B)', async () => {
   const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
   const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: '', currency: 'EUR' },
     listings: [{ productId: 'p', externalListingId: 'ASIN', fulfillmentMethod: null, platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
@@ -312,12 +314,14 @@ it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even 
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   m.region.mockResolvedValue('eu')
   await prepareAmazonPublication(facts)
-  // The old rule (`offer ?? typed ?? product`) sent DEFAULT here: the product flag outranked Amazon's own report.
-  expect(m.row.mock.calls.at(-1)![0].fulfillment_availability__fulfillment_channel_code).toBe('AMAZON_EU')
-  // CONTROL: with no report and no mirror, the product flag still decides.
+  // 2026-09-27 the old rule (`offer ?? typed ?? product`) sent DEFAULT here. Amazon sheet gaps: a live listing's
+  // fulfilment is the fulfilment door's and the stock job's, so Publish sends no code at all — FBA can never be
+  // re-coded by a publish, and a Remote Fulfilment code is never rebuilt.
+  expect(m.row.mock.calls.at(-1)![0]).not.toHaveProperty('fulfillment_availability__fulfillment_channel_code')
+  // Same with no report and no mirror (the product flag says FBM): still no code on a live listing.
   facts.listings[0].platformAttributes = {}
   await prepareAmazonPublication(facts)
-  expect(m.row.mock.calls.at(-1)![0].fulfillment_availability__fulfillment_channel_code).toBe('DEFAULT')
+  expect(m.row.mock.calls.at(-1)![0]).not.toHaveProperty('fulfillment_availability__fulfillment_channel_code')
 })
 
 it('F2: the Amazon product type is the resolver’s answer for this listing (no second read), never the product’s own', async () => {
@@ -471,4 +475,26 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   expect(allClosed.products).toEqual([]); expect(allClosed.feed.messages).toEqual([])
   facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
+})
+
+it('keeps each Amazon issue apart with its code, severity and attributes, and the feed completion time (sheet publish parity, step 2)', async () => {
+  m.call.mockResolvedValueOnce({ processingStatus: 'DONE', resultFeedDocumentId: 'report', processingEndTime: '2026-10-02T09:05:00Z' })
+    .mockResolvedValueOnce({ url: 'https://example.test/report' })
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+    issues: [
+      { messageId: 2, code: '90220', severity: 'ERROR', message: 'outer is required', attributeNames: ['outer'] },
+      { messageId: 2, code: '99022', severity: 'ERROR', message: 'size needs a value', attributeNames: ['bottoms_size'] },
+      { messageId: 1, code: '18', severity: 'WARNING', message: 'closure was normalised', attributeNames: ['closure'] },
+    ],
+    summary: { messagesProcessed: 2, messagesAccepted: 1, messagesInvalid: 1, errors: 2, warnings: 1 },
+  }), { status: 200 }))
+  const report = await readAmazonPublication('feed', 'account-b', ['PARENT', 'CHILD'])
+  expect(report?.completedAt).toEqual(new Date('2026-10-02T09:05:00Z'))
+  expect(report?.results).toEqual([
+    { sku: 'PARENT', failed: false, message: 'closure was normalised',
+      issues: [{ code: '18', severity: 'warning', message: 'closure was normalised', attributeNames: ['closure'] }] },
+    { sku: 'CHILD', failed: true, message: 'outer is required; size needs a value', issues: [
+      { code: '90220', severity: 'error', message: 'outer is required', attributeNames: ['outer'] },
+      { code: '99022', severity: 'error', message: 'size needs a value', attributeNames: ['bottoms_size'] }] },
+  ])
 })

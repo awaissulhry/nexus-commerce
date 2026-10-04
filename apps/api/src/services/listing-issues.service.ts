@@ -136,3 +136,33 @@ export async function mirrorListingIssues(
 
   return { open: byFingerprint.size, resolved: resolved.count }
 }
+
+/**
+ * Sheet publish parity, step 2 — a publication the channel ACCEPTED fixes what it carried, and nothing else.
+ *
+ * A JSON_LISTINGS_FEED message is partial (a PARTIAL_UPDATE / PATCH carries a few attributes), so its acceptance says
+ * nothing about an attribute it did not send. This resolves the listing's open issues from `source` whose attributes
+ * are ALL among `carriedAttributes`. An issue that names no attribute is never resolved here (nothing ties it to this
+ * send), and a fingerprint the same report still names (`keepFingerprints`) stays open.
+ */
+export async function resolveCarriedListingIssues(
+  prisma: PrismaClient,
+  listingId: string,
+  source: string,
+  carriedAttributes: readonly string[],
+  keepFingerprints: readonly string[] = [],
+): Promise<number> {
+  const carried = new Set(carriedAttributes.map(String))
+  if (!carried.size) return 0
+  const open = await prisma.listingIssue.findMany({
+    where: { listingId, source, resolvedAt: null },
+    select: { id: true, attributeNames: true, fingerprint: true },
+  })
+  const keep = new Set(keepFingerprints)
+  const ids = open
+    .filter((row) => row.attributeNames.length > 0 && row.attributeNames.every((name) => carried.has(name)) && !keep.has(row.fingerprint))
+    .map((row) => row.id)
+  if (!ids.length) return 0
+  const resolved = await prisma.listingIssue.updateMany({ where: { id: { in: ids }, resolvedAt: null }, data: { resolvedAt: new Date() } })
+  return resolved.count
+}

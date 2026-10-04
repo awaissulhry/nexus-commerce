@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
 import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
+import { shopifyInventoryHeldReason } from '../pim/shopify-inventory-hold.js'
 const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const linkedDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type ListingIdentity = { id: string; productId: string; externalListingId: string | null; platformAttributes: unknown }
@@ -115,7 +116,10 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const sharedConflict = rule && rule.sourceProductId !== remote.id && !excluded && pin ? sharedInformationSource(rule, field, workspace.draft, snapshot.rows) : undefined
       const conflictMessage = 'The saved draft conflicts with the sharing rule. Shopify will use the shared source. Edit or reset this field to resolve it.'
       const mapped = !rule && field.id !== 'inventory' && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
-      const reason = pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace))
+      // D2 = A (Amazon sheet gaps): while Nexus sends this listing's quantity, Shopify's own inventory field is held and
+      // points to Qty — the read set it (`studio-sheet`); this projection rebuilds the cell, so it applies the same rule.
+      const stockHeld = field.id === 'inventory' && !row.isParent ? shopifyInventoryHeldReason(row) : null
+      const reason = stockHeld ?? (pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace)))
       // The common content writer owns these values, source facts and save tokens. A provider read must not
       // replace a confirmed Nexus pin (including a blank). Keep older pending Shopify drafts visible for review.
       if (!rule && base?.contentAcknowledgement && pending === undefined && !pin) {

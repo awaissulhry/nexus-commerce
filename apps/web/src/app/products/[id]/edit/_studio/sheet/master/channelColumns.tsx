@@ -6,6 +6,9 @@ import { EbayPolicyEditor, isEbayPolicyField } from '../EbayPolicyInput'
 import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { CascadeCell } from '../channel/CascadeCell'
+import { asinColumnDef } from '../channel/AsinCell'
+import { LISTING_ASIN_KEY } from '../channel/stockCells'
+import { stockColumnDef } from '../channel/stockColumns'
 import { isCellEditable, withMappingRun } from '../channel/rows'
 import { optimisticCell } from '../channel/savedCellPatch'
 import { chipHasCell } from '../channel/viewChips'
@@ -184,6 +187,13 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
           roundTrip: roundTripClassRules<ChannelSheetRow>(tracker, (d) => d.rowId),
         }) as never), cellEditorParams: CHANNEL_VARIATION_EDITOR_PARAMS }
       : {}),
+    /**
+     * Amazon sheet gaps — Mode / Qty / Buffer are the MATRIX's columns (`matrixColumnDef` over the row's own Matrix
+     * cells, written through the Matrix door), and the ASIN is its own read-only cell. LAST for the same reason as the
+     * theme: each owns the renderer, the setter, the text and the editor, and clears this builder's formula selector.
+     */
+    ...(col.kind === 'stockControl' ? stockColumnDef(col, { tracker, scope: data.scope }) : {}),
+    ...(col.key === LISTING_ASIN_KEY ? asinColumnDef(col, data.scope.marketplace) : {}),
   }))
   const rank = new Map(orderColumnKeys(gridColumns as never, viewCtx).map((k, i) => [k, i]))
   const ordered = fields

@@ -27,6 +27,8 @@ vi.mock('./studio-publication-plan.js', async () => {
     object: (value: unknown) => value && typeof value === 'object' ? value : {} }
 })
 vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'live' }))
+// A status change is a refresh hint on the listing bus; here it is only recorded, never sent.
+vi.mock('../listing-events.service.js', () => ({ publishListingEvent: vi.fn() }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => 'live' }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: async () => ({ initialized: true }), saveContentWorkspace: vi.fn() }))
@@ -239,6 +241,33 @@ it('attributes Amazon messages by seller SKU and advances only the accepted SKU 
   expect(settled.find(row => (row.payload as any).productId === productId)).toMatchObject({ outcome: 'ACCEPTED', acceptedAt: expect.any(Date) })
   expect(settled.find(row => (row.payload as any).productId === childId)).toMatchObject({ outcome: 'FAILED', acceptedAt: null })
   expect(fixture.providerWrite).toHaveBeenCalledOnce()
+}, 30_000)
+
+/**
+ * Sheet publish parity, step 1 — a publication keeps its destination as indexed columns (the FAMILY, whichever member
+ * opened the studio) and its result in counts, so a history lists it without reading `changes`. Step 2 — a send
+ * schedules the result sweep (`checkCount` 0, the first look in two minutes); a final result clears `nextCheckAt`.
+ */
+it('keeps the destination of a publication as columns and its result in counts', async () => {
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
+  fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
+  const review = await previewStudioPublication(childId, amazon, null)
+  const destination = { kind: 'studio-publication', productId, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: amazonAccountId, aliasKey: '' }
+  expect(await prisma.bulkOperation.findUnique({ where: { id: review.id! } })).toMatchObject({ ...destination, status: 'PREVIEW',
+    submittedAt: null, summary: null, batchId: null, nextCheckAt: null, checkCount: null })
+  expect(await submitStudioPublication(childId, review.id!, {}, null)).toMatchObject({ status: 'SUBMITTED' })
+  const submitted = await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })
+  expect(submitted).toMatchObject({ ...destination, status: 'SUBMITTED', submittedAt: expect.any(Date), nextCheckAt: expect.any(Date), checkCount: 0,
+    summary: { products: 2, submitted: 2, accepted: 0, verified: 0, failed: 0, message: expect.stringContaining('feed-database') } })
+  expect(submitted.submittedAt!.toISOString()).toBe((submitted.changes as any).startedAt)
+  // The Amazon feed's first look: two minutes after its receipt (within this test's own run time).
+  const firstLook = submitted.nextCheckAt!.getTime() - Date.now()
+  expect(firstLook).toBeGreaterThan(60_000)
+  expect(firstLook).toBeLessThanOrEqual(120_000)
+  fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: true, message: 'Invalid content' }] })
+  expect(await studioPublicationResult(childId, review.id!, null)).toMatchObject({ status: 'PARTIAL' })
+  expect(await prisma.bulkOperation.findUnique({ where: { id: review.id! } })).toMatchObject({ ...destination, status: 'PARTIAL', nextCheckAt: null,
+    summary: { products: 2, submitted: 0, accepted: 1, verified: 0, failed: 1, message: expect.stringContaining('rejected by Amazon') } })
 }, 30_000)
 
 /**

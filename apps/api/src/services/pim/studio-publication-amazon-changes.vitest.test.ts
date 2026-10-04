@@ -47,7 +47,9 @@ it('one changed child/root produces one PATCH and journals only that explicit in
   pub.feed.messages[1].attributes!.brand = entries('Changed brand')
   pub.feed.messages[1].attributes!.purchasable_offer = entries('999')
   const plan = await prepareAmazonChanges(facts(), pub, accepted)
-  expect(plan.changes.some(c => ['purchasable_offer', 'fulfillment_availability', 'list_price'].includes(c.field))).toBe(false)
+  // The two offer roots are the offer lane's (a listing's saved offer draft); RRP is a root line like any other.
+  expect(plan.changes.some(c => ['purchasable_offer', 'fulfillment_availability'].includes(c.field))).toBe(false)
+  expect(plan.changes.find(c => c.productId === 'child' && c.field === 'list_price')).toMatchObject({ status: 'SAME', selectedByDefault: false })
   expect(defaults(plan)).toEqual([publicationChangeId('child', 'brand')])
   const sent = compileAmazonChanges(JSON.parse(JSON.stringify(plan)), defaults(plan))
   expect(sent.products).toEqual([{ productId: 'child', sku: 'SELLER-child' }])
@@ -55,6 +57,19 @@ it('one changed child/root produces one PATCH and journals only that explicit in
   expect(sent.fieldWrites).toEqual({ child: [{ field: 'brand', value: { state: 'value', value: entries('Changed brand') } }] })
   expect(m.bound).toHaveBeenCalledWith({ id: 'selected-account', region: 'eu' })
   expect(m.read).toHaveBeenCalledWith({ sellerId: 'SELLER', sku: 'SELLER-child', marketplaceId: 'MARKET', includedData: ['summaries', 'attributes'] })
+})
+
+it('🔴 a live listing\'s RRP (list_price) change is a root line against its publish baseline, ticked and sent alone', async () => {
+  const pub = publication(['parent']), accepted = baseline(pub)
+  pub.feed.messages[0].attributes!.list_price = entries('45')
+  // An offer line's field id in the journal (an accepted offer draft) never becomes a content root line.
+  accepted.set(publicationChangeId('parent', 'purchasable_offer__our_price'), { state: 'value', value: { pin: 44.9 } })
+  const plan = await prepareAmazonChanges(facts(['parent']), pub, accepted)
+  expect(plan.changes.some(c => c.field.startsWith('purchasable_offer'))).toBe(false)
+  expect(plan.changes.find(c => c.field === 'list_price')).toMatchObject({ status: 'SEND', selectedByDefault: true,
+    current: { state: 'value', value: entries('45') }, lastAccepted: { state: 'value', value: entries('39') }, channel: { state: 'value', value: entries('39') } })
+  expect(defaults(plan)).toEqual([publicationChangeId('parent', 'list_price')])
+  expect(compileAmazonChanges(plan, defaults(plan)).feed.messages[0].patches).toEqual([{ op: 'replace', path: '/attributes/list_price', value: entries('45') }])
 })
 
 it('no accepted baseline shows differences unticked, and no selected IDs submits no messages', async () => {

@@ -15,6 +15,10 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * dryRun defaults to TRUE — callers must explicitly pass dryRun:false to
  * send to Amazon. Honouring the publish gate is the responsibility of
  * amazonSpApiClient.submitListingPayload().
+ *
+ * A listing that carries an Amazon-only FBA code (Remote Fulfilment, VCS — set in
+ * Seller Central) in either place is skipped: the whole-root replace would
+ * overwrite that code with AMAZON_EU. It is FBA already; nothing to restore.
  */
 
 import { assertPushAllowed } from '@nexus/shared/push-lock'
@@ -22,6 +26,7 @@ import { closedMarketSet } from './amazon-market-offer.service.js'
 import prisma from '../db.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { logger } from '../utils/logger.js'
+import { keptAmazonFulfilmentCodes } from '../lib/amazon-fulfilment-programme.js'
 
 const AMZ_MP_ID: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4',
@@ -46,6 +51,8 @@ export interface FbaRestoreSummary {
   processed: number
   sent: number
   skippedNoFba: number
+  /** Listings skipped because they carry an Amazon-only FBA code (Remote Fulfilment, VCS) the restore would overwrite. */
+  skippedKeptCode: number
   results: FbaRestoreItemResult[]
 }
 
@@ -80,7 +87,7 @@ export async function restoreFbaListings(options?: {
 
   const closed = await closedMarketSet(listings.map(row => row.product.id))
   const results: FbaRestoreItemResult[] = []
-  let processed = 0, sent = 0, skippedNoFba = 0
+  let processed = 0, sent = 0, skippedNoFba = 0, skippedKeptCode = 0
 
   for (const cl of listings) {
     if (limit !== undefined && processed >= limit) break
@@ -97,6 +104,12 @@ export async function restoreFbaListings(options?: {
 
     if (!(agg?._sum.quantity && agg._sum.quantity > 0)) {
       skippedNoFba++
+      continue
+    }
+    const kept = keptAmazonFulfilmentCodes(cl.platformAttributes)
+    if (kept.length > 0) {
+      skippedKeptCode++
+      logger.info('fba-restore: skipped — the listing keeps an Amazon-only FBA code', { sku, marketplace: cl.marketplace, codes: kept })
       continue
     }
 
@@ -161,5 +174,5 @@ export async function restoreFbaListings(options?: {
     }
   }
 
-  return { dryRun, processed, sent, skippedNoFba, results }
+  return { dryRun, processed, sent, skippedNoFba, skippedKeptCode, results }
 }

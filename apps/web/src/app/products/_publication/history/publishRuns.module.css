@@ -1,0 +1,116 @@
+/* Publish history list — layout and domain content only; every control is the design system's. */
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+}
+
+.notes {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* Two-line cells: the main word, then a muted second line (account, title, who checked). */
+.stack,
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sub {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-sm);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sku {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.results {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--nds-text-3);
+}
+
+.search {
+  width: 260px;
+  max-width: 100%;
+}
+
+.row {
+  cursor: pointer;
+}
+
+/* The run whose detail is open. */
+.open {
+  background: var(--nds-surface-hover);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-16);
+}
+
+.pad {
+  padding: var(--nds-space-16);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}
+
+/* A phone gives the search its own line above the count: the toolbar row does not wrap. */
+.searchRow {
+  padding: var(--nds-space-12) var(--nds-space-16) 0;
+}
+
+.searchRow .search {
+  width: 100%;
+}
+
+/* A docked run detail: keep its width free on the right (PublishRuns `useDockReserve`), so the list reflows beside it. */
+.docked {
+  padding-right: var(--runs-dock-reserve, 0px);
+}
+
+/* Phone: the three quick filters as one wrapping row of chips. */
+.tileChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+/* The filters that are on, as removable tokens, at the top of the grid card. */
+.tokens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-space-16) 0;
+}
+
+/* The business page (/listings/publish-status): header, gate health section, then the list. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}

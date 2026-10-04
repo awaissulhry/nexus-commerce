@@ -31,6 +31,7 @@ import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { sellableAvailable } from './stock-pool/sync-ledgers.js'
 import { QUANTITY_PUSH_CHANNELS } from './sync-control-core.js'
+import { announceListingValues } from './listing-values-events.js'
 
 const FOLLOW_HOLD_MS = 30 * 1000
 
@@ -374,6 +375,10 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
       { delay: FOLLOW_HOLD_MS, jobId: queueId },
     )
   }
+  // Open sheets and Matrix tabs re-read the rows this wrote (committed chunks only; inside a caller's transaction the
+  // hint waits for its commit). Every caller is covered: Matrix, sheet, listings screens, Sync Control, stock import.
+  const moded = result.results.filter((r) => r.action === 'FOLLOW' || r.action === 'PIN').map((r) => r.listingId)
+  if (moded.length) announceListingValues(moded, ['quantityMode', 'quantity'])
 
   logger.info('follow-master: applied', {
     channel, follow, updated: result.updated, skippedFba: result.skippedFba, matched: result.matched, actor: actor ?? null,
@@ -582,6 +587,9 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
   for (const { queueId, productId } of queued) {
     await addJobSafely(outboundSyncQueue, 'sync-job', { queueId, productId, syncType: 'QUANTITY_UPDATE', source: 'STOCK_BUFFER' }, { delay: FOLLOW_HOLD_MS, jobId: queueId })
   }
+  // Same live hint as setFollowMasterQuantity: a buffer moves a following listing's quantity too.
+  const buffered = result.results.filter((r) => r.action === 'BUFFER').map((r) => r.listingId)
+  if (buffered.length) announceListingValues(buffered, ['stockBuffer', 'quantity'])
 
   logger.info('stock-buffer: applied', { channel, buffer, updated: result.updated, skippedFba: result.skippedFba, matched: result.matched, actor: actor ?? null })
   return result

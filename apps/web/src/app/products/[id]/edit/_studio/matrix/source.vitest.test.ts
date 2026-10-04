@@ -83,6 +83,20 @@ describe('patchMatrix — the live write door', () => {
     expect(seen[0]!.init?.credentials).toBe('include')
     expect(JSON.parse(String(seen[0]!.init?.body))).toEqual({ cells })
   })
+  it('sends the read\'s accountId in the body and each cell\'s expectedListingId (Amazon sheet gaps)', async () => {
+    const seen: Array<{ url: string; init?: RequestInit }> = []
+    const cells = [
+      { rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'syncQty' as const, value: 7, expectedVersion: 4, expectedListingId: 'L-de' },
+      { rowId: 'r2', coordinateKey: 'EBAY:IT', cell: 'syncBuffer' as const, value: 2, expectedVersion: 1, expectedListingId: 'L-ebay' },
+    ]
+    await patchMatrix('p', cells, { accountId: 'acc-1', baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ results: [], version: 60 }), seen) })
+    expect(JSON.parse(String(seen[0]!.init?.body))).toEqual({ cells, accountId: 'acc-1' })
+  })
+  it('no account → no accountId key at all', async () => {
+    const seen: Array<{ url: string; init?: RequestInit }> = []
+    await patchMatrix('p', [], { accountId: null, baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ results: [], version: 1 }), seen) })
+    expect(JSON.parse(String(seen[0]!.init?.body))).toEqual({ cells: [] })
+  })
   it('a refused write throws the server\'s sentence', async () => {
     await expect(patchMatrix('p', [], { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ message: 'Version conflict' }, 409)) })).rejects.toThrow('Version conflict')
   })

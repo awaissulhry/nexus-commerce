@@ -28,6 +28,7 @@ import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { followListingVersion, planSavedCellPatch } from './savedCellPatch'
+import { commitStockCells } from './stockCells'
 import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 import { channelScopeUrl as buildChannelScopeUrl, compactSheetUrl } from '../../sheetUrls'
 import { decodeSheetCells } from '@nexus/shared/sheet-cell-wire'
@@ -737,12 +738,42 @@ export async function updateListingAlias(input: {
 }
 
 
+/** One part of a split save, cell by cell: a part that answered for the whole batch hands each of its cells that answer. */
+function partCells(result: SheetWriteResult, cells: ReadonlyArray<{ colId: string }>): NonNullable<SheetWriteResult['cells']> {
+  return Object.fromEntries(cells.map(({ colId }) => [colId, {
+    ...(result.cells?.[colId] ?? { ok: result.ok, reason: result.reason }),
+    unreachable: result.cells?.[colId]?.unreachable ?? !!result.unreachable,
+  }]))
+}
+
 export function commitChannelRow(
   req: SheetWriteRequest<ChannelSheetRow>,
   coord: ChannelWriteCoord,
 ): Promise<SheetWriteResult> {
   // P2 review 2 — remember the cells as they were sent, once, before any part of the save leaves.
   if (!coord.sentCells) coord = { ...coord, sentCells: new Map(req.cells.map(({ colId }) => [colId, req.row?.values?.[colId]])) }
+  /**
+   * Amazon sheet gaps — a `stockControl` cell (Mode / Qty / Buffer) is the Matrix's own cell and leaves through the
+   * MATRIX door (`stockCells.ts` → `PATCH …/studio/matrix`), never the bulk route. Split on the column's kind, exactly
+   * like the variation theme below; each part's verdict stays on its own cells.
+   */
+  const stock = coord.kindOf ? req.cells.filter((c) => coord.kindOf!(c.colId) === 'stockControl') : []
+  if (stock.length > 0) {
+    const rest = req.cells.filter((c) => coord.kindOf!(c.colId) !== 'stockControl')
+    return (async () => {
+      const stocked = await commitStockCells({ ...req, cells: stock }, coord)
+      if (rest.length === 0) return stocked
+      const other = await commitChannelRow({ ...req, cells: rest }, coord)
+      return {
+        ok: stocked.ok && other.ok,
+        cells: { ...partCells(stocked, stock), ...partCells(other, rest) },
+        version: other.version ?? stocked.version,
+        conflict: stocked.conflict || other.conflict,
+        unreachable: stocked.unreachable || other.unreachable,
+        reason: stocked.reason ?? other.reason,
+      }
+    })()
+  }
   /**
    * VT.2 — a `variationTheme` cell leaves by its OWN route, exactly as the master sheet's does.
    *

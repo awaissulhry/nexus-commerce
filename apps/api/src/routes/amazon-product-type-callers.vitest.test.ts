@@ -54,6 +54,9 @@ vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putL
 // the real feed builder decide the product type the dry run shows.
 vi.mock('../services/pim/channel-specs/index.js', async importOriginal => ({ ...await importOriginal<object>(), loadAmazonSpec: async () => ({ fields: [] }) }))
 vi.mock('../services/amazon/mapping-payload.js', async importOriginal => ({ ...await importOriginal<object>(), applyResolvedMappingToAmazonFeed: (feed: string) => feed }))
+// U4b — the cockpit sends the stock job's own quantity (`send-quantity.ts`); this fixture seeds no stock, so it is stood in.
+vi.mock('../services/amazon/send-quantity.js', async importOriginal => ({ ...await importOriginal<object>(),
+  loadAmazonSendQuantity: async () => ({ quantity: 1, fba: false, refusal: null, code: null, listingFound: true }) }))
 
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'

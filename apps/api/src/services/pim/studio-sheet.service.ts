@@ -5,12 +5,14 @@ import { studioContentFacts } from './studio-content-wire.js'
 import { amazonImmutableDraftWarning } from './amazon-draft-policy.js'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { ContentWriteFacts } from '@nexus/shared/content-language'
+import type { AmazonOfferCellExtras } from './amazon-offer-cells.js'
+import type { StudioRowStock } from './studio-stock.js'
 import { marketLanguages } from './market-languages.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
 import { contentWireValue } from './content-read.js'
 import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
-import { effectiveFulfilment } from './matrix-cells.js'
+import { effectiveFulfilment, reportedFulfilment } from './matrix-cells.js'
 import { normalizeLanguage } from './content-language.js'
 /**
  * PES.5 — the Product Edit Studio's sheet read: ONE family, ONE scope.
@@ -148,7 +150,9 @@ export interface MappedCell {
   listingLevel?: import('./ebay-listing-level.js').ListingLevelMark
 }
 
-export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts {
+export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts, AmazonOfferCellExtras {
+  /** D9 = A: Amazon's last report on an Amazon Fulfillment method cell, set only when it differs from what Nexus sends. */
+  fulfilmentReported?: 'AFN'
   tier?: importResolvedContent['tier']
   language?: importResolvedContent['language']
   requested?: importResolvedContent['requested']
@@ -308,6 +312,8 @@ export interface StudioRow {
   aliasId: string | null
   values: Record<string, StudioCellValue>
   listing: SheetListing | null
+  /** Channel scope only: the Matrix coordinate and cells the Mode / Qty / Buffer columns show and write (`studio-stock.ts`). */
+  stock?: StudioRowStock
   readiness: SheetReadiness
   completeness: MasterCompleteness
 }
@@ -472,6 +478,11 @@ export interface GetStudioSheetInput {
    * (the variation projection's candidate axes). The operator's sheet shows the listing's one value on every row.
    */
   rowOwnValues?: boolean
+  /** `products.price.edit` for the caller: without it the Amazon offer price columns are held (as the Matrix). Absent = true. */
+  canEditPrice?: boolean
+  /** Fill the Mode / Qty / Buffer and ASIN cells (one Matrix read of the family). Only the sheet a person sees asks for
+   * them; readiness, import previews, transfers and other internal reads skip the extra read (the columns still come). */
+  stockCells?: boolean
 }
 
 export class UnknownProductError extends Error {
@@ -598,6 +609,11 @@ const CHANNEL_WRITABLE: Record<string, 'title' | 'description' | 'bulletPoints' 
 /** Channels whose prefix the write endpoint understands (`channelOf`). */
 const CHANNEL_WRITE_PREFIX: Record<string, string> = { AMAZON: 'amazon', EBAY: 'ebay' }
 
+/** `studio-stock.ts`, loaded by the first channel read: it imports the Matrix, whose module graph imports THIS module, and
+ * a static import would close that cycle (a half-built module — `variation-excluded.ts`). */
+let studioStock: typeof import('./studio-stock.js') | null = null
+const loadStudioStock = async () => (studioStock ??= await import('./studio-stock.js'))
+
 
 export interface WriteRouting extends Pick<ContentWriteFacts, 'contentAddress' | 'contentAcknowledgement'> {
   writeField: string
@@ -641,6 +657,12 @@ export function resolveWriteRouting(
       writable: col.editable !== false,
       writeBlockedReason: null,
     }
+  }
+  // Amazon sheet gaps — a stock column IS a Matrix cell, written through `PATCH /studio/matrix`, never a bulk field. Only a
+  // channel read builds one, after loading `studio-stock.ts`; anything else fails loudly rather than route it as a bulk write.
+  if (col.kind === 'stockControl') {
+    if (!studioStock) throw new Error('A stock column is routed by studio-stock.ts, which no channel sheet read has loaded yet.')
+    return studioStock.stockControlRouting({ ...col, editable: col.editable !== false })
   }
   const localizable = isLocalizableContent(col.slot?.of ?? col.key, col.storage)
   if (content && localizable) {
@@ -1074,6 +1096,9 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       throw new ScopeNotAvailableError(wantChannel, market, [...new Set(full.coordinates.map((c) => c.channel))])
     }
   }
+  // Amazon sheet gaps (D1) — on a channel sheet Mode / Qty / Buffer replace the raw quantity columns (the specs keep them).
+  const stock = coordinate ? await loadStudioStock() : null
+  if (stock && coordinate) columns = stock.withoutRawQuantityColumns(columns, coordinate.channel)
 
   const scope: StudioScope = coordinate
     ? { kind: 'channel', channel: coordinate.channel, marketplace: coordinate.marketplace, label: coordinate.label, connectionId: null, locale }
@@ -1261,6 +1286,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   const rows: StudioRow[] = []
   // A family on the photo plan: the "Product media" cell reads the plan (P3c), never the older gallery store.
   const mediaPlan = await sheetMediaPlan(rootId)
+  // Amazon sheet gaps (D4=B, D3) — the offer columns' rule (draft over live, holds, Publish words) and the real fulfilment code.
+  const offerCells = coordinate?.channel === 'AMAZON' ? await (await import('./amazon-offer-cells.js')).loadAmazonOfferCells({ listingIds: listingRows.map((l) => l.id), keys: columns.map((c) => c.key), canEditPrice: input.canEditPrice !== false }) : null
 
   for (const projection of projections) {
     mark('preRows')
@@ -1300,6 +1327,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
 
         let base: SheetCellValue | null = null
         let divergence: { publishesAs: unknown; note: string } | null = null
+        let fulfilmentReported: 'AFN' | null = null
         const contentHit = resolved[contentField(col.slot?.of ?? col.key)]?.language ? resolved[contentField(col.slot?.of ?? col.key)] : null
         const routing = resolveWriteRouting(col, coordinate, projection.id, { requested: locale, primary: PRIMARY_CONTENT_LOCALE,
           resolved: contentHit ? { tier: contentHit.tier, language: contentHit.language, follows: contentHit.tier === 'pin' ? contentHit.follows ?? false : true } : undefined,
@@ -1412,6 +1440,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           const code = effective?.method === 'FBA' ? col.options?.find((o) => o.startsWith('AMAZON_')) : effective?.method === 'FBM' && col.options?.includes('DEFAULT') ? 'DEFAULT' : undefined
           const own = effective?.source === 'offer' || effective?.source === 'set' || effective?.source === 'reported'
           base = code ? { value: code, source: own ? 'channelExplicit' : 'master', inheritedFrom: own ? null : rootId, inherited: !own } : null
+          // D9 = A — Amazon's last report says FBA while Nexus sends FBM: the cell says so, in the Matrix's words.
+          if (base && effective?.method === 'FBM' && reportedFulfilment(row?.platformAttributes) === 'AFN') fulfilmentReported = 'AFN'
         }
 
         // The mapped category fills only the coordinate channel's own category field (`CHANNEL_CATEGORY_FIELD`), never
@@ -1512,6 +1542,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         const fx = formulaByProduct.get(`${product.id}:${coordinate ? projection.id ?? '' : ''}`)?.get(col.key)
         values[col.key] = {
           ...cell,
+          ...(fulfilmentReported ? { fulfilmentReported } : {}),
           ...studioContentFacts(contentHit?.content, m, fx, locale, coordinate?.label),
           // Show the effective channel value that preview validates, including an empty mapping.
           // The separate mapping object retains transforms, provenance and diagnostics.
@@ -1576,6 +1607,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           writeBlockedReason: cellBlockedReason,
         }
       }
+      offerCells?.apply(values, { listingId: listingRow?.id ?? null, isParent })
 
       const listing: SheetListing | null = listingRow
         ? {
@@ -1872,6 +1904,19 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }
   }
 
+  // ── 5c. the stock cells (and the Amazon ASIN) from ONE Matrix read of the family ──
+  if (stock && coordinate && input.stockCells) {
+    phases.stock = (await stock.attachStudioStock({ rows, rootId: root.id, channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? null })).ms
+    _pm += phases.stock // not counted again in the `rows` remainder
+    // D2 = A — while Nexus sends a Shopify listing's quantity, Shopify's own inventory field is held, pointing to Qty (the
+    // family row keeps its own reason: the field belongs to the variant rows).
+    const inventory = coordinate.channel === 'SHOPIFY' ? columns.filter(stock.isShopifyInventoryColumn) : []
+    if (inventory.length) for (const row of rows) {
+      const reason = row.isParent ? null : stock.shopifyInventoryHeldReason(row)
+      if (reason) for (const col of inventory) if (row.values[col.key]) Object.assign(row.values[col.key], { editable: false, writable: false, writeBlockedReason: reason })
+    }
+  }
+
   // Audit P5 (2026-10-01) — what eBay needs for a NEW listing beyond its category's fields (an item location, the three
   // business policies), named on the main row only when Nexus KNOWS publish could not fill it (`ebay-publish-readiness.ts`).
   if (coordinate?.channel === 'EBAY') {
@@ -2018,9 +2063,11 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       variationAxes: (root.variationAxes as string[]) ?? [],
       axes: familyAxes,
     },
-    // The relationship columns join the sheet's groups too (Offer Identity, on every sheet).
+    // The relationship columns join the sheet's groups too (Offer Identity, on every sheet), and so do the stock columns
+    // (Amazon sheet gaps): Mode / Qty / Buffer (`master:inventory`) land in Offer, the ASIN (`master:identifiers`) in Offer Identity.
     ...groupSheetColumns(
-      [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting],
+      [...relationshipColumns.map(col => ({ ...col, ...resolveWriteRouting(col, coordinate, null), writable: false, affectsAllChannels: false, writeBlockedReason: col.helpText, formulaWritable: false, axis: false })), ...columnsWithRouting,
+        ...(stock && coordinate ? stock.studioStockSheetColumns(coordinate.channel) : [])],
       coordinate?.channel),
     aliases,
     rows,

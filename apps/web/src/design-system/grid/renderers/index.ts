@@ -98,3 +98,6 @@ export {
 export { CellSaveMark, type CellSaveMarkProps } from './CellSaveMark'
 export { intentMeta, factMeta, verdictMeta, presenceVerdict, presenceLine, PRESENCE_INTENTS, CHANNEL_FACTS, PRESENCE_VERDICTS, type Presence, type PresenceIntent, type ChannelFact, type PresenceVerdict, type PresenceMeta } from './presence'
 export { listingStatusMeta, LISTING_STATUSES, type ListingStatusMeta } from './listingStatus'
+// Sheet publish parity (2026-10-02) — the ONE publish status vocabulary, and the "Last publish" cell and its card.
+export { publicationStatusMeta, publishResultMeta, publishFamilyMeta, publishCellModel, publishCardModel, publishShortTime, publishFullTime, publishShownStatus, NO_PUBLISH, CREATE_FIELD, PUBLICATION_STATUSES, PUBLISH_RESULT_STATUSES, type PublishStatusMeta, type PublicationStatus, type PublishResultStatus, type PublishIssue, type PublishLast, type PublishFamilyCounts, type PublishStatusValue, type PublishCellState, type PublishCellModel, type PublishCardIssue, type PublishCardModel } from './publishStatus'
+export { PublishStatusCell, PublishStatusView, PublishStatusCard, PublishStatusPill, type PublishStatusCellParams, type PublishStatusViewProps, type PublishStatusCardProps } from './PublishStatusCell'

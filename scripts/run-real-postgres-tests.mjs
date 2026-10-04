@@ -177,6 +177,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'product media pop-up save (Lane C: one save bound by expect; two pop-ups on one set or one list, one wins; a gallery save is announced)', file: 'src/services/images/media-popup-save.vitest.test.ts', expect: 4 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 13 },
   { name: 'draft listings race (product sheet create path step 2: two concurrent first saves create one set)', file: 'src/services/pim/draft-listing-postgres.vitest.test.ts', expect: 2 },
+  { name: 'publication batch races (sheet publish parity step 5: two senders claim once, cancel vs send, two batches from one set of reviews)', file: 'src/services/pim/publication-batch-postgres.vitest.test.ts', expect: 3 },
   { name: 'live listings race (step 7: two recorders, or a draft creator and a recorder, leave one live row)', file: 'src/services/pim/live-listing-postgres.vitest.test.ts', expect: 2 },
   { name: 'first theme save race (product sheet create path step 4: two concurrent version-0 saves, one draft, one 409)', file: 'src/services/pim/family-projection-postgres.vitest.test.ts', expect: 1 },
   { name: 'eBay price read-back dedupe (JSON-path key, classes, 24 h, per business)', file: 'src/services/ebay-price-readback-postgres.vitest.test.ts', expect: 4 },

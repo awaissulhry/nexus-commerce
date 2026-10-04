@@ -7,7 +7,7 @@ import { Banner, Modal } from '@/design-system/components'
 import { Button, Checkbox, Tag } from '@/design-system/primitives'
 import { usePermission } from '@/lib/auth/AuthProvider'
 
-import { publicationRequest } from '../../publication/request'
+import { publicationRequest } from '@/app/products/_publication/dialog/request'
 import { requestAmazonRun, requestAmazonWorkspace } from '../amazon/transport'
 import { amazonOwnMarkets, destinationLabel, type MediaDestinationRow, type MediaRead } from './model'
 import { amazonCheck, amazonOutcome, amazonSendNote, destinationsToCheck, ebayCheck, ebayOutcome, unsupportedReason, type AmazonSend, type EbaySend, type PhotoCheck, type PhotoOutcome } from './publishModel'

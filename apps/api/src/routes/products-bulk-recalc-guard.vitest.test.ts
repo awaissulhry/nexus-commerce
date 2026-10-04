@@ -67,6 +67,11 @@ vi.mock('../services/product-event.service.js', () => ({ productEventService: { 
 vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { writeMany: async () => [] } }))
 vi.mock('../services/product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: async () => [] } }))
 vi.mock('../services/pim/readiness-index.service.js', async () => (await import('../test-support/readiness-module-mock.js')).readinessModuleMock(async () => {}))
+// A listing quantity goes through the Matrix's Mode / Qty door; its primitives run on PostgreSQL elsewhere (sheet-quantity-door).
+vi.mock('../services/pim/matrix-write.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/pim/matrix-write.service.js')>()),
+  pinTypedQuantity: async () => ({}), writeQuantityMode: async () => ({}),
+}))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),

@@ -38,7 +38,8 @@ describe('LX.12 canonical language wire mirrors', () => {
       StudioCellValue: { masterOnly: [], channelOnly: ['affectsAllChannels', 'nexusDraft', 'resettable', 'shopifyWrite', 'writable', 'writeBlockedReason', 'writeVerb'] },
       // `referenceImages` (2026-09-24): pictures for Shopify references, display only, Shopify channel scope only — like `shopifyField`.
       // `referenceSwatches` (2026-09-28, sheet pop-up rebuild P1): the colour of an entry whose picture is a colour — the same kind of field.
-      SheetColumn: { masterOnly: ['axis'], channelOnly: ['referenceImages', 'referenceSwatches', 'shopifyField'] },
+      // `matrixCell` (2026-10-03, Amazon sheet gaps): the Matrix cell a `stockControl` column shows — studio channel sheets only.
+      SheetColumn: { masterOnly: ['axis'], channelOnly: ['matrixCell', 'referenceImages', 'referenceSwatches', 'shopifyField'] },
     }
     for (const [name, allowed] of Object.entries(exemptions)) {
       const master = properties('apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts', name)

@@ -49,18 +49,27 @@ function sendError(reply: FastifyReply, err: unknown, log: { error: (o: unknown,
 
 const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice'])
 
-/** The body is parsed at ONE boundary: a malformed cell is refused with a sentence, never half-applied. */
-function parseCells(body: unknown): { cells: MatrixWriteCell[] } | { problem: string } {
-  const raw = (body as { cells?: unknown } | null)?.cells
+const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0
+
+/**
+ * The body is parsed at ONE boundary: a malformed cell is refused with a sentence, never half-applied. `accountId` is the
+ * account the caller's read used (the GET's `?accountId=`), so the door resolves the same listings; `expectedListingId`
+ * is the listing the caller saw on a cell's coordinate.
+ */
+function parseCells(body: unknown): { cells: MatrixWriteCell[]; accountId: string | null } | { problem: string } {
+  const b = body as { cells?: unknown; accountId?: unknown } | null
+  const raw = b?.cells
   if (!Array.isArray(raw)) return { problem: 'The write carried no `cells` array' }
   if (raw.length > 500) return { problem: 'At most 500 cells per write' }
+  if (b?.accountId != null && !isId(b.accountId)) return { problem: '`accountId` must be an account id' }
   const cells: MatrixWriteCell[] = []
   for (const c of raw as Array<Record<string, unknown>>) {
     if (typeof c?.rowId !== 'string' || typeof c?.coordinateKey !== 'string' || typeof c?.cell !== 'string' || !WRITABLE.has(c.cell) || typeof c?.expectedVersion !== 'number')
       return { problem: 'Each cell needs rowId, coordinateKey, a writable cell kind and a numeric expectedVersion' }
-    cells.push({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell as MatrixWriteCell['cell'], value: c.value, expectedVersion: c.expectedVersion })
+    if (c.expectedListingId !== undefined && !isId(c.expectedListingId)) return { problem: '`expectedListingId` must be a listing id' }
+    cells.push({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell as MatrixWriteCell['cell'], value: c.value, expectedVersion: c.expectedVersion, ...(isId(c.expectedListingId) ? { expectedListingId: c.expectedListingId } : {}) })
   }
-  return { cells }
+  return { cells, accountId: isId(b?.accountId) ? b.accountId : null }
 }
 
 function parseVerb(body: unknown): { req: MatrixVerbRequest & { preview?: VerbPreview } } | { problem: string } {
@@ -88,7 +97,7 @@ const studioMatrixRoutes: FastifyPluginAsync = async (fastify) => {
     const parsed = parseCells(request.body)
     if ('problem' in parsed) return reply.code(400).send({ error: 'invalid_write', message: parsed.problem })
     try {
-      return await writeMatrixCells({ productId: id, actor: actorOf(request), can: permissionCheckerFor(request) }, parsed.cells)
+      return await writeMatrixCells({ productId: id, actor: actorOf(request), can: permissionCheckerFor(request), accountId: parsed.accountId }, parsed.cells)
     } catch (err) { return sendError(reply, err, request.log, { id, route: 'matrix.write' }) }
   })
 

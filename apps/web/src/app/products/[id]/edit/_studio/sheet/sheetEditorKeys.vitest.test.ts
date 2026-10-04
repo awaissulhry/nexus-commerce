@@ -282,7 +282,7 @@ const CASES: Record<string, Case> = {
   MediaEditorGateway: { na: 'The product media cell: cancels the grid edit on open and hands off to the media dialog, which owns its keys.' },
   agLargeTextCellEditor: { na: 'AG\'s own long-text editor: AG reads its value directly, so nothing sits between the key and the value.' },
   agTextCellEditor: { na: 'AG\'s own text editor (a selector fallback that the studio always replaces with the value editor).' },
-  agNumberCellEditor: { na: 'AG\'s own number editor (a selector fallback that the studio always replaces with the value editor).' },
+  agNumberCellEditor: { na: 'AG\'s own number editor: AG reads its value directly, so nothing sits between the key and the value. The stock Qty and Buffer cells mount it; elsewhere it is a selector fallback the studio replaces with the value editor.' },
 }
 
 /* ── 3. the run ────────────────────────────────────────────────────────────────────────────────────────────── */

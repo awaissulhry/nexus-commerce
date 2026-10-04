@@ -67,6 +67,12 @@ export function channelValueMutation(store: ChannelStore | undefined, keys: stri
   return mutation
 }
 
+/**
+ * Bug 6 (Amazon sheet gaps): a SET never goes through an existing list. It used to turn the list into `{}` — a generic
+ * write to `fulfillment_availability/0/…` destroyed the fulfilment code the FBA guard reads. A list is written by its
+ * own door, so the write is refused; a removal through a list stays a no-op (it never rewrites one). Numeric keys of an
+ * OBJECT (Etsy's `etsyProperties/<property id>/…`) are ordinary keys and still written.
+ */
 export function applyPlatformMutations(value: unknown, mutations: ChannelValueMutation['platform']): ValueRecord {
   const bag = clone(value)
   for (const { path, value, remove } of mutations) {
@@ -78,6 +84,7 @@ export function applyPlatformMutations(value: unknown, mutations: ChannelValueMu
     for (const part of path.slice(0, -1)) {
       if (!current[part] || typeof current[part] !== 'object' || Array.isArray(current[part])) {
         if (remove) { absent = true; break }
+        if (Array.isArray(current[part])) throw new Error(`A channel value cannot be written inside a list (${path.join('.')}); use the field's own editor.`)
         current[part] = {}
       }
       current = current[part] as ValueRecord

@@ -25,6 +25,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
+import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import type { IntendedResolution } from '../sync-control-core.js'
 
 /* ── coordinates ───────────────────────────────────────────────────────────────────────────── */
@@ -172,6 +173,9 @@ export function deriveFulfilment(channel: string, flatChannel: unknown, productM
  *
  * Order: an active offer's method → the typed column (`setFulfillmentMethod` writes it with both mirrors) → Amazon's
  * own reported code (the nested key a pull writes and the FBA guard reads) → the flat mirror → the product's flag.
+ * D9 = A: Amazon's report (either place) ranks below the typed method — an old pulled copy saying FBA is shown as
+ * "Amazon reports AFN — differs from Nexus" (`matrixReportedDiffers`), not as the listing's method. The guard decides
+ * what is pushed (`isFbaCoordinate`).
  * `null` when nothing says anything: a new listing must still choose (the publish step refuses it by name).
  */
 export function effectiveFulfilment(input: {
@@ -185,10 +189,10 @@ export function effectiveFulfilment(input: {
     return s === 'FBA' || s === 'AFN' ? 'FBA' : s === 'FBM' || s === 'MFN' || s === 'MERCHANT' ? 'FBM' : null
   }
   const offer = named(input.activeOfferMethod)
-  if (offer) return { method: offer, source: 'offer' }
   const typed = named(input.typed)
-  if (typed) return { method: typed, source: 'set' }
   const reported = named(reportedFulfilment(input.platformAttributes))
+  if (offer) return { method: offer, source: 'offer' }
+  if (typed) return { method: typed, source: 'set' }
   if (reported) return { method: reported, source: 'reported' }
   const mirror = named((input.platformAttributes as { fulfillmentChannel?: unknown } | null)?.fulfillmentChannel)
   if (mirror) return { method: mirror, source: 'mirror' }
@@ -196,11 +200,15 @@ export function effectiveFulfilment(input: {
   return product ? { method: product, source: 'product' } : null
 }
 
-/** Amazon's last REPORTED channel — the nested key the flat-file PULL writes from Amazon's own data. */
+/**
+ * Amazon's REPORTED channel — every fulfilment code the listing carries, in BOTH places (the nested key the fulfilment
+ * door writes and `attributes.fulfillment_availability`, which Amazon's pull writes), every entry. Fail-closed: ANY FBA
+ * code (FBA, Remote Fulfilment, VCS) → AFN; otherwise a merchant code (an old label value counts as its code) → MFN.
+ */
 export function reportedFulfilment(platformAttributes: unknown): 'AFN' | 'MFN' | null {
-  const code = String((platformAttributes as { fulfillment_availability?: Array<{ fulfillment_channel_code?: unknown }> } | null)?.fulfillment_availability?.[0]?.fulfillment_channel_code ?? '').toUpperCase()
-  if (code.startsWith('AMAZON') || code === 'AFN') return 'AFN'
-  if (code === 'DEFAULT' || code === 'MFN') return 'MFN'
+  const codes = amazonFulfilmentCodes(platformAttributes)
+  if (codes.some(isFbaFulfilmentCode)) return 'AFN'
+  if (codes.some((c) => describeAmazonFulfilmentCode(c).method === 'FBM')) return 'MFN'
   return null
 }
 

@@ -11,6 +11,7 @@ export { SourceIndicator, type SourceIndicatorProps, type ValueSourceKind } from
 export { Modal, type ModalProps } from './Modal'
 export { type Size } from '../primitives/size'
 export { Drawer, type DrawerProps } from './Drawer'
+export { DrawerOverlayCard, type DrawerOverlayCardProps } from './DrawerOverlayCard'
 export { Menu, type MenuProps, type MenuItemDef } from './Menu'
 export { ToastProvider, useToast, type ToastApi } from './Toast'
 export { MultiSelect, type MultiSelectProps, type MultiSelectOption } from './MultiSelect'
@@ -91,3 +92,5 @@ export { ChangeReview, type ChangeReviewProps, type ChangeReviewItem } from './C
 // PSIE — the picked file before/while it is read, and a background job's progress in a dialog.
 export { FileRow, type FileRowProps } from './FileRow'
 export { JobProgress, jobPercent, type JobProgressProps } from './JobProgress'
+// Sheet publish parity (2026-10-02) — a read-only record of steps; Stepper is wizard navigation.
+export { Timeline, type TimelineProps, type TimelineStep } from './Timeline'

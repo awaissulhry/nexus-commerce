@@ -25,6 +25,8 @@ import type { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
+import { AMAZON_FBA_CODE, amazonFulfilmentCodes, describeAmazonFulfilmentCode, hasFbaFulfilmentCode, keptAmazonFulfilmentCodes, normaliseAmazonFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
+import { announceListingValues } from '../listing-values-events.js'
 
 export type FulfilmentWrite = 'FBA' | 'FBM' | null
 
@@ -64,7 +66,11 @@ const FBA_LOCATION_CODE = 'AMAZON-EU-FBA'
 /** The nested code the guard reads. Every cached Amazon market enum is `AMAZON_EU | DEFAULT` (phase 0(c)). */
 export const nestedChannelCode = (method: 'FBA' | 'FBM'): string => (method === 'FBA' ? 'AMAZON_EU' : 'DEFAULT')
 
-/** PURE — the platformAttributes bag after a fulfilment write: flat mirror + nested code, everything else kept. */
+/**
+ * PURE — the platformAttributes bag after a fulfilment write: flat mirror + nested code, everything else kept.
+ * An FBA write keeps the `AMAZON_*` code the listing already carries in either place (Remote Fulfilment, VCS — Amazon's
+ * own codes, set in Seller Central) and writes `AMAZON_EU` only when it has none.
+ */
 export function fulfilmentAttributes(bag: unknown, channel: string, method: FulfilmentWrite): Record<string, unknown> {
   const pa: Record<string, unknown> = { ...((bag as Record<string, unknown> | null) ?? {}) }
   if (method == null) {
@@ -78,7 +84,9 @@ export function fulfilmentAttributes(bag: unknown, channel: string, method: Fulf
     const first = (existing[0] && typeof existing[0] === 'object' ? existing[0] : {}) as Record<string, unknown>
     /* A merchant quantity under an FBA code is exactly what the guard exists to refuse — never carry one across. */
     const { quantity: _q, ...rest } = first
-    pa.fulfillment_availability = [{ ...(method === 'FBA' ? rest : first), fulfillment_channel_code: nestedChannelCode(method) }, ...existing.slice(1)]
+    const code = method === 'FBA' ? amazonFulfilmentCodes(bag).find((c) => c.startsWith('AMAZON')) ?? AMAZON_FBA_CODE : nestedChannelCode(method)
+    const others = existing.slice(1).filter((e) => method !== 'FBA' || normaliseAmazonFulfilmentCode((e as { fulfillment_channel_code?: unknown } | null)?.fulfillment_channel_code) !== code)
+    pa.fulfillment_availability = [{ ...(method === 'FBA' ? rest : first), fulfillment_channel_code: code }, ...others]
   }
   return pa
 }
@@ -87,6 +95,22 @@ export const guardHeldReason = (fbaUnits: number, activeOffer: boolean): string 
   activeOffer && fbaUnits <= 0
     ? 'Refused — an active FBA offer keeps the guard closed; convert the offer in Seller Central first'
     : `Refused — ${fbaUnits} units of FBA stock on hand keep the guard closed; convert the offer in Seller Central first`
+
+/**
+ * PURE — why a write that is not FBA is refused by the listing's own fulfilment codes, or null. A code Amazon set in
+ * Seller Central (Remote Fulfilment, VCS) is kept on every save, so neither FBM nor a clear may replace it; an FBM write
+ * that leaves an FBA code behind (Amazon still reports one) would be a state the push guard ignores.
+ */
+export function codeHeldReason(bag: unknown, method: FulfilmentWrite): string | null {
+  if (method === 'FBA') return null
+  const kept = keptAmazonFulfilmentCodes(bag)[0]
+  if (kept) return `Refused — ${describeAmazonFulfilmentCode(kept).readOnlyReason}`
+  if (method === 'FBM' && hasFbaFulfilmentCode(fulfilmentAttributes(bag, 'AMAZON', 'FBM'))) {
+    const code = amazonFulfilmentCodes(bag).find((c) => describeAmazonFulfilmentCode(c).method === 'FBA') ?? AMAZON_FBA_CODE
+    return `Refused — Amazon reports ${code} (FBA) for this listing, which keeps the guard closed; convert the offer in Seller Central first`
+  }
+  return null
+}
 
 export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[]; actor: string }): Promise<FulfilmentResult> {
   const result: FulfilmentResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0, productConversions: [] }
@@ -119,6 +143,8 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     if (l.channel === 'AMAZON' && t.method === 'FBM' && (units > 0 || activeFbaOffer.has(l.id))) {
       push({ ...base, outcome: 'refused', reason: guardHeldReason(units, activeFbaOffer.has(l.id)), version: l.version }); continue
     }
+    const codeHeld = l.channel === 'AMAZON' ? codeHeldReason(l.platformAttributes, t.method) : null
+    if (codeHeld) { push({ ...base, outcome: 'refused', reason: codeHeld, version: l.version }); continue }
     const pa = fulfilmentAttributes(l.platformAttributes, l.channel, t.method)
     const paBefore = (l.platformAttributes as Record<string, unknown> | null) ?? {}
     const mirrorsAlreadyRight = JSON.stringify(paBefore.fulfillmentChannel ?? null) === JSON.stringify(pa.fulfillmentChannel ?? null)
@@ -155,6 +181,9 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     push({ ...base, outcome: 'applied', version: written.version, productFlag: written.productFlag })
   }
   if (audit.length) await prisma.syncControlAudit.createMany({ data: audit }).catch((err) => logger.warn('fulfillment: audit write failed', { error: err instanceof Error ? err.message : String(err) }))
+  // Live sync: the sheet and the Matrix re-read these rows once the write commits (it waits for the caller's COMMIT).
+  const applied = result.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId)
+  if (applied.length > 0) announceListingValues(applied, ['fulfilment'], 'fulfilment-method')
   // A completed FBM conversion pushes pool truth now (D-MX11) — in the background, like every Sync Control mutation.
   // After COMMIT when a caller's transaction is open (the product sheet writes through here inside its bulk save):
   // started inline, it would run on that transaction's client while the transaction is still deciding.

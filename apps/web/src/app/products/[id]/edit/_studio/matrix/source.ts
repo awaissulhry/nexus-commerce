@@ -26,6 +26,7 @@ import {
   type MatrixRead,
   type MatrixRowRead,
   type MatrixWriteCell,
+  type MatrixWriteRequest,
   type MatrixWriteResult,
 } from './contract'
 import type { PreviewCoordinateInput, PreviewRowInput } from './fixtures'
@@ -160,18 +161,23 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
 
 /* ── the write (live mode only; preview goes to `store.applyCells`) ────────────────────────── */
 
+/**
+ * `accountId` is the account the READ used (`fetchMatrix`'s), so the server resolves the same listings it showed; each
+ * cell's `expectedListingId` (with `expectedVersion`) makes a write onto a different listing a conflict, never a hit.
+ */
 export async function patchMatrix(
   productId: string,
   cells: readonly MatrixWriteCell[],
-  opts: { fetchImpl?: typeof fetch; baseUrl?: string; signal?: AbortSignal } = {},
+  opts: { accountId?: string | null; fetchImpl?: typeof fetch; baseUrl?: string; signal?: AbortSignal } = {},
 ): Promise<MatrixWriteResult> {
   const base = opts.baseUrl ?? getBackendUrl()
   const doFetch = opts.fetchImpl ?? fetch
+  const request: MatrixWriteRequest = { cells: [...cells], ...(opts.accountId ? { accountId: opts.accountId } : {}) }
   const res = await doFetch(`${base}${MATRIX_ENDPOINTS.write(productId)}`, {
     method: 'PATCH',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ cells }),
+    body: JSON.stringify(request),
     signal: opts.signal,
   })
   const body = await res.json().catch(() => null)

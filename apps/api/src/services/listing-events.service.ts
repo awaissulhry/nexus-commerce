@@ -31,6 +31,17 @@ export type ListingEvent =
   | { type: 'listing.updated'; listingId: string; reason?: string; ts: number }
   | { type: 'listing.created'; listingId: string; ts: number }
   | { type: 'listing.deleted'; listingId: string; ts: number }
+  // Amazon sheet gaps — values a person sees on listings of one family changed (Mode, Qty, Buffer, sync state, fulfilment,
+  // price, offer, ASIN). `productId` is the family root; the sheet and the Matrix re-read those rows. Raised only after
+  // commit, by `announceListingValues` (listing-values-events.ts). Mirrors the catalogue's listing.values_changed.
+  | {
+      type: 'listing.values_changed'
+      productId: string
+      listings: Array<{ listingId: string; productId: string; version: number }>
+      fields: EventPayload<'listing.values_changed'>['fields']
+      reason?: string
+      ts: number
+    }
   // DR-C.3 — wizard.submitted fires when ListingWizard.status leaves
   // DRAFT (→ SUBMITTED/LIVE/FAILED). Step9Submit also broadcasts the
   // same event over BroadcastChannel for same-browser tabs, but if
@@ -51,6 +62,22 @@ export type ListingEvent =
   // Images rebuild P1 — a family's photo plan changed on one layer (`layer` = SHARED, CHANNEL:EBAY, LISTING:…).
   // The Media page and the Information sheet's Product media column refetch; `productId` is the family root.
   | { type: 'product.media.changed'; productId: string; layer: string; ts: number }
+  // Sheet publish parity, step 2 — a product sheet publication changed status (sent, waiting for the channel,
+  // settled by the result sweep or a status read). `productId` is the family; open sheets and the publish
+  // history refetch the publication's rows. Mirrors the catalogue's publication.status_changed.
+  | {
+      type: 'publication.status_changed'
+      publicationId: string
+      batchId?: string | null
+      productId: string
+      channel: string
+      marketplace: string
+      accountId: string
+      aliasKey: string
+      status: string
+      terminal: boolean
+      ts: number
+    }
   // EV.3 — raised by the API on every stock movement and fanned out here, so
   // an open grid's stock column can move for a change made anywhere. Payload
   // mirrors the catalogue's inventory.stock_changed.
@@ -90,7 +117,7 @@ type Listener = (event: ListingEvent) => void
 // or state-machine shaped — go through publishEvent(tx, …) and the outbox.
 
 import { createCrossReplicaBus } from '../lib/events/bus.js'
-import type { EventType } from '@nexus/events'
+import type { EventPayload, EventType } from '@nexus/events'
 
 /**
  * The catalogue types this bus carries. A remote event outside this set
@@ -104,9 +131,9 @@ import type { EventType } from '@nexus/events'
  */
 const LISTING_BUS_TYPES_LIST = [
   'shopify.schema.changed',
-  'listing.synced', 'listing.syncing', 'listing.updated', 'listing.created', 'listing.deleted',
+  'listing.synced', 'listing.syncing', 'listing.updated', 'listing.created', 'listing.deleted', 'listing.values_changed',
   'wizard.submitted', 'product.updated', 'product.created', 'product.deleted', 'product.media.changed',
-  'bulk.progress', 'bulk.completed', 'inventory.stock_changed',
+  'bulk.progress', 'bulk.completed', 'inventory.stock_changed', 'publication.status_changed',
 ] as const satisfies readonly EventType[]
 
 const bus = createCrossReplicaBus<ListingEvent>({

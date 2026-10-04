@@ -21,6 +21,7 @@ import { getInformationSheet } from '../services/pim/information-sheet.js'
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
+import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { encodePooledSheetCells, encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { encodeReadiness } from '@nexus/shared/readiness-wire'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
@@ -150,11 +151,37 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       return await previewStudioPublicationSelection(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
+  // Sheet publish parity T1 — a saved review read back (a row of the many-product dialog). products.publish (the
+  // `/studio-publication` rule); the creator only; never the exact channel request.
+  fastify.get<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/review', async (request, reply) => {
+    try {
+      const { studioPublicationStoredReview } = await import('../services/pim/studio-publication.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await studioPublicationStoredReview(request.params.id, request.params.reviewId, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
   fastify.get<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId', async (request, reply) => {
     try {
       const { studioPublicationResult } = await import('../services/pim/studio-publication.service.js')
       reply.header('Cache-Control', 'no-store')
       return await studioPublicationResult(request.params.id, request.params.reviewId, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
+  // Sheet publish parity, step 4 (D3) — a person checked a publication still waiting for a result. products.publish
+  // (the `/studio-publication` rule): it lets a new publish start on the destination.
+  fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/mark-checked', async (request, reply) => {
+    try {
+      const { markPublicationChecked } = await import('../services/pim/studio-publication-check.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await markPublicationChecked(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
+  // "Publish failed products again…" — what a NEW review pre-ticks. Reads only; never sends or replays a request.
+  fastify.get<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/retry-selection', async (request, reply) => {
+    try {
+      const { publicationRetrySelection } = await import('../services/pim/studio-publication-check.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await publicationRetrySelection(request.params.id, request.params.reviewId)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
   await (await import('./variant-transfer.routes.js')).registerVariantTransfer(fastify)
@@ -522,7 +549,8 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       // Routed through the sheet read so the columns a caller is given are
       // exactly the columns the rows are built from. Deriving them separately is
       // how a grid ends up with a column its rows never fill.
-      const sheet = await getInformationSheet({ productId: id, scope, market, channel, accountId: q.accountId ? String(q.accountId) : undefined, locale: q.locale ? String(q.locale) : undefined })
+      const sheet = await getInformationSheet({ productId: id, scope, market, channel, accountId: q.accountId ? String(q.accountId) : undefined, locale: q.locale ? String(q.locale) : undefined,
+        canEditPrice: permissionCheckerFor(request)(F.productsPriceEdit) })
       return {
         scope: sheet.scope,
         family: sheet.family,
@@ -575,6 +603,8 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         channel,
         locale: q.locale ? String(q.locale) : undefined,
         locales: q.locales !== undefined ? String(q.locales).split(',').filter(Boolean) : undefined,
+        canEditPrice: permissionCheckerFor(request)(F.productsPriceEdit),
+        stockCells: true,
       })
       // Optional display lookups run after the read transaction, once for the combined Languages view.
       const result = await outsideDatabaseTransaction(() => withSelectedReferenceNames(sheet))
@@ -637,6 +667,30 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         marketplace: q.marketplace ? String(q.marketplace).toUpperCase() : undefined,
         aliasId: q.aliasId ? String(q.aliasId) : undefined,
         limit: q.limit ? Number(q.limit) : undefined,
+      })
+    } catch (err) {
+      return sendError(reply, err, request.log, { id })
+    }
+  })
+
+  /**
+   * Sheet publish parity, step 3 — the last publish of each row on one destination, for the "Last publish" column.
+   * A `/studio/…` read (products.view by the `/api/products` prefix rule), not under `/studio-publication`, whose
+   * rule is products.publish: seeing a result is not sending one.
+   */
+  fastify.get('/products/:id/studio/publication-status', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, unknown>
+    if (!q.market) return missingMarket(reply, q)
+    try {
+      const { readPublicationStatus } = await import('../services/pim/publication-status.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await readPublicationStatus({
+        productId: id,
+        channel: q.channel ? String(q.channel) : '',
+        marketplace: String(q.market),
+        accountId: q.accountId === undefined ? undefined : String(q.accountId),
+        aliasKey: q.aliasKey === undefined ? undefined : String(q.aliasKey),
       })
     } catch (err) {
       return sendError(reply, err, request.log, { id })
@@ -770,6 +824,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const sheet = await getStudioSheet({
         productId: id, scope: sc.scope, market,
         ...(sc.channel ? { channel: sc.channel } : {}),
+        canEditPrice: permissionCheckerFor(request)(F.productsPriceEdit),
       })
 
       const actor = (request as { authUser?: { id?: string } }).authUser?.id ?? null
@@ -886,6 +941,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     id: string,
     storedScope: { kind: string; channel: string | null; marketplace: string | null; locale?: string | null } | null,
     storedMarket: string | null,
+    canEditPrice: boolean,
   ) => {
     const sheets = new Map<string, Awaited<ReturnType<typeof getStudioSheet>>>()
     const loadSheet = async (locale = storedScope?.locale ?? undefined) => {
@@ -905,6 +961,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         scope: (storedScope?.kind ?? 'master') as StudioScopeKind,
         market,
         ...(storedScope?.channel ? { channel: storedScope.channel } : {}),
+        canEditPrice,
       })
       sheets.set(locale ?? '', sheet)
       return sheet
@@ -967,7 +1024,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const loaded = await readJob(jobId)
       if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })
       if (loaded.scope?.kind === 'channel' || loaded.cells.some(c => c.scope.kind === 'channel')) return reply.code(409).send({ error: 'account_identity_required', message: 'This legacy channel job has no account identity. Review explicit corrections through /products/catalog-transfer.' })
-      const w = jobWriters(id, loaded.scope, loaded.market)
+      const w = jobWriters(id, loaded.scope, loaded.market, permissionCheckerFor(request)(F.productsPriceEdit))
       return jobStateReply(await applyStoredJob({ jobId, ...w }))
     } catch (err) {
       const { JobNotApplicableError: JNA } = await import('../services/pim/import-jobs.service.js')
@@ -993,7 +1050,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const loaded = await readJob(jobId)
       if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })
       if (loaded.scope?.kind === 'channel' || loaded.cells.some(c => c.scope.kind === 'channel')) return reply.code(409).send({ error: 'account_identity_required', message: 'This legacy channel job has no account identity. Review explicit corrections through /products/catalog-transfer.' })
-      const w = jobWriters(id, loaded.scope, loaded.market)
+      const w = jobWriters(id, loaded.scope, loaded.market, permissionCheckerFor(request)(F.productsPriceEdit))
       return jobStateReply(await revertStoredJob({ jobId, currentOf: w.currentOf, writeCells: w.writeCells }))
     } catch (err) {
       const { JobNotApplicableError: JNA } = await import('../services/pim/import-jobs.service.js')
@@ -1024,7 +1081,8 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'An observed listing version is required.' })
     try {
       const destination = await resolveWorkspaceDestination({ productId: id, channel: q.channel ?? '', marketplace: q.market ?? q.marketplace ?? '', accountId: q.accountId, listingId: q.listingId, aliasKey: q.aliasKey ?? (q.listingId ? undefined : '') })
-      const sheet = await getStudioSheet({ productId: id, scope: 'channel', channel: destination.channel, market: destination.marketplace, accountId: destination.accountId })
+      const sheet = await getStudioSheet({ productId: id, scope: 'channel', channel: destination.channel, market: destination.marketplace, accountId: destination.accountId,
+        canEditPrice: permissionCheckerFor(request)(F.productsPriceEdit) })
       const row = sheet.rows.find(row => row.id === id && (row.aliasId ?? '') === (destination.aliasKey ?? ''))
       const cell = row?.values[fieldKey] ?? Object.values(row?.values ?? {}).find(cell => cell.writeField === fieldKey)
       if (!cell?.editable || cell.writeTarget !== 'channelListing' || !cell.writeField)

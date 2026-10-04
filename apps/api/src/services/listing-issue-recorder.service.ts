@@ -175,6 +175,13 @@ export interface RecordFeedIssuesArgs {
   source?: IssueSource
   channel?: string
   prisma?: PrismaClient
+  /**
+   * Sheet publish parity, step 2 — the EXACT listings each sent SKU belongs to, taken from the publication's own
+   * journal (the sent seller SKU → its ChannelListing ids). When given, the SKU → Product → listing join is NOT used:
+   * that join matches the PRODUCT's SKU on the channel and marketplace, so it reaches another account's listing, another
+   * alias, and misses an alias's own seller SKU. A SKU absent from the map is reported as unmatched.
+   */
+  listingIdsBySku?: ReadonlyMap<string, readonly string[]>
 }
 
 /**
@@ -198,6 +205,10 @@ export async function recordFeedReportIssues(
   if (rejected.length === 0) return { listings: 0, issues: 0, unmatchedSkus: [] }
 
   const skus = [...new Set(rejected.map((r) => String(r.sku)))]
+
+  if (args.listingIdsBySku) {
+    return placeOnListings(prisma, rejected, args.listingIdsBySku, source, args.marketplace, args.occurredAt ?? null)
+  }
 
   // One query for the whole feed. The model API (never $queryRawUnsafe) so the scoping
   // client applies the business profile — raw SQL is invisible to it and would read
@@ -250,6 +261,35 @@ export async function recordFeedReportIssues(
   logger.info('[listing-issues] feed report recorded', {
     marketplace: args.marketplace, listings: placed, issues: issueCount, unmatched: unmatchedSkus.length,
   })
+  return { listings: placed, issues: issueCount, unmatchedSkus }
+}
+
+/** The exact-listing half of `recordFeedReportIssues`: every rejected SKU onto the listings the caller named. */
+async function placeOnListings(
+  prisma: PrismaClient,
+  rejected: PerSkuResult[],
+  listingIdsBySku: ReadonlyMap<string, readonly string[]>,
+  source: IssueSource,
+  marketplace: string,
+  occurredAt: Date | null,
+): Promise<{ listings: number; issues: number; unmatchedSkus: string[] }> {
+  const unmatchedSkus: string[] = []
+  let placed = 0
+  let issueCount = 0
+  for (const row of rejected) {
+    const ids = listingIdsBySku.get(String(row.sku)) ?? []
+    if (ids.length === 0) { unmatchedSkus.push(String(row.sku)); continue }
+    const issues = issuesFromPerSku(row)
+    for (const listingId of ids) {
+      const result = await recordListingIssues({ listingId, source, issues, occurredAt, prisma })
+      if (result) { placed++; issueCount += result.open }
+    }
+  }
+  if (unmatchedSkus.length > 0) {
+    logger.warn('[listing-issues] feed report: SKUs with no listing in the publication journal', {
+      marketplace, count: unmatchedSkus.length, sample: unmatchedSkus.slice(0, 5),
+    })
+  }
   return { listings: placed, issues: issueCount, unmatchedSkus }
 }
 

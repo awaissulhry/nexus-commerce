@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Send } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
 import { useStudioProduct } from './contracts'
-import { PublishDialog } from './publication/PublishDialog'
+import { StudioPublishDialog as PublishDialog } from './StudioPublishDialog'
 import { usePhotoPublish } from './images/plan-page/photoPublish'
 
 /** Publishing is available on every studio tab and keeps the selected destination. On the Media page of a family on the

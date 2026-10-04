@@ -27,6 +27,10 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import { writeMatrixCells } from './matrix-write.service.js'
 import { getMatrixRead } from './matrix.service.js'
+import { attachStudioStock, sheetStockWriteCell, type StudioRowStock } from './studio-stock.js'
+import { applySheetQuantityChanges } from './sheet-quantity-door.js'
+import { ProductBulkError } from '../../lib/product-bulk-error.js'
+import type { StudioRow } from './studio-sheet.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 let account = ''
@@ -89,5 +93,45 @@ describe('the matrix inventory cells never write an FBA row', () => {
       expect(await raw(row.id)).toMatchObject({ quantity: 7, quantityOverride: 7, followMasterQuantity: false })
       expect(await quantityRows(row.id)).toBe(1)
     }
+  }), 60_000)
+})
+
+// Amazon sheet gaps (gaps 4–5) — the product sheet reaches the same door, and the bulk quantity door refuses the same way.
+describe('a product sheet write never writes an FBA row either', () => {
+  /** The sheet row of the FBA DE listing, with its stock pass run (the cells are the Matrix's EU group cells). */
+  async function sheetRow(id: string, listingId: string) {
+    const l = await prisma.channelListing.findUniqueOrThrow({ where: { id: listingId }, select: { id: true, version: true, externalListingId: true } })
+    const r = { id, aliasId: null, isParent: false, values: {}, listing: { ...l, syncPaused: false, follows: {} } } as unknown as StudioRow & { stock?: StudioRowStock }
+    await attachStudioStock({ rows: [r], rootId: `${id}-parent`, channel: 'AMAZON', marketplace: 'DE', accountId: account })
+    return r
+  }
+
+  it.each([['stock_qty', 7], ['stock_mode', 'PINNED'], ['stock_buffer', 2]] as const)('🔴 the sheet\'s %s cell on the FBA DE row: refused Amazon-managed through the Matrix door; NOTHING written', (column, value) => scoped(async () => {
+    const id = `sheet-fba-${column.replace('_', '-')}`
+    const { it: itRow, de } = await seed(id, { fba: true })
+    const before = { it: await raw(itRow.id), de: await raw(de.id) }
+    const cell = sheetStockWriteCell(await sheetRow(id, de.id), column, value)
+    expect(cell).toMatchObject({ coordinateKey: 'AMAZON:EU' })
+    const result = await writeMatrixCells({ productId: id, actor: 'studio@example.test', can: () => true, accountId: account }, [cell!])
+    expect(result.results[0]).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.amazonManaged })
+    expect(await raw(de.id)).toEqual(before.de)
+    expect(await raw(itRow.id)).toEqual(before.it)
+    expect(await quantityRows(itRow.id)).toBe(0)
+    expect(await quantityRows(de.id)).toBe(0)
+  }), 60_000)
+
+  it('🔴 a pasted / imported Amazon quantity (the bulk PATCH): refused Amazon-managed by the quantity door; NOTHING staged', () => scoped(async () => {
+    const { it: itRow, de } = await seed('sheet-fba-bulk', { fba: true })
+    const before = { it: await raw(itRow.id), de: await raw(de.id) }
+    const moved = new Map<string, number>()
+    const err = await applySheetQuantityChanges([{ id: 'sheet-fba-bulk', field: 'attr_fulfillment_availability__quantity', value: 7, target: 'channel' }], {
+      contexts: [{ channel: 'AMAZON', marketplace: 'IT' }], accountFor: () => account, moved, actor: 'studio@example.test',
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(ProductBulkError)
+    expect(err).toMatchObject({ statusCode: 400, details: { error: MATRIX_COPY.amazonManaged, code: 'QUANTITY_REFUSED' } })
+    expect(moved.size).toBe(0)
+    expect(await raw(de.id)).toEqual(before.de)
+    expect(await raw(itRow.id)).toEqual(before.it)
+    expect(await quantityRows(itRow.id)).toBe(0)
   }), 60_000)
 })

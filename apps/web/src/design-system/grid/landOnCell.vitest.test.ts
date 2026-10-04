@@ -3,7 +3,7 @@
  * no row index until the parent opens, and a hidden column cannot take the cursor.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { collapsedAncestors, landOnCell, type LandingRowNode } from './landOnCell'
+import { LANDING_CLASS, LANDING_DRAW_FRAMES, collapsedAncestors, focusIsFree, landOnCell, type LandingRowNode } from './landOnCell'
 
 const tree = () => {
   const root: LandingRowNode = { id: 'root', rowIndex: null, level: -1 }
@@ -54,5 +54,52 @@ describe('landOnCell', () => {
   })
   it('says false for a row that is not in the grid, so the caller can say so', () => {
     expect(landOnCell(fakeApi({}), { rowId: 'gone', colId: 'brand', schedule: () => undefined })).toBe(false)
+  })
+
+  // Review 2026-10-02: AG focuses only a DRAWN cell, and the landing scrolls first — so the cursor was set while the
+  // cell did not exist yet, and the browser's focus stayed on <body>.
+  const fakeCell = () => ({ classList: { add: vi.fn(), remove: vi.fn() }, offsetWidth: 0, contains: () => false })
+  const drawnAfter = (frames: number, cell: ReturnType<typeof fakeCell>) => {
+    let polls = 0
+    return { querySelectorAll: () => (++polls > frames ? [cell] : []) } as never
+  }
+
+  it('waits for AG to draw the cell, then marks it and sets the cursor again so the browser focuses it', () => {
+    const { child } = tree() // its parent is collapsed: opening it gives the child row index 3
+    const api = fakeApi({ c1: child })
+    const cell = fakeCell()
+    const frames: Array<() => void> = []
+    landOnCell(api, { rowId: 'c1', colId: 'brand', schedule: fn => frames.push(fn), root: drawnAfter(2, cell) })
+    frames.shift()!() // scroll + first cursor
+    expect(api.setFocusedCell).toHaveBeenCalledTimes(1)
+    frames.shift()!(); frames.shift()!() // not drawn yet: keeps waiting
+    expect(cell.classList.add).not.toHaveBeenCalled()
+    frames.shift()!() // drawn
+    expect(cell.classList.add).toHaveBeenCalledWith(LANDING_CLASS)
+    expect(api.setFocusedCell).toHaveBeenCalledTimes(2)
+    expect(api.setFocusedCell).toHaveBeenLastCalledWith(3, 'brand')
+    expect(frames).toHaveLength(0)
+  })
+
+  it('stops waiting after LANDING_DRAW_FRAMES and keeps only the grid cursor', () => {
+    const { child } = tree()
+    const api = fakeApi({ c1: child })
+    const frames: Array<() => void> = []
+    landOnCell(api, { rowId: 'c1', colId: 'brand', schedule: fn => frames.push(fn), root: { querySelectorAll: () => [] } as never })
+    let ran = 0
+    while (frames.length && ran < 50) { frames.shift()!(); ran++ }
+    expect(ran).toBe(1 + LANDING_DRAW_FRAMES)
+    expect(api.setFocusedCell).toHaveBeenCalledTimes(1)
+  })
+
+  it('never takes focus the operator moved elsewhere; takes it from <body>, nothing, or another grid cell', () => {
+    const cell = { contains: (el: unknown) => el === inside }
+    const inside = { closest: () => ({}) }
+    const gridCell = { closest: (sel: string) => (sel === '.ag-root-wrapper' ? {} : null) }
+    const input = { closest: () => null }
+    expect(focusIsFree([cell as never], null)).toBe(true)
+    expect(focusIsFree([cell as never], gridCell as never)).toBe(true)
+    expect(focusIsFree([cell as never], input as never)).toBe(false)
+    expect(focusIsFree([cell as never], inside as never)).toBe(false) // already there
   })
 })
