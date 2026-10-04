@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveSpec, applyTargetOverrides, firstOutOfBudgetNoticeToday, groupReceipts, isGoalMode, pickActiveEvents, rankDefendSummaryLine, rankReleaseNote } from './ad-rank-defend.job.js'
+import { effectiveSpec, applyTargetOverrides, firstKeptServingNoticeToday, firstOutOfBudgetNoticeToday, firstWriteIntent, groupReceipts, isGoalMode, pickActiveEvents, rankDefendSummaryLine, rankReleaseNote, rankWritesNote } from './ad-rank-defend.job.js'
 import type { RankTargetSpec } from '../services/advertising/rank-controller.js'
 
 // RD.5 — family guardrail target transform (pure). OOS/lost-buybox → pause (stop
@@ -225,5 +225,58 @@ describe('2b firstOutOfBudgetNoticeToday — once per schedule per UTC day', () 
     // 23:30 on 2026-10-04 and 00:30 on 2026-10-05 in Rome (CEST, UTC+2) are both 2026-10-04 in UTC.
     expect(firstOutOfBudgetNoticeToday('automation:rank-plan-p1|c9', new Date('2026-10-04T21:30:00Z'))).toBe(true)
     expect(firstOutOfBudgetNoticeToday('automation:rank-plan-p1|c9', new Date('2026-10-04T22:30:00Z'))).toBe(false)
+  })
+})
+
+// 2c — the order a tick writes in, read off the campaign row and the hour's spec before anything is written.
+describe('2c firstWriteIntent — give-backs, then floors, then placement moves, then base bids', () => {
+  const sp = (o: Record<string, unknown> = {}) => ({ key: 'k', placement: 'PLACEMENT_TOP', targetISPct: null, acosCapPct: null, maxCpcCents: null, biasPct: 50, pause: false, allOut: false, ...o })
+  const camp = (o: Record<string, unknown> = {}) => ({ dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] }, bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null, ...o })
+  const ours = { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'automation:rank-defend-s1' }
+  it('a floor this engine set, on a serving hour, is a give-back', () => {
+    expect(firstWriteIntent(camp(ours), sp())).toBe('restore')
+    expect(firstWriteIntent(camp(ours), sp({ bidMode: 'suppress' }))).toBe('none') // kept floored on purpose
+  })
+  it('a floor someone else set is left alone', () => {
+    expect(firstWriteIntent(camp({ ...ours, bidsSuppressedBy: 'user:op' }), sp({ biasPct: 100 }))).toBe('none')
+  })
+  it('a Min-bid hour floors, or re-floors at a new floor, or only moves its placement', () => {
+    expect(firstWriteIntent(camp(), sp({ pause: true }))).toBe('suppress')
+    expect(firstWriteIntent(camp(ours), sp({ pause: true, floorBidCents: 5 }))).toBe('suppress')
+    expect(firstWriteIntent(camp(ours), sp({ pause: true, floorBidCents: 2, biasPct: 0 }))).toBe('placement')
+    expect(firstWriteIntent(camp(ours), sp({ pause: true, floorBidCents: 2, biasPct: null }))).toBe('none')
+    expect(firstWriteIntent(camp(), sp({ bidMode: 'suppress' }))).toBe('suppress')
+  })
+  it('a serving hour moves its placement (Top and Rest exclude each other), else its base bid, else nothing', () => {
+    expect(firstWriteIntent(camp(), sp({ biasPct: 100 }))).toBe('placement')
+    expect(firstWriteIntent(camp(), sp({ placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 0 }))).toBe('placement') // Top 50 → 0
+    expect(firstWriteIntent(camp(), sp({ lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 50 }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 20 }] }))).toBe('placement')
+    expect(firstWriteIntent(camp(), sp({ bidMode: 'absolute', bidValueCents: 60 }))).toBe('base')
+    expect(firstWriteIntent(camp(), sp())).toBe('none')
+  })
+})
+
+describe('2c rankWritesNote — the run\'s changes by kind', () => {
+  const guard = (deferredByCap = 0) => ({ engine: 'rank-defend' as const, posture: 'auto' as const, why: '', caps: { perRun: 600, perDay: 3000 }, todayBefore: 0, changes: 0, wouldApply: 0, waiting: 0, deferredByCap })
+  const none = { restore: 0, suppress: 0, placement: 0, base: 0 }
+  it('says nothing on a run that wrote and deferred nothing, as before', () => {
+    expect(rankWritesNote({ writes: none, guard: guard() })).toBe('')
+    expect(rankDefendSummaryLine({ evaluated: 33, applied: 0, decisions: [], writes: none, guard: guard() })).toBe('evaluated=33 applied=0')
+  })
+  it('names every kind once anything was written or deferred', () => {
+    expect(rankWritesNote({ writes: { restore: 140, suppress: 0, placement: 3, base: 0 }, guard: guard() })).toBe(' restore=140 suppress=0 placement=3 base=0 deferred=0')
+    expect(rankWritesNote({ writes: none, guard: guard(2) })).toBe(' restore=0 suppress=0 placement=0 base=0 deferred=2')
+  })
+  it('adds the anti-flap holds when there are any', () => {
+    expect(rankWritesNote({ writes: none, guard: guard(), keptServing: 1 })).toBe(' kept-serving=1 (entered Min bid 2 times today already)')
+  })
+})
+
+describe('2c firstKeptServingNoticeToday — once per campaign per UTC day', () => {
+  it('logs the first hold of the day only, and again the next UTC day', () => {
+    expect(firstKeptServingNoticeToday('c1', new Date('2026-10-04T08:00:00Z'))).toBe(true)
+    expect(firstKeptServingNoticeToday('c1', new Date('2026-10-04T20:00:00Z'))).toBe(false)
+    expect(firstKeptServingNoticeToday('c2', new Date('2026-10-04T20:00:00Z'))).toBe(true)
+    expect(firstKeptServingNoticeToday('c1', new Date('2026-10-05T00:00:00Z'))).toBe(true)
   })
 })

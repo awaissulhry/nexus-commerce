@@ -8482,6 +8482,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { items: map, count: Object.keys(map).length }
   })
   /**
+   * 2c (review G.11) — about how many changes a day each hourly bid plan sends to Amazon, from its painted hour table
+   * (rank-write-projection.ts): every switch into or out of Min bid moves every bid of every member campaign, every
+   * placement change is one change. Each member's own schedule rows and target overrides, as the rank tick reads them.
+   * `?groupId=` narrows it to one plan (the builder). A read; it writes nothing.
+   */
+  fastify.get('/advertising/rank-schedule-groups/write-projection', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=5')
+    const { groupId } = request.query as { groupId?: string }
+    const members = await prisma.adSchedule.findMany({
+      where: groupId ? { groupId } : { groupId: { not: null } },
+      select: { groupId: true, campaignId: true, windows: true, defaultTargetKey: true, targetOverrides: true },
+    })
+    const campaignIds = [...new Set(members.map((m) => m.campaignId))]
+    const [targets, groupRows, adGroups] = await Promise.all([
+      prisma.rankTarget.findMany(),
+      prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: campaignIds } }, _count: { _all: true } }),
+      prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, campaignId: true } }),
+    ])
+    const targetRows = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroupId: { in: adGroups.map((g) => g.id) }, isNegative: false }, _count: { _all: true } })
+    const campaignOfGroup = new Map(adGroups.map((g) => [g.id, g.campaignId]))
+    const bids = new Map<string, { adGroups: number; targets: number }>()
+    for (const r of groupRows) bids.set(r.campaignId, { adGroups: r._count._all, targets: 0 })
+    for (const r of targetRows) { const c = bids.get(campaignOfGroup.get(r.adGroupId) ?? ''); if (c) c.targets += r._count._all }
+    const { projectRankWrites, addProjection, emptyProjection } = await import('../services/advertising/rank-write-projection.js')
+    const { toSpec, applyTargetOverrides } = await import('../jobs/ad-rank-defend.job.js')
+    const byKey = new Map(targets.map((t) => [t.key, toSpec(t as never)]))
+    const items: Record<string, ReturnType<typeof emptyProjection> & { campaigns: number }> = {}
+    for (const m of members) {
+      const g = m.groupId as string
+      const overrides = m.targetOverrides as Parameters<typeof applyTargetOverrides>[1]
+      const p = projectRankWrites({
+        windows: m.windows as never, defaultTargetKey: m.defaultTargetKey,
+        specFor: (k) => { const t = byKey.get(k); return t ? applyTargetOverrides(t, overrides) : null },
+        campaign: bids.get(m.campaignId) ?? { adGroups: 0, targets: 0 },
+      })
+      const into = (items[g] ??= { ...emptyProjection(), campaigns: 0 })
+      addProjection(into, p); into.campaigns++
+    }
+    return { items }
+  })
+  /**
    * RDX/C1 — what the account is NOT covering.
    *
    * The list answers "what do my schedules do". It has never answered "what is running with no
