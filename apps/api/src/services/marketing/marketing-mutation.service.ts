@@ -20,6 +20,7 @@ import type { MktChannel } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { publishMarketingEvent } from '../marketing-events.service.js'
+import { isAutomationHalted } from '../advertising/ads-automation-state.service.js'
 import { checkMarketingWriteGate } from './marketing-write-gate.js'
 import { adapterFor } from './adapters/types.js'
 // Ensure the channel adapters self-register.
@@ -52,6 +53,37 @@ export interface EnqueueResult {
   campaign: { id: string; status: string; budgetCents: number | null }
 }
 
+/**
+ * 1f (review 2.10) — the ads path's two brakes, for automated writes on this path.
+ *
+ * Marketing rules (`mkt_*` in marketing-action-handlers.ts) reach Amazon through amazon.adapter.ts →
+ * ads-api-client `updateCampaign`, past the ads write gate and its halt. So, for `automation:*` actors only:
+ *   · no automation pauses a campaign (Owner rule) — refused before anything is written, and again at
+ *     dispatch for a row queued earlier;
+ *   · the ads halt and autonomy OFF ("Stop everything") bind — refused at enqueue, and again at dispatch,
+ *     where a halt pressed inside the grace window ends the queued write the way Cancel would.
+ * A person's pause, resume or budget change is untouched.
+ */
+export const AUTOMATED_PAUSE_REFUSAL =
+  'Refused: no automation may pause a campaign. An automation lowers bids or budgets instead; a person can still pause by hand.'
+export const AUTOMATION_HALTED_REFUSAL =
+  'Refused: ads automation is stopped. Resume it in the Control Room to let automated changes through.'
+
+export function isAutomationActor(userId: string | null | undefined): boolean {
+  return typeof userId === 'string' && userId.startsWith('automation:')
+}
+
+export function isAutomatedMarketingPause(args: { syncType: string; payload: Record<string, unknown>; userId?: string | null }): boolean {
+  return args.syncType === 'MKT_STATE_UPDATE' && args.payload.status === 'PAUSED' && isAutomationActor(args.userId)
+}
+
+/** The refusal for an automated write, or null when it may go ahead (always null for a person). */
+async function automationRefusal(args: { syncType: string; payload: Record<string, unknown>; userId?: string | null }): Promise<string | null> {
+  if (!isAutomationActor(args.userId)) return null
+  if (isAutomatedMarketingPause(args)) return AUTOMATED_PAUSE_REFUSAL
+  return (await isAutomationHalted()) ? AUTOMATION_HALTED_REFUSAL : null
+}
+
 /** Resolve the representative link (externalId/marketplace/connection). */
 async function primaryLink(campaignId: string) {
   return prisma.marketingCampaignLink.findFirst({
@@ -61,6 +93,10 @@ async function primaryLink(campaignId: string) {
 }
 
 export async function enqueueCampaignMutation(args: EnqueueArgs): Promise<EnqueueResult> {
+  // 1f — before the optimistic local update, so a refused automation leaves nothing behind. Thrown: the
+  // rule engine records the sentence as the action's error.
+  const refusal = await automationRefusal(args)
+  if (refusal) throw new Error(refusal)
   const campaign = await prisma.marketingCampaign.findUnique({ where: { id: args.campaignId } })
   if (!campaign) throw new Error(`campaign ${args.campaignId} not found`)
   const link = await primaryLink(args.campaignId)
@@ -195,6 +231,22 @@ export async function processMarketingSyncRow(queueId: string): Promise<{ status
   const row = await prisma.outboundSyncQueue.findUnique({ where: { id: queueId } })
   if (!row || row.syncStatus !== 'PENDING') return { status: 'skipped', queueId }
   if (row.holdUntil && row.holdUntil > new Date()) return { status: 'held', queueId }
+
+  // 1f — re-check an automated write at the moment it would leave Nexus (see automationRefusal). The actor
+  // is on the audit row, not on the queue payload. Refused → the row ends SKIPPED and the optimistic local
+  // change is put back, as cancelCampaignMutation does: nothing reached the channel.
+  const audit = await prisma.campaignAction.findFirst({ where: { outboundQueueId: queueId, channelResponseStatus: 'PENDING' } })
+  const refusal = await automationRefusal({ syncType: row.syncType, payload: (row.payload ?? {}) as Record<string, unknown>, userId: audit?.userId })
+  if (refusal) {
+    await prisma.$transaction([
+      prisma.outboundSyncQueue.update({ where: { id: queueId }, data: { syncStatus: 'SKIPPED', syncedAt: new Date(), errorMessage: refusal } }),
+      ...(audit?.campaignId ? [prisma.marketingCampaign.update({ where: { id: audit.campaignId }, data: audit.payloadBefore as never })] : []),
+      ...(audit ? [prisma.campaignAction.update({ where: { id: audit.id }, data: { channelResponseStatus: 'FAILED', rolledBackAt: new Date(), rollbackReason: refusal } })] : []),
+    ])
+    logger.warn('[UM] automated marketing write refused at dispatch', { queueId, syncType: row.syncType, actor: audit?.userId ?? null, refusal })
+    if (audit?.campaignId) publishMarketingEvent({ type: 'campaign.mutated', campaignId: audit.campaignId, channel: audit.channel, action: 'updated', ts: Date.now() })
+    return { status: 'refused', queueId }
+  }
 
   await prisma.outboundSyncQueue.update({ where: { id: queueId }, data: { syncStatus: 'IN_PROGRESS' } })
   const payload = row.payload as Record<string, unknown>

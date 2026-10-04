@@ -44,6 +44,8 @@ vi.mock('./advertising/ads-suggestions.service.js', () => ({
 }))
 vi.mock('./advertising/ads-rule-adapter.service.js', () => ({
   maybeTranslateAdsRule: () => null,
+  // 1f — the run-time AUTO ceiling (ads-graduation.ts) reads it; without it the ceiling fails closed.
+  BUILDER_SLUG_ACTIONS: {},
 }))
 vi.mock('./ads-execution-events.service.js', () => ({ publishAdsExecution: vi.fn() }))
 

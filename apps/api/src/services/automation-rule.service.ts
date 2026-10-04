@@ -530,6 +530,27 @@ function refusalEntityOf(ctx: unknown): { entityType?: string | null; entityId?:
   return {}
 }
 
+/**
+ * 1f — the graduation ceiling of the actions an advertising rule is about to run (`ads-graduation.ts`, the
+ * function the set-time check uses). `hasKeywordProtections: false` is the stricter answer and costs no
+ * query; the ceiling of a negation is PROPOSE either way today, and only `blockedBy` is reported.
+ * Fails CLOSED: a ceiling that cannot be computed proposes rather than acts.
+ */
+async function adsRunTimeCeiling(actions: unknown): Promise<{ maxLevel: import('./advertising/ads-autonomy.js').AutonomyLevel; blockedBy: string[] }> {
+  try {
+    const { graduationCeiling } = await import('./advertising/ads-graduation.js')
+    const actionTypes = (Array.isArray(actions) ? actions : [])
+      .map((a) => String((a as { type?: unknown } | null)?.type ?? '')).filter(Boolean)
+    const verdict = graduationCeiling({ actionTypes, hasKeywordProtections: false })
+    return { maxLevel: verdict.maxLevel, blockedBy: verdict.blockedBy }
+  } catch (err) {
+    logger.error('[automation-rule] AUTO ceiling could not be computed — proposing instead of acting', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return { maxLevel: 'PROPOSE', blockedBy: [] }
+  }
+}
+
 export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRuleResult> {
   const startedAt = Date.now()
   const rule = await prisma.automationRule.findUnique({ where: { id: args.ruleId } })
@@ -811,7 +832,23 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // An OBSERVE rule stays OBSERVE. The operator has said they do not want proposals from
   // that one, and an account-level setting should not override a per-rule instruction
   // that is already quieter than it.
-  const level = args.forceDryRun && declared === 'AUTO' ? 'PROPOSE' : declared
+  let level: typeof declared = args.forceDryRun && declared === 'AUTO' ? 'PROPOSE' : declared
+
+  // 1f (review 2.7) — the graduation ceiling binds at RUN time too. It bound only when a level was SET
+  // (`adsRuleLevelRefusal`), so a rule that reached AUTO another way — `PATCH {enabled, dryRun:false}`, a row
+  // written by an older deploy, actions edited after the rule graduated — acted with actions the ceiling keeps
+  // below AUTO (pause_target, negatives, anything unclassified). Judged on the actions about to run (after the
+  // translation above picked this context's block), by the same function the set-time check uses.
+  // A demotion, not a refusal: the rule still evaluates and PROPOSES, so a person gets the suggestion.
+  if (level === 'AUTO' && rule.domain === 'advertising' && !args.noPersist) {
+    const ceiling = await adsRunTimeCeiling(rule.actions)
+    if (ceiling.maxLevel !== 'AUTO') {
+      logger.warn('[automation-rule] action above its AUTO ceiling — execution demoted', {
+        ruleId: rule.id, ruleName: rule.name, to: ceiling.maxLevel, blockedBy: ceiling.blockedBy,
+      })
+      level = ceiling.maxLevel
+    }
+  }
 
   // CAP (2026-08-14) — the write cap, in the unit damage is measured in.
   //
