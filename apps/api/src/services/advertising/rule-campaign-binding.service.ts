@@ -50,21 +50,32 @@ const EMPTY: BindingSyncResult = { applied: false, created: 0, removed: 0, skipp
  * listing a campaign that has since been deleted is a stale rule, not a bad request.
  *
  * `campaigns: []` is a real instruction (H10's "None"): every link for the rule is removed.
+ *
+ * 4c (review 4.8) — `scopeMarketplace`, when the rule has one, binds only the picks in that market: the tick never
+ * evaluates a pick outside it, so a link there would only make Apply Rules show the rule where it can never fire (a
+ * save with such picks is refused first; this keeps the column true whatever reaches it). The rule's own list is not
+ * rewritten here; such picks are logged, not counted as `skipped` (that means "no longer exists").
  */
 export async function syncRuleCampaignBinding(
   ruleId: string,
   actions: unknown,
   actor?: string | null,
+  scopeMarketplace?: string | null,
 ): Promise<BindingSyncResult> {
   const want = builderBudgetCampaignIds(actions)
   if (want == null) return EMPTY
 
   const unique = [...new Set(want)]
   const known = unique.length
-    ? await prisma.campaign.findMany({ where: { id: { in: unique } }, select: { id: true } })
+    ? await prisma.campaign.findMany({ where: { id: { in: unique } }, select: { id: true, marketplace: true } })
     : []
-  const okIds = new Set(known.map((c) => c.id))
-  const skipped = unique.filter((id) => !okIds.has(id))
+  const knownIds = new Set(known.map((c) => c.id))
+  const skipped = unique.filter((id) => !knownIds.has(id))
+  const outsideMarket = scopeMarketplace ? known.filter((c) => c.marketplace !== scopeMarketplace).map((c) => c.id) : []
+  const okIds = new Set([...knownIds].filter((id) => !outsideMarket.includes(id)))
+  if (outsideMarket.length) {
+    logger.warn('[ADS-RULE-BINDING] picks outside the rule\'s market are not bound', { ruleId, scopeMarketplace, outsideMarket })
+  }
 
   let created = 0
   let removed = 0

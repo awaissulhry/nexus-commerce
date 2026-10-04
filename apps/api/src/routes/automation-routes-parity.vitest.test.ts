@@ -135,11 +135,15 @@ describe('R4 — the automation routes answer as before the move', () => {
       name: 'Untranslatable', trigger: 'SCHEDULE',
       actions: [{ type: 'budget', campaigns: [] }], conditions: [{ conditions: [{ metric: 'Moon Phase', op: '>=', value: 1 }], action: { op: 'set', value: 5 } }],
     })
+    // 4c — a rule scoped to IT needs a market an active Amazon Ads connection serves, or its save is refused. The row
+    // lives only for this create: gate status reads the connection too, and its answers below were recorded without one.
+    const itConnection = await inside(() => database.client.amazonAdsConnection.create({ data: { profileId: 'TEST-PROFILE-IT', marketplace: 'IT', isActive: true } }))
     const created = await ask('POST', '/api/advertising/automation-rules', {
       name: 'Created rule', description: 'made by the parity test', trigger: 'KEYWORD_HIGH_ACOS',
       conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.5 }], actions: [{ type: 'bid_down', target: 'ad_target', percent: 10 }],
       maxExecutionsPerDay: 7, maxWritesPerDay: 3, scopeMarketplace: 'IT',
     })
+    await inside(() => database.client.amazonAdsConnection.delete({ where: { id: itConnection.id } }))
     const createdId = created.json().rule.id as string
     await ask('POST', '/api/advertising/automation-rules', { name: 'Defaults rule', trigger: 'SCHEDULE' })
 
