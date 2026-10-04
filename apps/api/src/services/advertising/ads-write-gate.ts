@@ -16,10 +16,12 @@
  * Called by ads-sync.worker.ts before every live API call.
  */
 
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
+import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
 export type GateDeniedAt =
   | 'env'
@@ -102,6 +104,23 @@ export interface GateContext {
    * The MAXIMUM still binds: a "suppression" that raises a bid is not a suppression.
    */
   isSuppression?: boolean
+
+  // ── 6.1 — a budget schedule's give-back ───────────────────────────────────
+  /**
+   * Who is writing (the queued mutation's actor). The day-move bound reads it to recognise a budget
+   * schedule giving back what it set — and checks that against the action log, never this string
+   * alone (ads-budget-giveback.ts).
+   */
+  actor?: string | null
+  /**
+   * The value this write replaces, in cents (the queued field change's old value). The worker runs the
+   * gate AFTER Nexus wrote its own copy, so the campaign row already holds the NEW value (review N1);
+   * this is the honest "before". A caller that asks before anything is written (the change tools'
+   * preview) leaves it out — for it the campaign's own budget still is the previous value.
+   */
+  previousValueCents?: number | null
+  /** The OutboundSyncQueue row this write is. Its own action-log row is not part of its history. */
+  queueId?: string | null
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -390,6 +409,10 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         campaignId: ctx.campaignId,
         currentBudgetCents: Math.round(Number(campaign.dailyBudget ?? 0) * 100),
         intendedCents: ctx.intendedValueCents as number,
+        // 6.1 — what a give-back is recognised by, and the honest "before" for the day's opening.
+        actor: ctx.actor ?? null,
+        previousValueCents: ctx.previousValueCents ?? null,
+        queueId: ctx.queueId ?? null,
       })
       if (denial) return denial
     }
@@ -616,11 +639,20 @@ async function spendCeilingDenial(args: {
  * The earliest `payloadBefore.dailyBudget` logged for this campaign today — A7's ledger, read the
  * same way, with the same unit. ⚠ `payloadBefore/payloadAfter.dailyBudget` is in EUROS, not cents,
  * unlike every neighbouring ads money field; assuming cents inflates this 100× and produced a
- * spectacular false reading once already (BUD §2.5). No rows today ⇒ opening is the current value,
- * so the first write of a day is always allowed and the bound applies from there.
+ * spectacular false reading once already (BUD §2.5). No rows today ⇒ opening is the value before
+ * this write (6.1 below), so the bound applies from the first write of the day.
  *
  * Reading the EARLIEST row's `before` is deliberately robust to the 41%-broken audit chain: a
  * mid-sequence break moves intermediate values, not the first row's opening snapshot.
+ *
+ * ── 6.1 — a budget schedule's give-back ──────────────────────────────────────────────────────
+ * A schedule putting back what it set is exempt from this bound (and from nothing else): it is
+ * recognised from the action log (ads-budget-giveback.ts). For the same reason a give-back does
+ * not set the day's opening: the opening is the `before` of today's earliest row that is NOT a
+ * give-back, this write's own row left out. With no such row, the opening is this write's
+ * previous value — not the campaign row, which the worker reads after Nexus already wrote the
+ * new value (review N1). The campaign row stays the fallback only for a caller that checks
+ * before writing and so has no previous value to hand (the change tools' preview).
  */
 const pctEnv = (name: string, fallback: number): number => {
   const v = Number(process.env[name])
@@ -629,8 +661,13 @@ const pctEnv = (name: string, fallback: number): number => {
 
 export async function budgetDayMoveDenial(args: {
   campaignId: string
+  /** The campaign row's budget — in the worker already the NEW value (N1), so only the last fallback. */
   currentBudgetCents: number
   intendedCents: number
+  // 6.1 — see GateContext.
+  actor?: string | null
+  previousValueCents?: number | null
+  queueId?: string | null
 }): Promise<GateDecision | null> {
   const dropPct = pctEnv('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30)
   const risePct = pctEnv('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50)
@@ -638,21 +675,49 @@ export async function budgetDayMoveDenial(args: {
   const riseAbsCents = Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000 // €10
 
   const midnightUtc = new Date(`${utcDayKey()}T00:00:00.000Z`)
+  const previousCents = Number.isFinite(args.previousValueCents ?? NaN) ? (args.previousValueCents as number) : null
+  // This campaign's budget history, without this write's own row. NULL-safe on purpose: a bare
+  // `not` would also drop every row that has no queue id.
+  const history: Prisma.AdvertisingActionLogWhereInput = {
+    actionType: 'AD_BUDGET_UPDATE',
+    entityType: 'CAMPAIGN',
+    entityId: args.campaignId,
+    rolledBackAt: null,
+    ...(args.queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: args.queueId } }] } : {}),
+  }
+  const select = { userId: true, payloadBefore: true, payloadAfter: true } as const
+
+  // 6.1 — a schedule giving back what it set puts back a move this bound already allowed.
+  if (budgetScheduleIdOf(args.actor) && previousCents != null) {
+    const recent = await prisma.advertisingActionLog.findMany({
+      where: history, orderBy: { createdAt: 'desc' }, take: GIVE_BACK_LOOKBACK, select,
+    })
+    if (isBudgetGiveBack({ actor: args.actor, previousCents, newCents: args.intendedCents }, recent.map(budgetLogStepOf))) {
+      logger.info('[ads-write-gate] budget give-back — exempt from the day-move bound only', {
+        campaignId: args.campaignId, actor: args.actor, fromCents: previousCents, toCents: args.intendedCents,
+      })
+      return null
+    }
+  }
+
   const first = await prisma.advertisingActionLog.findFirst({
-    where: {
-      actionType: 'AD_BUDGET_UPDATE',
-      entityType: 'CAMPAIGN',
-      entityId: args.campaignId,
-      createdAt: { gte: midnightUtc },
-      rolledBackAt: null,
-    },
+    where: { ...history, createdAt: { gte: midnightUtc } },
     orderBy: { createdAt: 'asc' },
-    select: { payloadBefore: true },
+    select,
   })
-  const loggedOpening = Number((first?.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
-  const openingCents = Number.isFinite(loggedOpening)
-    ? Math.round(loggedOpening * 100) // EUROS in the payload — see the note above
-    : args.currentBudgetCents
+  // EUROS in the payload — budgetLogStepOf converts (see the note above).
+  let loggedOpening = first ? budgetLogStepOf(first).beforeCents : null
+  // 6.1 — only a schedule's row can be a give-back, so only a day that opened on one is read in full.
+  if (first && budgetScheduleIdOf(first.userId)) {
+    const today = await prisma.advertisingActionLog.findMany({
+      where: { ...history, createdAt: { gte: midnightUtc } }, orderBy: { createdAt: 'asc' }, select,
+    })
+    const beforeToday = await prisma.advertisingActionLog.findMany({
+      where: { ...history, createdAt: { lt: midnightUtc } }, orderBy: { createdAt: 'desc' }, take: GIVE_BACK_LOOKBACK, select,
+    })
+    loggedOpening = dayOpeningCents(today.map(budgetLogStepOf), beforeToday.map(budgetLogStepOf))
+  }
+  const openingCents = loggedOpening ?? previousCents ?? args.currentBudgetCents
   if (openingCents <= 0) return null // nothing to measure a move against
 
   const floorCents = Math.round(openingCents * (1 - dropPct / 100))

@@ -184,3 +184,130 @@ describe('AUTO.P0 guard ④ — daily budget movement', () => {
     if (r.allowed === false) expect(r.reason).toContain('€10.00')
   })
 })
+
+/**
+ * 6.1 — a budget schedule's give-back is not a new day move. A boost given back on the next UTC day was refused:
+ * the give-back's own log row, written before the gate runs, made the day "open" at the boost. The gate now
+ * recognises a give-back from the action log — exempt from this bound and from nothing else.
+ */
+describe('6.1 — a budget schedule gives back what it set', () => {
+  const SCHED = 'automation:budget-schedule-sch1'
+  const RULE = 'automation:cmrule0000000000000000001'
+  /** A log row as the gate reads it: who, the budget before and after (EUROS), and its queue row. */
+  const logged = (actor: string, before: number, after: number, queue = 'q-earlier') =>
+    ({ userId: actor, payloadBefore: { dailyBudget: before }, payloadAfter: { dailyBudget: after }, outboundQueueId: queue })
+  /**
+   * The campaign's history as the gate queries it: the newest rows (the give-back test), today's rows and the
+   * rows before today (the day's opening). The real queries leave this write's own row out; these lists do too.
+   */
+  const history = (h: { recent?: unknown[]; today?: unknown[]; beforeToday?: unknown[] }) => {
+    actionLogFindMany.mockImplementation((async (args: { where?: { createdAt?: { gte?: Date; lt?: Date } } }) => {
+      const at = args?.where?.createdAt
+      if (at?.gte) return h.today ?? []
+      if (at?.lt) return h.beforeToday ?? []
+      return h.recent ?? []
+    }) as never)
+    actionLogFindFirst.mockResolvedValue((h.today ?? [])[0] ?? null)
+  }
+  /** The worker's view of a give-back: Nexus already wrote €10 locally (N1); the queued change says €15 → €10. */
+  const giveBack = { ...base, field: 'dailyBudget', intendedValueCents: 1_000, actor: SCHED, previousValueCents: 1_500, queueId: 'q-back' }
+
+  beforeEach(() => {
+    campaignFindUnique.mockResolvedValue({ ...CAMPAIGN_AT_10, dailyBudget: 10 })
+  })
+
+  it('🔴 gives back a ×1.5 boost set yesterday (refused before: the day "opened" at €15, so €10 was a 33% drop)', async () => {
+    history({ recent: [logged(SCHED, 10, 15, 'q-entry')] })
+    // What the old read saw: the give-back's own row as today's first, opening the day at the boost.
+    actionLogFindFirst.mockResolvedValue(logged(SCHED, 15, 10, 'q-back'))
+    const r = await checkAdsWriteGate(giveBack)
+    expect(r.allowed).toBe(true)
+  })
+
+  it('gives back a ×2 boost (€20 → €10)', async () => {
+    history({ recent: [logged(SCHED, 10, 20, 'q-entry')] })
+    actionLogFindFirst.mockResolvedValue(logged(SCHED, 20, 10, 'q-back')) // the old read again: a 50% drop from €20
+    const r = await checkAdsWriteGate({ ...giveBack, previousValueCents: 2_000 })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('the same €15 → €10 from a rule is a 33% day move like any other', async () => {
+    history({ recent: [logged(SCHED, 10, 15, 'q-entry')] })
+    const r = await checkAdsWriteGate({ ...giveBack, actor: RULE })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) {
+      expect(r.deniedAt).toBe('budget_day_move')
+      expect(r.reason).toContain('from €15.00 to €10.00')
+    }
+  })
+
+  it('another writer after the schedule ends the run: the "give-back" is bounded', async () => {
+    // The schedule set €15, the pacer then €16. €16 → €10 is not the schedule's to put back.
+    history({ recent: [logged('automation:budget-manager-cron', 15, 16), logged(SCHED, 10, 15, 'q-entry')] })
+    const r = await checkAdsWriteGate({ ...giveBack, previousValueCents: 1_600 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('budget_day_move')
+  })
+
+  it('back to €10 only: €15 → €6 is not a give-back of a run that started at €10', async () => {
+    history({ recent: [logged(SCHED, 10, 15, 'q-entry')] })
+    const r = await checkAdsWriteGate({ ...giveBack, intendedValueCents: 600 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.deniedAt).toBe('budget_day_move')
+  })
+
+  describe('exempt from the day-move bound ONLY', () => {
+    beforeEach(() => history({ recent: [logged(SCHED, 10, 15, 'q-entry')] }))
+
+    it('the budget floor still refuses it', async () => {
+      campaignFindUnique.mockResolvedValue({ ...CAMPAIGN_AT_10, dailyBudget: 10, minBudgetCents: 1_200 })
+      const r = await checkAdsWriteGate(giveBack)
+      expect(r.allowed).toBe(false)
+      if (r.allowed === false) expect(r.deniedAt).toBe('entity_bounds')
+    })
+
+    it('a budget pin still refuses it', async () => {
+      campaignFindUnique.mockResolvedValue({ ...CAMPAIGN_AT_10, dailyBudget: 10, pinBudget: true })
+      const r = await checkAdsWriteGate({ ...giveBack, fields: ['dailyBudget'] })
+      expect(r.allowed).toBe(false)
+      if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+    })
+
+    it('the halt still refuses it', async () => {
+      automationState.mockResolvedValue({ autonomy: 'AUTO', halted: true, haltReason: 'test', effectivelyStopped: true, degraded: false })
+      const r = await checkAdsWriteGate(giveBack)
+      expect(r.allowed).toBe(false)
+      if (r.allowed === false) expect(r.deniedAt).toBe('automation_halted')
+    })
+
+    it('the allowlist still refuses it', async () => {
+      campaignFindUnique.mockResolvedValue({ ...CAMPAIGN_AT_10, dailyBudget: 10, liveBidWritesEnabled: false })
+      const r = await checkAdsWriteGate(giveBack)
+      expect(r.allowed).toBe(false)
+      if (r.allowed === false) expect(r.deniedAt).toBe('campaign_allowlist')
+    })
+  })
+
+  describe('the day\'s opening', () => {
+    it('a give-back does not open the day: a rule\'s −20% after it is measured from €10, not the boost', async () => {
+      // 00:15 the schedule gave back yesterday's €15; now a rule cuts €10 → €8.
+      history({ today: [logged(SCHED, 15, 10, 'q-back')], beforeToday: [logged(SCHED, 10, 15, 'q-entry')] })
+      const ok = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 800, actor: RULE, previousValueCents: 1_000, queueId: 'q-rule' })
+      expect(ok.allowed).toBe(true) // read from the give-back's row, the floor was €10.50
+
+      const tooFar = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 650, actor: RULE, previousValueCents: 1_000, queueId: 'q-rule' })
+      expect(tooFar.allowed).toBe(false)
+      if (tooFar.allowed === false) expect(tooFar.reason).toContain('€10.00') // still bounded, from the real opening
+    })
+
+    it('with no row today it is this write\'s previous value — never the campaign row, which already holds the new value (N1)', async () => {
+      campaignFindUnique.mockResolvedValue({ ...CAMPAIGN_AT_10, dailyBudget: 6 }) // Nexus wrote €6 before the gate ran
+      const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 600, actor: RULE, previousValueCents: 1_000, queueId: 'q-rule' })
+      expect(r.allowed).toBe(false) // read from the campaign row, €6 → €6 moved nothing
+      if (r.allowed === false) {
+        expect(r.deniedAt).toBe('budget_day_move')
+        expect(r.reason).toContain('from €10.00 to €6.00')
+      }
+    })
+  })
+})
