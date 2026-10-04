@@ -16,6 +16,13 @@ let task: ReturnType<typeof cron.schedule> | null = null
 let running = false
 
 export async function runBudgetEnforceOnce(): Promise<string> {
+  // 1e — one run per business at a time: the tick and a Run now share the engine lock (ads-engine-lock.ts).
+  const { withEngineLock, currentWorkspaceId } = await import('../services/advertising/ads-engine-lock.js')
+  const run = await withEngineLock(currentWorkspaceId(), 'budget-enforce', budgetEnforceTick)
+  return run.ran ? run.value : `skipped: ${run.reason}`
+}
+
+async function budgetEnforceTick(): Promise<string> {
   // R16 — the lower of the env (apply only with exactly '1') and this business's switch: OFF stands down, OBSERVE
   // computes and never applies.
   const { engineMode } = await import('../services/automation/engine-switch.service.js')

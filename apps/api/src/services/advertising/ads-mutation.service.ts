@@ -58,8 +58,9 @@ export type AdsActor = `user:${string}` | `automation:${string}`
  *
  * Scope is deliberately the two CRON actors only. It matches the policy's stated exceptions exactly:
  *   · `user:*`                    — a human clicking Pause/Enable does a real status write.
- *   · `automation:<ruleId>`       — an operator-authored rule (`pause_campaign`, `enable_campaign`,
- *                                   `pause_all_campaigns`) is the operator acting through a rule.
+ *   · `automation:<ruleId>`       — an operator-authored rule (`enable_campaign`, `resume_campaign`)
+ *                                   is the operator acting through a rule. Its PAUSE is refused by
+ *                                   `isAutomatedPause` below (1f).
  *   · `automation:rank-defend-*`  — REFUSED. Nobody asked for this campaign specifically.
  *   · `automation:dayparting-*`   — REFUSED. Same.
  *
@@ -88,6 +89,23 @@ const ENGINE_ACTOR_EXEMPTIONS = new Set<string>([
 export function isSchedulingEngineActor(actor: string): boolean {
   if (ENGINE_ACTOR_EXEMPTIONS.has(actor)) return false
   return ENGINE_CRON_ACTOR_PREFIXES.some((p) => actor.startsWith(p))
+}
+
+/**
+ * 1f — no automation pauses a campaign or an ad group (Owner rule; decision S5, 2026-10-04).
+ *
+ * SYNC.1 above bans only the two cron engines, and it let operator-authored rules through, so a
+ * rule carrying `pause_campaign`, `pause_ad_group`, `pause_all_campaigns`, `dayparting_apply` or
+ * `liquidate_aged_stock` could still pause on Amazon. A pause resets Amazon's learning; the house
+ * mechanism is a bid floor (`ads-bid-suppression.service.ts`). This is the backstop where every
+ * campaign and ad-group write passes, so a pause added to a handler next year is refused here too.
+ *
+ * Refused: `status: 'PAUSED'` on a CAMPAIGN or AD_GROUP from any `automation:*` actor.
+ * Not refused: a person (`user:*`) — the Pause button keeps working; a rule's ENABLED; and target
+ * level (`pause_target` stays a Bid rule action, capped below AUTO by the graduation ceiling).
+ */
+export function isAutomatedPause(actor: string, status: string | null | undefined): boolean {
+  return status === 'PAUSED' && actor.startsWith('automation:')
 }
 
 export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
@@ -732,6 +750,16 @@ export async function updateCampaignWithSync(args: {
       error: 'engine_may_not_set_campaign_status',
     }
   }
+  // 1f — see isAutomatedPause. Same placement and reasoning as SYNC.1: before the diff, and loud.
+  if (isAutomatedPause(args.actor, args.patch.status)) {
+    logger.warn('[ads-mutation] refused automated campaign pause', {
+      campaignId: args.campaignId, actor: args.actor, from: existing.status, reason: args.reason ?? null,
+    })
+    return {
+      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+      error: 'automation_may_not_pause_campaign',
+    }
+  }
 
   // Diff: only audit fields the patch actually changes.
   const changes: FieldChange[] = []
@@ -895,6 +923,13 @@ export async function updateAdGroupWithSync(args: {
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  }
+  // 1f — see isAutomatedPause: an automation lowers an ad group's bids, it never pauses it.
+  if (isAutomatedPause(args.actor, args.patch.status)) {
+    logger.warn('[ads-mutation] refused automated ad-group pause', {
+      adGroupId: args.adGroupId, actor: args.actor, from: existing.status, reason: args.reason ?? null,
+    })
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'automation_may_not_pause_ad_group' }
   }
   // AX2.0 — same guard as AdTarget: Amazon says this ad group is gone, so stop
   // regenerating writes for it. `force` is the operator's re-test path.

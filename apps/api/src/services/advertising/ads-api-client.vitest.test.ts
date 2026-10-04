@@ -1,4 +1,26 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+
+// 5f — the live describe at the bottom drives updateTarget through the REAL liveCall and the REAL
+// channel gateway with `fetch` stubbed (the pattern of gateway/ads.p12.vitest.test.ts). These stand
+// in only for the gateway's database touches and the account/token lookups; the sandbox tests
+// above short-circuit before any of them.
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
+vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+vi.mock('../../lib/workspace-context.js', async (original) => ({ ...(await original<object>()), requireWorkspace: () => ({ workspaceId: 'ws' }) }))
+vi.mock('../connection-resolver.service.js', async (original) => ({
+  ...(await original<object>()),
+  resolveConnectionForProfile: vi.fn(async () => ({ id: 'ads-1', connectionMetadata: {} })),
+}))
+vi.mock('../cx/apps.service.js', () => ({ getChannelApp: vi.fn(async () => ({ clientId: 'amzn1.application-oa2-client.x' })) }))
+vi.mock('../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'ads-token') }))
+vi.mock('../outbound-api-call-log.service.js', async (original) => ({
+  ...(await original<object>()),
+  recordApiCall: async (_ctx: unknown, run: () => Promise<unknown>) => run(),
+}))
+
+import { gatewayLedger } from '../../test-support/gateway-stubs.js'
+import { __rateTest } from '../gateway/rate.js'
 import { v3BatchResult, updateTarget } from './ads-api-client.js'
 
 // A3 — the v3 batch-response parser must be CONSERVATIVE: flip to failure only on a recognized
@@ -109,5 +131,102 @@ describe('NEG.3 updateTarget routing for NEGATIVE targets', () => {
     // 🔴 negativeLevel on a POSITIVE row must be ignored — the v1 sync sets negativeLevel null for
     // positives, but a stale or hand-written row must not be able to divert a bid write.
     expect(await route({ kind: 'KEYWORD', isNegative: false, negativeLevel: 'CAMPAIGN' })).toBe('keywords')
+  })
+})
+
+// ── 5f — an ARCHIVE of a negative is SP v3 `POST {path}/delete`; the PUT does not accept ARCHIVED ──
+//
+// Every value in this fixture is copied from Amazon's Sponsored Products 3.0 OpenAPI document, read
+// 2026-10-04 from `https://d1y2lf8k3vrkfu.cloudfront.net/openapi/en-us/dest/SponsoredProducts_prod_3p.json`
+// (the file advertising.amazon.com/API/docs/en-us/sponsored-products/3-0/openapi/prod loads):
+//   - operationIds DeleteSponsoredProductsNegativeKeywords / …CampaignNegativeKeywords /
+//     …NegativeTargetingClauses: `post` on the paths below, requestBody content = the mime below,
+//     schema `{ <idFilter>: SponsoredProductsObjectIdFilter }` with `required: ["include"]`;
+//   - 207 answer `{ <responseKey>: { success: [...], error: [{ index, errors }] } }`;
+//   - the negative PUTs' state is `SponsoredProductsCreateOrUpdateEntityState`,
+//     `enum: ["ENABLED","PAUSED","PROPOSED"]` — no ARCHIVED.
+const SP_V3_NEGATIVE_DELETE = {
+  adGroupKeyword: {
+    route: { kind: 'KEYWORD', isNegative: true, negativeLevel: 'AD_GROUP' },
+    path: '/sp/negativeKeywords/delete', mime: 'application/vnd.spNegativeKeyword.v3+json',
+    idFilter: 'negativeKeywordIdFilter', responseKey: 'negativeKeywords',
+  },
+  campaignKeyword: {
+    route: { kind: 'KEYWORD', isNegative: true, negativeLevel: 'CAMPAIGN' },
+    path: '/sp/campaignNegativeKeywords/delete', mime: 'application/vnd.spCampaignNegativeKeyword.v3+json',
+    idFilter: 'campaignNegativeKeywordIdFilter', responseKey: 'campaignNegativeKeywords',
+  },
+  adGroupProduct: {
+    route: { kind: 'PRODUCT', isNegative: true, negativeLevel: 'AD_GROUP' },
+    path: '/sp/negativeTargets/delete', mime: 'application/vnd.spNegativeTargetingClause.v3+json',
+    idFilter: 'negativeTargetIdFilter', responseKey: 'negativeTargetingClauses',
+  },
+} as const
+
+describe('5f updateTarget — archiving a negative uses the SP v3 delete operation (live, through the gateway)', () => {
+  const ctx = { profileId: '123', region: 'EU' as const }
+
+  beforeEach(() => {
+    __rateTest.useMemory()
+    h.calls = []; h.answers = []; gatewayLedger.length = 0
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_AMAZON_ADS_QUOTA_MODE', 'off')
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      h.calls.push({ url: String(url), init })
+      return h.answers.shift()?.() ?? new Response('{}', { status: 207 })
+    }))
+  })
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
+
+  for (const [name, spec] of Object.entries(SP_V3_NEGATIVE_DELETE)) {
+    it(`🔴 ${name}: archive → POST ${spec.path} with { ${spec.idFilter}: { include: [id] } }, through the gateway`, async () => {
+      h.answers.push(() => new Response(JSON.stringify({ [spec.responseKey]: { success: [{ index: 0 }], error: [] } }), { status: 207 }))
+      const r = await updateTarget(ctx, 'neg-9', { state: 'archived' }, spec.route)
+
+      expect(r).toMatchObject({ ok: true, mode: 'live', error: null })
+      expect(h.calls).toHaveLength(1)
+      expect(h.calls[0].url).toBe(`https://advertising-api-eu.amazon.com${spec.path}`)
+      expect(h.calls[0].init.method).toBe('POST')
+      expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ [spec.idFilter]: { include: ['neg-9'] } })
+      expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': spec.mime, Accept: spec.mime, 'Amazon-Advertising-API-Scope': '123' })
+      // The gateway sent it (one ledger row against the resolved account), as an action, not a read.
+      expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'AMAZON_ADS', connectionId: 'ads-1', outcome: 'sent', success: true })])
+    })
+
+    it(`${name}: a 207 with an error item is a failure, read from the "${spec.responseKey}" block`, async () => {
+      h.answers.push(() => new Response(JSON.stringify({ [spec.responseKey]: { success: [], error: [{ index: 0, errors: [{ errorType: 'entityNotFoundError' }] }] } }), { status: 207 }))
+      const r = await updateTarget(ctx, 'neg-9', { state: 'archived' }, spec.route)
+      expect(r.ok).toBe(false)
+      expect(r.error).toMatch(/amazon_rejected/)
+      expect(r.error).toMatch(/entityNotFoundError/)
+    })
+  }
+
+  it('enable and pause of a negative stay PUT with the state (ENABLED / PAUSED are in the PUT enum)', async () => {
+    await updateTarget(ctx, 'neg-9', { state: 'paused' }, SP_V3_NEGATIVE_DELETE.adGroupKeyword.route)
+    await updateTarget(ctx, 'neg-9', { state: 'enabled' }, SP_V3_NEGATIVE_DELETE.campaignKeyword.route)
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname, JSON.parse(String(c.init.body))])).toEqual([
+      ['PUT', '/sp/negativeKeywords', { negativeKeywords: [{ keywordId: 'neg-9', state: 'PAUSED' }] }],
+      ['PUT', '/sp/campaignNegativeKeywords', { campaignNegativeKeywords: [{ keywordId: 'neg-9', state: 'ENABLED' }] }],
+    ])
+  })
+
+  it('a POSITIVE keyword or target archive is unchanged — still the PUT it always was', async () => {
+    await updateTarget(ctx, 'kw-1', { state: 'archived' }, { kind: 'KEYWORD', isNegative: false })
+    await updateTarget(ctx, 't-1', { state: 'archived' }, 'PRODUCT')
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname, JSON.parse(String(c.init.body))])).toEqual([
+      ['PUT', '/sp/keywords', { keywords: [{ keywordId: 'kw-1', state: 'ARCHIVED' }] }],
+      ['PUT', '/sp/targets', { targetingClauses: [{ targetId: 't-1', state: 'ARCHIVED' }] }],
+    ])
+  })
+})
+
+describe('5f updateTarget — sandbox says when a negative archive would be a delete', () => {
+  const ctx = { profileId: 'p1', region: 'EU' as const }
+  it('archive of a negative reports operation "delete"; a pause does not', async () => {
+    const archive = (await updateTarget(ctx, 'ext-1', { state: 'archived' }, SP_V3_NEGATIVE_DELETE.adGroupProduct.route)).rawResponse
+    const pause = (await updateTarget(ctx, 'ext-1', { state: 'paused' }, SP_V3_NEGATIVE_DELETE.adGroupProduct.route)).rawResponse
+    expect(archive).toMatchObject({ sandbox: true, route: 'negativeTargets', operation: 'delete' })
+    expect(pause).not.toHaveProperty('operation')
   })
 })

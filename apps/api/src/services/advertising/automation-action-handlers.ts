@@ -11,8 +11,8 @@
  * Action types added:
  *   bid_down            — drop bid by percent (floor €0.05)
  *   bid_up              — raise bid by percent (estimated spend impact reported)
- *   pause_ad_group      — set status=PAUSED
- *   pause_campaign      — set status=PAUSED (heavier — loses impression rank)
+ *   pause_ad_group      — refused: no automation pauses an ad group (1f)
+ *   pause_campaign      — refused: no automation pauses a campaign (1f)
  *   adjust_ad_budget    — change Campaign.dailyBudget
  *   create_amazon_promotion — RetailEvent + RetailEventPriceAction
  *                           (reuses promotion-scheduler.service.ts:30)
@@ -50,6 +50,7 @@ import {
   updateAdTargetWithSync,
   type AdsActor,
 } from './ads-mutation.service.js'
+import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
 
 const BID_FLOOR_CENTS = 5 // €0.05
 const RULE_ACTOR = (ruleId: string): AdsActor => `automation:${ruleId}`
@@ -327,48 +328,27 @@ ACTION_HANDLERS.bid_up = async (action, context, meta): Promise<ActionResult> =>
   return { type: action.type, ok: false, error: `Unsupported target=${target}` }
 }
 
-// ── pause_ad_group / pause_campaign ───────────────────────────────────
-
-ACTION_HANDLERS.pause_ad_group = async (action, context, meta): Promise<ActionResult> => {
-  const id = ctxAdGroupId(action, context)
-  if (!id) return { type: action.type, ok: false, error: 'No adGroup.id in context' }
-  if (meta.dryRun) {
-    return { type: action.type, ok: true, output: { dryRun: true, adGroupId: id, wouldSet: 'PAUSED' } }
-  }
-  const res = await updateAdGroupWithSync({
-    evidence: ctxEvidence(context),
-    adGroupId: id,
-    patch: { status: 'PAUSED' },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: action.reason as string | undefined ?? `pause_ad_group via rule ${meta.ruleId}`,
-  })
+// ── pause_ad_group / pause_campaign / pause_all_campaigns — refused (1f) ──
+//
+// Owner rule: no engine or automation pauses a campaign or an ad group (decision S5, 2026-10-04). A pause
+// resets Amazon's learning; an automation lowers bids instead (`lower_bid_to_floor`, the bid floor). The
+// handlers stay registered so a stored rule carrying one reports this sentence rather than "Unknown action
+// type". They refuse in a dry run too, so no rule proposes a pause that a person's approval would then be
+// refused. `updateCampaignWithSync` / `updateAdGroupWithSync` refuse the same write as the backstop.
+function refuseAutomatedPause(type: string, what: string, output: Record<string, unknown>): ActionResult {
   return {
-    type: action.type,
-    ok: res.ok,
-    error: res.error ?? undefined,
-    output: { adGroupId: id, outboundQueueId: res.outboundQueueId },
+    type,
+    ok: false,
+    error: `Refused: no automation may pause ${what}. An automation lowers bids or budgets instead; a person can still pause by hand.`,
+    output: { refusedBy: 'no-automated-pause', ...output },
   }
 }
 
-ACTION_HANDLERS.pause_campaign = async (action, context, meta): Promise<ActionResult> => {
-  const id = ctxCampaignId(action, context)
-  if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
-  if (meta.dryRun) {
-    return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, wouldSet: 'PAUSED' } }
-  }
-  const res = await updateCampaignWithSync({
-    campaignId: id,
-    patch: { status: 'PAUSED' },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: action.reason as string | undefined ?? `pause_campaign via rule ${meta.ruleId}`,
-  })
-  return {
-    type: action.type,
-    ok: res.ok,
-    error: res.error ?? undefined,
-    output: { campaignId: id, outboundQueueId: res.outboundQueueId },
-  }
-}
+ACTION_HANDLERS.pause_ad_group = async (action, context): Promise<ActionResult> =>
+  refuseAutomatedPause(action.type, 'an ad group', { adGroupId: ctxAdGroupId(action, context) })
+
+ACTION_HANDLERS.pause_campaign = async (action, context): Promise<ActionResult> =>
+  refuseAutomatedPause(action.type, 'a campaign', { campaignId: ctxCampaignId(action, context) })
 
 // ── notify (TD.0) ─────────────────────────────────────────────────────
 // Alert-only action: fans a notification to every operator's bell. Fires even
@@ -1041,30 +1021,12 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
   }
 }
 
-// ── AU.4: pause_all_campaigns (budget failsafe kill-switch) ──────────
-// Pauses ALL ENABLED campaigns for a marketplace instantly. Used as the
-// hard budget-cap kill-switch: triggered when total monthly spend crosses a
-// threshold. The SCHEDULE trigger polls spend and fires this action.
-// Resume individually or via a companion rule with resume_campaign.
-ACTION_HANDLERS.pause_all_campaigns = async (action, _context, meta): Promise<ActionResult> => {
-  const marketplace = typeof action.marketplace === 'string' ? action.marketplace : undefined
-  const where: Record<string, unknown> = { status: 'ENABLED' }
-  if (marketplace) where.marketplace = marketplace
-  const campaigns = await prisma.campaign.findMany({ where, select: { id: true, name: true, marketplace: true } })
-  if (meta.dryRun) {
-    return { type: action.type, ok: true, output: { dryRun: true, wouldPause: campaigns.length, sample: campaigns.slice(0, 5).map((c) => c.name) } }
-  }
-  let paused = 0
-  const errors: string[] = []
-  for (const c of campaigns) {
-    try {
-      await updateCampaignWithSync({ campaignId: c.id, patch: { status: 'PAUSED' }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string | undefined) ?? `budget cap hit — pause_all_campaigns rule ${meta.ruleId}`, applyImmediately: true } as never)
-      paused++
-    } catch (e) { errors.push((e as Error).message) }
-  }
-  logger.warn('[pause_all_campaigns] budget cap pause executed', { ruleId: meta.ruleId, marketplace, paused, errors: errors.length })
-  return { type: action.type, ok: errors.length < campaigns.length, output: { paused, errors: errors.slice(0, 5) } }
-}
+// ── AU.4: pause_all_campaigns (budget failsafe kill-switch) — refused (1f) ──
+// It paused ALL ENABLED campaigns of a marketplace when monthly spend crossed a threshold. No automation
+// may pause a campaign (see refuseAutomatedPause above); the budget stop for a market is budget
+// enforcement's stop-over-spend, which floors bids instead.
+ACTION_HANDLERS.pause_all_campaigns = async (action): Promise<ActionResult> =>
+  refuseAutomatedPause(action.type, 'campaigns', { marketplace: typeof action.marketplace === 'string' ? action.marketplace : null })
 
 // ── add_negative_exact · add_negative_phrase ──────────────────────────
 // Add a specific query as a negative to a campaign. Designed for use with
@@ -1995,7 +1957,13 @@ ACTION_HANDLERS.enable_target = async (action, context, meta): Promise<ActionRes
   setTargetStatus(action, context, meta, 'ENABLED')
 
 // dayparting_apply (EA2) — SCHEDULE trigger. At each tick, find the weekly window(s) covering the
-// current hour (in the rule's timezone) and enable/pause the rule's campaigns for THIS marketplace.
+// current hour (in the rule's timezone) and act on the rule's campaigns for THIS marketplace.
+//
+// 1f — through BIDS, never campaign status (no automation pauses a campaign). A 'pause' window floors the
+// campaign's bids (suppressCampaignBids remembers each bid); an 'enable' window restores them, the same
+// mechanism the dayparting cron uses. The restore lifts only a floor THIS rule set (`bidsSuppressedBy`):
+// the rank engine, budget stop-over-spend and the retail guard share that flag, and budget enforcement
+// follows the same ownership rule for the same reason.
 const DOW_NAME: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 function nowInTimezone(tz: string): { dow: number; hour: number } {
   const now = new Date()
@@ -2019,17 +1987,23 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
   // the rule's campaigns in THIS marketplace
   const camps = await prisma.campaign.findMany({
     where: { id: { in: allow.length ? allow : ['__none__'] }, ...(marketplace ? { marketplace } : {}) },
-    select: { id: true, status: true, name: true },
+    select: { id: true, name: true, bidsSuppressedAt: true, bidsSuppressedBy: true },
   })
-  const desired = active.adj === 'enable' ? 'ENABLED' : 'PAUSED'
-  const toChange = camps.filter((c) => c.status !== desired)
+  const actor = RULE_ACTOR(meta.ruleId)
+  const floor = active.adj === 'pause'
+  // pause → every campaign not floored yet; enable → only the campaigns this rule floored.
+  const toChange = camps.filter((c) => floor ? !c.bidsSuppressedAt : !!c.bidsSuppressedAt && c.bidsSuppressedBy === actor)
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, tz, dow, hour, action: active.adj, wouldChange: toChange.length, sample: toChange.slice(0, 6).map((c) => c.name) } }
-  let changed = 0; const errors: string[] = []
+  let changed = 0, bidsMoved = 0; const errors: string[] = []
   for (const c of toChange) {
-    try { const r = await updateCampaignWithSync({ campaignId: c.id, patch: { status: desired as 'ENABLED' | 'PAUSED' }, actor: RULE_ACTOR(meta.ruleId), reason: `dayparting ${active.adj} via rule ${meta.ruleId}` }); if (r.ok) changed++ }
-    catch (e) { errors.push((e as Error).message) }
+    try {
+      bidsMoved += floor
+        ? await suppressCampaignBids(c.id, { actor, reason: `dayparting pause via rule ${meta.ruleId} → bids floored (no-pause)` })
+        : await restoreCampaignBids(c.id, { actor, reason: `dayparting enable via rule ${meta.ruleId} → bids restored` })
+      changed++
+    } catch (e) { errors.push((e as Error).message) }
   }
-  return { type: action.type, ok: true, output: { tz, dow, hour, action: active.adj, changed, errors: errors.slice(0, 5) } }
+  return { type: action.type, ok: true, output: { tz, dow, hour, action: active.adj, changed, bidsMoved, errors: errors.slice(0, 5) } }
 }
 
 logger.debug('[advertising] action handlers registered', {

@@ -98,6 +98,7 @@ import { PC_METRIC_UNIT } from './PerformanceCriteria'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { placementThenSentence } from './placementLanes'
+import { planBulkAutomation, bulkAutomationNotice, type BulkRuleState } from './bulkAutomation'
 import { RULE_TYPES } from './ruleTypes'
 import { RuleTypeModal } from './RuleTypeModal'
 import { NoDataIllus } from './NoDataIllus'
@@ -602,6 +603,9 @@ function orderedActionTypes(rule: Record<string, unknown>, tabKey: string): stri
  * `level !== 'OFF'`, turning a DISABLED rule on and then off again leaves it enabled at PROPOSE
  * rather than disabled. That is the route's contract, the toggle's tooltip says so before the
  * first click, and re-disabling is one control away on Automations.
+ *
+ * The BULK verb never writes it onto a rule already at or below it (4j, `bulkAutomation.ts`): bulk
+ * Off used to come back with every disabled, Off and Observe rule enabled at PROPOSE.
  */
 const ENGINE_OFF_LEVEL = 'PROPOSE'
 
@@ -904,24 +908,23 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       return
     }
     const on = !!payload?.on
-    // Turning ON a rule above its ceiling is a 409 per row. The modal said how many, and they are
-    // left exactly as they were rather than each producing its own failure. Turning OFF is never
-    // capped, so nothing is skipped on that side.
-    const targets = on ? ids.filter((id) => !isCapped(id)) : ids
+    // 4j — `planBulkAutomation` decides which rows this verb may touch. Turning ON a rule above its
+    // ceiling is a 409 per row, so those are left exactly as they were (the modal said how many).
+    // Turning OFF writes PROPOSE, which the route enables, so a rule already at PROPOSE, OBSERVE or
+    // OFF, or disabled, is left alone: Off never turns a rule up.
+    const stateOf = (id: string): BulkRuleState | undefined => {
+      const r = rows.find((x) => x.id === id)
+      const dryRun = raw.get(id)?.dryRun
+      return r && { level: r.level, enabled: r.enabled, automation: r.automation, dryRun: typeof dryRun === 'boolean' ? dryRun : undefined }
+    }
+    const plan = planBulkAutomation(ids, on ? 'AUTO' : ENGINE_OFF_LEVEL, stateOf, isCapped)
     let failed = 0
-    for (const id of targets) if (!(await setAutomation(id, on, true))) failed += 1
+    for (const id of plan.change) if (!(await setAutomation(id, on, true))) failed += 1
     setSel(new Set())
-    emitAdsChange('ads.rule.changed')
-    const skipped = ids.length - targets.length
+    if (plan.change.length > failed) emitAdsChange('ads.rule.changed')
     // \U0001f534 A bulk verb that silently does less than it was asked is the defect this whole page
     // was rebuilt to stop. The count that did NOT move is stated, always.
-    if (skipped || failed) {
-      setNotice([
-        `${targets.length - failed} of ${ids.length} ${ids.length === 1 ? nounLower : `${nounLower}s`} set to Automation ${on ? 'On' : 'Off'}.`,
-        skipped ? `${skipped} left unchanged — above the graduation ceiling, which only Automations can raise.` : '',
-        failed ? `${failed} failed to write.` : '',
-      ].filter(Boolean).join(' '))
-    }
+    setNotice(bulkAutomationNotice(plan, failed, nounLower))
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [

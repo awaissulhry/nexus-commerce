@@ -97,6 +97,7 @@ import {
   runFbaStorageAgeIngestCron,
   runTrueProfitRollupCron,
   runAdsReconcileCron,
+  runAutoBidLiveOnce,
 } from './ads-sync.job.js'
 // AD.3 — advertising-domain AutomationRule evaluator.
 import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
@@ -109,7 +110,7 @@ import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
 import { runSqpIngestOnce } from './sqp-ingest.job.js'
 import { runSqpCollectOnce } from './sqp-collect.job.js'
 import { runKtDigestOnce } from './kt-digest.job.js'
-import { runDaypartingOnce } from './ad-dayparting.job.js'
+import { runDaypartingOnce, daypartingSummaryLine } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceOnce } from './budget-pool-rebalance.job.js'
 // SR.1 — Sentient Review Loop ingest + spike detector.
@@ -292,10 +293,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'sqp-collect': () => runSqpCollectOnce(),
   // KT.7 — the Keyword Tracker digest, manually triggerable so its content can be read on demand.
   'kt-digest': () => runKtDigestOnce(),
-  'ad-dayparting': async () => {
-    const r = await runDaypartingOnce()
-    return `evaluated=${r.evaluated} changed=${r.changed}`
-  },
+  // 1c / 1e — the tick's own summary line: would-apply / waiting / deferred when the dial or the caps held changes back.
+  'ad-dayparting': async () => daypartingSummaryLine(await runDaypartingOnce()),
   'budget-pool-rebalance': async () => {
     const s = await runBudgetPoolRebalanceOnce()
     return `pools=${s.poolsConsidered} rebalanced=${s.poolsRebalanced} live=${s.poolsAppliedLive} skipped=${s.poolsSkipped} shift=${s.totalShiftCents}¢ ${s.durationMs}ms`
@@ -326,16 +325,15 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
    * scheduled tick does, and every write still passes ads-write-gate — the account halt,
    * the per-campaign allowlist, the entity bounds and the authority pins all bind a
    * manual run identically.
+   *
+   * 1e — and before any of that, a manual run of rank-defend, auto-bid, budget enforcement or
+   * top-of-search defense passes what the tick passes (ads-engine-lock.ts): this business's
+   * switch, the arm flags as the scheduler sees them, and the engine lock. A refused run records
+   * "skipped: <why>" — e.g. "a run is already in progress" while a tick holds the lock.
    */
-  'ad-rank-defend': () => import('./ad-rank-defend.job.js').then(async (m) => {
-    const r = await m.runRankDefendOnce()
-    return `evaluated=${r.evaluated} applied=${r.applied}`
-  }),
+  'ad-rank-defend': () => import('./ad-rank-defend.job.js').then(async (m) => m.rankDefendSummaryLine(await m.runRankDefendOnce())),
   'ad-budget-enforce': () => import('./ad-budget-enforce.job.js').then((m) => m.runBudgetEnforceOnce()),
-  'ads-auto-bid': () => import('../services/advertising/ads-auto-bid.service.js').then(async (m) => {
-    const r = await m.runAutoBidOnce()
-    return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
-  }),
+  'ads-auto-bid': () => runAutoBidLiveOnce(),
   // NAF.B — the nightly analyst sweep (read-only fleet; findings only).
   'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
   // NAF.C — the weekly council (director + critic; queues approvals, no writes).

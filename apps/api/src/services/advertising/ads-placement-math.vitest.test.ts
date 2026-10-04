@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBlendedAdjustments, deltaBidCents } from './ads-placement-math.js'
+import { buildBlendedAdjustments, deltaBidCents, mergeOntoAmazonPlacements } from './ads-placement-math.js'
 
 // BL — the blended writer must let Top + Rest of Search + Product pages coexist in ONE
 // placement profile, drop a lane the target no longer declares, preserve foreign
@@ -90,5 +90,57 @@ describe('deltaBidCents (BL.7 — base-bid delta, no compounding)', () => {
     expect(deltaBidCents(4, -90)).toBe(2)     // round(0.4) = 0 → floored to 2
     expect(deltaBidCents(50, 9999)).toBe(deltaBidCents(50, 300)) // clamped to +300%
     expect(deltaBidCents(50, 300)).toBe(200)  // round(50 * 4)
+  })
+})
+
+// G.4 — a placement write is merged onto Amazon's CURRENT array (read just before the PUT): a lane the
+// write does not set keeps Amazon's value, so a console change since the last 20-minute sync survives.
+describe('mergeOntoAmazonPlacements (G.4 — merge onto Amazon before the PUT)', () => {
+  const TOP = 'PLACEMENT_TOP', REST = 'PLACEMENT_REST_OF_SEARCH', PP = 'PLACEMENT_PRODUCT_PAGE', AB = 'PLACEMENT_AMAZON_BUSINESS'
+  const p = (placement: string, percentage: number) => ({ placement, percentage })
+
+  it('keeps Amazon\'s value for a lane the request only carried from the local copy (the console edit survives)', () => {
+    // local: Top 50, Product 0 · console raised Product to 40 · the write moves Top to 80 and carries Product 0
+    const out = mergeOntoAmazonPlacements([p(TOP, 80), p(PP, 0)], [p(TOP, 50), p(PP, 0)], [p(TOP, 50), p(PP, 40)])
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 80, [PP]: 40 })
+    expect(out.drift).toEqual([{ placement: PP, local: 0, amazon: 40 }])
+  })
+
+  it('a lane the request sets to a new value wins over Amazon\'s', () => {
+    const out = mergeOntoAmazonPlacements([p(TOP, 80), p(PP, 10)], [p(TOP, 50), p(PP, 25)], [p(TOP, 60), p(PP, 25)])
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 80, [PP]: 10 })
+    expect(out.drift).toEqual([{ placement: TOP, local: 50, amazon: 60 }])
+  })
+
+  it('keeps a lane Amazon has and the request never mentions (Amazon Business, a console-added lane)', () => {
+    const out = mergeOntoAmazonPlacements([p(TOP, 80)], [p(TOP, 50)], [p(TOP, 50), p(AB, 30), p(REST, 15)])
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 80, [AB]: 30, [REST]: 15 })
+    expect(out.drift.map((d) => d.placement).sort()).toEqual([AB, REST].sort())
+  })
+
+  it('a lane the request leaves out while the local copy has it above 0 is removed (what the full-array PUT always meant)', () => {
+    const out = mergeOntoAmazonPlacements([p(TOP, 80)], [p(TOP, 50), p(PP, 25)], [p(TOP, 50), p(PP, 25)])
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 80, [PP]: 0 })
+    expect(out.drift).toEqual([])
+  })
+
+  it('does not invent a "nothing → 0" entry for a lane that is 0 everywhere', () => {
+    const out = mergeOntoAmazonPlacements([p(TOP, 80), p(REST, 0)], [p(TOP, 50)], [p(TOP, 50)])
+    expect(out.adjustments).toEqual([p(TOP, 80)])
+  })
+
+  it('no drift and nothing carried: the request goes out as it came', () => {
+    const local = [p(TOP, 50), p(REST, 0), p(PP, 25)]
+    const out = mergeOntoAmazonPlacements([p(TOP, 150), p(REST, 0), p(PP, 25)], local, local)
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 150, [REST]: 0, [PP]: 25 })
+    expect(out.drift).toEqual([])
+  })
+
+  it('resend counts every requested lane as set (the failed-write re-push), and still keeps lanes it does not name', () => {
+    // local holds the undelivered Top 80; Amazon still has Top 50 and a console-added Product 40
+    const out = mergeOntoAmazonPlacements([p(TOP, 80)], [p(TOP, 80)], [p(TOP, 50), p(PP, 40)], { resend: true })
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 80, [PP]: 40 })
+    // without resend the same call would carry Amazon's 50 — the re-push would deliver nothing
+    expect(pmap(mergeOntoAmazonPlacements([p(TOP, 80)], [p(TOP, 80)], [p(TOP, 50)]).adjustments)).toEqual({ [TOP]: 50 })
   })
 })

@@ -49,8 +49,14 @@ const REVERSIBLE_ACTIONS = new Set([
   'budget_apply',
   'bid_apply',
   'placement_apply',
-  'dayparting_apply',
 ])
+
+/**
+ * 1f — floors bids for a time window and restores them after (it no longer pauses). Not reversible
+ * enough for AUTO yet: if its rule is switched off or deleted inside a pause window, nothing gives the
+ * bids back (review 3.2). It may PROPOSE until that restore exists.
+ */
+const WINDOW_FLOOR_ACTIONS = new Set(['dayparting_apply'])
 
 /**
  * Actions that CREATE or DESTROY something. Each needs a retirement path designed
@@ -158,6 +164,15 @@ export function graduationCeiling(input: GraduationInput): GraduationVerdict {
       maxLevel: 'PROPOSE',
       reason: 'Creates or destroys entities. Automation should leave behind a structure a human could still run by hand.',
       blockedBy: structural,
+    }
+  }
+
+  const windowFloors = acts.filter((t) => WINDOW_FLOOR_ACTIONS.has(t))
+  if (windowFloors.length > 0) {
+    return {
+      maxLevel: 'PROPOSE',
+      reason: 'Lowers bids for a time window. If the rule is removed inside a window, nothing gives the bids back yet, so a person accepts each change.',
+      blockedBy: windowFloors,
     }
   }
 

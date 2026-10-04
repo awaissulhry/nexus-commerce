@@ -1,20 +1,21 @@
 'use client'
 
 /**
- * Guardrails — the safety envelope every automation runs inside. Sets the
- * autonomy level (how much the engine may do on its own), hard spend/action
+ * Guardrails — the safety envelope every automation runs inside. Shows the
+ * autonomy level (set on Control Room since 1g), sets hard spend/action
  * ceilings per hour (POST /automation/thresholds), and the global kill-switch
  * (POST /automation/halt|resume). Reads current posture from /automation/state.
  */
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Gauge, Pause, Play, Save, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Input, RadioCard } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null; effectivelyStopped?: boolean }
 const LEVELS = [
-  { k: 'MANUAL', label: 'Manual', desc: 'Engine suggests nothing acts on its own. You drive everything.' },
+  { k: 'OFF', label: 'Manual', desc: 'Engine suggests nothing acts on its own. You drive everything.' },
   { k: 'SUGGEST', label: 'Suggest', desc: 'Engine surfaces recommendations; you approve each one.' },
   { k: 'AUTO', label: 'Auto', desc: 'Enabled live rules act within these guardrails. Dry-run rules still only preview.' },
 ]
@@ -29,7 +30,6 @@ export function GuardrailsTab() {
   const load = () => void fetch(`${getBackendUrl()}/api/advertising/automation/state`, { cache: 'no-store' }).then((r) => r.json()).then((d) => { setS(d); setHourly(d?.maxHourlySpendCentsEur != null ? String(d.maxHourlySpendCentsEur / 100) : ''); setActions(d?.maxActionsPerHour != null ? String(d.maxActionsPerHour) : '') }).catch(() => {})
   useEffect(load, [])
 
-  const setLevel = async (lvl: string) => { setBusy(true); try { await post('automation/autonomy', { autonomy: lvl }); load() } finally { setBusy(false) } }
   const saveThresholds = async () => { setBusy(true); setMsg(''); try { const r = await post('automation/thresholds', { maxHourlySpendCentsEur: hourly === '' ? null : Math.round(Number(hourly) * 100), maxActionsPerHour: actions === '' ? null : Number(actions) }); setMsg(r.ok ? 'Guardrails saved' : 'Could not save'); load() } finally { setBusy(false) } }
   const toggleHalt = async () => { setBusy(true); try { await post(s?.halted ? 'automation/resume' : 'automation/halt', s?.halted ? undefined : { reason: 'Manual halt from console' }); load() } finally { setBusy(false) } }
 
@@ -37,22 +37,12 @@ export function GuardrailsTab() {
     <div style={{ paddingTop: 4 }}>
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
         <h4><Gauge size={15} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Autonomy level</h4>
-        <p>How much the engine is allowed to do without you. Current: <b>{s?.autonomy ?? '—'}</b>.</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
-          {LEVELS.map((l) => (
-            <RadioCard
-              key={l.k}
-              name="autonomy-level"
-              value={l.k}
-              title={l.label}
-              description={l.desc}
-              selected={s?.autonomy === l.k}
-              checked={s?.autonomy === l.k}
-              disabled={busy}
-              onChange={() => void setLevel(l.k)}
-            />
-          ))}
-        </div>
+        {/* 1g — the dial moves only on Control Room, behind a confirm. This old console used to post a
+            field the route ignored, so these cards never did anything; they now say where the dial is. */}
+        <p>
+          How much the engine is allowed to do without you. Current: <b>{LEVELS.find((l) => l.k === s?.autonomy)?.label ?? s?.autonomy ?? '—'}</b>.
+          {' '}Change it with the account dial on <Link href="/marketing/ads/rules-automation/control-room">Control Room</Link>; it asks before every change.
+        </p>
       </div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>

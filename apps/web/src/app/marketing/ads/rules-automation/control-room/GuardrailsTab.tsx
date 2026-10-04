@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Save, AlertTriangle, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input } from '@/design-system/primitives'
+import { SummaryTable } from '@/design-system/components'
 import { GuardrailGrid } from './GuardrailGrid'
 import { ProtectedTermsPanel } from '../ProtectedTermsPanel'
 
@@ -38,6 +39,9 @@ interface Guardrails {
   envKill: boolean
 }
 
+/** 1g — one engine's limits from GET /automation/state (ads-engine-actors.ts). Only the hourly one binds today. */
+interface EngineLimit { key: string; label: string; perTick: number | null; perDay: number | null; breakerPerHour: number }
+
 const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
 
 export function GuardrailsTab() {
@@ -47,8 +51,19 @@ export function GuardrailsTab() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [limits, setLimits] = useState<EngineLimit[] | null>(null)
+  const [limitsErr, setLimitsErr] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    // Each engine's hourly limit, from the same endpoint the brakes write to. A failure here leaves the rest of the tab.
+    void fetch(`${getBackendUrl()}/api/advertising/automation/state`, { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`state: ${r.status}`)
+        const j = (await r.json()) as { engineLimits?: EngineLimit[] }
+        if (!Array.isArray(j.engineLimits)) throw new Error('the API sent no engine limits')
+        setLimits(j.engineLimits); setLimitsErr(null)
+      })
+      .catch((e: unknown) => setLimitsErr((e as Error).message))
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/control-room/guardrails`, { cache: 'no-store' })
       if (!r.ok) throw new Error(`guardrails: ${r.status}`)
@@ -71,12 +86,17 @@ export function GuardrailsTab() {
         maxActionsPerHour: actions.trim() === '' ? null : Number(actions),
         maxHourlySpendCentsEur: spend.trim() === '' ? null : Math.round(Number(spend) * 100),
       }
-      if (body.maxActionsPerHour != null && !Number.isFinite(body.maxActionsPerHour)) throw new Error('Actions per hour must be a number')
-      if (body.maxHourlySpendCentsEur != null && !Number.isFinite(body.maxHourlySpendCentsEur)) throw new Error('Spend per hour must be a number')
+      // The API refuses the same (1g); asking here first keeps the sentence in the screen's own units.
+      if (body.maxActionsPerHour != null && !(Number.isInteger(body.maxActionsPerHour) && body.maxActionsPerHour >= 1)) {
+        throw new Error('Rule actions per hour must be a whole number of at least 1, or empty for the default.')
+      }
+      if (body.maxHourlySpendCentsEur != null && !(Number.isFinite(body.maxHourlySpendCentsEur) && body.maxHourlySpendCentsEur >= 1)) {
+        throw new Error('Spend per hour must be more than €0, or empty for the default.')
+      }
       const r = await fetch(`${getBackendUrl()}/api/advertising/automation/thresholds`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-      if (!r.ok) throw new Error(`Could not save (${r.status})`)
+      if (!r.ok) throw new Error(((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? `Could not save (${r.status})`)
       await load()
       setSaved(true)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -91,12 +111,12 @@ export function GuardrailsTab() {
       {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
 
       <div className="acr-sec-head"><h2>Circuit breaker</h2>
-        <span className="acr-sec-count">Trips a full halt when either is exceeded in an hour</span>
+        <span className="acr-sec-count">Stops all automation when any limit below is passed in an hour</span>
       </div>
       <div className="acr-card">
         <div className="acr-fields">
           <label>
-            <span className="acr-lbl">Actions per hour</span>
+            <span className="acr-lbl">Rule actions per hour</span>
             <Input
               fieldClassName="acr-field"
               type="number" min={1} inputMode="numeric" value={actions}
@@ -126,10 +146,27 @@ export function GuardrailsTab() {
           </Button>
         </div>
         <p className="acr-note">
-          Leave a field empty to fall back to the default. The action count covers rule
-          executions only — it cannot see the rank engine, which is the largest source of
-          writes in this account, so treat it as a rule-runaway detector rather than an
-          account-wide spend guard.
+          Leave a field empty to fall back to the default. Rule actions counts the runs of
+          automation rules only. Each engine&apos;s changes have their own hourly limit, below.
+        </p>
+      </div>
+
+      {/* 1g — the limits the breaker holds each engine to (it counts the last 60 minutes of each one's changes). */}
+      <div className="acr-sec-head"><h2>Each engine&apos;s changes per hour</h2>
+        <span className="acr-sec-count">Set on the server — a change needs a deploy</span>
+      </div>
+      <div className="acr-card">
+        {limits
+          ? <SummaryTable
+            label="Each engine's changes per hour"
+            columns={['Engine', 'Changes per hour']}
+            rows={limits.map((l) => ({ id: l.key, cells: [l.label, l.breakerPerHour.toLocaleString('en-GB')] }))}
+          />
+          : <p className="acr-note">{limitsErr ? `The engine limits could not be read (${limitsErr}).` : 'Loading…'}</p>}
+        <p className="acr-note">
+          When one engine makes more changes than its limit in the last 60 minutes, the breaker
+          stops all automation, as it does for the limits above. The limits come
+          from <code>NEXUS_ADS_ENGINE_CAPS</code> on the server, or the code&apos;s defaults.
         </p>
       </div>
 

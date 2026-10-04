@@ -11,8 +11,9 @@
  *   1. Create RetailEvent + RetailEventPriceAction (markdown for the
  *      aged SKU's productType + marketplace). promotion-scheduler
  *      materializes ChannelListing.salePrice on its next tick.
- *   2. Pause Campaign rows that advertise the SAME productType in
- *      the SAME marketplace but for NEW (non-aged) products.
+ *   2. (Refused since 1f — no automation pauses a campaign.) It paused
+ *      Campaign rows advertising the SAME productType in the SAME
+ *      marketplace for NEW (non-aged) products; it now changes nothing.
  *   3. Boost Campaign.dailyBudget for campaigns advertising the
  *      aged product, by the configured percent.
  *
@@ -221,86 +222,22 @@ async function createMarkdownEvent(
   }
 }
 
-// ── Step 2: pause new-product ads ─────────────────────────────────────
-
-async function pauseNewProductAds(
-  input: LiquidateInput,
-  agedProductId: string,
-  productType: string | null,
-): Promise<LiquidateSubAction & { pausedCampaignIds: string[]; actionLogIds: string[] }> {
-  // Find campaigns in the same marketplace whose ad-groups advertise
-  // products of the same productType but that are NOT the aged SKU.
-  // "New" here = simply "any product that isn't the aged one"; an aged-
-  // tier query would be more nuanced but this is the pragmatic AD.4
-  // interpretation. AD.5+ refines using FbaStorageAge filtering.
-  if (!productType) {
-    return {
-      step: 'pause_new_product_ads',
-      ok: true,
-      output: { skipped: 'no productType' },
-      estimatedValueCentsEur: 0,
-      pausedCampaignIds: [],
-      actionLogIds: [],
-    }
-  }
-
-  const candidates = await prisma.campaign.findMany({
-    where: {
-      marketplace: input.marketplace,
-      status: 'ENABLED',
-      adGroups: {
-        some: {
-          productAds: {
-            some: {
-              product: { productType, NOT: { id: agedProductId } },
-            },
-          },
-        },
-      },
-    },
-    select: { id: true, name: true, status: true, dailyBudget: true, marketplace: true },
-  })
-
-  if (input.dryRun) {
-    return {
-      step: 'pause_new_product_ads',
-      ok: true,
-      output: {
-        dryRun: true,
-        wouldPause: candidates.map((c) => ({ id: c.id, name: c.name })),
-        count: candidates.length,
-      },
-      estimatedValueCentsEur: 0,
-      pausedCampaignIds: [],
-      actionLogIds: [],
-    }
-  }
-
-  const paused: string[] = []
-  const actionLogIds: string[] = []
-  let anyError = false
-  for (const c of candidates) {
-    const result = await updateCampaignWithSync({
-      campaignId: c.id,
-      patch: { status: 'PAUSED' },
-      actor: input.actor,
-      reason: input.reason ?? `liquidate_aged_stock — pause new-product ads`,
-    })
-    if (result.ok && result.outboundQueueId) {
-      paused.push(c.id)
-      if (result.actionLogId) actionLogIds.push(result.actionLogId)
-    } else {
-      anyError = true
-    }
-  }
-
+// ── Step 2: pause new-product ads — refused (1f) ──────────────────────
+//
+// Owner rule: no automation pauses a campaign. This step paused every ENABLED campaign in the
+// marketplace advertising another product of the same productType — a broad status write on
+// campaigns nobody named. It stays a reported step, so the composite's shape and its execution
+// record do not change, and it changes nothing; the markdown (step 1) and the boost (step 3) run.
+// Not swapped for a bid floor: nothing in this flow would ever lift one, so it would outlive the
+// promotion with no owner to restore it.
+function pauseNewProductAds(): LiquidateSubAction & { pausedCampaignIds: string[]; actionLogIds: string[] } {
   return {
     step: 'pause_new_product_ads',
-    ok: !anyError,
-    output: { pausedCampaignIds: paused, count: paused.length },
+    ok: true,
+    output: { skipped: 'Not done: no automation may pause a campaign. Ads for the other products keep running.' },
     estimatedValueCentsEur: 0,
-    pausedCampaignIds: paused,
-    actionLogIds,
+    pausedCampaignIds: [],
+    actionLogIds: [],
   }
 }
 
@@ -396,7 +333,7 @@ export async function liquidateAgedStock(input: LiquidateInput): Promise<Liquida
   }
 
   const step1 = await createMarkdownEvent(input, product)
-  const step2 = await pauseNewProductAds(input, product.id, product.productType)
+  const step2 = pauseNewProductAds()
   const step3 = await boostAgedProductAds(input, product.id)
 
   const subActions: LiquidateSubAction[] = [

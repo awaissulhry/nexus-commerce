@@ -81,3 +81,49 @@ export function buildBlendedAdjustments(
   }
   return out
 }
+
+/**
+ * G.4 — merge a placement write onto Amazon's CURRENT array, read just before the PUT.
+ *
+ * Amazon's PUT replaces the whole `placementBidding` array (absent = 0), and every caller builds its
+ * array from Nexus's local copy, which the settings sync refreshes only every 20 minutes. So a
+ * placement nobody in Nexus touched went out at its local value, and a change made in Amazon's
+ * console in those 20 minutes was overwritten.
+ *
+ * The request is read against the local copy it was built from (absent = 0 throughout):
+ *  - requested at a value that differs from the local copy → SET by this write: the new value;
+ *  - requested at its local value, or left out while the local copy has it at 0 → not touched:
+ *    Amazon's current value;
+ *  - left out while the local copy has it above 0 → removed (0), which is what the full-array PUT has
+ *    always meant for it (the Ad Manager's multiplier dialog leaves out a lane set to 0).
+ * `resend` (re-sending a write Amazon did not take) counts every requested placement as set: there the
+ * local copy holds the undelivered values, not Amazon's last state.
+ *
+ * Returns the array to send — a placement is listed when it ends above 0 or Amazon lists it, so no
+ * "nothing → 0" entry is invented — and the drift: placements where Amazon differs from the local copy.
+ * Pure + order-independent.
+ */
+export function mergeOntoAmazonPlacements(
+  requested: Array<{ placement: string; percentage: number }>,
+  local: Array<{ placement: string; percentage: number }>,
+  amazon: Array<{ placement: string; percentage: number }>,
+  opts: { resend?: boolean } = {},
+): { adjustments: Array<{ placement: string; percentage: number }>; drift: Array<{ placement: string; local: number; amazon: number }> } {
+  const toMap = (arr: Array<{ placement: string; percentage: number }>) => {
+    const m = new Map<string, number>()
+    for (const a of arr ?? []) if (a?.placement) m.set(a.placement, Number(a.percentage) || 0)
+    return m
+  }
+  const req = toMap(requested), loc = toMap(local), amz = toMap(amazon)
+  const adjustments: Array<{ placement: string; percentage: number }> = []
+  const drift: Array<{ placement: string; local: number; amazon: number }> = []
+  for (const p of new Set([...req.keys(), ...amz.keys(), ...loc.keys()])) {
+    const l = loc.get(p) ?? 0
+    const a = amz.get(p) ?? 0
+    if (a !== l) drift.push({ placement: p, local: l, amazon: a })
+    const r = req.get(p)
+    const next = r !== undefined ? (opts.resend || r !== l ? r : a) : (l > 0 ? 0 : a)
+    if (next > 0 || amz.has(p)) adjustments.push({ placement: p, percentage: next })
+  }
+  return { adjustments, drift }
+}
