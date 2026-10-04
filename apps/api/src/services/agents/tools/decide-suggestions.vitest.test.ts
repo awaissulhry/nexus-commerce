@@ -53,7 +53,9 @@ beforeAll(async () => {
     const campaign = await db.campaign.create({ data: { name: 'TEST CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT' } })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: 'TEST AG' } })
     const target = await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test term', bidCents: 2, suppressedFromBidCents: 60 } })
-    const sug = (key: string, entityType: string, entityId: string, action: object, status = 'pending') => db.adsRuleSuggestion.create({
+    // 4l — a suggestion is applied only while its rule stands behind it, so the rule exists (on, at PROPOSE).
+    await db.automationRule.create({ data: { id: 'tst-rule', domain: 'advertising', name: 'TEST rule', trigger: 'SCHEDULE', enabled: true, dryRun: true, autonomyLevel: 'PROPOSE', actions: [], conditions: [] } })
+    const sug =(key: string, entityType: string, entityId: string, action: object, status = 'pending') => db.adsRuleSuggestion.create({
       data: { ruleId: 'tst-rule', ruleName: 'TEST rule', marketplace: 'IT', entityType, entityId, entityName: `TEST ${key}`, proposedAction: action, proposedKey: key, status },
     })
     ids.apply = (await sug('k-apply', 'CAMPAIGN', campaign.id, { type: 'tst_ok' })).id
