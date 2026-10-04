@@ -7,6 +7,7 @@
  * server's verdict arrives on the wire and nothing here runs.
  */
 import {
+  MATRIX_COPY,
   type CoordinateKey,
   type MatrixCells,
   type MatrixRead,
@@ -37,7 +38,7 @@ function applyOne(read: MatrixRead, w: MatrixWriteCell): { read: MatrixRead; out
   const cells = row?.cells[w.coordinateKey]
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   if (!row || !cells) return { read, outcome: { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: cells?.version ?? 0 } }
-  if (cells.version !== w.expectedVersion) return { read, outcome: { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: cells.version } }
+  if (cells.version !== w.expectedVersion) return { read, outcome: { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version } }
   if (cells.writable[w.cell] !== true) return { read, outcome: { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version } }
   const next = clone(cells)
   let changed = false

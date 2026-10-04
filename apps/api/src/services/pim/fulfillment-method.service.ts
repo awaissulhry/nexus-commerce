@@ -27,6 +27,7 @@ import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import { AMAZON_FBA_CODE, amazonFulfilmentCodes, describeAmazonFulfilmentCode, hasFbaFulfilmentCode, keptAmazonFulfilmentCodes, normaliseAmazonFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { announceListingValues } from '../listing-values-events.js'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 
 export type FulfilmentWrite = 'FBA' | 'FBM' | null
 
@@ -138,7 +139,7 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     if (!l) { push({ productId: null, channel: null, marketplace: null, outcome: 'refused', reason: 'No listing with this id', version: 0, productFlag: null }); continue }
     const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, productFlag: null as FulfilmentOutcome['productFlag'] }
     if (l.channel !== 'AMAZON' && l.channel !== 'EBAY') { push({ ...base, outcome: 'refused', reason: `${l.channel} has no fulfilment method`, version: l.version }); continue }
-    if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: l.version }); continue }
+    if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: l.version }); continue }
     const units = fbaUnits.get(l.productId) ?? 0
     if (l.channel === 'AMAZON' && t.method === 'FBM' && (units > 0 || activeFbaOffer.has(l.id))) {
       push({ ...base, outcome: 'refused', reason: guardHeldReason(units, activeFbaOffer.has(l.id)), version: l.version }); continue
@@ -174,7 +175,7 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
       }
       return { version: l.version + 1, productFlag }
     })
-    if (!written) { push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: (await prisma.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version }); continue }
+    if (!written) { push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: (await prisma.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version }); continue }
     if (written.productFlag === 'FBM') { result.productConversions.push(l.productId); recascade.add(l.productId) }
     if (written.productFlag === 'held') logger.warn('fulfillment: product flag HELD (live FBA evidence remains)', { productId: l.productId, listingId: l.id, units, activeOffer: activeFbaOffer.has(l.id) })
     audit.push({ actor: input.actor, scopeType: 'LISTING', scopeId: l.id, scopeName: `${l.product?.sku ?? '?'}@${l.channel}:${l.marketplace}`, field: 'fulfillmentMethod', before: { method: l.fulfillmentMethod ?? null }, after: { method: t.method, productFlag: written.productFlag } })
