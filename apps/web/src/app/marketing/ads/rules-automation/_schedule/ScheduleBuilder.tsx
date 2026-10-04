@@ -70,14 +70,16 @@ function recommendWindows(cells: RawCell[], metric: string): { enable: [number, 
   }
   return { enable: [lo, hi + 1], pause: bestLen >= 3 ? [bestStart, bestStart + bestLen] : null }
 }
+// 2d — an end of '00:00' means 24:00 (midnight closes the day), the same rule dayparting_apply uses.
+const hhEnd = (end: string): number => (end === '00:00' ? 24 : hh(end))
 // days (idx) whose windows overlap in time
 function overlapDays(windows: SchedWindow[]): Set<number> {
   const out = new Set<number>()
   const byDay = new Map<number, SchedWindow[]>()
-  for (const w of windows) { if (hh(w.start) < 0 || hh(w.end) < 0) continue; if (!byDay.has(w.day)) byDay.set(w.day, []); byDay.get(w.day)!.push(w) }
+  for (const w of windows) { if (hh(w.start) < 0 || hhEnd(w.end) < 0) continue; if (!byDay.has(w.day)) byDay.set(w.day, []); byDay.get(w.day)!.push(w) }
   for (const [day, ws] of byDay) {
     const sorted = [...ws].sort((a, b) => hh(a.start) - hh(b.start))
-    for (let i = 1; i < sorted.length; i++) if (hh(sorted[i].start) < hh(sorted[i - 1].end)) { out.add(day); break }
+    for (let i = 1; i < sorted.length; i++) if (hh(sorted[i].start) < hhEnd(sorted[i - 1].end)) { out.add(day); break }
   }
   return out
 }
@@ -86,8 +88,8 @@ function activeGrid(windows: SchedWindow[]): Record<number, string[]> {
   const grid: Record<number, string[]> = {}
   for (const d of WEEKDAYS) grid[d.idx] = Array.from({ length: 24 }, () => '')
   for (const w of windows) {
-    if (!w.adj || hh(w.start) < 0 || hh(w.end) < 0) continue
-    for (let h = hh(w.start); h < hh(w.end); h++) if (h >= 0 && h < 24) grid[w.day][h] = w.adj
+    if (!w.adj || hh(w.start) < 0 || hhEnd(w.end) < 0) continue
+    for (let h = hh(w.start); h < hhEnd(w.end); h++) if (h >= 0 && h < 24) grid[w.day][h] = w.adj
   }
   return grid
 }
@@ -462,7 +464,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
 
             {/* ── Budget Schedule ── */}
             <section id="sb-schedule" className="h10-rb-sec">
-              <h2>{cfg.sectionTitle}{isDayparting && <HoverCard text="The heatmap shows your hourly performance so you can pick the windows to enable or pause each campaign." placement="above"><span className="h10-sb-i" aria-hidden="true"> ⓘ</span></HoverCard>}</h2>
+              <h2>{cfg.sectionTitle}{isDayparting && <HoverCard text="The heatmap shows your hourly performance so you can pick the hours each campaign runs at normal bids and the hours its bids drop to 2¢. A campaign is never paused." placement="above"><span className="h10-sb-i" aria-hidden="true"> ⓘ</span></HoverCard>}</h2>
               <p className="h10-rb-desc">{cfg.sectionDesc}</p>
               {cfg.types.length > 0 && (
               <div className="h10-sb-types">
@@ -559,14 +561,14 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
               {/* best-in-class toolbar (Dayparting): AI recommend · preview · bulk-apply */}
               {isDayparting && (
                 <div className="h10-dp-tools">
-                  <button type="button" className="h10-dp-aibtn" onClick={recommend} disabled={!cellsHasData} title={cellsHasData ? 'Propose Enable/Pause windows from your last 60 days' : 'Add campaigns with hourly data first'}><Sparkles size={15} /> Recommend Schedule</button>
+                  <button type="button" className="h10-dp-aibtn" onClick={recommend} disabled={!cellsHasData} title={cellsHasData ? 'Propose normal-bid and 2¢ windows from your last 60 days' : 'Add campaigns with hourly data first'}><Sparkles size={15} /> Recommend Schedule</button>
                   <button type="button" className="h10-dp-toolbtn" onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview}><Eye size={15} /> {showPreview ? 'Hide' : 'Preview'} active hours</button>
                   {selRows.size > 0 && (
                     <span className="h10-dp-bulk">
                       <b>{selRows.size} selected</b>
                       <button type="button" onClick={() => selWins[0] && copyToAllDays(selWins[0])} disabled={!selWins[0]?.start || !selWins[0]?.end || !selWins[0]?.adj}><CopyPlus size={14} /> Copy to all days</button>
-                      <button type="button" onClick={() => bulkApply({ adj: 'enable' })}>Set Enable</button>
-                      <button type="button" onClick={() => bulkApply({ adj: 'pause' })}>Set Pause</button>
+                      <button type="button" onClick={() => bulkApply({ adj: 'enable' })}>Set normal bids</button>
+                      <button type="button" onClick={() => bulkApply({ adj: 'pause' })}>Set bids to 2¢</button>
                       <button type="button" className="x" onClick={() => setSelRows(new Set())}>Clear</button>
                     </span>
                   )}
@@ -629,7 +631,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     ))}
                     <div className="row hours"><span className="lbl" />{Array.from({ length: 24 }, (_, h) => <span key={h} className="hr">{h % 6 === 0 ? (h === 0 ? '12A' : h === 12 ? '12P' : h < 12 ? `${h}A` : `${h - 12}P`) : ''}</span>)}</div>
                   </div>
-                  <div className="leg"><span className="sw enable" /> Enable <span className="sw pause" /> Pause <span className="sw" /> Default</div>
+                  <div className="leg"><span className="sw enable" /> Normal bids <span className="sw pause" /> Bids at 2¢ <span className="sw" /> Default</div>
                 </div>
               ) })()}
             </section>

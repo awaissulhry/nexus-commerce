@@ -1921,8 +1921,11 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
   const marketplace = (context as { marketplace?: string }).marketplace ?? null
   const { dow, hour } = nowInTimezone(tz)
   const hh = (t: string) => Number(String(t).split(':')[0])
+  // 2d (review 3.9) — an end of '00:00' is midnight at the end of the day (24), not its start: the builder offers no
+  // '24:00', so a window running to midnight never fired. An empty end stays 0 (never active).
+  const hhEnd = (t: string) => (String(t ?? '').trim() !== '' && hh(t) === 0 ? 24 : hh(t))
   // active window for the current day+hour (last one wins if overlapping)
-  const active = windows.filter((w) => w.day === dow && hh(w.start) <= hour && hour < hh(w.end) && (w.adj === 'enable' || w.adj === 'pause')).pop()
+  const active = windows.filter((w) => w.day === dow && hh(w.start) <= hour && hour < hhEnd(w.end) && (w.adj === 'enable' || w.adj === 'pause')).pop()
   if (!active) return { type: action.type, ok: true, output: { tz, dow, hour, noActiveWindow: true } }
   // the rule's campaigns in THIS marketplace
   const camps = await prisma.campaign.findMany({
