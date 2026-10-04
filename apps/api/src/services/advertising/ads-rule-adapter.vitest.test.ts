@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes, builderScopeCampaignIds } from './ads-rule-adapter.service.js'
+import { ADS_TRIGGER_FIELDS } from '../automation/ads-trigger-fields.js'
 
 const rule = (slug: string, metrics: string[], action: Record<string, unknown> = {}) => ({
   id: 'test-rule',
@@ -39,6 +40,21 @@ describe('every offered metric translates for its slug', () => {
       expect(t!.conditions).toHaveLength(metrics.length)
     })
   }
+})
+
+/**
+ * 4f (review 4.6) — Bid rules ride TARGET_PERFORMANCE (the builder's `TRIGGER_BY_SLUG.bid`). Every
+ * field a Bid condition translates to must be one that trigger's context carries, or the condition
+ * reads undefined and never matches (and the rule guard refuses it at save).
+ */
+describe('4f — every Bid metric reads a field TARGET_PERFORMANCE hands', () => {
+  it('all offered Bid metrics, plus Current Bid', () => {
+    const t = maybeTranslateAdsRule(rule('bid', [...OFFERED.bid, 'Current Bid']))
+    expect(t!.untranslatable ?? []).toEqual([])
+    const fields = (t!.conditions as Array<{ field: string }>).map((c) => c.field)
+    expect(fields).toHaveLength(OFFERED.bid.length + 1)
+    for (const f of fields) expect(ADS_TRIGGER_FIELDS.TARGET_PERFORMANCE, f).toContain(f)
+  })
 })
 
 /**

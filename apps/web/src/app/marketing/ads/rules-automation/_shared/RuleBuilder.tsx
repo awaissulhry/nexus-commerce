@@ -343,7 +343,9 @@ const actionUnit = (actions: Array<{ value: string; unit: ActionUnit }>, op?: st
 const TRIGGER_BY_SLUG: Record<string, string> = {
   'negative-targeting': 'SEARCH_TERM_WASTING',
   'keyword-harvesting': 'SEARCH_TERM_CONVERTING',
-  bid: 'KEYWORD_HIGH_ACOS',
+  // 4f — every clicked, enabled, unsuppressed target (KEYWORD_HIGH_ACOS offered 8 of 3,155, so two
+  // of the starters above could never match). KEYWORD_HIGH_ACOS stays for engine rules.
+  bid: 'TARGET_PERFORMANCE',
   budget: 'CAMPAIGN_PERFORMANCE_BUDGET',
   'dayparting-schedule': 'SCHEDULE',
   'budget-schedule': 'SCHEDULE',
@@ -829,16 +831,16 @@ export function RuleBuilder({ slug }: { slug: string }) {
      * offered at all.
      */
     /**
-     * BID-P — the Bid draft's census. `floor` is the bar the KEYWORD_HIGH_ACOS trigger applies
+     * BID-P — the Bid draft's census. `floor` is the bar the TARGET_PERFORMANCE trigger (4f) applies
      * before any rule sees a keyword; without it "3 of 240" reads as "237 were considered and
-     * rejected" when almost none were ever offered.
+     * rejected" when most were never offered.
      */
     bid?: {
       windowDays: number; selected: number; selectedTargets: number
       measurable: number; inScope: number; matched: number; noChange: number
       refusedNoSignal: number
       suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
-      floor: { minOrders: number; minSpendEur: number; minAcosPct: number; topPerTick: number }
+      floor: { minClicks: number }
     } | null
     sov?: {
       windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
@@ -1680,10 +1682,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                    * once here instead). So the floor sentence added to that component for `bid` was
                    * a string nothing displayed — a stored-but-unread control, caught by driving the
                    * deployed page rather than by reading the diff. It renders HERE, beside the
-                   * window it qualifies, reading the same `HIGH_ACOS_FLOOR` the emitter filters on.
-                   *
-                   * Measured: 8 of the account's 3,155 positive ad targets clear this bar. A Bid
-                   * rule cannot act on a zero-sales waster at all.
+                   * window it qualifies, reading the same floor constant the emitter filters on
+                   * (`TARGET_PERFORMANCE_FLOOR` since 4f).
                    */}
                   <PcWindowNote slug="bid" days={Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14))} />
                 </div>
@@ -1975,7 +1975,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                      old panel never mentioned it. "Never offered" and "considered and rejected"
                      are different facts and must not share a sentence. */
                   : !preview.bid || preview.bid.selected === 0 ? 'Add campaigns above to preview their keyword bids.'
-                  : preview.bid.measurable === 0 ? `None of the ${preview.bid.selectedTargets} target${preview.bid.selectedTargets === 1 ? '' : 's'} in your selected campaigns clears the bar a bid rule needs: at least ${preview.bid.floor.minOrders} order, €${preview.bid.floor.minSpendEur.toFixed(2)} of spend and ${preview.bid.floor.minAcosPct}% ACoS over the last ${preview.bid.windowDays} settled days. This is not a problem with your criteria — those keywords are never offered to a bid rule at all.`
+                  : preview.bid.measurable === 0 ? `None of the ${preview.bid.selectedTargets} target${preview.bid.selectedTargets === 1 ? '' : 's'} in your selected campaigns clears the bar a bid rule needs: enabled, not suppressed, and at least ${preview.bid.floor.minClicks} click${preview.bid.floor.minClicks === 1 ? '' : 's'} over the last ${preview.bid.windowDays} settled days. This is not a problem with your criteria — those keywords are never offered to a bid rule at all.`
                   : preview.bid.inScope === 0 ? `${preview.bid.measurable} of your keywords clear that bar, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
                   : `No keyword matches these criteria right now — ${preview.bid.inScope} ${preview.bid.inScope === 1 ? 'was' : 'were'} measured. The rule is still valid; it will act when one does.`) : isRank ? (preview.error ? preview.error
                   /* 🔴 KT-P2 — five different reasons for an empty rank preview, and only one of
@@ -2087,7 +2087,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         {preview.bid.noChange > 0 ? <> · {preview.bid.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
                         {/* 🔴 The floor, always. It is the difference between "your criteria are
                             tight" and "these keywords are never offered to a bid rule". */}
-                        <span className="phour">A bid rule only ever sees keywords with at least {preview.bid.floor.minOrders} order, €{preview.bid.floor.minSpendEur.toFixed(2)} of spend and {preview.bid.floor.minAcosPct}% ACoS over the last {preview.bid.windowDays} settled days — the KEYWORD_HIGH_ACOS trigger’s own bar, applied before any rule runs.</span>
+                        <span className="phour">A bid rule sees every enabled keyword and target with at least {preview.bid.floor.minClicks} click{preview.bid.floor.minClicks === 1 ? '' : 's'} over the last {preview.bid.windowDays} settled days, except ones whose bids are suppressed — applied before any rule runs. A keyword with no sales has no ACoS, so an ACoS condition never matches it.</span>
                         {preview.bid.refusedNoSignal > 0 && (
                           <span className="pwarn">⚠ {preview.bid.refusedNoSignal} of the {preview.bid.matched} matched {preview.bid.refusedNoSignal === 1 ? 'keyword was' : 'keywords were'} <b>refused by the bid action</b>, not left unchanged — a computed bid needs a signal those {preview.bid.refusedNoSignal === 1 ? 'target lacks' : 'targets lack'} in the window. Each row carries the handler’s own reason; hover the refusal to read it.</span>
                         )}

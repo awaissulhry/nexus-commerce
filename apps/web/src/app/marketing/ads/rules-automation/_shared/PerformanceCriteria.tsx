@@ -8,7 +8,7 @@
  */
 import { X, Plus } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
-import { HIGH_ACOS_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
+import { TARGET_PERFORMANCE_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import { Listbox } from '@/design-system/components'
 
 export interface Condition {
@@ -129,10 +129,9 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
           declaration the emitter reads (WASTING_FLOOR), so this sentence cannot drift. */}
       {slug === 'negative-targeting' && ` Search terms surface only once they have zero orders on at least ${WASTING_FLOOR.minClicks} clicks and €${(WASTING_FLOOR.minSpendCents / 100).toFixed(0)} of spend in the window — conditions can raise that bar, never lower it.`}
       {/* BUD-P1 — the budget context's floor + H10's Budget Utilization formula, stated. */}
-      {/* BID-P — the bar a keyword must clear before ANY bid rule sees it, from the emitter's own
-          constant so this sentence cannot drift from the filter. Measured: 8 of 3,155 positive
-          targets clear it. The tab never said so. */}
-      {slug === 'bid' && ` Keywords surface only once they have at least ${HIGH_ACOS_FLOOR.minOrders} order, €${(HIGH_ACOS_FLOOR.minSpendCents / 100).toFixed(2)} of spend and ${HIGH_ACOS_FLOOR.minAcos * 100}% ACoS in the window — the trigger's own bar; conditions can raise it, never lower it.`}
+      {/* BID-P · 4f — the bar a keyword must clear before ANY bid rule sees it, from the emitter's
+          own constant so this sentence cannot drift from the filter (TARGET_PERFORMANCE). */}
+      {slug === 'bid' && ` Every enabled keyword and target with at least ${TARGET_PERFORMANCE_FLOOR.minClicks} click${TARGET_PERFORMANCE_FLOOR.minClicks === 1 ? '' : 's'} in the window is offered to the rule, except ones whose bids are suppressed. A keyword with no sales has no ACoS, so an ACoS condition never matches it.`}
       {slug === 'budget' && ' Enabled campaigns surface only once they have ad spend inside the window. Budget Utilization = average daily spend in the window ÷ the campaign’s CURRENT daily budget, so it reads above 100% where the budget has since been lowered.'}
     </p>
   )
@@ -151,7 +150,7 @@ const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', '
 // RuleBuilder used to carry its own copy of this list.
 const METRICS_BUDGET = [...METRICS_BASE, 'Budget Utilization']
 // BP.P4 — H10's Bid list carries "Current Bid" (the target's live bid, in €). Bid rules only:
-// the KEYWORD_HIGH_ACOS context is the one that carries adTarget.bidCents.
+// the Bid rule's context (TARGET_PERFORMANCE since 4f) carries adTarget.bidCents.
 const METRICS_BID = [...METRICS_BASE, 'Current Bid']
 // P2.1 — 'Organic Share' and 'Sponsored Share' are REMOVED: no signal source exists anywhere,
 // so a condition on either could never match and the adapter now refuses rather than drops.

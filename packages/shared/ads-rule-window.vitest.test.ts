@@ -27,6 +27,8 @@ describe('TRIGGER_WINDOW — the values the engine runs on', () => {
     expect(TRIGGER_WINDOW.SEARCH_TERM_CONVERTING.days).toBe(30)
     expect(TRIGGER_WINDOW.SEARCH_TERM_WASTING.days).toBe(30)
     expect(TRIGGER_WINDOW.KEYWORD_HIGH_ACOS.days).toBe(14)
+    expect(TRIGGER_WINDOW.TARGET_PERFORMANCE.days).toBe(14)
+    expect(TRIGGER_WINDOW.TARGET_PERFORMANCE.settled).toBe(true)
     expect(TRIGGER_WINDOW.KEYWORD_SCALE_OPPORTUNITY.days).toBe(14)
     expect(TRIGGER_WINDOW.AD_GROUP_UNDERPERFORMING.days).toBe(14)
     expect(TRIGGER_WINDOW.NEW_TO_BRAND_WINNER.days).toBe(14)
@@ -34,13 +36,13 @@ describe('TRIGGER_WINDOW — the values the engine runs on', () => {
   })
 
   it('every trigger the evaluator can call WINDOW() for has a usable number', () => {
-    // The evaluator throws for a missing or null-day entry; these are exactly the twelve it asks
+    // The evaluator throws for a missing or null-day entry; these are exactly the thirteen it asks
     // for, so a rename that drops one fails here rather than at 00:15 in production.
     const asked = [
       'AD_TARGET_UNDERPERFORMING', 'CAMPAIGN_PERFORMANCE_BUDGET', 'KEYWORD_ZERO_IMPRESSIONS',
       'KEYWORD_LOW_CTR', 'KEYWORD_WASTED_SPEND', 'SEARCH_TERM_CONVERTING', 'KEYWORD_HIGH_ACOS',
       'KEYWORD_SCALE_OPPORTUNITY', 'AD_GROUP_UNDERPERFORMING', 'NEW_TO_BRAND_WINNER',
-      'CAMPAIGN_NO_SALES', 'SEARCH_TERM_WASTING',
+      'CAMPAIGN_NO_SALES', 'SEARCH_TERM_WASTING', 'TARGET_PERFORMANCE',
     ]
     for (const t of asked) {
       expect(TRIGGER_WINDOW[t], t).toBeDefined()
@@ -200,5 +202,12 @@ describe('ruleLookback', () => {
     expect(r.label).toBe('Unknown')
     expect(r.label).not.toBe('None')
     expect(r.why).toContain('gap in the map')
+  })
+
+  it('4f — a Bid rule on TARGET_PERFORMANCE reads its own lookback, and its trigger is a known 14-day settled window', () => {
+    const own = ruleLookback('TARGET_PERFORMANCE', ['bid'], 30)
+    expect(own).toMatchObject({ label: '30 days', fromAction: true, settled: true })
+    expect(own.why).toContain('selected over the last 14 days')
+    expect(ruleLookback('TARGET_PERFORMANCE').label).toBe('14 days')
   })
 })
