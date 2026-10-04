@@ -21,7 +21,7 @@ vi.mock('../../db.js', () => ({
   default: {
     campaign: { findUnique: h.campaignFindUnique, findMany: h.campaignFindMany },
     adTarget: { findMany: h.adTargetFindMany },
-    amazonAdsPlacementReport: { groupBy: h.placementGroupBy },
+    amazonAdsPlacementReport: { groupBy: h.placementGroupBy, aggregate: async () => ({ _sum: { costMicros: null } }) }, // 4d lane spend: none measured
     adSchedule: { findMany: h.schedules },
     productRankPlan: { findMany: h.plans },
   },
