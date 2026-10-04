@@ -15,6 +15,7 @@ import { HoverCard } from '../../campaigns/FilterDropdown'
 import { ApproveHoverCard, type HoverContent } from '../ApproveHoverCard'
 import { dash, eur, type SuggestionMetrics } from '../cells'
 import { ACTION_LABEL, ACTION_TONE, ENTITY_LABEL, ENTITY_TONE, srcOf, type Priced, type Suggestion } from './types'
+import { placementOnBudgetTrigger } from '../../rules-automation/automations/ruleText'
 
 /* SG.7 — eur / dash / AcosCell / RoasCell moved verbatim to ./cells.tsx (the Recommendations
    view renders through the SAME components). The per-key readers below stay: only this grid's
@@ -69,7 +70,13 @@ export const TRIGGER_LABEL: Record<string, string> = {
   CAMPAIGN_ROAS_DECLINING: 'Declining ROAS', SOV_BID: 'Share-of-voice signal', KEYWORD_RANK_BID: 'Keyword rank signal',
   SCHEDULE: 'Scheduled check',
 }
-export const prettyTrigger = (t: string | null): string => t ? (TRIGGER_LABEL[t] ?? t.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())) : 'Rule match'
+/**
+ * 4i (review 4.7) — `family` is the suggestion's kind (the server's one map). A Placement rule runs on the budget
+ * trigger by design, so its proposals read "Budget performance" as their signal; the family names it instead.
+ */
+export const prettyTrigger = (t: string | null, family?: string | null): string => !t ? 'Rule match'
+  : placementOnBudgetTrigger(t, family) ? 'Placement performance'
+  : (TRIGGER_LABEL[t] ?? t.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()))
 
 // Edit-before-apply preview: the budget/bid base (first € in wouldChange) + the projected result.
 export const baseEur = (s: Suggestion): number | null => {

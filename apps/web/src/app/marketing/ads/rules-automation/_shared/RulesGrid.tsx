@@ -98,6 +98,7 @@ import { PC_METRIC_UNIT } from './PerformanceCriteria'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { placementThenSentence } from './placementLanes'
+import { placementOnBudgetTrigger } from '../automations/ruleText'
 import { planBulkAutomation, bulkAutomationNotice, type BulkRuleState } from './bulkAutomation'
 import { RULE_TYPES } from './ruleTypes'
 import { RuleTypeModal } from './RuleTypeModal'
@@ -198,8 +199,12 @@ const TRIGGER_LABEL: Record<string, string> = {
   SEARCH_TERM_CONVERTING: 'On a converting term', KEYWORD_HIGH_ACOS: 'On high ACoS',
   FBA_AGE_THRESHOLD_REACHED: 'On stock ageing',
 }
-/** An unmapped trigger still reads like its neighbours rather than shouting its enum. */
-const humanTrigger = (t: string) => TRIGGER_LABEL[t] ?? (t ? `On ${t.toLowerCase().replace(/_/g, ' ')}` : 'No trigger')
+/**
+ * An unmapped trigger still reads like its neighbours rather than shouting its enum. 4i (review 4.7) — a Placement rule
+ * runs on the budget trigger by design, so its kind, not the trigger, names what it watches.
+ */
+const humanTrigger = (t: string, kind?: string) => placementOnBudgetTrigger(t, kind) ? 'On placement performance'
+  : TRIGGER_LABEL[t] ?? (t ? `On ${t.toLowerCase().replace(/_/g, ' ')}` : 'No trigger')
 
 /**
  * P2 — one money formatter for this grid, in `./ruleThresholds`.
@@ -503,7 +508,9 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   } else {
     // No stored schedule. An engine rule runs when its trigger fires; printing "Daily · 12:00 AM"
     // here would be a constant nobody reads.
-    freqDay = humanTrigger(String(rule.trigger ?? ''))
+    // 4i — `/automation-rules` carries no `kind` (4e put it on the board); the tab is the same fact here, because
+    // the Placement tab lists a rule for its placement action and describes that action (`tabActionOf`).
+    freqDay = humanTrigger(String(rule.trigger ?? ''), tabKey)
     freqTime = 'engine cadence'
   }
   return {

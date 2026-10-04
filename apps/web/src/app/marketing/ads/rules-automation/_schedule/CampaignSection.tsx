@@ -13,9 +13,10 @@
  * depending on which rule you were writing, and any change had to be made twice. That copy is
  * gone. Change this file and every builder changes with it; add a prop rather than a fork.
  *
- * Callers differ in exactly two ways, both props: `defaultStatus` (H10 opens the criteria builders
- * on Enabled and the schedule builders on All) and whether the campaign objects they hold carry
- * extra fields. The type below is a superset: `placements` is optional and only the Placement rule
+ * Callers differ in three ways, all props: `defaultStatus` (H10 opens the criteria builders
+ * on Enabled and the schedule builders on All), the rule's scope (`marketplace` + `adProducts`,
+ * the criteria builders only) and whether the campaign objects they hold carry extra fields. The
+ * type below is a superset: `placements` is optional and only the Placement rule
  * reads it (its preview shows current → proposed multipliers per lane), but it must survive a round
  * trip through this picker or that preview silently reads 0.
  *
@@ -23,11 +24,12 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, Input, Radio, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Radio, Tag, ToolbarButton } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Listbox } from '@/design-system/components'
+import { Banner, Listbox } from '@/design-system/components'
+import { campaignInScope, pickScopeTags, picksOutsideNotice, picksOutsideScope } from '../_shared/campaignPicks'
 
 export interface SchedCampaign {
   id: string
@@ -73,14 +75,23 @@ const TABS = ['All Campaigns', 'Portfolios', 'Products']
 /** A product line and the campaigns it reaches — `/advertising/scope-options`'s own shape. */
 interface ProductLine { id: string; sku: string; name: string; variations: number; campaigns: string[] }
 
-export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear, defaultStatus = 'all' }: {
+export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear, defaultStatus = 'all', marketplace = null, adProducts }: {
   selected: SchedCampaign[]
   onAdd: (c: SchedCampaign) => void
   onAddMany: (cs: SchedCampaign[]) => void
+  /** Called once per id by "Remove N picks …", so it must be a functional state update (RuleBuilder's is). */
   onRemove: (id: string) => void
   onClear: () => void
   /** H10 opens the criteria builders on Enabled and the schedule builders on All. */
   defaultStatus?: 'all' | 'enabled' | 'paused'
+  /**
+   * 🔴 4i (review 4.8) — the rule's one market (null or 'all' = every market). The picker offered every campaign
+   * whatever the market, so a DE rule could hold IT/FR/ES picks it never acts on (the tick matches market AND picks),
+   * and since 4c such a save is refused. The list now offers only this market's campaigns.
+   */
+  marketplace?: string | null
+  /** 4i (review 4.7) — the ad types the rule can act on: ['SP'] for a Placement rule. Absent = every type. */
+  adProducts?: readonly string[]
 }) {
   const [tab, setTab] = useState('All Campaigns')
   const [all, setAll] = useState<SchedCampaign[]>([])
@@ -122,19 +133,32 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
   }, [])
 
   const selIds = useMemo(() => new Set(selected.map((c) => c.id)), [selected])
+  // 4i — the rule's scope narrows the list before status and search, so every tab, Add All and the pager follow it.
+  const adProductsKey = (adProducts ?? []).join(',')
+  const scope = useMemo(() => ({ marketplace, adProducts: adProductsKey ? adProductsKey.split(',') : undefined }), [marketplace, adProductsKey])
+  const inScope = useMemo(() => all.filter((c) => campaignInScope(c, scope)), [all, scope])
+  const scopeTags = pickScopeTags(scope)
+  // Stored picks the rule can never act on — judged on the live list once it has loaded, as the server judges them.
+  const outside = useMemo(() => {
+    if (loading) return null
+    const live = new Map(all.map((c) => [c.id, c]))
+    const o = picksOutsideScope(selected, live, scope)
+    const notice = picksOutsideNotice(o, scope)
+    return notice ? { ids: o.ids, notice } : null
+  }, [loading, all, selected, scope])
   // OS.5 — status filtering first, then the shared ranked matcher. The old test was
   // `c.name.toLowerCase().includes(q)`, which could not find "gale broad" inside
   // "GALE | IT | Broad | Brand"; searchOptions also orders the best matches to the top,
   // which matters here because the list is paginated (a good hit was landing on page 3).
   const filtered = useMemo(() => {
-    const byStatus = all.filter((c) => {
+    const byStatus = inScope.filter((c) => {
       if (status === 'enabled' && c.status !== 'ENABLED') return false
       if (status === 'paused' && c.status !== 'PAUSED') return false
       if (status === 'all' && c.status === 'ARCHIVED') return false
       return true
     })
     return searchOptions(q, byStatus, (c) => c.name)
-  }, [all, status, q])
+  }, [inScope, status, q])
 
   const pages = Math.max(1, Math.ceil(filtered.length / perPage))
   const pg = Math.min(page, pages)
@@ -200,6 +224,17 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
   }
 
   return (
+    <>
+    {/* 4i — the picks a save would be refused for, named, with the one button that drops them from the draft. */}
+    {outside && (
+      <Banner
+        tone="warning"
+        title={outside.notice.title}
+        action={<Button variant="secondary" size="sm" onClick={() => { for (const id of outside.ids) onRemove(id) }}>{outside.notice.button}</Button>}
+      >
+        {outside.notice.sentence}
+      </Banner>
+    )}
     <div className="h10-rb-camps h10-sb-camps">
       <div className="cp-left">
         <div className="h10-sb-cptabs" role="tablist" aria-label="Campaign source">
@@ -223,6 +258,8 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           {(['all', 'enabled', 'paused'] as const).map((s) => (
             <Radio key={s} className="rad" name="schedcpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} label={s[0].toUpperCase() + s.slice(1)} />
           ))}
+          {/* 4i — the list is narrowed to what the rule can act on; say so rather than look incomplete. */}
+          {scopeTags.map((t) => <Tag key={t} tone="info">{t}</Tag>)}
           {/* On Products, "Add All" means every campaign of the products currently listed — the
               campaign-level `addable` would not match what the list is showing. */}
           {tab === 'Products' ? (
@@ -292,5 +329,6 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
         )}
       </div>
     </div>
+    </>
   )
 }

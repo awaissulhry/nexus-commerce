@@ -21,6 +21,7 @@ import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSectio
 import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_BUDGET, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
+import { ruleMarketOptions } from './campaignPicks'
 import { BID_FLOOR_EUR, criteriaProblems, normalizeDecimalText, readRuleNumbers } from './ruleBuilderValues'
 import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, controlForRule, levelNote, levelRefusedNotice, levelToSend, noAnswerNotice, ruleLevel, saveFailed, saveRefusedNotice, scopeForSave, storedBelt, type RuleControl, type RuleLevel, type SaveNotice } from './ruleBuilderSave'
 import { Banner, Field, Listbox } from '@/design-system/components'
@@ -236,8 +237,8 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
     },
   ],
 }
-// Budget rule marketplace scope (best-in-class) — limit a rule to one EU market.
-const MARKETS = [{ value: 'all', label: 'All markets' }, ...([['DE', 'Germany'], ['IT', 'Italy'], ['FR', 'France'], ['ES', 'Spain'], ['NL', 'Netherlands'], ['BE', 'Belgium'], ['SE', 'Sweden'], ['PL', 'Poland']] as const).map(([v, n]) => ({ value: v, label: `${n} (${v})` }))]
+// Rule marketplace scope — limit a rule to one market. 4i (review 4.10): the four live markets from `adsScope`
+// (`ruleMarketOptions`), not a private list that offered NL/BE/SE/PL (no campaigns there) and no UK.
 const INTERVAL = ['Days', 'Weeks', 'Months'].map((i) => ({ value: i, label: i }))
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => ({ value: d, label: d }))
 const METRIC_UNIT = PC_METRIC_UNIT
@@ -320,11 +321,15 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
 ]
 // Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
 // ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
+// 🔴 4i (review 5.14) — Increase/Decrease are RELATIVE (`current × (1 ± v/100)`, automation-action-handlers.ts):
+// 50% increased by 10 becomes 55%, not 60%. The bare label read as points, so it says "% of current".
 const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
   { value: 'set', label: 'Set to', unit: 'pct' },
-  { value: 'incPct', label: 'Increase by', unit: 'pct' },
-  { value: 'decPct', label: 'Decrease by', unit: 'pct' },
+  { value: 'incPct', label: 'Increase by (% of current)', unit: 'pct' },
+  { value: 'decPct', label: 'Decrease by (% of current)', unit: 'pct' },
 ]
+// 4i (review 4.7) — placement adjustments exist on Sponsored Products only, so the picker offers nothing else.
+const PLACEMENT_AD_PRODUCTS = ['SP'] as const
 // SP placement targets (Amazon: Top of Search / Product Pages / Rest of Search).
 // PLC-P3 — imported, not retyped: the rules grid's Criteria cell names the same three lanes, and
 // two label lists for one lane is how a grid and a builder start describing different rules.
@@ -1590,7 +1595,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   Products tabs and the ranked search this builder's private copy never had.
                   `defaultStatus="enabled"` keeps H10's opening state for a criteria rule. */}
               {isCampaign && (
-                <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} defaultStatus="enabled" />
+                <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} defaultStatus="enabled"
+                  marketplace={scopeMarket} adProducts={isPlacement ? PLACEMENT_AD_PRODUCTS : undefined} />
               )}
             </section>
 
@@ -1684,7 +1690,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       <div className="cond then">
                         <span className="pill then">THEN</span>
                         {isPlacement && <Listbox width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
-                        <Listbox width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
+                        <Listbox width={isPlacement ? 250 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
                         {/* C1 — a computed action ('none') has no number to take, so the box is
                             not rendered rather than rendered empty or disabled. A disabled input
                             beside a chosen action reads as "you forgot something". */}
@@ -1715,7 +1721,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                                   ? 'Turns a paused target back on. It keeps whatever bid it had; Amazon treats it as new and re-learns it. Held below Auto like its counterpart.'
                                   : 'The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met.'
                         } placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
-                        {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
+                        {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Increase and Decrease are a percentage of the current modifier, not points: 50% increased by 10% becomes 55%. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                       </div>
                     ) })()}
                   </div>
@@ -1883,8 +1889,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 </div>
                 <div className="advblock">
                   <b>Marketplace</b>
-                  <p>Limit this rule to a single marketplace — unscoped, it acts in every market</p>
-                  <Listbox width={260} options={MARKETS} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
+                  <p>Limit this rule to a single marketplace — unscoped, it acts in every market. The campaign picker above offers only this market’s campaigns.</p>
+                  <Listbox width={260} options={ruleMarketOptions(scopeMarket)} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
                 </div>
                 {isPlacement && (
                 <div className="advblock">

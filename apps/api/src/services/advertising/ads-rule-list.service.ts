@@ -164,7 +164,7 @@ export async function listAdsRuleBoard() {
   const reach = await reachForRules(rules)
   // BP.P1 — the ceiling is op-aware (see the PATCH route below): the toggle pre-disable this
   // list feeds must agree with what that route will actually refuse.
-  const { producedActionTypes } = await import('./ads-rule-adapter.service.js')
+  const { producedActionTypes, builderScopeCampaignIds } = await import('./ads-rule-adapter.service.js')
 
   const items = rules.map((r) => {
     const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
@@ -178,6 +178,12 @@ export async function listAdsRuleBoard() {
      * "Trim Top of Search" a budget rule. `kind` is the word a surface keys its wording on: placement · budget · bid · …
      */
     const category = ruleCategory(produced)
+    /**
+     * 🔴 4i — a builder rule bound to its picked campaigns has no single scope campaign, so it fell through to `account`
+     * and read "Whole account" while the tick (4a) runs it on its picks only. `picked` says how many it is bound to.
+     */
+    const picks = r.scopeCampaignId || r.scopePortfolioId ? null : builderScopeCampaignIds(r.actions)
+    const pickCount = picks ? new Set(picks).size : 0
     const week = weekBy.get(r.id) ?? {}
     return {
       id: r.id,
@@ -224,7 +230,9 @@ export async function listAdsRuleBoard() {
           ? { kind: 'campaign' as const, id: r.scopeCampaignId, name: campaignName.get(r.scopeCampaignId) ?? r.scopeCampaignId }
           : r.scopePortfolioId
             ? { kind: 'portfolio' as const, id: r.scopePortfolioId, name: portfolioName.get(r.scopePortfolioId) ?? r.scopePortfolioId }
-            : { kind: 'account' as const, id: null, name: null }),
+            : picks
+              ? { kind: 'picked' as const, id: null, name: `${pickCount} ${pickCount === 1 ? 'campaign' : 'campaigns'}`, count: pickCount }
+              : { kind: 'account' as const, id: null, name: null }),
         product: r.scopeProductId
           ? {
             id: r.scopeProductId,

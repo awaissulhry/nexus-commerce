@@ -47,11 +47,14 @@ export function placementLaneLabel(key: string | null | undefined): string {
  * Unknown ops fall through to a shape that still names the lane and the number, because a THEN
  * nobody has taught this function is still a THEN that does something to a specific lane, and
  * dropping the lane there would reintroduce the exact defect one op later.
+ *
+ * 🔴 4i (review 5.14) — Increase/Decrease are RELATIVE to the lane's current modifier (`current × (1 ± v/100)` in
+ * automation-action-handlers.ts): 50% increased by 20% is 60%, not 70%. "by 20%" read as points, so it says so.
  */
 export function placementThenSentence(op: string | undefined, value: string, placeTarget?: string | null): string {
   const lane = placementLaneLabel(placeTarget)
   if (op === 'set') return `Set ${lane} to ${value}%`
-  if (op === 'incPct') return `Increase ${lane} by ${value}%`
-  if (op === 'decPct') return `Decrease ${lane} by ${value}%`
+  if (op === 'incPct') return `Increase ${lane} by ${value}% of current`
+  if (op === 'decPct') return `Decrease ${lane} by ${value}% of current`
   return `${op ?? '—'} ${value}% on ${lane}`
 }

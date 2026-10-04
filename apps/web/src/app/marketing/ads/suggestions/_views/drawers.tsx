@@ -72,7 +72,7 @@ export function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct, onP
       <div className="h10-sug-dbody">
         {/* Provenance — why it surfaced, what it changes, where it lands */}
         <div className="h10-sug-flow">
-          <FlowNode eyebrow="Signal" title={prettyTrigger(suggestion.trigger)} sub={suggestion.marketplace ? `Marketplace ${suggestion.marketplace}` : undefined} />
+          <FlowNode eyebrow="Signal" title={prettyTrigger(suggestion.trigger, suggestion.family)} sub={suggestion.marketplace ? `Marketplace ${suggestion.marketplace}` : undefined} />
           <FlowNode eyebrow="Rule" title={suggestion.ruleName ?? 'Manual rule'} sub="Manual control · propose-only" />
           <FlowNode eyebrow="Proposed action" title={kindLabel} sub={a.type === 'harvest_and_negate' ? `promote ${a.wouldGraduate ?? 0} · negate ${a.wouldNegate ?? 0}` : a.wouldChange} tone={ACTION_TONE[a.type ?? '']} />
           <FlowNode eyebrow="Applies to" title={src.label} sub={ENTITY_LABEL[suggestion.entityType] ?? suggestion.entityType} href={src.href} last />

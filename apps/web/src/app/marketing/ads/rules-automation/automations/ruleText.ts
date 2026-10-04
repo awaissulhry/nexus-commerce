@@ -94,6 +94,9 @@ const ACTIONS: Record<string, string> = {
   budget_apply: 'Apply the budget plan',
   shift_budget: 'Move budget between campaigns',
   set_placement_multiplier: 'Change a placement multiplier',
+  // 4i — what a builder Placement rule stores (its slug) and what its translation writes.
+  placement: 'Change a placement modifier',
+  placement_apply: 'Change a placement modifier',
   defend_top_of_search: 'Defend top-of-search share',
   refresh_dayparting: 'Rewrite the dayparting plan',
   promote_to_exact: 'Graduate a search term to exact',
@@ -212,9 +215,19 @@ export function actionLines(actions: unknown, fallbackTypes?: string[]): ActionL
  */
 const ACRONYMS = new Set(['CAC', 'ACOS', 'ROAS', 'CTR', 'CVR', 'SOV', 'FBA', 'TOS', 'ASIN', 'SP', 'SB', 'SD'])
 
-/** Trigger → the "When" line. SCHEDULE is renamed because "on a schedule" is what it means. */
-export function triggerText(trigger: string): string {
+/**
+ * 🔴 4i (review 4.7) — a Placement rule runs on the budget trigger BY DESIGN (PLC-P7: the campaign context carries the
+ * placement lanes), so every surface keyed on the trigger called "Trim Top of Search" a budget rule. The rule's `kind`
+ * (4e: from what its translation writes) decides instead. One predicate, read by every label that names a trigger.
+ */
+export function placementOnBudgetTrigger(trigger: string | null | undefined, kind?: string | null): boolean {
+  return kind === 'placement' && trigger === 'CAMPAIGN_PERFORMANCE_BUDGET'
+}
+
+/** Trigger → the "When" line. SCHEDULE is renamed because "on a schedule" is what it means. `kind` is 4e's rule kind. */
+export function triggerText(trigger: string, kind?: string | null): string {
   if (trigger === 'SCHEDULE') return 'On a schedule (every evaluator tick)'
+  if (placementOnBudgetTrigger(trigger, kind)) return 'Placement performance'
   const words = trigger.split('_').filter(Boolean)
   return words
     .map((w, i) => {

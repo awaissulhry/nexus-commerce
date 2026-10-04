@@ -53,8 +53,11 @@ export interface DetailRule {
   writes: boolean
   actions?: unknown
   actionTypes: string[]
+  /** 4e — what the rule IS, from what its translation writes (placement · budget · bid · …); absent on an older build. */
+  kind?: string
   scope: {
-    kind: 'account' | 'portfolio' | 'campaign'
+    /** 4i — `picked`: a builder rule bound to the campaigns picked in its builder (`name` says how many). */
+    kind: 'account' | 'portfolio' | 'campaign' | 'picked'
     id: string | null
     name: string | null
     /** RA.GRAIN — the fourth grain, resolved to a name by the server. */
@@ -150,7 +153,7 @@ export function RuleDetail({
           <section className="h10-au-def">
             <div className="h10-au-defrow">
               <span className="k">When</span>
-              <span className="v">{triggerText(rule.trigger)}</span>
+              <span className="v">{triggerText(rule.trigger, rule.kind)}</span>
             </div>
             <div className="h10-au-defrow">
               <span className="k">If</span>

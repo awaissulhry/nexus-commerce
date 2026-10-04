@@ -863,9 +863,9 @@ function SuggestionsInner() {
     reason: {
       key: 'reason', label: 'Reason', metric: false, sortable: true,
       tip: 'Why this surfaced — the rule’s own criteria, in operator units, followed by the window it measures them over. That window is the RULE’s; the metric columns on this row are trailing 30 days, so the two can legitimately disagree. Falls back to the trigger when the rule states no criteria.',
-      sortValue: (s) => s.ruleCriteria ?? prettyTrigger(s.trigger),
+      sortValue: (s) => s.ruleCriteria ?? prettyTrigger(s.trigger, s.family),
       render: (s) => {
-        const crit = s.ruleCriteria ?? prettyTrigger(s.trigger)
+        const crit = s.ruleCriteria ?? prettyTrigger(s.trigger, s.family)
         const full = s.ruleWindow ? `${crit} · measured over ${s.ruleWindow} (the metric columns are trailing 30 days)` : crit
         return (
           <span className="h10-sug-reason" title={full}>

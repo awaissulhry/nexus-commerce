@@ -51,8 +51,9 @@ describe('placementThenSentence — three lanes must read as three rules', () =>
   })
 
   it('reads as English, not as arithmetic', () => {
-    expect(placementThenSentence('incPct', '20', 'tos')).toBe('Increase Top of Search by 20%')
-    expect(placementThenSentence('decPct', '20', 'ros')).toBe('Decrease Rest of Search by 20%')
+    // 4i (review 5.14) — relative to the current modifier, and the sentence says so
+    expect(placementThenSentence('incPct', '20', 'tos')).toBe('Increase Top of Search by 20% of current')
+    expect(placementThenSentence('decPct', '20', 'ros')).toBe('Decrease Rest of Search by 20% of current')
     // never a bare verb glyph beside a number — "−20%" is the cell an operator has to decode
     expect(placementThenSentence('decPct', '20', 'ros')).not.toMatch(/^[+−-]/)
   })

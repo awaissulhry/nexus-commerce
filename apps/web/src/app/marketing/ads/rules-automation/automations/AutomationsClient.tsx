@@ -425,7 +425,7 @@ export function AutomationsClient() {
       key: 'trigger', label: 'When', metric: false, sortable: true,
       sortValue: (a) => (a.k === 'rule' ? a.r.trigger : a.k === 'engine' ? (a.e.schedule ?? a.e.cron ?? '') : ''),
       render: (a) => (
-        a.k === 'rule' ? <span className="h10-au-trg">{triggerText(a.r.trigger)}</span>
+        a.k === 'rule' ? <span className="h10-au-trg">{triggerText(a.r.trigger, a.r.kind)}</span>
           : a.k === 'engine' ? <span className="h10-au-trg">{a.e.schedule ?? a.e.cron ?? '—'}</span>
             : <span className="h10-au-obsdash">—</span>
       ),
@@ -439,7 +439,7 @@ export function AutomationsClient() {
         const r = a.r
         return (
           <span className={`h10-au-scope ${r.scope.kind}`}>
-            {r.scope.kind === 'account' ? 'Whole account' : `${r.scope.kind}: ${r.scope.name ?? r.scope.id}`}
+            {r.scope.kind === 'account' ? 'Whole account' : r.scope.kind === 'picked' ? `${r.scope.name} picked` : `${r.scope.kind}: ${r.scope.name ?? r.scope.id}`}
             {r.marketplace && <em> · {r.marketplace}</em>}
           </span>
         )
