@@ -92,7 +92,7 @@ export const AsinCell = memo(function AsinCell(p: ICellRendererParams<ChannelShe
     const column = p.column?.getColId()
     if (p.node.rowIndex != null && column) p.api.setFocusedCell(p.node.rowIndex, column)
   }
-  // `nds-reveal-row`: the cell actions show while the pointer is on the cell (the sheet's CascadeCell does the same).
+  // `nds-reveal-row`: the cell actions show while the pointer is on the cell (the sheet's Shopify cells do the same, on the cell).
   return (
     <span className="nds-cell-value nds-reveal-row">
       <span className="nds-cell-value-text nds-projcell-detail">{model.asin}</span>

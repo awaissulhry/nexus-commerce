@@ -19,6 +19,8 @@ import { refusalWords } from '@/design-system/grid/editors/refusalWords'
 
 import { columnApplies, columnEditableOnRow, columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
+import type { CellProvenance } from '@/design-system/grid/renderers/provenance'
+import { fallbackLanguage, languageTextName } from '../languages'
 import type { SheetColumn, StudioCellValue, StudioRow } from './types'
 
 export const cellOf = (row: StudioRow, key: string): StudioCellValue | undefined => row.values[key]
@@ -119,6 +121,63 @@ export function sourceLabel(row: StudioRow, key: string, rows: readonly StudioRo
   // null id, which the contract does not produce.
   if (!cell?.inheritedFrom) return null
   return rows.find((r) => r.id === cell.inheritedFrom)?.sku ?? null
+}
+
+/** The members whose mark names where the value comes from — the others (formula, out of date, AI) name nothing. */
+const SOURCE_MEMBERS: ReadonlySet<CellProvenance> = new Set<CellProvenance>(['inherited', 'inheritedOverride', 'pinned', 'listingLevel', 'mapped', 'mappedShared'])
+
+/**
+ * The mark's source on the Shared scope (2026-10-04, channel cell marks) — the SAME meaning as the channel scopes
+ * (`channelCellFrom`): the layer the value follows, came from or no longer follows, read into the mark's one sentence
+ * (`provenanceTooltip`), and never the row's own SKU. A parent's own value carries `inheritedFrom` = the parent itself,
+ * which drew "Calculated by a formula — GALE-JACKET" and "Out of date — GALE-JACKET" on the parent row: a source that
+ * names the row it is on says nothing.
+ *
+ *   inherited          the row it inherits from ("Inherited from GALE-JACKET — edit to give this row its own value"),
+ *                      or the language a fallback shows ("the Italian text")
+ *   pinned             the layer the pin no longer follows: a variation's parent ("Pinned on this row — it no longer
+ *                      follows GALE-JACKET"). A parent row has nothing above it on this scope — no source, and the
+ *                      sentence says "the layer above". Never the row's own SKU: before, a variation's pin named
+ *                      nothing, so the mark said a bare "Pinned".
+ *   inheritedOverride  the row whose override it inherits
+ *   aiStale            "the source text" for a machine translation of an older source ("Drafted by AI from an older value
+ *                      — the source text has changed since"); nothing for an AI draft of this cell (the cell changed)
+ */
+export function markSourceLabel(member: CellProvenance, row: StudioRow, key: string, rows: readonly StudioRow[]): string | null {
+  // A machine translation of an older source text: the text it came from changed — not this cell (`channelCellFrom` too).
+  if (member === 'aiStale') return cellOf(row, key)?.translation ? 'the source text' : null
+  if (!SOURCE_MEMBERS.has(member)) return null
+  const parentSku = () => {
+    const parent = row.parentSku ?? (row.parentId ? rows.find((r) => r.id === row.parentId)?.sku : null) ?? null
+    return parent && parent !== row.sku ? parent : null
+  }
+  if (member === 'pinned') return parentSku()
+  const cell = cellOf(row, key)
+  // A language fallback names the language it shows ("Inherited from the Italian text"), as the channel scopes do.
+  const language = member === 'inherited' ? fallbackLanguage(cell) : null
+  if (language) return languageTextName(language)
+  /* The wire names the row itself when nothing holds a value (`sharedMember`): on a variation that is its parent — the
+     row it follows, which holds nothing either — never the row's own SKU. */
+  if (cell?.inheritedFrom === row.id) return member === 'inherited' ? parentSku() : null
+  const label = sourceLabel(row, key, rows)
+  return label && label !== row.sku ? label : null
+}
+
+/**
+ * The Shared scope's member for a cell, from the DS classifier (which the Variants tab keeps as it is) — less one false
+ * claim (2026-10-04): a row does not inherit from ITSELF. The content resolver answers a field that has no value
+ * anywhere as `inherited` with no owner (tier `computed`, `content-resolver.ts`'s last line), and the wire then names the
+ * row itself as the source (`content-read.ts`: `inheritedFrom = ownerId ?? productId`). Measured on GALE-JACKET in
+ * Italian: the parent row wore 🔗 "Inherited" on 61 such cells (description, bullets, keywords, …).
+ *
+ * Only that case. The same wire on a VARIATION row is true: a variation with no value of its own follows its parent, and
+ * the parent holds nothing either — the Owner-approved muted 🔗 "follows an empty parent" (2026-09-26, `grid.css`), kept.
+ * A language fallback is true too: the row shows (or would show) its own text in the source language ("Inherited from
+ * the Italian text"). Every other cell keeps the classifier's member, exactly as before.
+ */
+export function sharedMember(member: CellProvenance, row: Pick<StudioRow, 'id' | 'parentId'>, cell: StudioCellValue | undefined): CellProvenance {
+  if (member !== 'inherited' || !cell || cell.inheritedFrom !== row.id) return member
+  return row.parentId || fallbackLanguage(cell) ? member : 'own'
 }
 
 /**

@@ -339,27 +339,6 @@ export function tidyServerMessage(raw: string): string {
 }
 
 
-/* ── the run-level mapping fact, attached where the classifier expects it ─────────────────── */
-
-/**
- * Give a cell the RUN's `productLevelOnly` so `classifyProvenance` can reach `mappedShared`.
- *
- * 🔴 `provenance.ts:146` decides `mappedShared` from a per-cell `mappedProductLevel`, and the wire
- * carries no such field — it carries `meta.mapping.productLevelOnly`, a fact about the RUN. PES.2's
- * framing (#367) is that a run-level fact is the CONSUMER's to supply, and that is this sheet.
- *
- * Measured before the fix, Amazon·IT: 15 cells `mapped`, **0** `mappedShared`, with the run flag
- * `true` — so every cell that should have said "editing one row changes N" said the opposite of
- * what §9.6b intends.
- *
- * Allocates only when the flag is TRUE. It is read per cell per paint inside `cellClassRules`, and
- * when the run is not product-level there is nothing to add, so the common path stays the identity.
- */
-export function withMappingRun<T extends object>(cell: T | undefined, productLevelOnly: boolean): T | undefined {
-  if (!cell || !productLevelOnly) return cell
-  return { ...cell, mappedProductLevel: true }
-}
-
 /**
  * What a cell should say about itself on hover — the honesty the sheet owes before an edit (#513).
  *

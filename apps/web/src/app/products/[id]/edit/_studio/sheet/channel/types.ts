@@ -303,7 +303,16 @@ export interface AmazonOfferCellExtras {
 
 /** PES.5 §3.2 — `SheetCellValue` plus the studio's provenance and write routing. */
 export interface StudioCellValue extends importContentWriteFacts, AmazonOfferCellExtras {
+  /** Shopify: Nexus holds a value for this cell — a saved pin, or an edit Shopify does not have yet. */
   nexusDraft?: boolean
+  /** Shopify (API `StudioCellValue.unsentDraft`): an edit saved in Nexus that Shopify does not have yet. Absent = not one. */
+  unsentDraft?: boolean
+  /**
+   * Shopify (API `StudioCellValue.channelOnly`): the Shared product supplies no value for this field — a reset returns
+   * Shopify's own value. Set only when true. Every value Nexus holds arrives `mapped: null`, so `mapped.sourceOwner`
+   * cannot say it.
+   */
+  channelOnly?: boolean
   tier?: importResolvedContent['tier']
   language?: importResolvedContent['language']
   requested?: importResolvedContent['requested']

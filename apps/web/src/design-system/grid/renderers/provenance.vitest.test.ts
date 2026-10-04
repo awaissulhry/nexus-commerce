@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { classifyProvenance, provenanceClassRules, provenanceTooltip, type CellProvenance } from './provenance'
+import { classifyProvenance, describeCellSource, provenanceClassRules, provenanceLabel, provenanceTooltip, type CellProvenance, type ProvenanceLike } from './provenance'
 
 describe('classifyProvenance', () => {
   it('a plain master value carries no mark — most cells, and they get no ink', () => {
@@ -92,7 +92,7 @@ describe('classifyProvenance', () => {
 
     /**
      * Ruling #16. Both are inherited; they RESET TO DIFFERENT PLACES, so they are different states.
-     * A variant inheriting from its alias returns to the alias on reset, not to the master.
+     * A variant inheriting from its alias returns to the alias on reset, not to the Shared product.
      */
     it('distinguishes inherited-from-master from inherited-via-an-override', () => {
       expect(classifyProvenance({ layer: 'master', inherited: true }, 'channel')).toBe('inherited')
@@ -103,10 +103,10 @@ describe('classifyProvenance', () => {
     })
 
     it('the two inherited states say different things about what a reset does', () => {
-      expect(provenanceTooltip('inherited', 'GALE-JACKET')).not.toMatch(/overrides the master/)
+      expect(provenanceTooltip('inherited', 'GALE-JACKET')).not.toMatch(/overrides the Shared product/)
       const via = provenanceTooltip('inheritedOverride', 'Bundle listing')
       expect(via).toMatch(/Bundle listing/)
-      expect(via).toMatch(/not to the master/)
+      expect(via).toMatch(/not to the Shared product/)
     })
 
     it('both inherited states carry the shared tint class; only one carries the override class', () => {
@@ -289,13 +289,186 @@ describe('provenanceTooltip — refused', () => {
   })
 
   it('never returns empty, even for a refusal with no reason text', () => {
-    expect(provenanceTooltip('refused', null)).toBe('This formula produced no value.')
-    expect(provenanceTooltip('refused')).toBe('This formula produced no value.')
+    expect(provenanceTooltip('refused', null)).toBe('This formula produced no value')
+    expect(provenanceTooltip('refused')).toBe('This formula produced no value')
   })
 
   /* The formula tooltip is unchanged — this is the claim `refused` replaces, kept here so a future
      edit cannot quietly make the two say the same thing. */
   it('still says "Calculated by a formula" for a formula that was NOT refused', () => {
     expect(provenanceTooltip('formula')).toBe('Calculated by a formula on this cell — edit the cell to change the formula')
+  })
+})
+
+/*
+ * 2026-10-04 — channel cell marks. Four members for the channel scopes (`pending`, `attention`, `listingValue`,
+ * `listingLevel`). The DS describes them (label, sentence, tint); the product sheet's channel verdict decides them.
+ */
+/** Verdict counts of the sweep below, computed with main's `provenance.ts` (02f30039e) before the four members existed. */
+const CLASSIFY_COUNTS_ON_MAIN = {
+  master: { ai: 13824, formula: 13824, inherited: 5976, inheritedOverride: 648, mapped: 1728, mappedShared: 1728, outdated: 13824, own: 984, pinned: 2760, refused: 13824 },
+  variant: { ai: 13824, formula: 13824, inherited: 5976, inheritedOverride: 648, mapped: 1728, mappedShared: 1728, outdated: 13824, own: 360, pinned: 3384, refused: 13824 },
+  channel: { ai: 13824, formula: 13824, inherited: 5976, inheritedOverride: 648, mapped: 1728, mappedShared: 1728, outdated: 13824, own: 360, pinned: 3384, refused: 13824 },
+}
+const ALL_MEMBERS: CellProvenance[] = ['own', 'inherited', 'inheritedOverride', 'pinned', 'ai', 'aiStale', 'mapped', 'mappedShared',
+  'outdated', 'formula', 'refused', 'pending', 'attention', 'listingValue', 'listingLevel']
+
+describe('the words — "the Shared product", never "the master"', () => {
+  it('no sentence or label a user reads says "master", with or without a source', () => {
+    for (const m of ALL_MEMBERS) {
+      for (const from of [undefined, null, 'GALE-JACKET']) expect(provenanceTooltip(m, from)).not.toMatch(/master/i)
+      expect(provenanceLabel(m)).not.toMatch(/master/i)
+    }
+  })
+  it('every member but `own` has a label and a sentence', () => {
+    for (const m of ALL_MEMBERS.filter((x) => x !== 'own')) {
+      expect(provenanceLabel(m).length).toBeGreaterThan(3)
+      expect(provenanceTooltip(m).length).toBeGreaterThan(10)
+    }
+    expect(provenanceLabel('own')).toBe('')
+  })
+  it('a cell with no stated source names the layer in words, never its id', () => {
+    expect(describeCellSource({ layer: 'master', inherited: true }).tooltip).toBe('Inherited from the Shared product — edit to give this row its own value')
+    expect(describeCellSource({ layer: 'master', inherited: true }).from).toBe('the Shared product')
+    expect(describeCellSource({ layer: 'somethingNew', inherited: true }).from).toBeNull()
+  })
+})
+
+describe('provenanceTooltip — the four channel members', () => {
+  /* Like `refused`: the server's sentence, verbatim — no prefix, no restatement. */
+  it('pending and attention return the server sentence verbatim', () => {
+    const waits = 'Live on eBay until you publish: Gale Jacket, black'
+    const fba = 'Amazon reports this listing as FBA — Nexus does not send its quantity.'
+    expect(provenanceTooltip('pending', waits)).toBe(waits)
+    expect(provenanceTooltip('attention', fba)).toBe(fba)
+  })
+  it('pending and attention never return empty without a sentence', () => {
+    expect(provenanceTooltip('pending')).toBe('Saved in Nexus — the channel gets this value when you publish')
+    expect(provenanceTooltip('pending', null)).toBe('Saved in Nexus — the channel gets this value when you publish')
+    expect(provenanceTooltip('attention')).toBe('Needs attention — this value may not reach the channel as shown')
+  })
+  it('listingValue says the listing holds its own text and how to follow the Shared product', () => {
+    const text = provenanceTooltip('listingValue', 'eBay · IT')
+    expect(text).toBe('This listing still holds its own text, not the Shared product’s — the next change to the Shared product replaces it; Follow Shared uses the Shared product’s text now')
+    expect(provenanceTooltip('listingValue')).toBe(text)
+  })
+  it('listingLevel states the scope of an edit, with the row it is read from when known', () => {
+    expect(provenanceTooltip('listingLevel', 'GALE-JACKET')).toBe('One value for the whole listing, from GALE-JACKET — setting or clearing it here sets it for every variation')
+    expect(provenanceTooltip('listingLevel')).toBe('One value for the whole listing — setting or clearing it here sets it for every variation')
+  })
+})
+
+/* 2026-10-04 (A2): ONE punctuation rule for every DS sentence — none ends with a full stop. A server sentence passed as
+   `from` for refused / pending / attention is returned verbatim and is not held to it. */
+describe('provenanceTooltip — one ending rule', () => {
+  const MEMBERS = ['inherited', 'inheritedOverride', 'pinned', 'mapped', 'mappedShared', 'ai', 'aiStale', 'formula', 'refused',
+    'outdated', 'pending', 'attention', 'listingValue', 'listingLevel'] as const
+  it('no DS sentence ends with a full stop, with or without a source', () => {
+    for (const m of MEMBERS) {
+      for (const from of [undefined, 'GALE-JACKET']) {
+        if (from && (m === 'refused' || m === 'pending' || m === 'attention')) continue
+        const text = provenanceTooltip(m, from)
+        expect([m, from, text.length > 0 && !/[.]$/.test(text)]).toEqual([m, from, true])
+      }
+    }
+  })
+  it('the language pin sentence follows it too', () => {
+    expect(describeCellSource({ tier: 'pin', follows: false, provenance: { member: 'pinned', from: 'Dutch · Amazon · BE · pin' } } as ProvenanceLike).tooltip)
+      .toBe('Pinned at Dutch · Amazon · BE · pin — changes to the shared language text do not replace this value')
+  })
+})
+
+describe('provenanceClassRules — the four channel members', () => {
+  const rules = provenanceClassRules<{ p: CellProvenance }>((d) => d.p)
+  const on = (p: CellProvenance) => Object.entries(rules).filter(([, f]) => (f as (x: unknown) => boolean)({ data: { p }, colDef: { colId: 'c' } })).map(([k]) => k)
+  it('each new member sets exactly its own class', () => {
+    expect(on('pending')).toEqual(['nds-cell-is-awaiting-publish'])
+    expect(on('attention')).toEqual(['nds-cell-is-attention'])
+    expect(on('listingValue')).toEqual(['nds-cell-is-listing-value'])
+    expect(on('listingLevel')).toEqual(['nds-cell-is-listing-level'])
+  })
+  /* 🔴 The save tracker owns `nds-cell-is-pending` (a save in flight). A value waiting for Publish is SAVED. */
+  it('never reuses the save tracker\'s pending class', () => {
+    expect(Object.keys(rules)).not.toContain('nds-cell-is-pending')
+    for (const m of ALL_MEMBERS) expect(on(m)).not.toContain('nds-cell-is-pending')
+  })
+  it('the existing members keep exactly their classes', () => {
+    expect(on('own')).toEqual([])
+    expect(on('inherited')).toEqual(['nds-cell-is-inherited'])
+    expect(on('inheritedOverride')).toEqual(['nds-cell-is-inherited', 'nds-cell-is-inherited-override'])
+    expect(on('pinned')).toEqual(['nds-cell-is-pinned'])
+    expect(on('mapped')).toEqual(['nds-cell-is-mapped'])
+    expect(on('mappedShared')).toEqual(['nds-cell-is-mapped', 'nds-cell-is-mapped-shared'])
+    expect(on('outdated')).toEqual(['nds-cell-is-outdated'])
+    expect(on('formula')).toEqual(['nds-cell-is-formula'])
+    expect(on('refused')).toEqual(['nds-cell-is-formula-refused'])
+    expect(on('ai')).toEqual(['nds-cell-is-ai-draft'])
+    expect(on('aiStale')).toEqual(['nds-cell-is-ai-draft', 'nds-cell-is-ai-draft-stale'])
+  })
+})
+
+describe('describeCellSource — the four channel members', () => {
+  it('pending and attention carry the server sentence as `from`, and nothing else stands in for it', () => {
+    const sentence = 'Saved in Nexus, not sent: eBay refused the last send.'
+    expect(describeCellSource({ provenance: { member: 'attention', from: sentence } })).toEqual({ member: 'attention', from: sentence, tooltip: sentence })
+    // A layer must never become the hover text of a sentence member.
+    const bare = describeCellSource({ provenance: { member: 'pending', from: null }, layer: 'alias' }, { from: 'an internal row id' })
+    expect(bare).toEqual({ member: 'pending', from: null, tooltip: 'Saved in Nexus — the channel gets this value when you publish' })
+  })
+  it('listingLevel and listingValue keep the ordinary source rule', () => {
+    expect(describeCellSource({ provenance: { member: 'listingLevel', from: 'GALE-JACKET' } }).tooltip).toContain('from GALE-JACKET')
+    expect(describeCellSource({ provenance: { member: 'listingValue', from: 'eBay · IT' } }).member).toBe('listingValue')
+  })
+})
+
+/*
+ * 🔴 `classifyProvenance` must NOT change for any existing input: the Shared scope and the Variants tab read it, and the
+ * channel verdict lives in the sheet (`channelCellProvenance`), not here. Two proofs:
+ *   1. a table of the shapes those two surfaces send, with the verdicts they had before the four members existed;
+ *   2. a combinatorial sweep of the generic inputs: none of the four channel members ever comes out of them, and the
+ *      count per member per layer is pinned (taken from main at 02f30039e, before this change).
+ */
+describe('classifyProvenance — unchanged by the four channel members', () => {
+  it('the Shared scope and Variants tab shapes keep their verdicts', () => {
+    const table: [ProvenanceLike, 'master' | 'variant' | 'channel', CellProvenance][] = [
+      [{ layer: 'master', inherited: false }, 'master', 'own'],
+      [{ layer: 'master', inherited: true, inheritedFrom: 'GALE-JACKET' }, 'master', 'inherited'],
+      [{ layer: 'variant', pinned: true }, 'master', 'pinned'],
+      [{ provenance: { member: 'pinned', from: 'German · shared' }, follows: true }, 'master', 'inherited'],
+      [{ provenance: { member: 'inherited', from: 'German · shared' } }, 'master', 'inherited'],
+      [{ translation: { outdated: true } }, 'master', 'outdated'],
+      [{ translation: { outdated: false, source: 'ai', reviewedAt: null } }, 'master', 'ai'],
+      [{ formula: true, refusedReason: 'Too long.' }, 'master', 'refused'],
+      [{ mapped: { status: 'mapped' }, mappedProductLevel: true }, 'channel', 'mappedShared'],
+      [{ mapped: { status: 'mapped', derived: false }, layer: 'master', inherited: true }, 'channel', 'inherited'],
+      [{ layer: 'alias', inherited: true }, 'channel', 'inheritedOverride'],
+      [{ layer: 'aliasVariant' }, 'channel', 'pinned'],
+      [{ layer: 'default' }, 'channel', 'own'],
+      [{ source: 'variant' }, 'variant', 'pinned'],
+      [{ source: 'masterLocale' }, 'channel', 'own'],
+      [{ source: 'channelSnapshot', inherited: false }, 'channel', 'pinned'],
+    ]
+    for (const [cell, layer, expected] of table) expect([cell, layer, classifyProvenance(cell, layer)]).toEqual([cell, layer, expected])
+  })
+
+  it('no generic input yields a channel member, and the verdict counts are the ones main produced', () => {
+    const counts: Record<string, Record<string, number>> = {}
+    const opt = <V,>(...v: V[]) => v
+    for (const layerArg of opt<'master' | 'variant' | 'channel'>('master', 'variant', 'channel'))
+      for (const layer of opt(undefined, 'master', 'variant', 'alias', 'aliasVariant', 'channel', 'linked', 'default'))
+        for (const source of opt(undefined, 'master', 'masterLocale', 'variant', 'channelOverride', 'channelSnapshot'))
+          for (const inherited of opt(undefined, true, false))
+            for (const pinned of opt(undefined, true))
+              for (const follows of opt(undefined, true))
+                for (const mapped of opt(undefined, { status: 'mapped' }, { status: 'mapped', derived: false }, { status: 'unmapped' }))
+                  for (const mappedProductLevel of opt(undefined, true))
+                    for (const member of opt<CellProvenance | undefined>(undefined, 'inherited', 'pinned'))
+                      for (const extra of opt<ProvenanceLike>({}, { formula: true }, { aiDrafted: true }, { translation: { outdated: true } }, { refusedReason: 'No.' })) {
+                        const cell: ProvenanceLike = { layer, source, inherited, pinned, follows, mapped, mappedProductLevel, ...(member ? { provenance: { member, from: null } } : {}), ...extra }
+                        const verdict = classifyProvenance(cell, layerArg)
+                        ;(counts[layerArg] ??= {})[verdict] = (counts[layerArg][verdict] ?? 0) + 1
+                      }
+    for (const byLayer of Object.values(counts)) for (const m of ['pending', 'attention', 'listingValue', 'listingLevel']) expect(byLayer[m]).toBeUndefined()
+    expect(counts).toEqual(CLASSIFY_COUNTS_ON_MAIN)
   })
 })

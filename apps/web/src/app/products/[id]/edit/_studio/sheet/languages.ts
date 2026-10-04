@@ -1,4 +1,21 @@
 import { normalizeLanguage } from '@nexus/shared/content-language'
+import { languageLabel } from '../scopes'
+
+/** A language tag's language ("de-AT" → "de"); '' for none. Never throws on a malformed tag. */
+const languageOf = (tag: string | null | undefined) => (typeof tag === 'string' ? tag.toLowerCase().split(/[-_]/, 1)[0] : '')
+
+/**
+ * The language a cell shows when it is NOT the one the sheet asks for (an eBay DE title, or the Shared product in German,
+ * showing the Italian text because there is no German one): the wire's `language` and `requested` (`studio-content-wire.ts`)
+ * differ. Null when the cell shows the requested language, or the wire says nothing. Both sheet scopes read it (2026-10-04).
+ */
+export function fallbackLanguage(cell: { language?: string | null; requested?: string | null } | null | undefined): string | null {
+  const shown = languageOf(cell?.language), wanted = languageOf(cell?.requested)
+  return shown && wanted && shown !== wanted ? shown : null
+}
+
+/** "the Italian text" — the language a fallback shows, by its English name, never its code. */
+export const languageTextName = (language: string) => `the ${languageLabel(language)} text`
 
 export const LANGUAGES_VIEW_ID = 'languages'
 /** A view key carries a language; service field keys remain canonical. */

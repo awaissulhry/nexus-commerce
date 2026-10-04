@@ -130,9 +130,16 @@
   --nds-danger-text: #7d2621;
   --nds-info-text-light: #10457f;
   --nds-info-text: var(--nds-info-text-light);
-  --nds-prov-ai-fg: #6d28d9;
-  --nds-prov-formula-fg: #094b5e;
-  --nds-prov-inherited-fg: #1a60c4;
+  --nds-prov-ai-fg-light: #45198a;
+  --nds-prov-ai-fg: var(--nds-prov-ai-fg-light);
+  --nds-prov-formula-fg-light: #094b5e;
+  --nds-prov-formula-fg: var(--nds-prov-formula-fg-light);
+  --nds-prov-inherited-fg-light: #0f366f;
+  --nds-prov-inherited-fg: var(--nds-prov-inherited-fg-light);
+  --nds-prov-warning-fg-light: #522f0c;
+  --nds-prov-warning-fg: var(--nds-prov-warning-fg-light);
+  --nds-prov-muted-fg-light: #383f47;
+  --nds-prov-muted-fg: var(--nds-prov-muted-fg-light);
 
   /* ── Progress bars ── */
   --nds-progress-complete: var(--nds-green-600);
@@ -517,9 +524,11 @@
   --nds-danger-text: #f3b7b0;
   --nds-chrome-bg: #1e3050;
   --nds-topbar-bg: var(--nds-chrome-bg);
-  --nds-prov-ai-fg: #c4b5fd;
-  --nds-prov-formula-fg: #39d8f0;
-  --nds-prov-inherited-fg: #93c5fd;
+  --nds-prov-ai-fg: #d6ccfe;
+  --nds-prov-formula-fg: #6de2f4;
+  --nds-prov-inherited-fg: #cae3fe;
+  --nds-prov-warning-fg: #f7d5aa;
+  --nds-prov-muted-fg: #d1d8e0;
   --nds-targeting-auto: #7fd4b0;
   --nds-targeting-manual: #c9a86a;
   --nds-imgup-surface: #1a2330;

@@ -57,7 +57,7 @@ describe('channel builder', () => {
   const setup = (columns: unknown[]) => buildChannelColumns({
     data: { scope: { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT' } },
     gridColumns: columns, formulaWiring: { exprFor: () => null, errorFor: () => null },
-    openCellDetails: () => {}, productLevelOnly: false, refusedReasonFor: () => null,
+    productLevelOnly: false, refusedReasonFor: () => null,
     tracker: new CellSaveTracker(), activeCellsRef: { current: null }, viewCtx: { locale: 'it', variationAxes: [], flaggedKeys: [] },
     mediaEditor: { open: () => {}, actions: {} }, shopifyEditor: { open: () => {} }, auth: { has: () => true },
   } as unknown as BuildChannelColumnsOptions) as unknown as Array<Record<string, unknown>>
@@ -116,7 +116,7 @@ describe('#775 kept: where a formula IS available, = opens the formula editor (f
     const [def] = buildChannelColumns({
       data: { scope: { channel: 'EBAY', marketplace: 'IT', label: 'eBay · IT' } },
       gridColumns: [col(key, kind as 'text' | 'number')], formulaWiring,
-      openCellDetails: () => {}, productLevelOnly: false, refusedReasonFor: () => null,
+      productLevelOnly: false, refusedReasonFor: () => null,
       tracker: new CellSaveTracker(), activeCellsRef: { current: null }, viewCtx: { locale: 'it', variationAxes: [], flaggedKeys: [] },
       mediaEditor: { open: () => {}, actions: {} }, shopifyEditor: { open: () => {} }, auth: { has: () => true },
     } as unknown as BuildChannelColumnsOptions) as unknown as Array<Record<string, unknown>>

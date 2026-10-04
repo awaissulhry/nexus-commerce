@@ -37,12 +37,15 @@ export function pristineOf(cell: StudioCellValue): StudioCellValue {
 }
 
 /**
- * The cell the grid shows the moment a value is typed, before the server answers: pinned at this row's layer — except an
- * eBay listing-level value (P1), which is the listing's, so its value changes and its source does not (P2 ground truth).
- * Remembers the server's cell it started from.
+ * The cell the grid shows the moment a value is typed, before the server answers — the facts the server's answer will
+ * carry, so the cell's mark reads now what it reads after the save: pinned at this row's layer — except an eBay
+ * listing-level value (P1), which is the listing's, so its value changes and its source does not (P2 ground truth), and a
+ * Shopify value, which is saved as an edit Shopify does not have yet (`nexusDraft` + `unsentDraft`, the projection's
+ * answer): `pending` until Review synchronization sends it (2026-10-04). Remembers the server's cell it started from.
  */
 export function optimisticCell(previous: StudioCellValue, value: unknown, rowKind: ChannelSheetRow['rowKind']): StudioCellValue {
-  const next: StudioCellValue = previous.mapped?.listingLevel ? { ...previous, value }
+  const next: StudioCellValue = previous.shopifyWrite ? { ...previous, value, pinned: true, inherited: false, nexusDraft: true, unsentDraft: true }
+    : previous.mapped?.listingLevel ? { ...previous, value }
     : { ...previous, value, layer: rowKind === 'parent' ? 'alias' : 'aliasVariant', pinned: true, inherited: false }
   rememberPristine(next, previous)
   return next

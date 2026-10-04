@@ -100,7 +100,7 @@ function ProductCell(p: ICellRendererParams<StudioRow> & {
     const expander = parent && d.childCount > 0 ? (<ExpandButton expanded={expanded} onToggle={() => p.node.setExpanded(!expanded)} labels={['Expand children', 'Collapse children']}/>) : (<ExpandSlot />);
     const role = <ProductRoleChip product={d}/>;
     const line = p.secondaryRef ? identitySecondary(d, p.secondaryRef.current) : d.name;
-    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`}/>);
+    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`}/>);
 }
 interface SheetPageState {
     search: string;

@@ -16,9 +16,11 @@ The living style guide — one screen that renders every token (and, as Phases 3
 land, every component) at native resolution. It is both the **documentation**
 surface and the **verification harness** target.
 
-The component section includes `SourceIndicator` examples for Master inheritance,
-listing overrides, mapping rules, channel defaults and missing mappings. They use
-the same component as channel cells, with `showLabel` enabled for a visible legend.
+The component section includes `SourceIndicator` examples for Shared inheritance,
+listing overrides, mapping rules, channel defaults and missing mappings, with
+`showLabel` enabled for a visible legend. Since 2026-10-04 the product sheet's
+channel cells no longer draw `SourceIndicator`: both sheet scopes draw `MarkedValue`
+with a `ProvenanceMark` (see "Channel cell marks" below).
 
 - `TokenCatalog.tsx` — the catalog component, driven by `@/design-system/tokens`
   so it can never drift from the source of truth. Light + a dark toggle (which
@@ -196,6 +198,8 @@ LX.10 (2026-09-13): `outdated` is the translation-age provenance member, with a 
 `describeCellSource` takes canonical resolver provenance and translation review/outdated facts. Pass its `member` to ProvenanceMark.provenance and its `from` to ProvenanceMark.from; use `tooltip` for the cell explanation. `mapped.derived=false` distinguishes a direct inherited read carrying diagnostics from a computed rule.
 
 `ProvenanceMark.tooltip` accepts the exact sentence from `describeCellSource`. A canonical pin names its own answering coordinate and explains that shared language changes do not replace it; it never claims to follow that same pin.
+
+Channel cell marks (2026-10-04): the Shared scope and every channel scope of the product sheet draw `MarkedValue` — mark (nothing for `own`) · value text · trail (chevron) · after (cell action, save marks). No mark on a cell that simply follows Shared. Four channel members, each its own glyph: `pending` (clock, "Waits for Publish"), `attention` ("Needs attention"), `listingValue` (store, "Listing value") and `listingLevel` (layers, "One value for the whole listing"). `classifyProvenance` never returns them; the sheet's channel verdict does. One precedence picks a mark from several facts (`PROVENANCE_PRECEDENCE`): refused → attention → pending → aiStale → ai → outdated → formula → listingLevel → listingValue → mappedShared → mapped → inheritedOverride → inherited → pinned → own. A mixed bullets cell wears the strongest member and names its positions; a uniform one reads its first filled position's own words (`slotListColumnDef` `markOf`). The mark's `title` and `aria-label` are one text; with no `tooltip`, the four channel members read their whole `provenanceTooltip` sentence. Every mark ink is ≥7:1 on every resting row ground, both themes (`--nds-prov-*`). Verify in `#presence-catalog` (the "Value provenance" row) in light and dark, and on the product sheet: Shared, eBay, Amazon and Shopify scopes, hover and screen-reader name of each mark.
 
 
 ### Variation Theme

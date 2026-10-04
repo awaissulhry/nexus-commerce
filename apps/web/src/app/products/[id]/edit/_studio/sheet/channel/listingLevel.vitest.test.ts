@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { channelResetOffer } from '../sheetReset'
-import { describeValueSource, LISTING_LEVEL_LABEL } from './cellDetailsSource'
+import { provenanceLabel } from '@/design-system/grid/renderers/provenance'
+import { describeValueSource } from './cellDetailsSource'
+import { channelCellProvenance } from './channelCellProvenance'
 import { adoptFamilyListings, commitChannelRow, familyListingsOf } from './useChannelSheet'
 import type { ChannelSheetRow, StudioCellValue } from './types'
 
@@ -32,9 +34,12 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('(4) a variation row\'s listing-level value is the listing\'s', () => {
   it('its source says so, where it comes from, and that a set or a clear here sets it for every variation', () => {
-    const source = describeValueSource(family()[1].values.paese_di_origine, 'inherited')
-    expect(source.label).toBe(LISTING_LEVEL_LABEL)
-    expect(source.label).toBe('eBay listing value — one for all variations')
+    // Cell details words the member the cell's mark draws (2026-10-04): the listing-level mark, not 🔗.
+    const cell = family()[1].values.paese_di_origine
+    expect(channelCellProvenance(cell)).toBe('listingLevel')
+    const source = describeValueSource(cell, channelCellProvenance(cell))
+    // The mark's own label (2026-10-04): Cell details and the mark name it the same way.
+    expect(source.label).toBe(provenanceLabel('listingLevel'))
     expect(source.description).toContain('comes from FAM')
     expect(source.description).toContain('Setting or clearing it here sets it for every variation of this listing')
     expect(source.description).toContain('This row also stores "Cina", which eBay does not receive')
@@ -45,7 +50,7 @@ describe('(4) a variation row\'s listing-level value is the listing\'s', () => {
     expect(channelResetOffer(rows[0], 'paese_di_origine')).not.toBeNull()
   })
   it('control: the parent row\'s source is its own value, not the variation wording', () => {
-    expect(describeValueSource(family()[0].values.paese_di_origine, 'inherited').label).not.toBe(LISTING_LEVEL_LABEL)
+    expect(describeValueSource(family()[0].values.paese_di_origine, 'inherited').label).not.toBe(provenanceLabel('listingLevel'))
   })
 })
 

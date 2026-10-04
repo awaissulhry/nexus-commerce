@@ -163,7 +163,7 @@ export const AliasBandCell = memo(function AliasBandCell(
       noImage={!row.imageUrl}
       imageMark={
         row.imageInherited ? (
-          <ProvenanceMark provenance="inherited" from="the family's picture — this listing has none of its own" />
+          <ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this listing has none of its own" />
         ) : null
       }
       sku={sku}
