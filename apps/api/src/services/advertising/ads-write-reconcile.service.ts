@@ -184,7 +184,8 @@ export async function reconcileFailedAmazonWrites(
       try {
         // HX.1 — attributed, so a re-push is distinguishable in the change log from the original
         // write that failed. Without this the sweep's writes looked like they came from nowhere.
-        const r = await updatePlacementBidding({ campaignId: c.id, adjustments, actor: 'automation:ads-write-reconcile', reason: 're-push after a failed live write' })
+        // G.4 — `resend`: these are the undelivered values, so the merge onto Amazon's array must send them, not carry Amazon's.
+        const r = await updatePlacementBidding({ campaignId: c.id, adjustments, actor: 'automation:ads-write-reconcile', reason: 're-push after a failed live write', resend: true })
         if (r.ok) campaigns++
       } catch (e) {
         logger.warn('[ads-write-reconcile] placement re-push failed', { campaignId: c.id, error: (e as Error).message })

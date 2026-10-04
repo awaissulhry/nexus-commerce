@@ -21,9 +21,10 @@ import {
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
-  listKeywords, listSbKeywords,
+  listKeywords, listSbKeywords, adsMode,
   type AdsRegion,
 } from './ads-api-client.js'
+import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
@@ -1030,6 +1031,11 @@ export interface PlacementBiddingInput {
   targetKey?: string
   /** MCP full control A6 — tag the audit row with a change set (an approved request's id). Optional; additive. */
   changeSetId?: string | null
+  /**
+   * G.4 — re-sending a write Amazon did not take (the failed-write sweep). The local copy then holds the
+   * undelivered values, so every placement in `adjustments` counts as set by this write, none as carried.
+   */
+  resend?: boolean
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1052,12 +1058,14 @@ export interface PlacementBiddingResult {
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
   if (!c) throw new Error('campaign not found')
-  const adjustments = input.adjustments
+  // G.4 — `let`: on a live push this becomes the array merged onto Amazon's current one, i.e. what was sent.
+  let adjustments = input.adjustments
     .filter((a) => a.placement)
     .map((a) => ({ placement: a.placement, percentage: Math.max(0, Math.min(900, Math.round(a.percentage))) }))
   // D1 — snapshot the prior placement bias so a mis-firing change can be rolled back.
-  const priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
-  const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
+  // G.4 — the local copy until Amazon's current array is read before a live push; then that array.
+  let priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
+  let drift: Array<{ placement: string; local: number; amazon: number }> = []
   let mode = 'local'
   // AR — placement writes go inline (not via the queued+stamped worker path), so a
   // failed push to Amazon was previously invisible AND unrecoverable. Stamp the
@@ -1098,17 +1106,57 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
         gateDeniedAt = (gate as { deniedAt?: string }).deniedAt ?? null
         logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial, deniedAt: gateDeniedAt })
       } else {
-        const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
-        mode = r.mode
-        if (r.mode !== 'sandbox') {
-          syncStamp = { lastSyncedAt: new Date(), lastSyncStatus: r.ok ? 'SUCCESS' : 'FAILED', lastSyncError: r.ok ? null : (r.error ?? 'placement push failed') }
+        /**
+         * G.4 — read Amazon's current array (through the gateway, like the PUT) and merge onto it.
+         *
+         * The PUT replaces the whole array, and callers build theirs from the local copy, which the
+         * settings sync refreshes every 20 minutes — so a lane this write does not set used to go out
+         * at a stale value, overwriting a change made in Amazon's console in those minutes.
+         * `mergeOntoAmazonPlacements` keeps Amazon's value for every lane this write does not set.
+         *
+         * No read, no write: a failed read is refused exactly like a gate denial below (nothing changes
+         * here or on Amazon; safe to retry). Sandbox has no Amazon to read (the list answers a fixture),
+         * so it sends the array as given, as before.
+         */
+        let readError: string | null = null
+        if (adsMode() === 'live') {
+          try {
+            const cur = (await listCampaignsV3(ctx, { campaignIds: [c.externalCampaignId] }))
+              .find((x) => String(x.campaignId) === c.externalCampaignId)
+            // SP v3 always reports `dynamicBidding` (it carries the strategy); without it the lanes
+            // are unknown, not empty. `placementBidding` itself is left out when no lane is set.
+            if (cur?.dynamicBidding) {
+              const amazonNow = cur.dynamicBidding.placementBidding ?? []
+              const merged = mergeOntoAmazonPlacements(adjustments, priorAdjustments, amazonNow, { resend: input.resend })
+              drift = merged.drift
+              if (drift.length) logger.warn('[AX2.2] placement drift: Amazon differs from the local copy', { campaignId: input.campaignId, drift })
+              adjustments = merged.adjustments
+              priorAdjustments = amazonNow
+            } else {
+              readError = cur ? 'Amazon returned the campaign without its placement settings' : 'Amazon did not return the campaign'
+            }
+          } catch (e) {
+            readError = (e as Error).message
+          }
+        }
+        if (readError) {
+          gateDenial = 'Amazon\'s current placement settings for this campaign could not be read, so nothing was sent: sending without them could overwrite a change made in Amazon\'s console. Nothing changed; it is safe to try again.'
+          gateDeniedAt = 'placement_read'
+          logger.warn('[AX2.2] placement write refused: current placements unreadable', { campaignId: input.campaignId, error: readError.slice(0, 300) })
+        } else {
+          const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
+          mode = r.mode
+          if (r.mode !== 'sandbox') {
+            syncStamp = { lastSyncedAt: new Date(), lastSyncStatus: r.ok ? 'SUCCESS' : 'FAILED', lastSyncError: r.ok ? null : (r.error ?? 'placement push failed') }
+          }
         }
       }
     }
   }
   // ACR.0.7b — refused writes change nothing locally. Returning before the audit block too:
   // a denial is not a placement change, so it must not appear in CampaignBidHistory as
-  // "PLACEMENT_TOP 100 → 115" beside changes that actually happened.
+  // "PLACEMENT_TOP 100 → 115" beside changes that actually happened. G.4 — an unreadable
+  // current array (deniedAt 'placement_read') is refused the same way.
   if (gateDenial) {
     await audit(
       'update_placement_bidding', 'CAMPAIGN', input.campaignId,
@@ -1124,6 +1172,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     return { ok: false, adjustments: priorAdjustments, mode: 'blocked', reason: gateDenial, ...(gateDeniedAt ? { deniedAt: gateDeniedAt } : {}) }
   }
 
+  // G.4 — the local copy becomes what was actually sent (merged onto Amazon's current array on a live push).
+  const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
 
   /**
@@ -1140,6 +1190,9 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
    * is designed (a single field's old → new) and makes the diff read as
    * "PLACEMENT_TOP 100 → 115" instead of an opaque blob. Unchanged placements write nothing, so a
    * tick that moves only Top-of-Search doesn't manufacture three rows of noise.
+   *
+   * G.4 — after a live read `priorAdjustments` is Amazon's array, so each row is a change Amazon got;
+   * a console change folded into the local copy writes none (it is in the drift log line instead).
    */
   const priorPct = new Map(priorAdjustments.map((a) => [a.placement, a.percentage]))
   const changed = adjustments.filter((a) => priorPct.get(a.placement) !== a.percentage)
@@ -1173,7 +1226,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   // attribute. A caller that supplies no actor should still produce a row that says so.
   await audit(
     'update_placement_bidding', 'CAMPAIGN', input.campaignId,
-    { adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}) },
+    { adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}), ...(drift.length ? { drift } : {}) },
     input.actor ?? input.userId ?? 'system',
     { adjustments: priorAdjustments },
     auditStatus,
