@@ -6,6 +6,8 @@ export type AmazonFamilyRow = { role: 'parent'; theme: string } | { role: 'child
 
 /** Roots whose items the legacy row builder stamps with a `marketplace_id` the category schema may not declare. */
 const UNSCOPED_ITEM_ROOTS = ['fulfillment_availability', 'variation_theme'] as const
+/** The family structure roots: written from the family row only. */
+const FAMILY_ROOTS = ['parentage_level', 'child_parent_sku_relationship', 'variation_theme'] as const
 
 /** True only when the schema declares the root's item properties and `property` is not among them (unknown = keep). */
 function itemOmits(spec: ChannelSpec, root: string, property: string): boolean {
@@ -24,8 +26,13 @@ function itemOmits(spec: ChannelSpec, root: string, property: string): boolean {
  *  - `fulfillment_availability` and `variation_theme` items declare no `marketplace_id` and allow no other property.
  * The legacy row builder (the old flat-file route, unchanged) sends the theme on the parent only, and a `marketplace_id`
  * in both, so every studio family publish failed review. Pure; it never adds or changes a quantity.
+ *
+ * Item 12 (2026-10-05) — `family: null` is a STANDALONE product: it has no family, so the three family roots are dropped
+ * whatever the row or a saved listing value carried (a single product sent a stale `parentage_level: child`). A family
+ * member published without its family row (`familyMember`, e.g. a parent whose variations are all skipped) keeps what
+ * was built, as before: dropping its role would turn it into a standalone listing.
  */
-export function shapeAmazonStudioAttributes(spec: ChannelSpec, attributes: Record<string, unknown>, family: AmazonFamilyRow | null): Record<string, unknown> {
+export function shapeAmazonStudioAttributes(spec: ChannelSpec, attributes: Record<string, unknown>, family: AmazonFamilyRow | null, options: { familyMember?: boolean } = {}): Record<string, unknown> {
   const next = { ...attributes }
   for (const root of UNSCOPED_ITEM_ROOTS) {
     if (!Array.isArray(next[root]) || !itemOmits(spec, root, 'marketplace_id')) continue
@@ -35,7 +42,10 @@ export function shapeAmazonStudioAttributes(spec: ChannelSpec, attributes: Recor
       return rest
     })
   }
-  if (!family) return next
+  if (!family) {
+    if (!options.familyMember) for (const root of FAMILY_ROOTS) delete next[root]
+    return next
+  }
   const values: Record<string, unknown> = {}
   const put = (attribute: string, path: string[], value: unknown) => {
     const key = spec.fields.find(f => f.attribute === attribute && f.path.join('/') === path.join('/'))?.key
@@ -47,7 +57,7 @@ export function shapeAmazonStudioAttributes(spec: ChannelSpec, attributes: Recor
   put('variation_theme', ['name'], family.theme)
   // The schema's own envelopes: a selector the item declares is filled, one it does not declare never appears.
   const shaped = attributesFromCells(spec, values)
-  for (const root of ['parentage_level', 'child_parent_sku_relationship', 'variation_theme']) {
+  for (const root of FAMILY_ROOTS) {
     if (shaped[root] !== undefined) next[root] = shaped[root]
   }
   return next

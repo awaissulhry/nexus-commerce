@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveContent } from './content-resolver.js'
-import { contentAttribute, contentWireValue } from './content-read.js'
+import { amazonSearchTerms, contentAttribute, contentWireValue } from './content-read.js'
 import { studioContentFacts } from './studio-content-wire.js'
 import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 const product = { id: 'gale', name: 'Source title', translations: [{ language: 'de', name: 'German title', source: 'manual' as const, reviewedAt: '2026-09-12T00:00:00.000Z' }] }
@@ -32,5 +32,13 @@ describe('canonical Studio content wire', () => {
   it('keeps an explicit list clear on the wire', () => {
     expect(contentWireValue([], 'list')).toEqual([])
     expect(contentWireValue(null, 'list')).toEqual([])
+  })
+  // Item 9 (2026-10-05) — the cell and the publish join Amazon's search terms with the ONE function.
+  it('shows Amazon search terms as the one space-joined string publish sends, never cut', () => {
+    expect(contentWireValue(['moto', ' giacca ', '', 'pelle, nera'], 'scalar', 'keywords')).toBe('moto giacca pelle, nera')
+    expect(contentWireValue([], 'scalar', 'keywords')).toBe('')
+    expect(amazonSearchTerms('one phrase')).toBe('one phrase')
+    expect(amazonSearchTerms(['x'.repeat(600)])).toHaveLength(600)
+    expect(contentWireValue(['a', 'b'], 'list', 'keywords')).toEqual(['a', 'b'])
   })
 })

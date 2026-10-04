@@ -19,7 +19,7 @@
  */
 import type { AttributeChannel, AttributeLeafKind, AttributeShape } from './attributes'
 
-export const CONCEPTS_REVISION = '2026-09-26.2'
+export const CONCEPTS_REVISION = '2026-10-05.1'
 
 export type ConceptGroup = 'content' | 'identity' | 'identifiers' | 'variation' | 'specifications' | 'dimensions' | 'compliance'
 
@@ -153,7 +153,8 @@ export const ATTRIBUTE_CONCEPTS: readonly AttributeConcept[] = [
     bindings: { AMAZON: ['target_gender', 'department'], EBAY: EU('Department', 'Reparto', 'Abteilung', 'Département', 'Departamento'), SHOPIFY: ['shopify.target-gender'] },
     valueSynonyms: {
       men: ['Men', 'Male', "Men's", 'Uomo', 'Herren', 'Homme', 'Hombre'], women: ['Women', 'Female', "Women's", 'Donna', 'Damen', 'Femme', 'Mujer'],
-      unisex: ['Unisex', 'Unisex-adult', 'Unisex adulto', 'Unisex-Erwachsene', 'Unisexe'],
+      // 'Mixte' (2026-10-05): Amazon FR's adult unisex department word.
+      unisex: ['Unisex', 'Unisex-adult', 'Unisex adulto', 'Unisex-Erwachsene', 'Unisexe', 'Mixte'],
     } },
   { key: 'age_group', label: 'Age group', group: 'specifications', shape: 'scalar', kind: 'text', scope: 'global', localizable: false,
     adoptCodes: ['age_range_description'],
@@ -284,3 +285,22 @@ export function matchConceptValue(concept: AttributeConcept | undefined, value: 
   return synonym ? { to: synonym.code, how: 'synonym' } : null
 }
 
+/**
+ * Item 1 (product sheet consistency, 2026-10-05) — the ONE channel option a value means by the concept's synonyms, or
+ * null. Used when a value is resolved for a channel list (`men` → Amazon `male`, `men` → Amazon IT department `Uomo`).
+ *   · null when the value already IS an option — its code or its label, ignoring case and accents: the channel
+ *     validator's own spelling rules take it from there;
+ *   · null when the concept does not know the value, or when TWO or more options share its meaning (never a guess);
+ *   · otherwise the option's CODE (what is sent).
+ * Matching only: the stored value is never rewritten.
+ */
+export function conceptSynonymOption(concept: AttributeConcept | undefined, value: string, options: readonly string[], optionLabels?: Readonly<Record<string, string>> | null): string | null {
+  if (!concept?.valueSynonyms || !options.length) return null
+  const token = conceptFieldToken(value)
+  if (!token) return null
+  if (options.some(code => conceptFieldToken(code) === token || (!!optionLabels?.[code] && conceptFieldToken(optionLabels[code]) === token))) return null
+  const meaning = conceptValueCode(concept, value)
+  if (!meaning) return null
+  const matches = [...new Set(options)].filter(code => [code, optionLabels?.[code]].some(name => !!name && conceptValueCode(concept, name) === meaning))
+  return matches.length === 1 ? matches[0] : null
+}

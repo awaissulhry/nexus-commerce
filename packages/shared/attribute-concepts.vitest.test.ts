@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ATTRIBUTE_CONCEPTS, conceptByKey, conceptFieldToken, conceptForChannelField, conceptOptionCode, conceptValueCode, customAttributeConcepts, matchConceptValue,
+  ATTRIBUTE_CONCEPTS, conceptByKey, conceptFieldToken, conceptForChannelField, conceptOptionCode, conceptSynonymOption, conceptValueCode, customAttributeConcepts, matchConceptValue,
 } from './attribute-concepts'
 import type { AttributeChannel } from './attributes'
 
@@ -130,5 +130,47 @@ describe('matchConceptValue — the auto-match ladder', () => {
     expect(matchConceptValue(undefined, 'Nero', ['Black'])).toBeNull()
     expect(matchConceptValue(color, 'Chartreuse', ['Black', 'Blue'])).toBeNull()
     expect(matchConceptValue(color, '', ['Black'])).toBeNull()
+  })
+})
+
+// Item 1 (product sheet consistency, 2026-10-05). The option lists are Amazon's own, as cached for COAT (IT/DE/FR/ES).
+describe('conceptSynonymOption — the ONE option a value means, or null', () => {
+  const gender = conceptByKey('target_gender')!
+  const targetGender = {
+    IT: { female: 'Femmina', male: 'Maschio', unisex: 'Unisex' }, DE: { male: 'Männlich', unisex: 'Unisex', female: 'Weiblich' },
+    FR: { female: 'Femme', male: 'Homme', unisex: 'Unisexe' }, ES: { female: 'Femenino', male: 'Masculino', unisex: 'Unisex' },
+  }
+  const department = {
+    IT: ['Bambine e ragazze', 'Bambini e ragazzi', 'Bimba 0-24', 'Bimbo 0-24', 'Donna', 'Unisex - Adulto', 'Unisex - Bambini e ragazzi', 'Unisex - Bimbi 0-24', 'Uomo'],
+    DE: ['Baby - Jungen', 'Baby - Mädchen', 'Damen', 'Herren', 'Jungen', 'Mädchen', 'Unisex', 'Unisex Baby', 'Unisex Kinder'],
+    FR: ['Bébé fille', 'Bébé garçon', 'Femme', 'Fille', 'Garçon', 'Homme', 'Mixte', 'Mixte bébé', 'Mixte enfant'],
+    ES: ['Bebé-Niñas', 'Bebé-Niños', 'Hombre', 'Mujer', 'Niñas', 'Niños', 'Unisex adulto', 'Unisex bebé', 'Unisex niños'],
+  }
+  it.each(Object.entries(targetGender))('Amazon %s target gender: the Shared men / women / unisex become the codes Amazon takes', (_market, labels) => {
+    const options = Object.keys(labels)
+    expect(['men', 'Women', 'Uomo', 'Damen'].map(value => conceptSynonymOption(gender, value, options, labels))).toEqual(['male', 'female', 'male', 'female'])
+    expect(conceptSynonymOption(gender, 'unisex', options, labels)).toBeNull() // already the code
+  })
+  it.each([
+    ['IT', 'Uomo', 'Donna', 'Unisex - Adulto'], ['DE', 'Herren', 'Damen', null], ['FR', 'Homme', 'Femme', 'Mixte'], ['ES', 'Hombre', 'Mujer', 'Unisex adulto'],
+  ] as const)('Amazon %s department: men → %s, women → %s, unisex → %s (the market word)', (market, men, women, unisex) => {
+    const options = department[market]
+    expect(conceptSynonymOption(gender, 'men', options)).toBe(men)
+    expect(conceptSynonymOption(gender, 'women', options)).toBe(women)
+    // DE: 'Unisex' is already an option, so nothing is matched (the value is sent as it is).
+    expect(conceptSynonymOption(gender, 'unisex', options)).toBe(unisex)
+  })
+  it('a value that already is an option (code or label, any case) is not matched: the channel validator owns spelling', () => {
+    expect(conceptSynonymOption(gender, 'male', ['female', 'male'], { female: 'Femmina', male: 'Maschio' })).toBeNull()
+    expect(conceptSynonymOption(gender, 'maschio', ['female', 'male'], { female: 'Femmina', male: 'Maschio' })).toBeNull()
+    expect(conceptSynonymOption(gender, 'uomo', department.IT)).toBeNull()
+  })
+  it('never guesses: an unknown value, no concept, no list, or two options with the same meaning is null', () => {
+    expect(conceptSynonymOption(gender, 'Kids', department.IT)).toBeNull()
+    expect(conceptSynonymOption(undefined, 'men', ['male'])).toBeNull()
+    expect(conceptSynonymOption(gender, 'men', [])).toBeNull()
+    expect(conceptSynonymOption(gender, '', ['male'])).toBeNull()
+    expect(conceptSynonymOption(gender, 'men', ['male', 'mens'])).toBeNull()
+    expect(conceptSynonymOption(conceptByKey('model_name')!, 'men', ['male'])).toBeNull()
   })
 })

@@ -38,6 +38,9 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGAC
 const MP = 'APJ6JRA9NG5V4'
 const one = (extra: Record<string, unknown>) => ({ type: 'array', maxItems: 1, selectors: ['marketplace_id'],
   items: { type: 'object', properties: { value: { type: 'string', ...extra }, marketplace_id: { const: MP } } } })
+// Amazon's search terms: ONE string per (marketplace, language), as every cached schema declares it.
+const KEYWORDS = { type: 'array', maxItems: 1, selectors: ['marketplace_id', 'language_tag'],
+  items: { type: 'object', properties: { value: { type: 'string', maxLength: 500 }, marketplace_id: { const: MP }, language_tag: { type: 'string' } } } }
 // Three resolver-owned attributes (text, closed list, text) — the kinds M2 compared.
 const STORED = { part_number: 'XP-100', color: 'Nero', material: 'Mesh' }
 let productId = '', account = ''
@@ -47,8 +50,9 @@ beforeAll(() => scoped(async () => {
   account = (await prisma.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'parity', isActive: true, externalAccountId: 'SELLER',
     authStatus: 'connected', managedBy: 'oauth', region: 'EU' } as never })).id
   await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType: 'COAT', schemaVersion: 'v1', expiresAt: new Date(Date.now() + 86_400_000),
-    schemaDefinition: { properties: { part_number: one({ maxLength: 40 }), color: one({ maxLength: 50 }), material: one({ enum: ['Mesh', 'Leather'] }) } } } })
-  productId = (await prisma.product.create({ data: { sku: 'parity-a', name: 'Parity', basePrice: 10, productType: 'COAT', fulfillmentMethod: 'FBM' } as never })).id
+    schemaDefinition: { properties: { part_number: one({ maxLength: 40 }), color: one({ maxLength: 50 }), material: one({ enum: ['Mesh', 'Leather'] }), generic_keyword: KEYWORDS } } } })
+  // Two Shared keywords: the sheet shows ONE search-term string, and the payload must send that same one string.
+  productId = (await prisma.product.create({ data: { sku: 'parity-a', name: 'Parity', basePrice: 10, productType: 'COAT', fulfillmentMethod: 'FBM', keywords: ['moto', 'giacca'] } as never })).id
   // A LIVE listing (an ASIN): the studio then builds a partial update, which needs no gallery.
   await prisma.channelListing.create({ data: { productId, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', channelConnectionId: account,
     externalListingId: 'B0PARITY01', overrideData: STORED } })
@@ -81,12 +85,13 @@ async function bothSides() {
 it('🔴 the sheet and the payload agree on every resolver-owned attribute (M2 = 0)', async () => {
   const { expected, payload, sheetValues } = await bothSides()
   // Positive control: the sheet SHOWS the three stored values — a sheet that showed nothing would "agree" vacuously.
-  expect(Object.values(sheetValues).map(String).sort()).toEqual(Object.values(STORED).sort())
+  expect(Object.values(sheetValues).map(String).sort()).toEqual([...Object.values(STORED), 'moto giacca'].sort())
   const sheetRoots = Object.keys(expected).sort()
   const differ = sheetRoots.filter(r => JSON.stringify(leaves(expected[r]).sort()) !== JSON.stringify(leaves(payload[r]).sort()))
-  expect({ sheetRoots, differ }).toEqual({ sheetRoots: ['color', 'material', 'part_number'], differ: [] })
+  expect({ sheetRoots, differ }).toEqual({ sheetRoots: ['color', 'generic_keyword', 'material', 'part_number'], differ: [] })
   // What the payload sends beyond the sheet's values comes only from its own builders (offer, stock, content, parentage).
-  const OWN_BUILDERS = new Set(['purchasable_offer', 'fulfillment_availability', 'item_name', 'product_description', 'bullet_point', 'generic_keyword', 'condition_type', 'parentage_level', 'list_price'])
+  // Item 9 (2026-10-05): `generic_keyword` is no longer one of them — the payload's search terms are the sheet's.
+  const OWN_BUILDERS = new Set(['purchasable_offer', 'fulfillment_availability', 'item_name', 'product_description', 'bullet_point', 'condition_type', 'parentage_level', 'list_price'])
   expect(Object.keys(payload).filter(r => !(r in expected) && !OWN_BUILDERS.has(r))).toEqual([])
 })
 

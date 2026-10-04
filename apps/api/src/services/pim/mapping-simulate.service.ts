@@ -100,8 +100,16 @@ export async function simulateRuleChange(input: {
   const currentRules = await getResolvedRules(input.channel, input.code, input.productType ?? undefined)
   const currentRule = currentRules[input.fieldKey] // undefined when adding a new rule
 
+  // Item 1 (2026-10-05) — the same list matcher the sheet and publish use (`resolve-batch`): a value-map miss on a
+  // concept-bound list takes the ONE option the value means (`men` → `male`), so the simulation counts what would ship.
+  const { getFieldCatalogue } = await import('./mapping/field-catalogue.service.js')
+  const { conceptListMatcher } = await import('./mapping/master-default-rule.js')
+  const catalogue = await getFieldCatalogue({ channel: input.channel, marketplace: input.code, productType: input.productType ?? null, locale })
+  const field = catalogue.fields.find(f => f.fieldKey === input.fieldKey)
+  const matchListValue = field ? conceptListMatcher(input.channel.toUpperCase(), field) : null
   const transformCtx = {
     lookupValueMap: await loadValueMapLookup(input.channel, input.code),
+    ...(matchListValue ? { matchListValue } : {}),
     lookupSizeScale: await loadSizeScaleLookup(),
   }
 

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
-const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn(), categoryId: { value: '177104' } }))
+const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn(), valueMap: vi.fn(), categoryId: { value: '177104' } }))
 vi.mock('../../../db.js', () => ({ default: {
   marketplace: { findFirst: async ({ where }: any) => ({ languages: [{ IT: 'it', DE: 'de', FR: 'fr', ES: 'es', GLOBAL: 'en' }[where.code as string]] }) },
   product: { findMany: db.products }, channelListing: { findMany: db.listings }, fieldLinkGroup: { findMany: async () => [] }, productCategory: { findMany: async () => [] },
 } }))
 vi.mock('../../connection-resolver.service.js', () => ({ primaryConnectionIds: async () => new Map([['EBAY', 'primary']]) }))
 vi.mock('../schema-mapping.service.js', () => ({ getMappingForMarketplace: db.mapping, getRulesFor: (m: any) => m.fields }))
-vi.mock('../value-map.service.js', () => ({ loadValueMapLookup: async () => () => null, loadSizeScaleLookup: async () => () => null }))
+vi.mock('../value-map.service.js', () => ({ loadValueMapLookup: async () => (attribute: string, from: string) => db.valueMap(attribute, from) ?? null, loadSizeScaleLookup: async () => () => null }))
 vi.mock('./field-catalogue.service.js', () => ({ getFieldCatalogue: db.catalogue }))
 // The real `channelCategoryField` — the tests below pin the channel → category-field map itself.
 vi.mock('./category-mapping.service.js', async importOriginal => ({
@@ -31,6 +31,7 @@ const field = (fieldKey: string, extra: Partial<CatalogueField> = {}): Catalogue
 const input = { channel: 'EBAY', marketplace: 'IT', productIds: ['p'] }
 beforeEach(() => {
   vi.clearAllMocks()
+  db.valueMap.mockImplementation(() => null)
   db.categoryId.value = '177104'
   // LX.F R-LX-13 — the Italian title is the PRODUCT COLUMN (`it` is the primary
   // language, so it has no translation row by contract), and the legacy
@@ -421,5 +422,90 @@ describe('an Amazon child takes the family variation theme from its parent listi
       { productId: 'fam', channel: 'AMAZON', marketplace: 'IT', variationTheme: null }])
     const cell = (await resolveBatch(amazon)).products[0].cells.variation_theme
     expect(cell.value ?? null).toBeNull()
+  })
+})
+
+// Item 12 (product sheet consistency, 2026-10-05) — publish takes the listing role, relationship type and parent SKU
+// from the product family (`shapeAmazonStudioAttributes`). The cell shows exactly that: never a typed or stale stored
+// value, never a mapping rule; a single product shows none, because none is sent.
+describe('the Amazon listing role, relationship type and parent SKU are the family\'s', () => {
+  const amazon = { channel: 'AMAZON', marketplace: 'IT', productIds: ['p'] }
+  const owner = { kind: 'listing' as const, label: 'Variation setup', path: 'listing.overrideData' }
+  const STALE = { parentage_level: 'child', child_parent_sku_relationship__child_relationship_type: 'variation', child_parent_sku_relationship__parent_sku: 'TEST-SKU-OLD' }
+  const facts = (product: Record<string, unknown>, stored: Record<string, unknown>) => {
+    const rows = [{ id: 'p', sku: 'TEST-SKU-P', name: 'T', translations: [], categoryAttributes: {}, variantAttributes: {}, parentId: null, isParent: false, ...product },
+      { id: 'fam', sku: 'TEST-SKU-FAM', name: 'F', translations: [], categoryAttributes: {}, variantAttributes: {}, parentId: null, isParent: true }]
+    db.products.mockImplementation(async ({ where }: any) => rows.filter(row => where.id.in.includes(row.id)))
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', overrideData: stored }])
+    // An operator rule on the role must not reach it either.
+    db.mapping.mockResolvedValue({ fields: { parentage_level: { source: 'name' } } })
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [
+      field('parentage_level', { kind: 'select', options: ['parent', 'child'], selectionOnly: true, rule: null as never, sourceOwner: owner }),
+      field('child_parent_sku_relationship__child_relationship_type', { kind: 'select', options: ['variation'], selectionOnly: true, rule: null as never, sourceOwner: owner }),
+      field('child_parent_sku_relationship__parent_sku', { rule: null as never, sourceOwner: owner }),
+    ] })
+  }
+  const cells = async () => {
+    const { cells } = (await resolveBatch(amazon)).products[0]
+    return Object.fromEntries(Object.keys(STALE).map(key => [key, cells[key].value ?? null]))
+  }
+
+  it('a single product shows none, whatever the listing stored (nothing is sent)', async () => {
+    facts({}, STALE)
+    expect(await cells()).toEqual({ parentage_level: null, child_parent_sku_relationship__child_relationship_type: null, child_parent_sku_relationship__parent_sku: null })
+  })
+  it('a variation shows Child, Variation and its parent\'s SKU over a stale stored role', async () => {
+    facts({ parentId: 'fam' }, { ...STALE, parentage_level: 'parent' })
+    expect(await cells()).toEqual({ parentage_level: 'child', child_parent_sku_relationship__child_relationship_type: 'variation', child_parent_sku_relationship__parent_sku: 'TEST-SKU-FAM' })
+  })
+  it('a parent shows Parent and Variation, and no parent SKU', async () => {
+    facts({ isParent: true }, {})
+    expect(await cells()).toEqual({ parentage_level: 'parent', child_parent_sku_relationship__child_relationship_type: 'variation', child_parent_sku_relationship__parent_sku: null })
+  })
+})
+
+// Item 1 (product sheet consistency, 2026-10-05) — the Shared gender `men` is off Amazon's strict target gender list
+// (female / male / unisex), so every publish was blocked; department (an open list) was sent "men". A value-map miss
+// now takes the ONE option the concept's synonyms name. A listing's own value (an override) is never re-mapped.
+describe('Shared gender reaches Amazon as the code and the market word', () => {
+  const amazon = { channel: 'AMAZON', marketplace: 'IT', productIds: ['p'] }
+  const rule = { source: 'gender', transforms: [{ type: 'valueMap' as const, attribute: 'gender' }] }
+  const setup = (gender: string, overrideData: Record<string, unknown> | null = null) => {
+    db.products.mockResolvedValue([{ id: 'p', sku: 'TEST-SKU', name: 'T', translations: [], categoryAttributes: { gender }, variantAttributes: {}, parentId: null }])
+    db.listings.mockResolvedValue(overrideData ? [{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', overrideData }] : [])
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [
+      field('target_gender', { kind: 'select', label: 'Target gender', options: ['female', 'male', 'unisex'], optionLabels: { female: 'Femmina', male: 'Maschio', unisex: 'Unisex' }, selectionOnly: true, rule }),
+      field('department', { label: 'Department', options: ['Donna', 'Uomo', 'Unisex - Adulto'], rule }),
+    ] })
+  }
+  const cells = async () => (await resolveBatch(amazon)).products[0].cells
+
+  it('men → male (strict target gender) and men → Uomo (department), each cell saying so', async () => {
+    setup('men')
+    const { target_gender, department } = await cells()
+    expect(target_gender).toMatchObject({ value: 'male', errors: [], autoCorrected: { from: '"men"', to: '"male"' } })
+    expect(department).toMatchObject({ value: 'Uomo', errors: [], autoCorrected: { from: '"men"', to: '"Uomo"' } })
+  })
+  it('the code sent to Amazon is unchanged for a Shared value already on the list', async () => {
+    setup('male')
+    expect((await cells()).target_gender).toMatchObject({ value: 'male', autoCorrected: null })
+    setup('Uomo')
+    expect((await cells()).department).toMatchObject({ value: 'Uomo', autoCorrected: null })
+  })
+  it('a value-map row wins over the synonyms', async () => {
+    setup('men')
+    db.valueMap.mockImplementation((attribute: string, from: string) => attribute === 'gender' && from === 'men' ? 'unisex' : null)
+    expect((await cells()).target_gender).toMatchObject({ value: 'unisex', autoCorrected: null })
+  })
+  it('listing overrides stay exactly as typed: "male", "Uomo", "herr" — and a typed "men" stays and is flagged', async () => {
+    setup('women', { target_gender: 'male', department: 'Uomo' })
+    let result = await cells()
+    expect(result.target_gender).toMatchObject({ value: 'male', provenance: 'override', autoCorrected: null })
+    expect(result.department).toMatchObject({ value: 'Uomo', provenance: 'override', autoCorrected: null })
+    setup('women', { target_gender: 'men', department: 'herr' })
+    result = await cells()
+    expect(result.department).toMatchObject({ value: 'herr', provenance: 'override', autoCorrected: null, errors: [] })
+    expect(result.target_gender).toMatchObject({ value: 'men', provenance: 'override', autoCorrected: null })
+    expect(result.target_gender.errors.join(' ')).toMatch(/unaccepted value/)
   })
 })

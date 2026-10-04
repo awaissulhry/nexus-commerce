@@ -12,7 +12,7 @@ import { storedChannelState } from '../channel-value-mutation.js'
 import { isOffListError, validateChannelValue } from './validate-channel-value.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
-import { masterDefaultRule } from './master-default-rule.js'
+import { conceptListMatcher, masterDefaultRule } from './master-default-rule.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
 /**
@@ -48,6 +48,11 @@ import {
 } from '../resolve-channel-field.js'
 import { getFieldCatalogue, type CatalogueField, type FieldCatalogue } from './field-catalogue.service.js'
 import { categoryFieldValue, categoryForListing, channelCategoryField, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
+
+/** Amazon fields whose value is the product family's structure, never a listing value (Item 12, 2026-10-05). */
+export const AMAZON_FAMILY_FACT_KEYS: ReadonlySet<string> = new Set([
+  'parentage_level', 'child_parent_sku_relationship__child_relationship_type', 'child_parent_sku_relationship__parent_sku',
+])
 
 export interface ResolvedCell {
   content?: import('../content-resolver.js').ResolvedContent
@@ -295,6 +300,12 @@ export async function resolveBatch(input: {
   }
 
   const wanted = input.fieldKeys && input.fieldKeys.length > 0 ? new Set(input.fieldKeys) : null
+  // Item 1 (2026-10-05) — each list field's synonym matcher, built once per catalogue field (not per product).
+  const listMatchers = new Map<CatalogueField, ReturnType<typeof conceptListMatcher>>()
+  const listMatcherFor = (field: CatalogueField) => {
+    if (!listMatchers.has(field)) listMatchers.set(field, conceptListMatcher(channel, field))
+    return listMatchers.get(field)!
+  }
 
   const out: ResolvedProduct[] = []
   for (const p of products) {
@@ -353,11 +364,15 @@ export async function resolveBatch(input: {
       if (channel === 'SHOPIFY' && field.schemaKnown === false) continue
       // Historical Master facts remain usable before their keys are added to the family dictionary.
       // Only exact declared semantic matches qualify; an existing operator mapping keeps precedence.
-      const rule: FieldMappingRule | null = rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
+      // Item 12 (2026-10-05) — the Amazon listing role, relationship type and parent SKU are the FAMILY's facts: the cell
+      // shows what publish sends (`shapeAmazonStudioAttributes`), never a typed or stale stored value, and a single
+      // product shows none (nothing is sent). No rule, no content, no stored value reaches them.
+      const familyFact = channel === 'AMAZON' && AMAZON_FAMILY_FACT_KEYS.has(field.fieldKey)
+      const rule: FieldMappingRule | null = familyFact ? null : rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
       }, attrsView.keys))
       const store = field.channelStore
-      let contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      let contentHit = familyFact ? undefined : content[contentField(field.sheetKey ?? field.fieldKey)]
       // P1 (report 3 I-3.3) — a value the LISTING stores in its own channel bag (an eBay item specific, "Stile") is never
       // hidden by language content that only follows the shared text: it is the listing's value, it is what the sheet
       // edits (and resets), and it is what publish sends. A content PIN on this listing still wins.
@@ -389,7 +404,7 @@ export async function resolveBatch(input: {
           }
         }
       }
-      const stored = !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
+      const stored = !familyFact && !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
       const systemValue = channel === 'AMAZON' && field.fieldKey === 'parentage_level'
         ? full.isParent ? 'parent' : full.parentId ? 'child' : undefined
@@ -403,7 +418,7 @@ export async function resolveBatch(input: {
       const familyTheme = channel === 'AMAZON' && field.fieldKey === 'variation_theme' && full.parentId && isBlankValue(stored)
         ? listingByProduct.get(full.parentId)?.variationTheme ?? undefined : undefined
       // The mapped category fills the channel's own category field (one map for every channel).
-      const effectiveStored = familyTheme ?? (isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
+      const effectiveStored = familyFact ? systemValue ?? null : familyTheme ?? (isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
         ? categoryFieldValue(field.kind, categories[p.id]?.channelCategoryId) : stored === undefined ? systemValue : stored)
       // A deliberately cleared override is still an override; it must not revive Master.
       const hasStored = effectiveStored !== undefined
@@ -431,6 +446,11 @@ export async function resolveBatch(input: {
       }
 
       const link = linkForCoordinate(linkGroups, field.fieldKey, channel, marketplace, null, locale)
+      // Item 1 (2026-10-05) — a value-map MISS on a concept-bound list takes the ONE option the value means by the
+      // concept's synonyms (`men` → `male`). The cell shows the code with the autocorrect note ("men" → "male"). A
+      // stored listing value never reaches this: it is the listing's own and is shown and sent as typed (and flagged).
+      const listMatcher = listMatcherFor(field)
+      const synonymMatches: Array<{ from: string; to: string }> = []
       const r: import('../resolve-channel-field.js').ResolvedChannelField = contentHit && (contentHit.tier === 'pin' || !rule)
         ? { content: contentHit.content, fieldKey: field.fieldKey, value: contentHit.value, raw: contentHit.value, source: contentHit.tier === 'pin' && !contentHit.follows ? 'override' : 'catalogRule',
             legacySource: 'source', required: rule?.required === true, language: contentHit.language, requested: locale,
@@ -446,6 +466,11 @@ export async function resolveBatch(input: {
         link,
         transformCtx: {
           lookupValueMap,
+          ...(listMatcher ? { matchListValue: (from: string) => {
+            const to = listMatcher(from)
+            if (to != null) synonymMatches.push({ from, to })
+            return to
+          } } : {}),
           lookupSizeScale,
           maxLength: field.maxLength ?? undefined,
           namedExpression,
@@ -460,7 +485,12 @@ export async function resolveBatch(input: {
       // ("Ventilato, Impermeabile, …", over 65 characters) is its parts, as the publisher sends it.
       const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(normalized)
         ? ebayAspectValues(normalized) : normalized
-      const { value, errors, findings, autoCorrected, overLimit } = validateChannelValue(field, projected)
+      const { value, errors, findings, autoCorrected: spelled, overLimit } = validateChannelValue(field, projected)
+      const one = synonymMatches.length === 1
+      const autoCorrected = spelled ?? (synonymMatches.length ? {
+        from: JSON.stringify(one ? synonymMatches[0].from : synonymMatches.map(m => m.from)),
+        to: JSON.stringify(one ? synonymMatches[0].to : synonymMatches.map(m => m.to)),
+      } : null)
       // A mapping that failed or was skipped: the value that would ship is unknown, so nothing was checked.
       for (const warning of r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning))) {
         errors.push(warning); findings.push(finding('unchecked', warning))

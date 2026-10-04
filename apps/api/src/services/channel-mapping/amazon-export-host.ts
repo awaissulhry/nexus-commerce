@@ -79,7 +79,10 @@ export async function exportAmazonTemplate(request: AmazonExportRequest) {
     const window = windows.get(l.id)
     const sale = num(l.salePrice)
     return {
-      sku: product.sku, sellerSku: sellerSkuOf(l), parentSellerSku: parent ? sellerSkuOf(parent) : product.parent?.sku ?? null, isParent: !product.parentId,
+      // Item 12 (2026-10-05) — the role is the family's: a single product (no parent, not a parent) is neither, so it
+      // exports a blank role and keeps its price (it was written as a "parent" with a blank price).
+      sku: product.sku, sellerSku: sellerSkuOf(l), parentSellerSku: parent ? sellerSkuOf(parent) : product.parent?.sku ?? null,
+      isParent: !product.parentId && !!product.isParent, role: product.parentId ? 'child' as const : product.isParent ? 'parent' as const : 'single' as const,
       productType: String(pa.productType ?? set.formKey.split('+')[0]), asin: l.externalListingId ?? (typeof values.get('merchant_suggested_asin\u0000') === 'string' ? values.get('merchant_suggested_asin\u0000') as string : null),
       values, price: num(l.priceOverride ?? l.price), sale: sale != null && window?.start && window?.end ? { value: sale, start: window.start, end: window.end } : null,
     }

@@ -57,6 +57,22 @@ const fixedLabels: ReferenceLabels = {
   descriptionThemeId: { none: 'No theme' },
 }
 
+/**
+ * Item 7 (product sheet consistency, 2026-10-05) — a name two or more options share is shown with its code, as
+ * Amazon's own template does: Amazon's size list names `numeric_100` and `numeric_height_100` both "100". Display only:
+ * the codes, the allowed values, paste of a code and the server's autocorrect stay as they are (a pasted bare "100"
+ * still matches no single option). An option whose name IS its code keeps it.
+ */
+function qualifySharedLabels(options: readonly string[], names: Record<string, string>): void {
+  const fold = (name: string) => name.trim().toLowerCase()
+  const shown = [...new Set(options)].map(code => ({ code, name: names[code] ?? code }))
+  const counts = new Map<string, number>()
+  for (const { name } of shown) counts.set(fold(name), (counts.get(fold(name)) ?? 0) + 1)
+  for (const { code, name } of shown) {
+    if ((counts.get(fold(name)) ?? 0) > 1 && name !== code) names[code] = `${name} (${code})`
+  }
+}
+
 /** Add display metadata only. IDs, allowed values, validation and row objects stay intact. */
 export function nameReferenceColumns<C extends NamedColumn>(columns: C[], labels: ReferenceLabels): Array<C & Pick<NamedColumn, 'optionLabels'>> {
   return columns.map(column => {
@@ -70,6 +86,7 @@ export function nameReferenceColumns<C extends NamedColumn>(columns: C[], labels
         names[code] = name.split('/').map(part => part.charAt(0) + part.slice(1).toLowerCase().replace(/_/g, ' ')).join(' / ')
       }
     }
+    qualifySharedLabels(column.options ?? [], names)
     return Object.keys(names).length ? { ...column, optionLabels: names } : column
   })
 }

@@ -371,6 +371,25 @@ describe('applyTransforms — FM.3 ops', () => {
     expect(warn.some((m) => m.includes('no value-map context'))).toBe(true)
   })
 
+  // Item 1 (2026-10-05) — on a value-map miss, the field's list matcher (concept synonyms) answers before onMiss.
+  it('valueMap: a row first, then the list matcher on a miss, then onMiss', () => {
+    const ctx = {
+      lookupValueMap: (attr: string, from: string) => (attr === 'gender' && from === 'women' ? 'unisex' : null),
+      matchListValue: (value: string) => (value === 'men' ? 'male' : null),
+    }
+    const valueMap = [{ type: 'valueMap' as const, attribute: 'gender' }]
+    expect(applyTransforms('women', valueMap, w(), ctx).out).toBe('unisex') // the row wins
+    expect(applyTransforms('men', valueMap, w(), ctx).out).toBe('male') // the matcher on a miss
+    expect(applyTransforms('kids', valueMap, w(), ctx).out).toBe('kids') // neither: keep
+    expect(applyTransforms('kids', [{ type: 'valueMap', attribute: 'gender', onMiss: 'null' }], w(), ctx).out).toBeNull()
+    const flagged: string[] = []
+    expect(applyTransforms('men', [{ type: 'valueMap', attribute: 'gender', onMiss: 'flag' }], flagged, ctx).out).toBe('male')
+    expect(flagged).toEqual([]) // a match is not a miss
+    // A list: each member on its own; members without a match stay.
+    expect(applyTransforms(['men', 'kids'], valueMap, w(), ctx).out).toEqual(['male', 'kids'])
+    expect(applyTransforms(['kids'], valueMap, w(), ctx).out).toEqual(['kids'])
+  })
+
   it('sizeScale maps via ctx; no-ops with a warning when no context', () => {
     const ctx = { lookupSizeScale: (scale: string, _f: string, _t: string, v: string) => (scale === 'JACKET' && v === '52' ? 'L' : null) }
     expect(applyTransforms('52', [{ type: 'sizeScale', scale: 'JACKET', from: 'EU', to: 'ALPHA' }], w(), ctx).out).toBe('L')

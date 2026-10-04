@@ -77,3 +77,26 @@ it('a following legacy snapshot cannot conceal an unreviewed German draft', asyn
   const draft = { ...product, translations: [{ language: 'de', name: 'German draft', source: 'ai' as const, reviewedAt: null }] }
   await expect(buildAmazonContentAttributes({ product: draft, listing: { id: 'listing', productId: product.id, channel: 'AMAZON', marketplace: 'DE', title: 'Old listing snapshot', followMasterTitle: true }, marketplace: 'DE', marketplaceId: 'fixture' })).rejects.toThrow('German (de) title')
 })
+
+// Item 9 (product sheet consistency, 2026-10-05) — Amazon takes ONE search-term string per (marketplace, language):
+// `generic_keyword` has maxItems 1 in every cached schema. One entry per Shared keyword was refused.
+it('sends the Shared keywords as ONE generic_keyword entry per market language, joined by spaces as the sheet shows them', async () => {
+  const withKeywords = { ...product, translations: product.translations.map(row => ({ ...row, keywords: [`moto ${row.language}`, ' giacca ', '', 'pelle'] })) }
+  const attributes = await buildAmazonContentAttributes({ product: withKeywords, marketplace: 'BE', marketplaceId: 'fixture' })
+  expect(attributes.generic_keyword).toEqual([
+    { value: 'moto nl giacca pelle', marketplace_id: 'fixture', language_tag: 'nl_BE' },
+    { value: 'moto fr giacca pelle', marketplace_id: 'fixture', language_tag: 'fr_BE' },
+  ])
+  // The legacy outbound patch builds through the same builder.
+  const patch = await buildAmazonListingPatch({ title: 'stale queue snapshot' }, 'DE', 'OUTERWEAR', null, { product: withKeywords })
+  expect(patch.patches.find((p: any) => p.path === '/attributes/generic_keyword').value).toEqual([{ value: 'moto de giacca pelle', marketplace_id: expect.any(String), language_tag: 'de_DE' }])
+})
+
+it('never truncates the search terms: a string over Amazon’s limit is sent whole (the cell and publish flag it)', () => {
+  const long = Array.from({ length: 120 }, (_, i) => `keyword${i}`)
+  const row = { language: 'de', fields: { keywords: { value: long, tier: 'language' as const, language: 'de', requested: 'de', provenance: { member: 'own' as const, from: null } } } }
+  const entries = buildAmazonContentEntries([row], { marketplace: 'DE', marketplaceId: 'fixture' })
+  expect(entries.generic_keyword).toHaveLength(1)
+  expect(entries.generic_keyword[0].value).toBe(long.join(' '))
+  expect(entries.generic_keyword[0].value.length).toBeGreaterThan(500)
+})

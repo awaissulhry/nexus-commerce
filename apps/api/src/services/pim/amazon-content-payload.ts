@@ -1,4 +1,5 @@
 import { translationMissing, type ContentProduct } from './content-resolver.js'
+import { amazonSearchTerms } from './content-read.js'
 import { languageTag } from './market-languages.js'
 import { assertContentReviewed, resolvePublishContent, type PublishContentRow } from './publish-review-gate.js'
 import { CONTENT_MASTER_FIELD } from '../channel-drift/amazon-content-compare.js'
@@ -48,7 +49,9 @@ export function buildAmazonContentEntries(content: readonly PublishContentRow[],
     const tuple = `${key}|${input.marketplaceId}|${language_tag}`
     if (emitted.has(tuple)) continue
     emitted.add(tuple)
-    const values = Array.isArray(resolved.value) ? resolved.value : [resolved.value]
+    // Search terms are ONE string per (marketplace, language): the Shared keywords joined by spaces, as the sheet shows
+    // them (`amazonSearchTerms`). One entry per keyword was refused by Amazon's schema (maxItems 1).
+    const values = key === 'generic_keyword' ? [amazonSearchTerms(resolved.value)] : Array.isArray(resolved.value) ? resolved.value : [resolved.value]
     for (const value of values.filter(value => value !== '' && value != null)) {
       (attributes[key] ??= []).push({ value: String(value), marketplace_id: input.marketplaceId, language_tag })
     }
