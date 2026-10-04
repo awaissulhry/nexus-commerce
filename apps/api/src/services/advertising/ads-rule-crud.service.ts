@@ -252,10 +252,30 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
   if (changed.length) {
     await auditRule(actor, 'update_rule', rule.id, ruleConfig(existing, changed), ruleConfig(rule, changed), `${rule.name}: ${changed.join(', ')}${extra.note ? ` (${extra.note})` : ''}`)
   }
+  /**
+   * 🔴 4e (review 5.3) — an edit cannot leave an AUTO placement rule writing a lane the rank engine holds.
+   *
+   * The level dial refuses AUTO on such a rule (D-PLC-2), but an edit — a wider picker, another lane, a rule switched
+   * back on — never went through the dial. The saved rule is judged by the dial's own check; contested at AUTO, it goes
+   * back to PROPOSE (its changes then wait for a person), with an audit row that says why.
+   */
+  let saved = rule
+  if (['actions', 'conditions', 'enabled', 'dryRun'].some((k) => k in data)) {
+    const { resolveAutonomy } = await import('./ads-autonomy.js')
+    if (resolveAutonomy(rule) === 'AUTO') {
+      const { checkPlacementAutoAllowed } = await import('./ads-placement-autonomy.js')
+      const { producedActionTypes } = await import('./ads-rule-adapter.service.js')
+      const verdict = await checkPlacementAutoAllowed(rule, 'AUTO', producedActionTypes(rule))
+      if (verdict.blocked) {
+        saved = await prisma.automationRule.update({ where: { id }, data: { autonomyLevel: 'PROPOSE', dryRun: true } })
+        await auditRule(actor, 'set_rule_autonomy', id, { level: 'AUTO' }, { level: 'PROPOSE', dryRun: true }, `${rule.name} → PROPOSE after an edit: ${verdict.message}`)
+      }
+    }
+  }
   // BUD-P2 — the picker list changed only if `actions` was sent; re-mirror from the SAVED rule
   // so the column follows an edit that removed campaigns as faithfully as one that added them.
   if (body.actions !== undefined) await mirrorBinding(rule.id, rule.actions, actor, 'patch')
-  return done({ rule })
+  return done({ rule: saved })
 }
 
 /** DELETE /advertising/automation-rules/:id. The run history goes with the rule; its audit row keeps what it was. */

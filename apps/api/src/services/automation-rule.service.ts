@@ -160,6 +160,11 @@ export type ActionHandler = (
      * `alert_operator`) reports whom it would reach and sends nothing.
      */
     preview?: boolean
+    /**
+     * 4e — set by `applySuggestion` when a person approved this exact change. A write a person approved is that person's
+     * write: `placement_apply` then writes a lane the rank engine holds instead of skipping it, as an automated run does.
+     */
+    operatorApproved?: boolean
   },
 ) => Promise<ActionResult>
 

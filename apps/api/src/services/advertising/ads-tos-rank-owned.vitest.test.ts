@@ -24,6 +24,9 @@ vi.mock('../../db.js', () => ({
     amazonAdsPlacementReport: { groupBy: h.placementGroupBy, aggregate: async () => ({ _sum: { costMicros: null } }) }, // 4d lane spend: none measured
     adSchedule: { findMany: h.schedules },
     productRankPlan: { findMany: h.plans },
+    // 4e — contestedLanesByCampaign: no schedule events, no blend targets.
+    rankScheduleEvent: { findMany: async () => [] },
+    rankTarget: { findMany: async () => [] },
   },
 }))
 vi.mock('./ads-create.service.js', () => ({ updatePlacementBidding: h.updatePlacementBidding }))
@@ -38,13 +41,14 @@ import { defendTopOfSearch } from './ads-top-of-search.service.js'
 
 const TOP = 'PLACEMENT_TOP'
 const REST = 'PLACEMENT_REST_OF_SEARCH'
+const PAGES = 'PLACEMENT_PRODUCT_PAGE'
 // c-rank: an enabled goal schedule · c-plan: an enabled product plan's last run · c-free: an enabled schedule that
 // names no target (classic dayparting, not Hourly Bids), so it is NOT held.
 const RANK = 'c-rank', PLAN = 'c-plan', FREE = 'c-free'
 
 type Res = { ok: boolean; error?: string; output?: Record<string, unknown> }
-const run = (type: string, action: Record<string, unknown>, dryRun = false) =>
-  (ACTION_HANDLERS[type] as (a: unknown, c: unknown, m: unknown) => Promise<Res>)({ type, ...action }, {}, { dryRun, ruleId: 'rule-1' })
+const run = (type: string, action: Record<string, unknown>, dryRun = false, operatorApproved = false) =>
+  (ACTION_HANDLERS[type] as (a: unknown, c: unknown, m: unknown) => Promise<Res>)({ type, ...action }, {}, { dryRun, ruleId: 'rule-1', operatorApproved })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -85,15 +89,24 @@ describe('placement_apply — the Top of Search lane of a held campaign is left 
   })
 
   it('still writes a campaign Hourly Bids does not hold (a schedule that names no target does not count)', async () => {
-    const r = await run('placement_apply', { campaignId: FREE, placement: TOP, op: 'set', value: 80 })
+    // A person's approval: isolates 4m's rule from 4e's stricter one (4e treats any enabled schedule as contested
+    // for an automated live run).
+    const r = await run('placement_apply', { campaignId: FREE, placement: TOP, op: 'set', value: 80 }, false, true)
     expect(r).toMatchObject({ ok: true, output: { campaignId: FREE, placement: TOP, percentage: 80 } })
     expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
   })
 
-  it('still writes another lane of a held campaign — only Top of Search is left alone', async () => {
-    const r = await run('placement_apply', { campaignId: RANK, placement: REST, op: 'set', value: 40 })
-    expect(r).toMatchObject({ ok: true, output: { placement: REST, percentage: 40 } })
+  it('still writes a lane the rank engine does not set — Product Pages without a blend', async () => {
+    // Since 4e Rest of Search is contested too on a scheduled campaign (the engine zeros the other search lane).
+    const r = await run('placement_apply', { campaignId: RANK, placement: PAGES, op: 'set', value: 40 })
+    expect(r).toMatchObject({ ok: true, output: { placement: PAGES, percentage: 40 } })
     expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+  })
+
+  it('4e — Rest of Search on a scheduled campaign is left to the rank engine (automated live run)', async () => {
+    const r = await run('placement_apply', { campaignId: RANK, placement: REST, op: 'set', value: 40 })
+    expect(r).toMatchObject({ ok: true, output: { skipped: 'contested_by_rank_engine', placement: REST } })
+    expect(h.updatePlacementBidding).not.toHaveBeenCalled()
   })
 })
 

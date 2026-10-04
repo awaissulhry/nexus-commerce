@@ -1744,6 +1744,21 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   if (!(MANAGED_PLACEMENTS as readonly string[]).includes(placement)) {
     return { type: action.type, ok: false, error: `“${placement}” is not a placement this system manages (Top of Search · Rest of Search · Product Pages), so this rule cannot write it`, output: { campaignId: id, placement } }
   }
+  /**
+   * 🔴 4e (review 5.3) — an automated run does not write a lane the rank engine holds on this campaign.
+   *
+   * The level dial refuses AUTO on a contested rule, but only at the moment the level changes: a schedule enabled later,
+   * a widened picker or a blend added to the hourly plan left an AUTO rule writing a lane the engine puts back within the
+   * hour, every tick. Checked here, live, at write time. A skip, not a failure (the `campaign-not-selected` shape), with
+   * the reason. A change a person approved (`operatorApproved`) is that person's write and goes through.
+   */
+  if (!meta.operatorApproved) {
+    const { contestedLanesByCampaign, contestedLaneSkipReason } = await import('./ads-placement-autonomy.js')
+    const engineLanes = (await contestedLanesByCampaign([id])).get(id) ?? []
+    if (engineLanes.includes(placement)) {
+      return { type: action.type, ok: true, output: { skipped: 'contested_by_rank_engine', campaignId: id, placement, percentage: current, wouldBe: next, reason: contestedLaneSkipReason(placement) } }
+    }
+  }
   // Only a raise can spend more; a cut is never stopped by the spend ceiling.
   if (spend.extraCentsPerDay > 0) {
     const cap = await checkDailySpendCap(meta.ruleId, spend.extraCentsPerDay)
@@ -1789,7 +1804,10 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
     return {
       type: action.type,
       ok: false,
-      error: res.reason ?? `the write gate declined this placement change${res.deniedAt ? ` (${res.deniedAt})` : ''}`,
+      // 4e (review 5.9) — a push Amazon did not take is Amazon's answer, not the gate's: only a refusal (`blocked`) is the gate.
+      error: res.mode !== 'blocked'
+        ? `Amazon did not take this placement change: ${res.error ?? 'no reason given'}. Nexus keeps the new value and marks the campaign as not synced; the failed-write sweep sends it again if the error is temporary.`
+        : res.reason ?? `the write gate declined this placement change${res.deniedAt ? ` (${res.deniedAt})` : ''}`,
       output: { campaignId: id, placement, percentage: next, mode: res.mode, ...(res.deniedAt ? { deniedAt: res.deniedAt } : {}) },
     }
   }

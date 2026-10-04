@@ -1504,7 +1504,7 @@ export interface PlacementRulesStrip {
   engineWrites7d: number
   engineCampaigns7d: number
   engineLastWriteAt: string | null
-  /** Automation writes that came from a RULE (`automation:rule-…`) rather than the rank loop. */
+  /** Automation writes that came from a RULE (`automation:<ruleId>`, or the older `automation:rule-…`) rather than the rank loop. */
   ruleWrites7d: number
   /** Human lane writes in 30 days. Small on purpose — it is the contrast that carries the line. */
   humanWrites30d: number
@@ -1524,7 +1524,7 @@ export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
   const writesSince = new Date(Date.now() - 7 * 864e5)
   const humanSince = new Date(Date.now() - 30 * 864e5)
 
-  const [enabled, schedules, perf, engineRows, humanWrites30d] = await Promise.all([
+  const [enabled, schedules, perf, engineRows, humanWrites30d, rules] = await Promise.all([
     prisma.campaign.findMany({
       where: { status: 'ENABLED' },
       select: { id: true, liveBidWritesEnabled: true },
@@ -1556,7 +1556,10 @@ export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
         changedBy: { startsWith: 'user:' },
       },
     }),
+    // 4e (review 5.1) — the rule ids, so a rule's own actor `automation:<ruleId>` can be told from another engine's.
+    prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { id: true } }),
   ])
+  const ruleActors = new Set(rules.map((r) => `automation:${r.id}`))
 
   const spendIds = new Set(
     perf.filter((p) => p.localEntityId != null && microsToCents(p._sum.costMicros) > 0)
@@ -1575,10 +1578,11 @@ export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
   let lastAt: Date | null = null
   for (const w of engineRows) {
     if (w.campaignId) engineCampaigns.add(w.campaignId)
-    // `placement_apply` writes as `automation:rule-<ruleId>`; the rank loop as
+    // A rule writes as `automation:<ruleId>` (`RULE_ACTOR`; `automation:rule-<ruleId>` before part 06); the rank loop as
     // `automation:rank-defend-<scheduleId>`. Splitting them is the point of the line — "these
-    // lanes moved 7,818 times and no rule did any of it".
-    if (w.changedBy.startsWith('automation:rule-')) ruleWrites7d++
+    // lanes moved 7,818 times and no rule did any of it". 4e (review 5.1) — matched on the exact rule id, never a prefix:
+    // only counting the old `rule-` prefix made the strip say "no rule" whatever the rules did.
+    if (ruleActors.has(w.changedBy) || w.changedBy.startsWith('automation:rule-')) ruleWrites7d++
     if (!lastAt || w.changedAt > lastAt) lastAt = w.changedAt
   }
 

@@ -1056,6 +1056,8 @@ export interface PlacementBiddingResult {
   reason?: string
   /** which gate refused: authority_pin · campaign_allowlist · automation_halted · … */
   deniedAt?: string
+  /** 4e (review 5.9) — Amazon's error when the live push failed (not a refusal: the local copy and history are written). */
+  error?: string
 }
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } })
@@ -1247,7 +1249,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     input.changeSetId ?? null,
   )
   logger.info('[AX2.2] updatePlacementBidding', { campaignId: input.campaignId, adjustments, mode, status: auditStatus })
-  return { ok: auditStatus !== 'FAILED', adjustments, mode }
+  return { ok: auditStatus !== 'FAILED', adjustments, mode, ...(syncStamp?.lastSyncError ? { error: syncStamp.lastSyncError } : {}) }
 }
 
 /**
