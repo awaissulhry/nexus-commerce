@@ -8546,6 +8546,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * ad-rank-defend.job.ts skips plan-governed campaigns in its schedule loop, so a campaign in
    * both is genuinely run by the plan).
    *
+   * 7b (review 3.11) — "covered" counted every schedule row, switched off or not ("45 of 219"), and the total left out
+   * archived campaigns while every other screen counts them (220). Both now come from the census (ads-census.service.ts):
+   * covered = a schedule that is switched on; a switched-off schedule is its own bucket; `total` is every campaign and
+   * `archived` says how many of them nothing can change. The uncovered list itself is unchanged.
+   *
    * Spend comes from AmazonAdsDailyPerformance, not the hourly Marketing Stream table the heatmap
    * draws: AMS is not backfilled and covers a minority of campaigns, so ranking "biggest uncovered
    * spender" off it would quietly hide the campaigns that have been running longest.
@@ -8557,23 +8562,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const market = q.marketplace && q.marketplace !== 'all' ? String(q.marketplace) : null
     reply.header('Cache-Control', 'private, max-age=15')
 
-    const campaigns = await prisma.campaign.findMany({
-      where: { status: { not: 'ARCHIVED' }, ...(market ? { marketplace: market } : {}) },
-      select: { id: true, name: true, externalCampaignId: true, marketplace: true, status: true },
-    })
-    if (!campaigns.length) return { total: 0, covered: 0, governed: 0, uncovered: 0, windowDays: days, uncoveredSpendCents: 0, items: [] }
+    const { campaignCensus, rankCensus } = await import('../services/advertising/ads-census.service.js')
+    const [census, rank, campaigns] = await Promise.all([
+      campaignCensus({ marketplace: market }),
+      rankCensus(),
+      prisma.campaign.findMany({
+        where: { status: { not: 'ARCHIVED' }, ...(market ? { marketplace: market } : {}) },
+        select: { id: true, name: true, externalCampaignId: true, marketplace: true, status: true },
+      }),
+    ])
+    const held = rank.campaigns
+    const count = (ids: Set<string>) => campaigns.filter((c) => ids.has(c.id)).length
+    if (!campaigns.length) return { total: census.total, covered: 0, governed: 0, switchedOff: 0, archived: census.archived, uncovered: 0, windowDays: days, uncoveredSpendCents: 0, items: [] }
 
-    const scheduled = new Set((await prisma.adSchedule.findMany({ select: { campaignId: true } })).map((s) => s.campaignId))
-    const governed = new Set<string>()
-    try {
-      const plans = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { lastSummary: true } })
-      for (const p of plans) {
-        const decs = (p.lastSummary as { decisions?: Array<{ campaignId?: string }> } | null)?.decisions
-        for (const d of decs ?? []) if (d?.campaignId) governed.add(d.campaignId)
-      }
-    } catch { /* best-effort */ }
-
-    const open = campaigns.filter((c) => !scheduled.has(c.id) && !governed.has(c.id))
+    const open = campaigns.filter((c) => !held.bySchedule.has(c.id) && !held.byPlan.has(c.id) && !held.switchedOff.has(c.id))
 
     // Spend per uncovered campaign. Rows key on either the local FK or the external id, matching
     // how the heatmap resolves the same ambiguity.
@@ -8618,9 +8620,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       .sort((a, b) => b.spendCents - a.spendCents || a.name.localeCompare(b.name))
 
     return {
-      total: campaigns.length,
-      covered: campaigns.filter((c) => scheduled.has(c.id)).length,
-      governed: campaigns.filter((c) => !scheduled.has(c.id) && governed.has(c.id)).length,
+      total: census.total,
+      covered: count(held.bySchedule),
+      governed: count(held.byPlan),
+      switchedOff: count(held.switchedOff),
+      archived: census.archived,
       uncovered: open.length,
       windowDays: days,
       marketplace: market,

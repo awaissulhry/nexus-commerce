@@ -118,11 +118,10 @@ function underDial(rows: AutomationRow[], dial: AdsDial, effect: DialEffect, non
 }
 
 async function allowlistScope(): Promise<string> {
-  const [managed, total] = await Promise.all([
-    prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
-    prisma.campaign.count(),
-  ])
-  return `May write to ${managed} of ${total} campaigns (the live-write allowlist).`
+  // 7b — the census every screen counts campaigns from (ads-census.service.ts).
+  const { campaignCensus } = await import('./ads-census.service.js')
+  const { allowlisted, total } = await campaignCensus()
+  return `May write to ${allowlisted} of ${total} campaigns (the live-write allowlist).`
 }
 
 
@@ -231,7 +230,7 @@ const A1: AutomationAdapter = {
     const { listAdsRuleBoard } = await import('./ads-rule-list.service.js')
     const board = await listAdsRuleBoard()
     return board.items.map((r) => ({
-      id: r.id, name: r.name, level: r.level as AutomationLevel, ceiling: r.ceiling, trigger: r.trigger, writes: r.writes,
+      id: r.id, name: r.name, level: r.level as AutomationLevel, runsAs: r.runsAs, runsAsReason: r.runsAsReason, ceiling: r.ceiling, trigger: r.trigger, writes: r.writes,
       reach: r.reach, scope: r.scope, caps: r.caps, week: r.week, lastEvaluatedAt: r.lastEvaluatedAt, lastExecutedAt: r.lastExecutedAt,
     }))
   },
@@ -613,15 +612,14 @@ const A10: AutomationAdapter = {
   env: () => amazonAds(flagOn('NEXUS_ENABLE_RANK_DEFEND', isOne('NEXUS_ENABLE_RANK_DEFEND'), 'OFF',
     'NEXUS_ENABLE_RANK_DEFEND is not 1 — the hourly bid plans do not run.', 'The hourly bid plans run.')),
   async rows() {
-    const { isGoalMode } = await import('../../jobs/ad-rank-defend.job.js')
-    const [schedules, plans] = await Promise.all([
-      prisma.adSchedule.findMany({ select: { id: true, name: true, enabled: true, campaignId: true, windows: true, defaultTargetKey: true, lastEvaluatedAt: true }, orderBy: { name: 'asc' } }),
-      prisma.productRankPlan.findMany({ select: { id: true, productId: true, marketplace: true, enabled: true, manualOnly: true, pausedAt: true, maxCampaigns: true, familyDailyBudgetCents: true, familyAcosCapPct: true, lastEvaluatedAt: true }, orderBy: { marketplace: 'asc' } }),
-    ])
+    // 7b — the same read as the coverage strip's campaign counts (ads-census.service.ts), so "33 of 47 switched on" and
+    // "N of 220 campaigns under rank control" come from one place.
+    const { rankCensus } = await import('./ads-census.service.js')
+    const { schedules, plans } = await rankCensus()
     return [
-      ...schedules.filter((s) => isGoalMode(s.windows, s.defaultTargetKey)).map((s) => ({ id: s.id, name: `Schedule ${s.name}`, level: on(s.enabled), kind: 'schedule', campaignId: s.campaignId, lastEvaluatedAt: iso(s.lastEvaluatedAt) })),
+      ...schedules.map((s) => ({ id: s.id, name: `Schedule ${s.name}`, level: on(s.enabled), kind: 'schedule', campaignId: s.campaignId, lastEvaluatedAt: iso(s.lastEvaluatedAt) })),
       ...plans.map((p) => ({
-        id: p.id, name: `Plan ${p.marketplace} · product ${p.productId}`, level: on(p.enabled && !p.manualOnly && !p.pausedAt), kind: 'plan',
+        id: p.id, name: `Plan ${p.marketplace} · product ${p.productId}`, level: on(p.on), kind: 'plan',
         manualOnly: p.manualOnly, pausedAt: iso(p.pausedAt), caps: { maxCampaigns: p.maxCampaigns, familyDailyBudgetCents: p.familyDailyBudgetCents, familyAcosCapPct: p.familyAcosCapPct }, lastEvaluatedAt: iso(p.lastEvaluatedAt),
       })),
     ]

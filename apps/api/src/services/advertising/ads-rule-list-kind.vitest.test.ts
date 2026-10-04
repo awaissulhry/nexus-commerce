@@ -14,6 +14,8 @@ vi.mock('../../db.js', () => ({
     automationRule: { findMany: vi.fn(async () => h.rules) },
     adKeywordProtection: { count: vi.fn(async () => 0) },
     automationRuleExecution: { groupBy: vi.fn(async () => []) },
+    // 7b — the capped chip reads the refusal record.
+    automationRefusalDaily: { findMany: vi.fn(async () => []) },
   },
 }))
 vi.mock('./ads-rule-reach.service.js', () => ({ reachForRules: vi.fn(async () => new Map()) }))
