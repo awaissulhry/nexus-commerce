@@ -18,6 +18,7 @@ import { evaluateRule, type EvaluateRuleResult } from '../automation-rule.servic
 import type { AdsActor } from './ads-mutation.service.js'
 import { done, isRefused, refused, type ServiceOutcome } from '../automation/service-outcome.js'
 import { invalidValuesBody, readRuleCaps, ruleValueProblems } from './ads-rule-values.js'
+import { adProductLabel, adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
 
 /** The triggers the advertising evaluator emits. A rule on any other trigger would never run. */
 export const ADS_RULE_TRIGGERS: ReadonlySet<string> = new Set([
@@ -74,14 +75,70 @@ async function auditRule(actor: AdsActor, actionType: string, ruleId: string, be
   }).catch((error: unknown) => logger.warn('[ADS-RULE-AUDIT] audit row not written', { ruleId, actionType, error: String(error) }))
 }
 
-/** BUD-P2 — mirror a builder BUDGET rule's picker list into `CampaignRuleAssignment`. Never fatal. */
-async function mirrorBinding(ruleId: string, actions: unknown, actor: AdsActor, when: 'create' | 'patch'): Promise<void> {
+/** BUD-P2 — mirror a builder BUDGET rule's picker list into `CampaignRuleAssignment` (4c: its market's picks only). Never fatal. */
+async function mirrorBinding(ruleId: string, actions: unknown, scopeMarketplace: string | null, actor: AdsActor, when: 'create' | 'patch'): Promise<void> {
   try {
     const { syncRuleCampaignBinding } = await import('./rule-campaign-binding.service.js')
-    await syncRuleCampaignBinding(ruleId, actions as never, actor)
+    await syncRuleCampaignBinding(ruleId, actions as never, actor, scopeMarketplace)
   } catch (e) {
     logger.error(`[ADS-RULE-BINDING] ${when} mirror failed`, { ruleId, error: String(e) })
   }
+}
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
+/** "30 in IT, 25 in FR" — most first. */
+const tally = (labels: string[], say: (label: string) => string) => {
+  const counts = new Map<string, number>()
+  for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + 1)
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([l, n]) => `${n} ${say(l)}`).join(', ')
+}
+
+/**
+ * 🔴 4c (review 4.8, 4.10) — a scope the rule can never fire in is refused at save, with a sentence that says how to
+ * fix it. Three ways:
+ *   · picks outside the rule's market. The tick matches market AND picks (`ruleMatchesScope`), so a DE rule's IT pick
+ *     is never evaluated — yet the mirror bound it and Apply Rules showed the DE rule on IT, FR and ES campaigns (L7);
+ *   · a market no active Amazon Ads connection serves — asked of the write gate's own resolver (`adsProfileFor`);
+ *   · a pick on a Placement rule that is not Sponsored Products: placement adjustments exist only there.
+ * Campaign ids that no longer exist are not counted; the mirror skips them as before. Empty when all is well.
+ *
+ * The callers ask only when a save sends `actions` or `scopeMarketplace`, so a toggle or rename is never refused, and
+ * nothing here touches a stored rule: it keeps running exactly as stored until it is saved with a scope that can fire.
+ */
+async function ruleScopeProblems(rule: { actions?: unknown; scopeMarketplace?: string | null }): Promise<string[]> {
+  const out: string[] = []
+  const market = typeof rule.scopeMarketplace === 'string' && rule.scopeMarketplace.trim() ? rule.scopeMarketplace : null
+  if (market) {
+    const { adsProfileFor } = await import('./ads-profile-resolver.js')
+    if (!(await adsProfileFor(market))) {
+      out.push(`Nexus has no active Amazon Ads connection for ${market}, so a rule there can never run. Choose a market Nexus is connected to, or All markets.`)
+    }
+  }
+  const { builderScopeCampaignIds } = await import('./ads-rule-adapter.service.js')
+  const ids = [...new Set(builderScopeCampaignIds(rule.actions) ?? [])]
+  const placement = Array.isArray(rule.actions) && (rule.actions[0] as { type?: unknown } | undefined)?.type === 'placement'
+  if (ids.length === 0 || (!market && !placement)) return out
+  const picks = await prisma.campaign.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, marketplace: true, adProduct: true, type: true },
+  })
+  if (market) {
+    const outside = picks.filter((c) => c.marketplace !== market)
+    const n = outside.length
+    if (n) {
+      const where = tally(outside.map((c) => c.marketplace ?? ''), (m) => (m ? `in ${m}` : 'with no market'))
+      out.push(`This rule runs in ${market} only, but ${n} of its ${ids.length} picked campaigns ${plural(n, 'is in another market', 'are in other markets')} (${where}), so it can never change ${plural(n, 'it', 'them')}. Remove the ${plural(n, 'pick', `${n} picks`)} outside ${market}.`)
+    }
+  }
+  if (placement) {
+    const notSp = picks.filter((c) => { const p = adProductOf(c); return p != null && p !== SPONSORED_PRODUCTS })
+    const n = notSp.length
+    if (n) {
+      const what = tally(notSp.map((c) => adProductLabel(adProductOf(c)) ?? ''), (label) => label)
+      out.push(`Placement adjustments exist on Sponsored Products campaigns only, but ${n} of this rule's picked campaigns ${plural(n, 'is not one', 'are not')} (${what}), so it can never change ${plural(n, 'it', 'them')}. Remove ${plural(n, 'that pick', `those ${n} picks`)}.`)
+    }
+  }
+  return out
 }
 
 const untranslatableBody = (metrics: string[], full: boolean) => ({
@@ -140,6 +197,9 @@ export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, e
     if (bad.length) return refused(400, untranslatableBody(bad, true))
   }
   if (!ADS_RULE_TRIGGERS.has(body.trigger)) return refused(400, { error: `unknown trigger: ${body.trigger}` })
+  // 4c — a scope it can never fire in (picks outside its market, a market with no connection, non-SP placement picks).
+  const scopeProblems = await ruleScopeProblems(body)
+  if (scopeProblems.length) return refused(400, invalidValuesBody(scopeProblems))
   const rule = await prisma.automationRule.create({
     data: {
       name: body.name,
@@ -168,7 +228,7 @@ export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, e
   // Apply Rules Budget-Rule column shows what this rule actually governs. Never fatal: the rule
   // is saved and the engine reads the rule's own list, so a failed mirror leaves the COLUMN
   // stale, not the rule broken.
-  await mirrorBinding(rule.id, body.actions, actor, 'create')
+  await mirrorBinding(rule.id, body.actions, rule.scopeMarketplace, actor, 'create')
   return done({ rule })
 }
 
@@ -209,6 +269,15 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
       conditions: body.conditions ?? (existing.conditions as object[]),
     })
     if (bad.length) return refused(400, untranslatableBody(bad, true))
+  }
+  // 4c — as the create, on the MERGED scope, and only when the edit sends one half of it: a toggle, a rename or a cap
+  // change never runs into it, so a stored rule whose picks cross markets can still be switched off.
+  if (body.actions !== undefined || body.scopeMarketplace !== undefined) {
+    const scopeProblems = await ruleScopeProblems({
+      actions: body.actions ?? existing.actions,
+      scopeMarketplace: body.scopeMarketplace !== undefined ? body.scopeMarketplace : existing.scopeMarketplace,
+    })
+    if (scopeProblems.length) return refused(400, invalidValuesBody(scopeProblems))
   }
   const data: Record<string, unknown> = {}
   if (body.name !== undefined) data.name = body.name
@@ -274,7 +343,7 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
   }
   // BUD-P2 — the picker list changed only if `actions` was sent; re-mirror from the SAVED rule
   // so the column follows an edit that removed campaigns as faithfully as one that added them.
-  if (body.actions !== undefined) await mirrorBinding(rule.id, rule.actions, actor, 'patch')
+  if (body.actions !== undefined) await mirrorBinding(rule.id, rule.actions, rule.scopeMarketplace, actor, 'patch')
   return done({ rule: saved })
 }
 
