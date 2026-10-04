@@ -18,7 +18,7 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
@@ -54,8 +54,6 @@ interface AdMutationPayload {
   fieldChanges: Array<{ field: string; oldValue: string | null; newValue: string | null }>
   actor: string
   reason: string | null
-  /** ADX G1 — deliberate suppression/restore. Exempts the write from the MIN bid bound. */
-  force?: boolean
 }
 
 /**
@@ -382,9 +380,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // on single-field payloads and silently miss the combined one.
     fields: payload.fieldChanges.map((c) => c.field),
     intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : intendedBudgetCents,
-    // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a min bound
-    // must not block it.
-    isSuppression: payload.force === true,
+    // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a halt, a min bound
+    // or a bids pin must not block it. 2.2 — `force` is read off the queue row's JSON, its
+    // only record (the typed `payload` above has no such field, so this was always false),
+    // and counts only when every value in the write goes down: restores and base-bid deltas
+    // are forced too, and those can raise bids.
+    isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges),
   })
   if (gate.allowed === false) {
     logGateDeny(

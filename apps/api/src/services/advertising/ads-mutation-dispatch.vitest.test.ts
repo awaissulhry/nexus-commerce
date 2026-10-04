@@ -7,7 +7,7 @@
  * These tests pin the two places they could drift apart.
  */
 import { describe, it, expect } from 'vitest'
-import { dedupeFieldChanges } from './ads-mutation.service.js'
+import { dedupeFieldChanges, isSuppressionWrite } from './ads-mutation.service.js'
 
 type FieldChange = { field: string; oldValue: string | null; newValue: string | null }
 
@@ -84,5 +84,55 @@ describe('dedupeFieldChanges', () => {
       { field: 'b', oldValue: null, newValue: '2' },
     ]
     expect(dedupeFieldChanges(changes)).toEqual(changes)
+  })
+})
+
+/**
+ * 2.2 — the gate exempts a suppression from the halt, the min bid bound and the bids pin.
+ * `force` is set by suppressions AND by restores / base-bid deltas, which raise bids, so
+ * only a forced write whose every value goes down may be called a suppression.
+ */
+describe('isSuppressionWrite — forced AND lowering-only', () => {
+  const ch = (field: string, oldValue: string | null, newValue: string | null): FieldChange => ({ field, oldValue, newValue })
+
+  it('a forced floor is a suppression: night floor 35→2¢, an ad-group default, a refloor down', () => {
+    expect(isSuppressionWrite(true, [ch('bid', '35', '2')])).toBe(true)
+    expect(isSuppressionWrite(true, [ch('defaultBid', '80', '2')])).toBe(true)
+    expect(isSuppressionWrite(true, [ch('bid', '5', '3')])).toBe(true)
+  })
+
+  it('without force nothing is a suppression, however far it lowers', () => {
+    expect(isSuppressionWrite(false, [ch('bid', '35', '2')])).toBe(false)
+  })
+
+  it('a forced RAISE is not — the morning restore 2→35¢ and a +% base-bid delta', () => {
+    expect(isSuppressionWrite(true, [ch('bid', '2', '35')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('defaultBid', '40', '48')])).toBe(false)
+  })
+
+  it('an unchanged value is not — a forced re-sync may still move Amazon up', () => {
+    expect(isSuppressionWrite(true, [ch('bid', '2', '2')])).toBe(false)
+  })
+
+  it('an unknown old or new value is not (fail closed)', () => {
+    expect(isSuppressionWrite(true, [ch('bid', null, '2')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('bid', '', '2')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('bid', 'abc', '2')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('bid', '35', null)])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('bid', '35', '')])).toBe(false)
+  })
+
+  it('one rising value spoils the write, and so does a field without a direction', () => {
+    expect(isSuppressionWrite(true, [ch('defaultBid', '40', '2'), ch('dailyBudget', '10', '12')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('bid', '40', '2'), ch('status', 'ENABLED', 'PAUSED')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('status', 'ENABLED', 'PAUSED')])).toBe(false)
+    expect(isSuppressionWrite(true, [ch('dailyBudget', '10', '5'), ch('dailyBudgetCurrency', 'EUR', 'GBP')])).toBe(false)
+  })
+
+  it('a lowered budget or placement % counts; an empty write does not', () => {
+    expect(isSuppressionWrite(true, [ch('dailyBudget', '10.00', '1.00')])).toBe(true)
+    expect(isSuppressionWrite(true, [ch('PLACEMENT_TOP', '50', '0')])).toBe(true)
+    expect(isSuppressionWrite(true, [ch('defaultBid', '40', '2'), ch('dailyBudget', '10', '5')])).toBe(true)
+    expect(isSuppressionWrite(true, [])).toBe(false)
   })
 })

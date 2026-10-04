@@ -197,6 +197,10 @@ interface EnqueueArgs {
    *
    * The gate skips only the MINIMUM on a forced write. The maximum still binds — a
    * "suppression" that raises a bid is not a suppression.
+   *
+   * 2.2 — `force` alone does not make a write a suppression at the gate: restores and
+   * base-bid deltas set it too, and those raise bids. The worker reads it back off the
+   * queue row and the gate is told "suppression" only when `isSuppressionWrite` agrees.
    */
   force?: boolean
 }
@@ -240,7 +244,8 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         actor: args.actor,
         reason: args.reason,
         // ADX G1 — the worker hands this to the write gate so a deliberate
-        // suppression is not blocked by Campaign.minBidCents.
+        // suppression is not blocked by Campaign.minBidCents. 2.2 — the ONLY record
+        // of it: the typed rows have no column for it, so the worker reads it here.
         ...(args.force ? { force: true } : {}),
       } as object,
       holdUntil,
@@ -364,6 +369,46 @@ export async function dispatchPayloadFromMutations(
     // Recording it per field would duplicate it N times to no purpose.
     reason: null,
   }
+}
+
+/**
+ * The fields whose value is money going out — a bid, a budget, a placement % — so that a
+ * LOWER value always means less spend. Everything else (status, name, currency, strategy)
+ * has no direction, and a write carrying one is never a suppression.
+ */
+const SPEND_FIELDS = new Set([
+  'bid', 'defaultBid', 'dailyBudget', 'PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH',
+])
+
+/**
+ * 2.2 — may the write gate treat this queued write as a suppression?
+ *
+ * The gate exempts a suppression from the account halt (and autonomy OFF), the minimum bid
+ * bound and the bids authority pin, so the night floor (35→2¢), the retail guard and
+ * stop-over-spend still land while automation is stopped.
+ *
+ * `force` is necessary but NOT sufficient. It means "skip the 5¢ floor and the change clamp"
+ * in the mutation layer, and restoreCampaignBids, applyBaseBidDelta and revertBaseBidDelta set
+ * it too — writes that can RAISE bids. Handing `force` to the gate as-is would let raises
+ * pass a halt. So: force AND every field in the write is a spend field whose new value is
+ * strictly below its old one. A raise, an unchanged value (a forced re-sync), an unknown old
+ * or new value, or any field without a direction makes it NOT a suppression — fail closed.
+ * Owner decision S1: while stopped, only value-lowering writes pass; a restore is refused.
+ */
+export function isSuppressionWrite(force: boolean, fieldChanges: FieldChange[]): boolean {
+  if (!force || !fieldChanges?.length) return false
+  // String() because a pre-ZD.1 JSON payload is untyped; '' is unknown, not zero.
+  const num = (v: string | null): number | null => {
+    const s = v == null ? '' : String(v).trim()
+    const n = s === '' ? NaN : Number(s)
+    return Number.isFinite(n) ? n : null
+  }
+  return fieldChanges.every((c) => {
+    if (!SPEND_FIELDS.has(c.field)) return false
+    const from = num(c.oldValue)
+    const to = num(c.newValue)
+    return from != null && to != null && to < from
+  })
 }
 
 /**
