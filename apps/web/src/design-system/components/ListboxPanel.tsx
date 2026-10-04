@@ -57,8 +57,13 @@ const CLEAR_INDEX = -2
  * A panel option may be HELD: reachable and announced, never committed (Step 4.3 #2). The scope menu
  * uses it for a channel the operator cannot open yet — the same rule as a held ScopeBar chip, whose
  * refusal must stay readable. `disabled` would take it out of the keyboard's reach instead.
+ *
+ * `note` (sheet publish parity, 2026-10-04): one short line UNDER the label — who set a waiting value
+ * and when, a warning, or why a held option is refused — visible to the eye on focus as well as on
+ * hover (a `title` is hover-only). Read as the option's description, not its name, so the name stays
+ * the word the operator types to find it; a note equal to `heldReason` is read once.
  */
-export type ListboxPanelOption = ListboxOption & { heldReason?: string }
+export type ListboxPanelOption = ListboxOption & { heldReason?: string; note?: string }
 
 export interface ListboxPanelProps {
   options: ListboxPanelOption[]
@@ -205,6 +210,12 @@ export function ListboxPanel({
   const active = controlled ? activeIndex : ownActive ?? (q && ownsSearch ? bestMatch : selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
   activeRef.current = active
   const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
+  const noteOf = (o: ListboxOption) => (o as ListboxPanelOption).note?.trim() || undefined
+  const descriptionOf = (o: ListboxOption) => {
+    const held = heldReason(o)
+    const note = noteOf(o)
+    return held && note && held !== note ? `${held} ${note}` : held ?? note
+  }
 
   // An external query changes the list under the cursor; an active index into the old list is a
   // highlight on the wrong row. A CONTROLLED owner resets its own index — doing it here as well
@@ -274,20 +285,27 @@ export function ListboxPanel({
     if (autoFocus && !ownsSearch) hostRef.current?.focus()
   }, [autoFocus, ownsSearch])
 
-  const renderOption = (o: ListboxOption, i: number) => (
-    <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-      id={idPrefix ? `${idPrefix}-o${i}` : undefined} tabIndex={optionTabIndex}
-      className={[o.value === value ? 'on' : '', (filtering || controlled) && i === active ? 'active' : '', heldReason(o) ? 'held' : ''].filter(Boolean).join(' ') || undefined}
-      title={heldReason(o) ?? o.title ?? o.label}
-      aria-disabled={heldReason(o) ? true : undefined}
-      aria-description={heldReason(o)}
-      // Tab (or a click) onto an option makes it the one Enter commits. A controlled owner keeps its index.
-      onFocus={controlled ? undefined : () => { if (activeRef.current !== i) moveActive(() => i) }}
-      onClick={() => { if (!heldReason(o)) onCommit(o.value) }}>
-      {o.leading != null && <span className="nds-listbox-lead">{o.leading}</span>}
-      {o.trailing != null ? <><span className="nds-listbox-label">{o.label}</span><span className="nds-listbox-trailing">{o.trailing}</span></> : o.label}
-    </button>
-  )
+  const renderOption = (o: ListboxOption, i: number) => {
+    const note = noteOf(o)
+    // With a note the label and the note stack in one text column; the note is the description (`aria-hidden` here).
+    const text = note
+      ? <span className="nds-listbox-text"><span className="nds-listbox-name">{o.label}</span><span className="nds-listbox-note" aria-hidden="true">{note}</span></span>
+      : o.label
+    return (
+      <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
+        id={idPrefix ? `${idPrefix}-o${i}` : undefined} tabIndex={optionTabIndex}
+        className={[o.value === value ? 'on' : '', (filtering || controlled) && i === active ? 'active' : '', heldReason(o) ? 'held' : '', note ? 'has-note' : ''].filter(Boolean).join(' ') || undefined}
+        title={heldReason(o) ?? o.title ?? o.label}
+        aria-disabled={heldReason(o) ? true : undefined}
+        aria-description={descriptionOf(o)}
+        // Tab (or a click) onto an option makes it the one Enter commits. A controlled owner keeps its index.
+        onFocus={controlled ? undefined : () => { if (activeRef.current !== i) moveActive(() => i) }}
+        onClick={() => { if (!heldReason(o)) onCommit(o.value) }}>
+        {o.leading != null && <span className="nds-listbox-lead">{o.leading}</span>}
+        {o.trailing != null ? <><span className="nds-listbox-label">{text}</span><span className="nds-listbox-trailing">{o.trailing}</span></> : text}
+      </button>
+    )
+  }
 
   return (
     <div

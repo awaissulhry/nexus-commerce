@@ -1,17 +1,21 @@
 /**
- * MCP full control L9 — close-listing and reopen-listing, run through the one door (call-tool.ts) on
- * `listing-close.service.ts` and the doors it calls (SCT.6 offer close, the Matrix door, the Etsy state writer), against a
- * real PostgreSQL with the production schema and business-isolation policies (PGlite). Amazon's API, eBay's out-of-stock
- * option and Etsy's writer are faked: no channel is called.
+ * MCP full control L9, build shape v2 (P3) — close-listing and reopen-listing are Pause offer / Resume offer of the
+ * listing-action engine, run through the one door (call-tool.ts) on `listing-close.service.ts` → listing-action.service.ts
+ * and its adapters (SCT.6 offer close, the eBay Trading pause, the Etsy state writer), against a real PostgreSQL with the
+ * production schema and business-isolation policies (PGlite). Amazon's API, eBay's Trading calls and Etsy's writer are
+ * faked: no channel is called.
  *
- * Proven here: Amazon closes and reopens one market's offer, never FBA; eBay hides at 0 only with the out-of-stock option
- * ON and follows the stock again on reopen; Etsy goes inactive only while Etsy publishing is live; Shopify and a draft are
- * refused; the record stays, the presence columns say who and why; close and reopen are each other's undo.
+ * Proven here: the wrappers call the engine (its preview, run, hold and audit record) and no longer write `endedAt` on a
+ * pause; a resume clears an `endedAt` an older close wrote; Amazon pauses and resumes one market's offer, FBA too (its
+ * quantity untouched, no stock queued on resume); eBay pauses only with the item's out-of-stock control on (checked when
+ * sending) and resume lifts the hold and sends the current stock; Etsy only while Etsy publishing is live; Shopify is
+ * supported now; a draft and two coordinates are refused; pause and resume are each other's undo.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
+import { AMAZON_FBA_PAUSE_WARNING } from '@nexus/shared/listing-actions'
 
-const state = vi.hoisted(() => ({ db: null as any, option: vi.fn(), getListing: vi.fn(), patch: vi.fn(), etsyState: vi.fn() }))
+const state = vi.hoisted(() => ({ db: null as any, option: vi.fn(), getListing: vi.fn(), patch: vi.fn(), etsyState: vi.fn(), trading: vi.fn(), activated: vi.fn() }))
 vi.mock('@nexus/database', async (original) => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -25,6 +29,14 @@ vi.mock('../../channel-delist.service.js', async (original) => ({ ...(await orig
 vi.mock('../../../clients/amazon-sp-api.client.js', async (original) => ({ ...(await original<object>()), amazonSpApiClient: { getListingsItem: state.getListing, patchPurchasableOffer: state.patch } }))
 vi.mock('../../../lib/amazon-sp-client.js', async (original) => ({ ...(await original<object>()), getAmazonSellerId: async () => 'TEST-SELLER' }))
 vi.mock('../../etsy/listing-write.service.js', async (original) => ({ ...(await original<object>()), setEtsyListingState: state.etsyState }))
+vi.mock('../../amazon-publish-gate.service.js', async (original) => ({ ...(await original<object>()), getAmazonPublishMode: () => 'live' }))
+vi.mock('../../ebay-publish-gate.service.js', async (original) => ({ ...(await original<object>()), getEbayPublishMode: () => 'live' }))
+vi.mock('../../shopify-publish-gate.service.js', async (original) => ({ ...(await original<object>()), getShopifyPublishMode: () => 'live' }))
+vi.mock('../../ebay-trading-api.service.js', async (original) => ({ ...(await original<object>()), callTradingApi: state.trading }))
+vi.mock('../../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'token' } }))
+vi.mock('../../connection-resolver.service.js', async (original) => ({ ...(await original<object>()),
+  tryResolveConnection: async ({ accountId }: { accountId: string }) => ({ id: accountId, channelType: 'EBAY' }) }))
+vi.mock('../../listing-activation-sync.service.js', () => ({ syncActivatedListings: state.activated }))
 
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { MARKETPLACE_ID_MAP } from '../../amazon/flat-file.service.js'
@@ -42,7 +54,7 @@ const claude = person('u-l9-asker')
 const approver = person('u-l9-approver')
 type Json = Record<string, any>
 const db = () => state.db.client
-const row = async (id: string) => (await state.db.db.query(`SELECT "offerClosedAt", "offerClosedBy", "listingStatus", quantity, "quantityOverride", "followMasterQuantity", "endedBy", "endedReason" FROM "ChannelListing" WHERE id = $1`, [id])).rows[0]
+const row = async (id: string) => (await state.db.db.query(`SELECT "offerClosedAt", "offerClosedBy", "offerCloseReason", "listingStatus", quantity, "quantityOverride", "followMasterQuantity", "endedAt", "endedBy", "endedReason" FROM "ChannelListing" WHERE id = $1`, [id])).rows[0]
 
 const dryRun = async (tool: string, args: Json) => (await inside(() => callTool(claude, tool, args))).raw as Json
 async function approveAndRun(tool: string, args: Json) {
@@ -51,6 +63,9 @@ async function approveAndRun(tool: string, args: Json) {
   const ran = (await inside(() => executeTool(approver, tool, args, { approvedPreview: JSON.parse(JSON.stringify(preview.preview)), via: 'claude' }))).raw as Json
   return { preview: preview.preview as Json, ran }
 }
+
+const ITEM = '110000000001'
+const getItem = (oos: 'true' | 'false') => ({ ack: 'Success', itemId: ITEM, raw: `<Item><ItemID>${ITEM}</ItemID><Quantity>4</Quantity><SellingStatus><QuantitySold>0</QuantitySold><ListingStatus>Active</ListingStatus></SellingStatus><OutOfStockControl>${oos}</OutOfStockControl></Item>` })
 
 const ids: Record<string, string> = {}
 beforeAll(async () => {
@@ -69,8 +84,8 @@ beforeAll(async () => {
       channelMarket: `${channel}_${marketplace}`, region: marketplace, channelConnectionId: accounts[channel], price: 10, quantity: 4, followMasterQuantity: true,
       listingStatus: 'ACTIVE', isPublished: true, externalListingId: `TEST-L9-${channel}-${productId.slice(-4)}`, ...extra } as never })
     ids.amazon = (await listing(ids.child, 'AMAZON', 'IT', { fulfillmentMethod: 'FBM' })).id
-    ids.amazonFba = (await listing(ids.fba, 'AMAZON', 'IT', { fulfillmentMethod: 'FBA' })).id
-    ids.ebay = (await listing(ids.child, 'EBAY', 'IT')).id
+    ids.amazonFba = (await listing(ids.fba, 'AMAZON', 'IT', { fulfillmentMethod: 'FBA', followMasterQuantity: false, quantity: 9 })).id
+    ids.ebay = (await listing(ids.child, 'EBAY', 'IT', { externalListingId: ITEM })).id
     ids.etsy = (await listing(ids.child, 'ETSY', 'GLOBAL', { externalListingId: '123456789' })).id
     ids.shopify = (await listing(ids.child, 'SHOPIFY', 'GLOBAL')).id
     ids.draft = (await listing(ids.parent, 'EBAY', 'IT', { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, aliasKey: '' , channelConnectionId: null })).id
@@ -79,67 +94,104 @@ beforeAll(async () => {
 afterAll(async () => { await state.db?.close() }, 60_000)
 beforeEach(() => {
   vi.unstubAllEnvs()
+  vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
   state.option.mockReset(); state.option.mockResolvedValue('UNKNOWN')
   state.getListing.mockResolvedValue({ success: true, rawResponse: { summaries: [{ productType: 'COAT' }], attributes: {
     purchasable_offer: [{ marketplace_id: MARKETPLACE_ID_MAP.IT, currency: 'EUR', our_price: [{ schedule: [{ value_with_tax: 10 }] }] }],
     fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 4 }] } } })
   state.patch.mockReset(); state.patch.mockResolvedValue({ success: true })
   state.etsyState.mockReset(); state.etsyState.mockResolvedValue({ sent: true, state: 'inactive' })
+  state.trading.mockReset(); state.activated.mockReset()
 })
 
 describe('Amazon', () => {
-  it('closes one market\'s offer as approved, records who and why; reopen is its undo and reopens from the snapshot', async () => {
+  it('pauses one market\'s offer through the engine as approved, never writes endedAt; resume is its undo and clears an older endedAt', async () => {
+    expect(getTool('close-listing')!.title).toBe('Pause offer')
+    expect(getTool('reopen-listing')!.title).toBe('Resume offer')
     const { preview, ran } = await approveAndRun('close-listing', { listingIds: [ids.amazon], reason: 'Out of season' })
-    expect(preview).toMatchObject({ how: expect.stringContaining('offer of this market is closed'), listings: [{ listingId: ids.amazon, does: 'amazon-offer' }] })
+    expect(preview).toMatchObject({ how: expect.stringContaining('this market\'s offer is removed'), listings: [{ listingId: ids.amazon, does: 'amazon-offer' }] })
     expect(ran.ok, ran.error).toBe(true)
     expect(state.patch).toHaveBeenCalledWith(expect.objectContaining({ sellerId: 'TEST-SELLER', sku: 'TEST-SKU-L9-M', marketplaceId: MARKETPLACE_ID_MAP.IT, op: 'delete' }))
-    expect(await row(ids.amazon)).toMatchObject({ offerClosedBy: 'u-l9-approver', endedBy: 'u-l9-approver', endedReason: 'Out of season' })
+    expect(await row(ids.amazon)).toMatchObject({ offerClosedBy: 'u-l9-approver', offerCloseReason: 'sheet-pause', endedAt: null, endedBy: null, endedReason: null })
     expect((await row(ids.amazon)).offerClosedAt).not.toBeNull()
+    // The engine's own audit record, with the reason Claude gave.
+    expect(await inside(() => db().channelListingSnapshot.findFirst({ where: { channelListingId: ids.amazon, reason: 'pause' } })))
+      .toMatchObject({ outcome: 'ACCEPTED', payload: expect.objectContaining({ kind: 'listing-action', reason: 'Out of season' }) })
     const tool = getTool('close-listing')!
     expect(await inside(() => tool.undo!.current(ran.change))).toEqual(ran.change.after)
     const undo = tool.undo!.request(ran.change) as Json
     expect(undo).toEqual({ tool: 'reopen-listing', args: { listingIds: [ids.amazon] } })
+    // An older close wrote the presence columns; a resume clears them.
+    await state.db.db.query(`UPDATE "ChannelListing" SET "endedAt" = now(), "endedBy" = 'old-close', "endedReason" = 'old' WHERE id = $1`, [ids.amazon])
     const reopened = await approveAndRun('reopen-listing', undo.args)
     expect(reopened.ran.ok, reopened.ran.error).toBe(true)
     expect(state.patch).toHaveBeenLastCalledWith(expect.objectContaining({ op: 'replace' }))
-    expect(await row(ids.amazon)).toMatchObject({ offerClosedAt: null, endedBy: null, endedReason: null })
+    expect(await row(ids.amazon)).toMatchObject({ offerClosedAt: null, endedAt: null, endedBy: null, endedReason: null })
   })
 
-  it('never closes FBA, a draft, a Shopify listing, or two coordinates at once', async () => {
-    expect((await dryRun('close-listing', { listingIds: [ids.amazonFba] })).error).toContain('fulfilled by Amazon (FBA)')
+  it('pauses an FBA offer too (with the warning) and resumes it without sending any quantity', async () => {
+    const { preview, ran } = await approveAndRun('close-listing', { listingIds: [ids.amazonFba] })
+    expect(preview.listings).toEqual([expect.objectContaining({ listingId: ids.amazonFba, does: 'amazon-offer', note: expect.stringContaining(AMAZON_FBA_PAUSE_WARNING) })])
+    expect(ran.ok, ran.error).toBe(true)
+    expect(state.patch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ sku: 'TEST-SKU-L9-L', op: 'delete' }))
+    expect((await row(ids.amazonFba)).offerClosedAt).not.toBeNull()
+    const reopened = await approveAndRun('reopen-listing', { listingIds: [ids.amazonFba] })
+    expect(reopened.ran.ok, reopened.ran.error).toBe(true)
+    expect(state.patch).toHaveBeenLastCalledWith(expect.objectContaining({ sku: 'TEST-SKU-L9-L', op: 'replace' }))
+    // FBA quantity is untouchable: no Set Follow, no pin change, nothing queued.
+    expect(await row(ids.amazonFba)).toMatchObject({ offerClosedAt: null, followMasterQuantity: false, quantity: 9, quantityOverride: null })
+    expect(await inside(() => db().outboundSyncQueue.count({ where: { channelListingId: ids.amazonFba, syncType: 'QUANTITY_UPDATE' } }))).toBe(0)
+  })
+
+  it('never pauses a draft or two coordinates at once; a reopen takes no quantity', async () => {
     expect((await dryRun('close-listing', { listingIds: [ids.draft] })).error).toContain('a draft was never live')
-    expect((await dryRun('close-listing', { listingIds: [ids.shopify] })).error).toContain('Shopify listing from Nexus is not available yet')
-    state.option.mockResolvedValue('ON')
     expect((await dryRun('close-listing', { listingIds: [ids.amazon, ids.ebay] })).error).toContain('more than one channel')
+    expect((await dryRun('reopen-listing', { listingIds: [ids.amazon], quantity: 3 })).error).toContain('use set-listing-stock')
     expect(state.patch).not.toHaveBeenCalled()
   })
 })
 
 describe('eBay', () => {
-  it('hides at 0 only while the out-of-stock option is ON; reopen follows the stock again', async () => {
-    state.option.mockResolvedValue('OFF')
-    expect((await dryRun('close-listing', { listingIds: [ids.ebay] })).error).toContain('out-of-stock option is OFF')
-    state.option.mockResolvedValue('ON')
+  it('pauses at 0 only while the item\'s out-of-stock control is on (checked when sending), holds it; resume lifts the hold and sends the stock', async () => {
+    state.trading.mockImplementation(async (call: string) => call === 'GetItem' ? getItem('false') : { ack: 'Success', itemId: ITEM, raw: '' })
+    const off = await approveAndRun('close-listing', { listingIds: [ids.ebay] })
+    expect(off.preview).toMatchObject({ listings: [{ listingId: ids.ebay, does: 'ebay-quantity' }], checkedWhenSending: expect.stringContaining('out-of-stock control') })
+    expect(off.ran).toMatchObject({ ok: false, error: expect.stringMatching(/Nothing paused/) })
+    expect(state.trading.mock.calls.map((c) => c[0])).toEqual(['GetItem'])
+    expect(await row(ids.ebay)).toMatchObject({ offerClosedAt: null })
+
+    state.trading.mockReset().mockImplementation(async (call: string) => call === 'GetItem' ? getItem('true') : { ack: 'Success', itemId: ITEM, raw: '' })
     const { ran } = await approveAndRun('close-listing', { listingIds: [ids.ebay] })
     expect(ran.ok, ran.error).toBe(true)
-    expect(await row(ids.ebay)).toMatchObject({ quantity: 0, followMasterQuantity: false })
+    expect(state.trading.mock.calls.map((c) => c[0])).toEqual(['GetItem', 'ReviseInventoryStatus'])
+    expect(await row(ids.ebay)).toMatchObject({ offerCloseReason: 'sheet-pause', followMasterQuantity: true, quantityOverride: null, endedAt: null })
     const reopened = await approveAndRun('reopen-listing', { listingIds: [ids.ebay] })
     expect(reopened.ran.ok, reopened.ran.error).toBe(true)
-    expect(await row(ids.ebay)).toMatchObject({ followMasterQuantity: true })
+    expect(await row(ids.ebay)).toMatchObject({ offerClosedAt: null, followMasterQuantity: true })
+    expect(state.activated).toHaveBeenCalledWith([ids.ebay])
   })
 })
 
 describe('Etsy', () => {
-  it('only while Etsy publishing is live: then inactive, and active again with the renewal stated', async () => {
+  it('only while Etsy publishing is live: then inactive and held, and active again with the renewal stated', async () => {
     expect((await dryRun('close-listing', { listingIds: [ids.etsy] })).error).toContain('Etsy publishing is turned off')
     vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', 'true'); vi.stubEnv('ETSY_PUBLISH_MODE', 'live')
     const { ran } = await approveAndRun('close-listing', { listingIds: [ids.etsy] })
     expect(ran.ok, ran.error).toBe(true)
     expect(state.etsyState).toHaveBeenCalledWith(expect.objectContaining({ listingId: '123456789', change: { state: 'inactive' } }))
-    expect(await row(ids.etsy)).toMatchObject({ listingStatus: 'INACTIVE' })
+    expect(await row(ids.etsy)).toMatchObject({ listingStatus: 'INACTIVE', offerCloseReason: 'sheet-pause', endedAt: null })
     const reopen = await approveAndRun('reopen-listing', { listingIds: [ids.etsy] })
     expect(reopen.preview.how).toContain('renewal')
+    expect(reopen.ran.ok, reopen.ran.error).toBe(true)
     expect(state.etsyState).toHaveBeenLastCalledWith(expect.objectContaining({ change: { state: 'active', acceptRenewalAndQuantityReset: true } }))
-    expect(await row(ids.etsy)).toMatchObject({ listingStatus: 'ACTIVE' })
+    expect(await row(ids.etsy)).toMatchObject({ listingStatus: 'ACTIVE', offerClosedAt: null })
+  })
+})
+
+describe('Shopify', () => {
+  it('is supported now: a pause plans quantity 0 per variant through the engine', async () => {
+    const preview = await dryRun('close-listing', { listingIds: [ids.shopify] })
+    expect(preview.ok, preview.error).toBe(true)
+    expect(preview.preview).toMatchObject({ how: expect.stringContaining('quantity 0 per variant'), listings: [{ listingId: ids.shopify, does: 'shopify-quantity' }] })
   })
 })

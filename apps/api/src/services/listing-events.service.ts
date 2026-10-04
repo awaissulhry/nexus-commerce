@@ -78,6 +78,9 @@ export type ListingEvent =
       terminal: boolean
       ts: number
     }
+  // Build shape v2 (2026-10-04) — a row's waiting Status or Action value changed (`publish-action.service.ts`). Open
+  // sheets of the family refetch their values; nothing was sent. Mirrors the catalogue's listing.publish_action_changed.
+  | { type: 'listing.publish_action_changed'; productId: string; listingIds: string[]; column: 'send' | 'status'; value: string | null; ts: number }
   // EV.3 — raised by the API on every stock movement and fanned out here, so
   // an open grid's stock column can move for a change made anywhere. Payload
   // mirrors the catalogue's inventory.stock_changed.
@@ -133,7 +136,7 @@ const LISTING_BUS_TYPES_LIST = [
   'shopify.schema.changed',
   'listing.synced', 'listing.syncing', 'listing.updated', 'listing.created', 'listing.deleted', 'listing.values_changed',
   'wizard.submitted', 'product.updated', 'product.created', 'product.deleted', 'product.media.changed',
-  'bulk.progress', 'bulk.completed', 'inventory.stock_changed', 'publication.status_changed',
+  'bulk.progress', 'bulk.completed', 'inventory.stock_changed', 'publication.status_changed', 'listing.publish_action_changed',
 ] as const satisfies readonly EventType[]
 
 const bus = createCrossReplicaBus<ListingEvent>({

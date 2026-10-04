@@ -1080,6 +1080,11 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   const { coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coverage } = columnSet
   // P1 — widened below by the eBay item specifics the family stores outside its category (a copy: the set is cached).
   let columns = columnSet.columns, columnGroups = columnSet.groups
+  // Sheet publish parity, build shape v2 (Owner 2026-10-04) — the Nexus product status (`Product.status`) is the Products
+  // list's "Catalog status", not a selling state, so the Shared scope no longer shows it: every channel scope has its own
+  // Status column (Active / Inactive / Ended, sent by Publish). The field registry, the master-field gate, the Products
+  // list's bulk edit and the workbook import and export keep it.
+  if (!wantChannel) columns = columns.filter((c) => !(c.key === 'status' && c.storage === 'column'))
   const locale = normalizeLanguage(input.locale ?? marketLocale)
 
   let coordinate: SheetCoordinate | null = null

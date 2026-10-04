@@ -5,8 +5,15 @@
  * review allows (ready, nothing to send, problems, expired…), what the one counted button says, and whether a send
  * takes today's single-destination path or the background batch (`POST /api/publication-batches`). Each destination
  * keeps its OWN review, change plan and ticks; nothing here merges them.
+ *
+ * One-click publish (Owner 2026-10-04, OD1/OD4 A): the window starts with every market where the family is listed
+ * (`listedDestinationKeys`), reviews them one at a time per account (`ReviewQueue`, the sheet's market first), and
+ * builds each market's exact request by itself (`requestsDue`); a market whose request cannot be built is skipped with
+ * its reason, the others are sent.
  */
 import { blockingIssues, isPhotoChangeId, type PublicationBatchChild, type PublicationBatchView, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { PublishActionCell } from '@nexus/shared/publish-actions'
+import type { PublishPlanDestination } from '@nexus/shared/publish-plan'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import type { Tone } from '@/design-system/primitives/tone'
@@ -28,10 +35,30 @@ export interface DestinationEntry {
   locationId: string
   /** The review whose overwrite warning the person confirmed (Shopify). */
   confirmedReviewId: string | null
+  /**
+   * Build shape v2 (P10) — this destination's part of the Publish plan (`POST …/studio-publication/plan`): its content
+   * review (`review` above is the same object), the waiting Status changes and Deletes, held rows and outgrown values.
+   * Null until the plan is read.
+   */
+  plan: PublishPlanDestination | null
+  /** The family SKU the typed confirmation asks for (the plan's `familySku`). */
+  familySku: string | null
+  /** The viewer may end and delete listings (the plan's `canDelete`). */
+  canDelete: boolean
+  /** The ticked lifecycle row ids of this destination (the plan's own ids, sent back as given). */
+  lifecycleIds: string[]
+  /**
+   * One-click publish (OD4 A): the exact request for the ticked fields could not be built — the server's words. The
+   * market is skipped with this reason until its ticks change or the person tries again; the others are sent.
+   */
+  selectionError: string | null
+  /** When the ticks last changed (ms), 0 as the review gave them: a rebuild of the exact request waits a short pause after it. */
+  ticksAt: number
 }
 
 export const EMPTY_ENTRY: DestinationEntry = Object.freeze({
   review: null, loading: false, error: null, selectedIds: [], selection: null, selecting: false, locationId: '', confirmedReviewId: null,
+  plan: null, familySku: null, canDelete: true, lifecycleIds: [], selectionError: null, ticksAt: 0,
 }) as DestinationEntry
 
 /** Amazon and eBay send only the ticked fields; the other channels send the whole product. */
@@ -43,7 +70,8 @@ export type DestinationState =
   | { kind: 'error'; message: string }
   /** An earlier publish to this destination has no answer yet; the server refuses a new one until it has. */
   | { kind: 'earlier'; publicationId: string }
-  | { kind: 'blocked'; problems: number; reason: string | null }
+  /** `request`: the exact request could not be built (OD4 A) — the market is skipped, the reason says why. */
+  | { kind: 'blocked'; problems: number; reason: string | null; request?: true }
   | { kind: 'expired' }
   | { kind: 'nothing'; reason: 'none' | 'unticked' }
   | { kind: 'input'; needs: 'location' | 'overwrite' }
@@ -67,6 +95,9 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
   if (entry.loading) return { kind: 'checking' }
   if (entry.error) return { kind: 'error', message: entry.error }
   const review = entry.review
+  // A plan without a content review: every row's content is held here (only status changes go out), or the content
+  // review could not be made (the plan says why; its status changes can still be sent).
+  if (!review && entry.plan) return entry.plan.error ? { kind: 'error', message: entry.plan.error } : { kind: 'nothing', reason: 'none' }
   if (!review) return ticked ? { kind: 'checking' } : { kind: 'not_checked' }
   if (review.previousPublicationId) return { kind: 'earlier', publicationId: review.previousPublicationId }
   const blockers = blockingIssues(review.issues, review.photosOnly ? entry.selectedIds : undefined)
@@ -77,7 +108,9 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
     if (!review.changes) return { kind: 'blocked', problems: 0, reason: 'The review did not list the fields to send. Check again.' }
     const ticks = tickedChanges(entry)
     if (!ticks.length) return { kind: 'nothing', reason: review.changes.some(c => c.selectable) ? 'unticked' : 'none' }
-    return { kind: 'ready', changes: ticks.length, whole: false, requestReady: matchesPublicationSelection(entry.selection, review, ticks) }
+    const requestReady = matchesPublicationSelection(entry.selection, review, ticks)
+    if (!requestReady && entry.selectionError) return { kind: 'blocked', problems: 0, reason: requestSkipReason(entry.selectionError), request: true }
+    return { kind: 'ready', changes: ticks.length, whole: false, requestReady }
   }
   if (review.locations && !review.locations.some(l => l.id === entry.locationId)) return { kind: 'input', needs: 'location' }
   if (!publicationOverwriteAcknowledged(review, entry.confirmedReviewId)) return { kind: 'input', needs: 'overwrite' }
@@ -86,6 +119,12 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
+/** OD4 A — why a market is skipped when its exact request could not be built: the server's words, and what happens. */
+export function requestSkipReason(message: string): string {
+  const said = message.trim().replace(/\s*(Review the selection again|Check again)\.?\s*$/i, '')
+  return `Skipped: the exact request could not be built.${said ? ` ${/[.!?]$/.test(said) ? said : `${said}.`}` : ''}`
+}
+
 /** The words in the destination list's Review column. */
 export function destinationStateLabel(state: DestinationState): { label: string; tone: Tone; hint: string } {
   switch (state.kind) {
@@ -93,7 +132,9 @@ export function destinationStateLabel(state: DestinationState): { label: string;
     case 'checking': return { label: 'Checking…', tone: 'info', hint: 'Reading the saved values and the channel.' }
     case 'error': return { label: 'Could not check', tone: 'danger', hint: state.message }
     case 'earlier': return { label: 'Earlier publish waiting', tone: 'warning', hint: 'An earlier publish to this destination has no answer yet. It is not sent again until that publish has a result.' }
-    case 'blocked': return state.problems
+    case 'blocked': return state.request
+      ? { label: 'Skipped', tone: 'warning', hint: state.reason ?? requestSkipReason('') }
+      : state.problems
       ? { label: `Fix ${plural(state.problems, 'problem', 'problems')} first`, tone: 'warning', hint: 'Open the review to see the problems. This destination is skipped until they are fixed.' }
       : { label: 'Cannot be sent', tone: 'warning', hint: state.reason ?? 'Open the review to see why.' }
     case 'expired': return { label: 'Review expired', tone: 'warning', hint: 'Reviews last 15 minutes. Check again to compare the current values.' }
@@ -105,7 +146,7 @@ export function destinationStateLabel(state: DestinationState): { label: string;
       : { label: 'Confirm the overwrite', tone: 'warning', hint: 'Open the review and confirm that this publish can overwrite channel values.' }
     case 'ready': return state.whole
       ? { label: 'Ready', tone: 'info', hint: 'The whole product will be sent.' }
-      : { label: state.requestReady ? 'Request ready' : 'Ready', tone: 'info', hint: state.requestReady ? 'The exact request is prepared.' : 'Review the selected changes to prepare the exact request.' }
+      : { label: 'Ready', tone: 'info', hint: state.requestReady ? 'The exact request is prepared.' : 'Preparing the exact request…' }
   }
 }
 
@@ -170,8 +211,130 @@ export function publishButtonText(plan: PublishPlan, scopeOf: (key: string) => S
   return `Publish ${what || 'the review'} to ${plural(plan.send.length, word.one, word.many)}${skip}`
 }
 
-/** "Review 2 requests" — prepares the exact request of every ticked Amazon or eBay destination. */
-export const reviewRequestsText = (n: number) => `Review ${plural(n, 'request', 'requests')}`
+// ── One-click publish (Owner 2026-10-04) ─────────────────────────────────────────────────────────────────────────────
+
+/** A rebuild of a market's exact request waits this long after its last tick change (the pause restarts with each change). */
+export const REQUEST_PAUSE_MS = 600
+
+/**
+ * The markets whose exact request (`…/selection`, no channel call) is to be built, and when: an Amazon or eBay market
+ * that is ready, whose request is not built for its current ticks, is not being built (one request at a time per
+ * market — the server refuses overlaps) and did not just fail for these ticks. At once (`at` 0) when the review just
+ * arrived; `pauseMs` after the last tick change otherwise.
+ */
+export function requestsDue(keys: readonly string[], stateOf: (key: string) => DestinationState, entryOf: (key: string) => DestinationEntry,
+  pauseMs: number = REQUEST_PAUSE_MS): Array<{ key: string; at: number }> {
+  return keys.flatMap(key => {
+    const state = stateOf(key), entry = entryOf(key)
+    if (state.kind !== 'ready' || state.whole || state.requestReady || entry.selecting || entry.selectionError) return []
+    return [{ key, at: entry.ticksAt ? entry.ticksAt + pauseMs : 0 }]
+  })
+}
+
+/** A request is still to come for this market (due, or being built): a click on Publish waits for it. */
+export function requestOutstanding(state: DestinationState, entry: Pick<DestinationEntry, 'selecting' | 'selectionError'>): boolean {
+  return entry.selecting || (state.kind === 'ready' && !state.whole && !state.requestReady && !entry.selectionError)
+}
+
+/**
+ * The chosen markets still being checked: the review is not in yet, or its FIRST exact request is still being built. A
+ * rebuild after a tick change is not counted — the button stays ready and a click waits for it.
+ */
+export function checkingProgress(keys: readonly string[], stateOf: (key: string) => DestinationState, entryOf: (key: string) => DestinationEntry):
+  { checking: number; done: number; total: number } {
+  let checking = 0
+  for (const key of keys) {
+    const state = stateOf(key), entry = entryOf(key)
+    if (state.kind === 'checking' || state.kind === 'not_checked' || (!entry.ticksAt && requestOutstanding(state, entry))) checking++
+  }
+  return { checking, done: keys.length - checking, total: keys.length }
+}
+
+/** The button while markets are checked: "Checking 3 of 7 markets…" (the one being checked now), or "Checking…" for one. */
+export function checkingButtonText(progress: { done: number; total: number }): string {
+  if (progress.total <= 1) return 'Checking…'
+  return `Checking ${Math.min(progress.done + 1, progress.total)} of ${progress.total} markets…`
+}
+
+/** One review queue per account: the channel and the account (two Amazon reviews at once were throttled by Amazon). */
+export const accountGroup = (scope: Pick<StudioPublishScope, 'channel' | 'accountId'>) => `${scope.channel}|${scope.accountId}`
+
+/**
+ * The order the chosen markets ask for their review: the sheet's own market first, then the tab the person opened,
+ * then the rest in the market list's order.
+ */
+export function reviewOrder(keys: readonly string[], first: string | null, shown: string | null): string[] {
+  const head = [first, shown].filter((key): key is string => !!key && keys.includes(key))
+  return [...new Set([...head, ...keys])]
+}
+
+/**
+ * One review at a time per account. Each account has its own turn; when a review ends, the next turn goes to the
+ * market the person is looking at (`preferred`), else to the next in line. Every `acquire` is paired with one `release`.
+ */
+export class ReviewQueue {
+  private readonly groups = new Map<string, { busy: number; waiting: Array<{ key: string; go(): void }> }>()
+  constructor(private readonly preferred: () => string | null = () => null, private readonly perGroup = 1) {}
+
+  acquire(group: string, key: string): Promise<void> {
+    const g = this.groups.get(group) ?? { busy: 0, waiting: [] }
+    this.groups.set(group, g)
+    if (g.busy < this.perGroup) { g.busy++; return Promise.resolve() }
+    return new Promise(resolve => g.waiting.push({ key, go: () => { g.busy++; resolve() } }))
+  }
+
+  release(group: string): void {
+    const g = this.groups.get(group)
+    if (!g) return
+    g.busy = Math.max(0, g.busy - 1)
+    if (!g.waiting.length || g.busy >= this.perGroup) return
+    const want = this.preferred()
+    const [next] = g.waiting.splice(Math.max(0, g.waiting.findIndex(w => w.key === want)), 1)
+    next.go()
+  }
+
+  /** The markets waiting for this account's turn, in line (tests). */
+  waiting(group: string): string[] { return this.groups.get(group)?.waiting.map(w => w.key) ?? [] }
+}
+
+/**
+ * OD1 A — where the family counts as listed: the market's key (channel, market, account; no listing) when the family's
+ * main listing there is Active or Inactive (Mixed: its variations differ), or when a row not on the channel yet was set
+ * Active or Inactive by a person (the new-listings choice). A draft nobody chose for does not count (OD1 B was not
+ * chosen). Read from `GET /api/products/:id/studio/publish-actions` with no filter (every listing of the family).
+ */
+export interface ListedDestinations {
+  keys: ReadonlySet<string>
+  /** Still reading: the window starts with the sheet's market and adds the others when they arrive. */
+  loading: boolean
+  /** The read failed: only the sheet's market is chosen, and the window says so. */
+  failed?: boolean
+}
+
+const LISTED_STATES: ReadonlySet<string> = new Set(['active', 'paused', 'mixed'])
+
+/** A destination's key without its listing: what `listedDestinationKeys` holds. */
+export const marketKey = (scope: Pick<StudioPublishScope, 'channel' | 'marketplace' | 'accountId'>) =>
+  publicationScopeKey({ channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId })
+
+export function listedDestinationKeys(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'>>,
+  familyId: string): Set<string> {
+  const byMarket = new Map<string, Array<(typeof cells)[number]>>()
+  for (const cell of cells) {
+    // The window publishes each market's primary listing; a second listing on a market is chosen from its own sheet.
+    if (cell.aliasKey) continue
+    const key = marketKey(cell)
+    byMarket.set(key, [...(byMarket.get(key) ?? []), cell])
+  }
+  const out = new Set<string>()
+  for (const [key, rows] of byMarket) {
+    const main = rows.filter(row => row.productId === familyId)
+    const live = (main.length ? main : rows).some(row => LISTED_STATES.has(row.state))
+    const chosen = rows.some(row => row.create?.source === 'own' && row.create.target !== 'not_listed')
+    if (live || chosen) out.add(key)
+  }
+  return out
+}
 
 /**
  * Every market of one channel on one account, for "Select all Amazon markets (11)". A business with two accounts on a

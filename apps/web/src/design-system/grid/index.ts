@@ -99,6 +99,8 @@ export {
   stockColumn, lockedColumn, holdColumn, actionsColumn, type GridSelectionOptions, type ActionsColumnOptions,
 } from './columns/presets'
 export * from './editors'
+// Sheet publish parity (2026-10-04) — the select editor's option: a ListboxOption that may be held (with its reason) and carry a note.
+export type { SelectPanelOption } from './editors/SelectPanelEditor'
 export * from './toolbars'
 export * from './hosts'
 // AG.1-e — CSV. `gridCsv` is the FORMAT (RFC 4180, UTF-8 BOM, dated file name); `exportGrid` is

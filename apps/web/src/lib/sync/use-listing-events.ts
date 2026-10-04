@@ -37,6 +37,9 @@
 //   listing.values_changed → invalidation 'listing.values_changed' (Amazon sheet gaps — the sheet and the Matrix
 //                       stay in step; payload in meta)
 //   inventory.stock_changed → invalidation 'inventory.stock_changed' (narrow: NOT 'stock.adjusted')
+//   listing.publish_action_changed → invalidation 'listing.updated' with meta.subtype 'listing.publish_action_changed'
+//                       (build shape v2, P8 — a waiting Status or Action value changed; other open sheets of the
+//                       family read their Status and Action columns again. Nothing was sent to a channel.)
 //   ping             → no-op (just confirms liveness)
 
 'use client'
@@ -153,6 +156,16 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
               marketplace: parsed.marketplace, accountId: parsed.accountId, aliasKey: parsed.aliasKey, status: parsed.status,
               terminal: parsed.terminal, batchId: parsed.batchId },
           })
+        } else if (parsed.type === 'listing.publish_action_changed') {
+          // Build shape v2, P8 — a waiting Status or Action value changed (nothing was sent). It IS a listing change, so it
+          // rides 'listing.updated'; the sheet's `usePublishActions` matches the subtype and the family (`productId` is
+          // the family's main product).
+          emitInvalidation({
+            type: 'listing.updated',
+            id: parsed.productId,
+            meta: { source: 'sse', subtype: parsed.type, productId: parsed.productId, listingIds: parsed.listingIds,
+              column: parsed.column, value: parsed.value },
+          })
         } else if (parsed.type === 'product.created') {
           emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.deleted') {
@@ -186,6 +199,7 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'product.deleted',
       'product.media.changed',
       'publication.status_changed',
+      'listing.publish_action_changed',
       'ping',
     ]
     for (const t of namedTypes) source.addEventListener(t, handle as EventListener)

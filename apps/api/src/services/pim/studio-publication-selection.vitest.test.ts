@@ -1,8 +1,8 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StudioPublishChange } from '@nexus/shared/studio-publication'
 
 const m = vi.hoisted(() => ({ facts: vi.fn(), baseline: vi.fn(), prepare: vi.fn(), compile: vi.fn(), send: vi.fn(), records: vi.fn(),
-  beforeUpdate: vi.fn(), rows: new Map<string, any>(), remoteRevision: 'remote-1', compilerVersion: 'compiler-1', mode: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn() }))
+  beforeUpdate: vi.fn(), rows: new Map<string, any>(), remoteRevision: 'remote-1', compilerVersion: 'compiler-1', mode: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), inventory: vi.fn(() => false), ebayPrepare: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, entry) =>
@@ -23,7 +23,7 @@ vi.mock('./studio-publication-amazon.js', () => ({
   sendAmazonPublication: m.send, readAmazonPublication: vi.fn(async () => null),
 }))
 vi.mock('./studio-publication-amazon-changes.js', () => ({ prepareAmazonChanges: m.prepare, compileAmazonChanges: m.compile }))
-vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: vi.fn(), sendEbayPublication: vi.fn(), readEbayPublication: vi.fn(),
+vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: m.ebayPrepare, sendEbayPublication: vi.fn(), readEbayPublication: vi.fn(), usesEbayInventory: (facts: unknown) => m.inventory(facts),
   ebayPublicationRequest: (plan: any) => ({ operation: 'ReviseFixedPriceItem', xml: plan.xml }) }))
 vi.mock('./studio-publication-ebay-changes.js', () => ({ prepareEbayChanges: vi.fn(), compileEbayChanges: vi.fn() }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: async () => ({ initialized: true }), saveContentWorkspace: vi.fn() }))
@@ -55,6 +55,8 @@ vi.mock('../../db.js', () => {
 
 import * as publication from './studio-publication.service.js'
 import { selectPublicationChanges } from './studio-publication-changes.js'
+import { blockRowChanges } from './studio-publication-selection.js'
+import { FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
 
 const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' }
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: '' }, account: { displayName: 'Account' }, parent: { id: 'parent' },
@@ -224,4 +226,80 @@ it('blocks existing remote Shopify products even if Nexus has no external listin
   expect(review.id).toBeNull()
   expect(review.issues.some(issue => issue.severity === 'error' && /change.only|field|existing/i.test(issue.message))).toBe(true)
   expect(m.shopSend).not.toHaveBeenCalled()
+})
+
+// Build shape v2 P4 — the rows reviewed as Full update are the caller's list (P6 passes the stored Action values), kept
+// with the review so its submit rebuilds the same plan. Everything else stays Partial, exactly as before.
+describe('Full update rows', () => {
+  const live = () => ({ ...facts(), listings: [{ productId: 'parent', externalListingId: 'ASIN-P' }, { productId: 'child', externalListingId: 'ASIN-C' }] })
+  const removal = { productId: 'child', sku: 'SELLER-CHILD', field: 'fabric_type', label: 'Fabric', value: [{ value: 'Old' }] }
+  beforeEach(() => {
+    m.inventory.mockReturnValue(false)
+    m.facts.mockImplementation(async () => live())
+    m.prepare.mockImplementation(async (_facts, prepared, _baseline, options) => ({ kind: 'amazon-changes', changes: changes(), remoteRevision: m.remoteRevision, publication: prepared,
+      products: [], ...(options?.fullProductIds?.size ? { removals: [removal] } : {}) }))
+  })
+
+  it('reviews only the asked rows on the channel as Full, says each row\'s mode, lists the removals and keeps the list with the review', async () => {
+    const review = await publication.previewStudioPublication('parent', scope, 'owner', { fullProductIds: ['child', 'ghost', 'child'] })
+    expect(m.prepare.mock.calls[0][3]).toEqual({ fullProductIds: new Set(['child']) })
+    expect(review.rows.map(row => [row.productId, row.mode, row.blocked])).toEqual([['parent', 'partial', undefined], ['child', 'full', undefined]])
+    expect(review.removals).toEqual([removal])
+    expect(m.rows.get(review.id!).changes.fullProductIds).toEqual(['child', 'ghost'])
+    // The submit rebuilds the review with the same Full rows: the same plan, so the same revision.
+    const selection = await select(review.id!)
+    m.prepare.mockClear()
+    expect(await publication.submitStudioPublication('parent', review.id!, { selectionToken: selection.token }, 'owner')).toMatchObject({ status: 'SUBMITTED' })
+    expect(m.prepare.mock.calls[0][3]).toEqual({ fullProductIds: new Set(['child']) })
+  })
+
+  it('with no Full rows the review is today\'s: Partial rows, no stored list, no removals', async () => {
+    const review = await preview()
+    expect(m.prepare.mock.calls[0][3]).toEqual({})
+    expect(review.rows.map(row => row.mode)).toEqual(['partial', 'partial'])
+    expect(review.removals).toBeUndefined()
+    expect(m.rows.get(review.id!).changes).not.toHaveProperty('fullProductIds')
+  })
+
+  it('a row not on the channel yet is created whole: asked as Full, it is reviewed as Partial (the create)', async () => {
+    m.facts.mockImplementation(async () => ({ ...facts(), listings: [{ productId: 'parent', externalListingId: 'ASIN-P' }, { productId: 'child', externalListingId: null }] }))
+    const review = await publication.previewStudioPublication('parent', scope, 'owner', { fullProductIds: ['child'] })
+    expect(m.prepare.mock.calls[0][3]).toEqual({})
+    expect(review.rows.find(row => row.productId === 'child')?.mode).toBe('partial')
+  })
+
+  it('a Full row Amazon refuses (another product type) blocks the review by name', async () => {
+    m.prepare.mockImplementation(async (_facts, prepared) => ({ kind: 'amazon-changes', changes: changes(), remoteRevision: 'remote-1', publication: prepared, products: [],
+      fullIssues: [{ productId: 'child', sku: 'SELLER-CHILD', severity: 'error', message: 'SELLER-CHILD: Product type differs on Amazon — use Delete, then Publish.' }] }))
+    const review = await publication.previewStudioPublication('parent', scope, 'owner', { fullProductIds: ['child'] })
+    expect(review.id).toBeNull()
+    expect(review.issues).toContainEqual(expect.objectContaining({ severity: 'error', message: 'SELLER-CHILD: Product type differs on Amazon — use Delete, then Publish.' }))
+  })
+
+  it.each([
+    ['an existing Shopify product', { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop' }, false, ['child'], { child: SHOPIFY_EXISTING_NOT_YET }],
+    ['an eBay Inventory listing', { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay' }, true, ['parent', 'child'], { parent: FULL_EBAY_INVENTORY_LATER, child: FULL_EBAY_INVENTORY_LATER }],
+    ['an eBay variation row alone', { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay' }, false, ['child'], { child: FULL_EBAY_VARIATION }],
+  ])('Full on %s is refused with the shared sentence: the row is blocked, nothing of it is sent', async (_, destination, inventory, asked, blocked: Record<string, string>) => {
+    m.facts.mockImplementation(async () => ({ ...live(), scope: destination }))
+    m.inventory.mockReturnValue(inventory)
+    const review = await publication.previewStudioPublication('parent', destination, 'owner', { fullProductIds: asked })
+    for (const row of review.rows) expect([row.productId, row.blocked]).toEqual([row.productId, blocked[row.productId]])
+    for (const [productId, reason] of Object.entries(blocked)) expect(review.issues).toContainEqual(expect.objectContaining({ productId, severity: 'warning', message: expect.stringContaining(reason) }))
+    expect(m.ebayPrepare.mock.calls.every(call => call[1]?.full !== true)).toBe(true)
+  })
+
+  it('eBay Trading: Full on the main row reviews the whole item as Full update', async () => {
+    const destination = { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay' }
+    m.facts.mockImplementation(async () => ({ ...live(), scope: destination }))
+    const review = await publication.previewStudioPublication('parent', destination, 'owner', { fullProductIds: ['parent'] })
+    expect(m.ebayPrepare.mock.calls[0][1]).toEqual({ full: true })
+    expect(review.rows.map(row => row.mode)).toEqual(['full', 'full'])
+  })
+
+  it('a blocked row\'s fields cannot be ticked; the other rows keep their ticks', () => {
+    const blockedChanges = blockRowChanges(changes(), new Map([['child', FULL_EBAY_INVENTORY_LATER]]))
+    expect(blockedChanges.map(c => [c.productId, c.selectable, c.selectedByDefault])).toEqual([['parent', true, true], ['child', false, false], ['child', false, false]])
+    expect(blockedChanges[1].reason).toBe(FULL_EBAY_INVENTORY_LATER)
+  })
 })

@@ -30,9 +30,10 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { listingUrl } from '@/app/products/[id]/edit/_studio/drawer/listingUrl'
 import { publicationValueText } from '@/app/products/_publication/dialog/PublicationChanges'
 import {
-  SOURCE_LABEL, changeStatusText, failedSkus, filterProducts, orderProducts, productFilterCounts, productsAsShown, resultsCsv, resultsFileName,
-  runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel, runStatusMeta, sentFieldsText, type ProductFilter,
+  KIND_LABEL, SOURCE_LABEL, changeStatusText, failedSkus, filterProducts, orderProducts, productFilterCounts, productsAsShown, resultsCsv, resultsFileName,
+  runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel, runStatusMeta, runUndos, sentFieldsText, type ProductFilter, type RunUndo,
 } from './runActions'
+import { resultsText } from './runColumns'
 import { usePublishRunDetail, type ListingRequest } from './usePublishRunDetail'
 import styles from './PublishRunDrawer.module.css'
 
@@ -46,6 +47,11 @@ export interface PublishHistoryHostValue {
   publishAgain?: (selection: StudioRetrySelection, run: HistoryRun) => void
   /** Deep link `&sku=`: open the drawer with this product's row expanded. */
   focusSku?: string | null
+  /**
+   * Studio: put a selling change back (build shape v2, D-M2 A) — set Status back to Active on `undo.listingIds` and open
+   * Publish on that destination. Nothing is sent from here. Resolves when the surface has done its part.
+   */
+  undoSelling?: (undo: RunUndo) => Promise<void> | void
 }
 
 const PublishHistoryHostContext = createContext<PublishHistoryHostValue>({})
@@ -66,6 +72,10 @@ export interface PublishRunDrawerProps {
   onClose: () => void
   /** The run changed while open (a result arrived, or it was marked as checked): the list should read it again. */
   onRunChanged?: () => void
+  /** Open one part of a Publish (`children`) in this drawer. Absent = parts are listed without a way in. */
+  onOpenPart?: (runId: string) => void
+  /** This run was opened from a Publish: go back to it. */
+  onBack?: () => void
 }
 
 const FILTERS: Array<{ id: ProductFilter; label: string }> = [
@@ -87,14 +97,14 @@ function useNarrow(): boolean {
   return narrow
 }
 
-export function PublishRunDrawer({ runId, mode, onClose, onRunChanged }: PublishRunDrawerProps) {
+export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPart, onBack }: PublishRunDrawerProps) {
   const { state, detail, reload, checkNow, markChecked, retrySelection, loadRequest } = usePublishRunDetail(runId)
   const host = useContext(PublishHistoryHostContext)
   const canPublish = usePermission('products.publish')
   const { toast } = useToast()
   const [filter, setFilter] = useState<ProductFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [busy, setBusy] = useState<null | 'check' | 'mark' | 'again'>(null)
+  const [busy, setBusy] = useState<null | 'check' | 'mark' | 'again' | 'undo'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [note, setNote] = useState('')
@@ -134,7 +144,7 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged }: Publish
 
   const visibility = run ? runActionVisibility(run, { canPublish, canOpenReview: !!host.publishAgain }, products) : null
 
-  const act = useCallback(async (kind: 'check' | 'mark' | 'again', work: () => Promise<void>) => {
+  const act = useCallback(async (kind: 'check' | 'mark' | 'again' | 'undo', work: () => Promise<void>) => {
     setBusy(kind); setActionError(null)
     try { await work() } catch (error) { setActionError(error instanceof Error ? error.message : 'That did not work. Try again.') } finally { setBusy(null) }
   }, [])
@@ -157,6 +167,10 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged }: Publish
       return
     }
     host.publishAgain(selection, run)
+  })
+  const onUndo = (undo: RunUndo) => act('undo', async () => {
+    if (!host.undoSelling) return
+    await host.undoSelling(undo)
   })
   const onDownload = () => {
     if (!run) return
@@ -244,6 +258,10 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged }: Publish
             canPublish={canPublish}
             loadRequest={loadRequest}
             narrow={narrow}
+            onOpenPart={onOpenPart}
+            onBack={onBack}
+            onUndo={host.undoSelling && canPublish ? onUndo : undefined}
+            undoBusy={busy === 'undo'}
           />
         )}
       </div>
@@ -269,13 +287,20 @@ interface RunBodyProps {
   canPublish: boolean
   loadRequest: (listingId: string) => Promise<ListingRequest>
   narrow: boolean
+  onOpenPart?: (runId: string) => void
+  onBack?: () => void
+  /** Absent = this surface cannot prepare an Undo (the business page, or no products.publish): the note says where. */
+  onUndo?: (undo: RunUndo) => void
+  undoBusy: boolean
 }
 
-function RunBody({ detail, run, products, stale, onRetry, actionError, publishAgainUnavailable, filter, onFilter, expanded, onToggle, showInSheet, canPublish, loadRequest, narrow }: RunBodyProps) {
+function RunBody({ detail, run, products, stale, onRetry, actionError, publishAgainUnavailable, filter, onFilter, expanded, onToggle, showInSheet, canPublish, loadRequest, narrow, onOpenPart, onBack, onUndo, undoBusy }: RunBodyProps) {
   const meta = runStatusMeta(run)
   const counts = productFilterCounts(products)
   const shown = filterProducts(products, filter)
   const answered = run.productCount - run.counts.waiting - run.counts.unknown
+  const parts = detail.children ?? []
+  const undos = runUndos(detail, products)
 
   const facts: KeyValueItem[] = [
     // The listing only when the source recorded it: the older pages never did, so they name none (never a guess).
@@ -303,7 +328,16 @@ function RunBody({ detail, run, products, stale, onRetry, actionError, publishAg
       key: 'sku', label: 'Product', width: 144,
       render: p => <span className={styles.skuCell}><span className={styles.sku} title={p.sku}>{p.sku}</span>{p.variationLabel && <span className={styles.muted}>{p.variationLabel}</span>}</span>,
     },
-    { key: 'result', label: 'Result', width: 134, render: p => <PublishStatusPill meta={publishResultMeta(p.result)} /> },
+    {
+      key: 'result', label: 'Result', width: 134,
+      // In a Publish of several parts each product says which part it belongs to ("Pause offer").
+      render: p => (
+        <span className={styles.skuCell}>
+          <PublishStatusPill meta={publishResultMeta(p.result)} />
+          {parts.length > 0 && p.kind && <span className={styles.muted}>{KIND_LABEL[p.kind]}</span>}
+        </span>
+      ),
+    },
     {
       key: 'message', label: 'Channel message',
       render: p => <span className={styles.message}>{p.message ?? <span className={styles.muted}>No message</span>}{p.fieldLabel && <span className={styles.muted}>Field: {p.fieldLabel}</span>}</span>,
@@ -325,8 +359,34 @@ function RunBody({ detail, run, products, stale, onRetry, actionError, publishAg
     ? allColumns.filter(column => column.key !== 'message').map(column => (column.key === 'sku' ? { ...column, width: 136 } : column))
     : allColumns
 
+  // The parts of one Publish (build shape v2): each its own run, in send order, with its result and a way in.
+  const partColumns: Array<Column<HistoryRun>> = [
+    {
+      // A phone keeps all three columns in the full-width panel (352 px): the part wraps, like the products' SKU.
+      key: 'part', label: 'Part', ...(narrow ? { width: 136 } : {}),
+      render: part => (
+        <span className={styles.message}>
+          <span className={styles.text}>{runChangeLabel(part)}</span>
+          <span className={styles.muted}>{runDestination(part)} · {resultsText(part.counts)}</span>
+        </span>
+      ),
+    },
+    { key: 'result', label: 'Result', width: 134, render: part => <PublishStatusPill meta={runStatusMeta(part)} /> },
+    ...(onOpenPart ? [{
+      key: 'open', label: <span className="nds-vh">Open</span>, width: 76,
+      render: (part: HistoryRun) => (
+        <Button size="sm" variant="link" aria-label={`Open ${runChangeLabel(part)} on ${runDestination(part)}`} onClick={() => onOpenPart(part.id)}>Open</Button>
+      ),
+    }] : []),
+  ]
+
   return (
     <>
+      {onBack && (
+        <div>
+          <Button size="sm" variant="link" onClick={onBack}>Back to the whole Publish</Button>
+        </div>
+      )}
       {stale && (
         <Banner tone="warning" title="Showing the last result Nexus read." action={<Button size="sm" onClick={onRetry}>Try again</Button>}>
           The newest read failed: {stale}
@@ -353,6 +413,42 @@ function RunBody({ detail, run, products, stale, onRetry, actionError, publishAg
         />
       )}
       <KeyValue items={facts} columns={2} dense />
+
+      {undos.length > 0 && (
+        <section className={styles.section} aria-labelledby="publish-run-undo">
+          <h3 id="publish-run-undo" className={styles.sectionTitle}>Undo</h3>
+          <ul className={styles.undoList}>
+            {undos.map(undo => (
+              <li key={`${undo.run.id}:${undo.kind}`} className={styles.undoItem}>
+                <span className={styles.text}>
+                  {parts.length > 0 && <strong>{KIND_LABEL[undo.run.kind]} · {runDestination(undo.run)}. </strong>}
+                  {undo.hint}
+                </span>
+                {undo.kind === 'none'
+                  ? <span className={styles.muted}>{undo.label}</span>
+                  : onUndo
+                    ? <Button size="sm" onClick={() => onUndo(undo)} disabled={undoBusy}>{undoBusy ? 'Preparing…' : undo.label}</Button>
+                    : <span className={styles.muted}>Undo from the product&apos;s Activity tab.</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {parts.length > 0 && (
+        <section className={styles.section} aria-labelledby="publish-run-parts">
+          <h3 id="publish-run-parts" className={styles.sectionTitle}>Parts ({parts.length})</h3>
+          <p className={styles.muted}>One Publish sends its parts in this order. Open a part for its own fields and steps.</p>
+          <DataGrid<HistoryRun>
+            ariaLabel="Parts of this publish"
+            columns={partColumns}
+            rows={parts}
+            rowKey={part => part.id}
+            size="sm"
+            maxHeight={320}
+          />
+        </section>
+      )}
 
       <section className={styles.section} aria-labelledby="publish-run-steps">
         <h3 id="publish-run-steps" className={styles.sectionTitle}>Steps</h3>

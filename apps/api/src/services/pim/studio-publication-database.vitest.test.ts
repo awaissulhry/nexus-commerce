@@ -444,3 +444,73 @@ it('retains an unresolved receipt when the exact local destination disappeared',
   expect((await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })).status).toBe('UNVERIFIED')
   expect(fixture.sendEbay).toHaveBeenCalledOnce()
 }, 30_000)
+
+/**
+ * New listings (Owner 2026-10-04) — the rows a publication creates Inactive are marked when the channel accepts them, in
+ * the same step that makes them live: Amazon as the engine's Pause marks a closed offer (no offer was sent), eBay held
+ * as an eBay Pause holds it. A row's own stored choice clears once accepted. Shopify gets the main row's choice as the
+ * new product's status. A main row set Not listed holds its family: nothing of it can be ticked.
+ */
+const choice = (target: 'active' | 'inactive' | 'not_listed', own: boolean) =>
+  ({ target, source: own ? 'own' : 'default', own: own ? target : null, defaultTarget: 'active', includedByDefault: true, noRecord: false, isVariation: false })
+const withChoices = (base: any, entries: Array<[string, ReturnType<typeof choice>]>) =>
+  ({ ...base, createChoices: new Map(entries.map(([id, value]) => [id, { productId: id, listingId: null, ...value }])) })
+const childFacts = (over: Record<string, unknown> = {}) => ({ ...facts(), products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }], ...over })
+
+it('Amazon: a row created Inactive is promoted AND paused when accepted (no offer, sheet-pause), and its own choice clears', async () => {
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
+  const main = await draftRow(productId, 'AMAZON', 'IT', true)
+  const child = await draftRow(childId, 'AMAZON', 'IT', true)
+  await prisma.channelListing.update({ where: { id: child.id }, data: { sellingTarget: 'INACTIVE', sellingTargetAt: new Date(Date.now() - 60_000) } })
+  fixture.facts.mockResolvedValue(withChoices(childFacts({ scope: amazon, listings: [main, child] }), [[productId, choice('active', false)], [childId, choice('inactive', true)]]))
+  const review = await previewStudioPublication(productId, amazon, null)
+  expect(review.rows.map(row => [row.sku, row.startsAs])).toEqual([['PGLITE-PUBLISH', 'active'], ['PGLITE-CHILD', 'inactive']])
+  const stored = (await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })).changes as any
+  expect(stored).toMatchObject({ inactiveProductIds: [childId], createInactive: { [childId]: { productType: 'COAT', fba: false } }, createChoiceProductIds: [childId],
+    creates: [{ productId, sku: 'PGLITE-PUBLISH', startsAs: 'active' }, { productId: childId, sku: 'PGLITE-CHILD', startsAs: 'inactive' }] })
+  await submitStudioPublication(productId, review.id!, {}, null)
+  fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: false, message: 'Accepted' }] })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
+  const paused = await prisma.channelListing.findUniqueOrThrow({ where: { id: child.id } })
+  expect(paused).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, offerActive: false, offerCloseReason: 'sheet-pause',
+    offerCloseSnapshot: { purchasableOffer: [], productType: 'COAT', createdInactive: true, snapshotSource: 'created-inactive' }, sellingTarget: null, sellingTargetAt: null })
+  expect(paused.offerClosedAt).toBeInstanceOf(Date)
+  // The main row (a family's main product has no offer of its own) is promoted as before.
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: main.id } })).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, offerClosedAt: null })
+}, 30_000)
+
+it('eBay: a row created Inactive becomes live AND held (sheet-pause) when eBay confirms the item', async () => {
+  const main = await draftRow(productId, 'EBAY', 'IT', true)
+  const child = await draftRow(childId, 'EBAY', 'IT', true)
+  fixture.facts.mockResolvedValue(withChoices(childFacts({ listings: [main, child] }), [[productId, choice('active', false)], [childId, choice('inactive', true)]]))
+  const review = await previewStudioPublication(productId, scope, null)
+  await submitStudioPublication(productId, review.id!, {}, null)
+  fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: child.id } })).toMatchObject({ externalListingId: '123456789012', isPublished: true,
+    listingStatus: 'ACTIVE', syncPaused: false, offerActive: false, offerCloseReason: 'sheet-pause', offerCloseSnapshot: { channel: 'EBAY', createdInactive: true, previewId: review.id } })
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: main.id } })).toMatchObject({ isPublished: true, offerClosedAt: null, syncPaused: false })
+}, 30_000)
+
+it('Shopify: the main row\'s choice is the new product\'s status (Active → ACTIVE, Inactive → DRAFT)', async () => {
+  for (const [target, status] of [['active', 'ACTIVE'], ['inactive', 'DRAFT']] as const) {
+    fixture.shopSend.mockClear()
+    fixture.facts.mockResolvedValue(withChoices(shopifyFacts(), [[productId, choice(target, true)]]))
+    const review = await previewStudioPublication(productId, shopifyFacts().scope, null)
+    expect(review.visibility).toBe(status)
+    await submitStudioPublication(productId, review.id!, { locationId: 'shop-location' }, null)
+    expect(fixture.shopSend).toHaveBeenCalledWith(productId, expect.anything(), expect.objectContaining({ createStatus: status }), expect.any(Function))
+    await prisma.bulkOperation.deleteMany({ where: { changes: { path: ['kind'], equals: 'studio-publication' } } })
+  }
+}, 30_000)
+
+it('a main row set Not listed holds its family: every create is blocked with the reason, and nothing is created Inactive', async () => {
+  const amazon = { ...scope, channel: 'AMAZON', accountId: amazonAccountId }
+  fixture.facts.mockResolvedValue(withChoices(childFacts({ scope: amazon }), [[productId, choice('not_listed', true)], [childId, choice('inactive', true)]]))
+  const review = await previewRaw(productId, amazon, null)
+  expect(review.rows.map(row => [row.sku, row.notListed, row.blocked, row.startsAs])).toEqual([
+    ['PGLITE-PUBLISH', true, expect.stringContaining('Not listed'), undefined], ['PGLITE-CHILD', true, expect.stringContaining('Not listed'), undefined]])
+  expect(review.changes!.every(change => !change.selectable)).toBe(true)
+  const stored = (await prisma.bulkOperation.findFirst({ where: { id: review.id ?? '' } }))?.changes as any
+  expect(stored?.inactiveProductIds).toBeUndefined()
+}, 30_000)

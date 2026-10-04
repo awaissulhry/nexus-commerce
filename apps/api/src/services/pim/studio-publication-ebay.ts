@@ -19,8 +19,9 @@ import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { mediaLayoutFor, type MediaChannelValues } from '../images/media-plan.service.js'
 import type { EbayMediaLayout } from '@nexus/shared/media-plan-channels'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
-import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
-import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
+import { FULL_EBAY_SHAPE_DIFFERS, type StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
+import { EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN } from '@nexus/shared/listing-actions'
+import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlList, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
 import { readEbayInventoryListing, type EbayInventoryDestination, type EbayInventoryRaw } from '../live-read/ebay-inventory.js'
@@ -43,6 +44,139 @@ export interface EbayPublication {
   fieldWrites?: Record<string, StudioPublishFieldWrite[]>
   /** Review notes that block nothing (a new listing at stock 0). */
   notices?: string[]
+  /** Build shape v2 — the listing is reviewed as Full update: the whole Revise it sends (prepared from the live read). */
+  full?: EbayFullRevision
+}
+
+/** One eBay variation Nexus does not hold: a Full update deletes it, or keeps it at quantity 0 when it has sales. */
+export interface EbayFullExtra { sku: string; action: 'delete' | 'zero'; specifics: Record<string, string>; content: unknown }
+
+/**
+ * Build shape v2 — a Full update of a Trading listing: ONE ReviseFixedPriceItem from the full builder (content, category,
+ * condition, policies, item specifics replaced, package and the variation set), price from the price engine
+ * (`listingSendPrice`, as the builder sends it), and every quantity eBay's OWN available number from the live GetItem
+ * (GetItem's Quantity is the lifetime total; available = Quantity − QuantitySold, and a Revise sets the available
+ * number). Re-sending eBay's own number cannot oversell, and a paused listing stays at 0. The send refuses when eBay's
+ * stock moved since the review (`stockRevision`).
+ */
+export interface EbayFullRevision {
+  /** The ReviseFixedPriceItemRequest Full update sends (`ebayPublicationRequest` adds the InvocationID). */
+  xml: string
+  stockRevision: string
+  /** Variations eBay holds that Nexus does not. */
+  extras: EbayFullExtra[]
+  /** Nexus variations new on this item: added at quantity 0 (a Full update never sends stock). */
+  added: string[]
+  /** `<DeletedField>` values: optional fields Nexus holds empty that eBay holds. */
+  deletedFields: string[]
+  /** Item fields eBay holds and Nexus does not, that a Revise cannot remove: they stay as on eBay. */
+  keptRoots: string[]
+  /** Why this Full update cannot be sent (the listing's shape differs on eBay). */
+  blockers: string[]
+}
+
+/** eBay's quantities from a GetItem answer: per SKU and for a single-SKU item, the lifetime total and the sold count. */
+export interface EbayLiveStock {
+  item: { quantity: number; sold: number } | null
+  variations: Array<{ sku: string; quantity: number; sold: number }>
+}
+
+const count = (value: unknown) => {
+  const text = ebayXmlText(value)
+  return text != null && /^\d+$/.test(text.trim()) ? Number(text.trim()) : null
+}
+
+/** PURE. Never throws: a quantity eBay did not return is missing (`item: null`, or the SKU absent from `variations`). */
+export function ebayLiveStock(item: Record<string, unknown>): EbayLiveStock {
+  const variations: EbayLiveStock['variations'] = []
+  for (const entry of ebayXmlList(ebayXmlObject(item.Variations).Variation).map(ebayXmlObject)) {
+    const sku = ebayXmlText(entry.SKU)?.trim(), quantity = count(entry.Quantity)
+    if (sku && quantity != null) variations.push({ sku, quantity, sold: count(ebayXmlObject(entry.SellingStatus).QuantitySold) ?? 0 })
+  }
+  const quantity = count(item.Quantity)
+  return { item: quantity == null ? null : { quantity, sold: count(ebayXmlObject(item.SellingStatus).QuantitySold) ?? 0 }, variations }
+}
+
+/** What a Full update echoes: eBay's available number per SKU (and the single item's), sorted. */
+const availableOf = (held: { quantity: number; sold: number }) => Math.max(0, held.quantity - held.sold)
+export const ebayStockRevision = (stock: EbayLiveStock) => publicationDigest({ item: stock.item ? availableOf(stock.item) : null,
+  variations: stock.variations.map(v => [v.sku, availableOf(v)]).sort(([a], [b]) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0) })
+
+/** Item fields a Full update removes with `<DeletedField>` when Nexus holds them empty (eBay lets a Revise delete these). */
+const FULL_DELETABLE: Readonly<Record<string, string>> = { SubTitle: 'Item.SubTitle', ItemSpecifics: 'Item.ItemSpecifics' }
+/** Item fields the full builder leaves out when Nexus holds none: eBay keeps its own value (said in the review). */
+const FULL_KEPT_ROOTS = ['VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer', 'DispatchTimeMax', 'ProductListingDetails', 'Location', 'PostalCode', 'Country']
+
+const blank = (value: unknown) => value == null || (typeof value === 'string' && !value.trim())
+
+/**
+ * PURE. The Full update Revise of one Trading item from the builder's input (`shared`, `settings`) and the live read
+ * (`live`: the GetItem's Item; `stock`: its quantities). Nothing here reads or sends.
+ */
+export function ebayFullRevision(input: { shared: AddFixedPriceItemInput; settings: Record<string, any>; itemId: string; single: boolean
+  live: Record<string, unknown>; stock: EbayLiveStock }): EbayFullRevision {
+  const shared: AddFixedPriceItemInput = JSON.parse(JSON.stringify(input.shared))
+  const settings = { ...input.settings }
+  const blockers: string[] = [], added: string[] = [], extras: EbayFullExtra[] = [], deletedFields: string[] = []
+  const liveVariations = ebayXmlList(ebayXmlObject(input.live.Variations).Variation).map(ebayXmlObject)
+  const specificsOf = (variation: Record<string, unknown>): Record<string, string> => Object.fromEntries(ebayXmlList(ebayXmlObject(variation.VariationSpecifics).NameValueList)
+    .map(ebayXmlObject).map((nv): [string, string] => [ebayXmlText(nv.Name) ?? '', ebayXmlText(ebayXmlList(nv.Value)[0]) ?? '']).filter(([name]) => name))
+  if (input.single !== !liveVariations.length) blockers.push(FULL_EBAY_SHAPE_DIFFERS)
+  else if (input.single) {
+    if (!input.stock.item) blockers.push('eBay did not return this listing\'s quantity, so a Full update cannot keep it. Review again.')
+    else shared.variations[0].quantity = availableOf(input.stock.item)
+  } else {
+    if (liveVariations.some(variation => !ebayXmlText(variation.SKU)?.trim())) blockers.push('eBay holds a variation without a seller SKU, so a Full update cannot tell it apart. Use Partial update, or set its SKU on eBay.')
+    // eBay keeps one set of variation names per listing; a Full update never renames them.
+    const ours = new Set(shared.variationSpecificNames.map(aspectCanonicalName))
+    const theirs = new Set(liveVariations.flatMap(variation => Object.keys(specificsOf(variation))).map(aspectCanonicalName))
+    if (ours.size !== theirs.size || [...theirs].some(name => !ours.has(name))) blockers.push(FULL_EBAY_SHAPE_DIFFERS)
+    for (const variation of shared.variations) {
+      const held = input.stock.variations.find(v => v.sku === variation.sku)
+      if (held) variation.quantity = availableOf(held)
+      else if (liveVariations.some(v => ebayXmlText(v.SKU)?.trim() === variation.sku)) blockers.push(`eBay did not return the quantity of ${variation.sku}, so a Full update cannot keep it. Review again.`)
+      else { variation.quantity = 0; added.push(variation.sku) }
+    }
+    const nameOf = (name: string) => shared.variationSpecificNames.find(ours => aspectCanonicalName(ours) === aspectCanonicalName(name)) ?? name
+    for (const variation of liveVariations) {
+      const sku = ebayXmlText(variation.SKU)?.trim()
+      if (!sku || shared.variations.some(v => v.sku === sku)) continue
+      const sold = input.stock.variations.find(v => v.sku === sku)?.sold ?? 0
+      extras.push({ sku, action: sold > 0 ? 'zero' : 'delete', specifics: Object.fromEntries(Object.entries(specificsOf(variation)).map(([name, value]) => [nameOf(name), value])),
+        content: variation })
+    }
+    // A variation kept at 0 keeps its values in the listing's set (eBay refuses a variation whose value the set lacks).
+    const kept = extras.filter(extra => extra.action === 'zero')
+    if (kept.length) {
+      const set: Record<string, string[]> = {}
+      for (const name of shared.variationSpecificNames) set[name] = [...(shared.variationSpecificsSet?.[name] ?? [...new Set(shared.variations.map(v => v.specifics[name]).filter((v): v is string => v != null))])]
+      for (const extra of kept) for (const [name, value] of Object.entries(extra.specifics)) if (set[name] && !set[name].includes(value)) set[name].push(value)
+      shared.variationSpecificsSet = set
+    }
+  }
+  // A Full update never changes a live listing's seller SKU (Custom label): it sends eBay's own, or none.
+  const liveSku = ebayXmlText(input.live.SKU)?.trim()
+  shared.sku = liveSku || undefined
+  if (blank(settings.subtitle)) {
+    delete settings.subtitle
+    if (input.live.SubTitle !== undefined) deletedFields.push(FULL_DELETABLE.SubTitle)
+  }
+  if (!Object.keys(shared.itemSpecifics ?? {}).length && input.live.ItemSpecifics !== undefined) deletedFields.push(FULL_DELETABLE.ItemSpecifics)
+  let xml = ebayPublicationXml(shared, input.itemId, input.single, settings, { package: true })
+  const extraXml = extras.map(extra => {
+    const names = Object.entries(extra.specifics).map(([name, value]) => `<NameValueList><Name>${escapeXml(name)}</Name><Value>${escapeXml(value)}</Value></NameValueList>`).join('')
+    const price = ebayXmlText(ebayXmlObject(extra.content).StartPrice)
+    return extra.action === 'delete'
+      ? `<Variation><Delete>true</Delete><SKU>${escapeXml(extra.sku)}</SKU><VariationSpecifics>${names}</VariationSpecifics></Variation>`
+      : `<Variation><SKU>${escapeXml(extra.sku)}</SKU>${price ? `<StartPrice>${escapeXml(price)}</StartPrice>` : ''}<Quantity>0</Quantity><VariationSpecifics>${names}</VariationSpecifics></Variation>`
+  }).join('')
+  if (extraXml) {
+    const at = xml.lastIndexOf('</Variation>') + '</Variation>'.length
+    xml = xml.slice(0, at) + extraXml + xml.slice(at)
+  }
+  if (deletedFields.length) xml = xml.replace('<Item>', `${deletedFields.map(field => `<DeletedField>${field}</DeletedField>`).join('')}<Item>`)
+  const keptRoots = FULL_KEPT_ROOTS.filter(root => input.live[root] !== undefined && !xml.includes(`<${root}>`))
+  return { xml, stockRevision: ebayStockRevision(input.stock), extras, added, deletedFields, keptRoots, blockers: [...new Set(blockers)] }
 }
 export interface EbayPublicationReceipt { reference: string; warnings: string[]; verified?: boolean }
 
@@ -104,8 +238,11 @@ export function ebayPackageXml(pa: Record<string, any>, sku: string): string {
   return parts.length ? `<ShippingPackageDetails><MeasurementUnit>Metric</MeasurementUnit>${parts.join('')}</ShippingPackageDetails>` : ''
 }
 
-/** Trading revisions preserve fields outside the submitted product payload. */
-export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string | null, single: boolean, settings: Record<string, any> = {}) {
+/**
+ * Trading revisions preserve fields outside the submitted product payload. `options.package`: a Full update revise sends
+ * the package too (a narrow revise keeps eBay's; #36 sends it when the listing is created).
+ */
+export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string | null, single: boolean, settings: Record<string, any> = {}, options: { package?: boolean } = {}) {
   let xml = buildAddFixedPriceItemXml(input)
   if (single) {
     const variant = input.variations[0]
@@ -118,7 +255,7 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
     single && settings.bestOffer != null ? `<BestOfferDetails><BestOfferEnabled>${settings.bestOffer === true}</BestOfferEnabled></BestOfferDetails>` : '',
     settings.quantityLimitPerBuyer != null ? `<QuantityRestrictionPerBuyer><MaximumQuantity>${Number(settings.quantityLimitPerBuyer)}</MaximumQuantity></QuantityRestrictionPerBuyer>` : '',
     // A revision keeps eBay's package (#36 sends it only when the listing is created).
-    !itemId ? ebayPackageXml(settings, input.sku ?? 'This listing') : '',
+    !itemId || options.package ? ebayPackageXml(settings, input.sku ?? 'This listing') : '',
   ].join('')
   xml = xml.replace('</Item>', `${extra}</Item>`)
   // Missing saved origin on a revision means preserve eBay's existing origin.
@@ -160,9 +297,9 @@ async function readLiveItem(itemId: string, accountId: string, market: string) {
   const item = parseEbayItemDocument(got.raw)
   if (ebayXmlText(item.ItemID) !== itemId) throw new Error('eBay returned a different or unidentified listing. Nothing will be sent.')
   const content = parseEbayPublicationItem(got.raw)
-  return { content, revision: publicationDigest(content) }
+  // Build shape v2 — eBay's quantities (with what was sold) for a Full update; the content projection leaves QuantitySold out.
+  return { content, revision: publicationDigest(content), stock: ebayLiveStock(item) }
 }
-const liveItem = async (itemId: string, accountId: string, market: string) => (await readLiveItem(itemId, accountId, market)).revision
 
 /**
  * PLAN R-43 (A-39 slice b2) — the listing input this builder sends, extracted from `prepareEbayPublication` with its
@@ -422,7 +559,8 @@ const POLICY_WORD: Readonly<Record<EbayPolicyKind, string>> = { shipping: 'shipp
  * names its problem in `problems` and goes on (audit P1). `live`: this server really sends to eBay, so eBay may be read
  * for the defaults Nexus can fill (audit P2/P3); otherwise nothing here reaches eBay.
  */
-async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>, problems: EbayProblems, live: boolean) {
+async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>, problems: EbayProblems, live: boolean,
+  options: { inactive?: boolean } = {}) {
   const { scope, parent, products } = facts
   const { shared, itemId, parentListing, settings, galleries, variants } = built
   const main = { productId: parent.id, sku: parent.sku }
@@ -520,7 +658,15 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   // Owner 2026-10-01: a new listing may start at 0 and get its stock later. eBay keeps a listing at 0 alive (hidden from
   // search) only while the account's out-of-stock option is on; without it a listing cannot wait at 0. eBay's own dry
   // run (`sendEbayPublication`) still decides before anything is created.
-  if (!itemId && shared.variations.length && !shared.variations.some(v => v.quantity > 0)) {
+  // New listings — a row created Inactive waits at quantity 0: the account's out-of-stock option must be on (read now).
+  if (options.inactive) {
+    if (live) {
+      const { readEbayOutOfStockPreference } = await import('../channel-delist.service.js')
+      const outOfStock = await readEbayOutOfStockPreference(scope.accountId, scope.marketplace)
+      if (outOfStock === 'OFF') problems.add(EBAY_NEW_INACTIVE_OOS_OFF, { field: 'quantity' })
+      else if (outOfStock !== 'ON') problems.add(EBAY_NEW_INACTIVE_OOS_UNKNOWN, { field: 'quantity' })
+    } else problems.note('Inactive rows go to eBay at quantity 0. When sending is on, Nexus checks that this eBay account keeps a listing at 0 (its out-of-stock option).')
+  } else if (!itemId && shared.variations.length && !shared.variations.some(v => v.quantity > 0)) {
     if (live) {
       const { readEbayOutOfStockPreference } = await import('../channel-delist.service.js')
       const outOfStock = await readEbayOutOfStockPreference(scope.accountId, scope.marketplace)
@@ -536,31 +682,53 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   return shared
 }
 
-export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+/**
+ * `options.full` (build shape v2): the listing is reviewed as Full update. For a live item whose read succeeded, the
+ * whole Revise is prepared here, from the same builder input and the same live read (`ebayFullRevision`); a listing
+ * not on eBay yet is created whole as always.
+ */
+export async function prepareEbayPublication(facts: PublicationFacts, options: { full?: boolean; inactiveProductIds?: ReadonlySet<string> } = {}): Promise<EbayPublication> {
   const { scope, products } = facts
   const live = ebaySendsLive()
   const problems = ebayProblems()
   const built = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined, problems })
   const { itemId, settings, identities } = built
-  const shared = await finishEbayListingInput(facts, built, problems, live)
+  // New listings (Owner 2026-10-04) — a row created Inactive goes to eBay at quantity 0 (the settle step then holds its
+  // stock sync, as an eBay pause does). eBay keeps a listing at 0 only while the account's out-of-stock option is on.
+  const inactiveSkus = new Set(identities.filter(identity => options.inactiveProductIds?.has(identity.productId)).map(identity => identity.sku))
+  if (inactiveSkus.size && built.shared) for (const variation of built.shared.variations) if (inactiveSkus.has(variation.sku)) variation.quantity = 0
+  const shared = await finishEbayListingInput(facts, built, problems, live, { inactive: inactiveSkus.size > 0 })
   problems.throwIfAny()
   // Audit P9 — every check above ran in every mode; eBay is read (the live item) only when this server really sends to eBay.
   if (!live) throw sendingOff(problems.notes)
   let liveRevision: string | null = null, liveContent: Record<string, unknown> | null = null, liveReadError: string | undefined
+  let full: EbayFullRevision | undefined
   if (itemId) {
-    try { const live = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = live.revision; liveContent = live.content }
+    try {
+      const read = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = read.revision; liveContent = read.content
+      if (options.full) {
+        try { full = ebayFullRevision({ shared: shared as AddFixedPriceItemInput, settings, itemId, single: products.length === 1, live: read.content, stock: read.stock }) }
+        catch (error) { full = { xml: '', stockRevision: '', extras: [], added: [], deletedFields: [], keptRoots: [], blockers: [error instanceof Error ? error.message : String(error)] } }
+      }
+    }
     catch (error) { liveReadError = error instanceof Error ? error.message : String(error) }
   }
   const notices = problems.notes
   return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), ...(notices.length ? { notices } : {}), products: identities,
-    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
+    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings), ...(full ? { full } : {}) }
 }
 
 export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string,
   beforeSend?: (request: { operation: string; xml: string }) => Promise<void>): Promise<EbayPublicationReceipt> {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw Object.assign(new Error('Live eBay publication was disabled.'), { notSent: true })
   const markNotSent = (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
-  if (plan.itemId && await liveItem(plan.itemId, accountId, plan.marketplace).catch(markNotSent) !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
+  if (plan.itemId) {
+    const live = await readLiveItem(plan.itemId, accountId, plan.marketplace).catch(markNotSent)
+    if (live.revision !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
+    // Build shape v2 — a Full update re-sends eBay's own quantities: a sale or a stock update since the review refuses it.
+    if (plan.full && ebayStockRevision(live.stock) !== plan.full.stockRevision)
+      throw Object.assign(new Error('eBay\'s stock changed after the review (a sale or a stock update). Review again: a Full update re-sends eBay\'s own quantities.'), { notSent: true })
+  }
   const oauthToken = await ebayAuthService.getValidToken(accountId).catch(markNotSent)
   const ctx = { oauthToken, siteId: siteIdForMarket(plan.marketplace), connectionId: accountId, market: plan.marketplace }
   let validationWarnings: string[] = []

@@ -7,7 +7,7 @@
  *   count      `21 rows · 1 parent · 20 variants` (§3.9, verbatim)
  *   views      the ONE views menu — presets `Everything · Inventory · Pricing · Listings` and the
  *              operator's saved views on surface `product-edit:views:matrix`
- *   chips      the five Matrix chips, registered by the surface through `useRegisterViewChip`
+ *   chips      the six Matrix chips, registered by the surface through `useRegisterViewChip`
  *   Customise  the ONE `PreferencesModal`, opened by the surface
  *   Export     what is on screen (D15.2 key row: `sku` + `<key>.<kind>`)
  *   Import     HELD, with the reason — the toolbar's own `absent` contract renders the sentence as a

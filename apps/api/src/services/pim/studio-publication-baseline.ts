@@ -9,7 +9,13 @@ const canonical = (value: unknown) => JSON.stringify(value, (_key, entry) => ent
   ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)
 const PAGE_SIZE = 250
 
-/** Fold only recorded intentional fields. An exact raw request is not an interpreted field baseline. */
+/**
+ * Fold only recorded intentional fields. An exact raw request is not an interpreted field baseline.
+ *
+ * Delete and relist (Owner 2026-10-04): a listing's accepted Delete (the listing-action engine's audit record, reason
+ * 'delete') ends its history on the channel — only publishes accepted AFTER its last accepted delete count. Before, the
+ * old publishes still counted after a Delete, so the review took the listing for an existing one and nothing created it.
+ */
 export async function readPublicationBaseline(facts: PublicationFacts, identities: Array<{ productId: string; sku: string }>): Promise<{ values: Map<string, StudioPublishValue>; revision: string }> {
   const included = new Set(facts.products.map(product => product.id))
   const identity = new Map(identities.map(item => [item.productId, item.sku]))
@@ -27,6 +33,15 @@ export async function readPublicationBaseline(facts: PublicationFacts, identitie
     identities: [...identity].sort(([a], [b]) => a.localeCompare(b)), listings: [...byListing].sort(([a], [b]) => a.localeCompare(b)) }))
 
   if (listings.length) await prisma.$transaction(async tx => {
+    // Each listing's last delete the channel accepted: its earlier publishes belong to the listing that was deleted.
+    const deletes = await tx.channelListingSnapshot.findMany({
+      where: { channelListingId: { in: listings.map(listing => listing.id) }, channel: scope.channel, marketplace: scope.marketplace, aliasKey,
+        reason: 'delete', outcome: 'ACCEPTED', acceptedAt: { not: null } },
+      select: { channelListingId: true, acceptedAt: true }, orderBy: [{ acceptedAt: 'desc' }, { id: 'asc' }],
+    })
+    const deletedAt = new Map<string, Date>()
+    for (const row of deletes) if (row.acceptedAt && !deletedAt.has(row.channelListingId)) deletedAt.set(row.channelListingId, row.acceptedAt)
+    if (deletedAt.size) revision.update('\n').update(canonical({ deletedAt: [...deletedAt].sort(([a], [b]) => a.localeCompare(b)) }))
     let cursor: string | undefined
     for (;;) {
       const rows = await tx.channelListingSnapshot.findMany({
@@ -38,6 +53,8 @@ export async function readPublicationBaseline(facts: PublicationFacts, identitie
       })
       for (const row of rows) {
         const target = byListing.get(row.channelListingId)!
+        const cutoff = deletedAt.get(row.channelListingId)
+        if (cutoff && row.acceptedAt && row.acceptedAt <= cutoff) continue
         const journal = object(row.payload)
         if (journal.schemaVersion !== 1 || journal.kind !== 'studio-publication' || !Array.isArray(journal.requests) || !journal.requests.length
           || typeof journal.productId !== 'string' || typeof journal.channelConnectionId !== 'string' || typeof journal.sku !== 'string') throw new Error('An accepted publication journal has invalid identity or request metadata.')

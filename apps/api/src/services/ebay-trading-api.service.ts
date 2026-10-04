@@ -692,3 +692,30 @@ export async function endFixedPriceItem(
   const res = await callTradingApi('EndFixedPriceItem', xml, ctx)
   return { ack: res.ack, itemId: res.itemId, errors: res.errors }
 }
+
+/**
+ * Sheet publish parity, step 7 — RelistFixedPriceItem: put an ended fixed-price item back on sale. eBay answers with a
+ * NEW ItemID (the old one stays ended); the caller writes it on its own listing coordinate only. Only the ItemID is sent,
+ * so eBay relists the item exactly as it ended.
+ */
+export function buildRelistFixedPriceItemXml(input: { itemId: string }): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<RelistFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    <ItemID>${escapeXml(input.itemId)}</ItemID>
+  </Item>
+</RelistFixedPriceItemRequest>`
+}
+
+/** RelistFixedPriceItem through the gateway (a listing write: the eBay publish mode applies). Throws on Failure. */
+export async function relistFixedPriceItem(
+  input: { itemId: string },
+  ctx: TradingCallContext,
+): Promise<{ ack: string; newItemId: string | null; errors: string[] }> {
+  const res = await callTradingApi('RelistFixedPriceItem', buildRelistFixedPriceItemXml(input), ctx)
+  // The answer's ItemID is the new item. A rehearsal answers `DRYRUN-…` and nothing was relisted.
+  const newItemId = res.itemId && res.itemId !== input.itemId ? res.itemId : null
+  return { ack: res.ack, newItemId: res.itemId?.startsWith('DRYRUN-') ? res.itemId : newItemId, errors: res.errors }
+}

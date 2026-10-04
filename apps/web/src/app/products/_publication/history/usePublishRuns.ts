@@ -11,7 +11,7 @@
  * orders newest first, and a client sort would only sort the part that happens to be loaded.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { HistoryCoverage, HistoryPage, HistoryRun, HistorySource, HistoryState, HistoryTotals } from '@nexus/shared/publication-history'
+import { HISTORY_WHAT, type HistoryCoverage, type HistoryPage, type HistoryRun, type HistorySource, type HistoryState, type HistoryTotals, type HistoryWhat } from '@nexus/shared/publication-history'
 import { useInvalidationChannel, type InvalidationEvent } from '@/lib/sync/invalidation-channel'
 import { accountDisplayName, channelDisplayName } from '@/design-system/lib'
 import { historyRequest } from './runActions'
@@ -30,6 +30,11 @@ export interface RunFilters {
   marketplace: string
   accountId: string
   sources: HistorySource[]
+  /**
+   * The "What" chips (build shape v2): Updates · Selling changes · Deletes · Photos → `what=`. A Publish of several parts
+   * is listed when any part is in a chosen group. Empty = every kind. Shown as chips above the list, never in the panel.
+   */
+  what: HistoryWhat[]
   started: StartedPreset
   /** Only read when `started === 'custom'`. Whole days, in the viewer's zone. */
   range: { start: Date; end: Date } | null
@@ -44,13 +49,27 @@ export interface RunFilters {
 }
 
 export const EMPTY_FILTERS: RunFilters = {
-  states: [], channel: '', marketplace: '', accountId: '', sources: [], started: 'any', range: null, by: 'anyone', q: '',
+  states: [], channel: '', marketplace: '', accountId: '', sources: [], what: [], started: 'any', range: null, by: 'anyone', q: '',
 }
 
-/** How many filters differ from the empty set (the panel's Clear button and the "no match" wording read it). */
+/** How many of the PANEL's filters differ from the empty set (its title, "Filters · 2 on"). The What chips are not counted. */
 export function activeFilterCount(f: RunFilters): number {
   return [f.states.length > 0, !!f.channel, !!f.marketplace, !!f.accountId, f.sources.length > 0, f.started !== 'any',
     f.by === 'me', !!f.q.trim()].filter(Boolean).length
+}
+
+/** Any filter at all is on — the panel's or the What chips' (the "no match" wording and "matching publishes" read it). */
+export function isFiltered(f: RunFilters): boolean {
+  return activeFilterCount(f) > 0 || f.what.length > 0
+}
+
+/** The What chips in their fixed order, with their words (`HISTORY_WHAT_LABEL`). */
+export const WHAT_CHIPS: readonly HistoryWhat[] = HISTORY_WHAT
+
+/** Pressing a What chip adds its group, pressing it again removes it; the order stays the chips' own. */
+export function toggleWhat(current: readonly HistoryWhat[], what: HistoryWhat): HistoryWhat[] {
+  const next = current.includes(what) ? current.filter(w => w !== what) : [...current, what]
+  return WHAT_CHIPS.filter(w => next.includes(w))
 }
 
 /** One filter that is on, as a removable token: its words, and what removing it resets. */
@@ -106,6 +125,7 @@ export function historyPath(scope: PublishRunsScope, f: RunFilters, opts: { curs
   const params = new URLSearchParams()
   if (f.states.length) params.set('state', f.states.join(','))
   if (f.sources.length) params.set('source', f.sources.join(','))
+  if (f.what.length) params.set('what', f.what.join(','))
   if (f.channel) params.set('channel', f.channel)
   if (f.marketplace) params.set('marketplace', f.marketplace)
   if (f.accountId) params.set('accountId', f.accountId)

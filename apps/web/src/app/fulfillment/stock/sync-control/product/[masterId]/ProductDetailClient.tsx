@@ -26,7 +26,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from '../../SyncExcelBar'
 import {
   ebayZeroRefusal,
-  listingTarget,
+  listingTarget, BULK_ACTIONS, INACTIVE_NOTE, INACTIVE_ROW, actionLabel, actionCounts,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   type Density, type Mode, type Row, type ProductMaster,
 } from '../../sync-control-shared'
@@ -38,11 +38,6 @@ import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 
 const API = getBackendUrl()
-
-const BULK_ACTIONS: Array<[string, string]> = [
-  ['FOLLOW', 'Set Follow'], ['PIN', 'Pin'], ['PAUSE', 'Pause'], ['RESUME', 'Resume'],
-  ['ZERO_PIN', 'Zero & Pin'], ['CLOSE_OFFER', 'Close offer'], ['REOPEN_OFFER', 'Reopen offer'], ['EXCLUDE', 'Exclude'], ['INCLUDE', 'Include'],
-]
 
 /** SCD.6 — multi-select filter. Several channels/markets/modes at once so a
  *  change can be made across exactly the slice the operator wants. */
@@ -75,7 +70,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const confirm = useConfirm()
-  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  // Shared stock step 3 — Pin, Zero & Pin, Hold stock sync and Exclude can end by themselves.
   const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
 
   // SCD.3 — ?family=<key> narrows this page to ONE parent listing, so every
@@ -205,18 +200,19 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
 
   const runAction = async (action: string, opts: { buffer?: number } = {}) => {
     const rows = [...selected].map((k) => rowByKey.get(k)).filter((r): r is Row => Boolean(r))
-    const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
+    // An Inactive row (selling paused) is read-only here: it cannot be selected, and is never sent.
+    const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.mode !== 'CLOSED' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
-    const listingActs = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
+    const listingActs = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
     const sharedActs = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW'] // PIN/FOLLOW: shared stock step 3
     const l = listingActs.includes(action) ? listings : []
     const m = sharedActs.includes(action) ? memberships : []
-    if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${action}.`); return }
+    if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${actionLabel(action)}.`); return }
     const fbaSkipped = rows.filter((r) => r.mode === 'FBA').length
-    const title = `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`
+    const title = `${actionLabel(action)} — ${l.length + m.length} row(s)`
     const description = `${l.length} listing(s)${m.length ? ` + ${m.length} shared variant(s)` : ''}${fbaSkipped ? ` · ${fbaSkipped} FBA skipped (Amazon-managed)` : ''}` +
         (action === 'ZERO_PIN' ? ' · pushes qty 0 NOW and pins there' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities until Resume' : '')
+        (action === 'PAUSE' ? ' · freezes current quantities until Release stock sync' : '')
     // Shared stock step 3 — these four can end by themselves; a number only for shared variants alone.
     let extra: Partial<SyncActionAnswer> = {}
     if (END_TIME_ACTIONS.has(action)) {
@@ -225,44 +221,6 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
       extra = answer
     } else if (!(await confirm({ title, description, confirmLabel: 'Apply' }))) return
     setBusy(true); setNotice(null)
-
-    // SCT.6b — Close/Reopen make 1-2 Amazon API calls PER ROW; a big selection
-    // on one HTTP request outlives the browser timeout and false-reports
-    // "Failed to fetch" while the server keeps going (the 302-row close DID
-    // fully succeed behind exactly that error). Batch client-side with live
-    // progress so what you see is always what happened.
-    if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
-      const targets = l.map(listingTarget)
-      const BATCH = 20
-      const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
-      try {
-        for (let i = 0; i < targets.length; i += BATCH) {
-          setNotice(`${action.replace('_', ' ')}: ${i}/${targets.length} done — working…`)
-          const res = await fetch(`${API}/api/stock/sync-control/actions`, {
-            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, listings: targets.slice(i, i + BATCH) }),
-          })
-          const d = await res.json()
-          if (!res.ok) {
-            setNotice(`${action} stopped at ${i}/${targets.length}: ${d?.error ?? `HTTP ${res.status}`} — selection kept, run again to continue (done rows are skipped automatically)`)
-            return
-          }
-          agg.updated += d.updated ?? 0; agg.skippedFba += d.skippedFba ?? 0; agg.unchanged += d.unchanged ?? 0
-          if (d.error) {
-            setNotice(`${action} PARTIAL at ~${Math.min(i + BATCH, targets.length)}/${targets.length} — ${d.error}`)
-            return
-          }
-        }
-        setNotice(`${action}: updated ${agg.updated}, unchanged ${agg.unchanged}, FBA skipped ${agg.skippedFba}`)
-        setSelected(new Set())
-        emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-product', masterId } })
-      } catch (e) {
-        setNotice(`${action} stopped: ${e instanceof Error ? e.message : String(e)} — selection kept, run again to continue`)
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
 
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
@@ -283,7 +241,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           description:
             `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
             `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
-          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+          confirmLabel: `${actionLabel(action)} on all EU markets`,
         })
         if (!okEu) { setBusy(false); return }
         const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
@@ -304,14 +262,14 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
       }
       if (d.error) {
         // Keep the selection — "re-run to continue" must be one click.
-        setNotice(`${action} PARTIAL — ${d.error}`)
+        setNotice(`${actionLabel(action)} PARTIAL — ${d.error}`)
       } else {
-        setNotice(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.euExpanded ? `, incl. ${d.euExpanded} sibling EU row(s)` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        setNotice(`${actionLabel(action)}: updated ${d.updated}${actionCounts(d)}`)
         setSelected(new Set())
       }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-product', masterId } })
     } catch (e) {
-      setNotice(`${action} failed: ${e instanceof Error ? e.message : String(e)}`)
+      setNotice(`${actionLabel(action)} failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
@@ -323,7 +281,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     { key: 'channel', label: <TipText help={COLUMN_HELP.channel} cursor="inherit">Channel</TipText>, width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: <TipText help={COLUMN_HELP.market} cursor="inherit">Market</TipText>, width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: <TipText help={COLUMN_HELP.lane}>Lane</TipText>, width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
-    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span>Mode</span></Tooltip>, width: 210, sortable: true, sortValue: (r) => r.mode, render: (r) => <><Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex"><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip>{endsAtWords(r.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.endsAt)}</span>}</> },
+    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span>Mode</span></Tooltip>, width: 210, sortable: true, sortValue: (r) => r.mode, render: (r) => <><Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex"><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip>{endsAtWords(r.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.endsAt)}</span>}{r.mode === 'CLOSED' && <span className={styles.inactiveNote}>{INACTIVE_NOTE}</span>}</> },
     { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span> },
     { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
@@ -530,9 +488,9 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
             selectable
             selected={selected}
             onSelectedChange={setSelected}
-            rowSelectable={(r) => r.mode !== 'FBA'}
+            rowSelectable={(r) => r.mode !== 'FBA' && r.mode !== 'CLOSED'}
             selectAllHint={CONTROL_HELP.selectAll}
-            rowSelectableHint="Amazon-managed (FBA) — excluded from actions"
+            rowSelectableHint={`Not selectable: Amazon-managed (FBA), or ${INACTIVE_ROW}`}
             emptyState={loading ? <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span> : <span style={{ color: 'var(--text-tertiary)' }}>No listings.</span>}
           />
         </div>

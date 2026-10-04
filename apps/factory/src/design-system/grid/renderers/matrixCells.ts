@@ -33,6 +33,7 @@
 import {
   MATRIX_CELL_KINDS,
   type FulfilmentMethod,
+  type ListingCell,
   type MatrixCellKind,
   type MatrixCells,
   type MatrixCoordinate,
@@ -40,7 +41,7 @@ import {
   type SaleCell,
   type SyncCell,
 } from '../matrix/contract'
-import { projectionMeta } from './projection'
+import { projectionMeta, type ProjectionState } from './projection'
 import { readinessMeta, type ReadinessTone } from './readiness'
 
 /** The em dash every empty Matrix cell draws — the sheet's own, not a second one. */
@@ -63,14 +64,14 @@ export const MATRIX_DASH = '—'
 export const MATRIX_CELL_COPY: MatrixCopy = {
   amazonManaged: 'Amazon-managed',
   uncounted: 'Uncounted',
-  closed: 'Closed',
+  closed: 'Inactive',
   notListed: 'Not listed',
   sharedEu: (markets) => `Shared by ${markets.join(' ')} — one quantity per SKU on Amazon EU`,
   followsPool: (n, locations, buffer) => `Follows the pool · ${n} available at ${locations.join(', ') || 'no routed location'} − ${buffer} buffer`,
   pinnedAt: (n) => `Pinned at ${n}`,
-  pausedBy: (via, would) => `Paused by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? MATRIX_DASH} · Resume to push`,
+  pausedBy: (via, would) => `Stock sync held by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? MATRIX_DASH} · Release to push`,
   uncountedHint: 'No routed location holds this SKU — nothing is pushed',
-  closedHint: 'Offer closed — reopen in Sync Control',
+  closedHint: 'Selling is paused here — set Active in the sheet\'s Status column and Publish',
   guardFba: 'Guard reads FBA — the quantity is not pushed',
   reported: (r) => `Amazon reports ${r} — differs from Nexus`,
   followsBase: (price) => `Follows the base price ${price}`,
@@ -125,6 +126,52 @@ const guardDiffers = matrixGuardDiffers
 
 /** The one oversold sentence — the ⚠ mark's title and the tooltip line are the same string. */
 export const MATRIX_OVERSOLD_SENTENCE = 'The channel holds more than the pool can back'
+
+/* ── the Listing cell's word: health first, then the sheet's selling word ──────────────────── */
+
+/**
+ * The health words that win over the selling word (build shape v2, P12): the row is left out, the channel refuses or
+ * hides it, or a value is missing. Each sends the operator somewhere the selling word does not.
+ */
+const LISTING_HEALTH: readonly string[] = ['excluded', 'suppressed', 'error', 'needs-value', 'not-set-up', 'collides']
+
+/**
+ * The selling state's word, by `SellingState` key (@nexus/shared/listing-actions) — the sheet's Status column's words:
+ * Active · Inactive · Mixed · Ended · Not listed (a draft, or a listing Nexus deleted, is not on the channel here).
+ */
+const SELLING_PROJECTION: Readonly<Record<string, ProjectionState>> = {
+  active: 'active', paused: 'closed', mixed: 'partly-inactive', ended: 'ended', draft: 'not-listed', not_listed: 'not-listed',
+}
+
+/**
+ * The projection state the Matrix's Listing cell SHOWS (build shape v2, P12, Owner 2026-10-04): the health word when
+ * there is one (`LISTING_HEALTH`), else the selling word the sheet's Status column shows for the same listing (Active ·
+ * Inactive · Mixed · Ended · Not listed), else the wire's own word (no selling state known: "Listed"; a wire `draft`
+ * reads Not listed — one set of words, Owner 2026-10-04). The Matrix shows the word only; it has no selling verbs — the
+ * Status column and Publish change it.
+ *
+ * The wire's `state` is kept as it is (chips, filters and `matrixCellState` read it); only the word on screen, in a copy,
+ * an export and the tooltip follows this rule.
+ */
+export function matrixListingProjection(listing: Pick<ListingCell, 'state' | 'selling'> | null | undefined): ProjectionState | null {
+  if (!listing) return null
+  if (LISTING_HEALTH.includes(listing.state)) return listing.state as ProjectionState
+  const selling = listing.selling?.state
+  const shown = selling && Object.prototype.hasOwnProperty.call(SELLING_PROJECTION, selling) ? SELLING_PROJECTION[selling] : null
+  return shown ?? (listing.state === 'draft' ? 'not-listed' : listing.state as ProjectionState)
+}
+
+/**
+ * Buyers cannot buy it here: the listing's selling state is Inactive, Mixed or Ended (or, with no selling state on the
+ * wire, its state is `closed` / `ended`). The Matrix's "Inactive" chip (id `matrix-not-selling`, kept for saved views)
+ * counts these rows. Not listed (a draft, or a listing Nexus deleted) is not counted: there is no listing to sell.
+ */
+export function matrixListingNotSelling(listing: Pick<ListingCell, 'state' | 'selling'> | null | undefined): boolean {
+  if (!listing) return false
+  const selling = listing.selling?.state
+  if (selling && selling !== 'unknown' && selling !== 'not_listed') return selling === 'paused' || selling === 'mixed' || selling === 'ended'
+  return listing.state === 'closed' || listing.state === 'ended'
+}
 
 /**
  * The §3.4 state of one cell.
@@ -258,8 +305,9 @@ export function matrixModeWord(sync: SyncCell | null | undefined): string {
 }
 
 /**
- * The Sync word — `Sent <ago>` · `Queued` · `Sending` · `Failed` · `Dead` · `Paused · policy` ·
- * `Paused · listing` · `Never` (Appendix A, verbatim).
+ * The Sync word — `Sent <ago>` · `Queued` · `Sending` · `Failed` · `Dead` · `Sync held · policy` ·
+ * `Sync held · listing` · `Never` (Appendix A; build shape v2: a held STOCK SYNC reads "Sync held" — it is not an
+ * Inactive listing; selling words are the sheet's Status column's).
  */
 export function matrixQueueWord(cells: MatrixCells | null | undefined, now: number = Date.now()): string {
   const q = cells?.queue
@@ -273,7 +321,7 @@ export function matrixQueueWord(cells: MatrixCells | null | undefined, now: numb
     case 'sending': return 'Sending'
     case 'failed': return 'Failed'
     case 'dead': return 'Dead'
-    case 'paused': return `Paused · ${q.via === 'POLICY' ? 'policy' : 'listing'}`
+    case 'paused': return `Sync held · ${q.via === 'POLICY' ? 'policy' : 'listing'}`
     case 'never': return 'Never'
   }
 }
@@ -283,7 +331,7 @@ export function matrixQueueWord(cells: MatrixCells | null | undefined, now: numb
  * `✗ Failed` · `Dead` · `⏸ policy` / `⏸ listing` · `—` never.
  *
  * 🔴 Two forms, one fact, and the split is the design's: §3.4 draws the CELL (a glyph and a short
- * word, because the column is 96px and `Paused · listing` measured 94px against 63 available), and
+ * word, because the column is 96px and the long word `Sync held · listing` cannot fit the 63px available), and
  * Appendix A fixes the WORD an export, a filter and a tooltip carry (`matrixQueueWord`). The glyph
  * is the identity (`reference_tag_identity_is_glyph_not_colour`); the tone rides on it.
  */
@@ -303,7 +351,7 @@ export function matrixQueueGlyph(cells: MatrixCells | null | undefined, now: num
 }
 
 /**
- * The Qty word — `<n>` · `⏸ <n>` · `—` · `Uncounted` · `Closed` (Appendix A).
+ * The Qty word — `<n>` · `⏸ <n>` · `—` · `Uncounted` · `Inactive` (Appendix A; the wire's CLOSED reads Inactive).
  *
  * The ⏸ belongs to the TEXT and not only to the renderer, because this same function feeds the
  * clipboard, the CSV export and the text filter (`valueFormatter` / `getQuickFilterText`), and a
@@ -341,8 +389,10 @@ export function matrixCellText(
   /* `||`, not `??`: an empty currency string is no currency, and `Intl` would throw on it. */
   const currency = cells.price?.currency || coord.currency
   switch (kind) {
-    case 'listing':
-      return cells.listing ? projectionMeta(cells.listing.state).label : ''
+    case 'listing': {
+      const shown = matrixListingProjection(cells.listing)
+      return shown ? projectionMeta(shown).label : ''
+    }
     case 'fulfilment':
       return cells.fulfilment?.method ?? MATRIX_DASH
     case 'syncMode':
@@ -413,7 +463,10 @@ const TONE_SOURCE: Partial<Record<MatrixCellState, RowState>> = {
  * the delegation without re-deriving it, and so an auditor can check it by reading.
  */
 export function matrixCellToneFrom(kind: MatrixCellKind, cells: MatrixCells | null | undefined): MatrixToneSource {
-  if (kind === 'listing') return cells?.listing ? projectionMeta(cells.listing.state).from : null
+  if (kind === 'listing') {
+    const shown = matrixListingProjection(cells?.listing)
+    return shown ? projectionMeta(shown).from : null
+  }
   const source = TONE_SOURCE[matrixCellState(kind, cells)]
   return source ? `row:${source}` : null
 }
@@ -432,8 +485,9 @@ export function matrixCellTone(
   _coord?: Pick<MatrixCoordinate, 'key'>,
 ): ReadinessTone | null {
   if (kind === 'listing') {
-    if (!cells?.listing) return null
-    const meta = projectionMeta(cells.listing.state)
+    const shown = matrixListingProjection(cells?.listing)
+    if (!shown) return null
+    const meta = projectionMeta(shown)
     /* `excluded` declares no counterpart and paints nothing — `from: null` is the discriminator,
        not the tone value, because `neutral` is also a real painted tone elsewhere. */
     return meta.from == null ? null : meta.tone
@@ -531,8 +585,13 @@ export function matrixCellTooltip(
   switch (kind) {
     case 'listing': {
       const l = cells.listing
-      if (!l) break
-      lines.push(projectionMeta(l.state).hint)
+      const shown = matrixListingProjection(l)
+      if (!l || !shown) break
+      lines.push(projectionMeta(shown).hint)
+      /* The selling state's own reason ("Inactive: this market's Amazon offer is removed.", "3 of 11 variations are
+         inactive.") — the sheet's. */
+      const reason = l.selling?.reason?.trim()
+      if (reason) lines.push(reason)
       if (l.externalId) lines.push(l.externalId)
       if (l.detail) lines.push(l.detail)
       break

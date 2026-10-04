@@ -86,7 +86,7 @@ export function normalizeModeCell(raw: unknown): 'FOLLOW' | 'PINNED' | 'PAUSED' 
   if (v === '') return null
   if (['follow', 'following', 'segui', 'pool'].includes(v)) return 'FOLLOW'
   if (['pinned', 'pin', 'bloccato', 'fisso'].includes(v)) return 'PINNED'
-  if (['paused', 'pause', 'pausa', 'in pausa'].includes(v)) return 'PAUSED'
+  if (['paused', 'pause', 'pausa', 'in pausa', 'sync held', 'held', 'hold'].includes(v)) return 'PAUSED'
   if (['excluded', 'exclude', 'escluso', 'escludi'].includes(v)) return 'EXCLUDED'
   return undefined
 }

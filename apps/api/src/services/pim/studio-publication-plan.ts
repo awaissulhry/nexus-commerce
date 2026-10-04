@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { StudioPublishIssue, StudioPublishScope } from '@nexus/shared/studio-publication'
-import { assertPublishAllowed } from '@nexus/shared/push-lock'
+import { assertPublishAllowed, assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
+import { ENDED_FIRST } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { resolveConnection } from '../connection-resolver.service.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from './workspace-destination.js'
@@ -13,6 +14,9 @@ import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
 import { ebayListingLevelValues, isEbayItemLevel, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
+import { newListingChoices } from '../listings/new-listing-choices.js'
+import { readListingDeletions } from '../listings/listing-deletions.js'
+import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 
@@ -48,29 +52,59 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   // draft rows itself (`ensureDraftListings`, `family: false`). The review lists every product it sends and says why.
   const unstarted = scope.channel === 'EBAY' && !destination.aliasKey && products.length > 1
     && !listings.some(l => l.externalListingId) && !listings.some(l => l.productId !== parent.id)
+  // Delete and relist (simplify, Owner 2026-10-04) — the rows Nexus deleted and that are not listed again: rows not on the
+  // channel, default Not listed (`readListingDeletions`; the sheet reads the same). Product id → its delete.
+  const deletionsByListing = await readListingDeletions(listings.map(listing => ({ ...listing, channel: scope.channel, marketplace: scope.marketplace })))
+  const deletions = new Map([...deletionsByListing].map(([listingId, deletion]) => [listings.find(l => l.id === listingId)!.productId, deletion]))
+  // New listings (Owner 2026-10-04) — what Publish does with each row not on the channel (deleted ones included): its own
+  // Status choice, the main row's, else today's default — Not listed for a deleted row (`newListingChoices`, the sheet
+  // reads the same). A variation set Not listed is left out, as an excluded one; a main row set Not listed holds the
+  // family (studio-publication.service.ts `newRowsOf`).
+  const createChoices = newListingChoices({ channel: scope.channel, aliasKey: destination.aliasKey ?? '', familyId: parent.id,
+    products: products.map(p => ({ id: p.id, parentId: p.parentId })), listings, excludedListingIds: excludedIds, deletions: deletionsByListing,
+    shopifyActive: scope.channel === 'SHOPIFY' && String(nativeListingValue(listings.find(l => l.productId === parent.id) ?? null, 'status', 'DRAFT') ?? '').toUpperCase() === 'ACTIVE' })
+  const notListedVariation = (productId: string) => productId !== parent.id && createChoices.get(productId)?.own === 'not_listed'
   // VTR step 0 — the one "included" rule Information and the dock use (`studio-sheet.service.ts`, `family-projection.service.ts`):
   // a VARIANT is in this listing only with its own row here that is not excluded. A variant with no row is not sent.
   const selected = products.filter(p => {
     const rows = listings.filter(l => l.productId === p.id)
-    return (p.id === parent.id || rows.length > 0 || unstarted) && !rows.some(l => excludedIds.has(l.id))
+    return (p.id === parent.id || rows.length > 0 || unstarted) && !rows.some(l => excludedIds.has(l.id)) && !notListedVariation(p.id)
   })
     .sort(familyPublicationOrder(p => p.id === parent.id))
+  const notListedCount = products.filter(p => notListedVariation(p.id)).length
+  // D10 (build shape v2, Owner 2026-10-04) — row rules, not one lock for the family. A row ON the channel receives its
+  // content (Partial and Full update) while it is paused, its offer closed or its stock sync held: content never carries
+  // stock or the offer. A row the channel ENDED is skipped (relist it first); a discontinued or released identity is
+  // skipped with the lock's own sentence. eBay and Shopify change a whole listing, so one skipped row skips the family.
+  // A row NOT on the channel yet is created whole, with its stock and offer: the create keeps the old locks (a closed
+  // Amazon offer is skipped; any other lock refuses the family).
+  const onChannel = (productId: string) => !!listings.find(l => l.productId === productId)?.externalListingId
   const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
-  const skipped = selected.filter(p => closed.has(`${p.id}|${scope.marketplace}`))
-    .map(p => ({ productId: p.id, sku: p.sku, reason: 'Offer closed — not sent' }))
-  const included = selected.filter(p => !closed.has(`${p.id}|${scope.marketplace}`))
+  const rowSkips = new Map<string, string>()
+  for (const p of selected) {
+    const rule = existingRowRule(listings.find(l => l.productId === p.id))
+    if (rule) rowSkips.set(p.id, rule)
+    else if (!onChannel(p.id) && closed.has(`${p.id}|${scope.marketplace}`)) rowSkips.set(p.id, 'Offer closed — not sent')
+  }
+  const wholeListing = ['EBAY', 'SHOPIFY'].includes(scope.channel) ? [...rowSkips.values()][0] : undefined
+  const skipped = selected.filter(p => wholeListing || rowSkips.has(p.id))
+    .map(p => ({ productId: p.id, sku: p.sku, reason: rowSkips.get(p.id) ?? wholeListing! }))
+  const included = selected.filter(p => !skipped.some(skip => skip.productId === p.id))
   const issues: StudioPublishIssue[] = []
   const error = (message: string) => issues.push({ message, severity: 'error' })
   if (!selected.length) error('Every product is excluded from this destination. Include a product in Information first.')
   if (!selected.some(p => p.id === parent.id)) error('The parent listing is excluded. Include it before publishing this family.')
-  if ((parent.isParent || parent.isMaster) && selected.length < 2) error('This family has no included variants to publish.')
+  if ((parent.isParent || parent.isMaster) && selected.length < 2) error(notListedCount
+    ? 'Every variation of this family is Not listed here, so there is nothing to create. Set a variation Active or Inactive.'
+    : 'This family has no included variants to publish.')
   for (const skip of skipped) issues.push({ ...skip, message: skip.reason, severity: 'warning' })
+  if (selected.length && !included.length) error(`Nothing of this family can be sent here: ${skipped[0].reason}`)
   if (unstarted) issues.push({ severity: 'warning', message: `No variant had an eBay row here yet, so all ${selected.length - 1} variants are included. Publishing starts their eBay rows.` })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
   // Audit P12 — say WHICH account and where (the studio footer says the same).
   if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error(`Reconnect ${account.displayName?.trim() || 'this account'} in Settings → Channels before publishing.`)
-  // Publish's lock: a paused still-draft may be sent (Publish is what makes it live); any other paused listing is refused.
-  for (const listing of listings.filter(l => included.some(p => p.id === l.productId))) {
+  // Publish's lock for a CREATE: a paused still-draft may be sent (Publish is what makes it live); any other lock refuses.
+  for (const listing of listings.filter(l => !l.externalListingId && included.some(p => p.id === l.productId))) {
     const refusal = assertPublishAllowed(listing)
     if (refusal) error(refusal.sentence)
   }
@@ -129,9 +163,22 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const revision = publicationDigest({ scope, products, listings, excluded: [...excludedIds].sort(), skipped,
     resolved: resolved.map(r => ({ products: r.products, catalogue: r.catalogue })) })
   return { scope, destination, account, parent, products: included, listings, resolved, languages, issues, revision, skipped,
-    excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing' }
+    excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing', createChoices, deletions }
 }
 export type PublicationFacts = Awaited<ReturnType<typeof readPublicationFacts>>
+
+/**
+ * D10 — the one rule for a row already on the channel: null = its content is sent (paused, offer closed and stock-sync
+ * held included); else the reason it is skipped. Ended (the listing's status, `endedAt`, or the ENDED intent) says
+ * "relist it first"; a discontinued or released identity keeps the push lock's sentence. A row not on the channel is
+ * not judged here (its create keeps the publish lock).
+ */
+export function existingRowRule(listing: (PushLockListing & { externalListingId?: string | null }) | null | undefined): string | null {
+  if (!listing?.externalListingId) return null
+  if (listing.endedAt || String(listing.listingStatus ?? '').trim().toUpperCase() === 'ENDED' || listing.presenceIntent === 'ENDED') return ENDED_FIRST
+  if (listing.presenceIntent === 'DISCONTINUED' || listing.presenceIntent === 'RELEASED') return assertPushAllowed({ presenceIntent: listing.presenceIntent })?.sentence ?? null
+  return null
+}
 
 /** The eBay catalogue fields as listing-level candidates (key, label, store, the names they go by). */
 function ebayFields(fields: ReadonlyArray<{ fieldKey: string; sheetKey?: string; label: string; channelStore?: unknown }> | undefined): ListingLevelField[] {

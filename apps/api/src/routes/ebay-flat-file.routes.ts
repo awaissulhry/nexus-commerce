@@ -1,4 +1,4 @@
-import { assertPublishAllowed, assertPushAllowed, isStillDraftListing } from '@nexus/shared/push-lock'
+import { assertPublishAllowed, assertPushAllowed, isStillDraftListing, sellingPaused, type PushRefusal } from '@nexus/shared/push-lock'
 import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
@@ -107,6 +107,19 @@ const SCHEMA_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 
 // ── Route plugin ───────────────────────────────────────────────────────
+
+/**
+ * Build shape v2 (P13) — the old flat-file Push sends no quantity to a listing whose selling is paused (Inactive: the
+ * product sheet's Pause offer). The push lock already stops the whole push before anything is sent (one eBay item
+ * carries every variation, and leaving one variation out of a group push would remove it from eBay); this names the
+ * row and the market in plain words. Any other refusal keeps the lock's own sentence.
+ */
+export function heldRowSentence(row: Record<string, unknown>, listing: { offerClosedAt?: Date | string | null; marketplace?: string | null }, refusal: PushRefusal): string {
+  if (refusal.code !== 'PUSH_OFFER_CLOSED' || !sellingPaused(listing)) return refusal.sentence;
+  const market = String(listing.marketplace ?? '').toUpperCase();
+  return `Nothing was pushed: ${String(row.sku ?? 'a row')} is Inactive on eBay${market ? ` · ${market === 'GB' ? 'UK' : market}` : ''} (selling is paused), `
+    + `and Nexus sends it no quantity. Change it in the product sheet's Status column; the product sheet's Publish also sends its content while it stays Inactive.`;
+}
 
 export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   // ── GET /api/ebay/flat-file/rows ────────────────────────────────────
@@ -1591,7 +1604,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // A still-draft's pause only keeps it inert; Push is a publish. Which site's draft may really be sent is
           // decided per site inside the push (`familyPushRefusal`).
           const refusal = isStillDraftListing(listing) ? assertPublishAllowed(listing) : assertPushAllowed(listing);
-          if (refusal) return reply.code(409).send({ error: refusal.code, message: refusal.sentence, refusal });
+          if (refusal) return reply.code(409).send({ error: refusal.code, message: heldRowSentence(row, listing, refusal), refusal });
         }
       }
     } catch (error) {
@@ -1949,7 +1962,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       for (const listing of controls) {
         // As the pre-check above: the per-site decision is `familyPushRefusal`, inside the push.
         const refusal = isStillDraftListing(listing) ? assertPublishAllowed(listing) : assertPushAllowed(listing);
-        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
+        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${heldRowSentence(row, listing, refusal)}`), { code: refusal.code, refusal });
       }
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertPublishAllowed, assertPushAllowed, isStillDraftListing, STILL_DRAFT_LISTING } from './push-lock.js'
+import { assertPublishAllowed, assertPushAllowed, isOldClosePause, isStillDraftListing, sellingPaused, SELLING_PAUSED_SENTENCE, STILL_DRAFT_LISTING } from './push-lock.js'
 
 const draft = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null }
 const live = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'LIVE-ID' }
@@ -82,5 +82,40 @@ describe('assertPushAllowed', () => {
   it('has no schema or row-existence dependency (callers own coordinate validation)', () => {
     expect(assertPushAllowed(undefined)).toBeNull()
     expect(assertPushAllowed(null)).toBeNull()
+  })
+})
+
+describe('a listing whose selling is paused (Inactive) gets no quantity', () => {
+  const sheetPause = { offerClosedAt: new Date('2026-10-04T10:00:00Z'), offerCloseReason: 'sheet-pause' }
+  it('is any row with offerClosedAt: the sheet\'s Pause offer (eBay, Shopify, Etsy) and Amazon\'s market close alike', () => {
+    expect(sellingPaused(sheetPause)).toBe(true)
+    expect(sellingPaused({ offerClosedAt: '2026-10-04T10:00:00Z' })).toBe(true)
+    expect(sellingPaused({ offerClosedAt: null })).toBe(false)
+    expect(sellingPaused(null)).toBe(false)
+  })
+  it('is refused by the push lock in plain words that point to the Status column', () => {
+    expect(assertPushAllowed(sheetPause)).toEqual({ code: 'PUSH_OFFER_CLOSED', sentence: expect.stringContaining('Status column') })
+    expect(assertPushAllowed(sheetPause)?.sentence).not.toMatch(/Restore the offer|Sync Control/)
+    expect(SELLING_PAUSED_SENTENCE).toMatch(/^Inactive here .*Status column\.$/)
+  })
+})
+
+describe('isOldClosePause — an eBay listing the OLD close-listing paused (pin at 0 + endedAt, no hold)', () => {
+  const old = { channel: 'EBAY', listingStatus: 'ACTIVE', offerClosedAt: null, followMasterQuantity: false, quantityOverride: 0, quantity: 0, endedAt: new Date(), endedReason: 'too many returns' }
+  it('recognises the shape the old close wrote, with or without a reason', () => {
+    expect(isOldClosePause(old)).toBe(true)
+    expect(isOldClosePause({ ...old, endedReason: null })).toBe(true)
+    expect(isOldClosePause({ ...old, quantityOverride: null })).toBe(true)
+  })
+  it.each([
+    ['another channel', { channel: 'AMAZON' }],
+    ['no presence mark', { endedAt: null }],
+    ['a channel-file delete', { endedReason: 'channel-file-delete' }],
+    ['a listing held by the sheet\'s own Pause', { offerClosedAt: new Date() }],
+    ['a listing the channel ended', { listingStatus: 'ENDED' }],
+    ['a pin changed later to a number', { quantityOverride: 3, quantity: 3 }],
+    ['a listing that follows the stock again', { followMasterQuantity: true }],
+  ])('is not %s', (_, change) => {
+    expect(isOldClosePause({ ...old, ...change })).toBe(false)
   })
 })

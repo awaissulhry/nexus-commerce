@@ -13,18 +13,19 @@
  * `coverage` names every source, so a history that does not (yet) show the old flat-file uploads says so instead of
  * looking complete (Owner D1 = A).
  */
-import { HISTORY_RECENT_DAYS, HISTORY_SOURCES, HISTORY_STATES, type HistoryCoverage, type HistoryPage, type HistoryQuery, type HistoryRun,
-  type HistoryRunDetail, type HistorySource, type HistoryState, type HistoryTotals } from '@nexus/shared/publication-history'
+import { HISTORY_RECENT_DAYS, HISTORY_SOURCES, HISTORY_STATES, HISTORY_WHAT, type HistoryCoverage, type HistoryPage, type HistoryQuery, type HistoryRun,
+  type HistoryRunDetail, type HistorySource, type HistoryState, type HistoryTotals, type HistoryWhat } from '@nexus/shared/publication-history'
 import prisma from '../../db.js'
 import { HISTORY_ADAPTERS } from './publication-history/registry.js'
 import { userNames } from './publication-history/users.js'
-import { emptyTotals, type HistoryCursor, type HistoryFilters, type HistorySourceRow, type HistorySourceTotals, type PublicationHistoryAdapter } from './publication-history/types.js'
+import { answersWhat, emptyTotals, type HistoryCursor, type HistoryFilters, type HistorySourceRow, type HistorySourceTotals, type PublicationHistoryAdapter } from './publication-history/types.js'
 
 export const DEFAULT_PAGE = 50
 export const MAX_PAGE = 100
 
 const NOT_YET: Record<HistorySource, string> = {
   studio: 'Product sheet publishes are not shown yet.',
+  'listing-action': 'Selling changes (pause, resume, end, relist, delete) are not shown here yet.',
   'amazon-flat-file': 'Uploads from the old Amazon flat file are not shown here yet.',
   'ebay-flat-file': 'Pushes from the old eBay flat file are not shown here yet.',
   photos: 'Photo publishes are not shown here yet.',
@@ -72,6 +73,9 @@ export async function parseHistoryQuery(raw: Record<string, unknown>): Promise<{
   const sources = list(raw.source)
   const badSource = sources.find(source => !(HISTORY_SOURCES as readonly string[]).includes(source))
   if (badSource) throw new PublicationHistoryError(`Unknown source "${badSource}". Use ${HISTORY_SOURCES.join(', ')}.`)
+  const what = list(raw.what)
+  const badWhat = what.find(group => !(HISTORY_WHAT as readonly string[]).includes(group))
+  if (badWhat) throw new PublicationHistoryError(`Unknown "what" value "${badWhat}". Use ${HISTORY_WHAT.join(', ')}.`)
   const limitRaw = raw.limit === undefined || raw.limit === '' ? DEFAULT_PAGE : Number(raw.limit)
   if (!Number.isInteger(limitRaw) || limitRaw < 1) throw new PublicationHistoryError('"limit" must be a whole number of at least 1.')
   const from = time(raw.from, 'from')
@@ -91,6 +95,7 @@ export async function parseHistoryQuery(raw: Record<string, unknown>): Promise<{
     from, to,
     q: text(raw.q)?.slice(0, 200),
     ...(checkedRaw !== undefined ? { checked: checkedRaw === 'true' } : {}),
+    ...(what.length ? { what: [...new Set(what)] as HistoryWhat[] } : {}),
   }
   return {
     filters,
@@ -123,7 +128,7 @@ export async function coverageOf(adapters: PublicationHistoryAdapter[] = HISTORY
 
 export async function listPublicationHistory(query: { filters: HistoryFilters; sources: HistorySource[]; limit: number; cursor: HistoryCursor | null },
   options: { adapters?: PublicationHistoryAdapter[]; now?: Date } = {}): Promise<HistoryPage> {
-  const adapters = (options.adapters ?? HISTORY_ADAPTERS).filter(adapter => query.sources.includes(adapter.source))
+  const adapters = (options.adapters ?? HISTORY_ADAPTERS).filter(adapter => query.sources.includes(adapter.source) && answersWhat(adapter, query.filters))
   const now = options.now ?? new Date()
   const ask = query.limit + 1
   const batches = await Promise.all(adapters.map(async adapter => ({ adapter, rows: await adapter.list({ filters: query.filters, cursor: query.cursor, limit: ask, now }) })))
@@ -165,7 +170,7 @@ async function sourceTotals(adapter: PublicationHistoryAdapter, filters: History
  */
 export async function countPublicationHistory(query: { filters: HistoryFilters; sources: HistorySource[] },
   options: { adapters?: PublicationHistoryAdapter[]; now?: Date } = {}): Promise<HistoryTotals> {
-  const adapters = (options.adapters ?? HISTORY_ADAPTERS).filter(adapter => query.sources.includes(adapter.source))
+  const adapters = (options.adapters ?? HISTORY_ADAPTERS).filter(adapter => query.sources.includes(adapter.source) && answersWhat(adapter, query.filters))
   const now = options.now ?? new Date()
   const doneSince = now.getTime() - HISTORY_RECENT_DAYS * DAY_MS
   const filters: HistoryFilters = { ...query.filters, states: [], checked: undefined }

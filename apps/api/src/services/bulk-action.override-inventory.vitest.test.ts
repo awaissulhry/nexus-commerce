@@ -192,7 +192,7 @@ describe('the owner rules', () => {
     const status = Object.fromEntries(all.items.map((i) => [i.channelListingId, [i.status, i.errorMessage]]))
     expect(status[l['AMAZON:IT']]).toEqual(['SUCCEEDED', null])
     expect(status[l['AMAZON:DE']]).toEqual(['SUCCEEDED', null])
-    expect(status[l['AMAZON:FR']]![1]).toMatch(/offer is closed, and a quantity change never reopens it/)
+    expect(status[l['AMAZON:FR']]![1]).toMatch(/offer is closed \(Inactive\), and a quantity change never reopens it/)
     expect(status[l['AMAZON:ES']]![1]).toMatch(/\(FBA\)/)
     for (const m of ['IT', 'DE']) {
       expect(qtyColumns(await listing(l[`AMAZON:${m}`]))).toMatchObject({ quantity: 6, quantityOverride: 6, followMasterQuantity: false })

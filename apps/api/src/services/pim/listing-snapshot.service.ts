@@ -216,6 +216,8 @@ export async function restoreToDraft(input: {
 
   const payload = snap.payload as Record<string, unknown> | null
   if (payload?.kind === 'studio-publication') throw new WorkspaceScopeError('A provider request journal cannot be restored as listing draft fields. Review its sent values before editing the draft.', 422)
+  // Sheet publish parity, step 7 — a pause / resume / end / relist record holds channel evidence, not listing fields.
+  if (payload?.kind === 'listing-action') throw new WorkspaceScopeError('A pause, resume, end or relist record cannot be restored as listing draft fields. Use the Status column to change how the listing sells.', 422)
   const source = (payload && typeof payload === 'object' && '__capturedFrom' in payload
     ? ((payload as { state?: Record<string, unknown> }).state ?? {})
     : (payload ?? {})) as Record<string, unknown>

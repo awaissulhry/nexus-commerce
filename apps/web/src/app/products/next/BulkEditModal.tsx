@@ -5,7 +5,7 @@
  *
  * The shape is Ad Manager's `BulkActionsModal`, deliberately: operators already know it, and the
  * two steps are the point. Step one is a tick per field, so nothing is written that was not asked
- * for; step two states what is about to happen — "Status → Active · 12 products · 38 variations" —
+ * for; step two states what is about to happen — "Catalog status → Active · 12 products · 38 variations" —
  * before anything is sent. The toolbar used to carry three status buttons that wrote to N rows
  * with no such statement.
  *
@@ -19,6 +19,7 @@ import { Listbox, Modal } from '@/design-system/components'
 import { Button, Checkbox, Pill } from '@/design-system/primitives'
 import type { ProductRow } from '@/app/products/_types'
 
+import { CATALOG_STATUS_HINT } from './columns'
 import styles from './styles.module.css'
 
 export type BulkStatus = 'ACTIVE' | 'DRAFT' | 'INACTIVE'
@@ -103,15 +104,19 @@ export function BulkEditModal({ open, onClose, selection, busy = false, onSubmit
           </div>
 
           <div className={styles.bulkRow}>
-            <Checkbox checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change status" />
-            <span className={styles.bulkItem}>Status</span>
+            <Checkbox checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change catalog status" />
+            {/* Build shape v2 (P11): the product's status in Nexus only. A listing's selling state is set from Publish… */}
+            <span className="nds-field-w">
+              <span className={styles.bulkItem}>Catalog status</span>
+              <span className="nds-field-hint">{CATALOG_STATUS_HINT}</span>
+            </span>
             <div className={styles.bulkAction}>
               <Listbox
                 width={160}
                 options={STATUS_OPTIONS}
                 value={status}
                 onChange={(v) => { setStatus(v as BulkStatus); setEnStatus(true) }}
-                ariaLabel="Status to set"
+                ariaLabel="Catalog status to set"
               />
             </div>
           </div>
@@ -129,7 +134,7 @@ export function BulkEditModal({ open, onClose, selection, busy = false, onSubmit
         <div className={styles.bulkReview}>
           {changes.status && (
             <div className={styles.bulkReviewRow}>
-              <span className={styles.bulkReviewField}>Status</span>
+              <span className={styles.bulkReviewField}>Catalog status</span>
               <span><Pill tone={STATUS_TONE[changes.status]}>{STATUS_LABEL[changes.status]}</Pill></span>
             </div>
           )}

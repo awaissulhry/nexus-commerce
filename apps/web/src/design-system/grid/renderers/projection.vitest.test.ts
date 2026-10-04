@@ -21,6 +21,8 @@ describe('projection vocabulary', () => {
       /* MX.G, design §3.4 — the Matrix's four. The ORDER is the declaration order in the table and
          is asserted because `PROJECTION_STATES` is what a legend and a filter's options render. */
       'suppressed', 'closed', 'error', 'ended',
+      /* Build shape v2 (P12) — the selling words the Matrix's Listing cell shows (the Status column's own). */
+      'active', 'partly-inactive', 'not-listed',
     ])
     expect(PROJECTION_STATES.map((s) => projectionMeta(s).label)).toEqual([
       'Listed',
@@ -31,9 +33,12 @@ describe('projection vocabulary', () => {
       'Needs a value',
       'Collides',
       'Suppressed',
-      'Closed',
+      'Inactive',
       'Error',
       'Ended',
+      'Active',
+      'Mixed',
+      'Not listed',
     ])
   })
 
@@ -55,10 +60,10 @@ describe('projection vocabulary', () => {
       expect(meta.tone).toBe(source.tone)
       delegated += 1
     }
-    // 10 of the 11 delegate: `excluded` is still the only member that paints no status colour.
+    // 13 of the 14 delegate: `excluded` is still the only member that paints no status colour.
     // The count is the positive control on the loop above — it is what makes a silently skipped
     // member fail rather than pass (the arm that would have failed is the one never run).
-    expect(delegated).toBe(10)
+    expect(delegated).toBe(13)
   })
 
   it('maps each state to the dot §3.3 draws', () => {
@@ -80,8 +85,16 @@ describe('projection vocabulary', () => {
        against a colour name, so a recolour of a readiness state follows here automatically. */
     expect(projectionMeta('suppressed')).toMatchObject({ dot: 'solid', muted: false, from: 'row:errors' })
     expect(projectionMeta('suppressed').tone).toBe(readinessMeta('errors', 'row').tone)
-    expect(projectionMeta('closed')).toMatchObject({ dot: 'hollow', muted: true, from: 'row:unlisted' })
-    expect(projectionMeta('closed').tone).toBe(readinessMeta('unlisted', 'row').tone)
+    /* Build shape v2: `closed` IS Inactive — the Status column's warning, read from the row warning state. */
+    expect(projectionMeta('closed')).toMatchObject({ dot: 'solid', muted: false, from: 'row:missing', label: 'Inactive' })
+    expect(projectionMeta('closed').tone).toBe(readinessMeta('missing', 'row').tone)
+    expect(projectionMeta('active')).toMatchObject({ dot: 'solid', muted: false, from: 'row:ready', label: 'Active' })
+    expect(projectionMeta('active').tone).toBe(readinessMeta('ready', 'row').tone)
+    /* One set of words (Owner 2026-10-04): the key stays `partly-inactive`, the word is Mixed; Not listed is neutral. */
+    expect(projectionMeta('partly-inactive')).toMatchObject({ dot: 'solid', muted: false, from: 'row:missing', label: 'Mixed' })
+    expect(projectionMeta('not-listed')).toMatchObject({ dot: 'hollow', muted: false, from: 'row:unlisted', label: 'Not listed' })
+    expect(projectionMeta('not-listed').tone).toBe(readinessMeta('unlisted', 'row').tone)
+    expect(projectionMeta('not-listed').hint).toContain('Status column')
     expect(projectionMeta('error')).toMatchObject({ dot: 'solid', muted: false, from: 'row:errors' })
     expect(projectionMeta('error').tone).toBe(readinessMeta('errors', 'row').tone)
     expect(projectionMeta('ended')).toMatchObject({ dot: 'hollow', muted: true, from: 'row:unlisted' })
@@ -94,8 +107,11 @@ describe('projection vocabulary', () => {
        `row:unlisted` and must still point at two different controls. */
     const hints = ['suppressed', 'closed', 'error', 'ended'].map((s) => projectionMeta(s).hint)
     expect(new Set(hints).size).toBe(4)
-    expect(projectionMeta('closed').hint).toContain('Sync Control')
+    /* Build shape v2: Sync Control no longer reopens offers — the Status column + Publish does. */
+    expect(projectionMeta('closed').hint).toBe("Selling is paused here — set Active in the sheet's Status column and Publish")
+    expect(projectionMeta('closed').hint).not.toContain('Sync Control')
     expect(projectionMeta('ended').hint.toLowerCase()).toContain('relist')
+    expect(projectionMeta('ended').hint).toContain('Status column')
     expect(projectionMeta('suppressed').hint).toContain('Needs attention')
     expect(projectionMeta('error').hint).toContain('Needs attention')
     expect(projectionMeta('suppressed').hint).not.toBe(projectionMeta('error').hint)

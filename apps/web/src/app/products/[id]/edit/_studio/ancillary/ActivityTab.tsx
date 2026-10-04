@@ -5,15 +5,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import type { HistoryRun, HistoryTotals } from '@nexus/shared/publication-history'
-import type { StudioRetrySelection } from '@nexus/shared/studio-publication'
+import type { StudioPublishScope, StudioRetrySelection } from '@nexus/shared/studio-publication'
+import { fillResultSentence } from '@nexus/shared/publish-actions'
 import { Button, Pill, SegmentedControl } from '@/design-system/primitives'
 
-import { Banner, ProgressBar } from '@/design-system/components'
+import { Banner, ProgressBar, useToast } from '@/design-system/components'
 import { PublishRuns } from '@/app/products/_publication/history/PublishRuns'
 import { PublishHistoryHost, type PublishHistoryHostValue } from '@/app/products/_publication/history/PublishRunDrawer'
-import { historyRequest, parseHistoryDeepLink, sheetRowIdOf } from '@/app/products/_publication/history/runActions'
+import { historyRequest, parseHistoryDeepLink, requestSheetLanding, sheetFieldHints, sheetRowIdOf, type RunUndo } from '@/app/products/_publication/history/runActions'
 import { useStudioProduct, useStudioRecord, useStudioScope } from '../contracts'
 import { StudioPublishDialog } from '../StudioPublishDialog'
+import { readPublishActions, writePublishActions } from '../sheet/publishActionsApi'
 import { useWorkspaceRead } from '../useWorkspaceRead'
 import {
   groupEvents, readValue, summariseActivity, type EventKind, type ProductEvent,
@@ -173,22 +175,43 @@ export function ActivityTab() {
   /*
    * "Show in sheet" lands on a row only on the destination the studio is showing now: the studio's market and
    * account writers each rebuild the scope keys from the CURRENT scope, so switching channel, market and account in
-   * one step would undo itself. Same pattern as the Errors & Sync tab: one tab write plus the record.
+   * one step would undo itself. Same pattern as the Errors & Sync tab: one tab write plus the record. It lands on the
+   * FIELD the channel named (build shape v2): the request (`requestSheetLanding`) carries the channel's field names, and
+   * the sheet — the only one that knows its columns — maps them to a column and lands there with `landOnCell`.
    */
   /* "Publish failed products again…": a NEW review of the failed publish's destination with its failed fields ticked —
    * the studio's own Publish dialog, never a replay of the stored request. */
   const [retry, setRetry] = useState<StudioRetrySelection | null>(null)
+  /* Undo of a selling change (D-M2 A): Status back to Active is set, then Publish opens on that destination. */
+  const [undoReview, setUndoReview] = useState<StudioPublishScope | null>(null)
+  const { toast } = useToast()
+  const undoSelling = useCallback(async (undo: RunUndo) => {
+    const { run } = undo
+    if (!run.accountId) throw new Error('This publish did not record its account. Set Status to Active in the sheet and publish.')
+    const destination = { channel: run.channel, marketplace: run.marketplace, accountId: run.accountId, aliasKey: run.aliasKey }
+    // Compare-and-set: each row as it is stored now. A value someone set since is theirs: the write keeps it and says so.
+    const stored = await readPublishActions(product.id, destination)
+    const setAt = new Map(stored.rows.map(row => [row.listingId, row.status.setAt]))
+    const listingIds = undo.listingIds.filter(id => setAt.has(id))
+    if (!listingIds.length) throw new Error('These listings are no longer on this destination. Nothing was changed.')
+    const result = await writePublishActions(product.id, { column: 'status', target: 'active' },
+      { listingIds, expected: Object.fromEntries(listingIds.map(id => [id, setAt.get(id) ?? null])) })
+    toast(`${fillResultSentence('Active', result)} Nothing is sent until you publish.`, result.applied.length ? 'success' : 'warning')
+    if (result.applied.length) setUndoReview({ channel: run.channel, marketplace: run.marketplace ?? '', accountId: run.accountId })
+  }, [product.id, toast])
   const host = useMemo<PublishHistoryHostValue>(() => ({
     focusSku: link.sku,
     publishAgain: selection => setRetry(selection),
+    undoSelling,
     canShowInSheet: (run: HistoryRun) => run.channel === scope.scope && run.marketplace === scope.market
       && (!run.accountId || !scope.accountId || run.accountId === scope.accountId),
     showInSheet: (run, item) => {
       const rowId = sheetRowIdOf(run, item)
+      if (rowId) requestSheetLanding({ rowId, fieldNames: sheetFieldHints(item), channel: run.channel, marketplace: run.marketplace })
       scope.setTab('sheet')
       if (rowId) record.open(rowId)
     },
-  }), [link.sku, scope, record])
+  }), [link.sku, scope, record, undoSelling])
 
   const publishesLabel = count != null ? `Publishes (${count.toLocaleString('en-GB')})` : 'Publishes'
   const viewSwitch = (
@@ -212,6 +235,7 @@ export function ActivityTab() {
             <PublishRuns scope="product" productId={product.id} />
           </PublishHistoryHost>
         )}
+      {undoReview && <StudioPublishDialog onClose={() => setUndoReview(null)} initialDestination={undoReview} />}
       {retry && <StudioPublishDialog onClose={() => setRetry(null)}
         initialDestination={{ channel: retry.destination.channel, marketplace: retry.destination.marketplace, accountId: retry.destination.accountId,
           ...(retry.destination.listingId ? { listingId: retry.destination.listingId } : {}) }}

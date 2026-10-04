@@ -18,8 +18,9 @@ const INTENT: Record<PresenceIntent, PresenceMeta> = {
 }
 const FACT: Record<ChannelFact, PresenceMeta> = {
   UNKNOWN: { label: 'Not checked', tone: 'neutral', sentence: 'Nobody has asked the channel.' },
-  SELLING: { label: 'Selling', tone: 'success', sentence: 'The channel confirmed it is selling.' },
-  NOT_SELLING: { label: 'Not selling', tone: 'neutral', sentence: 'The channel confirmed it is not buyable.' },
+  // One set of selling words (Owner 2026-10-04): Active · Inactive · Not listed · Ended · Mixed.
+  SELLING: { label: 'Active', tone: 'success', sentence: 'The channel confirmed it is selling.' },
+  NOT_SELLING: { label: 'Inactive', tone: 'neutral', sentence: 'The channel confirmed it is not buyable.' },
   SUPPRESSED: { label: 'Suppressed', tone: 'danger', sentence: 'The channel is hiding it — their decision.' },
   ABSENT: { label: 'Gone from the channel', tone: 'neutral', sentence: 'The channel answered and has no such listing.' },
   REFUSED: { label: 'Could not ask', tone: 'warning', sentence: 'We asked and could not get an answer.' },

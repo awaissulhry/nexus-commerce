@@ -149,6 +149,20 @@ export const EVENTS = {
     schema: z.strictObject({ listingId: z.string().min(1) }),
     subject: (p) => p.listingId,
   }),
+  'listing.publish_action_changed': defineEvent({
+    type: 'listing.publish_action_changed',
+    context: 'catalog',
+    description: 'A waiting Action or Status value of listing rows was set or cleared (sheet publish, build shape v2); other open sheets refetch.',
+    schema: z.strictObject({
+      // The family (the main product) the rows belong to.
+      productId: z.string().min(1),
+      listingIds: z.array(z.string().min(1)).min(1),
+      column: z.enum(['send', 'status']),
+      // send: partial | full | delete; status: active | inactive | ended | not_listed (a new listing's choice), or null when cleared.
+      value: z.enum(['partial', 'full', 'delete', 'active', 'inactive', 'ended', 'not_listed']).nullable(),
+    }),
+    subject: (p) => p.productId,
+  }),
   'listing.syncing': defineEvent({
     type: 'listing.syncing',
     context: 'catalog',

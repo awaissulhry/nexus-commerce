@@ -18,6 +18,15 @@
  *    (a publication from before the sweep, an UNVERIFIED that is not polled) — except a PUBLISHING row still inside
  *    its 30-minute receipt window.
  *  - in_progress: everything still waiting that Nexus will look at again by itself.
+ *
+ * Build shape v2 (P7):
+ *  - A publication that is a PART of a Publish with selling changes (its batch also holds a `listing-action` child) is
+ *    not a run of its own here: the `listing-action` source lists that Publish as ONE run with its parts. It can still
+ *    be opened by its own id. A batch without selling changes (many markets, many families) is listed as before.
+ *  - `kind` `full_update`: the run sent at least one row as a Full update (`changes.fullProductIds`).
+ *  - The "What" filter: a product sheet run is an update or photos. Choosing only one of them reads one JSON path
+ *    (`changes.review.photosOnly`) of the rows the filter scans — a second exception to the rule above, like the
+ *    reference search: a person choosing a filter, not a page load.
  */
 import { Prisma } from '@prisma/client'
 import { channelLabel } from '@nexus/shared/channel-label'
@@ -30,6 +39,8 @@ import { columnHintOf, kindOf, totalsOf, type HistoryCountInput, type HistoryFil
   type HistorySourceTotals, type PublicationHistoryAdapter } from './types.js'
 
 export const STUDIO_KIND = 'studio-publication'
+/** The listing-action engine's run kind (`LISTING_ACTION_KIND`, apps/api/src/services/listings/listing-action.service.ts). */
+export const SELLING_KIND = 'listing-action'
 /** Statuses of a publication that was sent. PREVIEW (and anything else) was never sent. */
 export const SENT_STATUSES = ['PUBLISHING', 'SUBMITTED', 'UNVERIFIED', 'ACCEPTED', 'VERIFIED', 'PARTIAL', 'FAILED']
 /** Still waiting for the channel's result (the settle core's IN_FLIGHT). */
@@ -64,8 +75,14 @@ interface PageFacts {
   id: string
   action: string | null
   photosOnly: boolean | null
+  /** At least one row was sent as a Full update. */
+  full: boolean | null
   reference: string | null
 }
+
+/** A product sheet run's kind: photos only, a new listing, a Full update, or (by default) an update. */
+export const studioKindOf = (facts: Pick<PageFacts, 'action' | 'photosOnly' | 'full'> | undefined) =>
+  facts?.photosOnly ? 'photos' as const : facts?.action === 'create' ? 'create' as const : facts?.full ? 'full_update' as const : kindOf(facts?.action, 'update')
 
 const iso = (ms: number | null | undefined) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : null)
 /** An exact UTC instant as the timestamp-without-time-zone the columns store. */
@@ -74,12 +91,16 @@ const record = (value: unknown): Record<string, unknown> => (value && typeof val
 const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0)
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, match => `\\${match}`)
 
-const STARTED = Prisma.sql`COALESCE(b."submittedAt", b."createdAt")`
+export const STARTED = Prisma.sql`COALESCE(b."submittedAt", b."createdAt")`
 /** A run still waiting for its result that a person marked as checked (D3). Its state is needs_check. */
-const CHECKED = Prisma.sql`(b.status IN ('PUBLISHING', 'SUBMITTED', 'UNVERIFIED') AND COALESCE(b.summary->>'checkedAt', '') <> '')`
+export const CHECKED = Prisma.sql`(b.status IN ('PUBLISHING', 'SUBMITTED', 'UNVERIFIED') AND COALESCE(b.summary->>'checkedAt', '') <> '')`
+/** `b` is a part of a Publish with selling changes: the `listing-action` source lists it inside that Publish. */
+export const FOLDED = Prisma.sql`(b."batchId" IS NOT NULL AND EXISTS (SELECT 1 FROM "BulkOperation" x WHERE x."batchId" = b."batchId" AND x.kind = ${SELLING_KIND}))`
+/** `b` sent photos only. */
+export const PHOTOS_ONLY = Prisma.sql`(COALESCE(b.changes->'review'->>'photosOnly', '') = 'true')`
 
 /** The state CASE (see the file header). `now` is a parameter so the receipt window is testable. */
-function stateSql(now: Date) {
+export function stateSql(now: Date) {
   return Prisma.sql`CASE
     WHEN ${CHECKED} THEN 'needs_check'
     WHEN b.status IN ('ACCEPTED', 'VERIFIED') THEN 'succeeded'
@@ -131,7 +152,7 @@ function toRow(row: ListRow, facts: PageFacts | undefined): HistorySourceRow {
   const checkedAt = typeof summary.checkedAt === 'string' && summary.checkedAt ? summary.checkedAt : null
   // A check closes a waiting run (`completedAt` = when it was checked) but is not the channel's result.
   const checkedWhileWaiting = !!checkedAt && WAITING.includes(row.status)
-  const kind = facts?.photosOnly ? 'photos' : kindOf(facts?.action, 'update')
+  const kind = studioKindOf(facts)
   const run: Omit<HistoryRun, 'userName' | 'checkedBy'> = {
     id: row.id, source: 'studio', batchId: row.batchId, startedAt: iso(row.sortAt)!, finishedAt: checkedWhileWaiting ? null : iso(row.completedAt),
     state: row.state, status: row.status,
@@ -165,7 +186,9 @@ const SELECT_ROWS = (now: Date) => Prisma.sql`
  * filters a count ignores (`states`) are applied by the list on top; `checked` is a row condition here.
  */
 function studioWhere(f: HistoryFilters): Prisma.Sql[] {
-  const where: Prisma.Sql[] = [Prisma.sql`b.kind = ${STUDIO_KIND}`, Prisma.sql`b.status IN (${Prisma.join(SENT_STATUSES)})`]
+  const where: Prisma.Sql[] = [Prisma.sql`b.kind = ${STUDIO_KIND}`, Prisma.sql`b.status IN (${Prisma.join(SENT_STATUSES)})`, Prisma.sql`NOT ${FOLDED}`]
+  const what = studioWhat(f)
+  if (what) where.push(what)
   if (f.channel) where.push(Prisma.sql`b.channel = ${f.channel}`)
   if (f.marketplace) where.push(Prisma.sql`b.marketplace = ${f.marketplace}`)
   if (f.accountId) where.push(Prisma.sql`b."channelConnectionId" = ${f.accountId}`)
@@ -177,6 +200,20 @@ function studioWhere(f: HistoryFilters): Prisma.Sql[] {
   if (f.checked === false) where.push(Prisma.sql`NOT ${CHECKED}`)
   if (f.q) where.push(matchText(f.q))
   return where
+}
+
+/**
+ * The "What" filter on a product sheet run: an update (Partial, Full or a new listing) or photos. Both or neither chosen
+ * = no condition; a choice with neither (selling changes, deletes) matches no product sheet run.
+ */
+export function studioWhat(f: Pick<HistoryFilters, 'what'>): Prisma.Sql | null {
+  if (!f.what?.length) return null
+  const updates = f.what.includes('updates')
+  const photos = f.what.includes('photos')
+  if (updates && photos) return null
+  if (updates) return Prisma.sql`NOT ${PHOTOS_ONLY}`
+  if (photos) return PHOTOS_ONLY
+  return Prisma.sql`FALSE`
 }
 
 async function listRows(input: HistoryListInput): Promise<ListRow[]> {
@@ -207,11 +244,12 @@ export async function countStudioRuns(input: HistoryCountInput): Promise<History
   return totalsOf(rows)
 }
 
-/** Create-or-update, photos-only and the channel reference — JSON paths of the page's rows only. */
+/** Create-or-update, photos-only, Full update and the channel reference — JSON paths of the page's rows only. */
 async function pageFacts(ids: string[]): Promise<Map<string, PageFacts>> {
   if (!ids.length) return new Map()
   const rows = await prisma.$queryRaw<PageFacts[]>(Prisma.sql`
     SELECT b.id, b.changes->'review'->>'action' AS action, (b.changes->'review'->>'photosOnly') = 'true' AS "photosOnly",
+           (jsonb_typeof(b.changes->'fullProductIds') = 'array' AND jsonb_array_length(b.changes->'fullProductIds') > 0) AS full,
            (SELECT r->>'reference' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(b.changes->'result'->'results') = 'array'
               THEN b.changes->'result'->'results' ELSE '[]'::jsonb END) r
              WHERE COALESCE(r->>'reference', '') <> '' LIMIT 1) AS reference
@@ -296,7 +334,8 @@ async function detail(localId: string, now: Date): Promise<HistoryRunDetail | nu
   const delivery = record(changes.delivery)
   const deliveredIds = Array.isArray(delivery.productIds) ? new Set(delivery.productIds.filter((id): id is string => typeof id === 'string')) : null
   const reference = result?.results?.find(entry => typeof entry?.reference === 'string' && entry.reference)?.reference ?? null
-  const base = toRow(row, { id: row.id, action: typeof review.action === 'string' ? review.action : null, photosOnly: review.photosOnly === true, reference })
+  const full = Array.isArray(changes.fullProductIds) && changes.fullProductIds.length > 0
+  const base = toRow(row, { id: row.id, action: typeof review.action === 'string' ? review.action : null, photosOnly: review.photosOnly === true, full, reference })
 
   const journals = await prisma.$queryRaw<JournalRow[]>(Prisma.sql`
     SELECT s."channelListingId" AS "listingId", s.payload->>'productId' AS "productId", s.payload->>'sku' AS sku,
@@ -380,6 +419,18 @@ async function request(localId: string, listingId: string): Promise<{ sku: strin
   if (!snapshot) return null
   const payload = record(snapshot.payload)
   return { sku: typeof payload.sku === 'string' ? payload.sku : '', requests: Array.isArray(payload.requests) ? payload.requests : [] }
+}
+
+/**
+ * The product sheet runs with these ids, as list rows (the parts of a Publish with selling changes, which the
+ * `listing-action` source lists inside that Publish). Sent runs only; the same columns and facts as a list page.
+ */
+export async function studioRowsByIds(ids: string[], now: Date): Promise<HistorySourceRow[]> {
+  if (!ids.length) return []
+  const rows = await prisma.$queryRaw<ListRow[]>(Prisma.sql`${SELECT_ROWS(now)}
+    WHERE b.id IN (${Prisma.join(ids)}) AND b.kind = ${STUDIO_KIND} AND b.status IN (${Prisma.join(SENT_STATUSES)})`)
+  const facts = await pageFacts(rows.map(row => row.id))
+  return rows.map(row => toRow(row, facts.get(row.id)))
 }
 
 async function coverage(): Promise<HistoryCoverage> {

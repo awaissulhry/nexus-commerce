@@ -38,20 +38,40 @@
  * **outside the grid root entirely** (`popup parent: body > .ag-styled-root`) with
  * `stopEditingWhenCellsLoseFocus: true` on, and the edit survives. AG treats its own popup as part
  * of the editor.
+ *
+ * ## Closing without a pick writes nothing (sheet publish parity, 2026-10-04)
+ *
+ * A click elsewhere ends the edit with `stopEditing()` — NOT a cancel — and AG then compares what the
+ * editor holds with the cell's value. The editor holds what it OPENED on (`params.value`), and a column
+ * may open it on a different shape than its cell value: the sheet's Status and Action columns hold an
+ * OBJECT (`{ state, waiting, create }`) and open the list on its STRING ('active'). AG's compare saw
+ * "changed" and wrote the string — a click-away set the row's Status. So the edit is cancelled at its
+ * end until the operator actually picked something (`useGridCellEditor({ isCancelAfterEnd })`, the
+ * lifecycle AG 36 does read — the pattern `SaleCellEditor` and `AxesPanelEditor` use): Escape, a
+ * click elsewhere, Enter or Tab on the stored value never reach the column's `valueSetter`.
  */
-import { forwardRef, useCallback } from 'react'
+import { forwardRef, useCallback, useRef } from 'react'
 import type { ICellEditorParams } from 'ag-grid-community'
+import { useGridCellEditor } from 'ag-grid-react'
 
-import { ListboxPanel, type ListboxOption } from '../../components'
+import { ListboxPanel, type ListboxPanelOption } from '../../components'
 import { editorBox, roomToRightOf } from './editorBox'
 import { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'
+
+/**
+ * One choice in the editor: a `ListboxOption`, which may also be HELD (`heldReason`: reachable with the keyboard,
+ * announced as unavailable with its reason, never committed) and carry a `note` — one short line under the label, such
+ * as "Waiting for Publish, set by Awais today 10:42" or a warning (sheet publish parity, 2026-10-04). A plain
+ * `ListboxOption[]` is still a valid list, so every older column passes the same options as before.
+ */
+export type SelectPanelOption = ListboxPanelOption
 
 export interface SelectPanelEditorParams extends ICellEditorParams {
   /**
    * AG 36's reactive contract — the ONLY way an editor's value reaches the grid. See `onCommit`.
    */
   onValueChange?: (value: unknown) => void
-  options: ListboxOption[]
+  options: SelectPanelOption[]
   placeholder?: string
   /** A "nothing selected" row. Absent ⇒ the list cannot be cleared from the editor. */
   emptyLabel?: string
@@ -61,6 +81,11 @@ export interface SelectPanelEditorParams extends ICellEditorParams {
 
 export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(function SelectPanelEditor(props, _ref) {
   const { options, emptyLabel, allowCustom, value, column, stopEditing, onValueChange, parseValue, eventKey } = props
+
+  /* Closing without a pick is a CANCEL: nothing reaches the column (see the header). Set only when a changed choice
+     is reported to AG. */
+  const picked = useRef(false)
+  useGridCellEditor({ isCancelAfterEnd: () => !picked.current })
 
   /**
    * 🔴 THE VALUE IS REPORTED WITH `onValueChange`. It used to be held in a ref for AG to read back,
@@ -99,6 +124,7 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
       // Tell AG, THEN stop. `updateValue` sets the proxy's value synchronously before it schedules
       // its re-render, so the value is in place by the time `stopEditing()` reads it.
       const selected = cellValueOf(chosen)
+      picked.current = true
       onValueChange?.(selected !== null && parseValue ? parseValue(selected) : selected)
       stopEditing()
     },
@@ -112,12 +138,13 @@ export const SelectPanelEditor = forwardRef<unknown, SelectPanelEditorParams>(fu
    * the edit with whatever was last reported, so a choice made in the bubble phase was always too late — Enter and Tab
    * closed every list with its old value (P0, measured in production 2026-09-29). Reported in the capture phase, AG then
    * commits it and moves as it does for every other cell: Enter down, Tab right. An unchanged or empty choice reports
-   * nothing, so AG ends the edit with the stored value and no write.
+   * nothing, so AG ends the edit as a cancel (`isCancelAfterEnd`): no write.
    */
   const onKeyChoice = useCallback(
     (chosen: string | null) => {
       if (chosen === null || isUnchanged(value, chosen)) return
       const selected = cellValueOf(chosen)
+      picked.current = true
       onValueChange?.(selected !== null && parseValue ? parseValue(selected) : selected)
     },
     [value, onValueChange, parseValue],

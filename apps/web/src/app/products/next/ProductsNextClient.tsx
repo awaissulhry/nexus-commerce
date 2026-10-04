@@ -1069,7 +1069,7 @@ function ProductsNextInner() {
   const kpiMetrics = useMemo<Metric[]>(() => {
     const tiles: Array<{ tileKey: KpiTileKey; label: string; value: number | string; hint: string; accent: string }> = [
       { tileKey: null, label: 'Total', value: stats?.total ?? '—', hint: 'all statuses', accent: 'var(--nds-primary)' },
-      { tileKey: 'active', label: 'Active', value: stats?.active ?? '—', hint: 'live & selling', accent: 'var(--nds-success)' },
+      { tileKey: 'active', label: 'Active', value: stats?.active ?? '—', hint: 'catalog status', accent: 'var(--nds-success)' },
       { tileKey: 'out-of-stock', label: 'Out of stock', value: stats?.outOfStock ?? '—', hint: 'no available units', accent: 'var(--nds-danger)' },
       { tileKey: 'attention', label: 'Needs attention', value: needsAttentionCount ?? '—', hint: 'missing photos', accent: 'var(--nds-warning)' },
     ]
@@ -1236,7 +1236,8 @@ function ProductsNextInner() {
   const filterDimensions = useMemo<FilterDimension[]>(() => {
     const dims: FilterDimension[] = [
       { key: 'channels', label: 'Channel', kind: 'multiselect', value: setValuesOf('channels'), onChange: setSetFilter('channels'), options: CHANNEL_OPTS },
-      { key: 'status', label: 'Status', kind: 'multiselect', value: setValuesOf('status'), onChange: setSetFilter('status'), options: STATUS_OPTS },
+      // Build shape v2 (P11): the product's status in Nexus only — a listing's selling state is set in the Publish window.
+      { key: 'status', label: 'Catalog status', kind: 'multiselect', value: setValuesOf('status'), onChange: setSetFilter('status'), options: STATUS_OPTS },
       { key: 'stock', label: 'Stock', kind: 'multiselect', value: filters.stock, onChange: (v) => setF('stock', v), options: [{ value: 'in', label: 'In stock' }, { value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }] },
       { key: 'fulfillment', label: 'Fulfilment', kind: 'multiselect', value: filters.fulfillment, onChange: (v) => setF('fulfillment', v), options: [{ value: 'FBA', label: 'FBA' }, { value: 'FBM', label: 'FBM' }] },
     ]
@@ -1481,7 +1482,7 @@ function ProductsNextInner() {
                 <Download size={13} /> {exporting ? 'Exporting…' : 'Export table'}
               </Button>
               <Pill tone={error ? 'danger' : 'success'} dot size="md">
-                {error ? 'Not syncing' : loading ? 'Syncing…' : 'Live'}
+                {error ? 'Not updating' : loading ? 'Updating…' : 'Up to date'}
               </Pill>
             </>
           }

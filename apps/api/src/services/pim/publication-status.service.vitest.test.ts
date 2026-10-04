@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * the exact destination (another account's or alias's newer publish never leaks in); the per-SKU result and its
  * channel issues; a create reads as a complete listing; open issues carry the attributes the channel named; a
  * publication that has not settled is reported as in flight; and the stored request is never read out of the database.
+ * Build shape v2: a newer selling change (Pause offer, Delete listing…) is the row's last publish, with its kind; a row
+ * sent as a Full update says so.
  */
 const state = vi.hoisted(() => ({ db: null as any, raw: [] as Array<{ sql: string; result: unknown }> }))
 vi.mock('@nexus/database', async () => {
@@ -127,7 +129,7 @@ describe('readPublicationStatus', () => {
     expect(s.last).toEqual({
       publicationId: 'pub-new', status: 'PARTIAL', outcome: 'FAILED', at: at(5).toISOString(), userName: 'Publisher Person',
       message: 'Amazon refused 1 attribute.', reference: 'FEED-NEW', sentFields: ['color', 'bullet_point'],
-      issues: [{ code: '8541', severity: 'error', message: 'The value is not allowed.', attributeNames: ['color'] }],
+      issues: [{ code: '8541', severity: 'error', message: 'The value is not allowed.', attributeNames: ['color'] }], kind: 'publish',
     })
     // A create reads as a complete listing, not as the hundred attributes it carried.
     expect(rowOf(status, ids.root).last).toMatchObject({ publicationId: 'pub-new', outcome: 'ACCEPTED', sentFields: ['$create'] })
@@ -197,6 +199,54 @@ describe('readPublicationStatus', () => {
     const sql = state.raw.map(call => call.sql).join('\n')
     expect(sql.match(/payload(?!->|,)/g) ?? []).toEqual([])
     expect(sql).not.toMatch(/changes(?!->)/)
+  })
+
+  it('a selling change is the row\'s last publish when it is newer: its action, Accepted (never Verified), and a failure keeps its message', async () => {
+    await scoped(async () => {
+      ids.boot = (await prisma.product.create({ data: { sku: 'BOOT', name: 'Boot', basePrice: 10, isParent: true } as never })).id
+      ids.bootS = (await prisma.product.create({ data: { sku: 'BOOT-S', name: 'Boot S', basePrice: 10, parentId: ids.boot } as never })).id
+      ids.bootM = (await prisma.product.create({ data: { sku: 'BOOT-M', name: 'Boot M', basePrice: 10, parentId: ids.boot } as never })).id
+      for (const [key, productId] of [['boot', ids.boot], ['bootS', ids.bootS], ['bootM', ids.bootM]] as const)
+        listing[key] = (await prisma.channelListing.create({ data: { productId, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU',
+          channelConnectionId: ids.a } as never })).id
+      // A publish that sent BOOT-S as a Full update and BOOT-M as a Partial update…
+      await prisma.bulkOperation.create({ data: { id: 'pub-full', userId: ids.user, productCount: 3, changeCount: 3, status: 'VERIFIED',
+        changes: { kind: 'studio-publication', plan: { note: MARKER }, fullProductIds: [ids.bootS], result: { id: 'pub-full', status: 'VERIFIED', message: 'ok',
+          results: [{ sku: 'BOOT', status: 'VERIFIED' }, { sku: 'BOOT-S', status: 'VERIFIED' }, { sku: 'BOOT-M', status: 'VERIFIED' }] } },
+        kind: 'studio-publication', productId: ids.boot, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: ids.a, aliasKey: '',
+        submittedAt: at(2), createdAt: at(2) } as never })
+      for (const [key, sku] of [['boot', 'BOOT'], ['bootS', 'BOOT-S'], ['bootM', 'BOOT-M']] as const)
+        await journal(listing[key], 'pub-full', { sku, account: ids.a, minute: 2, outcome: 'ACCEPTED', fields: ['item_name'] })
+      // …then BOOT-S paused (accepted) and BOOT-M's delete refused, as the listing-action engine records them.
+      const selling = async (id: string, status: string, minute: number, rows: Array<{ key: string; sku: string; action: string; outcome: string; message: string }>) => {
+        await prisma.bulkOperation.create({ data: { id, userId: ids.user, productCount: rows.length, changeCount: rows.length, status, kind: 'listing-action',
+          productId: ids.boot, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: ids.a, aliasKey: '', submittedAt: at(minute), completedAt: at(minute), createdAt: at(minute - 1),
+          changes: { kind: 'listing-action', action: rows[0].action, preview: { note: MARKER } } } as never })
+        for (const row of rows) await prisma.channelListingSnapshot.create({ data: {
+          channelListingId: listing[row.key], channel: 'AMAZON', marketplace: 'IT', aliasKey: '', reason: row.action, publishEventId: id,
+          outcome: row.outcome === 'DONE' ? 'ACCEPTED' : 'FAILED', acceptedAt: row.outcome === 'DONE' ? at(minute) : null, createdAt: at(minute),
+          payload: { kind: 'listing-action', action: row.action, sku: row.sku, outcome: row.outcome, message: row.message, evidence: { raw: MARKER } },
+        } as never })
+      }
+      await selling('la-pause', 'DONE', 4, [{ key: 'bootS', sku: 'BOOT-S', action: 'pause', outcome: 'DONE', message: 'Paused on Amazon · IT.' }])
+      await selling('la-delete', 'FAILED', 6, [{ key: 'bootM', sku: 'BOOT-M', action: 'delete', outcome: 'FAILED', message: 'Amazon refused the delete: the listing is locked.' }])
+      // A snapshot of another kind (a restore point) never counts as a publish.
+      await prisma.channelListingSnapshot.create({ data: { channelListingId: listing.boot, channel: 'AMAZON', marketplace: 'IT', aliasKey: '', reason: 'pause',
+        publishEventId: 'la-pause', outcome: 'ACCEPTED', createdAt: at(8), payload: { kind: 'something-else' } } as never })
+    })
+    state.raw.length = 0
+    const status = await scoped(() => readPublicationStatus({ productId: ids.bootS, channel: 'AMAZON', marketplace: 'IT', accountId: ids.a }, at(30)))
+    expect(state.raw.length).toBe(2)
+    for (const call of state.raw) expect(JSON.stringify(call.result)).not.toContain(MARKER)
+    expect(rowOf(status, ids.bootS).last).toEqual({ publicationId: 'la-pause', status: 'ACCEPTED', outcome: 'ACCEPTED', at: at(4).toISOString(),
+      userName: 'Publisher Person', message: 'Paused on Amazon · IT.', reference: null, sentFields: [], issues: [], kind: 'pause' })
+    expect(rowOf(status, ids.bootM).last).toEqual({ publicationId: 'la-delete', status: 'FAILED', outcome: 'FAILED', at: at(6).toISOString(),
+      userName: 'Publisher Person', message: 'Amazon refused the delete: the listing is locked.', reference: null, sentFields: [], issues: [], kind: 'delete' })
+    // The parent's newest real record is still the publish; a row sent as a Full update says so.
+    expect(rowOf(status, ids.boot).last).toMatchObject({ publicationId: 'pub-full', kind: 'publish', outcome: 'VERIFIED' })
+    await scoped(() => prisma.channelListingSnapshot.deleteMany({ where: { publishEventId: 'la-pause' } }))
+    const before = await scoped(() => readPublicationStatus({ productId: ids.bootS, channel: 'AMAZON', marketplace: 'IT', accountId: ids.a }, at(30)))
+    expect(rowOf(before, ids.bootS).last).toMatchObject({ publicationId: 'pub-full', kind: 'full_update', outcome: 'VERIFIED', sentFields: ['item_name'] })
   })
 
   it('refuses a read without a channel or account, or for a missing product', async () => {

@@ -43,6 +43,14 @@ describe('W1.5-QUEUE every push consults the shared lock', () => {
     expect(await service.syncSharedTradingQuantity({ id: 'q', externalListingId: 'ITEM', payload: { pushVia: 'TRADING', itemId: 'ITEM', market: 'GB', channelConnectionId: 'owner' } })).toMatchObject({ errorCode: 'PUSH_SYNC_PAUSED' })
     expect(m.many).toHaveBeenCalledWith({ where: { channel: 'EBAY', externalListingId: 'ITEM', marketplace: { in: ['GB', 'UK'] }, channelConnectionId: 'owner' } })
   })
+  // Build shape v2 (P13) — a Pause offer from the product sheet (eBay, Shopify, Etsy: quantity 0 / Etsy inactive, then
+  // the hold) gets no quantity from the stock sync: every quantity push to it is refused, in words that say where to resume.
+  it.each([['syncToEbay', 'EBAY'], ['syncToShopify', 'SHOPIFY'], ['syncToEtsy', 'ETSY']])('%s sends no quantity to a listing paused from the product sheet', async (path, channel) => {
+    m.read.mockResolvedValue({ id: 'l', marketplace: 'IT', platformAttributes: {}, syncPaused: false, offerClosedAt: new Date(), offerCloseReason: 'sheet-pause', offerActive: false })
+    const result = await service[path]({ ...row('QUANTITY_UPDATE'), targetChannel: channel, payload: { quantity: 5 } })
+    expect(result).toMatchObject({ success: false, status: 'SKIPPED', retryable: false, errorCode: 'PUSH_OFFER_CLOSED', error: expect.stringContaining('Status column') })
+    expect(m.audit).not.toHaveBeenCalled()
+  })
   it('a failed control read never falls through to a channel client', async () => {
     m.read.mockRejectedValue(new Error('database unavailable'))
     await expect(service.syncToAmazon(row())).rejects.toThrow('database unavailable')

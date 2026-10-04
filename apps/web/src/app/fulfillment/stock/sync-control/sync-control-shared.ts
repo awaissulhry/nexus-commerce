@@ -20,7 +20,7 @@ export interface Row {
   buffer: number
   routedLocations: string[]
   itemId?: string
-  /** Shared stock step 3 — when the current Fixed number / Paused / Excluded ends by itself (ISO), or null. */
+  /** Shared stock step 3 — when the current Fixed number / Sync held / Excluded ends by itself (ISO), or null. */
   endsAt?: string | null
   /** A listing row's full address: its account and alias (the API needs all five levels). */
   channelConnectionId?: string | null
@@ -88,6 +88,48 @@ export interface ProductMaster {
   childrenOmitted: boolean
 }
 
+/**
+ * Build shape v2 (Owner 2026-10-04) — an Inactive listing (the wire's CLOSED: the product sheet's Pause offer on any
+ * channel, or Amazon's per-market close) is read-only here: these words, no selection, no action. Close offer and Reopen
+ * offer left Sync Control; pausing and resuming selling is the product sheet's Status column, then Publish.
+ */
+export const INACTIVE_NOTE = 'change it in the product sheet\'s Status column'
+export const INACTIVE_ROW = `Inactive — ${INACTIVE_NOTE}`
+
+/**
+ * The bulk actions every Sync Control surface offers, in this order. PAUSE / RESUME hold and release the STOCK SYNC
+ * (a Nexus flag: no quantity is sent; the listing keeps selling) — they never pause selling.
+ */
+export const BULK_ACTIONS: ReadonlyArray<readonly [string, string]> = [
+  ['FOLLOW', 'Set Follow'],
+  ['PIN', 'Pin'],
+  ['PAUSE', 'Hold stock sync'],
+  ['RESUME', 'Release stock sync'],
+  ['ZERO_PIN', 'Zero & Pin'],
+  ['EXCLUDE', 'Exclude'],
+  ['INCLUDE', 'Include'],
+]
+
+/** What an action is called in confirms and notices ("Hold stock sync — 3 rows"), never its API code. */
+export function actionLabel(action: string): string {
+  if (action === 'BUFFER') return 'Buffer'
+  return BULK_ACTIONS.find(([a]) => a === action)?.[1] ?? action
+}
+
+/**
+ * The tail of an action's notice: what the API counted besides the rows it updated. `skippedInactive`: listings whose
+ * selling is paused, which a quantity action (Follow, Pin, Zero & Pin, Buffer) leaves alone.
+ */
+export function actionCounts(d: { unchanged?: number; skippedFba?: number; skippedInactive?: number; euExpanded?: number; scopedOut?: number; recascadeQueued?: number }): string {
+  return [
+    `, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}`,
+    d.skippedInactive ? `, ${d.skippedInactive} Inactive left alone (change those in the product sheet's Status column)` : '',
+    d.euExpanded ? `, incl. ${d.euExpanded} sibling EU row(s)` : '',
+    d.scopedOut ? `, ${d.scopedOut} outside filters untouched` : '',
+    d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : '',
+  ].join('')
+}
+
 /** DS Pill tone per mode (FBA/Uncounted neutral, Excluded danger). */
 export const MODE_TONE: Record<Mode, Tone> = {
   FOLLOW: 'success',
@@ -103,24 +145,24 @@ export const MODE_TONE: Record<Mode, Tone> = {
 export const MODE_LABEL: Record<Mode, string> = {
   FOLLOW: 'Follow',
   PINNED: 'Pinned',
-  PAUSED: 'Paused',
-  PAUSED_POLICY: 'Paused (policy)',
+  PAUSED: 'Sync held',
+  PAUSED_POLICY: 'Sync held (policy)',
   UNCOUNTED: 'Uncounted',
   FBA: 'FBA',
   EXCLUDED: 'Excluded',
-  CLOSED: 'Closed',
+  CLOSED: 'Inactive',
 }
 
 /** SCD.4 — plain-English explanation of each mode, for hover tooltips. */
 export const MODE_HELP: Record<Mode, string> = {
   FOLLOW: 'Follows the shared stock pool — the marketplace quantity tracks available stock automatically.',
   PINNED: 'Held at a fixed manual quantity — pool changes never touch it until you set it back to Follow.',
-  PAUSED: 'Frozen — nothing is pushed to the marketplace until you Resume it.',
-  PAUSED_POLICY: 'Paused by a channel/market kill-switch policy (Resume the policy to re-enable pushes).',
+  PAUSED: 'Stock sync held — Nexus sends no quantity to the marketplace until you Release stock sync. The listing keeps selling at the quantity it shows now.',
+  PAUSED_POLICY: 'Stock sync held by a channel/market policy — Release it in Channel policies below to send quantities again.',
   UNCOUNTED: 'No stock pool yet for this product — nothing is pushed (it never sends a zero).',
   FBA: 'Amazon-managed (FBA) — Amazon controls the quantity; Sync Control never writes it. If you have CONVERTED this SKU to FBM and it still shows FBA, one of five safety signals is still latched — most often the VARIANT product\'s fulfillment method: edit the MASTER product, set fulfillment to FBM, and it now cascades to every variant (variants with live FBA stock or an active FBA offer are held back for safety). Then Set Follow to push immediately.',
   EXCLUDED: 'This shared eBay variant is deliberately left out of the pool (Include it to re-enable).',
-  CLOSED: 'This market\'s Amazon offer is CLOSED (SCT.6): the price/offer was removed for this marketplace only, so customers there cannot buy it. The SKU, content, ASIN, reviews and every other market are untouched, and this row receives no pushes of any kind. Reopen offer restores it exactly as it was and sets it back to Follow.',
+  CLOSED: `${INACTIVE_ROW}. Selling is paused on this market, so Sync Control sends it no quantity and leaves this row alone. Set it Active there and Publish to sell again.`,
 }
 
 /** SCD.4 — plain-English explanation of each grid column, for header tooltips. */
@@ -151,21 +193,17 @@ export const ACTION_HELP: Record<string, string> = {
   PIN:
     'Pin — freeze each selected listing at the quantity that is live right now. The pool can move freely; the marketplace number will not follow it again until you press Set Follow. Use it to hold a listing at a number you chose by hand, e.g. reserving units for a wholesale order. Nothing is pushed at the moment you pin. Amazon EU note: one quantity per SKU across IT/DE/FR/ES — a partial-market pin asks one confirm, then pins the SKU across all EU markets.',
   PAUSE:
-    'Pause — stop sending any quantity to the marketplace for the selected rows. Whatever is live stays live and untouched, and no push happens until you Resume. It does not delist, hide, or zero the listing, and it does not change warehouse stock. Use it while investigating a problem or during a stocktake.',
+    'Hold stock sync — stop sending any quantity to the marketplace for the selected rows. Whatever is live stays live and untouched, and no push happens until you Release stock sync. It does not delist, hide, or zero the listing, it does not stop selling, and it does not change warehouse stock. Use it while investigating a problem or during a stocktake. To stop selling in a market, set the product sheet\'s Status column to Inactive and Publish.',
   RESUME:
-    'Resume — undo Pause. Pushing restarts and each row is re-cascaded immediately, so the live quantity is brought back in line with the pool (or with its pinned number) on the next push, normally within seconds. Safe to press on rows that were never paused.',
+    'Release stock sync — undo Hold stock sync. Pushing restarts and each row is re-cascaded immediately, so the live quantity is brought back in line with the pool (or with its pinned number) on the next push, normally within seconds. Safe to press on rows that were never held. An Inactive row stays Inactive: it gets no quantity until it is set Active in the product sheet\'s Status column.',
   ZERO_PIN:
-    'Zero & Pin — pushes quantity 0 to the marketplace NOW and pins it there, so the listing becomes unbuyable within seconds. It does not delist the listing and it does not touch warehouse stock. Use it only to stop sales instantly: a safety recall, a wrong price, a confirmed oversell. Undo with Set Follow, which lets the pool refill the quantity. Amazon EU note: Amazon keeps ONE quantity per SKU across IT/DE/FR/ES — zeroing one market zeroes them all, so a partial-market Zero & Pin shows one confirm and then applies to every EU market; to stop selling in only ONE market, close that offer in Seller Central instead.',
+    'Zero & Pin — pushes quantity 0 to the marketplace NOW and pins it there, so the listing becomes unbuyable within seconds. It does not delist the listing and it does not touch warehouse stock. Use it only to stop sales instantly: a safety recall, a wrong price, a confirmed oversell. Undo with Set Follow, which lets the pool refill the quantity. Amazon EU note: Amazon keeps ONE quantity per SKU across IT/DE/FR/ES — zeroing one market zeroes them all, so a partial-market Zero & Pin shows one confirm and then applies to every EU market; to stop selling in only ONE market, set that market Inactive in the product sheet\'s Status column and Publish.',
   EXCLUDE:
     'Exclude — leave the selected shared eBay variants out of the pooled quantity, so their units stop counting toward that eBay item’s advertised stock. Applies only to shared-SKU rows (one eBay item selling several variants); ordinary listing rows are skipped and reported back as skipped.',
   INCLUDE:
     'Include — put previously excluded shared eBay variants back into the pooled quantity, so their units count again on the next push. Applies only to shared-SKU eBay rows.',
   BUFFER:
     'Buffer — hold back a fixed number of units from the marketplace. The pushed quantity becomes pool available minus the buffer, never below zero. Use it as a safety margin against oversell on a slow-syncing channel. Set it to 0 to remove the margin. Applies to every selected row.',
-  CLOSE_OFFER:
-    'Close offer — removes THIS market\'s Amazon offer (Amazon\'s documented per-market close), so customers in that marketplace can no longer buy the SKU. It does NOT touch: reviews or ratings (they live on the ASIN), the product content, other markets\' offers or prices, the shared EU quantity, or warehouse stock. Amazon FBA rows are always refused — Amazon manages their logistics. Pending pushes for the closed row are cancelled and nothing (flat files, imports, heals) can silently reopen it. Undo with Reopen offer. This is the RIGHT tool for "stop selling in DE/FR/ES while IT keeps selling" — unlike quantity, it truly is per-market.',
-  REOPEN_OFFER:
-    'Reopen offer — restores the market\'s Amazon offer exactly as it was when closed (the price and offer details were snapshotted at close time) and sets the row back to Follow, so the shared pool quantity flows to it immediately. Use it when you restock or want to sell in that market again. Only works on rows that are currently Closed; FBA rows are never touched.',
 }
 
 /** SCT.1 — explanation of every non-action control (toolbars, filters, Excel,
@@ -182,12 +220,12 @@ export const CONTROL_HELP: Record<string, string> = {
   pageSize: 'How many rows to load at once. Large pages mean far fewer clicks when bulk-editing (500 shows nearly every listing on one page, so one Select all covers it); small pages render faster.',
   pagination: 'Move between pages. Your selection is kept when you change page, so you can gather rows across pages and act on them together.',
   viewToggle: 'Products shows one row per real product family — expand it for its listings and bulk-act per product. With filters active, a bulk action touches only the listings matching them (never a hidden market). Listings shows every listing flat, for the finest per-row control.',
-  selectAll: 'Select every row on this page. Amazon FBA rows cannot be selected: Amazon owns their quantity and Sync Control never writes it.',
+  selectAll: 'Select every row on this page. Amazon FBA rows cannot be selected: Amazon owns their quantity and Sync Control never writes it. Inactive rows cannot be selected either: change those in the product sheet\'s Status column.',
   selectRow: 'Select this row for the bulk actions above.',
   // filters
   filterChannel: 'Show only the chosen sales channels. Pick several at once — the result is the union.',
   filterMarket: 'Show only the chosen marketplaces/countries. Pick several at once — the result is the union.',
-  filterMode: 'Show only rows in the chosen sync modes. Pick several at once, e.g. Pinned plus Paused to review everything not following the pool.',
+  filterMode: 'Show only rows in the chosen sync modes. Pick several at once, e.g. Pinned plus Sync held to review everything not following the pool. Inactive shows the listings whose selling is paused.',
   filterLane: 'Listing = a normal one-listing-per-SKU push. Shared = a pooled eBay item whose variants share one quantity.',
   filterFamily: 'Narrow to one duplicate family — one parent listing and its own child SKUs — so an action here touches that family only, not every copy of the product.',
   driftOnly: 'Show only rows where the live marketplace quantity does not match what Sync Control intends. This is the list worth fixing.',
@@ -208,13 +246,13 @@ export const CONTROL_HELP: Record<string, string> = {
   historyLink: 'Open the full audit trail in a new tab: who changed which listing, when, and from what to what.',
   backToFamilies: 'Back to every family of this product.',
   // policies
-  policyPause: 'Kill-switch for the whole channel/market: stop all pushes to it, whatever individual listings say. Nothing is delisted and nothing is zeroed.',
-  policyResume: 'Lift the kill-switch and let pushes to this channel/market resume. Affected listings are re-cascaded.',
-  policyNewDefault: 'Choose how a NEWLY discovered listing on this channel/market starts: paused (safe — it pushes nothing until you check it) or following the pool immediately.',
+  policyPause: 'Kill-switch for the whole channel/market: hold its stock sync, so no quantity is sent there, whatever individual listings say. Nothing is delisted and nothing is zeroed.',
+  policyResume: 'Release the stock sync of this channel/market: quantities are sent again, and the affected listings are re-cascaded.',
+  policyNewDefault: 'Choose how a NEWLY discovered listing on this channel/market starts: with its stock sync held (safe — it pushes nothing until you check it) or following the pool immediately.',
   policyChannelSelect: 'The channel this new policy applies to.',
   policyMarketSelect: 'The marketplace this new policy applies to. All markets covers every country on that channel. Etsy sells in one market, so an Etsy policy always covers all of it.',
-  policyAddPause: 'Create a policy that pauses every push on the chosen channel/market straight away.',
-  policyAddBornPaused: 'Create a policy that makes newly discovered listings on the chosen channel/market start paused, so nothing goes live unchecked.',
+  policyAddPause: 'Create a policy that holds the stock sync of the chosen channel/market straight away: no quantity is sent there.',
+  policyAddBornPaused: 'Create a policy that makes newly discovered listings on the chosen channel/market start with their stock sync held, so nothing goes live unchecked.',
   // routes
   routeEdit: 'Change which stock locations this route draws from.',
   routeSave: 'Save the locations. The pool for the affected listings is recalculated and re-pushed.',

@@ -17,7 +17,7 @@
  * unlinked", "unlinking needs the channels.sync permission". A bar that hid them would leave an
  * operator with an empty strip and no idea what selection would fill it.
  */
-import { memo, useMemo } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 
 import { actionLabel, actionsFor, isRunnable, SELECTION, type ActionResult, type GridAction } from '@/design-system/grid/actions/registry'
 import { useActionPress } from '@/design-system/grid/actions/useActionPress'
@@ -30,6 +30,11 @@ export interface FamilySelectionBarProps {
   actions: readonly GridAction<StudioRow>[]
   onClear?: () => void
   onDone?: (result: ActionResult) => void
+  /**
+   * Build shape v2, P9 (Owner 2026-10-04) — what follows the family verbs on the same bar: the shared scope's
+   * **Action ▾** sits right after "Delete child…", the last selection verb.
+   */
+  children?: ReactNode
 }
 
 /**
@@ -43,7 +48,7 @@ export interface FamilySelectionBarProps {
  * red fill) — it read as a broken control, not an unavailable one. Unavailable, it is a plain disabled
  * button like its neighbours; its label and its reason (the InfoTip) still say what it is.
  */
-export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, actions, onDone }: Omit<FamilySelectionBarProps, 'onClear'>) {
+export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, actions, onDone, children }: Omit<FamilySelectionBarProps, 'onClear'>) {
   const { press, busy, problem, confirmElement } = useActionPress<StudioRow>(onDone)
   const offered = useMemo(() => actionsFor(actions, SELECTION, rows), [actions, rows])
   if (rows.length === 0) return null
@@ -67,6 +72,7 @@ export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, a
           ? <InfoTip key={action.id} tip={availability.reason}>{button}</InfoTip>
           : <span key={action.id}>{button}</span>
       })}
+      {children}
       {confirmElement}
     </>
   )

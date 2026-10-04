@@ -57,7 +57,9 @@ const issueSevCls: Record<IssueSeverity, string> = {
 const CODE_TITLE: Record<string, string> = {
   '20017': 'Image blocked by its hosting site',
   '90220': 'Missing required attribute',
-  '8541': 'Invalid or missing value',
+  '8541': 'Product ID matches an ASIN your data contradicts',
+  '8005': 'SKU linked to another ASIN',
+  '13013': 'SKU recently deleted: try again later',
   '5000': 'Image quality',
 }
 const issueTitle = (i: { code: string; category?: string }) =>

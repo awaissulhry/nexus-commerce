@@ -40,7 +40,10 @@ export interface PreviewContext {
 }
 
 export const EBAY_ZERO_REFUSAL = 'Refused — eBay ends a listing pinned at 0 unless the account\'s out-of-stock option is ON, and it is OFF '
-  + 'or could not be read. Turn the out-of-stock option on in eBay first, or pause this listing instead.'
+  + 'or could not be read. Turn the out-of-stock option on in eBay first, or hold this listing\'s stock sync instead.'
+
+/** A held listing's note and refusal (build shape v2: "Pause sync" is "Hold stock sync"; selling words live in the sheet). */
+export const STILL_HELD = 'Stock sync held — release it to push'
 
 const money = (v: number | null | undefined, currency: string): string =>
   v == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(v)
@@ -51,7 +54,7 @@ export const syncLabel = (s: SyncCell | null | undefined): string => {
   switch (s.kind) {
     case 'FOLLOW': return `Follow ${s.intended ?? '—'}`
     case 'PINNED': return `Pinned ${s.intended ?? '—'}`
-    case 'PAUSED': return `Paused (${s.via === 'POLICY' ? 'policy' : 'listing'}) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`
+    case 'PAUSED': return `Sync held (${s.via === 'POLICY' ? 'policy' : 'listing'}) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`
     case 'FBA_EXCLUDED': return MATRIX_COPY.amazonManaged
     case 'UNCOUNTED': return MATRIX_COPY.uncounted
     case 'CLOSED': return MATRIX_COPY.closed
@@ -141,27 +144,27 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
           if (!Number.isInteger(p.value) || p.value < 0) { refuse(row, key, 'not-applicable', 'A pinned quantity is a whole number, zero or more'); break }
           if (s.mode === 'PINNED' && s.intended === p.value && s.kind === 'PINNED') break
           if (p.value === 0 && coord.channel === 'EBAY' && ctx.ebayZeroAllowed && ctx.ebayZeroAllowed(coord.accountId, coord.market) !== true) { refuse(row, key, 'guard', EBAY_ZERO_REFUSAL); break }
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncQty', from: s.intended, to: p.value, fromLabel: from, toLabel: `Pinned ${p.value}`, note: s.kind === 'PAUSED' ? 'Still paused — resume to push' : undefined })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncQty', from: s.intended, to: p.value, fromLabel: from, toLabel: `Pinned ${p.value}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
         } else if (p.verb === 'set-follow') {
           if (s.mode === 'FOLLOW') break /* already following — paused or not, nothing to change (resume is its own verb) */
           const to = followQty(s)
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncMode', from: s.mode, to: 'FOLLOW', fromLabel: from, toLabel: to == null ? `Follow · ${MATRIX_COPY.uncounted}` : `Follow ${to}`, note: s.kind === 'PAUSED' ? 'Still paused — resume to push' : undefined })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncMode', from: s.mode, to: 'FOLLOW', fromLabel: from, toLabel: to == null ? `Follow · ${MATRIX_COPY.uncounted}` : `Follow ${to}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
         } else if (p.verb === 'set-buffer') {
           if (!Number.isInteger(p.value) || p.value < 0) { refuse(row, key, 'not-applicable', 'A buffer is a whole number, zero or more'); break }
           if (s.buffer === p.value) break
           const after = followQty({ poolAvailable: s.poolAvailable, buffer: p.value })
           changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncBuffer', from: s.buffer, to: p.value, fromLabel: `Buffer ${s.buffer}`, toLabel: `Buffer ${p.value}`, note: s.mode === 'FOLLOW' ? `Follow pushes ${after ?? '—'}` : 'Stored — applies when this listing follows the pool' })
         } else if (p.verb === 'pause-sync') {
-          if (s.kind === 'PAUSED' && s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Already held by the channel policy — manage it in Sync Control'); break }
+          if (s.kind === 'PAUSED' && s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Stock sync is already held by the channel policy — manage it in Sync Control'); break }
           if (s.kind === 'PAUSED') break
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: s.kind, to: 'PAUSED', fromLabel: from, toLabel: `Paused (listing) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`, note: `Holds ${s.held ?? '—'} on the channel until resumed` })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: s.kind, to: 'PAUSED', fromLabel: from, toLabel: `Sync held (listing) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`, note: `The channel keeps ${s.held ?? '—'} until the stock sync is released` })
         } else if (p.verb === 'resume-sync') {
           if (s.kind !== 'PAUSED') break
-          if (s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Held by the channel policy — resuming here changes nothing; resume in Sync Control'); break }
+          if (s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Held by the channel policy — releasing here changes nothing; release it in Sync Control'); break }
           const to = s.mode === 'PINNED' ? `Pinned ${s.held ?? '—'}` : `Follow ${followQty(s) ?? MATRIX_COPY.uncounted}`
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: 'PAUSED', to: s.mode, fromLabel: from, toLabel: to, note: 'Resume recascades and pushes immediately' })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: 'PAUSED', to: s.mode, fromLabel: from, toLabel: to, note: 'Releasing recalculates the quantity and pushes it at once' })
         } else if (p.verb === 'push-now') {
-          if (s.kind === 'PAUSED') { refuse(row, key, 'not-applicable', 'Paused — resume to push'); break }
+          if (s.kind === 'PAUSED') { refuse(row, key, 'not-applicable', STILL_HELD); break }
           if (s.kind === 'UNCOUNTED') { refuse(row, key, 'not-applicable', MATRIX_COPY.uncountedHint); break }
           changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: cells.queue?.state ?? 'never', to: 'queued', fromLabel: cells.queue?.state ?? 'never', toLabel: `Queued · ${s.intended ?? '—'}`, note: 'A fresh quantity push' })
         } else if (p.verb === 'retry-sync') {

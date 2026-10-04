@@ -10,6 +10,10 @@
  *         Nexus and Amazon disagreed. Now such a product's Amazon EU rows are skipped with the reason, and nothing is
  *         written for them; a sheet that sets every EU market the same way applies as before.
  *
+ *   HOLD  Build shape v2 (P13): a listing whose selling is paused (Inactive: the product sheet's Pause offer, or Amazon's
+ *         market close) takes nothing from a sheet — skipped with the plain sentence — and a paused listing of another
+ *         account on the same market is never written by the change of the one that sells.
+ *
  * The real Sync Control route over a real PostgreSQL in-process (PGlite); the workbook is the route's own format.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -35,6 +39,7 @@ vi.mock('../services/product-read-cache.service.js', async (importOriginal) => (
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import { buildSyncControlWorkbook } from '../services/sync-control-excel.js'
+import { SELLING_PAUSED_SENTENCE } from '@nexus/shared/push-lock'
 
 const BUSINESS = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const scoped = <T>(work: () => Promise<T>) => withWorkspace(BUSINESS, work)
@@ -161,5 +166,40 @@ describe('F9 — the Amazon EU gate on the import', () => {
     const out = await upload('apply', [{ sku: 'IMP-EU-FBA-SIBLING', market: 'IT', mode: 'Pinned', pinnedQty: 4 }])
     expect(out.applied).toBe(1)
     expect(await listingState(l)).toEqual({ IT: { ...FOLLOWING, quantity: 4, quantityOverride: 4, followMasterQuantity: false }, DE: FOLLOWING })
+  }, 60_000)
+})
+
+describe('P13 — a listing whose selling is paused takes nothing from the import', () => {
+  const pause = (id: string) => scoped(() => prisma.channelListing.update({ where: { id }, data: { offerClosedAt: new Date(), offerCloseReason: 'sheet-pause', offerActive: false } }))
+  const queued = (id: string) => scoped(() => prisma.outboundSyncQueue.count({ where: { channelListingId: id } }))
+
+  it('the paused listing is skipped with the plain sentence; nothing is written or queued', async () => {
+    const l = await seed('imp-held', [{ marketplace: 'UK' }])
+    await pause(l.UK)
+    for (const sheet of [[{ sku: 'IMP-HELD', market: 'UK', mode: 'Pinned', pinnedQty: 3 }], [{ sku: 'IMP-HELD', market: 'UK', mode: '', buffer: 2 }]]) {
+      const preview = await upload('preview', sheet)
+      expect(preview.changes).toEqual([])
+      expect(preview.skipped).toEqual([{ key: 'IMP-HELD@AMAZON:UK', reason: SELLING_PAUSED_SENTENCE }])
+      expect((await upload('apply', sheet)).applied).toBe(0)
+    }
+    expect(await listingState(l)).toEqual({ UK: FOLLOWING })
+    expect(await queued(l.UK)).toBe(0)
+  }, 60_000)
+
+  it('a pin for the account that sells never reaches the paused listing of another account on the same market', async () => {
+    const other = (await scoped(() => prisma.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'import-guards-2', externalAccountId: 'TEST-SELLER-2', isActive: true } }))).id
+    // The paused one first, the selling one second: the sheet row names the market, and the selling one is the row it reads.
+    const held = await seed('imp-held-sibling', [{ marketplace: 'UK' }])
+    await pause(held.UK)
+    const selling = await scoped(() => prisma.channelListing.create({ data: {
+      productId: 'imp-held-sibling', channel: 'AMAZON', channelConnectionId: other, channelMarket: 'AMAZON_UK', marketplace: 'UK', region: 'EU',
+      price: 10, quantity: 5, followMasterQuantity: true, stockBuffer: 0, fulfillmentMethod: 'FBM', listingStatus: 'ACTIVE', isPublished: true,
+    } as never }))
+    const out = await upload('apply', [{ sku: 'IMP-HELD-SIBLING', market: 'UK', mode: 'Pinned', pinnedQty: 3 }])
+    expect(out.applied).toBe(1)
+    expect(await listingState({ held: held.UK, selling: selling.id })).toEqual({
+      held: FOLLOWING, selling: { ...FOLLOWING, quantity: 3, quantityOverride: 3, followMasterQuantity: false },
+    })
+    expect(await queued(held.UK)).toBe(0)
   }, 60_000)
 })

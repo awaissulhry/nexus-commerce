@@ -232,7 +232,12 @@ function cellOf(cell: MatrixCells) {
   return {
     listingId: cell.listingId,
     version: cell.version,
-    listing: cell.listing ? { state: cell.listing.state, published: cell.listing.published, linked: !!cell.listing.externalId, ...(cell.listing.detail ? { detail: cell.listing.detail } : {}) } : null,
+    listing: cell.listing ? {
+      state: cell.listing.state, published: cell.listing.published, linked: !!cell.listing.externalId, ...(cell.listing.detail ? { detail: cell.listing.detail } : {}),
+      // Build shape v2: the selling state the sheet's Status column shows (active · paused = Inactive · mixed = Partly
+      // inactive · ended · draft …) and why. Read only here: a selling change is the Status column + Publish.
+      ...(cell.listing.selling ? { selling: { state: cell.listing.selling.state, ...(cell.listing.selling.reason ? { reason: clip(cell.listing.selling.reason) } : {}) } } : {}),
+    } : null,
     fulfilment: cell.fulfilment ? { method: cell.fulfilment.method, source: cell.fulfilment.source, guard: cell.fulfilment.guard, reported: cell.fulfilment.reported } : null,
     sync: cell.sync ? {
       kind: cell.sync.kind, via: cell.sync.via, mode: cell.sync.mode, intended: cell.sync.intended, held: cell.sync.held,
@@ -282,7 +287,10 @@ const listingMatrix: AgentTool = {
     'Stock and price of every listing of a product family, per channel and market: the Nexus Matrix page\'s own read. '
     + 'coordinates are the listed channel and market columns (key, e.g. EBAY:IT, AMAZON:DE, EBAY:IT#<aliasId> for a second '
     + 'listing, AMAZON:EU for the ONE Amazon EU merchant quantity every EU market shares); rows are the family\'s products '
-    + '(rowId, SKU, master stock and price) with their cells per coordinate key: sync (FOLLOW the master stock or PINNED, '
+    + '(rowId, SKU, master stock and price) with their cells per coordinate key: listing (its state, and selling: the selling '
+    + 'state the product sheet\'s Status column shows — active (Active), paused (Inactive), mixed (Mixed: its variations '
+    + 'differ), ended (Ended: eBay or Shopify only), draft or not_listed (Not listed: never sent, or deleted by Nexus) — '
+    + 'with its reason), sync (FOLLOW the master stock or PINNED, '
     + 'the quantity it would send, the one the channel holds, the buffer), price and sale, fulfilment (FBA quantities are '
     + 'Amazon\'s and never set from Nexus), what can be written there and why not. A change names rowId and coordinate key.',
   async handler(args, ctx) {

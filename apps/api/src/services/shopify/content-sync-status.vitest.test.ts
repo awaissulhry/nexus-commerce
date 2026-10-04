@@ -49,6 +49,29 @@ describe('New product synchronization records final verified native status', () 
   })
 })
 
+// New listings (Owner 2026-10-04) — Publish's Status choice for a product Shopify does not hold yet wins over the stored
+// Shopify status: Active creates it ACTIVE, Inactive leaves it a Draft. The verified status is kept on the family row.
+describe('New listings: the create status from Publish', () => {
+  it.each([['DRAFT', 'ACTIVE', true], ['ACTIVE', 'DRAFT', false]] as const)('stored %s, chosen %s: Shopify verifies the choice', async (stored, chosen, live) => {
+    s.status = stored
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true, createStatus: chosen })
+    expect(s.remote.status).toBe(chosen)
+    expect(s.applied).toEqual(chosen === 'ACTIVE' ? ['status'] : [])
+    expect(s.row).toMatchObject({ isPublished: live, listingStatus: live ? 'ACTIVE' : 'INACTIVE', platformAttributes: expect.objectContaining({ status: chosen }) })
+  })
+  it('a product Shopify already holds keeps its own status path (the choice is only for a create)', async () => {
+    s.status = 'DRAFT'
+    s.remote = { id: 'gid://shopify/Product/1', status: 'DRAFT' }
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true, createStatus: 'ACTIVE' })
+    expect(s.remote.status).toBe('DRAFT')
+    expect(s.row.platformAttributes.status).toBeUndefined()
+  })
+})
+
  it('initializes a new product category before planning its constrained Information fields', async () => {
     s.status = 'DRAFT'; s.category = true
     const scope = { accountId: 'store-b', market: 'GLOBAL' }
