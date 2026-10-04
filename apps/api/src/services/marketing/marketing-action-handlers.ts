@@ -49,11 +49,9 @@ ACTION_HANDLERS.mkt_pause_campaign = async (action, context, meta): Promise<Acti
   const c = await loadCampaign(id)
   if (!c) return { type: action.type, ok: false, error: `campaign ${id} not found` }
   if (c.status === 'PAUSED') return { type: action.type, ok: true, output: { skipped: 'already paused' } }
-  if (meta.dryRun) {
-    return { type: action.type, ok: true, output: { dryRun: true, wouldChange: { id, status: 'PAUSED' }, name: c.name } }
-  }
-  const r = await enqueueCampaignMutation({ campaignId: id, syncType: 'MKT_STATE_UPDATE', payload: { status: 'PAUSED' }, userId: `automation:${meta.ruleId}` })
-  return { type: action.type, ok: true, output: { queueId: r.queueId, status: 'PAUSED' } }
+  // 1f — no automation pauses a campaign (the mutation service refuses it too). Refused in a dry run
+  // as well, so a rule never proposes a pause that would be refused when a person approves it.
+  return { type: action.type, ok: false, error: 'Refused: no automation may pause a campaign. A person can still pause it by hand.' }
 }
 
 // ── mkt_resume_campaign ───────────────────────────────────────────────────

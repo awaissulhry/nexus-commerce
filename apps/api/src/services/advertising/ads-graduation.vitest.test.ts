@@ -28,6 +28,15 @@ describe('reversible rules may reach AUTO', () => {
   })
 })
 
+describe('dayparting_apply is capped at PROPOSE (1f)', () => {
+  it('a window floor has no restore when its rule is removed mid-window, so it may not act alone', () => {
+    const r = v(['dayparting_apply'])
+    expect(r.maxLevel).toBe('PROPOSE')
+    expect(r.blockedBy).toEqual(['dayparting_apply'])
+    expect(v(['bid_down', 'dayparting_apply']).maxLevel).toBe('PROPOSE')
+  })
+})
+
 describe('structural rules are capped at PROPOSE', () => {
   it('creating a keyword', () => {
     const r = v(['promote_to_exact'])

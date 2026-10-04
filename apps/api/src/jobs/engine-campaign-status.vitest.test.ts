@@ -19,7 +19,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { isSchedulingEngineActor } from '../services/advertising/ads-mutation.service.js'
+import { isAutomatedPause, isSchedulingEngineActor } from '../services/advertising/ads-mutation.service.js'
 
 describe('SYNC.1 — which actors may set Campaign.status', () => {
   // The exact actor strings from the incident's AdvertisingActionLog rows.
@@ -37,9 +37,9 @@ describe('SYNC.1 — which actors may set Campaign.status', () => {
     expect(isSchedulingEngineActor('user:neg3b-probe')).toBe(false)
   })
 
-  it('ALLOWS an operator-authored rule — RULE_ACTOR is a bare automation:<cuid>', () => {
+  it('is not the SYNC.1 ban for an operator-authored rule — RULE_ACTOR is a bare automation:<cuid>', () => {
     // automation-action-handlers.ts: `const RULE_ACTOR = (ruleId) => \`automation:${ruleId}\``
-    // pause_campaign / enable_campaign / pause_all_campaigns must keep working.
+    // enable_campaign / resume_campaign keep working. A rule's PAUSE is refused by 1f below, not here.
     expect(isSchedulingEngineActor('automation:cms450kg9002rqt019f1outpu')).toBe(false)
     expect(isSchedulingEngineActor('automation:budget-manager-cron')).toBe(false)
   })
@@ -61,6 +61,38 @@ describe('SYNC.1 — which actors may set Campaign.status', () => {
   it('the exemption is exact — a cron tick cannot borrow it as a prefix', () => {
     expect(isSchedulingEngineActor('automation:dayparting-disabled-cms450kg9002rqt019f1outpu')).toBe(true)
     expect(isSchedulingEngineActor('automation:dayparting-deleteXYZ')).toBe(true)
+  })
+})
+
+/**
+ * 1f — no automation pauses a campaign or an ad group (Owner rule; decision S5). SYNC.1 let an
+ * operator-authored rule through, so `pause_campaign`, `pause_all_campaigns`, `dayparting_apply` and
+ * `liquidate_aged_stock` could still pause on Amazon. `isAutomatedPause` is the backstop in
+ * `updateCampaignWithSync` / `updateAdGroupWithSync`; the write itself is pinned in
+ * services/advertising/no-automated-pause.vitest.test.ts.
+ */
+describe('1f — which actors may PAUSE a campaign or an ad group', () => {
+  it('REFUSES a pause from every automation actor — a rule, an engine, a one-shot handler', () => {
+    expect(isAutomatedPause('automation:cms450kg9002rqt019f1outpu', 'PAUSED')).toBe(true)
+    expect(isAutomatedPause('automation:budget-manager-cron', 'PAUSED')).toBe(true)
+    expect(isAutomatedPause('automation:rank-defend-cmr2699uy02njp7018u2mndsz', 'PAUSED')).toBe(true)
+    expect(isAutomatedPause('automation:dayparting-delete', 'PAUSED')).toBe(true)
+  })
+
+  // The dangerous direction again: a person's Pause button must keep working.
+  it('ALLOWS a person to pause', () => {
+    expect(isAutomatedPause('user:anonymous', 'PAUSED')).toBe(false)
+    expect(isAutomatedPause('user:awais', 'PAUSED')).toBe(false)
+  })
+
+  it('ALLOWS a rule to enable — enable_campaign, resume_campaign and the schedule resume stay', () => {
+    expect(isAutomatedPause('automation:cms450kg9002rqt019f1outpu', 'ENABLED')).toBe(false)
+    expect(isAutomatedPause('automation:dayparting-delete', 'ENABLED')).toBe(false)
+    expect(isAutomatedPause('automation:cms450kg9002rqt019f1outpu', undefined)).toBe(false)
+  })
+
+  it('matches the actor kind, not a substring', () => {
+    expect(isAutomatedPause('user:automation:impersonator', 'PAUSED')).toBe(false)
   })
 })
 
