@@ -268,6 +268,34 @@ export function builderDraftCampaignIds(actions: unknown, slug: string): string[
   return builderCampaignIds(a0)
 }
 
+/**
+ * 4a (review 4.2) — the campaigns a builder rule's PICKER binds it to, for every slug that has a
+ * campaign picker. This is what the evaluator, Simulate and the reach number pass as
+ * `RuleScope.assignedCampaignIds` (through `ads-rule-scope-resolver.ts`).
+ *
+ * 🔴 Only a Budget rule used to be matched on its picks. A Bid, SOV, Keyword Tracker or Placement
+ * rule was evaluated on EVERY campaign and its handler skipped an unpicked one only after the
+ * execution row existed — so unpicked campaigns spent the rule's daily cap and took its arbitration
+ * claims, and reach counted the whole account (live: a Placement rule with 1 pick read 220).
+ *
+ *   · `budget` — the three states of `builderBudgetCampaignIds`, unchanged (`[]` matches nothing).
+ *   · `bid` · `sov` · `keyword-tracker` · `placement` — the picker list, or `null` when it stored
+ *     no picks. Empty means "no restriction" for these slugs, exactly as their handlers read it
+ *     (`campaignAllowed`, `bid_apply`), so a rule without picks stays account-wide as before.
+ *   · anything else — `null`. Negative Targeting and Keyword Harvesting are bound by the ad-group
+ *     mappings their handlers enforce, not by a campaign picker.
+ */
+const PICKER_SCOPED_SLUGS = new Set(['bid', 'sov', 'keyword-tracker', 'placement'])
+export function builderScopeCampaignIds(actions: unknown): string[] | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
+  if (!a0) return null
+  const slug = String(a0.type ?? '')
+  if (slug === 'budget') return builderBudgetCampaignIds(actions)
+  if (!PICKER_SCOPED_SLUGS.has(slug)) return null
+  const ids = builderCampaignIds(a0)
+  return ids.length > 0 ? ids : null
+}
+
 /** True for a budget rule of EITHER shape — the catalogue test the column should have used. */
 export function isBudgetRuleOfAnyShape(actions: unknown): boolean {
   return isEngineBudgetRule(actions) || builderBudgetCampaignIds(actions) != null

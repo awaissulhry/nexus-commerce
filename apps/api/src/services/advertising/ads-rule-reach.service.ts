@@ -24,7 +24,7 @@
  */
 import prisma from '../../db.js'
 import { ruleMatchesScope, type RuleScope } from '../automation-rule-scope.js'
-import { isEngineBudgetRule, builderBudgetCampaignIds } from './ads-rule-adapter.service.js'
+import { resolveAssignedCampaignIds } from './ads-rule-scope-resolver.js'
 
 export interface RuleReach {
   /** campaigns this rule's scope admits */
@@ -113,33 +113,16 @@ export async function reachForRules(
   const expanded = await expandProducts(productScoped)
 
   /**
-   * D1 (2026-08-20) — assignment, read the same way the evaluator reads it.
+   * D1 · BUD-P2 · 4a — assignment, read by the evaluator's OWN resolver.
    *
    * 🔴 This file's own header states the law: *"a reach number that disagrees with what actually
-   * runs is worse than none"*. The evaluator now refuses a budget rule on any campaign it is not
-   * assigned to, so a reach number computed from the scope columns alone would over-report — it
-   * would still say 220 for a rule assigned to three. Callers that do not select `actions` pass
-   * `undefined` and keep the old answer, which is correct for every non-budget rule.
+   * runs is worse than none"*. The tick refuses a bound rule on any campaign it is not bound to —
+   * an engine budget rule by `CampaignRuleAssignment`, a builder Budget/Bid/SOV/Keyword Tracker/
+   * Placement rule by its picker list — so a reach computed from the scope columns alone would
+   * over-report: "220" for a Placement rule with one pick (live, review 4.2). Callers that do not
+   * select `actions` pass `undefined` and keep the scope-column answer.
    */
-  const assignedByRule = new Map<string, string[]>()
-  const budgetRuleIds = rules.filter((r) => isEngineBudgetRule(r.actions)).map((r) => r.id)
-  if (budgetRuleIds.length > 0) {
-    for (const id of budgetRuleIds) assignedByRule.set(id, [])
-    const links = await prisma.campaignRuleAssignment.findMany({
-      where: { ruleId: { in: budgetRuleIds }, kind: 'budget' },
-      select: { ruleId: true, campaignId: true },
-    })
-    for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
-  }
-  /**
-   * BUD-P2 — a BUILDER budget rule is governed by its own picker list (the same list
-   * `budget_apply` enforces and the evaluator now matches on). Without this the reach number
-   * over-reported it exactly the way D1's note warns against: "220" for a rule bound to twelve.
-   */
-  for (const r of rules) {
-    const own = builderBudgetCampaignIds(r.actions)
-    if (own != null) assignedByRule.set(r.id, own)
-  }
+  const assignedByRule = await resolveAssignedCampaignIds(rules)
 
   const out = new Map<string, RuleReach>()
   for (const r of rules) {

@@ -18,9 +18,21 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ findUnique: vi.fn(), updatePlacementBidding: vi.fn() }))
+const h = vi.hoisted(() => ({
+  findUnique: vi.fn(), updatePlacementBidding: vi.fn(),
+  // 4d — the lane's measured spend and the rule's daily spend ceiling
+  laneAggregate: vi.fn(), ruleFindUnique: vi.fn(), execFindMany: vi.fn(), sugFindMany: vi.fn(),
+}))
 
-vi.mock('../../db.js', () => ({ default: { campaign: { findUnique: h.findUnique } } }))
+vi.mock('../../db.js', () => ({
+  default: {
+    campaign: { findUnique: h.findUnique },
+    amazonAdsPlacementReport: { aggregate: h.laneAggregate },
+    automationRule: { findUnique: h.ruleFindUnique },
+    automationRuleExecution: { findMany: h.execFindMany },
+    adsRuleSuggestion: { findMany: h.sugFindMany },
+  },
+}))
 vi.mock('./ads-create.service.js', () => ({ updatePlacementBidding: h.updatePlacementBidding }))
 
 import { ACTION_HANDLERS } from '../automation-rule.service.js'
@@ -31,7 +43,7 @@ const REST = 'PLACEMENT_REST_OF_SEARCH'
 const PDP = 'PLACEMENT_PRODUCT_PAGE'
 
 const run = (action: Record<string, unknown>, dryRun = false) =>
-  (ACTION_HANDLERS.placement_apply as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string; output?: Record<string, unknown> }>)(
+  (ACTION_HANDLERS.placement_apply as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string; estimatedValueCentsEur?: number; output?: Record<string, unknown> }>)(
     { campaignId: 'c1', ...action }, {}, { dryRun, ruleId: 'rule-1' },
   )
 
@@ -39,9 +51,23 @@ const profile = (lanes: Array<{ placement: string; percentage: number }>) => {
   h.findUnique.mockResolvedValue({ dynamicBidding: { placementBidding: lanes } })
 }
 
+/** 4d — today's rows of this rule, filtered the way the database would filter them on the helper's `where`. */
+const today = {
+  executions: [] as Array<{ ruleId: string; dryRun: boolean; actionResults: unknown[] }>,
+  suggestions: [] as Array<{ ruleId: string; status: string; appliedResult: unknown }>,
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   h.updatePlacementBidding.mockResolvedValue({ ok: true, mode: 'live', adjustments: [] })
+  h.laneAggregate.mockResolvedValue({ _sum: { costMicros: null } })
+  h.ruleFindUnique.mockResolvedValue({ maxDailyAdSpendCentsEur: null })
+  today.executions = []
+  today.suggestions = []
+  h.execFindMany.mockImplementation(async ({ where }: { where: { ruleId: string; dryRun?: boolean } }) =>
+    today.executions.filter((e) => e.ruleId === where.ruleId && (where.dryRun === undefined || e.dryRun === where.dryRun)))
+  h.sugFindMany.mockImplementation(async ({ where }: { where: { ruleId: string; status?: string } }) =>
+    today.suggestions.filter((x) => x.ruleId === where.ruleId && (where.status === undefined || x.status === where.status)))
 })
 
 describe('the merge — a one-lane rule must not erase the other lanes', () => {
@@ -163,5 +189,97 @@ describe('dryRun and no-change (D-PLC-3, fixed after PLC-P4 deferred it)', () =>
     const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
     expect(r.output?.wouldChange).toBe('30% → 50%')
     expect(r.output?.noChange).toBeUndefined()
+  })
+})
+
+/**
+ * 4d (review 4.4, Owner decision S11) — the rule's daily spend ceiling (€100/day by default) binds a placement raise.
+ *
+ * `placement_apply` never called `checkDailySpendCap`, so a placement rule could raise a lane to 900% with the ceiling
+ * the builder promised doing nothing. It now projects the EXTRA spend per day (lane spend/day × ((100+new)/(100+old) − 1))
+ * and, on a live raise, checks it against what the rule really committed today.
+ */
+describe('4d — the daily spend ceiling binds a placement raise', () => {
+  // 7,000¢ in the window = 1,000¢ a day over the campaign-performance window of 7 days
+  const laneSpend = () => h.laneAggregate.mockResolvedValue({ _sum: { costMicros: 70_000_000n } })
+  const ceiling = (cents: number) => h.ruleFindUnique.mockResolvedValue({ maxDailyAdSpendCentsEur: cents })
+
+  it('a raise reports its projected extra spend, live and dry, so maxValueCentsEur binds it', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    laneSpend()
+    const dry = await run({ placement: TOP, op: 'set', value: 50 }, true)
+    expect(dry.estimatedValueCentsEur).toBe(154)
+    expect(dry.output?.extraSpendPerDayCents).toBe(154)
+    expect(dry.output?.spendEstimate).toBe('raise')
+    const live = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(live.ok).toBe(true)
+    expect(live.estimatedValueCentsEur).toBe(154)
+  })
+
+  it('reads the lane by Amazon’s report label on the LOCAL campaign id, never the bidding enum', async () => {
+    profile([{ placement: REST, percentage: 0 }])
+    await run({ placement: REST, op: 'set', value: 20 }, true)
+    const where = h.laneAggregate.mock.calls[0][0].where
+    expect(where.localCampaignId).toBe('c1')
+    expect(where.placement).toEqual({ in: ['Other on-Amazon'] })
+  })
+
+  it('🔴 a live raise past the ceiling is refused and writes nothing', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    laneSpend()
+    ceiling(10_000)
+    today.executions = [{ ruleId: 'rule-1', dryRun: false, actionResults: [{ ok: true, estimatedValueCentsEur: 9_900 }] }]
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/DAILY_AD_SPEND_CAP_EXCEEDED/)
+    expect(h.updatePlacementBidding).not.toHaveBeenCalled()
+  })
+
+  it('🔴 dry runs do not use up the ceiling — only live writes count', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    laneSpend()
+    ceiling(10_000)
+    today.executions = [{ ruleId: 'rule-1', dryRun: true, actionResults: [{ ok: true, estimatedValueCentsEur: 50_000 }] }]
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(true)
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+  })
+
+  it('🔴 a suggestion approved today counts against the ceiling', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    laneSpend()
+    ceiling(10_000)
+    today.suggestions = [
+      { ruleId: 'rule-1', status: 'applied', appliedResult: { ok: true, estimatedValueCentsEur: 9_900 } },
+      // a pending or dismissed row spent nothing
+      { ruleId: 'rule-1', status: 'pending', appliedResult: { ok: true, estimatedValueCentsEur: 50_000 } },
+    ]
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/today=9900¢/)
+    expect(h.updatePlacementBidding).not.toHaveBeenCalled()
+  })
+
+  it('a cut never consults the ceiling, even on a day already spent past it', async () => {
+    profile([{ placement: TOP, percentage: 50 }])
+    laneSpend()
+    ceiling(10_000)
+    today.executions = [{ ruleId: 'rule-1', dryRun: false, actionResults: [{ ok: true, estimatedValueCentsEur: 20_000 }] }]
+    const r = await run({ placement: TOP, op: 'decPct', value: 20 })
+    expect(r.ok).toBe(true)
+    expect(r.estimatedValueCentsEur).toBe(0)
+    expect(r.output?.spendEstimate).toBe('cut')
+    expect(h.ruleFindUnique).not.toHaveBeenCalled()
+    expect(h.laneAggregate).not.toHaveBeenCalled()
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+  })
+
+  it('a raise on a lane with no measured spend projects 0 and says unmeasured', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    ceiling(10_000)
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(true)
+    expect(r.estimatedValueCentsEur).toBe(0)
+    expect(r.output?.spendEstimate).toBe('unmeasured')
   })
 })

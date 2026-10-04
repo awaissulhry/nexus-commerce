@@ -55,6 +55,8 @@ beforeEach(() => {
   db.$queryRawUnsafe.mockImplementation(async (q: string) =>
     (q.includes('DISTINCT lower') ? [{ keywords: 9, markets: 2 }] : [{ n: 40 }]) as never)
   db.campaign.findMany.mockResolvedValue([] as never)
+  // 4d — a bid raise's dry run reads the target's window clicks for its projected extra spend
+  db.amazonAdsDailyPerformance.aggregate.mockResolvedValue({ _sum: { clicks: null, costMicros: null, sales7dCents: null } } as never)
 })
 
 /**

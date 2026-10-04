@@ -9,7 +9,7 @@
  *      behaviour dropped the condition, and a dropped AND-condition makes a rule LOOSER.
  */
 import { describe, it, expect } from 'vitest'
-import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes } from './ads-rule-adapter.service.js'
+import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes, builderScopeCampaignIds } from './ads-rule-adapter.service.js'
 
 // 4b — each block carries a THEN value, as the builder always sends one: a blank THEN now refuses the rule.
 const rule = (slug: string, metrics: string[], action: Record<string, unknown> = {}) => ({
@@ -597,5 +597,45 @@ describe('4b (review 4.1) — a typed number is read with its decimal comma, and
       ],
     })!
     expect(t.untranslatable).toHaveLength(1)
+  })
+})
+
+describe('4a — builderScopeCampaignIds: the campaigns a builder rule\'s picker binds it to', () => {
+  const picked = (type: string, ids: string[], key: 'campaigns' | 'campaignIds' = 'campaigns') => [{
+    type, ...(key === 'campaigns' ? { campaigns: ids.map((id) => ({ id, name: id })) } : { campaignIds: ids }),
+  }]
+
+  it('🔴 Bid, SOV, Keyword Tracker and Placement return their picks (they were never bound)', () => {
+    for (const slug of ['bid', 'sov', 'keyword-tracker', 'placement']) {
+      expect(builderScopeCampaignIds(picked(slug, ['c1', 'c2']))).toEqual(['c1', 'c2'])
+    }
+  })
+
+  it('reads the Autopilot spelling (`campaignIds`) too, as the handlers do', () => {
+    expect(builderScopeCampaignIds(picked('placement', ['c1'], 'campaignIds'))).toEqual(['c1'])
+  })
+
+  it('no picks on a non-budget rule → null: account-wide, the way its handler reads an empty list', () => {
+    expect(builderScopeCampaignIds(picked('placement', []))).toBeNull()
+    expect(builderScopeCampaignIds([{ type: 'bid' }])).toBeNull()
+  })
+
+  it('Budget keeps its three states, unchanged', () => {
+    expect(builderScopeCampaignIds(picked('budget', ['c1']))).toEqual(['c1'])
+    expect(builderScopeCampaignIds(picked('budget', []))).toEqual([])
+    expect(builderScopeCampaignIds([{ type: 'budget' }])).toBeNull()
+  })
+
+  it('every other rule is unbound by a picker — Negative Targeting/Harvest by mappings, engine rules by assignment', () => {
+    expect(builderScopeCampaignIds(picked('negative-targeting', ['c1']))).toBeNull()
+    expect(builderScopeCampaignIds(picked('keyword-harvesting', ['c1']))).toBeNull()
+    expect(builderScopeCampaignIds([{ type: 'adjust_ad_budget', campaignIds: ['c1'] }])).toBeNull()
+    expect(builderScopeCampaignIds(null)).toBeNull()
+    expect(builderScopeCampaignIds([])).toBeNull()
+  })
+
+  it('the picks it binds are the same list the handler enforces (`campaignIds` on the translated action)', () => {
+    const t = maybeTranslateAdsRule({ id: 'r', actions: picked('placement', ['c1']), conditions: [] })!
+    expect((t.actions[0] as { campaignIds: string[] }).campaignIds).toEqual(builderScopeCampaignIds(picked('placement', ['c1'])))
   })
 })

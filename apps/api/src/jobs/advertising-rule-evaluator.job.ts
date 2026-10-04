@@ -418,9 +418,46 @@ async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
     }))
 }
 
+// ── Per-rule lookback ──────────────────────────────────────────────────
+// 4a (review 4.14) — hoisted out of the tick so `simulateOneRule` builds a rule's contexts over
+// the SAME window the tick does. Simulate used to build every rule over the trigger's default.
+
+/**
+ * BP.P4 — per-rule lookback for Bid rules, honoured by the EMITTER.
+ *
+ * A builder Bid rule may carry its own `actions[0].windowDays` (the builder's Lookback select,
+ * clamped 7–90). Contexts are aggregates over a window, so a rule's window can only bind if
+ * its contexts are BUILT over it: the default pass keeps the trigger's 14 settled days and
+ * excludes window-choosing rules; each distinct chosen window gets its own pass with its own
+ * contexts and only its own rules. One extra groupBy per distinct window actually in use.
+ */
+export function bidRuleWindow(actions: unknown): number | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
+  if (a0?.type !== 'bid' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
+  const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
+  return clamped === WINDOW('KEYWORD_HIGH_ACOS') ? null : clamped
+}
+
+/**
+ * BUD-P3 · PLC-P5 — the per-window mechanism for BOTH `CAMPAIGN_PERFORMANCE_BUDGET` builders.
+ *
+ * Budget and Placement share this trigger and share `buildCampaignBudgetContexts`, so they share
+ * one helper. It used to test `a0.type !== 'budget'`, which meant a `windowDays` stored on a
+ * placement rule was read by nobody and every placement rule silently rode the default 7-day
+ * pass — the stored-but-unread class, one layer below the UI where it is hardest to see.
+ */
+const CAMPAIGN_WINDOW_SLUGS = new Set(['budget', 'placement'])
+export function campaignRuleWindow(actions: unknown): number | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
+  if (!a0 || !CAMPAIGN_WINDOW_SLUGS.has(String(a0.type ?? ''))) return null
+  if (typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
+  const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
+  return clamped === WINDOW('CAMPAIGN_PERFORMANCE_BUDGET') ? null : clamped
+}
+
 // ── Cron tick ──────────────────────────────────────────────────────────
 
-async function applyMarketplaceScope<C extends { marketplace: string | null }>(
+export async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   trigger: string,
   contexts: C[],
   forceDryRun = false,
@@ -475,48 +512,17 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   if (rules.length === 0) return { evaluations, matches, capped, failed }
 
   /**
-   * ── D1 (2026-08-20) — ASSIGNMENT, for budget rules ───────────────────────────────────────────
+   * D1 · BUD-P2 · 4a — the campaigns each rule is BOUND to: engine-native budget rules by
+   * `CampaignRuleAssignment`, builder rules (Budget, Bid, SOV, Keyword Tracker, Placement) by their
+   * own picker list. One resolver, shared with `simulateOneRule` and `reachForRules`, so the tick,
+   * Simulate and the reach number cannot disagree — the three states are documented there.
    *
-   * Operator study of H10's Budget Rule column: a budget rule governs the campaigns it is
-   * ASSIGNED to, and does nothing until it is assigned. `CampaignRuleAssignment` points
-   * campaign → rule and is many-to-many — the inverse of `scopeCampaignId`, which is
-   * single-valued and therefore cannot express it.
-   *
-   * 🔴 The empty array is deliberate and load-bearing. Every budget rule gets an entry here, so a
-   * rule assigned to nothing arrives at the matcher as `[]` and matches NO campaign — which is the
-   * whole semantic. `null`/absent means "not assignment-governed" and leaves every other rule
-   * exactly as it was. Collapsing the two would make an unassigned budget rule account-wide again.
-   *
-   * Today's rows come from the backfill in migration `20260820b_d1_campaign_rule_assignment`,
-   * which made the six account-wide budget rules' existing reach explicit — so this changes no
-   * behaviour on the day it ships.
+   * 🔴 4a (review 4.2) — a Bid/SOV/Keyword Tracker/Placement rule used to reach this matcher
+   * ungoverned: every unpicked campaign was evaluated, wrote an execution row (spending the rule's
+   * daily cap) and took an arbitration claim before its handler skipped it as "not selected".
    */
-  const { isEngineBudgetRule, builderBudgetCampaignIds } = await import('../services/advertising/ads-rule-adapter.service.js')
-  const assignedByRule = new Map<string, string[]>()
-  const budgetRuleIds = rules.filter((r) => isEngineBudgetRule(r.actions)).map((r) => r.id)
-  if (budgetRuleIds.length > 0) {
-    // Seed every budget rule with [] FIRST: absent from the assignment table must read as
-    // "assigned to nothing", not as "not assignment-governed".
-    for (const id of budgetRuleIds) assignedByRule.set(id, [])
-    const links = await prisma.campaignRuleAssignment.findMany({
-      where: { ruleId: { in: budgetRuleIds }, kind: 'budget' },
-      select: { ruleId: true, campaignId: true },
-    })
-    for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
-  }
-  /**
-   * BUD-P2 — the OTHER budget shape. A builder rule (`actions[0].type === 'budget'`) is governed
-   * by its own picker list, which `rule-campaign-binding.service` keeps equal to the assignment
-   * rows in both directions. Reading the rule rather than the table means a mirror that lost a
-   * race can leave the COLUMN stale but can never make a live rule silently match nothing.
-   *
-   * Until now these rules reached the matcher ungoverned — only `budget_apply`'s own
-   * `campaignIds` check (EA4) held them in, so every non-picked campaign was still evaluated.
-   */
-  for (const r of rules) {
-    const own = builderBudgetCampaignIds(r.actions)
-    if (own != null) assignedByRule.set(r.id, own)
-  }
+  const { resolveAssignedCampaignIds } = await import('../services/advertising/ads-rule-scope-resolver.js')
+  const assignedByRule = await resolveAssignedCampaignIds(rules)
 
   /**
    * RA.GRAIN — product scope, resolved once per trigger and only when some rule asks for it.
@@ -1660,21 +1666,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   let totalCapped = 0
   let totalFailed = 0
 
-  /**
-   * BP.P4 — per-rule lookback for Bid rules, honoured by the EMITTER.
-   *
-   * A builder Bid rule may carry its own `actions[0].windowDays` (the builder's Lookback select,
-   * clamped 7–90). Contexts are aggregates over a window, so a rule's window can only bind if
-   * its contexts are BUILT over it: the default pass keeps the trigger's 14 settled days and
-   * excludes window-choosing rules; each distinct chosen window gets its own pass with its own
-   * contexts and only its own rules. One extra groupBy per distinct window actually in use.
-   */
-  const bidRuleWindow = (actions: unknown): number | null => {
-    const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
-    if (a0?.type !== 'bid' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
-    const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
-    return clamped === WINDOW('KEYWORD_HIGH_ACOS') ? null : clamped
-  }
+  // BP.P4 — Bid rules that chose their own lookback get their own pass (`bidRuleWindow`, above).
   const bidWindowRules = await prisma.automationRule.findMany({
     where: { domain: 'advertising', trigger: 'KEYWORD_HIGH_ACOS', enabled: true },
     select: { actions: true },
@@ -1683,22 +1675,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const highAcosByWindow = await Promise.all(customWindows.map(async (w) =>
     [w, await buildHighAcosKeywordContexts(w)] as const))
 
-  /**
-   * BUD-P3 · PLC-P5 — the per-window mechanism for BOTH `CAMPAIGN_PERFORMANCE_BUDGET` builders.
-   *
-   * Budget and Placement share this trigger and share `buildCampaignBudgetContexts`, so they share
-   * one helper. It used to test `a0.type !== 'budget'`, which meant a `windowDays` stored on a
-   * placement rule was read by nobody and every placement rule silently rode the default 7-day
-   * pass — the stored-but-unread class, one layer below the UI where it is hardest to see.
-   */
-  const CAMPAIGN_WINDOW_SLUGS = new Set(['budget', 'placement'])
-  const campaignRuleWindow = (actions: unknown): number | null => {
-    const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
-    if (!a0 || !CAMPAIGN_WINDOW_SLUGS.has(String(a0.type ?? ''))) return null
-    if (typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
-    const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
-    return clamped === WINDOW('CAMPAIGN_PERFORMANCE_BUDGET') ? null : clamped
-  }
+  // BUD-P3 · PLC-P5 — Budget and Placement rules that chose their own lookback (`campaignRuleWindow`).
   const budgetWindowRules = await prisma.automationRule.findMany({
     where: { domain: 'advertising', trigger: 'CAMPAIGN_PERFORMANCE_BUDGET', enabled: true },
     select: { actions: true },
@@ -1828,6 +1805,8 @@ export async function simulateOneRule(ruleId: string): Promise<{
     select: {
       id: true, name: true, domain: true, trigger: true, enabled: true,
       scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true,
+      // 4a — the picker list and the rule's own lookback live on the stored action.
+      actions: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return { ok: false, error: 'not_found' }
@@ -1878,14 +1857,32 @@ export async function simulateOneRule(ruleId: string): Promise<{
   } else {
     const build = BUILDERS[rule.trigger]
     if (!build) return { ok: false, error: `no context builder for trigger ${rule.trigger}`, ruleName: rule.name, trigger: rule.trigger }
-    contexts = await build()
+    /**
+     * 4a (review 4.14) — the rule's OWN lookback, exactly as the tick's per-window passes build it.
+     * A Bid rule on 30 days, or a Budget/Placement rule on 14, used to be simulated over the
+     * trigger's default window — numbers the real run never sees.
+     */
+    const ownWindow = rule.trigger === 'KEYWORD_HIGH_ACOS' ? bidRuleWindow(rule.actions)
+      : rule.trigger === 'CAMPAIGN_PERFORMANCE_BUDGET' ? campaignRuleWindow(rule.actions)
+        : null
+    contexts = ownWindow == null ? await build()
+      : rule.trigger === 'KEYWORD_HIGH_ACOS' ? await buildHighAcosKeywordContexts(ownWindow)
+        : await buildCampaignBudgetContexts(ownWindow)
   }
+
+  /**
+   * 4a (review 4.14) — the campaigns the rule is BOUND to (budget assignment, or the builder's
+   * picker list), from the resolver the tick uses. Simulate used to skip this entirely, so a
+   * simulated budget or placement rule reported every campaign in its market.
+   */
+  const { resolveAssignedCampaignIds } = await import('../services/advertising/ads-rule-scope-resolver.js')
+  const assignedCampaignIds = (await resolveAssignedCampaignIds([rule])).get(rule.id) ?? null
 
   // Same scope enforcement as the real tick, so a simulation cannot claim reach the rule
   // would not have. Identity maps only matter when the rule scopes below marketplace.
   const extToLocal = new Map<string, string>()
   const localToPortfolio = new Map<string, string | null>()
-  if (rule.scopePortfolioId != null || rule.scopeCampaignId != null) {
+  if (rule.scopePortfolioId != null || rule.scopeCampaignId != null || assignedCampaignIds != null) {
     const exts = new Set<string>(); const locals = new Set<string>()
     for (const ctx of contexts) {
       const c = ctx as unknown as { campaign?: { id?: string }; searchTerm?: { externalCampaignId?: string } }
@@ -1932,7 +1929,7 @@ export async function simulateOneRule(ruleId: string): Promise<{
   }
 
   const inScope = contexts.filter((ctx) => ruleMatchesScope(
-    { ...rule, scopeProductIds: expandedProductIds },
+    { ...rule, scopeProductIds: expandedProductIds, assignedCampaignIds },
     contextIdentity(ctx, extToLocal, localToPortfolio, simProductsByAdGroup, simProductsByCampaign),
   ))
 
