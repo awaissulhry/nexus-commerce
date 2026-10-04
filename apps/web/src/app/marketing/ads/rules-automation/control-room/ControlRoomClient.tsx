@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, SegmentedControl } from '@/design-system/primitives'
+import { Button, Pill, SegmentedControl } from '@/design-system/primitives'
 import { useActionConfirm } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import Link from '@/lib/workspaces/Link'
@@ -37,6 +37,7 @@ import { ForesightTab } from './ForesightTab'
 import { LeverDrawer } from './LeverDrawer'
 import type { LeverControl } from './lever-control'
 import { accountStatus, dialMove, DIAL_LABEL, DIAL_LEVELS, isDial, type AccountGlobal } from './dialState'
+import { actsOnItsOwn, groupSummary, GROUP_TONE, type ExposureFields } from '../automations/exposure'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -49,7 +50,8 @@ const MODE_META: Record<Mode, { label: string; Icon: typeof Zap; hint: string }>
   AUTO: { label: 'Auto', Icon: Zap, hint: 'Acts on its own, inside the write gate.' },
 }
 
-interface Engine {
+/** 7a — with its plain group (`exposure`), whether it changes Amazon by itself and its 7-day changes (exposure.ts). */
+interface Engine extends ExposureFields {
   key: string; name: string; what: string
   mode: Mode; modeReason: string
   scope: string | null; cron: string | null; schedule: string | null
@@ -135,7 +137,9 @@ export function ControlRoomClient() {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const acting = (engines ?? []).filter((e) => e.mode === 'AUTO').length
+  // 7a — "acting on their own" counts the engines that change Amazon by themselves, not every engine on Auto: the
+  // breaker and write delivery never do, and an engine with nothing set up does nothing. Every row stays below.
+  const acting = (engines ?? []).filter(actsOnItsOwn).length
   const warnings = (engines ?? []).filter((e) => e.warning).length
   const status = global ? accountStatus(global, acting, engines?.length ?? 0, canManage) : null
   const stopped = !!status?.stopped
@@ -235,7 +239,7 @@ export function ControlRoomClient() {
       <div className="acr-sec-head">
         <h2>Engines</h2>
         <span className="acr-sec-count">
-          {engines ? `${engines.length} total · ${acting} acting on their own` : ''}
+          {engines ? [`${engines.length} total`, groupSummary(engines) || `${acting} acting on their own`].join(' · ') : ''}
         </span>
       </div>
 
@@ -263,6 +267,7 @@ export function ControlRoomClient() {
                     <span className={`acr-mode ${e.mode.toLowerCase()}`} title={M.hint}>
                       <M.Icon size={12} /> {M.label}
                     </span>
+                    {e.exposure && <Pill tone={GROUP_TONE[e.exposure.group]}>{e.exposure.label}</Pill>}
                     {e.haltBehaviour === 'exempt' && (
                       <span className="acr-tag" title="Runs regardless of the account halt — correctly. The breaker must keep evaluating, and read-only work has nothing to stop.">
                         halt-exempt
@@ -272,6 +277,7 @@ export function ControlRoomClient() {
                   <p className="acr-what">{e.what}</p>
                   {/* Always present. The old board could not say why a lever was where it was. */}
                   <p className="acr-why">{e.modeReason}</p>
+                  {e.exposure?.start && <p className="acr-why">{e.exposure.start}</p>}
                   {e.warning && <p className="acr-warn"><AlertTriangle size={13} /> {e.warning}</p>}
                 </div>
                 <dl className="acr-facts">
@@ -282,6 +288,7 @@ export function ControlRoomClient() {
                     <dt>7 days</dt>
                     <dd className={e.failures7d > 0 ? 'bad' : undefined}>
                       {e.runs7d} run{e.runs7d === 1 ? '' : 's'}{e.failures7d > 0 ? ` · ${e.failures7d} failed` : ''}
+                      {e.writes7d != null && ` · ${e.writes7d} change${e.writes7d === 1 ? '' : 's'}`}
                     </dd>
                   </div>
                   <div><dt>Detail</dt><dd className="acr-row-open">Open →</dd></div>

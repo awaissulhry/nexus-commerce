@@ -340,10 +340,25 @@ function totalsOf(read: (id: string) => number | null): Totals {
   }
 }
 
-/** Count of levers per mode, and the names of the ones that write on their own. The full list is `automations` (R). */
+/**
+ * Count of levers per mode, the engines on Auto, and every engine in one of the plain groups the Control Room shows.
+ * The full list is `automations` (R).
+ *
+ * 7a (review 8.2) — `writingOnTheirOwn` named every engine on Auto, the breaker and write delivery included, and
+ * engines with nothing set up. It now names only the engines that change Amazon on their own; `enginesOnAuto` keeps
+ * the old list, and `engineGroups` places every engine, so none drops out of sight.
+ */
 function automationSummary(state: Awaited<ReturnType<typeof getAutomationState>>, levers: Awaited<ReturnType<typeof getEngineLevers>>) {
   const byMode: Record<string, number> = { AUTO: 0, PROPOSE: 0, OBSERVE: 0, OFF: 0 }
   for (const lever of levers.levers) byMode[lever.mode] = (byMode[lever.mode] ?? 0) + 1
+  const ACTIVITY: Record<string, string> = { 'never-ran': 'has never run', idle: 'ran and changed nothing in 7 days', acted: 'changed something in 7 days' }
+  const inGroup = (group: string) => levers.levers.filter((lever) => lever.exposure.group === group).map((lever) => ({
+    name: lever.name,
+    mode: lever.mode,
+    why: lever.modeReason,
+    ...(lever.exposure.start ? { start: lever.exposure.start } : {}),
+    lastWeek: `${ACTIVITY[lever.activity]} (${lever.writes7d} changes, ${lever.runs7d} runs)`,
+  }))
   return {
     autonomy: state.autonomy,
     halted: state.halted,
@@ -352,7 +367,16 @@ function automationSummary(state: Awaited<ReturnType<typeof getAutomationState>>
     effectivelyStopped: state.effectivelyStopped,
     degraded: state.degraded,
     engines: byMode,
-    writingOnTheirOwn: levers.levers.filter((lever) => lever.mode === 'AUTO').map((lever) => lever.name),
+    enginesOnAuto: levers.levers.filter((lever) => lever.mode === 'AUTO').map((lever) => lever.name),
+    writingOnTheirOwn: levers.levers.filter((lever) => lever.exposure.group === 'acts').map((lever) => lever.name),
+    engineGroups: {
+      changesAmazonOnItsOwn: inGroup('acts'),
+      readyNothingSetUp: inGroup('ready'),
+      offByServerSwitch: inGroup('server-off'),
+      heldBackInNexus: inGroup('held'),
+      neverChangesAmazonByItself: inGroup('never'),
+      ...(levers.levers.some((lever) => lever.exposure.group === 'unknown') ? { couldNotBeRead: inGroup('unknown') } : {}),
+    },
     warnings: levers.levers.filter((lever) => lever.warning).map((lever) => `${lever.name}: ${lever.warning}`).slice(0, 10),
   }
 }
@@ -460,7 +484,10 @@ const adsOverview: AgentTool = {
     + 'window and for the window before it, each day (the last 3 days marked provisional: Amazon restates them for up '
     + 'to 72 hours), the 5 campaigns that spent most (with their ids), how many campaigns are enabled, allowed live '
     + 'writes or have suppressed bids, and the Amazon Ads connection (production or sandbox, writes enabled). Also the '
-    + 'account\'s automation dial (autonomy, halted) with a count of engines per mode, and the health of the data '
+    + 'account\'s automation dial (autonomy, halted) with a count of engines per mode, the engines that change Amazon on '
+    + 'their own (writingOnTheirOwn; enginesOnAuto lists every engine on Auto, whether or not it writes), every engine in '
+    + 'a plain group (engineGroups: changes Amazon on its own, ready with nothing set up, off by a server switch, held back '
+    + 'in Nexus, never changes Amazon by itself) with why and what it did in 7 days, and the health of the data '
     + 'feeds (late, failing, contradictions). dataAsOf is the newest day of performance data.' + MONEY_WORDS
     + ' Each market\'s totals are in that market\'s currency; markets are never added together.'
     + ' eBay (channel ebay): per marketplace the ad fees (as spend), sales and sold units for the window and the one '

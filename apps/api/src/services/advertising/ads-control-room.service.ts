@@ -18,8 +18,9 @@ import { envEnabled } from '../../utils/env-flag.js'
 import { getAutomationState } from './ads-automation-state.service.js'
 import { lowest } from '../automation/automation-levels.js'
 import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../automation/engine-switch.service.js'
-import { breakerLimitsText } from './ads-engine-actors.js'
+import { breakerLimitsText, engineForActor } from './ads-engine-actors.js'
 import { engineCapsText } from './ads-engine-guard.js'
+import type { AutomationEntry } from '../automation/automation-catalog.service.js'
 
 /**
  * Engines are gated by env flags and apply-switches, not by `AutomationRule.autonomyLevel`.
@@ -82,6 +83,74 @@ export interface EngineLever {
     /** The highest a person may turn the switch up to: what the server env allows (engine-switch.service.ts). */
     ceiling: LeverMode | null
   }
+  /** 7a — its entry in the automation catalog (MCP list-automations), whose env and rows decide it; null = none. */
+  catalogId: string | null
+  /** 7a — whether it can change Amazon by itself. The breaker, write delivery, the reconcile and the analyst fleet never do. */
+  writesOnOwn: boolean
+  /** 7a — what it does now, in one of the plain groups below, and (when it is ready) what would start it. */
+  exposure: { group: ExposureGroup; label: string; start: string | null }
+  /** 7a — changes it made in the last 7 days (its actor strings, ads-engine-actors.ts). */
+  writes7d: number
+  /** 7a — never ran · ran and changed nothing in 7 days · changed something in 7 days. */
+  activity: EngineActivity
+}
+
+/**
+ * 7a (review 8.1, 8.2) — what an engine does now, in one of five plain groups. `mode` says what the server env, this
+ * business's switch and the account dial let it do; the group adds what it has to act on, so an engine on Auto with
+ * nothing set up is never counted as changing Amazon.
+ *
+ *   acts        changes Amazon on its own: allowed to act, writes by itself, and has something to act on
+ *   ready       allowed, but no plan, schedule or pool of its own is switched on, so it does nothing
+ *   server-off  a server switch (env) holds it off or below Auto
+ *   held        this business's switch, the account dial or a halt holds it back
+ *   never       runs, and never changes Amazon by itself (the breaker, write delivery, the reconcile)
+ *   unknown     its own settings could not be read
+ */
+export type ExposureGroup = 'acts' | 'ready' | 'server-off' | 'held' | 'never' | 'unknown'
+export type EngineActivity = 'never-ran' | 'idle' | 'acted'
+
+export interface ExposureInput {
+  writesOnOwn: boolean
+  /** What the server env allows (the catalog's reading for an engine in the catalog). */
+  env: LeverMode
+  /** This business's switch holds it below the env. */
+  switchedDown: boolean
+  /** The account dial or a halt holds it. */
+  dialHolds: boolean
+  /** Its own plans, schedules or pools as the catalog counts them; null = it has none to set up. */
+  rows: { total: number; auto: number } | null | 'unreadable'
+  mode: LeverMode
+  /** Its catalog entry is missing, so neither its env nor its rows can be said. */
+  unknown?: boolean
+}
+
+export function engineExposure(i: ExposureInput): { group: ExposureGroup; label: string } {
+  const group = ((): ExposureGroup => {
+    if (i.unknown) return 'unknown'
+    if (i.writesOnOwn ? i.env !== 'AUTO' : i.env === 'OFF') return 'server-off'
+    if (i.switchedDown || i.dialHolds) return 'held'
+    if (!i.writesOnOwn) return i.mode === 'OFF' ? 'ready' : 'never'
+    if (i.rows === 'unreadable') return 'unknown'
+    if (i.rows && i.rows.auto === 0) return 'ready'
+    return 'acts'
+  })()
+  const someRows = !!i.rows && i.rows !== 'unreadable' && i.rows.total > 0
+  const label: Record<ExposureGroup, string> = {
+    acts: 'Changes Amazon on its own',
+    ready: someRows ? 'Ready — nothing switched on' : 'Ready — nothing set up',
+    'server-off': 'Off by a server switch',
+    held: 'Held back in Nexus',
+    never: 'Always on — never changes Amazon by itself',
+    unknown: 'Its settings could not be read',
+  }
+  return { group, label: label[group] }
+}
+
+/** Changes in the window come first: an engine started by hand can write without a run of its cron. */
+export function engineActivity(lastRunAt: Date | null, writes7d: number): EngineActivity {
+  if (writes7d > 0) return 'acted'
+  return lastRunAt ? 'idle' : 'never-ran'
 }
 
 /**
@@ -200,32 +269,42 @@ export async function getAccountGuardrails(): Promise<AccountGuardrails> {
  */
 export const jobSwitchOn = (flag: 'NEXUS_BUDGET_ENFORCE_APPLY' | 'NEXUS_ENABLE_RANK_DEFEND'): boolean => process.env[flag] === '1'
 
+/**
+ * 7a (review 8.1) — the engines the automation catalog (MCP list-automations) describes, by lever key. Their env, own
+ * rows and scope are read there, so this board and the catalog cannot disagree. The breaker's entry (A3) is the dial,
+ * not the breaker's own run, so it is linked and not read.
+ */
+const CATALOG_OF: Record<string, string> = {
+  'rank-defend': 'A10', dayparting: 'A6', 'budget-enforce': 'A8', 'budget-schedules': 'A7', 'budget-pools': 'A9',
+  'auto-bid': 'A4', autopilot: 'A5', 'anomaly-guard': 'A3', 'tos-defense': 'A11', 'coverage-engine': 'A12',
+}
+
 export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global: { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean } }> {
   const CRONS = [
-    'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
-    'ads-auto-bid', 'ads-anomaly-guard', 'top-of-search-defense',
+    'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'ad-budget-schedule', 'budget-pool-rebalance',
+    'ads-auto-bid', 'ad-autopilot', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
     'ads-coverage-engine', 'fleet-sweep', 'fleet-council',
   ]
+  const { getAutomationCatalog } = await import('../automation/automation-catalog.service.js')
+  const catalogIds = new Set(Object.values(CATALOG_OF).filter((id) => id !== 'A3'))
 
-  const [state, facts, enabledSchedules, enabledPlans, budgetPlans, pools, allowlisted, totalCampaigns, coverageSets, enabledAnalysts] = await Promise.all([
+  const [state, facts, catalog, writeGroups, allowlisted, totalCampaigns, enabledAnalysts] = await Promise.all([
     getAutomationState(),
     cronFacts(CRONS),
-    prisma.adSchedule.count({ where: { enabled: true } }),
-    prisma.productRankPlan.count({ where: { enabled: true } }),
-    // AdBudgetPlan has no `enabled` — it is keyed by month, and the switches are
-    // autoPacing/stopOverSpend. What governs spend TONIGHT is a plan for THIS month
-    // with at least one switch on; counting every plan ever written would claim the
-    // engine governs months that are already closed.
-    prisma.adBudgetPlan.count({
-      where: { month: new Date().toISOString().slice(0, 7), OR: [{ autoPacing: true }, { stopOverSpend: true }] },
-    }).catch(() => 0),
-    prisma.budgetPool.count().catch(() => 0),
+    getAutomationCatalog((a) => catalogIds.has(a.id)),
+    prisma.advertisingActionLog.groupBy({ by: ['userId'], where: { createdAt: { gte: new Date(Date.now() - 7 * DAY) } }, _count: { _all: true } }),
     prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
     prisma.campaign.count(),
-    prisma.keywordCoverageSet.count({ where: { enabled: true } }).catch(() => 0),
-  ,
-    prisma.agentCharter.count({ where: { enabled: true, tier: 'analyst', key: { not: 'fleet-selftest' } } })])
+    prisma.agentCharter.count({ where: { enabled: true, tier: 'analyst', key: { not: 'fleet-selftest' } } }),
+  ])
+  const entries = new Map(catalog.map((e) => [e.id as string, e]))
+  // 7a — each engine's changes in 7 days, by the one actor map (ads-engine-actors.ts).
+  const writesBy = new Map<string, number>()
+  for (const g of writeGroups) {
+    const engine = engineForActor(g.userId)
+    if (engine) writesBy.set(engine, (writesBy.get(engine) ?? 0) + g._count._all)
+  }
 
   const adsCron = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
   const envKill = process.env.NEXUS_ADS_AUTOMATION_KILL === '1'
@@ -267,9 +346,17 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       suggest: 'computes each run and writes no pacing and no new floors (the run summary counts what it would change); it still restores bids it floored over the cap',
       stopped: 'Stopped: it only floors bids when a cap is reached; restores and budget pacing wait for Resume',
     },
+    'budget-schedules': {
+      suggest: 'enters no window and writes nothing new; it still gives back a budget it set when that window closes',
+      stopped: 'Stopped: it writes nothing; windows and give-backs wait for Resume',
+    },
     'budget-pools': {
       suggest: 'records each due rebalance as a dry run and writes nothing',
       stopped: 'Stopped: it writes nothing; rebalances wait for Resume',
+    },
+    autopilot: {
+      suggest: 'records the proposals of its Auto plans and writes nothing',
+      stopped: 'Stopped: its Auto plans record proposals and write nothing until Resume',
     },
     'tos-defense': {
       suggest: 'computes each run and writes nothing (the run summary counts what it would move)',
@@ -288,17 +375,32 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     return null
   }
 
+  /** 7a — what decides an engine besides its env and dial: whether it writes by itself, its catalog entry, its rows. */
+  interface LeverExtra {
+    writesOnOwn: boolean
+    catalogId?: string
+    /** The server env in words, for the drawer; defaults to the mode reason. */
+    envWords?: string
+    rows?: ExposureInput['rows']
+    /** What would start it, said when it is ready with nothing to act on. */
+    start?: string
+    /** What the server env allows, when the mode it leaves is lower for another reason (the fleet with no charter on). */
+    env?: LeverMode
+    /** Its catalog entry is missing: its group cannot be said. */
+    unknown?: boolean
+  }
+
   const mk = (
     key: string, name: string, what: string, cron: string | null,
     schedule: string | null, envMode: LeverMode, envReason: string,
-    scope: string | null, haltBehaviour: HaltBehaviour,
+    scope: string | null, haltBehaviour: HaltBehaviour, extra: LeverExtra,
   ): EngineLever => {
     // R16 — this business's switch only lowers what the env allows; the env (and the account dial below) still win.
     const set = switches.get(key) ?? null
     const rawMode: LeverMode = set ? lowest(envMode, set.mode as LeverMode) : envMode
     const rawReason = set && rawMode !== envMode ? `Switched to ${set.mode} for this business (${set.setBy})` : envReason
     const control = {
-      env: { mode: envMode, reason: envReason },
+      env: { mode: envMode, reason: extra.envWords ?? envReason },
       switch: set ? { mode: set.mode as LeverMode, setBy: set.setBy, setAt: set.setAt, reason: set.reason } : null,
       switchable: key in ENGINES,
       levels: key in ENGINES ? [...ENGINES[key as keyof typeof ENGINES].levels] as LeverMode[] : [],
@@ -327,84 +429,111 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       warning = `${h.failures} of ${h.runs} runs failed in 7 days`
     }
 
+    const lastRunAt = f?.startedAt ?? null
+    const writes7d = writesBy.get(key) ?? 0
+    const exposure = engineExposure({
+      writesOnOwn: extra.writesOnOwn, env: extra.env ?? envMode, switchedDown: rawMode !== envMode, unknown: extra.unknown,
+      dialHolds: haltBehaviour !== 'exempt' && (accountStopped || (extra.writesOnOwn && state.autonomy === 'SUGGEST')),
+      rows: extra.rows ?? null, mode,
+    })
     return {
       key, name, what, mode, modeReason, scope, cron, schedule,
-      lastRunAt: f?.startedAt ?? null,
+      lastRunAt,
       lastRunStatus: f?.status ?? null,
       lastRunSummary: f?.outputSummary ?? f?.errorMessage ?? null,
       runs7d: h.runs, failures7d: h.failures, warning, haltBehaviour, control,
+      catalogId: extra.catalogId ?? null,
+      writesOnOwn: extra.writesOnOwn,
+      exposure: { ...exposure, start: exposure.group === 'ready' ? extra.start ?? null : null },
+      writes7d,
+      activity: engineActivity(lastRunAt, writes7d),
     }
   }
+
+  /**
+   * 7a — an engine the catalog describes: its env as the catalog reads it, why (the env that holds it, or what its own
+   * rows say), its scope and its rows. Replaces the sentences this file used to fix in code ("every live schedule is
+   * rank-goal mode", "this one acts"), which stayed true only until the data moved.
+   */
+  const fromCatalog = (key: string, noun?: string, start?: string) => {
+    const id = CATALOG_OF[key]
+    const e: AutomationEntry | undefined = entries.get(id)
+    if (!e) {
+      const why = `Its entry in the automation catalog (${id}) could not be read`
+      return { envMode: 'OFF' as LeverMode, envReason: why, scope: null, extra: { writesOnOwn: true, catalogId: id, envWords: why, unknown: true } as LeverExtra }
+    }
+    const blocking = e.env.flags.filter((x) => !x.allows)
+    const envWords = (blocking.length ? blocking : e.env.flags).map((x) => x.says).join(' ') || 'No server setting holds it.'
+    const envMode = e.env.ceiling as LeverMode
+    const rows: ExposureInput['rows'] = e.rows ? { total: e.rows.total, auto: e.rows.byLevel.AUTO ?? 0 } : e.business.level == null ? 'unreadable' : null
+    const rowsScope = e.rows && noun ? (e.rows.total ? `${e.rows.byLevel.AUTO ?? 0} of ${e.rows.total} ${noun} switched on` : `No ${noun}`) : null
+    return {
+      envMode,
+      envReason: envMode === 'AUTO' ? e.business.reason : envWords,
+      scope: rowsScope ?? e.scope,
+      extra: { writesOnOwn: true, catalogId: id, envWords, rows, start } as LeverExtra,
+    }
+  }
+  const lever = (
+    key: string, name: string, what: string, cron: string, schedule: string, haltBehaviour: HaltBehaviour,
+    c: ReturnType<typeof fromCatalog>,
+  ) => mk(key, name, what, cron, schedule, c.envMode, c.envReason, c.scope, haltBehaviour, c.extra)
 
   const off = (why: string) => ({ mode: 'OFF' as LeverMode, why })
   const masterOff = !adsCron ? off('NEXUS_ENABLE_AMAZON_ADS_CRON is off — the whole ads fleet is dormant') : null
 
   const levers: EngineLever[] = [
-    mk('rank-defend', 'Rank & Dayparting', 'Holds a target rank on a schedule by moving placement bids',
-      'ad-rank-defend', 'every 15 min',
-      masterOff ? 'OFF' : jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? 'AUTO' : 'OFF',
-      masterOff?.why ?? (jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? `Armed and writing to Amazon. Honours the account dial; ${engineCapsText('rank-defend')}` : 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run'),
-      `${enabledSchedules} schedules · ${enabledPlans} product plans`, 'honours'),
+    lever('rank-defend', 'Hourly bid plans', 'Sets each campaign to its hour-of-week plan: placement percentages, a Min-bid floor and a base bid. Reads no rank or share signal',
+      'ad-rank-defend', 'every 15 min', 'honours',
+      fromCatalog('rank-defend', 'schedules and product plans', 'Switch on an hourly bid plan (a schedule or a product plan) to start it.')),
 
-    mk('dayparting', 'Classic dayparting', 'Enables/pauses and multiplies bids on fixed hour windows',
-      'ad-dayparting', 'every 15 min',
-      masterOff ? 'OFF' : 'AUTO',
-      masterOff?.why ?? `Runs, but every live schedule is rank-goal mode — this evaluates almost nothing. Honours the account dial; ${engineCapsText('dayparting')}`,
-      null, 'honours'),
+    lever('dayparting', 'Classic dayparting', 'Suppresses bids while an hour window is closed and multiplies them while it is open',
+      'ad-dayparting', 'every 15 min', 'honours',
+      fromCatalog('dayparting', 'classic schedules', 'Add a classic dayparting schedule and switch it on to start it.')),
 
-    mk('budget-enforce', 'Budget enforcement', 'Paces a monthly budget and suppresses over-spending campaigns',
-      'ad-budget-enforce', 'every 30 min',
-      masterOff ? 'OFF' : jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY') ? 'AUTO' : 'OBSERVE',
-      masterOff?.why ?? (jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY')
-        ? `NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts. Honours the account dial; ${engineCapsText('budget-enforce')}`
-        : 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 — computes, never applies'),
-      `${budgetPlans} plans active this month`, 'honours'),
+    lever('budget-enforce', 'Budget enforcement', 'Paces a monthly budget and suppresses over-spending campaigns',
+      'ad-budget-enforce', 'every 30 min', 'honours',
+      fromCatalog('budget-enforce', 'budget plans for this month', 'Set a budget plan for this month with pacing or the over-spend stop on to start it.')),
 
-    mk('budget-pools', 'Budget pools', 'Moves daily budget between campaigns inside a pool',
-      'budget-pool-rebalance', 'every 15 min',
-      masterOff ? 'OFF' : pools > 0 ? 'AUTO' : 'OFF',
-      masterOff?.why ?? (pools > 0 ? `Rebalancing live pools. Honours the account dial; ${engineCapsText('budget-pools')}` : 'No pools configured — nothing to rebalance'),
-      `${pools} pools`, 'honours'),
+    lever('budget-schedules', 'Budget schedules', 'Sets a campaign\'s daily budget for each time window, and gives the base budget back after',
+      'ad-budget-schedule', 'every 15 min', 'honours',
+      fromCatalog('budget-schedules', 'budget schedules', 'Add a budget schedule and switch it on to start it.')),
 
-    mk('auto-bid', 'Bid optimiser', 'Moves target bids toward a target ACOS',
-      'ads-auto-bid', 'every 6 h',
-      masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? `Runs on the account autonomy dial; ${engineCapsText('auto-bid')}`, null, 'honours'),
+    lever('budget-pools', 'Budget pools', 'Moves daily budget between campaigns inside a pool',
+      'budget-pool-rebalance', 'every 15 min', 'honours',
+      fromCatalog('budget-pools', 'pools', 'Create a budget pool and set it to Auto to start it.')),
+
+    lever('auto-bid', 'Bid optimiser', 'Moves target bids toward a target ACOS',
+      'ads-auto-bid', 'every 6 h', 'honours', fromCatalog('auto-bid')),
+
+    lever('autopilot', 'Autopilot plans', 'Per plan: bids, budgets and placements toward a goal',
+      'ad-autopilot', 'every 15 min', 'honours',
+      fromCatalog('autopilot', 'autopilot plans', 'Set an autopilot plan to Auto to start it.')),
 
     mk('anomaly-guard', 'Anomaly breaker', 'Stops ads automation account-wide when rule actions, one engine\'s changes or hourly ad spend pass their limits',
       'ads-anomaly-guard', 'every 10 min',
       masterOff ? 'OFF' : 'AUTO',
       masterOff?.why ?? `Trips at ${state.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR} rule actions an hour, €${((state.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS) / 100).toFixed(0)} of ad spend in one hour, or when one engine passes its own hourly limit of changes (${breakerLimitsText()})`,
-      null, 'exempt'),
+      null, 'exempt', { writesOnOwn: false, catalogId: 'A3' }),
 
-    mk('tos-defense', 'Top-of-Search defense', 'Nudges the top-of-search multiplier toward a target impression share',
-      'top-of-search-defense', 'every 30 min',
-      envEnabled('NEXUS_ENABLE_TOS_DEFENSE_CRON') && adsCron ? 'AUTO' : 'OFF',
-      envEnabled('NEXUS_ENABLE_TOS_DEFENSE_CRON')
-        ? (masterOff?.why ?? `Armed. Honours the account dial; ${engineCapsText('tos-defense')}`)
-        : 'NEXUS_ENABLE_TOS_DEFENSE_CRON is off — the most direct SERP lever has never run',
-      null, 'honours'),
+    lever('tos-defense', 'Top-of-Search defense', 'Nudges the top-of-search multiplier toward a target impression share',
+      'top-of-search-defense', 'every 30 min', 'honours', fromCatalog('tos-defense')),
 
-    mk('write-delivery', 'Write delivery', 'Drains queued changes to Amazon and retries failures',
+    mk('write-delivery', 'Write delivery', 'Sends to Amazon the changes people, rules and engines already made, and retries failures',
       'drain-ads-sync', 'every minute',
       masterOff ? 'OFF' : 'AUTO',
       masterOff?.why ?? 'The only path a change reaches Amazon by',
-      `${allowlisted} of ${totalCampaigns} campaigns allowlisted`, 'gated'),
+      `${allowlisted} of ${totalCampaigns} campaigns allowlisted`, 'gated', { writesOnOwn: false }),
 
-    mk('coverage-engine', 'Coverage engine', 'Holds each term of an enabled coverage set at its target share, inside its caps',
-      'ads-coverage-engine', 'daily 07:10',
-      masterOff ? 'OFF'
-        : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto' ? 'AUTO'
-          : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'off' ? 'OFF' : 'OBSERVE',
-      masterOff?.why ?? ((process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto'
-        ? `Writing — enabled coverage sets only, through the gate. Honours the account dial; ${engineCapsText('coverage-engine')}`
-        : 'Observe-first: logs would-do bids; writes need NEXUS_COVERAGE_ENGINE_MODE=auto AND an enabled set'),
-      `${coverageSets} enabled coverage sets`, 'honours'),
+    lever('coverage-engine', 'Coverage engine', 'Holds each term of an enabled coverage set at its target share, inside its caps',
+      'ads-coverage-engine', 'daily 07:10', 'honours',
+      fromCatalog('coverage-engine', 'coverage sets', 'Switch on a coverage set to start it.')),
 
     mk('structural-reconcile', 'Account reconcile', 'Compares the whole account against Amazon and records disagreement',
       'ads-structural-reconcile', 'every 6 h',
       masterOff ? 'OFF' : 'OBSERVE',
       masterOff?.why ?? 'Read-only — records drift, never repairs bids',
-      null, 'exempt'),
+      null, 'exempt', { writesOnOwn: false }),
 
     // NAF.B — the analyst fleet's nightly sweep. Read-only (findings only,
     // no write path); honours ITS OWN halt (AgentFleetState + the AI kill
@@ -419,7 +548,12 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
         : enabledAnalysts > 0
           ? `${enabledAnalysts} analyst charter(s) enabled — findings only, honours the fleet halt`
           : 'Sweep scheduled but every analyst charter is OFF (dark)',
-      null, 'exempt'),
+      null, 'exempt', {
+        writesOnOwn: false,
+        // Its env is the sweep flag alone: with the flag on and no charter enabled it is ready, not server-off.
+        env: process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1' ? 'OFF' : 'OBSERVE',
+        start: 'Switch on an analyst charter to start it.',
+      }),
   ]
 
   return {
