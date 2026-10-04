@@ -56,6 +56,8 @@ beforeAll(async () => {
   await database.db.query(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, $1, 'active', 'test', $1, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING`, [OTHER])
   await inside(async () => {
     await database.client.campaign.create({ data: { name: 'TEST CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-1' } })
+    // 4c — a rule scoped to IT needs a market an active Amazon Ads connection serves, or its save is refused.
+    await database.client.amazonAdsConnection.create({ data: { profileId: 'TEST-PROFILE-IT', marketplace: 'IT', isActive: true } })
     ids.auto = (await database.client.automationRule.create({ data: {
       domain: 'advertising', name: 'TEST auto rule', trigger: 'KEYWORD_HIGH_ACOS', enabled: true, dryRun: false, autonomyLevel: 'AUTO',
       conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.6 }], actions: [{ type: 'bid_down', percent: 5 }],
