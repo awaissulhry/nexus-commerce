@@ -32,7 +32,11 @@ vi.mock('../db.js', () => ({
 }))
 const genSuggestions = vi.fn(async () => 1)
 vi.mock('./advertising/ads-suggestions.service.js', () => ({ generateSuggestionsFromExecution: genSuggestions }))
-vi.mock('./advertising/ads-rule-adapter.service.js', () => ({ maybeTranslateAdsRule: vi.fn(() => null) }))
+// The scope helpers stay real: simulateOneRule resolves the rule's bound campaigns through them (4a).
+vi.mock('./advertising/ads-rule-adapter.service.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  maybeTranslateAdsRule: vi.fn(() => null),
+}))
 const publish = vi.fn()
 vi.mock('./ads-execution-events.service.js', () => ({ publishAdsExecution: publish }))
 const refusal = vi.fn(async () => undefined)
