@@ -22,6 +22,16 @@ import { createKeywordLocal, createTargetLocal } from './ads-create.service.js'
 // are the rule engine, the POST route, and two recommendation-accept paths (a fifth,
 // ads-auto-harvest — which wrote the 22 engine-attributed rows — was retired in HP5, 2026-08-21).
 import { checkProtectConverting, normaliseNegTerm, type NegationDecision, type ProtectConvertingConfig } from './ads-protect-converting.js'
+import { adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
+
+/**
+ * 5d (review 7.4) — the source ad group is a fallback destination only when it can take a keyword or product
+ * target: a manual Sponsored Products campaign. An automatic one cannot, so the create failed and left a local row.
+ */
+const SOURCE_SELECT = { id: true, campaign: { select: { targetingType: true, adProduct: true, type: true } } } as const
+const takesTargets = (ag: { campaign: { targetingType: string | null; adProduct: string | null; type: string | null } | null } | null): boolean =>
+  !!ag?.campaign && ag.campaign.targetingType === 'MANUAL' && adProductOf(ag.campaign) === SPONSORED_PRODUCTS
+const NO_DESTINATION = 'No destination was given for this match type, and the ad group this term came from is not in a manual Sponsored Products campaign, so it cannot take it. Nothing was created.'
 
 export interface HarvestCandidate {
   query: string
@@ -225,18 +235,15 @@ export async function applyHarvest(args: {
 
   // NEG.0(a) — one read for the whole batch, then a pure decision per term.
   //
-  // 🔴 This deliberately covers the H.3 ISOLATION negation as well as the wasteful one, and that is
-  // load-bearing: an isolation negation targets a term that just graduated *because* it converted,
-  // so under a literal reading of the builder's sentence every one of them is refused. The two
-  // paths are counted separately below so the effect is visible rather than inferred. If isolation
-  // should be exempt — the argument being that the term is not blocked, only routed, since the same
-  // term is created as EXACT in the destination campaign in the same transaction — that is an
-  // operator decision, not one to make silently inside a safety fix.
+  // It covered the H.3 ISOLATION negation too, so every isolation negative was refused: a graduated
+  // term converted by definition. 5d (Owner decision D4) — the operator decided the exemption this
+  // comment left open: the isolation negative skips this guard, but only after the keyword LANDED in
+  // a different ad group (the term is routed there, not blocked). So only the wasteful terms are read.
   const protectConfig: ProtectConvertingConfig = {
     enabled: args.protectConverting !== false,
     days: args.protectDays != null && Number(args.protectDays) > 0 ? Math.floor(Number(args.protectDays)) : 30,
   }
-  const candidateTerms = [...(args.negatives ?? []), ...(args.graduations ?? [])].map((c) => c.query)
+  const candidateTerms = (args.negatives ?? []).map((c) => c.query)
   const guard = await checkProtectConverting({ terms: candidateTerms, config: protectConfig })
   const refusalFor = (query: string): NegationDecision | null => {
     const d = guard.get(normaliseNegTerm(query))
@@ -260,6 +267,17 @@ export async function applyHarvest(args: {
    * so the caller reports `reachedAmazon` per negative rather than a count that cannot be read back to a term.
    */
   const negate = async (scope: 'AD_GROUP' | 'CAMPAIGN', externalCampaignId: string, externalAdGroupId: string, query: string, planNegate?: string[]): Promise<NegRow[]> => {
+    // 5d (review 7.5) — an ASIN is a product: one negative product target in its ad group, whatever the plan's
+    // keyword match types say. Nexus has no campaign-level product negative, so that scope is refused by name.
+    if (isAsinQuery(query)) {
+      if (scope === 'CAMPAIGN') return [{ matchType: 'PRODUCT', externalTargetId: null, denied: { deniedAt: 'asin_campaign_level', reason: `"${query.trim()}" is an ASIN, a product. Nexus negates a product only inside an ad group, as a negative product target, so no campaign-level negative was made.` } }]
+      const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId, campaign: { externalCampaignId } }, select: { id: true } })
+      if (!ag) return [{ matchType: 'PRODUCT', externalTargetId: null, denied: { deniedAt: 'ad_group_unknown', reason: `Nexus holds no ad group ${externalAdGroupId}, so the negative product target could not be made.` } }]
+      const r = await writeNegativeProductTarget({ adGroupId: ag.id, asin: query.trim(), userId: args.userId })
+      if (r.refusal) return [{ matchType: 'PRODUCT', externalTargetId: null, denied: { deniedAt: r.refusal.deniedAt, reason: r.refusal.reason } }]
+      if (r.outcome === 'failed') throw new Error(r.error ?? 'the negative product target was not created')
+      return [{ matchType: 'PRODUCT', externalTargetId: r.externalTargetId }]
+    }
     const negMatches = planNegate?.length ? planNegate : ['EXACT']
     const out: NegRow[] = []
     for (const nm of negMatches) {
@@ -314,74 +332,73 @@ export async function applyHarvest(args: {
   for (const g of args.graduations ?? []) {
     try {
       // Source local ad group the term came from (by external id) — fallback destination + lets us
-      // tell whether a graduation actually crosses into a different campaign (drives H.3 isolation).
-      const srcAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId: g.externalAdGroupId }, select: { id: true } })
+      // tell whether a graduation actually landed in a different ad group (drives H.3 isolation).
+      const srcAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId: g.externalAdGroupId }, select: SOURCE_SELECT })
       // Bid = derived from observed CPC (cost/clicks) or a sensible default.
       const bidEur = g.bidEur ?? (g.clicks > 0 ? Math.max(0.05, g.costCents / g.clicks / 100) : 0.5)
-      const gradMatches = args.plan?.[g.externalAdGroupId]?.graduate?.length ? args.plan[g.externalAdGroupId].graduate! : ['EXACT']
+      // 5d (review 7.5) — an ASIN graduates as a PRODUCT target (the PRODUCT destination), never as a keyword.
+      const asin = isAsinQuery(g.query)
+      const gradMatches = asin ? ['PRODUCT'] : args.plan?.[g.externalAdGroupId]?.graduate?.length ? args.plan[g.externalAdGroupId].graduate! : ['EXACT']
       const made: Array<{ matchType: string; destAdGroupId: string; targetId: string; externalTargetId: string | null }> = []
+      let noDestination = false
       for (const gm of gradMatches) {
         // H.2 — route into the destination campaign that hosts this match type (EXACT → Exact
         // campaign), not back into the source. Fall back to the source ad group when no destination
-        // of that kind exists (back-compat / standalone template).
-        const destAdGroupId = args.destinations?.[gm] ?? srcAg?.id
-        if (!destAdGroupId) { result.errors.push(`grad "${g.query}" (${gm}): no destination/local ad group`); continue }
-        const k = await createKeywordLocal({ adGroupId: destAdGroupId, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur, userId: args.userId, evidence: g.evidence ?? null })
+        // of that kind exists (back-compat / standalone template) — 5d: only when the source can take it.
+        const destAdGroupId = args.destinations?.[gm] ?? (takesTargets(srcAg) ? srcAg!.id : null)
+        if (!destAdGroupId) { noDestination = true; result.errors.push(`grad "${g.query}" (${gm}): ${NO_DESTINATION}`); continue }
+        const k = asin
+          ? await createTargetLocal({ adGroupId: destAdGroupId, kind: 'PRODUCT', value: g.query.trim(), bidEur, userId: args.userId })
+          : await createKeywordLocal({ adGroupId: destAdGroupId, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur, userId: args.userId, evidence: g.evidence ?? null })
         made.push({ matchType: gm, destAdGroupId, targetId: k.id, externalTargetId: k.externalTargetId })
       }
-      result.keywordsGraduated++
+      if (made.length) { if (asin) result.productsGraduated++; else result.keywordsGraduated++ }
 
-      // H.3 — isolation. If the winner was promoted into a DIFFERENT campaign, negate it in its source
-      // so the discovery campaign stops competing with the new tighter keyword. Match types come from
-      // the source row's negate plan (default EXACT). writeNegativeKeyword is idempotent + write-gated, so a
-      // recurring tick won't pile up duplicates and nothing pushes live while gated.
-      const promotedElsewhere = !!srcAg && gradMatches.some((gm) => { const d = args.destinations?.[gm]; return !!d && d !== srcAg.id })
+      // H.3 — isolation: negate the winner in its source so the discovery ad group stops competing with
+      // the new tighter target. Match types come from the source row's negate plan (default EXACT; an ASIN
+      // gets a negative product target). writeNegativeKeyword is idempotent + write-gated.
+      // 5d (review 7.3, Owner decision D4) — only once the target LANDED at Amazon in a DIFFERENT ad group:
+      // never when the create failed, and never when it landed in the source (a negative there would cancel
+      // it). It used to fire whenever a destination was named, landed or not. It skips the converting guard
+      // (the term is routed, not blocked); protected terms, text limits and the write gate still bind.
+      const promotedElsewhere = !!srcAg && made.some((m) => m.externalTargetId != null && m.destAdGroupId !== srcAg.id)
       let negOutcome: HarvestOutcome['negative'] = null
-      // The §4.1 sentence, in the no-destination case. HV.3 renders the same wording before the
-      // write; this records it after, so the two cannot drift.
+      // The §4.1 sentence. HV.3 renders the same wording before the write; this records it after.
       let negateReason = promotedElsewhere
         ? 'The keyword landed elsewhere, so the source was negated.'
-        : `No negative was created: the keyword was created in the ad group that discovered it, so applyHarvest's isolation negative does not fire.`
+        : made.some((m) => m.externalTargetId != null)
+          ? `No negative was created: the keyword was created in the ad group that discovered it, so applyHarvest's isolation negative does not fire.`
+          : 'No negative was created: nothing reached Amazon, so the source is not negated.'
       if (promotedElsewhere) {
-        // 🔴 NEG.0(a), the awkward case: a graduated term converted by definition, so the literal
-        // reading of "never negate a term that converted" refuses every isolation negation. Applied
-        // as written and counted under `path: 'isolation'` so the effect is legible on the result
-        // rather than showing up as an unexplained zero. Unreachable today — the only caller that
-        // has ever run this service (the cron retired in HP5) passed no `destinations`, so
-        // `promotedElsewhere` was false for it.
-        const refused = refusalFor(g.query)
-        if (refused) { recordRefusal(g.query, 'isolation', refused); negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, refusal: { deniedAt: 'protect_converting', reason: refused.reason } }; negateReason = `The isolation negative was refused: ${refused.reason}` }
-        else {
-          try {
-            if (negScope === 'AD_GROUP') {
-              const rows = await negate('AD_GROUP', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
-              const landed = rows.filter((r) => r.externalTargetId != null)
-              const denied = rows.find((r) => r.denied)
-              result.isolationNegativesAdded += landed.length
-              negOutcome = { attempted: true, scope: 'AD_GROUP', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
-              negateReason = denied?.denied
+        try {
+          if (negScope === 'AD_GROUP') {
+            const rows = await negate('AD_GROUP', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+            const landed = rows.filter((r) => r.externalTargetId != null)
+            const denied = rows.find((r) => r.denied)
+            result.isolationNegativesAdded += landed.length
+            negOutcome = { attempted: true, scope: 'AD_GROUP', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
+            negateReason = denied?.denied
+              ? `The keyword was created, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
+              : `The keyword landed elsewhere, so this term was negated in its source ad group.`
+          } else {
+            // HV.8a — campaign scope now reports what it actually did, exactly as the ad-group
+            // branch does. It used to hardcode `reachedAmazon: false`, which was true of every row
+            // this account has ever written but was an assumption rather than a reading.
+            const rows = await negate('CAMPAIGN', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+            const landed = rows.filter((r) => r.externalTargetId != null)
+            const denied = rows.find((r) => r.denied)
+            result.isolationNegativesAdded += landed.length
+            negOutcome = { attempted: true, scope: 'CAMPAIGN', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
+            negateReason = landed.length > 0
+              ? `The keyword landed elsewhere, so this term was negated at campaign scope.`
+              : denied?.denied
                 ? `The keyword was created, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
-                : `The keyword landed elsewhere, so this term was negated in its source ad group.`
-            } else {
-              // HV.8a — campaign scope now reports what it actually did, exactly as the ad-group
-              // branch does. It used to hardcode `reachedAmazon: false`, which was true of every row
-              // this account has ever written but was an assumption rather than a reading.
-              const rows = await negate('CAMPAIGN', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
-              const landed = rows.filter((r) => r.externalTargetId != null)
-              const denied = rows.find((r) => r.denied)
-              result.isolationNegativesAdded += landed.length
-              negOutcome = { attempted: true, scope: 'CAMPAIGN', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
-              negateReason = landed.length > 0
-                ? `The keyword landed elsewhere, so this term was negated at campaign scope.`
-                : denied?.denied
-                  ? `The keyword was created, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
-                  : `The keyword landed elsewhere, but the campaign-scope negative did not reach Amazon.`
-            }
-          } catch (e) {
-            negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, error: (e as Error).message }
-            negateReason = `The keyword was created, but the negative failed: ${(e as Error).message}`
-            result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`)
+                : `The keyword landed elsewhere, but the campaign-scope negative did not reach Amazon.`
           }
+        } catch (e) {
+          negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, error: (e as Error).message }
+          negateReason = `The keyword was created, but the negative failed: ${(e as Error).message}`
+          result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`)
         }
       }
 
@@ -397,7 +414,8 @@ export async function applyHarvest(args: {
         reachedAmazon: !!first && first.externalTargetId != null,
         negative: negOutcome,
         negateReason,
-        outcome: made.length === 0 ? 'failed' : 'acted',
+        outcome: made.length > 0 ? 'acted' : noDestination ? 'refused' : 'failed',
+        ...(made.length === 0 && noDestination ? { refusal: { deniedAt: 'no_destination', reason: NO_DESTINATION } } : {}),
       })
     } catch (e) {
       result.errors.push(`grad "${g.query}": ${(e as Error).message}`)
@@ -425,15 +443,16 @@ export async function applyHarvest(args: {
   for (const pg of args.productGraduations ?? []) {
     if (args.plan?.[pg.externalAdGroupId]?.graduateProduct !== true) continue // only when the row opted into product graduation
     try {
-      const srcAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId: pg.externalAdGroupId }, select: { id: true } })
+      const srcAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId: pg.externalAdGroupId }, select: SOURCE_SELECT })
       const bidEur = pg.bidEur ?? (pg.clicks > 0 ? Math.max(0.05, pg.costCents / pg.clicks / 100) : 0.5)
-      // H.2-analog — route the converting ASIN into the PRODUCT destination (the PAT campaign), fallback source.
-      const destAdGroupId = args.destinations?.PRODUCT ?? srcAg?.id
-      if (!destAdGroupId) { result.errors.push(`prod-grad "${pg.query}": no destination/local ad group`); continue }
-      await createTargetLocal({ adGroupId: destAdGroupId, kind: 'PRODUCT', value: pg.query, bidEur, userId: args.userId })
+      // H.2-analog — route the converting ASIN into the PRODUCT destination (the PAT campaign), fallback source
+      // (5d: only when the source can take a product target).
+      const destAdGroupId = args.destinations?.PRODUCT ?? (takesTargets(srcAg) ? srcAg!.id : null)
+      if (!destAdGroupId) { result.errors.push(`prod-grad "${pg.query}": ${NO_DESTINATION}`); continue }
+      const made = await createTargetLocal({ adGroupId: destAdGroupId, kind: 'PRODUCT', value: pg.query, bidEur, userId: args.userId })
       result.productsGraduated++
-      // H.3-analog — isolate: if promoted into a different campaign, negate the ASIN in its source.
-      if (srcAg && destAdGroupId !== srcAg.id) {
+      // H.3-analog — isolate: negate the ASIN in its source, 5d: only once it LANDED in a different ad group.
+      if (srcAg && destAdGroupId !== srcAg.id && made.externalTargetId != null) {
         try { if (await negateProductInSource(pg.externalAdGroupId, pg.query)) result.productNegativesAdded++ }
         catch (e) { result.errors.push(`prod-iso "${pg.query}": ${(e as Error).message}`) }
       }

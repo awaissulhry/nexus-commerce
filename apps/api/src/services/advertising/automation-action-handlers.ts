@@ -44,6 +44,8 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
 import { checkProtectConverting, protectConvertingConfig, normaliseNegTerm } from './ads-protect-converting.js'
+import { isAsin } from './ads-negation-policy.js'
+import { adProductLabel, adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
 import {
   updateCampaignWithSync,
   updateAdGroupWithSync,
@@ -994,6 +996,11 @@ ACTION_HANDLERS.pause_all_campaigns = async (action): Promise<ActionResult> =>
 // map, so a rule using it failed every execution with "Unknown action type". NEG.X proved phrase
 // negation through the same `createNegative` path (three NEGATIVE_PHRASE rows live at Amazon), so
 // the handler is the exact handler with the match type as a parameter.
+
+/** 5d (review 7.5) — the one sentence for an ASIN that would have to be negated campaign-wide. */
+const asinCampaignRefusal = (term: string) =>
+  `"${term.trim()}" is an ASIN, a product. Nexus negates a product only inside an ad group, as a negative product target, so no campaign-level negative was made.`
+
 const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE') =>
   async (action: Record<string, unknown> & { type: string }, context: unknown, meta: { ruleId: string; dryRun: boolean }): Promise<ActionResult> => {
     const keyword = (action.keyword as string | undefined) ?? (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
@@ -1030,7 +1037,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
 
       // 2 — term/brand/competitor filters. Same predicate as harvest; the direction matches:
       // brandExclude = never negate your own brand terms, competitorOnly = own ASINs pass through.
-      const looksLikeAsin = /^b0[a-z0-9]{8}$/i.test(keyword.trim())
+      const looksLikeAsin = isAsin(keyword)
       const isOwnAsin = wire.filters.competitorOnly && looksLikeAsin
         ? (await prisma.adProductAd.count({ where: { asin: { equals: keyword.trim(), mode: 'insensitive' } } })) > 0
         : false
@@ -1062,8 +1069,8 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
         : ['AD_GROUP']
 
       const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
-      const { createNegative } = await import('./ads-negative-kw.service.js')
-      const { mirrorNegativeKeywordLocal, createNegativeKeywordCampaignLocal, createNegativeProductTargetLocal } = await import('./ads-create.service.js')
+      const { createNegative, writeNegativeProductTarget } = await import('./ads-negative-kw.service.js')
+      const { mirrorNegativeKeywordLocal, createNegativeKeywordCampaignLocal } = await import('./ads-create.service.js')
 
       const outcomes: Array<Record<string, unknown>> = []
       let confirmed = 0
@@ -1079,16 +1086,36 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
           outcomes.push({ adGroupId: target.adGroupId, refused: 'destination ad group has no Amazon ids — it cannot receive a negative' })
           continue
         }
-        for (const t of target.types) {
-          // product circle → a negative PRODUCT target; only an ASIN-shaped term can be one.
-          if (t === 'ASIN') {
-            if (!looksLikeAsin) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', skipped: 'negative product target needs an ASIN-shaped term — keyword types on this mapping were still processed' }); continue }
-            if (meta.dryRun) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', wouldCreate: true }); continue }
-            const r = await createNegativeProductTargetLocal({ adGroupId: dst.id, asin: keyword.trim() })
-            if (r.externalTargetId != null) { confirmed += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', externalTargetId: r.externalTargetId, reachedAmazon: true }) }
-            else { failedWrites += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', adTargetId: r.id, reachedAmazon: false, refused: `negative product target did not land (mode=${r.mode}) — gate or connection` }) }
-            continue
+        /**
+         * 5d (review 7.5) — an ASIN search term is a product. Whatever is ticked here, it becomes ONE negative
+         * product target in this ad group, through the negative write service; as an exact or phrase keyword it
+         * blocked nothing (and 5b refuses that write). Nexus negates a product only inside an ad group, so the
+         * campaign level is refused by name, not counted as a failed write.
+         */
+        if (looksLikeAsin) {
+          if (levels.includes('CAMPAIGN') && !campaignsDone.has(dst.campaignId)) {
+            campaignsDone.add(dst.campaignId)
+            outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'CAMPAIGN', refused: asinCampaignRefusal(keyword) })
           }
+          if (!levels.includes('AD_GROUP')) continue
+          if (wire.dedupe) {
+            const exists = await prisma.adTarget.findFirst({
+              where: { isNegative: true, kind: 'PRODUCT', status: { not: 'ARCHIVED' }, adGroupId: dst.id, expressionValue: { equals: keyword.trim(), mode: 'insensitive' } },
+              select: { id: true },
+            })
+            if (exists) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', skipped: 'dedupe — this ASIN is already a negative product target in this ad group' }); continue }
+          }
+          if (meta.dryRun) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', wouldCreate: true }); continue }
+          const r = await writeNegativeProductTarget({ adGroupId: dst.id, asin: keyword.trim(), userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context) })
+          if (r.outcome === 'already_existed') { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', skipped: 'already a negative product target (existing row found at create time)' }); continue }
+          if (r.reachedAmazon) { confirmed += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', externalTargetId: r.externalTargetId, reachedAmazon: true }); continue }
+          failedWrites += 1
+          outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', reachedAmazon: false, refused: r.refusal ? `${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error ?? `the negative product target did not reach Amazon (mode=${r.mode})` })
+          continue
+        }
+        for (const t of target.types) {
+          // product circle → a negative PRODUCT target; only an ASIN-shaped term can be one (handled above).
+          if (t === 'ASIN') { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', skipped: 'negative product target needs an ASIN-shaped term — keyword types on this mapping were still processed' }); continue }
           const matchType = t === 'PHRASE' ? 'NEGATIVE_PHRASE' as const : 'NEGATIVE_EXACT' as const
           for (const level of levels) {
             if (level === 'CAMPAIGN' && campaignsDone.has(dst.campaignId)) continue
@@ -1144,7 +1171,8 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
      * mapping. The paired `promote_to_exact` skips terms whose source ad group is not in the
      * rule's `look` set; without the same check here, the rule would negate a term it never
      * harvested — silencing demand it did not act on. Absent (every non-harvest caller, and
-     * unmapped rules), nothing changes.
+     * unmapped rules), nothing changes. 5d — the adapter no longer emits this action (negate-in-source
+     * rides inside promote_to_exact); the check stays for suggestions recorded before.
      */
     const sourceAllow = Array.isArray(action.sourceLookAdGroupIds)
       ? (action.sourceLookAdGroupIds as unknown[]).map(String)
@@ -1195,6 +1223,21 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
       return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, externalCampaignId, scope } }
     }
 
+    // 5d (review 7.5) — an ASIN is a product: in its ad group it becomes a negative product target; campaign-wide
+    // there is no product negative Nexus can make, so that is refused by name.
+    if (isAsin(keyword)) {
+      if (scope === 'CAMPAIGN') return { type: action.type, ok: false, error: asinCampaignRefusal(keyword), output: { keyword, externalCampaignId, scope } }
+      const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId }, select: { id: true } })
+      if (!ag) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${externalAdGroupId}` }
+      if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType: 'PRODUCT', scope } }
+      const { writeNegativeProductTarget } = await import('./ads-negative-kw.service.js')
+      const r = await writeNegativeProductTarget({ adGroupId: ag.id, asin: keyword.trim(), userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context) })
+      if (r.outcome !== 'already_existed' && !r.reachedAmazon) {
+        return { type: action.type, ok: false, error: r.refusal ? `Refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error ?? `the negative product target did not reach Amazon (mode=${r.mode})`, output: { keyword, externalCampaignId, matchType: 'PRODUCT', scope } }
+      }
+      return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'PRODUCT', scope, alreadyExisted: r.outcome === 'already_existed', externalTargetId: r.externalTargetId } }
+    }
+
     if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType, scope } }
     const { createNegative } = await import('./ads-negative-kw.service.js')
     const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
@@ -1218,61 +1261,162 @@ ACTION_HANDLERS.add_negative_phrase = makeAddNegativeHandler('NEGATIVE_PHRASE')
 // with the ticked types, and every skip or refusal is named in the output. Before HP1 all of
 // that was stored-but-unread: EXACT-only, in the source ad group, account-wide, at a constant
 // bid — and `ok: true` even when the write gate refused and the keyword existed only locally
-// (the 209-of-218 never-reached-Amazon mechanism). An action WITHOUT `harvest` is an
-// engine-native rule and keeps the exact pre-HP1 behaviour.
+// (the 209-of-218 never-reached-Amazon mechanism).
+//
+// 5d (review 7.3, 7.4, 7.5) — three more promises the handler keeps:
+//   · an ACCOUNT-WIDE rule lands a term where `accountWideLanding` says (the stored harvest
+//     destination; the source only when it is a manual Sponsored Products ad group), or refuses
+//     by name. An action WITHOUT `harvest` (an engine-native rule) maps nothing, so it is
+//     account-wide too, at its own constant bid.
+//   · an ASIN search term becomes a PRODUCT target (an asin expression), never a keyword.
+//   · `negateInSource` adds the source's isolation negative only AFTER the term landed in
+//     ANOTHER ad group (`isolateInSource`).
+
+/** 5d — what an account-wide landing needs to know about the term's source ad group. */
+const HARVEST_SOURCE_SELECT = {
+  id: true, campaignId: true,
+  campaign: { select: { marketplace: true, portfolioId: true, targetingType: true, adProduct: true, type: true } },
+} as const
+type HarvestCampaign = { marketplace?: string | null; portfolioId?: string | null; targetingType: string | null; adProduct: string | null; type: string | null }
+type HarvestSource = { id: string; campaignId: string; campaign: HarvestCampaign | null }
+
+/** A manual Sponsored Products campaign: the only kind a harvest can create a keyword or product target in. */
+const takesHarvestTargets = (c: HarvestCampaign | null | undefined): boolean =>
+  !!c && c.targetingType === 'MANUAL' && adProductOf(c) === SPONSORED_PRODUCTS
+
+/**
+ * 5d (review 7.4) — where an ACCOUNT-WIDE harvest lands a term. It used to be the source ad group,
+ * always, automatic campaigns included — and an automatic campaign takes no keyword, so the push
+ * failed and left local-only rows. Now, in this order:
+ *   1. the destination stored for the term's scope (`AdsHarvestDestination`, most specific grain
+ *      first: the chain the Keyword Harvest tab saves to), when it is a manual Sponsored Products
+ *      ad group in the term's market;
+ *   2. else the source ad group, only when it is itself a manual Sponsored Products ad group;
+ *   3. else a refusal that says what to set. Nothing is written.
+ * Only the STORED destination is read, never the resolver's shortlist: a rule lands a term where a
+ * person chose, and the shortlist is 5–21 ad groups long in this account.
+ */
+async function accountWideLanding(src: HarvestSource, asin: boolean): Promise<{ adGroupId: string; via: 'destination' | 'source' } | { refuse: string }> {
+  const what = asin ? 'product target' : 'keyword'
+  const kind = asin ? 'product targets' : 'exact keywords'
+  const market = src.campaign?.marketplace ?? null
+  const { resolveStoredDestinations } = await import('./harvest-destination.service.js')
+  const stored = (await resolveStoredDestinations({
+    market: market ?? 'all', portfolio: src.campaign?.portfolioId ?? null, campaign: src.campaignId, adGroup: src.id,
+  })).get(asin ? 'PRODUCT' : 'EXACT')
+  if (stored) {
+    const dst = await prisma.adGroup.findUnique({
+      where: { id: stored.adGroupId },
+      select: { id: true, name: true, campaign: { select: { marketplace: true, targetingType: true, adProduct: true, type: true } } },
+    })
+    if (!dst) return { refuse: `The harvest destination set for ${kind} no longer exists, so this ${what} was not created. Choose a destination on the Keyword Harvest tab.` }
+    if (market && dst.campaign?.marketplace && dst.campaign.marketplace !== market) {
+      return { refuse: `The harvest destination “${dst.name}” is in ${dst.campaign.marketplace}, but this search term is from ${market}, so the ${what} was not created. Set a destination for ${market} on the Keyword Harvest tab.` }
+    }
+    if (!takesHarvestTargets(dst.campaign)) {
+      return { refuse: `The harvest destination “${dst.name}” is not in a manual Sponsored Products campaign, so it cannot take a ${what}. Choose another destination on the Keyword Harvest tab.` }
+    }
+    return { adGroupId: dst.id, via: 'destination' }
+  }
+  if (takesHarvestTargets(src.campaign)) return { adGroupId: src.id, via: 'source' }
+  const product = adProductOf(src.campaign)
+  const where = product !== SPONSORED_PRODUCTS
+    ? `a ${adProductLabel(product) ?? 'non-Sponsored Products'} campaign`
+    : src.campaign?.targetingType === 'AUTO' ? 'an automatic campaign' : 'a campaign that is not set to manual targeting'
+  return { refuse: `No harvest destination is set for ${kind}${market ? ` in ${market}` : ''}, and this search term came from an ad group in ${where}, which cannot take a ${what}. Nothing was created. Set a destination on the Keyword Harvest tab.` }
+}
+
+/** 5d — what a dry run says about the isolation negative: it can only follow a landing in another ad group. */
+function isolationPreview(srcId: string, asin: boolean, wouldLandIn: string[]): Record<string, unknown> {
+  const matchType = asin ? 'PRODUCT' : 'NEGATIVE_EXACT'
+  if (wouldLandIn.some((id) => id !== srcId)) {
+    return { wouldNegate: true, adGroupId: srcId, matchType, when: 'only after the term has landed in another ad group' }
+  }
+  return {
+    wouldNegate: false, adGroupId: srcId, matchType,
+    reason: wouldLandIn.length ? 'The term would land only in the ad group it came from, so the source would not be negated.' : 'Nothing would be created, so the source would not be negated.',
+  }
+}
+
+/**
+ * 5d (review 7.3, Owner decision D4) — the source's isolation negative, once the term LANDED at
+ * Amazon in ANOTHER ad group. Never before: a negative in the source when nothing landed silences
+ * the term everywhere, and a negative in the ad group that just received the keyword cancels it.
+ * Because it follows a landing elsewhere it skips the converting guard (a harvested term converted
+ * by definition, so the guard refused every one); protected terms, Amazon's text limits and the
+ * write gate still bind, inside the negative write service. An ASIN gets a negative product
+ * target, a keyword an EXACT negative. A refusal is named, not a failure; a write that did not
+ * land is a failure.
+ */
+async function isolateInSource(args: { srcId: string; query: string; asin: boolean; landedIn: string[]; ruleId: string; evidence: AdWriteEvidence | null }): Promise<{ isolation: Record<string, unknown>; failed: boolean }> {
+  const base = { adGroupId: args.srcId, matchType: args.asin ? 'PRODUCT' : 'NEGATIVE_EXACT' }
+  if (!args.landedIn.some((id) => id !== args.srcId)) {
+    return {
+      failed: false,
+      isolation: { ...base, attempted: false, reason: args.landedIn.length ? 'The term landed only in the ad group it came from, so the source was not negated.' : 'Nothing landed at Amazon, so the source was not negated.' },
+    }
+  }
+  const { writeNegativeKeyword, writeNegativeProductTarget } = await import('./ads-negative-kw.service.js')
+  const r = args.asin
+    ? await writeNegativeProductTarget({ adGroupId: args.srcId, asin: args.query.trim(), userId: RULE_ACTOR(args.ruleId), evidence: args.evidence })
+    : await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: args.srcId, keywordText: args.query, matchType: 'EXACT', protectConverting: null, userId: RULE_ACTOR(args.ruleId), evidence: args.evidence })
+  if (r.outcome === 'already_existed') return { failed: false, isolation: { ...base, attempted: true, alreadyExisted: true, externalTargetId: r.externalTargetId, reachedAmazon: r.reachedAmazon } }
+  if (r.outcome === 'refused') return { failed: false, isolation: { ...base, attempted: true, reachedAmazon: false, refused: `${r.refusal?.deniedAt}: ${r.refusal?.reason}` } }
+  if (r.reachedAmazon) return { failed: false, isolation: { ...base, attempted: true, externalTargetId: r.externalTargetId, reachedAmazon: true } }
+  return { failed: true, isolation: { ...base, attempted: true, reachedAmazon: false, refused: r.error ?? `the isolation negative did not reach Amazon (mode=${r.mode})` } }
+}
+
+/** 5d — why a product target did not land, from the only signal `createTargetLocal` returns. */
+const productTargetMiss = (mode: string): string => mode === 'live'
+  ? 'Amazon returned no id for the product target'
+  : mode === 'sandbox' ? 'sandbox mode: nothing was sent to Amazon' : 'nothing was sent: the write gate refused it, or the ad group has no Amazon ids'
+
 ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<ActionResult> => {
   const query = (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
   const srcExternalAdGroupId = (action.adGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
   if (!query) return { type: action.type, ok: false, error: 'No query in context' }
   if (!srcExternalAdGroupId) return { type: action.type, ok: false, error: 'No adGroupId' }
-  const { createKeywordLocal, pushExistingKeyword } = await import('./ads-create.service.js')
-  const src = await prisma.adGroup.findFirst({ where: { externalAdGroupId: srcExternalAdGroupId }, select: { id: true } })
+  const { createKeywordLocal, pushExistingKeyword, createTargetLocal } = await import('./ads-create.service.js')
+  const src: HarvestSource | null = await prisma.adGroup.findFirst({ where: { externalAdGroupId: srcExternalAdGroupId }, select: HARVEST_SOURCE_SELECT })
   if (!src) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${srcExternalAdGroupId}` }
+  const asin = isAsin(query)
 
   const wire = (action.harvest ?? null) as import('./ads-harvest-wire.js').HarvestWire | null
-  if (!wire) {
-    // engine-native path, byte-for-byte the pre-HP1 behaviour — except the write's fate is
-    // reported: a create the gate refused is a failure, not a success that silenced nothing.
-    const bidEur = Number(action.bidEur ?? 0.5)
-    if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, query, matchType: 'EXACT', bidEur } }
-    const r = await createKeywordLocal({ adGroupId: src.id, keywordText: query, matchType: 'EXACT', bidEur, evidence: ctxEvidence(context) })
-    if (r.externalTargetId == null) {
-      return { type: action.type, ok: false, error: r.denied ? `Write gate denied at ${r.denied.deniedAt}: ${r.denied.reason}` : r.pushError ?? (r.existed ? 'keyword exists locally but never reached Amazon' : 'created locally only — Amazon did not take the keyword'), output: { query, matchType: 'EXACT', adGroupId: src.id, bidEur, adTargetId: r.id, reachedAmazon: false } }
-    }
-    return { type: action.type, ok: true, output: { query, matchType: 'EXACT', adGroupId: src.id, bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true } }
-  }
-
   const { matchedBlocks, termPassesFilters, resolveHarvestBidEur, normalizeHarvestBidMode } = await import('./ads-harvest-wire.js')
 
-  // 1 — is this term's SOURCE ad group inside the rule's mappings?
-  const blocks = matchedBlocks(wire.blocks, src.id)
+  // 1 — is this term's SOURCE ad group inside the rule's mappings? (no wire = maps nothing = account-wide)
+  const blocks = wire ? matchedBlocks(wire.blocks, src.id) : 'account-wide'
   if (blocks !== 'account-wide' && blocks.length === 0) {
     return { type: action.type, ok: true, output: { skipped: 'source-ad-group-not-in-mappings', query, sourceAdGroupId: src.id } }
   }
 
   // 2 — the term filters (contains / does-not-contain / brand / competitor-only)
-  const looksLikeAsin = /^b0[a-z0-9]{8}$/i.test(query.trim())
-  const isOwnAsin = wire.filters.competitorOnly && looksLikeAsin
-    ? (await prisma.adProductAd.count({ where: { asin: { equals: query.trim(), mode: 'insensitive' } } })) > 0
-    : false
-  const filt = termPassesFilters(query, wire.filters, isOwnAsin)
-  if (filt.pass === false) return { type: action.type, ok: true, output: { skipped: 'term-filter', reason: filt.reason, query } }
+  if (wire) {
+    const isOwnAsin = wire.filters.competitorOnly && asin
+      ? (await prisma.adProductAd.count({ where: { asin: { equals: query.trim(), mode: 'insensitive' } } })) > 0
+      : false
+    const filt = termPassesFilters(query, wire.filters, isOwnAsin)
+    if (filt.pass === false) return { type: action.type, ok: true, output: { skipped: 'term-filter', reason: filt.reason, query } }
+  }
 
-  // 3 — the creation set: mapped destinations × ticked types; account-wide keeps create-in-source EXACT
-  const targets = blocks === 'account-wide'
-    ? [{ adGroupId: src.id, types: ['EXACT' as const] }]
-    : (() => {
-      const seen = new Map<string, Set<string>>()
-      for (const b of blocks) for (const c of b.create) {
-        const s = seen.get(c.adGroupId) ?? new Set<string>()
-        for (const t of c.types) s.add(t)
-        seen.set(c.adGroupId, s)
-      }
-      return [...seen.entries()].map(([adGroupId, types]) => ({ adGroupId, types: [...types] as Array<'PHRASE' | 'EXACT' | 'ASIN'> }))
-    })()
+  // 3 — the creation set: mapped destinations × ticked types; account-wide lands where 5d's rule says, or refuses
+  let targets: Array<{ adGroupId: string; types: Array<'PHRASE' | 'EXACT' | 'ASIN'> }>
+  if (blocks === 'account-wide') {
+    const landing = await accountWideLanding(src, asin)
+    if ('refuse' in landing) return { type: action.type, ok: false, error: landing.refuse, output: { refusedBy: 'destination', query, sourceAdGroupId: src.id } }
+    targets = [{ adGroupId: landing.adGroupId, types: [asin ? 'ASIN' : 'EXACT'] }]
+  } else {
+    const seen = new Map<string, Set<string>>()
+    for (const b of blocks) for (const c of b.create) {
+      const s = seen.get(c.adGroupId) ?? new Set<string>()
+      for (const t of c.types) s.add(t)
+      seen.set(c.adGroupId, s)
+    }
+    targets = [...seen.entries()].map(([adGroupId, types]) => ({ adGroupId, types: [...types] as Array<'PHRASE' | 'EXACT' | 'ASIN'> }))
+  }
 
   // dedupe scope = the campaigns of every mapped ad group ("the campaigns from this rule group");
-  // an account-wide rule dedupes account-wide.
+  // an account-wide rule dedupes account-wide. An engine-native action does not dedupe (the creators are idempotent).
   const mappedAgIds = blocks === 'account-wide' ? null : [...new Set(blocks.flatMap((b) => [...b.look, ...b.create.map((c) => c.adGroupId)]))]
   const dedupeCampaignIds = mappedAgIds
     ? (await prisma.adGroup.findMany({ where: { id: { in: mappedAgIds } }, select: { campaignId: true } })).map((g) => g.campaignId)
@@ -1280,11 +1424,14 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
 
   const st = (context as any)?.searchTerm as { clicks?: number; spendCents?: number } | undefined
   const termCpcEur = st && Number(st.clicks) > 0 ? (Number(st.spendCents ?? 0) / Number(st.clicks)) / 100 : null
-  const bidMode = normalizeHarvestBidMode((action.bid as { mode?: unknown } | undefined)?.mode)
-  const bidValue = (action.bid as { value?: unknown } | undefined)?.value
+  // An engine-native action carries one constant bid (`bidEur`, default €0.50): the 'fixed' mode.
+  const bidMode = wire ? normalizeHarvestBidMode((action.bid as { mode?: unknown } | undefined)?.mode) : 'fixed'
+  const bidValue = wire ? (action.bid as { value?: unknown } | undefined)?.value : (action.bidEur ?? 0.5)
   const bidValueNum = bidValue != null && Number.isFinite(Number(bidValue)) ? Number(bidValue) : null
+  const evidence = ctxEvidence(context)
 
   const outcomes: Array<Record<string, unknown>> = []
+  const landedIn: string[] = [] // ad groups where the term is now confirmed at Amazon
   let confirmed = 0
   let failedWrites = 0
   for (const target of targets) {
@@ -1292,17 +1439,17 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
       ? await prisma.adGroup.findUnique({ where: { id: target.adGroupId }, select: { defaultBidCents: true } }).then((g) => (g?.defaultBidCents != null ? g.defaultBidCents / 100 : null))
       : null
     for (const matchType of target.types) {
-      if (matchType === 'ASIN') {
-        // Named, never silent: a product-target create path does not exist yet. The keyword types
-        // on the same mapping still land; this refusal is visible in the execution row.
-        outcomes.push({ adGroupId: target.adGroupId, matchType, refused: 'product-target (ASIN) creation is not supported yet — keyword types on this mapping were still processed' })
+      // 5d (review 7.5) — an ASIN is a product: it lands only on the product tick, as a product target, and a keyword
+      // only on the keyword ticks. Named skips: the other types on the same mapping are still processed.
+      if (asin !== (matchType === 'ASIN')) {
+        outcomes.push({ adGroupId: target.adGroupId, matchType, skipped: asin ? 'an ASIN is a product, not a keyword: it is created only where the product type is ticked' : 'a product target needs an ASIN; this term is a keyword' })
         continue
       }
-      if (wire.dedupe) {
+      if (wire?.dedupe) {
         const exists = await prisma.adTarget.findFirst({
           where: {
-            kind: 'KEYWORD', isNegative: false, expressionType: matchType,
-            expressionValue: { equals: query, mode: 'insensitive' },
+            kind: asin ? 'PRODUCT' : 'KEYWORD', isNegative: false, ...(asin ? {} : { expressionType: matchType }),
+            expressionValue: { equals: asin ? query.trim() : query, mode: 'insensitive' },
             ...(dedupeCampaignIds ? { adGroup: { campaignId: { in: dedupeCampaignIds } } } : {}),
           },
           select: { id: true },
@@ -1312,13 +1459,20 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
       const bid = resolveHarvestBidEur(bidMode, bidValueNum, termCpcEur, agDefault)
       if ('refuse' in bid) { failedWrites += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, refused: `bid: ${bid.refuse}` }); continue }
       if (meta.dryRun) { outcomes.push({ adGroupId: target.adGroupId, matchType, wouldCreate: true, bidEur: bid.bidEur }); continue }
-      const r = await createKeywordLocal({ adGroupId: target.adGroupId, keywordText: query, matchType, bidEur: bid.bidEur, evidence: ctxEvidence(context) })
-      if (r.externalTargetId != null) { confirmed += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, bidEur: bid.bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true, existed: r.existed === true }); continue }
+      if (matchType === 'ASIN') {
+        const r = await createTargetLocal({ adGroupId: target.adGroupId, kind: 'PRODUCT', value: query.trim(), bidEur: bid.bidEur })
+        if (r.externalTargetId != null) { confirmed += 1; landedIn.push(target.adGroupId); outcomes.push({ adGroupId: target.adGroupId, matchType, bidEur: bid.bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true }); continue }
+        failedWrites += 1
+        outcomes.push({ adGroupId: target.adGroupId, matchType, adTargetId: r.id, reachedAmazon: false, refused: productTargetMiss(r.mode) })
+        continue
+      }
+      const r = await createKeywordLocal({ adGroupId: target.adGroupId, keywordText: query, matchType, bidEur: bid.bidEur, evidence })
+      if (r.externalTargetId != null) { confirmed += 1; landedIn.push(target.adGroupId); outcomes.push({ adGroupId: target.adGroupId, matchType, bidEur: bid.bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true, existed: r.existed === true }); continue }
       if (r.existed) {
         // The local-only backlog's live fix: an existing row Amazon never saw gets a PUSH, not a
         // silent idempotent no-op (HV.4's pushExistingKeyword, on the rule path at last).
-        const p = await pushExistingKeyword({ adTargetId: r.id, evidence: ctxEvidence(context) })
-        if (p.ok && p.externalTargetId) { confirmed += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, pushedExisting: true, externalTargetId: p.externalTargetId, reachedAmazon: true }); continue }
+        const p = await pushExistingKeyword({ adTargetId: r.id, evidence })
+        if (p.ok && p.externalTargetId) { confirmed += 1; landedIn.push(target.adGroupId); outcomes.push({ adGroupId: target.adGroupId, matchType, pushedExisting: true, externalTargetId: p.externalTargetId, reachedAmazon: true }); continue }
         failedWrites += 1
         outcomes.push({ adGroupId: target.adGroupId, matchType, reachedAmazon: false, refused: p.refusal ? `${p.refusal.deniedAt}: ${p.refusal.reason}` : p.error ?? 'exists locally and the push did not land' })
         continue
@@ -1328,12 +1482,24 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
     }
   }
 
+  // 4 — negate-in-source (5d): previewed in a dry run, written only after a landing in another ad group.
+  let isolation: Record<string, unknown> | null = null
+  let isolationFailed = false
+  if (action.negateInSource === true) {
+    if (meta.dryRun) isolation = isolationPreview(src.id, asin, outcomes.filter((o) => o.wouldCreate === true).map((o) => String(o.adGroupId)))
+    else ({ isolation, failed: isolationFailed } = await isolateInSource({ srcId: src.id, query, asin, landedIn, ruleId: meta.ruleId, evidence }))
+  }
+
+  const errors = [
+    failedWrites > 0 ? `${failedWrites} creation${failedWrites === 1 ? '' : 's'} did not reach Amazon — see outcomes` : null,
+    isolationFailed ? `the negative in the source ad group did not reach Amazon — see isolation` : null,
+  ].filter((e): e is string => e != null)
   return {
     type: action.type,
     // Skips are policy working; a write that did not land is a failure. All-skips is a clean run.
-    ok: failedWrites === 0,
-    error: failedWrites > 0 ? `${failedWrites} creation${failedWrites === 1 ? '' : 's'} did not reach Amazon — see outcomes` : undefined,
-    output: { query, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes },
+    ok: errors.length === 0,
+    error: errors.length ? errors.join('; ') : undefined,
+    output: { query, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes, ...(isolation ? { isolation } : {}) },
   }
 }
 
@@ -1344,6 +1510,8 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
   const keyword = (action.keyword as string | undefined) ?? (context as any)?.searchTerm?.query ?? (context as any)?.adTarget?.expressionValue
   const marketplace = (action.marketplace as string | undefined) ?? (context as any).marketplace
   if (!keyword || !marketplace) return { type: action.type, ok: false, error: 'keyword + marketplace required' }
+  // 5d (review 7.5) — every write here is campaign-level, where Nexus has no product negative for an ASIN.
+  if (isAsin(keyword)) return { type: action.type, ok: false, error: asinCampaignRefusal(keyword), output: { keyword, marketplace } }
   // ACR.7b — a drag-bound rule negates only inside its binding, not across the marketplace.
   const sweep = await resolveRuleSweepScope(meta.ruleId)
   const campaigns = await prisma.campaign.findMany({

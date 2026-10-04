@@ -21,21 +21,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // missing id (HV.9a) and records the row. Its result is what this file feeds in; the service's own read-back and
 // recording are pinned in negative-write-paths.vitest.test.ts.
 const writeNegativeKeyword = vi.fn()
+const writeNegativeProductTarget = vi.fn()
+const createKeywordLocal = vi.fn()
+const createTargetLocal = vi.fn()
+const checkProtectConverting = vi.fn(async () => new Map())
+const findAdGroup = vi.fn(async () => ({ id: 'ag1', campaign: { targetingType: 'AUTO', adProduct: 'SPONSORED_PRODUCTS', type: 'SP' } }) as unknown)
 const createNegativeKeywordCampaignLocal = vi.fn(async () => ({ id: 'local-1', created: true }))
 const mirrorNegativeKeywordLocal = vi.fn(async () => ({ id: 'mirror-1', created: true }))
 
 vi.mock('./ads-negative-kw.service.js', () => ({
   writeNegativeKeyword: (...a: unknown[]) => writeNegativeKeyword(...a),
-  writeNegativeProductTarget: vi.fn(),
+  writeNegativeProductTarget: (...a: unknown[]) => writeNegativeProductTarget(...a),
 }))
 vi.mock('./ads-create.service.js', () => ({
   createNegativeKeywordCampaignLocal: (...a: unknown[]) => createNegativeKeywordCampaignLocal(...a),
-  createKeywordLocal: vi.fn(),
-  createTargetLocal: vi.fn(),
+  createKeywordLocal: (...a: unknown[]) => createKeywordLocal(...a),
+  createTargetLocal: (...a: unknown[]) => createTargetLocal(...a),
   mirrorNegativeKeywordLocal: (...a: unknown[]) => mirrorNegativeKeywordLocal(...a),
 }))
 vi.mock('./ads-protect-converting.js', () => ({
-  checkProtectConverting: vi.fn(async () => new Map()),
+  checkProtectConverting: (...a: unknown[]) => checkProtectConverting(...(a as [])),
   protectConvertingConfig: vi.fn(() => ({})),
   normaliseNegTerm: (s: string) => s.trim().toLowerCase(),
 }))
@@ -43,7 +48,7 @@ vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn()
 vi.mock('../../db.js', () => ({
   default: {
     campaign: { findFirst: vi.fn(async () => ({ id: 'c1', marketplace: 'IT' })) },
-    adGroup: { findFirst: vi.fn(async () => ({ id: 'ag1' })) },
+    adGroup: { findFirst: (...a: unknown[]) => findAdGroup(...(a as [])) },
     amazonAdsConnection: { findFirst: vi.fn(async () => ({ profileId: 'p-123' })) },
     amazonAdsSearchTerm: { groupBy: vi.fn(async () => []) },
     adTarget: { findFirst: vi.fn(async () => null) },
@@ -69,6 +74,11 @@ const NO_ID = 'Amazon returned no id and a read-back did not find it, so this te
 
 beforeEach(() => {
   writeNegativeKeyword.mockReset()
+  writeNegativeProductTarget.mockReset()
+  createKeywordLocal.mockReset()
+  createTargetLocal.mockReset()
+  checkProtectConverting.mockReset()
+  checkProtectConverting.mockResolvedValue(new Map())
   mirrorNegativeKeywordLocal.mockClear()
   createNegativeKeywordCampaignLocal.mockClear()
 })
@@ -150,5 +160,86 @@ describe('HV.9a — the row is the service\'s, written only for a negative that 
     await applyHarvest({ negatives: [candidate], negateScope: 'CAMPAIGN' })
     expect(mirrorNegativeKeywordLocal).not.toHaveBeenCalled()
     expect(createNegativeKeywordCampaignLocal).not.toHaveBeenCalled()
+  })
+})
+
+/** 5d (review 7.5) — an ASIN in the keyword lists is a product: negated as a product target, graduated as one. */
+describe('5d — the harvest apply path treats an ASIN as a product', () => {
+  const asinCandidate = { ...(candidate as object), query: 'B0ABCD1234' } as never
+
+  it('a wasteful ASIN gets a negative product target in its ad group, not a negative keyword', async () => {
+    writeNegativeProductTarget.mockResolvedValue(result({ externalTargetId: 'AMZ-P1', reachedAmazon: true }))
+    const r = await applyHarvest({ negatives: [asinCandidate] })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(writeNegativeProductTarget).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'ag1', asin: 'B0ABCD1234' }))
+    expect(r.negativeOutcomes[0]).toMatchObject({ outcome: 'acted', matchTypes: ['PRODUCT'] })
+  })
+
+  it('at campaign scope it is refused by name and nothing is written', async () => {
+    const r = await applyHarvest({ negatives: [asinCandidate], negateScope: 'CAMPAIGN' })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(writeNegativeProductTarget).not.toHaveBeenCalled()
+    expect(r.negativeOutcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'asin_campaign_level' } })
+  })
+
+  it('a converting ASIN graduates as a PRODUCT target in the PRODUCT destination', async () => {
+    createTargetLocal.mockResolvedValue({ id: 'pt1', externalTargetId: 'AMZ-PT', mode: 'live' })
+    const r = await applyHarvest({ graduations: [{ ...(asinCandidate as object), orders: 3 } as never], destinations: { PRODUCT: 'dst-pat' } })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(createTargetLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'dst-pat', kind: 'PRODUCT', value: 'B0ABCD1234' }))
+    expect(r.productsGraduated).toBe(1)
+    expect(r.keywordsGraduated).toBe(0)
+  })
+})
+
+/** 5d (review 7.4) — the source ad group is a fallback destination only when it can take the target. */
+describe('5d — no destination and an automatic source: refused, nothing created', () => {
+  it('names the refusal on the outcome and creates nothing; a manual Sponsored Products source still takes it', async () => {
+    const r = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'no_destination' } })
+    expect(r.keywordsGraduated).toBe(0)
+    expect(r.errors[0]).toMatch(/not in a manual Sponsored Products campaign/)
+
+    findAdGroup.mockResolvedValueOnce({ id: 'ag1', campaign: { targetingType: 'MANUAL', adProduct: 'SPONSORED_PRODUCTS', type: 'SP' } })
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    const manual = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
+    expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'ag1' }))
+    expect(writeNegativeKeyword).not.toHaveBeenCalled() // it landed in its own source: a negative there would cancel it
+    expect(manual.outcomes[0].outcome).toBe('acted')
+  })
+})
+
+/**
+ * 5d (review 7.3, Owner decision D4) — the H.3 isolation negative fires only after the keyword LANDED in a different
+ * ad group, and then it skips the converting guard (which refused every one: a graduated term converted by definition).
+ */
+describe('5d — the isolation negative follows a landing elsewhere', () => {
+  const grad = { ...(candidate as object), orders: 3 } as never
+
+  it('landed in the destination → negated in the source, although the term converted', async () => {
+    checkProtectConverting.mockResolvedValue(new Map([['giacca moto', { allowed: false, reason: 'converted 3× in 30 days' }]]) as never)
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-N1', reachedAmazon: true }))
+    const r = await applyHarvest({ graduations: [grad], destinations: { EXACT: 'dst-exact' } })
+    expect(writeNegativeKeyword).toHaveBeenCalledWith(expect.objectContaining({ scope: 'AD_GROUP', externalAdGroupId: 'EAG1', keywordText: 'giacca moto', matchType: 'EXACT' }))
+    expect(r.isolationNegativesAdded).toBe(1)
+    expect(r.negativesProtected).toBe(0)
+    expect(r.outcomes[0].negative).toMatchObject({ attempted: true, reachedAmazon: true })
+  })
+
+  it('the keyword did not reach Amazon → no negative in the source', async () => {
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: null, denied: { deniedAt: 'campaign_allowlist', reason: 'not allowlisted' } })
+    const r = await applyHarvest({ graduations: [grad], destinations: { EXACT: 'dst-exact' } })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0].negative).toBeNull()
+    expect(r.outcomes[0].negateReason).toMatch(/nothing reached Amazon/)
+  })
+
+  it('a product target that did not land leaves the source un-negated too', async () => {
+    createTargetLocal.mockResolvedValue({ id: 'pt1', externalTargetId: null, mode: 'local' })
+    await applyHarvest({ productGraduations: [{ ...(candidate as object), query: 'B0ABCD1234', orders: 3 } as never], plan: { EAG1: { graduateProduct: true } }, destinations: { PRODUCT: 'dst-pat' } })
+    expect(createTargetLocal).toHaveBeenCalled()
+    expect(writeNegativeProductTarget).not.toHaveBeenCalled()
   })
 })

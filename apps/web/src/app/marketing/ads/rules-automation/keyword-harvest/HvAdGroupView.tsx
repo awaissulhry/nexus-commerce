@@ -43,6 +43,7 @@ import { NoDataIllus } from '../_shared/NoDataIllus'
 import { RuleTypeModal } from '../_shared/RuleTypeModal'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 import { Listbox } from '@/design-system/components'
+import { assignOptions, assignSource } from './assignRule'
 
 const BUILDER = '/marketing/ads/rules-automation/builder/keyword-harvesting'
 
@@ -250,18 +251,20 @@ export function HvAdGroupView() {
     }
   }, [rawRules])
 
+  /**
+   * 5d (review 7.11) — Assign refuses to narrow an account-wide rule: adding a look-only entry to a
+   * rule that maps nothing limited it to this one ad group, where it created nothing (`assignRule.ts`).
+   */
   const assignRule = useCallback((ruleId: string, row: Row) => {
+    const rule = rawRules.get(ruleId)
+    const name = String(rule?.name ?? ruleId)
+    const a0 = (Array.isArray(rule?.actions) ? rule.actions[0] : null) as { mappings?: unknown } | null
+    const check = assignSource(name, a0?.mappings, row)
+    if (!check.ok) { setNotice(check.reason); return }
     void patchMappings(ruleId, (mappings) => {
-      const blocks = mappings.length ? mappings : [{ groups: [] }]
-      const g0 = blocks[0].groups ?? (blocks[0].groups = [])
-      if (!g0.some((g) => String(g.id) === row.key)) {
-        // A look-only SOURCE entry: this ad group starts feeding the rule's existing
-        // destinations. Which types get created stays the rule's mapping matrix — assignment
-        // from here answers "harvest from this ad group?", not "create what, where?".
-        g0.push({ id: row.key, name: row.adGroup, campaignId: row.campaignId, campaignName: row.campaign, status: 'ENABLED', adProduct: null, portfolioId: null, look: true, types: { P: false, E: false, product: false } })
-      }
-      return blocks
-    }, `Assigning “${rawRules.get(ruleId)?.name ?? ruleId}”`)
+      const r = assignSource(name, mappings, row)
+      return r.ok ? r.mappings : mappings
+    }, `Assigning “${name}”`)
   }, [patchMappings, rawRules])
 
   const detachRule = useCallback((ruleId: string, row: Row) => {
@@ -276,16 +279,10 @@ export function HvAdGroupView() {
     `${paused ? 'Pausing' : 'Resuming'} this pathway on “${rawRules.get(ruleId)?.name ?? ruleId}”`)
   }, [patchMappings, rawRules])
 
-  /** The builder-shaped rules this row could still be assigned to. */
-  const assignableFor = useCallback((row: Row): Array<{ value: string; label: string }> => {
-    const already = new Set(row.rules.filter((x) => x.reach === 'mapped').map((x) => x.id))
-    return [...rawRules.values()]
-      .filter((r) => {
-        const a0 = (Array.isArray(r.actions) ? r.actions[0] : null) as { type?: string } | null
-        return a0?.type === 'keyword-harvesting' && !already.has(String(r.id))
-      })
-      .map((r) => ({ value: String(r.id), label: String(r.name ?? r.id) }))
-  }, [rawRules])
+  /** The builder-shaped rules this row could still be assigned to; an account-wide one is listed disabled, with why. */
+  const assignableFor = useCallback((row: Row) =>
+    assignOptions(rawRules.values(), row, new Set(row.rules.filter((x) => x.reach === 'mapped').map((x) => x.id))),
+  [rawRules])
 
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
@@ -397,9 +394,9 @@ export function HvAdGroupView() {
     },
     {
       key: 'negates', label: 'Negates', metric: false, sortable: false,
-      tip: 'H10 calls this Search Term Isolation: the harvested term is added as a negative in its source ad group so the source stops competing with the new target.',
+      tip: 'H10 calls this Search Term Isolation: once the harvested term has landed in another ad group, it is added as a negative in its source ad group (exact for a keyword, a negative product target for an ASIN), so the source stops competing with the new target. If the term did not land, or landed in its own ad group, nothing is negated.',
       render: (r) => (r.negates.length
-        ? <span className="h10-hv-badges">{r.negates.map((t) => <span key={t} className="h10-hv-mt neg" title="The harvested term is negated here, in its source">{t}</span>)}</span>
+        ? <span className="h10-hv-badges">{r.negates.map((t) => <span key={t} className="h10-hv-mt neg" title="Once the harvested term has landed in another ad group, it is negated here, in its source">{t}</span>)}</span>
         : <span className="h10-rg-thr none" title="Nothing is negated at source, so this ad group keeps competing for a term after it has been promoted elsewhere.">—</span>),
     },
   ], [pending, assignableFor, assignRule, detachRule, setPathwayPaused])

@@ -911,9 +911,12 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
      * HP1 — the WHOLE form rides into execution. `normalizeHarvestWire` carries the ad-group
      * mapping matrix, the Search Terms contains-filters, the brand filters and `dedupe`;
      * `action.bid` carries the mode+value so the handler computes the bid (CPC-inheriting by
-     * default) instead of the pre-HP1 €0.75 constant behind a "Suggested bid" label. The
-     * negate-in-source action gets the SAME source allowlist, so a mapped rule never negates a
-     * term it did not harvest.
+     * default) instead of the pre-HP1 €0.75 constant behind a "Suggested bid" label.
+     *
+     * 5d (review 7.3) — negate-in-source rides INSIDE the promotion. It was a second, free action:
+     * it negated the term in its source whether or not anything had landed anywhere, and the
+     * converting guard refused every one (a harvested term converted by definition). The handler
+     * now adds the source's EXACT isolation negative only after the keyword landed in ANOTHER ad group.
      */
     const wire = normalizeHarvestWire(a0)
     const bid = (a0.bid ?? {}) as { mode?: unknown; value?: unknown }
@@ -922,15 +925,9 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
       type: 'promote_to_exact',
       bid: { mode: normalizeHarvestBidMode(bid.mode), value: readBuilderNumber(bid.value, 'Harvest bid', unmappedAll, null) }, // 4b
       harvest: wire,
+      ...(a0.negateInSource === true ? { negateInSource: true } : {}),
       reason: `Harvest rule ${rule.id}`,
     }]
-    if (a0.negateInSource === true) {
-      actions.push({
-        type: 'add_negative_exact', scope: 'AD_GROUP',
-        ...(wire.blocks ? { sourceLookAdGroupIds: [...new Set(wire.blocks.flatMap((b) => b.look))] } : {}),
-        reason: `Harvest negate-in-source ${rule.id}`,
-      })
-    }
     const blocks: NonNullable<TranslatedRule['blocks']> = []
     for (const g of groups.length ? groups : [{} as BuilderGroup]) {
       const { leaves, unmapped } = translateConditions([g], SEARCHTERM_METRIC, rule.id)

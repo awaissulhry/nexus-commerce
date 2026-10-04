@@ -1982,7 +1982,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {isHarvest && (
                 <div className="h10-rb-dedupe">
                   <Toggle checked={negateInSource} aria-label="Negate harvested terms in source" onChange={setNegateInSource} />
-                  <span>Also add each harvested term as a <b>negative</b> in its source ad group — stops the source (Auto/Broad) campaign from competing with the new target.</span>
+                  <span>Also add each harvested term as a <b>negative</b> in its source ad group, once it has landed in another ad group — stops the source (Auto/Broad) campaign from competing with the new target.</span>
                 </div>
                 )}
                 <RadioCard

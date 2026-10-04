@@ -403,7 +403,7 @@ describe('BP.P4b — each criteria block translates to its own conditions + acti
 
 /**
  * HP1 — the harvest wire rides the translation: mappings, term filters, dedupe, bid modes,
- * OR-of-ANDs condition blocks, and the negate-in-source source-allowlist coupling.
+ * OR-of-ANDs condition blocks, and negate-in-source (inside the promotion since 5d).
  */
 describe('HP1 — the harvest builder form survives into execution', () => {
   const harvestRule = (extra: Record<string, unknown> = {}, conditions?: unknown[]) => ({
@@ -438,12 +438,14 @@ describe('HP1 — the harvest builder form survives into execution', () => {
     expect(harvest.filters).toEqual({ containsAny: ['moto'], notContains: [], brandExclude: ['xavia'], competitorOnly: false })
   })
 
-  it('negate-in-source gets the SAME source allowlist, so a mapped rule never negates outside it', () => {
+  // 5d (review 7.3) — it was a second, free add_negative_exact that negated whether or not anything landed.
+  it('negate-in-source rides INSIDE promote_to_exact — no separate negative action', () => {
     const t = maybeTranslateAdsRule(harvestRule())!
-    const neg = t.actions[1] as Record<string, unknown>
-    expect(neg.type).toBe('add_negative_exact')
-    expect(neg.scope).toBe('AD_GROUP')
-    expect(neg.sourceLookAdGroupIds).toEqual(['src1'])
+    expect(t.actions).toHaveLength(1)
+    expect(t.actions[0]).toMatchObject({ type: 'promote_to_exact', negateInSource: true })
+    for (const b of t.blocks ?? []) expect(b.actions.map((a) => a.type)).toEqual(['promote_to_exact'])
+    const off = maybeTranslateAdsRule(harvestRule({ negateInSource: false }))!
+    expect(off.actions[0]).not.toHaveProperty('negateInSource')
   })
 
   it('condition groups become OR blocks sharing one THEN (the old flatten AND-ed them)', () => {
