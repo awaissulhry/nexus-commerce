@@ -14,7 +14,8 @@
  * ── Three paths, and they are three because they leave three different records ────────────────
  *
  *   (a) AT AMAZON, ad-group scope — 2,017 rows. `updateAdTargetWithSync` → OutboundSyncQueue →
- *       the worker → `PUT /sp/negativeKeywords` on NEG.3's corrected routing. Gets the write gate,
+ *       the worker → `POST /sp/negativeKeywords/delete` (5f; SP v3 archives a negative by delete,
+ *       its PUT does not accept ARCHIVED) on NEG.3's corrected routing. Gets the write gate,
  *       the audit row, the grace window and the outbound record for free.
  *   (b) AT AMAZON, campaign scope — measured 2026-08-12: **0 rows**. Every one of the 22
  *       campaign-level negatives in this account is local-only, so path (b) is implemented (the
@@ -187,12 +188,16 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
 
     // 🔴 Already archived — on Amazon, by someone else, mirrored in. Not ours to retire, and a
     // no-op that logged as a retirement would be a false record.
+    // 5f — the decision is made on STATUS, not on `retiredAt` alone. `retiredAt` is stamped when
+    // the write is queued; a retire the gate skipped or Amazon rejected is healed back to ENABLED
+    // by the next sync and must stay retryable, so a stamp on a live row blocks nothing.
     if (String(row.status) === 'ARCHIVED') {
-      outcomes.push({ ...base, kind: 'skipped', delivery: 'not_applicable', reason: 'already archived at Amazon — mirrored in by the sync, not retired through this product' })
-      continue
-    }
-    if (row.retiredAt) {
-      outcomes.push({ ...base, kind: 'skipped', delivery: 'not_applicable', reason: `already retired here on ${row.retiredAt.toISOString().slice(0, 10)}` })
+      outcomes.push({
+        ...base, kind: 'skipped', delivery: 'not_applicable',
+        reason: row.retiredAt
+          ? `already retired here on ${row.retiredAt.toISOString().slice(0, 10)}`
+          : 'already archived at Amazon — mirrored in by the sync, not retired through this product',
+      })
       continue
     }
 

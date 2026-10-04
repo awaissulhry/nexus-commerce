@@ -1410,6 +1410,21 @@ export interface TargetPatch {
  *
  * The descriptor form is additive: a bare `kind` string still works and still means "positive",
  * so every existing caller is byte-identical.
+ *
+ * ── 5f — an ARCHIVE of a negative is `POST {path}/delete`, never a PUT ───────────────────────
+ *
+ * Amazon's SP 3.0 OpenAPI document (read 2026-10-04 from
+ * `d1y2lf8k3vrkfu.cloudfront.net/openapi/en-us/dest/SponsoredProducts_prod_3p.json`, the file the
+ * reference page loads) gives the negative PUTs `SponsoredProductsCreateOrUpdateEntityState`,
+ * whose enum is `["ENABLED","PAUSED","PROPOSED"]` — ARCHIVED is not accepted there. Removal is a
+ * separate operation per entity, keyed by an id filter, answered 207 with the same
+ * `{ <key>: { success, error } }` block the PUT returns:
+ *
+ *   negativeKeywords          POST /sp/negativeKeywords/delete          { negativeKeywordIdFilter: { include } }
+ *   campaignNegativeKeywords  POST /sp/campaignNegativeKeywords/delete  { campaignNegativeKeywordIdFilter: { include } }
+ *   negativeTargets           POST /sp/negativeTargets/delete           { negativeTargetIdFilter: { include } }
+ *
+ * Enable and pause stay PUT. Positive keywords and targets are not touched by this.
  */
 
 /** NEG.3 — what decides the endpoint. A bare string is accepted and means a POSITIVE target. */
@@ -1437,13 +1452,15 @@ export async function updateTarget(
 
   // NEG.3 — the negative endpoints. Paths and mimes are the SAME constants the create path uses;
   // spelling them a second time is how two halves of one feature drift apart.
-  const negRoute: { path: string; mime: string; key: string; label: string } | null = !isNegative
+  const negRoute: { path: string; mime: string; key: string; label: string; idFilter: string } | null = !isNegative
     ? null
     : k === 'PRODUCT'
-      ? { path: '/sp/negativeTargets', mime: 'application/vnd.spNegativeTargetingClause.v3+json', key: 'negativeTargetingClauses', label: 'negativeTargets' }
+      ? { path: '/sp/negativeTargets', mime: 'application/vnd.spNegativeTargetingClause.v3+json', key: 'negativeTargetingClauses', label: 'negativeTargets', idFilter: 'negativeTargetIdFilter' }
       : level === 'CAMPAIGN'
-        ? { path: '/sp/campaignNegativeKeywords', mime: 'application/vnd.spCampaignNegativeKeyword.v3+json', key: 'campaignNegativeKeywords', label: 'campaignNegativeKeywords' }
-        : { path: '/sp/negativeKeywords', mime: 'application/vnd.spNegativeKeyword.v3+json', key: 'negativeKeywords', label: 'negativeKeywords' }
+        ? { path: '/sp/campaignNegativeKeywords', mime: 'application/vnd.spCampaignNegativeKeyword.v3+json', key: 'campaignNegativeKeywords', label: 'campaignNegativeKeywords', idFilter: 'campaignNegativeKeywordIdFilter' }
+        : { path: '/sp/negativeKeywords', mime: 'application/vnd.spNegativeKeyword.v3+json', key: 'negativeKeywords', label: 'negativeKeywords', idFilter: 'negativeKeywordIdFilter' }
+  // 5f — the PUT does not accept ARCHIVED for a negative; removal is its own /delete operation.
+  const negDelete = negRoute != null && patch.state?.toUpperCase() === 'ARCHIVED'
 
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateTarget', {
@@ -1453,9 +1470,22 @@ export async function updateTarget(
       kind: k || null,
       isNegative,
       negativeLevel: level || null,
-      route: negRoute ? negRoute.path : isTargetingClause ? '/sp/targets' : '/sp/keywords',
+      route: negRoute ? (negDelete ? `${negRoute.path}/delete` : negRoute.path) : isTargetingClause ? '/sp/targets' : '/sp/keywords',
     })
-    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch, route: negRoute ? negRoute.label : isTargetingClause ? 'targets' : 'keywords' } }
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch, route: negRoute ? negRoute.label : isTargetingClause ? 'targets' : 'keywords', ...(negDelete ? { operation: 'delete' } : {}) } }
+  }
+
+  if (negRoute && negDelete) {
+    const response = await liveCall<unknown>({
+      ...ctx,
+      method: 'POST',
+      path: `${negRoute.path}/delete`,
+      body: { [negRoute.idFilter]: { include: [externalTargetId] } },
+      contentType: negRoute.mime,
+      acceptHeader: negRoute.mime,
+    })
+    const parsed = v3BatchResult(response, negRoute.key)
+    return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
   }
 
   if (negRoute) {

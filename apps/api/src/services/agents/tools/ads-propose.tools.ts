@@ -202,8 +202,9 @@ async function negativePreview(args: Record<string, unknown>): Promise<ToolResul
 export const CREATE_NEGATIVE_UNDO: ToolUndo = {
   async current(change) {
     const listed = ((change.after as { negatives?: Array<{ targetId?: unknown }> } | null)?.negatives ?? []).map((n) => String(n.targetId ?? ''))
+    // 5f — status decides, as in retireNegatives: a stale `retiredAt` from a failed retire blocks nothing.
     const standing = listed.length
-      ? await prisma.adTarget.findMany({ where: { id: { in: listed }, isNegative: true, retiredAt: null, status: { not: 'ARCHIVED' } }, select: { id: true } })
+      ? await prisma.adTarget.findMany({ where: { id: { in: listed }, isNegative: true, status: { not: 'ARCHIVED' } }, select: { id: true } })
       : []
     const ids = new Set(standing.map((t) => t.id))
     return { negatives: listed.filter((id) => ids.has(id)).map((targetId) => ({ targetId })) }
