@@ -6,41 +6,32 @@
  * on this tab was untested.
  */
 import { describe, expect, it } from 'vitest'
-import { deliveryCell, describeYields, localDayKey, restoreSummary, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { budgetDayKey } from '@nexus/shared/ads-budget-day'
+import { deliveryCell, describeYields, restoreSummary, scheduleStatus, type ScheduleDelivery } from './scheduleState'
 
 const delivery = (o: Partial<ScheduleDelivery> = {}): ScheduleDelivery => ({
   campaigns: 0, applied: 0, held: 0, yielded: 0, refused: 0, failed: 0,
   delivered: 0, notDelivered: 0, unknown: 0, lastError: null, ...o,
 })
 
-describe('localDayKey', () => {
-  /**
-   * 🔴 The regression this exists for. `toISOString().slice(0,10)` is UTC; the dates it was compared
-   * against are the local calendar dates an operator typed. Assert the RELATIONSHIP — that the key
-   * matches the LOCAL calendar — so the test is meaningful in any zone, rather than pinning an
-   * offset that only fails in some. [[reference_day_grouping_utc_local_trap]]
-   */
-  it('matches the local calendar date, not the UTC one', () => {
-    const d = new Date('2026-08-21T23:30:00Z')
-    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    expect(localDayKey(d)).toBe(expected)
+/**
+ * 🔴 3d (Owner D2) — the pill's day is the BUDGET day (00:00 UTC), the day the executor's `dateActive` counts.
+ * The browser's local day used to be passed, and between 00:00 and 02:00 Rome the pill and the executor
+ * disagreed. These pin the pill to the executor at the instants where the two days differ.
+ */
+describe('the Status pill counts budget days (00:00 UTC), like the executor', () => {
+  const row = (o: Partial<Parameters<typeof scheduleStatus>[0]> = {}) => ({
+    name: 'S', enabled: true, startDate: '2026-08-10', endDate: '2026-08-21', delivery: null, ...o,
   })
 
-  it('east of UTC, just after local midnight, it is already the NEW day (the old code said yesterday)', () => {
-    // 00:30 in Rome on 22 August is 22:30 UTC on the 21st. The UTC key would say 2026-08-21.
-    const d = new Date('2026-08-21T22:30:00Z')
-    if (d.getHours() === 0 && d.getDate() === 22) {
-      expect(localDayKey(d)).toBe('2026-08-22')
-      expect(localDayKey(d)).not.toBe(d.toISOString().slice(0, 10))
-    } else {
-      // In a zone where that instant is not just-after-midnight the premise does not apply; the
-      // invariant above still holds and is what this suite guarantees everywhere.
-      expect(localDayKey(d)).toBe(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-    }
+  it('at 00:30 Rome on the day after the end date the schedule is still Active — its last budget day runs to 02:00 Rome', () => {
+    expect(scheduleStatus(row(), budgetDayKey(new Date('2026-08-21T22:30:00Z'))).word).toBe('Active')
+    expect(scheduleStatus(row(), budgetDayKey(new Date('2026-08-22T00:00:00Z'))).word).toBe('Completed')
   })
 
-  it('pads single-digit months and days', () => {
-    expect(localDayKey(new Date(2026, 0, 5, 12))).toBe('2026-01-05')
+  it('at 01:30 Rome on the start date the schedule is still Scheduled — its first budget day opens at 02:00 Rome', () => {
+    expect(scheduleStatus(row(), budgetDayKey(new Date('2026-08-09T23:30:00Z'))).word).toBe('Scheduled')
+    expect(scheduleStatus(row(), budgetDayKey(new Date('2026-08-10T00:00:00Z'))).word).toBe('Active')
   })
 })
 

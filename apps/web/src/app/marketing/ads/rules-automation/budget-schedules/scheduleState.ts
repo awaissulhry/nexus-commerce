@@ -53,22 +53,15 @@ export interface ScheduleStateRow {
 export interface StateWord { word: string; cls: string; why: string }
 
 /**
- * 🔴 Today, in the LOCAL calendar.
- *
- * `new Date().toISOString().slice(0,10)` is UTC, and it was being compared against the local
- * calendar dates an operator typed into the builder. In Europe/Rome every instant between 00:00
- * and 02:00 local is still the previous day in UTC, so for the first two hours of every day a
- * finished schedule reported **Active** and a starting one reported **Scheduled**.
- * [[reference_day_grouping_utc_local_trap]] — derive from the date PARTS, never from an ISO string.
- */
-export const localDayKey = (now: Date = new Date()): string =>
-  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-
-/**
  * Scheduled / Active / Active · not in force / Completed / Off.
  *
  * Derived rather than stored, because there is no status field to drift from. ISO date strings
  * compare correctly as strings; '—' means "no bound on this side".
+ *
+ * 🔴 3d — `todayIso` is the BUDGET day, `budgetDayKey(now)` from `@nexus/shared/ads-budget-day`
+ * (00:00–24:00 UTC, Owner D2), because the executor's date range counts budget days (`dateActive`).
+ * The browser's local day used to be passed here: between 00:00 and 02:00 Rome the pill then said
+ * Completed or Active while the executor still ran the old day, or had not started the new one.
  *
  * 🔴 The fourth word is the BSP-P3 fix. "Active" used to assert unconditionally that "the weekly
  * windows decide each campaign's budget right now" — and on this account the pacer rewrites the

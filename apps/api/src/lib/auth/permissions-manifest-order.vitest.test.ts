@@ -97,6 +97,16 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute(method, path)).toBe(permission)
   })
 
+  // Owner 2026-10-04 (2a) — the live campaigns rank left bids changed on: the list is a read; giving one back changes
+  // bids and asks for what changing a rank schedule asks for.
+  it.each([
+    ['GET', '/api/advertising/rank-release/enabled-orphans', 'ads.view'],
+    ['POST', '/api/advertising/rank-release/enabled-orphans/:campaignId/release', 'ads.campaigns.manage'],
+    ['PATCH', '/api/advertising/rank-schedule-groups/:id', 'ads.campaigns.manage'],
+  ])('2a: %s %s requires %s', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+  })
+
   it('separates catalogue language reads and estimates from translation edits and model spend', () => {
     for (const path of ['languages', 'translate/runs']) expect(permissionForRoute('GET', `/api/catalog-transfer/${path}`)).toBe('products.view')
     expect(permissionForRoute('POST', '/api/products/grid')).toBe('products.view')

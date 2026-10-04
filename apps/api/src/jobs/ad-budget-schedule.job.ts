@@ -55,6 +55,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync } from '../services/advertising/ads-mutation.service.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
+import { budgetDayKey, budgetDayStart } from '@nexus/shared/ads-budget-day'
 
 interface BSWindow { day?: number; start?: string; end?: string; adj?: string; value?: number }
 interface BSCampaign { id: string; name?: string; dailyBudget?: number | null }
@@ -111,10 +112,16 @@ const parseHHMM = (s?: string): number => { if (!s) return 0; const [h, m] = s.s
  * does anything at all, it carries the midnight-wrap and all-day branches, and it had **no test**:
  * the two pure functions W4 pinned (`computeBudget`, `dateActive`) are the easy ones. A branch
  * that only fires at 23:00 on a Sunday is exactly the kind that a browser pass never sees.
+ *
+ * 3d (Owner D2) — an ALL-DAY window (no hours: Budget Multiplier) is one BUDGET day, so its weekday and
+ * entry date come from `budgetDayStart` (00:00–24:00 UTC, ads-budget-day.ts), not from `tz`: it opens
+ * when Amazon's budget day does, 02:00 Rome in summer and 01:00 in winter. Timed windows are clock
+ * hours and stay in the schedule's own timezone.
  */
 export function activeWindow(windows: BSWindow[], tz: string, now: Date = new Date()): ActiveWindow | null {
   if (!Array.isArray(windows) || windows.length === 0) return null
   const { day, minutes, date } = nowInTz(tz, now)
+  const budgetDay = { day: budgetDayStart(now).getUTCDay(), date: budgetDayKey(now) }
   /**
    * BSP.6 — `entryDate` is the calendar date the window OPENED on, which is not always today.
    * A wrapping window (23:00 → 02:00 Fri) is ONE entry that spans two dates; at 01:00 on Saturday
@@ -124,7 +131,7 @@ export function activeWindow(windows: BSWindow[], tz: string, now: Date = new Da
   let entryDate = date
   const win = windows.find((w) => {
     const wDay = Number(w.day)
-    if (!w.start || !w.end) { entryDate = date; return wDay === day } // all-day windows never wrap
+    if (!w.start || !w.end) { entryDate = budgetDay.date; return wDay === budgetDay.day } // all-day = one budget day (UTC); never wraps
     const a = parseHHMM(w.start)
     const b = parseHHMM(w.end)
     /**
@@ -149,23 +156,27 @@ export function activeWindow(windows: BSWindow[], tz: string, now: Date = new Da
 }
 
 /** Is "today" within the schedule's start/end window and outside every exclude range?
- *  `now` is injectable for tests only; the cron always passes real time. */
+ *  `now` is injectable for tests only; the cron always passes real time.
+ *
+ *  3d (N2) — the dates are BUDGET days: today, the start, the end and each blackout day all come from
+ *  `budgetDayStart` (00:00 UTC, ads-budget-day.ts), the same day the all-day windows and the write gate
+ *  count. A timed window late at night is in force while its budget day is in range. */
 export function dateActive(s: { startDate: Date | null; endDate: Date | null; neverExpire: boolean; excludeDates: unknown }, now: Date = new Date()): boolean {
-  const today = new Date(now); today.setUTCHours(12, 0, 0, 0)
-  if (s.startDate && today < new Date(new Date(s.startDate).setUTCHours(0, 0, 0, 0))) return false
-  if (!s.neverExpire && s.endDate && today > new Date(new Date(s.endDate).setUTCHours(23, 59, 59, 0))) return false
+  const today = budgetDayStart(now).getTime()
+  // An unreadable date compares as NaN — false both ways — so it bounds nothing, as before.
+  const dayOf = (d: Date | string) => budgetDayStart(new Date(d)).getTime()
+  if (s.startDate && today < dayOf(s.startDate)) return false
+  if (!s.neverExpire && s.endDate && today > dayOf(s.endDate)) return false
   const ex = Array.isArray(s.excludeDates) ? s.excludeDates as Array<{ start?: string; end?: string }> : []
   for (const r of ex) {
     if (!r.start || !r.end) continue
     /**
-     * W4 — the range is INCLUSIVE of its end day. A date-only ISO string parses to UTC midnight,
-     * and `today` is pinned to UTC noon, so the bare `today <= new Date(r.end)` excluded every day
-     * of the range EXCEPT the last one — the operator's chosen end date was the one day the
-     * blackout did not cover. Same end-of-day treatment as the schedule's own endDate above.
+     * W4 — the range is INCLUSIVE of its end day. The old instant comparison (`today` pinned to UTC
+     * noon against `new Date(r.end)`, UTC midnight) excluded every day of the range EXCEPT the last
+     * one — the operator's chosen end date was the one day the blackout did not cover. Comparing
+     * budget days keeps both ends inclusive, as for the schedule's own endDate above.
      */
-    const start = new Date(new Date(r.start).setUTCHours(0, 0, 0, 0))
-    const end = new Date(new Date(r.end).setUTCHours(23, 59, 59, 0))
-    if (today >= start && today <= end) return false
+    if (today >= dayOf(r.start) && today <= dayOf(r.end)) return false
   }
   return true
 }
