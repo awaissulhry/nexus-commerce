@@ -21,6 +21,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
+import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
 export type GateDeniedAt =
@@ -46,6 +47,8 @@ export type GateDeniedAt =
   // The only budget guard keyed to the ENTITY rather than to a rule, which is why it is the one
   // that survives the pacer, a budget schedule, and a rule nobody has written yet.
   | 'budget_day_move'
+  // 6a — the campaign is Sponsored Brands or Display; every write behind this gate goes to a Sponsored Products endpoint.
+  | 'ad_product_unsupported'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -105,6 +108,15 @@ export interface GateContext {
    */
   isSuppression?: boolean
 
+  // ── 6a ────────────────────────────────────────────────────────────────────
+  /**
+   * The ad product of the campaign this write belongs to (`adProductOf` from @nexus/shared/ads-ad-product), for a
+   * caller that knows it but passes no `campaignId` — the negative paths, which must not bind the live-write allowlist.
+   * Anything but Sponsored Products is refused, before the sandbox return. Omitted or null = not checked from here; a
+   * `campaignId` is checked against the campaign's own row on the live path.
+   */
+  adProduct?: string | null
+
   // ── 6.1 — a budget schedule's give-back ───────────────────────────────────
   /**
    * Who is writing (the queued mutation's actor). The day-move bound reads it to recognise a budget
@@ -150,6 +162,11 @@ export function utcDayKey(d: Date = new Date()): string {
  * the DB-side writes complete but no external HTTP fires.
  */
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
+  // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
+  // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
+  const unsupported = adProductRefusal({ adProduct: ctx.adProduct }, { unknown: 'allow' })
+  if (unsupported) return { allowed: false, reason: unsupported, deniedAt: 'ad_product_unsupported' }
+
   // Sandbox path — env says we're not in live mode at all.
   if (adsMode() === 'sandbox') {
     return { allowed: true, mode: 'sandbox' }
@@ -260,8 +277,16 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         dailyBudget: true, portfolioId: true, marketplace: true,
         // BUD.2 — the budget bounds, enforced below beside the bid bounds.
         minBudgetCents: true, maxBudgetCents: true,
+        // 6a — the ad product, refused below before the allowlist.
+        adProduct: true, type: true, name: true,
       },
     })
+    // 6a — the broader refusal first (the pin-before-bounds order below): no allowlist entry makes an SB/SD campaign
+    // writable through Sponsored Products endpoints, so naming the allowlist would point the operator at the wrong fix.
+    const unsupportedCampaign = adProductRefusal(campaign, { unknown: 'allow' })
+    if (unsupportedCampaign) {
+      return { allowed: false, reason: unsupportedCampaign, deniedAt: 'ad_product_unsupported' }
+    }
     if (!campaign?.liveBidWritesEnabled) {
       return {
         allowed: false,

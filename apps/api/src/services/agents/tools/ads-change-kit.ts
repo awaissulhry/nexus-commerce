@@ -18,6 +18,7 @@
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { boundAutomationsFor, claudeActor, claudeReason, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
+import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 
 // ── Running as an approved request ────────────────────────────────────────────────────────────────
 
@@ -121,10 +122,12 @@ export function recheck(ctx: ToolContext, fresh: ToolResult, material: readonly 
 
 // ── Shared facts ──────────────────────────────────────────────────────────────────────────────────
 
-/** Phase 1 changes Sponsored Products campaigns only (SB negatives are blocked upstream; SD has none). */
+/**
+ * Phase 1 changes Sponsored Products campaigns only (SB negatives are blocked upstream; SD has none). 6a — the shared
+ * ad product and sentence the mutation layer and the write gate refuse with; an unknown ad product is refused here.
+ */
 export function spOnlyRefusal(campaign: { type?: string | null; adProduct?: string | null; name?: string | null }): string | null {
-  const sp = campaign.adProduct ? campaign.adProduct === 'SPONSORED_PRODUCTS' : String(campaign.type ?? '') === 'SP'
-  return sp ? null : `${campaign.name ?? 'This campaign'} is not a Sponsored Products campaign; Claude changes Sponsored Products campaigns only for now.`
+  return adProductRefusal(campaign)
 }
 
 /** The enabled rules and schedules bound to the campaign: they may change it again after this change. */
