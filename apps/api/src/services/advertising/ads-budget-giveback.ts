@@ -25,8 +25,11 @@
  * Pure: the gate reads the rows and hands them over.
  */
 
-/** How many budget writes back the gate looks for a schedule's own run. */
-export const GIVE_BACK_LOOKBACK = 10
+/**
+ * How many budget writes back the gate looks for a schedule's own run. 3b — above GIVE_BACK_RETRIES + 1 (24 + 1):
+ * each refused retry adds a row by the schedule, and the entry row must stay in view for the last retry.
+ */
+export const GIVE_BACK_LOOKBACK = 32
 
 const SCHEDULE_ACTOR_PREFIX = 'automation:budget-schedule-'
 

@@ -83,6 +83,19 @@ describe('scheduleStatus', () => {
     expect(s.why).not.toContain('decide each campaign’s budget right now')
   })
 
+  /**
+   * 3b — Off and Completed used to promise "campaigns hold their base budgets" / "restored to base". A schedule
+   * gives back only a budget it still holds, and a budget someone changed since stays as it is.
+   */
+  it('Off and Completed say what a give-back does, and promise no restore it does not make', () => {
+    for (const s of [scheduleStatus(row({ enabled: false }), '2026-08-21'), scheduleStatus(row(), '2026-09-01')]) {
+      expect(s.why).toContain('gives back each budget it still holds')
+      expect(s.why).toContain('a budget someone changed since')
+      expect(s.why).not.toMatch(/restored to base|hold their base budgets/)
+    }
+    expect(scheduleStatus(row({ enabled: false }), '2026-08-21').why).toContain('Pausing gives back each budget it still holds')
+  })
+
   it('the Completed/Scheduled words outrank a contested delivery — dates first', () => {
     expect(scheduleStatus(row({ delivery: delivery({ campaigns: 2, yielded: 2 }) }), '2026-09-01').word).toBe('Completed')
   })
@@ -105,6 +118,13 @@ describe('deliveryCell', () => {
 
   it('a non-delivery outranks a partial success — half-landed is not landed', () => {
     expect(deliveryCell(delivery({ campaigns: 5, delivered: 4, notDelivered: 1 })).word).toBe('1 not at Amazon')
+  })
+
+  it('3b — a refusal says how it is tried again: a window change on the next run, a give-back hourly up to 24 times', () => {
+    const c = deliveryCell(delivery({ campaigns: 2, refused: 1, lastError: 'not given back: 25 tries did not reach Amazon' }))
+    expect(c.why).toContain('not given back: 25 tries did not reach Amazon')
+    expect(c.why).toContain('a refused give-back once an hour, up to 24 times')
+    expect(c.why).not.toContain('before they were queued')
   })
 
   it('a refusal outranks a yield, and a yield outranks in-flight', () => {
@@ -143,6 +163,8 @@ describe('describeYields + deliveryCell attribution (BSP.6)', () => {
     const s = describeYields(d)
     expect(s).toContain('4 to the budget pacer holding the monthly envelope')
     expect(s).toContain('owns a campaign only while its own window is open')
+    // 3b — and the window's close gives nothing back over their change.
+    expect(s).toContain('leaves their budget in place when the window closes')
   })
 
   it('lists several counterparties in one readable sentence', () => {

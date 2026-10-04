@@ -502,8 +502,8 @@ const A7: AutomationAdapter = {
       const out = await patchBudgetSchedule(rowId, { enabled: on }, `user:${actorUserId ?? 'anonymous'}`)
       if (!out) return 'not found'
       if (!out.restore) return null
-      const { restored, refused } = out.restore
-      return { note: `gave back the base budget of ${restored} campaign(s)${refused ? `; ${refused} kept the schedule's budget because the restore was refused` : ''}` }
+      const { restored, kept, refused } = out.restore
+      return { note: `gave back the base budget of ${restored} campaign(s)${kept ? `; ${kept} kept a budget someone changed since` : ''}${refused ? `; ${refused} kept the schedule's budget because the restore was refused` : ''}` }
     },
   }),
 }

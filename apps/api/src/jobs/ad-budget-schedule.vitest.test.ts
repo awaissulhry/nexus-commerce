@@ -3,7 +3,7 @@
  * the write path is exercised on prod by clicking, not here.
  */
 import { describe, expect, it } from 'vitest'
-import { activeWindow, classifyOverride, computeBudget, dateActive } from './ad-budget-schedule.job.js'
+import { activeWindow, classifyOverride, computeBudget, dateActive, decideCampaign, giveBackCheck, GIVE_BACK_RETRIES, missedGiveBackRecord, ownCentsOf, type ActiveWindow, type BSApplied } from './ad-budget-schedule.job.js'
 
 describe('computeBudget', () => {
   it('multiplier multiplies the base; 0/absent value means ×1, never ×0', () => {
@@ -211,5 +211,115 @@ describe('classifyOverride — who took the budget (BSP.6 item 2)', () => {
   it('a missing actor is unattributed rather than assigned to anyone', () => {
     expect(classifyOverride(null).kind).toBe('job')
     expect(classifyOverride(null).label).toContain('unattributed')
+  })
+})
+
+/**
+ * 3b (review 6.2, 6.3, 6.6, 6.5 pause/delete) — what a give-back puts back, and when. `decideCampaign` is
+ * the whole decision for one campaign; these pin each branch with the numbers from the review.
+ */
+describe('decideCampaign — the base is the budget before the window; give back only what the schedule holds (3b)', () => {
+  const NOW = new Date('2026-10-05T10:00:00Z')
+  const KEY = '2026-10-05#1||||incPct|50'
+  const RESTORE_KEY = `${KEY}#restore`
+  const open = (value = 50, key = KEY): ActiveWindow => ({ win: { day: 1, adj: 'incPct', value }, entryDate: '2026-10-05', key })
+  const ctx = (o: Partial<Parameters<typeof decideCampaign>[4]> = {}) => ({ type: 'CAMPAIGN_BUDGET', now: NOW, ...o })
+  const entered = (o: Partial<BSApplied> = {}): BSApplied => ({ budget: 15, at: '2026-10-05T08:00:00Z', state: 'applied', live: 10, windowKey: KEY, baseCents: 1000, ownCents: 1500, outboundQueueId: 'q-enter', ...o })
+  const gaveBack = (o: Partial<BSApplied> = {}): BSApplied => ({ budget: 10, at: '2026-10-05T12:00:00Z', state: 'applied', live: 15, windowKey: RESTORE_KEY, baseCents: 1000, ownCents: 1500, outboundQueueId: 'q-back', attempts: 1, nextRetryAt: '2026-10-05T13:00:00Z', ...o })
+
+  it('🔴 6.3 — the base is the live budget at window entry, not the creation-time snapshot: €10 → €20 by hand, then "+20%" writes €24 (it wrote €12)', () => {
+    const d = decideCampaign(undefined, 2000, open(20), 1000, ctx())
+    expect(d).toMatchObject({ act: 'write', purpose: 'enter', targetCents: 2400, baseCents: 2000, ownCents: 2400, windowKey: KEY })
+  })
+
+  it('S14 — still at the value this schedule set (a give-back not landed, back-to-back windows): the base recorded before stands', () => {
+    const d = decideCampaign(gaveBack({ state: 'applied' }), 1500, open(50, '2026-10-06#1||||incPct|50'), null, ctx())
+    // €15 is the schedule's own value, so the base stays €10 and +50% is €15 again — nothing to write.
+    expect(d).toMatchObject({ act: 'keep', record: { state: 'held', baseCents: 1000, ownCents: 1500, windowKey: '2026-10-06#1||||incPct|50' } })
+  })
+
+  it('inside its own entry: at its value → held; moved by anyone → yielded, the receipts carried, no write', () => {
+    expect(decideCampaign(entered(), 1500, open(), null, ctx())).toMatchObject({ act: 'keep', record: { state: 'held', windowKey: KEY } })
+    const d = decideCampaign(entered({ overriddenBy: { kind: 'pacer', label: 'old', actor: 'a', at: 'b' } }), 1800, open(), null, ctx())
+    expect(d).toMatchObject({ act: 'keep', outcome: 'yielded', record: { state: 'yielded', live: 18, windowKey: KEY, outboundQueueId: 'q-enter' } })
+    expect((d as { record: BSApplied }).record.overriddenBy).toBeUndefined() // re-resolved by the caller, never carried stale
+  })
+
+  it('the window closes while the campaign is at the schedule’s value → give back the base, carrying giveBackOf', () => {
+    expect(decideCampaign(entered(), 1500, null, null, ctx())).toEqual({
+      act: 'write', purpose: 'giveBack', windowKey: RESTORE_KEY, targetCents: 1000, baseCents: 1000, ownCents: 1500, attempts: 1, giveBackOf: KEY,
+    })
+  })
+
+  it('🔴 6.2 — a person changed the budget inside the window → their change wins: yielded, no write', () => {
+    const d = decideCampaign(entered({ state: 'yielded', live: 25 }), 2500, null, null, ctx())
+    expect(d).toMatchObject({ act: 'keep', outcome: 'yielded', record: { state: 'yielded', live: 25, windowKey: RESTORE_KEY } })
+  })
+
+  it('already back at the base (the entry never reached Amazon and the sync copied it back) → held, nothing written', () => {
+    expect(decideCampaign(entered(), 1000, null, null, ctx())).toMatchObject({ act: 'keep', record: { state: 'held', windowKey: RESTORE_KEY } })
+  })
+
+  it('🔴 6.6 — outside windows the record is KEPT: a delivered give-back, and a record older than BSP.6, stay as they are', () => {
+    const done = gaveBack()
+    expect(decideCampaign(done, 1000, null, null, ctx({ giveBack: { status: 'SUCCESS', error: null } }))).toEqual({ act: 'keep', record: done })
+    const old: BSApplied = { budget: 15, at: '2026-08-01T00:00:00Z' }
+    expect(decideCampaign(old, 1500, null, 1000, ctx())).toEqual({ act: 'keep', record: old })
+    expect(decideCampaign(undefined, 1500, null, 1000, ctx())).toEqual({ act: 'none' })
+  })
+
+  it('a give-back the gate SKIPPED is tried again once an hour, but only once the campaign is back at the schedule’s value', () => {
+    const skipped = { giveBack: { status: 'SKIPPED', error: '[ADS-WRITE-GATE-DENY] campaign_allowlist: not allowed' } }
+    // Nexus still shows the base it wrote (the sync has not copied Amazon's value back): nothing to retry yet.
+    expect(decideCampaign(gaveBack(), 1000, null, null, ctx(skipped))).toEqual({ act: 'keep', record: gaveBack() })
+    // Back at €15, but within the hour: wait.
+    expect(decideCampaign(gaveBack(), 1500, null, null, ctx({ ...skipped, now: new Date('2026-10-05T12:45:00Z') }))).toEqual({ act: 'keep', record: gaveBack() })
+    // An hour on: the second try.
+    expect(decideCampaign(gaveBack(), 1500, null, null, ctx({ ...skipped, now: new Date('2026-10-05T13:00:00Z') })))
+      .toMatchObject({ act: 'write', purpose: 'giveBack', targetCents: 1000, attempts: 2, windowKey: RESTORE_KEY, giveBackOf: KEY })
+    // Someone set a new budget meanwhile: theirs stays, never retried over.
+    expect(decideCampaign(gaveBack(), 2200, null, null, ctx({ ...skipped, now: new Date('2026-10-05T14:00:00Z') }))).toEqual({ act: 'keep', record: gaveBack() })
+    // Still queued, or delivered: nothing to retry.
+    expect(decideCampaign(gaveBack(), 1500, null, null, ctx({ giveBack: { status: 'PENDING', error: null }, now: new Date('2026-10-05T14:00:00Z') })).act).toBe('keep')
+  })
+
+  it(`after ${GIVE_BACK_RETRIES} retries it is given up: shown as refused, no longer tried, no longer waiting on a queue row`, () => {
+    const last = gaveBack({ attempts: GIVE_BACK_RETRIES + 1 })
+    const d = decideCampaign(last, 1500, null, null, ctx({ giveBack: { status: 'SKIPPED', error: 'campaign_allowlist: not allowed' }, now: new Date('2026-10-06T14:00:00Z') }))
+    expect(d).toMatchObject({ act: 'keep', outcome: 'refused', record: { state: 'refused', outboundQueueId: null, nextRetryAt: null, attempts: GIVE_BACK_RETRIES + 1 } })
+    const rec = (d as { record: BSApplied }).record
+    expect(rec.error).toBe(`not given back: ${GIVE_BACK_RETRIES + 1} tries did not reach Amazon (last: campaign_allowlist: not allowed). The campaign keeps €15.00; change it by hand if it should go back to €10.00`)
+    // Given up stays given up.
+    expect(decideCampaign(rec, 1500, null, null, ctx({ now: new Date('2026-10-07T14:00:00Z') }))).toEqual({ act: 'keep', record: rec })
+  })
+
+  it('a give-back refused before it was queued is tried again in an hour (not the next tick), and given up after the last try', () => {
+    const d = decideCampaign(entered(), 1500, null, null, ctx()) as Extract<ReturnType<typeof decideCampaign>, { act: 'write' }>
+    const missed = missedGiveBackRecord(entered(), d, NOW, 15, 'refused', 'not_found')
+    expect(missed).toMatchObject({ state: 'refused', windowKey: KEY, attempts: 1, nextRetryAt: '2026-10-05T11:00:00.000Z', error: 'not_found' })
+    expect(decideCampaign(missed, 1500, null, null, ctx({ now: new Date('2026-10-05T10:30:00Z') }))).toEqual({ act: 'keep', record: missed })
+    expect(decideCampaign(missed, 1500, null, null, ctx({ now: new Date('2026-10-05T11:00:00Z') }))).toMatchObject({ act: 'write', purpose: 'giveBack', attempts: 2 })
+    const final = missedGiveBackRecord(entered(), { ...d, attempts: GIVE_BACK_RETRIES + 1 }, NOW, 15, 'failed', 'boom')
+    expect(final).toMatchObject({ state: 'refused', windowKey: RESTORE_KEY, nextRetryAt: null, outboundQueueId: null })
+  })
+
+  it('a record written before 3b gives back the creation-time snapshot (never the rules’ captured baseline)', () => {
+    const legacy: BSApplied = { budget: 15, at: '2026-10-05T08:00:00Z', state: 'applied', windowKey: KEY }
+    expect(decideCampaign(legacy, 1500, null, 1000, ctx())).toMatchObject({ act: 'write', purpose: 'giveBack', targetCents: 1000 })
+  })
+})
+
+describe('giveBackCheck — the one check the executor and pause/delete share (3b)', () => {
+  it('gives back only a budget the schedule set and still holds; anyone else’s change is kept', () => {
+    const rec: BSApplied = { budget: 15, at: 't', state: 'applied', windowKey: 'k', baseCents: 1000, ownCents: 1500 }
+    expect(giveBackCheck(rec, 1500, null)).toEqual({ act: 'giveBack', baseCents: 1000, ownCents: 1500 })
+    expect(giveBackCheck(rec, 1700, null).act).toBe('kept')
+    expect(giveBackCheck(rec, 1000, null).act).toBe('nothing')
+  })
+
+  it('🔴 6.5 — a campaign whose window was refused was never set by the schedule: nothing to give back', () => {
+    const refused: BSApplied = { budget: 15, at: 't', state: 'refused', live: 15, error: 'not_found' }
+    expect(ownCentsOf(refused)).toBeNull()
+    expect(giveBackCheck(refused, 1500, 1000).act).toBe('nothing')
   })
 })

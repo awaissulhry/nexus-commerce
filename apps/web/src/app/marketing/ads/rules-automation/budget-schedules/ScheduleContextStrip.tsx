@@ -69,7 +69,7 @@ export function ScheduleContextStrip({ market }: { market?: string }) {
         <>
           <b>{ctx.enabledCampaigns}</b> enabled campaign{ctx.enabledCampaigns === 1 ? '' : 's'} in {where}
           {ctx.atFloor != null && <> · <b>{ctx.atFloor}</b> at the €1 floor, where a decrease is a no-op</>}
-          {ctx.withBaseline != null && <> · <b>{ctx.withBaseline}</b> with a captured baseline, which is the number a schedule restores to</>}
+          {ctx.withBaseline != null && <> · <b>{ctx.withBaseline}</b> with a captured baseline, which budget rules count their changes from — a schedule gives back the budget a campaign had just before its window</>}
         </>
       )}
       {ctx.outOfBudget != null && (
@@ -96,7 +96,7 @@ export function ScheduleContextStrip({ market }: { market?: string }) {
         </>
       )}
       {dm && (
-        <> · a schedule may move one budget by at most <b>−{dm.dropPct}%</b> / <b>+{dm.risePct}%</b> (or €{dm.riseAbsEur.toFixed(0)}, whichever is larger) per UTC day, counting every writer</>
+        <> · a schedule may move one budget by at most <b>−{dm.dropPct}%</b> / <b>+{dm.risePct}%</b> (or €{dm.riseAbsEur.toFixed(0)}, whichever is larger) per UTC day, counting every writer; giving a budget back when its window closes does not count</>
       )}
     </p>
   )
