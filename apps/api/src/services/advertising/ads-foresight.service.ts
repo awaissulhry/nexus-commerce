@@ -103,7 +103,7 @@ const TZ_OK = new Set([
  * default, so an override moves the forecast rather than leaving it confidently wrong.
  */
 const ENGINE_CRONS: { key: string; name: string; env: string; fallback: string; flag?: string; flagOffReason?: string }[] = [
-  { key: 'rank-defend', name: 'Rank & Dayparting', env: 'NEXUS_RANK_DEFEND_SCHEDULE', fallback: '*/15 * * * *', flag: 'NEXUS_ENABLE_RANK_DEFEND', flagOffReason: 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run' },
+  { key: 'rank-defend', name: 'Hourly bid plans', env: 'NEXUS_RANK_DEFEND_SCHEDULE', fallback: '*/15 * * * *', flag: 'NEXUS_ENABLE_RANK_DEFEND', flagOffReason: 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run' },
   { key: 'budget-enforce', name: 'Budget enforcement', env: 'NEXUS_BUDGET_ENFORCE_SCHEDULE', fallback: '*/30 * * * *', flag: 'NEXUS_BUDGET_ENFORCE_APPLY', flagOffReason: 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 — it computes but never applies' },
   { key: 'auto-bid', name: 'Bid optimiser', env: 'NEXUS_ADS_AUTO_BID_SCHEDULE', fallback: '20 */6 * * *' },
   { key: 'anomaly-guard', name: 'Anomaly breaker', env: 'NEXUS_ADS_ANOMALY_GUARD_SCHEDULE', fallback: '*/10 * * * *' },

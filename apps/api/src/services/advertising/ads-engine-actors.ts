@@ -49,7 +49,8 @@ interface EngineActorDef {
 
 /** Keys match the Control Room's Levers rows where the engine has one. */
 export const ENGINE_ACTORS: readonly EngineActorDef[] = [
-  { key: 'rank-defend', label: 'Rank & Dayparting', prefixes: ['automation:rank-defend-', 'automation:rank-plan-'] },
+  // 7d — the engine's screen name since 2e/7a ("Hourly bid plans", as the Control Room lever); key and actors unchanged.
+  { key: 'rank-defend', label: 'Hourly bid plans', prefixes: ['automation:rank-defend-', 'automation:rank-plan-'] },
   {
     key: 'dayparting', label: 'Classic dayparting', prefixes: ['automation:dayparting-'],
     exclude: ['automation:dayparting-disable', 'automation:dayparting-delete'],
@@ -247,7 +248,7 @@ export function breakerLimits(): Record<BreakerBucket, number> {
   return Object.fromEntries(Object.entries(caps).map(([k, v]) => [k, v.breakerPerHour])) as Record<BreakerBucket, number>
 }
 
-/** The hourly limits in words, for the screens: "Rank & Dayparting 1,200 · … · changes with no known author 300". */
+/** The hourly limits in words, for the screens: "Hourly bid plans 1,200 · … · changes with no known author 300". */
 export function breakerLimitsText(): string {
   const limits = breakerLimits()
   return (Object.keys(limits) as BreakerBucket[])

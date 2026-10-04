@@ -176,7 +176,7 @@ describe('the breaker limits', () => {
       'rank-defend', 'dayparting', 'budget-schedules', 'budget-enforce', 'budget-pools',
       'auto-bid', 'tos-defense', 'coverage-engine', 'autopilot', 'write-reconcile', 'unknown',
     ])
-    expect(limits[0]).toEqual({ key: 'rank-defend', label: 'Rank & Dayparting', perTick: 600, perDay: 3_000, breakerPerHour: 1_500 })
+    expect(limits[0]).toEqual({ key: 'rank-defend', label: 'Hourly bid plans', perTick: 600, perDay: 3_000, breakerPerHour: 1_500 })
     expect(limits.at(-1)).toEqual({ key: 'unknown', label: 'Changes with no known author', perTick: null, perDay: null, breakerPerHour: 300 })
   })
 })
