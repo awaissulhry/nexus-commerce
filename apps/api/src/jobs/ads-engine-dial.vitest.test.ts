@@ -42,6 +42,13 @@ vi.mock('../lib/queue.js', () => {
   }
 })
 const gate = vi.hoisted(() => ({ halted: false }))
+// 1e — the Run-now guard (switch, scheduler arm flags, engine lock) is proven in ads-engine-lock.vitest.test.ts; every
+// run gets through it here (budget enforcement takes the lock only, ToS and auto-bid the whole guard).
+vi.mock('../services/advertising/ads-engine-lock.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  guardLiveRun: async (_engine: string, fn: () => Promise<unknown>) => ({ ran: true, value: await fn() }),
+  withEngineLock: async (_workspaceId: string, _engine: string, fn: () => Promise<unknown>) => ({ ran: true, value: await fn() }),
+}))
 vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/advertising/ads-write-gate.js')>()),
   checkAdsWriteGate: async (ctx: GateContext): Promise<GateDecision> => (gate.halted && !ctx.isSuppression
