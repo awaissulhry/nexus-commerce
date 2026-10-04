@@ -131,7 +131,7 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
 
   // ── the gates the engine applies before it evaluates anything ─────────────────────────────
   if (!input.scheduleEnabled || !isGoalMode(input.windows, input.defaultTargetKey)) {
-    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule carries no rank target, so the rank loop does not own it.' : 'Paused — the rank loop skips it. Amazon keeps whatever bids were last set.' } }
+    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule carries no rank target, so the rank loop does not own it.' : 'Paused — the rank loop skips it. The bids it floored were given back when it was paused (while ads automation is stopped: on the first run after Resume for a paused campaign, while a live one waits for a person on the Rank & Dayparting list); placement percentages stay as last set.' } }
   }
   if (input.governed) {
     return { ...base, mode: { kind: 'governed-elsewhere', label: 'Governed elsewhere', detail: 'A Rank Director family plan governs this campaign and takes precedence, so the schedule is never evaluated for it.' } }
@@ -145,11 +145,11 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
   const eventName = ev?.name ?? null
 
   if (!key) {
-    return { ...base, eventName, mode: { kind: 'nothing-held', label: 'Holding nothing', detail: 'No window is open at this hour and no baseline is set, so this schedule holds nothing right now.' } }
+    return { ...base, eventName, mode: { kind: 'nothing-held', label: 'Holding nothing', detail: 'No window is open at this hour and no baseline is set, so this schedule holds nothing right now. Bids it floored are given back; placement percentages stay as last set.' } }
   }
   const row = input.targetByKey.get(key)
   if (!row) {
-    return { ...base, eventName, activeTargetKey: key, mode: { kind: 'dangling-target', label: 'Dangling target', detail: `The plan names "${key}", which no longer exists in the goal library. Nothing is held — the schedule was authored before the target was deleted.` } }
+    return { ...base, eventName, activeTargetKey: key, mode: { kind: 'dangling-target', label: 'Dangling target', detail: `The plan names "${key}", which no longer exists in the goal library. Nothing is held — the schedule was authored before the target was deleted. Bids it floored are given back; placement percentages stay as last set.` } }
   }
 
   // ── the spec the engine would decide with ─────────────────────────────────────────────────

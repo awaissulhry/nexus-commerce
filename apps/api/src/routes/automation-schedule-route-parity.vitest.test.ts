@@ -1,7 +1,10 @@
 /**
  * R10 (MCP full control, part 06) — PATCH /advertising/schedules/:id answers byte for byte as before its logic moved into
- * patchAdSchedule (ads-schedule.service.ts), which turn-down-automation uses to switch a dayparting schedule off: the
- * same resume of a campaign the schedule left paused (RC2.T3), never a second path.
+ * patchAdSchedule (ads-schedule.service.ts), which turn-down-automation uses to switch a dayparting schedule off: one
+ * path, never a second.
+ *
+ * 2a (review 3.3) — switching it off no longer resumes the campaign (the RC2.T3 resume re-enabled campaigns a person had
+ * paused); it gives back the bids the schedule floored instead. The answers are unchanged; the campaign stays PAUSED.
  *
  * On a real PostgreSQL (PGlite). The snapshot beside this file was WRITTEN BY THE ROUTE BEFORE THE MOVE and is read
  * unchanged after it.
@@ -42,6 +45,7 @@ const normalise = (text: string) => text
 
 let app: FastifyInstance
 const rows: Record<string, string> = {}
+let campaignId = ''
 beforeAll(async () => {
   database = await formulaDatabase()
   const { default: advertisingRoutes } = await import('./advertising.routes.js')
@@ -51,6 +55,7 @@ beforeAll(async () => {
   await app.ready()
   await withWorkspace(business, async () => {
     const campaign = await database.client.campaign.create({ data: { name: 'PARITY CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-1', status: 'PAUSED' } })
+    campaignId = campaign.id
     rows.paused = (await database.client.adSchedule.create({ data: { campaignId: campaign.id, name: 'PARITY night', windows: [{ days: [1], startHour: 0, endHour: 6 }], enabled: true, lastApplied: 'PAUSED' } })).id
   })
 }, 180_000)
@@ -68,9 +73,11 @@ describe('R10 — the schedule route answers as before the move', () => {
     }
     await send('nope', { enabled: false })
     await send(rows.paused, { name: 'PARITY night (renamed)', timezone: 'Europe/Rome', ignored: true })
-    // Disabled while it holds the campaign paused: the campaign is resumed first.
+    // Disabled while its last record says PAUSED: the campaign keeps its status (2a — no resume).
     await send(rows.paused, { enabled: false })
     await send(rows.paused, { enabled: true })
     expect(answers.join('\n')).toMatchSnapshot()
+    const after = await withWorkspace(business, () => database.client.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { status: true } }))
+    expect(after.status).toBe('PAUSED')
   })
 })

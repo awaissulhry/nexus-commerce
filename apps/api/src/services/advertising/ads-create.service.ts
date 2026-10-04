@@ -28,6 +28,7 @@ import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
+import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
 import { AD_PRODUCT_UNSUPPORTED, adProductOf, adProductRefusal } from '@nexus/shared/ads-ad-product'
 
 /**
@@ -1445,7 +1446,8 @@ export async function resolvePortfolioCampaignIds(portfolioId: string): Promise<
   return rows.map((r) => r.id)
 }
 
-export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number }> {
+// 2a — `release`: what a save gave back (campaigns removed from the group, or every member of a group saved switched off).
+export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Promise<{ id: string; members: number; moved: number; release?: ReleaseReport }> {
   const name = (input.name || '').trim()
   if (!name) throw new Error('name is required')
   let campaignIds = [...new Set((input.campaignIds || []).filter(Boolean))]
@@ -1518,7 +1520,12 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
     })
   }
   // Campaigns removed from the group → drop their (now-orphaned) execution rows.
+  // 2a (review 3.2) — and give back what the schedule floored on them, once the rows are gone (a tick starting meanwhile
+  // then cannot floor them again). A group saved switched off (Manual) holds none of its members: same give-back.
+  const removed = await readScheduleMembers({ groupId: group.id, campaignIdNotIn: campaignIds })
   await prisma.adSchedule.deleteMany({ where: { groupId: group.id, campaignId: { notIn: campaignIds.length ? campaignIds : ['__none__'] } } })
+  const released = [...removed, ...(enabled ? [] : await readScheduleMembers({ groupId: group.id }))]
+  const release = released.length ? await releaseScheduleMembers(released, enabled ? 'campaign removed from its rank schedule' : 'its rank schedule was saved switched off') : undefined
   /**
    * HX.8 — snapshot the plan as it now stands.
    *
@@ -1547,12 +1554,15 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   } catch (e) { logger.warn('[HX.8] version snapshot failed', { id: group.id, error: (e as Error).message }) }
 
   logger.info('[Phase3] saveRankScheduleGroup', { id: group.id, name, members: campaignIds.length, moved })
-  return { id: group.id, members: campaignIds.length, moved }
+  return { id: group.id, members: campaignIds.length, moved, ...(release ? { release } : {}) }
 }
 
-export async function deleteRankScheduleGroup(id: string): Promise<{ ok: boolean; removedSchedules: number }> {
+// 2a (review 3.2) — deleting a group gives back what its schedules floored on every member, after the rows are gone.
+export async function deleteRankScheduleGroup(id: string): Promise<{ ok: boolean; removedSchedules: number; release: ReleaseReport }> {
+  const members = await readScheduleMembers({ groupId: id })
   const del = await prisma.adSchedule.deleteMany({ where: { groupId: id } })
   await prisma.rankScheduleGroup.delete({ where: { id } }).catch(() => {})
-  logger.info('[Phase3] deleteRankScheduleGroup', { id, removedSchedules: del.count })
-  return { ok: true, removedSchedules: del.count }
+  const release = await releaseScheduleMembers(members, 'its rank schedule was deleted')
+  logger.info('[Phase3] deleteRankScheduleGroup', { id, removedSchedules: del.count, restored: release.restored, deferred: release.deferred })
+  return { ok: true, removedSchedules: del.count, release }
 }
