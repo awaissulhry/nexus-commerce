@@ -5663,6 +5663,10 @@
 /* The held-Create answer, above the footer row. Full width, and its own margin so it does not
    ride the footer's border-top. */
 .h10-rb-heldnote.ktp { margin: 18px 0 0; }
+/* 4h — a refused save's Banner sits where the held note does; more than one problem is a list
+   (the base layer resets list markers, so they are set here). */
+.h10-rb-savenote { margin: 18px 0 0; }
+.h10-rb-savenote ul { margin: 6px 0 0; padding-left: 18px; list-style: disc; }
 /* ── KT-P1 / KT-P2 — Keyword Tracker ─────────────────────────────────────────────────────────
    Source order beats specificity, so these sit at the END and override the shared builder rules
    without raising selector weight ([[reference_css_source_order_beats_specificity]]). */
