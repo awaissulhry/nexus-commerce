@@ -1510,8 +1510,26 @@ const measured = <T extends Record<string, unknown>>(o: T): Partial<T> => {
  */
 const KEYWORD_RANK_SCAN_CAP = 8000
 
+/**
+ * 4m (review 3.13) — a rank reading expires after 14 days.
+ *
+ * Ranks arrive only through `POST /advertising/keyword-ranks` (a manual or file import; no collector
+ * runs on a clock), so there is no refresh interval in code to derive from. A weekly import is the
+ * slowest cadence a rank rule is useful at; twice that lets one import be late without the rule going
+ * blind, and nothing older drives a bid. Before this, a reading from months ago moved bids as if it
+ * were today's.
+ *
+ * A stale reading is ABSENT, exactly like one the source never measured (KT-P3 above: absent, never
+ * null or 0, so every rank condition refuses), and `adTarget.rankNote` says why in plain words. The
+ * same limit holds for the reading before it: a "rank change" against a reading older than the limit
+ * is not a recent change, so `rankDelta` is absent then too.
+ */
+export const KEYWORD_RANK_MAX_AGE_DAYS = 14
+
 export async function buildKeywordRankBidContexts() {
   try {
+    const freshSince = Date.now() - KEYWORD_RANK_MAX_AGE_DAYS * 864e5
+    const ageDays = (d: Date) => Math.floor((Date.now() - d.getTime()) / 864e5)
     const ranks = await prisma.keywordRank.findMany({ orderBy: [{ capturedAt: 'desc' }], take: KEYWORD_RANK_SCAN_CAP })
     if (!ranks.length) return []
     if (ranks.length === KEYWORD_RANK_SCAN_CAP) {
@@ -1572,8 +1590,16 @@ export async function buildKeywordRankBidContexts() {
         const e = kw ? latest.get(`${kw}\u001f${mkt}`) : undefined
         if (!e) return null // no rank snapshot for this keyword → skip
         const cur = e.r, prior = e.prior
-        // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing.
-        const rankDelta = prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
+        // 4m — a reading older than KEYWORD_RANK_MAX_AGE_DAYS is not used (see the note there).
+        const curFresh = cur.capturedAt.getTime() >= freshSince
+        const priorFresh = prior != null && prior.capturedAt.getTime() >= freshSince
+        // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing or stale.
+        const rankDelta = curFresh && priorFresh && prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
+        const rankNote = !curFresh
+          ? `Rank not used: the newest rank reading for this keyword is ${ageDays(cur.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+          : prior != null && !priorFresh
+            ? `Rank change not used: the reading before the newest is ${ageDays(prior.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+            : undefined
         return {
           trigger: 'KEYWORD_RANK_BID' as const,
           marketplace: mkt || null,
@@ -1581,7 +1607,8 @@ export async function buildKeywordRankBidContexts() {
           adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
-            ...measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }),
+            ...(curFresh ? measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }) : {}),
+            ...(rankNote ? { rankNote } : {}),
             ...measured(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }

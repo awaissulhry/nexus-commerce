@@ -165,6 +165,17 @@ export async function applyTopOfSearchRecommendations(opts: { windowDays?: numbe
   return { applied, rows }
 }
 
+/**
+ * 4m (review 3.7) — why another automation left a campaign alone that Hourly Bids holds (`rankOwnedCampaignIds`:
+ * an enabled goal schedule, or an enabled product plan's campaigns). Per campaign without `count`; a run's total with it.
+ */
+export function rankOwnedWhy(what: string, count?: number): string {
+  const tail = `two writers on the same ${what} would undo each other.`
+  if (count == null) return `Hourly Bids holds this campaign (an enabled schedule or product plan) and sets its ${what}, so this automation leaves it alone: ${tail}`
+  const one = count === 1
+  return `Hourly Bids holds ${count} ${one ? 'campaign' : 'campaigns'} here (an enabled schedule or product plan) and sets ${one ? 'its' : 'their'} ${what}, so this automation left ${one ? 'it' : 'them'} alone: ${tail}`
+}
+
 // ── Apex D.2 — autonomous Top-of-Search defense ───────────────────────────
 // Tune the PLACEMENT_TOP multiplier toward the target so a campaign holds the
 // top slot when ROAS allows and eases off when it doesn't. Shared by the
@@ -185,6 +196,10 @@ export interface DefendTosResult {
   applied: number
   skippedNotAllowlisted: number
   skippedPaused: number // RC2.T4 — raises skipped because dayparting paused the campaign
+  /** 4m (review 3.7) — moves left alone because Hourly Bids holds the campaign (`rankOwnedCampaignIds`). */
+  skippedRankOwned: number
+  /** 4m — the same, in plain words; absent when none was left alone. */
+  rankOwnedNote?: string
   dryRun: boolean
   sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
 }
@@ -205,12 +220,21 @@ export async function defendTopOfSearch(opts: {
   // RC2.T4 — respect dayparting: never RAISE top-of-search on a campaign that is
   // currently PAUSED (dayparting pauses dead windows; pushing the slot then just
   // queues more spend for when it un-pauses). Easing off (lower) still applies.
+  // 4m (review 3.7) — a campaign Hourly Bids holds is left alone, raise or lower: the rank engine sets its Top of
+  // Search every run, so a second writer here would only be undone (and undo it). Asked before the dry-run return, so a
+  // preview never offers the move either.
+  const { rankOwnedCampaignIds } = await import('./rank-release.service.js')
+  const rankOwned = await rankOwnedCampaignIds()
   const candidate = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
-  const skippedPaused = candidate.filter((r) => r.action === 'raise' && r.status === 'PAUSED').length
-  const actionable = candidate.filter((r) => !(r.action === 'raise' && r.status === 'PAUSED'))
+  const free = candidate.filter((r) => !rankOwned.has(r.campaignId))
+  const skippedRankOwned = candidate.length - free.length
+  const rankOwnedNote = skippedRankOwned > 0 ? rankOwnedWhy('Top of Search placement', skippedRankOwned) : undefined
+  const skippedPaused = free.filter((r) => r.action === 'raise' && r.status === 'PAUSED').length
+  const actionable = free.filter((r) => !(r.action === 'raise' && r.status === 'PAUSED'))
   const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
+  const held = { skippedRankOwned, ...(rankOwnedNote ? { rankOwnedNote } : {}) }
   if (opts.dryRun) {
-    return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, skippedPaused, dryRun: true, sample }
+    return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, skippedPaused, ...held, dryRun: true, sample }
   }
   let allowed: Set<string> | null = null
   if (opts.allowlistedOnly) {
@@ -229,7 +253,7 @@ export async function defendTopOfSearch(opts: {
     applied += 1
     if (permit) opts.guard!.settle(permit, 1, nothingHeld())
   }
-  return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, dryRun: false, sample }
+  return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, ...held, dryRun: false, sample }
 }
 
 // Rule action — same engine, allowlist-enforced, dry-run honored from rule meta.
