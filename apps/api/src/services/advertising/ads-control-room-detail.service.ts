@@ -26,23 +26,25 @@
  * "this engine wrote nothing in the window" are different facts, and a drawer that
  * rendered both as an empty list would be the same confident-blank this programme keeps
  * removing.
+ *
+ * Group 1 (1b) — the actor strings themselves now live in `ads-engine-actors.ts`, the one map
+ * this drawer, the actor list and the anomaly breaker share.
  */
 import prisma from '../../db.js'
 import { pinnedDimensions, type AuthorityDimension } from './ads-authority-pins.js'
+import { ENGINE_ACTORS, engineActorWhere, type EngineKey } from './ads-engine-actors.js'
 
 const DAY = 86_400_000
 
 /**
  * Engine key → how to find what it did.
  *
- * `actorPrefix` matches with a trailing wildcard (rank-defend carries a schedule id);
- * `actors` are exact. `writesEntities: false` marks the engines that legitimately produce
+ * The rows an engine wrote are found by its actor strings in `ads-engine-actors.ts`.
+ * `writesEntities: false` marks the engines that legitimately produce
  * no per-entity rows — ingests, the drain, the breaker — so the drawer can say so instead
  * of showing an empty list that reads like a failure.
  */
 interface EvidenceSource {
-  actors?: string[]
-  actorPrefix?: string
   writesEntities: boolean
   /** Said out loud in the drawer when there is nothing to show. */
   emptyNote: string
@@ -50,32 +52,26 @@ interface EvidenceSource {
 
 const EVIDENCE: Record<string, EvidenceSource> = {
   'rank-defend': {
-    actorPrefix: 'automation:rank-defend-',
     writesEntities: true,
     emptyNote: 'No bid or placement writes in this window.',
   },
   dayparting: {
-    actorPrefix: 'automation:dayparting-',
     writesEntities: true,
     emptyNote: 'Nothing evaluated — every live schedule is rank-goal mode, which this engine does not own.',
   },
   'budget-enforce': {
-    actors: ['automation:budget-manager-cron'],
     writesEntities: true,
     emptyNote: 'No budget changes or suppressions in this window.',
   },
   'budget-pools': {
-    actors: ['automation:budget-pool-rebalance'],
     writesEntities: true,
     emptyNote: 'No pools are configured, so there is nothing to rebalance.',
   },
   'auto-bid': {
-    actors: ['automation:auto-bid'],
     writesEntities: true,
     emptyNote: 'Runs on schedule and has proposed nothing in this window.',
   },
   'tos-defense': {
-    actors: ['automation:tos-optimizer'],
     writesEntities: true,
     emptyNote: 'Its cron has never been armed, so it has never written anything.',
   },
@@ -92,7 +88,6 @@ const EVIDENCE: Record<string, EvidenceSource> = {
     emptyNote: 'Read-only by design: it records drift and never repairs a bid.',
   },
   'coverage-engine': {
-    actors: ['automation:coverage-engine'],
     writesEntities: true,
     emptyNote: 'No coverage set is enabled yet, so it has held no term.',
   },
@@ -174,7 +169,9 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
   const cron = lever.cron
   const days = Math.min(Math.max(opts.days ?? 14, 1), 60)
   const since = new Date(Date.now() - days * DAY)
-  const src = EVIDENCE[key] ?? UNMAPPED
+  // A writing engine with no actor strings in the shared map is as unmapped as one with no entry here.
+  const declared = EVIDENCE[key]
+  const src = declared && (!declared.writesEntities || ENGINE_ACTORS.some((d) => d.key === key)) ? declared : UNMAPPED
 
   /**
    * Whether "Run now" is offered is decided by the SAME registry the trigger route
@@ -231,9 +228,7 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
   let evidence: EngineEvidenceRow[] = []
   let evidenceNote: string | null = null
   if (src.writesEntities) {
-    const actorWhere = src.actorPrefix
-      ? { userId: { startsWith: src.actorPrefix } }
-      : { userId: { in: src.actors ?? [] } }
+    const actorWhere = engineActorWhere(key as EngineKey)
     const rows = await prisma.advertisingActionLog.findMany({
       where: { ...actorWhere, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },

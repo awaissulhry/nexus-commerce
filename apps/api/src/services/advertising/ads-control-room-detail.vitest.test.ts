@@ -40,6 +40,8 @@ vi.mock('../../db.js', () => ({
 const getEngineLevers = vi.fn(async () => ({
   levers: [
     { key: 'rank-defend', name: 'Rank & Dayparting', cron: 'ad-rank-defend' },
+    { key: 'dayparting', name: 'Classic dayparting', cron: 'ad-dayparting' },
+    { key: 'budget-enforce', name: 'Budget enforcement', cron: 'ad-budget-enforce' },
     { key: 'anomaly-guard', name: 'Anomaly breaker', cron: 'ads-anomaly-guard' },
     // Registered engine this file has NO evidence mapping for.
     { key: 'brand-new-engine', name: 'Something added next week', cron: 'a-brand-new-cron' },
@@ -158,5 +160,29 @@ describe('ACR.1.2e — a failed run is not shown blank', () => {
     }])
     const d = await getEngineDetail('rank-defend')
     expect(d!.runs[0].durationMs).toBeNull()
+  })
+})
+
+describe('1b — the drawer finds an engine\'s rows through the ONE shared actor map', () => {
+  const whereOf = () => (actionLogFindMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where
+
+  it('rank-defend includes its product plans (automation:rank-plan-…), which the old local map missed', async () => {
+    await getEngineDetail('rank-defend')
+    expect(whereOf()).toMatchObject({
+      OR: [{ userId: { startsWith: 'automation:rank-defend-' } }, { userId: { startsWith: 'automation:rank-plan-' } }],
+    })
+  })
+
+  it('dayparting leaves out the one-shots a person causes by turning a schedule off', async () => {
+    await getEngineDetail('dayparting')
+    expect(whereOf()).toMatchObject({
+      OR: [{ userId: { startsWith: 'automation:dayparting-' } }],
+      NOT: { userId: { in: ['automation:dayparting-disable', 'automation:dayparting-delete'] } },
+    })
+  })
+
+  it('budget enforcement includes a run started by hand (automation:budget-manager)', async () => {
+    await getEngineDetail('budget-enforce')
+    expect(whereOf()).toMatchObject({ OR: [{ userId: { in: ['automation:budget-manager-cron', 'automation:budget-manager'] } }] })
   })
 })

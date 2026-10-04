@@ -105,8 +105,10 @@ describe('R6 — list-automations', () => {
     const withMoney = await call('list-automations', { area: 'amazon-ads' })
     const noMoney = await call('list-automations', { area: 'amazon-ads' }, adsOnly)
     const a3 = (out: { data?: Row }) => out.data!.items.find((e: Row) => e.id === 'A3')
-    expect(a3(withMoney).caps).toEqual({ maxActionsPerHour: 250, maxHourlySpendCentsEur: 12_345, defaultTargetAcosPct: null })
-    expect(a3(noMoney).caps).toEqual({ maxActionsPerHour: 250 })
+    // 1b — the per-engine hourly breaker limits are counts, not money: both readers see them.
+    const engineChangesPerHour = expect.objectContaining({ 'rank-defend': 1200, unknown: 300 })
+    expect(a3(withMoney).caps).toEqual({ maxActionsPerHour: 250, maxHourlySpendCentsEur: 12_345, defaultTargetAcosPct: null, engineChangesPerHour })
+    expect(a3(noMoney).caps).toEqual({ maxActionsPerHour: 250, engineChangesPerHour })
 
     const poolWith = await call('automation-detail', { automation: 'A9' })
     const poolWithout = await call('automation-detail', { automation: 'A9' }, adsOnly)
