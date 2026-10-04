@@ -16655,7 +16655,8 @@ model AdBlueprintApplication {
 /// term from being negated by it. Scale Insights ships Whitelist and Blacklist as
 /// two of its eleven named algorithms for exactly this reason.
 ///
-/// BLACKLIST = always negate this term, everywhere, regardless of performance.
+/// BLACKLIST ("always negate") is REMOVED (ads fix 5c, 2026-10-04): it was saved and
+/// counted but no engine ever read it. The API refuses it with a 400 (0 live rows on 2026-10-04).
 ///
 /// Matching is on the lowercased, whitespace-collapsed term. `isPrefix` widens it
 /// to a prefix match so "xavia" can protect every branded variant without listing
@@ -16667,7 +16668,7 @@ model AdKeywordProtection {
   // Business ownership comes from verified database context.
   workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String   @id @default(cuid())
-  /// WHITELIST | BLACKLIST
+  /// WHITELIST. (BLACKLIST is removed and refused by the API; see the model comment.)
   mode        String
   /// Lowercased, whitespace-collapsed match text.
   term        String

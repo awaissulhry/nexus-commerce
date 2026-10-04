@@ -7,7 +7,8 @@ POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id1>",
 POST 409 {"ok":false,"id":"<id1>","error":"“gale jacket” is already protected with EXACT matching","code":"already_protected","existingMatchType":"EXACT"}
 POST 409 {"ok":false,"id":"<id1>","error":"“gale jacket” is already protected with EXACT matching. A protection cannot be changed in place — delete it and re-add it as CONTAINS.","code":"already_protected","existingMatchType":"EXACT"}
 POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id2>","mode":"WHITELIST","term":"gale","isPrefix":true,"matchType":null,"marketplace":"IT","campaignId":"<id3>","reason":null,"createdBy":"user:parity-person","createdAt":"<time>","updatedAt":"<time>"}}
-POST 200 {"ok":true,"item":{"workspaceId":"nexus_legacy_workspace","id":"<id4>","mode":"BLACKLIST","term":"cheap","isPrefix":false,"matchType":"CONTAINS","marketplace":null,"campaignId":null,"reason":null,"createdBy":"user:parity-person","createdAt":"<time>","updatedAt":"<time>"}}
+POST 400 {"ok":false,"error":"“Always negate” was removed: nothing ever negated these terms. To block a search term, add it as a negative keyword.","code":"blacklist_removed"}
+POST 400 {"ok":false,"error":"“Always negate” was removed: nothing ever negated these terms. To block a search term, add it as a negative keyword.","code":"blacklist_removed"}
 DELETE 404 {"ok":false,"error":"not_found"}
 DELETE 200 {"ok":true}"
 `;

@@ -10070,7 +10070,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── ADX G4 — protected keywords ─────────────────────────────────────────────
   //
-  // WHITELIST = never negate this term. BLACKLIST = always negate it.
+  // WHITELIST = never negate this term. BLACKLIST ("always negate") is removed (ads fix 5c): no engine ever read it,
+  // and POST now answers 400 for it (ads-guardrail.service.ts).
   //
   // Enforced in ads-write-gate.ts, the single chokepoint every write to Amazon passes
   // through — deliberately NOT in the harvest service, because harvest is not the only

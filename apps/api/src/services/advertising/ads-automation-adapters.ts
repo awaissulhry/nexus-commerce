@@ -792,15 +792,13 @@ const A15: AutomationAdapter = {
   crons: [], schedule: null,
   env: noEnv,
   async rows() {
-    const terms = await prisma.adKeywordProtection.findMany({ orderBy: { term: 'asc' }, take: 500 })
+    // Ads fix 5c — WHITELIST only: "always negate" (BLACKLIST) was removed and no engine ever read it.
+    const terms = await prisma.adKeywordProtection.findMany({ where: { mode: 'WHITELIST' }, orderBy: { term: 'asc' }, take: 500 })
     return terms.map((t) => ({ id: t.id, name: t.term, level: 'AUTO' as const, mode: t.mode, matchType: t.matchType, isPrefix: t.isPrefix, marketplace: t.marketplace, campaignId: t.campaignId }))
   },
   async state() {
-    const [white, black] = await Promise.all([
-      prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }),
-      prisma.adKeywordProtection.count({ where: { mode: 'BLACKLIST' } }),
-    ])
-    return { level: null, reason: 'Settings: they never act on their own.', state: `${white} protected terms, ${black} always-negate terms.`, rows: { total: white + black, byLevel: {} } }
+    const white = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
+    return { level: null, reason: 'Settings: they never act on their own.', state: `${white} protected terms.`, rows: { total: white, byLevel: {} } }
   },
   noSwitch: 'protected terms are set, not switched (set-ad-guardrail)',
 }
