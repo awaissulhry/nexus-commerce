@@ -8,11 +8,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *    put "Arancia" (Shared) in the listing.
  *  · live re-publish: a live item is validated like a new one (missing value, collision), never silently passed.
  */
-const m = vi.hoisted(() => ({ itemId: null as string | null, variants: [] as Array<{ id: string; sku: string; included: boolean; axisValues: Record<string, string> }>, platformAttributes: {} as Record<string, unknown> }))
+const m = vi.hoisted(() => ({ itemId: null as string | null, variants: [] as Array<{ id: string; sku: string; included: boolean; axisValues: Record<string, string> }>, platformAttributes: {} as Record<string, unknown>, dictionary: [] as unknown[] }))
 
 // Images rebuild P2c — not on the media plan: the builder keeps its per-product galleries (studio-publication-ebay-media tests the plan path).
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
-vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] } } }))
+// E1b — the publisher reads the dictionary and the market language for the variation values' market words.
+vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: async () => ({ languages: ['it'] }) }, customAttribute: { findMany: async () => m.dictionary }, channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] } } }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'token' } }))
 vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async (_db: unknown, input: { body: string }) => ({ html: `<p>${input.body}</p>`, warnings: [] }) }))
@@ -81,6 +82,7 @@ const aspects = (row: Record<string, unknown>) => Object.fromEntries(Object.entr
 beforeEach(() => {
   process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX
   m.itemId = null
+  m.dictionary = []
   m.platformAttributes = {}
   m.variants = [
     { id: 'c1', sku: 'FAM-NERO-M', included: true, axisValues: { Colore: 'Nero', Taglia: 'M' } },
@@ -169,5 +171,39 @@ describe('eBay studio publish — channel-only axes (sheet pop-up P3)', () => {
     m.platformAttributes = own(FIT, 'Marca')
     m.variants.forEach(v => { v.axisValues[FIT] = 'Xavia' })
     await expect(buildEbayListingInput(facts(), { currency: 'EUR' })).rejects.toThrow(/error 219451/)
+  })
+})
+
+/**
+ * E1b (product sheet consistency, 2026-10-05) — a stored value with no mapped eBay cell went out as stored: the sheet's
+ * code `black` reached eBay. It now goes out as the dictionary option's word in the market's language, the same word the
+ * eBay cell shows when it is mapped; a pinned cell is still sent as it is.
+ */
+describe('eBay studio publish — a stored colour or size goes out as the market word', () => {
+  const option = (code: string, label: string, labels?: Record<string, string>) => ({ id: `o-${code}`, code, label, metadata: labels ? { labels } : null, synonyms: [], sortOrder: 0, archivedAt: null })
+  beforeEach(() => {
+    m.dictionary = [
+      { id: 'a-color', code: 'color', label: 'Color', semanticKey: 'color', archivedAt: null, options: [option('black', 'Nero', { en: 'Black', it: 'Nero', de: 'Schwarz' }), option('orange', 'Arancione', { it: 'Arancione' })] },
+      { id: 'a-size', code: 'size', label: 'Size', semanticKey: 'size', archivedAt: null, options: [option('xs', 'XS'), option('m', 'M')] },
+    ]
+    m.variants = [
+      { id: 'c1', sku: 'FAM-BLACK-XS', included: true, axisValues: { Colore: 'black', Taglia: 'xs' } },
+      { id: 'c2', sku: 'FAM-ORANGE-M', included: true, axisValues: { Colore: 'orange', Taglia: 'M' } },
+    ]
+  })
+
+  it('the sheet\'s codes go out as eBay IT\'s words: black → Nero, xs → XS, orange → Arancione', async () => {
+    const built = await buildEbayListingInput(facts(), { currency: 'EUR' })
+    expect(built.variants.map(aspects)).toEqual([{ aspect_Colore: 'Nero', aspect_Taglia: 'XS' }, { aspect_Colore: 'Arancione', aspect_Taglia: 'M' }])
+    expect([...(built.shared.variationSpecificsSet?.Colore ?? [])].sort()).toEqual(['Arancione', 'Nero'])
+  })
+  it('a pinned eBay cell is sent as it is — the operator can keep the old word', async () => {
+    const built = await buildEbayListingInput(facts({ c1: { color: mapped('black') } }), { currency: 'EUR' })
+    expect(built.variants.map(aspects)).toEqual([{ aspect_Colore: 'black', aspect_Taglia: 'XS' }, { aspect_Colore: 'Arancione', aspect_Taglia: 'M' }])
+  })
+  it('positive control: with an empty dictionary the stored values go out as they are', async () => {
+    m.dictionary = []
+    const built = await buildEbayListingInput(facts(), { currency: 'EUR' })
+    expect(built.variants.map(aspects)).toEqual([{ aspect_Colore: 'black', aspect_Taglia: 'xs' }, { aspect_Colore: 'orange', aspect_Taglia: 'M' }])
   })
 })

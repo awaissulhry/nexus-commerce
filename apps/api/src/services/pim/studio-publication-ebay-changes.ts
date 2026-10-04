@@ -5,6 +5,7 @@ import type { EbayPublication } from './studio-publication-ebay.js'
 import { planPublicationChanges, publicationChangeId, selectPublicationChanges, type PublicationChangeInput } from './studio-publication-changes.js'
 import { compareEbayContent, ebayAspectKey, ebayContentFromItem, ebayXmlList, ebayXmlObject, ebayXmlText, parseEbayItemDocument } from '../channel-drift/ebay-content-compare.js'
 import { escapeXml } from '../ebay-trading-api.service.js'
+import { ebayRenameNote, ebayVariationRenames } from './studio-publication-ebay-problems.js'
 
 type ProductIdentity = { productId: string; sku: string }
 export interface EbayChangePlan {
@@ -251,6 +252,11 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
     const keptAll = [...new Set([...kept, ...(publication.full?.keptRoots ?? [])])]
     if (live && keptAll.length) warn(`Full update leaves ${keptAll.length === 1 ? 'this field' : `these ${keptAll.length} fields`} as eBay holds ${keptAll.length === 1 ? 'it' : 'them'}: ${keptAll.join(', ')}.`)
     for (const sku of publication.full?.added ?? []) warn(`${sku} is new on this eBay item. Full update adds it at quantity 0 (it never sends stock); send its stock from the Matrix (Push quantity now) after the publish.`)
+    // E1b (decision 9) — a live variation value the Full update renames (`black` → `Nero`) is its own line, never silent.
+    if (live) for (const rename of ebayVariationRenames(current, live)) {
+      const product = identities.find(identity => identity.sku === rename.sku)
+      fullIssues.push({ productId: product?.productId ?? owner.productId, sku: rename.sku, severity: 'warning', message: ebayRenameNote(rename) })
+    }
   }
   return { kind: 'ebay-changes', changes, remoteRevision: publication.liveRevision ?? (publication.itemId ? 'unavailable' : 'new'), publication,
     products: full ? identities : products, ownerProductId: owner.productId, liveSpecifics: theirs?.itemSpecifics ?? {}, aspectNames, createWrites,

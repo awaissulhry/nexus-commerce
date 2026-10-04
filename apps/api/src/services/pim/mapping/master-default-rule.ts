@@ -45,6 +45,10 @@ export function masterDefaultRule(field: DefaultRuleField | undefined, masterKey
   // Item 1 (2026-10-05) — an OPEN Amazon list the gender concept links (department: the market's own words, `Uomo`)
   // reads the same step, so its value is matched to the market word by the concept's synonyms (`men` → `Uomo`).
   const openConceptList = !!linked && OPEN_LIST_CONCEPTS.has(linked.concept) && concepts?.channel === 'AMAZON' && field.mode === 'open' && !!field.options?.length
+  // E1b (2026-10-05) — an automatic link into an eBay ITEM SPECIFIC reads the value maps whatever its list mode (eBay's
+  // colours and sizes are open lists): a value-map row still wins, and on a miss eBay gets the dictionary option's word
+  // in the market's language (`black` → `Nero`, resolve-batch `ebayMarketLabel`). A rule the operator wrote is untouched.
+  const ebayAspect = concepts?.channel === 'EBAY' && field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'itemSpecifics'
   const transforms = [
     // Amazon's ONE search-term string: the keywords joined by spaces, exactly as the sheet and the publish join them
     // (`amazonSearchTerms`). The old `replace(text(…), ", ", " ")` also rewrote a comma inside a keyword.
@@ -52,7 +56,7 @@ export function masterDefaultRule(field: DefaultRuleField | undefined, masterKey
     // PLAN §4.3 — any automatic link into a STRICT channel list reads the value maps, so one row maps a value for
     // every product. With no row for a value, `keep` sends it as it is (what happened before) and the channel
     // validator flags an off-list value.
-    ...(strict || openConceptList ? [{ type: 'valueMap' as const, attribute: source }] : []),
+    ...(strict || openConceptList || ebayAspect ? [{ type: 'valueMap' as const, attribute: source }] : []),
   ]
   return {
     source: source === 'name' ? 'title' : source,

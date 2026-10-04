@@ -17,7 +17,8 @@ const m = vi.hoisted(() => ({ currencyFill: undefined as string | undefined, fin
 // CHMAP M4: no ACTIVE mapping version, so the builder sends exactly what it sent before.
 // Images rebuild P2c — not on the media plan: the builder keeps its per-product galleries (studio-publication-ebay-media tests the plan path).
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
-vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: m.findFirst }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) } } }))
+// E1b — the publisher reads the dictionary and the market language for the variation values' market words.
+vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: async () => ({ languages: ['it'] }) }, customAttribute: { findMany: async () => [] }, channelListing: { findFirst: m.findFirst }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) } } }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'token' } }))
 vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async (_db: unknown, input: { body: string }) => ({ html: `<p>${input.body}</p>`, warnings: [] }) }))

@@ -13,6 +13,8 @@ import { isOffListError, validateChannelValue } from './validate-channel-value.j
 import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import { conceptListMatcher, masterDefaultRule } from './master-default-rule.js'
+import { ebayMarketWords } from '../ebay-market-label.js'
+import { variationDictionary } from '../variation-dictionary.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
 /**
@@ -300,6 +302,14 @@ export async function resolveBatch(input: {
   }
 
   const wanted = input.fieldKeys && input.fieldKeys.length > 0 ? new Set(input.fieldKeys) : null
+  // E1b (2026-10-05) — eBay gets a dictionary value in the market's word (`black` → `Nero` on eBay IT, `Schwarz` on DE),
+  // asked by the value-map step of an AUTOMATIC item-specific link on a miss: a value-map row wins, and a listing pin or
+  // a rule the operator wrote never reaches it. The dictionary is read once, and only when such a link is in the batch.
+  const ebayWordAttribute = (field: CatalogueField, rules: Record<string, FieldMappingRule>): string | null =>
+    channel === 'EBAY' && field.ruleOrigin === 'master' && !rules[field.fieldKey]
+      ? (field.rule?.transforms?.find(t => t.type === 'valueMap') as { attribute?: string } | undefined)?.attribute ?? null : null
+  const marketWord = channel === 'EBAY' && [...catalogueByCategory].some(([cat, { fields }]) => { const rules = getRulesFor(mapping, cat); return fields.some(f => ebayWordAttribute(f, rules)) })
+    ? ebayMarketWords(await variationDictionary(), languages[0]) : null
   // Item 1 (2026-10-05) — each list field's synonym matcher, built once per catalogue field (not per product).
   const listMatchers = new Map<CatalogueField, ReturnType<typeof conceptListMatcher>>()
   const listMatcherFor = (field: CatalogueField) => {
@@ -451,6 +461,9 @@ export async function resolveBatch(input: {
       // stored listing value never reaches this: it is the listing's own and is shown and sent as typed (and flagged).
       const listMatcher = listMatcherFor(field)
       const synonymMatches: Array<{ from: string; to: string }> = []
+      // E1b — after the synonym matcher (a strict list keeps its ONE option), the market word; null = no change.
+      const wordAttribute = marketWord && rule === field.rule ? ebayWordAttribute(field, rules) : null
+      const marketWordFor = wordAttribute ? (from: string) => { const word = marketWord!(wordAttribute, from); return word !== from ? word : null } : null
       const r: import('../resolve-channel-field.js').ResolvedChannelField = contentHit && (contentHit.tier === 'pin' || !rule)
         ? { content: contentHit.content, fieldKey: field.fieldKey, value: contentHit.value, raw: contentHit.value, source: contentHit.tier === 'pin' && !contentHit.follows ? 'override' : 'catalogRule',
             legacySource: 'source', required: rule?.required === true, language: contentHit.language, requested: locale,
@@ -466,10 +479,10 @@ export async function resolveBatch(input: {
         link,
         transformCtx: {
           lookupValueMap,
-          ...(listMatcher ? { matchListValue: (from: string) => {
-            const to = listMatcher(from)
-            if (to != null) synonymMatches.push({ from, to })
-            return to
+          ...(listMatcher || marketWordFor ? { matchListValue: (from: string) => {
+            const to = listMatcher?.(from) ?? null
+            if (to != null) { synonymMatches.push({ from, to }); return to }
+            return marketWordFor?.(from) ?? null
           } } : {}),
           lookupSizeScale,
           maxLength: field.maxLength ?? undefined,

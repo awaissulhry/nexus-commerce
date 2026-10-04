@@ -5,6 +5,9 @@ import { readExcludedListingIds } from './variation-excluded.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { parseOwnAxisKey } from '@nexus/shared/variation-mapping'
 import { ownAxisValuesFor, storedOwnAxisKeys } from './variation-own-axes.js'
+import { marketLanguages } from './market-languages.js'
+import { variationDictionary } from './variation-dictionary.js'
+import { ebayMarketWords } from './ebay-market-label.js'
 
 export function storedVariationValues(product: { categoryAttributes: unknown; variantAttributes: unknown }, axes: string[]): Record<string, string> {
   const bag = (value: unknown): Record<string, string> => value && typeof value === 'object' && !Array.isArray(value)
@@ -22,28 +25,43 @@ export function storedVariationValues(product: { categoryAttributes: unknown; va
  * VTR step 0 — the CHANNEL value of each included axis, taken from the resolved cells a publisher already holds (pins,
  * value maps): the value the Information sheet shows (`axisValuesFromCells`). A cell the resolver did not map keeps the
  * stored value; a mapped blank is a missing value, never a silent fallback to Shared.
+ *
+ * E1b (2026-10-05) — `marketWord` (eBay only, `ebayMarketWords`): a stored value that goes out as it is (no mapped cell,
+ * or a channel-only axis from a Shared attribute) is sent as the dictionary option's word in the market's language
+ * (`black` → `Nero`), the same word the resolver gives a mapped eBay cell. A mapped cell (a pin, a value map) is sent as
+ * the cell shows it.
  */
 export function channelAxisValues(
   stored: Record<string, string>,
   axes: Array<{ axisKey: string; familyKey: string; included: boolean }>,
   cells: Record<string, { value?: unknown; status?: string } | undefined>,
   fields: Array<{ fieldKey: string; sheetKey?: string | null }>,
+  marketWord?: ((attribute: string, value: string) => string) | null,
 ): Record<string, string> {
   const values = { ...stored }
+  const asStored = (key: string, attribute: string) => {
+    if (marketWord && typeof values[key] === 'string' && values[key].trim()) values[key] = marketWord(attribute, values[key])
+  }
   for (const axis of axes.filter(a => a.included)) {
     // Sheet pop-up P3 — a channel-only axis: `own:shared:` keeps the Shared attribute value it was loaded with; an
     // `own:channel:<column>` value is that column's cell here (never the Shared value), matched on the sheet key.
     const own = parseOwnAxisKey(axis.familyKey)
-    if (own?.from === 'shared') continue
+    if (own?.from === 'shared') { asStored(axis.familyKey, own.field); continue }
     const field = own
       ? fields.find(f => (f.sheetKey ?? f.fieldKey) === own.field) ?? fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === canonicalVariantAxis(own.field))
       : fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === axis.axisKey)
     const cell = field ? cells[field.fieldKey] : undefined
-    if (cell?.status !== 'mapped') continue
+    if (cell?.status !== 'mapped') { if (!own) asStored(axis.familyKey, axis.familyKey); continue }
     const value = cell.value
     values[axis.familyKey] = (typeof value === 'string' && value.trim()) || typeof value === 'number' || typeof value === 'boolean' ? String(value) : ''
   }
   return values
+}
+
+/** E1b (2026-10-05) — the eBay market word of one market (`channelAxisValues`' `marketWord`): one dictionary read. */
+export async function loadEbayMarketWords(market: string): Promise<(attribute: string, value: string) => string> {
+  const [dictionary, languages] = await Promise.all([variationDictionary(), marketLanguages('EBAY', market)])
+  return ebayMarketWords(dictionary, languages[0])
 }
 
 /** Exact listing context for non-sheet consumers. Ambiguous accounts are an error, never first-row wins. */

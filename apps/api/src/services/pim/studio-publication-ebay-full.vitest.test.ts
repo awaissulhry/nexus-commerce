@@ -176,3 +176,23 @@ describe('the eBay Full update review', () => {
     expect(() => compileSelection(plan, plan.changes.filter(c => c.locked).map(c => c.id), 'review')).toThrow('This Full update cannot be sent. Review again.')
   })
 })
+
+// E1b (decision 9, Owner 2026-10-05) — a colour live on eBay as the code `black` goes out as the market word `Nero` on the
+// next Full update. The review says so as its own line, per variation, with how to keep the old word; it blocks nothing.
+describe('the eBay Full update review names each renamed variation value', () => {
+  const withColour = (title: string, colour: string) => item(title, { Brand: 'Nexus' }).replace(variation('CHILD'), variation('CHILD', colour))
+  const renaming = (ours: string, theirs: string): EbayPublication => ({ ...publication(fullRevision({ xml: request(withColour('New title', ours)), extras: [] })),
+    liveContent: parseEbayItemDocument(withColour('Old title', theirs)) })
+
+  it('black → Nero on CHILD is one warning on its row: what changes, and how to keep the old word', async () => {
+    const plan = await prepareEbayChanges(facts(), renaming('Nero', 'black'), baseline(), { full: true })
+    expect(plan.fullIssues).toContainEqual({ productId: 'child', sku: 'CHILD', severity: 'warning', message: 'CHILD: Colour changes on eBay: black → Nero. '
+      + 'eBay may refuse to rename a variation, most of all one with sales: it then refuses the whole Full update and nothing changes. To keep "black", type it in this row\'s Colour cell on the eBay sheet.' })
+    expect(plan.fullIssues?.filter(issue => issue.severity === 'error')).toEqual([])
+    expect(plan.changes.find(change => change.productId === 'child' && change.field === 'variation')).toMatchObject({ locked: true, selectedByDefault: true })
+  })
+  it('an unchanged value adds no line', async () => {
+    const plan = await prepareEbayChanges(facts(), renaming('Nero', 'Nero'), baseline(), { full: true })
+    expect(plan.fullIssues?.some(issue => issue.message.includes('changes on eBay'))).toBe(false)
+  })
+})

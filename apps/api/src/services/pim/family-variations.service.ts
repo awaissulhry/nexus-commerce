@@ -20,7 +20,8 @@ import { produceReadinessForProducts } from './readiness-index.service.js'
 import { variationBag } from './shared-variation-values.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { variationAxisValue } from './variation-collisions.js'
-import { attributeForAxis, codeForNewOption, matchValue, valueIdentity, type DictionaryAttribute } from './family-variations-core.js'
+import { attributeForAxis, codeForNewOption, matchValue, valueIdentity } from './family-variations-core.js'
+import { variationDictionary } from './variation-dictionary.js'
 
 export class FamilyVariationError extends Error {
   constructor(message: string, readonly status = 409, readonly details?: Record<string, unknown>) {
@@ -42,13 +43,7 @@ export interface VariationValueChange {
 type Bag = Record<string, unknown>
 const bag = (value: unknown): Bag => value && typeof value === 'object' && !Array.isArray(value) ? value as Bag : {}
 
-/** The business's attribute dictionary, as the writers read it (the eBay import plans a new family's axes against it too). */
-export async function variationDictionary(): Promise<DictionaryAttribute[]> {
-  return prisma.customAttribute.findMany({ where: { archivedAt: null }, orderBy: { code: 'asc' }, select: {
-    id: true, code: true, label: true, semanticKey: true, archivedAt: true,
-    options: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { id: true, code: true, label: true, metadata: true, synonyms: true, sortOrder: true, archivedAt: true } },
-  } })
-}
+export { variationDictionary }
 
 export async function setFamilyVariationValues(familyId: string, input: { expectedVersion: number; changes: VariationValueChange[] }) {
   if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new FamilyVariationError('An observed family version is required.', 400)

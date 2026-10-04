@@ -6,7 +6,7 @@ import { loadEbaySpec } from './channel-specs/index.js'
 import { buildFlatRow } from '../ebay-variation-push.service.js'
 import { buildSharedListingInput } from '../ebay-shared-listing-push.service.js'
 import { buildAddFixedPriceItemXml, callTradingApi, escapeXml, siteIdForMarket, TradingApiFailure, type AddFixedPriceItemInput, type TradingCallResult } from '../ebay-trading-api.service.js'
-import { channelAxisValues, loadStoredVariationProjection } from './stored-variation-projection.js'
+import { channelAxisValues, loadEbayMarketWords, loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
@@ -32,7 +32,7 @@ import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follow
 import { reconcileEbayPolicies } from '../ebay-policy-reconcile.service.js'
 import { ebayAccountService } from '../ebay-account.service.js'
 import { EBAY_POLICY_FIELD, EBAY_POLICY_KINDS, ebayLocationKnownMissing, ebayMarketplaceId, ebayPolicyKnownMissing, isCompleteEbayLocation, resolveEbayItemLocation, usableEbayLocation, type EbayPolicyKind } from '../ebay-account-defaults.js'
-import { EbaySendingOff, ebayFieldLabel, ebayProblems, stripSku, type EbayProblems } from './studio-publication-ebay-problems.js'
+import { EbaySendingOff, ebayFieldLabel, ebayProblems, ebayRenameRefusal, ebayVariationRenames, stripSku, type EbayProblems } from './studio-publication-ebay-problems.js'
 import { ebaySendsLive } from './studio-publication-ebay-verify.js'
 import { ebayTradingPackage } from './ebay-packages.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
@@ -494,9 +494,11 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   const parentRow = rows[0], variants = products.length > 1 ? rows.slice(1) : rows
   if (products.length > 1) {
     const { input, cell } = await loadStoredVariationProjection({ productId: parent.id, channel: 'EBAY', market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
+    // E1b (2026-10-05) — a stored value that goes out as it is is sent in the market's word (`black` → `Nero`).
+    const marketWord = await loadEbayMarketWords(scope.marketplace)
     // VTR step 0 — the channel cells (pins, value maps) the Information sheet shows, not the Shared values.
     input.family.variants = input.family.variants?.map(v => ({ ...v, included: products.some(p => p.id === v.id),
-      axisValues: channelAxisValues(v.axisValues, cell.axes, facts.resolved[0]?.products.find(p => p.productId === v.id)?.cells ?? {}, facts.resolved[0]?.catalogue?.fields ?? []) }))
+      axisValues: channelAxisValues(v.axisValues, cell.axes, facts.resolved[0]?.products.find(p => p.productId === v.id)?.cells ?? {}, facts.resolved[0]?.catalogue?.fields ?? [], marketWord) }))
     const projection = resolveVariationProjection(input)
     // A live re-publish is validated like a first one: the review must not compare a structure that could not be sent.
     const structure = variationReadinessItems(projection, `EBAY ${scope.marketplace}`).filter(i => i.severity === 'error')
@@ -801,6 +803,11 @@ export async function prepareEbayPublication(facts: PublicationFacts, options: {
     xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings), ...(full ? { full } : {}) }
 }
 
+/** The live variation values this Revise renames; none when its XML cannot be read (eBay's own text then stands). */
+function renamesOf(xml: string, live: Record<string, unknown>) {
+  try { return ebayVariationRenames(parseEbayItemDocument(xml), live) } catch { return [] }
+}
+
 export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string,
   beforeSend?: (request: { operation: string; xml: string }) => Promise<void>): Promise<EbayPublicationReceipt> {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw Object.assign(new Error('Live eBay publication was disabled.'), { notSent: true })
@@ -832,6 +839,10 @@ export async function sendEbayPublication(plan: EbayPublication, accountId: stri
       if (error.priorItemId) return { reference: error.priorItemId, warnings: [...validationWarnings, error.message] }
       throw error
     }
+    // E1b — a Full update that renamed live variation values and was refused for it, in plain words (eBay's text kept).
+    const renamed = error instanceof TradingApiFailure && plan.itemId && plan.full && plan.liveContent
+      ? ebayRenameRefusal(error, renamesOf(plan.xml, plan.liveContent)) : null
+    if (renamed) markNotSent(new Error(renamed))
     if (error instanceof Error && /^eBay (?:Add|Revise)FixedPriceItem Failure:/.test(error.message)) markNotSent(error)
     throw error
   }
