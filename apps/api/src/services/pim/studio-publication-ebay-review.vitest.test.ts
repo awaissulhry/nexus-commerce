@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 const m = vi.hoisted(() => ({
   mode: 'live' as string, stock: 3, pa: {} as Record<string, Record<string, unknown>>, listing: {} as Record<string, Record<string, unknown>>,
-  category: {} as Record<string, string | null>, metadata: {} as Record<string, unknown>, products: ['p', 'c1', 'c2'],
+  category: {} as Record<string, string | null>, metadata: {} as Record<string, unknown>, products: ['p', 'c1', 'c2'], market: 'IT',
   snapshot: vi.fn(), specs: [] as string[], trading: vi.fn(), created: [] as unknown[], factsIssues: [] as unknown[],
 }))
 
@@ -59,7 +59,7 @@ vi.mock('./stored-variation-projection.js', async original => {
   } }
 })
 
-import { prepareEbayPublication } from './studio-publication-ebay.js'
+import { EBAY_EU_SAFETY_NOTE, prepareEbayPublication } from './studio-publication-ebay.js'
 import { EbayPublicationProblems, EbaySendingOff, ebayCheckIssue, tradingErrors } from './studio-publication-ebay-problems.js'
 import { previewStudioPublication } from './studio-publication.service.js'
 import { TradingApiFailure } from '../ebay-trading-api.service.js'
@@ -82,7 +82,7 @@ function facts(): any {
   const single = m.products.length === 1
   const rows = m.products.map(id => product(id, id === 'p' ? { isParent: true } : id.startsWith('c') ? { parentId: 'p' } : {}))
   return {
-    scope: { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' },
+    scope: { channel: 'EBAY', marketplace: m.market, accountId: 'acc' },
     destination: { aliasKey: null, currency: 'EUR', familyId: rows[0].id },
     account: { displayName: 'Motovento eBay', connectionMetadata: m.metadata },
     aliasLabel: 'Primary listing', excluded: 0, skipped: [], issues: m.factsIssues, revision: 'facts-1',
@@ -94,9 +94,10 @@ function facts(): any {
 const SNAPSHOT = {
   fulfillmentPolicies: [{ id: 'ship-it', name: 'Spedizione', marketplaceId: 'EBAY_IT' }], paymentPolicies: [{ id: 'pay-it', name: 'Pagamento', marketplaceId: 'EBAY_IT' }],
   returnPolicies: [{ id: 'ret-it', name: 'Reso', marketplaceId: 'EBAY_IT' }],
-  locations: [{ key: 'warehouse', name: 'Magazzino', country: 'IT', postalCode: '47822', city: 'Santarcangelo di Romagna', enabled: true }],
+  // A made-up town and postal code (never a real address in a fixture).
+  locations: [{ key: 'warehouse', name: 'Magazzino', country: 'IT', postalCode: '99999', city: 'Testville', enabled: true }],
 }
-const DEFAULTS = { ebayPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'pay', returnPolicyId: 'r' }, itemLocation: { country: 'IT', postalCode: '47822' } }
+const DEFAULTS = { ebayPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'pay', returnPolicyId: 'r' }, itemLocation: { country: 'IT', postalCode: '99999' } }
 async function problemsOf(promise: Promise<unknown>) {
   const error = await promise.then(() => null, (e: unknown) => e)
   expect(error).toBeInstanceOf(EbayPublicationProblems)
@@ -106,7 +107,7 @@ async function problemsOf(promise: Promise<unknown>) {
 beforeEach(() => {
   process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX
   delete process.env.EBAY_ITEM_COUNTRY; delete process.env.EBAY_ITEM_LOCATION; delete process.env.EBAY_ITEM_POSTAL_CODE
-  m.mode = 'live'; m.stock = 3; m.pa = {}; m.listing = {}; m.category = {}; m.metadata = structuredClone(DEFAULTS); m.products = ['p', 'c1', 'c2']; m.factsIssues = []
+  m.mode = 'live'; m.stock = 3; m.pa = {}; m.listing = {}; m.category = {}; m.metadata = structuredClone(DEFAULTS); m.products = ['p', 'c1', 'c2']; m.factsIssues = []; m.market = 'IT'
   m.snapshot.mockReset().mockResolvedValue(structuredClone(SNAPSHOT)); m.specs = []; m.created = []
   m.trading.mockReset().mockResolvedValue({ ack: 'Success', errors: [], raw: '<VerifyAddFixedPriceItemResponse><Ack>Success</Ack></VerifyAddFixedPriceItemResponse>' })
 })
@@ -162,8 +163,8 @@ describe('defaults Nexus fills (P2, P3, P7, P10)', () => {
     m.metadata = { ebayPolicies: DEFAULTS.ebayPolicies }
     const plan = await prepareEbayPublication(facts())
     expect(plan.xml).toContain('<Country>IT</Country>')
-    expect(plan.xml).toContain('<PostalCode>47822</PostalCode>')
-    expect(plan.xml).toContain('<Location>Santarcangelo di Romagna</Location>')
+    expect(plan.xml).toContain('<PostalCode>99999</PostalCode>')
+    expect(plan.xml).toContain('<Location>Testville</Location>')
   })
   it('P3: eBay\'s location never completes another country', async () => {
     m.metadata = { ebayPolicies: DEFAULTS.ebayPolicies }
@@ -199,17 +200,131 @@ describe('defaults Nexus fills (P2, P3, P7, P10)', () => {
   })
 })
 
-describe('no false refusals (P8)', () => {
+describe('Best Offer prices are sent (E1, Owner decision 8)', () => {
   beforeEach(() => { m.products = ['solo'] })
-  it('a Best Offer floor and ceiling are ignored while Best Offer is off', async () => {
+  const listingDetails = (xml: string) => xml.match(/<ListingDetails>[\s\S]*?<\/ListingDetails>/)?.[0] ?? null
+  const live = () => { m.listing = { solo: { externalListingId: '456' } } }
+
+  it('Best Offer off: the prices are not sent, and the review says so (no refusal)', async () => {
     m.pa = { solo: { bestOffer: false, bestOfferFloor: 50, bestOfferCeiling: 80 } }
     const plan = await prepareEbayPublication(facts())
     expect(plan.xml).toContain('<BestOfferEnabled>false</BestOfferEnabled>')
+    expect(listingDetails(plan.xml)).toBeNull()
+    expect(plan.notices).toContain('Best offer auto-decline below and Best offer auto-accept from: not sent to eBay while "Best offer" is off.')
   })
-  it('with Best Offer on, they are named as what Nexus cannot send yet', async () => {
-    m.pa = { solo: { bestOffer: true, bestOfferFloor: 50 } }
-    const issues = await problemsOf(prepareEbayPublication(facts()))
-    expect(issues).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'bestOfferFloor', message: expect.stringContaining('Best offer auto-decline below: Nexus cannot send it with a new eBay listing yet') })])
+  it('Best Offer on: auto-accept and auto-decline go to eBay, two decimals, in the market currency', async () => {
+    m.pa = { solo: { bestOffer: true, bestOfferFloor: 50, bestOfferCeiling: 80.5 } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.xml).toContain('<BestOfferEnabled>true</BestOfferEnabled>')
+    expect(listingDetails(plan.xml)).toBe('<ListingDetails><BestOfferAutoAcceptPrice currencyID="EUR">80.50</BestOfferAutoAcceptPrice><MinimumBestOfferPrice currencyID="EUR">50.00</MinimumBestOfferPrice></ListingDetails>')
+  })
+  it('only the price that is set is sent', async () => {
+    m.pa = { solo: { bestOffer: true, bestOfferFloor: 50, bestOfferCeiling: 0 } }
+    expect(listingDetails((await prepareEbayPublication(facts())).xml)).toBe('<ListingDetails><MinimumBestOfferPrice currencyID="EUR">50.00</MinimumBestOfferPrice></ListingDetails>')
+  })
+  it.each([[0, 0], ['', ''], [null, null]])('Best Offer on, both prices not set (%j, %j): nothing sent, no problem, no block — new and live', async (floor, ceiling) => {
+    for (const isLive of [false, true]) {
+      m.listing = isLive ? { solo: { externalListingId: '456' } } : {}
+      m.pa = { solo: { bestOffer: true, bestOfferFloor: floor, bestOfferCeiling: ceiling } }
+      const plan = await prepareEbayPublication(facts())
+      expect(listingDetails(plan.xml)).toBeNull()
+      expect((plan.notices ?? []).filter(note => /Best offer/.test(note))).toEqual([])
+    }
+  })
+  it('a new listing: auto-decline at or above auto-accept is refused by name', async () => {
+    m.pa = { solo: { bestOffer: true, bestOfferFloor: 80, bestOfferCeiling: 50 } }
+    expect(await problemsOf(prepareEbayPublication(facts()))).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'bestOfferFloor',
+      message: 'Best offer auto-decline below (80.00) must be below Best offer auto-accept from (50.00).' })])
+  })
+  it('a new listing: auto-accept at or above the price is refused by name', async () => {
+    m.pa = { solo: { bestOffer: true, bestOfferCeiling: 99 } }
+    expect(await problemsOf(prepareEbayPublication(facts()))).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'bestOfferCeiling',
+      message: 'Best offer auto-accept from (99.00) must be below the price (99.00).' })])
+  })
+  it('a new listing: a negative price is refused by name', async () => {
+    m.pa = { solo: { bestOffer: true, bestOfferFloor: -5 } }
+    expect(await problemsOf(prepareEbayPublication(facts()))).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'bestOfferFloor',
+      message: 'Best offer auto-decline below: set an amount above 0, or leave it blank (this row has -5).' })])
+  })
+  it('a LIVE listing: prices that cannot be sent are a note, never a block; eBay keeps its own', async () => {
+    live()
+    m.pa = { solo: { bestOffer: true, bestOfferFloor: 80, bestOfferCeiling: 50 } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.xml).toContain('ReviseFixedPriceItemRequest')
+    expect(listingDetails(plan.xml)).toBeNull()
+    expect(plan.notices).toContain('Best offer auto-decline below (80.00) must be below Best offer auto-accept from (50.00). Nexus does not send the Best Offer prices; eBay keeps the ones it holds.')
+  })
+})
+
+describe('Max per buyer (E1)', () => {
+  beforeEach(() => { m.products = ['solo'] })
+  const restriction = (xml: string) => xml.match(/<QuantityRestrictionPerBuyer>[\s\S]*?<\/QuantityRestrictionPerBuyer>/)?.[0] ?? null
+  it('a whole number, 1 or more, is sent', async () => {
+    m.pa = { solo: { quantityLimitPerBuyer: 3 } }
+    expect(restriction((await prepareEbayPublication(facts())).xml)).toBe('<QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer>')
+  })
+  it.each([null, ''])('blank (%j): nothing is sent and nothing is said — new and live', async (value) => {
+    for (const isLive of [false, true]) {
+      m.listing = isLive ? { solo: { externalListingId: '456' } } : {}
+      m.pa = { solo: { quantityLimitPerBuyer: value } }
+      const plan = await prepareEbayPublication(facts())
+      expect(restriction(plan.xml)).toBeNull()
+      expect((plan.notices ?? []).filter(note => /Max per buyer/.test(note))).toEqual([])
+    }
+  })
+  it.each([0, 2.5, -1])('a new listing: %j is refused by name', async (value) => {
+    m.pa = { solo: { quantityLimitPerBuyer: value } }
+    expect(await problemsOf(prepareEbayPublication(facts()))).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'quantityLimitPerBuyer',
+      message: `Max per buyer: eBay takes a whole number, 1 or more (this row has ${value}). Fix it on this listing's main row, or leave it blank.` })])
+  })
+  it('a LIVE listing: a value eBay cannot take is not sent, and is a note, never a block', async () => {
+    m.listing = { solo: { externalListingId: '456' } }
+    m.pa = { solo: { quantityLimitPerBuyer: 0 } }
+    const plan = await prepareEbayPublication(facts())
+    expect(restriction(plan.xml)).toBeNull()
+    expect(plan.notices).toContain('Max per buyer: eBay takes a whole number, 1 or more (this row has 0). Fix it on this listing\'s main row, or leave it blank. Nexus does not send it; eBay keeps the limit it holds.')
+  })
+})
+
+describe('EU product safety and parts compatibility (E1, item 3)', () => {
+  const SAFETY = 'Product safety information: Nexus does not send this to eBay; the saved value is not sent.'
+  const PARTS = 'Parts compatibility: Nexus does not send this to eBay; the saved value is not sent.'
+  it('a saved value is a note, never a block, on a new listing', async () => {
+    m.pa = { p: { regulatory: { manufacturer: 'Fixture maker' }, compatibility: 'Fixture fit' } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.notices).toEqual(expect.arrayContaining([SAFETY, PARTS]))
+  })
+  it('… and on a live listing', async () => {
+    m.products = ['solo']; m.listing = { solo: { externalListingId: '456' } }
+    m.pa = { solo: { regulatory: { manufacturer: 'Fixture maker' } } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.notices).toContain(SAFETY)
+  })
+  it('a new listing on an EU site is told to add the manufacturer and EU responsible person in Seller Hub; not the UK, not a live listing', async () => {
+    expect((await prepareEbayPublication(facts())).notices).toContain(EBAY_EU_SAFETY_NOTE)
+    m.market = 'UK'
+    expect((await prepareEbayPublication(facts())).notices ?? []).not.toContain(EBAY_EU_SAFETY_NOTE)
+    m.market = 'IT'; m.products = ['solo']; m.listing = { solo: { externalListingId: '456' } }
+    expect((await prepareEbayPublication(facts())).notices ?? []).not.toContain(EBAY_EU_SAFETY_NOTE)
+  })
+})
+
+describe('Condition on a live listing (E1, Owner decision 7)', () => {
+  beforeEach(() => { m.products = ['solo']; m.listing = { solo: { externalListingId: '456' } } })
+  it('blank: no <ConditionID> is sent, so eBay keeps its own; nothing blocks', async () => {
+    m.pa = { solo: { conditionId: '' } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.xml).toContain('ReviseFixedPriceItemRequest')
+    expect(plan.xml).not.toContain('<ConditionID>')
+  })
+  it('a word eBay does not know: not sent, said in a note, nothing blocks', async () => {
+    m.pa = { solo: { conditionId: 'Nuovissimo' } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.xml).not.toContain('<ConditionID>')
+    expect(plan.notices).toContain('Condition: eBay does not know "Nuovissimo", so Nexus does not send it; eBay keeps the listing\'s current condition.')
+  })
+  it('control: a condition Nexus holds is sent', async () => {
+    expect((await prepareEbayPublication(facts())).xml).toContain('<ConditionID>1000</ConditionID>')
   })
 })
 
@@ -275,6 +390,11 @@ describe('eBay\'s own check in the review (P1)', () => {
     m.pa = { p: { videoId: 'v-1' } }
     await previewStudioPublication('p', { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' }, 'user')
     expect(m.trading).not.toHaveBeenCalled()
+  })
+  it('E1: maps eBay\'s Best Offer price errors to the two columns, by tag or by its words', () => {
+    const [byTag, byWords] = tradingErrors(`${block('Error', '37', 'Input data is invalid.', 'Input data for tag &lt;Item.ListingDetails.BestOfferAutoAcceptPrice&gt; is invalid.')}${block('Error', '0', 'Auto decline price is invalid.', 'The auto decline price must be lower than the Buy It Now price.')}`).map(ebayCheckIssue)
+    expect(byTag).toMatchObject({ field: 'bestOfferCeiling', message: 'Best offer auto-accept from: eBay says this is missing or not valid.' })
+    expect(byWords).toMatchObject({ field: 'bestOfferFloor', message: 'Best offer auto-decline below: eBay says: Auto decline price is invalid.' })
   })
   it('maps eBay\'s policy and condition tags to the sheet\'s columns', () => {
     const [policy, condition] = tradingErrors(`${block('Error', '21916582', 'Invalid shipping policy.', 'The shipping policy for &lt;Item.SellerProfiles.SellerShippingProfile.ShippingProfileID&gt; is not valid.')}${block('Error', '37', 'Input data is invalid.', 'Input data for tag &lt;Item.ConditionID&gt; is invalid.')}`).map(ebayCheckIssue)

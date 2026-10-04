@@ -38,12 +38,31 @@ export function parseEbayItemDocument(xml: string): Record<string, unknown> {
 
 const publicationRoots = ['SKU', 'InventoryTrackingMethod', 'Title', 'SubTitle', 'Description', 'PrimaryCategory', 'ConditionID', 'Country', 'Currency', 'Location', 'PostalCode',
   'ListingDuration', 'ItemSpecifics', 'StartPrice', 'Quantity', 'ProductListingDetails', 'Variations', 'PictureDetails', 'SellerProfiles',
-  'DispatchTimeMax', 'VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer']
+  'DispatchTimeMax', 'VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer', 'ListingDetails']
+
+/**
+ * E1 (2026-10-04) — of eBay's `ListingDetails` (start and end time, links, eBay's own counters) Nexus sends only the Best
+ * Offer auto-accept and auto-decline prices, so only they are read: anything else there moves on eBay's side alone and
+ * would change the revision with no change to the listing. Amounts to two decimals (eBay answers 80.0, Nexus sends 80.00).
+ * Absent when eBay holds neither.
+ */
+const LISTING_DETAILS_SENT = ['BestOfferAutoAcceptPrice', 'MinimumBestOfferPrice'] as const
+const twoDecimals = (text: string) => /^\s*-?\d+(?:\.\d+)?\s*$/.test(text) ? Number(text).toFixed(2) : text
+function sentListingDetails(value: unknown): Record<string, unknown> | undefined {
+  const details = ebayXmlObject(value)
+  const kept = Object.fromEntries(LISTING_DETAILS_SENT.filter(key => details[key] !== undefined).map(key => {
+    const amount = details[key]
+    return [key, typeof amount === 'string' ? twoDecimals(amount)
+      : typeof ebayXmlObject(amount)['#text'] === 'string' ? { ...ebayXmlObject(amount), '#text': twoDecimals(ebayXmlObject(amount)['#text'] as string) } : amount]
+  }))
+  return Object.keys(kept).length ? kept : undefined
+}
 
 /** The real GetItem preparation and revision digest use this same stable projection. */
 export function parseEbayPublicationItem(xml: string): Record<string, unknown> {
   const item = parseEbayItemDocument(xml)
-  return JSON.parse(JSON.stringify(Object.fromEntries(publicationRoots.filter(key => item[key] !== undefined).map(key => [key, item[key]])),
+  const projected = { ...item, ListingDetails: sentListingDetails(item.ListingDetails) }
+  return JSON.parse(JSON.stringify(Object.fromEntries(publicationRoots.filter(key => projected[key] !== undefined).map(key => [key, projected[key]])),
     (key, value) => key === 'QuantitySold' || (key === '#text' && typeof value === 'string' && !value.trim()) ? undefined : value))
 }
 

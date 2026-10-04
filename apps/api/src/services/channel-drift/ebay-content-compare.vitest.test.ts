@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareEbayContent, parseEbayItemContent } from './ebay-content-compare.js'
+import { compareEbayContent, parseEbayItemContent, parseEbayItemDocument, parseEbayPublicationItem } from './ebay-content-compare.js'
 
 /** PLAN A-39 slice b2 (R-43) — the eBay title / item-specifics parser and compare. Pure. */
 
@@ -78,5 +78,23 @@ describe('compareEbayContent', () => {
     const r = compareEbayContent(ours({ title: '  ' }), theirs)
     expect(r.compared).not.toContain('title')
     expect(r.notCompared).toContainEqual({ field: 'title', reason: 'no title of ours' })
+  })
+})
+
+describe('parseEbayPublicationItem — ListingDetails (E1, 2026-10-04)', () => {
+  const item = (details: string) => `<GetItemResponse><Ack>Success</Ack><Item><ItemID>1</ItemID><ListingDetails>${details}</ListingDetails></Item></GetItemResponse>`
+  it('keeps only the Best Offer prices Nexus sends, at two decimals', () => {
+    const got = parseEbayPublicationItem(item('<StartTime>2026-01-01T00:00:00.000Z</StartTime><ViewItemURL>https://example.test/1</ViewItemURL>'
+      + '<BestOfferAutoAcceptPrice currencyID="EUR">80.0</BestOfferAutoAcceptPrice><MinimumBestOfferPrice currencyID="EUR">50</MinimumBestOfferPrice>'))
+    expect(got.ListingDetails).toEqual({ BestOfferAutoAcceptPrice: { '#text': '80.00', '@_currencyID': 'EUR' }, MinimumBestOfferPrice: { '#text': '50.00', '@_currencyID': 'EUR' } })
+  })
+  it('eBay\'s own details alone (times, links) are not read: no ListingDetails, so they never move the revision', () => {
+    const before = parseEbayPublicationItem(item('<EndTime>2026-01-01T00:00:00.000Z</EndTime>'))
+    expect(before).not.toHaveProperty('ListingDetails')
+    expect(parseEbayPublicationItem(item('<EndTime>2026-02-01T00:00:00.000Z</EndTime>'))).toEqual(before)
+  })
+  it('Nexus\'s own request reads the same as eBay\'s answer for the same price', () => {
+    const ours = parseEbayItemDocument('<Item><ListingDetails><BestOfferAutoAcceptPrice currencyID="EUR">80.00</BestOfferAutoAcceptPrice></ListingDetails></Item>').ListingDetails
+    expect(parseEbayPublicationItem(item('<BestOfferAutoAcceptPrice currencyID="EUR">80.0</BestOfferAutoAcceptPrice>')).ListingDetails).toEqual(ours)
   })
 })

@@ -15,7 +15,7 @@ type Where = { productId?: string; sku?: string; field?: string }
 /** Fields the listing builder reads that are not sheet columns of their own. */
 const OTHER_LABELS: Readonly<Record<string, string>> = {
   pictures: 'Photos', itemSpecifics: 'Item specifics', ean: 'EAN', currency: 'Currency', sellerSku: 'Seller SKU',
-  quantityLimitPerBuyer: 'Quantity limit per buyer', package: 'Package type, weight and size', fulfillment: 'Fulfillment',
+  package: 'Package type, weight and size', fulfillment: 'Fulfillment',
   compatibility: 'Parts compatibility', regulatory: 'Product safety information', variationPictures: 'Photos by variation',
 }
 
@@ -94,6 +94,8 @@ export const stripSku = (message: string, sku?: string) => sku && message.starts
 
 /** The `<Item.X>` paths eBay names in its errors, as the sheet's fields. First match wins. */
 const TAG_FIELDS: ReadonlyArray<readonly [RegExp, string]> = [
+  // E1 — Best Offer auto-accept / auto-decline (Trading `Item.ListingDetails`), as the sheet's columns.
+  [/^Item\.ListingDetails\.BestOfferAutoAcceptPrice/i, 'bestOfferCeiling'], [/^Item\.ListingDetails\.MinimumBestOfferPrice/i, 'bestOfferFloor'],
   [/^Item\.PostalCode/i, 'itemPostalCode'], [/^Item\.Location/i, 'itemLocation'], [/^Item\.Country/i, 'itemLocationCountry'],
   [/^Item\.ConditionID/i, 'conditionId'], [/^Item\.PrimaryCategory/i, 'categoryId'], [/^Item\.SubTitle/i, 'subtitle'], [/^Item\.Title/i, 'title'],
   [/^Item\.Description/i, 'description'], [/StartPrice/i, 'price'], [/Quantity(?!Restriction)/i, 'quantity'],
@@ -102,6 +104,11 @@ const TAG_FIELDS: ReadonlyArray<readonly [RegExp, string]> = [
   [/SellerReturnProfile|ReturnProfileID/i, 'returnPolicyId'], [/^Item\.DispatchTimeMax/i, 'handlingTime'], [/^Item\.ShippingPackageDetails/i, 'package'],
   [/^Item\.VATDetails/i, 'vatRate'], [/^Item\.BestOfferDetails/i, 'bestOffer'], [/^Item\.QuantityRestrictionPerBuyer/i, 'quantityLimitPerBuyer'],
   [/EAN/i, 'ean'], [/^Item\.Currency/i, 'currency'], [/^Item\.ListingDuration/i, 'listingDuration'], [/^Item\.Variations/i, 'variationTheme'],
+]
+
+/** E1 — eBay's Best Offer price errors often name no `<Item.X>` tag; their words say which price. First match wins. */
+const TEXT_FIELDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/MinimumBestOfferPrice|auto[- ]?decline|minimum best offer/i, 'bestOfferFloor'], [/BestOfferAutoAcceptPrice|auto[- ]?accept/i, 'bestOfferCeiling'],
 ]
 
 const decode = (value: string) => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')
@@ -128,7 +135,7 @@ const GENERIC = /^(?:input data(?: for tag .*)? is invalid\.?|invalid input\.?|m
 export function ebayCheckIssue(error: TradingError): StudioPublishIssue {
   const said = [error.long, ...error.parameters].join(' ')
   const path = said.match(/<?\b(Item\.[A-Za-z][\w.]*)>?/)?.[1]
-  const field = path ? TAG_FIELDS.find(([pattern]) => pattern.test(path))?.[1] : undefined
+  const field = path ? TAG_FIELDS.find(([pattern]) => pattern.test(path))?.[1] : TEXT_FIELDS.find(([pattern]) => pattern.test(`${error.short} ${said}`))?.[1]
   const short = error.short.replace(/\s+/g, ' ').trim()
   const message = field
     ? `${ebayFieldLabel(field)}: ${!short || GENERIC.test(short) ? 'eBay says this is missing or not valid.' : `eBay says: ${short}`}`

@@ -41,7 +41,7 @@ vi.mock('./stored-variation-projection.js', async original => {
   } }
 })
 
-import { ebayPackageXml, prepareEbayPublication } from './studio-publication-ebay.js'
+import { EBAY_EU_SAFETY_NOTE, ebayPackageXml, prepareEbayPublication } from './studio-publication-ebay.js'
 
 const updatedAt = new Date('2026-09-01T00:00:00Z')
 const product = (id: string, sku: string, extra: Record<string, unknown> = {}) => ({ id, sku, name: `Nome ${sku}`, ean: null, parentId: null, isParent: false,
@@ -63,7 +63,7 @@ function facts(): any {
   return {
     scope: { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' },
     destination: { aliasKey: null, currency: 'EUR', familyId: 'p' },
-    account: { connectionMetadata: { ebayPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'pay', returnPolicyId: 'r' }, itemLocation: { country: 'IT', postalCode: '47822' } } },
+    account: { connectionMetadata: { ebayPolicies: { fulfillmentPolicyId: 'f', paymentPolicyId: 'pay', returnPolicyId: 'r' }, itemLocation: { country: 'IT', postalCode: '99999' } } }, // a made-up postal code
     parent, products: [parent, ...kids],
     listings: [listing('p'), ...kids.map(k => listing(k.id))],
     resolved: [{ catalogue: { fields: AXIS_FIELDS }, products: [parent, ...kids].map(p => ({ productId: p.id, category: { channelCategoryId: '57988' },
@@ -78,18 +78,18 @@ beforeEach(() => {
 })
 
 describe('a new eBay listing at stock 0', () => {
-  it('positive control: with stock, nothing is asked and no note is added', async () => {
+  it('positive control: with stock, nothing is asked and no stock note is added (only the EU safety note, E1)', async () => {
     m.stock = 3
     const plan = await prepareEbayPublication(facts())
     expect(quantities(plan.xml)).toEqual([3, 3])
-    expect(plan.notices).toBeUndefined()
+    expect(plan.notices).toEqual([EBAY_EU_SAFETY_NOTE])
     expect(m.reads).toBe(0)
   })
 
   it('out-of-stock option on: built with quantity 0 on every variation, with a review note', async () => {
     const plan = await prepareEbayPublication(facts())
     expect(quantities(plan.xml)).toEqual([0, 0])
-    expect(plan.notices).toEqual(['The stock is 0. eBay keeps this listing hidden from search until it has stock.'])
+    expect(plan.notices).toEqual([EBAY_EU_SAFETY_NOTE, 'The stock is 0. eBay keeps this listing hidden from search until it has stock.'])
     expect(m.reads).toBe(1)
   })
 
@@ -117,6 +117,10 @@ describe('the package of a new eBay listing', () => {
     expect(xml).toContain('<ShippingPackage>PackageThickEnvelope</ShippingPackage>')
     expect(xml).toContain('<WeightMajor unit="kg">0</WeightMajor><WeightMinor unit="gr">680</WeightMinor>')
     expect(xml).toContain('<PackageLength unit="cm">26</PackageLength>')
+  })
+  it('E1: takes eBay Trading\'s own name for a type too (one shared list, `ebay-packages.ts`)', () => {
+    expect(ebayPackageXml({ packageType: 'PackageThickEnvelope' }, 'FAM')).toContain('<ShippingPackage>PackageThickEnvelope</ShippingPackage>')
+    expect(ebayPackageXml({ packageType: 'mailing_box' }, 'FAM')).toContain('<ShippingPackage>MailingBoxes</ShippingPackage>')
   })
   it('sends nothing when nothing is set, and refuses what it cannot send', () => {
     expect(ebayPackageXml({ packageWeight: 0, packageType: '' }, 'FAM')).toBe('')

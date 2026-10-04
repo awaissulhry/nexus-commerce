@@ -9,6 +9,7 @@ import { toTradingConditionId } from './ebay-condition.js'
 import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey, canonicalizeRowAspects } from './ebay-theme-axes.js'
 import { orderAxisValues } from './ebay-value-order.js'
 import { ebayAspectValues } from './ebay-aspect-values.js'
+import { isCompleteEbayLocation, resolveEbayItemLocation } from './ebay-account-defaults.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
  *  Callers' capQty implementations recognize this sentinel and return the pool
@@ -53,6 +54,8 @@ export function buildSharedListingInput(
    *  caller. It is an argument rather than a lookup so this builder stays pure;
    *  what it replaced was a five-market map that fell back to EUR silently. */
   currency?: string,
+  /** The eBay account's stored facts (`ChannelConnection.connectionMetadata`): its item location fills a blank row. */
+  accountMetadata?: unknown,
 ): SharedListingInput {
   const mkt = market.toUpperCase()
   const prefix = mkt.toLowerCase()
@@ -235,6 +238,10 @@ export function buildSharedListingInput(
   for (const { display, values } of bestByCanonical.values()) {
     itemSpecifics[display] = values.length === 1 ? values[0] : values
   }
+  // Shipping origin (E1, 2026-10-04): the row's own cells, then the eBay account's stored location, then the server's
+  // EBAY_ITEM_* settings (`resolveEbayItemLocation`). Nothing found stays blank and the pre-flight names it: no address
+  // is ever written into code.
+  const origin = resolveEbayItemLocation({ country: src.item_location_country, postalCode: src.item_postal_code, city: src.item_location }, accountMetadata)
 
   return {
     // Incident #30 — the parent SKU IS the listing's custom label on eBay.
@@ -245,12 +252,11 @@ export function buildSharedListingInput(
     // Incident #16 — the operator writes NEW/USED_EXCELLENT… (Inventory-style
     // words); Trading wants numeric ConditionID. Translate; unknown words
     // resolve to '' and the pre-flight below names them (never eBay code 37).
-    conditionId: str(src.condition) ? toTradingConditionId(str(src.condition)) : '1000',
-    country: str(src.item_location_country) || 'IT',
-    // Shipping origin: row columns win; otherwise the account's single origin
-    // (mirrors every live listing on this account — probed 2026-07-18).
-    location: str(src.item_location) || process.env.EBAY_ITEM_LOCATION || 'Santarcangelo di Romagna',
-    postalCode: str(src.item_postal_code) || process.env.EBAY_ITEM_POSTAL_CODE || '47822',
+    // A blank condition stays blank (Owner 2026-10-04: Nexus never guesses one).
+    conditionId: str(src.condition) ? toTradingConditionId(str(src.condition)) : '',
+    country: origin.country,
+    location: origin.city || undefined,
+    postalCode: origin.postalCode || undefined,
     itemSpecifics,
     // P4.4a — no silent default. What this replaced was a five-market map with
     // `?? 'EUR'`, which is how a Polish or Swedish listing got priced in euros.
@@ -287,6 +293,8 @@ export interface SharedListingCtx {
   connectionId: string
   market: string
   capQty?: CapQtyFn
+  /** The account's `connectionMetadata`: its stored eBay item location fills a parent row without one. */
+  accountMetadata?: unknown
   addFixedPriceItemFn?: (input: AddFixedPriceItemInput, ctx: { oauthToken: string; market: string; connectionId: string }) => Promise<{ itemId: string }>
   db?: {
     sharedListingMembership: { findFirst: Function; create: Function; deleteMany?: Function }
@@ -409,7 +417,7 @@ export async function createSharedListing(
       }
     } catch { /* order fallback remains deterministic without it */ }
 
-    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty, valueOrderByAxis, await marketCurrency('EBAY', market))
+    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty, valueOrderByAxis, await marketCurrency('EBAY', market), ctx.accountMetadata)
 
     // ED.2 — dynamic description: wrap the body in this listing's assigned theme
     // (shared-SKU listings are per-parent, so each gets its own render). Inert
@@ -444,6 +452,9 @@ export async function createSharedListing(
         missing.push(rawCond
           ? `condition ('${rawCond}' is not a recognized value — use NEW, NEW_OTHER, USED_EXCELLENT, … or a numeric eBay ConditionID)`
           : 'condition')
+      }
+      if (!isCompleteEbayLocation({ country: input.country, postalCode: input.postalCode ?? '', city: input.location ?? '' })) {
+        missing.push('item location (a country with a postal code or town: set them on the parent row, or set the eBay account\'s location)')
       }
       if (!input.variations.length) missing.push('variant rows')
       // Incident #41 (eBay 21919136 on VENTRA-ALT) — a SHELL family's rows carry

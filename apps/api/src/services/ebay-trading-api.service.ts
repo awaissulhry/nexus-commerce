@@ -103,11 +103,13 @@ export interface AddFixedPriceItemInput {
   title: string
   description: string
   categoryId: string
+  /** eBay's numeric ConditionID. '' = none in Nexus: the XML carries no <ConditionID>, so a Revise keeps eBay's and a new
+   *  listing is refused before it is sent (Nexus never guesses a condition, Owner 2026-10-04). */
   conditionId: string
   country: string
   currency: string
-  /** Free-text shipping origin ("Santarcangelo di Romagna") — eBay rejects a
-   *  listing without it ("item's location was not filled in"). */
+  /** Free-text shipping origin (a town name) — eBay rejects a new listing
+   *  without a postal code or a town ("item's location was not filled in"). */
   location?: string
   postalCode?: string
   /** Listing-level item specifics (Marca, Stagione…) — the category's required
@@ -210,8 +212,7 @@ ${sets}
 ${input.sku ? `    <SKU>${escapeXml(input.sku)}</SKU>\n` : ''}    <Title>${escapeXml(input.title)}</Title>
     <Description><![CDATA[${input.description.replace(/]]>/g, ']]]]><![CDATA[>')}]]></Description>
     <PrimaryCategory><CategoryID>${escapeXml(input.categoryId)}</CategoryID></PrimaryCategory>
-    <ConditionID>${escapeXml(input.conditionId)}</ConditionID>
-    <Country>${escapeXml(input.country)}</Country>
+${input.conditionId ? `    <ConditionID>${escapeXml(input.conditionId)}</ConditionID>\n` : ''}    <Country>${escapeXml(input.country)}</Country>
     <Currency>${escapeXml(input.currency)}</Currency>
 ${input.location ? `    <Location>${escapeXml(input.location)}</Location>\n` : ''}${input.postalCode ? `    <PostalCode>${escapeXml(input.postalCode)}</PostalCode>\n` : ''}${Object.keys(input.itemSpecifics ?? {}).length ? `    <ItemSpecifics>${Object.entries(input.itemSpecifics ?? {}).map(([n, v]) => nameValueList(n, Array.isArray(v) ? v : [v])).join('')}</ItemSpecifics>\n` : ''}    <ListingDuration>${escapeXml(duration)}</ListingDuration>
 ${galleryXml}${profilesXml}    <Variations>

@@ -98,7 +98,8 @@ beforeEach(() => {
   s.send.mockImplementation(async (url: string) => ({ ok: true, status: 200, text: async () => '', json: async () => url.includes('?sku=') ? { offers: [{ offerId: 'offer', availableQuantity: 2, format: 'FIXED_PRICE', marketplaceId: 'EBAY_IT' }] } : { listingId: 'remote' } }))
 })
 
-const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2 }
+// E1 — the row carries its condition: a blank one is refused before any eBay call (Nexus never guesses New).
+const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2, condition: 'NEW' }
 const cases = [
   ['eBay publish', '/api/ebay/flat-file/publish', { rowIds: ['p'], markets: ['IT'] }],
   ['eBay API push', '/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'api' }],

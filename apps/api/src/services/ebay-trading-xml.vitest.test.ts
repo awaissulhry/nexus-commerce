@@ -7,7 +7,7 @@ const input = {
   sku: 'PARENT-SKU-1',
   title: 'T', description: 'D', categoryId: '9999', conditionId: '1000',
   country: 'IT', currency: 'EUR',
-  location: 'Santarcangelo di Romagna', postalCode: '47822',
+  location: 'Testville', postalCode: '99999', // a made-up town and postal code
   itemSpecifics: { Marca: 'XAVIA', Stagione: 'Tutte le stagioni' },
   variationSpecificNames: ['Colore'],
   variations: [{ sku: 'A', price: 75, quantity: 3, specifics: { Colore: 'Nero' } }],
@@ -16,8 +16,8 @@ const input = {
 describe('buildAddFixedPriceItemXml — eBay IT creation requirements', () => {
   const xml = buildAddFixedPriceItemXml(input)
   it('carries Location + PostalCode (item location error otherwise)', () => {
-    expect(xml).toContain('<Location>Santarcangelo di Romagna</Location>')
-    expect(xml).toContain('<PostalCode>47822</PostalCode>')
+    expect(xml).toContain('<Location>Testville</Location>')
+    expect(xml).toContain('<PostalCode>99999</PostalCode>')
   })
   it('carries listing-level ItemSpecifics (Marca — eBay code 71 otherwise)', () => {
     expect(xml).toContain('<ItemSpecifics>')
@@ -35,6 +35,9 @@ describe('buildAddFixedPriceItemXml — eBay IT creation requirements', () => {
   })
   it('numeric ConditionID (code 37 otherwise)', () => {
     expect(xml).toContain('<ConditionID>1000</ConditionID>')
+  })
+  it('E1: a blank condition sends no <ConditionID> at all (never a guessed New; a Revise keeps eBay\'s)', () => {
+    expect(buildAddFixedPriceItemXml({ ...input, conditionId: '' })).not.toContain('ConditionID')
   })
   it('omits Location/specifics blocks cleanly when absent', () => {
     const bare = buildAddFixedPriceItemXml({ ...input, location: undefined, postalCode: undefined, itemSpecifics: {} })

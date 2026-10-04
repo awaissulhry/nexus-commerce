@@ -67,6 +67,25 @@ describe('ebayFullRevision', () => {
     expect(full.xml).toContain('<SubTitle>Kept</SubTitle>')
   })
 
+  it('E1: a blank Condition sends no <ConditionID>; eBay keeps its condition and its Best Offer prices, and the review names both', () => {
+    const raw = getItem('<ConditionID>1000</ConditionID><ListingDetails><EndTime>2026-01-01T00:00:00.000Z</EndTime><BestOfferAutoAcceptPrice currencyID="EUR">15.0</BestOfferAutoAcceptPrice></ListingDetails><Quantity>5</Quantity>',
+      '<ListingStatus>Active</ListingStatus><QuantitySold>2</QuantitySold>')
+    const shared = { ...input([{ sku: 'ONE', colour: 'Black', price: 20, quantity: 1 }]), conditionId: '' }
+    const full = ebayFullRevision({ shared: shared as any, settings: { bestOffer: true }, itemId: '456', single: true, ...read(raw) })
+    expect(full.xml).not.toContain('<ConditionID>')
+    expect(full.xml).not.toContain('<ListingDetails>')
+    expect(full.keptRoots).toEqual(['VATDetails', 'ConditionID', 'ListingDetails'])
+  })
+  it('E1: the Best Offer prices Nexus holds go in the Full update (eBay\'s own ListingDetails fields are never compared)', () => {
+    const raw = getItem('<ConditionID>1000</ConditionID><ListingDetails><EndTime>2026-01-01T00:00:00.000Z</EndTime></ListingDetails><Quantity>5</Quantity>',
+      '<ListingStatus>Active</ListingStatus><QuantitySold>2</QuantitySold>')
+    const full = ebayFullRevision({ shared: input([{ sku: 'ONE', colour: 'Black', price: 20, quantity: 1 }]) as any,
+      settings: { bestOffer: true, bestOfferFloor: 10, bestOfferCeiling: 15 }, itemId: '456', single: true, ...read(raw) })
+    expect(full.xml).toContain('<ConditionID>1000</ConditionID>')
+    expect(full.xml).toContain('<ListingDetails><BestOfferAutoAcceptPrice currencyID="EUR">15.00</BestOfferAutoAcceptPrice><MinimumBestOfferPrice currencyID="EUR">10.00</MinimumBestOfferPrice></ListingDetails>')
+    expect(full.keptRoots).toEqual(['VATDetails'])
+  })
+
   it.each([
     ['one product here, variations on eBay', true, multiLive],
     ['variations here, one product on eBay', false, getItem('<Quantity>5</Quantity>')],

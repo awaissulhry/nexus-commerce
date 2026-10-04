@@ -42,7 +42,7 @@ export { AXIS_SYNONYM_GROUPS, axisSynonymKey }
 // Trading path so the two directions can never drift); re-exported here for
 // existing importers.
 export { CONDITION_ID_TO_ENUM } from './ebay-condition.js';
-import { CONDITION_ID_TO_ENUM } from './ebay-condition.js';
+import { CONDITION_ID_TO_ENUM, EBAY_CONDITION_NOT_GUESSED } from './ebay-condition.js';
 
 // ── Variation group push helper ────────────────────────────────────────
 
@@ -1216,6 +1216,17 @@ export async function pushVariationGroup(
     }
   }
 
+  // Condition is never guessed (Owner 2026-10-04): a variation without a condition of its own takes the main row's; with
+  // neither, that SKU is refused by name. Checked before any write: each inventory_item PUT replaces the whole item, and
+  // the group cannot publish with a SKU missing, so nothing of this listing is sent.
+  const conditionOf = (row: Record<string, unknown>) => String(row.condition ?? '').trim() || String(parentRow.condition ?? '').trim()
+  const noCondition = variantRows.filter(row => !conditionOf(row)).map(row => String(row.sku ?? ''))
+  if (noCondition.length > 0) {
+    return variantRows.map(r => noCondition.includes(String(r.sku ?? ''))
+      ? { sku: String(r.sku ?? ''), market: mp, status: 'ERROR' as const, message: EBAY_CONDITION_NOT_GUESSED }
+      : { sku: String(r.sku ?? ''), market: mp, status: 'ERROR' as const, message: `Not sent: ${noCondition.join(', ')} ${noCondition.length === 1 ? 'has' : 'have'} no condition. ${EBAY_CONDITION_NOT_GUESSED}` })
+  }
+
   // ── Colour-representative image sets ─────────────────────────────────────
   // eBay with aspectsImageVariesBy=['Color'] aggregates images from EVERY variant
   // that matches the selected colour. If all 9 Black-size variants each carry 6
@@ -1418,9 +1429,10 @@ export async function pushVariationGroup(
 
     // Translate numeric conditionId (e.g. '1000') to eBay ConditionEnum ('NEW').
     // buildFlatRow stores the raw conditionId from platformAttributes; the
-    // Inventory API rejects numeric strings.
-    const rawCondition = String(row.condition ?? '')
-    const condition = CONDITION_ID_TO_ENUM[rawCondition] ?? (rawCondition || 'NEW')
+    // Inventory API rejects numeric strings. The row's own, else the main row's
+    // (a blank one on both was refused above, never sent as NEW).
+    const rawCondition = conditionOf(row)
+    const condition = CONDITION_ID_TO_ENUM[rawCondition] ?? rawCondition
 
     const pkgSize = buildPackageWeightAndSize(row)
     // eBay REQUIRES description to be 1–4000 chars on the inventory_item PUT
@@ -2691,7 +2703,8 @@ export function buildFlatRow(
     mpn: '',
     // shared listing fields from first listing
     title: first?.title || product.name || '',
-    condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
+    // Owner 2026-10-04 — blank stays blank: Nexus never guesses a condition (publish names a missing one, or keeps eBay's).
+    condition: (firstAttrs.conditionId as string | undefined) ?? '',
     category_id: (siteAttrs.categoryId as string | undefined) ?? '',
     subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
     // ED.3 — per-market description theme assignment (blank = default theme).
@@ -2882,7 +2895,7 @@ export function packSharedFields(row: Record<string, unknown>): {
     listingStatus: (row.listing_status as string) ?? 'DRAFT',
     offerActive: row.listing_status === 'ACTIVE',
     platformAttributes: {
-      conditionId: (row.condition as string) ?? 'NEW',
+      conditionId: (row.condition as string) ?? '',
       categoryId: (row.category_id as string) ?? '',
       subtitle: (row.subtitle as string) ?? '',
       // ED.3 — description theme id ('' = default, 'none' = raw body). Split

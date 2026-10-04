@@ -63,3 +63,9 @@ export function toInventoryCondition(raw: string): string {
   const value = String(raw ?? '').trim()
   return CONDITION_ID_TO_ENUM[toTradingConditionId(value)] ?? value
 }
+
+/**
+ * Owner 2026-10-04 — a blank condition is never sent as "New". The Inventory model replaces a whole inventory item, so a
+ * SKU with no condition of its own and none on the listing's main row is refused by name, before anything reaches eBay.
+ */
+export const EBAY_CONDITION_NOT_GUESSED = 'Condition is empty on this listing\'s main row; Nexus does not guess one.'
