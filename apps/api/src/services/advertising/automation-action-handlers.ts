@@ -51,6 +51,7 @@ import {
   type AdsActor,
 } from './ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
+import { bidExtraSpend, placementExtraSpend } from './ads-spend-estimate.js'
 
 const BID_FLOOR_CENTS = 5 // €0.05
 const RULE_ACTOR = (ruleId: string): AdsActor => `automation:${ruleId}`
@@ -83,20 +84,32 @@ async function checkDailySpendCap(
   // Sum estimatedValueCentsEur across all actionResults from today's
   // executions of this rule. The actionResults JSON column shape:
   //   [{ type, ok, estimatedValueCentsEur?, ... }, ...]
-  const executions = await prisma.automationRuleExecution.findMany({
-    where: { ruleId, startedAt: { gte: dayStart } },
-    select: { actionResults: true },
-  })
+  // 4d (review 4.4) — only spend that was really committed counts: LIVE executions, plus this rule's suggestions a
+  // person approved today (an approve runs the handler live, outside any execution row, and stores its result in
+  // `appliedResult`). Dry runs and PROPOSE ticks used to count their would-be estimates, so previewing a rule used up
+  // its own ceiling while an approved raise counted nothing.
+  const [executions, approved] = await Promise.all([
+    prisma.automationRuleExecution.findMany({
+      where: { ruleId, dryRun: false, startedAt: { gte: dayStart } },
+      select: { actionResults: true },
+    }),
+    prisma.adsRuleSuggestion.findMany({
+      where: { ruleId, status: 'applied', decidedAt: { gte: dayStart } },
+      select: { appliedResult: true },
+    }),
+  ])
   let spentTodayCents = 0
+  const count = (r: { ok?: boolean; estimatedValueCentsEur?: number } | null | undefined) => {
+    if (r?.ok && typeof r.estimatedValueCentsEur === 'number') {
+      spentTodayCents += r.estimatedValueCentsEur
+    }
+  }
   for (const ex of executions) {
     const results = (ex.actionResults ?? []) as Array<{ ok?: boolean; estimatedValueCentsEur?: number }>
     if (!Array.isArray(results)) continue
-    for (const r of results) {
-      if (r?.ok && typeof r.estimatedValueCentsEur === 'number') {
-        spentTodayCents += r.estimatedValueCentsEur
-      }
-    }
+    for (const r of results) count(r)
   }
+  for (const s of approved) count(s.appliedResult as { ok?: boolean; estimatedValueCentsEur?: number } | null)
   if (spentTodayCents + projectedSpendCents > cap) {
     return {
       allowed: false,
@@ -884,6 +897,22 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   }
 }
 
+/**
+ * 4m (review 3.7) — a rule leaves alone what Hourly Bids holds.
+ *
+ * The rank engine sets the Top of Search placement (and the bids) of every campaign an enabled goal schedule or
+ * product plan holds, every run. A rule writing the same lever there is undone on the next run and undoes it in turn,
+ * so the rule skips such a campaign and says why. A skip, not a failure, and asked BEFORE the dry-run return, so a
+ * PROPOSE rule offers no suggestion a person could accept into the same fight (`recordSuggestions` skips `skipped`).
+ * The decision is re-read when a suggestion is accepted, because the handler runs again then.
+ */
+async function rankOwnedSkip(type: string, campaignId: string, what: string): Promise<ActionResult | null> {
+  const { rankOwnedCampaignIds } = await import('./rank-release.service.js')
+  if (!(await rankOwnedCampaignIds()).has(campaignId)) return null
+  const { rankOwnedWhy } = await import('./ads-top-of-search.service.js')
+  return { type, ok: true, output: { skipped: 'rank-owned', campaignId, why: rankOwnedWhy(what) } }
+}
+
 // ── AU.6: set_placement_multiplier ────────────────────────────────────
 // Adjusts the PLACEMENT_TOP (or other placement) bid adjustment % for a
 // campaign. Lets rules like "raise top-of-search bids when ACOS is low" or
@@ -895,6 +924,10 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
   const campaignId = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   if (!campaignId) return { type: action.type, ok: false, error: 'No campaign.id in context' }
   const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  if (placement === 'PLACEMENT_TOP') {
+    const held = await rankOwnedSkip(action.type, campaignId, 'Top of Search placement')
+    if (held) return held
+  }
   const pct = Math.max(0, Math.min(900, Math.round(Number(action.percentage ?? 0))))
   if (meta.dryRun) {
     return { type: action.type, ok: true, output: { dryRun: true, campaignId, placement, percentage: pct } }
@@ -1451,11 +1484,15 @@ ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<Acti
 
 // ── raise_bids_for_rank_defense ───────────────────────────────────────
 // When impression share drops, raise bids aggressively to defend position.
-// Rate-limited: caps at MAX_PCT and one-step-at-a-time per rule fire.
+// 4m (review 3.7) — each fire raises every enabled target of the campaign by 5–50% (default 20%), from the bid it has
+// now. Nothing here limits how often that repeats: only the rule's own caps do (executions and writes a day). The old
+// line here claimed a cap per fire it never had. A campaign Hourly Bids holds is left alone (`rankOwnedSkip`).
 ACTION_HANDLERS.raise_bids_for_rank_defense = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   const pct = Math.min(50, Math.max(5, Number(action.percent ?? 20)))
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  const held = await rankOwnedSkip(action.type, id, 'bids')
+  if (held) return held
   const targets = await prisma.adTarget.findMany({ where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: id } }, select: { id: true, bidCents: true }, take: 200 })
   const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.round(t.bidCents * (1 + pct / 100)) }))
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: entries.length, raisePct: pct } }
@@ -1522,6 +1559,29 @@ type BuilderOp = 'set' | 'incPct' | 'decPct' | 'incAbs' | 'decAbs'
 // `curBidTargetAcos` (H10's "Current Bid × Target ACoS / ACoS") join C1's two.
 const COMPUTED_BID_OPS = new Set(['targetAcos', 'setCpc', 'revPerClick', 'curBidTargetAcos'])
 
+/** The window a bid rule measures a target over: the rule's own lookback, else its trigger's (see targetPerformance). */
+function bidWindowDays(trigger: string, overrideDays?: number | null): number {
+  const spec = TRIGGER_WINDOW[trigger]
+  // A trigger with no window of its own (SCHEDULE, CAC_SPIKE) still needs one to measure a
+  // keyword over; 30 days is the longest any trigger uses and the most forgiving for sparse rows.
+  // BP.P4 — a Bid rule's own lookback (`action.windowDays`, clamped like the emitter clamps it)
+  // overrides the trigger default, so the computed bid measures over the window the operator chose.
+  return typeof overrideDays === 'number' && Number.isFinite(overrideDays)
+    ? Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(overrideDays)))
+    : spec?.days ?? 30
+}
+
+/** 4d — one ad target's clicks over the same window, for the projected extra spend of a bid raise. */
+async function targetClicks(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ clicks: number; days: number }> {
+  const days = bidWindowDays(trigger, overrideDays)
+  const { since, until } = ruleWindowBounds(days)
+  const perf = await prisma.amazonAdsDailyPerformance.aggregate({
+    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, date: { gte: since, lte: until } },
+    _sum: { clicks: true },
+  })
+  return { clicks: perf._sum.clicks ?? 0, days }
+}
+
 /**
  * One ad target's measured CPC and ACoS, over the window the rule is described by.
  *
@@ -1533,15 +1593,8 @@ const COMPUTED_BID_OPS = new Set(['targetAcos', 'setCpc', 'revPerClick', 'curBid
  * whose sales have not finished arriving. Returns null where there is no signal: a CPC needs a
  * click, and an ACoS needs a sale. Acting on a keyword with no clicks is guessing.
  */
-async function targetPerformance(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ cpcEur: number; acos: number | null; clicks: number; salesCents: number } | null> {
-  const spec = TRIGGER_WINDOW[trigger]
-  // A trigger with no window of its own (SCHEDULE, CAC_SPIKE) still needs one to measure a
-  // keyword over; 30 days is the longest any trigger uses and the most forgiving for sparse rows.
-  // BP.P4 — a Bid rule's own lookback (`action.windowDays`, clamped like the emitter clamps it)
-  // overrides the trigger default, so the computed bid measures over the window the operator chose.
-  const days = typeof overrideDays === 'number' && Number.isFinite(overrideDays)
-    ? Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(overrideDays)))
-    : spec?.days ?? 30
+async function targetPerformance(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ cpcEur: number; acos: number | null; clicks: number; salesCents: number; days: number } | null> {
+  const days = bidWindowDays(trigger, overrideDays)
   const { since, until } = ruleWindowBounds(days)
   const perf = await prisma.amazonAdsDailyPerformance.aggregate({
     where: { entityType: 'AD_TARGET', localEntityId: adTargetId, date: { gte: since, lte: until } },
@@ -1559,6 +1612,7 @@ async function targetPerformance(adTargetId: string, trigger: string, overrideDa
     acos: salesCents > 0 ? spendCents / salesCents : null,
     clicks,
     salesCents,
+    days,
   }
 }
 function applyBuilderOp(op: BuilderOp | string, current: number, value: number): number {
@@ -1610,6 +1664,27 @@ ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResu
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: delta, output: { campaignId: id, newDailyBudget: next, outboundQueueId: res.outboundQueueId } }
 }
 
+/**
+ * 4d — one placement lane's spend over a placement rule's window, for the projected extra spend of a raise.
+ *
+ * The report holds Amazon's LABELS, never the bidding enums, and its `campaignId` is Amazon's external id — so the lane
+ * is matched through `REPORT_LABEL_TO_PLACEMENT` on `localCampaignId`, the same join the evaluator's lane criteria use
+ * (PLC-P7). Placement rules read the campaign-performance window; a suggestion approved after its context was pruned
+ * has no trigger, and falls back to that same window.
+ */
+async function laneSpend(campaignId: string, placement: string, trigger: string): Promise<{ spendCents: number; days: number }> {
+  const { REPORT_LABEL_TO_PLACEMENT } = await import('./ads-placement-math.js')
+  const days = TRIGGER_WINDOW[trigger]?.days ?? TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET?.days ?? 7
+  const labels = Object.keys(REPORT_LABEL_TO_PLACEMENT).filter((label) => REPORT_LABEL_TO_PLACEMENT[label] === placement)
+  if (!labels.length) return { spendCents: 0, days }
+  const { since, until } = ruleWindowBounds(days)
+  const agg = await prisma.amazonAdsPlacementReport.aggregate({
+    where: { localCampaignId: campaignId, placement: { in: labels }, date: { gte: since, lte: until } },
+    _sum: { costMicros: true },
+  })
+  return { spendCents: microsToCents(agg._sum.costMicros), days }
+}
+
 // placement_apply — Set/Increase/Decrease a placement bid modifier (%), clamped to [minPct, maxPct]
 // (Amazon allows 0–900%). Reads CURRENT from dynamicBidding.placementBidding for inc/dec.
 ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionResult> => {
@@ -1620,12 +1695,22 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
     return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', campaignId: id } }
   }
   const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  if (placement === 'PLACEMENT_TOP') {
+    const held = await rankOwnedSkip(action.type, id, 'Top of Search placement')
+    if (held) return held
+  }
   const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const current = db.placementBidding?.find((x) => x.placement === placement)?.percentage ?? 0
   const minPct = Math.max(0, Number(action.minPct ?? 0))
   const maxPct = Math.min(900, Number(action.maxPct ?? 900))
   const next = Math.round(clampRange(applyBuilderOp(action.op as string, current, Number(action.value) || 0), minPct, maxPct))
+  // 4d (review 4.4) — the spend this write would ADD per day: the lane's measured spend per day, scaled by how much the
+  // new multiplier raises what a click in it may cost. Returned as `estimatedValueCentsEur`, so the engine's per-run
+  // `maxValueCentsEur` binds a placement rule, and a live raise draws on the rule's daily spend ceiling. Read only for a raise.
+  const lane = next > current ? await laneSpend(id, placement, String(getFieldPath(context, 'trigger') ?? '')) : null
+  const spend = placementExtraSpend({ oldPct: current, newPct: next, laneSpendCents: lane?.spendCents ?? 0, windowDays: lane?.days ?? 1 })
+  const spendOut = { extraSpendPerDayCents: spend.extraCentsPerDay, spendEstimate: spend.basis }
   /**
    * 🔴 D-PLC-3 — a dry run that would change NOTHING says so, and still says what it read.
    *
@@ -1641,7 +1726,7 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
    */
   if (meta.dryRun) {
     const same = next === current
-    return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, placement, wouldChange: `${current}% → ${next}%`, ...(same ? { noChange: true } : {}) } }
+    return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, campaignId: id, placement, wouldChange: `${current}% → ${next}%`, ...spendOut, ...(same ? { noChange: true } : {}) } }
   }
   if (next === current) return { type: action.type, ok: true, output: { campaignId: id, placement, noChange: true } }
   const { updatePlacementBidding } = await import('./ads-create.service.js')
@@ -1658,6 +1743,11 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
    */
   if (!(MANAGED_PLACEMENTS as readonly string[]).includes(placement)) {
     return { type: action.type, ok: false, error: `“${placement}” is not a placement this system manages (Top of Search · Rest of Search · Product Pages), so this rule cannot write it`, output: { campaignId: id, placement } }
+  }
+  // Only a raise can spend more; a cut is never stopped by the spend ceiling.
+  if (spend.extraCentsPerDay > 0) {
+    const cap = await checkDailySpendCap(meta.ruleId, spend.extraCentsPerDay)
+    if (!cap.allowed) return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0, output: { campaignId: id, placement, percentage: current, wouldBe: next, ...spendOut } }
   }
   /**
    * PLC-P4 — ONE implementation of the merge.
@@ -1703,7 +1793,7 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
       output: { campaignId: id, placement, percentage: next, mode: res.mode, ...(res.deniedAt ? { deniedAt: res.deniedAt } : {}) },
     }
   }
-  return { type: action.type, ok: true, output: { campaignId: id, placement, percentage: next, mode: res.mode } }
+  return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { campaignId: id, placement, percentage: next, mode: res.mode, ...spendOut } }
 }
 
 // bid_apply (EA2) — Set/Increase/Decrease a keyword/target bid (adTarget.bidCents), clamped to
@@ -1777,14 +1867,18 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
    * success that changed nothing ([[reference_four_inert_ads_rules]]).
    */
   let computedEur: number | null = null
+  const trigger = String(getFieldPath(context, 'trigger') ?? '')
+  const windowDays = action.windowDays != null ? Number(action.windowDays) : null
+  let measured: { clicks: number; days: number } | null = null
   if (COMPUTED_BID_OPS.has(String(action.op))) {
     // The trigger comes from the CONTEXT, not `meta` — the handler signature carries only
     // { dryRun, ruleId }, and widening it would touch all 35 handlers for one field that the
     // context already states on every build.
-    const perf = await targetPerformance(id, String(getFieldPath(context, 'trigger') ?? ''), action.windowDays != null ? Number(action.windowDays) : null)
+    const perf = await targetPerformance(id, trigger, windowDays)
     if (!perf) {
       return { type: action.type, ok: false, error: `no measured clicks or spend for this target in the rule's window — there is no CPC to compute a bid from`, output: { adTargetId: id } }
     }
+    measured = perf
     if (action.op === 'setCpc') {
       computedEur = perf.cpcEur
     } else if (action.op === 'revPerClick') {
@@ -1822,10 +1916,24 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const rawEur = computedEur ?? applyBuilderOp(action.op as string, currentEur, Number(action.value) || 0)
   const nextEur = Math.round(clampRange(rawEur, floorEur, ceilEur) * 100) / 100
   const nextCents = Math.round(nextEur * 100)
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢` } }
+  // 4d (review 4.4) — the spend this write would ADD per day: (new − old) × the target's clicks per day in the rule's
+  // window. Returned as `estimatedValueCentsEur`, so the engine's per-run `maxValueCentsEur` binds a bid rule too, and
+  // a live raise draws on the rule's daily spend ceiling like a budget raise always has. Clicks are read only for a raise.
+  const oldCents = t.bidCents ?? 0
+  const raiseWindow = nextCents > oldCents ? (measured ?? await targetClicks(id, trigger, windowDays)) : null
+  const spend = bidExtraSpend({ oldBidCents: oldCents, newBidCents: nextCents, clicks: raiseWindow?.clicks ?? 0, windowDays: raiseWindow?.days ?? 1 })
+  const spendOut = { extraSpendPerDayCents: spend.extraCentsPerDay, spendEstimate: spend.basis }
+  // 5.10 — a dry run that would change nothing says so (as placement and budget do), so a 5¢ → 5¢ card never reaches
+  // the suggestion queue. `wouldChange` stays beside it for the preview.
+  if (meta.dryRun) return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢`, ...spendOut, ...(nextCents === t.bidCents ? { noChange: true } : {}) } }
   if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }
+  // Only a raise can spend more; a cut is never stopped by the spend ceiling.
+  if (spend.extraCentsPerDay > 0) {
+    const cap = await checkDailySpendCap(meta.ruleId, spend.extraCentsPerDay)
+    if (!cap.allowed) return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0, output: { adTargetId: id, bidCents: t.bidCents, wouldBe: nextCents, ...spendOut } }
+  }
   const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}` , evidence: ctxEvidence(context) })
-  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId } }
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: spend.extraCentsPerDay, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId, ...spendOut } }
 }
 
 /**

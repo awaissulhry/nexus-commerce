@@ -130,9 +130,10 @@ describe('R4 — the automation routes answer as before the move', () => {
     // ── Ads rules: create ──
     await ask('POST', '/api/advertising/automation-rules', {})
     await ask('POST', '/api/advertising/automation-rules', { name: 'Bad trigger', trigger: 'NOPE' })
+    // 4b — the builder block carries its THEN value (a blank one is now refused before the metric is looked at).
     await ask('POST', '/api/advertising/automation-rules', {
       name: 'Untranslatable', trigger: 'SCHEDULE',
-      actions: [{ type: 'budget', campaigns: [] }], conditions: [{ conditions: [{ metric: 'Moon Phase', op: '>=', value: 1 }] }],
+      actions: [{ type: 'budget', campaigns: [] }], conditions: [{ conditions: [{ metric: 'Moon Phase', op: '>=', value: 1 }], action: { op: 'set', value: 5 } }],
     })
     const created = await ask('POST', '/api/advertising/automation-rules', {
       name: 'Created rule', description: 'made by the parity test', trigger: 'KEYWORD_HIGH_ACOS',
@@ -147,7 +148,7 @@ describe('R4 — the automation routes answer as before the move', () => {
     await ask('PATCH', `/api/advertising/automation-rules/${createdId}`, { priority: 0 })
     await ask('PATCH', `/api/advertising/automation-rules/${createdId}`, { priority: 'first' })
     await ask('PATCH', `/api/advertising/automation-rules/${createdId}`, {
-      actions: [{ type: 'budget', campaigns: [] }], conditions: [{ conditions: [{ metric: 'Moon Phase', op: '>=', value: 1 }] }],
+      actions: [{ type: 'budget', campaigns: [] }], conditions: [{ conditions: [{ metric: 'Moon Phase', op: '>=', value: 1 }], action: { op: 'set', value: 5 } }],
     })
     await ask('PATCH', `/api/advertising/automation-rules/${createdId}`, {
       name: 'Created rule (edited)', description: null, enabled: true, dryRun: true, priority: 42.4,

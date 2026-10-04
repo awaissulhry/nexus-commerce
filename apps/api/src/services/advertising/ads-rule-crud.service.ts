@@ -17,6 +17,7 @@ import { logger } from '../../utils/logger.js'
 import { evaluateRule, type EvaluateRuleResult } from '../automation-rule.service.js'
 import type { AdsActor } from './ads-mutation.service.js'
 import { done, isRefused, refused, type ServiceOutcome } from '../automation/service-outcome.js'
+import { invalidValuesBody, readRuleCaps, ruleValueProblems } from './ads-rule-values.js'
 
 /** The triggers the advertising evaluator emits. A rule on any other trigger would never run. */
 export const ADS_RULE_TRIGGERS: ReadonlySet<string> = new Set([
@@ -124,6 +125,12 @@ export interface AdsRuleServiceExtra {
 /** POST /advertising/automation-rules. A new rule is born disabled and dry-run. */
 export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, extra: AdsRuleServiceExtra = {}): Promise<ServiceOutcome<{ rule: AutomationRule }>> {
   if (!body?.name || !body.trigger) return refused(400, { error: 'name + trigger required' })
+  // 4b (review 4.1) — every number readable (a decimal comma is fine) and in range, checked BEFORE the untranslatable
+  // refusal below so a typo is answered with what is wrong with it, not as a missing engine signal. A cap that cannot
+  // be read is refused — it never becomes "no cap" — and one sent as text is stored as the number it says.
+  const { caps, problems } = readRuleCaps(body)
+  problems.unshift(...ruleValueProblems(body))
+  if (problems.length) return refused(400, invalidValuesBody(problems))
   // P2.1 — refuse an untranslatable builder rule AT SAVE. The adapter used to drop unmapped
   // AND-conditions at evaluation, which made the rule LOOSER than the author wrote; now the
   // adapter fails such a rule closed and this refuses to store one at all, naming the metrics.
@@ -145,12 +152,12 @@ export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, e
       // dry-run; operator must explicitly opt in to live writes.
       enabled: false,
       dryRun: true,
-      maxExecutionsPerDay: body.maxExecutionsPerDay ?? 10,
-      maxValueCentsEur: body.maxValueCentsEur ?? null,
-      maxDailyAdSpendCentsEur: body.maxDailyAdSpendCentsEur ?? 10000,
+      maxExecutionsPerDay: caps.maxExecutionsPerDay ?? 10,
+      maxValueCentsEur: caps.maxValueCentsEur ?? null,
+      maxDailyAdSpendCentsEur: caps.maxDailyAdSpendCentsEur ?? 10000,
       // P2.2 — the demote-to-dry-run write cap (CAP step 6). Builder rules could not set it at
       // all before, so every one arrived with the second brake unset.
-      maxWritesPerDay: body.maxWritesPerDay ?? null,
+      maxWritesPerDay: caps.maxWritesPerDay ?? null,
       scopeMarketplace: body.scopeMarketplace ?? null,
       createdBy: 'user',
       ...withoutNote(extra),
@@ -186,6 +193,12 @@ const withoutNote = ({ note: _note, ...rest }: AdsRuleServiceExtra) => rest
 export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor: AdsActor, extra: AdsRuleServiceExtra = {}): Promise<ServiceOutcome<{ rule: AutomationRule }>> {
   const existing = await prisma.automationRule.findUnique({ where: { id } })
   if (!existing || existing.domain !== 'advertising') return refused(404, { error: 'not_found' })
+  // 4b — as the create: numbers readable and in range, the MERGED pair checked as P2.1 checks it just below.
+  const { caps, problems } = readRuleCaps(body)
+  if (body.actions !== undefined || body.conditions !== undefined) {
+    problems.unshift(...ruleValueProblems({ actions: body.actions ?? existing.actions, conditions: body.conditions ?? existing.conditions }))
+  }
+  if (problems.length) return refused(400, invalidValuesBody(problems))
   // P2.1 — same save-time refusal as the create route. Validate the MERGED rule: a PATCH that
   // touches neither actions nor conditions cannot introduce an untranslatable metric, but one
   // that changes either half must be checked against the pair it will actually store.
@@ -231,10 +244,7 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
     }
     data.priority = Math.round(body.priority)
   }
-  if (body.maxExecutionsPerDay !== undefined) data.maxExecutionsPerDay = body.maxExecutionsPerDay
-  if (body.maxValueCentsEur !== undefined) data.maxValueCentsEur = body.maxValueCentsEur
-  if (body.maxDailyAdSpendCentsEur !== undefined) data.maxDailyAdSpendCentsEur = body.maxDailyAdSpendCentsEur
-  if (body.maxWritesPerDay !== undefined) data.maxWritesPerDay = body.maxWritesPerDay
+  Object.assign(data, caps) // 4b — the four caps as read above: only the ones the body sent, in this order
   if (body.scopeMarketplace !== undefined) data.scopeMarketplace = body.scopeMarketplace
   Object.assign(data, withoutNote(extra))
   const rule = await prisma.automationRule.update({ where: { id }, data })

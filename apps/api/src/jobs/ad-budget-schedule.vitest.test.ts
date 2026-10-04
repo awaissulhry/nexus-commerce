@@ -22,6 +22,19 @@ describe('computeBudget', () => {
     expect(computeBudget(2, 'campaign-budget', 'decPct', 90)).toBe(1)
     expect(computeBudget(3.333, 'campaign-budget', 'incPct', 10)).toBe(3.67)
   })
+
+  it('🔴 4b — reads a decimal comma: "Set budget 15,50" is €15.50, not €1', () => {
+    expect(computeBudget(10, 'campaign-budget', 'set', '15,50')).toBe(15.5)
+    expect(computeBudget(10, 'campaign-budget', 'decPct', '12,5')).toBe(8.75)
+    expect(computeBudget(10, 'budget-multiplier', undefined, '1,5')).toBe(15)
+  })
+
+  it('🔴 4b — a value it cannot read, or a blank one, leaves the budget where it is (never €1)', () => {
+    expect(computeBudget(10, 'campaign-budget', 'set', 'abc')).toBe(10)
+    expect(computeBudget(10, 'campaign-budget', 'set', '')).toBe(10)
+    expect(computeBudget(10, 'campaign-budget', 'set', undefined)).toBe(10)
+    expect(computeBudget(10, 'budget-multiplier', undefined, '1.5.0')).toBe(10)
+  })
 })
 
 describe('dateActive', () => {
