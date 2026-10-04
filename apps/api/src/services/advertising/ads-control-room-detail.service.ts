@@ -44,6 +44,11 @@ const DAY = 86_400_000
  * `writesEntities: false` marks the engines that legitimately produce
  * no per-entity rows — ingests, the drain, the breaker — so the drawer can say so instead
  * of showing an empty list that reads like a failure.
+ *
+ * 7a (review 8.1) — an engine that writes says only what it did not write here; WHY it wrote nothing comes from its
+ * lever, which reads the automation catalog (no schedule, no plan this month, a server switch off …). The sentences
+ * this map used to fix ("every live schedule is rank-goal mode", "its cron has never been armed") were claims about the
+ * data that stayed true only until the data moved.
  */
 interface EvidenceSource {
   writesEntities: boolean
@@ -58,23 +63,31 @@ const EVIDENCE: Record<string, EvidenceSource> = {
   },
   dayparting: {
     writesEntities: true,
-    emptyNote: 'Nothing evaluated — every live schedule is rank-goal mode, which this engine does not own.',
+    emptyNote: 'No bid writes in this window.',
   },
   'budget-enforce': {
     writesEntities: true,
     emptyNote: 'No budget changes or suppressions in this window.',
   },
+  'budget-schedules': {
+    writesEntities: true,
+    emptyNote: 'No budget changes in this window.',
+  },
   'budget-pools': {
     writesEntities: true,
-    emptyNote: 'No pools are configured, so there is nothing to rebalance.',
+    emptyNote: 'No budget moves in this window.',
   },
   'auto-bid': {
     writesEntities: true,
-    emptyNote: 'Runs on schedule and has proposed nothing in this window.',
+    emptyNote: 'No bid changes in this window.',
+  },
+  autopilot: {
+    writesEntities: true,
+    emptyNote: 'No bid, budget or placement changes in this window.',
   },
   'tos-defense': {
     writesEntities: true,
-    emptyNote: 'Its cron has never been armed, so it has never written anything.',
+    emptyNote: 'No placement changes in this window.',
   },
   'anomaly-guard': {
     writesEntities: false,
@@ -90,7 +103,7 @@ const EVIDENCE: Record<string, EvidenceSource> = {
   },
   'coverage-engine': {
     writesEntities: true,
-    emptyNote: 'No coverage set is enabled yet, so it has held no term.',
+    emptyNote: 'No bid changes in this window.',
   },
 }
 
@@ -274,7 +287,9 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
       evidence: r.evidence ?? null,
       reason: readReason(r.evidence) ?? readReason(r.payloadAfter),
     }))
-    if (!evidence.length) evidenceNote = src.emptyNote
+    // 7a — and why, from the lever (the catalog's reason), unless it is acting and simply wrote nothing.
+    const why = lever.exposure && lever.exposure.group !== 'acts' && lever.modeReason ? ` ${lever.modeReason}` : ''
+    if (!evidence.length) evidenceNote = `${src.emptyNote}${why}`
   } else {
     evidenceNote = src.emptyNote
   }

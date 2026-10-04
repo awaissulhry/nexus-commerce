@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
@@ -37,7 +37,8 @@ import { HistoryDrawer } from '../tabs/RuleListTab'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ModeNotches, RANK, type Level } from './ModeNotches'
 import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
-import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
+import { EngineDetail, type EngineActor as EngineActorBase, type ObservedActor } from './EngineDetail'
+import { actsOnItsOwn, engineInTile, groupSummary, GROUP_TONE, type ExposureFields } from './exposure'
 import { LimitsView } from './LimitsView'
 import { LedgerView } from './LedgerView'
 // SG.6 — QueueView is ⛔ PARKED (one inbox: the Suggestions page). Its file stays at this path.
@@ -52,6 +53,9 @@ import { useMergedFilters } from '../_shared/useMergedFilters'
 interface Rule extends DetailRule {
   category: string
 }
+
+/** 7a — an engine row with its plain group (exposure.ts): only an engine that acts counts as writing. */
+type EngineActor = EngineActorBase & ExposureFields
 
 /**
  * AUTO.A2 — the grid's row is an ACTOR, not a rule. Rules stay the majority kind; engines come
@@ -322,18 +326,17 @@ export function AutomationsClient() {
     let engineRows: ActorRow[] = (actors?.engines ?? []).map((e) => ({ k: 'engine', e }))
     let obsRows: ActorRow[] = (actors?.observed ?? []).map((o) => ({ k: 'obs', o }))
     // A1 — the active tile narrows every kind it can describe. Engines are unscoped by
-    // construction, so 'unscoped' keeps the AUTO ones; 'off' keeps OFF engines.
+    // construction, so 'unscoped' keeps the ones that act; 'off' keeps OFF engines.
+    // 7a — an engine "writes" only when it changes Amazon on its own (exposure.ts), not because it is on Auto.
+    if (tile) engineRows = engineRows.filter((a) => a.k === 'engine' && engineInTile(a.e, tile))
     if (tile === 'writing') {
       ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes)
-      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'AUTO')
       obsRows = []
     } else if (tile === 'unscoped') {
       ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes && isUnscoped(a.r))
-      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'AUTO')
       obsRows = []
     } else if (tile === 'off') {
       ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'OFF')
-      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'OFF')
       obsRows = []
     }
     if (kind === 'rules') return ruleRows
@@ -364,7 +367,9 @@ export function AutomationsClient() {
     autoNotifyOnly: all.filter((r) => r.level === 'AUTO' && !r.writes).length,
     // A1 — the account's actual exposure: writes, on AUTO, and bound to NOTHING.
     unscopedWriting: all.filter((r) => r.level === 'AUTO' && r.writes && isUnscoped(r)).length,
-    engineAuto: (actors?.engines ?? []).filter((e) => e.posture === 'AUTO').length,
+    // 7a — engines that change Amazon on their own. The breaker and write delivery are on Auto and never do; an
+    // engine on Auto with no plan or schedule switched on does nothing. Every engine still has its row and group.
+    engineActing: (actors?.engines ?? []).filter(actsOnItsOwn).length,
     engineOff: (actors?.engines ?? []).filter((e) => e.posture === 'OFF').length,
     ready: [...grad.values()].filter((g) => g.canGraduate).length,
     // A rule can report completed executions while every action inside them failed, so the run
@@ -584,6 +589,8 @@ export function AutomationsClient() {
             </Button>
             <em>{e.what}</em>
           </span>
+          {/* 7a — what it does now, in one plain group: why (or what would start it) on hover. */}
+          {e.exposure && <Pill tone={GROUP_TONE[e.exposure.group]} title={e.exposure.start ?? e.postureReason}>{e.exposure.label}</Pill>}
           {e.warning && <span className="h10-au-badge conf" title={e.warning}><AlertTriangle size={10} aria-hidden /> attention</span>}
           <Button size="xs" className="h10-au-open" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }} aria-label={`Open ${e.name}`}>
             <Sliders size={11} aria-hidden /> Details
@@ -712,8 +719,8 @@ export function AutomationsClient() {
     {
       key: '__tile', label: 'Exposure', kind: 'select', placeholder: 'Everything', wide: true,
       options: [
-        { value: 'writing', label: `Writing to Amazon (${num(counts.writing + counts.engineAuto)})` },
-        { value: 'unscoped', label: `Unscoped and writing (${num(counts.unscopedWriting + counts.engineAuto)})` },
+        { value: 'writing', label: `Writing to Amazon (${num(counts.writing + counts.engineActing)})` },
+        { value: 'unscoped', label: `Unscoped and writing (${num(counts.unscopedWriting + counts.engineActing)})` },
         { value: 'off', label: `Off (${num(counts.off)})` },
       ],
     },
@@ -813,15 +820,15 @@ export function AutomationsClient() {
         {/* The emphasis, and it counts what can WRITE rather than what is on Auto. */}
         <Button className="h10-au-stat writing tilebtn" active={tile === 'writing'} aria-pressed={tile === 'writing'} onClick={() => setTileAndUrl('writing')}>
           <div className="k">Writing to Amazon</div>
-          <div className="v">{rules === null || actors === null ? '…' : num(counts.writing + counts.engineAuto)}</div>
+          <div className="v">{rules === null || actors === null ? '…' : num(counts.writing + counts.engineActing)}</div>
           <div className="s">
-            {num(counts.writing)} rules + {actors === null ? '…' : num(counts.engineAuto)} engines on Auto
+            {num(counts.writing)} rules + {actors === null ? '…' : num(counts.engineActing)} engines that change Amazon on their own
             {counts.autoNotifyOnly > 0 && <> · {counts.autoNotifyOnly} more on Auto that only notifies</>}
           </div>
         </Button>
         <Button className="h10-au-stat exposure tilebtn" active={tile === 'unscoped'} aria-pressed={tile === 'unscoped'} onClick={() => setTileAndUrl('unscoped')}>
           <div className="k">Unscoped and writing</div>
-          <div className="v">{rules === null || actors === null ? '…' : num(counts.unscopedWriting + counts.engineAuto)}</div>
+          <div className="v">{rules === null || actors === null ? '…' : num(counts.unscopedWriting + counts.engineActing)}</div>
           <div className="s">bound to no market, portfolio, campaign or product — the account&rsquo;s actual exposure</div>
         </Button>
         <div className="h10-au-stat">
@@ -962,6 +969,10 @@ export function AutomationsClient() {
           ]}
         />
         {actorsErr && <span className="h10-au-actorserr" role="alert"><AlertTriangle size={12} aria-hidden /> {actorsErr} — the rules below are unaffected.</span>}
+        {/* 7a — every engine, by what it does now: none drops out of sight because it does not write. */}
+        {kind !== 'rules' && actors && actors.engines.length > 0 && groupSummary(actors.engines) && (
+          <span className="h10-au-obsnote">Engines: {groupSummary(actors.engines)}</span>
+        )}
         {kind !== 'rules' && actors && actors.observed.length > 0 && (
           <span className="h10-au-obsnote">
             + {actors.observed.length} observed actor{actors.observed.length === 1 ? '' : 's'} the registry does not declare
@@ -983,7 +994,7 @@ export function AutomationsClient() {
         searchPlaceholder="Search actors…"
         searchValue={(a) => (a.k === 'rule'
           ? `${a.r.name} ${a.r.description ?? ''} ${a.r.trigger} ${a.r.categoryLabel} ${a.r.actionTypes.join(' ')}`
-          : a.k === 'engine' ? `${a.e.name} ${a.e.what} engine` : `${a.o.actor} ${a.o.label}`)}
+          : a.k === 'engine' ? `${a.e.name} ${a.e.what} engine ${a.e.exposure?.label ?? ''}` : `${a.o.actor} ${a.o.label}`)}
         selectable
         selected={sel}
         onSelectedChange={setSel}

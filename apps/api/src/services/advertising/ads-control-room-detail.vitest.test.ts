@@ -235,3 +235,47 @@ describe('1b — the drawer finds an engine\'s rows through the ONE shared actor
     expect(whereOf()).toMatchObject({ OR: [{ userId: { in: ['automation:budget-manager-cron', 'automation:budget-manager'] } }] })
   })
 })
+
+describe('7a — an empty drawer says why from the lever (the automation catalog), never a sentence fixed in code', () => {
+  const leversWith = (...levers: Array<Record<string, unknown>>) => getEngineLevers.mockResolvedValueOnce({ levers, global: {} } as never)
+
+  it('THE FINDING: classic dayparting with no schedule of its own says that, not "every live schedule is rank-goal mode"', async () => {
+    leversWith({
+      key: 'dayparting', name: 'Classic dayparting', cron: 'ad-dayparting', mode: 'AUTO',
+      modeReason: 'No classic dayparting schedules (goal-mode schedules belong to rank-defend).',
+      exposure: { group: 'ready', label: 'Ready — nothing set up', start: 'Add a classic dayparting schedule and switch it on to start it.' },
+    })
+    const d = await getEngineDetail('dayparting')
+    expect(d!.evidenceNote).toBe('No bid writes in this window. No classic dayparting schedules (goal-mode schedules belong to rank-defend).')
+    expect(d!.evidenceNote).not.toMatch(/rank-goal mode/)
+  })
+
+  it('an engine a server switch holds off says the switch, not "its cron has never been armed"', async () => {
+    leversWith({
+      key: 'tos-defense', name: 'Top-of-Search defense', cron: 'top-of-search-defense', mode: 'OFF',
+      modeReason: 'NEXUS_ENABLE_TOS_DEFENSE_CRON is off — top-of-search defense does not run.',
+      exposure: { group: 'server-off', label: 'Off by a server switch', start: null },
+    })
+    expect((await getEngineDetail('tos-defense'))!.evidenceNote).toBe('No placement changes in this window. NEXUS_ENABLE_TOS_DEFENSE_CRON is off — top-of-search defense does not run.')
+  })
+
+  it('an engine that acts and wrote nothing in the window says only that', async () => {
+    leversWith({
+      key: 'auto-bid', name: 'Bid optimiser', cron: 'ads-auto-bid', mode: 'AUTO', modeReason: 'Runs on the account dial, which is AUTO.',
+      exposure: { group: 'acts', label: 'Changes Amazon on its own', start: null },
+    })
+    expect((await getEngineDetail('auto-bid'))!.evidenceNote).toBe('No bid changes in this window.')
+  })
+
+  it('8.3 — autopilot plans and budget schedules have rows now, and their drawers read their own actors', async () => {
+    const whereOf = () => (actionLogFindMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where
+    leversWith({ key: 'autopilot', name: 'Autopilot plans', cron: 'ad-autopilot', mode: 'AUTO', modeReason: 'x' })
+    const autopilot = await getEngineDetail('autopilot')
+    expect(autopilot!.writesEntities).toBe(true)
+    expect(whereOf()).toMatchObject({ OR: [{ userId: { startsWith: 'automation:autopilot-' } }, { userId: { in: ['automation:autopilot'] } }] })
+    actionLogFindMany.mockClear()
+    leversWith({ key: 'budget-schedules', name: 'Budget schedules', cron: 'ad-budget-schedule', mode: 'AUTO', modeReason: 'x' })
+    expect((await getEngineDetail('budget-schedules'))!.writesEntities).toBe(true)
+    expect(whereOf()).toMatchObject({ OR: [{ userId: { startsWith: 'automation:budget-schedule-' } }] })
+  })
+})
