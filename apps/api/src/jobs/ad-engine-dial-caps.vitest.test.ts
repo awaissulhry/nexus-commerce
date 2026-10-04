@@ -51,6 +51,11 @@ vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => (
   recordSuccessfulWrite: async () => undefined,
   recordCampaignLiveWrite: async () => undefined,
 }))
+// 1e — the Run-now guard (switch, scheduler arm flags, engine lock) is proven in ads-engine-lock.vitest.test.ts; every run gets through it here.
+vi.mock('../services/advertising/ads-engine-lock.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  guardLiveRun: async (_engine: string, fn: () => Promise<unknown>) => ({ ran: true, value: await fn() }),
+}))
 const amazon = vi.hoisted(() => ({ calls: [] as Array<{ externalId: string; patch: Record<string, unknown> }> }))
 vi.mock('../services/advertising/ads-api-client.js', () => {
   const record = async (_ctx: unknown, externalId: string, patch: Record<string, unknown>) => {

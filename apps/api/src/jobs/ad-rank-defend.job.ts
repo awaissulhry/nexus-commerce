@@ -15,6 +15,8 @@
  *
  * 1c — a live run honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST writes
  * nothing new; halted / OFF only floors bids, restores wait for Resume; at most N changes a run and a day.
+ * 1e — a live run, Run now included, also needs the business switch on and the scheduler's arm flags, and holds the
+ * engine lock (ads-engine-lock.ts): a Run now during a tick answers "skipped: a run is already in progress".
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -156,7 +158,8 @@ export interface RankDefendDecision {
 }
 export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[]; selfCompetition?: SelfCompetitionConflict[] }
 // 1c — `guard` (live runs only): the dial posture and the caps this run ran under, and what they held back.
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport }
+// 1e — `skipped`: a live run that did not start (switched off, not armed on the scheduler, or a run already in progress), in words.
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string }
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
@@ -490,6 +493,15 @@ async function loadFamilyTargeting(famCampIds: string[], campById: Map<string, {
 const PLAN_ALLOW_APPLY = true
 
 export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: string; force?: boolean } = {}): Promise<RankDefendSummary> {
+  // 1e — a LIVE run (the tick, Run now, a plan's Apply now) honours this business's switch and the scheduler's arm
+  // flags, and holds the engine lock so it never runs beside another (ads-engine-lock.ts). A dry run previews freely.
+  if (opts.dryRun) return rankDefendTick(opts)
+  const { guardLiveRun } = await import('../services/advertising/ads-engine-lock.js')
+  const run = await guardLiveRun('rank-defend', () => rankDefendTick(opts))
+  return run.ran ? run.value : { evaluated: 0, applied: 0, decisions: [], plans: [], skipped: run.reason }
+}
+
+async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; force?: boolean }): Promise<RankDefendSummary> {
   const dryRun = !!opts.dryRun
   // onlyPlanId scopes a run to ONE plan (per-plan run-now / apply-now): skip schedules
   // and the enabled filter, so even a disabled plan can be previewed or manually applied.
@@ -789,6 +801,7 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
 
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
+  if (r.skipped) return `skipped: ${r.skipped}`
   return `evaluated=${r.evaluated} applied=${r.applied}${engineGuardNote(r.guard)}`
 }
 
@@ -800,6 +813,7 @@ export async function runRankDefendCron(): Promise<void> {
       const gate = await engineMode('rank-defend', 'AUTO')
       if (gate.mode === 'OFF') return `skipped: ${gate.note}`
       const r = await runRankDefendOnce()
+      if (r.skipped) return rankDefendSummaryLine(r) // 1e — it did not run (e.g. a Run now holds the lock): no sweep either
       // AR — after holding the slot, re-push any bid/placement whose LAST live write
       // to Amazon failed (dead-lettered queue rows + failed inline placement), so
       // Amazon converges to our local truth without waiting for the next change or a

@@ -33,6 +33,7 @@
 import prisma from '../../db.js'
 import { pinnedDimensions, type AuthorityDimension } from './ads-authority-pins.js'
 import { ENGINE_ACTORS, engineActorWhere, type EngineKey } from './ads-engine-actors.js'
+import { runNowRefusal } from './ads-engine-lock.js'
 
 const DAY = 86_400_000
 
@@ -183,6 +184,22 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
   // and a read-only detail endpoint has no business dragging that graph in at module load.
   const { CRON_REGISTRY } = await import('../../jobs/cron-registry.js')
   const runnable = !!cron && Object.prototype.hasOwnProperty.call(CRON_REGISTRY, cron)
+  /**
+   * 1e — and not while the lever is off (its switch, its env, or the account halt / dial stops it), nor when the run
+   * would be refused anyway: the same check a live run passes (ads-engine-lock.ts — the switch and the arm flags as
+   * the scheduler sees them). The drawer says why instead of offering a button that answers "skipped".
+   */
+  let withheld: string | null = null
+  if (runnable && lever.mode === 'OFF') withheld = `Not offered while this engine is off: ${lever.modeReason}`
+  else if (runnable) {
+    try {
+      const refusal = await runNowRefusal(key)
+      if (refusal) withheld = `Not offered: ${refusal}`
+    } catch (err) {
+      withheld = `Not offered: whether it may run could not be checked (${err instanceof Error ? err.message : String(err)})`
+    }
+  }
+  const offered = runnable && !withheld
 
   const [runRows, grouped] = await Promise.all([
     cron
@@ -266,9 +283,9 @@ export async function getEngineDetail(key: string, opts: { days?: number } = {})
     key,
     cron: cron ?? null,
     run: {
-      available: runnable,
-      jobName: runnable ? cron : null,
-      why: runnable ? null : 'No manual trigger is registered for this job.',
+      available: offered,
+      jobName: offered ? cron : null,
+      why: offered ? null : withheld ?? 'No manual trigger is registered for this job.',
     },
     runs,
     health: { runs14d, failures14d, manual14d },

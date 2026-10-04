@@ -692,10 +692,22 @@ export async function runAutoBidCron(): Promise<void> {
     const { engineMode } = await import('../services/automation/engine-switch.service.js')
     const gate = await engineMode('auto-bid', 'AUTO')
     if (gate.mode === 'OFF') return `skipped: ${gate.note}`
+    return runAutoBidLiveOnce()
+  }).catch((err) => logger.error('ads-auto-bid cron: failure', { error: String(err) }))
+}
+
+/**
+ * 1e — one live auto-bid run, the tick's and Run now's alike: this business's switch, the scheduler's arm flag and the
+ * engine lock first (ads-engine-lock.ts), then the run and its summary.
+ */
+export async function runAutoBidLiveOnce(): Promise<string> {
+  const { guardLiveRun } = await import('../services/advertising/ads-engine-lock.js')
+  const run = await guardLiveRun('auto-bid', async () => {
     const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
     const r = await runAutoBidOnce()
     return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
-  }).catch((err) => logger.error('ads-auto-bid cron: failure', { error: String(err) }))
+  })
+  return run.ran ? run.value : `skipped: ${run.reason}`
 }
 
 export function startAutoBidCron(): void {

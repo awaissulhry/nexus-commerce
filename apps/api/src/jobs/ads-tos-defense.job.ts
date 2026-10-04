@@ -30,6 +30,14 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
  * be the same run.
  */
 export async function runTosDefenseOnce(): Promise<string> {
+  // 1e — every run here is live (the tick and Run now alike): this business's switch, the scheduler's arm flags and
+  // the engine lock first (ads-engine-lock.ts).
+  const { guardLiveRun } = await import('../services/advertising/ads-engine-lock.js')
+  const run = await guardLiveRun('tos-defense', tosDefenseTick)
+  return run.ran ? run.value : `skipped: ${run.reason}`
+}
+
+async function tosDefenseTick(): Promise<string> {
   const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
   const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
   const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)

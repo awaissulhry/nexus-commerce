@@ -9590,7 +9590,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const plan = await prisma.productRankPlan.findUnique({ where: { id }, select: { id: true } })
     if (!plan) { reply.status(404); return { error: 'not found' } }
     const { runRankDefendOnce } = await import('../jobs/ad-rank-defend.job.js')
-    try { return await runRankDefendOnce({ dryRun, onlyPlanId: id, force: !dryRun }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // 1e — a live apply passes Run now's guard inside runRankDefendOnce (switch, scheduler arm flags, engine lock); refused = 409 + `skipped`.
+    try { const r = await runRankDefendOnce({ dryRun, onlyPlanId: id, force: !dryRun }); if (r.skipped) reply.status(409); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/rank-plans/:id/revert', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -9677,7 +9678,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const body = (request.body ?? {}) as { dryRun?: boolean }
     const dryRun = body.dryRun === true || (request.query as { dryRun?: string })?.dryRun === '1'
     const { runRankDefendOnce } = await import('../jobs/ad-rank-defend.job.js')
-    try { return await runRankDefendOnce({ dryRun }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // 1e — a live run passes Run now's guard inside runRankDefendOnce (switch, scheduler arm flags, engine lock); refused = 409 + `skipped`.
+    try { const r = await runRankDefendOnce({ dryRun }); if (r.skipped) reply.status(409); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // WC — one-time re-sync: force-push the CURRENT local bids to Amazon for rank-governed

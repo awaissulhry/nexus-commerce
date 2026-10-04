@@ -9,6 +9,8 @@ const CLAIM = `
   return 1`
 const RENEW = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], 90000) else return 0 end`
 const RELEASE = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`
+/** The holder-only renew (back to 90 s) and release, shared with services/advertising/ads-engine-lock.ts. */
+export { RENEW as RENEW_LEASE, RELEASE as RELEASE_LEASE }
 
 /** One bounded pair of keys per schedule/profile; do not start work without a lease. */
 export async function runWorkspaceTick(store: LeaseStore, jobId: string, scheduledAt: number, work: () => Promise<void>, periodMs = 60_000): Promise<boolean> {
