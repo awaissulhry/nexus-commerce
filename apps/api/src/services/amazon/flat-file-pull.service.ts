@@ -22,6 +22,7 @@
  *   Jobs are kept in memory for 2 hours, then pruned.
  */
 
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { productEventService } from '../product-event.service.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from '../marketplaces/amazon.service.js'
@@ -162,6 +163,19 @@ async function runAllMarketsJob(parentJob: AllMarketsPullJob): Promise<void> {
 
 // ── Core job logic ─────────────────────────────────────────────────────────
 
+/**
+ * U4b (design-draft-and-remote §A fact 4) — Amazon's report replaces the bag's `attributes` and nothing else: the offer
+ * draft (`amazonOfferDraft`), the live offer and fulfilment stores (`amazonOffer`, `amazonFulfillment`), the media
+ * workspace, the fulfilment door's top-level mirrors and every other key stay. Runs in the transaction that just
+ * recorded the listing, so the row is locked by that write: no other writer can change the bag in between.
+ */
+async function keepListingBag(tx: Prisma.TransactionClient, listingId: string, attributes: Record<string, unknown>): Promise<void> {
+  const row = await tx.channelListing.findUnique({ where: { id: listingId }, select: { platformAttributes: true } })
+  const bag = row?.platformAttributes && typeof row.platformAttributes === 'object' && !Array.isArray(row.platformAttributes)
+    ? row.platformAttributes as Record<string, unknown> : {}
+  await tx.channelListing.update({ where: { id: listingId }, data: { platformAttributes: { ...bag, attributes } as Prisma.InputJsonValue } })
+}
+
 async function runJob(job: PullJob): Promise<void> {
   const { marketplace: mp, productType: pt } = job
   const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
@@ -265,10 +279,11 @@ async function runJob(job: PullJob): Promise<void> {
       // still-draft loses its pause. A different stored ASIN is kept and reported, never replaced.
       // P0 2026-07-20 — DISCOVERABLE means the listing EXISTS on Amazon (incomplete offer, but live +
       // manageable): any Amazon-known status is published, so dispatch never skips it.
+      // U4b — `platformAttributes` is NOT among these fields: Amazon's report replaces only its `attributes`, merged
+      // into the listing's bag below (`keepListingBag`), never the whole bag.
       const listingFields: Record<string, any> = {
         title: title ?? attrs.item_name?.[0]?.value ?? undefined,
         description: attrs.product_description?.[0]?.value ?? undefined,
-        platformAttributes: { attributes: attrs },
         syncStatus: 'SYNCED',
         lastSyncedAt: new Date(),
         lastSyncStatus: 'SUCCESS',
@@ -287,10 +302,14 @@ async function runJob(job: PullJob): Promise<void> {
       // truth); on UPDATE the pool owns ChannelListing.quantity.
       const createOnlyQty = qty !== null && !isNaN(qty) ? { quantity: qty } : {}
 
-      const [recorded] = await prisma.$transaction(tx => recordLiveListings(tx, {
-        channel: 'AMAZON', market: mp, accountId,
-        rows: [{ productId: product.id, listingStatus: listingStatus ?? 'ACTIVE', externalListingId: asin, fields: listingFields, createFields: createOnlyQty }],
-      }))
+      const [recorded] = await prisma.$transaction(async tx => {
+        const out = await recordLiveListings(tx, {
+          channel: 'AMAZON', market: mp, accountId,
+          rows: [{ productId: product.id, listingStatus: listingStatus ?? 'ACTIVE', externalListingId: asin, fields: listingFields, createFields: createOnlyQty }],
+        })
+        await keepListingBag(tx, out[0].id, attrs)
+        return out
+      })
       // Round 6 — a still-draft this pull found live: its held price changes are sent once (after the commit above).
       await sendHeldPricesAfterGoLive([recorded], 'amazon-pull')
       if (recorded.keptExternalListingId) {

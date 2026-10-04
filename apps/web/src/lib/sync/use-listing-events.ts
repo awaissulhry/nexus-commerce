@@ -32,6 +32,11 @@
 //   bulk.progress    → invalidation 'bulk-job.completed' (debounced upstream)
 //   bulk.completed   → invalidation 'bulk-job.completed'
 //   product.media.changed → invalidation 'product-media.changed' (images rebuild P1)
+//   publication.status_changed → invalidation 'publication.status_changed' (sheet publish parity, step 2 — the
+//                       open Publish dialog and the sheet's toolbar mark learn a result without a click)
+//   listing.values_changed → invalidation 'listing.values_changed' (Amazon sheet gaps — the sheet and the Matrix
+//                       stay in step; payload in meta)
+//   inventory.stock_changed → invalidation 'inventory.stock_changed' (narrow: NOT 'stock.adjusted')
 //   ping             → no-op (just confirms liveness)
 
 'use client'
@@ -122,18 +127,32 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
             meta: { source: 'sse', reason: parsed.reason },
           })
         } else if (parsed.type === 'inventory.stock_changed') {
-          // The API's own event name (the EV.1 catalogue's), mapped to the invalidation type every
-          // stock-aware surface already subscribes to. Without this branch the bridge is inert: this
-          // chain maps SSE types to invalidation types EXPLICITLY, so an event it does not name
-          // reaches no one, whatever the publisher calls it.
-          //
-          // Whole-grid refresh for now. The payload also carries locationId, change,
-          // quantityBefore/After, available, poolTotal, reason and orderId, so a surface that finds
-          // this too blunt can narrow on `id` without the publisher changing.
-          emitInvalidation({ type: 'stock.adjusted', id: parsed.productId, meta: { source: 'sse' } })
+          // The API's own event name (the EV.1 catalogue's). Since the Amazon sheet gaps lane it is a named listener,
+          // so it arrives on every stock movement: it maps to its OWN narrow type, never to 'stock.adjusted' (about 20
+          // stock pages refresh whole grids on that). `id` = the product whose stock moved; the sheet and the Matrix
+          // re-read a family's quantities when it is one of theirs.
+          emitInvalidation({ type: 'inventory.stock_changed', id: parsed.productId, meta: { source: 'sse', productId: parsed.productId } })
+        } else if (parsed.type === 'listing.values_changed') {
+          // Amazon sheet gaps — Mode, Qty, Buffer, price, fulfilment or ASIN changed on listings of one family
+          // (`productId` = the family root). The sheet and the Matrix decide from the payload whether to re-read.
+          emitInvalidation({
+            type: 'listing.values_changed',
+            id: parsed.productId,
+            fields: Array.isArray(parsed.fields) ? parsed.fields : undefined,
+            meta: { source: 'sse', productId: parsed.productId, listings: parsed.listings, fields: parsed.fields, reason: parsed.reason },
+          })
         } else if (parsed.type === 'product.media.changed') {
           // Images rebuild P1 — the family's photo plan changed: the Media page and the Product media column refetch.
           emitInvalidation({ type: 'product-media.changed', id: parsed.productId, meta: { source: 'sse', layer: parsed.layer } })
+        } else if (parsed.type === 'publication.status_changed') {
+          // The whole payload rides in `meta`: a listener matches its own family and destination there.
+          emitInvalidation({
+            type: 'publication.status_changed',
+            id: parsed.publicationId,
+            meta: { source: 'sse', publicationId: parsed.publicationId, productId: parsed.productId, channel: parsed.channel,
+              marketplace: parsed.marketplace, accountId: parsed.accountId, aliasKey: parsed.aliasKey, status: parsed.status,
+              terminal: parsed.terminal, batchId: parsed.batchId },
+          })
         } else if (parsed.type === 'product.created') {
           emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.deleted') {
@@ -156,6 +175,8 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'listing.updated',
       'listing.created',
       'listing.deleted',
+      'listing.values_changed',
+      'inventory.stock_changed',
       'wizard.submitted',
       'bulk.progress',
       'bulk.completed',
@@ -164,6 +185,7 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'product.created',
       'product.deleted',
       'product.media.changed',
+      'publication.status_changed',
       'ping',
     ]
     for (const t of namedTypes) source.addEventListener(t, handle as EventListener)

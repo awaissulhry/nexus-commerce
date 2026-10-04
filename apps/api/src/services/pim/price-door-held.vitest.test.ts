@@ -328,8 +328,9 @@ describe('the hooks that run it', () => {
     ] as const) expect(source(file), file).toContain(call)
   })
   it('Publish sends the held prices of the drafts that went live: Amazon\'s acceptance and eBay\'s receipt', () => {
-    const body = source('./studio-publication.service.ts')
-    expect(body.split('async function storeResult')[1]!.split('\nasync function ')[0]).toMatch(/promoted = await promoteAcceptedDrafts\(tx, context\)[\s\S]*await heldPricesAfterGoLive\(promoted, userId\)/)
-    expect(body.split('async function reconcileEbayReceipt')[1]!.split('\nasync function ')[0]).toMatch(/STILL_DRAFT_LISTING[\s\S]*await heldPricesAfterGoLive\(drafts, userId\)/)
+    // The settle step owns both since the publication-history work moved them out of the service.
+    const body = source('./studio-publication-settle.ts')
+    expect(body.split('async function storeResult')[1]!.split('\nexport async function ')[0]).toMatch(/promoted = await promoteAcceptedDrafts\(tx, context\)[\s\S]*await heldPricesAfterGoLive\(promoted, userId\)/)
+    expect(body.split('async function reconcileEbayReceipt')[1]!.split('\nexport async function ')[0]).toMatch(/STILL_DRAFT_LISTING[\s\S]*await heldPricesAfterGoLive\(drafts, userId\)/)
   })
 })

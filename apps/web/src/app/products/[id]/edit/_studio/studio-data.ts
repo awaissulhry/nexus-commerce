@@ -91,36 +91,17 @@ export async function loadStudioData(id: string, signal?: AbortSignal): Promise<
       marketplacesFailed = primaryLanguage === null
     }
     // Keep revoked/disconnected accounts in the scope inventory. A failed read is unknown.
-    const accountsByChannel = new Map<string, NonNullable<MarketplaceLite['accounts']>>()
     let connectionsRead = false
     if (connectionsRes.status === 'fulfilled' && connectionsRes.value.ok) {
       try {
-        const data: unknown = await connectionsRes.value.json()
-        if (!data || typeof data !== 'object' || !Array.isArray((data as { connections?: unknown }).connections)) throw new Error('Connections not reported')
-        const connections = (data as { connections: unknown[] }).connections
-        for (const raw of connections) {
-          if (!raw || typeof raw !== 'object') throw new Error('Connection not reported')
-          const c = raw as Record<string, unknown>
-          if (typeof c.id !== 'string' || typeof c.channel !== 'string') throw new Error('Connection identity not reported')
-          if (c.isManagedBy === 'pending') continue
-          const labels = [c.accountLabel, c.storeName, c.sellerName]
-          const label = labels.find((v): v is string => typeof v === 'string' && v.trim().length > 0)
-          const health = connectionHealth(c, Date.now())
-          accountsByChannel.set(c.channel, [...(accountsByChannel.get(c.channel) ?? []), {
-            id: c.id, label: label == null ? c.id : label, primary: c.isPrimary === true, health,
-          }])
-        }
+        marketplaces = joinMarketplaceConnections(marketplaces, await connectionsRes.value.json())
         connectionsRead = true
-      } catch { accountsByChannel.clear() }
+      } catch { /* an unreadable inventory is unknown, never empty */ }
     }
-    if (!connectionsRead) marketplacesFailed = true
-    marketplaces = marketplaces.map(m => {
-      const accounts = accountsByChannel.get(m.channel) ?? []
-      if (!connectionsRead) return { ...m, connectionHealth: null }
-      const healthy = accounts.find(a => a.health?.state === 'connected')
-      return { ...m, connected: healthy != null, accounts,
-        connectionHealth: healthy?.health ?? accounts[0]?.health ?? null }
-    })
+    if (!connectionsRead) {
+      marketplacesFailed = true
+      marketplaces = marketplaces.map(m => ({ ...m, connectionHealth: null }))
+    }
 
     // One extra call, and ONLY for a variation. A parent pays nothing for this.
     let family: StudioFamily | null = null
@@ -149,4 +130,32 @@ export async function loadStudioData(id: string, signal?: AbortSignal): Promise<
     // Transport failure (DNS, cold start, reset) — a soft failure the client pass can retry.
     return { kind: 'error', code: null }
   }
+}
+
+/**
+ * Markets × the accounts of their channel, from `GET /api/connections?all=true`. Revoked and disconnected accounts stay
+ * in the inventory with their health; a market counts as connected when one of its channel's accounts is healthy. A
+ * body that is not the expected shape throws: an unknown inventory, never an empty one. The studio frame and the
+ * products list's Publish window (`_publication/dialog/useBusinessDestinations.ts`) both join through this one rule.
+ */
+export function joinMarketplaceConnections(marketplaces: MarketplaceLite[], connectionsBody: unknown, now: number = Date.now()): MarketplaceLite[] {
+  if (!connectionsBody || typeof connectionsBody !== 'object' || !Array.isArray((connectionsBody as { connections?: unknown }).connections)) throw new Error('Connections not reported')
+  const accountsByChannel = new Map<string, NonNullable<MarketplaceLite['accounts']>>()
+  for (const raw of (connectionsBody as { connections: unknown[] }).connections) {
+    if (!raw || typeof raw !== 'object') throw new Error('Connection not reported')
+    const c = raw as Record<string, unknown>
+    if (typeof c.id !== 'string' || typeof c.channel !== 'string') throw new Error('Connection identity not reported')
+    if (c.isManagedBy === 'pending') continue
+    const labels = [c.accountLabel, c.storeName, c.sellerName]
+    const label = labels.find((v): v is string => typeof v === 'string' && v.trim().length > 0)
+    const health = connectionHealth(c, now)
+    accountsByChannel.set(c.channel, [...(accountsByChannel.get(c.channel) ?? []), {
+      id: c.id, label: label == null ? c.id : label, primary: c.isPrimary === true, health,
+    }])
+  }
+  return marketplaces.map(m => {
+    const accounts = accountsByChannel.get(m.channel) ?? []
+    const healthy = accounts.find(a => a.health?.state === 'connected')
+    return { ...m, connected: healthy != null, accounts, connectionHealth: healthy?.health ?? accounts[0]?.health ?? null }
+  })
 }

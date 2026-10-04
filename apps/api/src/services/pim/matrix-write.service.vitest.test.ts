@@ -3,12 +3,13 @@
  * restored by VALUE (`restoreWrites`). The stateful paths run in `routes/studio-matrix.routes.vitest.test.ts` (mocked
  * primitives) and in the live fixture rehearsal recorded in `docs/pes-claims.md`.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MatrixCells, VerbChange } from '@nexus/shared/matrix-contract'
 
 // The door's version bump runs in a transaction: a stand-in that lets every compare-and-set through (one row each).
 // No product here sells from another business's stock (shared stock by SKU: `sharedStockLender` asks the link).
-vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: async () => ({ count: 1 }) } }), stockPoolLink: { findFirst: async () => null } } }))
+const h = vi.hoisted(() => ({ findMany: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })) }))
+vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: h.updateMany } }), channelListing: { findMany: h.findMany }, stockPoolLink: { findFirst: async () => null } } }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
 vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn(), amazonManagedListingIds: vi.fn(async () => new Set<string>()) }))
 vi.mock('../stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: vi.fn() }))
@@ -18,10 +19,15 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 vi.mock('./fulfillment-method.service.js', () => ({ setFulfillmentMethod: vi.fn() }))
 vi.mock('./channel-price-write.service.js', () => ({ writeChannelPrices: vi.fn() }))
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
+vi.mock('../listing-values-events.js', () => ({ announceListingValues: vi.fn() }))
 
-import { applyCell, paramsForChange, restoreWrites } from './matrix-write.service.js'
+import { applyCell, paramsForChange, restoreWrites, writeMatrixCells } from './matrix-write.service.js'
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
+import { setFulfillmentMethod } from './fulfillment-method.service.js'
+import { getMatrixRead } from './matrix.service.js'
+import { productReadCacheService } from '../product-read-cache.service.js'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -142,5 +148,89 @@ describe('an Etsy coordinate\'s Mode, Qty and Buffer cells go through the follow
     const outcome = await applyCell(read(), { rowId: 'row', coordinateKey: 'ETSY:GLOBAL', cell, value, expectedVersion: 3 } as never, ctx)
     expect(outcome).toMatchObject({ outcome: 'applied', version: 4 })
     called()
+  })
+})
+
+// Amazon sheet gaps (design-sync §1.B) — the outcome names every listing row it moved, so the sheet and the Matrix adopt
+// the new versions; another listing on the coordinate is a conflict; the door reads with the caller's account.
+describe('the door answers the listings it moved, refuses a listing it did not expect, and reads with the caller’s account', () => {
+  const EU_ROWS = [{ id: 'l-it', marketplace: 'IT', version: 3, offerClosedAt: null }, { id: 'l-de', marketplace: 'DE', version: 5, offerClosedAt: null }]
+  const euRead = (version = 3) => ({
+    version: 1, productId: 'root',
+    rows: [{ id: 'row', sku: 'S', cells: {
+      'AMAZON:EU': { ...cells({}), listingId: 'l-it', version, writable: { fulfilment: true, syncMode: true, syncQty: true, syncBuffer: true } },
+      'AMAZON:IT': { ...cells({ fulfilment: null, sync: null }), listingId: 'l-it', version, writable: { price: true, salePrice: true } },
+    } }],
+    coordinates: [
+      { key: 'AMAZON:EU', kind: 'region-inventory', channel: 'AMAZON', market: 'EU', label: 'Amazon EU', region: 'EU', accountId: 'acc', sharedInventoryWith: ['IT', 'DE'], vocabulary: { fulfilment: ['FBA', 'FBM'] } },
+      { key: 'AMAZON:IT', kind: 'market', channel: 'AMAZON', market: 'IT', label: 'Amazon · IT', region: 'EU', accountId: 'acc', sharedInventoryWith: null, vocabulary: { fulfilment: ['FBA', 'FBM'] } },
+    ],
+  }) as never
+  const ctx = { productId: 'root', actor: 'tester', can: () => true }
+  const done = { updated: 2, skippedFba: 0, unchanged: 0, matched: 2, results: [] }
+  const EU_AFTER = [{ listingId: 'l-it', productId: 'row', version: 4 }, { listingId: 'l-de', productId: 'row', version: 6 }]
+
+  beforeEach(() => {
+    h.findMany.mockReset().mockResolvedValue(EU_ROWS)
+    h.updateMany.mockClear()
+    vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue(done)
+    vi.mocked(setStockBuffer).mockReset().mockResolvedValue({ ...done, results: [] })
+    vi.mocked(getMatrixRead).mockReset().mockImplementation(async () => euRead())
+    vi.mocked(productReadCacheService.refreshMany).mockReset().mockResolvedValue(undefined as never)
+  })
+
+  it.each([['syncMode', 'PINNED'], ['syncQty', 7], ['syncBuffer', 2]] as const)('an EU %s write returns every EU row at its version + 1', async (cell, value) => {
+    const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell, value, expectedVersion: 3 } as never, ctx)
+    expect(outcome).toMatchObject({ outcome: 'applied', version: 4, expandedTo: ['AMAZON:IT', 'AMAZON:DE'] })
+    expect(outcome.listings).toEqual(EU_AFTER)
+  })
+
+  it('fulfilment and price answer the versions their own doors report', async () => {
+    vi.mocked(setFulfillmentMethod).mockReset().mockResolvedValue({ results: [
+      { listingId: 'l-it', productId: 'row', channel: 'AMAZON', marketplace: 'IT', outcome: 'applied', version: 4, productFlag: null },
+      { listingId: 'l-de', productId: 'row', channel: 'AMAZON', marketplace: 'DE', outcome: 'noop', version: 5, productFlag: null },
+    ], applied: 1, refused: 0, noop: 1, conflict: 0, productConversions: [] })
+    const f = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', value: 'FBA', expectedVersion: 3 } as never, ctx)
+    expect(f).toMatchObject({ outcome: 'applied', version: 4, listings: [{ listingId: 'l-it', productId: 'row', version: 4 }] })
+
+    vi.mocked(writeChannelPrices).mockReset().mockResolvedValue({ results: [{ listingId: 'l-it', productId: 'row', channel: 'AMAZON', marketplace: 'IT', outcome: 'applied', version: 4, guarded: true, queueId: null }], applied: 1, refused: 0, noop: 0, conflict: 0 })
+    const p = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 } as never, ctx)
+    expect(p).toMatchObject({ outcome: 'applied', version: 4, listings: [{ listingId: 'l-it', productId: 'row', version: 4 }] })
+  })
+
+  it('a refusal after the rows were staged still reports them (their versions moved)', async () => {
+    vi.mocked(setStockBuffer).mockResolvedValue({ ...done, results: [{ listingId: 'l-de', sku: 'S', channel: 'AMAZON', marketplace: 'DE', action: 'SKIPPED_FBA', buffer: 0, quantity: null }] })
+    const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncBuffer', value: 2, expectedVersion: 3 } as never, ctx)
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: 4, listings: EU_AFTER })
+  })
+
+  it('another listing on the coordinate than the caller saw is a conflict carrying the current version; nothing is written', async () => {
+    const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3, expectedListingId: 'l-other-account' } as never, ctx)
+    expect(outcome).toEqual({ rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: 3 })
+    expect(h.updateMany).not.toHaveBeenCalled()
+    expect(setFollowMasterQuantity).not.toHaveBeenCalled()
+    /* positive control: the listing the caller saw → applied */
+    const ok = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3, expectedListingId: 'l-it' } as never, ctx)
+    expect(ok).toMatchObject({ outcome: 'applied', version: 4 })
+  })
+
+  it('the same expectedVersion twice is a conflict with the current version and the one sentence — in one write and across two', async () => {
+    const one = await writeMatrixCells(ctx, [
+      { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 },
+      { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncBuffer', value: 2, expectedVersion: 3 },
+    ])
+    expect(one.results.map((r) => [r.outcome, r.version, r.reason])).toEqual([['applied', 4, undefined], ['conflict', 4, 'Changed elsewhere — reloaded']])
+    expect(setStockBuffer).not.toHaveBeenCalled()
+    // A second request carrying the version the first one spent: the fresh read holds 4.
+    vi.mocked(getMatrixRead).mockImplementation(async () => euRead(4))
+    const two = await writeMatrixCells(ctx, [{ rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 8, expectedVersion: 3 }])
+    expect(two.results[0]).toMatchObject({ outcome: 'conflict', version: 4, reason: MATRIX_COPY.changedElsewhere })
+  })
+
+  it('the caller’s accountId reaches the read (the GET’s account), and none means none', async () => {
+    await writeMatrixCells({ ...ctx, accountId: 'acc-2' }, [])
+    expect(getMatrixRead).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'root', accountId: 'acc-2' }))
+    await writeMatrixCells(ctx, [])
+    expect(getMatrixRead).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'root', accountId: null }))
   })
 })

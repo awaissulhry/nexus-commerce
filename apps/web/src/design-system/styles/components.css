@@ -638,6 +638,23 @@ html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
   padding: 20px;
   background: rgb(var(--nds-shadow-rgb) / 0.68);
 }
+/* The surface for a question inside the overlay (`DrawerOverlayCard`): the scrim above is only a
+   dimmer, so the question gets its own card — text on the surface, never on the scrim. */
+.nds-drawer-ovcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  width: 100%;
+  max-width: 460px;
+  min-width: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: var(--nds-space-16) var(--nds-space-18);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  box-shadow: var(--nds-shadow-modal);
+}
 
 /* ── Drawer — NON-MODAL panel (PES.4.1; slide-over per layout-v2 §5) ──
    The same drawer, overlaying the surface instead of blocking it.
@@ -3042,6 +3059,82 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   color: var(--nds-text-link); text-decoration: none; }
 .nds-progress-card-link:hover { text-decoration: underline; }
 .nds-progress-card-link:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-sm); }
+
+/* PUBLISH STATUS (grid/renderers/PublishStatusCell.tsx, sheet publish parity 2026-10-02). The cell is a Pill + time and
+   is never painted: red on a sheet cell already means "a required field is empty". Text is --nds-text /
+   --nds-text-strong only; tone words use the tone TEXT tokens (7:1 light and dark). */
+.nds-publish-trigger { max-width: 100%; }
+.nds-publish-pill { vertical-align: middle; }
+.nds-publish-cell { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; max-width: 100%;
+  font-size: var(--nds-font-size-xs); color: var(--nds-text); }
+.nds-publish-cell .nds-pill { flex: none; }
+.nds-publish-cell-time { flex: none; font-variant-numeric: tabular-nums; color: var(--nds-text); }
+.nds-publish-cell-edited { flex: none; font-weight: var(--nds-font-weight-semibold); color: var(--nds-warning-text); }
+.nds-detailpop.nds-publish-pop { min-width: 300px; max-width: 400px; padding: 0; }
+.nds-publish-card { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.nds-publish-card-head { flex: none; display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-10) var(--nds-space-14);
+  border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-publish-card-title { flex: 1 1 auto; min-width: 0; font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong);
+  overflow-wrap: anywhere; }
+/* The body is the only part that scrolls; overscroll-behavior keeps a wheel at its end from scrolling the sheet behind. */
+.nds-publish-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column;
+  gap: var(--nds-space-10); padding: var(--nds-space-12) var(--nds-space-14); }
+.nds-publish-card-hint, .nds-publish-card-line, .nds-publish-card-note { margin: 0; line-height: 1.45; }
+.nds-publish-card-note { padding: var(--nds-space-8) var(--nds-space-10); border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); }
+.nds-publish-card-strong { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.nds-publish-card-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--nds-space-4) var(--nds-space-12); margin: 0; }
+.nds-publish-card-fact { display: contents; }
+.nds-publish-card-fact dt { margin: 0; font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.nds-publish-card-fact dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.nds-publish-card-section { display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.nds-publish-card-gh { margin: 0; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+/* The sent fields read as one wrapped line, divided by a hairline (not a "·" glyph a screen reader would speak). */
+.nds-publish-card-sent { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; row-gap: var(--nds-space-2); }
+.nds-publish-card-sent li { padding-right: var(--nds-space-8); }
+.nds-publish-card-sent li + li { padding-left: var(--nds-space-8); border-left: 1px solid var(--nds-border); }
+.nds-publish-card-message { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The rows bleed by their own padding so their TEXT lines up with the section heading above, clickable or not. */
+.nds-publish-card-items { list-style: none; margin: 0 calc(var(--nds-space-8) * -1); padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.nds-publish-card-item { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-10);
+  width: 100%; min-height: 32px; padding: var(--nds-space-6) var(--nds-space-8); border-radius: var(--nds-radius-md); cursor: pointer; color: var(--nds-text); }
+.nds-publish-card-item:hover { background: var(--nds-surface-hover); }
+.nds-publish-card-item:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; background: var(--nds-surface-hover); }
+.nds-publish-card-item.is-static { cursor: default; }
+.nds-publish-card-item.is-static:hover { background: none; }
+.nds-publish-card-what { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-publish-card-issue-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nds-space-6); }
+.nds-publish-card-sev { font-weight: var(--nds-font-weight-bold); }
+.nds-publish-card-sev.tone-danger { color: var(--nds-danger-text); }
+.nds-publish-card-sev.tone-warning { color: var(--nds-warning-text); }
+.nds-publish-card-sev.tone-info { color: var(--nds-info-text); }
+.nds-publish-card-code { font-family: var(--nds-font-mono); font-size: var(--nds-font-size-xs); color: var(--nds-text); }
+.nds-publish-card-reason { overflow-wrap: anywhere; }
+.nds-publish-card-act { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-link); }
+.nds-publish-card-foot { flex: none; display: flex; padding: var(--nds-space-8) var(--nds-space-14); border-top: 1px solid var(--nds-border-subtle); }
+/* A toolbar mark that is a filter and is ON must look on without focus: an inset ring (a shape, not a shade). */
+.nds-sheet-statuses .nds-pill.btn[aria-pressed='true'] { box-shadow: inset 0 0 0 2px currentColor; }
+
+/* TIMELINE (components/Timeline.tsx, 2026-10-02) — a read-only record of what happened, not a Stepper. The dot is the
+   tone's TEXT colour (7:1 as text, so above 3:1 as a graphic, WCAG 1.4.11) in both themes; a step that has not happened
+   is a hollow ring in --nds-text. The connector is decorative. */
+.nds-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.nds-timeline-step { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: var(--nds-space-10);
+  padding-bottom: var(--nds-space-12); }
+.nds-timeline-step:last-child { padding-bottom: 0; }
+.nds-timeline-step:not(:last-child)::before { content: ''; position: absolute; left: 6px; top: 20px; bottom: 2px; width: 2px;
+  border-radius: var(--nds-radius-full); background: var(--nds-border); }
+.nds-timeline-dot { margin-top: 3px; width: 14px; height: 14px; box-sizing: border-box; border-radius: var(--nds-radius-round); background: var(--nds-text); }
+/* Success follows the success PILL's ink (blue, H10 parity), so a Verified step and a Verified pill are one colour. */
+.nds-timeline-step.tone-success .nds-timeline-dot { background: var(--nds-pill-success-fg); }
+.nds-timeline-step.tone-info .nds-timeline-dot { background: var(--nds-info-text); }
+.nds-timeline-step.tone-warning .nds-timeline-dot { background: var(--nds-warning-text); }
+.nds-timeline-step.tone-danger .nds-timeline-dot { background: var(--nds-danger-text); }
+.nds-timeline-step.is-pending .nds-timeline-dot { background: var(--nds-surface); border: 2px solid var(--nds-text); }
+.nds-timeline-body { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-timeline-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-10); }
+.nds-timeline-label { font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.nds-timeline-detail { font-size: var(--nds-font-size-xs); color: var(--nds-text); overflow-wrap: anywhere; }
 
 /* ChangeReview — selectable comparisons; field text stays readable when its choice is disabled. */
 .nds-change-review { display: grid; gap: var(--nds-space-12); min-width: 0; }

@@ -34,6 +34,15 @@ import { whereCoordinate } from '../../lib/listing-coordinate.js'
 import { amazonDiscountedPrice } from './discounted-price.js'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
 import { recordLiveListings, sendHeldPricesAfterGoLive } from '../pim/live-listing.service.js'
+import { isFbaCoordinate } from '../../lib/amazon-fulfillment.js'
+import {
+  AMAZON_FBA_CODE, AMAZON_FBM_CODE, amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode, normaliseAmazonFulfilmentCode,
+} from '../../lib/amazon-fulfilment-programme.js'
+import { amazonFulfillmentAvailability, amazonPurchasableOffer } from './offer-attributes.js'
+import { readAmazonOfferFacts, type AmazonOfferFacts, type AmazonOfferSource, type AmazonOfferValues } from './offer-facts.js'
+import {
+  AMAZON_OFFER_LEAVES, PURCHASABLE_OFFER_LEAVES, amazonOfferLeafRefusal, amazonOfferLivePath, rootOfLeaf, type AmazonOfferLeaf,
+} from './offer-fields.js'
 
 /** PR-PRESENCE-SANCTIONED-PAIR: offerActive:false => skip_offer:true is the ONE
  * sanctioned two-flag pairing. Acknowledged close owns offerClosedAt + offerActive;
@@ -108,6 +117,10 @@ const FLAT_FILE_EXPLICIT_KEYS = [
   'fulfillment_availability__fulfillment_channel_code',
   'fulfillment_availability__quantity',
   'fulfillment_availability__lead_time_to_ship_max_days',
+  // U4b — the whole root is built once (`flatFileFulfilmentRoot`); these two used to fall through to the generic
+  // loop, which replaced the root and lost the code and the quantity.
+  'fulfillment_availability__restock_date',
+  'fulfillment_availability__is_inventory_available',
 ]
 /** The feed also handles the product-identifier columns: the block that emits merchant_suggested_asin /
  * externally_assigned_product_identifier, so the generic loop never ALSO emits a raw `external_product_id`
@@ -1367,6 +1380,178 @@ export function buildFollowQuantityPatch(
   return { quantity: qty }
 }
 
+// ── U4b — the old page's offer facts: one fulfilment root, the live stores, label codes ─────────────────────────
+
+const FULFILMENT_CODE_KEY = 'fulfillment_availability__fulfillment_channel_code'
+const FULFILMENT_CODE_LABELS = 'fulfillment_availability.fulfillment_channel_code'
+type EnumCodeMap = Readonly<Record<string, Readonly<Record<string, string>>>>
+const asRecord = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null)
+const cellText = (v: unknown): string => (v == null ? '' : String(v).trim())
+
+/** Old pick-list words for the two codes Nexus sets: the bracket of "Logistica di Amazon (UE)", and the short names this
+ *  page has always read as one of them. */
+const OLD_FULFILMENT_WORDS: Readonly<Record<string, string>> = {
+  UE: AMAZON_FBA_CODE, EU: AMAZON_FBA_CODE, FBA: AMAZON_FBA_CODE, AFN: AMAZON_FBA_CODE, MFN: AMAZON_FBM_CODE,
+}
+
+/**
+ * U4b — an old-page fulfilment cell as the code it names. A code passes; a label is read through the schema's labels and
+ * the programme module ("Gestito dal venditore (default)" → DEFAULT, "Logistica di Amazon (UE)" → AMAZON_EU). '' when it
+ * names no code Nexus knows: never guessed, never sent as text.
+ */
+export function flatFileFulfilmentCode(raw: unknown, labels: Readonly<Record<string, string>> = {}): string {
+  const text = cellText(raw)
+  if (!text) return ''
+  const code = normaliseAmazonFulfilmentCode(labels[text] ?? text)
+  const named = OLD_FULFILMENT_WORDS[code] ?? code
+  return describeAmazonFulfilmentCode(named).method ? named : ''
+}
+
+/** The old page's columns of the offer facts (the schema walk's deep column ids) and the fact each one is. */
+export const FLAT_FILE_OFFER_CELLS: ReadonlyArray<{ key: string; leaf: AmazonOfferLeaf }> = [
+  { key: 'purchasable_offer__minimum_seller_allowed_price__schedule__value_with_tax', leaf: 'minimum_seller_allowed_price' },
+  { key: 'purchasable_offer__maximum_seller_allowed_price__schedule__value_with_tax', leaf: 'maximum_seller_allowed_price' },
+  { key: 'purchasable_offer__map_price__schedule__value_with_tax', leaf: 'map_price' },
+  { key: 'purchasable_offer__start_at', leaf: 'offer_start_at' },
+  { key: 'purchasable_offer__end_at', leaf: 'offer_end_at' },
+  { key: 'purchasable_offer__automated_pricing_merchandising_rule_plan__merchandising_rule__rule_id', leaf: 'automated_pricing_rule_id' },
+  { key: 'fulfillment_availability__lead_time_to_ship_max_days', leaf: 'lead_time_to_ship_max_days' },
+  { key: 'fulfillment_availability__restock_date', leaf: 'restock_date' },
+  { key: 'fulfillment_availability__is_inventory_available', leaf: 'is_inventory_available' },
+]
+
+/** One cell as its fact's value; `undefined` = blank, or not a value Amazon takes. Shape only: a restock date that has
+ *  passed is a value (the builder never sends it). */
+function offerCellValue(leaf: AmazonOfferLeaf, raw: unknown, labels: EnumCodeMap): unknown {
+  const text = cellText(raw)
+  if (!text) return undefined
+  let value: unknown = text
+  if (leaf === 'minimum_seller_allowed_price' || leaf === 'maximum_seller_allowed_price' || leaf === 'map_price') value = parseLocaleNumber(text)
+  else if (leaf === 'lead_time_to_ship_max_days') value = parseLocaleInt(text)
+  else if (leaf === 'is_inventory_available') {
+    const coded = (labels['fulfillment_availability.is_inventory_available']?.[text] ?? text).toLowerCase()
+    value = coded === 'true' ? true : coded === 'false' ? false : null
+  }
+  return value != null && amazonOfferLeafRefusal(leaf, value, '') === null ? value : undefined
+}
+
+/** The facts a row's own cells state, in the builder's shape (a filled cell is `live`, a blank one `none`). */
+function rowOfferFacts(row: Record<string, unknown>, labels: EnumCodeMap): Pick<AmazonOfferFacts, 'values' | 'source'> {
+  const values: Record<string, unknown> = { our_price: { mode: 'pin', price: null }, sale: null }
+  const source = {} as Record<AmazonOfferLeaf, AmazonOfferSource>
+  for (const leaf of AMAZON_OFFER_LEAVES) { source[leaf] = 'none'; if (!(leaf in values)) values[leaf] = null }
+  for (const { key, leaf } of FLAT_FILE_OFFER_CELLS) {
+    const value = offerCellValue(leaf, row[key], labels)
+    if (value !== undefined) { values[leaf] = value; source[leaf] = 'live' }
+  }
+  return { values: values as unknown as AmazonOfferValues, source }
+}
+
+/**
+ * U4b (bugs 1, 9) — THE `fulfillment_availability` root of an old-page row, for the feed and the local save alike, built
+ * once by the send builder (`offer-attributes.ts`): the code and, on a merchant (FBM) row, its quantity, handling time,
+ * restock date (future only) and always available. An FBA row is the code alone: a quantity or a merchant leaf would
+ * flip it to FBM. A parent, a blank or unknown code, or a code Nexus did not set (Remote Fulfilment) → null, no root.
+ */
+export function flatFileFulfilmentRoot(row: Record<string, unknown>, opts: { isParent: boolean; enumCodeMap?: EnumCodeMap }): Array<Record<string, unknown>> | null {
+  if (opts.isParent) return null
+  const labels = opts.enumCodeMap ?? {}
+  const code = flatFileFulfilmentCode(row[FULFILMENT_CODE_KEY] ?? row.fulfillment_channel_code, labels[FULFILMENT_CODE_LABELS])
+  if (!code) return null
+  const fba = isFbaFulfilmentCode(code)
+  const qty = parseLocaleInt(row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity)
+  return amazonFulfillmentAvailability({
+    facts: { ...rowOfferFacts(row, labels), fulfilmentCodes: [code], fbaByCode: fba }, fba, live: false, fbaCode: code,
+    quantity: !fba && qty !== null && qty >= 0 ? qty : null,
+  })
+}
+
+/**
+ * U4b — the live value of each offer cell on the old page, as the jobs read it (`readAmazonOfferFacts(…, 'job')`, never a
+ * draft): a cell Nexus's store or Amazon's report holds; '' when it was cleared in Nexus. A cell neither holds is left
+ * out, so the row's snapshot keeps its text.
+ */
+export function flatFileOfferCells(listing: Parameters<typeof readAmazonOfferFacts>[0]): Record<string, string> {
+  const facts = readAmazonOfferFacts(listing, 'job')
+  const out: Record<string, string> = {}
+  for (const { key, leaf } of FLAT_FILE_OFFER_CELLS) {
+    if (facts.source[leaf] === 'none') continue
+    const value = (facts.values as unknown as Record<string, unknown>)[leaf]
+    out[key] = value == null ? '' : String(value)
+  }
+  return out
+}
+
+/**
+ * U4b — the old page's save writes its offer cells to the live stores (`amazonOfferLivePath`), the ones the sheet, the
+ * jobs and this page read, not only to its snapshot:
+ *   - a parent row writes none; an FBA row keeps the fulfilment ones as they are (they apply only to orders you ship);
+ *   - a blank cell clears a value the store holds, and only that;
+ *   - a value Amazon would not take is not written;
+ *   - a cell nobody holds (no store, no Amazon report) and nobody edited (as in the last saved snapshot) stays in the
+ *     snapshot: a save that did not touch an old snapshot-only value does not make it live.
+ * Every other key of the bag (the offer draft, the media workspace…) is returned as it is.
+ */
+export function withFlatFileOfferStores(bag: Record<string, unknown>, row: Record<string, unknown>, opts: {
+  listing: { marketplace: string | null; platformAttributes?: unknown; flatFileSnapshot?: unknown; fulfillmentMethod?: string | null } | null
+  isParent: boolean
+  enumCodeMap?: EnumCodeMap
+}): Record<string, unknown> {
+  if (opts.isParent) return bag
+  const labels = opts.enumCodeMap ?? {}
+  const previous = asRecord(opts.listing?.platformAttributes) ?? {}
+  const snapshot = asRecord(opts.listing?.flatFileSnapshot) ?? {}
+  const facts = opts.listing ? readAmazonOfferFacts(opts.listing, 'job') : null
+  const fba = isFbaFulfilmentCode(flatFileFulfilmentCode(row[FULFILMENT_CODE_KEY] ?? row.fulfillment_channel_code, labels[FULFILMENT_CODE_LABELS]))
+    || (opts.listing != null && isFbaCoordinate(opts.listing))
+  const out = { ...bag }
+  for (const { key, leaf } of FLAT_FILE_OFFER_CELLS) {
+    if (!(key in row) || (fba && rootOfLeaf(leaf) === 'fulfillment_availability')) continue
+    const text = cellText(row[key])
+    if (!(facts && facts.source[leaf] !== 'none') && text === cellText(snapshot[key])) continue
+    const [store, field] = amazonOfferLivePath(leaf)!
+    let value: unknown
+    if (!text) {
+      if (asRecord(previous[store])?.[field] == null) continue
+      value = null
+    } else {
+      value = offerCellValue(leaf, text, labels)
+      if (value === undefined) continue
+    }
+    out[store] = { ...(asRecord(out[store]) ?? {}), [field]: value }
+  }
+  return out
+}
+
+/**
+ * U4b (bug 10) — the cockpit publish's two offer roots, built by the send builder over the `job` lane (live values, never
+ * a draft) on top of what its row builder made. Its full UPDATE replaces both roots whole, so every leaf Nexus or Amazon
+ * holds goes into the offer (the price stays the row's), and the fulfilment root carries the stock job's quantity. An
+ * FBA listing gets the code alone, a parent neither root; an offer is never sent without a price.
+ */
+export function withAmazonOfferRoots(feedBody: string, input: { facts: AmazonOfferFacts; fba: boolean; quantity: number | null; isParent: boolean; marketplaceId: string }): string {
+  const envelope = JSON.parse(feedBody)
+  const message = envelope?.messages?.[0]
+  if (!message || message.operationType === 'DELETE' || !message.attributes) return feedBody
+  const attrs = message.attributes as Record<string, unknown>
+  const row = Array.isArray(attrs.purchasable_offer) ? attrs.purchasable_offer as Array<Record<string, any>> : null
+  const rowPrice = row?.[0]?.our_price?.[0]?.schedule?.[0]?.value_with_tax
+  const roots = {
+    purchasable_offer: row && typeof rowPrice === 'number' ? amazonPurchasableOffer({
+      marketplaceId: input.marketplaceId, currency: String(row[0].currency ?? ''), facts: input.facts, base: row, sendPrice: rowPrice,
+      leaves: PURCHASABLE_OFFER_LEAVES.filter((leaf) => input.facts.source[leaf] !== 'none'), isParent: input.isParent,
+    }) : null,
+    fulfillment_availability: amazonFulfillmentAvailability({
+      facts: input.facts, fba: input.fba, live: message.operationType !== 'UPDATE', quantity: input.quantity, isParent: input.isParent,
+    }),
+  }
+  for (const [root, value] of Object.entries(roots)) {
+    if (value) attrs[root] = value
+    else delete attrs[root]
+  }
+  return JSON.stringify(envelope)
+}
+
 // RR.2 — build a grid row from the verbatim flat-file snapshot: the snapshot
 // (lossless content) with the live structured columns overlaid from the DB
 // (price/qty/title/desc/bullets, so repricer/stock changes show) + the internal
@@ -1390,11 +1575,18 @@ export function applySnapshotOverlay(
   /** Optional: maps localized parentage label → canonical code (e.g. 'Articolo padre' → 'parent').
    *  When provided, heals legacy localized values in existing snapshots to canonical on first read. */
   parentageCodeMap?: Record<string, string>,
+  /** U4b — the live offer cells (`flatFileOfferCells`): they overlay the snapshot as they are, '' (cleared) included. */
+  liveOfferCells: Record<string, string> = {},
 ): FlatFileRow {
   const overlay: Record<string, any> = {}
   for (const k of SNAPSHOT_LIVE_OVERLAY) {
     if (liveRow[k] !== undefined && liveRow[k] !== '') overlay[k] = liveRow[k]
   }
+  Object.assign(overlay, liveOfferCells)
+  // U4b — an old label saved as the code ("Gestito dal venditore (default)") reads as the code it names.
+  const snapCode = snapshot[FULFILMENT_CODE_KEY]
+  const namedCode = flatFileFulfilmentCode(snapCode)
+  if (namedCode && namedCode !== snapCode) snapshot = { ...snapshot, [FULFILMENT_CODE_KEY]: namedCode }
   // Normalize parentage_level in the snapshot to canonical 'parent'/'child'/''
   // Handles: legacy title-case "Parent"/"Child", localized "Articolo padre"/"Articolo figlio",
   // AND empty snapshots for rows published before Phase 1 (SP-API returned no parentage
@@ -1415,7 +1607,7 @@ export function applySnapshotOverlay(
     liveRow['fulfillment_availability__fulfillment_channel_code'] ??
       snapshot['fulfillment_availability__fulfillment_channel_code'] ?? '',
   ).toUpperCase()
-  const isFba = faCodeU.startsWith('AMAZON') || faCodeU === 'AFN' || faCodeU === 'FBA'
+  const isFba = faCodeU.startsWith('AMAZON') || faCodeU === 'AFN' || faCodeU === 'FBA' || isFbaFulfilmentCode(flatFileFulfilmentCode(faCodeU))
   return {
     ...snapshot,
     ...overlay,
@@ -2364,10 +2556,15 @@ export class AmazonFlatFileService {
       const faAttrs = attrs.fulfillment_availability?.[0] as Record<string, any> | undefined
       // FFA.3 — fall back to the product's fulfillment method when no channel code
       // was persisted (legacy listings), so FBA shows AMAZON_EU instead of DEFAULT.
-      const faCode = faAttrs?.fulfillment_channel_code != null
-        ? String(faAttrs.fulfillment_channel_code)
-        : ((p as any).fulfillmentMethod === 'FBA' ? 'AMAZON_EU' : 'DEFAULT')
+      // U4b — an old label stored as the code reads as the code it names (an unknown one stays as stored), and an FBA
+      // code in EITHER place the listing keeps one (the fulfilment door's top-level mirror too) wins: fail-closed.
+      const fbaCode = amazonFulfilmentCodes(listing?.platformAttributes).find(isFbaFulfilmentCode)
+      const faCode = fbaCode ?? (faAttrs?.fulfillment_channel_code != null
+        ? (flatFileFulfilmentCode(faAttrs.fulfillment_channel_code) || String(faAttrs.fulfillment_channel_code))
+        : ((p as any).fulfillmentMethod === 'FBA' ? 'AMAZON_EU' : 'DEFAULT'))
       const faLeadTime = faAttrs?.lead_time_to_ship_max_days != null ? String(faAttrs.lead_time_to_ship_max_days) : ''
+      // U4b — the offer cells as the jobs read them (live store, then Amazon's report; never a draft).
+      const offerCells = listing ? flatFileOfferCells(listing) : {}
       // FBA listings: Amazon owns the stock and a merchant quantity flips the
       // offer to FBM, so the quantity column is left blank (and the UI hides it).
       const faCodeU = faCode.toUpperCase()
@@ -2429,6 +2626,7 @@ export class AmazonFlatFileService {
         buffer: isFbaChannel ? '' : String((listing as any)?.stockBuffer ?? 0),
         fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
         main_product_image_locator: String(attrs.main_product_image_locator?.[0]?.media_location ?? ''),
+        ...offerCells,
       }
 
       // IN.1 — Inheritance state per field. Derived from ChannelListing.followMaster*
@@ -2542,7 +2740,7 @@ export class AmazonFlatFileService {
       // expanded `row` above is the legacy fallback for listings with no snapshot.
       const snapshot = (listing as any)?.flatFileSnapshot as Record<string, any> | null | undefined
       if (!opts?.skipSnapshotOverlay && snapshot && typeof snapshot === 'object' && Object.keys(snapshot).length > 0) {
-        return applySnapshotOverlay(snapshot, row, parentageCodeMap)
+        return applySnapshotOverlay(snapshot, row, parentageCodeMap, offerCells)
       }
 
       return row
@@ -2619,9 +2817,9 @@ export class AmazonFlatFileService {
     const candidates = (rows ?? [])
       .map((r) => {
         const sku = String(r?.item_sku ?? '').trim()
-        const ch = String(
-          r?.['fulfillment_availability__fulfillment_channel_code'] ?? r?.['fulfillment_channel_code'] ?? '',
-        ).toUpperCase()
+        const rawCh = r?.['fulfillment_availability__fulfillment_channel_code'] ?? r?.['fulfillment_channel_code'] ?? ''
+        // U4b — a label reads as its code ("Gestito dal venditore (default)" is DEFAULT): the guard sees what the feed sends.
+        const ch = flatFileFulfilmentCode(rawCh) || String(rawCh).toUpperCase()
         const qtyRaw = r?.['fulfillment_availability__quantity'] ?? r?.fulfillment_availability ?? r?.quantity
         const hasQty = qtyRaw !== undefined && String(qtyRaw).trim() !== ''
         return { sku, ch, hasQty }
@@ -2675,7 +2873,8 @@ export class AmazonFlatFileService {
     const candidates = (rows ?? [])
       .map((r) => {
         const sku = String(r?.item_sku ?? '').trim()
-        const ch = String(r?.['fulfillment_availability__fulfillment_channel_code'] ?? r?.['fulfillment_channel_code'] ?? '').toUpperCase()
+        const rawCh = r?.['fulfillment_availability__fulfillment_channel_code'] ?? r?.['fulfillment_channel_code'] ?? ''
+        const ch = flatFileFulfilmentCode(rawCh) || String(rawCh).toUpperCase()
         const qtyRaw = r?.['fulfillment_availability__quantity'] ?? r?.fulfillment_availability ?? r?.quantity
         const hasQty = qtyRaw !== undefined && String(qtyRaw).trim() !== ''
         return { sku, ch, hasQty }
@@ -2985,34 +3184,13 @@ export class AmazonFlatFileService {
           }
           attrs.purchasable_offer = [offer]
         }
-        // fulfillment_availability — FFA.3 + FBA-flip fix. A merchant quantity under
-        // fulfillment_channel_code:DEFAULT is exactly what flips an FBA offer to FBM, so:
-        //   • explicit FBA channel (AMAZON_*/AFN/FBA) → keep the channel, NEVER a
-        //     merchant qty (Amazon owns FBA stock) — re-publish stays FBA;
-        //   • explicit merchant channel (DEFAULT/MFN) → channel (normalised to DEFAULT) + qty;
-        //   • blank/unknown channel → emit NOTHING. The old `faCode || 'DEFAULT'`
-        //     fabricated a merchant claim for unknown-fulfillment rows and flipped them.
-        const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? '').toUpperCase()
-        const faQtyRaw   = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
-        const faQtyNum   = faQtyRaw !== undefined && faQtyRaw !== '' ? parseLocaleInt(faQtyRaw) : null
-        const faLeadRaw  = row['fulfillment_availability__lead_time_to_ship_max_days']
-        const faLeadNum  = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
-        const isFbaChannel      = faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA'
-        const isMerchantChannel = faCode === 'DEFAULT' || faCode === 'MFN'
-        // FFP.3 — a parent carries no fulfillment/stock; see purchasable_offer note.
-        if (isParentRow) {
-          // no fulfillment_availability on parent messages
-        } else if (isFbaChannel) {
-          const fa: Record<string, any> = { fulfillment_channel_code: faCode, marketplace_id: marketplaceId }
-          if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
-          attrs.fulfillment_availability = [fa]
-        } else if (isMerchantChannel) {
-          const fa: Record<string, any> = { fulfillment_channel_code: 'DEFAULT', marketplace_id: marketplaceId }
-          if (faQtyNum !== null && faQtyNum >= 0) fa.quantity = faQtyNum
-          if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
-          attrs.fulfillment_availability = [fa]
-        }
-        // blank/unknown faCode → omit fulfillment_availability entirely (fail-closed).
+        // fulfillment_availability — FFA.3 + FBA-flip fix + U4b: ONE root per row (`flatFileFulfilmentRoot`). An FBA
+        // code (AMAZON_EU) is sent alone, never with a merchant quantity or leaf (that flips the offer to FBM); a
+        // merchant code carries DEFAULT + quantity + handling time + restock date + always available; a parent, a
+        // blank or unknown code, or a Remote Fulfilment code sends no root (fail-closed). The old `faCode || 'DEFAULT'`
+        // fabricated a merchant claim for unknown-fulfillment rows and flipped them.
+        const fulfilment = flatFileFulfilmentRoot(row, { isParent: isParentRow, enumCodeMap })
+        if (fulfilment) attrs.fulfillment_availability = fulfilment
 
         // (parentageCode normalized above — canonical/'Parent'/localized labels.)
         if (parentageCode === 'parent') {
@@ -3050,11 +3228,16 @@ export class AmazonFlatFileService {
           // A4C — exhaustive-expansion deep column: rebuild the exact nested
           // SP-API shape (arrays-in-arrays, localized wrappers, typed leaves).
           const deepSpec = deepFieldSpecs[k]
+          const path = expandedFields[k]
+          // U4b — the fulfilment root is built once above; nothing here may add to it or replace it.
+          if ((deepSpec?.field ?? path?.split('.')[0]) === 'fulfillment_availability') continue
           if (deepSpec) {
+            // U4b — an offer leaf never builds an offer of its own: without our price (or on a parent) a partial
+            // update would replace Amazon's offer with one that has no price.
+            if (deepSpec.field === 'purchasable_offer' && !attrs.purchasable_offer) continue
             applyDeepValue(attrs, deepSpec.field, deepSpec, String(v), { marketplaceId, languageTag })
             continue
           }
-          const path = expandedFields[k]
           if (path) {
             if (!path.includes('.')) {
               // Multi-instance: path = "bullet_point", key = "bullet_point_1"
@@ -3510,6 +3693,9 @@ export class AmazonFlatFileService {
         // Collapsed attributes (same format getExistingRows reads back)
         const rowHints = hintsByProductType.get(String(row.product_type ?? '').toUpperCase())
         const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowHints?.enumCodeMap ?? {}, rowHints?.subPropTypes, await currencyRowsFor())
+        // U4b — the fulfilment cell as the code it names (a label is saved as its code; '' = none Nexus knows).
+        const rawFaCode = row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code']
+        const faCode = flatFileFulfilmentCode(rawFaCode, rowHints?.enumCodeMap?.[FULFILMENT_CODE_LABELS])
 
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
@@ -3541,18 +3727,20 @@ export class AmazonFlatFileService {
           // Normalize parentage_level to canonical 'parent'/'child' before storing
           // so the snapshot is always in a form the feed builder can compare directly.
           flatFileSnapshot: Object.fromEntries(
-            Object.entries({ ...row, parentage_level: parentageLevel || String(row.parentage_level ?? '') })
+            Object.entries({ ...row, parentage_level: parentageLevel || String(row.parentage_level ?? ''),
+              ...(faCode && faCode !== rawFaCode && FULFILMENT_CODE_KEY in row ? { [FULFILMENT_CODE_KEY]: faCode } : {}) })
               .filter(([k]) => !k.startsWith('_')),
           ),
           // PA — merge instead of replace: preserve cockpit-only top-level keys
           // (aplus_content, searchTerms, …) while flat-file remains authoritative
           // for `attributes`. resolveBrowseNodeId falls back to the existing node
-          // so a node-less sync never wipes it.
-          platformAttributes: buildPlatformAttributes(
+          // so a node-less sync never wipes it. U4b — the offer cells also land in
+          // the live stores the sheet and the jobs read (`withFlatFileOfferStores`).
+          platformAttributes: withFlatFileOfferStores(buildPlatformAttributes(
             (existing as any)?.platformAttributes,
             collapsedAttrs,
             resolveBrowseNodeId(row as Record<string, unknown>, (existing as any)?.platformAttributes),
-          ),
+          ), row, { listing: existing, isParent: isParentRow, enumCodeMap: rowHints?.enumCodeMap }),
           syncStatus: pushRefusal ? 'FAILED' : opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),
           lastSyncStatus: pushRefusal ? 'SKIPPED' : opts.isPublished ? 'SUCCESS' : null,
@@ -3645,13 +3833,14 @@ export class AmazonFlatFileService {
         // FBM: that silently re-tagged FBA products as merchant-fulfilled, and the
         // stale 'FBM' then flipped the live Amazon offer to FBM on the next quantity
         // push. Blank ⇒ leave Product.fulfillmentMethod untouched.
-        const rawFaCode = row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code']
-        const faCode = String(rawFaCode ?? '').toUpperCase()
         // FFA.3 — any AMAZON_* regional FBA channel (AMAZON_EU/AMAZON_NA/AMAZON_FE)
-        // + AFN/FBA = Fulfilled by Amazon; only DEFAULT/MFN is merchant (FBM).
-        const derivedMethod = faCode === ''
-          ? null
-          : (faCode.startsWith('AMAZON') || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
+        // + AFN/FBA = Fulfilled by Amazon; only DEFAULT/MFN is merchant (FBM). U4b — a
+        // label reads as its code ("Logistica di Amazon (UE)" is FBA); a cell naming no
+        // code Nexus knows leaves the method untouched instead of re-tagging it FBM.
+        const rawFaUpper = String(rawFaCode ?? '').trim().toUpperCase()
+        const derivedMethod = isFbaFulfilmentCode(faCode) || rawFaUpper.startsWith('AMAZON') || rawFaUpper === 'AFN' || rawFaUpper === 'FBA'
+          ? 'FBA'
+          : faCode ? 'FBM' : null
         const productUpdates: Record<string, any> = {}
         if (productType && product.productType !== productType) productUpdates.productType = productType
         if (isParentRow && !product.isParent)              productUpdates.isParent = true
@@ -3745,27 +3934,15 @@ export class AmazonFlatFileService {
       attrs.purchasable_offer = [offer]
     }
 
-    // fulfillment_availability — FFA.3: persist whenever ANY sub-field is present,
-    // not just quantity. FBA listings (channel_code AMAZON_EU/AMAZON_NA) carry no
-    // quantity, so the old qty-gate dropped the channel code → it reverted to
-    // DEFAULT on every reload. Channel code read from both the expanded + bare key.
-    const faCode = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? '').toUpperCase()
-    const faQtyRaw  = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
-    const faQtyNum  = faQtyRaw !== undefined && faQtyRaw !== '' ? parseLocaleInt(faQtyRaw) : null
-    const faLeadRaw = row['fulfillment_availability__lead_time_to_ship_max_days']
-    const faLeadNum = faLeadRaw !== undefined && faLeadRaw !== '' ? parseLocaleInt(faLeadRaw) : null
-    if (faCode || faQtyNum !== null || faLeadNum !== null) {
-      const fa: Record<string, any> = {
-        fulfillment_channel_code: faCode || 'DEFAULT',
-        marketplace_id: marketplaceId,
-      }
-      if (faQtyNum !== null && faQtyNum >= 0) fa.quantity = faQtyNum
-      if (faLeadNum !== null && faLeadNum >= 0) fa.lead_time_to_ship_max_days = faLeadNum
-      attrs.fulfillment_availability = [fa]
-    }
-
     // Variation structure — normalize via enumCodeMap before comparison
     const parentageLevel = normalizeParentage(String(row.parentage_level ?? ''), enumCodeMap['parentage_level'] ?? {})
+
+    // fulfillment_availability — FFA.3 + U4b: the SAME one root the feed sends (`flatFileFulfilmentRoot`), so the
+    // code always travels with the quantity, handling time, restock date and always available it belongs to, and an
+    // FBA row keeps its code alone. A blank code saves no root: the quantity lives on the listing and the merchant
+    // leaves in their stores (`withFlatFileOfferStores`), so nothing is fabricated as DEFAULT.
+    const fulfilment = flatFileFulfilmentRoot(row, { isParent: parentageLevel === 'parent', enumCodeMap })
+    if (fulfilment) attrs.fulfillment_availability = fulfilment
     if (parentageLevel === 'parent') {
       attrs.parentage_level = [{ value: 'parent', marketplace_id: marketplaceId }]
       if (row.variation_theme) {
@@ -3788,6 +3965,8 @@ export class AmazonFlatFileService {
     for (const [k, v] of Object.entries(row)) {
       if (k.startsWith('_') || !v || EXPLICIT.has(k)) continue
       const path = expandedFields[k]
+      // U4b — the fulfilment root is built once above; nothing here may replace it.
+      if (path?.split('.')[0] === 'fulfillment_availability') continue
       if (path) {
         if (!path.includes('.')) {
           const idx = parseInt(k.slice(path.length + 1), 10)

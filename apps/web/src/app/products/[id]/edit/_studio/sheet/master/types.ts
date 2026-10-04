@@ -27,7 +27,7 @@ import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared
  * the builder below could not route at all. Same reason as every other widening in this file: a
  * consumer that cannot name what the server sends cannot consume it.
  */
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme' | 'stockControl'
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
 

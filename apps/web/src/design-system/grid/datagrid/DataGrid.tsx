@@ -159,8 +159,9 @@ export function DataGrid<T>({
     onCustomizeOpenChange?.(next)
     if (!prefsControlled) setOwnPrefsOpen(next)
   }
-  const { lockedLead, lockedTrail, togglableKeys, defaultLockedKeys, prefsColumns, anyPinned } = useMemo(() => splitColumns(columns), [columns])
-  const [prefs, setPrefs] = useState<DataGridPrefs>(() => defaultPrefs(togglableKeys, defaultLockedKeys))
+  const { lockedLead, lockedTrail, togglableKeys, defaultVisibleKeys, defaultLockedKeys, prefsColumns, anyPinned } = useMemo(() => splitColumns(columns), [columns])
+  const defaultHiddenKeys = useMemo(() => togglableKeys.filter((k) => !defaultVisibleKeys.includes(k)), [togglableKeys, defaultVisibleKeys])
+  const [prefs, setPrefs] = useState<DataGridPrefs>(() => defaultPrefs(togglableKeys, defaultLockedKeys, defaultVisibleKeys))
   const prefsRef = useRef(prefs); prefsRef.current = prefs
   // Once per storageKey, never in the state initializer (hydration); the ref, not a dep list, makes it once —
   // a call site that builds `columns` inline hands us a new array every render.
@@ -177,7 +178,7 @@ export function DataGrid<T>({
     loadedFor.current = storageKey
     const saved = parseStoredPrefs(readStoredRaw(storageKey))
     if (saved) {
-      const { patch, restoredSort } = reconcileStoredPrefs(saved, { togglableKeys, defaultLockedKeys, prefsSortFields })
+      const { patch, restoredSort } = reconcileStoredPrefs(saved, { togglableKeys, defaultLockedKeys, defaultHiddenKeys, prefsSortFields })
       setPrefs((prev) => ({ ...prev, ...patch }))
       // The ROWS have to move too, not just the dialog's copy of the value.
       if (restoredSort) applySortRef.current(restoredSort)
@@ -191,7 +192,7 @@ export function DataGrid<T>({
   }, [prefs, customizable, storageKey, togglableKeys, prefsLoaded])
   const togglableSet = useMemo(() => new Set(togglableKeys), [togglableKeys])
   const togglableSetRef = useRef(togglableSet); togglableSetRef.current = togglableSet
-  const defaultsRef = useRef({ togglableKeys, defaultLockedKeys }); defaultsRef.current = { togglableKeys, defaultLockedKeys }
+  const defaultsRef = useRef({ togglableKeys, defaultLockedKeys, defaultVisibleKeys }); defaultsRef.current = { togglableKeys, defaultLockedKeys, defaultVisibleKeys }
 
   // The operator's order IS the render order; untouched when `customizable` is absent.
   const cols = useMemo(
@@ -354,7 +355,7 @@ export function DataGrid<T>({
   }, [showTotals, rows])
   const columnDialog = useMemo(
     () => (customizable
-      ? { customise: () => setPrefsOpen(true), reset: () => setPrefs(defaultPrefs(defaultsRef.current.togglableKeys, defaultsRef.current.defaultLockedKeys)) }
+      ? { customise: () => setPrefsOpen(true), reset: () => setPrefs(defaultPrefs(defaultsRef.current.togglableKeys, defaultsRef.current.defaultLockedKeys, defaultsRef.current.defaultVisibleKeys)) }
       : EMPTY_DIALOG),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [customizable, prefsControlled],
@@ -654,7 +655,7 @@ export function DataGrid<T>({
           setPrefsOpen(false)
         }}
         allColumns={prefsColumns}
-        defaultVisible={togglableKeys}
+        defaultVisible={defaultVisibleKeys}
         // Page-size stays hidden — this grid paginates nothing. Sort is the CALLER's call: omitted, the section is
         // hidden and the grid sorts from its headers; supplied, the dialog drives the very same sort.
         sortFieldOptions={prefsSortFields ?? []}

@@ -116,24 +116,34 @@ describe('P4.3d routedCeiling', () => {
  * read its refusal. A fourth lane added later is covered without editing this test
  * — which is the whole point, because "a rule learned once and applied in only one
  * of two builders" is the defect shape this package keeps finding.
+ *
+ * Amazon sheet gaps (bug 3): the Amazon lane's ceiling moved into THE send quantity (`amazon/send-quantity.ts`
+ * `routedSendCeiling`, shared with studio Publish), so its call site is counted there, and the lane must read that
+ * function's refusal.
  */
 describe('P4.3d: every send lane reads the refusal', () => {
   it('each routedCeiling call site checks ceiling.refusal within its own block', async () => {
     const { readFileSync } = await import('node:fs')
+    const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const source = readFileSync(new URL('./outbound-sync.service.ts', import.meta.url), 'utf8')
+    const shared = readFileSync(new URL('./amazon/send-quantity.ts', import.meta.url), 'utf8')
     // Strip comments: the helper's own doc comment mentions every lane by name.
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const code = strip(source)
+    const sharedCode = strip(shared)
     expect(code).toContain('routedCeiling')            // the stripper did not empty the file
     expect(code.length).toBeGreaterThan(source.length / 2)
+    expect(sharedCode.length).toBeGreaterThan(shared.length / 2)
 
-    const lines = code.split('\n')
-    const callSites = lines
-      .map((line, i) => ({ line, i }))
-      .filter(({ line }) => /this\.routedCeiling\(\{/.test(line))
-    // Positive control: three lanes today. A drop to one would otherwise pass silently.
+    const sitesIn = (text: string, call: RegExp) => {
+      const lines = text.split('\n')
+      return lines.map((line, i) => ({ line, i, lines })).filter(({ line }) => call.test(line))
+    }
+    const callSites = [...sitesIn(code, /this\.routedCeiling\(\{/), ...sitesIn(sharedCode, /=\s*routedSendCeiling\(/)]
+    // Positive control: three lanes today (eBay and Shopify here, Amazon through the shared send quantity). A drop
+    // would otherwise pass silently.
     expect(callSites.length).toBeGreaterThanOrEqual(3)
 
-    for (const { i } of callSites) {
+    for (const { i, lines } of callSites) {
       // 🔴 Match the WHOLE trimmed condition, not the substring. `if (false) { …
       // message: ceiling.refusal … }` keeps the substring and turns the rule off:
       // a `toContain` on part of a condition does not test that condition.
@@ -141,5 +151,9 @@ describe('P4.3d: every send lane reads the refusal', () => {
       const tests = window.filter((line) => /^if \(ceiling\.refusal\)/.test(line.trim()))
       expect(tests.length, `the routedCeiling call at line ${i + 1} has ${tests.length} lines testing ceiling.refusal, expected exactly 1`).toBe(1)
     }
+    // The Amazon lane sends THE send quantity and reads its refusal; the class's ceiling is the same function.
+    expect(code).toMatch(/const sent = amazonSendQuantity\(\{/)
+    expect(code.split('\n').filter((line) => /^if \(sent\.code === 'NO_ROUTED_LOCATION'\)/.test(line.trim()))).toHaveLength(1)
+    expect(code).toMatch(/return routedSendCeiling\(productLedger, args\)/)
   })
 })

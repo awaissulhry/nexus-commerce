@@ -29,6 +29,7 @@ import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
+import { adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -132,6 +133,27 @@ export interface MutationOutcome {
   /** AD.4 — id of the AdvertisingActionLog row this mutation wrote. */
   actionLogId: string | null
   error: string | null
+}
+
+/**
+ * 6a — Sponsored Products only (Owner decision S8, 2026-10-04; review G.1).
+ *
+ * The worker sends every write queued here to a Sponsored Products endpoint (/sp/campaigns, /sp/adGroups, /sp/keywords,
+ * /sp/targets, /sp/productAds). A Sponsored Brands or Display id is unknown there: a budget lands nowhere, and a keyword
+ * answered "not found" is marked orphaned although it is healthy, which then blocks every later write to it. Native
+ * SB/SD updates are not built, so the write is refused here, before the local row, the queue or the audit change —
+ * same placement as SYNC.1 / 1f, and loud. `error` carries the shared sentence, which routes show as it is.
+ * A campaign whose ad product is not stated is not refused (`Campaign.type` is required; only a partial select lacks it).
+ */
+function adProductRefused(
+  entity: AdEntityType, entityId: string, actor: string, campaign: AdProductSource | null | undefined,
+): MutationOutcome | null {
+  const refusal = adProductRefusal(campaign, { unknown: 'allow' })
+  if (!refusal) return null
+  logger.warn('[ads-mutation] refused a write to a campaign that is not Sponsored Products', {
+    entity, entityId, actor, adProduct: adProductOf(campaign),
+  })
+  return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: refusal }
 }
 
 /**
@@ -730,11 +752,16 @@ export async function updateCampaignWithSync(args: {
       status: true,
       biddingStrategy: true,
       endDate: true,
+      adProduct: true, // 6a
+      type: true,
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // 6a — see adProductRefused.
+  const notSp = adProductRefused('CAMPAIGN', args.campaignId, args.actor, existing)
+  if (notSp) return notSp
 
   // SYNC.1 — see isSchedulingEngineActor. Refuse before the diff, so the refusal does not depend on
   // whether the status happens to differ this tick: an engine asking for a campaign state at all is
@@ -918,12 +945,15 @@ export async function updateAdGroupWithSync(args: {
       defaultBidCents: true,
       status: true,
       orphanedAt: true,
-      campaign: { select: { id: true, marketplace: true } },
+      campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true } },
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // 6a — see adProductRefused.
+  const notSp = adProductRefused('AD_GROUP', args.adGroupId, args.actor, existing.campaign)
+  if (notSp) return notSp
   // 1f — see isAutomatedPause: an automation lowers an ad group's bids, it never pauses it.
   if (isAutomatedPause(args.actor, args.patch.status)) {
     logger.warn('[ads-mutation] refused automated ad-group pause', {
@@ -1035,9 +1065,12 @@ export async function updateProductAdWithSync(args: {
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
-    select: { id: true, externalAdId: true, status: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } },
+    select: { id: true, externalAdId: true, status: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true } } } } },
   })
   if (!existing) return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  // 6a — see adProductRefused.
+  const notSp = adProductRefused('PRODUCT_AD', args.productAdId, args.actor, existing.adGroup?.campaign)
+  if (notSp) return notSp
   if (args.status === existing.status) return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
 
   const changes: FieldChange[] = [{ field: 'status', oldValue: existing.status, newValue: args.status }]
@@ -1108,13 +1141,17 @@ export async function updateAdTargetWithSync(args: {
       isNegative: true,   // NEG.3 — the third routing axis; a negative's id is not a /sp/keywords id
       negativeLevel: true,
       adGroup: {
-        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } },
+        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } } },
       },
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // 6a — see adProductRefused. Before the orphan check below, which may itself clear a mark (a local write), and
+  // before anything is queued: an SB keyword sent to /sp/keywords comes back "not found" and would be marked orphaned.
+  const notSp = adProductRefused('AD_TARGET', args.adTargetId, args.actor, existing.adGroup?.campaign)
+  if (notSp) return notSp
 
   // AX2.0 — Amazon has already told us this target does not exist. Enqueueing
   // again just recreates the dead write: this is the loop that produced 662

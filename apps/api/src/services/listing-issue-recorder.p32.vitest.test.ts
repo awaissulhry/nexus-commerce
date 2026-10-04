@@ -286,4 +286,70 @@ describe('P3.2 — every channel error lands on its listing', () => {
       expect(result).toBeNull()
     })
   })
+  /**
+   * Sheet publish parity, step 2 — a product sheet publication files its Amazon report on the EXACT listings its journal
+   * names. The product-SKU join reaches every listing of the product on the marketplace (here: the primary listing and
+   * a second alias listing) and never finds an alias's own seller SKU.
+   */
+  describe('a publication report on the exact listings it journaled', () => {
+    const completedAt = new Date('2026-10-02T09:00:00.000Z')
+    const outer = { code: '90220', severity: 'error' as const, message: '“outer” è obbligatorio ma mancante.', attributeNames: [] }
+
+    beforeAll(async () => {
+      await q(`INSERT INTO "Product" ("workspaceId", id, sku, name, "basePrice", "updatedAt") VALUES
+        ($1, 'P-ALIASED', 'ALIASED-PRODUCT-SKU', 'Aliased', 10, CURRENT_TIMESTAMP)`, [LEGACY])
+      await q(`INSERT INTO "ChannelListing" ("workspaceId", id, "productId", "channelMarket", channel, region, marketplace, "aliasKey", "updatedAt") VALUES
+        ($1, 'L-ALIASED-PRIMARY', 'P-ALIASED', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', '', CURRENT_TIMESTAMP),
+        ($1, 'L-ALIASED-SECOND',  'P-ALIASED', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'second', CURRENT_TIMESTAMP)`, [LEGACY])
+    })
+
+    it('lands only on the listing the journal names, under the alias seller SKU', async () => {
+      const result = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'ALIAS-SELLER-SKU', status: 'error', issues: [outer] }], marketplace: 'IT', occurredAt: completedAt,
+        listingIdsBySku: new Map([['ALIAS-SELLER-SKU', ['L-ALIASED-SECOND']]]),
+      }))
+      expect(result).toEqual({ listings: 1, issues: 1, unmatchedSkus: [] })
+      expect((await issuesOn('L-ALIASED-SECOND')).map((r) => r.attributeNames)).toEqual([['outer']])
+      expect(await issuesOn('L-ALIASED-PRIMARY')).toHaveLength(0)
+    })
+
+    it('the control: without the journal the alias seller SKU finds no listing, and the product SKU hits both', async () => {
+      const alias = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'ALIAS-SELLER-SKU', status: 'error', issues: [outer] }], marketplace: 'IT', occurredAt: completedAt,
+      }))
+      expect(alias.unmatchedSkus).toEqual(['ALIAS-SELLER-SKU'])
+      const product = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'ALIASED-PRODUCT-SKU', status: 'error', issues: [{ ...outer, code: '90221' }] }], marketplace: 'IT', occurredAt: completedAt,
+      }))
+      expect(product.listings).toBe(2)
+    })
+
+    it('reports a SKU the journal does not name instead of guessing', async () => {
+      const result = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'NOT-JOURNALED', status: 'error', issues: [outer] }], marketplace: 'IT',
+        listingIdsBySku: new Map([['ALIAS-SELLER-SKU', ['L-ALIASED-SECOND']]]),
+      }))
+      expect(result).toEqual({ listings: 0, issues: 0, unmatchedSkus: ['NOT-JOURNALED'] })
+    })
+
+    it('an accepted publication resolves only the issues about attributes it carried', async () => {
+      const { resolveCarriedListingIssues, fingerprintIssue } = await import('./listing-issues.service.js')
+      await inLegacy(() => recorder.recordListingIssues({ listingId: 'L-ALIASED-SECOND', source: 'amazon-feed', issues: [
+        { code: '1', message: 'closure', attributeNames: ['closure'] },
+        { code: '2', message: 'closure and inner', attributeNames: ['closure', 'inner'] },
+        { code: '3', message: 'about the whole listing', attributeNames: [] },
+        { code: '4', message: 'item name, still reported', attributeNames: ['item_name'] },
+      ] }))
+      // A suppression issue about `closure` belongs to another source and stays open.
+      await inLegacy(() => recorder.recordListingIssues({ listingId: 'L-ALIASED-SECOND', source: 'amazon-suppression', issues: [
+        { code: '5', message: 'suppressed for closure', attributeNames: ['closure'] }] }))
+      const resolved = await inLegacy(() => resolveCarriedListingIssues((database.client as any), 'L-ALIASED-SECOND', 'amazon-feed',
+        ['closure', 'item_name'], [fingerprintIssue('4', ['item_name'])]))
+      expect(resolved).toBe(1)
+      // Only this test's own issues (codes 1–5); earlier tests left their own on this listing.
+      const mine = (await issuesOn('L-ALIASED-SECOND')).filter((r) => ['1', '2', '3', '4', '5'].includes(r.code))
+      expect(mine.filter((r) => r.resolvedAt === null).map((r) => r.code).sort()).toEqual(['2', '3', '4', '5'])
+      expect(mine.filter((r) => r.resolvedAt !== null).map((r) => r.code)).toEqual(['1'])
+    })
+  })
 })

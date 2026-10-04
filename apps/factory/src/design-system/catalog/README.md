@@ -186,7 +186,7 @@ Use `components/PresenceMark` with the canonical `Presence` from `grid/renderers
 
 `MenuItemDef.tone` applies to the emitted button or link without reordering declarations; `separator` is the existing group boundary. Put an unavailable reason in both description and title. Description-bearing held items receive keyboard focus and refuse activation. `Disclosure tone="warning"|"danger"` retains native details/open behavior. Per-row SummaryTable tone stays on a Pill in the cell.
 
-`CellSaveMark state="saving"|"waiting"|"unknown"` adds an announced glyph and distinct ring; keep CellSaveReason for the actual refusal text. `SheetStatuses status={...}` accepts data only, renders at most three md Pills, exposes details on a focusable Pill, and retains danger announcements when surplus is coalesced. The web catalog contains the interactive PresenceExample, including GridViewsMenu's local anchored naming prompt; Factory has no GridViewsMenu host.
+`CellSaveMark state="saving"|"waiting"|"unknown"` adds an announced glyph and distinct ring; keep CellSaveReason for the actual refusal text. `SheetStatuses status={...}` accepts data only, renders at most three md Pills plus every danger mark (a danger mark never folds into +N), and exposes details on a focusable Pill. The web catalog contains the interactive PresenceExample, including GridViewsMenu's local anchored naming prompt; Factory has no GridViewsMenu host.
 
 
 ### PR.6 approved accessibility follow-up — 2026-09-13
@@ -197,7 +197,7 @@ ScopeBar now lets arrow keys reach a held scope and its InfoTip without changing
 
 With Owner approval, existing danger/warning/formula text tokens now clear 7:1 across the conservative 80-ground light and dark matrices; success already clears that bar. No new token, fill, or ratchet-baseline increase. The corrected source-derived measurements live in the PR.6 audit.
 
-SheetStatuses accepts compact=true from the host’s existing last toolbar tier: one +N control retains every detail and danger announcement; default rendering remains at most three Pills. It defines no breakpoint.
+SheetStatuses accepts compact=true from the host’s existing last toolbar tier: the other tones fold into one +N control that keeps every detail, while a danger mark stays on the bar; default rendering remains at most three Pills plus any danger mark. It defines no breakpoint.
 
 PresenceMark axis=intent|fact|both (default both) separates adjacent columns; compact=true moves the full canonical explanation into a keyboard-reachable InfoTip. Fact keeps AsOf; no vocabulary or freshness logic is duplicated.
 

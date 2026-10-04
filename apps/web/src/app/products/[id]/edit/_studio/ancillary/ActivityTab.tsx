@@ -2,11 +2,18 @@
 
 /** Activity reads only explicitly attributed product/listing events. Audit access
  * remains with the audit log's existing permission boundary. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { Button, Pill } from '@/design-system/primitives'
+import type { HistoryRun, HistoryTotals } from '@nexus/shared/publication-history'
+import type { StudioRetrySelection } from '@nexus/shared/studio-publication'
+import { Button, Pill, SegmentedControl } from '@/design-system/primitives'
 
 import { Banner, ProgressBar } from '@/design-system/components'
+import { PublishRuns } from '@/app/products/_publication/history/PublishRuns'
+import { PublishHistoryHost, type PublishHistoryHostValue } from '@/app/products/_publication/history/PublishRunDrawer'
+import { historyRequest, parseHistoryDeepLink, sheetRowIdOf } from '@/app/products/_publication/history/runActions'
+import { useStudioProduct, useStudioRecord, useStudioScope } from '../contracts'
+import { StudioPublishDialog } from '../StudioPublishDialog'
 import { useWorkspaceRead } from '../useWorkspaceRead'
 import {
   groupEvents, readValue, summariseActivity, type EventKind, type ProductEvent,
@@ -19,7 +26,8 @@ const KIND_TONE: Record<EventKind, 'info' | 'success' | 'warning' | 'neutral'> =
 
 interface ActivityPage { events: ProductEvent[]; nextCursor: string | null; coverageNote: string }
 
-export function ActivityTab() {
+/** Everything attributed to this product. `viewSwitch` sits above it, in the same page. */
+function AllActivity({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [events, setEvents] = useState<ProductEvent[]>([])
   const [cursor, setCursor] = useState<string>()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -41,6 +49,7 @@ export function ActivityTab() {
 
   return (
     <div className={styles.page}>
+      {viewSwitch}
       <header className={styles.head}>
         <h2 className={styles.title}>Activity</h2>
         {summary.total > 0 && (
@@ -116,6 +125,97 @@ export function ActivityTab() {
       )}
 
       {read.data?.nextCursor && <Button disabled={read.loading} onClick={() => setCursor(read.data!.nextCursor!)}>Load earlier activity</Button>}
+    </div>
+  )
+}
+
+type ActivityView = 'publishes' | 'all'
+
+/** The view in the URL (`?view=`), written with every other key kept; leaving Publishes drops the open run. */
+function writeView(view: ActivityView) {
+  const url = new URL(window.location.href)
+  url.searchParams.set('view', view)
+  if (view === 'all') { url.searchParams.delete('run'); url.searchParams.delete('sku') }
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+/**
+ * Activity, in two views (sheet publish parity, step 4): this product's publish history, and everything else that
+ * happened to it. Publishes is the default when the product has any. Deep link:
+ * `?tab=activity&view=publishes&run=<id>[&sku=<sku>]` — the list opens the run, the drawer expands the SKU.
+ */
+export function ActivityTab() {
+  const product = useStudioProduct()
+  const scope = useStudioScope()
+  const record = useStudioRecord()
+  const [link] = useState(() => (typeof window === 'undefined' ? { view: null, run: null, sku: null } : parseHistoryDeepLink(window.location.search)))
+  const [view, setView] = useState<ActivityView | null>(link.view)
+  /** How many publishes this product's family has — the server's exact count. null = not read (or the read failed). */
+  const [count, setCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    historyRequest<HistoryTotals>(`/api/products/${encodeURIComponent(product.id)}/publications/counts`, { signal: controller.signal })
+      .then(totals => {
+        setCount(totals.total)
+        setView(current => current ?? (totals.total > 0 ? 'publishes' : 'all'))
+      })
+      .catch(() => { if (!controller.signal.aborted) setView(current => current ?? 'all') })
+    return () => controller.abort()
+  }, [product.id])
+
+  const choose = useCallback((next: string) => {
+    const value: ActivityView = next === 'all' ? 'all' : 'publishes'
+    setView(value)
+    writeView(value)
+  }, [])
+
+  /*
+   * "Show in sheet" lands on a row only on the destination the studio is showing now: the studio's market and
+   * account writers each rebuild the scope keys from the CURRENT scope, so switching channel, market and account in
+   * one step would undo itself. Same pattern as the Errors & Sync tab: one tab write plus the record.
+   */
+  /* "Publish failed products again…": a NEW review of the failed publish's destination with its failed fields ticked —
+   * the studio's own Publish dialog, never a replay of the stored request. */
+  const [retry, setRetry] = useState<StudioRetrySelection | null>(null)
+  const host = useMemo<PublishHistoryHostValue>(() => ({
+    focusSku: link.sku,
+    publishAgain: selection => setRetry(selection),
+    canShowInSheet: (run: HistoryRun) => run.channel === scope.scope && run.marketplace === scope.market
+      && (!run.accountId || !scope.accountId || run.accountId === scope.accountId),
+    showInSheet: (run, item) => {
+      const rowId = sheetRowIdOf(run, item)
+      scope.setTab('sheet')
+      if (rowId) record.open(rowId)
+    },
+  }), [link.sku, scope, record])
+
+  const publishesLabel = count != null ? `Publishes (${count.toLocaleString('en-GB')})` : 'Publishes'
+  const viewSwitch = (
+    <SegmentedControl
+      ariaLabel="Activity view"
+      size="sm"
+      value={view ?? 'publishes'}
+      onChange={choose}
+      options={[{ value: 'publishes', label: publishesLabel }, { value: 'all', label: 'All activity' }]}
+    />
+  )
+
+  if (view === 'all') return <AllActivity viewSwitch={viewSwitch} />
+  return (
+    <div className={styles.page}>
+      {viewSwitch}
+      {view === null
+        ? <ProgressBar indeterminate ariaLabel="Reading this product's publishes" />
+        : (
+          <PublishHistoryHost value={host}>
+            <PublishRuns scope="product" productId={product.id} />
+          </PublishHistoryHost>
+        )}
+      {retry && <StudioPublishDialog onClose={() => setRetry(null)}
+        initialDestination={{ channel: retry.destination.channel, marketplace: retry.destination.marketplace, accountId: retry.destination.accountId,
+          ...(retry.destination.listingId ? { listingId: retry.destination.listingId } : {}) }}
+        initialSelection={{ productIds: retry.productIds, fieldIds: retry.fieldIds }} />}
     </div>
   )
 }

@@ -80,7 +80,9 @@ export function heldSentence(listing: HoldFacts, what: string): string {
  *     the listing was paused after the row was queued (inside the 30 s hold), so that change waits the same way.
  *   - `PRICE_HELD_DRAFT` — a still-draft, for a change its publication does NOT carry. Round 6: every publisher sends
  *     the listing's own send price (`listingSendPrice`: a pin, or the rule's price), so a price is carried by Publish
- *     and is never marked; Amazon's publication sends no sale (no sale dates in its row), so an Amazon draft's sale is.
+ *     and is never marked; an Amazon draft's sale (and offer leaves) is: studio Publish now sends it with its dates,
+ *     but a draft can also go live through the old flat file, the wizard, a pull or reconciliation, which do not —
+ *     the held row is what reaches Amazon then (after Publish it is one harmless re-send).
  *     (Other channels' senders send no sale: a held one would only send the price again.)
  * A held row is kept by the queue's retention sweep (`NOT_HELD_PRICE_ROW`) and is not retried by hand: it waits for
  * the resume or the publish, or is replaced by a newer change.

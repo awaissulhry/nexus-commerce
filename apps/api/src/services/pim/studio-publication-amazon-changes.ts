@@ -11,6 +11,7 @@ import { planPublicationChanges, publicationChangeId, selectPublicationChanges, 
 import type { AmazonPublication } from './studio-publication-amazon.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { languageTag } from './market-languages.js'
+import { amazonOfferLines, compileAmazonOffer, isOfferLaneRoot, withOfferDisplay, type AmazonOfferJournal, type AmazonOfferPlan } from './studio-publication-amazon-offer.js'
 
 const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const canonical = (value: unknown) => JSON.stringify(value, (_key, entry) => entry && typeof entry === 'object' && !Array.isArray(entry)
@@ -23,7 +24,7 @@ const contentOnly = (attributes: Record<string, unknown>) => Object.fromEntries(
 type Message = AmazonPublication['feed']['messages'][number]
 type ProductPlan = { productId: string; sku: string; newListing: boolean; patches: Record<string, AttributePatch>;
   content: Record<string, { root: string; tag: string; deletion?: AttributePatch }>;
-  contentRoots: Record<string, { remote: Record<string, unknown>[]; replacement: AttributePatch }> }
+  contentRoots: Record<string, { remote: Record<string, unknown>[]; replacement: AttributePatch }>; offer?: AmazonOfferPlan }
 export interface AmazonChangePlan {
   kind: 'amazon-changes'
   changes: StudioPublishChange[]
@@ -234,7 +235,8 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
           roots.add(content?.root ?? coordinate[1]); scoped.set(coordinate[1], baselineValues.get(key)!)
         }
       }
-      for (const root of [...roots].sort().filter(root => !OUT_OF_SCOPE_ROOTS.has(root) && root !== '$create')) {
+      // Amazon sheet gaps — the offer roots are the offer lane's (below); `list_price` is a root line like any other.
+      for (const root of [...roots].sort().filter(root => !isOfferLaneRoot(root) && root !== '$create')) {
         const local = Object.prototype.hasOwnProperty.call(current, root) ? current[root] : unknown(`${root} is omitted by the content builder; no explicit clear was prepared.`)
         const baseline = baselineValues.get(publicationChangeId(product.productId, root)) ?? unknown('No accepted publish record')
         const clear = clearSelectors[root] ?? message.patches?.find(patch => patch.op === 'delete' && patch.path === `/attributes/${root}`)?.value
@@ -257,16 +259,18 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
           current: local, lastAccepted: baseline, channel, ...(blocked ? { refusal: blocked } : {}),
           currentMatchesChannel: providerEqual(root, local, channel, prepared.marketplaceId), acceptedMatchesChannel: providerEqual(root, comparisonBaseline, channel, prepared.marketplaceId) })
       }
+      inputs[index].push(...await amazonOfferLines(facts, meta, { marketplaceId: prepared.marketplaceId, remote: refusal ? null : object(raw.attributes), refusal: refusal ?? undefined }))
     }
   }
   await Promise.all(Array.from({ length: Math.min(5, prepared.products.length) }, () => worker()))
-  return { kind: 'amazon-changes', publication: prepared, products, changes: planPublicationChanges(inputs.flat()), remoteRevision: createHash('sha256').update(canonical(observations)).digest('hex') }
+  return { kind: 'amazon-changes', publication: prepared, products, changes: withOfferDisplay(planPublicationChanges(inputs.flat()), products), remoteRevision: createHash('sha256').update(canonical(observations)).digest('hex') }
 }
 
 /** Compile only the selected reviewed fields; companions preserved in a patch never become intentional writes. */
 export function compileAmazonChanges(plan: AmazonChangePlan, selectedIds: string[]): AmazonPublication {
   const selected = selectPublicationChanges(plan.changes, selectedIds)
   const messages: Message[] = [], products: AmazonPublication['products'] = [], fieldWrites: Record<string, StudioPublishFieldWrite[]> = {}
+  const offers: Record<string, AmazonOfferJournal> = {}
   for (const product of plan.products) {
     const changes = selected.filter(change => change.productId === product.productId)
     if (!changes.length) continue
@@ -278,7 +282,7 @@ export function compileAmazonChanges(plan: AmazonChangePlan, selectedIds: string
         ? [...contentGroups(root, value, plan.publication.marketplaceId)].map(([tag, instances]) => ({ field: amazonContentField(root, plan.publication.marketplaceId, tag), value: { state: 'value' as const, value: clone(instances) } }))
         : [{ field: root, value: { state: 'value' as const, value: clone(value) } }])
     } else {
-      const patches = changes.filter(change => !product.content[change.field]).map(change => {
+      const patches = changes.filter(change => !product.content[change.field] && !product.offer?.lines[change.field]).map(change => {
         if (!product.patches[change.field]) throw new Error(`${change.field}: no safe reviewed Amazon patch exists.`)
         return clone(product.patches[change.field])
       })
@@ -297,6 +301,13 @@ export function compileAmazonChanges(plan: AmazonChangePlan, selectedIds: string
           patches.push({ ...clone(deletions[0]!), value: deletions.flatMap(deletion => clone(deletion!.value as unknown[])) })
         }
       }
+      // Amazon sheet gaps — the selected offer leaves: one whole-root replace per root, and the journal's record of them.
+      const offerFields = changes.filter(change => product.offer?.lines[change.field]).map(change => change.field)
+      if (offerFields.length) {
+        const compiled = compileAmazonOffer(product.offer!, offerFields, product.sku)
+        patches.push(...compiled.patches)
+        offers[product.productId] = compiled.offer
+      }
       messages.push({ messageId: messages.length + 1, sku: product.sku, operationType: 'PATCH', productType: message.productType, patches })
       fieldWrites[product.productId] = changes.map(change => {
         if (change.current.state === 'unknown') throw new Error(`${change.field}: the intended value is unknown.`)
@@ -306,5 +317,5 @@ export function compileAmazonChanges(plan: AmazonChangePlan, selectedIds: string
     products.push({ productId: product.productId, sku: product.sku })
   }
   return { kind: 'amazon', sellerId: plan.publication.sellerId, marketplaceId: plan.publication.marketplaceId, products,
-    feed: { header: clone(plan.publication.feed.header), messages }, fieldWrites }
+    feed: { header: clone(plan.publication.feed.header), messages }, fieldWrites, ...(Object.keys(offers).length ? { offers } : {}) }
 }

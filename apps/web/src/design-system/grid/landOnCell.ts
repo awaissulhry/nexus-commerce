@@ -11,12 +11,21 @@
  *   4. marks the cell with `nds-cell-landing` (a 2px brand ring and wash that pulses twice, `grid.css`) for
  *      `LANDING_MS`, then leaves the ordinary focus ring in place.
  *
+ * Keyboard focus (sheet publish parity review, 2026-10-02). AG's `setFocusedCell` moves the browser's focus only into
+ * a cell that is ALREADY drawn. The landing scrolls first, and AG draws the newly visible rows and columns a frame or
+ * more later — so the grid's cursor was on the cell while `document.activeElement` stayed on <body> (the card that
+ * asked had closed): Enter did nothing until the operator clicked. So once the cell is drawn, the cursor is set again,
+ * which focuses it — unless the operator has moved focus somewhere else in the meantime (never steal it). A cell that
+ * is not drawn within `LANDING_DRAW_FRAMES` frames is left with the grid's cursor only.
+ *
  * Returns false when the row is not in the grid (filtered out, or not loaded) so the caller can say so instead of
  * silently doing nothing.
  */
 
 export const LANDING_CLASS = 'nds-cell-landing'
 export const LANDING_MS = 2400
+/** Frames to wait for AG to draw the landed cell after scrolling to it (a virtualised row or column). */
+export const LANDING_DRAW_FRAMES = 10
 
 /** The slice of AG's API landing needs — structural, so a test can pass a fake. */
 export interface LandingGridApi {
@@ -73,15 +82,40 @@ export function landOnCell(api: LandingGridApi, { rowId, colId, reveal, root, sc
     if (reveal) reveal(colId)
     else api.ensureColumnVisible(colId, 'auto')
     api.setFocusedCell(node.rowIndex, colId)
-    // The cell is rendered only once it is scrolled into the viewport: mark it on the frame after.
-    later(() => markLanding(root ?? (typeof document !== 'undefined' ? document : null), node.id ?? rowId, colId))
+    // The cell is drawn only once it is scrolled into the viewport — a frame or more later for a virtualised row or
+    // column. Wait for it, then mark it and give it the browser's focus (see the header: AG focuses drawn cells only).
+    const scope = root ?? (typeof document !== 'undefined' ? document : null)
+    const settle = (frame: number) => later(() => {
+      if (api.isDestroyed()) return
+      const cells = landedCells(scope, node.id ?? rowId, colId)
+      if (!cells.length) { if (frame < LANDING_DRAW_FRAMES) settle(frame + 1); return }
+      markLanding(cells)
+      if (node.rowIndex != null && focusIsFree(cells)) api.setFocusedCell(node.rowIndex, colId)
+    })
+    settle(1)
   })
   return true
 }
 
-function markLanding(root: ParentNode | null, rowId: string, colId: string): void {
-  if (!root || typeof CSS === 'undefined') return
-  const cells = root.querySelectorAll<HTMLElement>(`.ag-row[row-id="${CSS.escape(rowId)}"] .ag-cell[col-id="${CSS.escape(colId)}"]`)
+const escapeAttr = (value: string) => (typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(value) : value.replace(/["\\]/g, '\\$&'))
+
+function landedCells(root: ParentNode | null, rowId: string, colId: string): HTMLElement[] {
+  if (!root) return []
+  return [...root.querySelectorAll<HTMLElement>(`.ag-row[row-id="${escapeAttr(rowId)}"] .ag-cell[col-id="${escapeAttr(colId)}"]`)]
+}
+
+/**
+ * The landing may take the browser's focus only when nobody else has it: focus is on nothing / <body> (the card that
+ * asked has closed), or somewhere in a grid (the cell that opened the card). Focus in an input, a menu or a dialog the
+ * operator moved to while the grid scrolled is theirs. Already in the landed cell = nothing to do.
+ */
+export function focusIsFree(cells: readonly Element[], active: Element | null = typeof document !== 'undefined' ? document.activeElement : null): boolean {
+  if (cells.some(cell => active && cell.contains(active))) return false
+  if (!active || (typeof document !== 'undefined' && active === document.body)) return true
+  return active.closest('.ag-root-wrapper') !== null
+}
+
+function markLanding(cells: readonly HTMLElement[]): void {
   cells.forEach(cell => {
     cell.classList.remove(LANDING_CLASS)
     // Restart the animation when the same cell is landed on twice in a row.

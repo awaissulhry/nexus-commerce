@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   bulkCreate: vi.fn(),
   bulkFindUnique: vi.fn(),
   refresh: vi.fn(),
+  announce: vi.fn(),
 }))
 vi.mock('../db.js', () => ({
   default: {
@@ -53,6 +54,7 @@ vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: async () =
 vi.mock('../services/sync-coalesce.js', () => ({ coalescePendingQuantityRows: async () => 0 }))
 vi.mock('../services/product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: (...a: unknown[]) => mocks.refresh(...a) } }))
 vi.mock('../services/pim/studio-sheet.service.js', () => ({ UnknownProductError: class extends Error { code = 'unknown_product' } }))
+vi.mock('../services/listing-values-events.js', () => ({ announceListingValues: (...a: unknown[]) => mocks.announce(...a) }))
 vi.mock('../services/pim/product-relationship.service.js', () => ({ ProductRelationshipError: class extends Error { statusCode = 409; code = 'relationship' } }))
 
 import routes from './studio-matrix.routes.js'
@@ -203,7 +205,52 @@ describe('PATCH /products/:id/studio/matrix — the door', () => {
   })
 })
 
+// Amazon sheet gaps (design-sync §1.B) — the write carries the account its read used and the listing each cell saw.
+describe('PATCH — accountId and expectedListingId', () => {
+  const patch = (payload: unknown) => app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload })
+  const cell = { rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 }
+  it('parses both: the account reaches the read, the expected listing reaches the door, the outcome names every EU row it moved', async () => {
+    const ok = await patch({ accountId: 'acc', cells: [{ ...cell, expectedListingId: 'l-c1-it' }] })
+    expect(ok.statusCode).toBe(200)
+    expect(mocks.read).toHaveBeenCalledWith(expect.objectContaining({ productId: 'root', accountId: 'acc' }))
+    expect(ok.json().results[0]).toMatchObject({ outcome: 'applied', version: 4, listings: [{ listingId: 'l-c1-it', productId: 'c1', version: 4 }, { listingId: 'l-c1-de', productId: 'c1', version: 6 }] })
+    /* another listing than the caller saw → conflict, nothing written */
+    mocks.follow.mockClear(); mocks.updateMany.mockClear()
+    const other = await patch({ accountId: null, cells: [{ ...cell, expectedListingId: 'l-c1-it-other-account' }] })
+    expect(other.json().results[0]).toMatchObject({ outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: 3 })
+    expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: null }))
+    expect(mocks.follow).not.toHaveBeenCalled(); expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['an accountId that is not an id', { accountId: 5, cells: [cell] }],
+    ['an empty accountId', { accountId: '', cells: [cell] }],
+    ['an expectedListingId that is not an id', { cells: [{ ...cell, expectedListingId: 7 }] }],
+    ['a null expectedListingId', { cells: [{ ...cell, expectedListingId: null }] }],
+    ['an empty expectedListingId', { cells: [{ ...cell, expectedListingId: '' }] }],
+  ])('refuses %s with 400 and writes nothing', async (_name, payload) => {
+    const res = await patch(payload)
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toBe('invalid_write')
+    expect(mocks.read).not.toHaveBeenCalled()
+  })
+})
+
 describe('POST …/verbs and …/verbs/:id/revert', () => {
+  it('a state verb (pause) announces syncState for every EU row it moved, after the write, and answers their versions', async () => {
+    const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'pause-sync' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().results[0]).toMatchObject({ outcome: 'applied', listings: [{ listingId: 'l-c1-it', productId: 'c1', version: 4 }, { listingId: 'l-c1-de', productId: 'c1', version: 6 }] })
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-de', version: 5 }, data: { syncPaused: true, version: { increment: 1 } } })
+    expect(mocks.announce).toHaveBeenCalledTimes(1)
+    expect(mocks.announce).toHaveBeenCalledWith(['l-c1-it', 'l-c1-de'], ['syncState'], 'matrix')
+    expect(mocks.updateMany.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.announce.mock.invocationCallOrder[0]!)
+  })
+  it('a state verb that changes nothing announces nothing', async () => {
+    const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'resume-sync' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true } })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.announce).not.toHaveBeenCalled()
+  })
+
   it('commit:false answers exactly the shared preview run on the same read', async () => {
     const req = { params: { verb: 'adjust-prices', percent: -5 }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }, { rowId: 'root', coordinateKey: 'AMAZON:IT' }], commit: false }
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: req })

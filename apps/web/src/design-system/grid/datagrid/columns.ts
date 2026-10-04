@@ -76,6 +76,8 @@ export interface SplitColumns<T> {
   lockedLead: Column<T>[]
   lockedTrail: Column<T>[]
   togglableKeys: string[]
+  /** The togglable columns shown by default: all but `defaultHidden` ones. */
+  defaultVisibleKeys: string[]
   defaultLockedKeys: string[]
   anyPinned: boolean
   prefsColumns: Array<{ key: string; label: string; locked: boolean; defaultLocked: boolean; group?: string; lockSide?: 'left' | 'right' }>
@@ -91,6 +93,7 @@ export function splitColumns<T>(columns: readonly Column<T>[]): SplitColumns<T> 
     lockedLead: lead,
     lockedTrail: trail,
     togglableKeys: togglable.map((c) => c.key),
+    defaultVisibleKeys: togglable.filter((c) => !c.defaultHidden).map((c) => c.key),
     defaultLockedKeys: togglable.filter((c) => c.prefsLocked).map((c) => c.key),
     anyPinned: columns.some((c) => c.sticky || c.stickyRight),
     prefsColumns: [...lead, ...togglable, ...trail].map((c) => ({

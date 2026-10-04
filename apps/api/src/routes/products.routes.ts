@@ -1016,7 +1016,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         ifMatch: request.headers['if-match'], formulaWriteToken: request.headers['x-nexus-formula-write'],
         formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
         userId: (request as { authUser?: { id?: string } }).authUser?.id, ip: request.ip, logger: request.log,
-        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission
+        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission; also holds the Amazon offer price columns
       })
     } catch (error) {
       if (error instanceof ProductBulkError) return reply.code(error.statusCode).send(error.details)

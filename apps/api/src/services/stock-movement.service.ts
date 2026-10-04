@@ -80,6 +80,7 @@ export async function recascadeAfterSyncControlChange(
   if (unique.length) {
     const { sendHeldPrices } = await import('./pim/channel-price-write.service.js')
     out.heldPricesSent = (await sendHeldPrices({ productIds: unique, actor, cause: 'resume' })).sent.length
+    await (await import('./pim/amazon-fulfilment-settings.service.js')).reassertAmazonFulfilment(unique, actor)
   }
   return out
 }
