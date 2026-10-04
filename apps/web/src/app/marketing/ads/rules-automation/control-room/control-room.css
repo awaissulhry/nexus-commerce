@@ -51,7 +51,12 @@
 .acr-dot.running { background: #1a9d6a; box-shadow: 0 0 0 3px rgba(26, 157, 106, 0.15); }
 .acr-dot.stopped { background: var(--nds-red-600); box-shadow: 0 0 0 3px rgba(212, 69, 63, 0.15); }
 
-.acr-status-actions { flex-shrink: 0; }
+/* 1g — the account dial (DS SegmentedControl) sits beside Resume / Stop everything; on a phone the
+   status stacks so neither squeezes the sentence beside it. Layout only. */
+.acr-status-actions { flex-shrink: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 720px) {
+  .acr-status { flex-direction: column; align-items: stretch; }
+}
 /* DS-ALIGN — this whole family is the DS `Button` now, one variant per modifier:
      bare    → `quiet`          (it inherits its context's colour, which is why 25 sites
                                  could only convert once the DS stopped hard-setting one)

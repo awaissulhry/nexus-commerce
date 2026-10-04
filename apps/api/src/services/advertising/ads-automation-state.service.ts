@@ -24,6 +24,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { ENGINE_ACTORS, engineCaps, engineLabel, type BreakerBucket, type EngineCaps } from './ads-engine-actors.js'
 
 export type Autonomy = 'OFF' | 'SUGGEST' | 'AUTO'
 export interface AdsAutomationStateView {
@@ -170,6 +171,107 @@ export async function setGuardThresholds(opts: { maxHourlySpendCentsEur?: number
     create: { id: SINGLETON, ...opts },
     update: { ...opts },
   })
+}
+
+// ── Group 1 (1g) — the brakes as a person moves them (the Control Room routes) ────────────────────────────
+//
+// The routes called the setters above directly: no audit row, and the thresholds route spread its whole body into the
+// upsert, so a 0 or negative limit was stored (0 € switches the spend signal off) and any other column could ride
+// along. These validate, change, and leave one audit row each: who, from → to, why. The row goes in the ads action
+// log, where Claude's moves of the same brakes already go (ads-automation-adapters.ts, automation-stop.service.ts,
+// ads-engine-tune.service.ts), so both are read in one place. A press that changes nothing writes no row.
+
+export type BrakeOutcome = { ok: true } | { ok: false; error: string }
+
+async function auditBrake(by: string, actionType: string, entityType: string, entityId: string, before: object, after: object, note: string): Promise<void> {
+  await prisma.advertisingActionLog.create({
+    data: {
+      userId: by, actionType, entityType, entityId, payloadBefore: before, payloadAfter: after,
+      amazonResponseStatus: 'SUCCESS', evidence: { metric: 'operator_autonomy', note },
+    },
+  }).catch((err: unknown) => logger.warn('[ads-automation] audit row not written', { actionType, error: String(err) }))
+}
+
+const AUTONOMY_LEVELS: readonly Autonomy[] = ['OFF', 'SUGGEST', 'AUTO']
+
+/** The dial. It does not lift a halt: Resume does that. */
+export async function changeAutonomy(level: unknown, by: string): Promise<BrakeOutcome> {
+  if (typeof level !== 'string' || !(AUTONOMY_LEVELS as readonly string[]).includes(level)) {
+    return { ok: false, error: 'The dial level must be OFF, SUGGEST or AUTO.' }
+  }
+  const before = await getRow()
+  if (before.autonomy === level) return { ok: true }
+  await setAutonomy(level as Autonomy, by)
+  await auditBrake(by, 'set_automation_level', 'ADS_DIAL', 'ads-dial', { autonomy: before.autonomy }, { autonomy: level }, `ads dial ${before.autonomy} → ${level}`)
+  return { ok: true }
+}
+
+export async function haltWithAudit(reason: unknown, by: string): Promise<void> {
+  const why = typeof reason === 'string' && reason.trim() ? reason.trim() : 'Operator halt'
+  const before = await getRow()
+  await haltAutomation(why, by)
+  await auditBrake(by, 'halt_automation', 'AUTOMATION', 'amazon-ads', { halted: before.halted, haltReason: before.haltReason }, { halted: true, haltReason: why }, 'ads automation halted')
+}
+
+/** Clears a halt only. A dial at OFF stays OFF: the dial is what turns it back on. */
+export async function resumeWithAudit(by: string): Promise<void> {
+  const before = await getRow()
+  await resumeAutomation(by)
+  if (before.halted) {
+    await auditBrake(by, 'resume_automation', 'AUTOMATION', 'amazon-ads', { halted: true, haltReason: before.haltReason }, { halted: false, haltReason: null }, 'ads automation resumed')
+  }
+}
+
+export interface GuardThresholds { maxActionsPerHour?: number | null; maxHourlySpendCentsEur?: number | null }
+
+const THRESHOLD_NAMES: Record<keyof GuardThresholds, string> = {
+  maxActionsPerHour: 'Rule actions per hour (maxActionsPerHour)',
+  maxHourlySpendCentsEur: 'Spend per hour in cents (maxHourlySpendCentsEur)',
+}
+const INT_MAX = 2_147_483_647 // the columns are Int
+
+/**
+ * Each limit: a whole number of at least 1, or null for the default (250 rule actions, €500 an hour — the breaker reads
+ * null as its default, never as "no limit"). A field left out is left as it is.
+ */
+export function parseGuardThresholds(body: unknown): { ok: true; value: GuardThresholds } | { ok: false; error: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: 'Send maxActionsPerHour and/or maxHourlySpendCentsEur.' }
+  }
+  const fields = Object.keys(THRESHOLD_NAMES) as Array<keyof GuardThresholds>
+  const unknown = Object.keys(body).filter((k) => !(fields as string[]).includes(k))
+  if (unknown.length) return { ok: false, error: `Only maxActionsPerHour and maxHourlySpendCentsEur can be set here, not ${unknown.join(', ')}.` }
+  const value: GuardThresholds = {}
+  for (const field of fields) {
+    const n = (body as Record<string, unknown>)[field]
+    if (n === undefined) continue
+    if (n !== null && (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > INT_MAX)) {
+      return { ok: false, error: `${THRESHOLD_NAMES[field]} must be a whole number of at least 1, or empty to use the default.` }
+    }
+    value[field] = n as number | null
+  }
+  if (!Object.keys(value).length) return { ok: false, error: 'Send maxActionsPerHour and/or maxHourlySpendCentsEur.' }
+  return { ok: true, value }
+}
+
+export async function changeGuardThresholds(body: unknown, by: string): Promise<BrakeOutcome> {
+  const parsed = parseGuardThresholds(body)
+  if ('error' in parsed) return parsed
+  const row = await getRow()
+  const before = { maxActionsPerHour: row.maxActionsPerHour, maxHourlySpendCentsEur: row.maxHourlySpendCentsEur }
+  const after = { ...before, ...parsed.value }
+  if (after.maxActionsPerHour === before.maxActionsPerHour && after.maxHourlySpendCentsEur === before.maxHourlySpendCentsEur) return { ok: true }
+  await setGuardThresholds(parsed.value)
+  await auditBrake(by, 'tune_engine_setting', 'ADS_AUTOMATION_STATE', 'breaker', before, after, 'anomaly breaker limits')
+  return { ok: true }
+}
+
+/**
+ * Each engine's write limits, for the screens (from ads-engine-actors.ts: code defaults + NEXUS_ADS_ENGINE_CAPS).
+ * `breakerPerHour` binds now (the anomaly breaker); `perTick` / `perDay` bind only where an engine checks them.
+ */
+export function engineLimits(): Array<{ key: BreakerBucket; label: string } & EngineCaps> {
+  return ([...ENGINE_ACTORS.map((d) => d.key), 'unknown'] as BreakerBucket[]).map((key) => ({ key, label: engineLabel(key), ...engineCaps(key) }))
 }
 
 export async function markGuardChecked(): Promise<void> {

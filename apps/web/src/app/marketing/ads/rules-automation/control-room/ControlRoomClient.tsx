@@ -22,7 +22,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, SegmentedControl } from '@/design-system/primitives'
+import { useActionConfirm } from '@/design-system/components'
+import { usePermission } from '@/lib/auth/AuthProvider'
 import Link from '@/lib/workspaces/Link'
 import { useSearchParams } from 'next/navigation'
 import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Square, RefreshCw } from 'lucide-react'
@@ -34,6 +36,7 @@ import { TodayTab } from './TodayTab'
 import { ForesightTab } from './ForesightTab'
 import { LeverDrawer } from './LeverDrawer'
 import type { LeverControl } from './lever-control'
+import { accountStatus, dialMove, DIAL_LABEL, DIAL_LEVELS, isDial, type AccountGlobal } from './dialState'
 import './control-room.css'
 
 type Mode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
@@ -56,7 +59,6 @@ interface Engine {
   /** R16 — the env and this business's own switch (absent from an older API). */
   control?: LeverControl
 }
-interface Global { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean }
 
 const ago = (iso: string | null) => {
   if (!iso) return 'never'
@@ -77,7 +79,7 @@ export function ControlRoomClient() {
           : raw === 'foresight' ? 'foresight'
             : 'today'
   const [engines, setEngines] = useState<Engine[] | null>(null)
-  const [global, setGlobal] = useState<Global | null>(null)
+  const [global, setGlobal] = useState<AccountGlobal | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // ACR.1.2b — the engine whose drawer is open. Row-level state, not routed: a drawer is a
@@ -90,7 +92,7 @@ export function ControlRoomClient() {
       if (!r.ok) throw new Error(`levers: ${r.status}`)
       const j = await r.json()
       setEngines(Array.isArray(j?.engines) ? (j.engines as Engine[]) : [])
-      setGlobal((j?.global ?? null) as Global | null)
+      setGlobal((j?.global ?? null) as AccountGlobal | null)
       setErr(null)
     } catch (e) { setErr((e as Error).message); setEngines([]) }
   }, [])
@@ -116,9 +118,27 @@ export function ControlRoomClient() {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const stopped = !!global && (global.halted || global.envKill || global.autonomy === 'OFF')
+  // 1g — the account dial. Resume clears a halt only; a dial at Off is turned back on here. Every move asks first.
+  const canManage = usePermission('ads.automation.manage')
+  const confirm = useActionConfirm()
+  const setDial = async (to: string) => {
+    if (busy || !global) return
+    const move = dialMove(global, to)
+    if (!move || !(await confirm.ask(move.impact))) return
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation/autonomy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: move.to }),
+      })
+      if (!r.ok) throw new Error(((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? `Could not move the dial (${r.status})`)
+      await load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
   const acting = (engines ?? []).filter((e) => e.mode === 'AUTO').length
   const warnings = (engines ?? []).filter((e) => e.warning).length
+  const status = global ? accountStatus(global, acting, engines?.length ?? 0, canManage) : null
+  const stopped = !!status?.stopped
 
   return (
     // The dock is gone (operator call 2026-08-06): it duplicated the rules
@@ -139,32 +159,35 @@ export function ControlRoomClient() {
 
       {err && <div className="acr-banner err" role="alert"><AlertTriangle size={15} /> {err}</div>}
 
-      {global && (
+      {global && status && (
         <section className={`acr-status ${stopped ? 'stopped' : 'running'}`} aria-label="Account automation state">
           <div className="acr-status-main">
             <span className={`acr-dot ${stopped ? 'stopped' : 'running'}`} aria-hidden />
             <div>
-              <strong>{stopped ? 'Automation is stopped' : 'Automation is running'}</strong>
-              <div className="acr-status-detail">
-                {global.envKill
-                  ? 'NEXUS_ADS_AUTOMATION_KILL is set — this cannot be cleared from here.'
-                  : global.halted
-                    ? 'Halted. No engine can write to Amazon until it resumes.'
-                    : global.autonomy === 'SUGGEST'
-                      ? 'Account dial is SUGGEST — writes are demoted to proposals.'
-                      : `${acting} of ${engines?.length ?? 0} engines are acting on their own.`}
-              </div>
+              <strong>{status.headline}</strong>
+              <div className="acr-status-detail">{status.detail}</div>
             </div>
           </div>
           <div className="acr-status-actions">
-            {!global.envKill && (
-              stopped
-                ? <Button variant="success" size="sm" disabled={busy} onClick={() => void setHalt(false)}><Play size={14} /> Resume</Button>
-                : <Button variant="danger-outline" size="sm" disabled={busy} onClick={() => void setHalt(true)}><Square size={14} /> Stop everything</Button>
-            )}
+            <span className="acr-lbl">Account dial</span>
+            {status.dialLocked
+              ? <span className="acr-status-detail">
+                {!global.degraded && isDial(global.autonomy) ? `${DIAL_LABEL[global.autonomy]} — ` : ''}{status.dialLocked}
+              </span>
+              : <SegmentedControl
+                size="sm"
+                ariaLabel="Account dial"
+                options={DIAL_LEVELS.map((l) => ({ value: l, label: DIAL_LABEL[l] }))}
+                value={global.autonomy}
+                disabled={busy}
+                onChange={(v) => void setDial(v)}
+              />}
+            {status.action === 'resume' && <Button variant="success" size="sm" disabled={busy} onClick={() => void setHalt(false)}><Play size={14} /> Resume</Button>}
+            {status.action === 'halt' && <Button variant="danger-outline" size="sm" disabled={busy} onClick={() => void setHalt(true)}><Square size={14} /> Stop everything</Button>}
           </div>
         </section>
       )}
+      {confirm.element}
 
       {global?.degraded && (
         <div className="acr-banner warn">
