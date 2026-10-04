@@ -3,8 +3,8 @@
  * deterministic dry-run built from the same checks the write path enforces (protected terms, authority pins,
  * isNegative-only existing-negative reads); hard denials return ok:false so the approval gate never queues them.
  *
- * MCP full control A5 — `create-negative-keyword` (ad-group negatives only; createNegative now binds the campaign's
- * allowlist) and `graduate-keyword` (into the named or resolved harvest destination) execute too, with the same rules;
+ * MCP full control A5 — `create-negative-keyword` (ad-group negatives only, through the one negative write service, which
+ * binds the campaign's allowlist) and `graduate-keyword` (into the named or resolved harvest destination) execute too, with the same rules;
  * a negative is undone by undo-ad-change retiring it, a graduation by lowering the keyword to the floor (d3: never
  * paused or archived).
  *
@@ -23,8 +23,8 @@ import { negativeKeywordTextProblem, protectedNegativeRefusal } from '../../adve
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
-import { createNegative } from '../../advertising/ads-negative-kw.service.js'
-import { createKeywordLocal, mirrorNegativeKeywordLocal } from '../../advertising/ads-create.service.js'
+import { writeNegativeKeyword } from '../../advertising/ads-negative-kw.service.js'
+import { createKeywordLocal } from '../../advertising/ads-create.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../../advertising/ads-entity-lookup.service.js'
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
@@ -125,10 +125,11 @@ async function negativePreview(args: Record<string, unknown>): Promise<ToolResul
   if (!adGroup) return { ok: false, error: `ad group ${externalAdGroupId} not found in ${campaign.name}` }
 
   // Existing negatives via the isNegative boolean ONLY — 1,068 prod
-  // negatives carry expressionType='EXACT' (the known trap).
+  // negatives carry expressionType='EXACT' (the known trap). 5b — an archived (retired) one is not in the way.
   const existing = await prisma.adTarget.findMany({
     where: {
       isNegative: true,
+      status: { not: 'ARCHIVED' },
       expressionValue: { equals: keywordText, mode: 'insensitive' },
       adGroup: { campaign: { externalCampaignId } },
     },
@@ -240,41 +241,32 @@ const createNegativeKeyword: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const profileId = p.reach.reach === 'live' ? p.reach.profileId : (await adsProfileFor(p.campaign.marketplace))?.profileId ?? 'sandbox'
-    const made = await createNegative({
-      profileId,
-      externalCampaignId: String(args.externalCampaignId),
-      externalAdGroupId: p.adGroup.externalAdGroupId,
-      keywordText: p.term,
-      matchType: p.matchType,
+    // 5b — the one negative write service: it pushes (gated, with the campaign's allowlist), reads back a missing id,
+    // and records the row and its audit row only for a negative that stands.
+    const made = await writeNegativeKeyword({
       scope: 'AD_GROUP',
-      marketplace: p.campaign.marketplace ?? '',
-      nexusCampaignId: p.campaign.id,
-    })
-    if (made.denied) return notRun(`Not run: Amazon's write gate refused it — ${made.denied.reason}. Nothing changed.`)
-    if (!made.ok) return notRun('Not run: Amazon did not accept the negative keyword. Nothing changed.')
-    const mirror = await mirrorNegativeKeywordLocal({
       adGroupId: p.adGroup.id,
       keywordText: p.term,
       matchType: p.matchType,
-      externalTargetId: made.externalNegativeKeywordId,
+      profileId,
       userId: run.actor,
     })
-    const reachedAmazon = made.mode === 'live' && made.externalNegativeKeywordId != null
+    if (made.refusal) return notRun(`Not run: Amazon's write gate refused it — ${made.refusal.reason}. Nothing changed.`)
+    if (made.outcome === 'failed') return notRun(`Not run: the negative keyword did not reach Amazon — ${made.error}. Nothing changed.`)
+    if (made.outcome === 'already_existed' || !made.adTargetId) return notRun(`Not run: "${p.term}" is already negated in that ad group. Nothing changed.`)
     return {
       ok: true,
       data: {
-        targetId: mirror.id,
-        created: mirror.created,
+        targetId: made.adTargetId,
+        created: true,
         reach: p.reach,
-        reachedAmazon,
+        reachedAmazon: made.reachedAmazon,
         changeSetId: run.changeSetId,
-        note: made.mode === 'live'
-          ? (reachedAmazon ? 'Created at Amazon.' : 'Amazon answered without an id for it: the next sync shows whether it exists there.')
-          : 'Sandbox: recorded in Nexus only; nothing reached Amazon.',
+        note: made.mode === 'live' ? 'Created at Amazon.' : 'Sandbox: recorded in Nexus only; nothing reached Amazon.',
       },
       change: {
         before: { changeSetId: run.changeSetId, negatives: [] },
-        after: { negatives: [{ targetId: mirror.id }] },
+        after: { negatives: [{ targetId: made.adTargetId }] },
       },
     }
   },

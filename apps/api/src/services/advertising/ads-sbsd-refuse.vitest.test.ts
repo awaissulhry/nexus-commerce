@@ -166,14 +166,16 @@ describe('negatives (/sp/negativeKeywords, /sp/negativeTargets) — the gate get
     expect(sp).toMatchObject({ ok: true, mode: 'sandbox', denied: null })
   })
 
-  it('createNegativeKeywordLocal / createNegativeProductTargetLocal: no Amazon call for the SB ad group', async () => {
+  // 5b — and no local row: a refused negative leaves nothing behind (it used to write the row anyway).
+  it('createNegativeKeywordLocal / createNegativeProductTargetLocal: no Amazon call and no local row for the SB ad group', async () => {
     const { createNegativeKeywordLocal, createNegativeProductTargetLocal } = await import('./ads-create.service.js')
     const kw = await inside(() => createNegativeKeywordLocal({ adGroupId: 'g-c-sb', keywordText: 'cheap brand', matchType: 'EXACT' }))
-    expect(kw).toMatchObject({ externalTargetId: null, mode: 'local' })
+    expect(kw).toMatchObject({ id: null, externalTargetId: null, mode: 'refused', refusal: { deniedAt: 'ad_product_unsupported', reason: expect.stringContaining('(it is Sponsored Brands)') } })
     const pt = await inside(() => createNegativeProductTargetLocal({ adGroupId: 'g-c-sb', asin: 'B0OTHER001' }))
-    expect(pt).toMatchObject({ externalTargetId: null, mode: 'local' })
+    expect(pt).toMatchObject({ id: null, externalTargetId: null, mode: 'refused', refusal: { deniedAt: 'ad_product_unsupported' } })
     expect(amz.createNegativeKeyword).not.toHaveBeenCalled()
     expect(amz.createNegativeProductTarget).not.toHaveBeenCalled()
+    expect(await inside(() => database.client.adTarget.count({ where: { adGroupId: 'g-c-sb', isNegative: true } }))).toBe(0)
 
     await inside(() => createNegativeKeywordLocal({ adGroupId: 'g-c-it', keywordText: 'cheap brand', matchType: 'EXACT' }))
     expect(amz.createNegativeKeyword).toHaveBeenCalledTimes(1)

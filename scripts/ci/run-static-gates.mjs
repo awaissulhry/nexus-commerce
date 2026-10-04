@@ -64,6 +64,8 @@ const GATES = {
   'help cursor': node('scripts/check-help-cursor.mjs'),
   'connection resolver (MAP.3)': tsx('scripts/map0-connection-resolution-audit.mts', 'apps/api', '--ratchet'),
   'channel gateway (P1.2)': tsx('scripts/channel-gateway-ratchet.mts', 'apps/api', '--check'),
+  // 5b (2026-10-04) — every Amazon negative goes through the one negative write service; baseline 0.
+  'negative write path (5b)': node('scripts/check-negative-write-path.mjs', '--check'),
   'inbound ledger (P2.1)': node('scripts/check-inbound-ledger.mjs'),
   'web tokens.css in sync': tsx('apps/web/src/design-system/tools/generate-tokens-css.ts', undefined, '--check'),
   'factory tokens.css in sync': tsx('apps/factory/src/design-system/tools/generate-tokens-css.ts', undefined, '--check'),

@@ -244,7 +244,9 @@ async function dispatchToAmazon(
     return {
       ok: false,
       rawResponse: null,
-      error: err instanceof Error ? err.message : String(err),
+      // 5b — a negative refused at the wire (5a: re-enabling a protected term, or one Nexus holds no copy of) gets the
+      // same answer on every retry; "forbidden" makes isRetryableSyncError treat it as permanent, not retry it 3 times.
+      error: err instanceof Error ? ((err as { code?: unknown }).code === 'negative_refused' ? `forbidden by Nexus: ${err.message}` : err.message) : String(err),
     }
   }
 }

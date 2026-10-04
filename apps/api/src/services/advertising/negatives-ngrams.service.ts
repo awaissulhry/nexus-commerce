@@ -541,12 +541,10 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
         try {
           const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: extAdGroupId }, select: { id: true } })
           if (ag) {
-            const t = await prisma.adTarget.create({
-              data: {
-                adGroupId: ag.id, kind: 'KEYWORD', expressionType: 'NEGATIVE_PHRASE',
-                expressionValue: gram, bidCents: 0, status: 'ENABLED',
-                externalTargetId: res.externalNegativeKeywordId, isNegative: true, negativeLevel: 'AD_GROUP',
-              },
+            // 5b — the row through the negative write service's one row writer (scripts/check-negative-write-path.mjs).
+            const t = await (await import('./ads-negative-kw.service.js')).mirrorNegativeRow({
+              adGroupId: ag.id, kind: 'KEYWORD', level: 'AD_GROUP', expressionType: 'NEGATIVE_PHRASE',
+              expressionValue: gram, externalTargetId: res.externalNegativeKeywordId,
             })
             mirroredId = t.id
             await prisma.advertisingActionLog.create({
