@@ -57,6 +57,8 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
    * Open → the first control in the popover (its search box when shown, else the first option);
    * Esc → closed, focus back on the trigger; Tab past the last row (or Shift+Tab before the first)
    * → closed, focus back on the trigger, and Tab continues from there.
+   * Esc is marked as used (`preventDefault`), so a `Modal` around the picker stays open: it closes only on an
+   * Escape nothing else used (2026-10-02, the Publish window closed with its Markets list).
    */
   useEffect(() => {
     if (!open) return
@@ -77,7 +79,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
   return (
     <div className={['nds-ms', size === 'sm' ? 'sm' : '', width === 'auto' ? 'auto' : '', className].filter(Boolean).join(' ')}
       style={typeof width === 'number' ? { width } : undefined} ref={ref}
-      onKeyDown={(e) => { if (e.key === 'Escape' && open) close() }}>
+      onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); close() } }}>
       <button ref={triggerRef} type="button" id={id} className="nds-ms-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={() => setOpen((o) => !o)}>
         <span className={value.length === 0 ? 'ph' : ''}>{label}</span>
         <ChevronDown size={15} aria-hidden />

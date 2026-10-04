@@ -18,7 +18,7 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, putBackRefusedWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
@@ -411,6 +411,21 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
       },
     })
+    // 4k — a refused write leaves no local change. Nexus wrote its own copy when the write was queued, so each refused
+    // field still holding the refused value goes back to the value it replaced (putBackRefusedWrite); a newer change
+    // stays. Inside the entity claim, before settling. Never fails the worker.
+    await putBackRefusedWrite(payload).then(
+      (r) => {
+        if (r.restored.length || r.kept.length) {
+          logger.info('[ads-sync.worker] refused write put back in Nexus', {
+            queueId, entityType: payload.entityType, entityId: payload.entityId, restored: r.restored, kept: r.kept,
+          })
+        }
+      },
+      (err) => logger.warn('[ads-sync.worker] could not put back a refused write', {
+        queueId, entityType: payload.entityType, entityId: payload.entityId, error: err instanceof Error ? err.message : String(err),
+      }),
+    )
     await settleAdMutations(queueId, 'SKIPPED', { error: `${gate.deniedAt}: ${gate.reason}` })
     await stampEntitySync(payload, 'SKIPPED', `${gate.deniedAt}: ${gate.reason}`)
     return { status: 'SKIPPED', queueId }

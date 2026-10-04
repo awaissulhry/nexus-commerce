@@ -31,6 +31,8 @@ import {
   type Cardinality, type ChannelFieldSpec, type ChannelGroup, type ChannelSpec, type ChannelStore,
   type LeafKind, type Requirement,
 } from './types.js'
+import { AMAZON_FULFILMENT_CHOICES, amazonFulfilmentOptionLabel } from '../../../lib/amazon-fulfilment-programme.js'
+import { amazonOfferFieldFor } from '../../amazon/offer-fields.js'
 
 type Node = Record<string, any>
 
@@ -80,8 +82,6 @@ export const AMAZON_LISTING_STORES: Record<string, ChannelStore> = {
  * FBA → FBM while FBA stock is on hand.
  */
 export const AMAZON_FULFILMENT_KEY = 'fulfillment_availability__fulfillment_channel_code'
-const fulfilmentOptionLabel = (code: string) =>
-  code.startsWith('AMAZON_') ? 'FBA — Amazon stores and ships' : code === 'DEFAULT' ? 'FBM — you ship' : code
 
 /** Product type selects the schema, so it must remain editable even before a schema is cached. */
 export function amazonClassificationSpec(marketplace: string): ChannelSpec {
@@ -138,11 +138,23 @@ export function amazonSpecFromDefinition(input: AmazonSpecInput): ChannelSpec {
       }
       const listingStore = AMAZON_LISTING_STORES[name]
       if (listingStore && f.path.length <= 1) f.channelStore = listingStore
+      // Amazon sheet gaps — the offer and fulfilment leaves take their store and hold from the ONE registry.
+      const offerField = amazonOfferFieldFor(f.key)
+      if (offerField?.specStore) f.channelStore = offerField.specStore
+      if (offerField?.editHeldReason) f.editHeldReason = offerField.editHeldReason
+      // One value per offer leaf: Amazon's schema models a price as a schedule (an array), but Nexus sends ONE value (the
+      // builder writes the schedule). A list cell would let a typed value land NEXT TO the old one — a single cell.
+      if (offerField?.lane === 'draft' && f.shape === 'list') { f.shape = 'scalar'; f.cardinality = { min: Math.min(f.cardinality?.min ?? 0, 1), max: 1 } }
       if (f.key === AMAZON_FULFILMENT_KEY) {
         f.label = f.englishLabel = 'Fulfillment method'
-        f.optionLabels = Object.fromEntries((f.options ?? []).map((code) => [code, fulfilmentOptionLabel(code)]))
+        // The two choices a person has (D3); Remote Fulfilment and other Amazon codes are set in Seller Central.
+        f.options = [...AMAZON_FULFILMENT_CHOICES]
+        f.deprecatedOptions = f.deprecatedOptions?.filter((code) => f.options!.includes(code))
+        if (!f.deprecatedOptions?.length) f.deprecatedOptions = undefined
+        f.mode = 'strict'
+        f.optionLabels = Object.fromEntries(f.options.map((code) => [code, amazonFulfilmentOptionLabel(code)]))
         f.channelStore = { kind: 'platformAttributes', path: ['fulfillment_availability', '0', 'fulfillment_channel_code'] }
-        f.helpText = 'FBA: Amazon stores and ships the order. FBM: you ship it. A change to FBM is refused while FBA stock is on hand or an FBA offer is active.'
+        f.helpText = 'FBA: Amazon stores and ships the order. FBM: you ship it. A change to FBM is refused while FBA stock is on hand or an FBA offer is active. A Remote Fulfilment code is set in Seller Central and kept.'
       }
     }
     coverage[name] = produced.map((f) => f.key)

@@ -36,6 +36,7 @@ import {
   type FulfilmentMethod,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixListingVersion,
   type MatrixRead,
   type MatrixRowRead,
   type MatrixVerbId,
@@ -63,11 +64,15 @@ import { getMatrixRead } from './matrix.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
 import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
+import { loadSharedInventoryTargets } from './shared-inventory-targets.js'
+import { announceListingValues } from '../listing-values-events.js'
 
 export interface DoorContext {
   productId: string
   actor: string
   can: (permission: string) => boolean
+  /** The account the caller's read used (`GET …/studio/matrix?accountId=`): the door reads with it, so it resolves the same listings. */
+  accountId?: string | null
 }
 
 const PRICE_PERMISSION = 'products.price.edit'
@@ -88,22 +93,23 @@ function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | 
 
 /**
  * The listing rows a write on this coordinate lands on: the one listing, or — on the region group — every EU row of
- * the SKU that is not closed (SCT.6: consenting to an EU-wide quantity action must never reopen a closed offer).
- * The region cell's own `listingId`/`version` is the PRIMARY market's; its fresh version must still match.
+ * the SKU that is not closed (SCT.6: consenting to an EU-wide quantity action must never reopen a closed offer), by the
+ * one EU rule (`loadSharedInventoryTargets`). The region cell's own `listingId`/`version` is the PRIMARY market's; its
+ * fresh version must still match.
  */
-async function targetsOf(hit: Located, expectedVersion: number): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
+async function targetsOf(read: MatrixRead, hit: Located, expectedVersion: number): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
   if (!hit.coord.sharedInventoryWith) return { targets: [{ id: hit.cells.listingId!, marketplace: hit.coord.market, version: expectedVersion }] }
-  const rows = await prisma.channelListing.findMany({
-    where: { productId: hit.row.id, channel: hit.coord.channel, marketplace: { in: [...hit.coord.sharedInventoryWith] }, aliasKey: '', ...(hit.coord.accountId ? { channelConnectionId: hit.coord.accountId } : {}) },
-    select: { id: true, marketplace: true, version: true, offerClosedAt: true },
+  // The primary's own market: the market coordinate of this row that holds the same listing (read in memory).
+  const own = read.coordinates.find((c) => c.channel === hit.coord.channel && !c.alias && c.key !== hit.coord.key
+    && hit.coord.sharedInventoryWith!.includes(c.market) && hit.row.cells[c.key]?.listingId === hit.cells.listingId)?.market
+    ?? (await prisma.channelListing.findUnique({ where: { id: hit.cells.listingId! }, select: { marketplace: true } }))?.marketplace
+  if (!own) return { conflict: 0 }
+  const resolved = await loadSharedInventoryTargets(prisma, {
+    id: hit.cells.listingId!, productId: hit.row.id, channel: hit.coord.channel, marketplace: own,
+    channelConnectionId: hit.coord.accountId, aliasKey: '', version: expectedVersion,
   })
-  const primary = rows.find((r) => r.id === hit.cells.listingId)
-  if (!primary) return { conflict: 0 }
-  if (primary.version !== expectedVersion) return { conflict: primary.version }
-  const open = rows.filter((r) => !r.offerClosedAt)
-  const order = hit.coord.sharedInventoryWith
-  open.sort((a, b) => order.indexOf(a.marketplace) - order.indexOf(b.marketplace))
-  return { targets: open.map((r) => ({ id: r.id, marketplace: r.marketplace, version: r.version })), expandedTo: open.map((r) => `${hit.coord.channel}:${r.marketplace}`) }
+  if ('conflict' in resolved) return resolved
+  return { targets: resolved.targets, expandedTo: (resolved.expandedTo ?? []).map((m) => `${hit.coord.channel}:${m}`) }
 }
 
 /** Bump every target's version under CAS inside the caller's transaction; `false` = someone else moved a row → roll back. */
@@ -190,17 +196,25 @@ export function pinTypedQuantity(input: Omit<Parameters<typeof writeQuantityMode
 export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorContext): Promise<MatrixWriteOutcome> {
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   const hit = locate(read, w.rowId, w.coordinateKey)
+  /* The caller saw another listing on this coordinate (another account's, or one replaced since): never write over it. */
+  if (hit && w.expectedListingId !== undefined && hit.cells.listingId !== w.expectedListingId) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: hit.cells.version }
   if (!hit || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: hit?.cells.version ?? 0 }
   const { row, coord, cells } = hit
-  if (cells.version !== w.expectedVersion) return { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: cells.version }
+  if (cells.version !== w.expectedVersion) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version }
   if (cells.writable[w.cell] !== true) return { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version }
   const refuse = (reason: string): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason, version: cells.version })
   const noop = (): MatrixWriteOutcome => ({ ...base, outcome: 'noop', version: cells.version })
 
-  const resolved = await targetsOf(hit, w.expectedVersion)
-  if ('conflict' in resolved) return { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: resolved.conflict }
+  const resolved = await targetsOf(read, hit, w.expectedVersion)
+  if ('conflict' in resolved) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: resolved.conflict }
   const { targets, expandedTo } = resolved
-  const applied = (version = cells.version + 1): MatrixWriteOutcome => ({ ...base, outcome: 'applied', version, ...(expandedTo ? { expandedTo } : {}) })
+  /* `listings`: every row the write moved, at its version after it — the door bumps each target once; the fulfilment and
+     price doors answer their own. A refusal after staging moved them too (`staged`). */
+  const bumped = (): MatrixListingVersion[] => targets.map((t) => ({ listingId: t.id, productId: row.id, version: t.version + 1 }))
+  const moved = (rs: ReadonlyArray<{ listingId: string; productId: string | null; outcome: string; version: number }>): MatrixListingVersion[] =>
+    rs.filter((x) => x.outcome === 'applied').map((x) => ({ listingId: x.listingId, productId: x.productId ?? row.id, version: x.version }))
+  const applied = (version = cells.version + 1, listings = bumped()): MatrixWriteOutcome => ({ ...base, outcome: 'applied', version, ...(expandedTo ? { expandedTo } : {}), listings })
+  const stagedRefusal = (reason: string): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason, version: cells.version + 1, listings: bumped() })
   const channel = coord.channel as 'AMAZON' | 'EBAY'
   const markets = targets.map((t) => t.marketplace)
   /* Owner rule: FBA quantity is untouchable. An inventory cell lands on every target — on Amazon EU, every open EU row
@@ -221,7 +235,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
            PIN on a SKU that sells from another business's stock refused with `sharedStockReason` (shared stock by SKU,
            #230; the read holds the cell with the same sentence). */
         const moded = await writeQuantityMode({ productId: row.id, channel, targets, follow: mode === 'FOLLOW', actor: ctx.actor })
-        if (moded.refused) return { ...base, outcome: 'refused', reason: moded.refused, version: moded.staged ? cells.version + 1 : cells.version }
+        if (moded.refused) return moded.staged ? stagedRefusal(moded.refused) : refuse(moded.refused)
         return applied()
       }
       case 'syncQty': {
@@ -234,7 +248,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         /* D-MX3: the typed value is staged into `quantity` under CAS; the PIN primitive snapshots exactly that —
            `pinTypedQuantity`, the one implementation the listings grid uses too. */
         const pinned = await pinTypedQuantity({ productId: row.id, channel, targets, quantity: n, actor: ctx.actor })
-        if (pinned.refused) return { ...base, outcome: 'refused', reason: pinned.refused, version: pinned.staged ? cells.version + 1 : cells.version }
+        if (pinned.refused) return pinned.staged ? stagedRefusal(pinned.refused) : refuse(pinned.refused)
         return applied()
       }
       case 'syncBuffer': {
@@ -245,7 +259,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setStockBuffer({ productIds: [row.id], channel, markets, buffer: n, actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version + 1 }
+        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return stagedRefusal(MATRIX_COPY.amazonManaged)
         return applied()
       }
       case 'fulfilment': {
@@ -257,7 +271,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const typed: FulfilmentWrite = m === null ? null : m === 'MCF' ? 'FBA' : m
         const r = await setFulfillmentMethod({ targets: targets.map((t) => ({ listingId: t.id, method: typed, expectedVersion: t.version })), actor: ctx.actor })
         const mine = r.results.find((x) => x.listingId === cells.listingId) ?? r.results[0]!
-        if (mine.outcome === 'applied') return applied(mine.version)
+        if (mine.outcome === 'applied') return applied(mine.version, moved(r.results))
         return { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
       case 'price': {
@@ -275,7 +289,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const seen = p.clamped ? undefined : p.source === 'override' ? p.value : p.source === 'master' ? null : undefined
         const r = await writeChannelPrices({ targets: [{ listingId: cells.listingId, price: rounded, expectedVersion: cells.version, ...(seen !== undefined ? { expectedPrice: seen } : {}) }], actor: ctx.actor, source: 'MANUAL_OVERRIDE', reason: 'matrix' })
         const mine = r.results[0]!
-        return mine.outcome === 'applied' ? applied(mine.version) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
+        return mine.outcome === 'applied' ? applied(mine.version, moved(r.results)) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
       case 'salePrice': {
         const sale = cells.sale; if (!sale) return refuse('This coordinate has no sale price')
@@ -285,11 +299,11 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (sale.value === next.value && sale.start === next.start && sale.end === next.end) return noop()
         const r = await writeChannelPrices({ targets: [{ listingId: cells.listingId, sale: next, expectedVersion: cells.version }], actor: ctx.actor, source: 'MANUAL_OVERRIDE', reason: 'matrix' })
         const mine = r.results[0]!
-        return mine.outcome === 'applied' ? applied(mine.version) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
+        return mine.outcome === 'applied' ? applied(mine.version, moved(r.results)) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
     }
   } catch (err) {
-    if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: err.version }
+    if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: err.version }
     throw err
   }
   return refuse('This cell cannot be changed here')
@@ -297,7 +311,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
 
 /** The one door: every cell write, in order, each CAS-checked on its own listing version; the read is taken once. */
 export async function writeMatrixCells(ctx: DoorContext, cells: readonly MatrixWriteCell[]): Promise<MatrixWriteResult> {
-  const read = await getMatrixRead({ productId: ctx.productId, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
   const results: MatrixWriteOutcome[] = []
   const versions = new Map<string, number>()
   for (const w of cells) {
@@ -325,10 +339,14 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
   if (!hit?.cells.sync || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: 'No inventory on this coordinate', version: hit?.cells.version ?? 0 }
   const { row, cells, coord } = hit
   if (cells.sync.kind === 'FBA_EXCLUDED') return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version }
-  const resolved = await targetsOf(hit, cells.version)
-  if ('conflict' in resolved) return { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: resolved.conflict }
+  const resolved = await targetsOf(read, hit, cells.version)
+  if ('conflict' in resolved) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: resolved.conflict }
   const { targets, expandedTo } = resolved
-  const applied = (): MatrixWriteOutcome => ({ ...base, outcome: 'applied', version: cells.version + 1, ...(expandedTo ? { expandedTo } : {}) })
+  /* Every state verb bumps each target once; open sheets and Matrix tabs re-read the Sync cell after commit. */
+  const applied = (): MatrixWriteOutcome => {
+    announceListingValues(targets.map((t) => t.id), ['syncState'], 'matrix')
+    return { ...base, outcome: 'applied', version: cells.version + 1, ...(expandedTo ? { expandedTo } : {}), listings: targets.map((t) => ({ listingId: t.id, productId: row.id, version: t.version + 1 })) }
+  }
   const scopeName = (t: Target) => `${row.sku}@${coord.channel}:${t.marketplace}`
   try {
     if (verb === 'pause-sync' || verb === 'resume-sync') {
@@ -376,7 +394,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
       return applied()
     }
   } catch (err) {
-    if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: err.version }
+    if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: err.version }
     throw err
   }
   return { ...base, outcome: 'refused', reason: `${verb} is not a state verb`, version: cells.version }
@@ -437,7 +455,7 @@ export async function ebayZeroAllowedFor(pairs: Iterable<{ accountId: string | n
 }
 
 export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<VerbPreview | VerbCommitResult> {
-  const read = await getMatrixRead({ productId: ctx.productId, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
   const pctx: PreviewContext = { can: ctx.can, simulated: false, ebayZeroAllowed: await ebayZeroAllowed(read, req) }
   if (!req.commit) return previewVerb(read, { ...req, commit: false }, pctx)
   const verb = req.params.verb
@@ -528,7 +546,7 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
   const claimed = await prisma.bulkOperation.updateMany({ where: { id: op.id, status: op.status }, data: { status: 'RUNNING' } })
   if (claimed.count !== 1) throw new OperationNotRevertibleError(409, 'This operation is already being reverted')
 
-  const read = await getMatrixRead({ productId: ctx.productId, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
   const results: MatrixWriteOutcome[] = []
   try {
     for (const b of stored.before ?? []) {

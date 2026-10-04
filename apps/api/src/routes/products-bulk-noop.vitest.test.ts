@@ -55,6 +55,14 @@ vi.mock('../services/pim/fulfillment-method.service.js', async (importOriginal) 
   setFulfillmentMethod: (...args: unknown[]) => fulfilmentWrite(...args),
 }))
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
+// Amazon sheet gaps — a listing quantity goes through the Matrix's Mode / Qty door (`sheet-quantity-door.ts`); its primitives'
+// rules run on PostgreSQL (sheet-quantity-door, studio-sheet-stock-columns tests). Here only the routing to them.
+const quantityWrite = vi.fn()
+vi.mock('../services/pim/matrix-write.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/pim/matrix-write.service.js')>()),
+  pinTypedQuantity: (...args: unknown[]) => quantityWrite(...args),
+  writeQuantityMode: (...args: unknown[]) => quantityWrite(...args),
+}))
 // Product-sheet create path — the draft creator's own rules run on PostgreSQL (draft-listing.service and
 // bulk-edit-new-market tests); here only that the bulk route calls it, and with what.
 const ensureDrafts = vi.fn()
@@ -291,6 +299,7 @@ beforeEach(() => {
       listingId: target.listingId, outcome: 'applied', version: target.expectedVersion + 1, guarded: true,
     })),
   }))
+  quantityWrite.mockReset().mockResolvedValue({})
   produceReadiness.mockReset().mockResolvedValue(undefined)
   // Persistence cases have no additional Information fields; specific resolver cases override this.
   resolveBatch.mockReset().mockResolvedValue({ products: [{ productId: PRODUCT_ID, cells: {} }] })
@@ -529,7 +538,8 @@ describe('requested account resolution before bulk writes', () => {
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-b' }], expectedVersion: 19 })
     expect(result.statusCode, result.body).toBe(200)
     expect(primaryConnections).toHaveBeenCalledWith([])
-    expect(channelListingUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ channelConnectionId: 'account-b' }) }))
+    // A listing quantity is written by the quantity door, on exactly that account's listing.
+    expect(quantityWrite).toHaveBeenCalledWith(expect.objectContaining({ coordinates: [expect.objectContaining({ channelConnectionId: 'account-b' })] }))
   })
 
   it.each([
@@ -694,21 +704,21 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
   })
 
   it('#689 a same-value MAPPED channel field (ebay_quantity) is now a no-op', async () => {
-    // The mapped quantity lives in a listing column, so before this fix the
-    // equality pass looked up `ebay_quantity`, found undefined, and called an
-    // identical value a change.
+    // Amazon sheet gaps — a listing quantity is the quantity door's: the same number on a listing already PINNED at it is
+    // its no-op (on a following listing the number pins it). The door checks the listing token first.
     channelListingFindMany.mockResolvedValue([
-      ebayListing(),
+      ebayListing({ channelConnectionId: 'account-ebay', followMasterQuantity: false }),
     ])
     const res = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 100 }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
-      expectedVersion: 5,
+      expectedVersion: 19,
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({
       updated: 0, unchanged: 1, currentVersion: 19, versionOf: 'channelListing',
     })
+    expect(quantityWrite).not.toHaveBeenCalled()
   })
 
   it('#689 a REAL ebay_quantity change still writes', async () => {
@@ -765,7 +775,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     )
 
   it('#700 a mapped channel field is CAS\'d against the LISTING, not the product', async () => {
-    channelListingFindMany.mockResolvedValue([ebayListing()])
+    channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: 'account-ebay' })])
     const res = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
@@ -774,8 +784,8 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     expect(res.statusCode).toBe(200)
     // The product is not the row this write touches, so it must not be CAS'd.
     expect(productCasBuilt()).toBe(false)
-    // And the row it DOES touch must be guarded, keyed on the token.
-    expect(listingGuards().some((guard) => guard.version === 19 && guard.id === 'listing_1')).toBe(true)
+    // And the row it DOES touch is guarded by the quantity door, keyed on the token.
+    expect(quantityWrite).toHaveBeenCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ id: 'listing_1', version: 19 })] }))
     // And the response names the listing, so the client can advance the token
     // it actually holds — without this the SECOND consecutive edit 409s.
     expect(res.json()).toMatchObject({ versionOf: 'channelListing', currentVersion: 19 })
@@ -821,7 +831,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // the listing is at 82. It must REFUSE — silently passing would let a
     // half-landed producer/consumer pair overwrite concurrent edits, and the
     // token would be guarding a counter the write never touches.
-    channelListingFindMany.mockResolvedValue([ebayListing({ version: 82 })])
+    channelListingFindMany.mockResolvedValue([ebayListing({ version: 82, channelConnectionId: 'account-ebay' })])
     channelListingFindUnique.mockResolvedValue({ version: 82 })
     // The guard keyed on version 3 matches no row.
     queryRaw.mockResolvedValue([])
@@ -843,7 +853,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // PES.3's failure mode if `channelListingIdsTouched` were not recorded:
     // the first save returns no listing version, the sheet keeps the stale one,
     // and the second edit 409s. This is the pair working end to end.
-    channelListingFindMany.mockResolvedValue([ebayListing({ version: 19 })])
+    channelListingFindMany.mockResolvedValue([ebayListing({ version: 19, channelConnectionId: 'account-ebay' })])
     channelListingFindUnique.mockResolvedValue({ version: 20 })
     const first = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
@@ -855,7 +865,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     expect(advanced).toBe(20)
 
     queryRaw.mockClear()
-    channelListingFindMany.mockResolvedValue([ebayListing({ version: 20 })])
+    channelListingFindMany.mockResolvedValue([ebayListing({ version: 20, channelConnectionId: 'account-ebay' })])
     channelListingFindUnique.mockResolvedValue({ version: 21 })
     const second = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 121, target: 'channel' }],
@@ -863,7 +873,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: advanced,
     })
     expect(second.statusCode).toBe(200)
-    expect(listingGuards().some((guard) => guard.version === 20)).toBe(true)
+    expect(quantityWrite.mock.calls.at(-1)![0].targets).toEqual([expect.objectContaining({ id: 'listing_1', version: 20 })])
   })
 
   it('#703 a mapped write under alias-2 targets the ALIAS listing, never the primary', async () => {
@@ -872,8 +882,8 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     // primary while the client had asked for alias-2 — silent wrong row, and
     // with the listing CAS it would have guarded the primary's version too.
     channelListingFindMany.mockResolvedValue([
-      ebayListing({ id: 'listing_primary', aliasKey: '', version: 19 }),
-      ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55 }),
+      ebayListing({ id: 'listing_primary', aliasKey: '', version: 19, channelConnectionId: 'account-ebay' }),
+      ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55, channelConnectionId: 'account-ebay' }),
     ])
     const res = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
@@ -881,23 +891,19 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: 55,
     })
     expect(res.statusCode).toBe(200)
-    const updateWhere = channelListingUpdateMany.mock.calls.map(
-      (c) => (c[0] as { where?: { aliasKey?: string } })?.where?.aliasKey,
-    )
-    expect(updateWhere).toContain('alias-2')
-    expect(updateWhere).not.toContain('')
-    // There is no create branch left to default the alias to '': the column writer only UPDATEs, and a missing
-    // listing is started by `ensureDraftListings`, which never creates an alias listing.
+    // The quantity door writes exactly the alias row, on the alias coordinate, CAS'd on its own version.
+    expect(quantityWrite).toHaveBeenCalledTimes(1)
+    expect(quantityWrite.mock.calls[0][0]).toMatchObject({ targets: [{ id: 'listing_alias2', version: 55 }], coordinates: [{ aliasKey: 'alias-2' }] })
+    // There is no create branch left to default the alias to '': a missing listing is started by `ensureDraftListings`,
+    // which never creates an alias listing.
     expect(channelListingUpsert).not.toHaveBeenCalled()
-    // And the CAS guards the alias row, keyed on its own version.
-    expect(listingGuards().some((guard) => guard.id === 'listing_alias2' && guard.version === 55)).toBe(true)
-    expect(listingGuards().some((guard) => guard.id === 'listing_primary')).toBe(false)
+    expect(channelListingUpdateMany).not.toHaveBeenCalled()
   })
 
   it('#703 CONTROL: the PRIMARY alias ("") is unchanged', async () => {
     channelListingFindMany.mockResolvedValue([
-      ebayListing({ id: 'listing_primary', aliasKey: '', version: 19 }),
-      ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55 }),
+      ebayListing({ id: 'listing_primary', aliasKey: '', version: 19, channelConnectionId: 'account-ebay' }),
+      ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55, channelConnectionId: 'account-ebay' }),
     ])
     const res = await patch({
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
@@ -905,12 +911,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       expectedVersion: 19,
     })
     expect(res.statusCode).toBe(200)
-    const updateWhere = channelListingUpdateMany.mock.calls.map(
-      (c) => (c[0] as { where?: { aliasKey?: string } })?.where?.aliasKey,
-    )
-    expect(updateWhere).toContain('')
-    expect(updateWhere).not.toContain('alias-2')
-    expect(listingGuards().some((guard) => guard.id === 'listing_primary')).toBe(true)
+    expect(quantityWrite.mock.calls[0][0]).toMatchObject({ targets: [{ id: 'listing_primary', version: 19 }], coordinates: [{ aliasKey: '' }] })
   })
 
   it('P10 the audit row records the token the request carried', async () => {
@@ -1107,7 +1108,7 @@ describe('channel inheritance reset and account isolation', () => {
   })
 
   it('verifies a listing once before applying a paste across column and JSON stores', async () => {
-    channelListingFindMany.mockResolvedValue([ebayListing()])
+    channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: 'account-ebay' })])
     const restore = installContract()
     try {
       const res = await patch({ changes: [
@@ -1115,11 +1116,10 @@ describe('channel inheritance reset and account isolation', () => {
         { id: PRODUCT_ID, field: `attr_${key}`, value: true, target: 'channel' },
       ], marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }], expectedVersion: 19 })
       expect(res.statusCode, res.body).toBe(200)
-      // One guard for the listing, checked before the edit's writes.
-      expect(listingGuards()).toEqual([expect.objectContaining({ id: 'listing_1', version: 19 })])
-      expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan($transaction.mock.invocationCallOrder[0])
-      const statements = $transaction.mock.calls[0][0]
-      expect(statements).toContainEqual({ __stmt: 'listing.updateMany' })
+      // One check of the listing: the quantity (its column) goes through the quantity door, CAS'd on the token, and the
+      // JSON store's write in the same transaction takes no second guard on a listing a door already moved.
+      expect(quantityWrite).toHaveBeenCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ id: 'listing_1', version: 19 })] }))
+      expect(listingGuards()).toEqual([])
     } finally { restore() }
   })
 
@@ -1145,10 +1145,12 @@ describe('provenance is part of the no-op decision', () => {
   })
 
   it('does not infer that every target is unchanged from the first listing', async () => {
-    channelListingFindMany.mockResolvedValue([ebayListing(), ebayListing({ id: 'listing_de', marketplace: 'DE', quantity: 90 })])
+    channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: 'account-ebay', followMasterQuantity: false }),
+      ebayListing({ id: 'listing_de', marketplace: 'DE', quantity: 90, channelConnectionId: 'account-ebay', followMasterQuantity: false })])
     const res = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 100, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }, { channel: 'EBAY', marketplace: 'DE' }], expectedVersion: 19 })
     expect(res.statusCode, res.body).toBe(200)
-    expect(channelListingUpdateMany.mock.calls.map(call => call[0].where.marketplace)).toEqual(['IT', 'DE'])
+    // IT is already pinned at 100 (the door's no-op); DE is not, so the door pins it.
+    expect(quantityWrite.mock.calls.map(call => call[0].coordinates[0].marketplace)).toEqual(['DE'])
   })
 })

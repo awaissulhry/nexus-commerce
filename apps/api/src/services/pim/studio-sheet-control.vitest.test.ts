@@ -28,6 +28,8 @@ vi.mock('../../db.js', () => ({
     marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: (...a: unknown[]) => marketplaceFindMany(...a) },
   },
 }))
+// The stock cells are one Matrix read (proven on PostgreSQL in studio-stock / studio-sheet-stock-columns); this mocked database has no Matrix.
+vi.mock('./studio-stock.js', async (importOriginal) => ({ ...await importOriginal<typeof import('./studio-stock.js')>(), attachStudioStock: async () => ({ ms: 0 }) }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: (...a: unknown[]) => getStudioColumns(...a) }))
 vi.mock('./product-category-context.js', () => ({ productCategoryContext: async () => ({ connectionId: 'account', categories: ['177104'], defaults: {} }) }))
 vi.mock('./mapping/index.js', () => ({ resolveChannelValues: async () => ({ byProduct: {}, categoryByProduct: {}, missingProductIds: [], meta: {} }) }))

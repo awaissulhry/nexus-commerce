@@ -127,9 +127,18 @@ describe('while automation is stopped', () => {
     expect(rows.map((r) => r.syncStatus)).toEqual(['SKIPPED', 'SKIPPED', 'SKIPPED'])
     expect(rows.every((r) => r.errorCode === 'WRITE_GATE_DENIED' && r.errorMessage?.includes('automation_halted'))).toBe(true)
     expect(amazon.calls).toEqual([])
+    // 4k — and Nexus shows what Amazon still has: each refused restore is put back to the 2¢ floor.
+    const local = await inside(() => database.client.adTarget.findMany({ where: { adGroupId: 'sup-g' }, select: { bidCents: true } }))
+    expect(local.map((t) => t.bidCents)).toEqual([2, 2])
   })
 
   it('a forced +% base-bid delta raises bids: refused; a forced −% delta only lowers: passes', async () => {
+    // 4k — the refused restore above left Nexus at the floor (as Amazon is), so this arm starts from served bids.
+    await inside(async () => {
+      await database.client.adGroup.update({ where: { id: 'sup-g' }, data: { defaultBidCents: 40 } })
+      await database.client.adTarget.update({ where: { id: 'sup-t1' }, data: { bidCents: 35 } })
+      await database.client.adTarget.update({ where: { id: 'sup-t2' }, data: { bidCents: 60 } })
+    })
     await inside(() => applyBaseBidDelta('sup-c', 20, { actor: ACTOR }))
     const up = await drain()
     expect(up.out.processed).toBe(3)
@@ -152,7 +161,9 @@ describe('while automation is stopped', () => {
   })
 
   it('a forced re-push of an unchanged bid is not a suppression (it may still move Amazon up)', async () => {
-    const r = await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t2', patch: { bidCents: 10 }, actor: ACTOR, applyImmediately: true, force: true, forceResync: true }))
+    // 4k — the bid Nexus holds now: the refused cut above was put back, so 10¢ is no longer "unchanged".
+    const { bidCents } = await inside(() => database.client.adTarget.findUniqueOrThrow({ where: { id: 'sup-t2' }, select: { bidCents: true } }))
+    const r = await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t2', patch: { bidCents }, actor: ACTOR, applyImmediately: true, force: true, forceResync: true }))
     expect(r.ok).toBe(true)
     const { flags } = await drain()
     expect(flags).toEqual([false])

@@ -1,0 +1,42 @@
+/* Publish history — one run's detail. Tokens only; text colours are the AAA roles (--nds-text, --nds-text-3). */
+.drawer { min-width: 0; }
+.body { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.body p { margin: 0; }
+
+.summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.headline { flex: 1 1 260px; min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); overflow-wrap: anywhere; }
+
+.section { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.sectionHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-8); }
+.sectionTitle { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+
+.text { color: var(--nds-text); overflow-wrap: anywhere; }
+.muted { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.mono { font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+
+.skuCell { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+/* A SKU wraps instead of being cut: variations share a long prefix and differ only at the END ("…-BLACK-MEN-3XL"),
+   so an ellipsis made every row of a family read the same. */
+.sku { font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.message { display: flex; flex-direction: column; gap: var(--nds-space-2); white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.sentHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-8); }
+
+.link { color: var(--nds-text-link); font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.link:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+
+.reference { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; }
+
+.sent { display: flex; flex-direction: column; gap: var(--nds-space-10); padding: var(--nds-space-10) var(--nds-space-12); min-width: 0; white-space: normal; }
+.issues { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-6); color: var(--nds-text); overflow-wrap: anywhere; }
+
+.payload { margin: 0; max-height: 320px; overflow: auto; padding: var(--nds-space-10); white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); color: var(--nds-text);
+  background: var(--nds-surface-hover); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+/* `--nds-focus-ring` is a 12%-alpha box-shadow value, not a colour: as an outline colour it drew nothing. The DS rule
+   for a visible ring is a solid `--nds-text` outline. */
+.payload:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; }
+
+.footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); }
+
+.overlayTitle { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }

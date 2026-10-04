@@ -12,6 +12,8 @@ vi.mock('../../db.js', () => ({ default: {
   marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: async () => [{ channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' }] },
 } }))
 vi.mock('../connection-resolver.service.js', () => ({ isPrimaryChannelConnection: mocks.primary }))
+// The stock cells are one Matrix read (proven on PostgreSQL in studio-stock / studio-sheet-stock-columns); this mocked database has no Matrix.
+vi.mock('./studio-stock.js', async (importOriginal) => ({ ...await importOriginal<typeof import('./studio-stock.js')>(), attachStudioStock: async () => ({ ms: 0 }) }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: async () => ({ locale: 'it',
   // LX.F R-LX-13 — LX's `contentListing` refuses a coordinate without its market languages.
   coordinates: [{ channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true, languages: ['it'] }],

@@ -39,6 +39,10 @@ import { numericStorageError } from '../pim/numeric-storage.js'
 import { writeChannelPrices } from '../pim/channel-price-write.service.js'
 import { AMAZON_FULFILMENT_KEY } from '../pim/channel-specs/amazon.js'
 import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
+import { AMAZON_FULFILMENT_CHOICES, describeAmazonFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
+import { OFFER_VERSION_REQUIRED, isAmazonOfferSheetField, writeSheetOfferChanges } from '../pim/amazon-offer-writes.js'
+import { applySheetQuantityChanges, isSheetQuantityChange, type SheetQuantityOutcome } from '../pim/sheet-quantity-door.js'
+import { STUDIO_STOCK_KEYS } from '../pim/studio-stock.js'
 import { UnsupportedPlatformBatch, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
 import type { EbayFamilyClearOperation, EbayFamilyScope, EbayListingVersion } from './ebay-family-clear.js'
 
@@ -234,6 +238,7 @@ export interface ProductBulkContext {
   /**
    * S1 (F4, F5) — the acting person's permissions, from the request (`permissionCheckerFor`). Given, a change to a price
    * needs `products.price.edit` and a change to a cost needs `pricing.costs.edit`, beside the route's products.edit.
+   * `products.price.edit` also holds the Amazon offer price columns (bug 8, as the Matrix). Absent: allowed, as before.
    */
   can?: (permission: string) => boolean
 }
@@ -981,6 +986,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       errors.push({ id: c?.id ?? '', field: c?.field ?? '', error: 'Missing id' })
       continue
     }
+    // Amazon sheet gaps — Mode / Qty / Buffer ARE the Matrix's cells: written through `PATCH /studio/matrix`, never here.
+    if ((STUDIO_STOCK_KEYS as readonly string[]).includes(String(c.field ?? '').replace(/^attr_/, ''))) {
+      errors.push({ id: c.id, field: c.field, error: 'Mode, Qty and Buffer save through the Matrix door (the sheet\'s stock cells or the Matrix tab), not through this save.' })
+      continue
+    }
     const isCh = isChannelField(c.field ?? '')
     const isAttr = isCategoryAttrField(c.field ?? '')
     if (
@@ -1643,7 +1653,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   }
 
   const isFulfilmentChange = (v: Validated) => v.target === 'channel' && v.field === `attr_${AMAZON_FULFILMENT_KEY}`
+  // Amazon sheet gaps — an Amazon offer column: its own router below (`amazon-offer-writes.ts`), never the price door's
+  // nor the generic writer's (their stores are the LIVE stores).
+  const isAmazonOfferChange = (v: Validated) => v.target === 'channel' && isAmazonOfferSheetField(v.field) && effectiveContexts.some(ctx => ctx.channel === 'AMAZON')
+  // A listing quantity: the Matrix's Mode / Qty writes (`sheet-quantity-door.ts`), never the generic writer.
+  const quantityStoreOf = (v: { id: string; field: string; target?: string }) => v.target === 'channel' ? storeFor(v.id, v.field.replace(/^attr_/, '')) : undefined
+  const isQuantityChange = (v: Validated) => effectiveContexts.some(ctx => isSheetQuantityChange(v, ctx.channel, quantityStoreOf(v)))
   const isPriceChange = (v: Validated) => {
+    if (isAmazonOfferChange(v)) return false
     if (CHANNEL_FIELD_MAP[v.field] === 'price') return true
     const store = v.target === 'channel' ? storeFor(v.id, v.field.replace(/^attr_/, '')) : undefined
     return store?.kind === 'listingColumn' && store.column === 'price'
@@ -1651,8 +1668,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // Step 2.2: the sheet has no licence to invent a listing version, including for children.
   for (let i = validated.length - 1; i >= 0; i--) {
     const v = validated[i]
-    if (isPriceChange(v) && (expectedVersion === undefined || v.cascade)) {
-      errors.push({ id: v.id, field: v.field, error: 'Price edits require the listing expectedVersion. Edit each listing with the version you read; a parent version cannot guard child prices.' })
+    if ((isPriceChange(v) || isAmazonOfferChange(v)) && (expectedVersion === undefined || v.cascade)) {
+      errors.push({ id: v.id, field: v.field, error: isAmazonOfferChange(v) ? OFFER_VERSION_REQUIRED : 'Price edits require the listing expectedVersion. Edit each listing with the version you read; a parent version cannot guard child prices.' })
       validated.splice(i, 1)
     }
   }
@@ -1832,8 +1849,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         return String(a ?? '') === String(b ?? '')
       }
       for (const v of validated) {
-        // Price equality includes inheritance and legacy keys; its owner decides below.
-        if (isPriceChange(v)) continue
+        // Price equality includes inheritance and legacy keys; its owner decides below. So does an offer column's (a draft).
+        if (isPriceChange(v) || isAmazonOfferChange(v) || isQuantityChange(v)) continue
         if (currentFormulaWrite(context.formulaWriteToken)?.operations) continue
         // Pin/reset changes provenance even when the displayed value stays the same. Comparing
         // one listing also cannot establish a no-op across several requested coordinates.
@@ -1985,7 +2002,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // the ordered row semantics. Validation above is shared with that path, including partial cells and no-ops.
     const families = new Set(changeIds.map(id => familyPlace.get(id)?.parentId))
     if (effectiveContexts.length !== 1 || families.size !== 1 || families.has(undefined) || families.has(null) ||
-      listingLevelFamily.size || validated.some(change => isFulfilmentChange(change) || change.slot !== undefined)) throw new UnsupportedPlatformBatch('This edit is not independent.')
+      listingLevelFamily.size || validated.some(change => isFulfilmentChange(change) || isAmazonOfferChange(change) || isQuantityChange(change) || change.slot !== undefined)) throw new UnsupportedPlatformBatch('This edit is not independent.')
     const formulas = await prisma.cellFormula.findFirst({ where: { OR: [{ productId: { in: changeIds } }, { product: { parentId: { in: changeIds } } }] }, select: { id: true } })
     if (formulas) throw new UnsupportedPlatformBatch('Dependent formulas use the synchronous row writer.')
     const mutations: PlatformBulkPlan['mutations'] = new Map()
@@ -2134,6 +2151,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // Only a non-primary alias can get here (the draft step above starts every missing primary listing).
       if (!listing) throw new ProductBulkError(400, { error: `This listing alias has no Amazon listing on ${d.marketplace} for this product. An edit never creates an alias listing, so its fulfillment method cannot be set here.` })
       const code = d.change.reset || d.change.value === null || d.change.value === undefined || d.change.value === '' ? null : String(d.change.value).toUpperCase()
+      // FBA or FBM only (D3): Remote Fulfilment and every other Amazon code are set in Seller Central, never here.
+      if (code !== null && !(AMAZON_FULFILMENT_CHOICES as readonly string[]).includes(code)) throw new ProductBulkError(400, {
+        error: `Only FBA (AMAZON_EU) or FBM (DEFAULT) can be set here, not ${code}.${describeAmazonFulfilmentCode(code).kind === 'REMOTE' ? ` ${describeAmazonFulfilmentCode(code).readOnlyReason}` : ''}` })
       return { listingId: listing.id, method: code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const, expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
     })
     const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })
@@ -2152,6 +2172,62 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
     if (written.results.length === 1) {
       noOpCurrentVersion = written.results[0].version
+      noOpVersionOf = 'channelListing'
+    }
+  }
+
+  // Amazon sheet gaps (design-sync §1.A) — a listing quantity typed, pasted, imported or written by a formula: a number pins
+  // the listing at it, an empty cell or a reset follows the stock (the Matrix's Mode / Qty writes, EU targets, FBA and shared
+  // stock refused with its sentence). One change at a time, so a refusal names its cell; a refusal or a lost CAS (409
+  // `VERSION_CONFLICT`) rolls the whole save back. Never the generic path below.
+  const quantityEdits = validated.filter(isQuantityChange)
+  if (quantityEdits.length) {
+    const door = { contexts: effectiveContexts, accountFor: (channel: string) => connFor.get(channel) ?? null, storeOf: quantityStoreOf,
+      expectedVersion, originalExpectedVersion, moved: priceWrittenIds, actor: context.userId ?? 'system' }
+    const outcomes: SheetQuantityOutcome[] = []
+    for (const change of quantityEdits) {
+      try {
+        outcomes.push(...await applySheetQuantityChanges([{ id: change.id, field: change.field, value: change.value, reset: change.reset, target: change.target }], door))
+      } catch (error) {
+        if (error instanceof ProductBulkError && error.statusCode === 400) throw new ProductBulkError(400, { ...error.details, errors: [{ id: change.id, field: change.field, error: error.message }] })
+        throw error
+      }
+    }
+    if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of quantityEdits) {
+      if (outcomes.every(o => o.change.id !== change.id || o.change.field !== change.field || o.outcome === 'noop')) {
+        noOpKeys.add(`${change.id}:${change.field}`)
+        validated.splice(validated.indexOf(change), 1)
+      }
+    }
+    if (new Set(outcomes.map(o => o.listingId)).size === 1) {
+      noOpCurrentVersion = outcomes[outcomes.length - 1].version
+      noOpVersionOf = 'channelListing'
+    }
+  }
+
+  // Amazon sheet gaps (D4=B) — an Amazon offer column: a live listing saves an offer draft that Publish sends, a still-draft
+  // writes the price / fulfilment doors as the Matrix does (`amazon-offer-writes.ts`). Never the generic path below.
+  const offerEdits = validated.filter(isAmazonOfferChange)
+  if (offerEdits.length) {
+    if (expectedVersion === undefined) throw new ProductBulkError(400, { error: OFFER_VERSION_REQUIRED })
+    const offers = await writeSheetOfferChanges({ changes: offerEdits.map(v => ({ productId: v.id, field: v.field, value: v.value, reset: v.reset })),
+      contexts: effectiveContexts.filter(ctx => ctx.channel === 'AMAZON').map(ctx => ({ marketplace: ctx.marketplace, channelConnectionId: connFor.get('AMAZON') ?? null, aliasKey: ctx.aliasKey ?? '' })),
+      expectedVersion, versionOf: id => priceWrittenIds.get(id), actor: context.userId ?? 'system', permissions: context.can ?? (() => true) })
+    for (const outcome of offers.results) {
+      if (outcome.outcome === 'conflict') throw new ProductBulkError(409, {
+        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion: originalExpectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
+      })
+      if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
+      if (outcome.outcome === 'applied') priceWrittenIds.set(outcome.listingId, outcome.version)
+    }
+    if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of offerEdits) {
+      if (offers.results.every(r => r.change.productId !== change.id || r.change.field !== change.field || r.outcome === 'noop')) {
+        noOpKeys.add(`${change.id}:${change.field}`)
+        validated.splice(validated.indexOf(change), 1)
+      }
+    }
+    if (new Set(offers.results.map(r => r.listingId)).size === 1) {
+      noOpCurrentVersion = offers.results[0].version
       noOpVersionOf = 'channelListing'
     }
   }
@@ -2430,6 +2506,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       const stripped = declaredStore?.column ?? CHANNEL_FIELD_MAP[field]
       if (!stripped) return []
       if (stripped === 'price') return [] // already persisted by writeChannelPrices, never a generic mutation
+      if (stripped === 'quantity') return [] // already persisted by the quantity door (`applySheetQuantityChanges`)
       const expected = channelOf(field)
       const targets = expected
         ? effectiveContexts.filter((ctx) => ctx.channel === expected)
@@ -2561,8 +2638,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
 
     for (const v of validated) {
       if (!isCategoryAttrField(v.field)) continue
-      // Written through the fulfilment door above — never a second time as a raw path.
-      if (isFulfilmentChange(v)) continue
+      // Written through the fulfilment door / the offer router / the quantity door above — never a second time as a raw path.
+      if (isFulfilmentChange(v) || isAmazonOfferChange(v) || isQuantityChange(v)) continue
       if (v.target === 'channel') {
         const stripped = v.field.replace(/^attr_/, '')
         const store = storeFor(v.id, stripped)

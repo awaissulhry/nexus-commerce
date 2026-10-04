@@ -1,6 +1,11 @@
 'use client'
 
-// M.7 — Phase B publish-status client.
+// Publish history (sheet publish parity, step 4; docs/sheet-publish-parity/PLAN.md, item 4) — this page, rebuilt.
+// The page is now the business's publish history: every publish from Nexus (the product sheet, the old flat-file
+// pages, photo uploads) with what each channel answered. The rollout dashboard it used to be (M.7, below) stays one
+// click away in a collapsed section, read only while open.
+//
+// M.7 — Phase B publish-status client (the gate health section).
 //
 // Live-renders the same data the V.1 verification CLI prints. Eight
 // blocks (env reminder + 7 data sections), 30-second polling, all
@@ -13,7 +18,7 @@
 // surface that consumes the publish gate (the wizard + outbound
 // sync + bulk publish flows) without crowding the main grid.
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
@@ -23,13 +28,15 @@ import {
   Activity,
   ShieldAlert,
 } from 'lucide-react'
-import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
-import { Tooltip } from '@/components/ui/Tooltip'
-import { useTranslations } from '@/lib/i18n/use-translations'
+import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
+import { PageHeader } from '@/design-system/patterns'
+import { Disclosure } from '@/design-system/components'
+import { PublishRuns } from '@/app/products/_publication/history/PublishRuns'
+import styles from '@/app/products/_publication/history/publishRuns.module.css'
 import { accountDisplayName } from '@/design-system/lib'
 
 interface DailyTrendPoint {
@@ -104,17 +111,11 @@ const OUTCOME_TONE: Record<string, { bg: string; text: string; icon: any }> = {
   'circuit-open': { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', icon: XCircle },
 }
 
-interface Breadcrumb {
-  label: string
-  href?: string
-}
-
-export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Breadcrumb[] }) {
-  const { t } = useTranslations()
-  // L-RT.2 — open SSE pipe so listing.synced / listing.updated / bulk
-  // job completions surface sub-200ms instead of waiting for the 30s
-  // poll. `connected` powers the Live/Polling chip below.
-  const { connected: sseConnected } = useListingEvents()
+/**
+ * The publishing gate's health (M.7): switches, circuit breakers, 30-day totals and recent failures. Rendered only
+ * while its section on the Publish history page is open, so its 30-second poll runs only while someone reads it.
+ */
+function GateHealth() {
   const { data, loading, error, lastFetchedAt, refetch } = usePolledList<PublishStatusResponse>({
     url: '/api/listings/publish-status',
     intervalMs: 30_000,
@@ -148,45 +149,6 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Publish status"
-        description="Live audit of every channel-write attempt. Same data the V.1 CLI script (audit-channel-publish-attempts.mjs) produces, polled every 30s + reactive to listing.synced SSE events."
-        breadcrumbs={breadcrumbs}
-      />
-
-      {/* L-RT.2 — Live indicator. Mirrors the ProductsWorkspace +
-          ListingsWorkspace pattern: green pulse = SSE attached,
-          mutations refresh within ~200ms; gray = falling back to 30s
-          polling baseline. */}
-      <div className="flex items-center gap-2">
-        <Tooltip
-          content={
-            sseConnected
-              ? t('products.live.tooltipConnected')
-              : t('products.live.tooltipDisconnected')
-          }
-        >
-          <span
-            className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
-            aria-label={
-              sseConnected
-                ? t('products.live.tooltipConnected')
-                : t('products.live.tooltipDisconnected')
-            }
-            data-testid="publish-status-live-indicator"
-            data-connected={sseConnected ? '1' : '0'}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-              }`}
-              aria-hidden
-            />
-            {sseConnected ? t('products.live') : t('products.polling')}
-          </span>
-        </Tooltip>
-      </div>
-
       {/* Env block — what the API thinks the publish gate is set to */}
       <Card>
         <div className="space-y-1.5">
@@ -665,5 +627,27 @@ function Sparkline({ points }: { points: DailyTrendPoint[] }) {
         )
       })}
     </svg>
+  )
+}
+
+export default function PublishStatusClient() {
+  // One stream for the page: a publish that settles refreshes its row by itself (`publication.status_changed`).
+  useListingEvents(streamsEnabled())
+  const [gateOpen, setGateOpen] = useState(false)
+  return (
+    <div className={styles.page}>
+      <PageHeader
+        eyebrow={<Link href="/listings">Listings</Link>}
+        title="Publish history"
+        subtitle="Every publish from Nexus to your sales channels, with what each channel answered."
+      />
+      <Disclosure
+        summary="Publishing gate health — switches, circuit breakers and 30-day totals"
+        onToggle={event => setGateOpen(event.currentTarget.open)}
+      >
+        {gateOpen ? <GateHealth /> : null}
+      </Disclosure>
+      <PublishRuns scope="business" />
+    </div>
   )
 }

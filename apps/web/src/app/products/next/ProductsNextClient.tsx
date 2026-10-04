@@ -75,6 +75,7 @@ import { csvFileName, downloadCsv, toCsv, type CsvColumn } from '@/design-system
 import { fetchAllRowsForExport } from './productsExport'
 import { ProductTreeCell, type ProductTreeCellParams } from './ProductTreeCell'
 import { BULK_MAX, useBulkActions } from './useBulkActions'
+import { ProductsPublishDialog } from '../_publication/dialog/ProductsPublishDialog'
 import { GridViewsMenu } from './GridViewsMenu'
 import { FamilyFooter } from './FamilyFooter'
 import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
@@ -229,6 +230,8 @@ function ProductsNextInner() {
   const [modalRow, setModalRow] = useState<ProductRow | null>(null)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
+  /** T1 — the products to publish, frozen when the dialog opens (the grid selection may change underneath it). */
+  const [publishing, setPublishing] = useState<{ ids: string[]; families: number } | null>(null)
   const [customizeOpen, setCustomizeOpen] = useState(false)
   /**
    * "New product". `?new=1` opens it too, so every entry point can be a link: the command palette's "Create new
@@ -1488,6 +1491,13 @@ function ProductsNextInner() {
               <Button size="sm" variant="primary" disabled={busy} onClick={() => setBulkEditOpen(true)}>
                 <SlidersHorizontal size={13} /> <SelectionLabel>Bulk edit</SelectionLabel>
               </Button>
+              <Button size="sm" disabled={busy} title="Publish…" onClick={() => {
+                if (selection.ids.length > BULK_MAX) { toast(`Select ${BULK_MAX} or fewer products to publish.`, 'danger'); return }
+                // A selected variation publishes its whole family: count families, not rows.
+                setPublishing({ ids: selection.ids, families: new Set(selection.rows.map(row => row.parentId ?? row.id)).size })
+              }}>
+                <Send size={13} /> <SelectionLabel>Publish…</SelectionLabel>
+              </Button>
               <Button size="sm" disabled={busy} onClick={() => setTagDialogOpen(true)} title="Tag">
                 <TagIcon size={13} /> <SelectionLabel>Tag</SelectionLabel>
               </Button>
@@ -1646,6 +1656,7 @@ function ProductsNextInner() {
       )}
 
       <BulkEditModal open={bulkEditOpen} onClose={() => setBulkEditOpen(false)} selection={selection.rows} busy={busy} onSubmit={applyBulkEdit} />
+      {publishing && <ProductsPublishDialog productIds={publishing.ids} familyCount={publishing.families} onClose={() => setPublishing(null)} />}
       {deleteConfirm.element}
 
       {/* Tag dialog — the selection's tags, tri-state across the rows it covers. */}

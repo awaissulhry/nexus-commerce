@@ -14,6 +14,7 @@ export type EditorId =
   | 'ChannelCategoryEditor' | 'EbayPolicyEditor' | 'SlotListEditor' | 'StructuredAttributeEditor'
   | 'ImpactProtectorsEditor' | 'AxesPanelEditor' | 'Gateway' | 'MediaEditorGateway'
   | 'FormulaUnavailableEditor' | 'agLargeTextCellEditor' | 'agTextCellEditor' | 'agNumberCellEditor'
+  | 'MatrixStockEditor'
 
 export type Path = 'keyboard' | 'mouse' | 'paste'
 export const PATHS: readonly Path[] = ['keyboard', 'mouse', 'paste']
@@ -68,9 +69,13 @@ export const REFERENCE_KEYS = ['descriptionThemeId', 'merchant_shipping_group', 
 const POLICY_KEYS = ['paymentPolicyId', 'returnPolicyId', 'fulfillmentPolicyId']
 const CATEGORY_KEY: Record<string, string> = { EBAY: 'categoryId', AMAZON: 'productType', ETSY: 'taxonomy_id' }
 const BOOLEAN = [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]
+/** The stock Mode list (`MODE_OPTIONS`, design-system/grid/editors/matrixColumn.ts). */
+const STOCK_MODES = [{ value: 'FOLLOW', label: 'Follow' }, { value: 'PINNED', label: 'Pinned' }]
 
 /** The editor the sheet's builders mount for this column — the same decision tree, read from the wire contract. */
 export function editorOf(column: ApiColumn & { key: string }, scope: ScopeName): EditorId {
+  // Mode / Qty / Buffer are the Matrix's cells (`stockColumns.tsx` → `matrixColumnDef`), whatever else the column says.
+  if (column.kind === 'stockControl') return 'MatrixStockEditor'
   if (column.kind === 'variationTheme' || column.shape === 'axes') return 'AxesPanelEditor'
   if (column.shopifyField) return 'Gateway'
   if (column.key === 'productMedia') return 'MediaEditorGateway'
@@ -185,6 +190,15 @@ export function pickFor(editor: EditorId, column: ApiColumn, current: unknown, n
       const text = cap <= 3 ? ['IT', 'FR', 'ES', 'DE'].filter((c) => c !== current)[n] : fresh(`E2E ${path} ${column.key}`, current, cap)
       return { input: text, wire: text, shows: text }
     }
+    case 'MatrixStockEditor': {
+      if (column.matrixCell === 'syncMode') {
+        const mode = STOCK_MODES.find((m) => m.value !== current) ?? STOCK_MODES[0]
+        return { input: mode.label, wire: mode.value, shows: mode.label }
+      }
+      // Qty and Buffer hold whole units, zero or more.
+      const value = 7 + n + (current === 7 + n ? 10 : 0)
+      return { input: String(value), wire: value, shows: String(value) }
+    }
     case 'SlotListEditor': {
       // Shared's bullets are ONE list: the edit replaces position 1 and keeps the rest.
       const held = Array.isArray(current) ? current.map(String) : []
@@ -232,6 +246,12 @@ export async function arrowTo(page: Page, label: string) {
 }
 
 const typeInto = async (page: Page, text: string) => { await page.keyboard.type(text, { delay: 8 }) }
+/** Another driver's gesture, for an editor that driver already drives (the stock Mode cell mounts SelectPanelEditor). */
+function gestureOf(editor: EditorId, path: Path): (ctx: ArmContext) => Promise<void> {
+  const arm = DRIVERS[editor][path]
+  if (typeof arm !== 'function') throw new Error(`${editor} has no ${path} gesture`)
+  return arm
+}
 /**
  * Type-to-start: the first key opens the editor and is kept (P0); the rest goes in once the editor's field has focus. Keys
  * sent faster than the editor mounts can land out of order (see the P3 report: "EE keyboard color2") — a finding of its
@@ -437,7 +457,31 @@ export const DRIVERS: Record<EditorId, Driver> = {
   },
   agNumberCellEditor: {
     kinds: ['number'],
-    abstain: 'A selector fallback the studio always replaces with the value editor (FormulaCellEditor); never mounted on the sheet.',
+    abstain: 'A selector fallback the studio always replaces with the value editor (FormulaCellEditor). The stock Qty and Buffer cells mount it; MatrixStockEditor drives them.',
     keyboard: { na: 'abstained' }, mouse: { na: 'abstained' }, paste: { na: 'abstained' },
+  },
+  MatrixStockEditor: {
+    kinds: ['stockControl'],
+    // Mode is the DS list (`selectEditor`): Enter opens it, ↓ to the choice, Enter. Qty and Buffer are AG's number editor
+    // IN the cell (`matrixColumnDef`): a digit opens it and is kept, Enter saves.
+    keyboard: async (ctx) => {
+      if (ctx.column.matrixCell === 'syncMode') return gestureOf('SelectPanelEditor', 'keyboard')(ctx)
+      await ctx.page.keyboard.press(ctx.pick.input[0])
+      await expect(ctx.cell.locator('input')).toBeFocused()
+      await typeInto(ctx.page, ctx.pick.input.slice(1))
+      await ctx.page.keyboard.press('Enter')
+    },
+    // Mode: ONE click on the chevron opens the list, a click on the option commits. Qty and Buffer: a double-click opens
+    // the stored number; typing replaces it; a click elsewhere commits.
+    mouse: async (ctx) => {
+      if (ctx.column.matrixCell === 'syncMode') return gestureOf('SelectPanelEditor', 'mouse')(ctx)
+      await ctx.cell.dblclick({ position: { x: 10, y: 10 } })
+      await expect(ctx.cell.locator('input')).toBeFocused()
+      await ctx.page.keyboard.press(selectAll)
+      await typeInto(ctx.page, ctx.pick.input)
+      await clickAway(ctx)
+    },
+    // A pasted Mode word (what a copied Mode cell carries) stores its code; a pasted number is the units.
+    paste: async ({ page, cell, pick }) => paste(page, pick.input, cell),
   },
 }

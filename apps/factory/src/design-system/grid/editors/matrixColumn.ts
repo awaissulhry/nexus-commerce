@@ -12,7 +12,7 @@
  *
  *   width      `MATRIX_CELL_WIDTHS[kind]`         header   `MATRIX_CELL_LABELS[kind]`
  *   renderer   `MATRIX_CELL_RENDERERS[kind]`      classes  `matrixCellClasses` (+ validation, + round trip)
- *   editable   `matrixCellEditable`               tooltip  `matrixCellTooltip`
+ *   editable   `matrixCellEditable`               tooltip  `matrixCellTooltip` (+ `matrixWaitingLine`)
  *   text       `matrixCellText`                   compare  `matrixCompare`
  *   fill       `matrixFillAllowed`                value    `matrixCellValue` / `matrixApplyValue`
  *
@@ -40,7 +40,7 @@
 import type { CellClassParams, ColDef, GetQuickFilterTextParams, ICellRendererParams, ValueFormatterParams, ValueGetterParams, ValueSetterParams } from 'ag-grid-community'
 
 import { MATRIX_CELL_LABELS, MATRIX_CELL_WIDTHS, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixCopy } from '../matrix/contract'
-import { MATRIX_CELL_RENDERERS, type MatrixCellParams } from '../renderers/MatrixCellViews'
+import { MATRIX_CELL_RENDERERS, matrixWaitingLine, type MatrixCellParams } from '../renderers/MatrixCellViews'
 import {
   MATRIX_CELL_CLASSES,
   matrixApplyValue,
@@ -65,6 +65,12 @@ export interface MatrixColumnOptions<T> {
   /** `<coordinateKey>.<kind>` — the page's addressing, and what Export and the chips key on. */
   colId: string
   coordinate: MatrixCoordinate
+  /**
+   * This row's own coordinate, when it differs per row (the product sheet: an EU row is shared by the EU markets, an
+   * alias row is not). Read for the tooltip, the classes and the text; `null`/absent = `coordinate`. The Matrix
+   * page passes none — one column, one coordinate.
+   */
+  coordinateOf?: (data: T | undefined) => MatrixCoordinate | null | undefined
   /** This row's cells for this coordinate, read at paint time. Stable identity required. */
   cells: (data: T | undefined) => MatrixCells | null
   /** The round-trip marks (`saving`/`saved`/`refused`) the sheet already uses. Needs `rowIdOf`. */
@@ -137,6 +143,8 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
   const copy = opts.copy
   const now = opts.now
   const data = (p: { data?: T | null }): T | undefined => (p.data ?? undefined) as T | undefined
+  const coordinateOf = opts.coordinateOf
+  const coordOf = coordinateOf ? (row: T | undefined): MatrixCoordinate => coordinateOf(row) ?? coordinate : (): MatrixCoordinate => coordinate
 
   /* STABLE — built once per call, handed to AG as one object. */
   const rendererParams: MatrixCellParams = {
@@ -161,7 +169,7 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
   /* The five Matrix classes, each a rule reading the pure function — in THE precedence it decides. */
   const matrixRules: Record<string, (p: CellClassParams<T>) => boolean> = {}
   for (const cls of MATRIX_CELL_CLASSES) {
-    matrixRules[cls] = (p) => matrixCellClasses(kind, cells(data(p)), coordinate).includes(cls)
+    matrixRules[cls] = (p) => matrixCellClasses(kind, cells(data(p)), coordOf(data(p))).includes(cls)
   }
   if (kind === 'fulfilment' || kind === 'syncMode') matrixRules[SELECT_CELL_CLASS] = (p) => editable(data(p))
 
@@ -179,7 +187,7 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
   }
 
   const numeric = NUMERIC_KINDS.includes(kind)
-  const text = (row: T | undefined) => matrixCellText(kind, cells(row), coordinate, copy, now?.())
+  const text = (row: T | undefined) => matrixCellText(kind, cells(row), coordOf(row), copy, now?.())
 
   return {
     colId,
@@ -226,7 +234,12 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
     valueFormatter: (p: ValueFormatterParams<T>) => text(data(p)),
     filterValueGetter: (p: ValueGetterParams<T>) => text(data(p)),
     getQuickFilterText: (p: GetQuickFilterTextParams<T>) => text(data(p)),
-    tooltipValueGetter: (p) => matrixCellTooltip(kind, cells(data(p)), coordinate, copy, now?.()) ?? undefined,
+    tooltipValueGetter: (p) => {
+      const row = data(p)
+      const coord = coordOf(row)
+      const lines = [matrixCellTooltip(kind, cells(row), coord, copy, now?.()), matrixWaitingLine(kind, cells(row), coord.currency, copy)].filter(Boolean)
+      return lines.length ? lines.join(' · ') : undefined
+    },
     comparator: (a: unknown, b: unknown) => matrixCompare(kind, a, b),
   } as ColDef<T>
 }

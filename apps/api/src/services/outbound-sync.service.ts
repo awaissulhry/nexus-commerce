@@ -38,11 +38,10 @@ import {
 } from "./channel-publish-audit.service.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
-import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { priceRefusalFor } from "./price-bounds.service.js";
 import { confirmEbayOfferPrice, ebayFixedPriceOfferOf, ebayMarketplaceIdOf, offerPriceOf, pickEbayPriceOffer } from "./ebay-price-readback.service.js";
-import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
-import { resolveMembershipIntended, routedAvailable } from "./sync-control-core.js";
+import { AMAZON_EU_SHARED_MARKETS } from "./amazon-eu-quantity-guard.js";
+import { resolveMembershipIntended } from "./sync-control-core.js";
 import { marketCurrency } from './pim/market-currency.js';
 import { ledgerInputs, loadSyncLedgers } from "./stock-pool/sync-ledgers.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
@@ -57,8 +56,11 @@ import {
 import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
-import { amazonDiscountedPrice } from './amazon/discounted-price.js'
 import { amazonOfferMergeEnabled, amazonOfferReadFailure, amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
+import { readAmazonOfferFacts, type AmazonOfferFacts } from './amazon/offer-facts.js'
+import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amazonPurchasableOffer, amazonSellerBoundsRefusal } from './amazon/offer-attributes.js'
+import { PURCHASABLE_OFFER_LEAVES } from './amazon/offer-fields.js'
+import { amazonSendQuantity, readEuIntentRows, routedSendCeiling } from './amazon/send-quantity.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -316,6 +318,33 @@ export function resolveAmazonMarketplaceId(mp: string | undefined): string {
   return AMAZON_MARKETPLACE_IDS[mp.toUpperCase()] ?? AMAZON_MARKETPLACE_IDS.IT;
 }
 
+/** The offer facts the jobs send (`offer-facts.ts`, `job` lane), with what the queue row itself carries on top. */
+type JobOfferFacts = Pick<AmazonOfferFacts, 'values' | 'source' | 'fulfilmentCodes' | 'fbaByCode'>
+
+/**
+ * Amazon sheet gaps — the facts a price or stock push sends: the listing's LIVE facts (never a draft), with the row's
+ * own price (the send price it was queued with) and, when the row names one, its sale. No facts = only what the row
+ * carries (a caller with no listing).
+ */
+export function amazonJobOfferFacts(
+  payload: { price?: number | null; salePrice?: unknown; salePriceStart?: string | null; salePriceEnd?: string | null },
+  marketplaceCode: string,
+  listingFacts?: JobOfferFacts,
+): JobOfferFacts {
+  const base = listingFacts ?? readAmazonOfferFacts({ marketplace: marketplaceCode, platformAttributes: {} }, 'job')
+  const values = { ...base.values }
+  const source = { ...base.source }
+  if (payload.price !== undefined) {
+    values.our_price = { mode: values.our_price.mode, price: payload.price ?? null }
+    if (payload.price != null) source.our_price = 'live'
+  }
+  if (payload.salePrice !== undefined) {
+    values.sale = payload.salePrice == null ? null : { price: Number(payload.salePrice), start: payload.salePriceStart ?? null, end: payload.salePriceEnd ?? null }
+    source.sale = 'live'
+  }
+  return { values, source, fulfilmentCodes: base.fulfilmentCodes, fbaByCode: base.fbaByCode }
+}
+
 /**
  * A4.0 — build a CORRECT Amazon Listings Items PATCH body. The old
  * constructAmazonPayload emitted non-schema attribute names (`title`, `price`,
@@ -324,6 +353,11 @@ export function resolveAmazonMarketplaceId(mp: string | undefined): string {
  * real schema names (item_name / product_description / bullet_point /
  * purchasable_offer / fulfillment_availability) and value shapes. Mirrors the
  * proven buildJsonFeedBody attribute shapes; same serializer semantics everywhere.
+ *
+ * Amazon sheet gaps (bug 2) — both offer roots come from THE send builder (`amazon/offer-attributes.ts`) over the
+ * listing's live facts (`offer`), because a `replace` sets the WHOLE root: a stock push used to send `[{DEFAULT,
+ * quantity}]` and wipe the handling time and restock date; a price push wiped the min/max seller price, MAP price, offer
+ * dates and Automate Pricing rule. Now each root keeps every leaf Nexus knows (its own store, else Amazon's report).
  */
 export async function buildAmazonListingPatch(
   payload: SyncPayload,
@@ -331,6 +365,7 @@ export async function buildAmazonListingPatch(
   productType: string,
   fulfillmentMethod?: string | null,
   content?: Omit<AmazonContentInput, 'marketplace' | 'marketplaceId'>,
+  offer?: { facts?: JobOfferFacts; isParent?: boolean; today?: string },
 ): Promise<Record<string, any>> {
   const rawCode = (marketplaceCode || "IT").toUpperCase();
   const code = Object.entries(AMAZON_MARKETPLACE_IDS).find(([, id]) => id === rawCode)?.[0] ?? rawCode;
@@ -356,33 +391,31 @@ export async function buildAmazonListingPatch(
     attrs.bullet_point = bullets.filter(Boolean).map((b: any) => ({ value: String(b), marketplace_id: marketplaceId, language_tag }));
   }
   }
+  const facts = payload.price !== undefined || payload.quantity !== undefined ? amazonJobOfferFacts(payload, code, offer?.facts) : null;
   if (payload.price !== undefined) {
     // P4.4a — from the Marketplace row, not a UK/GB ternary. Resolved HERE rather
     // than at the top of the builder so a CONTENT-only push to a market with no
     // currency configured is not refused for a price it is not sending.
     const currency = await marketCurrency('AMAZON', code);
-    const offer: Record<string, any> = { currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId };
     // MX.1 (D-MX4) — the sale rides the SAME purchasable_offer instance as our_price, so the one `op:replace` this
-    // builder emits carries both and a price push never wipes the sale (report 19 §5.9). Shape = the cached
-    // Listings-Items JSON schema (`discounted_price[].schedule[]{ start_at, end_at, value_with_tax }`, all three
-    // REQUIRED; measured on IT/UK/DE, MX.1 phase 0(c)) — NOT the feed's `sale_price` with `start_at:[{value}]`. A sale
-    // without both dates is never emitted: Amazon would reject the schedule entry.
+    // builder emits carries both and a price push never wipes the sale (report 19 §5.9); a sale without both dates is
+    // never emitted (`amazon/discounted-price.ts`). The other offer leaves Nexus knows ride it too (gaps 1–3).
     // With NEXUS_AMAZON_OFFER_MERGE=1, `syncToAmazon` turns this replace into a MERGE on the live offer instance at
     // send time (amazon/purchasable-offer.ts); the replace then goes out as built only for a first offer.
-    const sale = amazonDiscountedPrice(payload.salePrice != null ? Number(payload.salePrice) : null, payload.salePriceStart, payload.salePriceEnd);
-    if (sale) offer.discounted_price = sale;
-    attrs.purchasable_offer = [offer];
+    // No price, or a parent (no offer of its own): no root at all, never one that clears Amazon's price.
+    const purchasableOffer = amazonPurchasableOffer({ marketplaceId, currency, facts: facts!, sendPrice: payload.price, isParent: offer?.isParent });
+    if (purchasableOffer) attrs.purchasable_offer = purchasableOffer;
   }
   // B2 — FBA stock is owned by Amazon. Pushing a merchant fulfillment_availability
   // (DEFAULT channel) for an FBA SKU flips the offer to FBM and overwrites Amazon's
   // managed quantity. So only emit a merchant quantity for FBM (or unknown — the
   // common, safe default). For FBA we leave fulfillment untouched (handled upstream).
   if (payload.quantity !== undefined && !isFba) {
-    // P0b — canonical schema shape: fulfillment_availability entries carry
-    // fulfillment_channel_code + quantity ONLY (channel-scoped, not
-    // marketplace-scoped; the marketplace comes from the ?marketplaceIds
-    // query param). The stray marketplace_id predates the incident.
-    attrs.fulfillment_availability = [{ fulfillment_channel_code: "DEFAULT", quantity: payload.quantity }];
+    // P0b — canonical schema shape: channel-scoped entries (the marketplace comes from the ?marketplaceIds query
+    // param), `[{DEFAULT, quantity, handling time, restock date (future only), always available}]`. The builder also
+    // refuses an AMAZON_* code in the listing's facts (FBA, Remote Fulfilment, VCS) and an unreadable one: no root.
+    const fulfilment = amazonFulfillmentAvailability({ facts: facts!, fba: isFba, live: true, quantity: payload.quantity, isParent: offer?.isParent, today: offer?.today });
+    if (fulfilment) attrs.fulfillment_availability = fulfilment;
   }
 
   return {
@@ -697,31 +730,10 @@ export class OutboundSyncService {
     sourceLocationCodes: string[]
     stockBuffer: number
   }): Promise<{ available: number; routedAvailable: number; locationCodes: string[]; refusal: string | null }> {
+    // Amazon sheet gaps — ONE ceiling rule (`amazon/send-quantity.ts` `routedSendCeiling`): the Amazon lane and Publish
+    // reach it through `amazonSendQuantity`, eBay / Shopify / Etsy through here. The listing's buffer is applied on top.
     const productLedger = (await loadSyncLedgers(prisma, [args.productId])).get(args.productId);
-    const inputs = ledgerInputs(productLedger, args.sourceLocationCodes);
-    const routed = routedAvailable({
-      ledger: inputs.ledger,
-      channel: args.channel,
-      marketplace: args.marketplace,
-      sourceLocationCodes: inputs.sourceLocationCodes,
-    });
-    // Two nullable fields, not an `ok` union: `apps/api` sets "strict": false, so a
-    // discriminated union never narrows and `refusal` would be a compile error
-    // after the guard.
-    return {
-      // The listing's own hold-back is applied on top, exactly as before.
-      available: computeAvailableToPublish({
-        fulfillmentMethod: 'FBM',
-        warehouseAvailable: routed.available,
-        fbaSellable: 0,
-        stockBuffer: args.stockBuffer,
-      }).available,
-      routedAvailable: routed.available,
-      locationCodes: routed.locationCodes,
-      refusal: !routed.routed && !inputs.uncountedIsZero
-        ? `Nothing was sent to ${args.channelLabel}: no stock location is routed to ${args.marketplace} for this listing, so the quantity it may promise cannot be worked out. Route a location to this market in Sync Control.`
-        : null,
-    };
+    return routedSendCeiling(productLedger, args);
   }
 
   private async pushLockListings(queueItem: any, channel: string): Promise<PushLockListing[]> {
@@ -1129,7 +1141,12 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true, salePrice: true, sourceLocationCodes: true },
+          // The offer facts' reader (`readAmazonOfferFacts`, job lane) reads the price columns and the platform bag; the
+          // send quantity reads the stock columns. Never `overrideData`: a value saved there was never sent.
+          select: {
+            platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true,
+            salePrice: true, sourceLocationCodes: true, price: true, priceOverride: true, followMasterPrice: true, followMasterQuantity: true,
+          },
         })
         .catch(() => null);
     }
@@ -1150,12 +1167,17 @@ export class OutboundSyncService {
     if (marketRefusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: marketRefusal, error: marketRefusal, errorCode: "AMAZON_MARKET_UNRESOLVED", retryable: false };
     // MX.1 (D-MX4) — a PRICE push that carries no sale (a legacy producer) takes the listing's STORED sale + window, so
     // `buildAmazonListingPatch`'s `op:replace` on purchasable_offer re-emits it instead of wiping it (report 19 §5.9).
+    let saleWindow: { start: string | null; end: string | null } | null = null;
     if (payload.price !== undefined && payload.salePrice === undefined && cl && queueItem.channelListingId && cl.salePrice != null) {
       try {
         const window = (await readSaleWindows(prisma as never, [queueItem.channelListingId])).get(queueItem.channelListingId);
+        saleWindow = window ?? null;
         if (window?.start && window?.end) { payload.salePrice = Number(cl.salePrice); payload.salePriceStart = window.start; payload.salePriceEnd = window.end; }
       } catch { /* a database without the window columns pushes the price alone — the sale cannot be scheduled there */ }
     }
+    // Amazon sheet gaps — the listing's LIVE offer facts (job lane: never a draft, never `overrideData`), so a price or
+    // stock push re-sends every leaf of the root it replaces instead of wiping it.
+    const offerFacts = amazonJobOfferFacts(payload, marketplaceId, readAmazonOfferFacts({ ...(cl ?? {}), marketplace: cl?.marketplace ?? marketplaceId, saleWindow }, 'job'));
     try {
       const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId, destination.connectionId);
       if (scp?.pushesPaused) {
@@ -1192,141 +1214,67 @@ export class OutboundSyncService {
       fbaStockQty = fbaAgg?._sum.quantity ?? null;
       hasActiveFbaOffer = !!fbaOffer;
     }
-    const isFba = isFbaListing(cl, product, { fbaStockQty, hasActiveFbaOffer });
-    // P1 — push the CURRENT listing quantity (the latest committed value), not
-    // the stale enqueue-time snapshot. FBA listings still drop the qty patch
-    // below regardless of value. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
-    if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
-      payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
-    }
-    // P2 — hard oversell guard for Amazon-FBM. FBA is never clamped (Amazon
-    // owns the qty; buildAmazonListingPatch drops the patch for FBA anyway).
-    // Kill-switch: NEXUS_OVERSELL_CLAMP=0.
-    if (
-      process.env.NEXUS_OVERSELL_CLAMP !== '0' &&
-      !isFba &&
-      payload.quantity !== undefined &&
-      product?.id
-    ) {
-      // P4.3d — shared stock AND routing: the limit is what the ledger the product
-      // follows holds IN THE LOCATIONS ROUTED TO THIS MARKET, minus the listing's
-      // buffer. Same filter as the intended quantity, so the promise and its cap
-      // cannot be computed two ways.
-      const ceiling = await this.routedCeiling({
-        productId: product.id,
-        channel: 'AMAZON',
-        channelLabel: 'Amazon',
-        marketplace: String(cl?.marketplace ?? marketplaceId),
-        sourceLocationCodes: (cl?.sourceLocationCodes as string[] | undefined) ?? [],
-        stockBuffer: cl?.stockBuffer ?? 0,
-      })
-      // Nothing routed here and the ledger does not treat uncounted as zero (a
-      // pooled product): we do not know the ceiling, so we do not cap to 0 and
-      // send it — that is the scoped Zero. Refuse, as the EU guard does (D9).
-      if (ceiling.refusal) {
-        return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: ceiling.refusal, error: ceiling.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false }
-      }
-      const available = ceiling.available
-      const requested = payload.quantity
-      const { quantity, clamped } = applyOversellClamp(requested, available)
-      if (clamped) {
-        payload.quantity = quantity
-        try {
-          publishOrderEvent({
-            type: 'sync.oversell.clamped',
-            sku,
-            channel: 'AMAZON',
-            marketplace: marketplaceId,
-            requested,
-            clampedTo: quantity,
-            available,
-            ts: Date.now(),
-          })
-        } catch { /* observability must never break the sync */ }
-      }
-    }
-    // SCT.4 — Amazon EU SHARED-QUANTITY belt (kill-switch: NEXUS_EU_SHARED_QTY_GUARD=0).
-    // Amazon keeps ONE merchant quantity per SKU across EU marketplaces (proved
-    // 2026-07-26: 302 market-scoped Zero&Pins blanked the whole IT storefront).
-    // If this SKU's sibling EU rows disagree on the shared number, pushing ANY
-    // side would silently overwrite the other market's intent — refuse, log a
-    // conflict, and let the operator align the modes instead.
-    if (
-      process.env.NEXUS_EU_SHARED_QTY_GUARD !== '0' &&
-      !isFba &&
-      payload.quantity !== undefined &&
-      product?.id &&
-      AMAZON_EU_SHARED_MARKETS.has(String(cl?.marketplace ?? '').toUpperCase())
-    ) {
-      try {
-        const siblings = await prisma.channelListing.findMany({
-          where: {
-            productId: product.id,
-            channel: 'AMAZON',
-            isPublished: true,
-            listingStatus: { notIn: ['ENDED', 'REMOVED'] },
-          },
-          select: {
-            marketplace: true, followMasterQuantity: true, quantityOverride: true,
-            quantity: true, syncPaused: true, fulfillmentMethod: true,
-          },
-        })
-        const euRows = siblings.map((sib) => ({
-          marketplace: sib.marketplace,
-          followMasterQuantity: sib.followMasterQuantity,
-          quantityOverride: sib.quantityOverride,
-          quantity: sib.quantity,
-          syncPaused: sib.syncPaused,
-          isFba: sib.fulfillmentMethod === 'FBA',
-        }))
-        const verdict = detectEuIntentConflict(euRows)
-        if (verdict.conflict) {
-          const message = `EU shared-quantity conflict for ${sku}: ${verdict.detail}. Push refused so no market's intent is silently overwritten. ${EU_GUARD_REMEDY}`
-          try {
-            const { syncHealthService } = await import('./sync-health.service.js')
-            await syncHealthService.logConflict({
-              channel: 'AMAZON',
-              conflictType: 'EU_SHARED_QTY_CONFLICT',
-              message,
-              productId: product.id,
-              localData: { rows: euRows },
-              remoteData: { attemptedQuantity: payload.quantity, marketplace: cl?.marketplace ?? marketplaceId },
-            })
-          } catch { /* observability best-effort */ }
-          return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message, error: "eu-shared-qty-conflict" };
+    let isFba = isFbaListing(cl, product, { fbaStockQty, hasActiveFbaOffer });
+    // Amazon sheet gaps (bug 3) — THE send quantity (`amazon/send-quantity.ts`), the one studio Publish sends too, with
+    // the steps this lane has always run, in its order and with its sentences: P1 the latest committed quantity, not the
+    // enqueue-time snapshot (kill-switch NEXUS_SYNC_ORDERING_V2=0); P2/P4.3d the oversell clamp to the stock routed to
+    // this market minus the buffer, refused (never capped to 0) when nothing is routed (NEXUS_OVERSELL_CLAMP=0); SCT.4
+    // the Amazon EU shared-quantity guard, fail closed (D9) (NEXUS_EU_SHARED_QTY_GUARD=0). FBA is never clamped or
+    // guarded: Amazon owns the quantity, and the builder drops it. This lane reads the inputs and keeps its events.
+    if (payload.quantity !== undefined && !isFba) {
+      const requested = typeof payload.quantity === 'number' ? payload.quantity : typeof cl?.quantity === 'number' ? cl.quantity : undefined;
+      if (requested === undefined) payload.quantity = undefined;
+      else {
+        const ledger = process.env.NEXUS_OVERSELL_CLAMP !== '0' && product?.id ? (await loadSyncLedgers(prisma, [product.id])).get(product.id) : undefined;
+        let euRows: Awaited<ReturnType<typeof readEuIntentRows>> | null = null;
+        let euRowsError: string | null = null;
+        if (process.env.NEXUS_EU_SHARED_QTY_GUARD !== '0' && product?.id && AMAZON_EU_SHARED_MARKETS.has(String(cl?.marketplace ?? '').toUpperCase())) {
+          try { euRows = await readEuIntentRows(prisma, product.id); } catch (guardErr) { euRowsError = guardErr instanceof Error ? guardErr.message : String(guardErr); }
         }
-      } catch (guardErr) {
-        // P4.3b / D9 — FAIL CLOSED. This used to say "Guard infrastructure
-        // failing must not stop legitimate pushes" and allow the send. The Owner
-        // ruled the other way in decision D9: *hold the push and alert — a wrong
-        // EU quantity is worse than a short delay.*
-        //
-        // The reason the ruling is right: Amazon holds ONE merchant quantity per
-        // SKU across the EU markets. If the guard cannot run, we do not know
-        // whether this push fights a sibling market's intent — and the incident
-        // this guard exists for is a scoped Zero that blanked an entire
-        // storefront. "We could not check" is not "there is no conflict".
-        //
-        // A retry is cheap: the row stays queued and the next attempt runs the
-        // guard again. Sending blind is not reversible.
-        const detail = guardErr instanceof Error ? guardErr.message : String(guardErr)
-        const message = `EU shared-quantity guard could not run for ${sku} (${detail}). Push held rather than sent blind: Amazon holds one EU quantity per SKU, so an unchecked push can overwrite another market's intent. It will be retried. ${EU_GUARD_REMEDY}`
-        logger.warn('[outbound-sync] EU shared-qty guard check failed (push HELD)', { sku, error: detail })
-        try {
-          const { syncHealthService } = await import('./sync-health.service.js')
-          await syncHealthService.logConflict({
-            channel: 'AMAZON',
-            // Its own type: "the guard could not run" is a different fact from
-            // "the guard found a conflict", and an operator must be able to tell
-            // them apart on the screen.
-            conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE',
-            message,
-            productId: product.id,
-            localData: { guardError: detail },
-            remoteData: { attemptedQuantity: payload.quantity, marketplace: cl?.marketplace ?? marketplaceId },
-          })
-        } catch { /* observability best-effort — it must not decide the push */ }
-        return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message, error: "eu-shared-qty-guard-unavailable" };
+        const sent = amazonSendQuantity({
+          sku, listing: cl, product: { id: product?.id ?? null, fulfillmentMethod: product?.fulfillmentMethod ?? null }, ledger,
+          evidence: { fbaStockQty, hasActiveFbaOffer }, requested, marketplace: marketplaceId, euRows, euRowsError,
+        });
+        // The clamp is never silent (`sync.oversell.clamped`), even when the EU guard then refuses the push.
+        if (sent.available != null && sent.requested != null && sent.requested > sent.available) {
+          try {
+            publishOrderEvent({ type: 'sync.oversell.clamped', sku, channel: 'AMAZON', marketplace: marketplaceId, requested: sent.requested, clampedTo: sent.available, available: sent.available, ts: Date.now() });
+          } catch { /* observability must never break the sync */ }
+        }
+        const attemptedQuantity = sent.available != null && sent.requested != null ? Math.min(sent.requested, sent.available) : sent.requested;
+        if (sent.code === 'NO_ROUTED_LOCATION') {
+          return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: sent.refusal, error: sent.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false };
+        }
+        if (sent.code === 'EU_SHARED_QTY_CONFLICT') {
+          // Amazon keeps ONE merchant quantity per SKU across the EU markets (2026-07-26: 302 market-scoped Zero&Pins
+          // blanked the whole IT storefront): siblings that disagree are refused and logged, never overwritten.
+          try {
+            const { syncHealthService } = await import('./sync-health.service.js');
+            await syncHealthService.logConflict({
+              channel: 'AMAZON', conflictType: 'EU_SHARED_QTY_CONFLICT', message: sent.refusal, productId: product.id,
+              localData: { rows: sent.euConflict?.rows ?? euRows }, remoteData: { attemptedQuantity, marketplace: cl?.marketplace ?? marketplaceId },
+            });
+          } catch { /* observability best-effort */ }
+          return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: sent.refusal, error: "eu-shared-qty-conflict" };
+        }
+        if (sent.code === 'EU_SHARED_QTY_GUARD_UNAVAILABLE') {
+          // P4.3b / D9 — FAIL CLOSED: "we could not check" is not "there is no conflict". The row stays queued and the next
+          // attempt runs the guard again; sending blind is not reversible. Its own conflict type, so the screen tells the
+          // two facts apart.
+          logger.warn('[outbound-sync] EU shared-qty guard check failed (push HELD)', { sku, error: euRowsError });
+          try {
+            const { syncHealthService } = await import('./sync-health.service.js');
+            await syncHealthService.logConflict({
+              channel: 'AMAZON', conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE', message: sent.refusal, productId: product.id,
+              localData: { guardError: euRowsError }, remoteData: { attemptedQuantity, marketplace: cl?.marketplace ?? marketplaceId },
+            });
+          } catch { /* observability best-effort — it must not decide the push */ }
+          return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: sent.refusal, error: "eu-shared-qty-guard-unavailable" };
+        }
+        if (sent.refusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: sent.refusal, error: sent.refusal, errorCode: sent.code ?? 'NO_QUANTITY', retryable: false };
+        // Fail closed: the shared function's FBA verdict wins too.
+        if (sent.fba) isFba = true;
+        else payload.quantity = sent.quantity ?? undefined;
       }
     }
     const hasContent = payload.title !== undefined || payload.description !== undefined || payload.bulletPoints !== undefined || payload.keywords !== undefined;
@@ -1350,7 +1298,18 @@ export class OutboundSyncService {
       const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'Amazon', sku, market: { channel: 'AMAZON', marketplace: cl?.marketplace ?? marketplaceId } });
       if (refusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
     }
-    const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content);
+    // Amazon sheet gaps — Amazon deactivates an offer priced outside the seller's own minimum and maximum price, so a
+    // price (or a sale the push carries) outside them is refused here, before anything is sent. A person has to change
+    // the price or the bounds: not retryable.
+    if (payload.price !== undefined) {
+      const v = offerFacts.values;
+      const refusal = amazonSellerBoundsRefusal({
+        price: payload.price ?? null, salePrice: v.sale?.start && v.sale?.end ? v.sale.price : null,
+        min: v.minimum_seller_allowed_price, max: v.maximum_seller_allowed_price, sku,
+      });
+      if (refusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: refusal, error: refusal, errorCode: AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, retryable: false };
+    }
+    const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content, { facts: offerFacts, isParent: product?.isParent === true });
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
     // FBA stock). Don't submit an empty patch — return a terminal, no-retry skip.
@@ -1423,6 +1382,8 @@ export class OutboundSyncService {
             live: live.instances,
             marketplaceId: offerMarketplaceId,
             saleRemoved: payload.saleRemoved === true,
+            // The leaves Nexus's own store holds (min/max, MAP, offer window, Automate Pricing rule); Amazon keeps the rest.
+            held: { facts: offerFacts, leaves: PURCHASABLE_OFFER_LEAVES.filter((leaf) => offerFacts.source[leaf] === 'live') },
           });
           if (plan.kind === 'refused') {
             offerFailure = { errorCode: 'AMAZON_OFFER_NOT_MATCHED', retryable: false };

@@ -1,14 +1,15 @@
 'use client'
 
-import { Circle, Database, GitBranch, Link2, Pin, Settings2, Sparkles, FunctionSquare, AlertTriangle } from 'lucide-react'
+import { Circle, Clock, Database, GitBranch, Link2, Pin, Settings2, Sparkles, FunctionSquare, AlertTriangle } from 'lucide-react'
 import { Button } from '../primitives/Button'
 import { Tooltip, useTooltipsDisabled } from '../primitives/Tooltip'
 
-export type ValueSourceKind = 'master' | 'override' | 'rule' | 'default' | 'missing' | 'linked' | 'channel' | 'formula' | 'ai' | 'warning'
+/** `pending`: a value saved in Nexus that reaches the channel only when someone publishes — never drawn like a live one. */
+export type ValueSourceKind = 'master' | 'override' | 'rule' | 'default' | 'missing' | 'linked' | 'channel' | 'formula' | 'ai' | 'warning' | 'pending'
 
 const ICONS = {
   master: Link2, override: Pin, rule: Settings2, default: Database, missing: Circle,
-  linked: GitBranch, channel: Database, formula: FunctionSquare, ai: Sparkles, warning: AlertTriangle,
+  linked: GitBranch, channel: Database, formula: FunctionSquare, ai: Sparkles, warning: AlertTriangle, pending: Clock,
 }
 
 export interface SourceIndicatorProps {

@@ -16,10 +16,14 @@ export function PublicationChanges({ changes, selectedIds, disabled, onSelection
   photosOnly?: boolean
 }) {
   const blocked = (change: StudioPublishChange) => photosOnly && !isPhotoChangeId(change.id)
+  // Amazon sheet gaps — an offer draft line names its three values in words: the saved value, live in Nexus, Amazon's.
+  const values = (change: StudioPublishChange) => change.display
+    ? [{ label: 'Saved (waiting)', value: change.display.current }, { label: 'Live in Nexus', value: change.display.lastAccepted }, { label: 'Amazon now', value: change.display.channel }]
+    : [{ label: 'Nexus now', value: publicationValueText(change.current) }, { label: 'Last accepted', value: publicationValueText(change.lastAccepted) },
+      { label: 'Channel now', value: publicationValueText(change.channel) }]
   const row = (change: StudioPublishChange) => ({ id: change.id, label: `${change.label} · ${change.sku}`, selectable: change.selectable && !blocked(change),
     status: change.status === 'SAME' ? 'No send needed' : change.status === 'CANNOT_COMPARE' ? 'Cannot compare' : change.status === 'DIFFERS' ? 'Differs on channel' : 'Changed in Nexus',
-    note: blocked(change) ? 'Fix the problems listed above to send this field. Photos can be sent now.' : change.reason, values: [{ label: 'Nexus now', value: publicationValueText(change.current) },
-      { label: 'Last accepted', value: publicationValueText(change.lastAccepted) }, { label: 'Channel now', value: publicationValueText(change.channel) }] })
+    note: blocked(change) ? 'Fix the problems listed above to send this field. Photos can be sent now.' : [change.reason, change.display?.note].filter(Boolean).join(' '), values: values(change) })
   const pending = changes.filter(c => c.status !== 'SAME'), same = changes.filter(c => c.status === 'SAME')
   const selected = changes.filter(c => c.selectable && selectedIds.includes(c.id))
   return <>

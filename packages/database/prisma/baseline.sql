@@ -3287,6 +3287,17 @@ CREATE TABLE "BulkOperation" (
     "processed" INTEGER,
     "total" INTEGER,
     "expectedVersion" INTEGER,
+    "kind" TEXT,
+    "productId" TEXT,
+    "channel" TEXT,
+    "marketplace" TEXT,
+    "channelConnectionId" TEXT,
+    "aliasKey" TEXT,
+    "batchId" TEXT,
+    "summary" JSONB,
+    "submittedAt" TIMESTAMP(3),
+    "nextCheckAt" TIMESTAMP(3),
+    "checkCount" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "BulkOperation_pkey" PRIMARY KEY ("id")
@@ -11600,6 +11611,18 @@ CREATE INDEX "BulkOperation_status_expiresAt_idx" ON "BulkOperation"("status", "
 
 -- CreateIndex
 CREATE INDEX "BulkOperation_workspaceId_idx" ON "BulkOperation"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "BulkOperation_workspaceId_kind_createdAt_idx" ON "BulkOperation"("workspaceId", "kind", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "BulkOperation_workspaceId_kind_productId_createdAt_idx" ON "BulkOperation"("workspaceId", "kind", "productId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "BulkOperation_workspaceId_batchId_idx" ON "BulkOperation"("workspaceId", "batchId");
+
+-- CreateIndex
+CREATE INDEX "BulkOperation_kind_status_nextCheckAt_idx" ON "BulkOperation"("kind", "status", "nextCheckAt");
 
 -- CreateIndex
 CREATE INDEX "BulkOpsTemplate_userId_idx" ON "BulkOpsTemplate"("userId");

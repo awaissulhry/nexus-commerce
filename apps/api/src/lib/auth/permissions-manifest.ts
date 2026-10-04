@@ -234,6 +234,13 @@ export const ENTRIES: Entry[] = [
   // prefix rule's products.edit below (GET /api/products, the list, stays products.view there).
   P(F.productsCreate, (m, p) => m === 'POST' && p === '/api/products'),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
+  // Sheet publish parity, step 4 — the publish history. Reading runs is a view for anyone in the business; the exact request a
+  // listing received shows raw seller and item identifiers, so it needs products.publish. /api/products/:id/publications is a
+  // GET under the /api/products prefix rule (products.view).
+  P(F.productsPublish, (_m, p) => /^\/api\/publications\/[^/]+\/listings\/[^/]+\/request$/.test(p)),
+  RW(F.productsView, F.productsPublish, (_m, p) => p === '/api/publications' || p.startsWith('/api/publications/')),
+  // Sheet publish parity, step 5 — a publication batch sends reviews to channels; reading or cancelling one is part of publishing.
+  P(F.productsPublish, (_m, p) => p === '/api/publication-batches' || p.startsWith('/api/publication-batches/')),
   // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
   // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.
   P(F.pimManage, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio\/own-axis-attribute$/.test(p)),

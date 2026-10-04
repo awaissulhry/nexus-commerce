@@ -11,6 +11,7 @@
 import { familyRowHoldsValue, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 import { cascadeIntent, cascadeOf, hasValue, wholeListWriteField } from './channel/provenance'
 import { isCellEditable, offersCascade } from './channel/rows'
+import { offerDraftResetLabel, pendingPublishOf } from './channel/offerDrafts'
 import type { ChannelSheetRow } from './channel/types'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { SheetColumn as MasterColumn, StudioRow } from './master/types'
@@ -39,11 +40,15 @@ const label = (formula: boolean, fallback: string) => (formula ? 'Remove formula
 /**
  * Channel: a reset exists where the cascade says the value is THIS listing's own (an override, an old listing text, an
  * AI or outdated translation pinned here). A value that follows Master, or a cell that writes the shared record itself
- * (`writeTarget: 'master'`), has nothing to reset to.
+ * (`writeTarget: 'master'`), has nothing to reset to. An Amazon offer change waiting for Publish (D4=B) always has one:
+ * the reset discards the saved change, and the cell shows the live value it names again.
  */
 export function channelResetOffer(row: ChannelSheetRow | undefined, colId: string, formula = false): ResetOffer | null {
   const cell = row?.values?.[colId]
-  if (!row || !cell || !isCellEditable(cell) || !offersCascade(cell)) return null
+  if (!row || !cell || !isCellEditable(cell)) return null
+  const waiting = pendingPublishOf(cell)
+  if (waiting) return { intent: 'reset', formula, label: label(formula, offerDraftResetLabel(waiting)) }
+  if (!offersCascade(cell)) return null
   if (cascadeIntent(cascadeOf(cell, row.rowKind), row.rowKind, cell.value ?? null)?.action !== 'reset') return null
   const list = !!wholeListWriteField(cell.writeField)
   return {
@@ -146,11 +151,12 @@ export interface SetColumnFacts {
 /**
  * Which columns the verbs act on: the attribute columns an operator edits. Never the identity, progress, media or
  * relationship columns, the variation theme (its own editor and route), a bullets one cell (its positions are the
- * columns), or a column nobody can edit.
+ * columns), the stock columns (Mode / Qty / Buffer: the Matrix door's, nothing to reset or clear to), or a column nobody
+ * can edit.
  */
 export function controlColumnFacts(col: { key: string; label: string; kind?: string; shape?: string; options?: string[]; optionLabels?: Record<string, string>;
   mode?: 'strict' | 'open'; editable?: boolean; shopifyField?: unknown } | undefined): SetColumnFacts | null {
-  if (!col || col.editable === false || isProductRelationshipColumn(col.key) || col.kind === 'variationTheme' || col.shape === 'axes') return null
+  if (!col || col.editable === false || isProductRelationshipColumn(col.key) || col.kind === 'variationTheme' || col.kind === 'stockControl' || col.shape === 'axes') return null
   if (col.key === 'productMedia' || col.key.startsWith('progress:') || col.key.startsWith('slots:')) return null
   return { colId: col.key, label: col.label, kind: col.kind, shape: col.shape, options: col.options, optionLabels: col.optionLabels, mode: col.mode,
     // A Shopify field takes "Set every row…" only for a supported scalar metafield; the rest keep their own draft editor.

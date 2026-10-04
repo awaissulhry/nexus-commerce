@@ -50,6 +50,18 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/products/:id/studio/own-axis-attribute', 'pim.manage'],
     ['GET', '/api/products/:id/studio/own-axis-sources', 'products.view'],
     ['PATCH', '/api/products/:id/studio/projection', 'products.edit'],
+    // Sheet publish parity, step 3 — reading what became of a publish is a view; sending one stays products.publish.
+    ['GET', '/api/products/:id/studio/publication-status', 'products.view'],
+    ['GET', '/api/products/:id/studio-publication/:reviewId', 'products.publish'],
+    // Sheet publish parity, step 4 — the publish history reads with products.view; the exact request needs products.publish.
+    ['GET', '/api/publications', 'products.view'],
+    ['GET', '/api/publications/:id', 'products.view'],
+    ['GET', '/api/publications/:id/listings/:listingId/request', 'products.publish'],
+    ['GET', '/api/products/:id/publications', 'products.view'],
+    // Sheet publish parity, step 5 — a publication batch (create, read, cancel) is publishing.
+    ['POST', '/api/publication-batches', 'products.publish'],
+    ['GET', '/api/publication-batches/:id', 'products.publish'],
+    ['POST', '/api/publication-batches/:id/cancel', 'products.publish'],
     ['POST', '/etsy/sync/listings', 'products.edit'],
     ['POST', '/etsy/sync/inventory/from-etsy', 'inventory.adjust'],
     ['POST', '/etsy/sync/orders', 'orders.edit'],

@@ -21,6 +21,7 @@
  * the node-cron fallback (existing) drains it on its next tick.
  */
 
+import type { Prisma } from '@prisma/client'
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -30,6 +31,7 @@ import {
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
+import { entityBoundsDenial, logGateDeny, type EntityBoundsCampaign } from './ads-write-gate.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -144,6 +146,50 @@ function adProductRefused(
   })
   return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: refusal }
 }
+
+/**
+ * 4k — the entity's own bounds, asked BEFORE the local write (review 5.2).
+ *
+ * The worker's gate asked them only after Nexus had written its copy, so a refused bid or budget was marked SKIPPED
+ * and Nexus kept showing a value Amazon never got, while the caller — a rule, a screen, Claude — was told `ok`. The
+ * bounds depend on nothing but the entity and the new value, so they are asked here first, with the same
+ * lowering-only suppression flag the worker hands the gate (`isSuppressionWrite`): a forced lowering still passes the
+ * bid minimum, a forced raise does not. Refused → nothing local, no queue row, no audit row; `error` is the gate's
+ * own sentence, and the refusal is recorded where the gate records its own (queueId null). Every other refusal can
+ * only be known at dispatch; the worker puts those back (putBackRefusedWrite).
+ */
+async function boundsRefused(args: {
+  entity: AdEntityType
+  entityId: string
+  campaign: EntityBoundsCampaign & { id: string } | null | undefined
+  field: string
+  intendedValueCents: number
+  isSuppression: boolean
+}): Promise<MutationOutcome | null> {
+  if (!args.campaign) return null
+  const denial = await entityBoundsDenial({
+    campaignId: args.campaign.id,
+    campaign: args.campaign,
+    field: args.field,
+    intendedValueCents: args.intendedValueCents,
+    isSuppression: args.isSuppression,
+  })
+  if (!denial) return null
+  logGateDeny(
+    {
+      queueId: null, marketplace: args.campaign.marketplace, payloadValueCents: args.intendedValueCents,
+      campaignId: args.campaign.id, entityType: args.entity, entityId: args.entityId,
+    },
+    denial.reason,
+    denial.deniedAt,
+  )
+  return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: denial.reason }
+}
+
+/** The campaign columns `boundsRefused` reads, for the selects below. */
+const BOUNDS_SELECT = {
+  minBidCents: true, maxBidCents: true, minBudgetCents: true, maxBudgetCents: true, portfolioId: true,
+} as const
 
 /**
  * AD.4 — Write a single AdvertisingActionLog row capturing the
@@ -440,6 +486,64 @@ export function isSuppressionWrite(force: boolean, fieldChanges: FieldChange[]):
   })
 }
 
+/** 4k — a queued field's column on its entity, and how its typed value reads back (undefined = cannot be read). */
+type FieldColumn = { column: string; value: (v: string | null) => unknown }
+const intColumn = (column: string): FieldColumn => ({ column, value: (v) => (v != null && /^-?\d+$/.test(v.trim()) ? Number(v) : undefined) })
+const decimalColumn = (column: string): FieldColumn => ({ column, value: (v) => (v != null && v.trim() !== '' && Number.isFinite(Number(v)) ? v.trim() : undefined) })
+const textColumn = (column: string, nullable = false): FieldColumn => ({ column, value: (v) => (v != null ? v : nullable ? null : undefined) })
+const dateColumn = (column: string): FieldColumn => ({ column, value: (v) => (v == null ? null : Number.isNaN(Date.parse(v)) ? undefined : new Date(v)) })
+/** Every field the update helpers below write locally, per entity, in their own vocabulary. */
+const LOCAL_COLUMNS: Partial<Record<AdEntityType, Record<string, FieldColumn>>> = {
+  AD_TARGET: { bid: intColumn('bidCents'), status: textColumn('status') },
+  AD_GROUP: { defaultBid: intColumn('defaultBidCents'), status: textColumn('status') },
+  CAMPAIGN: {
+    dailyBudget: decimalColumn('dailyBudget'), status: textColumn('status'), name: textColumn('name'),
+    portfolioId: textColumn('portfolioId', true), biddingStrategy: textColumn('biddingStrategy'),
+    dailyBudgetCurrency: textColumn('dailyBudgetCurrency'), endDate: dateColumn('endDate'),
+  },
+  PRODUCT_AD: { status: textColumn('status') },
+}
+
+/**
+ * 4k — put a write the gate refused back in Nexus (review 5.2).
+ *
+ * The update helpers below write Nexus's own copy when they queue a write; the worker asks the gate only at dispatch.
+ * Bounds are now asked before that local write (boundsRefused), but the halt, the allowlist, a pin, a spend ceiling
+ * and the day's budget movement can only be known at dispatch, so on every gate refusal the worker calls this and
+ * each refused field goes back to the value the write replaced. One conditional update per field, matching on the
+ * refused value: a newer change — a person, another writer, a sync from Amazon — is never overwritten. A field with
+ * no column here (a portfolio's) is left as it is and named in `kept`. Same workspace context as the worker's job.
+ */
+export async function putBackRefusedWrite(payload: {
+  entityType: string
+  entityId: string
+  fieldChanges: FieldChange[]
+}): Promise<{ restored: string[]; kept: string[] }> {
+  const columns = LOCAL_COLUMNS[payload.entityType as AdEntityType]
+  const out = { restored: [] as string[], kept: [] as string[] }
+  for (const c of dedupeFieldChanges(payload.fieldChanges ?? [])) {
+    // String(): a pre-ZD.1 JSON payload is untyped, as in isSuppressionWrite.
+    const oldValue = c.oldValue == null ? null : String(c.oldValue)
+    const newValue = c.newValue == null ? null : String(c.newValue)
+    if (oldValue === newValue) continue // a forced re-push changed nothing locally
+    const col = columns?.[c.field]
+    const from = col?.value(oldValue)
+    const to = col?.value(newValue)
+    if (!col || from === undefined || to === undefined) { out.kept.push(c.field); continue }
+    const where = { id: payload.entityId, [col.column]: to }
+    const data = { [col.column]: from }
+    let n = 0
+    switch (payload.entityType) {
+      case 'AD_TARGET': n = (await prisma.adTarget.updateMany({ where: where as Prisma.AdTargetWhereInput, data: data as Prisma.AdTargetUpdateManyMutationInput })).count; break
+      case 'AD_GROUP': n = (await prisma.adGroup.updateMany({ where: where as Prisma.AdGroupWhereInput, data: data as Prisma.AdGroupUpdateManyMutationInput })).count; break
+      case 'CAMPAIGN': n = (await prisma.campaign.updateMany({ where: where as Prisma.CampaignWhereInput, data: data as Prisma.CampaignUpdateManyMutationInput })).count; break
+      case 'PRODUCT_AD': n = (await prisma.adProductAd.updateMany({ where: where as Prisma.AdProductAdWhereInput, data: data as Prisma.AdProductAdUpdateManyMutationInput })).count; break
+    }
+    ;(n > 0 ? out.restored : out.kept).push(c.field)
+  }
+  return out
+}
+
 /**
  * AX-ZD.1 — project an `OutboundSyncQueue` outcome onto its typed mutations.
  *
@@ -731,6 +835,7 @@ export async function updateCampaignWithSync(args: {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
     select: {
+      ...BOUNDS_SELECT, // 4k
       id: true,
       name: true,
       portfolioId: true,
@@ -837,6 +942,14 @@ export async function updateCampaignWithSync(args: {
   if (changes.length === 0) {
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
+  // 4k — see boundsRefused: a budget outside the campaign's own bounds is refused before Nexus writes it.
+  if (changes.some((c) => c.field === 'dailyBudget')) {
+    const refused = await boundsRefused({
+      entity: 'CAMPAIGN', entityId: args.campaignId, campaign: existing, field: 'dailyBudget',
+      intendedValueCents: Math.round((args.patch.dailyBudget as number) * 100), isSuppression: false,
+    })
+    if (refused) return refused
+  }
 
   // Capture payloadBefore snapshot BEFORE we write to local row.
   const payloadBefore = {
@@ -934,7 +1047,7 @@ export async function updateAdGroupWithSync(args: {
       defaultBidCents: true,
       status: true,
       orphanedAt: true,
-      campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true } },
+      campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true, ...BOUNDS_SELECT } },
     },
   })
   if (!existing) {
@@ -987,6 +1100,14 @@ export async function updateAdGroupWithSync(args: {
       actionLogId: null,
       error: 'bid_below_floor_5_cents',
     }
+  }
+  // 4k — see boundsRefused.
+  if (changes.some((c) => c.field === 'defaultBid')) {
+    const refused = await boundsRefused({
+      entity: 'AD_GROUP', entityId: args.adGroupId, campaign: existing.campaign, field: 'defaultBid',
+      intendedValueCents: args.patch.defaultBidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
+    })
+    if (refused) return refused
   }
 
   const payloadBefore = {
@@ -1130,7 +1251,7 @@ export async function updateAdTargetWithSync(args: {
       isNegative: true,   // NEG.3 — the third routing axis; a negative's id is not a /sp/keywords id
       negativeLevel: true,
       adGroup: {
-        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } } },
+        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true, ...BOUNDS_SELECT } } },
       },
     },
   })
@@ -1212,6 +1333,14 @@ export async function updateAdTargetWithSync(args: {
       actionLogId: null,
       error: 'bid_below_floor_5_cents',
     }
+  }
+  // 4k — see boundsRefused. After the change clamp, so the bid judged is the bid that would be written.
+  if (changes.some((c) => c.field === 'bid')) {
+    const refused = await boundsRefused({
+      entity: 'AD_TARGET', entityId: args.adTargetId, campaign: existing.adGroup?.campaign, field: 'bid',
+      intendedValueCents: args.patch.bidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
+    })
+    if (refused) return refused
   }
 
   const payloadBefore = {

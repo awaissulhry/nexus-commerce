@@ -24,6 +24,7 @@ import { configuredAmazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { AMAZON_LIVE_STATUSES } from '@nexus/shared/listing-risk'
+import { announceListingValues } from '../listing-values-events.js'
 
 export type AsinFillOutcome = 'filled' | 'not_visible_yet' | 'already_had_asin' | 'error'
 
@@ -130,6 +131,7 @@ export async function fillAmazonListingAsins(listingIds: readonly string[], opti
   const readers = accountReaders()
   const report = new Map<string, AsinFillRow>()
   const written = new Set<string>()
+  const filled: string[] = []
 
   await eachLimited(ids, CONCURRENCY, async id => {
     const row = byId.get(id)
@@ -171,6 +173,7 @@ export async function fillAmazonListingAsins(listingIds: readonly string[], opti
           return
         }
         written.add(row.productId)
+        filled.push(id)
       }
       report.set(id, { ...base, sku, outcome: 'filled', asin, ...(status ? { status } : {}) })
     } catch (error) {
@@ -180,6 +183,8 @@ export async function fillAmazonListingAsins(listingIds: readonly string[], opti
 
   // The /products grid reads listing status from its cache; keep it in step with what was just written.
   if (written.size) await productReadCacheService.refreshMany([...written]).catch(error => logger.warn('amazon asin fill: read cache refresh failed', { error: message(error) }))
+  // Open sheets and Matrix tabs show the new ASIN (and the listing's new version) without a reload.
+  if (filled.length) announceListingValues(filled, ['externalListingId'], 'asin-fill')
   const rows = ids.map(id => report.get(id)!)
   const counts: Record<AsinFillOutcome, number> = { filled: 0, not_visible_yet: 0, already_had_asin: 0, error: 0 }
   for (const row of rows) counts[row.outcome]++

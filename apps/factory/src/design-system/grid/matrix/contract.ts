@@ -112,12 +112,16 @@ export interface PriceCell {
   source: PriceSource
   formula: string | null
   clamped: 'floor' | 'ceiling' | null
+  /** A product sheet change that goes to Amazon only on Publish; tooltip only (`value: null` = back to the base price). */
+  waiting?: { value: number | null } | null
 }
 
 export interface SaleCell {
   value: number | null
   start: string | null
   end: string | null
+  /** As `PriceCell.waiting`: the saved sale, sent on Publish (`value: null` = remove the sale). Tooltip only. */
+  waiting?: { value: number | null; start: string | null; end: string | null } | null
 }
 
 /** Everything one row says about one coordinate. */
@@ -170,6 +174,8 @@ export interface MatrixWriteCell {
   cell: MatrixWritableKind
   value: unknown
   expectedVersion: number
+  /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a conflict. */
+  expectedListingId?: string
 }
 
 /* ── verbs ──────────────────────────────────────────────────────────────────────────────────── */
@@ -248,4 +254,6 @@ export interface MatrixCopy {
   readonly setHere: string
   readonly formula: (expr: string) => string
   readonly clamped: (which: 'floor' | 'ceiling') => string
+  /** Optional until the engine default table carries it: absent = no waiting line. */
+  readonly waitingForPublish: (value: string) => string
 }

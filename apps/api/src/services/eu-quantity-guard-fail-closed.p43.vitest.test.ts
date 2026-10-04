@@ -37,41 +37,66 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+/*
+ * Amazon sheet gaps (bug 3): the guard's rule moved into THE send quantity (`amazon/send-quantity.ts`, shared with studio
+ * Publish), so this check reads two places: the shared function decides (fail closed when the sibling read failed), and
+ * the stock job's branch for that verdict holds the push and raises the alert. Behaviour:
+ * `outbound-sync.amazon-offer-roots.vitest.test.ts` ("the EU guard cannot read the siblings → held").
+ */
 const SRC = join(import.meta.dirname, '..')
 const file = readFileSync(join(SRC, 'services', 'outbound-sync.service.ts'), 'utf8')
+const shared = readFileSync(join(SRC, 'services', 'amazon', 'send-quantity.ts'), 'utf8')
 const health = readFileSync(join(SRC, 'services', 'sync-health.service.ts'), 'utf8')
 
 /** Comments stripped — a claim about what the code DOES. */
-const code = file
+const strip = (text: string) => text
   .split('\n')
   .filter((l) => {
     const t = l.trim()
     return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')
   })
   .join('\n')
+const code = strip(file)
+const sharedCode = strip(shared)
 
-/** The guard's catch block, so a return elsewhere is not credited to it. */
-const catchBlock = (() => {
-  const start = code.indexOf('} catch (guardErr) {')
+/** The stock job's branch for the "guard could not run" verdict, so a return elsewhere is not credited to it. */
+const heldBranch = (() => {
+  const start = code.indexOf("if (sent.code === 'EU_SHARED_QTY_GUARD_UNAVAILABLE') {")
   return code.slice(start, start + 1800)
+})()
+/** Where the sibling read's failure is caught: it must reach the verdict, never be swallowed. */
+const readCatch = (() => {
+  const start = code.indexOf('} catch (guardErr) {')
+  return code.slice(start, start + 200)
+})()
+/** The shared function's fail-closed branch. */
+const sharedBranch = (() => {
+  const start = sharedCode.indexOf('if (input.euRowsError != null || !input.euRows) {')
+  return sharedCode.slice(start, start + 900)
 })()
 
 describe('the guard fails CLOSED', () => {
-  it('the catch block exists and is the one under test', () => {
-    expect(catchBlock).toContain('} catch (guardErr) {') // positive control
+  it('the branches exist and are the ones under test', () => {
+    expect(heldBranch).toContain("if (sent.code === 'EU_SHARED_QTY_GUARD_UNAVAILABLE') {") // positive controls
+    expect(readCatch).toContain('} catch (guardErr) {')
+    expect(sharedBranch).toContain('if (input.euRowsError != null || !input.euRows) {')
+    // The job hands the read's outcome to the shared verdict.
+    expect(code).toMatch(/amazonSendQuantity\(\{[\s\S]{0,400}euRows, euRowsError,/)
   })
 
   it('HOLDS the push instead of allowing it', () => {
-    expect(catchBlock).toContain('return { success: false')
-    expect(catchBlock).toContain("status: \"SKIPPED\"")
-    expect(catchBlock).toContain("error: \"eu-shared-qty-guard-unavailable\"")
+    expect(sharedBranch).toContain("code: 'EU_SHARED_QTY_GUARD_UNAVAILABLE'")
+    expect(sharedBranch).toContain('return none(')
+    expect(heldBranch).toContain('return { success: false')
+    expect(heldBranch).toContain("status: \"SKIPPED\"")
+    expect(heldBranch).toContain("error: \"eu-shared-qty-guard-unavailable\"")
   })
 
   it('no longer says the push was allowed', () => {
     // The old log line was the marker of the fail-open. Its absence is the
     // assertion; the new one names what happens instead.
     expect(code).not.toContain('(push allowed)')
-    expect(catchBlock).toContain('(push HELD)')
+    expect(heldBranch).toContain('(push HELD)')
   })
 
   it('does not swallow the failure silently', () => {
@@ -80,8 +105,9 @@ describe('the guard fails CLOSED', () => {
     // Assert the CALL, not the name. A mutation that left `void syncHealthService`
     // in place kept the name and removed the alert, and this test stayed green —
     // the name-versus-value lesson again.
-    expect(catchBlock).toContain('logger.warn')
-    expect(catchBlock).toContain('await syncHealthService.logConflict({')
+    expect(readCatch).toMatch(/euRowsError = guardErr instanceof Error \? guardErr\.message : String\(guardErr\)/)
+    expect(heldBranch).toContain('logger.warn')
+    expect(heldBranch).toContain('await syncHealthService.logConflict({')
   })
 })
 
@@ -91,8 +117,8 @@ describe('the alert says WHICH fact it is', () => {
     // different facts. Reusing EU_SHARED_QTY_CONFLICT would tell the operator
     // their listings disagree when the truth is that OUR guard broke — theirs
     // to fix versus ours to fix.
-    expect(catchBlock).toContain("conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE'")
-    expect(catchBlock).not.toContain("conflictType: 'EU_SHARED_QTY_CONFLICT'")
+    expect(heldBranch).toContain("conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE'")
+    expect(heldBranch).not.toContain("conflictType: 'EU_SHARED_QTY_CONFLICT'")
   })
 
   it('the type is declared, so this is not a string that type-checks by luck', () => {
@@ -101,15 +127,15 @@ describe('the alert says WHICH fact it is', () => {
   })
 
   it('carries the guard error, the SKU and what was attempted', () => {
-    expect(catchBlock).toContain('guardError: detail')
-    expect(catchBlock).toContain('attemptedQuantity: payload.quantity')
-    expect(catchBlock).toContain('sku')
+    expect(heldBranch).toContain('guardError: euRowsError')
+    expect(heldBranch).toContain('remoteData: { attemptedQuantity,')
+    expect(heldBranch).toContain('sku')
   })
 
   it('never lets the alert decide the push', () => {
     // The alert is best-effort and wrapped; if logging the conflict throws, the
     // push must STILL be held. An alert failure must not re-open the gate.
-    const afterAlert = catchBlock.slice(catchBlock.indexOf('syncHealthService'))
+    const afterAlert = heldBranch.slice(heldBranch.indexOf('syncHealthService'))
     const iCatch = afterAlert.indexOf('} catch {')
     const iReturn = afterAlert.indexOf('return { success: false')
     expect(iCatch).toBeGreaterThan(0)
@@ -119,10 +145,12 @@ describe('the alert says WHICH fact it is', () => {
 
 describe('the operator sentence explains itself', () => {
   it('says it was held, why, and that it will retry', () => {
-    expect(catchBlock).toContain('Push held rather than sent blind')
-    expect(catchBlock).toContain('one EU quantity per SKU')
-    expect(catchBlock).toContain('It will be retried')
-    expect(catchBlock).toContain('EU_GUARD_REMEDY')
+    expect(sharedBranch).toContain('Push held rather than sent blind')
+    expect(sharedBranch).toContain('one EU quantity per SKU')
+    expect(sharedBranch).toContain('It will be retried')
+    expect(sharedBranch).toContain('EU_GUARD_REMEDY')
+    // The job sends that sentence, not one of its own.
+    expect(heldBranch).toContain('message: sent.refusal')
   })
 })
 
@@ -130,8 +158,9 @@ describe('the CONFLICT path is untouched', () => {
   it('still refuses on a real conflict, with its own message', () => {
     // The change is only to the failure path. A mutation that "fixed" the
     // fail-open by deleting the whole block would break this.
-    expect(code).toContain('if (verdict.conflict) {')
-    expect(code).toContain('Push refused so no market\'s intent is silently overwritten')
+    expect(sharedCode).toContain('if (verdict.conflict) {')
+    expect(sharedCode).toContain('Push refused so no market\'s intent is silently overwritten')
+    expect(code).toContain("if (sent.code === 'EU_SHARED_QTY_CONFLICT') {")
     expect(code).toContain('error: "eu-shared-qty-conflict"')
   })
 })

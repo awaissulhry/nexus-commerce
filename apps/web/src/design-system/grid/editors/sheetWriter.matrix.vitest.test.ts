@@ -81,7 +81,7 @@ describe('matrixWrite — what a Matrix cell edit sends, and why it sometimes se
     expect(matrixWrite(col('syncQty'), cellsOf(), 403, 4.5)).toEqual({ send: false, reason: 'A quantity is a whole number, zero or more' })
     expect(matrixWrite(col('syncBuffer'), cellsOf(), 0, 'abc')).toEqual({ send: false, reason: 'A buffer is a whole number, zero or more' })
     expect(matrixWrite(col('price'), cellsOf(), 105, -5)).toEqual({ send: false, reason: 'A price is zero or more' })
-    expect(matrixWrite(col('syncMode'), cellsOf(), 'FOLLOW', 'Pinned')).toEqual({ send: false, reason: 'Mode is Follow or Pinned' })
+    expect(matrixWrite(col('syncMode'), cellsOf(), 'FOLLOW', 'Paused')).toEqual({ send: false, reason: 'Mode is Follow or Pinned' })
     expect(matrixWrite(col('salePrice'), cellsOf(), null, 89)).toEqual({ send: false, reason: 'A sale is a price, zero or more, with an optional window' })
   })
 })

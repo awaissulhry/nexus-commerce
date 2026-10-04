@@ -121,14 +121,15 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     same(e.formula('= $basePrice * 0.95'), w.formula('= $basePrice * 0.95'))
     same(e.clamped('floor'), w.clamped('floor'))
     same(e.clamped('ceiling'), w.clamped('ceiling'))
+    same(e.waitingForPublish('€44.90'), w.waitingForPublish('€44.90'))
 
     /* A loop that asserts nothing still goes green. Count the arms, and check the COUNT against the
        interface's own member list so a member added to `MatrixCopy` cannot slip through unchecked. */
-    expect(checked).toBe(20)
+    expect(checked).toBe(21)
     expect(Object.keys(e).sort()).toEqual([
       'amazonManaged', 'clamped', 'closed', 'closedHint', 'followsBase', 'followsPool', 'formula',
       'guardFba', 'notListed', 'pausedBy', 'pinnedAt', 'reported', 'setHere', 'sharedEu',
-      'uncounted', 'uncountedHint',
+      'uncounted', 'uncountedHint', 'waitingForPublish',
     ])
   })
 

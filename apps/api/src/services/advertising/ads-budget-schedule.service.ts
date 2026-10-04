@@ -3,14 +3,22 @@
  * `PATCH` / `DELETE /advertising/budget-schedules/:id` (advertising.routes.ts), so tune-ad-engine edits a schedule's
  * windows and turn-down-automation switches one off through the same code — with the same give-back (W4): a schedule
  * disabled or deleted while it holds a budget gives that budget back. The routes answer byte for byte as before
- * (automation-tune-route-parity.vitest.test.ts).
+ * (automation-tune-route-parity.vitest.test.ts), plus 3b's `kept` count in the give-back result.
  */
 import type { BudgetSchedule } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdsActor } from './ads-mutation.service.js'
+import type { BSApplied } from '../../jobs/ad-budget-schedule.job.js'
 
-export interface BudgetScheduleRestore { restored: number; refused: number }
+/**
+ * 3b — what a pause or a delete did with each campaign the schedule set a budget on:
+ *   · `restored` — given back: the budget from just before the window is queued for Amazon;
+ *   · `kept`     — someone changed the budget since this schedule set it, so their change stays;
+ *   · `refused`  — the give-back was refused or failed, so the campaign keeps the schedule's budget.
+ * A campaign already at that budget, or one this schedule never changed, counts in none of them.
+ */
+export interface BudgetScheduleRestore { restored: number; kept: number; refused: number }
 
 /**
  * W4 (2026-08-20) — a schedule being DELETED or DISABLED mid-window must give the budgets back.
@@ -21,31 +29,34 @@ export interface BudgetScheduleRestore { restored: number; refused: number }
  * would ever restore the base. Dayparting's own delete route has resumed campaigns since RC2.T3;
  * budget never did.
  *
- * The restore honours the same two laws as the executor:
- *   · base precedence — captured baseline ▸ creation snapshot ▸ live (`ad-budget-schedule.job.ts`);
- *   · a manual override wins — if the live budget is no longer the value THIS schedule last
- *     applied, someone else moved it since, and re-fighting them is the §3 precedence decision
- *     this route must not take on its own.
+ * 3b — the executor's own check (`giveBackCheck`, ad-budget-schedule.job.ts), so the two can never
+ * disagree:
+ *   · the base is the budget recorded just before the window opened (records written before 3b:
+ *     the creation-time snapshot) — no longer the rules' captured baseline (review 6.3);
+ *   · it gives back only a budget the schedule SET and still holds — a campaign whose window was
+ *     refused, or that it only found already on target, is not touched (review 6.5);
+ *   · a manual override wins — if the live budget is no longer the value THIS schedule set,
+ *     someone else moved it since, and re-fighting them is the §3 precedence decision this route
+ *     must not take on its own. It is counted as `kept`.
  * Best-effort per campaign, same as dayparting's resume.
  */
 export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<BudgetScheduleRestore> {
   const camps = Array.isArray(s.campaigns) ? s.campaigns as Array<{ id: string; dailyBudget?: number | null }> : []
-  const last = (s.lastApplied as Record<string, { budget?: number }> | null) ?? {}
-  let restored = 0, refused = 0
-  if (camps.length === 0) return { restored, refused }
+  const last = (s.lastApplied as Record<string, BSApplied> | null) ?? {}
+  let restored = 0, kept = 0, refused = 0
+  if (camps.length === 0) return { restored, kept, refused }
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')
+  const { giveBackCheck, ownCentsOf } = await import('../../jobs/ad-budget-schedule.job.js')
   for (const c of camps) {
-    const applied = last[c.id]?.budget
-    if (applied == null) continue // this schedule never touched it
-    const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true, budgetBaselineCents: true } })
+    const prev = last[c.id]
+    if (ownCentsOf(prev) == null) continue // this schedule never set it
+    const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true } })
     if (!campaign || campaign.status === 'ARCHIVED') continue
-    const live = Number(campaign.dailyBudget ?? 0)
-    if (live !== applied) continue // moved by someone else since — their write wins
-    const base = campaign.budgetBaselineCents != null
-      ? campaign.budgetBaselineCents / 100
-      : c.dailyBudget != null ? Number(c.dailyBudget) : live
-    const target = Math.max(1, Math.round(base * 100) / 100)
-    if (live === target) continue
+    const liveCents = Math.round(Number(campaign.dailyBudget ?? 0) * 100)
+    const check = giveBackCheck(prev, liveCents, c.dailyBudget != null ? Math.round(Number(c.dailyBudget) * 100) : null)
+    if (check.act === 'kept') { kept++; continue } // moved by someone else since — their write wins
+    if (check.act !== 'giveBack' || check.baseCents == null) continue
+    const target = check.baseCents / 100
     try {
       // 🔴 BSP-P3 — the second of the two bare call sites. `updateCampaignWithSync` returns
       // `{ ok:false }` rather than throwing ([[reference_mutation_outcome_returned_not_thrown]]),
@@ -55,8 +66,10 @@ export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unkn
         campaignId: c.id,
         patch: { dailyBudget: target },
         actor: `automation:budget-schedule-${s.id}`,
-        reason: 'budget schedule removed or disabled — restore base budget',
+        reason: 'budget schedule removed or disabled — give back the budget before the window',
         applyImmediately: true,
+        // 3b — the entry this gives back, for the history (the gate reads the action log, not this).
+        ...(prev?.windowKey ? { evidence: { giveBackOf: prev.windowKey.replace(/#restore$/, '') } } : {}),
       })
       // `.ok` is three-way: `no_changes` is ok:true and enqueues nothing, so counting it as a
       // restore would overstate what this route gave back. Same branch as the executor's.
@@ -64,7 +77,7 @@ export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unkn
       else if (!outcome.ok) { refused++; logger.warn('[budget-schedule] restore refused', { scheduleId: s.id, campaignId: c.id, error: outcome.error }) }
     } catch { refused++ /* best-effort, mirrors dayparting's resume */ }
   }
-  return { restored, refused }
+  return { restored, kept, refused }
 }
 
 /** PATCH /advertising/budget-schedules/:id. null = not found (the route's 404), as any failure inside always was. */

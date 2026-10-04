@@ -51,9 +51,13 @@ export interface ApiColumn {
   unitOptions?: string[]; editable: boolean; defaultVisible?: boolean; writeField?: string; maxLength?: number | null
   validation?: { min?: number; max?: number; recordFields?: unknown[]; [k: string]: unknown }; cardinality?: { min?: number; max?: number | null }
   shopifyField?: unknown; slot?: unknown
+  /** A `stockControl` column's Matrix cell: `syncMode` · `syncQty` · `syncBuffer`. */
+  matrixCell?: string
 }
 export interface ApiCell { value: unknown; writable?: boolean; editable?: boolean; writeField?: string; writeTarget?: string; contentAddress?: unknown }
-export interface ApiRow { id: string; rowId?: string; isParent: boolean; version: number; listing?: { version?: number } | null; values: Record<string, ApiCell> }
+/** A channel row's stock (`studio-stock.ts`): the coordinate its Mode / Qty / Buffer sit on and the Matrix's cells there. */
+export interface ApiStock { key: string; cells: { listingId: string | null; version: number } | null; coordinate?: { accountId?: string | null } | null }
+export interface ApiRow { id: string; rowId?: string; isParent: boolean; version: number; listing?: { version?: number } | null; stock?: ApiStock; values: Record<string, ApiCell> }
 export interface SheetRead { columns: ApiColumn[]; rows: ApiRow[]; scope: { kind: string; channel: string | null; marketplace: string | null; connectionId: string | null; locale: string } }
 
 /** The sheet contract, read with the page's own session (and business header, as the browser's patched fetch sends it). */

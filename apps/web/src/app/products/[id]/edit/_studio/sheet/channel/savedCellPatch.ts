@@ -82,6 +82,8 @@ interface PlanInput {
 }
 
 const read = (reason: string): PatchPlan => ({ kind: 'read', reason })
+/** Amazon offer columns (price, sale, min/max, MAP, offer window, rule, handling time, restock, always available). */
+const AMAZON_OFFER_KEY = /^(attr_)?(purchasable_offer|fulfillment_availability)__/
 
 /**
  * Decide, BEFORE the answer's other effects are applied, whether this save can be settled in place; `apply` then
@@ -116,6 +118,10 @@ export function planSavedCellPatch({ row, changes, column, body, sent }: PlanInp
     if ((col as { axis?: boolean }).axis || col.kind === 'variationTheme' || col.slot || col.managedBy || col.shopifyField) return read(`${change.colId}: axis, theme, slot, media or Shopify column`)
     if (FOLLOW_KEYS.has(col.key) && col.key !== 'price') return read(`${change.colId}: follows a Master field`)
     if (CATEGORY_KEYS.has(col.key)) return read(`${change.colId}: a category decides the columns`)
+    // Amazon sheet gaps (D4 = B): on a live listing an offer edit is saved as a change waiting for Publish (the cell must
+    // say so, never look live); on a never-published one it goes through the price or fulfilment door. Only the server's
+    // read knows which, so the cell is read again.
+    if ((before as { pendingPublish?: unknown }).pendingPublish || AMAZON_OFFER_KEY.test(col.key)) return read(`${change.colId}: an Amazon offer change may wait for Publish`)
     if (before.writeTarget !== 'channelListing' || before.contentVersion !== undefined || before.contentAcknowledgement || before.shopifyWrite ||
         before.nexusDraft || before.translation || before.linkGroupId != null || before.layer === 'linked' || before.source === 'channelSnapshot' ||
         (before as { formula?: unknown }).formula || (before as { formulaError?: unknown }).formulaError) return read(`${change.colId}: not a plain listing cell`)
