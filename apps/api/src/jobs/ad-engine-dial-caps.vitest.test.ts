@@ -183,7 +183,7 @@ describe('rank-defend while stopped (Owner S1): the floor lands, the restore wai
     const restoreRun = await inside(() => runRankDefendOnce())
     expect(restoreRun.applied).toBe(3)
     expect(restoreRun.guard).toMatchObject({ posture: 'auto', waiting: 0, deferredByCap: 0 })
-    expect(rankDefendSummaryLine(restoreRun)).toBe('evaluated=1 applied=3') // a normal run's line is unchanged
+    expect(rankDefendSummaryLine(restoreRun)).toBe('evaluated=1 applied=3 restore=3 suppress=0 placement=0 base=0 deferred=0') // 2c — a normal run's line adds its writes by kind
     expect(await bids('rd-halt')).toMatchObject({
       suppressed: false, group: { defaultBidCents: 40, suppressedFromBidCents: null },
       targets: [{ bidCents: 35, suppressedFromBidCents: null }, { bidCents: 60, suppressedFromBidCents: null }],
@@ -216,7 +216,7 @@ describe('rank-defend under SUGGEST (Owner S2): nothing new is written, its own 
 
     const r = await inside(() => runRankDefendOnce())
     expect(r.guard).toMatchObject({ posture: 'suggest', wouldApply: 2, changes: 2 })
-    expect(rankDefendSummaryLine(r)).toBe('evaluated=2 applied=2 would-apply=2 (the account ads dial is SUGGEST: nothing new is written; its own floors are still given back)')
+    expect(rankDefendSummaryLine(r)).toBe('evaluated=2 applied=2 restore=2 suppress=0 placement=0 base=0 deferred=0 would-apply=2 (the account ads dial is SUGGEST: nothing new is written; its own floors are still given back)')
     // Not floored.
     expect(await bids('rd-sug-floor')).toMatchObject({ suppressed: false, group: { defaultBidCents: 40 }, targets: [{ bidCents: 35 }] })
     // Restored (a give-back), and the Top +50% placement was not written.

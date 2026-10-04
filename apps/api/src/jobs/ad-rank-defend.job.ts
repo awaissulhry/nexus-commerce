@@ -18,7 +18,10 @@
  * 1e — a live run, Run now included, also needs the business switch on and the scheduler's arm flags, and holds the
  * engine lock (ads-engine-lock.ts): a Run now during a tick answers "skipped: a run is already in progress".
  * 2a — it gives back what it floored when nothing is due (no window open and no baseline, or a deleted target), leaves
- * a floor it did not set alone, and ends each live run with the orphan sweep (rank-release.service.ts).
+ * a floor it did not set alone, and runs the orphan sweep in each live run (rank-release.service.ts).
+ * 2c — a tick decides every campaign first and then writes in one order: give-backs (releases and sweep included),
+ * floors, placement moves, base bids (firstWriteIntent). A campaign enters Min bid at most twice a UTC day (anti-flap,
+ * counted from the action log); the summary line splits the run's changes by kind.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -30,10 +33,12 @@ import { setSearchPlacement, buildBlendedAdjustments } from '../services/adverti
 import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
-import { deltaBidCents } from '../services/advertising/ads-placement-math.js'
+import { clampPct, deltaBidCents } from '../services/advertising/ads-placement-math.js'
 import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
 import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
+import { engineActorWhere } from '../services/advertising/ads-engine-actors.js'
+import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -166,9 +171,38 @@ export interface RankPlanRunSummary { planId: string; productId: string; marketp
 // 2a — `release` (live runs only): what it gave back where nothing was due, and what the orphan sweep gave back (`swept`
 // = campaigns the sweep looked at).
 export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: number }
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary }
+// 2c — `writes` (live runs only): the run's changes by kind, the give-backs of `release` included in `restore`;
+// `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
+interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
+
+/**
+ * 2c (review 2.5) — the order a tick writes its campaigns in: give-backs first, then floors, then placement moves,
+ * then base bids. Read off the campaign row and the hour's spec alone (no database), so the tick can order every
+ * campaign before it writes to any. It decides ORDER only: decideAndMaybeApply still decides each write, and a
+ * campaign still asks its permit once and finishes (1c), so it is never half-applied. When a cap binds mid-tick the
+ * campaigns it defers are the ones at the back — never a give-back, which the cap does not refuse anyway.
+ */
+export const RANK_WRITE_ORDER = ['restore', 'suppress', 'placement', 'base', 'none'] as const
+export type RankWriteIntent = (typeof RANK_WRITE_ORDER)[number]
+export function firstWriteIntent(camp: Pick<CampRow, 'dynamicBidding' | 'bidsSuppressedAt' | 'bidsSuppressedFloorCents' | 'bidsSuppressedBy'>, spec: RankTargetSpec): RankWriteIntent {
+  if (camp.bidsSuppressedAt && !isRankOwnedFloor(camp.bidsSuppressedBy)) return 'none' // someone else's floor: held
+  const live = ((camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }).placementBidding ?? []
+  const cur = (p: string) => live.find((x) => x.placement === p)?.percentage ?? 0
+  if (spec.pause) {
+    if (!camp.bidsSuppressedAt || normaliseFloorCents(camp.bidsSuppressedFloorCents) !== normaliseFloorCents(spec.floorBidCents)) return 'suppress'
+    return spec.biasPct != null && cur(spec.placement) !== clampPct(spec.biasPct) ? 'placement' : 'none'
+  }
+  if (camp.bidsSuppressedAt && spec.bidMode !== 'suppress') return 'restore'
+  if (spec.bidMode === 'suppress' && !camp.bidsSuppressedAt) return 'suppress'
+  const placementMoves = spec.lanes && spec.lanes.length
+    ? !samePlacements(live, buildBlendedAdjustments(live, spec.lanes.map((l) => ({ placement: l.placement, percentage: clampPct(l.biasPct ?? 0) }))))
+    : cur(spec.placement) !== clampPct(spec.biasPct ?? 0) || (spec.placement === 'PLACEMENT_TOP' ? cur('PLACEMENT_REST_OF_SEARCH') : spec.placement === 'PLACEMENT_REST_OF_SEARCH' ? cur('PLACEMENT_TOP') : 0) > 0
+  if (placementMoves) return 'placement'
+  return spec.bidMode === 'absolute' || spec.bidMode === 'deltaPct' ? 'base' : 'none'
+}
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
 // product-plan fan-out. `write` gates ALL actuation (pause / resume / placement
@@ -209,44 +243,62 @@ function samePlacements(a: Array<{ placement: string; percentage: number }>, b: 
 // default to bidValueCents (idempotent); suppress = floor to ~2¢ (placements stay set);
 // deltaPct (BL.7) = scale every bid ±% from a stable baseline (no compounding). Returns writes.
 // 1c — `permit` says which of these this campaign may write this run; what it may not is noted in `held`.
-async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: { write: boolean; actor: string; permit: CampaignPermit }, held: HeldBack): Promise<number> {
-  if (!ctx.write) return 0
+// 2c — split in two so a campaign writes in the tick's order: the give-back half (revertBaseBidDirective) runs before
+// the placement write, the forward half (applyBaseBidDirective) after it. Each adds its writes to `writes` by kind.
+interface BaseBidCtx { write: boolean; actor: string; permit: CampaignPermit; entriesToday?: number }
+async function revertBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: BaseBidCtx, held: HeldBack, writes: RankWriteCounts): Promise<number> {
+  if (!ctx.write || spec.bidMode === 'deltaPct') return 0
+  // Leaving deltaPct (or never in it) → restore each entity's stable baseline + clear it.
+  // 1c — a give-back: never capped, but it waits while stopped (the gate would refuse it after Nexus moved its bids).
+  let n = 0
+  if (ctx.permit.restore) {
+    try { n = await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
+  } else if (await hasBaseBidDelta(camp.id)) held.restore = true
+  writes.restore += n
+  return n
+}
+async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: BaseBidCtx, held: HeldBack, writes: RankWriteCounts): Promise<{ applied: number; keptServing: boolean }> {
+  const none = { applied: 0, keptServing: false }
+  if (!ctx.write) return none
   const allow = (kind: keyof HeldBack) => allowChange(ctx.write, ctx.permit, held, kind)
   let n = 0
   const mode = spec.bidMode
-  // Leaving deltaPct (or never in it) → restore each entity's stable baseline + clear it.
-  // 1c — a give-back: never capped, but it waits while stopped (the gate would refuse it after Nexus moved its bids).
-  if (mode !== 'deltaPct') {
-    if (ctx.permit.restore) {
-      try { n += await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
-    } else if (await hasBaseBidDelta(camp.id)) held.restore = true
-  }
-  if (!mode || mode === 'hold') return n
+  if (!mode || mode === 'hold') return none
   if (mode === 'suppress') {
-    if (!camp.bidsSuppressedAt && allow('floor')) {
-      try { n += await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank base-bid = suppress (placements stay set)' }) } catch (e) { logger.warn('[rank-defend] base-bid suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
+    if (camp.bidsSuppressedAt) return none
+    // 2c — floored-base hours count as Min-bid entries: the anti-flap holds the third on one UTC day.
+    const entries = ctx.entriesToday ?? 0
+    if (entries >= MAX_MIN_BID_ENTRIES_PER_DAY) return { applied: 0, keptServing: true }
+    if (allow('floor')) {
+      try {
+        n = await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank base-bid = suppress (placements stay set)' })
+        await recordMinBidEntry(camp.id, ctx.actor, 2, entries + 1)
+      } catch (e) { logger.warn('[rank-defend] base-bid suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
-    return n
+    writes.suppress += n
+    return { applied: n, keptServing: false }
   }
   if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
     const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
     const moves = ags.filter((g) => g.defaultBidCents !== spec.bidValueCents)
-    if (!moves.length || !allow('forward')) return n
+    if (!moves.length || !allow('forward')) return none
     for (const g of moves) {
       try { const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: spec.bidValueCents }, actor: ctx.actor as AdsActor, reason: 'rank base-bid (absolute)', applyImmediately: true }); if (r.ok) n++ } catch (e) { logger.warn('[rank-defend] base-bid absolute failed', { campaignId: camp.id, adGroupId: g.id, error: (e as Error).message }) }
     }
-    return n
+    writes.base += n
+    return { applied: n, keptServing: false }
   }
   if (mode === 'deltaPct' && spec.bidDeltaPct != null) {
     if (!ctx.permit.forward) {
       // Only note it as held back when it would actually move a bid (applyBaseBidDelta is idempotent).
       if (await baseBidDeltaWouldMove(camp.id, spec.bidDeltaPct)) held.forward = true
-      return n
+      return none
     }
-    try { n += await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%` }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
-    return n
+    try { n = await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%` }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
+    writes.base += n
+    return { applied: n, keptServing: false }
   }
-  return n
+  return none
 }
 
 // 1c — read-only twins of revertBaseBidDelta / applyBaseBidDelta's own skip rules, used only when the permit
@@ -269,23 +321,74 @@ async function baseBidDeltaWouldMove(campaignId: string, deltaPct: number): Prom
 
 // 2b — the out-of-budget hold is logged once per key (schedule actor + campaign) per UTC day: the tick runs every 15
 // minutes and a warning per tick would bury it. Only today's keys are kept.
-let budgetNoticeDay = ''
-const budgetNoticed = new Set<string>()
-export function firstOutOfBudgetNoticeToday(key: string, now: Date = new Date()): boolean {
-  const day = now.toISOString().slice(0, 10)
-  if (day !== budgetNoticeDay) { budgetNoticeDay = day; budgetNoticed.clear() }
-  if (budgetNoticed.has(key)) return false
-  budgetNoticed.add(key)
-  return true
+function oncePerUtcDay(): (key: string, now?: Date) => boolean {
+  let noticeDay = ''
+  const noticed = new Set<string>()
+  return (key, now = new Date()) => {
+    const day = now.toISOString().slice(0, 10)
+    if (day !== noticeDay) { noticeDay = day; noticed.clear() }
+    if (noticed.has(key)) return false
+    noticed.add(key)
+    return true
+  }
 }
+export const firstOutOfBudgetNoticeToday = oncePerUtcDay()
+// 2c — the anti-flap hold is logged once per campaign per UTC day, the same way.
+export const firstKeptServingNoticeToday = oncePerUtcDay()
+
+/**
+ * 2c (review 2.5, G.11) — anti-flap. A campaign enters Min bid at most MAX_MIN_BID_ENTRIES_PER_DAY times a UTC day;
+ * a later Min-bid hour leaves it serving (nothing is written) until the next UTC day. Each entry floors every bid and
+ * the next serving hour gives every bid back, so a table painted on and off Min bid all day costs ~2 writes per bid
+ * per switch; this can only take writes away.
+ *
+ * Counted from the action log: each entry leaves ONE record row on the campaign — a `custom_event`, which the caps,
+ * the breaker and the day count already leave out, and which the Change Log shows as a note and never offers to undo.
+ * The bid rows themselves are per ad group and target, so they cannot say how many times a campaign entered.
+ */
+const MIN_BID_ENTRY_MARK = 'rankMinBidEntry'
+const utcMidnight = (now: Date): Date => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+async function minBidEntriesToday(campaignIds: string[], now: Date): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!campaignIds.length) return out
+  try {
+    const rows = await prisma.advertisingActionLog.groupBy({
+      by: ['entityId'],
+      where: {
+        ...engineActorWhere('rank-defend'), actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: { in: campaignIds },
+        createdAt: { gte: utcMidnight(now) }, payloadAfter: { path: [MIN_BID_ENTRY_MARK], equals: true },
+      },
+      _count: { _all: true },
+    })
+    for (const r of rows) out.set(r.entityId, r._count._all)
+  } catch (e) {
+    // Unknown is not zero, but anti-flap only ever takes writes away: without a count the tick runs as before 2c.
+    logger.warn('[rank-defend] could not count today\'s Min-bid entries — anti-flap not applied this run', { error: (e as Error).message })
+  }
+  return out
+}
+async function recordMinBidEntry(campaignId: string, actor: string, floorCents: number, entry: number): Promise<void> {
+  try {
+    await prisma.advertisingActionLog.create({
+      data: {
+        actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: campaignId, userId: actor, payloadBefore: {}, amazonResponseStatus: 'SUCCESS',
+        payloadAfter: { [MIN_BID_ENTRY_MARK]: true, note: `Min bid: every bid floored to €${(floorCents / 100).toFixed(2)} — entry ${entry} of ${MAX_MIN_BID_ENTRIES_PER_DAY} allowed today (UTC)` },
+      },
+    })
+  } catch (e) { logger.warn('[rank-defend] could not record a Min-bid entry — it will not count toward today\'s limit', { campaignId, error: (e as Error).message }) }
+}
+const keptServingWords = (entries: number): string =>
+  `kept serving: this campaign already entered Min bid ${entries === 1 ? 'once' : `${entries} times`} today (UTC) — a campaign is floored at most ${MAX_MIN_BID_ENTRIES_PER_DAY} times a day, so its bids stay as they are until tomorrow`
 
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; permit: CampaignPermit; actor: string; suppressRaise?: boolean; maxBaseBidByCampaign?: Map<string, number> },
-): Promise<{ decision: RankDefendDecision; applied: number; held: HeldBack }> {
+  ctx: { write: boolean; permit: CampaignPermit; actor: string; suppressRaise?: boolean; maxBaseBidByCampaign?: Map<string, number>; entriesToday?: number },
+): Promise<RankCampaignResult> {
   // 1c — every write below asks the campaign's permit first (dial posture + caps, decided once per campaign by the
   // caller). What it may not write is noted in `held`; on a dry run (`write` false) nothing is written or noted.
+  // 2c — `writes` counts what it wrote by kind, in the order it writes: restore, suppress, placement, base.
   const held = nothingHeld()
+  const writes = noWrites()
   const allow = (kind: keyof HeldBack) => allowChange(ctx.write, ctx.permit, held, kind)
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   // PP — read the bias of the TARGET's placement (Top for own-top/defend/all-out, Rest
@@ -308,7 +411,7 @@ async function decideAndMaybeApply(
   // its to lift, move or build on: no restore, no re-floor, no base-bid or placement change while it holds. The serve
   // path used to restore any floor at all.
   if (camp.bidsSuppressedAt && !isRankOwnedFloor(camp.bidsSuppressedBy)) {
-    return { decision: { ...base, action: 'hold', reason: `bids held at a floor set by ${floorOwnerWords(camp.bidsSuppressedBy)} — rank leaves this campaign alone until that floor is lifted`, nextPct: currentPct, applied: false }, applied: 0, held }
+    return { decision: { ...base, action: 'hold', reason: `bids held at a floor set by ${floorOwnerWords(camp.bidsSuppressedBy)} — rank leaves this campaign alone until that floor is lifted`, nextPct: currentPct, applied: false }, applied: 0, held, writes, keptServing: false }
   }
   // NP — no-pause: a Pause target (or OOS/lost-buybox via effectiveSpec) drops every
   // bid to the floor (~2¢) and keeps the campaign ENABLED — NEVER status=PAUSED, which
@@ -321,6 +424,13 @@ async function decideAndMaybeApply(
     // baseline can hold 54 hours a week across every campaign in a group; re-deriving an
     // unchanged answer four times an hour is load bought for nothing.
     const atFloorAlready = !!camp.bidsSuppressedAt && normaliseFloorCents(camp.bidsSuppressedFloorCents) === floor
+    // 2c — anti-flap: a third entry on one UTC day is not made. The campaign keeps serving and nothing is written for
+    // it this tick — no floor and no Min-bid placement — so it holds what its last serving hour set.
+    const entries = ctx.entriesToday ?? 0
+    if (!camp.bidsSuppressedAt && entries >= MAX_MIN_BID_ENTRIES_PER_DAY) {
+      if (ctx.write && firstKeptServingNoticeToday(camp.id)) logger.warn(`[rank-defend] ${camp.name}: ${keptServingWords(entries)} (logged once a day per campaign)`, { campaignId: camp.id, actor: ctx.actor, entriesToday: entries })
+      return { decision: { ...base, action: 'hold', reason: keptServingWords(entries), nextPct: currentPct, applied: false }, applied: 0, held, writes, keptServing: true }
+    }
     let suppressed = 0
     // 1c — moving an already-floored campaign to a HIGHER floor raises bids: that is a raise, not a floor (it waits
     // while stopped, where the gate passes only lowering writes).
@@ -332,9 +442,11 @@ async function decideAndMaybeApply(
         suppressed = camp.bidsSuppressedAt
           ? await refloorCampaignBids(camp.id, { actor: ctx.actor as AdsActor, floorCents: floor, reason: `rank — Min bid → floor €${(floor / 100).toFixed(2)}` })
           : await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, floorCents: floor, reason: `rank — Min bid → bids floored to €${(floor / 100).toFixed(2)} (no-pause)` })
+        if (!camp.bidsSuppressedAt) await recordMinBidEntry(camp.id, ctx.actor, floor, entries + 1)
       } catch (e) { logger.warn('[rank-defend] bid-suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     applied += suppressed
+    writes.suppress += suppressed
     // MB.3 — placement during Min-bid hours. Until now the multipliers were left exactly as
     // the PREVIOUS window set them, so a Min-bid hour following an all-out one still carried
     // Top +300% and the floored bid served at ~4× its face value. A Placement % on the
@@ -356,20 +468,23 @@ async function decideAndMaybeApply(
         if (allow('forward')) {
           // Floor first, then the multiplier: for one tick the campaign is at the floored bid
           // with the OLD multiplier, never at the old bid with a new one.
-          try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%` }); applied++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
+          try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%` }); applied++; writes.placement++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
         }
       } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
     }
     const reason = `target = Min bid → bids at floor €${(floor / 100).toFixed(2)} (campaign live, restorable)${placeNote}`
-    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null && !placeHeld ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
+    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null && !placeHeld ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held, writes, keptServing: false }
   }
   // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
   // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
   // 1c — a give-back, so a cap never refuses it; while stopped it is not attempted at all (bidsSuppressedAt stays set
   // and the first run after Resume restores), because the gate would refuse the raise after Nexus restored its copy.
   if (camp.bidsSuppressedAt && spec.bidMode !== 'suppress' && allow('restore')) {
-    try { applied += await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }) } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { const n = await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }); applied += n; writes.restore += n } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
+  // 2c — the base-bid give-back (leaving a ±% base bid) goes with the restore, before any placement write.
+  const reverted = await revertBaseBidDirective(camp, spec, ctx, held, writes)
+  applied += reverted
   // SYNC.1 — a PAUSED campaign is left PAUSED. This used to read "resume only if something ELSE
   // left it paused (we never pause)" and push status=ENABLED to Amazon. Since NP the engine
   // suppresses with a bid floor and never pauses a campaign, so there was nothing of ours left to
@@ -425,13 +540,13 @@ async function decideAndMaybeApply(
     const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${budgetHeld.length ? ` · ${budgetWait(budgetHeld.join(', '))}` : ''}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
     const placeAllowed = changed && allow('forward')
     if (placeAllowed) {
-      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
-    const baseApplied = await applyBaseBidDirective(camp, spec, ctx, held)
-    applied += baseApplied
+    const baseRes = await applyBaseBidDirective(camp, spec, ctx, held, writes)
+    applied += baseRes.applied
     const head = laneDecisions.find((l) => l.placement === 'PLACEMENT_TOP') ?? laneDecisions[0]
-    const reason = `${blendReason}${baseBidNote(spec)}`
-    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, applied: placeAllowed || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
+    const reason = `${blendReason}${baseBidNote(spec)}${baseRes.keptServing ? ` · ${keptServingWords(ctx.entriesToday ?? 0)}` : ''}`
+    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, applied: placeAllowed || reverted + baseRes.applied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held, writes, keptServing: baseRes.keptServing }
   }
 
   // ── Single-placement path ──────────────────────────────────────────────────────
@@ -462,11 +577,12 @@ async function decideAndMaybeApply(
   if (willApply) {
     // HX.1 — attribute the write. Without the actor this row lands with userId:null and cannot be
     // traced back to the schedule or plan that made it.
-    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason }); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
-  const baseApplied = await applyBaseBidDirective(camp, spec, ctx, held)
-  applied += baseApplied
-  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
+  const baseRes = await applyBaseBidDirective(camp, spec, ctx, held, writes)
+  applied += baseRes.applied
+  const keptNote = baseRes.keptServing ? ` · ${keptServingWords(ctx.entriesToday ?? 0)}` : ''
+  return { decision: { ...base, action, reason: reason + baseBidNote(spec) + keptNote, nextPct, applied: willApply || reverted + baseRes.applied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held, writes, keptServing: baseRes.keptServing }
 }
 
 // RD.5 — family guardrails. effectiveSpec transforms the window target before the
@@ -624,8 +740,13 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // 1c — the account dial and this engine's caps, read once per run. Each campaign asks for its permit once, before
   // its first write, so a campaign is never split; a dry run reads neither (it writes nothing).
   const guard = dryRun ? null : await openEngineGuard('rank-defend')
-  // 2a — campaigns where nothing is due this hour: what this engine floored there is given back after the loops.
+  // 2a — campaigns where nothing is due this hour: what this engine floored there is given back.
   const idle: IdleCampaign[] = []
+  // 2c — decide, then write. The two loops below only resolve each campaign's hour into a work item and write nothing;
+  // the items then run in RANK_WRITE_ORDER (after the give-backs above), and their decisions are put back in loop
+  // order, so every summary and plan receipt reads as before.
+  const work: RankWork[] = []
+  const planRuns: Array<{ plan: (typeof plans)[number]; key: string | null; conflicts: SelfCompetitionConflict[]; items: RankWork[] }> = []
 
   // RD.5 — retail-readiness (OOS/lost-buybox) per market, memoised across plans.
   const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
@@ -641,7 +762,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   for (const { plan, campaigns: famCamps } of planFamilies) {
     const { day, hour } = nowInTz(plan.timezone || 'Europe/Rome', plan.leadTimeMinutes || 0, clockNow)
     const key = resolveActiveTargetKey(plan.windows as ScheduleWindow[], plan.defaultTargetKey, day, hour)
-    const planDecisions: RankDefendDecision[] = []
+    const items: RankWork[] = []
     let planConflicts: SelfCompetitionConflict[] = []
     const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
     if (write && (!key || !targetByKey.get(key))) {
@@ -667,17 +788,12 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
           const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos })
-          const permit = write && guard ? guard.permit() : DRY_RUN
-          const { decision, applied: a, held } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, permit, actor: `automation:rank-plan-${plan.id}`, maxBaseBidByCampaign, suppressRaise: overBudget })
-          if (write) guard?.settle(permit, a, held)
-          planDecisions.push(decision); decisions.push(decision); applied += a
+          const item: RankWork = { seq: work.length, camp, key: useKey, spec: eff, planId: plan.id, write, actor: `automation:rank-plan-${plan.id}`, suppressRaise: overBudget }
+          items.push(item); work.push(item)
         }
       }
     }
-    planSummaries.push({ planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: planConflicts })
-    if (!dryRun) {
-      try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { lastEvaluatedAt: new Date(), lastSummary: { at: new Date().toISOString(), activeTargetKey: key ?? null, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: planConflicts } as never } }) } catch { /* best-effort */ }
-    }
+    planRuns.push({ plan, key, conflicts: planConflicts, items })
   }
 
   // ── Schedules (skip plan-governed campaigns). Existing behaviour preserved. ──
@@ -740,10 +856,35 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     // deleted after the schedule was authored). Nothing is held, so record nothing held.
     const target = targetByKey.get(key)
     if (!target) { receipts.set(s.id, null); idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: `its schedule names "${key}", which no longer exists` }); continue }
-    const permit = guard ? guard.permit() : DRY_RUN
-    const { decision, applied: a, held } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, permit, actor: `automation:rank-defend-${s.id}`, maxBaseBidByCampaign })
-    guard?.settle(permit, a, held)
-    decisions.push(decision); applied += a
+    work.push({ seq: work.length, camp, key, spec: applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), planId: null, write: !dryRun, actor: `automation:rank-defend-${s.id}` })
+  }
+
+  // 2a — a one-plan run does not know who else holds a campaign, nor does a run that could not resolve a plan's family:
+  // neither sweeps. 2c — the give-backs run first, before any campaign's new writes.
+  if (familyUnknown && !opts.onlyPlanId) logger.warn('[rank-defend] a plan family could not be resolved — orphan sweep skipped this run')
+  const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed) : undefined
+
+  // 2c — then every campaign, in RANK_WRITE_ORDER (restore → suppress → placement → base), loop order within a kind.
+  const entriesToday = await minBidEntriesToday([...new Set(work.map((w) => w.camp.id))], clockNow)
+  const order = new Map(work.map((w) => [w, RANK_WRITE_ORDER.indexOf(firstWriteIntent(w.camp, w.spec))]))
+  const writes = noWrites()
+  let keptServing = 0
+  for (const w of [...work].sort((a, b) => order.get(a)! - order.get(b)! || a.seq - b.seq)) {
+    const permit = w.write && guard ? guard.permit() : DRY_RUN
+    const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0 })
+    if (w.write) guard?.settle(permit, r.applied, r.held)
+    applied += r.applied
+    for (const k of Object.keys(writes) as Array<keyof RankWriteCounts>) writes[k] += r.writes[k]
+    if (r.keptServing) keptServing++
+    w.result = r
+  }
+  for (const w of work) decisions.push(w.result!.decision)
+  for (const { plan, key, conflicts, items } of planRuns) {
+    const planDecisions = items.map((i) => i.result!.decision)
+    planSummaries.push({ planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: conflicts })
+    if (!dryRun) {
+      try { await prisma.productRankPlan.update({ where: { id: plan.id }, data: { lastEvaluatedAt: new Date(), lastSummary: { at: new Date().toISOString(), activeTargetKey: key ?? null, campaigns: planDecisions.length, decisions: planDecisions, selfCompetition: conflicts } as never } }) } catch { /* best-effort */ }
+    }
   }
   // Grouped by resolved key so the 33 live schedules cost ~2 statements rather than 33.
   // Best-effort, exactly like the plan summary above — a receipt must never fail a tick.
@@ -756,19 +897,17 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     }
   }
 
-  // 2a — a one-plan run does not know who else holds a campaign, nor does a run that could not resolve a plan's family:
-  // neither sweeps.
-  if (familyUnknown && !opts.onlyPlanId) logger.warn('[rank-defend] a plan family could not be resolved — orphan sweep skipped this run')
-  const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed) : undefined
-
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report() } : {}), ...(release ? { release } : {}) }
+  if (release) writes.restore += release.writes
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
+// 2c — one campaign's hour, resolved before the tick writes anything; `result` is filled when it runs.
+interface RankWork { seq: number; camp: CampRow; key: string; spec: RankTargetSpec; planId: string | null; write: boolean; actor: AdsActor; suppressRaise?: boolean; result?: RankCampaignResult }
 
 /**
- * 2a — the end of every live run: give back what this engine floored where nothing is due, then the orphan sweep
- * (`sweepGoverned` = campaigns enabled plans hold; null skips it). Both ask the guard per campaign: counted against the
+ * 2a — every live run, first (2c: before any new write): give back what this engine floored where nothing is due, then
+ * the orphan sweep (`sweepGoverned` = campaigns enabled plans hold; null skips it). Both ask the guard per campaign: counted against the
  * caps and never refused by one; while stopped they wait, and the sweep of the first run after Resume gives them back.
  * The sweep changes paused campaigns only; a live one is listed for a person (Owner, 2026-10-04 — rank-release.service.ts).
  */
@@ -791,10 +930,23 @@ export function rankReleaseNote(r: RankReleaseSummary | null | undefined): strin
   return `${restored}${r.swept ? ` swept=${r.swept}` : ''}${r.failed ? ` release-failed=${r.failed} (kept for the next run)` : ''}${r.deferred ? ` release-waiting=${r.deferred} (${r.deferredWhy ?? 'stopped'})` : ''}`
 }
 
+/**
+ * 2c — the run's changes by kind, in the order it wrote them (`restore` includes the release's give-backs), and the
+ * campaigns the cap moved to the next run. Nothing extra on a run that wrote and deferred nothing; ` kept-serving=N`
+ * only when the anti-flap held a Min-bid hour.
+ */
+export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServing' | 'guard'>): string {
+  const w = r.writes
+  const deferred = r.guard?.deferredByCap ?? 0
+  const kept = r.keptServing ? ` kept-serving=${r.keptServing} (entered Min bid ${MAX_MIN_BID_ENTRIES_PER_DAY} times today already)` : ''
+  if (!w || !(w.restore || w.suppress || w.placement || w.base || deferred)) return kept
+  return ` restore=${w.restore} suppress=${w.suppress} placement=${w.placement} base=${w.base} deferred=${deferred}${kept}`
+}
+
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

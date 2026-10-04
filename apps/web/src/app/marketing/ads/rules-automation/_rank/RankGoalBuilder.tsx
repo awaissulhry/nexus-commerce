@@ -25,6 +25,7 @@ import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
 import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
 import { ScheduleEvents } from '../dayparting/ScheduleEvents'
 import { releaseHoldLine, type ReleasePreview } from '../dayparting/scheduleHealth'
+import { parseWriteProjections, writesExplained, type WriteProjection } from './writeProjection'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
 
@@ -229,6 +230,19 @@ export function RankGoalBuilder() {
   const [planStatus, setPlanStatus] = useState<RankPlanStatus>({ valid: false, busy: false, dirty: false, saved: false })
   const planRef = useRef<RankPlanHandle>(null)
   const create = useCallback(async () => { await planRef.current?.save(control === 'automate') }, [control])
+
+  // 2c (review G.11) — about how many changes a day the SAVED plan sends to Amazon, from its painted hours. Like the arm
+  // preview it reads the saved plan (the editor's live plan belongs to RankPlanBody), so it is re-read after each save.
+  const [writes, setWrites] = useState<WriteProjection | null>(null)
+  useEffect(() => {
+    if (!groupId) { setWrites(null); return }
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/write-projection?groupId=${encodeURIComponent(groupId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => { if (alive) setWrites(parseWriteProjections(body)[groupId] ?? null) })
+      .catch(() => { if (alive) setWrites(null) })
+    return () => { alive = false }
+  }, [groupId, planStatus.dirty])
   const createLabel = planStatus.busy ? 'Saving…' : planStatus.saved ? 'Save Changes' : 'Create Schedule'
 
   // scroll-spy step nav (mirrors the other builders)
@@ -351,6 +365,11 @@ export function RankGoalBuilder() {
                 targets={targetRows}
                 showSchedule={!!savedPlan}
               />
+              {writes && (
+                <p className="h10-rb-hint-note">
+                  Saved plan: {writesExplained(writes)}{planStatus.dirty ? ' Changes not saved yet are not counted.' : ''}
+                </p>
+              )}
               <p className="h10-rb-hint-note">
                 Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off (a live campaign then waits for you to give its bids back from the banner on the Hourly Bids list). Placement percentages stay as last set.
                 {release && <> {releaseHoldLine(release)}</>}

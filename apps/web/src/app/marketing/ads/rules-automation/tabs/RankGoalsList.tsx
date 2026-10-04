@@ -36,6 +36,7 @@ import { GRAIN_LABEL, boundBy, groupMatchesScope } from '../dayparting/_rd/scope
 import type { RdGroupScope } from '../dayparting/_rd/types'
 import { getBackendUrl } from '@/lib/backend-url'
 import { pillTone } from '../../_shared/pillTone'
+import { parseWriteProjections, writesCell, writesExplained, type WriteProjection } from '../_rank/writeProjection'
 
 interface RankRow {
   id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null
@@ -59,6 +60,8 @@ interface RankRow {
   // RD.P2 — the campaign grain rolled up. Null while /rank-runtime is in flight, or for a group
   // holding no campaigns.
   runtime: RdGroupRuntime | null
+  // 2c — about how many changes a day this plan sends to Amazon, from its painted hours. Null until read.
+  writes: WriteProjection | null
 }
 // RD.P0 — the RankTarget palette (and its built-in fallbacks) moved to the page's data layer, so
 // the week strip, the drawer and every later section colour a key the same way.
@@ -77,6 +80,16 @@ export function RankGoalsList() {
   const [rows, setRows] = useState<RankRow[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [tplFor, setTplFor] = useState<string[] | null>(null) // F2 — bulk apply a template
+  // 2c — re-read whenever the plans are, so a saved or re-painted plan shows its new count.
+  const [writeMap, setWriteMap] = useState<Record<string, WriteProjection>>({})
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/write-projection`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => { if (alive) setWriteMap(parseWriteProjections(body)) })
+      .catch(() => { /* the column shows a dash rather than a wrong number */ })
+    return () => { alive = false }
+  }, [groups])
 
   // Rows stay LOCAL state rather than a derived memo, because rename, delete and the optimistic
   // enable/pause below all reconcile in place — a round-trip and a flash of the loading state for
@@ -105,6 +118,7 @@ export function RankGoalsList() {
         marketplaces: g.scope.marketplaces,
         scope: g.scope,
         runtime: groupRuntime.get(g.id) ?? null,
+        writes: writeMap[g.id] ?? null,
         windowsRaw: g.windowsRaw,
         spendCents: g.performance.costCents,
         salesCents: g.performance.salesCents,
@@ -121,7 +135,7 @@ export function RankGoalsList() {
         }),
       }
     }))
-  }, [groups, tmetaState, groupRuntime])
+  }, [groups, tmetaState, groupRuntime, writeMap])
 
   // Owner 2026-10-04 — live campaigns that still carry bids rank changed, with no schedule or plan holding them. The
   // rank loop never changes a live campaign by itself, so the banner below lists them for a person. Re-read after a
@@ -283,6 +297,21 @@ export function RankGoalsList() {
           <span className="n">{r.windows === 0 ? 'no windows' : `${r.windows} window${r.windows === 1 ? '' : 's'}`}</span>
         </span>
       ),
+    },
+    {
+      // 2c (review G.11) — the volume is set by the painting, not the 15-minute tick: say what it asks Amazon for.
+      key: 'writes', label: 'Changes/day', metric: true, sortable: true,
+      sortValue: (r) => (r.writes && r.enabled ? r.writes.perDay : -1),
+      tip: 'About how many changes a day this plan sends to Amazon, counted from its painted hours: each switch into or out of Min bid moves every bid in a campaign, each placement change is one change.',
+      render: (r) => {
+        if (!r.writes) return <span className="h10-rg-none" title="Not counted: the estimate could not be read.">—</span>
+        if (!r.enabled) return <span className="h10-rg-none" title={`Paused: sends nothing to Amazon. When active — ${writesExplained(r.writes)}`}>—</span>
+        return <span title={writesExplained(r.writes)}>{writesCell(r.writes)}</span>
+      },
+      total: (rows) => {
+        const week = rows.reduce((n, r) => n + (r.enabled && r.writes ? r.writes.perWeek : 0), 0)
+        return <span title="Active plans only.">{week ? `about ${Math.round(week / 7).toLocaleString('en-GB')}` : 'none'}</span>
+      },
     },
     {
       // Sorts on the timestamp, renders the relative string — sorting on "4m ago" as text would
