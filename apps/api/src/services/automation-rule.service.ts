@@ -579,6 +579,19 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       errorMessage: 'Rule disabled',
     }
   }
+  // 4l (review 2.7) — OFF means off: a rule whose level is OFF is not evaluated and writes nothing, whatever `enabled`
+  // and `dryRun` say (resolveAutonomy used to fall back to dryRun, so OFF + enabled + dryRun=false ran as AUTO). The
+  // tick never loads one (evaluateAllRulesForTrigger); this holds for any other caller. A preview still evaluates.
+  if (rule.autonomyLevel === 'OFF' && !args.noPersist) {
+    return {
+      ruleId: rule.id,
+      matched: false,
+      status: 'FAILED',
+      actionResults: [],
+      durationMs: Date.now() - startedAt,
+      errorMessage: 'Rule is Off',
+    }
+  }
 
   // EA1/EA2 — advertising builder rules store a UI-friendly shape (nested condition groups +
   // slug action types). Translate to the engine-native shape in-memory so the conditions-tree
@@ -1102,6 +1115,7 @@ export async function evaluateAllRulesForTrigger(args: {
   const rules = await prisma.automationRule.findMany({
     where: {
       domain: args.domain, trigger: args.trigger, enabled: true,
+      autonomyLevel: { not: 'OFF' }, // 4l — an OFF rule is not evaluated
       ...(args.ruleIds ? { id: { in: args.ruleIds } } : {}),
     },
     select: { id: true },

@@ -63,8 +63,8 @@ function ruleConfig(rule: Partial<AutomationRule>, keys: readonly string[] = RUL
   return out
 }
 
-/** One audit row; it never fails the change it describes. */
-async function auditRule(actor: AdsActor, actionType: string, ruleId: string, before: object, after: object, note: string): Promise<void> {
+/** One audit row; it never fails the change it describes. 4l: the scope route writes its row through this too. */
+export async function auditRule(actor: AdsActor, actionType: string, ruleId: string, before: object, after: object, note: string): Promise<void> {
   await prisma.advertisingActionLog.create({
     data: {
       userId: actor,
@@ -253,6 +253,17 @@ const withoutNote = ({ note: _note, ...rest }: AdsRuleServiceExtra) => rest
 export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor: AdsActor, extra: AdsRuleServiceExtra = {}): Promise<ServiceOutcome<{ rule: AutomationRule }>> {
   const existing = await prisma.automationRule.findUnique({ where: { id } })
   if (!existing || existing.domain !== 'advertising') return refused(404, { error: 'not_found' })
+  // 4l (review 2.7) — an edit cannot switch writing on: `dryRun: false` on a rule whose level is not already AUTO went
+  // past the graduation gate (an OFF or unset level fell back to it). AUTO is set by the level control, after the gate.
+  if (body.dryRun === false) {
+    const { resolveAutonomy } = await import('./ads-autonomy.js')
+    if (resolveAutonomy({ ...existing, enabled: true }) !== 'AUTO') {
+      return refused(409, {
+        error: 'use_level_control',
+        message: `A rule edit cannot switch writing on. Auto is set with the level control, only after the graduation gate (${gateWords()}) and a person's click.`,
+      })
+    }
+  }
   // 4b — as the create: numbers readable and in range, the MERGED pair checked as P2.1 checks it just below.
   const { caps, problems } = readRuleCaps(body)
   if (body.actions !== undefined || body.conditions !== undefined) {
@@ -316,6 +327,13 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
   Object.assign(data, caps) // 4b — the four caps as read above: only the ones the body sent, in this order
   if (body.scopeMarketplace !== undefined) data.scopeMarketplace = body.scopeMarketplace
   Object.assign(data, withoutNote(extra))
+  // 4l (review 2.7) — `dryRun` and the level move together. Switching an Off rule on lands it at PROPOSE, never higher
+  // (with OFF now off, `enabled` alone would leave it silent); `dryRun: true` takes an AUTO rule down to PROPOSE (an
+  // explicit AUTO ignored dryRun, so the rule went on writing).
+  if (data.autonomyLevel === undefined) {
+    if (data.enabled === true && existing.autonomyLevel === 'OFF') Object.assign(data, { autonomyLevel: 'PROPOSE', dryRun: true })
+    else if (data.dryRun === true && existing.autonomyLevel === 'AUTO') data.autonomyLevel = 'PROPOSE'
+  }
   const rule = await prisma.automationRule.update({ where: { id }, data })
   const changed = Object.keys(data)
   if (changed.length) {
@@ -378,7 +396,14 @@ export async function testAdsRule(id: string, context: unknown): Promise<Service
   return done({ result })
 }
 
-export const GRADUATION_OBSERVATION_DAYS = 14
+/**
+ * 4l (review 2.6) — THE graduation gate's evidence, the one gate to AUTO (Owner ruling D-R1: 14 days · 10 evaluations ·
+ * 1 match, then a person's click). The gate status, the graduate route, the level dial and the Automations page (through
+ * GET /advertising/autonomy/graduation) all read these numbers; the page used to state a gate of its own ("3 weeks").
+ */
+export const GRADUATION_GATE = { observationDays: 14, evaluations: 10, matches: 1 } as const
+export const GRADUATION_OBSERVATION_DAYS = GRADUATION_GATE.observationDays
+const gateWords = () => `${GRADUATION_GATE.observationDays} days, ${GRADUATION_GATE.evaluations} evaluations, ${GRADUATION_GATE.matches} match`
 
 export interface GateCheck { id: string; label: string; detail: string; passed: boolean }
 export interface GateStatus { gateOpen: boolean; daysInDryRun: number; observationDaysRequired: number; checks: GateCheck[] }
@@ -434,18 +459,18 @@ export async function adsRuleGateStatus(id: string): Promise<ServiceOutcome<Gate
     {
       id: 'HAS_EVALUATIONS',
       label: 'Rule has evaluation history',
-      detail: rule.evaluationCount >= 10
+      detail: rule.evaluationCount >= GRADUATION_GATE.evaluations
         ? `${rule.evaluationCount} evaluations recorded`
-        : `${rule.evaluationCount} evaluations — need at least 10 to prove the rule has run`,
-      passed: rule.evaluationCount >= 10,
+        : `${rule.evaluationCount} evaluations — need at least ${GRADUATION_GATE.evaluations} to prove the rule has run`,
+      passed: rule.evaluationCount >= GRADUATION_GATE.evaluations,
     },
     {
       id: 'HAS_MATCHES',
       label: 'Rule has matched at least once',
-      detail: rule.matchCount > 0
+      detail: rule.matchCount >= GRADUATION_GATE.matches
         ? `${rule.matchCount} matches — rule has found real candidates`
         : 'Zero matches — rule may not be triggering correctly (check conditions)',
-      passed: rule.matchCount > 0,
+      passed: rule.matchCount >= GRADUATION_GATE.matches,
     },
     {
       id: 'CONNECTION_PRODUCTION',
@@ -530,9 +555,11 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
   const failures: string[] = []
   if (!rule.enabled)            failures.push('RULE_ENABLED')
   if (!rule.dryRun)             failures.push('RULE_DRY_RUN')
-  if (daysInDryRun < 14)        failures.push(`OBSERVATION_WINDOW (${daysInDryRun}/14 days)`)
-  if (rule.evaluationCount < 10) failures.push(`HAS_EVALUATIONS (${rule.evaluationCount}/10)`)
-  if (rule.matchCount < 1)      failures.push('HAS_MATCHES')
+  // 4l (review 2.6) — the same gate numbers as the gate status and the level dial, never a copy of them.
+  const g = GRADUATION_GATE
+  if (daysInDryRun < g.observationDays) failures.push(`OBSERVATION_WINDOW (${daysInDryRun}/${g.observationDays} days)`)
+  if (rule.evaluationCount < g.evaluations) failures.push(`HAS_EVALUATIONS (${rule.evaluationCount}/${g.evaluations})`)
+  if (rule.matchCount < g.matches) failures.push('HAS_MATCHES')
   if (conn?.mode !== 'production') failures.push('CONNECTION_PRODUCTION')
   if (!conn?.writesEnabledAt)   failures.push('WRITES_ENABLED')
   if (!liveMode)                failures.push('LIVE_MODE_ENV')

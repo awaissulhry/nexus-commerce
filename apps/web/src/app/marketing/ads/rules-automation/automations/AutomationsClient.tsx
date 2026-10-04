@@ -87,6 +87,8 @@ export function AutomationsClient() {
   const [protectedTerms, setProtectedTerms] = useState(0)
   const [grad, setGrad] = useState<Map<string, Readiness>>(new Map())
   const [weeksRequired, setWeeksRequired] = useState(3)
+  // 4l (review 2.6) — the graduation gate's numbers, from the server: the page states that gate, never one of its own.
+  const [gate, setGate] = useState<{ observationDays: number; evaluations: number; matches: number } | null>(null)
   const [scopeOptions, setScopeOptions] = useState<ScopeOptions | null>(null)
   const [market, setMarket] = useState('all')
   const [busy, setBusy] = useState<string | null>(null)
@@ -179,6 +181,7 @@ export function AutomationsClient() {
       const all = [...(gj?.ready ?? []), ...(gj?.others ?? [])] as Array<Readiness & { ruleId: string }>
       setGrad(new Map(all.map((x) => [x.ruleId, x])))
       setWeeksRequired(Number(gj?.weeksRequired ?? 3))
+      setGate(gj?.gate ?? null)
     } catch { setGrad(new Map()) }
     // AUTO.A0 — the engine/observed half. Also independent: a failed actors read must degrade to
     // "engines could not load", never blank the rules an operator may be about to switch off.
@@ -931,14 +934,16 @@ export function AutomationsClient() {
         </div>
       )}
 
-      {grad.size > 0 && (
+      {grad.size > 0 && gate && (
         <p className="h10-au-gradrule">
           <GraduationCap size={13} aria-hidden />
           <span>
-            A rule is offered the <b>Auto</b> notch only after you have applied its proposals{' '}
-            <strong>unchanged</strong> in {weeksRequired} separate weeks with no failures. Running
-            cleanly is not the same evidence and never earns it — nor does any ceiling move: rules
-            that create or destroy things stay gated whatever their history.
+            A rule reaches <b>Auto</b> only through the graduation gate: <strong>{gate.observationDays} days</strong>{' '}
+            since it was created, <strong>{gate.evaluations} evaluations</strong> and{' '}
+            <strong>{gate.matches} match{gate.matches === 1 ? '' : 'es'}</strong>, with live writes on — then your
+            click. Nothing graduates on its own. Ready marks the rules whose proposals you applied unchanged in{' '}
+            {weeksRequired} separate weeks. No history moves a ceiling: rules that create or destroy things stay
+            below Auto.
           </span>
         </p>
       )}

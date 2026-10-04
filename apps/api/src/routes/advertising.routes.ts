@@ -6709,10 +6709,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     await prisma.automationRule.update({ where: { id }, data: next })
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
     logger.warn('[RA-GRAIN-RULE-SCOPE]', {
-      ruleId: id, name: rule.name, ...next, campaigns: reach.campaignIds.length,
-      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+      ruleId: id, name: rule.name, ...next, campaigns: reach.campaignIds.length, actor,
     })
+    // 4l (review 2.11) — a scope change leaves the same audit row as every other rule edit: who, and each changed scope
+    // field before → after. It is also what tells an approval that the rule was re-scoped after it proposed a change.
+    const changed = (Object.keys(next) as Array<keyof typeof next>).filter((k) => next[k] !== rule[k])
+    if (changed.length) {
+      const { auditRule } = await import('../services/advertising/ads-rule-crud.service.js')
+      await auditRule(actor, 'update_rule', id,
+        Object.fromEntries(changed.map((k) => [k, rule[k]])), Object.fromEntries(changed.map((k) => [k, next[k]])),
+        `${rule.name}: scope ${changed.map((k) => `${k} ${rule[k] ?? 'any'} → ${next[k] ?? 'any'}`).join(', ')}`)
+    }
     return {
       ok: true,
       ruleId: id,
@@ -11128,8 +11137,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/advertising/autonomy/graduation', async (_request, reply) => {
     const { getGraduationBoard } = await import('../services/advertising/ads-graduation-readiness.service.js')
+    // 4l (review 2.6) — the graduation gate's own numbers ride along, so the page states the one gate (never its own).
+    const { GRADUATION_GATE } = await import('../services/advertising/ads-rule-crud.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
-    return getGraduationBoard()
+    return { ...(await getGraduationBoard()), gate: GRADUATION_GATE }
   })
 
   /**

@@ -32,15 +32,59 @@ export type { DecideResult }
  */
 export type ApplyOverride = { value?: number; resultBidCents?: number; resultBudgetEur?: number }
 
+/** The rule fields that decide WHAT a rule proposes; an edit to any of them makes its older proposals stale. */
+const PROPOSING_FIELDS: Record<string, string> = {
+  trigger: 'trigger', conditions: 'conditions', actions: 'actions',
+  scopeMarketplace: 'scope', scopePortfolioId: 'scope', scopeCampaignId: 'scope', scopeProductId: 'scope',
+}
+
+/**
+ * 4l (review 2.8) — whether the rule that proposed this change would still propose it; a sentence when it would not.
+ *
+ * Approving applied a suggestion whatever had become of its rule since: deleted, switched Off, or edited (conditions,
+ * actions, trigger, scope) so it no longer proposes the change. A suggestion is the rule's proposal, so it is applied
+ * only while the rule stands behind it. "Edited" is read from the rule's audit rows (every edit writes one, the scope
+ * route too since 4l) newer than `lastSeenAt` — the newest run that still proposed this change. If the edited rule
+ * still proposes it, its next run stamps `lastSeenAt` again and the change can be applied. Nothing is written here.
+ */
+export async function staleRuleSentence(sug: { ruleId: string; ruleName: string | null; lastSeenAt: Date }): Promise<string | null> {
+  const rule = await prisma.automationRule.findUnique({
+    where: { id: sug.ruleId }, select: { id: true, name: true, domain: true, enabled: true, dryRun: true, autonomyLevel: true },
+  })
+  if (!rule || rule.domain !== 'advertising') {
+    return `This change can no longer be applied: the rule that proposed it${sug.ruleName ? ` (${sug.ruleName})` : ''} was deleted. Dismiss it.`
+  }
+  const { resolveAutonomy } = await import('./ads-autonomy.js')
+  if (resolveAutonomy(rule) === 'OFF') {
+    return `This change can no longer be applied: ${rule.name} is Off, and a rule that is Off changes nothing. Switch it back on; if the change still holds, it will propose it again.`
+  }
+  const edits = await prisma.advertisingActionLog.findMany({
+    where: { entityType: 'RULE', entityId: rule.id, actionType: 'update_rule', createdAt: { gt: sug.lastSeenAt } },
+    select: { payloadAfter: true }, take: 50,
+  })
+  const what = new Set<string>()
+  for (const e of edits) {
+    const after = e.payloadAfter
+    if (after && typeof after === 'object' && !Array.isArray(after)) for (const k of Object.keys(after)) if (PROPOSING_FIELDS[k]) what.add(PROPOSING_FIELDS[k])
+  }
+  if (what.size) {
+    return `This change cannot be applied now: ${rule.name} was edited (${[...what].join(', ')}) after it proposed this, and it has not proposed it again since. If the edited rule still wants this change, it will propose it on its next run.`
+  }
+  return null
+}
+
 // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
 // automation halt + the handlers' own spend caps). The operator already approved, so we apply
-// the action directly rather than re-evaluating conditions.
+// the action directly rather than re-evaluating conditions — but only while its rule still stands behind it (4l).
 export async function applySuggestion(id: string, ov: ApplyOverride = {}): Promise<DecideResult> {
   const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
   if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
   if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
   const { isAutomationHalted } = await import('./ads-automation-state.service.js')
   if (await isAutomationHalted()) return { ok: false, httpStatus: 423, error: 'automation_halted' }
+  // 4l (review 2.8) — a refusal like the gate's (SG.0 below): the row stays pending and the caller shows the sentence.
+  const stale = await staleRuleSentence(sug)
+  if (stale) return { ok: false, refused: true, error: stale }
   // The frozen execution context is pruned after a few days. Don't hard-fail a stale
   // suggestion: budget/bid/placement actions are self-contained (they carry campaignId + op +
   // value and read current values live from the DB), so they re-apply correctly against an
@@ -259,6 +303,8 @@ export async function planSuggestionDecisions(
       for (const refused of refusedActionsOf([String(action.type ?? '')])) problems.push(`${label}: ${refused.type} refused — ${refused.why}; dismiss it and use ${refused.instead}`)
       const target = r.entityType === 'AD_TARGET' ? targetById.get(r.entityId) : undefined
       if (target?.suppressedFromBidCents != null) problems.push(`${label}: its target is held at the floor bid by no-pause suppression — applying would lift it; dismiss it, or wait until its campaign resumes`)
+      const stale = await staleRuleSentence(r) // 4l — refused before a person is asked, not after
+      if (stale) problems.push(`${label}: ${stale}`)
     }
     const current = r.entityType === 'AD_TARGET' ? targetById.get(r.entityId)?.bidCents ?? null : r.entityType === 'CAMPAIGN' ? budgetById.get(r.entityId) ?? null : null
     const projected = family === 'bids' ? projectBidCents(action, current) : family === 'budget' ? projectBudgetEur(action, current) : null

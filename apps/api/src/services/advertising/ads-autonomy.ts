@@ -49,10 +49,14 @@ export interface AutonomyInput {
  * When `autonomyLevel` is missing or unrecognised we fall back to the old binary, so a
  * row written by an older deploy, or by a code path that has not learned the column
  * yet, behaves exactly as it did before.
+ *
+ * 4l (review 2.7) — an explicit OFF is off, whatever `enabled` and `dryRun` say. It used to fall back to the binary
+ * like a missing level, so OFF on an enabled rule ran at PROPOSE — or at AUTO, past the graduation gate, when
+ * `dryRun` was false. The evaluator does not run an OFF rule at all (`evaluateRule`).
  */
 export function resolveAutonomy(rule: AutonomyInput): AutonomyLevel {
   if (!rule.enabled) return 'OFF'
-  if (isAutonomyLevel(rule.autonomyLevel) && rule.autonomyLevel !== 'OFF') return rule.autonomyLevel
+  if (isAutonomyLevel(rule.autonomyLevel)) return rule.autonomyLevel
   return rule.dryRun ? 'PROPOSE' : 'AUTO'
 }
 
