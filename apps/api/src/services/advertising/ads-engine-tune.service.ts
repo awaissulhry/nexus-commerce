@@ -16,7 +16,8 @@
  * pool shift, a looser harvest, a lowering window removed…) and why; those are outside tune-ad-engine's limits — a
  * person decides. Switching is not tuning: on / off and levels stay with turn-up / turn-down-automation. Not tunable here,
  * on purpose: dayparting windows (a closed window can hold a campaign paused — never pause), rank targets' pause /
- * all-out / lanes, a pool's on / dry-run flags.
+ * lanes / base bid, a pool's on / dry-run flags. 2e — a rank target is tuned by what the hourly bid plan reads: its
+ * Placement %, CPC ceiling and Min-bid floor (its goal, ACoS, step, ceiling and keep-climbing fields are not read).
  */
 import prisma from '../../db.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -28,7 +29,8 @@ export type EngineSetting = (typeof ENGINE_SETTINGS)[number]
 export const POOL_STRATEGIES = ['STATIC', 'PROFIT_WEIGHTED', 'URGENCY_WEIGHTED'] as const
 export const HARVEST_GRAINS = ['account', 'market', 'line', 'portfolio', 'campaign', 'adGroup'] as const
 export const WINDOW_ADJ = ['set', 'incPct', 'decPct'] as const
-export const RANK_TARGET_TUNABLE = ['targetISPct', 'acosCapPct', 'maxCpcCents', 'maxBiasPct', 'stepUpPct', 'stepDownPct', 'jumpStartPct', 'floorBidCents', 'keepClimbing'] as const
+// 2e — only what the hourly bid plan reads (rank-controller.ts): the goal / ACoS / step / ceiling / keep-climbing fields are not.
+export const RANK_TARGET_TUNABLE = ['biasPct', 'maxCpcCents', 'floorBidCents'] as const
 
 /** The breaker's limits when none is set (ads-anomaly-guard.service.ts). */
 const BREAKER_DEFAULTS = { maxHourlySpendCentsEur: 50_000, maxActionsPerHour: 250 }
@@ -185,7 +187,7 @@ const coverageSet: Spec = {
 // ── rank-target (A10) ────────────────────────────────────────────────────────────────────────────────────
 
 const rankTarget: Spec = {
-  automation: { id: 'A10', name: 'Rank-defend (schedules and product plans)' },
+  automation: { id: 'A10', name: 'Hourly bid plans (schedules and product plans)' },
   label: 'rank target',
   needsSubject: true,
   async load(input) {
@@ -204,15 +206,9 @@ const rankTarget: Spec = {
       if (a[field] == null && b[field] != null) out.push(`${words} (${show(b[field])}) is cleared`)
       else if (a[field] != null && b[field] != null && Number(a[field]) > Number(b[field])) out.push(`${words} rises (${show(b[field])} → ${show(a[field])})`)
     }
-    up('targetISPct', 'the impression-share target')
-    cleared('acosCapPct', 'the ACOS ceiling')
+    up('biasPct', 'the placement percentage')
     cleared('maxCpcCents', 'the bid ceiling')
-    cleared('maxBiasPct', 'the placement ceiling')
-    up('stepUpPct', 'the climb step')
-    up('jumpStartPct', 'the opening jump')
     up('floorBidCents', 'the floor bid')
-    if (b.stepDownPct == null ? a.stepDownPct != null : a.stepDownPct != null && Number(a.stepDownPct) < Number(b.stepDownPct)) out.push(`the loop eases down more slowly (${show(b.stepDownPct ?? 'snap')} → ${show(a.stepDownPct)})`)
-    if (a.keepClimbing === true && b.keepClimbing !== true) out.push('it keeps climbing to the ceiling with no signal')
     return out
   },
   async write(loaded, before, after, actorUserId) {
@@ -222,7 +218,7 @@ const rankTarget: Spec = {
     await auditTune(actorUserId, 'RANK_TARGET', loaded.id!, before, after)
     return null
   },
-  effect: (l) => `The rank target "${l.name}" applies from rank-defend's next run${l.note ? ` — ${l.note}` : ''}.`,
+  effect: (l) => `The rank target "${l.name}" applies from the hourly bid plans' next run${l.note ? ` — ${l.note}` : ''}.`,
 }
 
 // ── budget-schedule (A7) ─────────────────────────────────────────────────────────────────────────────────

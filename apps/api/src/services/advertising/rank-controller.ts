@@ -1,31 +1,33 @@
 /**
- * RS.4 — pure rank controller. The bridge from a goal (RankTarget) to a concrete
- * actuation each tick. No DB / IO, so it's unit-tested and reused verbatim by the
- * RS.5 defend loop. "Rank" on Amazon = a Top-of-Search impression-share held by
- * bid-to-win, so this converges the placement-bias % toward the target IS within
- * the ACOS/CPC guardrails — or ignoring ACOS when the target is all-out — and
- * snaps back fast when the loss proxy says we're slipping off the slot.
+ * RS.4 — pure rank controller: from the target the hour's plan names to the placement % a tick sets.
+ * No DB / IO, so it's unit-tested and reused verbatim by the defend loop (ad-rank-defend.job.ts).
+ *
+ * 2e (Owner D1 = A, 2026-10-04) — an hour-of-day bid plan, not a rank chase. No Amazon signal can feed a 15-minute
+ * loop (Top-of-search share is daily and 1–3 days late, SQP weekly, no organic-rank API), so each tick sets the
+ * hour's FIXED Placement % and nothing else: no impression-share or ACoS reading, no climb/ease step, no keep-
+ * climbing, no all-out climb, no ceiling chase. The goal fields stay in the database but are not read.
  */
 
+// 2e — the fields marked "not read" are kept (the database still holds them) but no tick reads them since 2e.
 export interface RankTargetSpec {
   key: string
   placement: string // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
-  targetISPct: number | null // 0-100 target Top-of-Search impression share
-  acosCapPct: number | null // ACOS ceiling %; ignored when allOut
-  maxCpcCents: number | null // hard bid ceiling (runaway guard); applied at the bid layer (RS.5)
-  biasPct: number | null // starting placement-bias % on entry
+  targetISPct: number | null // not read (2e)
+  acosCapPct: number | null // not read (2e)
+  maxCpcCents: number | null // hard bid ceiling (runaway guard): caps the placement % (MB.4)
+  biasPct: number | null // the Placement % this target holds (blank = 0%)
   pause: boolean
   // MB.1 — for a `pause` (Min bid) target: the bid floor in cents it holds during its
   // hours. null = the engine's legacy 2¢. Read by the job's pause branch, not by
   // computeStep — a Min-bid hour never reaches the placement controller.
   floorBidCents?: number | null
-  allOut: boolean // ignore acosCapPct — hold the slot at any cost up to maxCpc
-  // MP v2 — motion profile: HOW the loop moves the bid. floor = biasPct (Placement %); blank knobs => snap to it both ways.
-  jumpStartPct?: number | null // DORMANT in v2 — computeStep ignores it (snap-to-Placement made the opening jump redundant)
-  stepUpPct?: number | null // climb step %/cycle; null => SNAP up to Placement % (default 15/25 when chasing above it)
-  stepDownPct?: number | null // ease step %/cycle; null => SNAP down to Placement %; a number => gradual (never snap)
-  maxBiasPct?: number | null // ceiling; null => Placement % (never above). Set above to allow climbing. all-out forces 900.
-  keepClimbing?: boolean // climb to the ceiling even with NO signal (only matters when ceiling > Placement %; bounded by ceiling + ACOS)
+  allOut: boolean // not read (2e): an all-out target holds its Placement % like any other
+  // MP v2 motion profile — not read (2e): a tick snaps to the hour's Placement % in one write.
+  jumpStartPct?: number | null
+  stepUpPct?: number | null
+  stepDownPct?: number | null
+  maxBiasPct?: number | null
+  keepClimbing?: boolean
   // BL — blended multi-placement + base-bid (all optional; absent => single-placement legacy).
   lanes?: LaneSpec[] | null // when set, the engine drives EACH lane's placement at once
   bidMode?: string | null // base-bid lever: null|'hold'|'absolute'|'suppress'|'deltaPct'
@@ -33,10 +35,8 @@ export interface RankTargetSpec {
   bidDeltaPct?: number | null // reserved for 'deltaPct'
 }
 
-// BL — one placement lane in a blended target: the per-placement bid strategy. A lane is
-// a single-placement RankTargetSpec minus the shared key/pause/base-bid; the engine
-// expands each into computeStep with that placement's own signal (Top=Top-IS, Rest=SQP,
-// Product=open-loop).
+// BL — one placement lane in a blended target. 2e — a lane holds its own Placement % (biasPct); its other fields are
+// kept in the database and not read.
 export interface LaneSpec {
   placement: string // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
   biasPct: number | null
@@ -79,15 +79,14 @@ export function resolveActiveTargetKey(windows: ScheduleWindow[] | null | undefi
 }
 
 /**
- * The [floor, ceiling] placement-bias band a target may occupy — the same two numbers computeStep
- * derives before it moves anything, exported so the preview quotes the engine rather than
- * paraphrasing it. floor = "the bid we hold" (Placement %); the loop only goes above it when a
- * ceiling is raised above it, or all-out (which defaults the ceiling to the 900% cap).
+ * The [floor, ceiling] placement-bias band a target may occupy — the same numbers computeStep
+ * uses, exported so the previews quote the engine rather than paraphrasing it. floor = the
+ * Placement % the hour holds. 2e — nothing climbs above it any more (no ceiling chase, no all-out),
+ * so the ceiling IS the floor; the CPC ceiling (cpcCapPct) is the only thing that can hold it lower.
  */
-export function biasBand(target: Pick<RankTargetSpec, 'biasPct' | 'maxBiasPct' | 'allOut'>): { floor: number; ceiling: number } {
+export function biasBand(target: Pick<RankTargetSpec, 'biasPct'>): { floor: number; ceiling: number } {
   const floor = clamp(target.biasPct ?? 0, 0, 900)
-  const ceiling = target.allOut ? (target.maxBiasPct ?? 900) : (target.maxBiasPct ?? floor)
-  return { floor, ceiling: Math.max(floor, ceiling) }
+  return { floor, ceiling: floor }
 }
 
 /**
@@ -136,104 +135,25 @@ export function cpcCapPct(maxCpcCents: number | null | undefined, maxBaseBidCent
   return raw < 0 ? { capPct: 0, baseAlone: true } : { capPct: Math.floor(raw), baseAlone: false }
 }
 
+// 2e — the placement % the target holds right now is all a tick needs: no impression share, ACoS or loss proxy.
 export interface Observed {
-  currentPct: number // current PLACEMENT_TOP bias % (0-900)
-  achievedISFraction: number | null // 0-1 achieved TOS IS (daily truth), null if unknown
-  achievedAcosFraction: number | null // 0-1 achieved ACOS, null if unknown
-  lossDetected?: boolean // RS.6 fast proxy: hourly impressions cratered vs our baseline
+  currentPct: number // the placement % live on the campaign for the target's placement (0-900)
 }
 
 export interface StepDecision { action: 'raise' | 'hold' | 'lower' | 'pause'; nextPct: number; reason: string }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)))
-const pctStr = (f: number) => `${Math.round(f * 100)}%`
-
-/** Step size — larger for all-out so we re-take harder. */
-export function stepFor(target: RankTargetSpec): number {
-  return target.allOut ? 25 : 15
-}
-
-// RS.6 — loss proxy. Amazon exposes no live rank, and TOS-IS is daily/sparse, so
-// the fastest "we're slipping" fingerprint is the campaign's own hourly
-// impressions cratering vs its recent baseline. Conservative on purpose: it needs
-// a meaningful baseline AND a sharp drop, so noise/low-volume hours don't trip it.
-export const LOSS_MIN_BASELINE = 5
-export const LOSS_THRESHOLD = 0.4
-export function isRankLoss(latestImpr: number, baselineImpr: number): boolean {
-  return baselineImpr >= LOSS_MIN_BASELINE && latestImpr < baselineImpr * LOSS_THRESHOLD
-}
 
 /**
- * The controller. Given the active target + observed signals, return the next
- * placement-bias %. allOut (or a null acosCap) => the ACOS ceiling is ignored.
+ * The controller. 2e — set the hour's fixed Placement % (biasPct, blank = 0%) in one move, up or down, and hold it
+ * there; `maxPct` (the CPC ceiling, when the caller passes it) can only hold it lower. Nothing else is read, so the
+ * answer changes only when the hour's plan (or the live value) changes — and a tick writes only then.
  */
 export function computeStep(target: RankTargetSpec, obs: Observed, opts: { maxPct?: number } = {}): StepDecision {
-  if (target.pause) return { action: 'pause', nextPct: obs.currentPct, reason: 'target = pause' }
-  // MP v2 — "Placement % is the bid". Snap to the floor (biasPct) both ways by default; a
-  // Climb/Ease step makes that move gradual instead; the bid only goes ABOVE the floor when a
-  // Ceiling is raised above it — then it chases the [floor, ceiling] band (signal-driven, or
-  // always with keepClimbing / all-out) and eases back toward the floor, never below it.
-  const { floor, ceiling } = biasBand(target) // floor = the bid we hold = Placement %
-  const maxPct = Math.min(opts.maxPct ?? 900, ceiling) // biasBand already lifts ceiling to >= floor
-  const climbStep = target.stepUpPct ?? stepFor(target) // up increment %/cyc (also the chase rate)
-  const easeStep = target.stepDownPct ?? climbStep // down increment %/cyc
-  const rampUp = target.stepUpPct != null // climb step SET → ramp up to the floor; blank → snap up
-  const easeDown = target.stepDownPct != null // ease step SET → ease down to the floor; blank → snap down
+  if (target.pause) return { action: 'pause', nextPct: obs.currentPct, reason: 'target = Min bid' }
+  const want = Math.min(biasBand(target).floor, clamp(opts.maxPct ?? 900, 0, 900))
   const cur = obs.currentPct
-  const acosCap = target.allOut ? null : (target.acosCapPct != null ? target.acosCapPct / 100 : null)
-  const acosOk = acosCap == null || obs.achievedAcosFraction == null || obs.achievedAcosFraction <= acosCap * 1.1
-  const targetIS = target.targetISPct != null ? target.targetISPct / 100 : null
-  const canChase = target.allOut || ceiling > floor
-
-  const toFloorUp = (): StepDecision => rampUp
-    ? { action: 'raise', nextPct: clamp(Math.min(floor, cur + climbStep), 0, maxPct), reason: `ramping to ${floor}% Placement (+${climbStep}/cyc)` }
-    : { action: 'raise', nextPct: clamp(floor, 0, maxPct), reason: `snap to ${floor}% Placement` }
-  // Easing DOWN moves toward the floor, so clamp to [0, 900] — NOT maxPct (which caps raises and
-  // equals the floor when there's no chase, which would wrongly snap a gradual ease straight down).
-  const toFloorDown = (why: string): StepDecision => easeDown
-    ? { action: 'lower', nextPct: clamp(Math.max(floor, cur - easeStep), 0, 900), reason: `${why} — ease to ${floor}% Placement (−${easeStep}/cyc)` }
-    : { action: 'lower', nextPct: clamp(floor, 0, 900), reason: `${why} — snap to ${floor}% Placement` }
-
-  // 1) Below the floor → establish the Placement % (snap, or ramp if a Climb step is set).
-  if (cur < floor) return toFloorUp()
-
-  // 2) No chase allowed (Ceiling = Placement %) → sit exactly at the floor; come back if drifted up.
-  if (!canChase) {
-    if (cur > floor) return toFloorDown('above Placement')
-    return { action: 'hold', nextPct: cur, reason: `holding ${floor}% Placement` }
-  }
-
-  // 3) Chase band [floor, ceiling] — only when a Ceiling above Placement % is set (or all-out).
-  if (target.allOut) {
-    return cur < maxPct
-      ? { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: 'all-out — push for the slot' }
-      : { action: 'hold', nextPct: cur, reason: `all-out — holding ${maxPct}% ceiling` }
-  }
-  // loss proxy — re-take the slot fast
-  if (obs.lossDetected && acosOk && cur < maxPct) {
-    return { action: 'raise', nextPct: clamp(cur + climbStep * 2, 0, maxPct), reason: 'rank slipping — re-take aggressively' }
-  }
-  // IS truth signal — seek the least-cost hold of the target share within [floor, ceiling].
-  if (targetIS != null && obs.achievedISFraction != null) {
-    if (obs.achievedISFraction < targetIS && acosOk && cur < maxPct) {
-      return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `IS ${pctStr(obs.achievedISFraction)} below target ${pctStr(targetIS)} — push` }
-    }
-    if (cur > floor && obs.achievedISFraction >= targetIS * 1.1) return toFloorDown(`IS ${pctStr(obs.achievedISFraction)} above target`)
-    if (cur > floor && acosCap != null && obs.achievedAcosFraction != null && obs.achievedAcosFraction > acosCap * 1.2) return toFloorDown(`ACOS ${pctStr(obs.achievedAcosFraction)} over cap`)
-    return { action: 'hold', nextPct: cur, reason: 'holding target IS' }
-  }
-  // No IS — ACOS-guided within the band.
-  if (acosCap != null && obs.achievedAcosFraction != null) {
-    if (obs.achievedAcosFraction <= acosCap * 0.8 && cur < maxPct) {
-      return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `ACOS ${pctStr(obs.achievedAcosFraction)} well under cap — capture more` }
-    }
-    if (cur > floor && obs.achievedAcosFraction >= acosCap * 1.2) return toFloorDown(`ACOS ${pctStr(obs.achievedAcosFraction)} over cap`)
-  }
-  // keep-climbing — push to the ceiling with no signal (bounded by ceiling + ACOS).
-  if (target.keepClimbing && acosOk && cur < maxPct) {
-    return { action: 'raise', nextPct: clamp(cur + climbStep, 0, maxPct), reason: `climbing to ${maxPct}% ceiling (+${climbStep}/cyc, no signal)` }
-  }
-  // No reason to be elevated → settle back to the floor (keep-climbing holds at the ceiling instead).
-  if (cur > floor && !target.keepClimbing) return toFloorDown('no signal')
-  return { action: 'hold', nextPct: cur, reason: cur > floor ? `holding ${cur}% (ceiling)` : `holding ${floor}% Placement` }
+  if (cur < want) return { action: 'raise', nextPct: want, reason: `set to ${want}% Placement (this hour's plan)` }
+  if (cur > want) return { action: 'lower', nextPct: want, reason: `set to ${want}% Placement (this hour's plan)` }
+  return { action: 'hold', nextPct: cur, reason: `holding ${want}% Placement (this hour's plan)` }
 }

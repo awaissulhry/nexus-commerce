@@ -214,7 +214,7 @@ export function RankPlanPanel({ campaignId, campaignName, onAutoDefend, reloadSi
         {/* Live defend preview */}
         {decision && (
           <div className="az-rp-preview"><Sparkles size={13} />
-            <span>Right now the loop would <b>{decision.action === 'pause' ? 'drop to Min bid' : decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% placement bias` : ''}{decision.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{decision.reason}</i>{decision.achievedISPct != null ? ` · IS ${decision.achievedISPct}%` : ' · no IS data yet'}.</span>
+            <span>Right now the loop would <b>{decision.action === 'pause' ? 'drop to Min bid' : decision.action}</b>{decision.action === 'raise' || decision.action === 'lower' ? ` → ${decision.nextPct}% placement bias` : ''} — <i>{decision.reason}</i>.</span>
             {/* BL.8 — per-placement breakdown when the active target is a blend */}
             {decision.lanes && decision.lanes.length > 0 && (
               <div className="az-blend-dec">

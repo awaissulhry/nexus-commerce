@@ -6,8 +6,9 @@
  * So the cases below are taken from the ENGINE's branches and from prod measurements, not from the
  * design:
  *
- *   · `allOut` makes `canChase` true while `computeStep` reads neither the IS goal nor the ACoS
- *     cap — the single mistake that would have printed "Chasing 90% IS" on 11 live campaigns;
+ *   · 2e (Owner D1 = A) — the loop is an hour-of-day bid plan: every serving hour HOLDS its Placement %, so
+ *     there is no all-out or chasing state, no goal is ever live, and the only "cannot converge" is the CPC
+ *     ceiling holding a campaign below what its hour sets;
  *   · the CPC ceiling binds LAST and can pin a campaign below its own floor (measured: 6) or
  *     rule it out entirely on the base bid alone (measured: 5);
  *   · a group's mode is a SPREAD, never an average — one row hides eleven campaigns with four
@@ -38,7 +39,6 @@ const input = (over: Partial<RdCampaignRuntimeInput> = {}): RdCampaignRuntimeInp
   maxBaseBidCents: null,
   biddingStrategy: null,
   governed: false,
-  achievedISPct: null,
   ...over,
 })
 
@@ -119,62 +119,63 @@ describe('mode precedence — the ceiling binds last and therefore decides first
   })
 })
 
-describe('🔴 all-out is not chasing', () => {
+describe('2e — an all-out target holds its Placement % like any other', () => {
   const allOut = target({ key: 'own-top-allout', allOut: true, biasPct: 300, maxCpcCents: 200, targetISPct: 90, acosCapPct: null })
 
-  it('gets its own mode even though canChase is true', () => {
+  it('is holding, with no chase band and no all-out state', () => {
     const r = deriveCampaignRuntime(input({
       defaultTargetKey: 'own-top-allout', targetByKey: new Map([['own-top-allout', allOut]]),
       maxBaseBidCents: 20,
     }))
-    expect(r.canChase).toBe(true)          // the engine's own predicate
-    expect(r.mode.kind).toBe('all-out')    // ...but NOT "chasing"
-    expect(r.mode.label).not.toContain('Chasing')
-    expect(r.band).toEqual({ floor: 300, ceiling: 900 })
+    expect(r.canChase).toBe(false)
+    expect(r.mode.kind).toBe('holding')
+    expect(r.mode.label).toBe('Holding Top 300%')
+    expect(r.band).toEqual({ floor: 300, ceiling: 300 }) // before 2e: ceiling 900
   })
 
-  it('reports the IS goal as dead, because computeStep never reads it under allOut', () => {
+  it('shows no goal: the stored IS target is not read', () => {
     const r = deriveCampaignRuntime(input({
       defaultTargetKey: 'own-top-allout', targetByKey: new Map([['own-top-allout', allOut]]),
-      maxBaseBidCents: 20, achievedISPct: 52,
+      maxBaseBidCents: 20,
     }))
-    expect(r.goal.live).toBe(false)
-    expect(r.goal.targetPct).toBe(90)
-    expect(r.goal.deadReason).toMatch(/all-out/i)
+    expect(r.goal).toEqual({ targetPct: null, actualPct: null, live: false, deadReason: null })
   })
 })
 
-describe('chasing vs holding — the only real closed loop', () => {
-  it('chases only when a ceiling is raised above the floor and allOut is off', () => {
+describe('2e — no chasing: every serving hour holds what it sets', () => {
+  it('a ceiling raised above the floor no longer makes a closed loop', () => {
     // measured override: own-top {biasPct:100, maxBiasPct:200, targetISPct:55}
-    const t = target({ biasPct: 100, maxBiasPct: 200, targetISPct: 55, maxCpcCents: 80 })
+    const t = target({ biasPct: 100, maxBiasPct: 200, targetISPct: 55, maxCpcCents: 80, keepClimbing: true })
     const r = deriveCampaignRuntime(input({ targetByKey: new Map([['own-top', t]]), maxBaseBidCents: 20 }))
-    expect(r.mode.kind).toBe('chasing')
-    expect(r.mode.label).toBe('Chasing 55% IS')
-    expect(r.goal.live).toBe(true)
-    expect(r.canConverge).toBe(true)
-  })
-
-  it('holds when the ceiling equals the floor — the library default on all five targets', () => {
-    const r = deriveCampaignRuntime(input({ maxBaseBidCents: 20 }))
-    expect(r.mode.kind).toBe('holding')
-    expect(r.mode.label).toBe('Holding 150%')
-  })
-
-  it('a goal set behind a ceiling that equals the floor CANNOT converge', () => {
-    const r = deriveCampaignRuntime(input({ maxBaseBidCents: 20 }))
-    expect(r.goal.targetPct).toBe(70)
+    expect(r.mode.kind).toBe('holding') // before 2e: chasing 55% IS
+    expect(r.mode.label).toBe('Holding Top 100%')
     expect(r.goal.live).toBe(false)
-    expect(r.canConverge).toBe(false)
-    expect(r.cannotConvergeReason).toMatch(/ceiling equals/i)
+    expect(r.canConverge).toBe(true)
   })
 
-  it('a target with no goal at all holds without being a convergence fault', () => {
-    const t = target({ targetISPct: null })
-    const r = deriveCampaignRuntime(input({ targetByKey: new Map([['own-top', t]]), maxBaseBidCents: 20 }))
+  it('holds the library default', () => {
+    const r = deriveCampaignRuntime(input({ maxBaseBidCents: 20 }))
     expect(r.mode.kind).toBe('holding')
-    expect(r.canConverge).toBe(true)
+    expect(r.mode.label).toBe('Holding Top 150%')
+    expect(r.mode.detail).toMatch(/reads no rank or share signal/)
+  })
+
+  it('a stored IS goal behind a ceiling that equals the floor is no longer a convergence fault', () => {
+    const r = deriveCampaignRuntime(input({ maxBaseBidCents: 20 }))
     expect(r.goal.targetPct).toBeNull()
+    expect(r.canConverge).toBe(true) // before 2e: cannot converge ("ceiling equals the floor")
+    expect(r.cannotConvergeReason).toBeNull()
+  })
+
+  it('a blend holds each lane at its own %, and the CPC cap binds against the highest lane', () => {
+    const blend = target({ lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 50, maxBiasPct: 400 }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 20 }] })
+    const ok = deriveCampaignRuntime(input({ targetByKey: new Map([['own-top', blend]]), maxBaseBidCents: 20 }))
+    expect(ok.mode.label).toBe('Holding Top 50% · Rest 20%')
+    // €1.50 ceiling over a €1.20 base → cap 25%, below the 50% Top lane
+    const capped = deriveCampaignRuntime(input({ targetByKey: new Map([['own-top', blend]]), maxBaseBidCents: 120 }))
+    expect(capped.mode.kind).toBe('capped-floor')
+    expect(capped.mode.label).toBe('Capped 25% · plan 50%')
+    expect(capped.cannotConvergeReason).toMatch(/holds this at 25%, below the 50%/)
   })
 })
 
@@ -185,7 +186,7 @@ describe('overrides and events follow the engine, not the group', () => {
       maxBaseBidCents: 20,
     }))
     expect(r.band).toEqual({ floor: 0, ceiling: 0 })
-    expect(r.mode.label).toBe('Holding 0%')
+    expect(r.mode.label).toBe('Holding Top 0%')
   })
 
   it('an active event overrides the weekly plan, exactly as the engine does', () => {
@@ -201,13 +202,13 @@ describe('overrides and events follow the engine, not the group', () => {
 })
 
 describe('rollUpGroup — a spread, never an average', () => {
-  const mk = (kind: string, n: number) => Array.from({ length: n }, () => ({ mode: { kind, label: kind }, canConverge: kind !== 'capped-floor', goal: { live: kind === 'chasing' } }))
+  const mk = (kind: string, n: number) => Array.from({ length: n }, () => ({ mode: { kind, label: kind }, canConverge: kind !== 'capped-floor', goal: { live: false } }))
 
   it('counts every distinct fate rather than collapsing to one', () => {
-    const rows = [...mk('chasing', 4), ...mk('holding', 8)] as never
+    const rows = [...mk('min-bid', 4), ...mk('holding', 8)] as never
     const g = rollUpGroup(rows)
     expect(g.members).toBe(12)
-    expect(g.modeSummary).toBe('4 chasing · 8 holding')
+    expect(g.modeSummary).toBe('4 min bid · 8 holding')
   })
 
   it('orders the spread by severity, not by count', () => {

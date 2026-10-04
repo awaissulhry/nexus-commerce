@@ -17,7 +17,7 @@ export interface HealthInput {
   failedWrites: number
   governedElsewhere: number
   membersTotal: number
-  /** RD.P2 — members that can never reach their own goal. 0 when nothing is wrong. */
+  /** RD.P2 / 2e — members the CPC ceiling holds below their hour's placement %. 0 when nothing is wrong. */
   cannotConverge?: number
   /** The engine's own reason, for the tooltip. */
   cannotConvergeReason?: string | null
@@ -56,28 +56,27 @@ export function scheduleHealth(input: HealthInput, now: number = Date.now()): He
     return { tone: 'warn', label: `${governedElsewhere} governed elsewhere`, detail: `${governedElsewhere} of ${membersTotal} campaigns are governed by a Rank Director family plan and are not controlled by this schedule.` }
   }
   /**
-   * RD.P2 — the state the page most needed and did not have.
+   * RD.P2 — the state the page most needed and did not have. 2e (Owner D1 = A): no goal is read any
+   * more, so the only thing that stops a campaign holding its hour's values is the CPC ceiling — the
+   * base bid alone over it, or the cap below the hour's placement %. The label says exactly that.
    *
    * Placed here deliberately, and the position IS the policy:
    *
    *  · BELOW `Governed elsewhere`, because a campaign a family plan owns is not this schedule's to
-   *    converge — saying "cannot converge" about a row it never evaluates would be false.
+   *    hold — saying "capped" about a row it never evaluates would be false.
    *  · ABOVE `Never run` and `Stale`, because those are TRANSIENT — a schedule armed two minutes
-   *    ago reaches its first tick in fifteen, and a stale cron is fixed by the next tick. Cannot
-   *    converge is a CONFIG fault that no amount of waiting repairs: the ceiling equals the floor,
-   *    or the CPC ceiling pins the placement below its own floor, or the base bid alone defeats the
-   *    ceiling. Ranking a transient above a permanent fault buries the permanent one, which is
-   *    exactly how 29 open-loop campaigns spent months reading `OK`.
+   *    ago reaches its first tick in fifteen, and a stale cron is fixed by the next tick. A binding
+   *    CPC ceiling is a CONFIG fault that no amount of waiting repairs.
    */
   if (cannotConverge > 0) {
     const all = cannotConverge >= membersTotal
     return {
       tone: 'warn',
-      label: all ? 'Cannot converge' : `${cannotConverge} cannot converge`,
+      label: all ? 'Capped by CPC ceiling' : `${cannotConverge} capped by CPC ceiling`,
       detail: input.cannotConvergeReason
         ?? (all
-          ? 'This schedule is running and can never reach its goal. Open the Campaigns grain to see which ceiling is deciding.'
-          : `${cannotConverge} of ${membersTotal} campaigns here can never reach their goal. Open the Campaigns grain to see which.`),
+          ? 'This plan is running, but the CPC ceiling holds its campaigns below the placement % their hour sets. Open the Campaigns grain to see each ceiling.'
+          : `${cannotConverge} of ${membersTotal} campaigns here are held below the placement % their hour sets by the CPC ceiling. Open the Campaigns grain to see which.`),
     }
   }
   if (!lastEvaluatedAt) {
@@ -133,7 +132,7 @@ const n = (count: number, one: string, many = `${one}s`) => `${count} ${count ==
 export function releasePreviewLines(p: ReleasePreview): string[] {
   const lines: string[] = []
   if (!p.restore) lines.push('No campaign here holds a bid floor this schedule set, so no bid changes.')
-  else if (p.waitWhy) lines.push(`The ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')} ${p.bids === 1 ? 'stays' : 'stay'} floored for now because ${p.waitWhy}. ${p.bids === 1 ? 'It comes' : 'They come'} back on the first run after that changes on a paused campaign; on a live one, when you give ${p.bids === 1 ? 'it' : 'them'} back from the banner on the Rank & Dayparting list.`)
+  else if (p.waitWhy) lines.push(`The ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')} ${p.bids === 1 ? 'stays' : 'stay'} floored for now because ${p.waitWhy}. ${p.bids === 1 ? 'It comes' : 'They come'} back on the first run after that changes on a paused campaign; on a live one, when you give ${p.bids === 1 ? 'it' : 'them'} back from the banner on the Hourly Bids list.`)
   else lines.push(`Gives back at once the ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')}.`)
   if (p.keptByOthers) {
     const who = [...new Set(p.items.filter((i) => i.outcome === 'kept-by-others').map((i) => i.floorBy ?? 'someone else'))]

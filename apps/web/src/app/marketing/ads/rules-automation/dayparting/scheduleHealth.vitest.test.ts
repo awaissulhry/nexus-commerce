@@ -55,37 +55,42 @@ describe('scheduleHealth', () => {
 })
 
 /**
- * RD.P2 — `Cannot converge`, and the position that makes it useful.
+ * RD.P2 — `Capped by CPC ceiling` (was `Cannot converge` before 2e), and the position that makes it useful.
  *
  * The ordering is the policy, so these tests pin the ORDER rather than the string: a config fault
  * that never self-heals must outrank a transient the next cron tick clears, and must not outrank a
  * campaign this schedule does not own.
  */
-describe('Cannot converge', () => {
+describe('Capped by CPC ceiling', () => {
   const base = { enabled: true, lastEvaluatedAt: new Date().toISOString(), failedWrites: 0, governedElsewhere: 0, membersTotal: 11 }
 
   it('fires when every member is stuck, and carries the engine’s own reason', () => {
-    const h = scheduleHealth({ ...base, cannotConverge: 11, cannotConvergeReason: 'The ceiling equals the floor (75%).' })
-    expect(h.label).toBe('Cannot converge')
+    const h = scheduleHealth({ ...base, cannotConverge: 11, cannotConvergeReason: 'The CPC ceiling holds this at 40%, below the 75% this hour sets.' })
+    expect(h.label).toBe('Capped by CPC ceiling')
     expect(h.tone).toBe('warn')
-    expect(h.detail).toContain('ceiling equals the floor')
+    expect(h.detail).toContain('below the 75% this hour sets')
+  })
+
+  it('says the CPC ceiling, not a goal, when the engine gives no reason', () => {
+    expect(scheduleHealth({ ...base, cannotConverge: 11 }).detail).toMatch(/CPC ceiling holds its campaigns below the placement % their hour sets/)
+    expect(scheduleHealth({ ...base, cannotConverge: 11 }).detail).not.toMatch(/goal/)
   })
 
   it('counts the members when only some are stuck', () => {
-    expect(scheduleHealth({ ...base, cannotConverge: 8, membersTotal: 10 }).label).toBe('8 cannot converge')
+    expect(scheduleHealth({ ...base, cannotConverge: 8, membersTotal: 10 }).label).toBe('8 capped by CPC ceiling')
   })
 
   it('outranks Stale — a config fault does not heal on the next tick', () => {
     const stale = new Date(Date.now() - 90 * 60 * 1000).toISOString()
-    expect(scheduleHealth({ ...base, lastEvaluatedAt: stale, cannotConverge: 3 }).label).toBe('3 cannot converge')
+    expect(scheduleHealth({ ...base, lastEvaluatedAt: stale, cannotConverge: 3 }).label).toBe('3 capped by CPC ceiling')
     expect(scheduleHealth({ ...base, lastEvaluatedAt: stale, cannotConverge: 0 }).label).toBe('Stale')
   })
 
   it('outranks Never run, which is transient for a freshly armed schedule', () => {
-    expect(scheduleHealth({ ...base, lastEvaluatedAt: null, cannotConverge: 2 }).label).toBe('2 cannot converge')
+    expect(scheduleHealth({ ...base, lastEvaluatedAt: null, cannotConverge: 2 }).label).toBe('2 capped by CPC ceiling')
   })
 
-  it('does NOT outrank Governed elsewhere — that row is not this schedule’s to converge', () => {
+  it('does NOT outrank Governed elsewhere — that row is not this schedule’s to hold', () => {
     expect(scheduleHealth({ ...base, governedElsewhere: 11, cannotConverge: 11 }).label).toBe('Governed elsewhere')
   })
 
@@ -116,9 +121,9 @@ describe('release copy', () => {
 
   it('says why the give-back waits, and when it comes', () => {
     expect(releasePreviewLines(preview({ waitWhy: 'ads automation is stopped (halted: spend spike)' }))[0])
-      .toBe('The 3 bids it floored on 1 campaign stay floored for now because ads automation is stopped (halted: spend spike). They come back on the first run after that changes on a paused campaign; on a live one, when you give them back from the banner on the Rank & Dayparting list.')
+      .toBe('The 3 bids it floored on 1 campaign stay floored for now because ads automation is stopped (halted: spend spike). They come back on the first run after that changes on a paused campaign; on a live one, when you give them back from the banner on the Hourly Bids list.')
     expect(releasePreviewLines(preview({ bids: 1, waitWhy: 'Rank & Dayparting is switched off for this business' }))[0])
-      .toBe('The 1 bid it floored on 1 campaign stays floored for now because Rank & Dayparting is switched off for this business. It comes back on the first run after that changes on a paused campaign; on a live one, when you give it back from the banner on the Rank & Dayparting list.')
+      .toBe('The 1 bid it floored on 1 campaign stays floored for now because Rank & Dayparting is switched off for this business. It comes back on the first run after that changes on a paused campaign; on a live one, when you give it back from the banner on the Hourly Bids list.')
   })
 
   it('names who holds a floor it did not set, and lists placements above 0%', () => {

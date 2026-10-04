@@ -28,7 +28,7 @@
  *
  * LIVE CAMPAIGNS (Owner, 2026-10-04): the orphan sweep never changes bids on a live (ENABLED) campaign by itself — a
  * leftover floor or base-bid delta there is of unknown size and age. It gives back on paused (and draft) campaigns
- * only. The live ones are listed (`listEnabledOrphans`, the banner on the Rank & Dayparting list) and a person gives
+ * only. The live ones are listed (`listEnabledOrphans`, the banner on the Hourly Bids list) and a person gives
  * each one back (`releaseEnabledOrphan`, through `releaseCampaigns`, so every brake above still applies). So "the sweep
  * gives it back after Resume" below holds for a paused campaign; a live one waits on that list.
  */
@@ -257,11 +257,11 @@ export async function releaseScheduleMembers(members: ScheduleMember[], why: str
 /**
  * A give-back that could not run (the database did not answer) never fails the delete, pause or save that asked for
  * it: the schedule no longer holds those campaigns, so the next rank-defend run's orphan sweep gives the bids back on
- * the paused ones, and the live ones wait on the Rank & Dayparting list for a person.
+ * the paused ones, and the live ones wait on the Hourly Bids list for a person.
  */
 function couldNotRun(campaigns: number, e: unknown): ReleaseReport {
   logger.warn('[rank-release] give-back could not run — the next rank-defend run gives it back', { campaigns, error: (e as Error)?.message ?? String(e) })
-  return { ...emptyRelease(), deferred: campaigns, deferredWhy: 'the give-back could not run just now; the rank loop\'s next run gives the bids back on paused campaigns, and live ones wait on the Rank & Dayparting list for a person to give them back' }
+  return { ...emptyRelease(), deferred: campaigns, deferredWhy: 'the give-back could not run just now; the rank loop\'s next run gives the bids back on paused campaigns, and live ones wait on the Hourly Bids list for a person to give them back' }
 }
 
 /**
@@ -518,7 +518,7 @@ export async function enabledOrphanScope(): Promise<{ scope?: string }> {
     if (unknown) return {}
     const n = (await pickOrphans(held, true)).size
     if (!n) return {}
-    return { scope: `${plural(n, 'live campaign')} still ${n === 1 ? 'carries' : 'carry'} bids it changed and no schedule or plan holds ${n === 1 ? 'it' : 'them'}: it never changes a live campaign by itself, so ${n === 1 ? 'it waits' : 'they wait'} for a person to give the bids back on the Rank & Dayparting list.` }
+    return { scope: `${plural(n, 'live campaign')} still ${n === 1 ? 'carries' : 'carry'} bids it changed and no schedule or plan holds ${n === 1 ? 'it' : 'them'}: it never changes a live campaign by itself, so ${n === 1 ? 'it waits' : 'they wait'} for a person to give the bids back on the Hourly Bids list.` }
   } catch (e) {
     logger.warn('[rank-release] live orphan count unreadable', { error: (e as Error).message })
     return {}
@@ -609,7 +609,7 @@ export function releaseSentence(p: ReleasePreview): string {
   if (!p.restore) return p.keptByOthers ? `nothing it floored is floored now (${plural(p.keptByOthers, 'campaign')} floored by someone else stay floored)` : 'nothing it floored is floored now'
   const what = `the ${plural(p.bids, 'bid')} it floored on ${plural(p.restore, 'campaign')} ${p.bids === 1 ? 'comes' : 'come'} back`
   // Owner 2026-10-04 — after the wait, the sweep gives back on a paused campaign only; a live one waits for a person.
-  return p.waitWhy ? `${what} on the first run after that changes if the campaign is paused, or when a person gives them back on the Rank & Dayparting list if it is live (${p.waitWhy})` : `${what} at once`
+  return p.waitWhy ? `${what} on the first run after that changes if the campaign is paused, or when a person gives them back on the Hourly Bids list if it is live (${p.waitWhy})` : `${what} at once`
 }
 
 /**
@@ -636,7 +636,7 @@ export async function rankSwitchBrake(base: string | null): Promise<string | nul
       where: { bidsSuppressedAt: { not: null }, OR: [{ bidsSuppressedBy: null }, { bidsSuppressedBy: '' }, { bidsSuppressedBy: { startsWith: 'automation:rank-defend-' } }, { bidsSuppressedBy: { startsWith: 'automation:rank-plan-' } }] },
     })
     const now = n
-      ? `${plural(n, 'campaign')} ${n === 1 ? 'holds' : 'hold'} a bid floor it set right now: switched off, ${n === 1 ? 'it stays' : 'they stay'} floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Rank & Dayparting list)`
+      ? `${plural(n, 'campaign')} ${n === 1 ? 'holds' : 'hold'} a bid floor it set right now: switched off, ${n === 1 ? 'it stays' : 'they stay'} floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Hourly Bids list)`
       : 'no campaign holds a bid floor it set right now'
     return base ? `${base}; ${now}` : now
   } catch (e) {

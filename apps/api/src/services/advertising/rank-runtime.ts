@@ -11,7 +11,12 @@
  * 🔴 **It reuses the engine's functions and reimplements none of them.** `resolveActiveTargetKey`,
  * `applyTargetOverrides`, `toSpec`, `biasBand`, `cpcCapPct` and `strategyHeadroom` are imported
  * from the controller and the job, so a page column cannot disagree with the loop that actually
- * decides. The one place this module adds judgement is naming the states — see `allOut` below.
+ * decides. The one place this module adds judgement is naming the states.
+ *
+ * 2e (Owner D1 = A) — the loop is an hour-of-day bid plan: every serving hour HOLDS the Placement % its target sets
+ * (per lane for a blend), capped only by the CPC ceiling. Nothing chases a goal, so there is no `all-out` or `chasing`
+ * state any more, `goal` is never live, and "cannot converge" means only that the CPC ceiling holds a campaign below
+ * the % its hour sets.
  *
  * The path mirrors `runRankDefendOnce`'s schedule loop (`ad-rank-defend.job.ts:663–681`) exactly:
  *
@@ -46,21 +51,19 @@ export type RdModeKind =
   | 'min-bid'
   | 'capped-base'
   | 'capped-floor'
-  | 'all-out'
-  | 'chasing'
   | 'holding'
 
 /** Severity order for the group roll-up: what an operator should look at first. */
 const MODE_SEVERITY: RdModeKind[] = [
   'dangling-target', 'capped-base', 'capped-floor', 'governed-elsewhere',
-  'nothing-held', 'not-running', 'min-bid', 'all-out', 'chasing', 'holding',
+  'nothing-held', 'not-running', 'min-bid', 'holding',
 ]
 /** One word per state, for the spread. */
 const MODE_WORD: Record<RdModeKind, string> = {
   'not-running': 'not running', 'governed-elsewhere': 'governed elsewhere',
   'nothing-held': 'holding nothing', 'dangling-target': 'dangling',
   'min-bid': 'min bid', 'capped-base': 'capped', 'capped-floor': 'capped',
-  'all-out': 'all-out', chasing: 'chasing', holding: 'holding',
+  holding: 'holding',
 }
 
 export interface RdMode { kind: RdModeKind; label: string; detail: string }
@@ -75,10 +78,10 @@ export interface RdCeiling {
   label: string
 }
 
+/** 2e — no goal is read any more: always { null, null, false, null }. Kept so the payload keeps its shape. */
 export interface RdGoal {
   targetPct: number | null
   actualPct: number | null
-  /** False when the engine never reads this goal. Two causes, and they differ. */
   live: boolean
   deadReason: string | null
 }
@@ -98,8 +101,6 @@ export interface RdCampaignRuntimeInput {
   maxBaseBidCents: number | null
   biddingStrategy: string | null
   governed: boolean
-  /** Achieved impression share for the active lane, 0-100, where a signal exists. */
-  achievedISPct?: number | null
 }
 
 export interface RdCampaignRuntime {
@@ -110,6 +111,7 @@ export interface RdCampaignRuntime {
   placement: string | null
   eventName: string | null
   band: { floor: number; ceiling: number } | null
+  /** 2e — always false: nothing climbs above the hour's Placement %. */
   canChase: boolean
   mode: RdMode
   ceiling: RdCeiling | null
@@ -131,7 +133,7 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
 
   // ── the gates the engine applies before it evaluates anything ─────────────────────────────
   if (!input.scheduleEnabled || !isGoalMode(input.windows, input.defaultTargetKey)) {
-    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule carries no rank target, so the rank loop does not own it.' : 'Paused — the rank loop skips it. The bids it floored were given back when it was paused (while ads automation is stopped: on the first run after Resume for a paused campaign, while a live one waits for a person on the Rank & Dayparting list); placement percentages stay as last set.' } }
+    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule names no target in any hour, so the hourly bid engine does not own it.' : 'Paused — the hourly bid engine skips it. The bids it floored were given back when it was paused (while ads automation is stopped: on the first run after Resume for a paused campaign, while a live one waits for a person on the Hourly Bids list); placement percentages stay as last set.' } }
   }
   if (input.governed) {
     return { ...base, mode: { kind: 'governed-elsewhere', label: 'Governed elsewhere', detail: 'A Rank Director family plan governs this campaign and takes precedence, so the schedule is never evaluated for it.' } }
@@ -149,15 +151,18 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
   }
   const row = input.targetByKey.get(key)
   if (!row) {
-    return { ...base, eventName, activeTargetKey: key, mode: { kind: 'dangling-target', label: 'Dangling target', detail: `The plan names "${key}", which no longer exists in the goal library. Nothing is held — the schedule was authored before the target was deleted. Bids it floored are given back; placement percentages stay as last set.` } }
+    return { ...base, eventName, activeTargetKey: key, mode: { kind: 'dangling-target', label: 'Dangling target', detail: `The plan names "${key}", which no longer exists in the target library. Nothing is held — the schedule was authored before the target was deleted. Bids it floored are given back; placement percentages stay as last set.` } }
   }
 
   // ── the spec the engine would decide with ─────────────────────────────────────────────────
   const spec: RankTargetSpec = applyTargetOverrides(toSpec(row), input.targetOverrides)
   const { floor, ceiling } = biasBand(spec)
-  const canChase = !!spec.allOut || ceiling > floor
+  // What the hour holds, per lane for a blend (each lane its own Placement %, exactly as the job drives it).
+  const held = heldPlacements(spec)
+  const top = Math.max(...held.map((h) => h.pct))
   const cap = cpcCapPct(spec.maxCpcCents, input.maxBaseBidCents, strategyHeadroom(input.biddingStrategy))
-  const binding = !!cap && (cap.baseAlone || cap.capPct < floor)
+  // The job applies the cap to every lane, so it binds as soon as it sits below the highest one.
+  const binding = !spec.pause && !!cap && (cap.baseAlone || cap.capPct < top)
   const ceilingOut: RdCeiling | null = cap
     ? {
       capPct: cap.capPct, baseAlone: cap.baseAlone, binding,
@@ -169,60 +174,44 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
     }
     : null
 
-  // ── the goal, and the two different reasons it can be dead ────────────────────────────────
-  //
-  // 🔴 `allOut` is the one that is easy to get wrong. `canChase` is TRUE for an all-out target,
-  // but `computeStep`'s all-out branch reads neither `targetISPct` nor `acosCapPct` — it climbs
-  // `+stepUpPct` toward the ceiling and nothing else. Printing "Chasing 90% IS" there would be a
-  // brand-new lie of exactly the shape this page exists to remove.
-  const goal: RdGoal = {
-    targetPct: spec.targetISPct ?? null,
-    actualPct: input.achievedISPct ?? null,
-    live: spec.targetISPct != null && canChase && !spec.allOut,
-    deadReason: null,
-  }
-  if (spec.targetISPct != null && !goal.live) {
-    goal.deadReason = spec.allOut
-      ? 'All-out climbs to the ceiling and ignores this goal — the controller never reads it.'
-      : 'The ceiling equals the floor, so the controller returns before it reads this goal. The target holds a fixed placement.'
-  }
-
-  // ── convergence ───────────────────────────────────────────────────────────────────────────
+  // ── 2e — can it hold what the hour sets? Only the CPC ceiling can stop it ──────────────────
   let canConverge = true
   let cannotConvergeReason: string | null = null
-  if (cap?.baseAlone) {
+  if (!spec.pause && cap?.baseAlone) {
     canConverge = false
-    cannotConvergeReason = `The base bid alone (${eur(input.maxBaseBidCents)}) exceeds the ${eur(spec.maxCpcCents)} CPC ceiling — no multiplier can rescue it. Lower the bids.`
-  } else if (cap && cap.capPct < floor) {
+    cannotConvergeReason = `The base bid alone (${eur(input.maxBaseBidCents)}) exceeds the ${eur(spec.maxCpcCents)} CPC ceiling — no placement % can bring it under. Lower the bids.`
+  } else if (binding && cap) {
     canConverge = false
-    cannotConvergeReason = `The CPC ceiling pins this to ${cap.capPct}%, below its own ${floor}% floor. The ceiling is deciding, not the target.`
-  } else if (spec.targetISPct != null && !canChase) {
-    canConverge = false
-    cannotConvergeReason = `The ceiling equals the floor (${floor}%), so this schedule's ${spec.targetISPct}% impression-share goal is never read. It holds a fixed placement.`
+    cannotConvergeReason = `The ${eur(spec.maxCpcCents)} CPC ceiling holds this at ${cap.capPct}%, below the ${top}% this hour's plan sets.`
   }
 
   // ── mode, in precedence order: the ceiling binds LAST in the engine and therefore first here ──
   let mode: RdMode
   if (spec.pause) {
-    mode = { kind: 'min-bid', label: `Min bid ${eur(spec.floorBidCents ?? 2)}`, detail: 'This hour holds the minimum bid rather than a rank. Nothing is being pursued.' }
+    mode = { kind: 'min-bid', label: `Min bid ${eur(spec.floorBidCents ?? 2)}`, detail: 'This hour holds every bid at the floor; the campaign stays live and the bids come back when a serving hour starts.' }
   } else if (cap?.baseAlone) {
     mode = { kind: 'capped-base', label: `Capped 0% · base ${eur(input.maxBaseBidCents)} > ${eur(spec.maxCpcCents)}`, detail: cannotConvergeReason ?? '' }
-  } else if (cap && cap.capPct < floor) {
-    mode = { kind: 'capped-floor', label: `Capped ${cap.capPct}% · floor ${floor}%`, detail: cannotConvergeReason ?? '' }
-  } else if (spec.allOut) {
-    mode = { kind: 'all-out', label: `All-out → ${ceiling}%`, detail: `Climbing toward ${ceiling}% and bounded only by the ${eur(spec.maxCpcCents)} CPC ceiling. All-out ignores both the impression-share goal and the ACoS cap.` }
-  } else if (canChase) {
-    mode = { kind: 'chasing', label: `Chasing ${spec.targetISPct ?? '—'}% IS`, detail: `A real closed loop: the ceiling (${ceiling}%) sits above the floor (${floor}%), so the controller reads the goal and moves between them.` }
+  } else if (binding && cap) {
+    mode = { kind: 'capped-floor', label: `Capped ${cap.capPct}% · plan ${top}%`, detail: cannotConvergeReason ?? '' }
   } else {
-    mode = { kind: 'holding', label: `Holding ${floor}%`, detail: `Snap-and-hold at ${floor}%. The ceiling equals the floor, so the controller never enters its feedback branch.` }
+    const words = held.map((h) => `${SHORT_PLACE[h.placement] ?? h.placement} ${h.pct}%`).join(' · ')
+    mode = { kind: 'holding', label: `Holding ${words}`, detail: `This hour's plan sets ${words}. The engine sets it once when the hour starts and holds it; it reads no rank or share signal.` }
   }
 
   return {
     scheduleId: input.scheduleId, campaignId: input.campaignId, groupId: input.groupId,
     activeTargetKey: key, placement: spec.placement, eventName,
-    band: { floor, ceiling }, canChase, mode, ceiling: ceilingOut, goal,
+    band: { floor, ceiling }, canChase: false, mode, ceiling: ceilingOut, goal: base.goal,
     canConverge, cannotConvergeReason,
   }
+}
+
+const SHORT_PLACE: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' }
+
+/** 2e — the placement %s a serving hour holds: each lane's own for a blend, else the target's one placement. */
+function heldPlacements(spec: RankTargetSpec): Array<{ placement: string; pct: number }> {
+  if (spec.lanes && spec.lanes.length) return spec.lanes.map((l) => ({ placement: l.placement, pct: biasBand(l).floor }))
+  return [{ placement: spec.placement, pct: biasBand(spec).floor }]
 }
 
 // ── RD.P4 · is a signal trustworthy? ─────────────────────────────────────────────────────────

@@ -55,9 +55,9 @@ export const RULES_BASE = '/marketing/ads/rules-automation'
  * Two labels moved with the order, and one deliberately did not:
  *   · `budget`           "Budget Rules"              → **"Budget"**           (H10's word)
  *   · `budget-schedules` "Budget Pacing & Schedules" → **"Budget Schedules"** (H10's word)
- *   · `dayparting` **keeps "Rank & Dayparting Schedules"** — the operator's explicit exception:
- *     100% of the live rows are rank-goal schedules, so H10's plain "Dayparting Schedules" would
- *     name the mode nobody uses. Renaming a tab does not touch the RD page or its builder.
+ *   · `dayparting` kept "Rank & Dayparting Schedules" until 2e (Owner D1 = A, 2026-10-04): no
+ *     Amazon signal can feed a 15-minute rank loop, so the schedules now hold a fixed placement %,
+ *     bid floor and base bid per hour, and the tab says that — **"Hourly Bids"**. Key and route stay.
  * Both relabelled tabs keep their `key` and route, so no URL, deep link or `RULE_TAB_ACTION_TYPES`
  * entry moved.
  *
@@ -134,7 +134,7 @@ export const RULES_TABS: RulesTab[] = [
     routed: true,
     subtitle: 'What may change a budget, by how much, and what it actually did',
   },
-  { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
+  { key: 'dayparting', label: 'Hourly Bids', routed: true, subtitle: 'A fixed placement % and bid floor for each hour of the week, across many campaigns' },
   // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
   // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
   // nothing — but budget still binds on 32.7% of campaign-days, so the subject is pacing and level,

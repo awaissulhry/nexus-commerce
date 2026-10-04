@@ -2,6 +2,7 @@
 
 /**
  * RGD.0 — Rank Goal & Schedule builder (the NEW default for the Dayparting Schedule rule type).
+ * 2e (Owner D1 = A) — on screen it is the "Hourly bid plan" builder: each hour holds fixed values.
  *
  * `/builder/dayparting-schedule` now opens this rank-goal authoring surface by default; a segmented
  * toggle in the top bar switches to the UNCHANGED classic dayparting builder (?style=classic). The
@@ -45,7 +46,7 @@ function StyleToggle({ value, onChange }: { value: 'rank' | 'classic'; onChange:
       ariaLabel="Schedule style" size="sm" className="h10-rgd-toggle"
       value={value}
       onChange={(v) => onChange(v as 'rank' | 'classic')}
-      options={[{ value: 'rank', label: 'Rank goal' }, { value: 'classic', label: 'Dayparting' }]}
+      options={[{ value: 'rank', label: 'Hourly bids' }, { value: 'classic', label: 'Dayparting' }]}
     />
   )
 }
@@ -53,7 +54,7 @@ function StyleToggle({ value, onChange }: { value: 'rank' | 'classic'; onChange:
 const STEPS = [
   { id: 'name', label: 'Schedule Name' },
   { id: 'campaigns', label: 'Campaigns' },
-  { id: 'plan', label: 'Rank goal & schedule' },
+  { id: 'plan', label: 'Hourly bid plan' },
   { id: 'control', label: 'Control' },
 ]
 // HX.8 — the history step only exists once the schedule does: a schedule being created for the
@@ -256,7 +257,7 @@ export function RankGoalBuilder() {
         <div className="l">
           <ToolbarButton className="x" icon={<X size={19} />} label="Close" tooltip={false} onClick={close} />
           <AtomMark size={20} />
-          <b>{isEdit ? 'Edit' : 'Create'} Rank Schedule</b>
+          <b>{isEdit ? 'Edit' : 'Create'} Hourly Bid Plan</b>
           {toggle}
         </div>
         <div className="r">
@@ -268,7 +269,7 @@ export function RankGoalBuilder() {
         {/* Not `role="tablist"`: these scroll the body to a section, they do not swap panels, and
             nothing here carries `aria-controls`. A `<nav>` of links-as-buttons is what it is, and
             `aria-current` says which section you are in without promising tab behaviour. */}
-        <nav className="h10-rb-nav" aria-label="Rank schedule steps">
+        <nav className="h10-rb-nav" aria-label="Hourly bid plan steps">
           {(groupId ? [...STEPS, EVENTS_STEP, HISTORY_STEP] : STEPS).map((s) => (
             <Button key={s.id} variant="quiet" className={`h10-rb-step ${active === s.id ? 'on' : ''}`} aria-current={active === s.id ? 'true' : undefined} onClick={() => goto(s.id)}>{s.label}</Button>
           ))}
@@ -283,7 +284,7 @@ export function RankGoalBuilder() {
 
             <section id="rgd-campaigns" className="h10-rb-sec">
               <h2>Campaigns</h2>
-              <p className="h10-rb-desc">Select the campaigns this rank plan should hold — one plan, applied across all of them.</p>
+              <p className="h10-rb-desc">Select the campaigns this hourly bid plan sets — one plan, applied across all of them.</p>
               <div className="h10-rb-pfscope">
                 <label htmlFor="rgd-pfscope">Portfolio scope <span className="opt">(optional)</span></label>
                 {/* OS.4 — was a native dropdown: no search, and an account with many portfolios made
@@ -317,14 +318,14 @@ export function RankGoalBuilder() {
             </section>
 
             <section id="rgd-plan" className="h10-rb-sec">
-              <h2>Your rank goal &amp; schedule</h2>
-              <p className="h10-rb-desc">Hold this rank, on this schedule.</p>
+              <h2>Your hourly bid plan</h2>
+              <p className="h10-rb-desc">Paint what each hour of the week holds: a placement %, the Min-bid floor or a base bid. The engine sets those fixed values each hour; it reads no rank or impression share.</p>
               <RankPlanBody ref={planRef} campaigns={selCampaigns} name={name} groupId={groupId ?? undefined} portfolioId={portfolioScope || undefined} onStatus={setPlanStatus} onGroupCreated={onGroupCreated} />
             </section>
 
             <section id="rgd-control" className="h10-rb-sec">
               <h2>Control</h2>
-              <p className="h10-rb-desc">Choose how this rank plan runs once you create it.</p>
+              <p className="h10-rb-desc">Choose how this hourly bid plan runs once you create it.</p>
               <div className="h10-rb-card control">
                 <RadioCard
                   variant="row" className="h10-rb-ctrl"
@@ -338,7 +339,7 @@ export function RankGoalBuilder() {
                   name="rgdcontrol" checked={control === 'automate'} selected={control === 'automate'}
                   onChange={() => setControl('automate')}
                   title="Automate"
-                  description={<>Have the engine hold this rank automatically on its cadence (real Amazon pushes still honour each campaign&apos;s write-gate).</>}
+                  description={<>Have the engine set each hour&apos;s values automatically, writing only when the hour&apos;s value changes (real Amazon pushes still honour each campaign&apos;s write-gate).</>}
                 />
               </div>
               {/* E1/E3 — what arming this actually does, at the point the choice is made. */}
@@ -351,7 +352,7 @@ export function RankGoalBuilder() {
                 showSchedule={!!savedPlan}
               />
               <p className="h10-rb-hint-note">
-                Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off (a live campaign then waits for you to give its bids back from the banner on the Rank &amp; Dayparting list). Placement percentages stay as last set.
+                Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off (a live campaign then waits for you to give its bids back from the banner on the Hourly Bids list). Placement percentages stay as last set.
                 {release && <> {releaseHoldLine(release)}</>}
               </p>
             </section>

@@ -166,7 +166,7 @@ function RowDialog({ kind, row, onClose, onRenamed, onDeleted }: {
         {kind === 'delete' && (
           <>
             Deletes <b>{row.name}</b> and removes the schedule from its <b>{row.campaigns}</b> campaign{row.campaigns === 1 ? '' : 's'}.
-            The rank loop stops holding a rank for {row.campaigns === 1 ? 'it' : 'them'}. This cannot be undone.
+            The engine stops setting hourly bids for {row.campaigns === 1 ? 'it' : 'them'}. This cannot be undone.
           </>
         )}
       </p>

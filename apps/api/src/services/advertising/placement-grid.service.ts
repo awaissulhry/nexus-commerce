@@ -485,10 +485,14 @@ export interface PlcChaseable {
   allOut: boolean
 }
 
-/** The targets that CAN move — the other half of the decorative story, and the one the study missed. */
+/**
+ * The targets that CAN move — the other half of the decorative story, and the one the study missed.
+ * 2e — none can any more: an hour holds its target's Placement % (biasBand's ceiling is its floor) and all-out no longer
+ * climbs, so this is always empty and every target that names a goal is decorative.
+ */
 export function chaseableOf(specs: RankTargetSpec[]): PlcChaseable[] {
   return specs
-    .filter((sp) => sp.allOut || biasBand(sp).ceiling > biasBand(sp).floor)
+    .filter((sp) => biasBand(sp).ceiling > biasBand(sp).floor)
     .map((sp) => ({ targetKey: sp.key, floor: biasBand(sp).floor, ceiling: biasBand(sp).ceiling, allOut: !!sp.allOut }))
 }
 
@@ -496,7 +500,7 @@ export function decorativeOf(specs: RankTargetSpec[]): PlcDecorative[] {
   const out: PlcDecorative[] = []
   for (const spec of specs) {
     const band = biasBand(spec)
-    const canChase = spec.allOut || band.ceiling > band.floor
+    const canChase = band.ceiling > band.floor // 2e — never true: all-out holds its Placement % too
     if (canChase) continue
     if (spec.targetISPct == null && spec.acosCapPct == null) continue
     out.push({

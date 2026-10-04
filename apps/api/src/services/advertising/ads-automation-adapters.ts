@@ -602,14 +602,15 @@ const A9: AutomationAdapter = {
 }
 
 const A10: AutomationAdapter = {
-  id: 'A10', key: 'ads-rank-defend', name: 'Rank-defend (schedules and product plans)',
-  what: 'Holds a search rank by moving placement percentages; suppresses and restores bids.',
+  id: 'A10', key: 'ads-rank-defend', name: 'Hourly bid plans (schedules and product plans)',
+  // 2e (Owner D1 = A) — an hour-of-day bid plan: it reads no rank or share signal and chases no goal.
+  what: 'Sets each campaign to the values its hour-of-week plan holds: placement percentages, a Min-bid floor (bids floored, campaign stays live, bids restored after) and a base bid. Writes only when the hour\'s value changes; reads no rank or share signal.',
   area: 'amazon-ads', writesTo: ['amazon'], view: FEATURES.adsView, claude: 'switch-tune', preview: 'saved',
   previewNote: 'One run of every enabled schedule and plan (or one plan), as a dry run: decisions only, nothing written.',
   crons: ['ad-rank-defend'], schedule: process.env.NEXUS_RANK_DEFEND_SCHEDULE ?? '*/15 * * * *',
   // The job runs only with exactly '1' (jobs/ad-rank-defend.job.ts).
   env: () => amazonAds(flagOn('NEXUS_ENABLE_RANK_DEFEND', isOne('NEXUS_ENABLE_RANK_DEFEND'), 'OFF',
-    'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run.', 'Rank-defend runs.')),
+    'NEXUS_ENABLE_RANK_DEFEND is not 1 — the hourly bid plans do not run.', 'The hourly bid plans run.')),
   async rows() {
     const { isGoalMode } = await import('../../jobs/ad-rank-defend.job.js')
     const [schedules, plans] = await Promise.all([

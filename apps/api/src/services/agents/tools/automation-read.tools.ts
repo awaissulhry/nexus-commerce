@@ -54,7 +54,7 @@ const listAutomations: AgentTool = {
   title: 'List automations',
   category: 'automation',
   description:
-    'Every automation in this business — Amazon and eBay ads rules and engines, budget schedules and pools, rank-defend, ' +
+    'Every automation in this business — Amazon and eBay ads rules and engines, budget schedules and pools, the hourly bid plans (rank-defend), ' +
     'the agent fleet, repricing, listing, replenishment, review and bulk rules, scheduled jobs, alerts and detectors — ' +
     'each with how far it may go now (OFF, OBSERVE, PROPOSE or AUTO: the lower of what the server allows and what this ' +
     'business set, with the reason), its scope, schedule, caps, last run and up to 5 of its rules or plans. ' +
@@ -189,7 +189,7 @@ const previewAutomationTool: AgentTool = {
     'What an automation would do now, writing nothing. A draft before it is saved (an Amazon ads rule in the rule ' +
     "builder's shape, an eBay ads rule) or a saved row: an ads rule against what its next tick would see, a " +
     'marketing, replenishment, listing or bulk rule against its trigger\'s contexts or a context you give, the price a ' +
-    "repricing rule would pick, auto-bid's bids, this month's budget enforcement, a pool's next rebalance, rank-defend " +
+    "repricing rule would pick, auto-bid's bids, this month's budget enforcement, a pool's next rebalance, the hourly bid plans (rank-defend) " +
     'and top-of-search as dry runs, a coverage set, an autopilot backtest. Says "no preview" for kinds without one. ' +
     'No run row, no counter, no proposal, no notification, nothing sent anywhere. A rule that pauses (or carries ' +
     'another action Claude may not automate) is shown as it would run and marked as refused when saved, with the ' +

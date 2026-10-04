@@ -92,9 +92,10 @@ export interface RdGroupRow {
  * `applyTargetOverrides`, `toSpec`) against the DATABASE clock, so a column here cannot disagree
  * with the loop that actually decides.
  */
+// 2e (Owner D1 = A) — 'all-out' and 'chasing' are gone: every hour holds fixed values.
 export type RdModeKind =
   | 'not-running' | 'governed-elsewhere' | 'nothing-held' | 'dangling-target'
-  | 'min-bid' | 'capped-base' | 'capped-floor' | 'all-out' | 'chasing' | 'holding'
+  | 'min-bid' | 'capped-base' | 'capped-floor' | 'holding'
 
 export interface RdMode { kind: RdModeKind; label: string; detail: string }
 
@@ -109,6 +110,7 @@ export interface RdCeiling {
   label: string
 }
 
+/** 2e — still sent by the API, always empty (no goal is read), and not shown. */
 export interface RdGoal {
   targetPct: number | null
   actualPct: number | null
@@ -117,6 +119,7 @@ export interface RdGoal {
   deadReason: string | null
 }
 
+/** 2e — still sent by the API (kept for now) and not shown: the engine reads no signal. */
 export type RdSignalKind = 'top-is' | 'sqp' | 'none-by-design' | 'no-signal' | 'no-coverage' | 'not-applicable'
 
 export interface RdSignal {
@@ -171,7 +174,7 @@ export interface RdGroupRuntime {
   groupId: string
   members: number
   modeCounts: Array<{ kind: RdModeKind; count: number }>
-  /** `8 capped · 2 all-out`, or one word when every member agrees. */
+  /** `8 capped · 2 min bid`, or one word when every member agrees. */
   modeSummary: string
   mixed: boolean
   cannotConverge: number
