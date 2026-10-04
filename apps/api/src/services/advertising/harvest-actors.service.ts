@@ -45,6 +45,7 @@ import prisma from '../../db.js'
 import { resolveAutonomy, type AutonomyLevel } from './ads-autonomy.js'
 import { graduationCeiling } from './ads-graduation.js'
 import { getAutomationState } from './ads-automation-state.service.js'
+import { settledEndText } from './ads-settled-window.js'
 
 /**
  * An action that can bring a keyword or a negative into existence.
@@ -225,7 +226,7 @@ function executedFor(actionTypes: string[], actions: unknown[]): Array<{ text: s
 
   if (actionTypes.includes('promote_to_exact')) {
     out.push(
-      { text: 'a 30-day window, ending 2 days back', source: 'advertising-rule-evaluator.job.ts:675 · ruleWindowBounds(30)' },
+      { text: `a 30-day window, ${settledEndText()}`, source: 'advertising-rule-evaluator.job.ts buildSearchTermConvertingContexts · settledWhere(30)' },
       { text: 'orders ≥ 2 as a HAVING clause — a rule condition can tighten it, never loosen it', source: 'CONVERTING_MIN_ORDERS, same file' },
       { text: 'the first 300 grouped terms only', source: '.slice(0, 300), same file' },
       { text: 'BROAD and PHRASE source terms only', source: 'matchType filter, :685' },

@@ -134,10 +134,18 @@ export interface RuleWindow {
  * honesty, on the channel that lacked it. Amazon's evaluator previously used a
  * bare `date >= now - N` with **no upper bound**, so every rule read D-0 and
  * D-1 on every run.
+ *
+ * 6c — an ads DECISION no longer uses this: it reads `settledWindowBounds` below, which also waits
+ * out the attribution window.
  */
 export function ruleWindowBounds(windowDays: number, now: Date = new Date()): RuleWindow {
+  return windowEndingDaysAgo(windowDays, PROVISIONAL_DAYS, now)
+}
+
+/** `windowDays` whole UTC days whose newest day is `lagDays` before `now`'s day. */
+function windowEndingDaysAgo(windowDays: number, lagDays: number, now: Date): RuleWindow {
   const until = new Date(now)
-  until.setUTCDate(until.getUTCDate() - PROVISIONAL_DAYS)
+  until.setUTCDate(until.getUTCDate() - lagDays)
   until.setUTCHours(23, 59, 59, 999)
 
   const since = new Date(until)
@@ -158,6 +166,50 @@ export function attributionWindowDays(adProduct: string | null | undefined): num
   if (p.includes('DISPLAY')) return 14
   // Sponsored Products: 7 days for sellers, 14 for vendors. We are a seller.
   return 7
+}
+
+/**
+ * 6c (review G.2, Owner decision S9, 2026-10-04) — every ads DECISION waits for the ad product's
+ * attribution window to close.
+ *
+ * `ruleWindowBounds` drops only the two days Amazon is still reporting. But a sale is attributed
+ * back to the day of the click for up to 7 days (Sponsored Products) or 14 (Brands, Display), so a
+ * day 3 days old still gains sales: a keyword whose newest days show spend and no sales looks like
+ * waste when its sales simply have not arrived. So a rule, a bid or a cut reads only days whose
+ * attribution window has closed.
+ *
+ * `provisional` is the escape hatch: the old two-day tail. The API reads it from
+ * `NEXUS_ADS_SETTLED_LAG=provisional` (this package reads no environment).
+ */
+export type SettledLag = 'attribution' | 'provisional'
+
+/** How many days before today a decision window ends, for one ad product. */
+export function settledLagDays(adProduct: string | null | undefined, lag: SettledLag = 'attribution'): number {
+  return lag === 'provisional' ? PROVISIONAL_DAYS : Math.max(PROVISIONAL_DAYS, attributionWindowDays(adProduct))
+}
+
+/**
+ * Bounds for a decision window: `windowDays` days ending `settledLagDays(adProduct)` days ago.
+ * `offsetDays` moves the whole window that many days further back — the earlier half of a
+ * week-over-week comparison.
+ */
+export function settledWindowBounds(
+  windowDays: number,
+  adProduct: string | null | undefined,
+  opts: { now?: Date; lag?: SettledLag; offsetDays?: number } = {},
+): RuleWindow {
+  return windowEndingDaysAgo(windowDays, settledLagDays(adProduct, opts.lag) + Math.max(0, opts.offsetDays ?? 0), opts.now ?? new Date())
+}
+
+/**
+ * The same rule in words, for every screen that states a window: "ending 7 days ago (14 for
+ * Sponsored Brands and Display)". One sentence, so the builder, the grid and the review queue
+ * cannot describe different windows.
+ */
+export function settledEndPhrase(lag: SettledLag = 'attribution'): string {
+  const sp = settledLagDays('SPONSORED_PRODUCTS', lag)
+  const other = settledLagDays('SPONSORED_BRANDS', lag)
+  return sp === other ? `ending ${sp} days ago` : `ending ${sp} days ago (${other} for Sponsored Brands and Display)`
 }
 
 export interface WindowVintage {

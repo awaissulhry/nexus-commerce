@@ -50,8 +50,9 @@ beforeAll(async () => {
     })
     campaignId = campaign.id
     // Top of search at 1 % ACOS: well under a 25 % target, so the defence raises the top-of-search percentage.
+    // 6c — 10 days old, inside Top-of-Search's settled window (it ends 7 days ago).
     await database.client.amazonAdsPlacementReport.create({
-      data: { profileId: 'TEST-PROFILE-1', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(), campaignId: 'TEST-CMP-1', placement: 'Top of Search on-Amazon', impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 10_000, orders7d: 5, currencyCode: 'EUR' },
+      data: { profileId: 'TEST-PROFILE-1', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(Date.now() - 10 * 86_400_000), campaignId: 'TEST-CMP-1', placement: 'Top of Search on-Amazon', impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 10_000, orders7d: 5, currencyCode: 'EUR' },
     })
   })
 }, 180_000)

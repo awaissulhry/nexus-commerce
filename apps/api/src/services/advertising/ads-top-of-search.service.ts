@@ -16,6 +16,7 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { logger } from '../../utils/logger.js'
 import { nothingHeld, type EngineGuard } from './ads-engine-guard.js'
+import { settledWhere } from './ads-settled-window.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -40,11 +41,11 @@ export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplac
   const windowDays = Math.max(7, Math.min(90, opts.windowDays ?? 30))
   const targetAcos = opts.targetAcos ?? 0.25
   const targetIS = opts.targetIS ?? null
-  const since = new Date(); since.setUTCDate(since.getUTCDate() - windowDays); since.setUTCHours(0, 0, 0, 0)
-
+  // 6c — settled: `windowDays` days ending at the ad product's attribution lag, so the ACoS this
+  // decides on is not today's spend against sales Amazon has not attributed yet.
   const perf = await prisma.amazonAdsPlacementReport.groupBy({
     by: ['campaignId'],
-    where: { placement: TOP_REPORT_PLACEMENT, date: { gte: since } },
+    where: { placement: TOP_REPORT_PLACEMENT, ...settledWhere(windowDays) },
     _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
     _avg: { topOfSearchIS: true },
   })

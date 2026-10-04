@@ -116,22 +116,27 @@ describe('ruleWindowOf — the window that stops a Reason contradicting its own 
     ],
   }]
 
-  it('reads the builder group’s own lookback and exclusion', () => {
-    expect(ruleWindowOf(placementRule)).toBe('Last 7 Days, excluding the last 2 days')
+  it('reads the builder group’s own lookback, ending where the engine ends it (6c), not at the stored exclusion', () => {
+    // The stored `exclude: 'Last 2 Days'` is what the builder said before 6c; the engine never read it.
+    expect(ruleWindowOf(placementRule)).toBe('Last 7 Days, ending 7 days ago (14 for Sponsored Brands and Display)')
   })
 
   it('leaves the criteria sentence untouched — they are separate readings', () => {
     expect(conditionsTextOf(placementRule)).toBe('Sales = €0 and Clicks ≥ 20')
   })
 
-  it('does not say "excluding" when the builder excluded nothing', () => {
-    expect(ruleWindowOf([{ lookback: 'Last 30 Days', exclude: 'None', conditions: [] }])).toBe('Last 30 Days')
-    expect(ruleWindowOf([{ lookback: 'Last 30 Days', conditions: [] }])).toBe('Last 30 Days')
+  it('6c — states the settled end even where the builder stored "exclude nothing": the engine lags regardless', () => {
+    expect(ruleWindowOf([{ lookback: 'Last 30 Days', exclude: 'None', conditions: [] }])).toBe('Last 30 Days, ending 7 days ago (14 for Sponsored Brands and Display)')
+    expect(ruleWindowOf([{ lookback: 'Last 30 Days', conditions: [] }])).toBe('Last 30 Days, ending 7 days ago (14 for Sponsored Brands and Display)')
+  })
+
+  it('a snapshot is not a span and gets no end', () => {
+    expect(ruleWindowOf([{ lookback: 'Latest snapshot', exclude: 'Last 2 Days', conditions: [] }])).toBe('Latest snapshot')
   })
 
   it('finds a window nested one group deeper', () => {
     expect(ruleWindowOf([{ match: 'any', conditions: [{ lookback: 'Last 14 Days', conditions: [] }] }]))
-      .toBe('Last 14 Days')
+      .toBe('Last 14 Days, ending 7 days ago (14 for Sponsored Brands and Display)')
   })
 
   it('is null for an engine-flat rule, whose window lives on the ACTION instead', () => {

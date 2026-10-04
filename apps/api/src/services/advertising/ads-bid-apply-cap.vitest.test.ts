@@ -52,7 +52,8 @@ const clicks = (n: number, costMicros: bigint | null = null) =>
   h.perfAggregate.mockResolvedValue({ _sum: { clicks: n, costMicros, sales7dCents: 0 } })
 const ceiling = (cents: number) => h.ruleFindUnique.mockResolvedValue({ maxDailyAdSpendCentsEur: cents })
 const windowDaysOf = (call: number) => {
-  const { gte, lte } = h.perfAggregate.mock.calls[call][0].where.date as { gte: Date; lte: Date }
+  // 6c — the window is per ad product now; the Sponsored Products branch carries the same length.
+  const { gte, lte } = h.perfAggregate.mock.calls[call][0].where.OR[0].date as { gte: Date; lte: Date }
   return Math.round((lte.getTime() - gte.getTime()) / 86_400_000)
 }
 const RAISE = { op: 'incAbs', value: 0.05 } // 35¢ → 40¢

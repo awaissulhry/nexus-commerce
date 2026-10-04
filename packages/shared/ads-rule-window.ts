@@ -17,7 +17,7 @@
  *     (ads-top-of-search.service.ts, the only one that already takes `windowDays` as a parameter).
  *
  * ⚠ **This file is the SOURCE, not a copy of one.** The evaluator and the bid optimiser import
- * `TRIGGER_WINDOW` / `ACTION_WINDOW` and pass the numbers to `ruleWindowBounds`; editing a number
+ * `TRIGGER_WINDOW` / `ACTION_WINDOW` and pass the numbers to `settledWhere`; editing a number
  * here changes what the engine reads. That is deliberate and it is the whole point: a table of
  * window sizes that no executor reads is [[reference_fleet_stale_constant_class]] — a surface
  * rendering what nothing obeys — and this section has shipped that bug more than once. If you
@@ -28,7 +28,7 @@
  * already inline at the call site it replaces, transcribed and then diffed against it.
  */
 
-import { PROVISIONAL_DAYS } from './data-vintage.js'
+import { PROVISIONAL_DAYS, settledEndPhrase } from './data-vintage.js'
 
 /**
  * How a rule gets the numbers it decides on. Not every rule reads a window, and the three
@@ -50,8 +50,9 @@ export interface RuleWindowSpec {
   /** days of history read; null where `kind` is stored / snapshot / none */
   days: number | null
   /**
-   * True when the window is built by `ruleWindowBounds`, which drops the last
-   * `PROVISIONAL_DAYS` because Amazon is still attributing conversions to them.
+   * True when the window is built by `settledWhere` (apps/api ads-settled-window.ts), which ends it
+   * at the ad product's attribution lag — 7 days ago for Sponsored Products, 14 for Brands and
+   * Display (6c, review G.2) — because Amazon is still attributing sales to the newer days.
    *
    * 🔴 False is not a rounding detail. A window that includes D-0 is measuring a day that is
    * still being written: today's partial spend against today's not-yet-attributed sales makes
@@ -162,11 +163,11 @@ const W = (days: number, source: string, settled = true): RuleWindowSpec => ({ k
  * Every advertising trigger, and the window its context builder reads.
  *
  * Transcribed from `advertising-rule-evaluator.job.ts` on 2026-08-20 and then imported BY it, so
- * the two cannot drift. The `settled` flag records which builders go through `ruleWindowBounds`
- * and which hand-roll `Date.now() - Nd`; three do the latter and therefore include today.
+ * the two cannot drift. The `settled` flag records which builders go through `settledWhere`.
+ * 6c — all of them do now, the three week-over-week comparisons included.
  */
 export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
-  // ── settled windows (ruleWindowBounds) ────────────────────────────────────────────────────
+  // ── settled windows (settledWhere) ────────────────────────────────────────────────────────
   AD_TARGET_UNDERPERFORMING: W(14, 'buildUnderperformContexts'),
   CAMPAIGN_PERFORMANCE_BUDGET: W(7, 'BUDGET_RULE_WINDOW_DAYS'),
   KEYWORD_ZERO_IMPRESSIONS: W(7, 'buildZeroImpressionContexts'),
@@ -182,11 +183,11 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
   NEW_TO_BRAND_WINNER: W(14, 'buildNewToBrandWinnerContexts'),
   CAMPAIGN_NO_SALES: W(30, 'buildCampaignNoSalesContexts'),
 
-  // ── week-over-week comparisons, and NOT settled: each hand-rolls its own date maths and
-  //    therefore counts today's partial day in the recent half ────────────────────────────────
-  CVR_DROP: { kind: 'compare', days: 7, settled: false, source: 'buildCvrDropContexts' },
-  CAMPAIGN_ROAS_DECLINING: { kind: 'compare', days: 7, settled: false, source: 'buildCampaignRoasDecliningContexts' },
-  KEYWORD_RISING_STAR: { kind: 'compare', days: 7, settled: false, source: 'buildRisingStarContexts' },
+  // ── week-over-week comparisons: both halves settled (6c) — the recent week ends at the
+  //    attribution lag, the earlier week is the 7 days before it ────────────────────────────────
+  CVR_DROP: { kind: 'compare', days: 7, settled: true, source: 'buildCvrDropContexts' },
+  CAMPAIGN_ROAS_DECLINING: { kind: 'compare', days: 7, settled: true, source: 'buildCampaignRoasDecliningContexts' },
+  KEYWORD_RISING_STAR: { kind: 'compare', days: 7, settled: true, source: 'buildRisingStarContexts' },
 
   // ── no window of their own ────────────────────────────────────────────────────────────────
   /** Selected off `Campaign.acos` / `.spend`, the stored columns. Their window is whatever the
@@ -239,14 +240,11 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
  */
 export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
   /**
-   * 🔴 30 days, and NOT settled — `ads-bid-optimizer.service.ts` builds its own
-   * `Date.now() - 30d` instead of calling `ruleWindowBounds`, so unlike all thirteen settled
-   * triggers above it counts D-0 and D-1. Four of the eighteen bid rules compute their bids
-   * this way, three of them at AUTO. Flagged rather than silently fixed: changing it moves live
-   * bids, which is a decision, not a tidy-up.
+   * 30 days, settled since 6c (review G.2): `ads-bid-optimizer.service.ts` reads them through
+   * `settledWhere`. Before, it built a bare `Date.now() - 30d` that counted today.
    */
   bid_to_target_acos: {
-    kind: 'window', days: 30, settled: false,
+    kind: 'window', days: 30, settled: true,
     source: 'ads-bid-optimizer.service.ts DAILY_WINDOW_DAYS',
     /**
      * 🔴 The window is declared, and on the default source it is not read.
@@ -261,7 +259,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
   },
   /** The only window an operator can already set: `action.windowDays`, clamped 7–90, default 30. */
   defend_top_of_search: {
-    kind: 'window', days: 30, settled: false, source: 'ads-top-of-search.service.ts analyzeTopOfSearch',
+    kind: 'window', days: 30, settled: true, source: 'ads-top-of-search.service.ts analyzeTopOfSearch',
     tunable: { clamp: [TOS_WINDOW_MIN, TOS_WINDOW_MAX] },
   },
   /**
@@ -280,7 +278,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
    * ordering. One entry closes both.
    *
    * `settled: false` is not an oversight: `previewHarvest` builds `Date.now() - windowDays * 86400e3`
-   * directly and never calls `ruleWindowBounds`, so unlike `SEARCH_TERM_CONVERTING` — the OTHER
+   * directly and never calls `settledWhere` (6c left `ads-harvest.service.ts` alone), so unlike `SEARCH_TERM_CONVERTING` — the OTHER
    * harvest path — it counts the days Amazon is still attributing. The two harvest engines disagree
    * about this, and the cell now says so instead of averaging them (HV-R plan P6).
    */
@@ -288,7 +286,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     kind: 'window', days: HARVEST_DEFAULTS.windowDays, settled: false,
     source: 'automation-action-handlers.ts harvest_and_negate → ads-harvest.service.ts previewHarvest',
     tunable: {},
-    caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through ruleWindowBounds. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans.',
+    caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through settledWhere. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans.',
   },
   /**
    * BP.P4 — a builder Bid rule's lookback is ITS OWN (`actions[0].windowDays`, the builder's
@@ -300,11 +298,11 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
    * engine readers honour the same number: the context emitter builds this rule's contexts over
    * its window (`advertising-rule-evaluator.job.ts`, per-window passes), and `targetPerformance`
    * measures computed ops (Set to CPC · the two ratio actions · Revenue per Click) over it.
-   * Settled: both readers go through `ruleWindowBounds`, which drops the two attributing days.
+   * Settled: both readers go through `settledWhere`, which ends the window at the attribution lag.
    */
   bid: {
     kind: 'window', days: 14, settled: true,
-    source: 'advertising-rule-evaluator.job.ts buildTargetPerformanceContexts + targetPerformance (both via ruleWindowBounds)',
+    source: 'advertising-rule-evaluator.job.ts buildTargetPerformanceContexts + targetPerformance (both via settledWhere)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
   /**
@@ -314,7 +312,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
    */
   budget: {
     kind: 'window', days: 7, settled: true,
-    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via ruleWindowBounds)',
+    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via settledWhere)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
   /**
@@ -337,7 +335,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
    */
   placement: {
     kind: 'window', days: 7, settled: true,
-    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via ruleWindowBounds)',
+    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via settledWhere)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
 }
@@ -394,8 +392,8 @@ export function ruleLookback(trigger: string, actionTypes: string[] = [], action
       why: [
         `This rule computes from the last ${days} days of Amazon performance data — the window ${actType} reads, not the trigger's.`,
         spec.settled
-          ? `The most recent ${PROVISIONAL_DAYS} days are excluded because Amazon is still attributing conversions to them.`
-          : `⚠ This window INCLUDES the last ${PROVISIONAL_DAYS} days, which Amazon is still attributing conversions to — unlike most triggers, which drop them. Today's partial spend is measured against sales that have not landed yet.`,
+          ? `The window stops short of the newest days, ${settledEndPhrase()}, because Amazon is still attributing late sales to them.`
+          : `⚠ This window INCLUDES the last ${PROVISIONAL_DAYS} days, which Amazon is still attributing conversions to — unlike the triggers, which end at the attribution lag. Today's partial spend is measured against sales that have not landed yet.`,
         spec.caveat ?? '',
         /**
          * 🔴 P1 — `true` because the ACTION supplied this window, and the trigger's own sentence
@@ -457,9 +455,9 @@ function describeTrigger(trigger: string, t: RuleWindowSpec, actionSuppliesWindo
   }
   switch (t.kind) {
     case 'window':
-      return `It is offered rows selected over the last ${t.days} days${t.settled ? `, excluding the ${PROVISIONAL_DAYS} most recent days while Amazon is still attributing conversions to them` : ` — a window that INCLUDES the ${PROVISIONAL_DAYS} still-settling days`}.`
+      return `It is offered rows selected over the last ${t.days} days${t.settled ? `, ${settledEndPhrase()}, because Amazon is still attributing late sales to the newer days` : ` — a window that INCLUDES the ${PROVISIONAL_DAYS} still-settling days`}.`
     case 'compare':
-      return `It compares the last ${t.days} days against the ${t.days} before them, so it reads ${(t.days as number) * 2} days in two halves rather than one span. ⚠ The recent half includes today, which is still being written.`
+      return `It compares the last ${t.days} days against the ${t.days} before them, so it reads ${(t.days as number) * 2} days in two halves rather than one span. Both halves stop short of the newest days: the recent one is the ${t.days} days ${settledEndPhrase()}, because Amazon is still attributing late sales to the newer days.`
     case 'stored':
       return `It is selected off the stored campaign columns (spend · sales · ACoS), whose window the sync does not record${t.days ? `, alongside a ${t.days}-day profit aggregate` : ''} — so how far back this rule looks is not a number this system knows.`
     case 'snapshot':

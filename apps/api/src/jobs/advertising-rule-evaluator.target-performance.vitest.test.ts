@@ -35,7 +35,7 @@ const { previewBidRule } = await import('../services/advertising/ads-rule-previe
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: ['OWNER'] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 const db = () => database.client as any
-/** UTC midnight, `n` days ago — the window is today−15 … today−2 (the last 2 days are still settling). */
+/** UTC midnight, `n` days ago — the default window is today−20 … today−7 (6c: Sponsored Products' 7-day attribution lag). */
 const daysAgo = (n: number) => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - n); return d }
 
 /** The two Bid starters that could never fire, copied from RuleBuilder.tsx `STARTERS.bid`. */
@@ -51,33 +51,36 @@ beforeAll(async () => {
     await campaign('c-a', 'Alpha IT')
     await campaign('c-b', 'Beta IT')
     await campaign('c-sup', 'Suppressed IT', { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'test' })
-    for (const c of ['a', 'b', 'sup']) {
+    await campaign('c-sb', 'Brands IT', { type: 'SB', adProduct: 'SPONSORED_BRANDS' })
+    for (const c of ['a', 'b', 'sup', 'sb']) {
       await db().adGroup.create({ data: { id: `g-${c}`, campaignId: `c-${c}`, name: `Group ${c}`, externalAdGroupId: `EXT-g-${c}` } })
     }
     const target = (id: string, group: string, text: string, bidCents: number, extra: Record<string, unknown> = {}) => db().adTarget.create({
       data: { id, adGroupId: group, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: text, bidCents, externalTargetId: `EXT-${id}`, ...extra },
     })
-    const perf = (localEntityId: string, ago: number, m: { clicks: number; impressions?: number; costCents?: number; salesCents?: number; orders?: number }) =>
+    const perf = (localEntityId: string, ago: number, m: { clicks: number; impressions?: number; costCents?: number; salesCents?: number; orders?: number }, adProduct = 'SPONSORED_PRODUCTS') =>
       db().amazonAdsDailyPerformance.create({
         data: {
-          profileId: 'P-IT', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: daysAgo(ago), entityType: 'AD_TARGET',
+          profileId: 'P-IT', marketplace: 'IT', adProduct, date: daysAgo(ago), entityType: 'AD_TARGET',
           entityId: `EXT-${localEntityId}`, localEntityId, currencyCode: 'EUR', reportedAt: new Date(),
           clicks: m.clicks, impressions: m.impressions ?? m.clicks * 20, costMicros: BigInt((m.costCents ?? 0) * 10_000),
           sales7dCents: m.salesCents ?? 0, orders7d: m.orders ?? 0,
         },
       })
-    await target('t-win', 'g-a', 'race jacket', 45); await perf('t-win', 5, { clicks: 10, costCents: 400, salesCents: 2500, orders: 3 })
-    await target('t-waste', 'g-a', 'cheap gloves', 40); await perf('t-waste', 5, { clicks: 12, costCents: 600 })
-    await target('t-b', 'g-b', 'beta jacket', 30); await perf('t-b', 6, { clicks: 4, costCents: 100, salesCents: 1000, orders: 1 })
-    // Not offered: no click · clicks only in the settling tail · outside 14 days · the three suppressions · paused · negative.
-    await target('t-noclick', 'g-a', 'winter boots', 50); await perf('t-noclick', 5, { clicks: 0, impressions: 300 })
-    await target('t-recent', 'g-a', 'summer boots', 50); await perf('t-recent', 1, { clicks: 9, costCents: 200 })
-    await target('t-old', 'g-a', 'leather jacket', 50); await perf('t-old', 20, { clicks: 5, costCents: 100 })
-    await target('t-flag', 'g-a', 'helmet', 2, { suppressedFromBidCents: 60 }); await perf('t-flag', 5, { clicks: 8, costCents: 300 })
-    await target('t-low', 'g-a', 'visor', 3); await perf('t-low', 5, { clicks: 8, costCents: 300 })
-    await target('t-camp', 'g-sup', 'suppressed campaign jacket', 45); await perf('t-camp', 5, { clicks: 8, costCents: 300 })
-    await target('t-paused', 'g-a', 'paused boots', 50, { status: 'PAUSED' }); await perf('t-paused', 5, { clicks: 8, costCents: 300 })
-    await target('t-neg', 'g-a', 'free', 50, { isNegative: true, negativeLevel: 'AD_GROUP', expressionType: 'NEGATIVE_EXACT' }); await perf('t-neg', 5, { clicks: 8, costCents: 300 })
+    await target('t-win', 'g-a', 'race jacket', 45); await perf('t-win', 10, { clicks: 10, costCents: 400, salesCents: 2500, orders: 3 })
+    await target('t-waste', 'g-a', 'cheap gloves', 40); await perf('t-waste', 10, { clicks: 12, costCents: 600 })
+    await target('t-b', 'g-b', 'beta jacket', 30); await perf('t-b', 11, { clicks: 4, costCents: 100, salesCents: 1000, orders: 1 })
+    // Not offered: no click · clicks only in the attribution tail (6c: 4 days old, inside the old 2-day cut) · a Sponsored
+    // Brands row 10 days old (its window ends 14 days ago) · outside 14 days · the three suppressions · paused · negative.
+    await target('t-noclick', 'g-a', 'winter boots', 50); await perf('t-noclick', 10, { clicks: 0, impressions: 300 })
+    await target('t-recent', 'g-a', 'summer boots', 50); await perf('t-recent', 4, { clicks: 9, costCents: 200 })
+    await target('t-old', 'g-a', 'leather jacket', 50); await perf('t-old', 25, { clicks: 5, costCents: 100 })
+    await target('t-sb', 'g-sb', 'brand jacket', 50); await perf('t-sb', 10, { clicks: 7, costCents: 250 }, 'SPONSORED_BRANDS')
+    await target('t-flag', 'g-a', 'helmet', 2, { suppressedFromBidCents: 60 }); await perf('t-flag', 10, { clicks: 8, costCents: 300 })
+    await target('t-low', 'g-a', 'visor', 3); await perf('t-low', 10, { clicks: 8, costCents: 300 })
+    await target('t-camp', 'g-sup', 'suppressed campaign jacket', 45); await perf('t-camp', 10, { clicks: 8, costCents: 300 })
+    await target('t-paused', 'g-a', 'paused boots', 50, { status: 'PAUSED' }); await perf('t-paused', 10, { clicks: 8, costCents: 300 })
+    await target('t-neg', 'g-a', 'free', 50, { isNegative: true, negativeLevel: 'AD_GROUP', expressionType: 'NEGATIVE_EXACT' }); await perf('t-neg', 10, { clicks: 8, costCents: 300 })
   })
 }, 180_000)
 afterAll(async () => { await database?.close() }, 30_000)
@@ -106,8 +109,21 @@ describe('buildTargetPerformanceContexts — every clicked, enabled, unsuppresse
     expect(waste.adTarget.salesCents).toBe(0)
   })
 
-  it('a Bid rule\'s own lookback widens the window (30 days reaches the 20-day-old clicks)', async () => {
+  it('a Bid rule\'s own lookback widens the window (30 days reaches the 25-day-old clicks)', async () => {
     expect(ids(await inside(() => buildTargetPerformanceContexts(30)))).toContain('t-old')
+  })
+
+  it('🔴 6c — the newest days wait out the attribution window: 7 days for Sponsored Products, 14 for Brands', async () => {
+    // Both rows sit inside the old window (today−15 … today−2), so before 6c both were offered.
+    const offered = ids(await inside(() => buildTargetPerformanceContexts()))
+    expect(offered).not.toContain('t-recent') // Sponsored Products, 4 days old
+    // Same age, different ad product: the Sponsored Products row 10 days old is read, the Brands row is not.
+    expect(offered).toContain('t-win')
+    expect(offered).not.toContain('t-sb')
+    // A longer lookback moves the start, never the end: 30 days still stop 7 (SP) and 14 (Brands) days ago.
+    const wide = ids(await inside(() => buildTargetPerformanceContexts(30)))
+    expect(wide).not.toContain('t-sb')
+    expect(wide).not.toContain('t-recent')
   })
 
   it('control: KEYWORD_HIGH_ACOS offers neither the winner nor the waster — why the starters never fired', async () => {
