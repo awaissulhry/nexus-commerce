@@ -223,6 +223,26 @@ describe('A2 — ads-overview', () => {
     expect(uk.days).toEqual([expect.objectContaining({ date: ymd(dayBefore(2)), provisional: true })])
   })
 
+  it('7a (review 8.2) — names only the engines that change Amazon on their own, and places every engine in a group', async () => {
+    const before = process.env.NEXUS_ENABLE_AMAZON_ADS_CRON
+    process.env.NEXUS_ENABLE_AMAZON_ADS_CRON = '1'
+    try {
+      const a = (await call('ads-overview', {})).data!.automation
+      const grouped = (Object.values(a.engineGroups) as Row[][]).flat().map((e) => e.name)
+      // Every engine on the board sits in exactly one group: none drops out of sight.
+      expect(grouped).toHaveLength((Object.values(a.engines) as number[]).reduce((n, c) => n + c, 0))
+      expect(new Set(grouped).size).toBe(grouped.length)
+      expect(a.writingOnTheirOwn).toEqual(a.engineGroups.changesAmazonOnItsOwn.map((e: Row) => e.name))
+      // The old list stays, under its own name: the breaker is on Auto and never changes Amazon by itself.
+      expect(a.enginesOnAuto).toContain('Anomaly breaker')
+      expect(a.writingOnTheirOwn).not.toContain('Anomaly breaker')
+      expect(a.engineGroups.neverChangesAmazonByItself).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Anomaly breaker', why: expect.any(String), lastWeek: expect.any(String) })]))
+    } finally {
+      if (before === undefined) delete process.env.NEXUS_ENABLE_AMAZON_ADS_CRON
+      else process.env.NEXUS_ENABLE_AMAZON_ADS_CRON = before
+    }
+  })
+
   it('also states the automation dial and the data feeds, and narrows to one market', async () => {
     const data = (await call('ads-overview', { market: 'uk', days: 30 })).data!
     expect(data.markets.map((m: Row) => m.market)).toEqual(['UK'])

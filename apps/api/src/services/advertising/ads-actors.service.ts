@@ -15,7 +15,7 @@
  * observed in one grid; this service owns everything that is not a rule.
  */
 import { prisma } from '@nexus/database'
-import { getEngineLevers, type LeverMode } from './ads-control-room.service.js'
+import { getEngineLevers, type EngineActivity, type ExposureGroup, type LeverMode } from './ads-control-room.service.js'
 import { engineForActor, engineLabel } from './ads-engine-actors.js'
 
 const DAY = 86_400_000
@@ -40,6 +40,12 @@ export interface EngineActor {
   warning: string | null
   /** Writes in the window attributed to this engine's actor strings. */
   writes7d: number
+  /** 7a — whether it can change Amazon by itself (the breaker and write delivery never do). */
+  writesOnOwn: boolean
+  /** 7a — what it does now, in plain groups: only `acts` changes Amazon on its own. */
+  exposure: { group: ExposureGroup; label: string; start: string | null }
+  activity: EngineActivity
+  catalogId: string | null
 }
 
 export interface ObservedActor {
@@ -135,6 +141,10 @@ export async function getActors(): Promise<ActorsPayload> {
     failures7d: l.failures7d,
     warning: l.warning,
     writes7d: engineWrites.get(l.key) ?? 0,
+    writesOnOwn: l.writesOnOwn,
+    exposure: l.exposure,
+    activity: l.activity,
+    catalogId: l.catalogId,
   }))
 
   return { engines, observed, global, window: { days, since: since.toISOString() } }

@@ -31,11 +31,12 @@ import { getForesight } from './ads-foresight.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
-const KEYS = ['NEXUS_ENABLE_AMAZON_ADS_CRON', 'NEXUS_BUDGET_ENFORCE_APPLY', 'NEXUS_ENABLE_RANK_DEFEND'] as const
+// 7a — the levers read the env through the automation catalog, which also asks whether Amazon ads writes are live.
+const KEYS = ['NEXUS_ENABLE_AMAZON_ADS_CRON', 'NEXUS_BUDGET_ENFORCE_APPLY', 'NEXUS_ENABLE_RANK_DEFEND', 'NEXUS_AMAZON_ADS_MODE'] as const
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]))
 const set = (values: Partial<Record<(typeof KEYS)[number], string>>) => {
   for (const k of KEYS) delete process.env[k]
-  Object.assign(process.env, values)
+  Object.assign(process.env, { NEXUS_AMAZON_ADS_MODE: 'live' }, values)
 }
 
 beforeAll(async () => {
@@ -84,8 +85,9 @@ describe('the Control Room reads the engine switches as the jobs do', () => {
   it('1c — rank-defend and classic dayparting honour the dial: their caps in words, SUGGEST and stopped said plainly', async () => {
     set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1', NEXUS_ENABLE_RANK_DEFEND: '1' })
     const rank = await lever('rank-defend')
-    expect(rank).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours' })
-    expect(rank.modeReason).toBe('Armed and writing to Amazon. Honours the account dial; at most 600 changes a run and 3,000 a day')
+    // 7a — allowed to act, nothing set up: the reason is the catalog's, and it is not counted as changing Amazon.
+    expect(rank).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours', exposure: { group: 'ready', label: 'Ready — nothing set up' } })
+    expect(rank.modeReason).toBe('No goal-mode schedules or product rank plans. Honours the account dial; at most 600 changes a run and 3,000 a day.')
     expect(await lever('dayparting')).toMatchObject({ haltBehaviour: 'honours', modeReason: expect.stringContaining('at most 300 changes a run and 1,500 a day') })
     // 1d moved budget enforcement too; only the delivery drain is still gated at the write gate.
     expect((await lever('budget-enforce')).haltBehaviour).toBe('honours')
@@ -114,10 +116,11 @@ describe('the Control Room reads the engine switches as the jobs do', () => {
   it('1d — budget enforcement, pools, top-of-search and coverage honour the dial too: caps in words, SUGGEST and stopped said plainly', async () => {
     set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1', NEXUS_BUDGET_ENFORCE_APPLY: '1' })
     const enforce = await lever('budget-enforce')
-    expect(enforce).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours' })
-    expect(enforce.modeReason).toBe('NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts. Honours the account dial; at most 100 changes a run and 400 a day')
+    expect(enforce).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours', exposure: { group: 'ready' } })
+    // 7a — no longer "this one acts": with no budget plan this month it has nothing to act on, and says so.
+    expect(enforce.modeReason).toBe('No budget plan for this month. Honours the account dial; at most 100 changes a run and 400 a day.')
     for (const key of ['budget-pools', 'tos-defense', 'coverage-engine', 'auto-bid']) expect((await lever(key)).haltBehaviour).toBe('honours')
-    expect((await lever('auto-bid')).modeReason).toBe('Runs on the account autonomy dial; at most 300 changes a run and 1,200 a day')
+    expect((await lever('auto-bid')).modeReason).toBe('Runs on the account dial, which is AUTO. It keeps its own caps: at most 300 changes a run and 1,200 a day.')
 
     const dial = (data: Record<string, unknown>) => inside(() => database.client.adsAutomationState.update({ where: { id: 'singleton' }, data }))
     try {
