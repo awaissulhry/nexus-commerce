@@ -173,15 +173,23 @@ export function engineCapsText(engine: EngineKey): string {
   return parts.length ? `at most ${parts.join(' and ')}` : 'no cap of its own'
 }
 
+/** 1d — what an engine still does under SUGGEST and while stopped, in its run summary. */
+export interface EngineGuardWords { suggest: string; stopped: string }
+const FLOOR_ENGINE_WORDS: EngineGuardWords = {
+  suggest: 'nothing new is written; its own floors are still given back',
+  stopped: 'only bid floors land; restores, raises and placement moves wait for Resume',
+}
+
 /**
  * What the run summary adds, in words. Empty for a normal AUTO run, so an ordinary day's summary is unchanged.
+ * `words` (1d): an engine that is not a floors-and-restores engine says what it does instead.
  */
-export function engineGuardNote(r: EngineGuardReport | null | undefined): string {
+export function engineGuardNote(r: EngineGuardReport | null | undefined, words: EngineGuardWords = FLOOR_ENGINE_WORDS): string {
   if (!r) return ''
   const caps = `cap ${r.caps.perRun != null ? `${num(r.caps.perRun)} a run` : 'none a run'}, ${r.caps.perDay != null ? `${num(r.caps.perDay)} a day` : 'none a day'}`
   const uncounted = r.todayBefore == null && r.caps.perDay != null ? " — today's changes could not be counted, so nothing new was written" : ''
   const deferred = r.deferredByCap ? ` deferred-by-cap=${r.deferredByCap} (${caps}; ${num(r.changes)} this run${r.todayBefore != null ? `, ${num(r.todayBefore + r.changes)} today` : ''}${uncounted}; they go next run)` : ''
-  if (r.posture === 'suggest') return ` would-apply=${r.wouldApply} (${r.why}: nothing new is written; its own floors are still given back)${deferred}`
-  if (r.posture === 'stopped') return ` waiting=${r.waiting} (stopped — ${r.why}: only bid floors land; restores, raises and placement moves wait for Resume)${deferred}`
+  if (r.posture === 'suggest') return ` would-apply=${r.wouldApply} (${r.why}: ${words.suggest})${deferred}`
+  if (r.posture === 'stopped') return ` waiting=${r.waiting} (stopped — ${r.why}: ${words.stopped})${deferred}`
   return deferred
 }

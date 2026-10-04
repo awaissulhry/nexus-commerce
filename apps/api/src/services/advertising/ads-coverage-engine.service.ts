@@ -29,9 +29,13 @@
  *     new keywords) stays operator-gated; the engine moves bids that exist.
  *   · Bypass anything. Writes go through updateAdTargetWithSync — the write gate, the halt,
  *     bounds, audit, queue — tagged with one change-set per day for whole-day revert.
+ *   · 1d — Ignore the account dial or its own caps (ads-engine-guard.ts). In auto mode, under SUGGEST
+ *     and while halted / OFF, it logs the would-do exactly as OBSERVE does and writes nothing (a step
+ *     down is not a suppression, so the gate would refuse it); at most N bid steps a run and a day.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from './ads-engine-guard.js'
 
 export type CoverageEngineMode = 'off' | 'observe' | 'auto'
 
@@ -164,6 +168,16 @@ export interface EngineRunSummary {
   holds: number
   applied: number
   blocked: number
+  /** 1d — auto mode only: the dial posture and the caps this run ran under, and what they held back. */
+  guard?: EngineGuardReport
+}
+
+/** 1d — the cron's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
+export function coverageEngineSummaryLine(r: EngineRunSummary): string {
+  return `mode=${r.mode} sets=${r.setsEnabled} terms=${r.termsEvaluated} up=${r.ups} down=${r.downs} hold=${r.holds} applied=${r.applied} blocked=${r.blocked}${engineGuardNote(r.guard, {
+    suggest: 'nothing is written; the bids it would set are logged, as in observe mode',
+    stopped: 'nothing is written; the bids it would set are logged, as in observe mode',
+  })}`
 }
 
 /**
@@ -189,6 +203,8 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
 
   const applyMode = mode === 'auto' && !opts.previewSetId
   const changeSet = `coverage-engine-${new Date().toISOString().slice(0, 10)}`
+  // 1d — the account dial and this engine's caps, read once per run (only a run that may write reads them).
+  const guard = applyMode ? await openEngineGuard('coverage-engine') : null
 
   for (const set of sets) {
     // Family membership + campaigns, by the same rule the cockpit uses.
@@ -290,7 +306,11 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
 
       let applied = false
       let applyError: string | null = null
-      if (applyMode && decision.action !== 'hold') {
+      // 1d — one bid step per term: the term asks the guard once, before it. A step the dial holds (SUGGEST,
+      // stopped) is logged as a would-do below, as OBSERVE does; one the cap defers is decided again next run.
+      const permit = guard && decision.action !== 'hold' ? guard.permit() : null
+      const held = nothingHeld()
+      if (permit && allowChange(true, permit, held, 'forward')) {
         try {
           const { updateAdTargetWithSync } = await import('./ads-mutation.service.js')
           const res = await updateAdTargetWithSync({
@@ -311,7 +331,11 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
           if (!res.ok) { applyError = res.error ?? 'not ok'; summary.blocked += 1 }
           else summary.applied += 1
         } catch (e) { applyError = (e as Error).message.slice(0, 160); summary.blocked += 1 }
+        guard!.settle(permit, applied ? 1 : 0, held)
+      } else if (permit && guard!.posture === 'auto') {
+        guard!.settle(permit, 0, held) // deferred by the cap: no would-do row, it is simply decided again next run
       } else if (!opts.previewSetId && decision.action !== 'hold') {
+        if (permit) guard!.settle(permit, 0, held)
         // OBSERVE: the would-do, logged where the Activity tab already reads.
         await prisma.advertisingActionLog.create({
           data: {
@@ -341,6 +365,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
   }
 
   summary.controlsSkipped = controlsSkipped
+  if (guard) summary.guard = guard.report()
   logger.info('[coverage-engine] tick', {
     mode, sets: summary.setsEnabled, terms: summary.termsEvaluated, controls: controlsSkipped,
     ups: summary.ups, downs: summary.downs, holds: summary.holds,

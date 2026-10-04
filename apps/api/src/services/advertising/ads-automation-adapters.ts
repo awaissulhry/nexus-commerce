@@ -16,7 +16,7 @@ import {
   type ExplainOptions, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
 } from '../automation/automation-levels.js'
 import { isRefused } from '../automation/service-outcome.js'
-import { breakerLimits, breakerLimitsText, engineCaps } from './ads-engine-actors.js'
+import { breakerLimits, breakerLimitsText, engineCaps, type EngineKey } from './ads-engine-actors.js'
 import { engineCapsText } from './ads-engine-guard.js'
 
 // ── Env checks every Amazon ads engine shares ─────────────────────────────────────────────────────────
@@ -59,31 +59,51 @@ async function adsDial(): Promise<AdsDial> {
 }
 
 /**
+ * 1c / 1d — the engines that read the dial through ads-engine-guard.ts, and what each still does under it: under
+ * SUGGEST nothing new is written (some still give back their own state); while halted or OFF only bid floors may
+ * land, everything else waiting for Resume. Each keeps its own caps per run and per day.
+ */
+type GuardedEngine = 'rank-defend' | 'dayparting' | 'budget-schedules' | 'budget-enforce' | 'budget-pools' | 'tos-defense' | 'coverage-engine' | 'autopilot'
+const FLOOR_ENGINE: { suggest: string; stopped: string } = {
+  suggest: 'it computes and writes nothing new, but still gives back its own floors.',
+  stopped: ' It only lowers bids to their floors; restores wait for Resume.',
+}
+const GUARDED_WORDS: Record<GuardedEngine, { suggest: string; stopped: string }> = {
+  'rank-defend': FLOOR_ENGINE,
+  dayparting: FLOOR_ENGINE,
+  'budget-schedules': {
+    suggest: 'it enters no window and writes nothing new, but still gives back a budget it set when that window closes.',
+    stopped: ' It writes nothing; windows and give-backs wait for Resume.',
+  },
+  'budget-enforce': {
+    suggest: 'it writes no pacing and no new floors, but still restores bids it floored over the cap.',
+    stopped: ' It only floors bids when a cap is reached; restores and budget pacing wait for Resume.',
+  },
+  'budget-pools': { suggest: 'each due rebalance is recorded as a dry run; nothing is written.', stopped: ' It writes nothing; rebalances wait for Resume.' },
+  'tos-defense': { suggest: 'it computes and writes nothing.', stopped: ' It writes nothing; placement moves wait for Resume.' },
+  'coverage-engine': { suggest: 'it logs the bids it would set and writes nothing.', stopped: ' It logs the bids it would set and writes nothing until Resume.' },
+  autopilot: { suggest: 'AUTO plans record proposals and write nothing.', stopped: ' AUTO plans record proposals and write nothing until Resume.' },
+}
+
+/**
  * How the dial bears on an ads automation.
  *   rules    the rule evaluator: a halt or OFF skips the tick; SUGGEST demotes AUTO rules to proposals
  *   honours  auto-bid: a halt or OFF stands it down; SUGGEST makes it a dry run that only reports
- *   guarded  rank-defend and classic dayparting (1c, ads-engine-guard.ts): SUGGEST makes each run compute and write
- *            nothing new, though it still gives back its own floors; a halt or OFF leaves it only lowering bids to
- *            their floors, restores waiting for Resume; and it keeps its own caps per run and per day
- *   gated    every other engine: it still runs, but while halted or OFF the write gate refuses its writes;
- *            SUGGEST does not reach it
+ *   <engine> a guarded engine (GUARDED_WORDS above): it says what it still does under the dial
  */
-type DialEffect = 'rules' | 'honours' | 'guarded' | 'gated'
+type DialEffect = 'rules' | 'honours' | GuardedEngine
 function dialCap(dial: AdsDial, effect: DialEffect): { cap: AutomationLevel; why: string | null } {
-  const floorsOnly = effect === 'guarded' ? ' It only lowers bids to their floors; restores wait for Resume.' : ''
-  if (dial.halted) return { cap: 'OFF', why: `Ads automation is halted${dial.haltReason ? `: ${dial.haltReason}` : ''}.${floorsOnly}` }
-  if (dial.autonomy === 'OFF') return { cap: 'OFF', why: `The account ads dial is OFF.${floorsOnly}` }
-  if (dial.autonomy === 'SUGGEST' && effect === 'guarded') {
-    return { cap: 'PROPOSE', why: `The account ads dial is SUGGEST${dial.set ? '' : ' (never set)'} — it computes and writes nothing new, but still gives back its own floors.` }
-  }
-  if (dial.autonomy === 'SUGGEST' && effect !== 'gated') {
-    return { cap: 'PROPOSE', why: `The account ads dial is SUGGEST${dial.set ? '' : ' (never set)'} — it proposes, nothing acts.` }
+  const words = effect === 'rules' || effect === 'honours' ? null : GUARDED_WORDS[effect]
+  if (dial.halted) return { cap: 'OFF', why: `Ads automation is halted${dial.haltReason ? `: ${dial.haltReason}` : ''}.${words?.stopped ?? ''}` }
+  if (dial.autonomy === 'OFF') return { cap: 'OFF', why: `The account ads dial is OFF.${words?.stopped ?? ''}` }
+  if (dial.autonomy === 'SUGGEST') {
+    return { cap: 'PROPOSE', why: `The account ads dial is SUGGEST${dial.set ? '' : ' (never set)'} — ${words?.suggest ?? 'it proposes, nothing acts.'}` }
   }
   return { cap: 'AUTO', why: null }
 }
 
 /** 1c — an engine that keeps its own caps says them, beside its level and in its reason. */
-function withEngineCaps(s: BusinessState, engine: 'rank-defend' | 'dayparting'): BusinessState {
+function withEngineCaps(s: BusinessState, engine: EngineKey): BusinessState {
   const { perTick, perDay } = engineCaps(engine)
   return { ...s, reason: `${s.reason} Honours the account dial; ${engineCapsText(engine)}.`, caps: { ...(s.caps ?? {}), changesPerRun: perTick, changesPerDay: perDay } }
 }
@@ -355,7 +375,9 @@ const A4: AutomationAdapter = {
   async state() {
     const [dial, scope] = await Promise.all([adsDial(), allowlistScope()])
     const { cap, why } = dialCap(dial, 'honours')
-    return { level: cap, reason: why ?? 'Runs on the account dial, which is AUTO.', scope, caps: { defaultTargetAcosPct: dial.defaultTargetAcosPct } }
+    // 1d — and its own caps per run and per day.
+    const { perTick, perDay } = engineCaps('auto-bid')
+    return { level: cap, reason: `${why ?? 'Runs on the account dial, which is AUTO.'} It keeps its own caps: ${engineCapsText('auto-bid')}.`, scope, caps: { defaultTargetAcosPct: dial.defaultTargetAcosPct, changesPerRun: perTick, changesPerDay: perDay } }
   },
   explain: (opts: ExplainOptions) => engineExplain(['ads-auto-bid'], ['automation:auto-bid'], opts),
   async runPreview(): Promise<PreviewOutcome> {
@@ -384,7 +406,7 @@ const A5: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No autopilot plans.')
+    return withEngineCaps(underDial(rows, dial, 'autopilot', 'No autopilot plans.'), 'autopilot')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => `automation:autopilot-${row.id}`, ['A plan writes as automation:autopilot-<planId>; its top-of-search step writes as automation:autopilot (not counted per plan).'])
@@ -427,7 +449,7 @@ const A6: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return withEngineCaps(underDial(rows, dial, 'guarded', 'No classic dayparting schedules (goal-mode schedules belong to rank-defend).'), 'dayparting')
+    return withEngineCaps(underDial(rows, dial, 'dayparting', 'No classic dayparting schedules (goal-mode schedules belong to rank-defend).'), 'dayparting')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => `automation:dayparting-${row.id}`)
@@ -461,7 +483,7 @@ const A7: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No budget schedules.')
+    return withEngineCaps(underDial(rows, dial, 'budget-schedules', 'No budget schedules.'), 'budget-schedules')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => `automation:budget-schedule-${row.id}`)
@@ -502,7 +524,7 @@ const A8: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No budget plan for this month.')
+    return withEngineCaps(underDial(rows, dial, 'budget-enforce', 'No budget plan for this month.'), 'budget-enforce')
   },
   explain: (opts: ExplainOptions) => engineExplain(['ad-budget-enforce'], ['automation:budget-manager-cron', 'automation:budget-manager'], opts),
   async runPreview(): Promise<PreviewOutcome> {
@@ -532,7 +554,7 @@ const A9: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No budget pools.')
+    return withEngineCaps(underDial(rows, dial, 'budget-pools', 'No budget pools.'), 'budget-pools')
   },
   async explain(opts: ExplainOptions) {
     const actors = ['automation:budget-pool-rebalance', 'user:cron-budget-pool']
@@ -599,7 +621,7 @@ const A10: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return withEngineCaps(underDial(rows, dial, 'guarded', 'No goal-mode schedules or product rank plans.'), 'rank-defend')
+    return withEngineCaps(underDial(rows, dial, 'rank-defend', 'No goal-mode schedules or product rank plans.'), 'rank-defend')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => (row.kind === 'plan' ? `automation:rank-plan-${row.id}` : `automation:rank-defend-${row.id}`))
@@ -631,8 +653,8 @@ const A11: AutomationAdapter = {
     'NEXUS_ENABLE_TOS_DEFENSE_CRON is off — top-of-search defense does not run.', 'Top-of-search defense runs.')),
   async state() {
     const [dial, scope] = await Promise.all([adsDial(), allowlistScope()])
-    const { cap, why } = dialCap(dial, 'gated')
-    return { level: cap, reason: why ?? 'Configured by env only; acts on allowlisted campaigns.', scope }
+    const { cap, why } = dialCap(dial, 'tos-defense')
+    return withEngineCaps({ level: cap, reason: why ?? 'Configured by env only; acts on allowlisted campaigns.', scope }, 'tos-defense')
   },
   explain: (opts: ExplainOptions) => engineExplain(['top-of-search-defense'], ['automation:tos-optimizer'], opts, ['A rule\'s defend_top_of_search action writes as that rule (it wrote as automation:tos-optimizer before the part 06 fix).']),
   async runPreview(): Promise<PreviewOutcome> {
@@ -664,7 +686,7 @@ const A12: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return underDial(rows, dial, 'gated', 'No coverage sets.')
+    return withEngineCaps(underDial(rows, dial, 'coverage-engine', 'No coverage sets.'), 'coverage-engine')
   },
   async explain(opts: ExplainOptions) {
     const [facts, observed] = await Promise.all([

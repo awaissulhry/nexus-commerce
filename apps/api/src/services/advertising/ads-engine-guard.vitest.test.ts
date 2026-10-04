@@ -168,4 +168,12 @@ describe('the run summary line', () => {
     expect(engineGuardNote({ ...base, posture: 'auto', changes: 612, deferredByCap: 5 }))
       .toBe(' deferred-by-cap=5 (cap 600 a run, 3,000 a day; 612 this run, 1,612 today; they go next run)')
   })
+  it('1d — an engine without floors says what it does instead', () => {
+    const words = { suggest: 'nothing is written', stopped: 'nothing is written; placement moves wait for Resume' }
+    expect(engineGuardNote({ ...base, posture: 'suggest', why: 'the account ads dial is SUGGEST', wouldApply: 3 }, words))
+      .toBe(' would-apply=3 (the account ads dial is SUGGEST: nothing is written)')
+    expect(engineGuardNote({ ...base, posture: 'stopped', why: 'halted: test', waiting: 2 }, words))
+      .toBe(' waiting=2 (stopped — halted: test: nothing is written; placement moves wait for Resume)')
+    expect(engineGuardNote({ ...base, posture: 'auto' }, words)).toBe('')
+  })
 })

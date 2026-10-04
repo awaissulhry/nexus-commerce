@@ -10,6 +10,8 @@
  *   1. NEXUS_ENABLE_TOS_DEFENSE_CRON (default OFF — operator opts in only when ready)
  *   2. allowlistedOnly: writes only to campaigns with Campaign.liveBidWritesEnabled
  *   3. the global ads write-gate (env live + connection production/writesEnabledAt)
+ * 1d — and it honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST and a halt / OFF
+ * write nothing; at most N placement changes a run and a day.
  * Registered in CRON_REGISTRY for manual triggering; only auto-scheduled when on.
  */
 
@@ -17,6 +19,7 @@ import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { envEnabled } from '../utils/env-flag.js'
+import { engineGuardNote, openEngineGuard } from '../services/advertising/ads-engine-guard.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -41,13 +44,21 @@ async function tosDefenseTick(): Promise<string> {
   const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
   const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
   const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
+  // 1d — the account dial and this engine's caps, asked once per campaign before its one placement write. Under
+  // SUGGEST and while stopped it writes nothing (it has no state of its own to give back, and a placement move is
+  // never a suppression); the summary counts what it would move.
+  const guard = await openEngineGuard('tos-defense')
   const r = await defendTopOfSearch({
     allowlistedOnly: true,
     dryRun: false,
     targetAcos: Number.isFinite(targetAcos) && targetAcos > 0 ? targetAcos : undefined,
     targetIS: Number.isFinite(targetIS) && targetIS > 0 && targetIS <= 1 ? targetIS : undefined,
+    guard,
   })
-  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}`
+  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${engineGuardNote(guard.report(), {
+    suggest: 'nothing is written',
+    stopped: 'nothing is written; placement moves wait for Resume',
+  })}`
 }
 
 export async function runTosDefenseCron(): Promise<void> {

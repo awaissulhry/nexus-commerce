@@ -9,7 +9,8 @@
 import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { applyBudgetEnforcement } from '../services/advertising/ads-budget-enforce.service.js'
+import { BUDGET_ENFORCE_DIAL_WORDS, applyBudgetEnforcement } from '../services/advertising/ads-budget-enforce.service.js'
+import { engineGuardNote } from '../services/advertising/ads-engine-guard.js'
 
 let task: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -28,8 +29,9 @@ async function budgetEnforceTick(): Promise<string> {
   const gate = await engineMode('budget-enforce', process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1' ? 'AUTO' : 'OBSERVE')
   if (gate.mode === 'OFF') return `skipped: ${gate.note}`
   const apply = gate.mode === 'AUTO'
+  // 1d — a live run honours the account dial and this engine's caps; the note says what they held back.
   const r = await applyBudgetEnforcement({ dryRun: !apply, actor: 'automation:budget-manager-cron' })
-  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}`
+  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}${engineGuardNote(r.guard, BUDGET_ENFORCE_DIAL_WORDS)}`
 }
 
 export async function runBudgetEnforceCron(): Promise<void> {

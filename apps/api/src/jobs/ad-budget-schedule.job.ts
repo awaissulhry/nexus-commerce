@@ -30,6 +30,10 @@
  *
  * The delete/disable give-back (`bsRestoreBase`, advertising.routes.ts) is a SEPARATE mechanism and
  * is deliberately untouched by this rule — it runs when the operator removes the schedule.
+ *
+ * 1d — honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST enters no window but
+ * still gives back a budget it set; halted / OFF writes nothing, give-backs wait for Resume; at most N
+ * changes a run and a day. A held-back entry is not committed, so it is entered once allowed.
  */
 import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
@@ -37,6 +41,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync } from '../services/advertising/ads-mutation.service.js'
+import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 
 interface BSWindow { day?: number; start?: string; end?: string; adj?: string; value?: number }
 interface BSCampaign { id: string; name?: string; dailyBudget?: number | null }
@@ -231,7 +236,8 @@ export function classifyOverride(actor: string | null | undefined): { kind: BSOv
   return { kind: 'job', label: rest.replace(/-/g, ' ') }
 }
 
-export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number }
+// 1d — `guard`: the dial posture and the caps this run ran under, and what they held back.
+export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport }
 
 export async function runBudgetScheduleOnce(): Promise<BSTick> {
   const schedules = await prisma.budgetSchedule.findMany({
@@ -245,6 +251,8 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
   let changed = 0
   let yielded = 0
   let refused = 0
+  // 1d — the account dial and this engine's caps, read once per run; each campaign asks before its one write.
+  const guard = schedules.length ? await openEngineGuard('budget-schedules') : null
   for (const s of schedules) {
     const windows = (s.windows as unknown as BSWindow[]) ?? []
     const camps = (s.campaigns as unknown as BSCampaign[]) ?? []
@@ -333,6 +341,24 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
       // A new entry, and reality already matches it — nothing to do, but the entry is satisfied.
       if (live === target) { nextLast[c.id] = { budget: target, at, state: 'held', live, windowKey: entryKey }; continue }
 
+      /**
+       * 1d — the dial and the caps, asked once per campaign before its one write. Entering a window is a new
+       * change: capped, and not written under SUGGEST or while stopped. The give-back after a window is its own
+       * state: never refused by a cap and still written under SUGGEST, but it waits while stopped (the gate
+       * refuses a budget write while stopped, and only after Nexus changed its own copy).
+       * 🔴 Held back, the entry key is NOT committed — the previous memo is carried instead, exactly as on a
+       * refusal — so the window is entered properly, and a give-back still owed is still owed, on the first run
+       * allowed to write.
+       */
+      const permit = guard!.permit()
+      const held = nothingHeld()
+      if (!allowChange(true, permit, held, active ? 'forward' : 'restore')) {
+        guard!.settle(permit, 0, held)
+        if (prev) nextLast[c.id] = prev
+        continue
+      }
+      let writes = 0
+
       try {
         /**
          * 🔴 BSP-P3 — `updateCampaignWithSync` FAILS BY RETURN VALUE, never by throwing
@@ -382,6 +408,7 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
           continue
         }
         changed++
+        writes = 1
         /**
          * ⚠ `ok: true` means WRITTEN LOCALLY AND QUEUED — not landed at Amazon. The write gate runs
          * later, in the sync worker (`WRITE_GATE_DENIED` exists only there), and on this account it
@@ -397,6 +424,8 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
         if (prev?.budget != null) nextLast[c.id] = { ...prev, at, state: 'failed', live, error: (e as Error).message }
         else nextLast[c.id] = { budget: live, at, state: 'failed', live, error: (e as Error).message }
         logger.warn('[budget-schedule] apply failed — will retry next tick', { scheduleId: s.id, campaignId: c.id, error: (e as Error).message })
+      } finally {
+        guard!.settle(permit, writes, held)
       }
     }
 
@@ -438,13 +467,21 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
     await prisma.budgetSchedule.update({ where: { id: s.id }, data: { lastApplied: nextLast as unknown as Prisma.InputJsonValue, lastEvaluatedAt: new Date() } })
   }
   logger.info('[budget-schedule] tick', { evaluated: schedules.length, changed, yielded, refused })
-  return { evaluated: schedules.length, changed, yielded, refused }
+  return { evaluated: schedules.length, changed, yielded, refused, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** 1d — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
+export function budgetScheduleSummaryLine(r: BSTick): string {
+  return `evaluated=${r.evaluated} changed=${r.changed} yielded=${r.yielded} refused=${r.refused}${engineGuardNote(r.guard, {
+    suggest: 'no window is entered; a budget it set is still given back when its window closes',
+    stopped: 'nothing is written; windows and give-backs wait for Resume',
+  })}`
 }
 
 export async function runBudgetScheduleCron(): Promise<void> {
   // BSP-P3 — the summary carries the refusals too. A green cron row that reports only `changed`
   // reads as "all good" while every write is being stood down: [[reference_cron_success_carries_sweeper_error]].
-  try { await recordCronRun('ad-budget-schedule', async () => { const r = await runBudgetScheduleOnce(); return `evaluated=${r.evaluated} changed=${r.changed} yielded=${r.yielded} refused=${r.refused}` }) }
+  try { await recordCronRun('ad-budget-schedule', async () => budgetScheduleSummaryLine(await runBudgetScheduleOnce())) }
   catch (err) { logger.error('ad-budget-schedule cron failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 
