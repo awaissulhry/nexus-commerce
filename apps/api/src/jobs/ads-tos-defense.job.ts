@@ -55,7 +55,9 @@ async function tosDefenseTick(): Promise<string> {
     targetIS: Number.isFinite(targetIS) && targetIS > 0 && targetIS <= 1 ? targetIS : undefined,
     guard,
   })
-  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${engineGuardNote(guard.report(), {
+  // 4m — campaigns Hourly Bids holds are left alone, and the run says so in words.
+  const rankOwned = r.rankOwnedNote ? ` rank-owned=${r.skippedRankOwned} (${r.rankOwnedNote})` : ''
+  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${rankOwned}${engineGuardNote(guard.report(), {
     suggest: 'nothing is written',
     stopped: 'nothing is written; placement moves wait for Resume',
   })}`

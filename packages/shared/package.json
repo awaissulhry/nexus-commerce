@@ -130,6 +130,10 @@
       "types": "./dist/ads-budget-day.d.ts",
       "default": "./dist/ads-budget-day.js"
     },
+    "./ads-number": {
+      "types": "./dist/ads-number.d.ts",
+      "default": "./dist/ads-number.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

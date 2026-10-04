@@ -39,11 +39,12 @@ import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-s
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from '../lib/cron/clustered.js'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
-import { BID_WINDOW_MAX, BID_WINDOW_MIN, HIGH_ACOS_FLOOR, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
+import { BID_WINDOW_MAX, BID_WINDOW_MIN, HIGH_ACOS_FLOOR, TARGET_PERFORMANCE_FLOOR, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 // PLC-P7 — the report-label join and the three lane enums, from the leaf module that owns them.
 import { REPORT_LABEL_TO_PLACEMENT, PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from '../services/advertising/ads-placement-math.js'
 import { adSalesCents } from '../services/ads-core/ad-sales.js'
+import { KT6_SUPPRESSION_CENTS } from '../services/advertising/kt6-bid-action.js'
 
 /**
  * B2 (2026-08-20) — each trigger's window now comes from `@nexus/shared/ads-rule-window`, which
@@ -430,12 +431,15 @@ async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
  * its contexts are BUILT over it: the default pass keeps the trigger's 14 settled days and
  * excludes window-choosing rules; each distinct chosen window gets its own pass with its own
  * contexts and only its own rules. One extra groupBy per distinct window actually in use.
+ *
+ * 4f — `trigger` is the rule's own: builder Bid rules ride TARGET_PERFORMANCE now, and "the
+ * default" means that trigger's window.
  */
-export function bidRuleWindow(actions: unknown): number | null {
+export function bidRuleWindow(actions: unknown, trigger: 'KEYWORD_HIGH_ACOS' | 'TARGET_PERFORMANCE' = 'KEYWORD_HIGH_ACOS'): number | null {
   const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
   if (a0?.type !== 'bid' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
   const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
-  return clamped === WINDOW('KEYWORD_HIGH_ACOS') ? null : clamped
+  return clamped === WINDOW(trigger) ? null : clamped
 }
 
 /**
@@ -1097,6 +1101,96 @@ export async function buildHighAcosKeywordContexts(overrideDays?: number) {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildHighAcosKeywordContexts failed', { error: (e as Error).message }); return [] }
 }
 
+// ── TARGET_PERFORMANCE (4f) ───────────────────────────────────────────
+/**
+ * 4f (review 4.6) — the trigger builder Bid rules ride: every ENABLED positive target with at least
+ * `TARGET_PERFORMANCE_FLOOR.minClicks` clicks over the rule's window (14 settled days by default,
+ * `overrideDays` for a Bid rule's own lookback, as `buildHighAcosKeywordContexts` takes it).
+ *
+ * KEYWORD_HIGH_ACOS kept only converting keywords at ≥20% ACoS — 8 of 3,155 targets — so a Bid rule
+ * built from "Scale winners" or "Floor zero-sale spenders" could never match. It stays for engine rules.
+ *
+ * 🔴 Suppressed targets are NOT offered: the target's own flag, a bid at or under
+ * `KT6_SUPPRESSION_CENTS`, or a campaign whose bids are suppressed — the three tests `bid_apply`
+ * skips on. Offering them would only write execution rows for keywords the handler refuses.
+ *
+ * `acos` is ABSENT (never 0) on a target with no sales: `applyOperator` reads `Number(null)` as 0,
+ * so a null would match every "ACoS < x". `salesCents: 0` stays, so "Sales = 0" still matches.
+ */
+export async function buildTargetPerformanceContexts(overrideDays?: number) {
+  try {
+    const { since, until } = ruleWindowBounds(overrideDays ?? WINDOW('TARGET_PERFORMANCE'))
+    const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'marketplace'],
+      where: { entityType: 'AD_TARGET', localEntityId: { not: null }, date: { gte: since, lte: until } },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true, impressions: true },
+    })
+    const clicked = perf.filter((p) => (p._sum.clicks ?? 0) >= TARGET_PERFORMANCE_FLOOR.minClicks)
+    if (clicked.length === 0) return []
+    const rows = await prisma.adTarget.findMany({
+      where: {
+        id: { in: clicked.map((p) => p.localEntityId as string) },
+        status: 'ENABLED', isNegative: false,
+        suppressedFromBidCents: null, bidCents: { gt: KT6_SUPPRESSION_CENTS },
+        adGroup: { campaign: { bidsSuppressedAt: null } },
+      },
+      select: {
+        id: true, kind: true, expressionType: true, expressionValue: true, bidCents: true,
+        adGroup: { select: { id: true, name: true, campaign: { select: { id: true, name: true } } } },
+      },
+    })
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    return clicked
+      .map((p) => {
+        const t = byId.get(p.localEntityId as string)
+        if (!t?.adGroup?.campaign) return null
+        const spend = microsToCents(p._sum.costMicros)
+        const sales = adSalesCents(p._sum)
+        const orders = p._sum.orders7d ?? 0
+        const clicks = p._sum.clicks ?? 0
+        const impressions = p._sum.impressions ?? 0
+        return {
+          trigger: 'TARGET_PERFORMANCE' as const,
+          marketplace: p.marketplace,
+          campaign: { id: t.adGroup.campaign.id, name: t.adGroup.campaign.name },
+          adGroup: { id: t.adGroup.id, name: t.adGroup.name },
+          adTarget: {
+            id: t.id, kind: t.kind, expressionType: t.expressionType, expressionValue: t.expressionValue,
+            bidCents: t.bidCents, spendCents: spend, salesCents: sales, orders, clicks, impressions,
+            ...measured({
+              acos: sales > 0 ? spend / sales : null,
+              roas: spend > 0 ? sales / spend : null,
+              ctr: impressions > 0 ? clicks / impressions : null,
+              cvr: clicks > 0 ? orders / clicks : null,
+              cpcCents: clicks > 0 ? Math.round(spend / clicks) : null,
+            }),
+          },
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.adTarget.spendCents - a.adTarget.spendCents)
+  } catch (e) { logger.warn('[ads-rule-evaluator] buildTargetPerformanceContexts failed', { error: (e as Error).message }); return [] }
+}
+
+/**
+ * 4f — the tick's TARGET_PERFORMANCE passes: one per distinct window among the enabled rules on it
+ * (the default window is `null`), each admitting only its own rules — the BP.P4 mechanism the
+ * KEYWORD_HIGH_ACOS passes use. Nothing is built when no enabled rule rides the trigger (0 today).
+ */
+type RulePass = [string, Array<{ marketplace: string | null }>, ((r: { id: string; actions: unknown }) => boolean)?]
+export async function targetPerformancePasses(): Promise<RulePass[]> {
+  const rules = await prisma.automationRule.findMany({
+    where: { domain: 'advertising', trigger: 'TARGET_PERFORMANCE', enabled: true },
+    select: { actions: true },
+  })
+  const windows = [...new Set(rules.map((r) => bidRuleWindow(r.actions, 'TARGET_PERFORMANCE')))]
+  return Promise.all(windows.map(async (w): Promise<RulePass> => [
+    'TARGET_PERFORMANCE',
+    await buildTargetPerformanceContexts(w ?? undefined),
+    (r) => bidRuleWindow(r.actions, 'TARGET_PERFORMANCE') === w,
+  ]))
+}
+
 // ── KEYWORD_SCALE_OPPORTUNITY (E2) ────────────────────────────────────
 // Proven winners (strong ROAS + real orders) with headroom to scale — pair
 // with bid_up to win more of a profitable term.
@@ -1510,8 +1604,26 @@ const measured = <T extends Record<string, unknown>>(o: T): Partial<T> => {
  */
 const KEYWORD_RANK_SCAN_CAP = 8000
 
+/**
+ * 4m (review 3.13) — a rank reading expires after 14 days.
+ *
+ * Ranks arrive only through `POST /advertising/keyword-ranks` (a manual or file import; no collector
+ * runs on a clock), so there is no refresh interval in code to derive from. A weekly import is the
+ * slowest cadence a rank rule is useful at; twice that lets one import be late without the rule going
+ * blind, and nothing older drives a bid. Before this, a reading from months ago moved bids as if it
+ * were today's.
+ *
+ * A stale reading is ABSENT, exactly like one the source never measured (KT-P3 above: absent, never
+ * null or 0, so every rank condition refuses), and `adTarget.rankNote` says why in plain words. The
+ * same limit holds for the reading before it: a "rank change" against a reading older than the limit
+ * is not a recent change, so `rankDelta` is absent then too.
+ */
+export const KEYWORD_RANK_MAX_AGE_DAYS = 14
+
 export async function buildKeywordRankBidContexts() {
   try {
+    const freshSince = Date.now() - KEYWORD_RANK_MAX_AGE_DAYS * 864e5
+    const ageDays = (d: Date) => Math.floor((Date.now() - d.getTime()) / 864e5)
     const ranks = await prisma.keywordRank.findMany({ orderBy: [{ capturedAt: 'desc' }], take: KEYWORD_RANK_SCAN_CAP })
     if (!ranks.length) return []
     if (ranks.length === KEYWORD_RANK_SCAN_CAP) {
@@ -1572,8 +1684,16 @@ export async function buildKeywordRankBidContexts() {
         const e = kw ? latest.get(`${kw}\u001f${mkt}`) : undefined
         if (!e) return null // no rank snapshot for this keyword → skip
         const cur = e.r, prior = e.prior
-        // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing.
-        const rankDelta = prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
+        // 4m — a reading older than KEYWORD_RANK_MAX_AGE_DAYS is not used (see the note there).
+        const curFresh = cur.capturedAt.getTime() >= freshSince
+        const priorFresh = prior != null && prior.capturedAt.getTime() >= freshSince
+        // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing or stale.
+        const rankDelta = curFresh && priorFresh && prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
+        const rankNote = !curFresh
+          ? `Rank not used: the newest rank reading for this keyword is ${ageDays(cur.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+          : prior != null && !priorFresh
+            ? `Rank change not used: the reading before the newest is ${ageDays(prior.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+            : undefined
         return {
           trigger: 'KEYWORD_RANK_BID' as const,
           marketplace: mkt || null,
@@ -1581,7 +1701,8 @@ export async function buildKeywordRankBidContexts() {
           adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
-            ...measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }),
+            ...(curFresh ? measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }) : {}),
+            ...(rankNote ? { rankNote } : {}),
             ...measured(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
@@ -1674,6 +1795,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const customWindows = [...new Set(bidWindowRules.map((r) => bidRuleWindow(r.actions)).filter((w): w is number => w != null))]
   const highAcosByWindow = await Promise.all(customWindows.map(async (w) =>
     [w, await buildHighAcosKeywordContexts(w)] as const))
+  // 4f — builder Bid rules ride TARGET_PERFORMANCE, one pass per window in use (`targetPerformancePasses`).
+  const targetPerformance = await targetPerformancePasses()
 
   // BUD-P3 · PLC-P5 — Budget and Placement rules that chose their own lookback (`campaignRuleWindow`).
   const budgetWindowRules = await prisma.automationRule.findMany({
@@ -1705,6 +1828,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['KEYWORD_HIGH_ACOS', highAcosKeyword, (r) => bidRuleWindow(r.actions) == null],
     ...highAcosByWindow.map(([w, ctxs]): Pass => (
       ['KEYWORD_HIGH_ACOS', ctxs, (r) => bidRuleWindow(r.actions) === w])),
+    ...targetPerformance,
     ['KEYWORD_SCALE_OPPORTUNITY', scaleOpportunity],
     ['AD_GROUP_UNDERPERFORMING', adGroupUnderperform],
     ['NEW_TO_BRAND_WINNER', newToBrandWinner],
@@ -1824,6 +1948,7 @@ export async function simulateOneRule(ruleId: string): Promise<{
     KEYWORD_WASTED_SPEND: buildWastedKeywordContexts,
     SEARCH_TERM_CONVERTING: buildSearchTermConvertingContexts,
     KEYWORD_HIGH_ACOS: buildHighAcosKeywordContexts,
+    TARGET_PERFORMANCE: buildTargetPerformanceContexts,
     KEYWORD_SCALE_OPPORTUNITY: buildScaleOpportunityContexts,
     AD_GROUP_UNDERPERFORMING: buildAdGroupUnderperformContexts,
     NEW_TO_BRAND_WINNER: buildNewToBrandWinnerContexts,
@@ -1862,12 +1987,13 @@ export async function simulateOneRule(ruleId: string): Promise<{
      * A Bid rule on 30 days, or a Budget/Placement rule on 14, used to be simulated over the
      * trigger's default window — numbers the real run never sees.
      */
-    const ownWindow = rule.trigger === 'KEYWORD_HIGH_ACOS' ? bidRuleWindow(rule.actions)
+    const ownWindow = rule.trigger === 'KEYWORD_HIGH_ACOS' || rule.trigger === 'TARGET_PERFORMANCE' ? bidRuleWindow(rule.actions, rule.trigger)
       : rule.trigger === 'CAMPAIGN_PERFORMANCE_BUDGET' ? campaignRuleWindow(rule.actions)
         : null
     contexts = ownWindow == null ? await build()
       : rule.trigger === 'KEYWORD_HIGH_ACOS' ? await buildHighAcosKeywordContexts(ownWindow)
-        : await buildCampaignBudgetContexts(ownWindow)
+        : rule.trigger === 'TARGET_PERFORMANCE' ? await buildTargetPerformanceContexts(ownWindow)
+          : await buildCampaignBudgetContexts(ownWindow)
   }
 
   /**

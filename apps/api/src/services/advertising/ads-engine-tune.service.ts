@@ -269,7 +269,8 @@ const budgetSchedule: Spec = {
   async write(loaded, _before, after, actorUserId) {
     const { patchBudgetSchedule } = await import('./ads-budget-schedule.service.js')
     // Its own audit row (budget_schedule_update), as the route writes it.
-    return (await patchBudgetSchedule(loaded.id!, { windows: after.windows }, actorOf(actorUserId) as `user:${string}`)) ? null : 'not found'
+    const out = await patchBudgetSchedule(loaded.id!, { windows: after.windows }, actorOf(actorUserId) as `user:${string}`)
+    return !out ? 'not found' : 'invalid' in out ? out.invalid.error : null // 4b — a value the save refuses is said, not reported as done
   },
   effect: (l) => `The schedule "${l.name}" uses the new windows from its next window entry (if it is switched on); a window it is in now is not re-applied.`,
 }

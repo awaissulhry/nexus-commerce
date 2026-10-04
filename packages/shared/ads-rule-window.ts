@@ -87,7 +87,8 @@ export const TOS_WINDOW_MAX = 90
 
 /**
  * BP.P4 — the bounds of a Bid rule's own lookback (`actions[0].windowDays`), enforced by BOTH
- * readers: the KEYWORD_HIGH_ACOS context emitter and `targetPerformance` (computed bid ops).
+ * readers: the Bid rule's context emitter (TARGET_PERFORMANCE, or KEYWORD_HIGH_ACOS before 4f) and
+ * `targetPerformance` (computed bid ops).
  * Declared here so the grid's Lookback cell, the builder's select and the engine agree.
  */
 export const BID_WINDOW_MIN = 7
@@ -133,8 +134,24 @@ export const WASTING_FLOOR = { minSpendCents: 300, minClicks: 5, topPerTick: 300
  *
  * `minAcos` is a FRACTION to match `adTarget.acos`; `topPerTick` is the emitter's own slice, kept
  * here so a census can say what it dropped instead of implying it considered everything.
+ *
+ * 4f (review 4.6) — builder Bid rules no longer ride this trigger (see `TARGET_PERFORMANCE_FLOOR`);
+ * engine rules on KEYWORD_HIGH_ACOS still do, so the floor stays exactly as it was.
  */
 export const HIGH_ACOS_FLOOR = { minOrders: 1, minSalesCents: 1, minSpendCents: 200, minAcos: 0.2, topPerTick: 500 } as const
+
+/**
+ * 4f (review 4.6) — the TARGET_PERFORMANCE emitter's floor, the trigger builder Bid rules ride.
+ *
+ * KEYWORD_HIGH_ACOS offered a Bid rule 8 of 3,155 targets, so two of the five Bid starters ("Scale
+ * winners" at ACoS < 20%, "Floor zero-sale spenders" at Sales = 0) could never match. This trigger
+ * offers every ENABLED positive target with at least `minClicks` clicks in the window, minus the
+ * ones whose bids are suppressed (the three tests `bid_apply` skips on). A target with no sales has
+ * no ACoS (absent, never 0), so an ACoS condition never matches it.
+ *
+ * Same three readers as `HIGH_ACOS_FLOOR`: the emitter, the draft preview's census, the builder's note.
+ */
+export const TARGET_PERFORMANCE_FLOOR = { minClicks: 1 } as const
 
 /** Amazon's still-settling tail, re-exported so a caller needs one import to explain a window. */
 export { PROVISIONAL_DAYS }
@@ -158,6 +175,8 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
   SEARCH_TERM_CONVERTING: W(30, 'buildSearchTermConvertingContexts'),
   SEARCH_TERM_WASTING: W(30, 'buildSearchTermWastingContexts'),
   KEYWORD_HIGH_ACOS: W(14, 'buildHighAcosKeywordContexts'),
+  /** 4f — builder Bid rules: every clicked, enabled, unsuppressed positive target. */
+  TARGET_PERFORMANCE: W(14, 'buildTargetPerformanceContexts'),
   KEYWORD_SCALE_OPPORTUNITY: W(14, 'buildScaleOpportunityContexts'),
   AD_GROUP_UNDERPERFORMING: W(14, 'buildAdGroupUnderperformContexts'),
   NEW_TO_BRAND_WINNER: W(14, 'buildNewToBrandWinnerContexts'),
@@ -273,7 +292,8 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
   },
   /**
    * BP.P4 — a builder Bid rule's lookback is ITS OWN (`actions[0].windowDays`, the builder's
-   * "Lookback period" select), defaulting to the KEYWORD_HIGH_ACOS trigger's 14 settled days.
+   * "Lookback period" select), defaulting to its trigger's 14 settled days (TARGET_PERFORMANCE
+   * since 4f; a Bid rule saved before 4f rides KEYWORD_HIGH_ACOS, also 14).
    *
    * The key is the builder SLUG, because that is the action type a stored builder rule carries
    * (`actions[0].type = 'bid'`) — the grid reads STORED actions, never the translation. Both
@@ -284,7 +304,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
    */
   bid: {
     kind: 'window', days: 14, settled: true,
-    source: 'advertising-rule-evaluator.job.ts buildHighAcosKeywordContexts + targetPerformance (both via ruleWindowBounds)',
+    source: 'advertising-rule-evaluator.job.ts buildTargetPerformanceContexts + targetPerformance (both via ruleWindowBounds)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
   /**

@@ -54,7 +54,7 @@
  * "current → proposed" row with neither is a number that will be false within the hour.
  */
 import prisma from '../../db.js'
-import { HIGH_ACOS_FLOOR } from '@nexus/shared/ads-rule-window'
+import { TARGET_PERFORMANCE_FLOOR } from '@nexus/shared/ads-rule-window'
 import { logger } from '../../utils/logger.js'
 import { ruleMatchesScope } from '../automation-rule-scope.js'
 import { maybeTranslateAdsRule, builderBudgetCampaignIds, builderDraftCampaignIds } from './ads-rule-adapter.service.js'
@@ -838,19 +838,17 @@ export interface BidPreviewResult {
   suppressedMatched: number
   suppressedUnflaggedMatched: number
   campaignSuppressedMatched: number
-  /** The bar a keyword must clear before ANY bid rule can see it — read from the emitter's own constant. */
-  floor: { minOrders: number; minSpendEur: number; minAcosPct: number; topPerTick: number }
+  /**
+   * The bar a keyword must clear before ANY bid rule can see it — read from the emitter's own constant.
+   * 4f — TARGET_PERFORMANCE's bar (clicks in the window, not suppressed), no longer KEYWORD_HIGH_ACOS's.
+   */
+  floor: { minClicks: number }
   rows: BidPreviewRow[]
   untranslatable?: string[]
 }
 
 export async function previewBidRule(draft: BudgetPreviewDraft): Promise<BidPreviewResult> {
-  const floor = {
-    minOrders: HIGH_ACOS_FLOOR.minOrders,
-    minSpendEur: HIGH_ACOS_FLOOR.minSpendCents / 100,
-    minAcosPct: HIGH_ACOS_FLOOR.minAcos * 100,
-    topPerTick: HIGH_ACOS_FLOOR.topPerTick,
-  }
+  const floor = { minClicks: TARGET_PERFORMANCE_FLOOR.minClicks }
   const empty = (extra: Partial<BidPreviewResult> = {}): BidPreviewResult => ({
     ok: true, windowDays: 14, selected: 0, selectedTargets: 0, measurable: 0, inScope: 0,
     matched: 0, noChange: 0, refusedNoSignal: 0,
@@ -876,14 +874,15 @@ export async function previewBidRule(draft: BudgetPreviewDraft): Promise<BidPrev
     adTarget: { id: string; acos?: number | null; spendCents?: number; [k: string]: unknown }
   }
 
-  const { buildHighAcosKeywordContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
+  // 4f — the trigger a Bid rule saved from the builder now rides (`TRIGGER_BY_SLUG.bid`).
+  const { buildTargetPerformanceContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
   const run = await runDraftPreview<BidCtx>(draft, {
     slug: 'bid',
     handler: 'bid_apply',
     // BP.P4 — a Bid rule chooses its own lookback; `runDraftPreview` reads it off the action and
     // clamps it exactly as the emitter and `targetPerformance` do, then hands it here.
     defaultWindowDays: 14,
-    buildContexts: (windowDays) => buildHighAcosKeywordContexts(windowDays) as unknown as Promise<unknown[]>,
+    buildContexts: (windowDays) => buildTargetPerformanceContexts(windowDays) as unknown as Promise<unknown[]>,
     entityId: (ctx) => ({ key: 'adTargetId', value: ctx.adTarget.id }),
   })
 
@@ -936,7 +935,7 @@ export async function previewBidRule(draft: BudgetPreviewDraft): Promise<BidPrev
     return {
       targetId: p.ctx.adTarget.id,
       /**
-       * KEYWORD_HIGH_ACOS selects on AD_TARGET performance and does NOT filter by kind, so an auto
+       * TARGET_PERFORMANCE selects on AD_TARGET performance and does NOT filter by kind, so an auto
        * or product target with spend is emitted too and `bid_apply` really can move its bid. Those
        * carry no keyword text, and rendering them blank would hide rows the rule genuinely acts on
        * — label them by what they are instead (the old client-side preview's one good idea).

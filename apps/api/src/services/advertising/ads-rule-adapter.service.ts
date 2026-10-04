@@ -15,6 +15,7 @@
  * evaluateRule, domain-gated) so the existing engine — context-builders, conditions-tree,
  * handlers, safety spine, audit rows — runs it unchanged. Returns null for non-builder rules.
  */
+import { parseDecimalInput } from '@nexus/shared/ads-number'
 import { logger } from '../../utils/logger.js'
 import { normalizeHarvestWire, normalizeHarvestBidMode } from './ads-harvest-wire.js'
 
@@ -169,6 +170,31 @@ interface BuilderGroup { conditions?: BuilderCond[]; action?: { op?: string; val
 interface EngineLeaf { field: string; op: string; value: number }
 
 const num = (v: unknown): number => Number(v) || 0
+
+/**
+ * 4b (review 4.1) — a number the builder stored as TYPED, read failing closed.
+ *
+ * These were read with `num`, so an Italian decimal comma or a typo became 0: "Spend ≥ 2,5" matched every
+ * campaign, "Set budget 12,50" asked for €0, and a ceiling of "12,50" became a ceiling of €0. `parseDecimalInput`
+ * reads the comma. A value it cannot read — or a blank where the rule needs a number (`ifBlank` not given) — is
+ * named in `bad`, which becomes the rule's `untranslatable` list: the evaluator runs the rule as no-match and the
+ * save routes refuse it, never a silent 0. `ifBlank` is what an empty field means here: a default, or `null` for
+ * "no bound". `num` stays for the reverse direction below, which reads engine-native numbers, not typed text.
+ */
+function readBuilderNumber(raw: unknown, label: string, bad: string[], ifBlank?: number | null): number | null {
+  const read = parseDecimalInput(raw)
+  // Once per problem: a rule-wide field (a floor, a ceiling) is read again for every criteria block.
+  const refuse = (why: string) => { if (!bad.includes(why)) bad.push(why) }
+  if (read.ok === false) { refuse(`${label}: ${read.reason}`); return null }
+  if (read.value != null) return read.value
+  if (ifBlank === undefined) refuse(`${label} is empty`)
+  return ifBlank ?? null
+}
+/**
+ * The Bid ops that compute their own number (`COMPUTED_BID_OPS` in automation-action-handlers.ts): a blank value is
+ * theirs to have — `bid_apply` ignores it, or for the two ratio ops falls back to the account's target ACoS.
+ */
+const BLANK_VALUE_BID_OPS = new Set(['targetAcos', 'setCpc', 'revPerClick', 'curBidTargetAcos'])
 
 /**
  * The campaigns an operator picked, from either spelling the writers use: `campaigns: [{id}]`
@@ -351,7 +377,10 @@ function translateConditions(groups: BuilderGroup[], map: typeof CAMPAIGN_METRIC
        * still comes from the metric, because that is a property of the metric and not of the lane.
        */
       const field = placementScopedField(m.field, c.scope)
-      leaves.push({ field, op: c.op, value: convert(c.value, m.conv) })
+      // 4b — the threshold fails closed: a junk or blank value refuses the rule instead of comparing against 0.
+      const threshold = readBuilderNumber(c.value, c.metric!, unmapped)
+      if (threshold == null) continue
+      leaves.push({ field, op: c.op, value: convert(threshold, m.conv) })
     }
   }
   return { leaves, unmapped }
@@ -728,9 +757,10 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
         actions: [{
           type: 'budget_apply',
           op: act.op ?? 'set',
-          value: num(act.value),
-          minEur: a0.budgetFloor != null ? num(a0.budgetFloor) : 1,
-          maxEur: a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+          // 4b — read failing closed: a ceiling that cannot be read refuses the rule, it never becomes "no ceiling".
+          value: readBuilderNumber(act.value, 'THEN value', unmappedAll),
+          minEur: readBuilderNumber(a0.budgetFloor, 'Budget floor', unmappedAll, 1),
+          maxEur: readBuilderNumber(a0.budgetCeiling, 'Budget ceiling', unmappedAll, null),
           // BUD-P3 — the rule's own lookback (Advanced Settings), honoured by per-window
           // CAMPAIGN_PERFORMANCE_BUDGET passes in the evaluator; absent = the trigger's 7 days.
           ...(typeof a0.windowDays === 'number' && Number.isFinite(a0.windowDays)
@@ -763,9 +793,9 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
           type: 'placement_apply',
           placement: PLACEMENT_ENUM[act.placeTarget ?? 'tos'] ?? 'PLACEMENT_TOP',
           op: act.op ?? 'set',
-          value: num(act.value),
-          minPct: a0.placeFloor != null ? num(a0.placeFloor) : 0,
-          maxPct: a0.placeCeiling != null ? num(a0.placeCeiling) : 900,
+          value: readBuilderNumber(act.value, 'THEN value', unmappedAll), // 4b — as budget above
+          minPct: readBuilderNumber(a0.placeFloor, 'Placement floor', unmappedAll, 0),
+          maxPct: readBuilderNumber(a0.placeCeiling, 'Placement ceiling', unmappedAll, 900),
           campaignIds: builderCampaignIds(a0), // EA4 — as budget above
           reason: `Placement rule ${rule.id}`,
         }],
@@ -808,11 +838,12 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
         : {
           type: 'bid_apply',
           op: act.op ?? 'set',
-          value: num(act.value),
+          // 4b — as budget above; only the computed ops may leave the value blank.
+          value: readBuilderNumber(act.value, 'THEN value', unmappedAll, BLANK_VALUE_BID_OPS.has(String(act.op)) ? 0 : undefined),
           // SK1 stores bid guardrails as bidFloor/bidCeiling (fall back to the legacy budget*
           // fields); the handler still enforces a €0.05 floor regardless.
-          minEur: a0.bidFloor != null ? num(a0.bidFloor) : a0.budgetFloor != null ? num(a0.budgetFloor) : null,
-          maxEur: a0.bidCeiling != null ? num(a0.bidCeiling) : a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+          minEur: readBuilderNumber(a0.bidFloor, 'Bid floor', unmappedAll, null) ?? readBuilderNumber(a0.budgetFloor, 'Bid floor', unmappedAll, null),
+          maxEur: readBuilderNumber(a0.bidCeiling, 'Bid ceiling', unmappedAll, null) ?? readBuilderNumber(a0.budgetCeiling, 'Bid ceiling', unmappedAll, null),
           campaignIds: builderCampaignIds(a0),
           // BP.P4 — the rule's own lookback (Bid rules; `windowDays` on the stored action) rides
           // into the handler so computed ops measure over the window the operator chose.
@@ -851,17 +882,17 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
      */
     const wire = normalizeHarvestWire(a0)
     const levels = NEG_LEVELS[String(a0.negationLevel ?? 'adgroup')] ?? ['AD_GROUP']
+    const unmappedAll: string[] = []
     const actions: Array<Record<string, unknown>> = [{
       type: 'add_negative_exact',
       scope: levels[0],
       levels,
       negative: wire,
       protectConverting: a0.protectConverting !== false,
-      protectDays: a0.protectDays != null ? num(a0.protectDays) : 30,
+      protectDays: readBuilderNumber(a0.protectDays, 'Protect days', unmappedAll, 30), // 4b
       reason: `Negative rule ${rule.id}`,
     }]
     const blocks: NonNullable<TranslatedRule['blocks']> = []
-    const unmappedAll: string[] = []
     for (const g of groups.length ? groups : [{} as BuilderGroup]) {
       const { leaves, unmapped } = translateConditions([g], SEARCHTERM_METRIC, rule.id)
       unmappedAll.push(...unmapped)
@@ -886,9 +917,10 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
      */
     const wire = normalizeHarvestWire(a0)
     const bid = (a0.bid ?? {}) as { mode?: unknown; value?: unknown }
+    const unmappedAll: string[] = []
     const actions: Array<Record<string, unknown>> = [{
       type: 'promote_to_exact',
-      bid: { mode: normalizeHarvestBidMode(bid.mode), value: bid.value != null && String(bid.value).trim() !== '' ? num(bid.value) : null },
+      bid: { mode: normalizeHarvestBidMode(bid.mode), value: readBuilderNumber(bid.value, 'Harvest bid', unmappedAll, null) }, // 4b
       harvest: wire,
       reason: `Harvest rule ${rule.id}`,
     }]
@@ -900,7 +932,6 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
       })
     }
     const blocks: NonNullable<TranslatedRule['blocks']> = []
-    const unmappedAll: string[] = []
     for (const g of groups.length ? groups : [{} as BuilderGroup]) {
       const { leaves, unmapped } = translateConditions([g], SEARCHTERM_METRIC, rule.id)
       unmappedAll.push(...unmapped)

@@ -11,6 +11,7 @@
  *     re-enable that would put it in a second one is refused, and the answer names the other schedule (409).
  */
 import type { BudgetSchedule } from '@prisma/client'
+import { checkDecimal, DECIMAL_RANGE, type DecimalRange } from '@nexus/shared/ads-number'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdsActor } from './ads-mutation.service.js'
@@ -131,17 +132,54 @@ export async function budgetScheduleConflict(campaigns: unknown, exceptId: strin
   }
 }
 
+/** 4b — a create or edit refused because a window's value cannot be read or is out of range (the route's 400). */
+export interface BudgetScheduleInvalid { error: string }
+
+const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+/** Each adjustment's words and range. A set budget is at least €1, Amazon's lowest daily budget. */
+const WINDOW_VALUE: Record<string, { words: string; range: DecimalRange }> = {
+  set: { words: 'Set budget to (€)', range: { min: 1 } },
+  incPct: { words: 'Increase budget by (%)', range: DECIMAL_RANGE.increasePct },
+  decPct: { words: 'Decrease budget by (%)', range: DECIMAL_RANGE.decreasePct },
+}
+const MULTIPLIER_VALUE = { words: 'Multiplier (×)', range: DECIMAL_RANGE.multiplier }
+
+/**
+ * 4b (review 4.1) — a schedule's window values, read and range-checked before anything is stored.
+ *
+ * The builder sent `Number(value) || 0` and the executor read the same way, so a decimal comma or a typo became 0:
+ * "Set budget 15,50" put €1 (Amazon's floor) on every picked campaign. Now "15,50" is 15.5, a value that cannot be
+ * read or is out of range refuses the whole save with a sentence naming the window, and each stored value is the
+ * number it says (every reader — the executor, tune-ad-engine, the screen — then sees a number). `type` is the
+ * schedule's, from the body or the stored row. Anything that is not a list of windows is left as it was.
+ */
+function readScheduleWindows(windows: unknown, type: unknown): { windows: unknown } | { invalid: BudgetScheduleInvalid } {
+  if (!Array.isArray(windows)) return { windows }
+  const out: unknown[] = []
+  for (const w of windows as Array<Record<string, unknown> | null>) {
+    if (w == null || typeof w !== 'object') { out.push(w); continue }
+    const spec = type === 'budget-multiplier' ? MULTIPLIER_VALUE : WINDOW_VALUE[String(w.adj ?? '')]
+    const when = `${WEEKDAY[Number(w.day)] ?? `Day ${String(w.day)}`} ${w.start && w.end ? `${String(w.start)}–${String(w.end)}` : '(all day)'}`
+    const check = checkDecimal(w.value, `${when}: ${spec?.words ?? 'the value'}`, spec?.range ?? {}, spec != null)
+    if (check.ok === false) return { invalid: { error: check.error } }
+    out.push(check.value != null ? { ...w, value: check.value } : w)
+  }
+  return { windows: out }
+}
+
 /**
  * POST /advertising/budget-schedules, moved unchanged out of advertising.routes.ts (3c) — plus the one-schedule rule:
  * a new schedule is switched on, so a campaign already in another switched-on schedule refuses the create.
  * The route checks the name (400) before it calls this.
  */
-export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict }> {
+export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid }> {
+  const read = readScheduleWindows(b.windows, b.type) // 4b — before anything else is checked or written
+  if ('invalid' in read) return read
   const conflict = await budgetScheduleConflict(b.campaigns, null)
   if (conflict) return { conflict }
   const schedule = await prisma.budgetSchedule.create({ data: {
     name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
-    campaigns: (b.campaigns as object) ?? [], windows: (b.windows as object) ?? [],
+    campaigns: (b.campaigns as object) ?? [], windows: (read.windows as object) ?? [],
     timezone: (b.timezone as string) ?? 'Europe/Rome', chartPrefs: (b.chartPrefs as object) ?? {},
     startDate: b.startDate ? new Date(String(b.startDate)) : null,
     endDate: b.endDate ? new Date(String(b.endDate)) : null,
@@ -174,9 +212,10 @@ export async function createBudgetSchedule(b: Record<string, unknown>, actor: Ad
 
 /**
  * PATCH /advertising/budget-schedules/:id. null = not found (the route's 404), as any failure inside always was;
- * `conflict` = 3c's one-schedule rule refused the edit (the route's 409) and nothing was changed.
+ * `conflict` = 3c's one-schedule rule refused the edit (the route's 409) and nothing was changed; `invalid` = 4b, a
+ * window value that cannot be read or is out of range (the route's 400), and nothing was changed.
  */
-export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | { conflict: BudgetScheduleConflict } | null> {
+export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid } | null> {
   const data: Record<string, unknown> = {}
   // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in createBudgetSchedule.
   for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
@@ -184,6 +223,15 @@ export async function patchBudgetSchedule(id: string, b: Record<string, unknown>
   if (data.excludeDates !== undefined && !Array.isArray(data.excludeDates)) data.excludeDates = []
   if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
   if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
+  // 4b — new windows are read against the schedule's type: the one this edit sets, or the stored one.
+  if (data.windows !== undefined) {
+    const type = b.type !== undefined ? b.type
+      : (await prisma.budgetSchedule.findUnique({ where: { id }, select: { type: true } }).catch(() => null))?.type
+    if (type === undefined) return null
+    const read = readScheduleWindows(data.windows, type)
+    if ('invalid' in read) return read
+    data.windows = read.windows
+  }
   const editsCampaigns = data.campaigns !== undefined
   try {
     // W4 — read before write, so a disable can give back what THIS schedule applied.
