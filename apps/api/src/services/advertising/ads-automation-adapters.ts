@@ -625,7 +625,7 @@ const A10: AutomationAdapter = {
   },
   async state() {
     const [rows, dial] = await Promise.all([this.rows!(), adsDial()])
-    return withEngineCaps(underDial(rows, dial, 'rank-defend', 'No goal-mode schedules or product rank plans.'), 'rank-defend')
+    return withEngineCaps(underDial(rows, dial, 'rank-defend', 'No goal-mode schedules or product rank plans.', await (await import('./rank-release.service.js')).enabledOrphanScope()), 'rank-defend')
   },
   explain(opts: ExplainOptions) {
     return perRowExplain(this, opts, (row) => (row.kind === 'plan' ? `automation:rank-plan-${row.id}` : `automation:rank-defend-${row.id}`))

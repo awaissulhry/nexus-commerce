@@ -384,6 +384,11 @@ export const ENTRIES: Entry[] = [
   // 2a — what deleting or pausing a rank schedule would give back: a read (it writes nothing), named on its own so no
   // reorder of the rules below can make the delete dialog need a write permission to show it.
   P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/rank-schedule-groups\/[^/]+\/release-preview$/.test(p)),
+  // Owner 2026-10-04 — live campaigns rank left bids changed on, waiting for a person: the list is a read; giving one
+  // back changes bids, so it asks for what changing a rank schedule asks for (ads.campaigns.manage). Named on their own
+  // for the same reason as the preview above.
+  P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/rank-release/enabled-orphans'),
+  P(F.adsCampaignsManage, (m, p) => !isRead(m) && /^\/api\/advertising\/rank-release\/enabled-orphans\/[^/]+\/release$/.test(p)),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   P(F.adsAutomationManage, has('/autopilot')),
   // R16 — a person's per-business engine switch (the Control Room lever drawer): ads.automation.manage, named on its own

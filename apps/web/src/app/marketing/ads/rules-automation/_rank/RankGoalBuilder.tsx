@@ -351,7 +351,7 @@ export function RankGoalBuilder() {
                 showSchedule={!!savedPlan}
               />
               <p className="h10-rb-hint-note">
-                Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off. Placement percentages stay as last set.
+                Removing a campaign here, or pausing or deleting the schedule, gives back the bids it floored in Min-bid hours at once — or on the first run after ads automation is resumed or Rank &amp; Dayparting is switched back on, if either is off (a live campaign then waits for you to give its bids back from the banner on the Rank &amp; Dayparting list). Placement percentages stay as last set.
                 {release && <> {releaseHoldLine(release)}</>}
               </p>
             </section>

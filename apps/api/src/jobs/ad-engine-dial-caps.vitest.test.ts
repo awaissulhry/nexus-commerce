@@ -267,10 +267,11 @@ describe('rank-defend caps (review 2.5): per run and per day, a campaign never s
 
     const r = await inside(() => runRankDefendOnce())
     expect(r.guard!.todayBefore).toBeGreaterThanOrEqual(5)
-    // 2a — the run-cap arm's two floored campaigns lost their schedules to `only()` above: the orphan sweep gives them
-    // back past the day cap too (never refused, only counted), so the run's changes are the restore's 2 plus the sweep's.
-    expect(r.release).toMatchObject({ restored: 2, swept: 2, writes: 6 })
-    expect(r.guard).toMatchObject({ deferredByCap: 1, changes: 2 + 6 })
+    // 2a — the run-cap arm's two floored campaigns lost their schedules to `only()` above. They are live, so the orphan
+    // sweep leaves them for a person (Owner, 2026-10-04: it never changes a live campaign by itself); the run's changes
+    // are the restore's 2, past the day cap (never refused, only counted).
+    expect(r.release).toMatchObject({ restored: 0, swept: 0, writes: 0 })
+    expect(r.guard).toMatchObject({ deferredByCap: 1, changes: 2 })
     expect((await bids('rd-day-floor')).suppressed).toBe(false)
     expect(await bids('rd-day-restore')).toMatchObject({ suppressed: false, group: { defaultBidCents: 40 }, targets: [{ bidCents: 35 }] })
   })

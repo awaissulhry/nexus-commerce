@@ -31,6 +31,8 @@ describe('scheduleHealth', () => {
     expect(d).toContain('The bids it floored are given back when it is paused')
     expect(d).toContain('Placement percentages stay as last set.')
     expect(d).not.toContain('nothing is reverted')
+    // Owner 2026-10-04 — the loop never gives back on a live campaign by itself.
+    expect(d).toContain('while a live one waits for you to give its bids back from the banner on this list')
   })
 
   it('flags a group that holds no campaigns', () => {
@@ -114,9 +116,9 @@ describe('release copy', () => {
 
   it('says why the give-back waits, and when it comes', () => {
     expect(releasePreviewLines(preview({ waitWhy: 'ads automation is stopped (halted: spend spike)' }))[0])
-      .toBe('The 3 bids it floored on 1 campaign stay floored for now because ads automation is stopped (halted: spend spike). They come back on the first run after that changes.')
+      .toBe('The 3 bids it floored on 1 campaign stay floored for now because ads automation is stopped (halted: spend spike). They come back on the first run after that changes on a paused campaign; on a live one, when you give them back from the banner on the Rank & Dayparting list.')
     expect(releasePreviewLines(preview({ bids: 1, waitWhy: 'Rank & Dayparting is switched off for this business' }))[0])
-      .toBe('The 1 bid it floored on 1 campaign stays floored for now because Rank & Dayparting is switched off for this business. It comes back on the first run after that changes.')
+      .toBe('The 1 bid it floored on 1 campaign stays floored for now because Rank & Dayparting is switched off for this business. It comes back on the first run after that changes on a paused campaign; on a live one, when you give it back from the banner on the Rank & Dayparting list.')
   })
 
   it('names who holds a floor it did not set, and lists placements above 0%', () => {
@@ -144,7 +146,7 @@ describe('release copy', () => {
     const none = { restored: 0, keptByOthers: 0, failed: 0, deferred: 0, deferredWhy: null, writes: 0 }
     expect(releaseOutcomeLine(2, { ...none, restored: 3, writes: 9 })).toBe('Paused 2 schedules. Gave back the bids on 3 campaigns (9 bids).')
     expect(releaseOutcomeLine(1, { ...none, deferred: 1, deferredWhy: 'ads automation is stopped (halted: x)', keptByOthers: 1 }))
-      .toBe('Paused 1 schedule. 1 campaign stays floored for now because ads automation is stopped (halted: x); the bids come back on the first run after that changes. 1 campaign stays floored by someone else.')
+      .toBe('Paused 1 schedule. 1 campaign stays floored for now because ads automation is stopped (halted: x); the bids come back on the first run after that changes on a paused campaign, and a live one waits for you in the banner on this list. 1 campaign stays floored by someone else.')
     expect(releaseOutcomeLine(1, none)).toBe('Paused 1 schedule. None of its campaigns held a bid floor, so no bid changed.')
     expect(releaseOutcomeLine(2, none)).toBe('Paused 2 schedules. None of their campaigns held a bid floor, so no bid changed.')
   })

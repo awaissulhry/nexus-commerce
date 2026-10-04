@@ -131,7 +131,7 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
 
   // ── the gates the engine applies before it evaluates anything ─────────────────────────────
   if (!input.scheduleEnabled || !isGoalMode(input.windows, input.defaultTargetKey)) {
-    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule carries no rank target, so the rank loop does not own it.' : 'Paused — the rank loop skips it. The bids it floored were given back when it was paused (while ads automation is stopped, on the first run after Resume); placement percentages stay as last set.' } }
+    return { ...base, mode: { kind: 'not-running', label: 'Not running', detail: input.scheduleEnabled ? 'This schedule carries no rank target, so the rank loop does not own it.' : 'Paused — the rank loop skips it. The bids it floored were given back when it was paused (while ads automation is stopped: on the first run after Resume for a paused campaign, while a live one waits for a person on the Rank & Dayparting list); placement percentages stay as last set.' } }
   }
   if (input.governed) {
     return { ...base, mode: { kind: 'governed-elsewhere', label: 'Governed elsewhere', detail: 'A Rank Director family plan governs this campaign and takes precedence, so the schedule is never evaluated for it.' } }

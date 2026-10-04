@@ -41,7 +41,8 @@ export function scheduleHealth(input: HealthInput, now: number = Date.now()): He
   // A paused schedule is not stale — it is not meant to be running.
   // 2a — pausing gives back the bids it floored (review 3.2); before, they stayed at the floor for good.
   if (!enabled) {
-    return { tone: 'muted', label: 'Paused', detail: 'Paused, so the rank loop skips it. The bids it floored are given back when it is paused — or on the first run after ads automation is resumed or Rank & Dayparting is switched back on, if either was off. Placement percentages stay as last set.' }
+    // Owner 2026-10-04 — after a wait, the loop gives back on a paused campaign only; a live one waits for a person.
+    return { tone: 'muted', label: 'Paused', detail: 'Paused, so the rank loop skips it. The bids it floored are given back when it is paused — or, if ads automation was stopped or Rank & Dayparting switched off, on the first run after that changes for a paused campaign, while a live one waits for you to give its bids back from the banner on this list. Placement percentages stay as last set.' }
   }
   if (membersTotal === 0) {
     return { tone: 'warn', label: 'No campaigns', detail: 'This schedule holds no campaigns, so it can never run. Add campaigns, or delete it.' }
@@ -132,7 +133,7 @@ const n = (count: number, one: string, many = `${one}s`) => `${count} ${count ==
 export function releasePreviewLines(p: ReleasePreview): string[] {
   const lines: string[] = []
   if (!p.restore) lines.push('No campaign here holds a bid floor this schedule set, so no bid changes.')
-  else if (p.waitWhy) lines.push(`The ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')} ${p.bids === 1 ? 'stays' : 'stay'} floored for now because ${p.waitWhy}. ${p.bids === 1 ? 'It comes' : 'They come'} back on the first run after that changes.`)
+  else if (p.waitWhy) lines.push(`The ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')} ${p.bids === 1 ? 'stays' : 'stay'} floored for now because ${p.waitWhy}. ${p.bids === 1 ? 'It comes' : 'They come'} back on the first run after that changes on a paused campaign; on a live one, when you give ${p.bids === 1 ? 'it' : 'them'} back from the banner on the Rank & Dayparting list.`)
   else lines.push(`Gives back at once the ${n(p.bids, 'bid')} it floored on ${n(p.restore, 'campaign')}.`)
   if (p.keptByOthers) {
     const who = [...new Set(p.items.filter((i) => i.outcome === 'kept-by-others').map((i) => i.floorBy ?? 'someone else'))]
@@ -157,9 +158,9 @@ export function releaseHoldLine(p: ReleasePreview): string {
 export function releaseOutcomeLine(schedules: number, r: ReleaseReport): string {
   const parts = [`Paused ${n(schedules, 'schedule')}.`]
   if (r.restored) parts.push(`Gave back the bids on ${n(r.restored, 'campaign')} (${n(r.writes, 'bid')}).`)
-  if (r.deferred) parts.push(`${n(r.deferred, 'campaign')} ${r.deferred === 1 ? 'stays' : 'stay'} floored for now because ${r.deferredWhy ?? 'ads automation is stopped'}; the bids come back on the first run after that changes.`)
+  if (r.deferred) parts.push(`${n(r.deferred, 'campaign')} ${r.deferred === 1 ? 'stays' : 'stay'} floored for now because ${r.deferredWhy ?? 'ads automation is stopped'}; the bids come back on the first run after that changes on a paused campaign, and a live one waits for you in the banner on this list.`)
   if (r.keptByOthers) parts.push(`${n(r.keptByOthers, 'campaign')} ${r.keptByOthers === 1 ? 'stays' : 'stay'} floored by someone else.`)
-  if (r.failed) parts.push(`${n(r.failed, 'campaign')} could not be given back in full; the next run tries again.`)
+  if (r.failed) parts.push(`${n(r.failed, 'campaign')} could not be given back in full; the next run tries again on a paused campaign, and a live one waits for you in the banner on this list.`)
   if (!r.restored && !r.deferred && !r.keptByOthers && !r.failed) parts.push(`None of ${schedules === 1 ? 'its' : 'their'} campaigns held a bid floor, so no bid changed.`)
   return parts.join(' ')
 }

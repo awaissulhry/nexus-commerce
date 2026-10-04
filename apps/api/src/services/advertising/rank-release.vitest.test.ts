@@ -2,7 +2,8 @@
  * Group 2 (2a) — Rank & Dayparting gives bids back when a schedule is deleted, paused, loses a campaign or holds
  * nothing (review 3.2), the legacy schedule delete / disable no longer re-enable a paused campaign (3.3), rank-defend
  * leaves a floor it did not set alone (N1), and a release that waited (halted, switched off) is given back by the orphan
- * sweep of the first run after (N3, Owner S1/S7).
+ * sweep of the first run after (N3, Owner S1/S7) — on a paused campaign: the sweep never changes a live one by itself, it
+ * lists it, and a person gives each back (Owner, 2026-10-04).
  *
  * PGlite with the production schema; the real routes, services and rank-defend tick. The audited mutation service is a
  * recorder that applies each bid to the database (no queue, no gate, no Amazon), so every assertion reads Nexus's own
@@ -62,7 +63,7 @@ vi.mock('./ads-mutation.service.js', async (importOriginal) => ({
   updateCampaignWithSync: async (a: unknown) => { rec.statusWrites.push(a); return { ok: true } },
 }))
 
-const { isRankOwnedFloor, floorOwnerWords, releaseScheduleMembers, readScheduleMembers, sweepOrphanReleases, rankSwitchBrake } = await import('./rank-release.service.js')
+const { isRankOwnedFloor, floorOwnerWords, releaseScheduleMembers, readScheduleMembers, sweepOrphanReleases, rankSwitchBrake, enabledOrphanScope } = await import('./rank-release.service.js')
 const { saveRankScheduleGroup, deleteRankScheduleGroup } = await import('./ads-create.service.js')
 const { patchAdSchedule, deleteAdSchedule } = await import('./ads-schedule.service.js')
 const { runRankDefendOnce, rankDefendSummaryLine } = await import('../../jobs/ad-rank-defend.job.js')
@@ -123,7 +124,8 @@ beforeAll(async () => {
     await db().rankTarget.create({ data: { key: 'hold', name: 'Hold, no placement', biasPct: 0 } })
   })
   app = Fastify()
-  app.addHook('preHandler', (_r, _p, done) => { withWorkspace(business, done) })
+  // The person a give-back is recorded as (the auth hook's `authUser`; no auth hook runs here).
+  app.addHook('preHandler', (r, _p, done) => { (r as { authUser?: { id: string } }).authUser = { id: 'u-test' }; withWorkspace(business, done) })
   const { default: advertisingRoutes } = await import('../../routes/advertising.routes.js')
   await app.register(advertisingRoutes, { prefix: '/api' })
   await app.ready()
@@ -241,9 +243,9 @@ describe('a person stops a schedule holding a campaign (3.2)', () => {
   })
 })
 
-describe('while ads automation is stopped, nothing is attempted; the first run after Resume gives it back (Owner S1)', () => {
+describe('while ads automation is stopped, nothing is attempted; the first run after Resume gives it back on a paused campaign (Owner S1)', () => {
   it('halted: the delete defers, Nexus\'s copy does not move; after Resume the tick\'s orphan sweep restores', async () => {
-    await seed('rr-halt', 40, [35, 60], 'automation:rank-defend-gone')
+    await seed('rr-halt', 40, [35, 60], 'automation:rank-defend-gone', { status: 'PAUSED' })
     const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR halt', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-halt'] }))
     await dial('AUTO', true)
 
@@ -275,11 +277,11 @@ describe('while ads automation is stopped, nothing is attempted; the first run a
   })
 
   it('Rank & Dayparting switched off (Owner S7): the pause defers; the switch text counts the floors; back on, the sweep restores', async () => {
-    await seed('rr-off', 40, [20], 'automation:rank-defend-off')
+    await seed('rr-off', 40, [20], 'automation:rank-defend-off', { status: 'PAUSED' })
     const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR off', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-off'] }))
     await isolate('rr-off')
     await inside(() => setEngineSwitch('rank-defend', 'OFF', 'user:test'))
-    expect(await inside(() => rankSwitchBrake('base'))).toBe('base; 1 campaign holds a bid floor it set right now: switched off, it stays floored until it is switched back on, and its first run then gives back every floor no schedule holds')
+    expect(await inside(() => rankSwitchBrake('base'))).toBe('base; 1 campaign holds a bid floor it set right now: switched off, it stays floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Rank & Dayparting list)')
 
     const res = await app.inject({ method: 'PATCH', url: `/api/advertising/rank-schedule-groups/${groupId}`, payload: { enabled: false } })
     expect(res.json().release).toMatchObject({ deferred: 1, restored: 0, deferredWhy: 'Rank & Dayparting is switched off for this business' })
@@ -341,10 +343,11 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
   })
 
   it('the sweep leaves campaigns an enabled schedule holds and floors set by others, and takes at most `limit`', async () => {
-    await seed('rr-sw-held', 40, [20], 'automation:rank-defend-held')
-    await seed('rr-sw-other', 40, [20], 'user:awais')
-    await seed('rr-sw-1', 40, [20], 'automation:dayparting-gone')
-    await seed('rr-sw-2', 40, [20], 'automation:rank-plan-gone')
+    const paused = { status: 'PAUSED' } // the sweep's own campaigns; live ones are the next describe's
+    await seed('rr-sw-held', 40, [20], 'automation:rank-defend-held', paused)
+    await seed('rr-sw-other', 40, [20], 'user:awais', paused)
+    await seed('rr-sw-1', 40, [20], 'automation:dayparting-gone', paused)
+    await seed('rr-sw-2', 40, [20], 'automation:rank-plan-gone', paused)
     await inside(() => saveRankScheduleGroup({ name: 'RR held', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-sw-held'] }))
     await isolate('rr-sw-held', 'rr-sw-other', 'rr-sw-1', 'rr-sw-2')
     const guard = await inside(() => openEngineGuard('rank-defend'))
@@ -358,9 +361,123 @@ describe('the rank-defend tick (in-tick release, N1, the sweep)', () => {
     // The dayparting floor is given back as the release actor (it counts against rank-defend's caps); the plan's as its plan.
     expect(new Set(rec.writes.map((w) => w.actor))).toEqual(new Set(['automation:rank-defend-release', 'automation:rank-plan-gone']))
     // A campaign a product plan holds is left alone too.
-    await seed('rr-sw-plan', 40, [20], 'automation:rank-plan-live')
+    await seed('rr-sw-plan', 40, [20], 'automation:rank-plan-live', paused)
     const third = await inside(() => sweepOrphanReleases({ guard, governed: new Set(['rr-sw-plan']) }))
     expect(third.orphans).toBe(0)
+  })
+})
+
+describe('a live campaign: the sweep leaves it, the list shows it, a person gives it back (Owner, 2026-10-04)', () => {
+  const list = () => app.inject({ method: 'GET', url: '/api/advertising/rank-release/enabled-orphans' })
+  const giveBack = (id: string) => app.inject({ method: 'POST', url: `/api/advertising/rank-release/enabled-orphans/${id}/release` })
+  /** A live floor (one target also carries a base-bid change under it), a live delta, and a paused floor. */
+  async function seedOrphans(p: string) {
+    await seed(`${p}-floor`, 40, [35, 60], 'automation:rank-defend-gone')
+    await seed(`${p}-delta`, 60, [45]) // live, no floor, +50% on a 40/30 baseline
+    await seed(`${p}-paused`, 40, [20], 'automation:dayparting-gone', { status: 'PAUSED' })
+    await inside(async () => {
+      await db().adTarget.update({ where: { id: `${p}-floor-t1` }, data: { baseBidFromCents: 50 } })
+      await db().adGroup.update({ where: { id: `${p}-delta-g` }, data: { baseBidFromCents: 40 } })
+      await db().adTarget.update({ where: { id: `${p}-delta-t0` }, data: { baseBidFromCents: 30 } })
+    })
+    await isolate(`${p}-floor`, `${p}-delta`, `${p}-paused`)
+  }
+
+  it('the sweep gives back the paused orphan and changes nothing on the live ones; the list shows each bid now and where it goes back to', async () => {
+    await seedOrphans('rl')
+    const r = await inside(() => runRankDefendOnce())
+    expect(r.release).toMatchObject({ restored: 1, swept: 1, deferred: 0 })
+    expect(await bids('rl-paused')).toMatchObject({ floored: false, group: { defaultBidCents: 40 }, targets: [{ bidCents: 20 }] })
+    expect(rec.writes.length).toBeGreaterThan(0)
+    expect(rec.writes.every((w) => w.id.startsWith('rl-paused'))).toBe(true)
+    expect(await bids('rl-floor')).toMatchObject({ floored: true, group: { defaultBidCents: 2, suppressedFromBidCents: 40 }, targets: [{ bidCents: 2 }, { bidCents: 2, suppressedFromBidCents: 60, baseBidFromCents: 50 }] })
+    expect(await bids('rl-delta')).toMatchObject({ group: { defaultBidCents: 60, baseBidFromCents: 40 }, targets: [{ bidCents: 45, baseBidFromCents: 30 }] })
+
+    const res = await list()
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['cache-control']).toBe('no-store')
+    expect(res.json()).toMatchObject({ campaigns: 2, bids: 5, waitWhy: null })
+    const [floor, delta] = res.json().items
+    expect(floor).toMatchObject({
+      campaignId: 'rl-floor', name: 'rl-floor', marketplace: 'IT', adGroups: 1, targets: 2, deltaBids: 1,
+      floor: { by: 'automation:rank-defend-gone', byWords: 'a rank schedule', floorCents: 2 },
+      bids: [
+        { kind: 'ad-group', id: 'rl-floor-g', label: 'rl-floor-g', currentCents: 2, backCents: 40 },
+        { kind: 'target', id: 'rl-floor-t0', label: 'rl-floor kw 0 (exact)', adGroup: 'rl-floor-g', currentCents: 2, backCents: 35 },
+        // Floored AND a base-bid change: the floor comes back to 60, then the change is reverted to its 50 baseline.
+        { kind: 'target', id: 'rl-floor-t1', label: 'rl-floor kw 1 (exact)', currentCents: 2, backCents: 50 },
+      ],
+    })
+    expect(floor.reasons).toEqual([expect.stringMatching(/^stranded bid floor set by a rank schedule since \d{4}-\d{2}-\d{2}$/), 'leftover base-bid change on 1 bid'])
+    expect(delta).toMatchObject({
+      campaignId: 'rl-delta', floor: null, adGroups: 1, targets: 1, deltaBids: 2, reasons: ['leftover base-bid change on 2 bids'],
+      bids: [{ kind: 'ad-group', currentCents: 60, backCents: 40 }, { kind: 'target', currentCents: 45, backCents: 30 }],
+    })
+    // The next run changes nothing on them either.
+    rec.writes = []
+    await inside(() => runRankDefendOnce())
+    expect(rec.writes).toEqual([])
+  })
+
+  it('a person gives back ONE listed campaign, as themselves, through the release: the floor, then its base-bid change', async () => {
+    await seedOrphans('ra')
+    const res = await giveBack('ra-floor')
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ campaignId: 'ra-floor', name: 'ra-floor', outcome: 'restored', writes: 4, deferredWhy: null })
+    expect(await bids('ra-floor')).toMatchObject({
+      status: 'ENABLED', floored: false, floorBy: null, group: { defaultBidCents: 40, suppressedFromBidCents: null },
+      targets: [{ bidCents: 35, suppressedFromBidCents: null }, { bidCents: 50, suppressedFromBidCents: null, baseBidFromCents: null }],
+    })
+    expect(new Set(rec.writes.map((w) => w.actor))).toEqual(new Set(['user:u-test']))
+    expect(rec.statusWrites).toEqual([])
+    // Only that one: the live delta is untouched and still listed.
+    expect(await bids('ra-delta')).toMatchObject({ group: { defaultBidCents: 60, baseBidFromCents: 40 } })
+    expect((await list()).json().items.map((i: { campaignId: string }) => i.campaignId)).toEqual(['ra-delta'])
+    // A second click finds nothing left to give back.
+    expect((await giveBack('ra-floor')).statusCode).toBe(409)
+  })
+
+  it('refuses a campaign that is not a live orphan, and changes nothing', async () => {
+    await seed('rf-held', 40, [20], 'automation:rank-defend-x')
+    await inside(() => saveRankScheduleGroup({ name: 'RF held', windows: [], defaultTargetKey: 'hold', campaignIds: ['rf-held'] }))
+    await seed('rf-paused', 40, [20], 'automation:rank-defend-y', { status: 'PAUSED' })
+    await seed('rf-archived', 40, [20], 'automation:rank-defend-z', { status: 'ARCHIVED' })
+    await seed('rf-person', 40, [20], 'user:awais')
+    await seed('rf-clean', 40, [20])
+    await isolate('rf-held', 'rf-paused', 'rf-archived', 'rf-person', 'rf-clean')
+    const refusal = async (id: string) => { const r = await giveBack(id); return [r.statusCode, r.json().error] }
+    expect(await refusal('rf-held')).toEqual([409, 'A rank schedule or plan holds "rf-held" again, so the rank loop manages its bids. Nothing was changed.'])
+    expect(await refusal('rf-paused')).toEqual([409, '"rf-paused" is not live any more; the rank loop gives its bids back by itself (at most 20 campaigns a run). Nothing was changed.'])
+    expect(await refusal('rf-archived')).toEqual([409, '"rf-archived" is archived; no bid is given back on an archived campaign. Nothing was changed.'])
+    expect(await refusal('rf-person')).toEqual([409, '"rf-person" holds a bid floor set by a person, not by Rank & Dayparting, so it stays as it is. Nothing was changed.'])
+    expect(await refusal('rf-clean')).toEqual([409, '"rf-clean" no longer carries bids Rank & Dayparting changed. Nothing was changed.'])
+    expect(await refusal('rf-nope')).toEqual([404, 'not found'])
+    expect(rec.writes).toEqual([])
+    expect((await list()).json()).toMatchObject({ campaigns: 0, bids: 0, waitWhy: null, items: [] })
+  })
+
+  it('while ads automation is stopped, or Rank & Dayparting is switched off, the give-back waits and nothing moves', async () => {
+    await seed('rw-live', 40, [20], 'automation:rank-plan-gone')
+    await isolate('rw-live')
+    await dial('AUTO', true)
+    expect((await list()).json()).toMatchObject({ campaigns: 1, waitWhy: 'ads automation is stopped (halted: test halt)' })
+    expect((await giveBack('rw-live')).json()).toMatchObject({ outcome: 'deferred', writes: 0, deferredWhy: 'ads automation is stopped (halted: test halt)' })
+    await dial('AUTO', false)
+    await inside(() => setEngineSwitch('rank-defend', 'OFF', 'user:test'))
+    expect((await giveBack('rw-live')).json()).toMatchObject({ outcome: 'deferred', writes: 0, deferredWhy: 'Rank & Dayparting is switched off for this business' })
+    expect(rec.writes).toEqual([])
+    expect(await bids('rw-live')).toMatchObject({ floored: true, group: { defaultBidCents: 2, suppressedFromBidCents: 40 } })
+    // Back on: the same click gives the bids back.
+    await inside(() => setEngineSwitch('rank-defend', 'AUTO', 'user:test'))
+    expect((await giveBack('rw-live')).json()).toMatchObject({ outcome: 'restored', writes: 2 })
+  })
+
+  it('the automation catalog\'s scope line counts the live campaigns that wait', async () => {
+    await seed('rc-live', 40, [20], 'automation:rank-defend-gone')
+    await isolate('rc-live')
+    expect(await inside(() => enabledOrphanScope())).toEqual({ scope: '1 live campaign still carries bids it changed and no schedule or plan holds it: it never changes a live campaign by itself, so it waits for a person to give the bids back on the Rank & Dayparting list.' })
+    await giveBack('rc-live')
+    expect(await inside(() => enabledOrphanScope())).toEqual({})
   })
 })
 

@@ -179,3 +179,6 @@
    too thin to steer a bid. Colouring it `ok` would repeat the lie this page exists to remove;
    colouring it `warn` would say the feed is broken, which is a different and wrong diagnosis. */
 .rd-sig.stale { color: #7a5b00; background: #fbf0cf; text-decoration: underline dotted currentColor 1px; text-underline-offset: 3px; }
+
+/* Owner 2026-10-04 — the live-campaign review dialog behind the Rank & Dayparting banner: one DS Card per campaign. */
+.rd-orphans { display: flex; flex-direction: column; gap: var(--nds-space-3); }

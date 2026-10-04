@@ -25,9 +25,16 @@
  *   Rank & Dayparting switched off         deferred the same way (Owner S7: a brake must not raise spend); the sweep
  *                                          gives it back on the first run after it is switched back on.
  *   caps                                   counted against the engine's caps through the guard, never refused by one.
+ *
+ * LIVE CAMPAIGNS (Owner, 2026-10-04): the orphan sweep never changes bids on a live (ENABLED) campaign by itself — a
+ * leftover floor or base-bid delta there is of unknown size and age. It gives back on paused (and draft) campaigns
+ * only. The live ones are listed (`listEnabledOrphans`, the banner on the Rank & Dayparting list) and a person gives
+ * each one back (`releaseEnabledOrphan`, through `releaseCampaigns`, so every brake above still applies). So "the sweep
+ * gives it back after Resume" below holds for a paused campaign; a live one waits on that list.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { done, refused, type ServiceOutcome } from '../automation/service-outcome.js'
 import type { AdsActor } from './ads-mutation.service.js'
 import { restoreCampaignBids, revertBaseBidDelta } from './ads-bid-suppression.service.js'
 import { nothingHeld, openEngineGuard, readEnginePosture, type EngineGuard } from './ads-engine-guard.js'
@@ -249,11 +256,12 @@ export async function releaseScheduleMembers(members: ScheduleMember[], why: str
 
 /**
  * A give-back that could not run (the database did not answer) never fails the delete, pause or save that asked for
- * it: the schedule no longer holds those campaigns, so the next rank-defend run's orphan sweep gives the bids back.
+ * it: the schedule no longer holds those campaigns, so the next rank-defend run's orphan sweep gives the bids back on
+ * the paused ones, and the live ones wait on the Rank & Dayparting list for a person.
  */
 function couldNotRun(campaigns: number, e: unknown): ReleaseReport {
   logger.warn('[rank-release] give-back could not run — the next rank-defend run gives it back', { campaigns, error: (e as Error)?.message ?? String(e) })
-  return { ...emptyRelease(), deferred: campaigns, deferredWhy: 'the give-back could not run just now; the rank loop\'s next run gives the bids back' }
+  return { ...emptyRelease(), deferred: campaigns, deferredWhy: 'the give-back could not run just now; the rank loop\'s next run gives the bids back on paused campaigns, and live ones wait on the Rank & Dayparting list for a person to give them back' }
 }
 
 /**
@@ -279,20 +287,37 @@ export async function releaseGroupMembers(groupId: string, why: string): Promise
  * The orphan sweep, at the end of every live rank-defend run: Rank & Dayparting floors and base-bid deltas on campaigns
  * no enabled schedule (goal-mode or classic) and no enabled product plan holds any more. It is what gives back a
  * release that waited (halted, switched off), a plan that auto-paused, and anything a path outside this file dropped.
- * Oldest floor first, archived campaigns left out, at most `limit` campaigns a run. `governed` = the campaigns this
- * run's enabled plans resolved to.
+ * Oldest floor first, at most `limit` campaigns a run. `governed` = the campaigns this run's enabled plans resolved to.
+ * Paused and draft campaigns only (Owner, 2026-10-04): a live one is never changed by the sweep, only listed for a
+ * person (`listEnabledOrphans`); archived ones are left out.
  */
 export async function sweepOrphanReleases(opts: { guard: EngineGuard; governed: Set<string>; limit?: number }): Promise<ReleaseReport & { orphans: number }> {
   const limit = opts.limit ?? SWEEP_LIMIT
   const held = new Set<string>(opts.governed)
   for (const s of await prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true } })) held.add(s.campaignId)
+  const picked = await pickOrphans(held, false, limit)
+  if (!picked.size) return { ...emptyRelease(), orphans: 0 }
+  // The floor's own schedule or plan when it names one (its history shows the give-back), the release actor otherwise.
+  const actorFor = (by: string | null): AdsActor =>
+    by && (by.startsWith('automation:rank-defend-') || by.startsWith('automation:rank-plan-')) ? by as AdsActor : RELEASE_ACTOR
+  const targets = [...picked].map(([campaignId, by]) => ({ campaignId, actor: actorFor(by) }))
+  const r = await releaseCampaigns(targets, { reason: 'rank release — no schedule or plan holds this campaign any more', guard: opts.guard })
+  return { ...r, orphans: picked.size }
+}
+
+/**
+ * The orphans `held` leaves out: Rank & Dayparting's own floors (oldest first), then base-bid deltas on campaigns
+ * nobody floors. `live` false = paused or draft campaigns (the sweep); true = live ones (the review list). Archived
+ * campaigns are never picked. At most `limit` campaigns when it is given. Value = the floor's owner (null: a delta).
+ */
+async function pickOrphans(held: Set<string>, live: boolean, limit?: number): Promise<Map<string, string | null>> {
   const notHeld = held.size ? { id: { notIn: [...held] } } : {}
   const floored = await prisma.campaign.findMany({
-    where: { ...notHeld, status: { not: 'ARCHIVED' }, bidsSuppressedAt: { not: null }, OR: [{ bidsSuppressedBy: null }, { bidsSuppressedBy: '' }, ...RANK_OWNER_PREFIXES.map((p) => ({ bidsSuppressedBy: { startsWith: p } }))] },
+    where: { ...notHeld, status: live ? 'ENABLED' : { notIn: ['ARCHIVED', 'ENABLED'] }, bidsSuppressedAt: { not: null }, OR: [{ bidsSuppressedBy: null }, { bidsSuppressedBy: '' }, ...RANK_OWNER_PREFIXES.map((p) => ({ bidsSuppressedBy: { startsWith: p } }))] },
     select: { id: true, bidsSuppressedBy: true }, orderBy: { bidsSuppressedAt: 'asc' }, take: limit,
   })
   const picked = new Map<string, string | null>(floored.map((c) => [c.id, c.bidsSuppressedBy ?? null]))
-  if (picked.size < limit) {
+  if (limit == null || picked.size < limit) {
     // A base-bid delta on a campaign nobody floors now. One floored by someone else is left out: reverting it would
     // raise their floor, and it would take a slot every run.
     const [g, t] = await Promise.all([
@@ -302,17 +327,202 @@ export async function sweepOrphanReleases(opts: { guard: EngineGuard; governed: 
     const deltaIds = [...new Set([...g.map((x) => x.campaignId), ...t.map((x) => x.adGroup?.campaignId).filter(Boolean) as string[]])]
       .filter((id) => !held.has(id) && !picked.has(id))
     if (deltaIds.length) {
-      const free = await prisma.campaign.findMany({ where: { id: { in: deltaIds }, status: { not: 'ARCHIVED' }, bidsSuppressedAt: null }, select: { id: true }, orderBy: { id: 'asc' }, take: limit - picked.size })
+      const free = await prisma.campaign.findMany({
+        where: { id: { in: deltaIds }, status: live ? 'ENABLED' : { notIn: ['ARCHIVED', 'ENABLED'] }, bidsSuppressedAt: null },
+        select: { id: true }, orderBy: { id: 'asc' }, take: limit == null ? undefined : limit - picked.size,
+      })
       for (const c of free) picked.set(c.id, null)
     }
   }
-  if (!picked.size) return { ...emptyRelease(), orphans: 0 }
-  // The floor's own schedule or plan when it names one (its history shows the give-back), the release actor otherwise.
-  const actorFor = (by: string | null): AdsActor =>
-    by && (by.startsWith('automation:rank-defend-') || by.startsWith('automation:rank-plan-')) ? by as AdsActor : RELEASE_ACTOR
-  const targets = [...picked].map(([campaignId, by]) => ({ campaignId, actor: actorFor(by) }))
-  const r = await releaseCampaigns(targets, { reason: 'rank release — no schedule or plan holds this campaign any more', guard: opts.guard })
-  return { ...r, orphans: picked.size }
+  return picked
+}
+
+// ── Live campaigns the sweep leaves alone: listed for a person, given back one at a time (Owner, 2026-10-04) ────────
+
+/**
+ * Campaigns Rank & Dayparting holds right now, decided as the tick decides it: every enabled schedule (goal-mode or
+ * classic) and each enabled product plan's family, resolved live, its excluded campaigns left out. `unknown` = a
+ * family could not be resolved, so the set may be short and nothing may be called an orphan.
+ */
+async function rankHeldNow(): Promise<{ held: Set<string>; unknown: boolean }> {
+  const [schedules, plans] = await Promise.all([
+    prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true } }),
+    prisma.productRankPlan.findMany({ where: { enabled: true }, select: { id: true, productId: true, marketplace: true, excludeCampaignIds: true } }),
+  ])
+  const held = new Set<string>(schedules.map((s) => s.campaignId))
+  let unknown = false
+  if (plans.length) {
+    const { resolveProductFamily } = await import('./ads-dayparting-refresh.service.js')
+    for (const p of plans) {
+      try {
+        const excluded = new Set<string>(Array.isArray(p.excludeCampaignIds) ? (p.excludeCampaignIds as string[]) : [])
+        for (const c of (await resolveProductFamily({ parentProductId: p.productId, marketplace: p.marketplace })).campaigns ?? []) if (!excluded.has(c.id)) held.add(c.id)
+      } catch (e) { unknown = true; logger.warn('[rank-release] plan family unreadable — live orphans not decided', { planId: p.id, error: (e as Error).message }) }
+    }
+  }
+  return { held, unknown }
+}
+
+const PLANS_UNREAD = 'Could not read which campaigns the rank plans hold just now, so no live campaign could be checked. Nothing was changed; try again in a minute.'
+
+export interface EnabledOrphanBid {
+  kind: 'ad-group' | 'target'
+  id: string
+  /** The ad group's name (its default bid), or the target: keyword and match type, ASIN or category. */
+  label: string
+  adGroup: string
+  currentCents: number
+  /** The bid a give-back sets: the remembered pre-floor bid, or the base-bid baseline where there is one (it is
+   *  reverted once the floor is back). */
+  backCents: number
+}
+export interface EnabledOrphan {
+  campaignId: string
+  name: string
+  marketplace: string | null
+  /** Why it is listed, in words: a stranded floor (who set it, since when), a leftover base-bid change. */
+  reasons: string[]
+  floor: { by: string | null; byWords: string; since: string; floorCents: number | null } | null
+  /** Bids carrying a base-bid change rank made. */
+  deltaBids: number
+  /** Ad groups whose default bid would change, and targets whose bid would. */
+  adGroups: number
+  targets: number
+  bids: EnabledOrphanBid[]
+}
+export interface EnabledOrphanList {
+  campaigns: number
+  bids: number
+  /** Why a give-back would wait right now (ads automation stopped, Rank & Dayparting switched off); null = at once. */
+  waitWhy: string | null
+  items: EnabledOrphan[]
+}
+
+/** Who set a floor Rank & Dayparting owns, in words. */
+function rankFloorSource(by: string | null): string {
+  if (!by) return 'Rank & Dayparting (before owners were recorded)'
+  if (by.startsWith('automation:rank-defend-')) return 'a rank schedule'
+  if (by.startsWith('automation:rank-plan-')) return 'a rank plan'
+  if (by.startsWith('automation:dayparting-')) return 'a dayparting schedule'
+  return floorOwnerWords(by)
+}
+
+/** Each campaign's bids now and what a give-back would set them to (the order of `ids` is kept). */
+async function describeOrphans(ids: string[]): Promise<EnabledOrphan[]> {
+  if (!ids.length) return []
+  const [camps, groups, targets] = await Promise.all([
+    prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, marketplace: true, bidsSuppressedAt: true, bidsSuppressedBy: true, bidsSuppressedFloorCents: true } }),
+    prisma.adGroup.findMany({ where: { campaignId: { in: ids } }, orderBy: { name: 'asc' }, select: { id: true, campaignId: true, name: true, defaultBidCents: true, suppressedFromBidCents: true, baseBidFromCents: true } }),
+    prisma.adTarget.findMany({
+      where: { adGroup: { campaignId: { in: ids } }, OR: [{ suppressedFromBidCents: { not: null } }, { baseBidFromCents: { not: null } }] },
+      orderBy: { expressionValue: 'asc' },
+      select: { id: true, adGroupId: true, kind: true, expressionType: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, baseBidFromCents: true },
+    }),
+  ])
+  const out = new Map<string, EnabledOrphan>()
+  for (const c of camps) {
+    out.set(c.id, {
+      campaignId: c.id, name: c.name, marketplace: c.marketplace ?? null, reasons: [],
+      floor: c.bidsSuppressedAt ? { by: c.bidsSuppressedBy ?? null, byWords: rankFloorSource(c.bidsSuppressedBy ?? null), since: c.bidsSuppressedAt.toISOString(), floorCents: c.bidsSuppressedFloorCents ?? null } : null,
+      deltaBids: 0, adGroups: 0, targets: 0, bids: [],
+    })
+  }
+  // As releaseCampaigns does it: a floor comes back to the remembered bid, then a delta to its baseline; with no floor,
+  // only the delta moves (a remembered pre-floor bid without a floor is not touched).
+  const back = (o: EnabledOrphan, from: number | null, base: number | null) => (o.floor ? base ?? from : base)
+  const groupById = new Map(groups.map((g) => [g.id, g]))
+  for (const g of groups) {
+    const o = out.get(g.campaignId)
+    const to = o ? back(o, g.suppressedFromBidCents, g.baseBidFromCents) : null
+    if (!o || to == null) continue
+    o.bids.push({ kind: 'ad-group', id: g.id, label: g.name, adGroup: g.name, currentCents: g.defaultBidCents, backCents: to })
+    o.adGroups++
+    if (g.baseBidFromCents != null) o.deltaBids++
+  }
+  for (const t of targets) {
+    const g = groupById.get(t.adGroupId)
+    const o = g ? out.get(g.campaignId) : undefined
+    const to = o ? back(o, t.suppressedFromBidCents, t.baseBidFromCents) : null
+    if (!o || to == null) continue
+    const label = t.kind === 'KEYWORD' ? `${t.expressionValue} (${t.expressionType.toLowerCase()})` : t.expressionValue
+    o.bids.push({ kind: 'target', id: t.id, label, adGroup: g!.name, currentCents: t.bidCents, backCents: to })
+    o.targets++
+    if (t.baseBidFromCents != null) o.deltaBids++
+  }
+  for (const o of out.values()) {
+    if (o.floor) o.reasons.push(`stranded bid floor set by ${o.floor.byWords} since ${o.floor.since.slice(0, 10)}`)
+    if (o.deltaBids) o.reasons.push(`leftover base-bid change on ${plural(o.deltaBids, 'bid')}`)
+  }
+  return ids.map((id) => out.get(id)).filter((o): o is EnabledOrphan => !!o)
+}
+
+/**
+ * GET /advertising/rank-release/enabled-orphans — the live campaigns no schedule or plan holds that still carry Rank &
+ * Dayparting's floor or base-bid change: why each is listed, and per ad group and target the bid now and the bid a
+ * give-back would set. Nothing is written.
+ */
+export async function listEnabledOrphans(): Promise<ServiceOutcome<EnabledOrphanList>> {
+  const { held, unknown } = await rankHeldNow()
+  if (unknown) return refused(503, { error: PLANS_UNREAD })
+  const items = await describeOrphans([...(await pickOrphans(held, true)).keys()])
+  return done({
+    campaigns: items.length,
+    bids: items.reduce((n, o) => n + o.bids.length, 0),
+    waitWhy: items.length ? await releaseWaitWhy('rank-defend') : null,
+    items,
+  })
+}
+
+export interface EnabledOrphanRelease {
+  campaignId: string
+  name: string
+  outcome: ReleaseOutcome
+  /** Bids that came back. */
+  writes: number
+  /** Why it waits (`deferred`): nothing changed. */
+  deferredWhy: string | null
+}
+
+/**
+ * POST /advertising/rank-release/enabled-orphans/:campaignId/release — a person gives back the bids on ONE listed
+ * campaign, as themselves, through `releaseCampaigns`: deferred while ads automation is stopped or Rank & Dayparting is
+ * switched off, counted against rank-defend's caps and never refused by one. Refused when the campaign is not (or no
+ * longer) a live orphan: a schedule or plan holds it, it is not live, or it carries nothing of Rank & Dayparting's.
+ */
+export async function releaseEnabledOrphan(campaignId: string, actor: AdsActor): Promise<ServiceOutcome<EnabledOrphanRelease>> {
+  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, name: true, status: true } })
+  if (!camp) return refused(404, { error: 'not found' })
+  const { held, unknown } = await rankHeldNow()
+  if (unknown) return refused(503, { error: PLANS_UNREAD })
+  const nothingChanged = 'Nothing was changed.'
+  if (held.has(campaignId)) return refused(409, { error: `A rank schedule or plan holds "${camp.name}" again, so the rank loop manages its bids. ${nothingChanged}` })
+  if (camp.status !== 'ENABLED') {
+    return refused(409, { error: camp.status === 'ARCHIVED'
+      ? `"${camp.name}" is archived; no bid is given back on an archived campaign. ${nothingChanged}`
+      : `"${camp.name}" is not live any more; the rank loop gives its bids back by itself (at most ${SWEEP_LIMIT} campaigns a run). ${nothingChanged}` })
+  }
+  const s = (await readStates([campaignId])).get(campaignId)
+  const what = plan(s)
+  if (what === 'kept-by-others') return refused(409, { error: `"${camp.name}" holds a bid floor set by ${floorOwnerWords(s!.floorBy)}, not by Rank & Dayparting, so it stays as it is. ${nothingChanged}` })
+  if (what === 'nothing') return refused(409, { error: `"${camp.name}" no longer carries bids Rank & Dayparting changed. ${nothingChanged}` })
+  const waitWhy = await rankSwitchedOff()
+  const guard = waitWhy ? null : await openEngineGuard('rank-defend')
+  const r = await releaseCampaigns([{ campaignId, actor }], { reason: 'rank release — a person gave back the bids on a live campaign no schedule or plan holds', guard, waitWhy })
+  return done({ campaignId, name: camp.name, outcome: r.campaigns[0]?.outcome ?? 'nothing', writes: r.writes, deferredWhy: r.deferredWhy })
+}
+
+/** The A10 catalog's scope line: how many live campaigns wait for a person ({} when none, or when it cannot be read). */
+export async function enabledOrphanScope(): Promise<{ scope?: string }> {
+  try {
+    const { held, unknown } = await rankHeldNow()
+    if (unknown) return {}
+    const n = (await pickOrphans(held, true)).size
+    if (!n) return {}
+    return { scope: `${plural(n, 'live campaign')} still ${n === 1 ? 'carries' : 'carry'} bids it changed and no schedule or plan holds ${n === 1 ? 'it' : 'them'}: it never changes a live campaign by itself, so ${n === 1 ? 'it waits' : 'they wait'} for a person to give the bids back on the Rank & Dayparting list.` }
+  } catch (e) {
+    logger.warn('[rank-release] live orphan count unreadable', { error: (e as Error).message })
+    return {}
+  }
 }
 
 /**
@@ -398,7 +608,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export function releaseSentence(p: ReleasePreview): string {
   if (!p.restore) return p.keptByOthers ? `nothing it floored is floored now (${plural(p.keptByOthers, 'campaign')} floored by someone else stay floored)` : 'nothing it floored is floored now'
   const what = `the ${plural(p.bids, 'bid')} it floored on ${plural(p.restore, 'campaign')} ${p.bids === 1 ? 'comes' : 'come'} back`
-  return p.waitWhy ? `${what} on the first run after that changes (${p.waitWhy})` : `${what} at once`
+  // Owner 2026-10-04 — after the wait, the sweep gives back on a paused campaign only; a live one waits for a person.
+  return p.waitWhy ? `${what} on the first run after that changes if the campaign is paused, or when a person gives them back on the Rank & Dayparting list if it is live (${p.waitWhy})` : `${what} at once`
 }
 
 /**
@@ -425,7 +636,7 @@ export async function rankSwitchBrake(base: string | null): Promise<string | nul
       where: { bidsSuppressedAt: { not: null }, OR: [{ bidsSuppressedBy: null }, { bidsSuppressedBy: '' }, { bidsSuppressedBy: { startsWith: 'automation:rank-defend-' } }, { bidsSuppressedBy: { startsWith: 'automation:rank-plan-' } }] },
     })
     const now = n
-      ? `${plural(n, 'campaign')} ${n === 1 ? 'holds' : 'hold'} a bid floor it set right now: switched off, ${n === 1 ? 'it stays' : 'they stay'} floored until it is switched back on, and its first run then gives back every floor no schedule holds`
+      ? `${plural(n, 'campaign')} ${n === 1 ? 'holds' : 'hold'} a bid floor it set right now: switched off, ${n === 1 ? 'it stays' : 'they stay'} floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Rank & Dayparting list)`
       : 'no campaign holds a bid floor it set right now'
     return base ? `${base}; ${now}` : now
   } catch (e) {

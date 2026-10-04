@@ -9394,6 +9394,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'no-store')
     return preview
   })
+  // Owner 2026-10-04 — the orphan sweep never changes a live campaign by itself. These list the live campaigns that still
+  // carry Rank & Dayparting's floor or base-bid change with nothing holding them (bid now → bid it would go back to),
+  // and give back ONE as the person who approved it (deferred while stopped, counted in the caps).
+  fastify.get('/advertising/rank-release/enabled-orphans', async (_request, reply) => {
+    const { listEnabledOrphans } = await import('../services/advertising/rank-release.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return answer(reply, await listEnabledOrphans())
+  })
+  fastify.post('/advertising/rank-release/enabled-orphans/:campaignId/release', async (request, reply) => {
+    const { campaignId } = request.params as { campaignId: string }
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id
+    const actor = userId ? `user:${userId}` as AdsActor : actorFromHeaders(request.headers as Record<string, unknown>)
+    const { releaseEnabledOrphan } = await import('../services/advertising/rank-release.service.js')
+    return answer(reply, await releaseEnabledOrphan(campaignId, actor))
+  })
 
   // ── RTPL — named rank-SCHEDULE templates (account-global; Save/Load a painted schedule) ──
   fastify.get('/advertising/rank-templates', async (_request, reply) => {

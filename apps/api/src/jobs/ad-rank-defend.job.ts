@@ -838,6 +838,7 @@ interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
  * 2a — the end of every live run: give back what this engine floored where nothing is due, then the orphan sweep
  * (`sweepGoverned` = campaigns enabled plans hold; null skips it). Both ask the guard per campaign: counted against the
  * caps and never refused by one; while stopped they wait, and the sweep of the first run after Resume gives them back.
+ * The sweep changes paused campaigns only; a live one is listed for a person (Owner, 2026-10-04 — rank-release.service.ts).
  */
 async function giveBack(guard: EngineGuard, idle: IdleCampaign[], sweepGoverned: Set<string> | null): Promise<RankReleaseSummary> {
   const out = emptyRelease()
