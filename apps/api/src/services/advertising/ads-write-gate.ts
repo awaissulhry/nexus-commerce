@@ -129,9 +129,10 @@ export interface GateContext {
    * gate AFTER Nexus wrote its own copy, so the campaign row already holds the NEW value (review N1);
    * this is the honest "before". A caller that asks before anything is written (the change tools'
    * preview) leaves it out — for it the campaign's own budget still is the previous value.
+   * 4k — the spend ceiling measures the increase from it too.
    */
   previousValueCents?: number | null
-  /** The OutboundSyncQueue row this write is. Its own action-log row is not part of its history. */
+  /** The OutboundSyncQueue row this write is. Its own action-log row is not part of its history (nor of the spend ceiling's ledger). */
   queueId?: string | null
 }
 
@@ -324,44 +325,18 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       return { allowed: false, reason: pinned.reason, deniedAt: 'authority_pin' }
     }
 
-    // ADX A1 — entity bid bounds. Deliberately a DENY rather than a silent clamp:
-    // clamping would rewrite an engine's intent without telling anyone, and the whole
-    // point of this phase is that the operator can see why something did not happen.
-    // A denial leaves the bid where it was, which is the safe direction for both a
-    // ceiling (refuse the raise) and a floor (refuse the cut).
-    //
-    // BID.S5 — the bounds resolve at FOUR grains now, most specific first PER SIDE:
-    // the Campaign column ?? LINE ?? PORTFOLIO ?? MARKET (`AdBidPolicy`). The campaign
-    // column stays the strongest word, so every pre-existing row behaves exactly as
-    // before; the policy walk runs only when a side is null on the campaign AND any
-    // policy rows exist. The refusal names its source — a bound whose origin is a
-    // mystery is a bound the operator clears in the wrong place.
-    if (ctx.field && BID_FIELDS.has(ctx.field) && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
-      const v = ctx.intendedValueCents as number
-      let effMax: { cents: number; source: string } | null =
-        campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: `Campaign.maxBidCents on ${ctx.campaignId}` } : null
-      let effMin: { cents: number; source: string } | null =
-        campaign.minBidCents != null ? { cents: campaign.minBidCents, source: `Campaign.minBidCents on ${ctx.campaignId}` } : null
-      if (effMax == null || effMin == null) {
-        const policy = await resolveBidPolicy(ctx.campaignId, campaign.portfolioId, campaign.marketplace)
-        if (effMax == null && policy.max) effMax = { cents: policy.max.cents, source: policy.max.label }
-        if (effMin == null && policy.min) effMin = { cents: policy.min.cents, source: policy.min.label }
-      }
-      if (effMax != null && v > effMax.cents) {
-        return {
-          allowed: false,
-          reason: `bid ${v}¢ exceeds the ${effMax.cents}¢ ceiling (${effMax.source})`,
-          deniedAt: 'entity_bounds',
-        }
-      }
-      if (effMin != null && v < effMin.cents && !ctx.isSuppression) {
-        return {
-          allowed: false,
-          reason: `bid ${v}¢ is below the ${effMin.cents}¢ floor (${effMin.source})`,
-          deniedAt: 'entity_bounds',
-        }
-      }
-    }
+    // ADX A1 / BID.S5 / BUD.2 — the entity's own bid and budget bounds (entityBoundsDenial below). 4k — the
+    // mutation layer asks the same question before Nexus writes its copy; this is the backstop for a bound that
+    // changed while the write waited in the queue.
+    const bounds = await entityBoundsDenial({
+      campaignId: ctx.campaignId,
+      campaign,
+      field: ctx.field,
+      intendedValueCents: ctx.intendedValueCents,
+      isSuppression: ctx.isSuppression,
+    })
+    if (bounds) return bounds
+
     /**
      * AUTO.A7 — per-SCOPE spend ceilings, at the one door every write passes.
      *
@@ -376,39 +351,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
      * is deliberate here and is exactly why BUD.2's baseline exists for the ratchet.
      * Inert until an operator creates a ceiling row (0 rows exist as this ships).
      */
-    /**
-     * BUD.2 — entity BUDGET bounds, the bid bounds' twin, and the brake `liveBidWritesEnabled`
-     * never was (BUD.1 §1.2: the local cut lands before the gate runs, so the allowlist makes a
-     * campaign DIVERGE, not survive). A DENY, never a clamp, for the same reason as the bid
-     * bounds: a clamp rewrites an engine's intent without telling anyone. The floor is the
-     * direct counter to the ratchet's end state — 58 campaigns pinned at Amazon's €1 floor
-     * because nothing above €1 existed to refuse the cut.
-     */
-    if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
-      const v = ctx.intendedValueCents as number
-      if (campaign.maxBudgetCents != null && v > campaign.maxBudgetCents) {
-        return {
-          allowed: false,
-          reason: `budget €${(v / 100).toFixed(2)} exceeds Campaign.maxBudgetCents=€${(campaign.maxBudgetCents / 100).toFixed(2)} on ${ctx.campaignId}`,
-          deniedAt: 'entity_bounds',
-        }
-      }
-      if (campaign.minBudgetCents != null && v < campaign.minBudgetCents) {
-        return {
-          allowed: false,
-          reason: `budget €${(v / 100).toFixed(2)} is below Campaign.minBudgetCents=€${(campaign.minBudgetCents / 100).toFixed(2)} on ${ctx.campaignId} — the floor exists precisely so a cut-only rule cannot walk this to €1`,
-          deniedAt: 'entity_bounds',
-        }
-      }
-    }
-
     if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
       const denial = await spendCeilingDenial({
         campaignId: ctx.campaignId,
-        currentBudgetCents: Math.round(Number(campaign.dailyBudget ?? 0) * 100),
+        // 4k (review N1) — the budget this write replaces. The worker asks AFTER Nexus wrote its own copy, so the
+        // campaign row already holds the NEW value: the increase read 0 and no ceiling ever refused a queued raise.
+        // The row stays the fallback for a caller that asks before writing (the change tools' preview).
+        currentBudgetCents: Number.isFinite(ctx.previousValueCents ?? NaN)
+          ? (ctx.previousValueCents as number)
+          : Math.round(Number(campaign.dailyBudget ?? 0) * 100),
         intendedCents: ctx.intendedValueCents as number,
         portfolioId: campaign.portfolioId,
         marketplace: campaign.marketplace,
+        queueId: ctx.queueId ?? null,
       })
       if (denial) return denial
     }
@@ -506,6 +461,100 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   return { allowed: true, mode: 'live', profileId: conn.profileId }
 }
 
+/** The campaign columns the entity bounds read. */
+export interface EntityBoundsCampaign {
+  minBidCents: number | null
+  maxBidCents: number | null
+  minBudgetCents: number | null
+  maxBudgetCents: number | null
+  portfolioId: string | null
+  marketplace: string | null
+}
+
+/**
+ * 4k (review 5.2) — the entity's own bounds: the bid floor and ceiling (campaign column, then bid policy) and the
+ * budget floor and ceiling. Extracted from checkAdsWriteGate unchanged, because these are the only refusals that
+ * depend on nothing but the entity and the new value — not the clock, the halt, the allowlist or today's ledger.
+ * So the mutation layer asks them BEFORE Nexus writes its own copy, and a refused bid or budget changes nothing
+ * anywhere; the gate still asks them at dispatch. Same answer in sandbox and live: they are the entity's rules.
+ */
+export async function entityBoundsDenial(args: {
+  campaignId: string
+  campaign: EntityBoundsCampaign
+  field: string | null | undefined
+  intendedValueCents: number | null | undefined
+  /** ADX G1 / 2.2 — a lowering-only forced write (`isSuppressionWrite`): exempt from the bid MINIMUM only. */
+  isSuppression?: boolean
+}): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const { campaignId, campaign } = args
+  if (!Number.isFinite(args.intendedValueCents ?? NaN)) return null
+  const v = args.intendedValueCents as number
+
+  // ADX A1 — entity bid bounds. Deliberately a DENY rather than a silent clamp:
+  // clamping would rewrite an engine's intent without telling anyone, and the whole
+  // point of this phase is that the operator can see why something did not happen.
+  // A denial leaves the bid where it was, which is the safe direction for both a
+  // ceiling (refuse the raise) and a floor (refuse the cut).
+  //
+  // BID.S5 — the bounds resolve at FOUR grains now, most specific first PER SIDE:
+  // the Campaign column ?? LINE ?? PORTFOLIO ?? MARKET (`AdBidPolicy`). The campaign
+  // column stays the strongest word, so every pre-existing row behaves exactly as
+  // before; the policy walk runs only when a side is null on the campaign AND any
+  // policy rows exist. The refusal names its source — a bound whose origin is a
+  // mystery is a bound the operator clears in the wrong place.
+  if (args.field && BID_FIELDS.has(args.field)) {
+    let effMax: { cents: number; source: string } | null =
+      campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: `Campaign.maxBidCents on ${campaignId}` } : null
+    let effMin: { cents: number; source: string } | null =
+      campaign.minBidCents != null ? { cents: campaign.minBidCents, source: `Campaign.minBidCents on ${campaignId}` } : null
+    if (effMax == null || effMin == null) {
+      const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
+      if (effMax == null && policy.max) effMax = { cents: policy.max.cents, source: policy.max.label }
+      if (effMin == null && policy.min) effMin = { cents: policy.min.cents, source: policy.min.label }
+    }
+    if (effMax != null && v > effMax.cents) {
+      return {
+        allowed: false,
+        reason: `bid ${v}¢ exceeds the ${effMax.cents}¢ ceiling (${effMax.source})`,
+        deniedAt: 'entity_bounds',
+      }
+    }
+    if (effMin != null && v < effMin.cents && !args.isSuppression) {
+      return {
+        allowed: false,
+        reason: `bid ${v}¢ is below the ${effMin.cents}¢ floor (${effMin.source})`,
+        deniedAt: 'entity_bounds',
+      }
+    }
+  }
+
+  /**
+   * BUD.2 — entity BUDGET bounds, the bid bounds' twin, and the brake `liveBidWritesEnabled`
+   * never was (BUD.1 §1.2: the local cut lands before the gate runs, so the allowlist makes a
+   * campaign DIVERGE, not survive). A DENY, never a clamp, for the same reason as the bid
+   * bounds: a clamp rewrites an engine's intent without telling anyone. The floor is the
+   * direct counter to the ratchet's end state — 58 campaigns pinned at Amazon's €1 floor
+   * because nothing above €1 existed to refuse the cut.
+   */
+  if (args.field === 'dailyBudget') {
+    if (campaign.maxBudgetCents != null && v > campaign.maxBudgetCents) {
+      return {
+        allowed: false,
+        reason: `budget €${(v / 100).toFixed(2)} exceeds Campaign.maxBudgetCents=€${(campaign.maxBudgetCents / 100).toFixed(2)} on ${campaignId}`,
+        deniedAt: 'entity_bounds',
+      }
+    }
+    if (campaign.minBudgetCents != null && v < campaign.minBudgetCents) {
+      return {
+        allowed: false,
+        reason: `budget €${(v / 100).toFixed(2)} is below Campaign.minBudgetCents=€${(campaign.minBudgetCents / 100).toFixed(2)} on ${campaignId} — the floor exists precisely so a cut-only rule cannot walk this to €1`,
+        deniedAt: 'entity_bounds',
+      }
+    }
+  }
+  return null
+}
+
 /**
  * BID.S5 — resolve the policy half of the bid bounds, most specific first per side:
  * LINE ?? PORTFOLIO ?? MARKET. Cheapest-first like the spend ceilings: one indexed read for the
@@ -562,6 +611,8 @@ async function spendCeilingDenial(args: {
   intendedCents: number
   portfolioId: string | null
   marketplace: string | null
+  /** 4k — this write's own queue row: its action-log row is written before the worker asks, and is not "already authorised". */
+  queueId?: string | null
 }): Promise<GateDecision | null> {
   const deltaCents = args.intendedCents - args.currentBudgetCents
   if (deltaCents <= 0) return null
@@ -610,6 +661,7 @@ async function spendCeilingDenial(args: {
 
     // Today's AUTHORISED budget increases inside the scope — our own ledger, in EUROS in the
     // payloads (the one ads money field that is not cents; assuming cents inflates 100×).
+    // 4k — without this write's own row, which would count its increase twice (NULL-safe, as in the day-move bound).
     const rows = await prisma.advertisingActionLog.findMany({
       where: {
         actionType: 'AD_BUDGET_UPDATE',
@@ -617,6 +669,7 @@ async function spendCeilingDenial(args: {
         entityId: { in: campaignIds },
         createdAt: { gte: midnightUtc },
         rolledBackAt: null,
+        ...(args.queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: args.queueId } }] } : {}),
       },
       select: { payloadBefore: true, payloadAfter: true },
     })
@@ -779,7 +832,8 @@ export async function budgetDayMoveDenial(args: {
  * record starts 2026-08-15; earlier refusals exist only in the application log.
  */
 export function logGateDeny(
-  context: { queueId: string; marketplace: string | null; payloadValueCents: number; campaignId?: string | null; entityType?: string | null; entityId?: string | null },
+  // 4k — `queueId` null: a bound refused by the mutation layer before anything was queued.
+  context: { queueId: string | null; marketplace: string | null; payloadValueCents: number; campaignId?: string | null; entityType?: string | null; entityId?: string | null },
   reason: string,
   deniedAt: GateDeniedAt,
 ): void {
