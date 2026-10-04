@@ -58,4 +58,22 @@ describe('studio Amazon family shape', () => {
     const silent = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: { properties: {} } })
     expect(shapeAmazonStudioAttributes(silent, standalone, null)).toEqual(standalone)
   })
+
+  // Item 12 (2026-10-05) — a single product has no family: a stale saved role, relationship or theme is never sent.
+  it('a standalone product drops a stale listing role, relationship and theme the row or a saved value carried', () => {
+    const stale = { item_name: title, parentage_level: [{ value: 'child', marketplace_id: MP }],
+      child_parent_sku_relationship: [{ child_relationship_type: 'variation', parent_sku: 'TEST-SKU-OLD', marketplace_id: MP }],
+      variation_theme: [{ name: 'SIZE/COLOR', marketplace_id: MP }], fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 3, marketplace_id: MP }] }
+    const before = structuredClone(stale)
+    const shaped = shapeAmazonStudioAttributes(spec, stale, null)
+    expect(shaped).toEqual({ item_name: title, fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 3 }] })
+    expect(validateSchemaAttributes(spec, shaped)).toEqual([])
+    expect(stale).toEqual(before) // pure
+  })
+
+  it('a family member published without its family row keeps what was built (never turned into a standalone listing)', () => {
+    const shaped = shapeAmazonStudioAttributes(spec, legacyParent, null, { familyMember: true })
+    expect(shaped.parentage_level).toEqual(legacyParent.parentage_level)
+    expect(shaped.variation_theme).toEqual([{ name: 'SIZE/COLOR' }])
+  })
 })

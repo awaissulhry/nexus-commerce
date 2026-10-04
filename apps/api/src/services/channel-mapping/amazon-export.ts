@@ -17,7 +17,10 @@ export interface AmazonExportRecord {
   sellerSku: string
   /** Children: the parent's seller SKU on this market. */
   parentSellerSku: string | null
+  /** A variation parent: no price of its own. False for a child and for a single product. */
   isParent: boolean
+  /** The listing role written into the file. A single product (no family) writes none. Absent = parent or child by `isParent`. */
+  role?: 'parent' | 'child' | 'single'
   /** Amazon product type code (`COAT`). */
   productType: string
   asin: string | null
@@ -111,7 +114,10 @@ export function buildAmazonTemplateRows(template: AmazonTemplateParse, fields: r
       const path = header.replace(/\[[^\]]*\]/g, '').replace(/#\d+/g, '').split('.')
       // Parentage is Nexus's own fact (the Products sheet), so it is written even though the import leaves it managed.
       if (decision.targetKind === 'relationship') {
-        if (path[0] === 'parentage_level') out[header] = labelFor(template, header, record.isParent ? 'parent' : 'child', decision.transform)
+        if (path[0] === 'parentage_level') {
+          const role = record.role ?? (record.isParent ? 'parent' : 'child')
+          if (role !== 'single') out[header] = labelFor(template, header, role, decision.transform)
+        }
         else if (path.at(-1) === 'parent_sku') { if (!record.isParent && record.parentSellerSku) out[header] = record.parentSellerSku }
         else blank(decision.reason ?? 'Relationship detail not held in Nexus.')
         continue

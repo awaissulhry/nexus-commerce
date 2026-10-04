@@ -216,7 +216,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     // builder normalises it); every row, standalone included, drops a `marketplace_id` the schema does not declare.
     const family: AmazonFamilyRow | null = projection?.theme ? { theme: normalizeVariationTheme(projection.theme.code, hints.enumCodeMap?.variation_theme ?? {}),
       ...(product.id === parent.id ? { role: 'parent' as const } : { role: 'child' as const, parentSku: sellerSkus.get(parent.id)! }) } : null
-    base.messages[0].attributes = shapeAmazonStudioAttributes(spec, base.messages[0].attributes, family)
+    base.messages[0].attributes = shapeAmazonStudioAttributes(spec, base.messages[0].attributes, family, { familyMember: !!(product.isParent || product.parentId) })
     const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
     const catalogue = resolved[0].catalogue && excludedRoots.size ? { ...resolved[0].catalogue, fields: resolved[0].catalogue.fields.filter(f => !excludedRoots.has(amazonRootOf(f.fieldKey))) } : resolved[0].catalogue
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)

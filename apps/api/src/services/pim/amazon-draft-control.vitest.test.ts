@@ -83,8 +83,12 @@ it('offers the classified attribute drafts but keeps unknown and actual relation
   const id = await fixture()
   const row = (await read(id)).rows[0]
   expect(row.values.condition_type).toMatchObject({ editable: true, writable: true })
-  for (const key of ['externally_assigned_product_identifier', 'externally_assigned_product_identifier__type', 'child_parent_sku_relationship__parent_sku', 'child_parent_sku_relationship__child_relationship_type']) {
+  for (const key of ['externally_assigned_product_identifier', 'externally_assigned_product_identifier__type']) {
     expect(row.values[key], key).toMatchObject({ editable: true, writable: true, writeBlockedReason: null })
+  }
+  // Item 12 (2026-10-05): the family's relationship cells are read-only system values, not drafts.
+  for (const key of ['child_parent_sku_relationship__parent_sku', 'child_parent_sku_relationship__child_relationship_type']) {
+    expect(row.values[key], key).toMatchObject({ editable: false, writable: false })
   }
   expect(row.values.unknown_immutable).toMatchObject({ editable: false, writable: false, writeBlockedReason: expect.any(String) })
   for (const key of ['__productRole', '__parentSku']) expect(row.values[key], key).toMatchObject({ editable: false, writable: false })
@@ -179,7 +183,20 @@ it('stores a valid brand beside one malformed cell and returns a usable next-sav
   expect(await prisma.channelListing.findMany({ where: { productId: id, NOT: { id: before.id } }, orderBy: { id: 'asc' } })).toEqual(others)
 }))
 
-it.each(['externally_assigned_product_identifier', 'externally_assigned_product_identifier__type', 'child_parent_sku_relationship__parent_sku', 'child_parent_sku_relationship__child_relationship_type'])(
+it.each(['child_parent_sku_relationship__parent_sku', 'child_parent_sku_relationship__child_relationship_type'])(
+  'a direct %s write is refused (a read-only family value) and changes nothing', key => scoped(async () => {
+    const id = await fixture()
+    const before = await listing(id)
+    const productBefore = await prisma.product.findUniqueOrThrow({ where: { id } })
+    await expect(write(id, `attr_${key}`, 'SYNTHETIC-DRAFT', before.version)).rejects.toThrow()
+    const after = await listing(id)
+    expect(after.overrideData).toEqual(before.overrideData)
+    expect(after.version).toBe(before.version)
+    expect(await prisma.product.findUniqueOrThrow({ where: { id } })).toEqual(productBefore)
+  }),
+)
+
+it.each(['externally_assigned_product_identifier', 'externally_assigned_product_identifier__type'])(
   'a direct %s draft leaves real product/listing identities and observed data unchanged', key => scoped(async () => {
     const id = await fixture()
     const parent = await prisma.product.create({ data: { sku: `DRAFT-RELATION-PARENT-${serial}`, name: 'Original parent', isParent: true, basePrice: 29, productType: 'E2E_DRAFT_COAT' } })

@@ -146,6 +146,9 @@ export interface TransformContext {
   /** FM.4 — canonical value → channel/market value (e.g. Rosso → Red);
    *  null on a miss. */
   lookupValueMap?: (attribute: string, fromValue: string) => string | null
+  /** Item 1 (2026-10-05) — on a value-map MISS, the ONE option of this field's list the value means by its concept's
+   *  synonyms (`men` → `male`), or null. Asked after the value-map row, before `onMiss`. Per member for a list. */
+  matchListValue?: (value: string) => string | null
   /** FM.4 — size across systems (e.g. EU 52 → UK "L"); null on a miss. */
   lookupSizeScale?: (scale: string, from: string, to: string, value: string) => string | null
   /** FM.9 — channel field max length from the manifest, for channelLimit. */
@@ -193,6 +196,23 @@ function interpolateTemplate(expr: string, values: Record<string, unknown>): str
     const v = values[key]
     return v == null ? '' : String(v)
   })
+}
+
+/** Each text member through the list matcher; undefined when nothing matched (the value is left to `onMiss`). */
+function matchListMembers(value: unknown, match: (value: string) => string | null): unknown {
+  if (Array.isArray(value)) {
+    let changed = false
+    const next = value.map(member => {
+      if (typeof member !== 'string' && typeof member !== 'number') return member
+      const hit = match(String(member))
+      if (hit == null) return member
+      changed = true
+      return hit
+    })
+    return changed ? next : undefined
+  }
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  return match(String(value)) ?? undefined
 }
 
 /** Apply transforms in order. Each transform mutates the value;
@@ -339,8 +359,12 @@ export function applyTransforms(
           }
           if (current == null) break
           const mapped = ctx.lookupValueMap(t.attribute, String(current))
+          // A value-map row wins; on a miss the field's list may still name the ONE option the value means.
+          const matched = mapped == null && ctx.matchListValue ? matchListMembers(current, ctx.matchListValue) : undefined
           if (mapped != null) {
             current = mapped
+          } else if (matched !== undefined) {
+            current = matched
           } else if (t.onMiss === 'null') {
             current = null
           } else if (t.onMiss === 'flag') {
@@ -521,7 +545,7 @@ export interface ResolveChannelFieldInput {
   /** FM.4 — value-map / size-scale lookups + manifest maxLength for the
    *  data-backed transform ops. resolveChannelField fills ctx.values
    *  (the resolved attributes) itself; the caller supplies the lookups. */
-  transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'lookupSizeScale' | 'maxLength' | 'namedExpression' | 'lookupPath'>
+  transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'matchListValue' | 'lookupSizeScale' | 'maxLength' | 'namedExpression' | 'lookupPath'>
   /** P7 — `resolvedAttrsView(resolvedAttrs)`, built once per product by a caller that resolves many fields. */
   attrsView?: ResolvedAttrsView
 }

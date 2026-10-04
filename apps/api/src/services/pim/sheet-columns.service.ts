@@ -860,17 +860,27 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
 
   // These are Amazon listing metadata, not the shared Product.parentId relationship. In particular,
   // a historical parentage_level may be inherited by a variant; never label it as the product role.
+  // Item 12 (product sheet consistency, 2026-10-05) — publish takes all three from the product family (the shared
+  // variation structure), never from a typed value: an edit here was saved and then ignored. So they are read-only,
+  // say why, and show the family's value in English (the column's own labels only; the channel spec keeps Amazon's
+  // market labels, which paste, import and autocorrect read). A single product has no family: nothing is sent.
+  const FAMILY_FACT_HELP = 'Publish takes it from the product family: the parent sends Parent, each variation sends Child, a single product sends none. To change it, change the family; this cell cannot be edited.'
   for (const column of columns) {
     if (column.key === 'parentage_level') {
       column.label = scopeKind === 'master' ? 'Saved Amazon parentage level' : 'Amazon listing role'
-      column.helpText = 'Stored Amazon parentage value. This does not define the shared product relationship. Product role and Parent SKU show the catalog relationship.'
+      column.helpText = `Amazon listing role. ${FAMILY_FACT_HELP}`
+      column.optionLabels = { parent: 'Parent', child: 'Child' }
     } else if (column.key === 'child_parent_sku_relationship__parent_sku') {
       column.label = 'Amazon parent SKU'
-      column.helpText = 'Parent SKU used by this Amazon listing. The shared Parent SKU field defines the catalog relationship across listing aliases.'
+      column.helpText = 'Parent SKU of this Amazon variation. Publish takes it from the product family (the parent\'s SKU); a parent or a single product sends none. To change it, change the family; this cell cannot be edited.'
     } else if (column.key === 'child_parent_sku_relationship__child_relationship_type') {
       column.label = 'Amazon relationship type'
-      column.helpText = 'Relationship type submitted with the Amazon listing.'
-    }
+      column.helpText = 'Amazon accepts one relationship type, Variation, and publish sends it on every family row. A single product sends none. This cell cannot be edited.'
+      column.optionLabels = { variation: 'Variation' }
+      column.defaultVisible = false
+    } else continue
+    column.editable = false
+    column.formulaWritable = false
   }
 
   // Repeated schema titles describe distinct slots/paths. Keep every attribute and qualify its

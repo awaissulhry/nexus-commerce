@@ -147,4 +147,26 @@ describe('CHMAP — export into Amazon’s own template', () => {
     expect(compareTemplateRows(parsed, parsed.rows, rows, SKU, new Map()).differ).toHaveLength(1)
     expect(labelFor(parsed, h('condition_type'), 'new_new')).toBe('Nuovo')
   })
+
+  // Item 12 (product sheet consistency, 2026-10-05) — a single product is neither a parent nor a child: it was written as
+  // "Articolo parent" with a blank price.
+  it('writes the listing role from the family: a single product gets a blank role and keeps its price', async () => {
+    const parsed = await file()
+    const fields = buildAmazonDraftFields(parsed, specs, { marketplace: 'IT', primaryLanguage: 'it', marketLanguages: ['it'], productTypes: ['COAT', 'PANTS'] }).map((r, i) => ({ ...r, id: `f${i}` }))
+    const read = mapAmazonWorkbook(parsed, specs, destination)
+    const records = stored(read.rows, { 'GALE-JACKET-BLACK-MEN-M': 'GALE-JACKET', 'GALE-JACKET-BLACK-MEN-L': 'GALE-JACKET' })
+    records.find(r => r.sku === 'GALE-JACKET')!.role = 'parent'
+    const child = records.find(r => r.sku === 'GALE-JACKET-BLACK-MEN-M')!
+    child.role = 'child'
+    records.push({ ...child, sku: 'TEST-SINGLE', sellerSku: 'TEST-SINGLE', parentSellerSku: null, isParent: false, role: 'single', price: 49 })
+    const out = buildAmazonTemplateRows(parsed, fields, records, { recordAction: 'partial_update', primaryLanguage: 'it', currency: 'EUR', includePrices: true })
+    const row = (sku: string) => out.rows.find(r => r[SKU] === sku)!
+    expect(row('GALE-JACKET')[PARENTAGE]).toBe('Articolo parent')
+    expect(row('GALE-JACKET-BLACK-MEN-M')[PARENTAGE]).toBe('Bambino')
+    expect(row('GALE-JACKET-BLACK-MEN-M')[PARENT]).toBe('GALE-JACKET')
+    expect(row('TEST-SINGLE')[PARENTAGE]).toBeUndefined()
+    expect(row('TEST-SINGLE')[PARENT]).toBeUndefined()
+    expect(row('TEST-SINGLE')[PRICE]).toBe('49')
+    expect(out.blankForRow.has(`TEST-SINGLE\u0000${PRICE}`)).toBe(false)
+  })
 })

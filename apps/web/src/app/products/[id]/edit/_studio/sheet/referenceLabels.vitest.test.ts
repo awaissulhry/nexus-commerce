@@ -110,4 +110,27 @@ describe('information grid reference names', () => {
     expect(marketplaceReferenceLabels([...markets, { ...markets[0], name: 'Conflicting name' }], 'AMAZON')).toEqual({ IT: 'Italy' })
     expect(marketplaceReferenceLabels(null, 'AMAZON')).toEqual({})
   })
+
+  // Item 7 (product sheet consistency, 2026-10-05) — Amazon's size list names two codes "100".
+  it('shows the code beside a name two options share, for display only', () => {
+    const options = ['numeric_100', 'numeric_height_100', 'numeric_102']
+    const original = { key: 'apparel_size__size', kind: 'select', options, optionLabels: { numeric_100: '100', numeric_height_100: '100', numeric_102: '102' } }
+    const [column] = nameReferenceColumns([original], {})
+    expect(column.optionLabels).toEqual({ numeric_100: '100 (numeric_100)', numeric_height_100: '100 (numeric_height_100)', numeric_102: '102' })
+    expect(column.options).toBe(options)
+    expect(original.optionLabels.numeric_100).toBe('100')
+    const def = referenceColumnDef(column, () => null)
+    expect(def.valueFormatter!({ value: 'numeric_height_100' })).toBe('100 (numeric_height_100)')
+    // Paste: a code is kept, a bare shared name still selects no option by itself, the shown name selects its own code.
+    expect(parseReferenceOrScalarValue(column, 'numeric_100')).toBe('numeric_100')
+    expect(parseReferenceOrScalarValue(column, '100')).toBe('100')
+    expect(parseReferenceOrScalarValue(column, '100 (numeric_height_100)')).toBe('numeric_height_100')
+  })
+
+  it('compares names ignoring case, and never qualifies an option whose name is its own code', () => {
+    const [column] = nameReferenceColumns([{ key: 'size', kind: 'select', options: ['M', 'medium'], optionLabels: { medium: 'm' } }], {})
+    expect(column.optionLabels).toEqual({ medium: 'm (medium)' })
+    const [unique] = nameReferenceColumns([{ key: 'size', kind: 'select', options: ['s', 'm'], optionLabels: { s: 'S', m: 'M' } }], {})
+    expect(unique.optionLabels).toEqual({ s: 'S', m: 'M' })
+  })
 })

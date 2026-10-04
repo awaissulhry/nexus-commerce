@@ -42,10 +42,19 @@ export function resolveContentAttributes(input: { product: Row; parent?: Row | n
   return Object.fromEntries(Object.entries(resolved).map(([key, value]) => [key, contentAttribute(value, input.product.id, input.product.parentId)]))
 }
 
+/**
+ * Amazon's search terms: ONE `generic_keyword` string per (marketplace, language) — the Shared keywords, in order,
+ * joined by spaces. The sheet cell shows it and the publish sends it, so the two cannot differ. Never truncated: a
+ * string over Amazon's limit is flagged with its reason (cell and publish), never cut.
+ */
+export function amazonSearchTerms(value: unknown): string {
+  return (Array.isArray(value) ? value : [value]).filter(part => part != null).map(part => String(part).trim()).filter(Boolean).join(' ')
+}
+
 /** R10: raw resolver absence must not change an established list-shaped sheet/API wire. */
 export function contentWireValue(value: unknown, shape?: string, field?: string): unknown {
   // Amazon exposes one search-term string; the shared content store uses String[].
-  if (shape === 'scalar' && field === 'keywords' && Array.isArray(value)) return value.join(' ')
+  if (shape === 'scalar' && field === 'keywords' && Array.isArray(value)) return amazonSearchTerms(value)
   return shape === 'list' && value == null ? [] : value
 }
 
