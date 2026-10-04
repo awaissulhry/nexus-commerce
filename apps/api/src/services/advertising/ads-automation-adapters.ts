@@ -16,6 +16,7 @@ import {
   type ExplainOptions, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
 } from '../automation/automation-levels.js'
 import { isRefused } from '../automation/service-outcome.js'
+import { breakerLimits, breakerLimitsText } from './ads-engine-actors.js'
 
 // ── Env checks every Amazon ads engine shares ─────────────────────────────────────────────────────────
 
@@ -293,7 +294,7 @@ const A2: AutomationAdapter = {
 
 const A3: AutomationAdapter = {
   id: 'A3', key: 'ads-dial', name: 'Ads dial, halt and anomaly breaker',
-  what: 'One dial for all ads automation; the breaker halts everything on an action or spend excursion.',
+  what: 'One dial for all ads automation; the breaker stops it account-wide when rule actions, one engine\'s changes or hourly ad spend pass their limits.',
   area: 'amazon-ads', writesTo: ['nexus'], view: FEATURES.adsView, claude: 'switch-tune', preview: 'none',
   previewNote: 'The dial and the breaker have nothing to preview: they are the brakes.',
   crons: ['ads-anomaly-guard'], schedule: process.env.NEXUS_ADS_ANOMALY_GUARD_SCHEDULE ?? '*/10 * * * *',
@@ -304,8 +305,8 @@ const A3: AutomationAdapter = {
     return {
       level,
       reason: dial.halted ? `Halted${dial.haltReason ? `: ${dial.haltReason}` : ''}.` : `The dial is ${dial.autonomy}${dial.set ? '' : ' (never set)'}.`,
-      state: `Dial ${dial.autonomy}${dial.halted ? ', HALTED' : ''}; the breaker trips at ${dial.maxActionsPerHour ?? 250} rule actions per hour or its hourly spend limit.`,
-      caps: { maxActionsPerHour: dial.maxActionsPerHour ?? 250, maxHourlySpendCentsEur: dial.maxHourlySpendCentsEur ?? 50_000, defaultTargetAcosPct: dial.defaultTargetAcosPct },
+      state: `Dial ${dial.autonomy}${dial.halted ? ', HALTED' : ''}; the breaker trips at ${dial.maxActionsPerHour ?? 250} rule actions an hour, €${((dial.maxHourlySpendCentsEur ?? 50_000) / 100).toFixed(0)} of ad spend in one hour, or when one engine passes its own hourly limit of changes (${breakerLimitsText()}).`,
+      caps: { maxActionsPerHour: dial.maxActionsPerHour ?? 250, maxHourlySpendCentsEur: dial.maxHourlySpendCentsEur ?? 50_000, engineChangesPerHour: breakerLimits(), defaultTargetAcosPct: dial.defaultTargetAcosPct },
     }
   },
   levelSwitch: {

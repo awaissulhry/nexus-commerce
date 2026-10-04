@@ -18,6 +18,7 @@ import { envEnabled } from '../../utils/env-flag.js'
 import { getAutomationState } from './ads-automation-state.service.js'
 import { lowest } from '../automation/automation-levels.js'
 import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../automation/engine-switch.service.js'
+import { breakerLimitsText } from './ads-engine-actors.js'
 
 /**
  * Engines are gated by env flags and apply-switches, not by `AutomationRule.autonomyLevel`.
@@ -144,6 +145,7 @@ async function cronFacts(names: string[]) {
  * returned and the UI can say "250 (default)" rather than nothing.
  */
 export interface AccountGuardrails {
+  /** The breaker's limit on RULE actions. Each engine's changes have their own hourly limit (ads-engine-actors.ts). */
   actionsPerHour: { effective: number; set: number | null; default: number }
   spendPerHourCents: { effective: number; set: number | null; default: number }
   /** Per-payload write ceiling, from env. Read-only here — it needs a deploy to change. */
@@ -329,10 +331,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       'ads-auto-bid', 'every 6 h',
       masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? 'Runs on the account autonomy dial', null, 'honours'),
 
-    mk('anomaly-guard', 'Anomaly breaker', 'Halts all automation on an action or spend excursion',
+    mk('anomaly-guard', 'Anomaly breaker', 'Stops ads automation account-wide when rule actions, one engine\'s changes or hourly ad spend pass their limits',
       'ads-anomaly-guard', 'every 10 min',
       masterOff ? 'OFF' : 'AUTO',
-      masterOff?.why ?? `Trips at ${state.maxActionsPerHour ?? 250} actions/h or €${((state.maxHourlySpendCentsEur ?? 50_000) / 100).toFixed(0)}/h`,
+      masterOff?.why ?? `Trips at ${state.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR} rule actions an hour, €${((state.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS) / 100).toFixed(0)} of ad spend in one hour, or when one engine passes its own hourly limit of changes (${breakerLimitsText()})`,
       null, 'exempt'),
 
     mk('tos-defense', 'Top-of-Search defense', 'Nudges the top-of-search multiplier toward a target impression share',

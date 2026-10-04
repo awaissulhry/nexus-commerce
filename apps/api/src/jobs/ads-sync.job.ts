@@ -670,9 +670,8 @@ export function startKeywordBidResyncCron(): void {
 // safety net above the per-rule caps.
 export async function runAnomalyGuardCron(): Promise<void> {
   await recordCronRun('ads-anomaly-guard', async () => {
-    const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
-    const r = await runAnomalyGuardOnce()
-    return `tripped=${r.tripped} actions/h=${r.actionsLastHour} spend/h=${r.spendLastHourCents}c${r.reason ? ' reason=' + r.reason : ''}`
+    const { runAnomalyGuardOnce, anomalyGuardSummary } = await import('../services/advertising/ads-anomaly-guard.service.js')
+    return anomalyGuardSummary(await runAnomalyGuardOnce())
   }).catch((err) => logger.error('ads-anomaly-guard cron: failure', { error: String(err) }))
 }
 

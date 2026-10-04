@@ -16,24 +16,9 @@
  */
 import { prisma } from '@nexus/database'
 import { getEngineLevers, type LeverMode } from './ads-control-room.service.js'
+import { engineForActor, engineLabel } from './ads-engine-actors.js'
 
 const DAY = 86_400_000
-
-/**
- * Engine key → the actor strings its writes carry in `AdvertisingActionLog.userId`.
- * Mirrors `ads-control-room-detail.service.ts`'s measured EVIDENCE map (its shape is private to
- * the drawer; the pairs are duplicated here knowingly — they are MEASURED constants, and the
- * detail service's own header records the measurement).
- */
-const ENGINE_ACTORS: Record<string, { actors?: string[]; actorPrefix?: string }> = {
-  'rank-defend': { actorPrefix: 'automation:rank-defend-' },
-  dayparting: { actorPrefix: 'automation:dayparting-' },
-  'budget-enforce': { actors: ['automation:budget-manager-cron'] },
-  'budget-pools': { actors: ['automation:budget-pool-rebalance'] },
-  'auto-bid': { actors: ['automation:auto-bid'] },
-  'tos-defense': { actors: ['automation:tos-optimizer'] },
-  'coverage-engine': { actors: ['automation:coverage-engine'] },
-}
 
 export interface EngineActor {
   kind: 'engine'
@@ -97,13 +82,8 @@ export async function getActors(): Promise<ActorsPayload> {
   let operatorWrites = 0
   let operatorLast: Date | null = null
 
-  const engineFor = (userId: string): string | null => {
-    for (const [key, src] of Object.entries(ENGINE_ACTORS)) {
-      if (src.actors?.includes(userId)) return key
-      if (src.actorPrefix && userId.startsWith(src.actorPrefix)) return key
-    }
-    return null
-  }
+  // The engine → actor map lives in ads-engine-actors.ts (one map for this list, the drawer and the breaker).
+  const onBoard = new Set(levers.map((l) => l.key))
 
   for (const g of writeGroups) {
     const id = g.userId
@@ -113,8 +93,12 @@ export async function getActors(): Promise<ActorsPayload> {
       observed.push({ kind: 'observed', actor: '(no actor recorded)', label: 'Writes with no author — the log carries a null userId', writes7d: n, lastWriteAt: last?.toISOString() ?? null })
       continue
     }
-    const engine = engineFor(id)
-    if (engine) { engineWrites.set(engine, (engineWrites.get(engine) ?? 0) + n); continue }
+    const engine = engineForActor(id)
+    if (engine && onBoard.has(engine)) { engineWrites.set(engine, (engineWrites.get(engine) ?? 0) + n); continue }
+    if (engine) {
+      observed.push({ kind: 'observed', actor: id, label: `Written by ${engineLabel(engine)} (no row of its own on this board)`, writes7d: n, lastWriteAt: last?.toISOString() ?? null })
+      continue
+    }
     if (id.startsWith('automation:')) {
       const ruleId = id.slice('automation:'.length)
       if (ruleIds.has(ruleId)) continue // a rule's writes — the rules grid already shows them
