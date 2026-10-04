@@ -9,7 +9,7 @@
  * No `@/` imports — the vitest runner in apps/web has no such alias.
  */
 import { describe, it, expect } from 'vitest'
-import { conditionText, actionLines, triggerText, targetAcosProblem, NON_WRITING } from './ruleText'
+import { conditionText, actionLines, triggerText, targetAcosProblem, NON_WRITING, placementOnBudgetTrigger } from './ruleText'
 
 describe('conditionText — the "If" line', () => {
   it('renders a ratio as a percentage, not a fraction', () => {
@@ -116,6 +116,19 @@ describe('triggerText', () => {
     expect(triggerText('CVR_DROP')).toBe('CVR drop')
     expect(triggerText('SOV_BID')).toBe('SOV bid')
     expect(triggerText('FBA_AGE_THRESHOLD_REACHED')).toBe('FBA age threshold reached')
+  })
+
+  it('🔴 4i (review 4.7) — a Placement rule on the budget trigger reads as placement, not budget', () => {
+    expect(triggerText('CAMPAIGN_PERFORMANCE_BUDGET', 'placement')).toBe('Placement performance')
+    // a budget rule on the same trigger, and a rule with no kind (an older build), keep the trigger's own words
+    expect(triggerText('CAMPAIGN_PERFORMANCE_BUDGET', 'budget')).toBe('Campaign performance budget')
+    expect(triggerText('CAMPAIGN_PERFORMANCE_BUDGET')).toBe('Campaign performance budget')
+    expect(placementOnBudgetTrigger('KEYWORD_HIGH_ACOS', 'placement')).toBe(false)
+  })
+
+  it('4i — a builder Placement rule\'s Then line names a placement change', () => {
+    expect(actionLines([{ type: 'placement', campaigns: [] }])[0].label).toBe('Change a placement modifier')
+    expect(actionLines([], ['placement_apply'])[0].label).toBe('Change a placement modifier')
   })
 })
 

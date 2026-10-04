@@ -39,7 +39,7 @@ export interface DockRule {
   category: string
   categoryColor: string
   categoryLabel: string
-  scope: { kind: 'account' | 'portfolio' | 'campaign'; id: string | null; name: string | null }
+  scope: { kind: 'account' | 'portfolio' | 'campaign' | 'picked'; id: string | null; name: string | null }
   week: { acted: number; proposed: number; failed: number }
 }
 
@@ -206,10 +206,11 @@ export function AutomationDock({ title = 'Automations', onChanged, surface = 'co
               </div>
               {/* The binding, visible and clearable. An invisible scope is an invisible surprise. */}
               {r.scope.kind !== 'account' && (
-                <div className="adock-scope" title={`This rule fires ONLY inside ${r.scope.kind} “${r.scope.name}”.`}>
+                <div className="adock-scope" title={r.scope.kind === 'picked' ? `This rule acts only on the ${r.scope.name} picked in its rule builder; change them there.` : `This rule fires ONLY inside ${r.scope.kind} “${r.scope.name}”.`}>
                   {r.scope.kind}: {r.scope.name}
-                  <button type="button" className="adock-scope-x" disabled={busy === r.id}
-                    title="Unbind — back to account-wide" onClick={() => void clearScope(r)}><X size={10} /></button>
+                  {/* 4i — Unbind clears a portfolio or campaign scope; it cannot clear builder picks, so it is not offered for them. */}
+                  {r.scope.kind !== 'picked' && <button type="button" className="adock-scope-x" disabled={busy === r.id}
+                    title="Unbind — back to account-wide" onClick={() => void clearScope(r)}><X size={10} /></button>}
                 </div>
               )}
               <div className="adock-dial" role="group" aria-label={`Autonomy for ${r.name}`}>
