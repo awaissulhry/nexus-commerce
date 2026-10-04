@@ -97,7 +97,7 @@ describe('caps: code defaults, env overrides, never "no cap"', () => {
     expect(engineCaps('dayparting')).toEqual({ perTick: 300, perDay: 1_500, breakerPerHour: 600 })
     expect(engineCaps('write-reconcile')).toEqual({ perTick: null, perDay: null, breakerPerHour: 600 })
     expect(breakerLimits()).toMatchObject({ 'budget-pools': 100, 'tos-defense': 100, autopilot: 300, 'auto-bid': 600, unknown: 300 })
-    expect(breakerLimitsText()).toContain('Rank & Dayparting 1,200')
+    expect(breakerLimitsText()).toContain('Hourly bid plans 1,200')
   })
 
   it('the env overrides a single field and keeps the rest', () => {

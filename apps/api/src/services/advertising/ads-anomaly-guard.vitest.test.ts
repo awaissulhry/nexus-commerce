@@ -65,7 +65,7 @@ describe('the breaker counts engine writes per engine', () => {
     await writes('automation:rank-plan-p1', 301)
     const r = await run()
     expect(r.tripped).toBe(true)
-    expect(r.reason).toBe('Rank & Dayparting made 1,201 ad changes in the last hour (limit 1,200 an hour).')
+    expect(r.reason).toBe('Hourly bid plans made 1,201 ad changes in the last hour (limit 1,200 an hour).')
     expect(engine(r, 'rank-defend')).toMatchObject({ writes: 1_201, limit: 1_200 })
     const s = await state()
     expect(s).toMatchObject({ halted: true, haltedBy: 'auto:anomaly-guard', haltReason: r.reason })

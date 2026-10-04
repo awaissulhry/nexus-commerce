@@ -150,7 +150,7 @@ describe('guardLiveRun — the switch and the arm flags as the scheduler sees th
   it('switched OFF for this business: refused in plain words, before the lock is even asked for', async () => {
     h.switches['rank-defend'] = { mode: 'OFF', setBy: 'user:u-1e' }
     const work = vi.fn(async () => 'ran')
-    expect(await lock.guardLiveRun('rank-defend', work)).toEqual({ ran: false, reason: 'Rank & Dayparting is switched off for this business (by user:u-1e)' })
+    expect(await lock.guardLiveRun('rank-defend', work)).toEqual({ ran: false, reason: 'Hourly bid plans is switched off for this business (by user:u-1e)' })
     expect(work).not.toHaveBeenCalled()
     expect(store.eval).not.toHaveBeenCalled()
   })
@@ -173,7 +173,7 @@ describe('guardLiveRun — the switch and the arm flags as the scheduler sees th
   it('unknown is not on: no scheduler heartbeat (or no Redis) refuses, and says why', async () => {
     schedulerPublishes(null)
     const work = vi.fn(async () => 'ran')
-    expect(await lock.guardLiveRun('rank-defend', work)).toMatchObject({ ran: false, reason: expect.stringMatching(/^whether Rank & Dayparting is switched on cannot be read from the scheduler \(no live heartbeat from the scheduler process/) })
+    expect(await lock.guardLiveRun('rank-defend', work)).toMatchObject({ ran: false, reason: expect.stringMatching(/^whether Hourly bid plans is switched on cannot be read from the scheduler \(no live heartbeat from the scheduler process/) })
     setStatusRedisForTests(null)
     expect((await lock.guardLiveRun('rank-defend', work)).ran).toBe(false)
     expect(work).not.toHaveBeenCalled()
