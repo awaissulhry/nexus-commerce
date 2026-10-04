@@ -67,7 +67,11 @@ afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
 describe('A9 — approval-status follows an approved ad change to Amazon', () => {
   it('live: waiting, sent, refused by the write gate, failed — each counted by its outbound row, in one sentence', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    const id = await askAndRun('bulk-ad-bid-change', { bids: [{ targetId: 't-it', bidCents: 50 }, { targetId: 't-uk', bidCents: 65 }] })
+    // 6b — two Italian targets: the write gate refuses every live write in UK (no checked Amazon limits row there).
+    await inside(() => database.client.adTarget.create({ data: {
+      id: 't-it2', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'race boots', bidCents: 60, externalTargetId: 'EXT-t-it2',
+    } }))
+    const id = await askAndRun('bulk-ad-bid-change', { bids: [{ targetId: 't-it', bidCents: 50 }, { targetId: 't-it2', bidCents: 65 }] })
     let s = await status(id)
     expect(s.ads).toEqual({ reach: 'live', writes: 2, waiting: 2, sent: 0, refusedByGate: 0, failed: 0, notSent: 0 })
     expect(s.meaning).toBe('Approved and written in Nexus. Amazon: 2 waiting to be sent (a queued ad write waits out a 5-minute cancel window) (of 2 writes).')

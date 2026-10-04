@@ -134,6 +134,10 @@
       "types": "./dist/ads-number.d.ts",
       "default": "./dist/ads-number.js"
     },
+    "./ads-market-limits": {
+      "types": "./dist/ads-market-limits.d.ts",
+      "default": "./dist/ads-market-limits.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"
