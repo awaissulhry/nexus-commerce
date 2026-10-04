@@ -226,10 +226,24 @@ describe('A5 — create-negative-keyword: ad-group negatives only, executed once
     expect((await preview('create-negative-keyword', { ...neg, scope: 'CAMPAIGN' })).error).toMatch(/^Campaign-level negatives are not offered/)
     expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-it', keywordText: 'giacca pelle' })).error).toMatch(/^Name the ad group/)
     expect((await preview('create-negative-keyword', { ...neg, externalAdGroupId: 'EXT-g-c-uk' })).error).toMatch(/ad group EXT-g-c-uk not found in Italy exact/)
-    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'xavia' })).error).toMatch(/whitelisted against negation \(brand term\)/)
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'xavia' })).error).toBe('"xavia" cannot be negated: it matches the protected term "xavia" (brand term).')
     expect((await preview('create-negative-keyword', { ...neg, keywordText: 'FREE' })).error).toMatch(/already negated/)
     expect((await preview('create-negative-keyword', { ...neg, externalCampaignId: 'EXT-nope' })).error).toMatch(/not found/)
     expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-sb', keywordText: 'x', externalAdGroupId: 'EXT-g-c-sb' })).error).toMatch(/not a Sponsored Products campaign/)
+  })
+
+  // 5a — the write gate's matcher: phrase-aware, Amazon's text limits, and binding in sandbox before anything is written.
+  it('refuses a phrase that a protected term contains and a text Amazon would not take; createNegative refuses a protected term in sandbox', async () => {
+    await inside(() => database.client.adKeywordProtection.create({ data: { term: 'xavia gale', mode: 'WHITELIST', matchType: 'CONTAINS' } as never }))
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'gale', matchType: 'NEGATIVE_PHRASE' })).error)
+      .toBe('"gale" cannot be a phrase negative: it would also block searches for the protected term "xavia gale".')
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'gale', matchType: 'NEGATIVE_EXACT' })).ok).toBe(true)
+    expect((await preview('create-negative-keyword', { ...neg, keywordText: 'giacca moto donna estiva rete', matchType: 'NEGATIVE_PHRASE' })).error)
+      .toMatch(/has 5 words; Amazon accepts at most 4 in a negative phrase keyword/)
+    const { createNegative } = await import('../../advertising/ads-negative-kw.service.js')
+    const denied = await inside(() => createNegative({ profileId: 'P-IT-TEST', externalCampaignId: 'EXT-c-it', externalAdGroupId: 'EXT-g-c-it', keywordText: 'gale', matchType: 'NEGATIVE_PHRASE', scope: 'AD_GROUP', marketplace: 'IT', nexusCampaignId: 'c-it' }))
+    expect(denied).toMatchObject({ ok: false, mode: 'sandbox', denied: { deniedAt: 'keyword_protected' } })
+    await inside(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'xavia gale' } }))
   })
 
   it('live: off the allowlist it is refused and not queued; createNegative with the campaign binds the allowlist too', async () => {
