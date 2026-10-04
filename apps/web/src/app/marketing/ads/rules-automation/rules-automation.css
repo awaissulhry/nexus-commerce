@@ -472,8 +472,15 @@
 .h10-rb-ninline { width: 56px; margin: 0 5px; vertical-align: middle; }
 .nds-field > .h10-rb-nincenter { text-align: center; }
 .h10-rb-ninline:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
-/* B5: budget guardrails — floor>ceiling warning */
-.h10-rb-warn { margin-top: 10px; font-size: 12.5px; color: var(--nds-amber-700); background: #fff5ed; border: 1px solid #fed7aa; border-radius: var(--nds-radius-lg); padding: 8px 12px; line-height: 1.45; }
+/* 4g — a guardrail or cap row of DS `Field`s: tops aligned, so a field showing its error does not
+   push its neighbours down; a long error wraps under its own field. The amber floor>ceiling
+   warning that lived here is gone: a Min above its Max is now an error on the Max field. */
+.h10-rb-card.adv .freqrow.fields { align-items: flex-start; }
+.h10-rb-card.adv .freqrow.fields > .nds-field-w { max-width: 300px; }
+/* 4g — the Banner naming a number Save cannot take, under an input that sits inside a sentence. */
+.h10-rb-numerr { padding: 0 18px 16px; }
+.h10-rb-numerr.adv { padding: 10px 0 0; }
+.h10-rb-numerr.ctl { padding: 0 0 12px; }
 
 /* ── R3: Keyword Harvesting "Positive Rule Setup" — heading row + Ad Group Mapping + info banner ── */
 .h10-rb-setuphd { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
@@ -619,6 +626,8 @@
 
 /* weekly schedule table */
 .h10-sb-week { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); overflow: hidden; }
+/* 4g — the Banner naming a window value Save cannot take, under the weekly table. */
+.h10-sb-numerr { margin-top: 12px; }
 .h10-sb-week-h, .h10-sb-week-r { display: grid; grid-template-columns: 40px 64px minmax(270px, 1fr) minmax(250px, 1.2fr) 104px; align-items: center; gap: 10px; padding: 11px 16px; }
 .h10-sb-week-h { background: var(--nds-grey-50); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); border-bottom: 1px solid var(--nds-grey-150); }
 .h10-sb-week-r { border-bottom: 1px solid var(--nds-grey-75); }

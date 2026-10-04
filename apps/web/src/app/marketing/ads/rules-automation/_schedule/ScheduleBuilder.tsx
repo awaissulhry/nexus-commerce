@@ -23,6 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 // (`recommendWindows` below) and is not touched by any of this.
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
+import { scheduleWindowValue } from '../_shared/ruleBuilderValues'
 import { Banner, Listbox } from '@/design-system/components'
 import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
 
@@ -335,8 +336,18 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
     isAllDay
       ? !!w.adj && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
       : !!(w.start && w.end && w.adj) && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
+  /**
+   * 4g (review 4.1) — each window's value, read the way the server reads it. The save sent
+   * `Number(v) || 0`, so "Decrease by 12,5" saved as 0% and a typo as 0, without a word. A value that
+   * cannot be read or is out of range (a set budget under €1, a decrease over 100%, a multiplier of 0)
+   * is named under the table and holds Save. `null` = this row takes no value.
+   */
+  const winValue = (w: SchedWindow) => (w.adj && adjNeedsValue(w.adj)
+    ? scheduleWindowValue(type, { day: WEEKDAYS.find((d) => d.idx === w.day)?.label ?? `Day ${w.day}`, start: isAllDay ? '' : w.start, end: isAllDay ? '' : w.end, adj: w.adj, value: w.value })
+    : null)
+  const winErrors = new Map(windows.flatMap((w) => { const e = winValue(w)?.error; return e ? [[w.id, e] as const] : [] }))
   const valid = name.trim().length > 0 && selCampaigns.length > 0 &&
-    windows.some(winComplete) &&
+    windows.some(winComplete) && winErrors.size === 0 &&
     // W4 — budget: the Start Date is required, full stop. It is labelled with an asterisk and
     // defaults to today, yet the old `neverExpire ||` let the DEFAULT path store `startDate: null`
     // — "never expire" (no END) had been conflated with "no start". Dayparting keeps its rule.
@@ -355,7 +366,8 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         day: w.day,
         start: isAllDay ? '' : w.start,
         end: isAllDay ? '' : w.end,
-        adj: w.adj, value: Number(w.value) || 0,
+        // 4g — the number it reads as (Save is held while any value fails); a row that takes no value sends 0, as before.
+        adj: w.adj, value: winValue(w)?.value ?? 0,
       }))
       let ok = false
       let error: string | null = null
@@ -601,7 +613,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     </span>
                     <span className="adj">
                       <Listbox width={200} options={[{ value: '', label: 'Select adjustment type' }, ...adjustments]} value={w.adj} onChange={(v) => setWin(w.id, { adj: v })} ariaLabel="Adjustment type" />
-                      {w.adj && adjNeedsValue(w.adj) && <Input size="sm" fieldClassName="h10-sb-adjval" inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" />}
+                      {w.adj && adjNeedsValue(w.adj) && <Input size="sm" fieldClassName="h10-sb-adjval" inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" {...(winErrors.has(w.id) ? { 'aria-invalid': true, 'aria-describedby': 'sb-win-err' } : {})} />}
                     </span>
                     <span className="act">
                       <ToolbarButton size="sm" icon={<Plus size={15} />} label="Add time period" tooltip={false} onClick={() => addWin(w.day)} />
@@ -612,6 +624,11 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                   </div>
                 ))}
               </div>
+              {winErrors.size > 0 && (
+                <div className="h10-sb-numerr" id="sb-win-err">
+                  <Banner tone="danger" title="Fix these values to save">{[...winErrors.values()].join(' ')}</Banner>
+                </div>
+              )}
 
               {/* overlap/conflict detection (Dayparting) */}
               {isDayparting && overlaps.size > 0 && (
