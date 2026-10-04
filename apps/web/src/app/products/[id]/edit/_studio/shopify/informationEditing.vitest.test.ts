@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { informationRegistry, type InformationRow } from '@nexus/shared/shopify-information'
 import { emptyShopifyLinkedDraft, validateShopifyField } from '@nexus/shared/shopify-linked-products'
-import { acceptsTextTransfer, applyInformationCells, editTags, informationRestriction, informationDraftCellError } from './informationEditing'
+import { acceptsTextTransfer, applyInformationCells, editTags, informationRestriction, informationDraftCellError, informationValueLabel } from './informationEditing'
 const product: InformationRow = { id: 'gid://shopify/Product/1', productId: 'gid://shopify/Product/1', title: 'MOSS', handle: 'moss', kind: 'PRODUCT', image: null, media: [], fields: [], values: { title: 'MOSS', tags: '[]' } }
 const variant: InformationRow = { ...product, id: 'gid://shopify/ProductVariant/11', title: 'S', kind: 'PRODUCTVARIANT', values: { price: '10.00', sku: '00001' } }
 const fields = informationRegistry(null), price = fields.find(f => f.id === 'price')!, sku = fields.find(f => f.id === 'sku')!
@@ -93,5 +93,21 @@ describe('Information semantic commands', () => {
     const base = { ...emptyShopifyLinkedDraft(), edits: [{ ownerId: product.id, namespace: 'custom', key: 'features', type: 'list.metaobject_reference', value: '["gid://shopify/Metaobject/999"]', nextValue: '["gid://shopify/Metaobject/999","gid://shopify/Metaobject/12"]', compareDigest: 'base', ownerLabel: 'MOSS' }] }
     const next = applyInformationCells(base, [{ row: variant, field: price, value: '12' }], [product, variant], false)
     expect(next.edits).toEqual(base.edits)
+  })
+})
+/* S1 item 6 (product sheet consistency) — Shopify stores KILOGRAMS; a person reads "1.2 kg". The stored code is unchanged. */
+describe('a Shopify weight reads as its symbol', () => {
+  it.each([['GRAMS', '250 g'], ['KILOGRAMS', '1.2 kg'], ['OUNCES', '3 oz'], ['POUNDS', '2 lb']])('%s', (unit, words) => {
+    const value = Number(words.split(' ')[0])
+    expect(informationValueLabel('weight', JSON.stringify({ value, unit }))).toBe(words)
+  })
+  it('other measurements keep Shopify\'s unit name; an unknown weight unit is shown as it is', () => {
+    expect(informationValueLabel('volume', '{"value":2,"unit":"MILLILITERS"}')).toBe('2 MILLILITERS')
+    expect(informationValueLabel('weight', '{"value":2,"unit":"stone"}')).toBe('2 stone')
+  })
+  it('the weight check takes Shopify\'s codes and refuses a capital handle with Shopify\'s reason', () => {
+    const weight = fields.find(f => f.id === 'weight')!, handle = fields.find(f => f.id === 'handle')!
+    expect(informationDraftCellError(weight, '{"value":1.2,"unit":"KILOGRAMS"}', null, false)).toBeNull()
+    expect(informationDraftCellError(handle, 'Moss-Jacket', 'moss-jacket', false)).toBe('Use lowercase letters, numbers and separating hyphens.')
   })
 })

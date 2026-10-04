@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { informationGroups, informationRegistry, SHOPIFY_FIELD_NOT_SWITCHED_ON, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeValuesEqual } from './shopify-information.js'
+import { informationGroups, informationRegistry, informationSheetValue, SHOPIFY_FIELD_NOT_SWITCHED_ON, SHOPIFY_WEIGHT_UNITS, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeFieldValueError, nativeValuesEqual,
+  normalizeShopifyWeight, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit } from './shopify-information.js'
 import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema, type ShopifyStoreSchema } from './shopify-linked-products.js'
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
@@ -108,5 +109,43 @@ describe('Stable association ordering', () => {
       expect(() => mediaMoves(ids, nextValue)).toThrow()
       expect(mediaOrderEditSchema.safeParse({ productId, ownerLabel: 'MOSS', value: ids, nextValue }).success).toBe(false)
     }
+  })
+})
+describe('Shopify weight units (product sheet consistency, S1 item 6)', () => {
+  const weight = informationRegistry(schema).find(f => f.id === 'weight')!
+  it('reads every common spelling, in any case, as Shopify\'s code and never guesses another unit', () => {
+    expect(SHOPIFY_WEIGHT_UNITS).toEqual(['GRAMS', 'KILOGRAMS', 'OUNCES', 'POUNDS'])
+    for (const [spelling, code] of [['g', 'GRAMS'], ['Gram', 'GRAMS'], ['grams', 'GRAMS'], ['GRAMS', 'GRAMS'], ['kg', 'KILOGRAMS'], ['KG', 'KILOGRAMS'], ['kilograms', 'KILOGRAMS'],
+      ['KILOGRAM', 'KILOGRAMS'], ['oz', 'OUNCES'], ['Ounces', 'OUNCES'], ['lb', 'POUNDS'], ['lbs', 'POUNDS'], ['POUNDS', 'POUNDS'], [' kg ', 'KILOGRAMS']]) expect(shopifyWeightUnit(spelling), spelling).toBe(code)
+    for (const other of ['cm', 'stone', '', null, undefined, 3]) expect(shopifyWeightUnit(other)).toBeNull()
+  })
+  it('converts the unit only, keeps the number and the form it came in, and leaves anything else for the validator', () => {
+    expect(normalizeShopifyWeight({ value: 1.2, unit: 'kg' })).toEqual({ value: 1.2, unit: 'KILOGRAMS' })
+    expect(normalizeShopifyWeight('{"value":0,"unit":"g"}')).toBe('{"value":0,"unit":"GRAMS"}')
+    const coded = { value: 3, unit: 'POUNDS' }
+    expect(normalizeShopifyWeight(coded)).toBe(coded)
+    for (const other of [{ value: 1, unit: 'cm' }, { value: 1 }, 'not json', '12', null, ['kg']]) expect(normalizeShopifyWeight(other)).toEqual(other)
+  })
+  it('shows symbols for the codes and compares weights in grams', () => {
+    expect(SHOPIFY_WEIGHT_UNITS.map(shopifyWeightSymbol)).toEqual(['g', 'kg', 'oz', 'lb'])
+    expect(shopifyWeightSymbol('furlongs')).toBe('furlongs')
+    expect(shopifyWeightGrams({ value: 1.2, unit: 'KILOGRAMS' })).toBe(1200)
+    expect(shopifyWeightGrams('{"value":1200,"unit":"GRAMS"}')).toBe(1200)
+    expect(shopifyWeightGrams({ value: 1, unit: 'lb' })).toBe(453.592)
+    expect(shopifyWeightGrams({ value: 1, unit: 'cm' })).toBeNull()
+    expect(shopifyWeightGrams(null)).toBeNull()
+  })
+  it('the publish rule takes exactly Shopify\'s codes; the sheet value of a Shared weight is Shopify\'s JSON text', () => {
+    for (const unit of SHOPIFY_WEIGHT_UNITS) expect(nativeFieldValueError('weight', JSON.stringify({ value: 1.2, unit }))).toBeNull()
+    expect(nativeFieldValueError('weight', '{"value":1.2,"unit":"kg"}')).toMatch(/Shopify weight unit/)
+    expect(informationSheetValue(weight, { value: 1.2, unit: 'kg' })).toBe('{"value":1.2,"unit":"KILOGRAMS"}')
+    expect(informationSheetValue(weight, { value: 1.2, unit: 'KILOGRAMS' })).toBe('{"value":1.2,"unit":"KILOGRAMS"}')
+    expect(informationSheetValue(weight, '{"value":1.2,"unit":"kg"}')).toBe('{"value":1.2,"unit":"KILOGRAMS"}')
+    const odd = { value: 1, unit: 'cm' }
+    expect(informationSheetValue(weight, odd)).toBe(odd)
+  })
+  it('refuses a handle with capitals with Shopify\'s reason', () => {
+    expect(nativeFieldValueError('handle', 'moss-jacket')).toBeNull()
+    expect(nativeFieldValueError('handle', 'Moss-Jacket')).toBe('Use lowercase letters, numbers and separating hyphens.')
   })
 })

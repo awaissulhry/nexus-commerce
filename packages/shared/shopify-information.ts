@@ -5,6 +5,8 @@ import { inventoryEditError, type InformationInventory } from './shopify-informa
 export { informationInventorySchema, inventoryEditError, type InformationInventory } from './shopify-information-inventory.js'
 import { shopifyTypeReason } from './shopify-field-codecs.js'
 import type { ShopifyFieldDefinition, ShopifyFieldSnapshot, ShopifyStoreSchema } from './shopify-linked-products.js'
+import { SHOPIFY_WEIGHT_UNITS } from './shopify-weight.js'
+export { SHOPIFY_WEIGHT_UNITS, shopifyWeightUnit, normalizeShopifyWeight, shopifyWeightSymbol, shopifyWeightGrams, type ShopifyWeightUnit } from './shopify-weight.js'
 
 export const informationGroups = ['General', 'Publishing', 'Pricing', 'Inventory', 'Shipping', 'SEO', 'Metafields', 'Category Metafields'] as const
 export type InformationGroup = typeof informationGroups[number]
@@ -238,7 +240,7 @@ export function nativeFieldValueError(key: NativeEdit['field'], raw: string | nu
       const v = JSON.parse(raw)
       if (!v || typeof v !== 'object' || Array.isArray(v)) return 'Enter a measurement.'
       if (edit.field === 'weight') {
-        if (typeof v.value !== 'number' || !Number.isFinite(v.value) || v.value < 0 || !['GRAMS', 'KILOGRAMS', 'OUNCES', 'POUNDS'].includes(v.unit) || Object.keys(v).some(k => !['value', 'unit'].includes(k))) return 'Enter a nonnegative weight and a Shopify weight unit.'
+        if (typeof v.value !== 'number' || !Number.isFinite(v.value) || v.value < 0 || !(SHOPIFY_WEIGHT_UNITS as readonly unknown[]).includes(v.unit) || Object.keys(v).some(k => !['value', 'unit'].includes(k))) return 'Enter a nonnegative weight and a Shopify weight unit.'
       } else if (typeof v.quantityValue !== 'number' || !Number.isFinite(v.quantityValue) || v.quantityValue <= 0 || !Number.isInteger(v.referenceValue) || v.referenceValue <= 0 || typeof v.quantityUnit !== 'string' || typeof v.referenceUnit !== 'string' || Object.keys(v).some(k => !['quantityValue', 'quantityUnit', 'referenceValue', 'referenceUnit'].includes(k))) return 'Enter positive quantity and reference measurements.'
     } catch { return 'Enter a valid measurement.' }
   }

@@ -232,3 +232,16 @@ describe('exact formula comparisons', () => {
   it('keeps saved legacy comparisons compatible', () => { expect(run('"Nexus" = "nexus"').value).toBe(true) })
   it('refuses oversized expressions with a useful explanation', () => { expect(validateExpr('1 + '.repeat(5000) + '1')?.message).toContain('too long') })
 })
+
+/* S1 item 6 (product sheet consistency) — Shopify's weight rule names Shopify's unit codes; a Shared g / kg / oz / lb is
+   read as the code. Only the spelling changes, never the number; a unit that is not a weight is refused, not guessed. */
+describe('measure() into Shopify weight codes', () => {
+  const shopify = '"GRAMS|KILOGRAMS|OUNCES|POUNDS"'
+  it.each([['kg', 'KILOGRAMS'], ['KG', 'KILOGRAMS'], ['g', 'GRAMS'], ['grams', 'GRAMS'], ['oz', 'OUNCES'], ['lb', 'POUNDS'], ['lbs', 'POUNDS'], ['KILOGRAMS', 'KILOGRAMS']])('%s → %s', (unit, code) => {
+    expect(run(`measure(1.2, "${unit}", ${shopify})`)).toMatchObject({ value: { value: 1.2, unit: code }, warnings: [] })
+  })
+  it('refuses a unit that is not a weight', () => {
+    expect(run(`measure(1.2, "cm", ${shopify})`).value).toBeNull()
+    expect(String(run(`measure(1.2, "cm", ${shopify})`).error)).toContain('not accepted by the channel')
+  })
+})

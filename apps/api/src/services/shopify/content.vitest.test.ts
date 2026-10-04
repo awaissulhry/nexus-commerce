@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { parse } from 'graphql'
 import { emptyShopifyContent, inspectShopifyContent, resolveShopifyContent, shopifyContentSchema, collectionCards, type ContentVariant, type ShopifyContent } from '@nexus/shared/shopify-content'
 vi.mock('./admin-client.js', () => ({ assertShopifyResult: (payload: any, operation: string) => { if (!payload || payload.userErrors?.length) throw new Error(`${operation}: ${payload?.userErrors?.[0]?.message ?? 'missing result'}`); return payload } }))
-import { ensureContentDefinitions, mapRemoteVariants, publishContent, publishMetaobjects, readRemoteProduct, SHOPIFY_IDENTITY_NOT_ID, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
+import { ensureContentDefinitions, mapRemoteVariants, newVariantFacts, publishContent, publishMetaobjects, readRemoteProduct, SHOPIFY_IDENTITY_NOT_ID, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
 // P3b A4 — the workspace's pure pieces (option order, variant options) are imported below; no database is used here.
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
@@ -218,6 +218,22 @@ describe('native Shopify publication', () => {
     const manifests = shop.calls.filter(c => c.name === 'NexusManifest').slice(-5).map(c => JSON.parse(c.variables.metafields[0].value))
     expect(manifests.slice(0, 4).every(m => !m.cards)).toBe(true)
     expect(manifests[4].cards).toHaveLength(2)
+  })
+  /* S1 item 5 (d) — product sheet consistency: values a new variant takes from Shared ride the create, in the one-field
+     writer's shapes (`applyNativeEdit`); no extra call, and a variant Shopify already holds never receives them here. */
+  it('creates a new variant with its Shared barcode, cost, country, HS code and weight; a held variant gets none', async () => {
+    expect(newVariantFacts({ barcode: '0001', cost: '9', countryCodeOfOrigin: 'IT', harmonizedSystemCode: '640399', weight: '{"value":1.2,"unit":"KILOGRAMS"}' })).toEqual({
+      barcode: '0001', inventoryItem: { tracked: true, cost: '9', countryCodeOfOrigin: 'IT', harmonizedSystemCode: '640399', measurement: { weight: { value: 1.2, unit: 'KILOGRAMS' } } } })
+    expect(newVariantFacts()).toEqual({ inventoryItem: { tracked: true } })
+    const c = content(), shop = fakeShopify(c)
+    const facts = Object.fromEntries(variants.map(v => [v.id, { barcode: `000-${v.id}`, weight: '{"value":1.2,"unit":"KILOGRAMS"}' }]))
+    await publishContent(shop.gql, { ...input(c), variantFacts: facts }, async () => {})
+    const sets = () => shop.calls.filter(c => c.name === 'NexusProductSet')
+    expect(sets()[0].variables.input.variants.map((v: any) => [v.barcode, v.inventoryItem])).toEqual(variants.map(v => [`000-${v.id}`, { tracked: true, measurement: { weight: { value: 1.2, unit: 'KILOGRAMS' } } }]))
+    const calls = shop.calls.length
+    await publishContent(shop.gql, { ...input(c), remote: structuredClone(shop.product), variantFacts: facts }, async () => {})
+    expect(sets().at(-1)!.variables.input.variants.every((v: any) => v.id && !('barcode' in v) && !('inventoryItem' in v))).toBe(true)
+    expect(shop.calls.slice(calls).filter(c => /Variant(Update|sBulk)/.test(c.name))).toEqual([])
   })
   it('refuses a product changed while preparing content and rejects translation mismatches', async () => {
     const c = content(), shop = fakeShopify(c)

@@ -1,5 +1,5 @@
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
-import { nativeFieldError, nativeFieldKeys, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldError, nativeFieldKeys, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
 import { checkForStorage, isBlankValue } from '../sheet-values.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
@@ -58,6 +58,9 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
     }
   }
   const info = field.shopifyField
+  // S1 item 6 — a Shopify variant weight is held in Shopify's unit codes. A value spelled the older way (a saved rule's
+  // `measure(…, "g|kg|oz|lb")`, a pasted `kg`) is read as the code; the number never changes. Only this native field.
+  if (info && !info.definition && info.id === 'weight') value = normalizeShopifyWeight(value)
   if (info) {
     const raw = value == null ? null : typeof value === 'string' ? value : typeof value === 'object' ? JSON.stringify(value) : String(value)
     const error = info.definition ? validateShopifyField(info.definition, raw)

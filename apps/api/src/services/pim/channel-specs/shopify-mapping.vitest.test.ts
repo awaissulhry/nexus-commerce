@@ -40,9 +40,30 @@ describe('Shopify information mapping contract', () => {
     const spec = shopifyProductSpec()
     const rule = (id: string) => masterDefaultRule(spec.fields.find(f => f.shopifyField?.id === id), keys)
     for (const [id, source] of Object.entries({ title: 'title', descriptionHtml: 'description', vendor: 'brand', price: 'basePrice', cost: 'costPrice', sku: 'sku', countryCodeOfOrigin: 'countryOfOrigin', harmonizedSystemCode: 'hsCode', productType: 'shopify_product_type' })) expect(rule(id)?.source).toBe(source)
-    for (const id of ['inventory', 'barcode', 'status', 'salesChannels', 'package']) expect(rule(id)).toBeNull()
+    for (const id of ['inventory', 'status', 'salesChannels', 'package']) expect(rule(id)).toBeNull()
     expect(sourceOwner(spec.fields.find(f => f.key === 'productType')!)).toBeNull()
     expect(rule('weight')?.transforms?.[0]).toMatchObject({ type: 'expr', expr: expect.stringContaining('$weightUnit') })
+    // S1 (Owner decision 10) — the barcode is the Shared EAN, else the GTIN; it is no longer a listing-only field.
+    expect(rule('barcode')).toEqual({ source: 'ean', fallback: 'gtin' })
+    expect(sourceOwner(spec.fields.find(f => f.key === 'barcode')!)).toBeNull()
+  })
+  /* S1 item 6 — before this, a new product with a Shared weight could not publish: the sheet's units were g/kg/oz/lb and
+     Publish's rule took GRAMS/KILOGRAMS/OUNCES/POUNDS, so every weight failed one of the two. */
+  it('holds a weight in Shopify\'s unit codes and reads an older spelling as the code', () => {
+    const weight = shopifyProductSpec().fields.find(f => f.key === 'weight')!
+    expect(weight.unitOptions).toEqual(['GRAMS', 'KILOGRAMS', 'OUNCES', 'POUNDS'])
+    expect(masterDefaultRule(weight, keys)?.transforms?.[0]).toEqual({ type: 'expr', expr: 'measure($weightValue, $weightUnit, "GRAMS|KILOGRAMS|OUNCES|POUNDS")' })
+    const field = { ...weight, fieldKey: weight.key, priority: 'optional', selectionOnly: false } as unknown as CatalogueField
+    for (const unit of ['kg', 'KILOGRAMS']) expect(validateChannelValue(field, { value: 1.2, unit })).toMatchObject({ value: { value: 1.2, unit: 'KILOGRAMS' }, errors: [] })
+    expect(validateChannelValue(field, { value: 1.2, unit: 'cm' }).errors).not.toEqual([])
+  })
+  it('the handle rule is Shopify\'s: capitals are refused with its reason, never lowered', () => {
+    const handle = shopifyProductSpec().fields.find(f => f.key === 'handle')!
+    const field = { ...handle, fieldKey: handle.key, priority: 'optional', selectionOnly: false } as unknown as CatalogueField
+    expect(validateChannelValue(field, 'moss-jacket-2').errors).toEqual([])
+    const capitals = validateChannelValue(field, 'Moss-Jacket')
+    expect(capitals.value).toBe('Moss-Jacket')
+    expect(capitals.errors).toContain('Use lowercase letters, numbers and separating hyphens.')
   })
   it('projects every mapping destination once, with native labels and protected typed writes', () => {
     const spec = shopifyProductSpec(schema([def(), def({ namespace: 'custom-other' }), def({ namespace: 'custom_other' })]), 'a')

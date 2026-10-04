@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import type { InformationField, InformationInventory } from '@nexus/shared/shopify-information'
+import { shopifyWeightSymbol, type InformationField, type InformationInventory } from '@nexus/shared/shopify-information'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { Field } from '@/design-system/components'
 import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
@@ -59,7 +59,8 @@ export function ShopifyNativeEditor({ path, schema, field, value, disabled, onCh
       <Field label={label}><Input size="sm" inputMode="decimal" value={String(current[key])} disabled={disabled} onChange={e => update(key, e.target.value, true)} /></Field>
       <Field label={unitLabel}><Select size="sm" value={String(current[unit])} disabled={disabled} onChange={e => update(unit, e.target.value, false)}><option value="">Choose unit</option>
         {!!current[unit] && !unitChoices.some(c => c.name === current[unit]) && <option value={String(current[unit])}>{String(current[unit])} (current)</option>}
-        {unitChoices.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+        {/* A weight unit shows its symbol (kg); the value saved stays Shopify's code (KILOGRAMS). */}
+        {unitChoices.map(c => <option key={c.name} value={c.name}>{weight ? shopifyWeightSymbol(c.name) : c.name}</option>)}
       </Select></Field></div>)}</div>
   }
   const hint = field.id === 'handle' ? 'The old URL will redirect to the new handle. Shopify is checked for collisions before synchronization.'

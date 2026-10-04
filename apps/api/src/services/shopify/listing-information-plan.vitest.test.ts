@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shopifyProductSpec } from '../pim/channel-specs/store.js'
 import { channelValuePatch } from '../pim/channel-value-mutation.js'
-import { listingInformationTranslations, validateListingInformationOverrides } from './listing-information-plan.js'
+import { listingInformationDraft, listingInformationOverrideReview, listingInformationTranslations, validateListingInformationOverrides } from './listing-information-plan.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 const read = vi.hoisted(() => ({ rows: [] as unknown[] }))
 vi.mock('./information-gateway.js', () => ({ readInformation: async () => ({ rows: read.rows }) }))
@@ -64,6 +64,44 @@ describe('Channel sheet schema, storage and publication validation', () => {
     it('still refuses a product translation pinned on a child\'s listing, which would be lost', async () => {
       const pinned = row('child', rows[1].product, { _shopifyInformationLocales: { it: { title: 'Solo figlio' } } })
       await expect(listingInformationTranslations(async () => ({}) as never, input([rows[0], pinned]), schema)).rejects.toThrow('A product translation is stored on another row.')
+    })
+  })
+  /* S1 (product sheet consistency) — item 5 (e): after Shopify created a variant with its Shared values, each value it did
+     not keep becomes one checked edit; item 6: a weight saved in an older spelling is read in Shopify's code everywhere. */
+  describe('values a new variant took from Shared, checked after the create', () => {
+    const base = schema
+    const PRODUCT = 'gid://shopify/Product/1', VARIANT = 'gid://shopify/ProductVariant/2'
+    const variantRow = (values: Record<string, string | null>) => ({ id: VARIANT, productId: PRODUCT, kind: 'PRODUCTVARIANT', title: 'Red / S', handle: 'p', image: null, fields: [], media: [], values })
+    const productRow = { id: PRODUCT, productId: PRODUCT, kind: 'PRODUCT', title: 'P', handle: 'p', image: null, fields: [], media: [], values: {} }
+    const draftInput = (inherited: Record<string, Record<string, string>>, variantIds: Record<string, string> = { child: VARIANT }) =>
+      ({ accountId: 'store-a', familyId: 'family', productId: PRODUCT, variantIds, listings: [], inherited })
+    it('adds nothing for a value Shopify kept (a weight in another key order, a cost with trailing zeros)', async () => {
+      read.rows = [productRow, variantRow({ barcode: '0001', cost: '9.00', weight: '{"unit":"KILOGRAMS","value":1.2}' })]
+      const draft = await listingInformationDraft(async () => ({}) as never, draftInput({ child: { barcode: '0001', cost: '9', weight: '{"value":1.2,"unit":"KILOGRAMS"}' } }), schema)
+      expect(draft.nativeEdits ?? []).toEqual([])
+    })
+    it('one checked edit per value Shopify did not keep, from what Shopify holds now', async () => {
+      read.rows = [productRow, variantRow({ barcode: '', countryCodeOfOrigin: null, weight: '{"value":0,"unit":"GRAMS"}' })]
+      const draft = await listingInformationDraft(async () => ({}) as never, draftInput({ child: { barcode: '0001', countryCodeOfOrigin: 'IT', weight: '{"value":1.2,"unit":"KILOGRAMS"}' } }), schema)
+      expect(draft.nativeEdits).toEqual([
+        { ownerId: VARIANT, productId: PRODUCT, ownerLabel: 'Red / S', field: 'barcode', value: '', nextValue: '0001' },
+        { ownerId: VARIANT, productId: PRODUCT, ownerLabel: 'Red / S', field: 'countryCodeOfOrigin', value: null, nextValue: 'IT' },
+        { ownerId: VARIANT, productId: PRODUCT, ownerLabel: 'Red / S', field: 'weight', value: '{"value":0,"unit":"GRAMS"}', nextValue: '{"value":1.2,"unit":"KILOGRAMS"}' },
+      ])
+    })
+    it('refuses a variant Shopify did not return, never skips it', async () => {
+      read.rows = [productRow, variantRow({})]
+      await expect(listingInformationDraft(async () => ({}) as never, draftInput({ other: { barcode: '1' } }), schema)).rejects.toThrow('variant mapping changed')
+    })
+    it('reads a weight saved as kg in Shopify\'s code for the review and for Publish', async () => {
+      const schema = { ...base, native: { ...base.native!, inputs: { ...base.native!.inputs, measurement: ['weight'] } } }
+      const weight = shopifyProductSpec(schema, 'store-a').fields.find(f => f.shopifyField?.id === 'weight')!
+      const child = { ...listing, ...channelValuePatch(listing, weight.channelStore, [weight.key], 'SET', { value: 1.2, unit: 'kg' }) }
+      expect(() => validateListingInformationOverrides([child], 'store-a', schema)).not.toThrow()
+      expect(listingInformationOverrideReview([child], 'store-a', schema)).toEqual([expect.objectContaining({ label: 'Weight', value: '{"value":1.2,"unit":"KILOGRAMS"}' })])
+      read.rows = [productRow, variantRow({ weight: null })]
+      const draft = await listingInformationDraft(async () => ({}) as never, { ...draftInput({}, { family: VARIANT }), listings: [child] }, schema)
+      expect(draft.nativeEdits).toEqual([expect.objectContaining({ field: 'weight', nextValue: '{"value":1.2,"unit":"KILOGRAMS"}' })])
     })
   })
 })

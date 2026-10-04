@@ -146,9 +146,17 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
  * A follower that keeps a saved Nexus draft value while its sharing rule still copies the source (the API's `divergence`,
  * `channel-sheet-projection.ts`). Both facts are shown: the value kept here and the value Shopify receives on publish —
  * also when they are equal, because the conflict is the rule, not the text. Showing them writes nothing.
+ * `follows` (S1 item 5 f): the cell follows Shared on a product Shopify already holds, and Shopify keeps its own value.
  */
-export function ShopifyDivergenceBanner({ type, kept, divergence }: { type: string; kept: string | null; divergence: StudioCellValue['divergence'] }) {
+export function ShopifyDivergenceBanner({ type, kept, divergence, follows = false }: { type: string; kept: string | null; divergence: StudioCellValue['divergence']; follows?: boolean }) {
   if (!divergence) return null
+  if (follows) return <Banner tone="warning" title="Shopify keeps its own value">
+    <KeyValue dense items={[
+      { label: 'Shared value, shown here', value: informationValueLabel(type, kept) },
+      { label: 'Shopify has', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs)) },
+    ]} />
+    <p>{divergence.note}</p>
+  </Banner>
   return <Banner tone="warning" title="Publishing uses the shared value">
     <KeyValue dense items={[
       { label: 'Saved draft, kept here', value: informationValueLabel(type, kept) },
@@ -252,7 +260,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
       {warning && <Banner tone="warning" title="Can save as a Nexus draft">Fix this before publishing: {warning}</Banner>}
-      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} />
+      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} follows={selected.row.values[selected.column.key]?.pinned === false && selected.row.values[selected.column.key]?.inherited === true} />
       {template ? <Banner tone={switchOn === 'done' ? 'success' : 'info'} title={switchOn === 'done' ? `${field.label} is switched on in Shopify` : `${field.label} is not switched on in this Shopify store`}
           action={switchOn === 'done' ? undefined : <Button size="sm" variant="primary" disabled={!canPublish || switchOn === 'busy'} onClick={() => void switchOnField()}>{switchOn === 'busy' ? 'Switching on…' : 'Switch on in Shopify'}</Button>}>
           {switchOn === 'done' ? 'The sheet reloads this field. Open the cell again to choose its values.'

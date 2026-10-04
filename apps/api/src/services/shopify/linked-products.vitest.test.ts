@@ -18,6 +18,8 @@ const fixture = vi.hoisted(() => {
   db.$transaction = async (fn: any) => { const snapshot = structuredClone(data.listings); try { return await fn(db) } catch (e) { data.listings = snapshot; throw e } }
   return { data, db }
 })
+// S1 item 5 — no Shared values to inherit in this suite (`inherited-information.vitest.test.ts` covers them).
+vi.mock('./inherited-information.js', () => ({ noInheritedInformation: () => ({ values: {}, problems: [], review: [] }), resolveInheritedInformation: async () => ({ values: {}, problems: [], review: [] }) }))
 vi.mock('../../db.js', () => ({ default: fixture.db }))
 vi.mock('./colour-products/settings.js', () => ({ colourGrouping: async () => fixture.data.colourGrouping }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_: string, account: string) => { if (!['A', 'B'].includes(account)) throw new Error('Account unavailable'); return account } }))

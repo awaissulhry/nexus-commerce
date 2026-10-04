@@ -18,6 +18,7 @@ import { nativeListingValue } from './native-listing-value.js'
 import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { noInheritedInformation, resolveInheritedInformation, type InheritedInformation } from './inherited-information.js'
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
   const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
@@ -48,13 +49,20 @@ export async function previewContentSync(productId: string, scope: ContentScope,
   let shopify: ShopifyRemoteProduct | null = null, locations: { id: string; name: string; isActive: boolean }[] = [], domain: string | null = null
   let informationDraft: ShopifyLinkedDraft | null = null
   let translationDraft: ShopifyLinkedDraft | null = null
-  let informationOverrides: ReturnType<typeof listingInformationOverrideReview> = []
+  let informationOverrides: Array<ReturnType<typeof listingInformationOverrideReview>[number] & { shared?: true }> = []
+  let inherited: InheritedInformation = noInheritedInformation()
   if (remote) {
     const admin = await shopifyAdmin(destination.accountId); domain = admin.domain
     const schema = await readLinkedStoreSchema(admin.graphql)
     shopify = await readRemoteProduct(admin.graphql, data.publish.productId ?? (data.draft.target === 'linked-product' ? data.listing?.externalListingId : null), identity)
     validateListingInformationOverrides(data.listings, destination.accountId, schema, !shopify)
     informationOverrides = listingInformationOverrideReview(data.listings, destination.accountId, schema)
+    // S1 item 5 — what a NEW variant takes from Shared (barcode, cost, country, HS code, weight): sent when Shopify creates
+    // it, listed with the typed values (marked Shared), and a value Shopify would refuse holds Publish with its reason.
+    inherited = await resolveInheritedInformation({ accountId: destination.accountId, marketplace: destination.marketplace, aliasKey: destination.aliasKey, schema,
+      variants: data.variants, listings: data.listings, remoteSkus: shopify?.variants?.nodes.map(variant => variant.sku) ?? [] })
+    data.errors.push(...inherited.problems)
+    informationOverrides = [...informationOverrides, ...inherited.review]
     if (shopify) {
       const source = { accountId: destination.accountId, familyId: data.family.id, productId: shopify.id, variantIds: data.publish.variantIds ?? {}, listings: data.listings }
       informationDraft = await listingInformationDraft(admin.graphql, source, schema)
@@ -66,7 +74,10 @@ export async function previewContentSync(productId: string, scope: ContentScope,
     if (response.shopLocales.find((l: any) => l.primary)?.locale !== data.draft.defaultLocale) data.errors.push('The document’s default language must match the Shopify store’s primary language.')
     for (const locale of data.draft.locales) if (!response.shopLocales.some((l: any) => l.locale === locale && l.published)) data.errors.push(`Shopify language ${locale} is not published in this store.`)
   }
-  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft]) : null, informationDraft, translationDraft, informationOverrides,
+  // The inherited values are part of what the operator reviews; a review without any keeps its earlier revision.
+  const inheritedReview = Object.keys(inherited.values).length || inherited.problems.length ? [{ values: inherited.values, problems: inherited.problems }] : []
+  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft, ...inheritedReview]) : null, informationDraft, translationDraft, informationOverrides,
+    inheritedInformation: inherited.values,
     changes: { variants: data.variants.map(v => ({ ...v, resolved: resolveShopifyContent(data.draft, v) })), metafieldDefinitions: data.draft.fields, reusableEntries: data.draft.metaobjects.length,
       newProductStatus: nativeListingValue(data.listing, 'status', 'DRAFT'), requiresActiveConfirmation: !!shopify && shopify.status !== 'DRAFT' || ['ACTIVE', 'ARCHIVED'].includes(String(nativeListingValue(data.listing, 'status', 'DRAFT'))), preservesUnmanagedMedia: true, preservesUnmanagedMetafields: true },
   }
@@ -148,6 +159,7 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       managedMediaIds: current.publish.status !== 'VERIFIED' && Array.isArray(current.publish.managedMediaIds) ? current.publish.managedMediaIds : Object.values(object(current.publish.mediaIds)).filter((id): id is string => typeof id === 'string'),
       galleryOperation: current.publish.galleryOperation,
       locationId: input.locationId, remote: preview.remote, confirmActive: input.confirmActive === true,
+      variantFacts: preview.inheritedInformation,
     }, checkpoint)
     const informationSource = { accountId: destination.accountId, familyId: current.family.id, productId: result.productId, variantIds: result.variantIds, listings: current.listings }
     if (!preview.informationDraft) {
@@ -156,7 +168,8 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       const category = initial.nativeEdits?.find(e => e.field === 'category')
       if (category) { await applyNativeEdit(graphql, category, runId); await checkpoint({ categoryInitialized: true }) }
     }
-    const informationDraft = preview.informationDraft ?? await listingInformationDraft(graphql, informationSource, await readLinkedStoreSchema(graphql))
+    // S1 item 5 (e) — a product created here: the values its variants took from Shared are checked with the typed ones.
+    const informationDraft = preview.informationDraft ?? await listingInformationDraft(graphql, { ...informationSource, inherited: preview.inheritedInformation }, await readLinkedStoreSchema(graphql))
     // New listings (Owner 2026-10-04) — Publish's Status choice for a product Shopify did not hold yet wins over the stored
     // Shopify status: ACTIVE (one status edit after the create), or DRAFT (as created; no status edit).
     const createStatus = !preview.remote && (input.createStatus === 'ACTIVE' || input.createStatus === 'DRAFT') ? input.createStatus as 'ACTIVE' | 'DRAFT' : null
@@ -169,12 +182,20 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     // A product created in this operation has newly allocated exact owner IDs. Existing products
     // keep the baselines included in the reviewed remote revision, including absent metafields.
     const information = reviewedInformation ?? await buildLinkedPlan(graphql, informationDraft)
-    await checkpoint({ informationDraft, informationCompleted: 0 })
+    // S1 item 5 (e) — an existing product's NEW variants: the reviewed plan above predates their Shopify ids, so the values
+    // they took from Shared are checked now that Shopify has created them. A variant Shopify already held is never touched.
+    const heldBefore = new Set(preview.remote?.variants?.nodes.map(variant => variant.id) ?? [])
+    const createdHere = Object.fromEntries(Object.entries(preview.inheritedInformation).filter(([id]) => result.variantIds[id] && !heldBefore.has(result.variantIds[id])))
+    const inheritedDraft = preview.informationDraft && Object.keys(createdHere).length
+      ? await listingInformationDraft(graphql, { ...informationSource, listings: [], inherited: createdHere }, await readLinkedStoreSchema(graphql)) : null
+    const inheritedEdits = inheritedDraft?.nativeEdits?.length ? (await buildLinkedPlan(graphql, inheritedDraft)).nativeEdits ?? [] : []
+    const nativeEdits = [...(information.nativeEdits ?? []), ...inheritedEdits]
+    await checkpoint({ informationDraft: inheritedEdits.length ? { ...informationDraft, nativeEdits: [...(informationDraft.nativeEdits ?? []), ...inheritedEdits] } : informationDraft, informationCompleted: 0 })
     for (let offset = 0; offset < information.changes.length; offset += 25) {
       await applyLinkedBatch(graphql, information.changes.slice(offset, offset + 25), await readLinkedStoreSchema(graphql))
       await checkpoint({ informationCompleted: Math.min(offset + 25, information.changes.length) })
     }
-    for (const [index, edit] of (information.nativeEdits ?? []).entries()) {
+    for (const [index, edit] of nativeEdits.entries()) {
       await applyNativeEdit(graphql, edit, runId)
       await checkpoint({ informationCompleted: information.changes.length + index + 1 })
     }
