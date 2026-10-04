@@ -9,14 +9,14 @@
  *     originating ad group (the auto→manual harvest funnel).
  *
  * preview() returns candidates; apply() executes the chosen actions via the
- * shipped createNegative + AX.4 createKeywordLocal. Sandbox-safe + gated.
+ * negative write service (writeNegativeKeyword) + AX.4 createKeywordLocal. Sandbox-safe + gated.
  */
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { createNegative, type NegativeMatchType } from './ads-negative-kw.service.js'
+import { writeNegativeKeyword, writeNegativeProductTarget } from './ads-negative-kw.service.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
-import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal, mirrorNegativeKeywordLocal } from './ads-create.service.js'
+import { createKeywordLocal, createTargetLocal } from './ads-create.service.js'
 // NEG.0(a) — enforced HERE rather than at applyHarvest's callers, for the reason the write
 // gate gives about itself: a protection only some callers honour is not a protection. The callers
 // are the rule engine, the POST route, and two recommendation-accept paths (a fifth,
@@ -248,105 +248,31 @@ export async function applyHarvest(args: {
     logger.warn('[applyHarvest] negation refused by protectConverting', { query, path, evidence: d.evidence })
   }
 
-  // H.7 — negate at campaign scope: push to Amazon (gated, via createNegative) THEN mirror a local row
-  // so our platform reflects it immediately (gated-local symmetry with graduations). Ordered so
-  // createNegative's existsLocally probe doesn't pre-empt the first push; on later runs both sides find
-  // the local row and dedupe. Returns the number of match types negated.
-  const negateCampaign = async (externalCampaignId: string, query: string, planNegate?: string[]): Promise<NegRow[]> => {
-    const negMatches = planNegate?.length ? planNegate : ['EXACT']
-    const out: NegRow[] = []
-    const camp = await prisma.campaign.findFirst({ where: { externalCampaignId }, select: { marketplace: true } })
-    // NEG.0(b) — `marketplace` was omitted here behind `as never`, so the gate denied at
-    // `connection` (ads-write-gate.ts:165-171) before it ever reached the protected-terms check,
-    // and `createNegativeKeywordCampaignLocal` — which has no gate of its own — wrote the local row
-    // regardless. That pair is why all 22 campaign-scope negatives in the account carry no Amazon
-    // id. Refuse rather than repeat it: a push that cannot be gated must not leave a mirror behind.
-    if (!camp?.marketplace) throw new Error(`no local campaign (or no marketplace) for externalCampaignId=${externalCampaignId} — cannot resolve a connection for the write gate`)
-    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } })
-    for (const nm of negMatches) {
-      // Amazon SP has no negative-broad (ads-api-client.ts:1759). A plan asking for one used to be
-      // sent as `NEGATIVE_BROAD` and rejected downstream; name it here instead.
-      if (nm !== 'EXACT' && nm !== 'PHRASE') throw new Error(`unsupported negative match type "${nm}" — Amazon SP accepts EXACT and PHRASE only`)
-      const matchType: NegativeMatchType = nm === 'EXACT' ? 'NEGATIVE_EXACT' : 'NEGATIVE_PHRASE'
-      // 🔴 HV.8a — `profileId ?? ''` is a silent no-op waiting to happen: an empty profile id is a
-      // well-formed argument that can never identify a connection. Refuse instead.
-      if (!conn?.profileId) throw new Error(`no active AmazonAdsConnection for marketplace=${camp.marketplace} — refusing rather than calling Amazon with an empty profileId`)
-      const r = await createNegative({ profileId: conn.profileId, externalCampaignId, keywordText: query, matchType, scope: 'CAMPAIGN', marketplace: camp.marketplace })
-      if (r.denied) throw new Error(`write gate denied at ${r.denied.deniedAt}: ${r.denied.reason}`)
-      await createNegativeKeywordCampaignLocal({ externalCampaignId, keywordText: query, matchType: nm, externalTargetId: r.externalNegativeKeywordId ?? null, userId: args.userId })
-      out.push({ matchType: nm, externalTargetId: r.externalNegativeKeywordId ?? null })
-    }
-    return out
-  }
-
   /**
-   * HV.4 — the same write, at AD_GROUP scope. `createNegative` has always supported it; nothing in
-   * this account has ever used it from the harvest path, which is why all 20 campaign-scoped rows
-   * failed while the 2,037 ad-group ones succeeded.
+   * The negation, at campaign or ad-group scope. 5b — through `writeNegativeKeyword`, the one negative write service: it
+   * pushes (gated: protected terms, text limits, the allowlist), reads back a create that came back without an id
+   * (HV.9a — moved there from here), and only then writes the local row and its audit row. A refusal is returned with
+   * the gate's own words rather than thrown (C7): the promotion half may well have succeeded and the operator has to
+   * see both. A refused or failed negative leaves no local row — the one HV.8a counted 20 of, all from a gate denial
+   * the old code did not throw on.
    *
-   * Returns the created rows so the caller can report `reachedAmazon` per negative rather than a
-   * count that cannot be read back to a term.
+   * HV.4 — AD_GROUP has landed 2,017 of 2,037 rows in this account; CAMPAIGN 0 of 20 before NEG.0(b). Returns the rows
+   * so the caller reports `reachedAmazon` per negative rather than a count that cannot be read back to a term.
    */
-  const negateAdGroup = async (externalCampaignId: string, externalAdGroupId: string, query: string, planNegate?: string[]): Promise<NegRow[]> => {
+  const negate = async (scope: 'AD_GROUP' | 'CAMPAIGN', externalCampaignId: string, externalAdGroupId: string, query: string, planNegate?: string[]): Promise<NegRow[]> => {
     const negMatches = planNegate?.length ? planNegate : ['EXACT']
-    const camp = await prisma.campaign.findFirst({ where: { externalCampaignId }, select: { marketplace: true } })
-    if (!camp?.marketplace) throw new Error(`no local campaign (or no marketplace) for externalCampaignId=${externalCampaignId} — cannot resolve a connection for the write gate`)
-    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } })
-    // The local ad group the mirror row hangs off. Resolved once, outside the match-type loop.
-    const localAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId }, select: { id: true } })
-    const localAdGroupId = localAg?.id ?? null
     const out: NegRow[] = []
     for (const nm of negMatches) {
+      // Amazon SP has no negative-broad. A plan asking for one used to be sent as `NEGATIVE_BROAD` and rejected
+      // downstream; name it here instead.
       if (nm !== 'EXACT' && nm !== 'PHRASE') throw new Error(`unsupported negative match type "${nm}" — Amazon SP accepts EXACT and PHRASE only`)
-      const matchType: NegativeMatchType = nm === 'EXACT' ? 'NEGATIVE_EXACT' : 'NEGATIVE_PHRASE'
-      if (!conn?.profileId) throw new Error(`no active AmazonAdsConnection for marketplace=${camp.marketplace} — refusing rather than calling Amazon with an empty profileId`)
-      const r = await createNegative({ profileId: conn.profileId, externalCampaignId, externalAdGroupId, keywordText: query, matchType, scope: 'AD_GROUP', marketplace: camp.marketplace })
-      // 🔴 A refusal is not a failure (C7). It is returned, with the gate's own words, rather than
-      // thrown — the promotion half may well have succeeded and the operator has to see both.
-      if (r.denied) { out.push({ matchType: nm, externalTargetId: null, denied: { deniedAt: String(r.denied.deniedAt), reason: String(r.denied.reason) } }); continue }
-
-      /**
-       * 🔴 HV.9a — A NULL ID DOES NOT MEAN AMAZON DIDN'T CREATE IT.
-       *
-       * HV.4's doctrine — "reachedAmazon is the external id, never the fact we called create" — is
-       * still right as a default, and this is its converse, which is NOT safe. Measured on the
-       * 2026-08-13 proof write: `createNegative` logged `success … externalId: null` for
-       * "veste moto homme homologué", we reported `outcome: failed / reachedAmazon: false`, and the
-       * negative is ENABLED at Amazon as id 48498817150724. Amazon accepted the create, returned no
-       * error, and returned no keywordId.
-       *
-       * A false failure is not the safe direction: an operator who believes it failed retries, and
-       * the retry is a duplicate. So when the id is missing, ask Amazon rather than assume.
-       */
-      let externalTargetId = r.externalNegativeKeywordId ?? null
-      if (!externalTargetId && !r.alreadyExisted) {
-        try {
-          const { listNegativeKeywords } = await import('./ads-api-client.js')
-          const live = await listNegativeKeywords({ profileId: conn.profileId, region: 'EU' }, { campaignIds: [externalCampaignId] })
-          const key = query.trim().toLowerCase()
-          const found = (live as Array<{ keywordId?: string; keywordText?: string; adGroupId?: string; matchType?: string }>)
-            .find((k) => String(k.keywordText ?? '').trim().toLowerCase() === key
-              && String(k.adGroupId ?? '') === externalAdGroupId
-              && String(k.matchType ?? '').toUpperCase().includes(nm))
-          if (found?.keywordId) {
-            externalTargetId = String(found.keywordId)
-            logger.warn('[applyHarvest] Amazon created the negative but returned no id — recovered by read-back', { query, externalAdGroupId, externalTargetId })
-          }
-        } catch (e) {
-          // A failed read-back leaves the id null and the row reports honestly as unproven. It must
-          // never throw: the negative may well exist, and losing the whole outcome would be worse.
-          logger.warn('[applyHarvest] read-back after a null negative id failed', { query, error: (e as Error).message })
-        }
-      }
-
-      // HV.9a — mirror it locally. `negateCampaign` always did; this path never did, so every
-      // ad-group negative it created was invisible here.
-      try {
-        if (localAdGroupId) await mirrorNegativeKeywordLocal({ adGroupId: localAdGroupId, keywordText: query, matchType, externalTargetId, userId: args.userId })
-      } catch (e) {
-        logger.warn('[applyHarvest] could not mirror the ad-group negative locally', { query, error: (e as Error).message })
-      }
-      out.push({ matchType: nm, externalTargetId })
+      const r = await writeNegativeKeyword({
+        scope, externalCampaignId, ...(scope === 'AD_GROUP' ? { externalAdGroupId } : {}),
+        keywordText: query, matchType: nm, userId: args.userId,
+      })
+      if (r.refusal) { out.push({ matchType: nm, externalTargetId: null, denied: { deniedAt: r.refusal.deniedAt, reason: r.refusal.reason } }); continue }
+      if (r.outcome === 'failed') throw new Error(r.error ?? 'the negative was not created')
+      out.push({ matchType: nm, externalTargetId: r.externalTargetId })
     }
     return out
   }
@@ -360,9 +286,7 @@ export async function applyHarvest(args: {
     }
     try {
       const planNegate = args.plan?.[n.externalAdGroupId]?.negate
-      const rows = negScope === 'CAMPAIGN'
-        ? await negateCampaign(n.externalCampaignId, n.query, planNegate)
-        : await negateAdGroup(n.externalCampaignId, n.externalAdGroupId, n.query, planNegate)
+      const rows = await negate(negScope, n.externalCampaignId, n.externalAdGroupId, n.query, planNegate)
       const landed = rows.filter((r) => r.externalTargetId != null)
       const denied = rows.find((r) => r.denied)
       // 🔴 Only what Amazon confirmed. A local mirror is a record of intent, not a negation.
@@ -409,7 +333,7 @@ export async function applyHarvest(args: {
 
       // H.3 — isolation. If the winner was promoted into a DIFFERENT campaign, negate it in its source
       // so the discovery campaign stops competing with the new tighter keyword. Match types come from
-      // the source row's negate plan (default EXACT). createNegative is idempotent + write-gated, so a
+      // the source row's negate plan (default EXACT). writeNegativeKeyword is idempotent + write-gated, so a
       // recurring tick won't pile up duplicates and nothing pushes live while gated.
       const promotedElsewhere = !!srcAg && gradMatches.some((gm) => { const d = args.destinations?.[gm]; return !!d && d !== srcAg.id })
       let negOutcome: HarvestOutcome['negative'] = null
@@ -430,7 +354,7 @@ export async function applyHarvest(args: {
         else {
           try {
             if (negScope === 'AD_GROUP') {
-              const rows = await negateAdGroup(g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+              const rows = await negate('AD_GROUP', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
               const landed = rows.filter((r) => r.externalTargetId != null)
               const denied = rows.find((r) => r.denied)
               result.isolationNegativesAdded += landed.length
@@ -442,13 +366,16 @@ export async function applyHarvest(args: {
               // HV.8a — campaign scope now reports what it actually did, exactly as the ad-group
               // branch does. It used to hardcode `reachedAmazon: false`, which was true of every row
               // this account has ever written but was an assumption rather than a reading.
-              const rows = await negateCampaign(g.externalCampaignId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+              const rows = await negate('CAMPAIGN', g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
               const landed = rows.filter((r) => r.externalTargetId != null)
+              const denied = rows.find((r) => r.denied)
               result.isolationNegativesAdded += landed.length
-              negOutcome = { attempted: true, scope: 'CAMPAIGN', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0 }
+              negOutcome = { attempted: true, scope: 'CAMPAIGN', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
               negateReason = landed.length > 0
                 ? `The keyword landed elsewhere, so this term was negated at campaign scope.`
-                : `The keyword landed elsewhere and a campaign-scope negative was written locally, but Amazon returned no id for it.`
+                : denied?.denied
+                  ? `The keyword was created, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
+                  : `The keyword landed elsewhere, but the campaign-scope negative did not reach Amazon.`
             }
           } catch (e) {
             negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, error: (e as Error).message }
@@ -489,7 +416,9 @@ export async function applyHarvest(args: {
   const negateProductInSource = async (externalAdGroupId: string, asin: string): Promise<boolean> => {
     const srcAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId }, select: { id: true } })
     if (!srcAg) return false
-    await createNegativeProductTargetLocal({ adGroupId: srcAg.id, asin, userId: args.userId })
+    // 5b — a refused or failed one is an error the caller records, and leaves no local row.
+    const r = await writeNegativeProductTarget({ adGroupId: srcAg.id, asin, userId: args.userId })
+    if (r.outcome === 'refused' || r.outcome === 'failed') throw new Error(r.refusal ? `refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error ?? 'not created')
     return true
   }
 

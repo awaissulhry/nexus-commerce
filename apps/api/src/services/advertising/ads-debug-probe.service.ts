@@ -277,7 +277,7 @@ const PROBE_VARIANTS: ProbeVariant[] = [
   {
     id: 'sp_v3_negative_keywords_create_probe',
     description: 'POST /sp/negativeKeywords with empty body (auth check)',
-    method: 'POST', path: '/sp/negativeKeywords',
+    method: 'POST', path: '/sp/negativeKeywords', // negative-write-exempt: an empty-body auth probe; it creates nothing
     acceptHeader: 'application/vnd.spNegativeKeyword.v3+json',
     contentTypeHeader: 'application/vnd.spNegativeKeyword.v3+json',
     body: { negativeKeywords: [] },

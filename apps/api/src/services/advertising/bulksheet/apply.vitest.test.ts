@@ -290,6 +290,73 @@ describe('creates report what they made', () => {
   })
 })
 
+/**
+ * 5b — negatives go through the one negative write service. A refused one wrote nothing and says why; one that
+ * already stands is not reported as made; the campaign negative is SENT now (review 7.12: it was written locally only
+ * and reported "the write gate declined" although no gate had run); and the sheet's asin="B0…" reaches Amazon as the
+ * ASIN alone.
+ */
+describe('negatives go through the negative write service', () => {
+  const made = (over: Record<string, unknown>) => ({
+    outcome: 'created', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: null, error: null, rawResponse: null, ...over,
+  })
+  const negRow = (entity: string, parentId: string, diffs: Array<[string, string]>) => row({
+    entity, status: 'CREATE', targetId: null, parentId, label: '', diffs: diffs.map(([field, next]) => ({ field, current: '', next })),
+  })
+  const mockService = (keyword: (a: Rec) => unknown, product: (a: Rec) => unknown = keyword) => {
+    const calls: Rec[] = []
+    vi.doMock('../ads-create.service.js', () => ({}))
+    vi.doMock('../ads-negative-kw.service.js', () => ({
+      writeNegativeKeyword: async (a: Rec) => { calls.push({ kind: 'keyword', ...a }); return keyword(a) },
+      writeNegativeProductTarget: async (a: Rec) => { calls.push({ kind: 'product', ...a }); return product(a) },
+    }))
+    return calls
+  }
+
+  it('the campaign negative is sent at CAMPAIGN scope and reports Amazon\'s id', async () => {
+    vi.resetModules()
+    mockMutations({ ok: true, error: null })
+    const calls = mockService(() => made({ externalTargetId: 'AMZ-C-1', reachedAmazon: true, adTargetId: 'neg-c-1' }))
+    const { applyPlan: apply } = await import('./apply.js')
+    const { client, staged } = fakePrisma()
+
+    const out = await apply(client, 'job', [negRow('Campaign negative keyword', 'c1', [['Keyword text', 'cheap gloves'], ['Match type', 'Negative phrase']])], OPTS)
+    expect(calls).toEqual([expect.objectContaining({ kind: 'keyword', scope: 'CAMPAIGN', campaignId: 'c1', keywordText: 'cheap gloves', matchType: 'PHRASE', userId: 'u1' })])
+    expect(out.applied).toBe(1)
+    expect(out.results[0].message).toMatch(/Created on Amazon \(AMZ-C-1\)/)
+    expect(staged[0].data.targetId).toBe('neg-c-1')
+  })
+
+  it('a refusal is FAILED with the reason and names no row; an existing negative is SKIPPED', async () => {
+    vi.resetModules()
+    mockMutations({ ok: true, error: null })
+    mockService((a) => a.keywordText === 'xavia'
+      ? made({ outcome: 'refused', refusal: { deniedAt: 'keyword_protected', reason: '"xavia" cannot be negated: it matches the protected term "xavia".' } })
+      : made({ outcome: 'already_existed', adTargetId: 'neg-old', externalTargetId: 'AMZ-9', reachedAmazon: true }))
+    const { applyPlan: apply } = await import('./apply.js')
+    const { client, staged } = fakePrisma()
+
+    const out = await apply(client, 'job', [
+      negRow('Negative keyword', 'ag1', [['Keyword text', 'xavia'], ['Match type', 'Negative exact']]),
+      { ...negRow('Negative keyword', 'ag1', [['Keyword text', 'free'], ['Match type', 'Negative exact']]), rowIndex: 1 },
+    ], OPTS)
+    expect(out.results[0]).toMatchObject({ outcome: 'FAILED', targetId: null, message: 'Not created — refused at keyword_protected: "xavia" cannot be negated: it matches the protected term "xavia".' })
+    expect(out.results[1]).toMatchObject({ outcome: 'SKIPPED', targetId: 'neg-old', message: 'That negative already exists' })
+    expect(staged.map((x) => x.data.status)).toEqual(['FAILED', 'SKIPPED'])
+  })
+
+  it('a negative product target sends the ASIN out of asin="B0…"', async () => {
+    vi.resetModules()
+    mockMutations({ ok: true, error: null })
+    const calls = mockService(() => made({}), () => made({ adTargetId: 'neg-p-1', externalTargetId: 'AMZ-P-1', reachedAmazon: true }))
+    const { applyPlan: apply } = await import('./apply.js')
+
+    const out = await apply(fakePrisma().client, 'job', [negRow('Negative product targeting', 'ag1', [['Product targeting expression', 'asin="B0ABCDE123"']])], OPTS)
+    expect(calls).toEqual([expect.objectContaining({ kind: 'product', adGroupId: 'ag1', asin: 'B0ABCDE123' })])
+    expect(out.applied).toBe(1)
+  })
+})
+
 // Referenced so the direct import is not flagged unused; the tests above all use
 // the re-imported module so vi.doMock applies.
 void applyPlan

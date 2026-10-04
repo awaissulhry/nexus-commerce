@@ -26,6 +26,7 @@ import {
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
+import type { NegativeWriteResult } from '../ads-negative-kw.service.js'
 import { applyFields } from './field-map.js'
 
 export interface ApplyOptions {
@@ -115,6 +116,14 @@ async function createRow(
   }
 
   const svc = await import('../ads-create.service.js')
+  // 5b — negatives go through the one negative write service. A refused or failed one wrote nothing, so it is FAILED
+  // with the reason; one that already stands is SKIPPED rather than reported as made.
+  const neg = await import('../ads-negative-kw.service.js')
+  const negativeNotMade = (r: NegativeWriteResult): { outcome: ApplyRowResult['outcome']; message: string; createdId: string | null } | null =>
+    r.outcome === 'refused' ? { outcome: 'FAILED', message: `Not created — refused at ${r.refusal!.deniedAt}: ${r.refusal!.reason}`.slice(0, 300), createdId: null }
+      : r.outcome === 'failed' ? { outcome: 'FAILED', message: `Not created — ${r.error ?? 'it did not reach Amazon'}`.slice(0, 300), createdId: null }
+        : r.outcome === 'already_existed' ? { outcome: 'SKIPPED', message: 'That negative already exists', createdId: r.adTargetId }
+          : null
   // AdsActor is a tagged string (`user:<id>` / `automation:<id>`); the create
   // services want the bare id for their audit rows.
   const actorId = opts.actor.startsWith('user:') ? opts.actor.slice('user:'.length) : undefined
@@ -144,22 +153,26 @@ async function createRow(
         const kw = text('Keyword text'); const mt = match()
         if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
         if (mt !== 'EXACT' && mt !== 'PHRASE') return { outcome: 'FAILED', message: 'A negative keyword must be Negative exact or Negative phrase', createdId: null }
-        const r = await svc.createNegativeKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
-        created = { id: r.id, externalId: r.externalTargetId }
+        const r = await neg.writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
+        const notMade = negativeNotMade(r)
+        if (notMade) return notMade
+        created = { id: r.adTargetId!, externalId: r.externalTargetId }
         break
       }
       case 'Campaign negative keyword': {
         const kw = text('Keyword text'); const mt = match()
         if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
         if (mt !== 'EXACT' && mt !== 'PHRASE') return { outcome: 'FAILED', message: 'A campaign negative must be Negative exact or Negative phrase', createdId: null }
-        // This one service takes the EXTERNAL campaign id, not the local one.
         const camp = await prisma.campaign.findUnique({ where: { id: row.parentId }, select: { externalCampaignId: true } })
         if (!camp?.externalCampaignId) {
           return { outcome: 'FAILED', message: 'That campaign has never synced to Amazon, so a campaign negative cannot be attached to it yet', createdId: null }
         }
-        const r = await svc.createNegativeKeywordCampaignLocal({ externalCampaignId: camp.externalCampaignId, keywordText: kw, matchType: mt, userId: actorId })
-        if (!r) return { outcome: 'FAILED', message: 'Campaign negative could not be created', createdId: null }
-        created = { id: r.id, externalId: null }
+        // 5b (review 7.12) — it is sent to Amazon now, through the gate. It used to be written locally only and
+        // reported as applied ("the write gate declined") although no gate had run and nothing was ever pushed.
+        const r = await neg.writeNegativeKeyword({ scope: 'CAMPAIGN', campaignId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
+        const notMade = negativeNotMade(r)
+        if (notMade) return notMade
+        created = { id: r.adTargetId!, externalId: r.externalTargetId }
         break
       }
       case 'Product targeting': {
@@ -173,8 +186,12 @@ async function createRow(
       case 'Negative product targeting': {
         const expr = text('Product targeting expression')
         if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
-        const r = await svc.createNegativeProductTargetLocal({ adGroupId: row.parentId, asin: expr, userId: actorId })
-        created = { id: r.id, externalId: r.externalTargetId }
+        // The sheet writes the expression as asin="B0…"; Amazon takes the ASIN alone.
+        const asin = /^asin\s*=\s*"?([^"]*)"?$/i.exec(expr)?.[1]?.trim() ?? expr
+        const r = await neg.writeNegativeProductTarget({ adGroupId: row.parentId, asin, userId: actorId })
+        const notMade = negativeNotMade(r)
+        if (notMade) return notMade
+        created = { id: r.adTargetId!, externalId: r.externalTargetId }
         break
       }
       case 'Product ad': {

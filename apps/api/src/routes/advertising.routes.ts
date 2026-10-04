@@ -6862,7 +6862,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.asin) { reply.status(400); return { error: 'adGroupId, asin required' } }
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return await createNegativeProductTargetLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // 5b — a refused negative writes nothing, so it is not answered 200 (the modal would say it was added).
+    try { const r = await createNegativeProductTargetLocal(b as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // LAUNCH-REPAIR — push a campaign's existing local structure (ad group/keywords/auto/product ads)

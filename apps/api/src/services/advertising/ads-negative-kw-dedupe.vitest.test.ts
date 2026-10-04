@@ -65,3 +65,25 @@ describe('negativeExistsLocally — both spellings', () => {
     expect(await negativeExistsLocally({ ...baseArgs, scope: 'CAMPAIGN' })).toBe(true)
   })
 })
+
+/**
+ * 5b (review 7.6) — a retired negative could never be added again: the probe ignored status and compared the text
+ * case-sensitively. An ARCHIVED row is absent now, and the text matches whatever its case.
+ */
+describe('negativeExistsLocally — retired is absent, case does not matter', () => {
+  it('skips ARCHIVED rows and compares the text case-insensitively', async () => {
+    await negativeExistsLocally({ ...baseArgs, keywordText: '  Giacca Moto ', scope: 'CAMPAIGN' })
+    const where = (db.adTarget.findFirst.mock.calls[0]![0] as { where: Record<string, unknown> }).where
+    expect(where.status).toEqual({ not: 'ARCHIVED' })
+    expect(where.expressionValue).toEqual({ equals: 'Giacca Moto', mode: 'insensitive' })
+    expect(where.negativeLevel).toBe('CAMPAIGN')
+  })
+
+  it('AD_GROUP scope takes the ad-group rows, and the v1 sync\'s rows that carry no level', async () => {
+    await negativeExistsLocally({ ...baseArgs, scope: 'AD_GROUP', externalAdGroupId: 'eag1' })
+    const where = (db.adTarget.findFirst.mock.calls[0]![0] as { where: Record<string, unknown> }).where
+    expect(where.adGroupId).toBe('g1')
+    expect(where.OR).toEqual([{ negativeLevel: 'AD_GROUP' }, { negativeLevel: null }])
+    expect(where.status).toEqual({ not: 'ARCHIVED' })
+  })
+})

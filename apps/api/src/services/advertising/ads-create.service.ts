@@ -18,7 +18,7 @@ import { logger } from '../../utils/logger.js'
 import { SB_AD_TYPE_KEYS, sbAdTypeNotice } from '../ads-core/sb-ad-types.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
-  createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
+  createTarget, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
   listKeywords, listSbKeywords, adsMode,
@@ -29,7 +29,9 @@ import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
-import { AD_PRODUCT_UNSUPPORTED, adProductOf, adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { AD_PRODUCT_UNSUPPORTED, adProductRefusal } from '@nexus/shared/ads-ad-product'
+// 5b — every negative this file writes goes through the one negative write service.
+import { mirrorNegativeKeyword, pushLocalNegative, writeNegativeKeyword, writeNegativeProductTarget, type NegativeWriteResult } from './ads-negative-kw.service.js'
 
 /**
  * The currency a new campaign's budget is in: its market's (`Marketplace.currency`) — Amazon reads the number it is
@@ -570,15 +572,14 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
         else out.errors.push('productAd "' + (pa.asin || sku) + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
       } catch (e) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": ' + ((e as Error)?.message || '')) }
     }
-    // Ad-group negative keywords (funnel isolation) that exist locally but were never pushed.
-    const negKws = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, kind: 'KEYWORD', isNegative: true, externalTargetId: null } })
+    // Negative keywords (funnel isolation) that exist locally but were never pushed. 5b — through the negative write
+    // service: protected terms, text limits and the gate bind them, a NEGATIVE_PHRASE row goes as a phrase (it went as
+    // exact), a campaign-level row goes to the campaign (it went to this ad group), and an archived one is not pushed.
+    const negKws = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, kind: 'KEYWORD', isNegative: true, externalTargetId: null, status: { not: 'ARCHIVED' } }, select: { id: true, expressionType: true, expressionValue: true } })
     for (const nk of negKws) {
-      const mt: 'EXACT' | 'PHRASE' = nk.expressionType === 'PHRASE' ? 'PHRASE' : 'EXACT'
-      try {
-        const r = await createNegativeKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: nk.expressionValue ?? '', matchType: mt, state: 'enabled' })
-        if (r.externalId) { await prisma.adTarget.update({ where: { id: nk.id }, data: { externalTargetId: r.externalId } }); out.negKeywords++ }
-        else out.errors.push('negKw "' + (nk.expressionValue || '') + '" ' + mt + ': ' + JSON.stringify(r.rawResponse).slice(0, 220))
-      } catch (e) { out.errors.push('negKw "' + (nk.expressionValue || '') + '": ' + ((e as Error)?.message || '')) }
+      const r = await pushLocalNegative(nk.id)
+      if (r.externalTargetId) out.negKeywords++
+      else out.errors.push('negKw "' + (nk.expressionValue || '') + '" ' + nk.expressionType + ': ' + (r.refusal ? `refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error ?? `not pushed (mode=${r.mode})`))
     }
   }
   logger.info('[LAUNCH-REPAIR] pushCampaignStructure', { campaignId, ...out })
@@ -613,7 +614,8 @@ export async function reconcileNegativesAndDelivery(campaignIds: string[]): Prom
   }
   let backfilled = 0, alreadyLinked = 0, unmatchedLocal = 0
   for (const ln of localNegs) {
-    const key = `${ln.adGroupId}|${ln.expressionType}|${(ln.expressionValue || '').toLowerCase()}`
+    // Both spellings: a mirror row says NEGATIVE_EXACT, the index above is keyed on EXACT.
+    const key = `${ln.adGroupId}|${ln.expressionType.replace('NEGATIVE_', '')}|${(ln.expressionValue || '').toLowerCase()}`
     const id = amzIndex.get(key)?.[0]?.id ?? null
     if (id) {
       if (ln.externalTargetId === id) alreadyLinked++
@@ -1299,91 +1301,40 @@ export async function resolveSbTemplate(marketplace: string): Promise<SbTemplate
   }
 }
 
-export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string }
-export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
-  if (!ag) throw new Error('ad group not found')
-  // H.5 — idempotent: a negative product target is identified by ad group + ASIN.
-  const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: input.adGroupId, kind: 'PRODUCT', isNegative: true, expressionValue: input.asin }, select: { id: true, externalTargetId: true } })
-  if (dupe) return { id: dupe.id, externalTargetId: dupe.externalTargetId, mode: 'local' }
-  let externalId: string | null = null, mode = 'local'
-  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
-    const ctx = await resolveCtx(ag.campaign.marketplace)
-    if (ctx) {
-      // 6a — /sp/negativeTargets: the gate refuses an SB/SD campaign by its ad product (no campaignId — that would bind the allowlist).
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, adProduct: adProductOf(ag.campaign) })
-      if (gate.allowed) { const r = await createNegativeProductTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, asin: input.asin, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
-    }
-  }
-  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: input.asin, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
-  await audit('create_negative_product_target', 'AD_TARGET', t.id, { asin: input.asin, externalId, mode }, input.userId)
-  return { id: t.id, externalTargetId: externalId, mode }
+// 5b — the negative helpers below keep their names and shapes for their callers (launches, blueprints, AI goals, the
+// bulk routes, the rule handlers) and delegate to the one negative write service (ads-negative-kw.service.ts). What
+// changed for them: protected terms and Amazon's text limits bind, the live-write allowlist binds (a launch passes
+// `creationFlow`), a retired negative can be added again, and a refused negative writes NO local row (`id: null`).
+type LocalNegative = { id: string | null; externalTargetId: string | null; mode: string; refusal?: { deniedAt: string; reason: string }; error?: string }
+const asLocal = (r: NegativeWriteResult): LocalNegative => ({
+  id: r.adTargetId, externalTargetId: r.externalTargetId, mode: r.outcome === 'refused' || r.outcome === 'failed' ? r.outcome : r.mode,
+  ...(r.refusal ? { refusal: r.refusal } : {}), ...(r.error ? { error: r.error } : {}),
+})
+
+export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string; creationFlow?: boolean }
+export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<LocalNegative> {
+  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow }))
 }
 
 // NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.
-export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string }
+export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string; creationFlow?: boolean }
 /**
  * 🔴 HV.9a — mirror an AD_GROUP negative that has ALREADY been created at Amazon.
  *
- * Distinct from `createNegativeKeywordLocal` above, which calls Amazon itself. `applyHarvest`'s
- * `negateAdGroup` has already made that call, so re-using the other function would create the
- * negative twice. It had no mirror at all before this — `negateCampaign` wrote one and the
- * ad-group path did not — so a negative that landed at Amazon left no row here.
- *
- * Measured 2026-08-13, both proof writes: `motorradjacke 4xl` (id 53955160123085) and
- * `veste moto homme homologué` (id 48498817150724) are ENABLED at Amazon and had no local row.
- * That is the 209-row defect pointing the other way — our record and Amazon's disagreeing, with
- * neither side visible from the other.
+ * Distinct from `createNegativeKeywordLocal` below, which calls Amazon itself: re-using it after a push would create
+ * the negative twice. Measured 2026-08-13, both proof writes: `motorradjacke 4xl` (id 53955160123085) and
+ * `veste moto homme homologué` (id 48498817150724) were ENABLED at Amazon with no local row — our record and Amazon's
+ * disagreeing, with neither side visible from the other. Heals a row the sync mirrored without an id.
  */
 export async function mirrorNegativeKeywordLocal(input: {
   adGroupId: string; keywordText: string; matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
   externalTargetId: string | null; userId?: string
 }): Promise<{ id: string; created: boolean }> {
-  const existing = await prisma.adTarget.findFirst({
-    where: {
-      adGroupId: input.adGroupId, isNegative: true, negativeLevel: 'AD_GROUP',
-      expressionValue: input.keywordText,
-      // Both spellings: the sync stores plain EXACT/PHRASE with isNegative, mirrors store NEGATIVE_*.
-      expressionType: { in: [input.matchType, input.matchType.replace('NEGATIVE_', '')] },
-    },
-    select: { id: true, externalTargetId: true },
-  })
-  if (existing) {
-    // Heal a row the sync mirrored without an id, rather than creating a second one.
-    if (!existing.externalTargetId && input.externalTargetId) {
-      await prisma.adTarget.update({ where: { id: existing.id }, data: { externalTargetId: input.externalTargetId } })
-    }
-    return { id: existing.id, created: false }
-  }
-  const t = await prisma.adTarget.create({
-    data: {
-      adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType,
-      expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED',
-      isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: input.externalTargetId,
-    },
-  })
-  await audit('create_negative_keyword', 'AD_TARGET', t.id, {
-    keywordText: input.keywordText, matchType: input.matchType, scope: 'AD_GROUP',
-    externalTargetId: input.externalTargetId, reachedAmazon: input.externalTargetId != null,
-  }, input.userId)
-  return { id: t.id, created: true }
+  return mirrorNegativeKeyword({ scope: 'AD_GROUP', ...input })
 }
 
-export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
-  if (!ag) throw new Error('ad group not found')
-  let externalId: string | null = null, mode = 'local'
-  if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
-    const ctx = await resolveCtx(ag.campaign.marketplace)
-    if (ctx) {
-      // 6a — /sp/negativeKeywords: refused for an SB/SD campaign by its ad product, as above.
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, adProduct: adProductOf(ag.campaign) })
-      if (gate.allowed) { const r = await createNegativeKeyword(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
-    }
-  }
-  const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED', externalTargetId: externalId, isNegative: true, negativeLevel: 'AD_GROUP' } })
-  await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, externalId, mode }, input.userId)
-  return { id: t.id, externalTargetId: externalId, mode }
+export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<LocalNegative> {
+  return asLocal(await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: input.adGroupId, keywordText: input.keywordText, matchType: input.matchType, userId: input.userId, creationFlow: input.creationFlow }))
 }
 
 // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation). Idempotent: skips a negative
@@ -1394,40 +1345,30 @@ export async function bulkNegativeKeywords(items: Array<{ adGroupId: string; key
   for (const it of items) {
     const text = (it.keywordText || '').trim()
     if (!text || (it.matchType !== 'EXACT' && it.matchType !== 'PHRASE')) { out.failed++; out.errors.push('bad item ' + JSON.stringify(it)); continue }
-    const dupe = await prisma.adTarget.findFirst({ where: { adGroupId: it.adGroupId, kind: 'KEYWORD', isNegative: true, expressionType: it.matchType, expressionValue: { equals: text, mode: 'insensitive' } }, select: { id: true } })
-    if (dupe) { out.skipped++; continue }
     try {
-      const r = await createNegativeKeywordLocal({ adGroupId: it.adGroupId, keywordText: text, matchType: it.matchType, userId })
+      const r = await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: it.adGroupId, keywordText: text, matchType: it.matchType, userId })
+      if (r.outcome === 'already_existed') { out.skipped++; continue }
+      if (r.outcome === 'refused' || r.outcome === 'failed') { out.failed++; out.errors.push('"' + text + '" ' + it.matchType + ': ' + (r.refusal ? `refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error)); continue }
       out.created++
       if (r.externalTargetId) out.pushed++
-      else out.errors.push('not pushed (gate/local): ' + it.matchType + ' "' + text + '"')
+      else out.errors.push('not pushed (' + r.mode + '): ' + it.matchType + ' "' + text + '"')
     } catch (e) { out.failed++; out.errors.push('"' + text + '" ' + it.matchType + ': ' + ((e as Error)?.message || '')) }
   }
   logger.info('[LAUNCH-REPAIR] bulkNegativeKeywords', out)
   return out
 }
 
-// H.7 — persist a CAMPAIGN-scope negative keyword as a local mirror row so our platform reflects it
-// immediately (gated-local), matching how the sync stores campaign negatives: AdTarget with
-// negativeLevel='CAMPAIGN' + expressionType='NEGATIVE_<mt>', attached to a representative ad group of
-// the campaign (the schema's legacy campaign-negative structure). The Amazon push is done separately
-// by createNegative (so its existsLocally probe — which matches this exact shape — keeps the first
-// push unblocked and dedupes subsequent runs). Idempotent + matches createNegative's probe precisely.
+// H.7 — persist a CAMPAIGN-scope negative keyword that has ALREADY been created at Amazon as a local mirror row,
+// matching how the sync stores campaign negatives: AdTarget with negativeLevel='CAMPAIGN' + expressionType=
+// 'NEGATIVE_<mt>', attached to a representative ad group of the campaign (the schema's legacy structure). 5b — a new
+// campaign negative goes through writeNegativeKeyword({ scope: 'CAMPAIGN' }), which pushes AND records it.
 export async function createNegativeKeywordCampaignLocal(input: { externalCampaignId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; externalTargetId?: string | null; userId?: string }): Promise<{ id: string; created: boolean } | null> {
   const camp = await prisma.campaign.findFirst({ where: { externalCampaignId: input.externalCampaignId }, select: { id: true, adGroups: { select: { id: true }, take: 1 } } })
   if (!camp || camp.adGroups.length === 0) return null // no ad group to attach the campaign-level negative to
-  const expressionType = `NEGATIVE_${input.matchType}`
-  // Both spellings: sync-stored negatives carry plain 'EXACT'/'PHRASE'
-  // with isNegative=true; only mirror rows carry NEGATIVE_* (pre-F fix,
-  // same defect as negativeExistsLocally).
-  const existing = await prisma.adTarget.findFirst({
-    where: { adGroup: { campaignId: camp.id }, isNegative: true, negativeLevel: 'CAMPAIGN', expressionType: { in: [expressionType, input.matchType] }, expressionValue: input.keywordText },
-    select: { id: true },
+  return mirrorNegativeKeyword({
+    scope: 'CAMPAIGN', adGroupId: camp.adGroups[0].id, campaignId: camp.id, keywordText: input.keywordText,
+    matchType: `NEGATIVE_${input.matchType}`, externalTargetId: input.externalTargetId ?? null, userId: input.userId,
   })
-  if (existing) return { id: existing.id, created: false }
-  const t = await prisma.adTarget.create({ data: { adGroupId: camp.adGroups[0].id, kind: 'KEYWORD', expressionType, expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED', isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: input.externalTargetId ?? null } })
-  await audit('create_negative_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, scope: 'CAMPAIGN', externalTargetId: input.externalTargetId ?? null }, input.userId)
-  return { id: t.id, created: true }
 }
 
 // ── Phase 3 — named rank-schedule groups (one named schedule spanning many campaigns) ──────────
