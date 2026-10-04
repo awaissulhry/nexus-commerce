@@ -7087,32 +7087,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── TD.0: Trading Desk automation safety spine (autonomy + circuit-breaker) ──
+  // 1g — each change goes through ads-automation-state.service.ts, which validates it and writes the audit row. Who:
+  // the signed-in person (auth sets `authUser`); the x-actor-id header only when there is none (the web never sends it).
+  const brakeActor = (request: { authUser?: { id?: string }; headers: unknown }) =>
+    (request.authUser?.id ? `user:${request.authUser.id}` : actorFromHeaders(request.headers as Record<string, unknown>))
   fastify.get('/advertising/automation/state', async () => {
-    const { getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
-    return getAutomationState()
+    const { getAutomationState, engineLimits } = await import('../services/advertising/ads-automation-state.service.js')
+    return { ...(await getAutomationState()), engineLimits: engineLimits() }
   })
   fastify.post('/advertising/automation/autonomy', async (request, reply) => {
-    const b = (request.body ?? {}) as { level?: string }
-    if (!b.level || !['OFF', 'SUGGEST', 'AUTO'].includes(b.level)) { reply.status(400); return { error: 'level must be OFF|SUGGEST|AUTO' } }
-    const { setAutonomy, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
-    await setAutonomy(b.level as 'OFF' | 'SUGGEST' | 'AUTO', actorFromHeaders(request.headers as Record<string, unknown>))
+    const { changeAutonomy, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    const out = await changeAutonomy(((request.body ?? {}) as { level?: unknown }).level, brakeActor(request))
+    if ('error' in out) { reply.status(400); return { error: out.error } }
     return getAutomationState()
   })
   fastify.post('/advertising/automation/halt', async (request, reply) => {
-    const b = (request.body ?? {}) as { reason?: string }
-    const { haltAutomation, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
-    await haltAutomation(b.reason || 'Operator halt', actorFromHeaders(request.headers as Record<string, unknown>))
+    const { haltWithAudit, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await haltWithAudit(((request.body ?? {}) as { reason?: unknown }).reason, brakeActor(request))
     reply.status(200); return getAutomationState()
   })
   fastify.post('/advertising/automation/resume', async (request) => {
-    const { resumeAutomation, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
-    await resumeAutomation(actorFromHeaders(request.headers as Record<string, unknown>))
+    const { resumeWithAudit, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await resumeWithAudit(brakeActor(request))
     return getAutomationState()
   })
-  fastify.post('/advertising/automation/thresholds', async (request) => {
-    const b = (request.body ?? {}) as { maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null }
-    const { setGuardThresholds, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
-    await setGuardThresholds(b)
+  fastify.post('/advertising/automation/thresholds', async (request, reply) => {
+    const { changeGuardThresholds, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    const out = await changeGuardThresholds(request.body ?? {}, brakeActor(request))
+    if ('error' in out) { reply.status(400); return { error: out.error } }
     return getAutomationState()
   })
   // SG.5 — account default ACoS target (INTEGER percent; null clears). One reader:
