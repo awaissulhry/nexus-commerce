@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   createNegative: vi.fn(),
+  writeNegativeProductTarget: vi.fn(),
   mirrorNegativeKeywordLocal: vi.fn(),
   createNegativeKeywordCampaignLocal: vi.fn(),
   createNegativeProductTargetLocal: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('./ads-mutation.service.js', () => ({
   updateAdGroupWithSync: vi.fn(),
   updateAdTargetWithSync: vi.fn(),
 }))
-vi.mock('./ads-negative-kw.service.js', () => ({ createNegative: h.createNegative }))
+vi.mock('./ads-negative-kw.service.js', () => ({ createNegative: h.createNegative, writeNegativeProductTarget: h.writeNegativeProductTarget }))
 vi.mock('./ads-create.service.js', () => ({
   createKeywordLocal: vi.fn(),
   pushExistingKeyword: vi.fn(),
@@ -92,6 +93,7 @@ beforeEach(() => {
   h.mirrorNegativeKeywordLocal.mockResolvedValue({ id: 'm1', created: true })
   h.createNegativeKeywordCampaignLocal.mockResolvedValue({ id: 'm2', created: true })
   h.createNegativeProductTargetLocal.mockResolvedValue({ id: 'pt1', externalTargetId: 'ext-pt1', mode: 'live' })
+  h.writeNegativeProductTarget.mockResolvedValue({ outcome: 'created', mode: 'live', externalTargetId: 'ext-pt1', reachedAmazon: true, adTargetId: 'pt1', refusal: null, error: null })
 })
 
 describe('NEG-P1 — the mapped wire path', () => {
@@ -180,7 +182,7 @@ describe('NEG-P1 — the mapped wire path', () => {
     const act = { ...ACT, negative: { ...WIRE, dedupe: false, blocks: [{ look: ['src1'], create: [{ adGroupId: 'dst1', types: ['ASIN'] }] }] } }
     const rAsin = await negate(act, { ...CTX, searchTerm: { ...CTX.searchTerm, query: 'b0abcd1234' } })
     expect(rAsin.ok).toBe(true)
-    expect(h.createNegativeProductTargetLocal).toHaveBeenCalledWith({ adGroupId: 'dst1', asin: 'b0abcd1234' })
+    expect(h.writeNegativeProductTarget).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'dst1', asin: 'b0abcd1234' }))
     const rKw = await negate(act, CTX)
     expect(rKw.ok).toBe(true)
     const rows = (rKw.output as { outcomes: Array<{ skipped?: string }> }).outcomes
@@ -211,5 +213,67 @@ describe('NEG-P1 — the mapped wire path', () => {
     expect(r.ok).toBe(true)
     expect(h.createNegative).toHaveBeenCalledTimes(1)
     expect((h.createNegative.mock.calls[0][0] as { scope: string }).scope).toBe('CAMPAIGN')
+  })
+})
+
+/**
+ * 5d (review 7.5) — an ASIN search term is a product. As an exact or phrase negative KEYWORD it blocked nothing
+ * Amazon matches (and 5b's write service refuses it); it becomes a negative PRODUCT target in its ad group, and the
+ * campaign level, where Nexus has no product negative, is refused by name.
+ */
+describe('5d — an ASIN is negated as a product target', () => {
+  const ASIN_CTX = { ...CTX, searchTerm: { ...CTX.searchTerm, query: 'B0ABCD1234' } }
+
+  it('a mapping that ticks only EXACT still negates the ASIN as a product target — never as a keyword', async () => {
+    const r = await negate({ ...ACT, negative: { ...WIRE, dedupe: false } }, ASIN_CTX)
+    expect(r.ok).toBe(true)
+    expect(h.createNegative).not.toHaveBeenCalled()
+    expect(h.writeNegativeProductTarget).toHaveBeenCalledTimes(1)
+    expect(h.writeNegativeProductTarget.mock.calls[0][0]).toMatchObject({ adGroupId: 'dst1', asin: 'B0ABCD1234' })
+    expect((r.output as { confirmed: number }).confirmed).toBe(1)
+  })
+
+  it('campaign level is refused by name; the ad-group level still lands', async () => {
+    const r = await negate({ ...ACT, levels: ['AD_GROUP', 'CAMPAIGN'], negative: { ...WIRE, dedupe: false } }, ASIN_CTX)
+    expect(r.ok).toBe(true)
+    const rows = (r.output as { outcomes: Array<{ level?: string; refused?: string; reachedAmazon?: boolean }> }).outcomes
+    expect(rows.find((o) => o.level === 'CAMPAIGN')?.refused).toMatch(/is an ASIN, a product.*only inside an ad group/)
+    expect(rows.find((o) => o.level === 'AD_GROUP')?.reachedAmazon).toBe(true)
+    expect(h.createNegative).not.toHaveBeenCalled()
+  })
+
+  it('campaign level only: nothing written, and the dry run offers nothing to create', async () => {
+    const r = await negate({ ...ACT, levels: ['CAMPAIGN'], negative: { ...WIRE, dedupe: false } }, ASIN_CTX, { ...meta, dryRun: true })
+    const rows = (r.output as { outcomes: Array<{ wouldCreate?: boolean }> }).outcomes
+    expect(rows.some((o) => o.wouldCreate)).toBe(false)
+    expect(h.writeNegativeProductTarget).not.toHaveBeenCalled()
+  })
+
+  it('a refusal by the write service is a failure naming its gate', async () => {
+    h.writeNegativeProductTarget.mockResolvedValue({ outcome: 'refused', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: { deniedAt: 'keyword_protected', reason: 'own product' }, error: null })
+    const r = await negate({ ...ACT, negative: { ...WIRE, dedupe: false } }, ASIN_CTX)
+    expect(r.ok).toBe(false)
+    const rows = (r.output as { outcomes: Array<{ refused?: string }> }).outcomes
+    expect(String(rows[0]?.refused)).toContain('keyword_protected')
+  })
+
+  it('the legacy path (no wire): ad group → a negative product target in the source; campaign → refused by name', async () => {
+    const ag = await negate({ type: 'add_negative_exact', scope: 'AD_GROUP' }, ASIN_CTX)
+    expect(ag.ok).toBe(true)
+    expect(h.writeNegativeProductTarget).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'src1', asin: 'B0ABCD1234' }))
+    expect(h.createNegative).not.toHaveBeenCalled()
+    const camp = await negate({ type: 'add_negative_exact', scope: 'CAMPAIGN' }, ASIN_CTX)
+    expect(camp.ok).toBe(false)
+    expect(camp.error).toMatch(/is an ASIN, a product/)
+    expect(h.createNegative).not.toHaveBeenCalled()
+  })
+
+  it('sync_negatives_across_campaigns refuses an ASIN before touching any campaign', async () => {
+    const sync = ACTION_HANDLERS.sync_negatives_across_campaigns as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string }>
+    const r = await sync({ type: 'sync_negatives_across_campaigns' }, ASIN_CTX, meta)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/is an ASIN, a product/)
+    expect(db.campaign.findMany).not.toHaveBeenCalled()
+    expect(h.createNegative).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { graduationCeiling, isLevelAllowed } from './ads-graduation.js'
+import { producedActionTypes } from './ads-rule-adapter.service.js'
 
 const v = (actionTypes: string[], hasKeywordProtections = false) =>
   graduationCeiling({ actionTypes, hasKeywordProtections })
@@ -135,5 +136,17 @@ describe('builder-slug expansion', () => {
 
   it('a harvest slug is structural — it creates keywords and negatives', () => {
     expect(g(['keyword-harvesting']).maxLevel).toBe('PROPOSE')
+  })
+
+  // 5d — negate-in-source now rides inside promote_to_exact; a saved harvest rule is judged by what it produces.
+  it('a saved harvest rule with negate-in-source produces promote_to_exact alone, and stays PROPOSE', () => {
+    const rule = {
+      id: 'hv',
+      actions: [{ type: 'keyword-harvesting', negateInSource: true, bid: { mode: 'cpc' } }],
+      conditions: [{ match: 'all', conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }] }],
+    }
+    const produced = producedActionTypes(rule)
+    expect(produced).toEqual(['promote_to_exact'])
+    for (const prot of [true, false]) expect(g(produced, prot).maxLevel).toBe('PROPOSE')
   })
 })

@@ -245,7 +245,8 @@ export async function promoteCandidates(args: {
         bidEur: row.bidCents / 100,
         evidence: row.evidence,
       }],
-      destinations: { [row.matchType]: row.destinationAdGroupId },
+      // 5d — an ASIN row's destination was resolved for a PRODUCT target, and applyHarvest graduates an ASIN under that key.
+      destinations: { [/^b0[a-z0-9]{8}$/i.test(row.term.trim()) ? 'PRODUCT' : row.matchType]: row.destinationAdGroupId },
       negateScope: 'AD_GROUP',
       userId: `user:${args.userId}`,
     })

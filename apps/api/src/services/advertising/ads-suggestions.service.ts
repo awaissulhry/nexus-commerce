@@ -121,6 +121,23 @@ function proposedKey(action: Record<string, unknown>): string {
 }
 
 /**
+ * 5d (review 7.10) — the ad group a search-term proposal came from. A SEARCH_TERM entity is
+ * `campaign:query`, so one term in two ad groups of a campaign shared ONE card: the second ad
+ * group's proposal overwrote the first's, and approving applied whichever ran last. The key now
+ * carries the ad group; the entity id keeps its `campaign:query` shape for every reader that parses it.
+ */
+function searchTermAdGroup(context: unknown): string | null {
+  const st = (context as { searchTerm?: { query?: unknown; externalAdGroupId?: unknown } } | null)?.searchTerm
+  return st?.query && st.externalAdGroupId ? String(st.externalAdGroupId) : null
+}
+
+/** 5d — a wire rule's dry run lists every creation in `outcomes`; a card needs at least one it would make. */
+function createsNothing(output: unknown): boolean {
+  const outcomes = (output as { outcomes?: unknown } | null)?.outcomes
+  return Array.isArray(outcomes) && !outcomes.some((o) => (o as { wouldCreate?: unknown } | null)?.wouldCreate === true)
+}
+
+/**
  * SG.9 — the mute set for a producer, as `${entityType}|${entityId}` keys.
  *
  * H10's third verb ("Pausing Suggestions") means *stop collecting data on this keyword or
@@ -175,7 +192,9 @@ export async function generateSuggestionsFromExecution(args: {
       // asking whether the action was the kind of thing you approve.
       if (NON_PROPOSAL_ACTIONS.has(String(action.type ?? ''))) continue
       if (out.wouldChange === 0 || out.wouldChange === '0') continue
-      const key = proposedKey(action)
+      // 5d (review 7.10) — a harvest or negative wire rule whose every outcome is a skip (dedupe, a term filter,
+      // a type the term cannot take) proposes nothing. It used to become a card, and approving it "applied" nothing.
+      if (createsNothing(res.output)) continue
       // HV.8c — a sweep is filed against the account, not against whichever context tripped it.
       // Everything else keeps its real entity, so `bid_down`'s sixty distinct proposals stay sixty.
       const sweep = SWEEP_ACTIONS.has(String(action.type ?? ''))
@@ -183,6 +202,16 @@ export async function generateSuggestionsFromExecution(args: {
       // SG.9 — the operator muted this entity: stop proposing for it. The entity keeps
       // running at Amazon; only the suggestions stop (H10's "Pausing Suggestions").
       if (muted.has(`${ent.type}|${ent.id}`)) continue
+      const legacyKey = proposedKey(action)
+      const adGroup = !sweep && ent.type === 'SEARCH_TERM' ? searchTermAdGroup(args.context) : null
+      const key = adGroup ? `${legacyKey}:ag=${adGroup}` : legacyKey
+      if (key !== legacyKey) {
+        // 5d — a card written before the ad group joined the key is taken over by the first ad group that proposes
+        // it again, so it keeps its place and the operator's decision instead of reappearing beside itself.
+        try {
+          await prisma.adsRuleSuggestion.updateMany({ where: { ruleId: args.ruleId, entityId: ent.id, proposedKey: legacyKey }, data: { proposedKey: key } })
+        } catch { /* a row with the new key already exists: the old one ages out through the lifecycle sweep */ }
+      }
       // upsert on the dedupe key — keep one row per rule×entity×change. The update branch never
       // touches `status` (the operator's decision is not overwritten by a tick); resurrection is
       // the LIFECYCLE SWEEP's job, with its windows (see sweepSuggestionLifecycle below).
