@@ -1512,7 +1512,7 @@ export interface PlacementRulesStrip {
 
 export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
   const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
-  const { ruleWindowBounds } = await import('@nexus/shared/data-vintage')
+  const { settledWhere } = await import('./ads-settled-window.js')
   /**
    * A Placement rule is triggered by CAMPAIGN_PERFORMANCE_BUDGET (`TRIGGER_BY_SLUG.placement`),
    * so its reach is that trigger's context set — the same one `buildCampaignBudgetContexts`
@@ -1520,7 +1520,7 @@ export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
    */
   const spec = TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET
   const windowDays = spec && spec.kind === 'window' && spec.days != null ? spec.days : 7
-  const { since, until } = ruleWindowBounds(windowDays)
+  const settled = settledWhere(windowDays) // 6c — the same settled window the evaluator reads
   const writesSince = new Date(Date.now() - 7 * 864e5)
   const humanSince = new Date(Date.now() - 30 * 864e5)
 
@@ -1532,7 +1532,7 @@ export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
     prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true } }),
     prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', date: { gte: since, lte: until } },
+      where: { entityType: 'CAMPAIGN', ...settled },
       _sum: { costMicros: true },
     }),
     /**

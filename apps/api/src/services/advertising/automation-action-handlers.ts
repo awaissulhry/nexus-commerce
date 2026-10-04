@@ -39,7 +39,7 @@ import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
 import { BID_WINDOW_MAX, BID_WINDOW_MIN, HARVEST_DEFAULTS, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
-import { ruleWindowBounds } from '@nexus/shared/data-vintage'
+import { settledWhere } from './ads-settled-window.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
@@ -1574,9 +1574,9 @@ function bidWindowDays(trigger: string, overrideDays?: number | null): number {
 /** 4d — one ad target's clicks over the same window, for the projected extra spend of a bid raise. */
 async function targetClicks(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ clicks: number; days: number }> {
   const days = bidWindowDays(trigger, overrideDays)
-  const { since, until } = ruleWindowBounds(days)
+  const settled = settledWhere(days) // 6c — ends at the ad product's attribution lag
   const perf = await prisma.amazonAdsDailyPerformance.aggregate({
-    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, date: { gte: since, lte: until } },
+    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, ...settled },
     _sum: { clicks: true },
   })
   return { clicks: perf._sum.clicks ?? 0, days }
@@ -1589,15 +1589,16 @@ async function targetClicks(adTargetId: string, trigger: string, overrideDays?: 
  * Lookback column — so the figure this computes on is the figure the operator was shown. A second
  * hard-coded window here is exactly the drift B2 existed to remove.
  *
- * `ruleWindowBounds` drops the two still-settling days, so a bid is never computed against a day
- * whose sales have not finished arriving. Returns null where there is no signal: a CPC needs a
+ * 6c — `settledWhere` ends the window at the ad product's attribution lag (7 days for Sponsored
+ * Products, 14 for Brands and Display), so a bid is never computed against a day whose sales have
+ * not finished arriving. Returns null where there is no signal: a CPC needs a
  * click, and an ACoS needs a sale. Acting on a keyword with no clicks is guessing.
  */
 async function targetPerformance(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ cpcEur: number; acos: number | null; clicks: number; salesCents: number; days: number } | null> {
   const days = bidWindowDays(trigger, overrideDays)
-  const { since, until } = ruleWindowBounds(days)
+  const settled = settledWhere(days) // 6c — ends at the ad product's attribution lag
   const perf = await prisma.amazonAdsDailyPerformance.aggregate({
-    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, date: { gte: since, lte: until } },
+    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, ...settled },
     _sum: { costMicros: true, clicks: true, sales7dCents: true },
   })
   const clicks = perf._sum.clicks ?? 0
@@ -1677,9 +1678,9 @@ async function laneSpend(campaignId: string, placement: string, trigger: string)
   const days = TRIGGER_WINDOW[trigger]?.days ?? TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET?.days ?? 7
   const labels = Object.keys(REPORT_LABEL_TO_PLACEMENT).filter((label) => REPORT_LABEL_TO_PLACEMENT[label] === placement)
   if (!labels.length) return { spendCents: 0, days }
-  const { since, until } = ruleWindowBounds(days)
+  const settled = settledWhere(days) // 6c — ends at the ad product's attribution lag
   const agg = await prisma.amazonAdsPlacementReport.aggregate({
-    where: { localCampaignId: campaignId, placement: { in: labels }, date: { gte: since, lte: until } },
+    where: { localCampaignId: campaignId, placement: { in: labels }, ...settled },
     _sum: { costMicros: true },
   })
   return { spendCents: microsToCents(agg._sum.costMicros), days }

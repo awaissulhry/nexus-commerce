@@ -188,7 +188,10 @@ describe('AX-ZD.5 ratchet — the evaluator must not read provisional data', () 
       .map((l, i) => ({ l, i: i + 1 }))
       .filter(({ l }) => /date:\s*\{\s*gte:\s*since\s*\}/.test(l))
     expect(unbounded.map((u) => u.i), 'add `lte: until` — these read provisional data').toEqual([])
-    expect(src).toMatch(/ruleWindowBounds\(/)
+    // 6c (review G.2) — every rule window ends at the ad product's attribution lag (settledWhere), not
+    // two days back (ruleWindowBounds).
+    expect(src).toMatch(/settledWhere\(/)
+    expect(src).not.toMatch(/ruleWindowBounds\(/)
   })
 })
 

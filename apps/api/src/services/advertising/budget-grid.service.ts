@@ -847,10 +847,10 @@ export interface BudgetStrip {
 
 export async function getBudgetRulesStrip(): Promise<BudgetStrip> {
   const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
-  const { ruleWindowBounds } = await import('@nexus/shared/data-vintage')
+  const { settledWhere } = await import('./ads-settled-window.js')
   const spec = TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET
   const windowDays = spec && spec.kind === 'window' ? spec.days : 7
-  const { since, until } = ruleWindowBounds(windowDays)
+  const settled = settledWhere(windowDays) // 6c — the same settled window the evaluator reads
   const writesSince = new Date(Date.now() - 7 * 864e5)
 
   const [enabled, baselines, perf, writes] = await Promise.all([
@@ -858,7 +858,7 @@ export async function getBudgetRulesStrip(): Promise<BudgetStrip> {
     prisma.campaign.count({ where: { budgetBaselineCents: { not: null } } }),
     prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', date: { gte: since, lte: until } },
+      where: { entityType: 'CAMPAIGN', ...settled },
       _sum: { costMicros: true },
     }),
     prisma.advertisingActionLog.groupBy({

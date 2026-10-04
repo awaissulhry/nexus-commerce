@@ -40,7 +40,7 @@ export interface SuggestionSuggested {
 
 export interface Suggestion {
   id: string; ruleId: string; ruleName: string | null; ruleCriteria?: string | null
-  /** SGX — the window `ruleCriteria` is measured over ("Last 7 Days, excluding the last 2 days").
+  /** SGX — the window `ruleCriteria` is measured over ("Last 7 Days, ending 7 days ago (14 for Sponsored Brands and Display)" — 6c).
    *  Without it the Reason reads as contradicting the metric columns, which are trailing 30 days. */
   ruleWindow?: string | null
   /** SG.2d — the ACoS threshold written into the producing rule, for the adaptive dot */

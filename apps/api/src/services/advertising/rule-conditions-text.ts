@@ -1,5 +1,6 @@
 /**
- * One human reading of a rule's conditions, in a module with NO imports.
+ * One human reading of a rule's conditions, in a module with NO imports but one leaf
+ * (`ads-settled-window.ts`, which imports nothing but @nexus/shared — 6c).
  *
  * 🔴 Why it lives alone. It began as an export from `budget-grid.service.ts`, pulled into the
  * assignment route with a dynamic `await import()`. On prod that threw **"Cannot access
@@ -26,6 +27,8 @@
  * condition nobody can name is still a condition the rule evaluates, and dropping it would make
  * the rule look looser than it is.
  */
+
+import { settledEndText } from './ads-settled-window.js'
 
 /** field path → how a human says it, and how its stored value should be read back. */
 const FIELDS: Record<string, { label: string; unit: 'fraction' | 'cents' | 'multiple' | 'raw' }> = {
@@ -137,11 +140,10 @@ export const ruleWindowOf = (conditions: unknown): string | null => {
     }
     const look = typeof c.lookback === 'string' ? c.lookback.trim() : ''
     if (!look) continue
-    const excl = typeof c.exclude === 'string' ? c.exclude.trim() : ''
-    // "None" is the builder's own word for "exclude nothing" — saying it aloud would read as a
-    // caveat where there is none.
-    if (!excl || /^none$/i.test(excl)) return look
-    return `${look}, excluding the ${excl.replace(/^last\s+/i, 'last ').toLowerCase()}`
+    // 6c — the stored `exclude` is what the builder said when the rule was saved ("Last 2 Days");
+    // the engine never read it. A span of days ends where the engine ends it: the ad product's
+    // attribution lag. A snapshot ("Latest snapshot") is not a span and gets no end.
+    return /^last\s+\d+\s+days?$/i.test(look) ? `${look}, ${settledEndText()}` : look
   }
   return null
 }

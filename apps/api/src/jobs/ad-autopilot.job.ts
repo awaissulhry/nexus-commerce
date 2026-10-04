@@ -24,7 +24,7 @@ import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertisi
 import { mutedKeys } from '../services/advertising/ads-suggestions.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import { isCampaignOutOfBudget } from '../services/advertising/delivery-reasons.js'
-import { ruleWindowBounds } from '@nexus/shared/data-vintage'
+import { settledWhere } from '../services/advertising/ads-settled-window.js'
 
 /** Assemble per-campaign signals from Campaign aggregates + AdTarget perf roll-up. */
 export async function gatherSignals(campaignIds: string[]): Promise<CampaignSignals[]> {
@@ -39,13 +39,13 @@ export async function gatherSignals(campaignIds: string[]): Promise<CampaignSign
   // populated, already the level these signals are consumed at, and no dependency on
   // the target-grain ingest. AdTarget is still read, but only for bidCents, which is
   // genuine entity state from structure sync rather than a performance roll-up.
-  const { since, until } = ruleWindowBounds(14) // excludes the provisional D-0/D-1 tail
+  const settled = settledWhere(14) // 6c — 14 days ending at the ad product's attribution lag
   const [campaigns, targets, perf] = await Promise.all([
     prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, dailyBudget: true, trueProfitMarginPct: true, deliveryReasons: true, impressions: true } }),
     prisma.adTarget.findMany({ where: { isNegative: false, adGroup: { campaignId: { in: campaignIds } } }, select: { bidCents: true, adGroup: { select: { campaignId: true } } } }),
     prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: { gte: since, lte: until } },
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, ...settled },
       _sum: { costMicros: true, sales7dCents: true, clicks: true, orders7d: true },
     }),
   ])
