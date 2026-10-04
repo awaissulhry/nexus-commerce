@@ -501,6 +501,7 @@ const A7: AutomationAdapter = {
       const { patchBudgetSchedule } = await import('./ads-budget-schedule.service.js')
       const out = await patchBudgetSchedule(rowId, { enabled: on }, `user:${actorUserId ?? 'anonymous'}`)
       if (!out) return 'not found'
+      if ('conflict' in out) return out.conflict.error // 3c — switched back on, a campaign would be in two schedules
       if (!out.restore) return null
       const { restored, kept, refused } = out.restore
       return { note: `gave back the base budget of ${restored} campaign(s)${kept ? `; ${kept} kept a budget someone changed since` : ''}${refused ? `; ${refused} kept the schedule's budget because the restore was refused` : ''}` }

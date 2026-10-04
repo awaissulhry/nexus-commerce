@@ -9,7 +9,9 @@
  *   · a person who changes the budget inside the window keeps it: the schedule yields, gives nothing back when the
  *     window closes, and a pause leaves it too (`kept`);
  *   · a give-back the gate refused is tried again an hour later — once the sync has copied Amazon's budget back —
- *     and the gate takes the retry as a give-back, so a +100% boost comes back even across a UTC midnight.
+ *     and the gate takes the retry as a give-back, so a +100% boost comes back even across a UTC midnight;
+ *   · 3c × 4k — a window entry the gate refused is put back in Nexus by the worker, and the next run records it as
+ *     refused (with the gate's reason), not as yielded to someone who never touched it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../test-support/formula-database.js'
@@ -79,7 +81,7 @@ const db = () => database.client as any
 
 /** Every weekday, all day, +X% — so a window is open whenever the test runs, and `windows: []` closes it. */
 const EVERY_DAY = (pct: number) => [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, start: '', end: '', adj: 'incPct', value: pct }))
-type Memo = { windowKey?: string; state?: string; baseCents?: number; ownCents?: number; attempts?: number; overriddenBy?: { kind: string } }
+type Memo = { windowKey?: string; state?: string; baseCents?: number; ownCents?: number; attempts?: number; error?: string | null; overriddenBy?: { kind: string } }
 const memo = (id: string, campaignId: string) => inside(async () =>
   (((await db().budgetSchedule.findUnique({ where: { id }, select: { lastApplied: true } })).lastApplied ?? {}) as Record<string, Memo>)[campaignId])
 const budget = (id: string) => inside(async () => Number((await db().campaign.findUnique({ where: { id }, select: { dailyBudget: true } })).dailyBudget))
@@ -193,6 +195,31 @@ describe('3b — a budget schedule gives back only what it holds, from the budge
 
     // Delivered: the next runs keep the record and write nothing more.
     expect(await inside(() => runBudgetScheduleOnce(new Date(t0 + 3 * 60 * 60_000)))).toMatchObject({ changed: 0 })
+    expect((await drain()).processed).toBe(0)
+  })
+
+  it('3c × 4k — a window entry the gate refused is put back in Nexus and shown refused, not yielded', async () => {
+    await seedCampaign('gb-c', 10)
+    await inside(() => db().budgetSchedule.create({ data: { id: 'gb-e', name: 'gb-e', timezone: 'UTC', windows: EVERY_DAY(50), campaigns: [{ id: 'gb-c', dailyBudget: 10 }] } }))
+    gate.refuse = 1
+    expect(await inside(() => runBudgetScheduleOnce())).toMatchObject({ changed: 1 })
+    expect(await budget('gb-c')).toBe(15)
+    expect((await drain()).statuses).toEqual(['SKIPPED'])
+    expect(await budget('gb-c')).toBe(10) // 4k: the refused write is put back in Nexus
+
+    // Before 3c the next run read "€10 ≠ the €15 we set" as someone else's change: yielded. It is the gate's refusal.
+    expect(await inside(() => runBudgetScheduleOnce())).toMatchObject({ changed: 0, yielded: 0, refused: 1 })
+    const refused = await memo('gb-e', 'gb-c')
+    expect(refused).toMatchObject({ state: 'refused', baseCents: 1000, ownCents: 1500 })
+    expect(refused.error).toMatch(/campaign_allowlist/)
+    expect(refused.overriddenBy).toBeUndefined()
+    // Still stood down for this entry: no new write every 15 minutes.
+    expect((await drain()).processed).toBe(0)
+
+    // The window closes: Nexus and Amazon both hold the €10 from before the window, so nothing is given back.
+    await inside(() => db().budgetSchedule.update({ where: { id: 'gb-e' }, data: { windows: [] } }))
+    expect(await inside(() => runBudgetScheduleOnce())).toMatchObject({ changed: 0, yielded: 0, refused: 0 })
+    expect(await budget('gb-c')).toBe(10)
     expect((await drain()).processed).toBe(0)
   })
 })

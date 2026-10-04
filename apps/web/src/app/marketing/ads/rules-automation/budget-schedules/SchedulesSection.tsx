@@ -75,9 +75,9 @@ import { SectionEmpty } from './SectionShell'
 // BSP-P5 — the state vocabulary lives in a pure module so it can be TESTED. A client component
 // cannot be loaded under vitest here, and these three functions are exactly what the operator
 // reads about whether a schedule is working. Same move as `bid/bidState.ts`.
-import { deliveryCell, localDayKey, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { deliveryCell, localDayKey, restoreSummary, scheduleStatus, type ScheduleDelivery, type ScheduleRestore } from './scheduleState'
 import { ScheduleContextStrip } from './ScheduleContextStrip'
-import { Listbox } from '@/design-system/components'
+import { Banner, Listbox } from '@/design-system/components'
 
 /** W4 — `autoRefill` dropped (dead client state since BSP.2 removed its column); `enabled` added
  *  (the API always returned it; nothing read it). */
@@ -120,6 +120,8 @@ export function SchedulesSection({ market }: { market?: string }) {
   const [total, setTotal] = useState(0)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
   const [toggleErr, setToggleErr] = useState<string | null>(null)
+  // 3c (review 6.5) — what a pause or a delete gave back. The API has answered it since BSP-P3; the screen dropped it.
+  const [restoreNote, setRestoreNote] = useState<ReturnType<typeof restoreSummary>>(null)
 
   useEffect(() => {
     let alive = true
@@ -159,9 +161,11 @@ export function SchedulesSection({ market }: { market?: string }) {
    * (the list is cached 15s server-side, so a refetch would flip the switch back under the
    * operator's finger — the U13 lesson). Turning a schedule OFF also gives back the budgets it
    * still holds, server-side (3b); the tooltip says so, because that is a spend-affecting side effect.
+   * 3c — and the answer's give-back counts are shown in a Banner once it is off.
    */
-  const toggleEnabled = useCallback(async (id: string, on: boolean) => {
+  const toggleEnabled = useCallback(async (id: string, on: boolean, name: string) => {
     setToggleErr(null)
+    setRestoreNote(null)
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: on } : r)))
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/budget-schedules/${id}`, {
@@ -169,6 +173,7 @@ export function SchedulesSection({ market }: { market?: string }) {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.error != null) throw new Error(String(j?.error ?? `the server answered ${r.status}`))
+      if (!on) setRestoreNote(restoreSummary((j?.restore ?? null) as ScheduleRestore | null, `Paused “${name}”`))
     } catch (e) {
       setRows((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: !on } : r)))
       setToggleErr(`The schedule could not be ${on ? 'resumed' : 'paused'} (${(e as Error).message}) — the switch shows its real state.`)
@@ -202,7 +207,7 @@ export function SchedulesSection({ market }: { market?: string }) {
               checked={r.enabled}
               aria-label={`${r.enabled ? 'Pause' : 'Resume'} ${r.name}`}
               title={r.enabled ? 'Pause this schedule — it gives back each budget it still holds; a budget someone changed since stays as it is.' : 'Resume this schedule.'}
-              onClick={() => void toggleEnabled(r.id, !r.enabled)}
+              onClick={() => void toggleEnabled(r.id, !r.enabled, r.name)}
             />
             <span className={`h10-bd7-posture ${s.cls}`} title={s.why}>{s.word}</span>
           </span>
@@ -283,17 +288,26 @@ export function SchedulesSection({ market }: { market?: string }) {
     const n = ids.length
     if (!window.confirm(`Delete ${n} budget schedule${n === 1 ? '' : 's'}? This cannot be undone.`)) return
     setDeleteErr(null)
+    setRestoreNote(null)
     const results = await Promise.all(ids.map(async (id) => {
       try {
         const r = await fetch(`${getBackendUrl()}/api/advertising/budget-schedules/${id}`, { method: 'DELETE' })
-        return { id, ok: r.ok, status: r.status }
+        const j = await r.json().catch(() => ({}))
+        return { id, ok: r.ok, status: r.status, restore: (j?.restore ?? null) as ScheduleRestore | null }
       } catch {
-        return { id, ok: false, status: 0 }
+        return { id, ok: false, status: 0, restore: null }
       }
     }))
     const gone = results.filter((r) => r.ok).map((r) => r.id)
     const failed = results.filter((r) => !r.ok)
     if (gone.length) setRows((rs) => rs.filter((r) => !gone.includes(r.id)))
+    // 3c — one line for the whole delete: the give-backs of every deleted schedule, summed (a switched-off one answers null).
+    if (gone.length) {
+      const sum = results.filter((r) => r.ok).reduce<ScheduleRestore>((a, r) => ({
+        restored: a.restored + (r.restore?.restored ?? 0), kept: a.kept + (r.restore?.kept ?? 0), refused: a.refused + (r.restore?.refused ?? 0),
+      }), { restored: 0, kept: 0, refused: 0 })
+      setRestoreNote(restoreSummary(sum, `Deleted ${gone.length} schedule${gone.length === 1 ? '' : 's'}`))
+    }
     setSel(new Set(failed.map((f) => f.id)))
     if (failed.length) {
       const one = failed[0]
@@ -354,6 +368,7 @@ export function SchedulesSection({ market }: { market?: string }) {
 
       {deleteErr && <p className="h10-bsp-note bad"><span>{deleteErr}</span></p>}
       {toggleErr && <p className="h10-bsp-note bad"><span>{toggleErr}</span></p>}
+      {restoreNote && <Banner tone={restoreNote.tone} title={restoreNote.title} onDismiss={() => setRestoreNote(null)}>{restoreNote.text}</Banner>}
 
       <AdsDataGrid<ScheduleRow>
         rows={rows}

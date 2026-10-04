@@ -10,6 +10,10 @@
  * The answers AND the rows each request leaves (the row itself, the campaigns a disable gives back, the audit rows) are
  * recorded. On a real PostgreSQL (PGlite). The snapshot beside this file was WRITTEN BY THE ROUTES BEFORE THE MOVE and
  * is read unchanged after it — except 3b's `kept` count in a pause's or a delete's give-back result.
+ *
+ * 3c — `POST /advertising/budget-schedules` → createBudgetSchedule joined: its two answers (and the rows they leave) were
+ * recorded from the route before the move and read unchanged after it. The block after them is 3c's new behaviour: the
+ * 409 of the one-schedule rule on create, campaigns edit and re-enable, and a campaigns edit's give-back result.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -50,7 +54,7 @@ let app: FastifyInstance
 const answers: string[] = []
 const rows = { pool: '', target: '', schedule: '', scheduleGone: '', campaign: '', campaignGone: '', ebayCampaign: '' }
 
-async function ask(method: 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: object) {
+async function ask(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: object) {
   const res = await app.inject({ method, url, ...(payload ? { payload } : {}), headers: { 'x-actor-id': 'parity-person' } })
   answers.push(`${method} ${normalise(url)} → ${res.statusCode} ${normalise(res.body)}`)
 }
@@ -130,6 +134,20 @@ describe('R14 — the engine-setting routes answer as before the move', () => {
     await ask('PUT', `/api/ebay-ads/campaigns/${rows.ebayCampaign}/automation-policy`, { posture: 'SUGGEST', rateCapPct: 9.5, rateFloorPct: 2, bidCapCents: 80, bidFloorCents: null })
     await ask('PUT', `/api/ebay-ads/campaigns/${rows.ebayCampaign}/automation-policy`, { protected: true })
     await state('eBay policy')
+    // ── Budget schedule create (3c: POST moved into createBudgetSchedule) ──
+    await ask('POST', '/api/advertising/budget-schedules', { windows: [] })
+    await ask('POST', '/api/advertising/budget-schedules', { name: 'PARITY schedule (created)', kind: 'budget', type: 'campaign-budget', campaigns: [{ id: rows.campaignGone, name: 'PARITY B', dailyBudget: 10 }], windows: [{ day: 3, start: '18:00', end: '22:00', adj: 'incPct', value: 30 }], chartPrefs: { metric1: 'Spend' }, startDate: '2026-03-01', endDate: '2026-04-01', neverExpire: false, excludeDates: false, autoRefill: true })
+    await state('schedule created')
+    // ── 3c — new answers: one switched-on budget schedule per campaign (409 naming the other), removal gives back ──
+    const created = (await inside(() => database.client.budgetSchedule.findFirst({ where: { name: 'PARITY schedule (created)' } })))!.id
+    const both = [{ id: rows.campaign, dailyBudget: 10 }, { id: rows.campaignGone, name: 'PARITY B', dailyBudget: 10 }]
+    await ask('POST', '/api/advertising/budget-schedules', { name: 'PARITY overlap', campaigns: [{ id: rows.campaign, name: 'PARITY A', dailyBudget: 10 }] })
+    await ask('PATCH', `/api/advertising/budget-schedules/${rows.schedule}`, { campaigns: both })
+    await ask('PATCH', `/api/advertising/budget-schedules/${created}`, { enabled: false })
+    await ask('PATCH', `/api/advertising/budget-schedules/${rows.schedule}`, { campaigns: both })
+    await ask('PATCH', `/api/advertising/budget-schedules/${created}`, { enabled: true })
+    await ask('PATCH', `/api/advertising/budget-schedules/${rows.schedule}`, { campaigns: [both[1]] })
+    await state('schedule overlap')
     expect(answers.join('\n')).toMatchSnapshot()
   })
 })
