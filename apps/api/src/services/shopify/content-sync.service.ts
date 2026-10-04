@@ -157,6 +157,15 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       if (category) { await applyNativeEdit(graphql, category, runId); await checkpoint({ categoryInitialized: true }) }
     }
     const informationDraft = preview.informationDraft ?? await listingInformationDraft(graphql, informationSource, await readLinkedStoreSchema(graphql))
+    // New listings (Owner 2026-10-04) — Publish's Status choice for a product Shopify did not hold yet wins over the stored
+    // Shopify status: ACTIVE (one status edit after the create), or DRAFT (as created; no status edit).
+    const createStatus = !preview.remote && (input.createStatus === 'ACTIVE' || input.createStatus === 'DRAFT') ? input.createStatus as 'ACTIVE' | 'DRAFT' : null
+    if (createStatus) {
+      // Status is the product's own field (a variant has none): Publish's choice replaces any stored one.
+      informationDraft.nativeEdits = (informationDraft.nativeEdits ?? []).filter(edit => edit.field !== 'status')
+      if (createStatus === 'ACTIVE') informationDraft.nativeEdits.push({ ownerId: result.productId, productId: result.productId,
+        ownerLabel: String(listing.title ?? current.family.name ?? 'Product'), field: 'status', value: 'DRAFT', nextValue: 'ACTIVE' })
+    }
     // A product created in this operation has newly allocated exact owner IDs. Existing products
     // keep the baselines included in the reviewed remote revision, including absent metafields.
     const information = reviewedInformation ?? await buildLinkedPlan(graphql, informationDraft)
@@ -190,7 +199,10 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
         else await tx.channelListing.create({ data: { ...mapping, productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey } })
       }
       const parent = await tx.channelListing.findUniqueOrThrow({ where: { id: listingId } })
-      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, listingStatus, ...(stillDrafts.has(listingId) ? { syncPaused: false } : {}), platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId } as Prisma.InputJsonValue } })
+      // New listings — the status Shopify verified for a product created with Publish's choice, kept on the family row as
+      // the engine's status change keeps it (the Status column reads Active, or Inactive "Draft in Shopify").
+      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, listingStatus, ...(stillDrafts.has(listingId) ? { syncPaused: false } : {}), platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId,
+        ...(createStatus ? { status: verifiedProduct.status } : {}) } as Prisma.InputJsonValue } })
     }, { isolationLevel: 'Serializable' })
     await checkpoint({ ...result, error: null })
     return { success: true, ...result, message: `Verified ${current.variants.length} native Shopify variants. Storefront theme verification is a separate review.` }

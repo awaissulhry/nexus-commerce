@@ -5,6 +5,7 @@
  *   1. NEXUS_AMAZON_ADS_MODE=live (deploy-wide env flag)
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
  *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
+ *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
  * marks the OutboundSyncQueue row SKIPPED with a `[ADS-WRITE-GATE-DENY]`
@@ -21,8 +22,11 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
+import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
+import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
 export type GateDeniedAt =
@@ -50,6 +54,8 @@ export type GateDeniedAt =
   | 'budget_day_move'
   // 6a — the campaign is Sponsored Brands or Display; every write behind this gate goes to a Sponsored Products endpoint.
   | 'ad_product_unsupported'
+  // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
+  | 'market_limits'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -95,6 +101,8 @@ export interface GateContext {
   keywordText?: string | null
   /** True when the write adds a negative keyword / suppresses a term. */
   isNegation?: boolean
+  /** 5a — the negative's match type ('NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'); a phrase is also refused when a protected term contains it. */
+  negativeMatchType?: string | null
   /**
    * ADX G1 — a deliberate bid suppression or restore (`force` in the mutation layer),
    * not an optimisation. Exempts the write from the MINIMUM bid bound only.
@@ -140,10 +148,8 @@ export interface GateContext {
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
 const BID_FIELDS = new Set(['bid', 'defaultBid'])
 
-/** Normalise a keyword for protection matching: lowercase, collapse whitespace. */
-export function normaliseTerm(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ').trim()
-}
+/** Normalise a keyword for protection matching — 5a: it lives with the one matcher now; re-exported for its readers. */
+export { normaliseTerm } from './ads-negation-policy.js'
 
 function maxWriteValueCents(): number {
   const v = Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)
@@ -168,6 +174,23 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
   const unsupported = adProductRefusal({ adProduct: ctx.adProduct }, { unknown: 'allow' })
   if (unsupported) return { allowed: false, reason: unsupported, deniedAt: 'ad_product_unsupported' }
+
+  // ADX A1 — keyword protection. A whitelisted term may not be negated by anything.
+  // Checked here rather than in the harvest service because the harvest service is
+  // not the only thing that can negate a term, and a protection that only some
+  // callers honour is not a protection.
+  // 5a — before the sandbox return, so a sandbox run refuses what a live one would. The matcher (EXACT / PREFIX /
+  // CONTAINS, and a phrase negative that a protected term contains) is ads-negation-policy.ts, the one the wire and
+  // the MCP preview use too.
+  if (ctx.isNegation && ctx.keywordText) {
+    const refusal = await protectedNegativeRefusal({
+      text: ctx.keywordText,
+      matchType: ctx.negativeMatchType ?? null,
+      marketplace: ctx.marketplace,
+      campaignId: ctx.campaignId ?? null,
+    })
+    if (refusal) return { allowed: false, reason: refusal.reason, deniedAt: 'keyword_protected' }
+  }
 
   // Sandbox path — env says we're not in live mode at all.
   if (adsMode() === 'sandbox') {
@@ -243,6 +266,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       deniedAt: 'connection_writes',
     }
   }
+
+  // 6b — Amazon's own limits in this market (review G.5, Owner decision S10). Every amount behind this gate is in euro
+  // cents, so a market without a checked row (UK, SE, PL, NL, …) is refused outright rather than converted, and a bid or
+  // budget outside Amazon's range is refused before Amazon answers with an error. Suppression is not exempt: it lowers a
+  // bid to Amazon's minimum, never below. `marketplace` may be an Amazon marketplace id on older rows (HB.8), hence the
+  // normaliser. The ad product is Sponsored Products here unless the caller says otherwise — 6a refused the others above.
+  const outsideLimits = marketLimitsRefusal({
+    market: normalizeMarketplaceCode(ctx.marketplace, '') || ctx.marketplace,
+    adProduct: ctx.adProduct ?? null,
+    field: ctx.field ?? null,
+    valueMinor: ctx.intendedValueCents ?? null,
+  })
+  if (outsideLimits) return { allowed: false, reason: outsideLimits, deniedAt: 'market_limits' }
 
   // Apex A.2a — per-campaign allowlist (default-deny). When the worker passes a
   // campaignId (every existing-entity bid/state mutation), the campaign must be
@@ -407,45 +443,6 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // clamps below, plus cpcCeiling) so no single write can set a wild bid, and the Ads
     // client's 429 backoff (ads-api-client.ts) paces bursts against Amazon's rate limits.
     // liveBidWritesToday is still recorded (see recordWrite) for observability only.
-  }
-
-  // ADX A1 — keyword protection. A whitelisted term may not be negated by anything.
-  // Checked here rather than in the harvest service because the harvest service is
-  // not the only thing that can negate a term, and a protection that only some
-  // callers honour is not a protection.
-  if (ctx.isNegation && ctx.keywordText) {
-    const term = normaliseTerm(ctx.keywordText)
-    if (term) {
-      const protections = await prisma.adKeywordProtection.findMany({
-        where: {
-          mode: 'WHITELIST',
-          AND: [
-            { OR: [{ marketplace: null }, { marketplace: ctx.marketplace }] },
-            { OR: [{ campaignId: null }, { campaignId: ctx.campaignId ?? undefined }] },
-          ],
-        },
-        select: { term: true, isPrefix: true, matchType: true, reason: true },
-      })
-      // ADX G4 — CONTAINS is the mode brand protection actually needs. Amazon returns
-      // search terms like "giacca moto xavia", which neither equals "xavia" nor starts
-      // with it, so a prefix-only whitelist would have looked like it protected the brand
-      // while missing every term where the brand is not the first word.
-      // matchType null falls back to isPrefix so pre-existing rows are unchanged.
-      const hit = protections.find((p) => {
-        const t = normaliseTerm(p.term)
-        const mode = p.matchType ?? (p.isPrefix ? 'PREFIX' : 'EXACT')
-        if (mode === 'CONTAINS') return term.includes(t)
-        if (mode === 'PREFIX') return term.startsWith(t)
-        return term === t
-      })
-      if (hit) {
-        return {
-          allowed: false,
-          reason: `"${term}" is whitelisted against negation${hit.reason ? ` (${hit.reason})` : ''}`,
-          deniedAt: 'keyword_protected',
-        }
-      }
-    }
   }
 
   // Value cap: blast-radius limit per write. Composite actions are

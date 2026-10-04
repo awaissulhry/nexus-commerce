@@ -11,9 +11,17 @@
  *    `changes->'result'`, never the change plan);
  *  - the issues the channel reports for each listing now (open `ListingIssue` rows);
  *  - whether a publication to this destination has not settled yet.
+ *
+ * Build shape v2 (P7): a selling change is a publish too. The newest of the publish journals AND the audit records the
+ * listing-action engine writes per row (`ChannelListingSnapshot`, reason = the action: pause, resume, end, relist,
+ * delete) is the row's last publish, with its `kind` so the card reads "Pause offer · Accepted · 10:42 · Awais". A
+ * successful selling change is ACCEPTED (never VERIFIED: Nexus does not read it back); a failed one keeps the engine's
+ * message. A publish journal is `full_update` when its publication sent this row as a Full update
+ * (`changes.fullProductIds`), else `publish`.
  */
 import { Prisma } from '@prisma/client'
-import type { StudioChannelIssue, StudioPublicationStatus, StudioPublishResult, StudioRowLastPublish, StudioRowOpenIssue } from '@nexus/shared/studio-publication'
+import type { LastPublishKind } from '@nexus/shared/publication-history'
+import type { StudioChannelIssue, StudioPublicationStatus, StudioPublishResult, StudioRowLastPublish, StudioRowOpenIssue, StudioRowPublicationStatus } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from './workspace-destination.js'
 import { IN_FLIGHT, OPEN_PUBLICATION, PUBLICATION_KIND } from './studio-publication-settle.js'
@@ -32,25 +40,44 @@ const SENT = [...IN_FLIGHT, 'ACCEPTED', 'VERIFIED', 'PARTIAL', 'FAILED']
 const ISSUES_PER_LISTING = 50
 /** A journal's own words for "this publish created the listing": an Amazon full UPDATE or an eBay AddFixedPriceItem. */
 export const CREATE_FIELD = '$create'
+/** The listing-action engine's run kind and the reasons of its per-row audit records (listing-action.service.ts). */
+const SELLING_KIND = 'listing-action'
+const SELLING_REASONS = ['pause', 'resume', 'end', 'relist', 'delete'] as const
+
+/** A row's last publish, with what it was (build shape v2): the sheet titles its card with `kind`. */
+export interface LastPublish extends StudioRowLastPublish { kind: LastPublishKind }
+export interface RowPublicationStatus extends Omit<StudioRowPublicationStatus, 'last'> { last: LastPublish | null }
+export interface PublicationStatusRead extends Omit<StudioPublicationStatus, 'rows'> { rows: RowPublicationStatus[] }
 
 interface JournalRow {
   listingId: string
   publicationId: string | null
+  /** 'publish', or the selling change's action. */
+  reason: string
   outcome: string
   createdAt: Date
   sku: string | null
+  /** A selling change's own row message (its audit record); null for a publish journal. */
+  message: string | null
   fields: unknown
   created: boolean
 }
 
 interface PublicationRow {
   id: string
+  kind: string | null
   status: string
   userId: string | null
   submittedAt: Date | null
   createdAt: Date
   result: unknown
+  /** The rows the publication sent as a Full update (a publication only). */
+  fullProductIds: unknown
 }
+
+/** A selling change's run status in the publish vocabulary the Last publish cell reads (`PUBLICATION_STATUSES`). */
+const SELLING_STATUS: Record<string, string> = { RUNNING: 'PUBLISHING', DONE: 'ACCEPTED', PARTIAL: 'PARTIAL', FAILED: 'FAILED', NOT_SENT: 'NOT_SENT', UNKNOWN: 'UNVERIFIED' }
+const isSellingReason = (reason: string): reason is (typeof SELLING_REASONS)[number] => (SELLING_REASONS as readonly string[]).includes(reason)
 
 const severityOf = (raw: string): StudioChannelIssue['severity'] => {
   const value = raw.toUpperCase()
@@ -85,19 +112,25 @@ function sentFields(row: JournalRow): string[] {
   return [...new Set(fields)]
 }
 
-/** The newest publish journal per listing. One statement; each lateral step walks the [channelListingId, createdAt] index. */
+/**
+ * The newest publish journal or selling-change record per listing. One statement; each lateral step walks the
+ * [channelListingId, createdAt] index.
+ */
 async function newestJournals(listingIds: string[]): Promise<JournalRow[]> {
   if (!listingIds.length) return []
   return prisma.$queryRaw<JournalRow[]>(Prisma.sql`
-    SELECT l.id AS "listingId", j."publishEventId" AS "publicationId", j.outcome, j."createdAt", j.sku, j.fields, j.created
+    SELECT l.id AS "listingId", j."publishEventId" AS "publicationId", j.reason, j.outcome, j."createdAt", j.sku, j.message, j.fields, j.created
       FROM unnest(${listingIds}::text[]) AS l(id)
       CROSS JOIN LATERAL (
-        SELECT s."publishEventId", s.outcome, s."createdAt",
+        SELECT s."publishEventId", s.reason, s.outcome, s."createdAt",
                s.payload->>'sku' AS sku,
-               jsonb_path_query_array(s.payload, '$.requests[*].writes[*].field') AS fields,
-               jsonb_path_exists(s.payload, '$.requests[*] ? (@.intentVersion == 1 && (@.message.operationType == "UPDATE" || @.operation == "AddFixedPriceItem"))') AS created
+               CASE WHEN s.reason = 'publish' THEN NULL ELSE s.payload->>'message' END AS message,
+               CASE WHEN s.reason = 'publish' THEN jsonb_path_query_array(s.payload, '$.requests[*].writes[*].field') ELSE '[]'::jsonb END AS fields,
+               s.reason = 'publish' AND jsonb_path_exists(s.payload, '$.requests[*] ? (@.intentVersion == 1 && (@.message.operationType == "UPDATE" || @.operation == "AddFixedPriceItem"))') AS created
           FROM "ChannelListingSnapshot" s
-         WHERE s."channelListingId" = l.id AND s.reason = 'publish' AND s.payload->>'kind' = ${PUBLICATION_KIND}
+         WHERE s."channelListingId" = l.id
+           AND ((s.reason = 'publish' AND s.payload->>'kind' = ${PUBLICATION_KIND})
+             OR (s.reason IN (${Prisma.join(SELLING_REASONS)}) AND s.payload->>'kind' = ${SELLING_KIND}))
          ORDER BY s."createdAt" DESC, s.id DESC
          LIMIT 1
       ) j`)
@@ -110,13 +143,26 @@ async function newestJournals(listingIds: string[]): Promise<JournalRow[]> {
 async function publications(ids: string[]): Promise<PublicationRow[]> {
   if (!ids.length) return []
   return prisma.$queryRaw<PublicationRow[]>(Prisma.sql`
-    SELECT b.id, b.status, b."userId", b."submittedAt", b."createdAt", b.changes->'result' AS result
+    SELECT b.id, b.kind, b.status, b."userId", b."submittedAt", b."createdAt",
+           CASE WHEN b.kind = ${SELLING_KIND} THEN NULL ELSE b.changes->'result' END AS result,
+           CASE WHEN b.kind = ${SELLING_KIND} THEN NULL ELSE b.changes->'fullProductIds' END AS "fullProductIds"
       FROM "BulkOperation" b
      WHERE b.id = ANY(${ids}::text[])
-       AND (b.kind = ${PUBLICATION_KIND} OR (b.kind IS NULL AND b.changes->>'kind' = ${PUBLICATION_KIND}))`)
+       AND (b.kind IN (${PUBLICATION_KIND}, ${SELLING_KIND}) OR (b.kind IS NULL AND b.changes->>'kind' = ${PUBLICATION_KIND}))`)
 }
 
-export async function readPublicationStatus(input: PublicationStatusInput, now = new Date()): Promise<StudioPublicationStatus> {
+/** A selling change's record as the row's last publish: its own outcome and message; no fields, no channel issues. */
+function sellingLast(journal: JournalRow, publication: PublicationRow, userName: string | null, kind: LastPublishKind): LastPublish {
+  return {
+    publicationId: publication.id,
+    status: SELLING_STATUS[publication.status] ?? publication.status,
+    outcome: journal.outcome === 'ACCEPTED' ? 'ACCEPTED' : journal.outcome === 'FAILED' ? 'FAILED' : 'UNKNOWN',
+    at: (publication.submittedAt ?? journal.createdAt).toISOString(),
+    userName, message: journal.message || null, reference: null, sentFields: [], issues: [], kind,
+  }
+}
+
+export async function readPublicationStatus(input: PublicationStatusInput, now = new Date()): Promise<PublicationStatusRead> {
   if (!input.channel?.trim()) throw new WorkspaceScopeError('Choose the channel.', 400)
   if (!input.accountId?.trim()) throw new WorkspaceScopeError('Choose the connected account.', 400)
   const channel = input.channel.trim().toUpperCase()
@@ -165,11 +211,15 @@ export async function readPublicationStatus(input: PublicationStatusInput, now =
     issuesOf.set(issue.listingId, list)
   }
 
-  const rows = listings.map(listing => {
+  const rows = listings.map((listing): RowPublicationStatus => {
     const journal = journalOf.get(listing.id)
     const publication = journal?.publicationId ? publicationOf.get(journal.publicationId) : undefined
-    let last: StudioRowLastPublish | null = null
-    if (journal && publication) {
+    let last: LastPublish | null = null
+    const userName = publication?.userId ? nameOf.get(publication.userId) ?? null : null
+    if (journal && publication && isSellingReason(journal.reason)) {
+      last = publication.kind === SELLING_KIND ? sellingLast(journal, publication, userName, journal.reason) : null
+    } else if (journal && publication && publication.kind !== SELLING_KIND) {
+      const full = Array.isArray(publication.fullProductIds) && publication.fullProductIds.includes(listing.productId)
       const result = (publication.result && typeof publication.result === 'object' ? publication.result : null) as StudioPublishResult | null
       const entries = journal.sku && Array.isArray(result?.results) ? result!.results.filter(entry => entry?.sku === journal.sku) : []
       const entry = entries.length === 1 ? entries[0] : undefined
@@ -178,11 +228,12 @@ export async function readPublicationStatus(input: PublicationStatusInput, now =
         status: publication.status,
         outcome: resultOutcome(entry?.status) ?? journalOutcome(journal.outcome),
         at: (publication.submittedAt ?? journal.createdAt).toISOString(),
-        userName: publication.userId ? nameOf.get(publication.userId) ?? null : null,
+        userName,
         message: typeof entry?.message === 'string' ? entry.message : null,
         reference: typeof entry?.reference === 'string' && entry.reference ? entry.reference : null,
         sentFields: sentFields(journal),
         issues: channelIssues(entry?.issues),
+        kind: full && !journal.created ? 'full_update' : 'publish',
       }
     }
     return { productId: listing.productId, listingId: listing.id, sku: skuOf.get(listing.productId) ?? '', last, issues: issuesOf.get(listing.id) ?? [] }

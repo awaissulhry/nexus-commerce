@@ -35,9 +35,9 @@ import {
   type ActionResult,
   type GridAction,
 } from '@/design-system/grid/actions/registry'
-import { getBackendUrl } from '@/lib/backend-url'
 import { isAsinPending } from '@nexus/shared/listing-risk'
-import { coordinateSchema } from '../../presence/types'
+import { AMAZON_NO_END, ETSY_NO_END, STATUS_TARGET_LABEL, type StatusTarget } from '@nexus/shared/listing-actions'
+import { SEND_MODE_LABEL, type PublishActionCell, type PublishActionChange, type SendMode } from '@nexus/shared/publish-actions'
 
 import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelSheetRow } from './types'
 
@@ -52,19 +52,6 @@ import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelShee
  * channel verb so it needs a channel permission" would have named the wrong one in every refusal.
  */
 export const CHANNEL_VERB_PERMISSION = 'products.edit'
-
-/** Honest-copy §2 / SHOP-P5. These are local marks, not a channel takedown. */
-export function offerMarkConsequence(channel: ChannelScopeChannel, activate: boolean): string {
-  if (channel === 'WOOCOMMERCE') return 'Recorded in Nexus. Nothing is sent to WooCommerce from here.'
-  if (channel === 'ETSY') return 'Recorded as paused in Nexus. Nothing is ever sent to Etsy from here.'
-  if (channel === 'AMAZON') return activate
-    ? "The pause mark is cleared, and Nexus queues this SKU's stock to Amazon straight away."
-    : 'Recorded as paused in Nexus. Amazon is told at the next Amazon flat-file publish, which suppresses the offer.'
-  const label = channel === 'EBAY' ? 'eBay' : 'Shopify'
-  return activate
-    ? `The pause mark is cleared, and Nexus queues this SKU's stock to ${label} straight away.`
-    : `Recorded as paused in Nexus. Nothing is sent to ${label} — the offer keeps selling there until you end it on the channel itself.`
-}
 
 /**
  * What the browser knows about the operator's permissions — THREE states, not two (ruling #123).
@@ -124,13 +111,6 @@ export interface ChannelActionDeps {
   openRecordId: string | null
 }
 
-function offerCoordinate(deps: ChannelActionDeps, row: ChannelSheetRow) {
-  return coordinateSchema.safeParse({ productId: row.id, channel: deps.channel, marketplace: deps.marketplace,
-    channelConnectionId: deps.channelConnectionId, aliasKey: row.aliasId === null ? '' : row.aliasId })
-}
-const coordinateRefusal = 'The listing’s account or alias was not reported. Reload before changing its offer mark.'
-const heldOfferRefusal = (count: number, channel: string) => `Refused on ${count} rows whose listing holds a channel id on ${channel}. This verb only writes a Nexus record, and this studio has no verb that can carry it to ${channel}.`
-
 /** A row is a real listing line, not the alias band. */
 const variantsOf = (rows: ChannelSheetRow[]) => rows.filter((r) => r.rowKind === 'variant')
 
@@ -144,178 +124,6 @@ const variantsOf = (rows: ChannelSheetRow[]) => rows.filter((r) => r.rowKind ===
  */
 const liveAliasKeys = (aliases: AliasGroup[], channel: string) =>
   new Set(aliases.filter((a) => !!a.externalListingId || isAsinPending({ ...a, channel })).map((a) => aliasKeyOf(a.id)))
-
-const externalIdFor = (aliases: AliasGroup[], r: ChannelSheetRow) =>
-  aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(r.aliasId))?.externalListingId ?? null
-
-// ────────────────────────────────────────────────────────────────────────────────────────────────
-// Offer pause / activate (#112, D3)
-// ────────────────────────────────────────────────────────────────────────────────────────────────
-
-/**
- * ONE offer verb whose label follows state (#327·17), replacing the Pause/Activate pair.
- *
- * Both used to be listed together on every row — correct registry behaviour (one enabled, one
- * disabled with "Already active on …", which is #114's rule that a disabled verb teaches), and
- * still two entries for one decision. Collapsing keeps the teaching where it actually matters: a
- * MIXED selection now says how it is mixed, which the pair could never express — each half simply
- * went available because "not all rows agree" fell through to enabled.
- */
-function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
-  /**
-   * What this verb would DO to a given set of rows — the one place that decision is made, so the
-   * label, the availability and the run cannot disagree about it.
-   *
-   * Paused → Activate; active or unknown → Pause. It names the ACTION, never the state, so the
-   * label can never be misread as a status badge.
-   */
-  const plan = (rows: readonly ChannelSheetRow[]) => {
-    const known = variantsOf([...rows]).filter((r) => r.listing)
-    const on = known.filter((r) => r.listing!.offerActive).length
-    const off = known.length - on
-    /**
-     * 🔴 The verb is the one that CHANGES MORE ROWS, not "activate only if all are paused".
-     *
-     * With 2 paused and 1 active, the first draft chose Pause and read "Pause 1 of 3" — true (the
-     * two already-paused rows are no-ops) and almost certainly not what was wanted. Neither reading
-     * is wrong in isolation, so the tie-break is which one does more work; and it is the same rule
-     * that makes the even-split refusal coherent, because an even split is exactly where "changes
-     * more rows" has no answer.
-     */
-    return { known: known.length, on, off, activate: off > on }
-  }
-  return {
-    id: 'offer-toggle',
-    /**
-     * 🔴 Wording follows the SELECTION now (#363/#371), not the sheet.
-     *
-     * It used to read `deps.offerState` — the scope's overall state — because `GridAction.label`
-     * was a fixed string, so a verb could not word itself from the rows an operator had ticked. I
-     * filed that as a substrate limit; PES.2 lifted it, and this is the call site that asked for it.
-     *
-     * The mixed case is why it matters and why the resolver takes ROWS rather than a count: with 2
-     * of 3 paused, "Activate 3 offers" would be a lie about one of them, so the honest wording is
-     * **"Activate 2 of 3 offers"** — a sentence no count-based signature could produce.
-     */
-    label: (rows) => {
-      const { known, on, off, activate } = plan(rows)
-      const word = activate ? 'Mark active' : 'Mark paused'
-      if (known === 0) return `${word} offer on ${deps.scopeLabel}`
-      const n = activate ? off : on
-      const offers = n === 1 ? 'offer' : 'offers'
-      return n === known
-        ? `${word} ${n} ${offers} on ${deps.scopeLabel}`
-        : `${word} ${n} of ${known} ${offers} on ${deps.scopeLabel}`
-    },
-    scope: ROW,
-    available: (rows) => {
-      const refusal = permissionRefusal(deps.permission)
-      if (refusal) return disabled(refusal)
-      const vs = variantsOf(rows)
-      if (vs.length === 0) return disabled('Select a listing row — the alias band is not an offer')
-      /**
-       * `offerActive` IS on the wire now (#112 landed), so the verb can read current state instead
-       * of guessing. A row with NO listing is left offered: the endpoint creates one, and refusing
-       * would hide a legitimate action behind an absence.
-       */
-      if (vs.some(row => !offerCoordinate(deps, row).success)) return disabled(coordinateRefusal)
-      const { known: knownCount, on, off } = plan(rows)
-      const known = vs.filter((r) => r.listing)
-      // 🔴 No listing = no offer. Pausing something that does not exist is not an action, and the
-      // §14 upsert would create a DRAFT row purely as a side effect of asking to pause it.
-      if (knownCount === 0) {
-        return disabled(`No listing record on ${deps.scopeLabel} — there is no offer mark to change`)
-      }
-      // 🔴 A mixed selection is now NAMED by the label ("Activate 2 of 3 offers") rather than
-      // refused — the wording says exactly what will happen to which rows, which is what the refusal
-      // was standing in for while the label could not move. It stays refused only when the two
-      // halves are equal, where no verb is more useful than the other.
-      if (on > 0 && off > 0 && on === off) {
-        return disabled(`${on} marked active and ${off} marked paused — an even split, so mark them separately`)
-      }
-      const activate = plan(rows).activate
-      if (known.every((r) => r.listing!.offerActive === activate)) {
-        return disabled(`Already marked ${activate ? 'active' : 'paused'} on ${deps.scopeLabel}`)
-      }
-      return AVAILABLE
-    },
-    preflight: async (rows): Promise<ActionImpact> => {
-      const vs = variantsOf(rows)
-      const liveKeys = liveAliasKeys(deps.aliases, deps.channel)
-      const live = vs.filter((r) => liveKeys.has(aliasKeyOf(r.aliasId)))
-      // Same `plan` the label and the availability used — the confirmation cannot describe a
-      // different action from the one the operator read on the menu item.
-      const { activate } = plan(rows)
-      const word = activate ? 'active' : 'paused'
-      return {
-        level: live.length || vs.some(row => !offerCoordinate(deps, row).success) ? 'none' : 'confirm',
-        title: `Mark the offer ${word} for ${vs.length} ${vs.length === 1 ? 'SKU' : 'SKUs'} on ${deps.scopeLabel}?`,
-        consequences: [
-          offerMarkConsequence(deps.channel, activate),
-          ...(vs.some(row => row.listing?.offerActiveHonoured === false)
-            ? ['This channel does not act on the Nexus offer mark.'] : []),
-          'Only the named account and alias on this channel and market are changed.',
-        ],
-        // The endpoint auto-creates a ChannelListing row when none exists. Naming it because the
-        // verb's name does not, and an operator who paused something can be surprised to find a
-        // row now exists where there was none.
-        sideEffects: live.length
-          ? [`Refused: ${live.length} of these belong to a listing that holds a channel id, and this verb cannot touch those. Nothing is marked.`]
-          : ['None of these hold a channel id. A listing record is created on this coordinate for any row that has none.'],
-        findings: vs.map((r) => {
-          const ext = externalIdFor(deps.aliases, r)
-          const pending = !ext && liveKeys.has(aliasKeyOf(r.aliasId))
-          return {
-            rowId: r.rowId,
-            label: `${r.sku}${ext ? ` · ${ext}` : pending ? ' · published, ASIN pending' : ' · no channel reference recorded'}`,
-            severity: ext || pending ? ('warn' as const) : ('info' as const),
-          }
-        }),
-        // 🔴 Wave-1: the outward-facing half does not ship. Stated in the impact so the operator
-        // learns it BEFORE confirming, not from a failure afterwards.
-        unavailable: live.length
-          ? heldOfferRefusal(live.length, deps.channel)
-          : vs.some(row => !offerCoordinate(deps, row).success) ? coordinateRefusal : undefined,
-      }
-    },
-    run: async (rows): Promise<ActionResult> => {
-      const vs = variantsOf(rows)
-      // One plan, resolved from the same rows the label and the confirmation described.
-      const { activate } = plan(rows)
-      const liveKeys = liveAliasKeys(deps.aliases, deps.channel)
-      const held = vs.filter(r => liveKeys.has(aliasKeyOf(r.aliasId)))
-      if (held.length) return { ok: false, message: heldOfferRefusal(held.length, deps.channel) }
-      const targets = vs.map(row => offerCoordinate(deps, row))
-      if (targets.some(target => !target.success)) return { ok: false, message: coordinateRefusal }
-      try {
-        const results = await Promise.all(
-          vs.map((r) =>
-            fetch(`${getBackendUrl()}/api/products/${r.id}/offer-availability`, {
-              method: 'PATCH',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                markets: [{ channel: deps.channel, marketplace: deps.marketplace, channelConnectionId: deps.channelConnectionId,
-                  aliasKey: r.aliasId === null ? '' : r.aliasId, offerActive: activate }],
-              }),
-            }),
-          ),
-        )
-        const bad = results.find((r) => !r.ok)
-        if (bad) {
-          const body = await bad.json().catch(() => null)
-          return { ok: false, message: body?.refusal ?? body?.error ?? `Refused (HTTP ${bad.status})` }
-        }
-        // This lane has no per-row refetch, and says so rather than claiming one (#114).
-        return { ok: true, invalidates: { kind: 'page' } }
-      } catch (err) {
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
-      }
-    },
-  }
-}
-
-export const offerToggle = (deps: ChannelActionDeps) => offerVerb(deps)
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 // Broadcast to listings (3.13n)
@@ -427,6 +235,108 @@ export function openRecordAction(deps: ChannelActionDeps): GridAction<ChannelShe
 }
 
 export function channelActions(deps: ChannelActionDeps): GridAction<ChannelSheetRow>[] {
-  const actions = [openRecordAction(deps), offerToggle(deps), broadcastToListings(deps)]
+  // Build shape v2 (Owner 2026-10-04): "Mark paused / active" is gone — the Status column and the selection bar's
+  // Action ▾ (`actionMenuEntries` below) set what Publish sends.
+  const actions = [openRecordAction(deps), broadcastToListings(deps)]
   return deps.accountSpecific ? actions.map(action => action.id === 'open-record' ? action : { ...action, available: () => disabled('This bulk action currently uses the primary account. Edit this account’s cells or use explicit account destinations in Catalog import.') }) : actions
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// Action ▾ — the selection bar's button (build shape v2, Owner 2026-10-04)
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A ticked row as Action ▾ reads it: its waiting values and options on this destination, or null (no listing here). */
+export interface ActionMenuRow { sku: string; cell: PublishActionCell | null }
+
+export interface ActionMenuEntry {
+  id: string
+  group: 'Status' | 'Send as'
+  change: PublishActionChange
+  /** How many of the ticked rows allow it, of how many. */
+  allowed: number
+  total: number
+  /** "Inactive — 18 of 21". */
+  label: string
+  /** Why the rest cannot take it ("3 not allowed: Amazon has no End…"), or why none can. */
+  note: string | null
+  disabled: boolean
+  /** Ended and Delete: drawn in the danger tone when they can run. */
+  danger: boolean
+}
+
+export const ACTION_MENU_STATUS: readonly StatusTarget[] = ['active', 'inactive', 'ended']
+/** New listings: Not listed is offered when a ticked row is not on the channel yet. */
+export const ACTION_MENU_NEW_STATUS: StatusTarget = 'not_listed'
+/** A Status a new row cannot take (Ended): it chooses what Publish creates. */
+export const ACTION_NEW_ROW_STATUS = 'Not on the channel yet: choose Active, Inactive or Not listed.'
+/** Not listed on a listing that is on the channel. */
+export const ACTION_NOT_LISTED_ON_CHANNEL = 'On the channel already: Not listed applies only before the first Publish.'
+export const ACTION_MENU_SEND: readonly SendMode[] = ['partial', 'full', 'delete']
+export const ACTION_NOT_ON_CHANNEL = 'Not on the channel yet. Publish creates it.'
+export const ACTION_ROLE_CANNOT_PUBLISH = 'Your role cannot publish listings, so it cannot set what Publish sends.'
+export const ACTION_ROLE_CANNOT_DELETE = 'Your role cannot end or delete listings.'
+
+const optionOf = (cell: PublishActionCell, change: PublishActionChange): { offered: boolean; reason: string | null } => {
+  if (change.column === 'send') {
+    const option = cell.sendOptions.find(o => o.mode === change.mode)
+    return { offered: !!option?.offered, reason: option?.reason ?? null }
+  }
+  const option = cell.statusOptions.find(o => o.target === change.target)
+  if (!option) return { offered: false, reason: cell.create ? ACTION_NEW_ROW_STATUS : change.target === 'not_listed' ? ACTION_NOT_LISTED_ON_CHANNEL
+    : change.target === 'ended' && cell.channel === 'AMAZON' ? AMAZON_NO_END : change.target === 'ended' && cell.channel === 'ETSY' ? ETSY_NO_END : null }
+  return { offered: option.offered, reason: option.reason ?? null }
+}
+
+/**
+ * The items of Action ▾ for the ticked rows: Status (Active, Inactive — Not listed when a ticked row is not on the
+ * channel, Ended only when a ticked row's channel can end: eBay, Shopify) · Send as (Partial update, Full update,
+ * Delete). Rows not on the channel take Active / Inactive / Not listed as what Publish does (the note says how many:
+ * "Includes 3 new listings.", "2 deleted rows are listed again on the next Publish."); Send as holds their Partial update
+ * and Delete with the server's reason, and their Full update changes nothing (they are always sent whole). Each counts
+ * the rows whose own options allow it — the same options the cells' editors offer — and names the most common reason
+ * for the rest. Ended and Delete need `products.delete`; the rest `products.publish`.
+ */
+export function actionMenuEntries(rows: readonly ActionMenuRow[], can: { publish: boolean; delete: boolean }): ActionMenuEntry[] {
+  const anyNew = rows.some(row => !!row.cell?.create)
+  // Ended only where a ticked row's channel ends listings (never Amazon or Etsy).
+  const canEnd = rows.some(row => !!row.cell?.statusOptions.some(o => o.target === 'ended'))
+  const statuses = [...ACTION_MENU_STATUS.slice(0, 2), ...(anyNew ? [ACTION_MENU_NEW_STATUS] : []), ...(canEnd ? ACTION_MENU_STATUS.slice(2) : [])]
+  const changes: Array<{ group: ActionMenuEntry['group']; change: PublishActionChange; word: string; danger: boolean }> = [
+    ...statuses.map(target => ({ group: 'Status' as const, change: { column: 'status' as const, target }, word: STATUS_TARGET_LABEL[target], danger: target === 'ended' })),
+    ...ACTION_MENU_SEND.map(mode => ({ group: 'Send as' as const, change: { column: 'send' as const, mode }, word: SEND_MODE_LABEL[mode], danger: mode === 'delete' })),
+  ]
+  const total = rows.length
+  return changes.map(({ group, change, word, danger }) => {
+    let allowed = 0
+    let newAllowed = 0
+    let deletedAllowed = 0
+    const reasons = new Map<string, number>()
+    for (const row of rows) {
+      const option = row.cell ? optionOf(row.cell, change) : { offered: false, reason: ACTION_NOT_ON_CHANNEL }
+      if (option.offered) { allowed += 1; if (row.cell?.create) { if (row.cell.deleted) deletedAllowed += 1; else newAllowed += 1 } }
+      else { const why = option.reason ?? 'Not possible for this listing.'; reasons.set(why, (reasons.get(why) ?? 0) + 1) }
+    }
+    // Ended and Delete need products.delete.
+    const permitted = danger ? can.delete : can.publish
+    const top = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    const refused = total - allowed
+    const n = (count: number) => count.toLocaleString('en')
+    const rowsNotOn = newAllowed + deletedAllowed
+    // Rows not on the channel: a Status says what Publish does with them — new ones are created (or left out), deleted
+    // ones listed again (or kept off). Active on such a row is no resume. Their Full update changes nothing.
+    const newNote = !newAllowed || change.column !== 'status' ? null
+      : `${newAllowed === allowed ? (newAllowed === 1 ? 'A new listing' : `${n(newAllowed)} new listings`) : `Includes ${newAllowed === 1 ? '1 new listing' : `${n(newAllowed)} new listings`}`}: ${change.target === 'not_listed' ? `Publish leaves ${newAllowed === 1 ? 'it' : 'them'} out.` : `Publish creates ${newAllowed === 1 ? 'it' : 'them'} ${STATUS_TARGET_LABEL[change.target as StatusTarget]}.`}`
+    const deletedNote = !deletedAllowed || change.column !== 'status' ? null
+      : change.target === 'not_listed' ? `${n(deletedAllowed)} deleted ${deletedAllowed === 1 ? 'row stays' : 'rows stay'} off.`
+        : `${n(deletedAllowed)} deleted ${deletedAllowed === 1 ? 'row is' : 'rows are'} listed again on the next Publish.`
+    const wholeNote = change.column === 'send' && change.mode === 'full' && rowsNotOn
+      ? `${n(rowsNotOn)} not on the channel ${rowsNotOn === 1 ? 'is' : 'are'} always sent whole.` : null
+    const note = !permitted ? (danger ? ACTION_ROLE_CANNOT_DELETE : ACTION_ROLE_CANNOT_PUBLISH)
+      : [refused > 0 && top ? (allowed === 0 ? top : `${n(refused)} not allowed: ${top}`) : null, newNote, deletedNote, wholeNote].filter(Boolean).join(' ') || null
+    return {
+      id: `${change.column}:${change.column === 'send' ? change.mode : change.target}`,
+      group, change, allowed, total, label: `${word} — ${n(allowed)} of ${n(total)}`,
+      note, disabled: !permitted || allowed === 0, danger,
+    }
+  })
 }

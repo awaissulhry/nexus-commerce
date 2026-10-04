@@ -23,8 +23,9 @@
 .muted { color: var(--nds-text-3); }
 .expanded { padding: var(--nds-space-12); min-width: 0; }
 /* Compact destination row (Owner, 2026-10-02): Channel · Account · Markets, chosen markets as chips. It stays at the top
-   of the window while the review below scrolls (the modal body is the scroller; its top padding is --nds-space-12). */
-.top { position: sticky; top: calc(-1 * var(--nds-space-12)); z-index: 1; margin-top: calc(-1 * var(--nds-space-12)); padding-top: var(--nds-space-12); padding-bottom: var(--nds-space-8); display: flex; flex-direction: column; gap: var(--nds-space-8); background: var(--nds-surface); border-bottom: 1px solid var(--nds-border-subtle); min-width: 0; }
+   of the window while the review below scrolls (the modal body is the scroller; its top padding is --nds-space-12).
+   z-index 3 (P10): a table's header (AG, z-index 1–2, later in the page) painted over this band when scrolled under it. */
+.top { position: sticky; top: calc(-1 * var(--nds-space-12)); z-index: 3; margin-top: calc(-1 * var(--nds-space-12)); padding-top: var(--nds-space-12); padding-bottom: var(--nds-space-8); display: flex; flex-direction: column; gap: var(--nds-space-8); background: var(--nds-surface); border-bottom: 1px solid var(--nds-border-subtle); min-width: 0; }
 .picker { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .pickerControls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); margin: 0; padding: 0; list-style: none; min-width: 0; }
@@ -36,3 +37,18 @@
   /* The Markets trigger fills the row like Channel and Account (MultiSelect's root stretches, its button does not). */
   .pickerControls :global(.nds-ms-btn) { flex: 1 1 auto; }
 }
+/* Build shape v2 (P10) — the plan: one summary line and one table per market; the typed confirmation; Undo after Done.
+   Muted text is --nds-text-muted (7:1 in both themes); a row that sends nothing keeps its words, only quieter. */
+.planSummary { margin: 0; font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+/* One-click "Nexus wins" — under a field line's reason: the plain warning of a line that replaces a channel value (body
+   text, so it reads above the muted reason), or, unticked, what the channel keeps (the reason's own colour). */
+.lineWarning { display: block; margin-top: var(--nds-space-4); color: var(--nds-text); }
+.lineKept { display: block; margin-top: var(--nds-space-4); }
+.quiet { color: var(--nds-text-muted); }
+.whatCell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+.sentCell { display: flex; flex-direction: column; gap: var(--nds-space-2); white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.confirm { display: flex; flex-direction: column; gap: var(--nds-space-8); padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); min-width: 0; }
+.footReason { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); overflow-wrap: break-word; min-width: 0; }
+/* A phone: the reason takes its own line above the buttons. The footer wraps; `.nds-modal-f .grow { flex: 1 }` would
+   otherwise squeeze it into a narrow column beside them, so this rule is one step more specific. */
+@media (max-width: 639px) { :global(.nds-modal-f) .footReason:global(.grow) { flex: 1 1 100%; } }

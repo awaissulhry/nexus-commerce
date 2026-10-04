@@ -14,12 +14,12 @@
  * `user:<approverId>`, reason `Claude request <approvalId>: <why>`, and changeSetId = the approval id. Requests made
  * before the switch carry no stored reach: they never run and the approval sweep expires them.
  *
- * The protected-terms check replicates ads-write-gate.ts:304-337 exactly
- * (WHITELIST rows, normaliseTerm both sides); it is not re-invented.
+ * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
+ * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
  */
 import prisma from '../../../db.js'
 import { pinDenial } from '../../advertising/ads-authority-pins.js'
-import { normaliseTerm } from '../../advertising/ads-write-gate.js'
+import { negativeKeywordTextProblem, protectedNegativeRefusal } from '../../advertising/ads-negation-policy.js'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
@@ -83,32 +83,14 @@ async function termMetrics(query: string, externalCampaignId: string) {
   }
 }
 
-/** ads-write-gate.ts:304-337 verbatim semantics. Returns the denial
- *  string or null. Only meaningful for negations. */
+/** 5a — the write gate's protected-term refusal (ads-negation-policy.ts), as a sentence, or null. Only meaningful for negations. */
 async function protectedTermDenial(
   keywordText: string,
+  matchType: string,
   marketplace: string | null,
   campaignId: string | null,
 ): Promise<string | null> {
-  const rows = await prisma.adKeywordProtection.findMany({
-    where: {
-      mode: 'WHITELIST',
-      AND: [
-        { OR: [{ marketplace: null }, { marketplace: marketplace ?? undefined }] },
-        { OR: [{ campaignId: null }, { campaignId: campaignId ?? undefined }] },
-      ],
-    },
-    select: { term: true, isPrefix: true, matchType: true, reason: true },
-  })
-  const term = normaliseTerm(keywordText)
-  for (const p of rows) {
-    const t = normaliseTerm(p.term)
-    const mode = p.matchType ?? (p.isPrefix ? 'PREFIX' : 'EXACT')
-    const hit =
-      mode === 'CONTAINS' ? term.includes(t) : mode === 'PREFIX' ? term.startsWith(t) : term === t
-    if (hit) return `"${term}" is whitelisted against negation (${p.reason ?? 'protected'})`
-  }
-  return null
+  return (await protectedNegativeRefusal({ text: keywordText, matchType, marketplace, campaignId }))?.reason ?? null
 }
 
 /** An ad group of this campaign, by Amazon's id: its Nexus id and name, or null when the campaign has no such group. */
@@ -160,8 +142,10 @@ async function negativePreview(args: Record<string, unknown>): Promise<ToolResul
     }
   }
 
-  const denial = await protectedTermDenial(keywordText, campaign.marketplace, campaign.id)
+  const denial = await protectedTermDenial(keywordText, matchType, campaign.marketplace, campaign.id)
   if (denial) return { ok: false, error: denial }
+  const textProblem = negativeKeywordTextProblem(keywordText, matchType)
+  if (textProblem) return { ok: false, error: textProblem }
 
   const reach = await checkLiveReach({
     campaignId: campaign.id,

@@ -23,6 +23,7 @@ import { recascadeAfterSyncControlChange } from '../services/stock-movement.serv
 import { summarizeProductSync, marketMatches, rowMarkets, omitChildrenInList, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { projectBufferAndDetect, detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY, type EuIntentRow } from '../services/amazon-eu-quantity-guard.js'
 import { isFbaCoordinate } from '../services/amazon-market-offer.service.js'
+import { SELLING_PAUSED_SENTENCE, sellingPaused } from '@nexus/shared/push-lock'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 // MCP full control 08 S7 — the writes (and the rows they act on) live in the service, shared with Claude's tools.
@@ -461,7 +462,9 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       return {
         product: (r.productId ? nameById.get(r.productId) : '') ?? '',
         sku: r.sku, channel: r.channel, market: r.marketplace, itemId: r.itemId ?? '', lane: r.lane,
-        mode: lm === 'FBA' ? 'Amazon-managed' : lm === 'UNCOUNTED' ? 'Follow' : `${lm.charAt(0)}${lm.slice(1).toLowerCase()}`,
+        // The page's own words: an Inactive listing (CLOSED) reads Inactive — the import skips it whatever it says — and a
+        // held stock sync reads Sync held (the import reads "Sync held" back as a hold; "Paused" is still accepted).
+        mode: lm === 'FBA' ? 'Amazon-managed' : lm === 'UNCOUNTED' ? 'Follow' : (lm as string) === 'CLOSED' ? 'Inactive' : lm === 'PAUSED' ? 'Sync held' : `${lm.charAt(0)}${lm.slice(1).toLowerCase()}`,
         pinnedQty: r.mode === 'PINNED' ? (r.intendedQty ?? '') : '' as number | '',
         buffer: r.buffer,
         pool: poolOf(r.productId), intended: r.mode === 'FBA' ? '' : (r.intendedQty ?? '') as number | '',
@@ -486,12 +489,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const keyOf = (k: { productId: string; channel: string; marketplace: string }) => `${k.productId}|${k.channel}|${k.marketplace}`
     const rows = await prisma.channelListing.findMany({
       where: { OR: keys.map((k) => ({ productId: k.productId, channel: k.channel as never, marketplace: k.marketplace })) },
-      select: { id: true, productId: true, channel: true, marketplace: true, fulfillmentMethod: true, platformAttributes: true, product: { select: { fulfillmentMethod: true } } },
+      select: { id: true, productId: true, channel: true, marketplace: true, fulfillmentMethod: true, platformAttributes: true, offerClosedAt: true, product: { select: { fulfillmentMethod: true } } },
     })
     const managed = await amazonManagedListingIds(rows.map((r) => r.id))
     for (const k of keys) byKey.set(keyOf(k), [])
     for (const r of rows) {
-      if (managed.has(r.id) || isFbaCoordinate(r)) continue
+      // Build shape v2 — a listing of another account or alias on the same market whose selling is paused is not written.
+      if (managed.has(r.id) || isFbaCoordinate(r) || sellingPaused(r)) continue
       byKey.get(keyOf(r))?.push(r.id)
     }
     return byKey
@@ -571,9 +575,10 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // Prefer exact lane match; fall back to either lane by (sku,channel,market).
       const cur = byKey.get(key) ?? rows.find((r) => r.sku === e.sku && r.channel === e.channel && r.marketplace === e.market && (e.itemId ? r.itemId === e.itemId : true))
       if (!cur) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'no matching listing' }); continue }
-      // SCT.6 — a CLOSED market offer is never modified via Excel: reopening
-      // is a deliberate action, not an import side effect.
-      if (cur.mode === 'CLOSED') { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'market offer CLOSED — use Reopen offer' }); continue }
+      // SCT.6 / build shape v2 — a listing whose selling is paused (Inactive: the product sheet's Pause offer, or
+      // Amazon's market close) is never changed via Excel and gets no quantity from it: resuming is a deliberate
+      // action in the product sheet's Status column, not an import side effect.
+      if (cur.mode === 'CLOSED') { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: SELLING_PAUSED_SENTENCE }); continue }
       if (cur.mode === 'FBA' || e.locked) { skipped.push({ key: `${e.sku}@${e.channel}:${e.market}`, reason: 'FBA (Amazon-managed)' }); continue }
 
       const want = normalizeModeCell(e.mode)
@@ -583,7 +588,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
       if (want && want !== curLogical) {
         if (cur.lane === 'SHARED' && want === 'PAUSED') {
-          skipped.push({ key: label, reason: 'a shared variant is not paused; use Excluded' }); continue
+          skipped.push({ key: label, reason: 'a shared variant has no stock-sync hold; use Excluded' }); continue
         }
         // Shared stock step 3 — a shared variant can hold a fixed number; the sheet must say which.
         if (cur.lane === 'SHARED' && want === 'PINNED' && e.pinnedQty == null) {
@@ -663,6 +668,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       // 08 S2 (F9) — re-read at write time: only the listings the fail-closed FBA test leaves to Nexus.
       const writableIds = async (c: { productId?: string | null; channel?: string; marketplace?: string }) =>
         (await writableListingIds([{ productId: c.productId!, channel: c.channel!, marketplace: c.marketplace! }])).get(`${c.productId}|${c.channel}|${c.marketplace}`) ?? []
+      // Build shape v2 — the follow / pin / buffer primitives write exactly these listings (account and alias included):
+      // never one whose selling is paused, even on another account of the same market.
+      const writableCoordinates = async (c: { productId?: string | null; channel?: string; marketplace?: string }) => {
+        const ids = await writableIds(c)
+        return ids.length ? prisma.channelListing.findMany({ where: { id: { in: ids } }, select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } }) : []
+      }
 
       for (const c of changes) {
         try {
@@ -682,7 +693,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             if (c.lane === 'SHARED' && c.itemId) {
               await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { stockBuffer: c.buffer } })
             } else {
-              await setStockBuffer({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], buffer: c.buffer, actor })
+              await setStockBuffer({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], buffer: c.buffer, actor, coordinates: await writableCoordinates(c) })
             }
             recascade.add(c.productId); applied++
             await audit([{ scopeType: c.lane === 'SHARED' ? 'MEMBERSHIP' : 'LISTING', scopeId: `${c.productId}:${c.channel}:${c.marketplace}`, scopeName: c.key, field: 'stockBuffer', after: { buffer: c.buffer } }], actor)
@@ -695,13 +706,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
               await setMembershipModeByCoordinate({ itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, null)
             } else {
               await prisma.channelListing.updateMany({ where: { id: { in: await writableIds(c) } }, data: { syncPaused: false } })
-              await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor })
+              await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor, coordinates: await writableCoordinates(c) })
             }
           } else if (c.target === 'PINNED' && c.lane === 'SHARED' && c.itemId) {
             // Shared stock step 3 — a fixed number for a shared variant (the preview required the number).
             await setMembershipModeByCoordinate({ itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, c.pinnedQty ?? 0)
           } else if (c.target === 'PINNED') {
-            await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor })
+            await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor, coordinates: await writableCoordinates(c) })
             if (c.pinnedQty != null) {
               await prisma.channelListing.updateMany({ where: { id: { in: await writableIds(c) } }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false } })
             }

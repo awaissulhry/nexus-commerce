@@ -204,12 +204,21 @@ async function delistAmazon(
   if (!sellerId) return delistRefusal('AMAZON_DELIST_NO_SELLER')
 
   if (action === 'unpublish') return unpublishAmazon({ sellerId, sku, marketplaceId, payloadListing })
+  return deleteAmazonListingOnChannel({ sellerId, sku, marketplaceId })
+}
 
+/**
+ * The CHANNEL half of an Amazon delete, one owner for both callers: the hard-delete cascade above and the
+ * listing-action engine's Delete listing (listing-action-adapters/amazon.ts, build shape v2). `deleteListingsItem`
+ * for THIS marketplace only (`marketplaceIds` names one); other markets keep their listings. The publish mode
+ * is the client's own: anything but live answers a dry run (outcome NOT_SENT) and sends nothing.
+ */
+export async function deleteAmazonListingOnChannel(input: { sellerId: string; sku: string; marketplaceId: string }): Promise<ChannelDelistResult> {
   try {
     const r = await amazonSpApiClient.deleteListingsItem({
-      sellerId,
-      sku,
-      marketplaceId,
+      sellerId: input.sellerId,
+      sku: input.sku,
+      marketplaceId: input.marketplaceId,
     })
     if (!r.success) return unknownDelist('AMAZON_DELIST_UNVERIFIED', r.error ?? 'No acknowledgement received')
     return { success: true, outcome: r.dryRun ? 'NOT_SENT' : 'SUCCESS', submissionId: r.submissionId, dryRun: r.dryRun }
@@ -386,7 +395,7 @@ const ACK_OK = new Set(['Success', 'Warning'])
 const isGateRefusal = (err: unknown) => (err as { name?: string; code?: string } | null)?.name === 'EbayWriteRefusedError'
   || (err as { code?: string } | null)?.code === 'EBAY_WRITE_REFUSED'
 
-async function unpublishEbay(
+export async function unpublishEbay(
   itemId: string,
   ctx: { oauthToken: string; siteId: string; connectionId: string; market: string },
 ): Promise<ChannelDelistResult> {

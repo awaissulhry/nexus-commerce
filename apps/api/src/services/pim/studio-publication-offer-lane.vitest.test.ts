@@ -35,7 +35,9 @@ import { prepareAmazonPublication } from './studio-publication-amazon.js'
 import { readPublicationBaseline } from './studio-publication-baseline.js'
 import { compileAmazonChanges, prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { publicationChangeId } from './studio-publication-changes.js'
-import { AUTOMATE_PRICING_WARNING, ALWAYS_AVAILABLE_WARNING, planAmazonOfferLines, withSendQuantities, type OfferLaneInput } from './studio-publication-amazon-offer.js'
+import { AUTOMATE_PRICING_AGAIN_NOTE, AUTOMATE_PRICING_WARNING, ALWAYS_AVAILABLE_WARNING, compileAmazonOffer, planAmazonOfferLines, withOfferDisplay, withSendQuantities,
+  type OfferLaneInput } from './studio-publication-amazon-offer.js'
+import { planPublicationChanges } from './studio-publication-changes.js'
 import { readAmazonOfferFacts } from '../amazon/offer-facts.js'
 import { resetSaleWindowColumnCache } from './sale-window.js'
 
@@ -160,12 +162,29 @@ describe('🔴 the offer lane of a live Amazon listing', () => {
     expect(sent.offers?.[id]).toEqual({ leaves: { our_price: { pin: 44.9 } }, base: { our_price: { follow: true } } })
   })
 
-  it('Amazon not at Nexus\'s live value → DIFFERS, unticked, with the sentence', async () => {
+  it('Amazon not at Nexus\'s live value → DIFFERS, ticked (Nexus wins, Owner 2026-10-04), with the sentence and the offer\'s own words', async () => {
     state.remote = amazonNow({ price: 51 })
     const id = await scoped(() => seed('lane-differs', { our_price: leaf({ pin: 44.9 }, { follow: true }) }))
     const [line] = offerLines(await review(id))
-    expect(line).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: false,
-      reason: 'Amazon shows 51.00, not Nexus\'s live 49.90 — a price push may still be on its way, or it was changed in Seller Central.' })
+    expect(line).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: true,
+      reason: 'Amazon shows 51.00, not Nexus\'s live 49.90 — a price push may still be on its way, or it was changed in Seller Central.',
+      replaces: { kind: 'both_changed', channel: '51.00', nexus: '44.90', sentence: 'Changed in Nexus and on Amazon. Amazon has 51.00 — Publish sets 44.90.',
+        note: AUTOMATE_PRICING_AGAIN_NOTE } })
+  })
+
+  it('a price Amazon\'s own maximum (changed in Seller Central) would refuse is refused at review, not when the request is built', async () => {
+    state.remote = amazonNow()
+    ;(state.remote.purchasable_offer as any[])[0].maximum_seller_allowed_price = scheduled(40)
+    const id = await scoped(() => seed('lane-amazon-max', { our_price: leaf({ pin: 44.9 }, { follow: true }), lead_time_to_ship_max_days: leaf(3, 2) }))
+    const plan = await review(id)
+    const lines = offerLines(plan)
+    expect(lines.map(c => [c.field, c.selectable, c.selectedByDefault])).toEqual([
+      ['purchasable_offer__our_price', false, false], ['fulfillment_availability__lead_time_to_ship_max_days', true, true]])
+    expect(lines[0].reason).toBe('lane-amazon-max: Amazon\'s own maximum price is 40.00 (changed outside Nexus), so Amazon would refuse the price 44.90. '
+      + 'Change the price, or save a maximum price on the sheet and publish them together.')
+    expect(lines[0].replaces).toBeUndefined()
+    // The default ticks still build (the handling time goes alone); the price could never have been sent.
+    expect(() => compileAmazonChanges(plan, plan.changes.filter(c => c.selectedByDefault).map(c => c.id))).not.toThrow()
   })
 
   it('refuses a price under the product\'s floor and a restock date that has passed, by name', async () => {
@@ -214,6 +233,55 @@ describe('line words (pure)', () => {
   it('an FBA listing: every fulfilment line refused by name', () => {
     const { inputs } = planAmazonOfferLines({ ...input({ lead_time_to_ship_max_days: leaf(3, 2) }), quantity: { fba: true, refusal: null } })
     expect(inputs[0]).toMatchObject({ refusal: expect.stringContaining('Amazon stores and ships this listing (FBA)') })
+    // Nexus wins never ticks a refused line, whatever Amazon holds.
+    const [change] = planPublicationChanges(inputs, { channel: 'Amazon' })
+    expect(change).toMatchObject({ selectable: false, selectedByDefault: false })
+    expect(change.replaces).toBeUndefined()
+  })
+
+  describe('Amazon\'s own bounds at review (one-click "Nexus wins", Owner 2026-10-04)', () => {
+    /** Amazon holds minimum / maximum prices Nexus never set (Seller Central); Nexus's stored copy has none. */
+    const withAmazonBounds = (drafts: Record<string, unknown>, min: number | null, max: number | null): OfferLaneInput => {
+      const base = input(drafts)
+      return { ...base, remote: { ...base.remote, purchasable_offer: [{ marketplace_id: IT_ID, audience: 'ALL', our_price: scheduled(49.9),
+        ...(min != null ? { minimum_seller_allowed_price: scheduled(min) } : {}), ...(max != null ? { maximum_seller_allowed_price: scheduled(max) } : {}) }] } }
+    }
+    it('refuses the price line by name with both numbers (maximum)', () => {
+      const lane = withAmazonBounds({ our_price: leaf({ pin: 44.9 }, { pin: 49.9 }) }, null, 40)
+      const { inputs, plan } = planAmazonOfferLines(lane)
+      expect(inputs[0].refusal).toBe('SKU: Amazon\'s own maximum price is 40.00 (changed outside Nexus), so Amazon would refuse the price 44.90. '
+        + 'Change the price, or save a maximum price on the sheet and publish them together.')
+      // The same price would have failed when the request was built — now it is said at review.
+      expect(() => compileAmazonOffer(plan!, ['purchasable_offer__our_price'], 'SKU')).toThrow(/above the maximum price on Amazon \(40\.00\)/)
+    })
+    it('refuses the price and the sale price under Amazon\'s own minimum', () => {
+      const { inputs } = planAmazonOfferLines(withAmazonBounds({ our_price: leaf({ pin: 44.9 }, { pin: 49.9 }),
+        sale: leaf({ price: 39.9, start: '2026-10-10', end: '2026-10-20' }, null) }, 42, null))
+      expect(inputs.map(i => i.refusal)).toEqual([undefined, 'SKU: Amazon\'s own minimum price is 42.00 (changed outside Nexus), so Amazon would refuse the sale price 39.90. '
+        + 'Change the sale price, or save a minimum price on the sheet and publish them together.'])
+    })
+    it('a bound the draft sends itself replaces Amazon\'s: no refusal', () => {
+      const { inputs } = planAmazonOfferLines(withAmazonBounds({ our_price: leaf({ pin: 44.9 }, { pin: 49.9 }), maximum_seller_allowed_price: leaf(50, null) }, null, 40))
+      expect(inputs.every(i => i.refusal === undefined)).toBe(true)
+    })
+    it('a price inside Amazon\'s own bounds is not refused', () => {
+      expect(planAmazonOfferLines(withAmazonBounds({ our_price: leaf({ pin: 44.9 }, { pin: 49.9 }) }, 30, 60)).inputs[0].refusal).toBeUndefined()
+    })
+  })
+
+  it('a ticked DIFFERS offer line says what Publish replaces in the offer\'s words; only the price line adds the Automate Pricing note', () => {
+    // Amazon shows 49.90 and handling 2 days; Nexus's live copy says 52.00 and 1 day (both changed in Seller Central).
+    const lane = input({ our_price: leaf({ pin: 44.9 }, { pin: 52 }), lead_time_to_ship_max_days: leaf(3, 1) }, { followMasterPrice: false, price: 52, priceOverride: 52 })
+    const live = { ...lane.live, values: { ...lane.live.values, lead_time_to_ship_max_days: 1 } }
+    const remote = { ...lane.remote!, fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 4, lead_time_to_ship_max_days: 2 }] }
+    const { inputs, plan } = planAmazonOfferLines({ ...lane, live, remote })
+    const changes = withOfferDisplay(planPublicationChanges(inputs, { channel: 'Amazon' }), [{ productId: 'p', offer: plan! }])
+    expect(changes.map(c => [c.field, c.status, c.selectedByDefault])).toEqual([
+      ['purchasable_offer__our_price', 'DIFFERS', true], ['fulfillment_availability__lead_time_to_ship_max_days', 'DIFFERS', true]])
+    expect(changes[0].replaces).toEqual({ kind: 'both_changed', channel: '49.90', nexus: '44.90',
+      sentence: 'Changed in Nexus and on Amazon. Amazon has 49.90 — Publish sets 44.90.', note: 'Amazon\'s Automate Pricing can change it again.' })
+    expect(changes[1].replaces).toEqual({ kind: 'both_changed', channel: '2 days', nexus: '3 days',
+      sentence: 'Changed in Nexus and on Amazon. Amazon has 2 days — Publish sets 3 days.', note: null })
   })
 })
 

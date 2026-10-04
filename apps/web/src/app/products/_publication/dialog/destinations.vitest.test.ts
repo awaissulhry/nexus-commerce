@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicationBatchView, StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
 import {
-  EMPTY_ENTRY, batchCancellable, batchChildMeta, batchProgress, batchRequest, batchSentence, channelOptions, destinationState, destinationStateLabel,
-  euRefusal, initialTicked, initialTicks, publishButtonText, publishPath, publishPlan, reviewRequestsText, selectAllText, withInitialOptions,
+  EMPTY_ENTRY, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchChildMeta, batchProgress, batchRequest, batchSentence, channelOptions,
+  checkingButtonText, checkingProgress, destinationState, destinationStateLabel, euRefusal, initialTicked, initialTicks, listedDestinationKeys, marketKey,
+  publishButtonText, publishPath, publishPlan, requestOutstanding, requestSkipReason, requestsDue, reviewOrder, selectAllText, withInitialOptions,
   type DestinationEntry, type DestinationState,
 } from './destinations'
+import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { publicationDestinations, publicationScopeKey } from './model'
 
 const NOW = Date.parse('2026-10-02T10:00:00Z')
@@ -132,7 +134,6 @@ describe('the counted button and the send path', () => {
     const plan = publishPlan([key('AMAZON', 'IT'), key('AMAZON', 'DE')], k => k === key('AMAZON', 'IT') ? { kind: 'ready', changes: 2, whole: false, requestReady: false } : { kind: 'checking' })
     expect(plan.needsRequest).toEqual([key('AMAZON', 'IT')])
     expect(plan.pending).toEqual([key('AMAZON', 'DE')])
-    expect(reviewRequestsText(2)).toBe('Review 2 requests')
   })
 })
 
@@ -177,5 +178,125 @@ describe('the Amazon EU quantity refusal', () => {
       'These new Amazon listings would send different quantities to markets that share one EU quantity. Nothing was sent.',
       'JACKET-M (DE, FR): 3 against 5.', 'Give these SKUs the same quantity.'] })
     expect(euRefusal(Object.assign(new Error('x'), { status: 409 }))).toBeNull()
+  })
+})
+
+// ── One-click publish (Owner 2026-10-04) ─────────────────────────────────────────────────────────────────────────────
+
+describe('OD1 A — where the family is listed', () => {
+  const cell = (over: Partial<PublishActionCell>): Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'> =>
+    ({ productId: 'fam', channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: '', state: 'active', create: null, ...over })
+  it('counts a market whose main listing is Active, Inactive or Mixed, and not one that is a draft, ended or not listed', () => {
+    const keys = listedDestinationKeys([
+      cell({ marketplace: 'IT', state: 'active' }), cell({ marketplace: 'DE', state: 'paused' }), cell({ marketplace: 'FR', state: 'mixed' }),
+      cell({ marketplace: 'ES', state: 'draft' }), cell({ marketplace: 'NL', state: 'ended' }), cell({ marketplace: 'SE', state: 'not_listed' }),
+    ], 'fam')
+    expect([...keys].sort()).toEqual([key('AMAZON', 'DE'), key('AMAZON', 'FR'), key('AMAZON', 'IT')].sort())
+  })
+  it('reads the main listing first: a variation active under an ended main listing does not make the market listed', () => {
+    expect(listedDestinationKeys([cell({ state: 'ended' }), cell({ productId: 'child', state: 'active' })], 'fam').size).toBe(0)
+    // No main listing on the market (only variations): the variations decide.
+    expect(listedDestinationKeys([cell({ productId: 'child', state: 'paused' })], 'fam')).toEqual(new Set([key('AMAZON', 'IT')]))
+  })
+  it('counts a market where a person set a NEW row Active or Inactive, never a default or a Not listed choice', () => {
+    const create = (source: 'own' | 'main' | 'default', target: 'active' | 'inactive' | 'not_listed') =>
+      ({ target, source, defaultTarget: 'active' as const, noRecord: false, sentence: '' })
+    expect(listedDestinationKeys([cell({ state: 'draft', create: create('own', 'inactive') })], 'fam')).toEqual(new Set([key('AMAZON', 'IT')]))
+    expect(listedDestinationKeys([cell({ state: 'draft', create: create('default', 'active') })], 'fam').size).toBe(0)
+    expect(listedDestinationKeys([cell({ state: 'draft', create: create('own', 'not_listed') })], 'fam').size).toBe(0)
+  })
+  it('ignores a second listing on a market, and keys by channel, market and account', () => {
+    expect(listedDestinationKeys([cell({ aliasKey: 'second' })], 'fam').size).toBe(0)
+    expect(marketKey({ channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', listingId: 'x' } as never)).toBe(key('AMAZON', 'IT'))
+  })
+})
+
+describe('reviews: one at a time per account, the sheet’s market first', () => {
+  it('orders the sheet’s market first, then the open tab, then the rest', () => {
+    expect(reviewOrder(['IT', 'DE', 'FR', 'ES'], 'FR', 'ES')).toEqual(['FR', 'ES', 'IT', 'DE'])
+    expect(reviewOrder(['IT', 'DE'], 'GONE', null)).toEqual(['IT', 'DE'])
+  })
+  it('lets one review of an account run at a time; another account runs beside it; the open tab goes next', async () => {
+    let shown: string | null = null
+    const queue = new ReviewQueue(() => shown)
+    const started: string[] = []
+    const run = (group: string, key: string) => queue.acquire(group, key).then(() => { started.push(key) })
+    const amazon = accountGroup({ channel: 'AMAZON', accountId: 'acc' }), ebay = accountGroup({ channel: 'EBAY', accountId: 'ebay' })
+    void run(amazon, 'IT'); void run(amazon, 'DE'); void run(amazon, 'FR'); void run(ebay, 'eBay IT')
+    await Promise.resolve(); await Promise.resolve()
+    expect(started).toEqual(['IT', 'eBay IT'])
+    expect(queue.waiting(amazon)).toEqual(['DE', 'FR'])
+    shown = 'FR'
+    queue.release(amazon)
+    await Promise.resolve(); await Promise.resolve()
+    expect(started).toEqual(['IT', 'eBay IT', 'FR'])
+    queue.release(amazon)
+    await Promise.resolve(); await Promise.resolve()
+    expect(started).toEqual(['IT', 'eBay IT', 'FR', 'DE'])
+    expect(queue.waiting(amazon)).toEqual([])
+  })
+})
+
+describe('the exact request is built by itself, and again after the ticks change', () => {
+  const it_ = { channel: 'AMAZON', marketplace: 'IT', accountId: 'acc' }
+  const de = { channel: 'AMAZON', marketplace: 'DE', accountId: 'acc' }
+  const selection = (r: StudioPublishReview, ids: string[]) => ({ reviewId: r.id!, token: `tok-${ids.join('-')}`, selectedIds: ids, fieldCount: ids.length,
+    products: [{ productId: 'p', sku: 'SKU' }], payload: { format: 'json' as const, content: '{"patches":[]}' } })
+  it('is due at once when the review arrives, and a short pause after the last tick change', () => {
+    const entries: Record<string, DestinationEntry> = {
+      IT: entry(review(it_)),
+      DE: entry(review(de), { selectedIds: ['title', 'brand'], ticksAt: NOW }),
+    }
+    const due = requestsDue(['IT', 'DE'], k => destinationState(entries[k], true, NOW), k => entries[k])
+    expect(due).toEqual([{ key: 'IT', at: 0 }, { key: 'DE', at: NOW + REQUEST_PAUSE_MS }])
+  })
+  it('is not due while one is being built (the server refuses two at once), once built, or after it failed for these ticks', () => {
+    const r = review(it_)
+    const states = (e: DestinationEntry) => requestsDue(['IT'], () => destinationState(e, true, NOW), () => e)
+    expect(states(entry(r, { selecting: true }))).toEqual([])
+    expect(states(entry(r, { selection: selection(r, ['title']) }))).toEqual([])
+    expect(states(entry(r, { selectionError: 'Review expired.' }))).toEqual([])
+    // New ticks make the built request stale: a new one is due.
+    expect(states(entry(r, { selectedIds: ['title', 'brand'], selection: selection(r, ['title']), ticksAt: NOW }))).toEqual([{ key: 'IT', at: NOW + REQUEST_PAUSE_MS }])
+  })
+  it('a click waits while a request is still to come', () => {
+    const r = review(it_)
+    const waits = (e: DestinationEntry) => requestOutstanding(destinationState(e, true, NOW), e)
+    expect(waits(entry(r))).toBe(true)
+    expect(waits(entry(r, { selecting: true }))).toBe(true)
+    expect(waits(entry(r, { selection: selection(r, ['title']) }))).toBe(false)
+    expect(waits(entry(r, { selectionError: 'Nope' }))).toBe(false)
+  })
+  it('says "Checking 3 of 7 markets…" while reviews and first requests come in; a rebuild after a tick change does not count', () => {
+    const r = review(it_)
+    const entries: Record<string, DestinationEntry> = {
+      a: entry(r, { selection: selection(r, ['title']) }),           // done
+      b: entry(review(de), { plan: null }),                            // first request still to come
+      c: { ...EMPTY_ENTRY, loading: true },                            // review still loading
+      d: entry(r, { selectedIds: ['title', 'brand'], ticksAt: NOW }),  // rebuild after a tick change: not counted
+    }
+    const progress = checkingProgress(['a', 'b', 'c', 'd'], k => destinationState(entries[k], true, NOW), k => entries[k])
+    expect(progress).toEqual({ checking: 2, done: 2, total: 4 })
+    expect(checkingButtonText(progress)).toBe('Checking 3 of 4 markets…')
+    expect(checkingButtonText({ done: 7, total: 7 })).toBe('Checking 7 of 7 markets…')
+    expect(checkingButtonText({ done: 0, total: 1 })).toBe('Checking…')
+  })
+})
+
+describe('OD4 A — a market whose request cannot be built is skipped with its reason', () => {
+  const it_ = { channel: 'AMAZON', marketplace: 'IT', accountId: 'acc' }
+  it('reads Skipped with the server’s words, and the others are still sent', () => {
+    const failed = destinationState(entry(review(it_), { selectionError: 'The review expired. Review the selection again.' }), true, NOW)
+    expect(failed).toEqual({ kind: 'blocked', problems: 0, reason: requestSkipReason('The review expired. Review the selection again.'), request: true })
+    expect(destinationStateLabel(failed)).toEqual({ label: 'Skipped', tone: 'warning',
+      hint: 'Skipped: the exact request could not be built. The review expired.' })
+    const states: Record<string, DestinationState> = { IT: failed, DE: { kind: 'ready', changes: 4, whole: false, requestReady: true }, FR: { kind: 'ready', changes: 2, whole: false, requestReady: true } }
+    const plan = publishPlan(['IT', 'DE', 'FR'], k => states[k])
+    expect(plan).toMatchObject({ send: ['DE', 'FR'], skipped: ['IT'], problems: 0 })
+    expect(publishButtonText(plan, () => it_)).toBe('Publish 6 changes to 2 markets · skip 1 with problems')
+  })
+  it('clears when the ticks change: the request is built again', () => {
+    const r = review(it_)
+    expect(destinationState(entry(r, { selectionError: null, ticksAt: NOW }), true, NOW).kind).toBe('ready')
   })
 })

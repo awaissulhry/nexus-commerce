@@ -165,6 +165,9 @@ describe('listing-matrix', () => {
       price: { value: cell.price!.value, currency: 'EUR', source: cell.price!.source }, sync: { kind: cell.sync!.kind, mode: cell.sync!.mode, held: 4 } })
     expect(answer.data.totalRows).toBe(3)
     expect(answer.data).not.toHaveProperty('nextOffset')
+    // Build shape v2 (P12): the selling state the sheet's Status column shows rides along, read only.
+    expect(cell.listing!.selling).toBeTruthy()
+    expect(row.cells['EBAY:IT'].listing.selling).toEqual({ state: cell.listing!.selling!.state, ...(cell.listing!.selling!.reason ? { reason: cell.listing!.selling!.reason } : {}) })
     noChannelIdsOrSecrets(answer)
   })
 

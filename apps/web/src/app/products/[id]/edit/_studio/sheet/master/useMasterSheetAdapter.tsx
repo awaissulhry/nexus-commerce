@@ -59,7 +59,16 @@ import { useLanguageChips } from '../useLanguageChips';
 import { useSheetColumns } from '../useSheetColumns';
 import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
 import { useSheetControl } from '../useSheetControl';
-import { controlColumnFacts, masterResetOffer } from '../sheetReset';
+import { controlColumnFacts, isClearKey, masterResetOffer, selectedCells } from '../sheetReset';
+import type { PublishActionCell, PublishActionChange } from '@nexus/shared/publish-actions';
+import { CellSaveTracker, SELLING_ROW_MARK_CLASS, rowCarriesInactiveMark, waitingWhen } from '@/design-system/grid';
+import { PublishActionFence, SKIP_CELL, groupStaged, isInactiveCell, isWaitingCell, usePublishActions, waitingStatusMark, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type PublishWriteGroup, type StagedPublishCell } from '../usePublishActions';
+import { STATUS_COLUMN, type PublishCellReadState } from '../channel/statusColumn';
+import { ACTION_COLUMN, PublishActionMenu } from '../channel/actionColumn';
+import { ACTION_ROLE_CANNOT_PUBLISH } from '../channel/channelActions';
+import { cellsByProduct, type RecordSelling } from '../../SellingSummary';
+import { sharedStatusColumn, sharedStatusSheetColumn } from './sharedStatusColumn';
+import { listingLabel, sharedActionColumn, sharedActionMenuEntries, sharedActionSheetColumn, sharedDeleteImpact, sharedDeletedRefusal, sharedOperationToast } from './sharedActionColumn';
 import { useToast } from '@/design-system/components';
 import type { SheetExportMode } from '../sheetExport';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
@@ -100,6 +109,9 @@ const NO_VARIATION_AXES: readonly string[] = [];
 const NO_KEYS: readonly string[] = [];
 /** What the Shared scope is called on screen (the scope chip, the progress column). */
 const SHARED_SCOPE_LABEL = 'Shared product';
+/** Build shape v2, P9 — the shared scope reads the waiting Status and Action values of every market of the family. */
+const SHARED_DESTINATION = {};
+const NO_CELLS: readonly PublishActionCell[] = [];
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
     const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
     const savedAtRef = useRef<(at: string) => void>(() => undefined);
@@ -267,7 +279,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     });
     cellMenuRef.current = control.cellMenuItems;
     refusalReason.current = (key, row) => {
-        if (key === PRODUCT_MEDIA_COLUMN)
+        if (key === PRODUCT_MEDIA_COLUMN || key === STATUS_COLUMN || key === ACTION_COLUMN)
             return null;
         const column = columnByKeyRef.current.get(key);
         return column ? editRefusalReason(column, row) : null;
@@ -275,6 +287,205 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const { bandWidth, bandWidthRef, bandDerivedRef, revealCell, replayReveal, remeasureSoon } = useSheetGeometry({ scope: 'master', rows, getGridApi, gridReady, recordId: record.rowId });
     const rowsRef = useRef<StudioRow[]>(rows);
     rowsRef.current = rows;
+    /* ── Build shape v2, P9 — the shared scope's Status and Action columns, Action ▾ and the waiting mark ───────────
+       One read of the family's waiting values on EVERY market (`usePublishActions(productId, {}, { familyId })`). One
+       sheet row = one product, so a cell summarises the product's markets, and a change is written to every market of
+       the product: the server refuses the markets that do not allow it, and ONE toast names them (the Owner's option
+       B). An edit, a fill, a paste, a reset or Action ▾ stages its cells in one fence, like the channel sheet's (P8).
+       Nothing here sends anything to a channel: Publish does. */
+    const publishActions = usePublishActions(productId, SHARED_DESTINATION, { familyId: sheet?.family.id ?? null });
+    const publishActionsRef = useRef(publishActions);
+    publishActionsRef.current = publishActions;
+    const cellsByRow = useMemo(() => cellsByProduct(publishActions.rows), [publishActions.rows]);
+    const cellsByRowRef = useRef(cellsByRow);
+    cellsByRowRef.current = cellsByRow;
+    const publishCellsOf = useCallback((row: StudioRow): readonly PublishActionCell[] => cellsByRowRef.current.get(row.id) ?? NO_CELLS, []);
+    const publishLock = authStatus !== 'loading' && !has('products.publish') ? ACTION_ROLE_CANNOT_PUBLISH : null;
+    const publishRead = useMemo<PublishCellReadState>(() => ({
+        loaded: publishActions.status === 'ready' || publishActions.status === 'error',
+        failed: publishActions.status === 'error',
+        lockedReason: publishLock,
+    }), [publishActions.status, publishLock]);
+    const publishReadRef = useRef(publishRead);
+    publishReadRef.current = publishRead;
+    const canDeleteRef = useRef(false);
+    canDeleteRef.current = has('products.delete');
+    const [publishTracker] = useState(() => new CellSaveTracker());
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
+    /** A shared Delete is SET only after a typed confirmation that lists every listing it would remove. */
+    const deleteConfirm = useActionConfirm();
+    const askDeleteRef = useRef(deleteConfirm.ask);
+    askDeleteRef.current = deleteConfirm.ask;
+    const repaintPublishCells = useCallback((rowIds?: Iterable<string>) => {
+        const api = getGridApi();
+        if (!api || api.isDestroyed())
+            return;
+        const nodes = rowIds ? [...new Set(rowIds)].flatMap((id) => { const node = api.getRowNode(id); return node ? [node] : []; }) : undefined;
+        api.refreshCells({ ...(nodes ? { rowNodes: nodes } : {}), columns: [STATUS_COLUMN, ACTION_COLUMN], force: true });
+    }, [getGridApi]);
+    const publishColumnOf = (column: PublishActionChange['column']) => (column === 'send' ? ACTION_COLUMN : STATUS_COLUMN);
+    /** "GALE-S · eBay · IT" — a listing of the family, named by its product's SKU on the sheet. */
+    const publishLabelOf = useCallback((listingId: string): string | null => {
+        const cell = publishActionsRef.current.byListingId.get(listingId);
+        if (!cell) return null;
+        return listingLabel(rowsRef.current.find((row) => row.id === cell.productId)?.sku ?? cell.sku, cell);
+    }, []);
+    /** One operation's cells, sent: a mark on each product row while it is on its way, then ONE toast for every market. */
+    const flushPublishCells = useRef<(items: StagedPublishCell[]) => Promise<void>>(async () => { });
+    flushPublishCells.current = async (items) => {
+        const { writes, refused } = groupStaged(items);
+        const byListing = publishActionsRef.current.byListingId;
+        const rowOf = (listingId: string) => byListing.get(listingId)?.productId ?? null;
+        const sending: PublishWriteGroup[] = [];
+        for (const write of writes) {
+            if (write.change.column === 'send' && write.change.mode === 'delete') {
+                const targets = write.listingIds.flatMap((id) => { const cell = byListing.get(id); return cell ? [{ sku: rowsRef.current.find((row) => row.id === cell.productId)?.sku ?? cell.sku, cell }] : []; });
+                const impact = sharedDeleteImpact(targets, canDeleteRef.current);
+                if (impact && !(await askDeleteRef.current(impact)))
+                    continue;
+            }
+            sending.push(write);
+        }
+        const touched = new Set<string>();
+        for (const write of sending)
+            for (const id of write.listingIds) {
+                const rowId = rowOf(id);
+                if (rowId) { publishTracker.set(rowId, publishColumnOf(write.change.column), 'saving'); touched.add(rowId); }
+            }
+        repaintPublishCells(touched);
+        const outcomes: PublishActionWriteOutcome[] = await Promise.all(sending.map((write) => publishActionsRef.current.write(write.change, write.listingIds)));
+        // A product row is marked refused only when NONE of its markets took the value: a market that does not allow it
+        // is expected (the cell then says "on 5 of 7"), and the toast names it.
+        for (const outcome of outcomes) {
+            const colId = publishColumnOf(outcome.change.column);
+            const perRow = new Map<string, { applied: number; reason: string | null }>();
+            const note = (listingId: string, applied: boolean, reason: string | null) => {
+                const rowId = rowOf(listingId);
+                if (!rowId) return;
+                const entry = perRow.get(rowId) ?? { applied: 0, reason: null };
+                if (applied) entry.applied += 1;
+                else entry.reason ??= reason;
+                perRow.set(rowId, entry);
+            };
+            if (!outcome.ok) for (const id of outcome.requested) note(id, false, outcome.error ?? 'The change could not be saved.');
+            else {
+                for (const id of outcome.applied) note(id, true, null);
+                for (const r of outcome.refused) note(r.listingId, false, `${publishLabelOf(r.listingId) ?? r.sku}: ${r.reason}`);
+                for (const c of outcome.conflicts) note(c.listingId, false, `${publishLabelOf(c.listingId) ?? c.sku}: ${c.setByName ?? 'Someone else'} changed this first${c.setAt ? ` ${waitingWhen(c.setAt)}` : ''}. Nexus kept their value.`);
+            }
+            for (const [rowId, entry] of perRow) {
+                if (!entry.applied && entry.reason) publishTracker.set(rowId, colId, 'refused', entry.reason);
+                else publishTracker.clear(rowId, colId);
+            }
+        }
+        for (const write of writes)
+            if (!sending.includes(write))
+                for (const id of write.listingIds) { const rowId = rowOf(id); if (rowId) { publishTracker.clear(rowId, publishColumnOf(write.change.column)); touched.add(rowId); } }
+        repaintPublishCells(touched);
+        const summary = sharedOperationToast(outcomes, refused, publishLabelOf);
+        if (summary && !summary.quiet)
+            toastRef.current(summary.message, summary.tone, { duration: summary.tone === 'success' ? 5000 : 10000 });
+    };
+    const [publishFence] = useState(() => new PublishActionFence((items) => { void flushPublishCells.current(items); }));
+    useEffect(() => () => publishFence.dispose(), [publishFence]);
+    /** A product cell received a value: staged once per market of the product (a refusal is marked at once). */
+    const stagePublishCell = useCallback((column: PublishActionChange['column'], row: StudioRow, input: PublishCellInput) => {
+        const colId = publishColumnOf(column);
+        if ('refused' in input) publishTracker.set(row.id, colId, 'refused', input.refused);
+        else publishTracker.clear(row.id, colId);
+        repaintPublishCells([row.id]);
+        const cells = publishCellsOf(row);
+        if ('refused' in input || !cells.length) {
+            publishFence.stage({ column, listingId: null, sku: row.sku, input });
+            return;
+        }
+        // A market Nexus deleted takes no Status or Action from the shared scope: its own sheet lists it again (the toast
+        // says so). A market not on the channel reads Full update: Partial update (the default) and Full update leave it as
+        // it is; Delete is refused there by the server, with its reason. A new market that already holds the chosen
+        // Status is left as it is (a paste or a fill of the same word).
+        const sendLeavesIt = (cell: PublishActionCell) => column === 'send' && !!cell.create && 'change' in input && input.change.column === 'send' && input.change.mode !== 'delete';
+        for (const cell of cells) publishFence.stage({ column, listingId: cell.listingId, sku: listingLabel(row.sku, cell),
+            input: cell.deleted && 'change' in input ? { refused: sharedDeletedRefusal(cell) }
+                : sendLeavesIt(cell) ? SKIP_CELL
+                    : withoutSameNewChoice(cell, input) });
+    }, [publishCellsOf, publishFence, publishTracker, repaintPublishCells]);
+    /** Action ▾: fill one column of the ticked products, every market — one operation, so one write per value and one toast. */
+    const fillPublishCells = useCallback((change: PublishActionChange, targets: readonly StudioRow[]) => {
+        publishFence.begin();
+        try {
+            for (const row of targets) stagePublishCell(change.column, row, { change });
+        }
+        finally {
+            publishFence.end();
+        }
+    }, [publishFence, stagePublishCell]);
+    /** Delete / Backspace on a Status or Action cell: what waits on every market of those products goes back to the default. */
+    const onPublishCellKey = useCallback((event: { event?: Event | null; column?: { getColId(): string } | null }): boolean => {
+        const key = event.event as KeyboardEvent | null | undefined;
+        const colId = event.column?.getColId();
+        if ((colId !== STATUS_COLUMN && colId !== ACTION_COLUMN) || !isClearKey(key, false))
+            return false;
+        const api = getGridApi();
+        if (!api || api.isDestroyed() || api.getEditingCells().length > 0)
+            return false;
+        key!.preventDefault();
+        if (!publishReadRef.current.loaded || publishReadRef.current.lockedReason)
+            return true;
+        publishFence.begin();
+        try {
+            for (const target of selectedCells(api, (row: StudioRow) => row.id)) {
+                for (const cell of publishCellsOf(target.row)) {
+                    const sku = listingLabel(target.row.sku, cell);
+                    // A deleted market's own Status choice is cleared in its own sheet (the shared scope refuses it, and says so).
+                    if (target.colId === STATUS_COLUMN && cell.status.target)
+                        publishFence.stage({ column: 'status', listingId: cell.listingId, sku, input: cell.deleted ? { refused: sharedDeletedRefusal(cell) } : { change: { column: 'status', target: null } } });
+                    // A market not on the channel reads Full update: nothing to reset.
+                    if (target.colId === ACTION_COLUMN && !cell.create && cell.send.mode !== 'partial')
+                        publishFence.stage({ column: 'send', listingId: cell.listingId, sku, input: { change: { column: 'send', mode: 'partial' } } });
+                }
+            }
+        }
+        finally {
+            publishFence.end();
+        }
+        return true;
+    }, [getGridApi, publishCellsOf, publishFence]);
+    /* A new read (or a permission answer) repaints only the cells whose value changed (`equals`). */
+    useEffect(() => { getGridApi()?.refreshCells({ columns: [STATUS_COLUMN, ACTION_COLUMN] }); }, [publishActions.version, publishRead, getGridApi]);
+    /* The inactive row-start mark — when ANY market of the product is inactive; a row whose mark changed is redrawn. */
+    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: StudioRow }) => !!p.data && rowCarriesInactiveMark(publishCellsOf(p.data).map((cell) => cell.state)) }), [publishCellsOf]);
+    const inactiveRowIds = useRef(new Set<string>());
+    useEffect(() => {
+        const next = new Set(rows.filter((row) => publishCellsOf(row).some(isInactiveCell)).map((row) => row.id));
+        const changed = [...next].filter((id) => !inactiveRowIds.current.has(id)).concat([...inactiveRowIds.current].filter((id) => !next.has(id)));
+        inactiveRowIds.current = next;
+        const api = getGridApi();
+        if (!api || api.isDestroyed() || !changed.length)
+            return;
+        const nodes = changed.flatMap((id) => { const node = api.getRowNode(id); return node ? [node] : []; });
+        if (nodes.length) api.redrawRows({ rowNodes: nodes });
+    }, [rows, publishActions.version, publishCellsOf, getGridApi, gridReady]);
+    /* The toolbar's "4 waiting for Publish" (every market of the family) — pressing it shows only those products. */
+    const [waitingOnly, setWaitingOnly] = useState(false);
+    const waitingRowCount = useMemo(() => rows.filter((row) => publishCellsOf(row).some(isWaitingCell)).length, [rows, publishActions.version, publishCellsOf]);
+    useEffect(() => { if (waitingOnly && !waitingRowCount) setWaitingOnly(false); }, [waitingOnly, waitingRowCount]);
+    const waitingMarkStatus = useMemo(() => waitingStatusMark(publishActions.waiting, waitingOnly, () => setWaitingOnly((on) => !on)), [publishActions.waiting, waitingOnly]);
+    /** The shared Status and Action columns; their values are read through refs, so a new read never rebuilds them. */
+    const hasSheet = !!sheet;
+    const statusActionColumns = useMemo<ColDef<StudioRow>[]>(() => {
+        if (!hasSheet) return [];
+        const input = { cells: publishCellsOf, read: () => publishReadRef.current, canDelete: () => canDeleteRef.current, tracker: publishTracker, rowIdOf: (row: StudioRow) => row.id };
+        return [
+            sharedStatusColumn<StudioRow>({ ...input, onInput: (row, value) => stagePublishCell('status', row, value) }),
+            sharedActionColumn<StudioRow>({ ...input, onInput: (row, value) => stagePublishCell('send', row, value) }),
+        ];
+    }, [hasSheet, publishCellsOf, publishTracker, stagePublishCell]);
+    /** The record drawer's selling state: the open product's listings on every market. */
+    const drawerSelling = useMemo<RecordSelling>(() => ({
+        status: publishActions.status, error: publishActions.error,
+        cellsOf: (rowId) => cellsByRow.get(rowId) ?? NO_CELLS,
+    }), [publishActions.status, publishActions.error, cellsByRow]);
     const reloadConfirm = useActionConfirm();
     const onReload = useCallback(async () => {
         const impact = reloadImpact({ pending: writer.pending, refused, unknown: writer.unknownCount });
@@ -305,7 +516,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         progressSheetColumn<SheetColumn>(SCOPE_PROGRESS_COLUMN, 'Shared product', SHARED_PROGRESS_TIP),
         ...coordinateColumns.map((c) => progressSheetColumn<SheetColumn>(progressKeyOf(c.colId), c.label, marketProgressTip(c.label, languageLabel(c.language), c.computedAt))),
     ] : []), [sheet, coordinateColumns]);
-    const schemaColumns = useMemo(() => withSheetGroups([...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))]), [sheet, progressSpecs]);
+    /* Build shape v2, P9 — Status and Action, right after the progress columns: members of the column model (Customise,
+       views), never write fields (`managedBy: 'progress'` keeps them out of the attribute builder). */
+    const publishSpecs = useMemo<SheetColumn[]>(() => (sheet ? [sharedStatusSheetColumn<SheetColumn>(), sharedActionSheetColumn<SheetColumn>()] : []), [sheet]);
+    const schemaColumns = useMemo(() => withSheetGroups([...progressSpecs, ...publishSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))]), [sheet, progressSpecs, publishSpecs]);
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,
@@ -348,9 +562,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const { onGridReady, onGridPreDestroyed } = useSheetGridBindings({ apiRef, sheetColumns, bindGridApi, releaseGrid, bindWriter: bindGrid, clearRows: () => setSelectedRows([]) });
     const scopeRows = useMemo(() => {
         const afterRefused = showRefusedOnly && refusedRowIds.size ? filterProductSheetRows(rows, row => refusedRowIds.has(productSheetRowKey(row))) : rows;
+        const afterWaiting = waitingOnly ? filterProductSheetRows(afterRefused, row => publishCellsOf(row).some(isWaitingCell)) : afterRefused;
         const query = search.trim().toLowerCase();
-        return query ? filterProductSheetRows(afterRefused, row => (row.sku + ' ' + (row.name ?? '')).toLowerCase().includes(query) || Object.entries(row.values).some(([key, cell]) => referenceSearchText(cell?.value, columnByKeyRef.current.get(key)?.optionLabels).includes(query))) : afterRefused;
-    }, [rows, search, showRefusedOnly, refusedRowIds, schemaColumns]);
+        return query ? filterProductSheetRows(afterWaiting, row => (row.sku + ' ' + (row.name ?? '')).toLowerCase().includes(query) || Object.entries(row.values).some(([key, cell]) => referenceSearchText(cell?.value, columnByKeyRef.current.get(key)?.optionLabels).includes(query))) : afterWaiting;
+    }, [rows, search, showRefusedOnly, refusedRowIds, schemaColumns, waitingOnly, publishCellsOf, publishActions.version]);
     useSheetChips(sheet ? scopeRows : null, schemaColumns, { scope: 'master' });
     const productIds = useMemo(() => rows.map((r) => r.id), [rows]);
     const contentAiChip = useLanguageChips(sheet ? scopeRows : null, schemaColumns, false);
@@ -435,8 +650,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             .map((c, i) => ({ c, r: rankOfColumn(c, rank), i }))
             .sort((a, b) => a.r - b.r || a.i - b.i)
             .map((x) => x.c);
-        return [...identityColumns, ...progressColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered];
-    }, [identityColumns, attributeColumns, progressColumns, schemaColumns, viewCtx, mediaEditor.open, mediaEditor.actions]);
+        return [...identityColumns, ...progressColumns, ...statusActionColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered];
+    }, [identityColumns, attributeColumns, progressColumns, statusActionColumns, schemaColumns, viewCtx, mediaEditor.open, mediaEditor.actions]);
     const getRowId = useCallback((p: {
         data: StudioRow;
     }) => p.data.id, []);
@@ -517,6 +732,21 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;
+    /* Action ▾ counts what each item would do to the ticked products, on every market. */
+    const actionEntries = useMemo(() => sharedActionMenuEntries(selectedRows.map((row) => ({ sku: row.sku, cells: publishCellsOf(row) })),
+        { publish: !publishLock && authStatus !== 'loading', delete: has('products.delete') }), [selectedRows, publishCellsOf, publishActions.version, publishLock, authStatus, has]);
+    /* The grid's operation events open and close the Status and Action fence too (after the sheet's own fence). */
+    const publishFenceProps = useMemo(() => {
+        const g = undo.gridProps;
+        const begin = () => publishFence.begin();
+        const end = () => publishFence.end();
+        return {
+            ...g,
+            onFillStart: () => { g.onFillStart(); begin(); }, onFillEnd: () => { g.onFillEnd(); end(); },
+            onPasteStart: () => { g.onPasteStart(); begin(); }, onPasteEnd: () => { g.onPasteEnd(); end(); },
+            onCellSelectionDeleteStart: () => { g.onCellSelectionDeleteStart(); begin(); }, onCellSelectionDeleteEnd: () => { g.onCellSelectionDeleteEnd(); end(); },
+        };
+    }, [undo.gridProps, publishFence]);
     const [importOpen, setImportOpen] = useState(false);
     const [transferIntent, setTransferIntent] = useState<'import' | 'export'>('import');
     const familyVerbs = useFamilyVerbs({
@@ -616,7 +846,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             total: rows.length,
             selected: selected,
             /* SHEET-VIEWS (2026-09-26): the selection verbs live in the toolbar while rows are selected. */
-            selectionActions: <FamilySelectionVerbs rows={selectedRows} actions={famActions} onDone={onFamilyChanged}/>,
+            selectionActions: <FamilySelectionVerbs rows={selectedRows} actions={famActions} onDone={onFamilyChanged}>
+                {/* Build shape v2, P9 — Action ▾ after "Delete child…": fills Status or Action on every market of the ticked products. */}
+                <PublishActionMenu entries={actionEntries} selected={selected} onChoose={(change) => fillPublishCells(change, selectedRows)} disabled={publishActions.status !== 'ready'}/>
+            </FamilySelectionVerbs>,
             onClearSelection: clearSelection,
             descriptor: familySummary.role !== '—' ? (<span className="nds-cell-muted"> · {familySummary.role} · {familySummary.detail}</span>) : null,
             search: search,
@@ -632,7 +865,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onReload: onReload,
             loading: loading,
             unavailable: !!error,
-            overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [...(waitingRowCount ? [{ id: 'show-waiting', label: waitingOnly ? 'Show all rows' : `Show the ${waitingRowCount === 1 ? 'product' : `${waitingRowCount} products`} waiting for Publish`, description: 'Products with a Status or Action that Publish will send, on any market', onSelect: () => setWaitingOnly((on) => !on) }] : []), { id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: [
                 ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
                 /* Step 4 (D3, 2026-10-01) — a missing setup is the notice above the grid, in plain words and with the button
@@ -643,6 +876,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                     detail: `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
                 }] : []),
                 ...familyVerbs.status,
+                ...(waitingMarkStatus ? [waitingMarkStatus] : []),
                 ...(readinessQuery.status === 'error' ? [{ tone: 'warning' as const, label: 'Progress unavailable', detail: `The channel · market progress bars could not be read: ${readinessQuery.message} Choose ⋯ → Refresh progress to try again.` }]
                     : readinessQuery.status === 'ready' && readinessQuery.refreshError ? [{ tone: 'warning' as const, label: 'Progress not refreshed', detail: `The bars show the last good reading. The refresh failed: ${readinessQuery.refreshError} Choose ⋯ → Refresh progress to try again.` }] : []),
             ],
@@ -661,6 +895,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         {rowPress.confirmElement}
         {familyVerbs.dialogs}
         {reloadConfirm.element}
+        {deleteConfirm.element}
         {control.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
     {sheet?.meta.source === 'legacy' && (<InfoTip tip="The studio sheet route is not deployed yet, so this is the catalogue read adapted to the same shape. Cell values and versions are real; the layer each value came from is INFERRED here rather than stated by the server.">
                 <Pill tone="neutral" size="sm">adapted read</Pill>
@@ -693,13 +928,15 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onGridPreDestroyed: onGridPreDestroyed,
             onCellValueChanged: onCellValueChanged,
             // One operation (fill, paste, range delete) = one undo step and one save; ⌘Z is the sheet's own (`useSheetUndo`).
-            ...undo.gridProps,
+            // The same events open and close the Status and Action fence (P9).
+            ...publishFenceProps,
+            rowClassRules: rowClassRules,
             processDataFromClipboard: processDataFromClipboard,
             loading: loading,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             onCellFocused: onCellFocused,
         },
         gridOverlay: null,
@@ -713,6 +950,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onWrite: onDrawerWrite,
             onRevealCell: revealCell,
             formulas: formulas,
+            selling: drawerSelling,
         },
         preferences: preferences,
         before: <>{mediaEditor.element}

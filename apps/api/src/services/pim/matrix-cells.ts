@@ -8,7 +8,12 @@
  * resolver runs in the service; this module only SHAPES its output), `price.value` is the number the push reads,
  * `listing.state` is the nine-word vocabulary derived from the columns named in the table below. Every sentence
  * an operator can see is `MATRIX_COPY`'s (`@nexus/shared/matrix-contract`) — the page's own words, one source.
+ *
+ * Build shape v2 (P7): the Listing cell's selling word (Active · Inactive · Mixed · Ended · Not listed) is THE
+ * engine's (`destinationSellingStates`, listing-action.service.ts — the sheet's Status column reads the same), carried
+ * as `listing.selling`; `listing.state` follows it below the health words.
  */
+import type { SellingStateRead } from '@nexus/shared/listing-actions'
 import {
   INVENTORY_CELL_KINDS,
   MATRIX_CELL_KINDS,
@@ -111,46 +116,60 @@ export interface ListingFacts {
   listingStatus: string
   isPublished: boolean
   externalListingId: string | null
-  offerClosedAt: Date | string | null
   /** An OPEN `AmazonSuppression` episode (resolvedAt null) exists for this listing. */
   suppressed: boolean
   /** VP.2's `variationExcluded` flag. */
   excluded: boolean
   /** A variant missing a value for at least one family axis (VP.2's `needs_value`). */
   needsValue: boolean
+  /** The engine's selling state of this row on this coordinate (`destinationSellingStates`; a main product reads its variations). */
+  selling: SellingStateRead
 }
 
+/** The Listing cell with its selling facts (the word the sheet's Status column shows, and why). */
+export type MatrixListingCell = ListingCell & { selling: SellingStateRead }
+
 /**
- * The listing-state TABLE (pinned by the test; precedence top to bottom):
+ * The listing-state TABLE (pinned by the test; precedence top to bottom). The health words win; then the engine's
+ * selling state decides, so the Matrix and the sheet never disagree (a Shopify pause is a quantity-0 hold with
+ * `offerClosedAt`: Inactive on both, never "Listed · inactive"):
  *
  *   excluded (variationExcluded)                       → excluded
- *   offerClosedAt set                                  → closed
  *   an open AmazonSuppression                          → suppressed
- *   listingStatus ENDED | REMOVED                      → ended
  *   listingStatus ERROR                                → error
  *   a variant missing an axis value                    → needs-value
- *   listingStatus DISCOVERABLE                         → listed · detail `not buyable` (Amazon's own meaning)
- *   listingStatus INACTIVE                             → listed · detail `inactive`
- *   listingStatus ACTIVE | BUYABLE, or an external id  → listed
- *   anything else (DRAFT …)                            → draft
+ *   selling Ended (eBay ENDED, Shopify ARCHIVED)       → ended
+ *   selling Inactive (offer paused, Etsy inactive,
+ *     Shopify hold / Draft / Unlisted)                 → closed   (the wire's key for Inactive; the word is `selling`)
+ *   selling Not listed (never sent, or deleted by
+ *     Nexus and not listed again)                      → draft    (the wire's key; the Matrix says "Not listed")
+ *   selling Active or Mixed                            → listed · detail `not buyable` for DISCOVERABLE (Amazon's meaning)
+ *   selling Unknown: REMOVED                           → ended
+ *                    ACTIVE | BUYABLE | DISCOVERABLE | INACTIVE, or an external id → listed
+ *                    anything else                     → draft
  *
- * `published` is `isPublished` verbatim on every row; it is a separate fact from the word.
+ * `selling` rides along verbatim (state + reason); the wire's `closed` and `draft` are keys, never words on screen (one
+ * set of selling words, Owner 2026-10-04: Active · Inactive · Not listed · Ended · Mixed). `published` is
+ * `isPublished` verbatim on every row; it is a separate fact from the word.
  */
-export function listingStateOf(f: ListingFacts): ListingCell {
+export function listingStateOf(f: ListingFacts): MatrixListingCell {
   const status = String(f.listingStatus ?? '').toUpperCase()
+  const selling = f.selling.state
   let state: ListingState
   let detail: string | null = null
   if (f.excluded) state = 'excluded'
-  else if (f.offerClosedAt) state = 'closed'
   else if (f.suppressed) state = 'suppressed'
-  else if (status === 'ENDED' || status === 'REMOVED') state = 'ended'
   else if (status === 'ERROR') state = 'error'
   else if (f.needsValue) state = 'needs-value'
-  else if (status === 'DISCOVERABLE') { state = 'listed'; detail = 'not buyable' }
-  else if (status === 'INACTIVE') { state = 'listed'; detail = 'inactive' }
-  else if (status === 'ACTIVE' || status === 'BUYABLE' || f.externalListingId) state = 'listed'
+  else if (selling === 'ended') state = 'ended'
+  else if (selling === 'paused') state = 'closed'
+  // Not on the channel here: never sent (a draft), or deleted by Nexus and not listed again (it reads Not listed).
+  else if (selling === 'draft' || selling === 'not_listed') state = 'draft'
+  else if (selling === 'active' || selling === 'mixed') { state = 'listed'; if (status === 'DISCOVERABLE') detail = 'not buyable' }
+  else if (status === 'REMOVED') state = 'ended'
+  else if (['ACTIVE', 'BUYABLE', 'DISCOVERABLE', 'INACTIVE'].includes(status) || f.externalListingId) state = 'listed'
   else state = 'draft'
-  return { state, externalId: f.externalListingId ?? null, detail, published: f.isPublished === true }
+  return { state, externalId: f.externalListingId ?? null, detail, published: f.isPublished === true, selling: { state: f.selling.state, reason: f.selling.reason } }
 }
 
 /* ── fulfilment ────────────────────────────────────────────────────────────────────────────── */

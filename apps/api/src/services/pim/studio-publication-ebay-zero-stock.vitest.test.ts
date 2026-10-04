@@ -137,3 +137,25 @@ describe('the package of a new eBay listing', () => {
     await expect(prepareEbayPublication(facts())).rejects.toThrow('eBay takes one package type, weight and size for the whole listing. FAM-NERO-L holds a different package than the main row')
   })
 })
+
+// New listings (Owner 2026-10-04) — a row created Inactive goes to eBay at quantity 0, whatever its stock, and only while the
+// account's out-of-stock option is on (read when the review is built, and again when the send rebuilds it).
+describe('a new eBay listing created Inactive', () => {
+  it('sends quantity 0 for the Inactive variation only, and keeps the other\'s stock', async () => {
+    m.stock = 3
+    const plan = await prepareEbayPublication(facts(), { inactiveProductIds: new Set(['c2']) })
+    expect(quantities(plan.xml)).toEqual([3, 0])
+    expect(m.reads).toBe(1)
+  })
+  it('out-of-stock option off: refused with the New listings sentence, even with stock', async () => {
+    m.stock = 3
+    m.outOfStock = 'OFF'
+    await expect(prepareEbayPublication(facts(), { inactiveProductIds: new Set(['c1', 'c2']) }))
+      .rejects.toThrow('This eBay account\'s out-of-stock option is off, so eBay cannot hold a new listing at 0. Turn it on in eBay, or choose Active or Not listed.')
+  })
+  it('out-of-stock option unreadable: refused, never sent on a guess', async () => {
+    m.stock = 3
+    m.outOfStock = 'UNKNOWN'
+    await expect(prepareEbayPublication(facts(), { inactiveProductIds: new Set(['c1']) })).rejects.toThrow('Nexus could not confirm that this eBay account\'s out-of-stock option is on')
+  })
+})

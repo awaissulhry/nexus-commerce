@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryProduct, HistoryRun } from '@nexus/shared/publication-history'
 import {
-  failedSkus, filterProducts, historyDeepLinkPatch, orderProducts, parseHistoryDeepLink, productFilterCounts, resultsCsv,
-  productsAsShown, resultsFileName, runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel, runStatusMeta, sentFieldsText, sheetRowIdOf,
+  SHEET_LANDING_TTL_MS, failedSkus, filterProducts, historyDeepLinkPatch, listWords, orderProducts, parseHistoryDeepLink, productFilterCounts, requestSheetLanding,
+  resultsCsv, productsAsShown, resultsFileName, runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel, runStatusMeta, runUndos,
+  sentFieldsText, sheetFieldHints, sheetRowIdOf, takeSheetLanding,
 } from './runActions'
 
 const ZERO = { accepted: 0, verified: 0, failed: 0, waiting: 0, notSent: 0, skipped: 0, unknown: 0 }
@@ -208,5 +209,72 @@ describe('deep link ?tab=activity&view=publishes&run=<id>[&sku=<sku>]', () => {
   it('writing the link removes what is not set', () => {
     expect(historyDeepLinkPatch({ view: 'publishes', run: null, sku: 'X' })).toEqual({ view: 'publishes', run: undefined, sku: undefined })
     expect(historyDeepLinkPatch({ view: 'publishes', run: 'pub-1', sku: 'X' })).toEqual({ view: 'publishes', run: 'pub-1', sku: 'X' })
+  })
+})
+
+describe('build shape v2 (P12) — one Publish of several parts is one run', () => {
+  it('names every part of a Publish, in send order, once each', () => {
+    expect(listWords(['A'])).toBe('A')
+    expect(listWords(['A', 'B'])).toBe('A and B')
+    expect(listWords(['A', 'B', 'C'])).toBe('A, B and C')
+    expect(runChangeLabel(run({ kind: 'resume', kinds: ['resume', 'update', 'update', 'end'] }))).toBe('Resume offer, Update and End listing')
+    // One kind (or no kinds) reads as before.
+    expect(runChangeLabel(run({ kind: 'update', kinds: ['update'], fieldCount: 2 }))).toBe('Update · 2 fields')
+    expect(runChangeLabel(run({ kind: 'pause', fieldCount: null }))).toBe('Pause offer')
+  })
+})
+
+describe('runUndos — Resume these 3…, Relist…, Cannot be undone', () => {
+  const sell = (kind: HistoryRun['kind'], over: Partial<HistoryRun> = {}) => run({ id: `listing-action:${kind}`, source: 'listing-action', kind, fieldCount: null, ...over })
+  it('a pause offers to resume the listings the channel accepted, and only those', () => {
+    const items = [product('A', 'ACCEPTED'), product('B', 'ACCEPTED'), product('C', 'ACCEPTED'), product('D', 'FAILED'), product('E', 'ACCEPTED', { listingId: null })]
+    const [undo, ...rest] = runUndos({ run: sell('pause') }, items)
+    expect(rest).toEqual([])
+    expect(undo).toMatchObject({ kind: 'resume', label: 'Resume these 3…', listingIds: ['l-A', 'l-B', 'l-C'] })
+    expect(undo.hint).toBe('Sets Status to Active on 3 listings on eBay IT and opens Publish. Nothing is sent until you publish.')
+    expect(runUndos({ run: sell('pause') }, [product('A', 'VERIFIED')])[0].label).toBe('Resume this listing…')
+    // Nothing accepted: nothing was paused, nothing to put back.
+    expect(runUndos({ run: sell('pause') }, [product('A', 'FAILED')])).toEqual([])
+  })
+  it('an end offers Relist… (eBay: a new item number); a delete says it cannot be undone; content offers nothing', () => {
+    const relist = runUndos({ run: sell('end') }, [product('A', 'ACCEPTED')])[0]
+    expect(relist).toMatchObject({ kind: 'relist', label: 'Relist…', listingIds: ['l-A'] })
+    expect(relist.hint).toContain('eBay gives a relisted item a new item number.')
+    const gone = runUndos({ run: sell('delete') }, [product('A', 'ACCEPTED'), product('B', 'ACCEPTED')])[0]
+    expect(gone).toMatchObject({ kind: 'none', label: 'Cannot be undone', listingIds: [] })
+    expect(gone.hint).toBe('2 listings were deleted on eBay IT and read Not listed. To list them again, set their Status to Active and Publish.')
+    expect(runUndos({ run: run() }, [product('A', 'ACCEPTED')])).toEqual([])
+    expect(runUndos({ run: sell('resume') }, [product('A', 'ACCEPTED')])).toEqual([])
+  })
+  it('a Publish of several parts: one Undo per selling part, each with ITS products', () => {
+    const pause = sell('pause', { id: 'part-pause' })
+    const end = sell('end', { id: 'part-end', marketplace: 'DE' })
+    const content = run({ id: 'part-content' })
+    const items = [
+      product('A', 'ACCEPTED', { runId: 'part-pause', kind: 'pause' }), product('B', 'ACCEPTED', { runId: 'part-pause', kind: 'pause' }),
+      product('C', 'ACCEPTED', { runId: 'part-end', kind: 'end' }), product('D', 'ACCEPTED', { runId: 'part-content', kind: 'update' }),
+    ]
+    const undos = runUndos({ run: run({ id: 'listing-action:batch:b1', kind: 'update', kinds: ['update', 'pause', 'end'] }), children: [content, pause, end] }, items)
+    expect(undos.map(u => [u.run.id, u.label, u.listingIds])).toEqual([['part-pause', 'Resume these 2…', ['l-A', 'l-B']], ['part-end', 'Relist…', ['l-C']]])
+    expect(undos[1].hint).toContain('on eBay DE')
+  })
+})
+
+describe('"Show in sheet" lands on the field the channel named', () => {
+  it('the field names in order: the server column, every named attribute, then the field label; no blanks, no repeats', () => {
+    expect(sheetFieldHints(product('A', 'FAILED', { columnKey: null, columnHint: ['color', 'item_name'], fieldLabel: 'color' }))).toEqual(['color', 'item_name'])
+    expect(sheetFieldHints(product('A', 'FAILED', { columnKey: 'title', columnHint: [' '], fieldLabel: 'Item name' }))).toEqual(['title', 'Item name'])
+    expect(sheetFieldHints(product('A', 'ACCEPTED'))).toEqual([])
+  })
+  it('one request, taken once by the sheet of the same destination, dropped when stale', () => {
+    const now = Date.parse('2026-10-04T10:00:00Z')
+    requestSheetLanding({ rowId: 'primary:p-A', fieldNames: ['color'], channel: 'EBAY', marketplace: 'IT' }, now)
+    // Another destination's sheet leaves it for the right one.
+    expect(takeSheetLanding({ channel: 'AMAZON', marketplace: 'IT' }, now)).toBeNull()
+    expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now + 1000)).toMatchObject({ rowId: 'primary:p-A', fieldNames: ['color'] })
+    expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now + 2000)).toBeNull()
+    requestSheetLanding({ rowId: 'primary:p-B', fieldNames: [], channel: 'EBAY', marketplace: 'IT' }, now)
+    expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now + SHEET_LANDING_TTL_MS + 1)).toBeNull()
+    expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now)).toBeNull()
   })
 })

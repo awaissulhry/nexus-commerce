@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { deletedPublishSkip } from '@nexus/shared/listing-actions'
 
 const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
 vi.mock('./studio-publication-plan.js', async original => {
@@ -61,6 +62,8 @@ vi.mock('../../db.js', () => {
   channelListingSnapshot: { findMany: m.snapshots }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => { const out = await fn(db); m.events.push('commit'); return out } }
   return { default: db }
 })
+import { newListingChoices } from '../listings/new-listing-choices.js'
+import { readListingDeletions } from '../listings/listing-deletions.js'
 import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, publicationSummary, publicationColumns, reviewStudioPublication, publicationResultFor } from './studio-publication.service.js'
 
 // Existing recovery tests explicitly review a selection before their send/result scenario.
@@ -451,4 +454,66 @@ it('L3: reads and settles a publication in the business, whoever submitted it; a
   expect(await publicationResultFor(review.id!)).toMatchObject({ status: 'ACCEPTED' })
   expect(m.amazonStatus).not.toHaveBeenCalled()
   await expect(publicationResultFor('no-such-publication')).rejects.toThrow('not found')
+})
+
+// ── Delete and relist (Owner 2026-10-04, simplified the same day) ────────────────────────────────
+// A row Nexus deleted is a row not on the channel, Not listed by default: every review blocks it (no create, never
+// ticked), whatever path reviews it (the plan, the many-family batch, the direct studio review). Its Status Active (or an
+// older relist choice in the Action column, read as Active) lists it again, ticked by default; Amazon's refusal of that
+// relist is explained beside Amazon's own words.
+const deletedAt = new Date(Date.now() - 2 * 3_600_000 - 60_000)
+const chosenAt = new Date(deletedAt.getTime() + 60_000)
+const draftListing = (productId: string, extra: Record<string, unknown> = {}) => ({ id: `listing-${productId}`, productId, channel: 'AMAZON', marketplace: 'IT',
+  externalListingId: null, listingStatus: 'DRAFT', isPublished: false, publishAction: null, publishActionAt: null, ...extra })
+function deletedChild(childExtra: Record<string, unknown> = {}) {
+  const listings = [draftListing('parent', { externalListingId: 'B0PARENT01', listingStatus: 'ACTIVE', isPublished: true }), draftListing('child', childExtra)]
+  m.snapshots.mockImplementation(async ({ where }: any) => where.reason === 'delete'
+    ? [{ channelListingId: 'listing-child', acceptedAt: deletedAt, payload: { kind: 'listing-action', evidence: { oldExternalListingId: 'B0OLDCHILD' } } }] : [])
+  // The facts as `readPublicationFacts` reads them: the delete records, and the choices of every row not on the channel.
+  m.facts.mockImplementation(async () => {
+    const byListing = await readListingDeletions(listings)
+    const deletions = new Map([...byListing].map(([id, deletion]) => [listings.find(listing => listing.id === id)!.productId, deletion]))
+    const createChoices = newListingChoices({ channel: 'AMAZON', aliasKey: 'alias-b', familyId: 'parent',
+      products: [{ id: 'parent', parentId: null }, { id: 'child', parentId: 'parent' }], listings, deletions: byListing })
+    return { ...facts(), listings, deletions, createChoices }
+  })
+}
+
+it('delete and relist: a deleted row left Not listed sends nothing — no create, never ticked — and the rest of the family still goes', async () => {
+  deletedChild()
+  const review = await previewRaw('parent', scope, 'user-a')
+  const skip = deletedPublishSkip({ where: 'Amazon · IT', at: deletedAt.toISOString() })
+  expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ deleted: true, blocked: skip })
+  expect(review.rows.find(r => r.productId === 'child')!.relist).toBeUndefined()
+  expect(review.changes!.find(c => c.productId === 'child')).toMatchObject({ selectable: false, selectedByDefault: false, reason: skip })
+  expect(review.changes!.find(c => c.productId === 'parent')).toMatchObject({ selectable: true, selectedByDefault: true })
+  expect(m.rows.get(review.id!).changes.relistProductIds).toBeUndefined()
+})
+
+it('delete and relist: Status Active after the delete lists it again, ticked; Amazon\'s refusal is explained beside its words', async () => {
+  deletedChild({ sellingTarget: 'ACTIVE', sellingTargetAt: chosenAt, sellingTargetById: 'user-a' })
+  const review = await previewStudioPublication('parent', scope, 'user-a')
+  expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ relist: { deletedAt: deletedAt.toISOString(), oldReference: 'B0OLDCHILD', asin: null,
+    sentence: 'Lists CHILD again (it was ASIN B0OLDCHILD; Amazon matches it by its product ID).', warning: null } })
+  expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ startsAs: 'active' })
+  expect(review.rows.find(r => r.productId === 'child')!.blocked).toBeUndefined()
+  expect(review.changes!.find(c => c.productId === 'child')).toMatchObject({ selectable: true, selectedByDefault: true })
+  expect(m.rows.get(review.id!).changes).toMatchObject({ relistProductIds: ['child'], createChoiceProductIds: ['child'],
+    relist: [{ productId: 'child', sku: 'SELLER-CHILD', deletedAt: deletedAt.toISOString(), oldReference: 'B0OLDCHILD', asin: null }] })
+  await submitStudioPublication('parent', review.id!, {}, 'user-a')
+  m.amazonStatus.mockResolvedValue({ results: [{ sku: 'SELLER-SKU', failed: false, issues: [], message: 'Amazon processed this product.' },
+    { sku: 'SELLER-CHILD', failed: true, issues: [{ code: '8005', severity: 'ERROR', message: 'The SKU is associated with ASIN B0ELSEWHR1.' }], message: 'The SKU is associated with ASIN B0ELSEWHR1.' }] })
+  const result = await publicationResultFor(review.id!)
+  expect(result.results.find(r => r.sku === 'SELLER-CHILD')).toMatchObject({ status: 'FAILED',
+    message: 'Amazon still links this SKU to ASIN B0ELSEWHR1 in another market. Delete it there first. Amazon said: The SKU is associated with ASIN B0ELSEWHR1.' })
+  expect(result.results.find(r => r.sku === 'SELLER-SKU')!.message).toBe('Amazon processed this product.')
+})
+
+it('delete and relist: an OLDER relist choice (Full update after the delete) reads as Status Active; Amazon\'s validation refusal says it in plain words too', async () => {
+  deletedChild({ publishAction: 'FULL_UPDATE', publishActionAt: chosenAt })
+  const review = await previewStudioPublication('parent', scope, 'user-a')
+  expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ startsAs: 'active', relist: { oldReference: 'B0OLDCHILD' } })
+  m.amazon.mockRejectedValue(Object.assign(new Error('SELLER-CHILD: 13013: The SKU was recently deleted.'), { notSent: true }))
+  const result = await submitStudioPublication('parent', review.id!, {}, 'user-a')
+  expect(result).toMatchObject({ status: 'FAILED', message: expect.stringMatching(/^Nothing was submitted\. Amazon is still removing this SKU \(deleted 2 hours ago\)\. Try again later; Amazon can take up to 24 hours\. Amazon said: SELLER-CHILD: 13013: The SKU was recently deleted\.$/) })
 })

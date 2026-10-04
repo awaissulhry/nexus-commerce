@@ -18,7 +18,9 @@ export const FEED_ERROR_CODES: Record<string, FeedErrorInfo> = {
   '8562':  { title: 'Invalid attribute value', hint: 'The value is not in the schema for this product type.' },
 
   // Listing / ASIN errors
-  '8541':  { title: 'Brand mismatch', hint: 'Brand name must match Amazon Brand Registry exactly.' },
+  '8541':  { title: 'Product ID matches an ASIN your data contradicts', hint: 'Your product ID (barcode or ASIN) matches an ASIN on Amazon, but some of your values (brand, title, attributes) contradict that ASIN. Correct the values to match it, or use the right product ID.' },
+  '8005':  { title: 'SKU linked to another ASIN', hint: 'Amazon ties this SKU to a different ASIN, and a SKU\'s ASIN cannot change. Delete the SKU (in every market where Amazon still links it), then list it again on the new ASIN.' },
+  '13013': { title: 'SKU recently deleted', hint: 'Amazon is still removing this SKU after a delete. Try again later; Amazon can take up to 24 hours.' },
   '8568':  { title: 'Variation theme mismatch', hint: 'Parent/child variation themes must match.' },
   '8572':  { title: 'Variation invalid', hint: 'Child SKU references a parent that does not exist or has a different variation theme.' },
   '8000':  { title: 'SKU not found', hint: 'This SKU does not exist on this marketplace — use item_type: "update" if the ASIN already exists.' },

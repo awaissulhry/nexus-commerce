@@ -241,6 +241,18 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsPublish, (_m, p) => p === '/api/publications' || p.startsWith('/api/publications/')),
   // Sheet publish parity, step 5 — a publication batch sends reviews to channels; reading or cancelling one is part of publishing.
   P(F.productsPublish, (_m, p) => p === '/api/publication-batches' || p.startsWith('/api/publication-batches/')),
+  // Sheet publish parity, step 7 — the Status column's changes. Ending a live listing is a delete (house rule A-10, like
+  // /api/ebay/flat-file/delete); pausing, resuming and relisting are publishing. The state read is a GET under the
+  // /api/products prefix rule (products.view). Both rules precede that prefix rule.
+  // Build shape v2 — Delete (remove the listing from the channel) is a delete too.
+  P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/listing-actions\/(end|delete)\/(preview|run)$/.test(p)),
+  P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/listing-actions\/[^/]+\/(preview|run)$/.test(p)),
+  // Sheet publish parity, build shape v2 — the waiting Action and Status values of listing rows (publish-actions.routes.ts).
+  // Setting a value sends nothing, but it is what Publish will send, so it needs what sending it needs: Delete (Action) and
+  // Ended (Status) are deletes (house rule A-10), every other value is publishing. Each value has its own path, so this
+  // manifest decides; the service checks again. The read is a GET under the /api/products prefix rule (products.view).
+  P(F.productsDelete, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/studio\/publish-actions\/(send\/delete|status\/ended)$/.test(p)),
+  P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/studio\/publish-actions\/(send\/(partial|full)|status\/(active|inactive|not_listed|none))$/.test(p)),
   // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
   // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.
   P(F.pimManage, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio\/own-axis-attribute$/.test(p)),

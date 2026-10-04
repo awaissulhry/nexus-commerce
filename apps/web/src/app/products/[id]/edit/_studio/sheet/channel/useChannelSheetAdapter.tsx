@@ -52,7 +52,8 @@ import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { usePublicationStatus } from '@/app/products/_publication/dialog/usePublicationStatus';
 import { destinationLabel as publishDestinationLabel, rejectedFilterMenuLabel, withRejectedFilter } from '@/app/products/_publication/dialog/outcome';
-import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishSheetColumn, rejectedRowCount, rowPublishValue, type PublishCellValue } from './publishColumn';
+import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishHistorySearch, publishSheetColumn, rejectedRowCount, rowPublishValue, useSellingChangeReRead, type PublishCellValue } from './publishColumn';
+import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { OFFER_DRAFT_COPY, discardOfferDrafts, offerDraftControls, pendingPublishOf } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
 import { useCellFormulas } from '../../useCellFormulas';
@@ -90,8 +91,14 @@ import { useReferenceNames } from '../useReferenceNames';
 import { referenceSearchText, referenceTooltip } from '../referenceLabels';
 import { RESERVED_COLUMN_IDS } from '../views';
 import { flaggedColumnKeys } from '../flaggedColumns';
-import { CHANNEL_VERB_PERMISSION, channelActions, type PermissionState } from './channelActions';
-import { aliasKeyOf, type ChannelScopeChannel, type ChannelSheetRow, type SheetColumn, type StudioCellValue } from './types';
+import { ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, actionMenuEntries, channelActions, type PermissionState } from './channelActions';
+import { PublishActionFence, groupStaged, inactiveStatusMark, isInactiveCell, isWaitingCell, operationToast, publishCellKey, usePublishActions, waitingCountsOf, waitingStatusMark, waitingTotalOf, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type StagedPublishCell } from '../usePublishActions';
+import { STATUS_COLUMN, statusCellValue, statusColumn, statusSheetColumn, type PublishCellReadState } from './statusColumn';
+import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, actionSheetColumn } from './actionColumn';
+import { isClearKey, selectedCells } from '../sheetReset';
+import type { PublishActionChange } from '@nexus/shared/publish-actions';
+import { SELLING_ROW_MARK_CLASS, publishActionModel, rowCarriesInactiveMark, sellingStatusModel, waitingWhen } from '@/design-system/grid';
+import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type SheetColumn, type StudioCellValue } from './types';
 import './channel-sheet.css';
 import { channelValidation } from '../master/channelColumns';
 import { buildSheetColumns } from '../buildSheetColumns';
@@ -110,7 +117,7 @@ const DRAWER_READ_ONLY = 'Edit channel values in the sheet — the drawer is rea
 const SHOPIFY_FIELDS_UNREAD = 'SHOPIFY:*';
 export function useChannelSheetAdapter({ productId, channel, marketplace, locale, accountId, shopifySchema }: ChannelSheetProps): ProductSheetModel<ChannelSheetRow, null, ChannelSheetRow> {
     const record = useStudioRecord();
-    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, rowSelection, selectedRows: selected, setSelectedRows: setSelected, announceRefusals } = useProductSheetInteraction<ChannelSheetRow>('channel');
+    const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows: selected, setSelectedRows: setSelected, announceRefusals } = useProductSheetInteraction<ChannelSheetRow>('channel');
     const savedAtRef = useRef<(at: string) => void>(() => undefined);
     const { toast } = useToast();
     const languageScope = useStudioScope();
@@ -128,6 +135,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const selectedAlias = destination.status === 'ready' ? destination.data.aliasKey : null;
     /* Sheet publish parity, step 2 — a publication's result arrives without a click: the toolbar mark below and one toast. */
     const publication = usePublicationStatus({ channel, marketplace, accountId, aliasKey: destination.status === 'ready' ? destination.data.aliasKey ?? '' : null });
+    // Selling changes send no publication event: the Last publish column reads again while one is still being sent.
+    useSellingChangeReRead(publication.status, publication.reload);
+    /* Build shape v2, P8 — the Status and Action columns: the family's waiting values on this channel · market (every
+       listing of it: rows are matched by their listing id). Read alongside the sheet, not after it. */
+    const publishActions = usePublishActions(productId, { channel, marketplace, accountId: accountId ?? null }, { familyId: loadedData?.family?.id ?? null });
     const selectedData = useMemo(() => !loadedData || selectedAlias === null ? loadedData : {
         ...loadedData, rows: loadedData.rows.filter(row => (row.aliasId ?? '') === selectedAlias),
         aliases: loadedData.aliases.filter(alias => (alias.id ?? '') === selectedAlias),
@@ -653,6 +665,224 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         : auth.status === 'anon' ? 'no-session'
             : auth.has(CHANNEL_VERB_PERMISSION) ? 'granted'
                 : 'denied';
+    /* ── Build shape v2, P8 — the Status and Action columns, Action ▾, the waiting mark and the inactive chip ─────────
+       The values live in `usePublishActions` (never in the row, never in the sheet's writer); a cell edit, a fill, a
+       paste, a reset or Action ▾ STAGES its cells in one fence, and they leave as one write per column and value, with
+       ONE toast. Nothing here sends anything to a channel: Publish does. */
+    const publishActionsRef = useRef(publishActions);
+    publishActionsRef.current = publishActions;
+    /* A row finds its cell by its listing id; a row with no listing here yet (a new row, or one whose drafts a choice
+       just started, until the sheet reads again) by its product and listing alias. */
+    const publishCellOf = useCallback((row: ChannelSheetRow) => {
+        const id = row.listing?.id;
+        const byId = id ? publishActionsRef.current.byListingId.get(id) : undefined;
+        return byId ?? (id ? null : publishActionsRef.current.byProductKey.get(publishCellKey(row.id, wireAliasKey(row.aliasId))) ?? null);
+    }, []);
+    const publishLock = auth.status !== 'loading' && !auth.has('products.publish') ? ACTION_ROLE_CANNOT_PUBLISH : null;
+    const publishRead = useMemo<PublishCellReadState>(() => ({
+        loaded: publishActions.status === 'ready' || publishActions.status === 'error',
+        failed: publishActions.status === 'error',
+        lockedReason: publishLock,
+    }), [publishActions.status, publishLock]);
+    const publishReadRef = useRef(publishRead);
+    publishReadRef.current = publishRead;
+    const canDeleteRef = useRef(false);
+    canDeleteRef.current = auth.has('products.delete');
+    const [publishTracker] = useState(() => new CellSaveTracker());
+    const repaintPublishCells = useCallback((rowIds?: Iterable<string>) => {
+        const api = getGridApi();
+        if (!api || api.isDestroyed())
+            return;
+        const nodes = rowIds ? [...new Set(rowIds)].flatMap((id) => { const node = api.getRowNode(id); return node ? [node] : []; }) : undefined;
+        api.refreshCells({ ...(nodes ? { rowNodes: nodes } : {}), columns: [STATUS_COLUMN, ACTION_COLUMN], force: true });
+    }, [getGridApi]);
+    const publishColumnOf = (column: PublishActionChange['column']) => (column === 'send' ? ACTION_COLUMN : STATUS_COLUMN);
+    /** One operation's cells, sent: marks while it is on its way, the server's word per row after, and ONE toast. */
+    const flushPublishCells = useRef<(items: StagedPublishCell[]) => Promise<void>>(async () => { });
+    flushPublishCells.current = async (items) => {
+        const { writes, refused } = groupStaged(items);
+        // Every row's cell id — a listing id, or a new row's `new:` id — to the sheet row.
+        const rowIdOfListing = new Map(rowsRef.current.flatMap((row) => { const id = publishCellOf(row)?.listingId ?? row.listing?.id; return id ? [[id, row.rowId] as const] : []; }));
+        const touched: string[] = [];
+        for (const write of writes)
+            for (const id of write.listingIds) {
+                const rowId = rowIdOfListing.get(id);
+                if (rowId) { publishTracker.set(rowId, publishColumnOf(write.change.column), 'saving'); touched.push(rowId); }
+            }
+        repaintPublishCells(touched);
+        const outcomes: PublishActionWriteOutcome[] = await Promise.all(writes.map((write) => publishActionsRef.current.write(write.change, write.listingIds)));
+        for (const outcome of outcomes) {
+            const colId = publishColumnOf(outcome.change.column);
+            const mark = (listingId: string, reason: string | null) => {
+                const rowId = rowIdOfListing.get(listingId);
+                if (!rowId) return;
+                if (reason) publishTracker.set(rowId, colId, 'refused', reason);
+                else publishTracker.clear(rowId, colId);
+            };
+            if (!outcome.ok) { for (const id of outcome.requested) mark(id, outcome.error ?? 'The change could not be saved.'); continue; }
+            for (const id of outcome.applied) mark(id, null);
+            for (const r of outcome.refused) mark(r.listingId, r.reason);
+            for (const c of outcome.conflicts) mark(c.listingId, `${c.setByName ?? 'Someone else'} changed this first${c.setAt ? ` ${waitingWhen(c.setAt)}` : ''}. Nexus kept their value.`);
+        }
+        repaintPublishCells(touched);
+        const summary = operationToast(outcomes, refused);
+        if (summary && !summary.quiet)
+            toastRef.current(summary.message, summary.tone, { duration: summary.tone === 'success' ? 5000 : 10000 });
+        // New listings: a choice started the family's drafts — the sheet reads its rows again, quietly (their listing ids).
+        if (outcomes.some((outcome) => outcome.started))
+            void refreshRef.current(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+    };
+    const [publishFence] = useState(() => new PublishActionFence((items) => { void flushPublishCells.current(items); }));
+    useEffect(() => () => publishFence.dispose(), [publishFence]);
+    /** A cell received a value: a refusal is marked at once; a change waits in the fence for the rest of its operation. */
+    const stagePublishCell = useCallback((column: PublishActionChange['column'], row: ChannelSheetRow, received: PublishCellInput) => {
+        const colId = publishColumnOf(column);
+        // A new row's current choice again (a paste, a fill or Action ▾ of the same word): nothing to write.
+        const input = withoutSameNewChoice(publishCellOf(row), received);
+        if ('refused' in input) publishTracker.set(row.rowId, colId, 'refused', input.refused);
+        else publishTracker.clear(row.rowId, colId);
+        repaintPublishCells([row.rowId]);
+        // Full update on a row not on the channel (it reads it already), or a new row's own choice again: nothing to set.
+        if ('skip' in input)
+            return;
+        // Only a listing this read knows can be written; any other row is refused with the reason (the server would
+        // refuse the whole write for one unknown id).
+        const cell = publishCellOf(row);
+        publishFence.stage({ column, listingId: cell?.listingId ?? null, sku: row.sku, input });
+    }, [publishCellOf, publishFence, publishTracker, repaintPublishCells]);
+    /** Fill the ticked rows' cells of one column (Action ▾): one operation, so one write and one toast. */
+    const fillPublishCells = useCallback((change: PublishActionChange, targets: readonly ChannelSheetRow[]) => {
+        publishFence.begin();
+        try {
+            for (const row of targets) stagePublishCell(change.column, row, { change });
+        }
+        finally {
+            publishFence.end();
+        }
+    }, [publishFence, stagePublishCell]);
+    /** Delete / Backspace on a Status or Action cell: the selected cells of those columns go back to "no change" / Partial update. */
+    const onPublishCellKey = useCallback((event: { event?: Event | null; column?: { getColId(): string } | null }): boolean => {
+        const key = event.event as KeyboardEvent | null | undefined;
+        const colId = event.column?.getColId();
+        if ((colId !== STATUS_COLUMN && colId !== ACTION_COLUMN) || !isClearKey(key, false))
+            return false;
+        const api = getGridApi();
+        if (!api || api.isDestroyed() || api.getEditingCells().length > 0)
+            return false;
+        key!.preventDefault();
+        publishFence.begin();
+        try {
+            for (const target of selectedCells(api, rowIdOf)) {
+                const cell = publishCellOf(target.row);
+                if (target.colId === STATUS_COLUMN && cell?.status.target && sellingStatusModel(statusCellValue(cell, publishReadRef.current)).editable)
+                    stagePublishCell('status', target.row, { change: { column: 'status', target: null } });
+                // A row not on the channel reads Full update: nothing to reset (its Status says whether it goes out).
+                if (target.colId === ACTION_COLUMN && cell && !cell.create && cell.send.mode !== 'partial' && publishActionModel(actionCellValue(cell, publishReadRef.current)).editable)
+                    stagePublishCell('send', target.row, { change: { column: 'send', mode: 'partial' } });
+            }
+        }
+        finally {
+            publishFence.end();
+        }
+        return true;
+    }, [getGridApi, publishCellOf, publishFence, stagePublishCell]);
+    /* A new read (or a permission answer) repaints only the cells whose value changed (`equals`). */
+    useEffect(() => { getGridApi()?.refreshCells({ columns: [STATUS_COLUMN, ACTION_COLUMN] }); }, [publishActions.version, publishRead, getGridApi]);
+    /* The inactive row-start mark: AG applies row classes when it draws a row, so a row whose state changed is redrawn. */
+    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: ChannelSheetRow }) => !!p.data && rowCarriesInactiveMark([publishCellOf(p.data)?.state]) }), [publishCellOf]);
+    const inactiveRowIds = useRef(new Set<string>());
+    useEffect(() => {
+        const next = new Set(rows.filter((row) => isInactiveCell(publishCellOf(row))).map((row) => row.rowId));
+        const changed = [...next].filter((id) => !inactiveRowIds.current.has(id)).concat([...inactiveRowIds.current].filter((id) => !next.has(id)));
+        inactiveRowIds.current = next;
+        const api = getGridApi();
+        if (!api || api.isDestroyed() || !changed.length)
+            return;
+        const nodes = changed.flatMap((id) => { const node = api.getRowNode(id); return node ? [node] : []; });
+        if (nodes.length) api.redrawRows({ rowNodes: nodes });
+    }, [rows, publishActions.version, publishCellOf, getGridApi, gridReady]);
+    /* The toolbar: "4 waiting for Publish" and "3 inactive", each a filter; the ⋯ menu offers both and "Clear …". */
+    const [publishFilter, setPublishFilter] = useState<'waiting' | 'inactive' | null>(null);
+    const publishCounts = useMemo(() => {
+        const withChildren = new Set(rows.filter((row) => row.rowKind === 'variant').map((row) => aliasKeyOf(row.aliasId)));
+        const cells = rows.map((row) => publishCellOf(row));
+        return {
+            waiting: waitingCountsOf(cells),
+            waitingRows: rows.filter((row) => isWaitingCell(publishCellOf(row))).length,
+            // A main row with variations shows their state ("Mixed"): count the listings that sell, not it.
+            inactive: rows.filter((row) => isInactiveCell(publishCellOf(row)) && (row.rowKind === 'variant' || !withChildren.has(aliasKeyOf(row.aliasId)))).length,
+        };
+    }, [rows, publishActions.version, publishCellOf]);
+    useEffect(() => {
+        if ((publishFilter === 'waiting' && !publishCounts.waitingRows) || (publishFilter === 'inactive' && !publishCounts.inactive))
+            setPublishFilter(null);
+    }, [publishFilter, publishCounts]);
+    const destinationWords = publishDestinationLabel(channel, marketplace);
+    const togglePublishFilter = useCallback((which: 'waiting' | 'inactive') => setPublishFilter((current) => (current === which ? null : which)), []);
+    const waitingMarkStatus = useMemo(() => waitingStatusMark(publishCounts.waiting, publishFilter === 'waiting', () => togglePublishFilter('waiting')), [publishCounts.waiting, publishFilter, togglePublishFilter]);
+    const inactiveMarkStatus = useMemo(() => inactiveStatusMark(publishCounts.inactive, destinationWords, publishFilter === 'inactive', () => togglePublishFilter('inactive')), [publishCounts.inactive, destinationWords, publishFilter, togglePublishFilter]);
+    const waitingTotal = waitingTotalOf(publishCounts.waiting);
+    /** ⋯ "Clear N waiting values on <market>": every waiting value of this sheet back to the default, with Undo. */
+    const clearWaitingValues = useCallback(async () => {
+        const cells = rowsRef.current.map((row) => publishCellOf(row)).filter((cell): cell is NonNullable<typeof cell> => !!cell);
+        // A row not on the channel has no Action value of its own (it reads Full update); its Status choice clears below
+        // (a deleted row chosen to be listed again goes back to Not listed; Undo chooses it again).
+        const sends = cells.filter((cell) => !cell.create && cell.send.mode !== 'partial' && !cell.send.noLongerApplies);
+        const statuses = cells.filter((cell) => !!cell.status.target && !cell.status.noLongerApplies);
+        if (!sends.length && !statuses.length)
+            return;
+        const outcomes = await Promise.all([
+            ...(sends.length ? [publishActionsRef.current.write({ column: 'send', mode: 'partial' }, sends.map((cell) => cell.listingId))] : []),
+            ...(statuses.length ? [publishActionsRef.current.write({ column: 'status', target: null }, statuses.map((cell) => cell.listingId))] : []),
+        ]);
+        const failed = outcomes.find((outcome) => !outcome.ok);
+        const cleared = outcomes.reduce((n, outcome) => n + outcome.applied.length, 0);
+        if (failed && !cleared) {
+            toastRef.current(`Nothing was cleared: ${failed.error ?? 'the request failed.'}`, 'danger', { duration: 10000 });
+            return;
+        }
+        const appliedIds = new Set(outcomes.flatMap((outcome) => outcome.applied.map((id) => `${outcome.change.column}|${id}`)));
+        // Undo puts back what was cleared (each value again as yours, now).
+        const undoWrites = new Map<string, { change: PublishActionChange; ids: string[] }>();
+        for (const cell of sends) if (appliedIds.has(`send|${cell.listingId}`)) {
+            const change: PublishActionChange = { column: 'send', mode: cell.send.mode };
+            const k = JSON.stringify(change);
+            undoWrites.set(k, { change, ids: [...(undoWrites.get(k)?.ids ?? []), cell.listingId] });
+        }
+        for (const cell of statuses) if (appliedIds.has(`status|${cell.listingId}`)) {
+            const change: PublishActionChange = { column: 'status', target: cell.status.target };
+            const k = JSON.stringify(change);
+            undoWrites.set(k, { change, ids: [...(undoWrites.get(k)?.ids ?? []), cell.listingId] });
+        }
+        const putBack = async () => {
+            const back = await Promise.all([...undoWrites.values()].map(({ change, ids }) => publishActionsRef.current.write(change, ids)));
+            const summary = operationToast(back, []);
+            if (summary) toastRef.current(summary.message, summary.tone, { duration: 8000 });
+        };
+        const kept = failed ? ` Some could not be cleared: ${failed.error ?? 'the request failed.'}` : '';
+        toastRef.current(<>{`Cleared ${cleared.toLocaleString('en')} waiting ${cleared === 1 ? 'value' : 'values'} on ${destinationWords}.${kept}`} <Button variant="link" size="sm" onClick={() => void putBack()}>Undo</Button></>, failed ? 'warning' : 'success', { duration: 10000 });
+    }, [publishCellOf, destinationWords]);
+    const publishOverflow = useMemo<MenuItemDef[]>(() => [
+        ...(publishCounts.waitingRows ? [{ id: 'show-waiting', label: publishFilter === 'waiting' ? 'Show all rows' : `Show the ${publishCounts.waitingRows === 1 ? 'row' : `${publishCounts.waitingRows} rows`} waiting for Publish`, description: 'Rows with a Status or Action that Publish will send', onSelect: () => togglePublishFilter('waiting') }] : []),
+        ...(publishCounts.inactive ? [{ id: 'show-inactive', label: publishFilter === 'inactive' ? 'Show all rows' : `Show the ${publishCounts.inactive === 1 ? 'inactive row' : `${publishCounts.inactive} inactive rows`}`, description: `Listings that do not sell on ${destinationWords} now`, onSelect: () => togglePublishFilter('inactive') }] : []),
+        { id: 'clear-waiting', label: waitingTotal ? `Clear ${waitingTotal.toLocaleString('en')} waiting ${waitingTotal === 1 ? 'value' : 'values'} on ${destinationWords}` : `Clear waiting values on ${destinationWords}`,
+            description: waitingTotal ? `Status back to no change, Action back to Partial update${publishCounts.waiting.relist ? ' (a deleted row back to Not listed)' : ''}. Undo puts them back.` : 'Nothing waits for Publish on this sheet.',
+            disabled: !waitingTotal || !!publishLock, onSelect: () => void clearWaitingValues() },
+    ], [publishCounts, publishFilter, togglePublishFilter, destinationWords, waitingTotal, publishLock, clearWaitingValues]);
+    /* Action ▾ counts what each item would do to the ticked rows. */
+    const actionEntries = useMemo(() => actionMenuEntries(selected.map((row) => ({ sku: row.sku, cell: publishCellOf(row) })),
+        { publish: !publishLock && auth.status !== 'loading', delete: auth.has('products.delete') }), [selected, publishCellOf, publishActions.version, publishLock, auth]);
+    /* The grid's operation events open and close the Status and Action fence too (after the sheet's own fence). */
+    const publishFenceProps = useMemo(() => {
+        const g = undo.gridProps;
+        const begin = () => publishFence.begin();
+        const end = () => publishFence.end();
+        return {
+            onFillStart: () => { g.onFillStart(); begin(); }, onFillEnd: () => { g.onFillEnd(); end(); },
+            onPasteStart: () => { g.onPasteStart(); begin(); }, onPasteEnd: () => { g.onPasteEnd(); end(); },
+            onCellSelectionDeleteStart: () => { g.onCellSelectionDeleteStart(); begin(); }, onCellSelectionDeleteEnd: () => { g.onCellSelectionDeleteEnd(); end(); },
+        };
+    }, [undo.gridProps, publishFence]);
     const fieldsBanner = useMissingFieldsBanner({ channel, market: marketplace, missing: data?.meta.schemaMissing ?? [], ready: !!data && !loading && auth.status !== 'loading',
         canLoad: auth.has(LOAD_FIELDS_PERMISSION), onLoaded: reload });
     const verbs = useMemo(() => data
@@ -810,6 +1040,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             },
         })];
     }, [scopePage, marketplace, getGridApi, revealCell, refreshProgress]);
+    /** The card's "See publish history" (P8): the studio's Activity tab on that publish — a shallow address change. */
+    const canChangeEditor = languageScope.canChangeEditor;
+    const openPublishHistory = useCallback((runId: string, sku: string | null) => {
+        if (canChangeEditor && !canChangeEditor())
+            return;
+        const url = new URL(window.location.href);
+        // A fresh state object: Next's patched pushState then moves `useSearchParams` (see contracts.tsx `flushUrl`).
+        window.history.pushState({}, '', `${url.pathname}${publishHistorySearch(url.search, runId, sku)}${url.hash}`);
+    }, [canChangeEditor]);
     /** Step 3 — the "Last publish" column, right after progress. Channel scopes only (this adapter); master has none. */
     const publishColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => scopePage ? [publishColumn<ChannelSheetRow>({
         value: (row) => publishValueRef.current(row),
@@ -819,11 +1058,33 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 const api = getGridApi();
                 if (row && api) landOnCell(api, { rowId: rowIdOf(row), colId: columnKey, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
             },
-            // "See publish history" arrives with the history (step 4); until then the card offers no link.
+            // "See publish history": the Activity tab on that publish, the row's SKU expanded (P8).
+            onOpenHistory: (publicationId, p) => openPublishHistory(publicationId, (p.data as ChannelSheetRow | undefined)?.sku ?? null),
         },
-    })] : [], [scopePage, getGridApi, revealCell]);
+    })] : [], [scopePage, getGridApi, revealCell, openPublishHistory]);
     useEffect(() => { getGridApi()?.refreshCells({ columns: [PUBLISH_COLUMN] }); }, [publication.read, publishLookup, getGridApi]);
-    const allColumnDefs = useMemo(() => [...progressColumns, ...publishColumns, ...columnDefs], [progressColumns, publishColumns, columnDefs]);
+    // "Show in sheet" from Publish history lands on the FIELD the channel named (the request names the row and fields).
+    useEffect(() => {
+        if (!gridReady || !rows.length)
+            return;
+        const request = takeSheetLanding({ channel, marketplace });
+        const api = getGridApi();
+        if (!request || !api || !rows.some(row => rowIdOf(row) === request.rowId))
+            return;
+        const column = request.fieldNames.map(name => publishLookup(name)).find(ref => !!ref);
+        if (column)
+            landOnCell(api, { rowId: request.rowId, colId: column.key, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
+    }, [gridReady, rows, channel, marketplace, getGridApi, publishLookup, revealCell]);
+    /** Build shape v2, P8 — Status and Action, right after "Last publish". Their values are read through refs. */
+    const statusActionColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
+        if (!scopePage) return [];
+        const shared = { cell: publishCellOf, read: () => publishReadRef.current, canDelete: () => canDeleteRef.current, tracker: publishTracker, rowIdOf };
+        return [
+            statusColumn<ChannelSheetRow>({ ...shared, onInput: (row, input) => stagePublishCell('status', row, input) }),
+            actionColumn<ChannelSheetRow>({ ...shared, onInput: (row, input) => stagePublishCell('send', row, input) }),
+        ];
+    }, [scopePage, publishCellOf, publishTracker, stagePublishCell]);
+    const allColumnDefs = useMemo(() => [...progressColumns, ...publishColumns, ...statusActionColumns, ...columnDefs], [progressColumns, publishColumns, statusActionColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
     const matchesSearch = useCallback((r: ChannelSheetRow) => {
@@ -838,8 +1099,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         // Step 3 — the channel's rejections in the latest publish (the toolbar mark's filter), not the save refusals above.
         const afterRejected = showRejectedOnly && rejectedCount ? filterProductSheetRows(afterRefused, row => isRejectedRow(row, publication.status)) : afterRefused;
         const afterWaiting = offerDrafts.filterOn ? filterProductSheetRows(afterRejected, offerDrafts.keep) : afterRejected;
-        return searchTerm ? filterProductSheetRows(afterWaiting, matchesSearch) : afterWaiting;
-    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, publication.status, offerDrafts]);
+        // P8 — the waiting mark's and the inactive chip's filters.
+        const afterPublish = publishFilter === 'waiting' ? filterProductSheetRows(afterWaiting, row => isWaitingCell(publishCellOf(row)))
+            : publishFilter === 'inactive' ? filterProductSheetRows(afterWaiting, row => isInactiveCell(publishCellOf(row)))
+                : afterWaiting;
+        return searchTerm ? filterProductSheetRows(afterPublish, matchesSearch) : afterPublish;
+    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, publication.status, offerDrafts, publishFilter, publishCellOf, publishActions.version]);
     useLanguageChips(data ? scopeRows : null, gridColumns);
     useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
@@ -853,7 +1118,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const crossChannelCols = useMemo(() => crossChannelColumnCount(rows.find((r) => r.rowKind === 'variant')), [rows]);
     /* Progress column (2026-09-26) — a member of the column model (Customise, views, locks), built above by the shared
        builder; the channel builder never sees it. */
-    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), publishSheetColumn<typeof gridColumns[number]>(), ...gridColumns]) : gridColumns, [data, gridColumns]);
+    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), publishSheetColumn<typeof gridColumns[number]>(), statusSheetColumn<typeof gridColumns[number]>(), actionSheetColumn<typeof gridColumns[number]>(), ...gridColumns]) : gridColumns, [data, gridColumns]);
     const schemaColumns = useMemo(() => modelColumns as never as StudioSheetColumn[], [modelColumns]);
     const prefsBridge = useMemo<PrefsBridgeOptions>(() => ({
         columns: [{ key: '__identity', locked: true }, ...modelColumns.map((c) => ({ key: c.key }))],
@@ -1059,6 +1324,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             visible: visibleRows.length,
             total: rows.length,
             selected: selected.length,
+            /* P8 — while rows are ticked: Action ▾ fills their Status or Action (it replaces "Mark paused / active").
+               Broadcast and Open record stay where they were: the row menus and the drawer. */
+            selectionActions: <PublishActionMenu entries={actionEntries} selected={selected.length} onChoose={(change) => fillPublishCells(change, selected)} disabled={publishActions.status !== 'ready'}/>,
+            onClearSelection: clearSelection,
             /* With no listing here, the alias count ("1 listing") counted the primary GROUP, not a listing — so it is left
                out, and the notice above the grid says what the first edit does. */
             descriptor: data && <span className="nds-cell-muted">
@@ -1080,7 +1349,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [liveRead.menuItem, ...(rejectedCount ? [{ id: 'show-rejected', label: rejectedFilterMenuLabel(rejectedCount, showRejectedOnly, channel, marketplace), description: 'The rows the channel rejected in the last publish', onSelect: () => setShowRejectedOnly(v => !v) }] : []), ...offerDrafts.menu, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [liveRead.menuItem, ...publishOverflow, ...(rejectedCount ? [{ id: 'show-rejected', label: rejectedFilterMenuLabel(rejectedCount, showRejectedOnly, channel, marketplace), description: 'The rows the channel rejected in the last publish', onSelect: () => setShowRejectedOnly(v => !v) }] : []), ...offerDrafts.menu, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             /* Step 4 (D2, 2026-10-01) — one message per fact: a missing field list or category is said ONCE, by its banner
                above the grid (`useMissingFieldsBanner`, the Shopify notice). The chip, the ⋯ item and an empty-grid notice
                no longer repeat it; the chip stays only as the neutral Requirements note while nothing is missing. */
@@ -1089,6 +1358,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 ...(data ? [
                 ...(listingState === 'draft' ? [{ tone: 'info' as const, label: DRAFT_CHIP_LABEL, detail: draftChipDetail(channel, marketplace) }] : []),
                 ...(asinPending ? [{ tone: 'info' as const, label: ASIN_PENDING_CHIP_LABEL, detail: asinPendingChipDetail(asinPending, marketplace) }] : []),
+                // P8 — what waits for Publish (danger when an End or a Delete waits: it never folds) and the inactive listings.
+                ...(waitingMarkStatus ? [waitingMarkStatus] : []),
+                ...(inactiveMarkStatus ? [inactiveMarkStatus] : []),
                 ...(data.meta.schemaMissing.length ? [] : [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))]),
             ] : []),
                 ...(publication.mark ? [withRejectedFilter(publication.mark, rejectedCount, showRejectedOnly, () => setShowRejectedOnly(v => !v))!] : []),
@@ -1185,11 +1457,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onCellValueChanged: onCellValueChanged,
             // One operation (fill, paste, range delete) = one undo step and one save; ⌘Z is the sheet's own (`useSheetUndo`).
             ...undo.gridProps,
+            // P8 — the same operation events fence the Status and Action cells: one write per column and value.
+            ...publishFenceProps,
+            rowClassRules: rowClassRules,
             rowSelection: rowSelection,
             onSelectionChanged: onSelectionChanged,
             onCellFocused: onCellFocused,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             getContextMenuItems: contextMenu,
             columnDialog: columnDialog,
         },
@@ -1205,6 +1480,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             rowActions: verbs,
             onWrite: async () => ({ state: 'refused' as const, message: DRAWER_READ_ONLY }),
             writesRefused: DRAWER_READ_ONLY,
+            // The record's selling state on this destination (its one listing here).
+            selling: { status: publishActions.status, error: publishActions.error, cellsOf: (id: string) => {
+                    const row = rows.find(r => r.rowId === id);
+                    const cell = row ? publishCellOf(row) : null;
+                    return cell ? [cell] : [];
+                } },
             formulas: { ...formulas,
                 exprFor: (id, key) => formulas.exprFor(record.rowId ?? id, key),
             },

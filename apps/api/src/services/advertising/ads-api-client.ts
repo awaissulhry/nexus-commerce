@@ -45,6 +45,7 @@ import { logger } from '../../utils/logger.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
 import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
+import { assertNegativeWriteAllowed } from './ads-negation-policy.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -574,6 +575,10 @@ async function adsConnectionIdForToken(): Promise<string | null> {
 }
 
 export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
+  // 5a — protected terms bind every negative HERE, at the one door every Amazon call passes: a negative create or a
+  // negative put back to ENABLED that would block a protected term (or that Amazon's text limits refuse) is never
+  // sent, whichever caller built it and whether or not it went through the write gate (ads-negation-policy.ts).
+  await assertNegativeWriteAllowed(opts)
   let clientId: string
   let token: string
   let connectionId: string | null
@@ -2054,12 +2059,14 @@ export async function createTarget(ctx: ClientContext, input: CreateTargetInput)
 
 export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }
 export async function createNegativeProductTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'asinSameAs', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
   if (adsMode() === 'sandbox') {
+    // 5a — sandbox refuses what liveCall would refuse.
+    await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] } })
     const externalId = `sb-ntgt-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createNegativeProductTarget', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'asinSameAs', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ negativeTargetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] }, contentType: 'application/vnd.spNegativeTargetingClause.v3+json', acceptHeader: 'application/vnd.spNegativeTargetingClause.v3+json' })
   return { ok: true, mode: 'live', externalId: response?.negativeTargetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
 }
@@ -2068,12 +2075,14 @@ export async function createNegativeProductTarget(ctx: ClientContext, input: Cre
 // Amazon SP only supports NEGATIVE_EXACT / NEGATIVE_PHRASE (there is no neg-broad).
 export interface CreateNegativeKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; state?: 'enabled' | 'paused' }
 export async function createNegativeKeyword(ctx: ClientContext, input: CreateNegativeKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: `NEGATIVE_${input.matchType}`, state: (input.state ?? 'enabled').toUpperCase() }
   if (adsMode() === 'sandbox') {
+    // 5a — sandbox refuses what liveCall would refuse.
+    await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeKeywords', body: { negativeKeywords: [v3] } })
     const externalId = `sb-nkw-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createNegativeKeyword', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: `NEGATIVE_${input.matchType}`, state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ negativeKeywords?: { success?: Array<{ keywordId?: string; negativeKeywordId?: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeKeywords', body: { negativeKeywords: [v3] }, contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json' })
   // v3 create returns negativeKeywordId; some shapes echo keywordId — accept either so the id is captured.
   const nk = response?.negativeKeywords?.success?.[0]

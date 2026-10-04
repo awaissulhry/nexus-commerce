@@ -26,6 +26,18 @@
       "types": "./dist/publication-history.d.ts",
       "default": "./dist/publication-history.js"
     },
+    "./listing-actions": {
+      "types": "./dist/listing-actions.d.ts",
+      "default": "./dist/listing-actions.js"
+    },
+    "./publish-actions": {
+      "types": "./dist/publish-actions.d.ts",
+      "default": "./dist/publish-actions.js"
+    },
+    "./publish-plan": {
+      "types": "./dist/publish-plan.d.ts",
+      "default": "./dist/publish-plan.js"
+    },
     "./live-read": {
       "types": "./dist/live-read.d.ts",
       "default": "./dist/live-read.js"
@@ -133,6 +145,10 @@
     "./ads-number": {
       "types": "./dist/ads-number.d.ts",
       "default": "./dist/ads-number.js"
+    },
+    "./ads-market-limits": {
+      "types": "./dist/ads-market-limits.d.ts",
+      "default": "./dist/ads-market-limits.js"
     },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",

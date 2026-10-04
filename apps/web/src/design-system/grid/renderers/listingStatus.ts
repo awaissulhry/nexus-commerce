@@ -16,6 +16,8 @@ const STATUSES: Record<string, ListingStatusMeta> = {
   ERROR: { label: 'Error', tone: error, hint: 'Our record carries an error. Read its recorded reason.' },
   FAILED: { label: 'Failed', tone: error, hint: 'Our record carries a failed attempt. Read its recorded reason.' },
   SUPPRESSED: { label: 'Suppressed', tone: error, hint: 'Suppression is recorded here. A fresh channel check may be needed.' },
+  // New listings (2026-10-04): the Status read's stand-in for a family member with no listing record here (never stored).
+  NOT_LISTED: { label: 'Not listed', tone: neutral, hint: 'No listing is recorded here yet. Publish creates it.' },
 }
 export const LISTING_STATUSES = Object.keys(STATUSES)
 export function listingStatusMeta(raw: string | null | undefined): ListingStatusMeta {

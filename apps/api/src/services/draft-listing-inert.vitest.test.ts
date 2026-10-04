@@ -146,50 +146,43 @@ describe('a paused draft is inert to every cascade', () => {
   }))
 })
 
-describe('a product status change leaves a still-draft listing alone', () => {
-  it('keeps a still-draft row DRAFT with nothing queued, and still updates the live row', () => scoped(async () => {
+describe('a product status change is Nexus-only (sheet publish parity step 7, D4): no listing is touched, nothing is queued', () => {
+  // Before step 7 the master Status flipped every live listing's status and queued STATUS_UPDATE rows no dispatcher
+  // could send. Now it changes the product only, for drafts and live listings alike.
+  it('keeps a still-draft row DRAFT and a live row as it was, with nothing queued', () => scoped(async () => {
     const { product, rows } = await seed('DRAFT-SAFETY-STATUS', [
       { marketplace: 'IT', live: true, paused: false, status: 'INACTIVE' },
       { marketplace: 'SE', live: false, paused: true },
       { marketplace: 'DE', live: false, paused: false },
     ], { status: 'INACTIVE' })
     const result = await new MasterStatusService(prisma as never).update(product.id, 'ACTIVE', { reason: 'draft-safety' })
-    expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
-    expect(result.skippedListingIds.sort()).toEqual([rows.AMAZON_SE.id, rows.AMAZON_DE.id].sort())
-    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'ACTIVE', version: rows.AMAZON_IT.version + 1 })
-    expect(await queueFor(rows.AMAZON_IT.id, 'STATUS_UPDATE')).toHaveLength(1)
-    for (const draft of [rows.AMAZON_SE, rows.AMAZON_DE]) {
-      expect(await stored(draft.id)).toMatchObject({ listingStatus: 'DRAFT', version: draft.version })
-      expect(await queueFor(draft.id, 'STATUS_UPDATE')).toEqual([])
-    }
+    expect(result).toMatchObject({ changed: true, cascadedListingIds: [], queuedSyncIds: [] })
+    expect(result.skippedListingIds.sort()).toEqual([rows.AMAZON_IT.id, rows.AMAZON_SE.id, rows.AMAZON_DE.id].sort())
+    expect(await prisma.product.findUnique({ where: { id: product.id }, select: { status: true } })).toEqual({ status: 'ACTIVE' })
+    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'INACTIVE', version: rows.AMAZON_IT.version })
+    for (const row of [rows.AMAZON_IT, rows.AMAZON_SE, rows.AMAZON_DE]) expect(await queueFor(row.id, 'STATUS_UPDATE')).toEqual([])
+    for (const draft of [rows.AMAZON_SE, rows.AMAZON_DE]) expect(await stored(draft.id)).toMatchObject({ listingStatus: 'DRAFT', version: draft.version })
   }))
 
-  it('also leaves a still-draft row alone when the product goes INACTIVE', () => scoped(async () => {
+  it('going INACTIVE leaves a live listing ACTIVE: the channel still sells, so the listing must not say otherwise', () => scoped(async () => {
     const { product, rows } = await seed('DRAFT-SAFETY-STATUS-OFF', [
       { marketplace: 'IT', live: true, paused: false },
       { marketplace: 'SE', live: false, paused: true },
     ])
     const result = await new MasterStatusService(prisma as never).update(product.id, 'INACTIVE', { reason: 'draft-safety' })
-    expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
-    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'INACTIVE' })
+    expect(result.cascadedListingIds).toEqual([])
+    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: rows.AMAZON_IT.listingStatus, version: rows.AMAZON_IT.version })
+    expect(await queueFor(rows.AMAZON_IT.id, 'STATUS_UPDATE')).toEqual([])
     expect(await stored(rows.AMAZON_SE.id)).toMatchObject({ listingStatus: 'DRAFT', version: rows.AMAZON_SE.version })
   }))
 
-  it('also skips a DRAFT row a creator left isPublished: true — it has not reached the channel either (broader than the Publish rule)', () => scoped(async () => {
-    const { product, rows } = await seed('DRAFT-SAFETY-STATUS-PUB', [
-      { marketplace: 'IT', live: true, paused: false, status: 'INACTIVE' },
-      { marketplace: 'SE', live: false, paused: false, published: true },
-    ], { status: 'INACTIVE' })
-    const result = await new MasterStatusService(prisma as never).update(product.id, 'ACTIVE', { reason: 'draft-safety' })
-    expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
-    expect(await stored(rows.AMAZON_SE.id)).toMatchObject({ listingStatus: 'DRAFT', isPublished: true, version: rows.AMAZON_SE.version })
-  }))
-
-  it('keeps flipping a DRAFT row that has a channel id — it has reached the channel, so it is not a still-draft', () => scoped(async () => {
-    const { product, rows } = await seed('DRAFT-SAFETY-STATUS-ID', [{ marketplace: 'IT', live: true, paused: false, status: 'DRAFT' }], { status: 'INACTIVE' })
-    const result = await new MasterStatusService(prisma as never).update(product.id, 'ACTIVE', { reason: 'draft-safety' })
-    expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
-    expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'ACTIVE' })
+  it('still writes one audit row with the status diff, and none for a no-op', () => scoped(async () => {
+    const { product } = await seed('DRAFT-SAFETY-STATUS-AUDIT', [{ marketplace: 'IT', live: true, paused: false }])
+    const service = new MasterStatusService(prisma as never)
+    const changed = await service.update(product.id, 'INACTIVE', { reason: 'draft-safety' })
+    expect(await prisma.auditLog.findUnique({ where: { id: changed.auditLogId! }, select: { before: true, after: true } }))
+      .toEqual({ before: { status: 'ACTIVE' }, after: { status: 'INACTIVE' } })
+    expect(await service.update(product.id, 'INACTIVE')).toMatchObject({ changed: false, auditLogId: null })
   }))
 })
 

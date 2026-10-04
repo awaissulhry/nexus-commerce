@@ -1,3 +1,23 @@
+## Simplify: Status is the one control for "is it on this market"; one set of selling words — 2026-10-04
+
+Sheet publish parity, "SIMPLIFY BEFORE ONE-CLICK" items 1–2 (`docs/sheet-publish-parity/PLAN.md`). Mirrored in Factory except the catalog example and `sellingStatus.shared.vitest.test.ts`.
+
+- **`publishAction.ts` / `PublishActionCell`**: the Action words are Partial update · Full update · Delete only — `create`, Deleted, Keep deleted, Lists again and their constants are gone (`DELETED_WORD`, `KEEP_DELETED_*`, `RELIST_*`, `SEND_MODE_DELETED_GROUP`, `DELETED_HINT`, `CREATE_LEFT_OUT_HINT`, `PublishActionDeleted`). A row not on the channel (new, or deleted by Nexus: `PublishActionValue.newRow`) reads **Full update** — kind `new`, an info Pill without a glyph (a create is always sent whole: `NEW_ROW_SENT_WHOLE`), quiet when `leftOut` (`NEW_ROW_LEFT_OUT_HINT`, or `DELETED_ROW_LEFT_OUT_HINT` with `deleted`). `sendModeEditorOptions(…, newRow)`: Full update is the value it holds (`NEW_ROW_FULL_NOTE`), Partial update and Delete held with the caller's reasons, never "waiting". The dot glyph is gone from the Action cell.
+- **`sellingStatus.ts`**: one set of selling words — `mixed` reads **Mixed** (was "Partly inactive"), `draft` reads **Not listed**. `NewListingCellFacts.deleted` (`{ on: '4 Oct' }`): a row Nexus deleted is a new row — "deleted 4 Oct" beside Not listed, `RELIST_MARK` "lists again" beside Active / Inactive, the delete's own words alone in the tooltip; `NEW_CHOICE_DELETED` in its editor.
+- **`SelectPanelEditor`**: closing without a pick never writes — an untouched or unchanged edit ends as a cancel (`useGridCellEditor` `isCancelAfterEnd`), so a click elsewhere no longer hands AG the value the editor opened on (a column whose cell value is an object, such as the sheet's Status and Action, saw it as a change and wrote it).
+- **`projection.ts`**: `partly-inactive` reads **Mixed** (key kept); new state `not-listed` ("Not listed", neutral from `unlisted`, hollow dot) is the Matrix's word for a draft or a listing Nexus deleted. Every tone is still read from `readinessMeta`.
+- **`matrixCells.ts`**: the Listing cell shows Not listed for selling `draft` / `not_listed` and for a wire `draft`; the Matrix never says "Draft". The chip rule is documented as the "Inactive" chip (id kept).
+- **`presence.ts`**: channel facts read **Active** / **Inactive** (were "Selling" / "Not selling").
+- Catalog (`SellingStatusExample`, web): Mixed, Not listed (a draft), Not listed (deleted on Amazon · IT), and Full update on a row not on the channel (sent whole; left out and deleted).
+
+## New listings: the Status and Action of a row not on the channel yet — 2026-10-04
+
+`grid/renderers/`: `StatusTarget` `not_listed` ("Not listed", neutral) and `SendMode` `create` ("Create", info, no glyph) in the word maps; `SellingStatusValue.create` draws a row not on the channel yet as an editable NEW row (its choice, a clock when chosen on the row, a "new" mark) and `newListingEditorOptions` lists Active · Inactive · Not listed with what each does; a Create cell is quiet when its Status leaves it out (`leftOut`); `SellingPillMeta.glyph` `none`; `listingStatus` `NOT_LISTED`. Mirrored from web (web's entry has the detail).
+
+## Status and Action cells, held options with notes, ConfirmPhraseField, a wrapping selection bar on phones — 2026-10-04
+
+`grid/renderers/` gains the Status cell (`SellingStatusCell`, `sellingStatus.ts`: live state pill, a clock pill for a value waiting for Publish, read-only Draft/Not listed, the inactive row-start mark class) and the Action cell (`PublishActionCell`, `publishAction.ts`: quiet Partial update, waiting Full update / Delete pills). `SelectPanelEditor` takes held options (`heldReason`) and `ListboxPanel` options may carry a `note` under the label. New `ConfirmPhraseField` (exact-match typed confirmation, polite live state), used by `ActionConfirm`. `grid.css`: a page grid card of 640 px or less wraps its toolbar and gives the selection cluster its own wrapping line. Mirrored from the web app.
+
 ## "Not listed yet", the header fold, "Try again" — 2026-10-01
 
 `readinessMeta('unlisted', 'row')` and presence `NONE` read "Not listed yet". `DetailHeader.tsx` exports `DETAIL_HEADER_FOLD` (the fold's rules live in the web app's `patterns.css`; Factory has no folding header). `FormulaCellEditor` / `FormulaComposer` say "Try again". Mirrored from the web app.

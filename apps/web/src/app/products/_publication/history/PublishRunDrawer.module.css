@@ -37,6 +37,11 @@
    for a visible ring is a solid `--nds-text` outline. */
 .payload:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; }
 
+.undoList { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--nds-space-8); }
+.undoItem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.undoItem > span:first-child { flex: 1 1 260px; min-width: 0; }
+
 .footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); }
 
 .overlayTitle { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }

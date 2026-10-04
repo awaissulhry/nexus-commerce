@@ -184,6 +184,7 @@ export async function createNegative(
     // is not the only caller that can negate a term.
     isNegation: true,
     keywordText: args.keywordText ?? null,
+    negativeMatchType: args.matchType, // 5a — a phrase negative is refused when a protected term contains it
     ...(args.nexusCampaignId ? { campaignId: args.nexusCampaignId } : {}),
     adProduct: adProductOf(owner),
   })

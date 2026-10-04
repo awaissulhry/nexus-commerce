@@ -137,6 +137,7 @@ export function PublishStatusCard({ model, onGoToField, onOpenHistory }: Publish
         <PublishStatusPill meta={model.meta} />
       </div>
       <div className="nds-publish-card-body">
+        {model.headline && <p className="nds-publish-card-line nds-publish-card-strong">{model.headline}</p>}
         <p className="nds-publish-card-hint">{model.hint}</p>
         {model.rowResult && (
           <p className="nds-publish-card-line">

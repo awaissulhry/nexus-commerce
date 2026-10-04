@@ -106,6 +106,15 @@ describe('W1.1 no adapter escalates', () => {
     expect(await dispatchChannelDelist(job('AMAZON', 'DELETE_LISTING'))).toMatchObject({ success: true, dryRun: true })
     expect(m.removeAmazon).toHaveBeenCalledOnce()
   })
+  it('the Amazon delete half is one exported function (the listing-action engine\'s Delete uses it): this market only', async () => {
+    const { deleteAmazonListingOnChannel } = await import('./channel-delist.service.js')
+    m.removeAmazon.mockResolvedValueOnce({ success: true, submissionId: 'sub-1' })
+    expect(await deleteAmazonListingOnChannel({ sellerId: 'seller-owner', sku: 'PR2-SELLER-SKU', marketplaceId: 'APJ6JRA9NG5V4' }))
+      .toEqual({ success: true, outcome: 'SUCCESS', submissionId: 'sub-1', dryRun: undefined })
+    expect(m.removeAmazon).toHaveBeenCalledExactlyOnceWith({ sellerId: 'seller-owner', sku: 'PR2-SELLER-SKU', marketplaceId: 'APJ6JRA9NG5V4' })
+    m.removeAmazon.mockResolvedValueOnce({ success: false, error: 'Unexpected status: INVALID' })
+    expect(await deleteAmazonListingOnChannel({ sellerId: 'seller-owner', sku: 'X', marketplaceId: 'APJ6JRA9NG5V4' })).toMatchObject({ success: false, outcome: 'UNKNOWN', errorCode: 'AMAZON_DELIST_UNVERIFIED' })
+  })
 })
 
 const { applyDelistResultToQueue, COULD_NOT_ASK, ENDED_CONFIRMED } = await import('./channel-delist.service.js')

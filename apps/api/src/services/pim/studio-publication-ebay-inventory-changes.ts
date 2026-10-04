@@ -98,7 +98,7 @@ export function prepareEbayInventoryChanges(input: { owner: Identity; ours: Ebay
   for (const remote of liveVariants.filter(v => !ours.variants.some(o => o.sku === v.sku)))
     add({ productId: owner.productId, sku: remote.sku }, `variation-removed:${remote.sku}`, 'Variation not in Nexus', { state: 'absent' }, known(remote.values), LATER)
 
-  return { kind: 'ebay-inventory-changes', changes: planPublicationChanges(inputs), remoteRevision: live.revision ?? 'unavailable',
+  return { kind: 'ebay-inventory-changes', changes: planPublicationChanges(inputs, { channel: 'eBay' }), remoteRevision: live.revision ?? 'unavailable',
     ownerProductId: owner.productId, groupKey: live.raw.groupKey, liveGroup: group, aspectNames, destination, owner, liveItems: live.raw.items }
 }
 

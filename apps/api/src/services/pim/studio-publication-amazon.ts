@@ -24,7 +24,7 @@ import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-wor
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
-import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
+import { CONTENT_ROOTS, OUT_OF_SCOPE_ROOTS, STRUCTURE_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { languageTag } from './market-languages.js'
 import { effectiveFulfilment } from './matrix-cells.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
@@ -53,9 +53,25 @@ export interface AmazonPublication {
   /** Amazon sheet gaps — per product, the offer leaves the message carries (the journal's `request.offer`). */
   offers?: Record<string, AmazonOfferJournal>
   feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; requirements?: string; attributes?: Record<string, unknown>; patches?: any[] }> }
+  /**
+   * Build shape v2 — the rows reviewed as Full update (existing listings only), each with the attribute roots Nexus
+   * MANAGES for it: a column of the sheet resolves it (a mapped cell, blank or not), it is not left out by the mapping
+   * version, and it is not price, offer, stock, photos or the family structure. Only these may be removed by a Full
+   * update. Never part of the feed: a compiled selection carries no `full`.
+   */
+  full?: Record<string, { managedRoots: string[] }>
 }
 
-export async function prepareAmazonPublication(facts: PublicationFacts): Promise<AmazonPublication> {
+/** Sources whose values the Amazon builder does not take from the sheet cells (price, stock, photos, channel reads). */
+const NOT_FROM_CELLS = ['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data']
+
+/**
+ * `inactiveProductIds` (New listings, ND1 A, Owner 2026-10-04): the NEW rows created Inactive — sent WITHOUT this
+ * market's offer (no `purchasable_offer`, no merchant quantity; an FBA row keeps only its fulfilment channel code, never
+ * a quantity). Their price is still checked, so Resume can put the offer back. The settle step marks them as a paused
+ * Amazon row once Amazon accepts them (studio-publication-settle.ts).
+ */
+export async function prepareAmazonPublication(facts: PublicationFacts, options: { fullProductIds?: ReadonlySet<string>; inactiveProductIds?: ReadonlySet<string> } = {}): Promise<AmazonPublication> {
   const { scope, parent, products, listings, resolved } = facts
   const marketplaceId = await configuredAmazonMarketplaceId(scope.marketplace)
   if (!marketplaceId) throw new Error('The Amazon marketplace identifier is unavailable.')
@@ -107,6 +123,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     if (!projection.theme || errors.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
+  const full: NonNullable<AmazonPublication['full']> = {}
   // Round 6 — the currency this publication sends its prices in (the destination market's): a follower is sent its rule's
   // price only in the master currency, never the master number into another currency (`listingSendPrice`).
   const marketCur = currencyCode(facts.destination.currency)
@@ -209,7 +226,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     // wrote (an old sheet value in `overrideData` never leaks into them). A parent has none.
     if (row._isNew && message.attributes) {
       const roots = await newListingOfferRoots({ sku: String(row.item_sku), product, listing, ledger, method: fulfillment, sendPrice: send.price,
-        saleWindow: listing ? saleWindows.get(listing.id) ?? null : null, marketplace: scope.marketplace, marketplaceId, currency: facts.destination.currency, accountId: scope.accountId })
+        saleWindow: listing ? saleWindows.get(listing.id) ?? null : null, marketplace: scope.marketplace, marketplaceId, currency: facts.destination.currency, accountId: scope.accountId,
+        inactive: !!options.inactiveProductIds?.has(product.id) })
       for (const [root, value] of Object.entries(roots)) {
         if (value) message.attributes[root] = value
         else delete message.attributes[root]
@@ -230,10 +248,19 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
       if (message.attributes) delete message.attributes[root]
       if (message.patches) message.patches = message.patches.filter((p: any) => p.path !== `/attributes/${root}`)
     }
+    if (options.fullProductIds?.has(product.id) && listing?.externalListingId) {
+      const fields = (resolved[0].catalogue?.fields ?? []) as Array<{ fieldKey: string; sourceOwner?: { label: string } | null }>
+      const mapped = new Set(fields.filter(f => !f.sourceOwner || !NOT_FROM_CELLS.includes(f.sourceOwner.label))
+        .filter(f => cells[f.fieldKey]?.status === 'mapped').map(f => amazonRootOf(f.fieldKey)))
+      const schemaRoots = new Set(Object.keys(object(spec.validationSchema?.properties)))
+      full[product.id] = { managedRoots: [...mapped].filter(root => schemaRoots.has(root) && !excludedRoots.has(root) && !OUT_OF_SCOPE_ROOTS.has(root)
+        && !STRUCTURE_ROOTS.has(root) && !(CONTENT_ROOTS as readonly string[]).includes(root) && !amazonImageSlots.some(slot => slot.attribute === root)).sort() }
+    }
     feed.header = envelope.header
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
   }
-  return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })) }
+  return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })),
+    ...(Object.keys(full).length ? { full } : {}) }
 }
 
 type PublicationListing = PublicationFacts['listings'][number]
@@ -269,7 +296,9 @@ async function newListingQuantity(input: { sku: string; product: PublicationProd
  * name — never re-coded, never sent a merchant quantity.
  */
 async function newListingOfferRoots(input: { sku: string; product: PublicationProduct; listing: PublicationListing | undefined; ledger: ProductLedger | undefined;
-  method: 'FBA' | 'FBM' | undefined; sendPrice: number | null; saleWindow: SaleWindow | null; marketplace: string; marketplaceId: string; currency: string; accountId: string }) {
+  method: 'FBA' | 'FBM' | undefined; sendPrice: number | null; saleWindow: SaleWindow | null; marketplace: string; marketplaceId: string; currency: string; accountId: string
+  /** New listings (ND1 A): created without this market's offer. */
+  inactive?: boolean }) {
   if (input.product.isParent) return { purchasable_offer: null, fulfillment_availability: null }
   const facts = readAmazonOfferFacts({ ...(input.listing ?? {}), marketplace: input.marketplace, saleWindow: input.saleWindow }, 'publish', { followPrice: input.sendPrice })
   const sale = facts.values.sale?.start && facts.values.sale.end ? facts.values.sale.price : null
@@ -277,12 +306,21 @@ async function newListingOfferRoots(input: { sku: string; product: PublicationPr
     : priceBoundsRefusal({ price: input.sendPrice, bounds: priceBoundsOf(input.product), channel: 'Amazon', sku: input.sku, currency: currencyCode(input.currency), masterCurrency: masterCurrency() })
       ?? amazonSellerBoundsRefusal({ price: input.sendPrice, salePrice: sale, min: facts.values.minimum_seller_allowed_price, max: facts.values.maximum_seller_allowed_price, sku: input.sku })
   if (priceRefusal) throw new Error(priceRefusal)
+  const fbaCode = async () => `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(input.accountId)]}`
+  // New listings (ND1 A, Owner 2026-10-04) — Inactive: no offer in this market and no merchant quantity (never 0 as a
+  // pause: Amazon EU keeps one quantity for every EU market). An FBA row keeps its channel code only, never a quantity.
+  if (input.inactive) {
+    if (input.method !== 'FBA' && facts.fbaByCode)
+      throw new Error(`${input.sku}: Amazon fulfils this product (FBA), but this listing is set to FBM. Choose FBA for it before publishing.`)
+    return { purchasable_offer: null, fulfillment_availability: input.method === 'FBA'
+      ? amazonFulfillmentAvailability({ facts, fba: true, live: false, fbaCode: await fbaCode() }) : null }
+  }
   const quantity = await newListingQuantity(input)
   if (input.method !== 'FBA' && (quantity.fba || facts.fbaByCode))
     throw new Error(`${input.sku}: Amazon fulfils this product (FBA), but this listing is set to FBM. Nexus never sends it a merchant quantity: choose FBA for it, or move its stock out of FBA, before publishing.`)
   if (input.method !== 'FBA' && quantity.quantity == null) throw new Error(`${input.sku}: ${quantity.refusal ?? 'No quantity was worked out for this listing.'}`)
-  const fbaCode = `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(input.accountId)]}`
-  const fulfilment = amazonFulfillmentAvailability({ facts, fba: input.method === 'FBA', live: false, quantity: input.method === 'FBA' ? undefined : quantity.quantity, fbaCode })
+  const fbaCodeValue = await fbaCode()
+  const fulfilment = amazonFulfillmentAvailability({ facts, fba: input.method === 'FBA', live: false, quantity: input.method === 'FBA' ? undefined : quantity.quantity, fbaCode: fbaCodeValue })
   if (!fulfilment) {
     const kept = facts.fulfilmentCodes.map(describeAmazonFulfilmentCode).find(p => p.readOnlyReason)
     throw new Error(`${input.sku}: ${kept?.readOnlyReason ?? 'its fulfilment could not be built.'}`)

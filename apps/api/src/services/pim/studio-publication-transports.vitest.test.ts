@@ -33,7 +33,8 @@ vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'l
 vi.mock('../ebay-trading-api.service.js', async original => ({ ...await original<any>(), callTradingApi: m.trading }))
 
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
-import { ebayPublicationXml, readEbayPublication, sendEbayPublication, ebayLiveContentRevision } from './studio-publication-ebay.js'
+import { ebayPublicationXml, readEbayPublication, sendEbayPublication, ebayLiveContentRevision, ebayLiveStock, ebayStockRevision } from './studio-publication-ebay.js'
+import { parseEbayItemDocument } from '../channel-drift/ebay-content-compare.js'
 import { publicationImages } from './studio-publication-media.js'
 import { writeMediaCollection } from '@nexus/shared/product-media'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
@@ -236,6 +237,23 @@ it('allows an unchanged single-item revision and blocks stale remote price or qu
   expect(beforeSend).not.toHaveBeenCalled()
   expect(m.trading.mock.calls.filter(([call]) => call === 'ReviseFixedPriceItem')).toHaveLength(1)
 })
+// Build shape v2 P4 — a Full update re-sends eBay's own quantities, so a sale between the review and the send refuses it
+// (the content revision alone does not see a sale: QuantitySold is not part of it).
+it('a Full update is refused, nothing sent, when eBay\'s stock moved after the review', async () => {
+  const baseline = ebaySingleItem()
+  const full = { xml: ebayPublicationXml(ebay, '456', true), stockRevision: ebayStockRevision(ebayLiveStock(parseEbayItemDocument(baseline))), extras: [], added: [], deletedFields: [], keptRoots: [], blockers: [] }
+  const plan = { kind: 'ebay' as const, products: [], marketplace: 'IT', itemId: '456', liveRevision: ebayLiveRevision(baseline), xml: full.xml, full }
+  m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: baseline })
+    .mockResolvedValueOnce({ ack: 'Success', errors: [], itemId: '456', raw: '<Ack>Success</Ack><ItemID>456</ItemID>' })
+  await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234')).resolves.toEqual({ reference: '456', warnings: [] })
+  const sold = baseline.replace('<QuantitySold>1</QuantitySold>', '<QuantitySold>2</QuantitySold>')
+  expect(ebayLiveRevision(sold)).toBe(ebayLiveRevision(baseline))
+  const beforeSend = vi.fn()
+  m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: sold })
+  await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234', beforeSend)).rejects.toMatchObject({ notSent: true, message: expect.stringContaining('stock changed after the review') })
+  expect(beforeSend).not.toHaveBeenCalled()
+  expect(m.trading.mock.calls.filter(([call]) => call === 'ReviseFixedPriceItem')).toHaveLength(1)
+})
 it('preserves eBay acknowledgement warnings and the item reference independently of later read-back', async () => {
   m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: '<Ack>Success</Ack>' })
     .mockResolvedValueOnce({ ack: 'Warning', errors: ['eBay shortened the submitted title'], itemId: '456', raw: '<Ack>Warning</Ack><ItemID>456</ItemID>' })
@@ -304,6 +322,27 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('add a product image')
   facts.listings[0].offers = []
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
+})
+
+// Build shape v2 P4 — which roots a Full update may remove: a root a sheet column resolves (a mapped cell, blank or not),
+// in this product type, and never price/offer/stock, photos, content languages (handled per language) or the family shape.
+it('names the roots Nexus manages for a Full row only — never price, stock, photos, content or structure', async () => {
+  const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const roots = ['fabric_type', 'color', 'merchant_shipping_group', 'purchasable_offer', 'item_name', 'main_product_image_locator', 'variation_theme', 'brand']
+  m.spec.mockResolvedValue({ fields: [], validationSchema: { type: 'object', properties: Object.fromEntries(roots.map(root => [root, { type: 'array' }])) } })
+  const field = (fieldKey: string, owner?: string) => ({ fieldKey, label: fieldKey, ...(owner ? { sourceOwner: { label: owner } } : {}) })
+  const cell = (status: string, value: unknown = null) => ({ status, value, errors: [] })
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: '', currency: 'EUR' },
+    listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {
+      fabric_type: cell('mapped'), color__value: cell('unmapped'), merchant_shipping_group: cell('mapped'), purchasable_offer__our_price: cell('mapped', 29),
+      item_name: cell('mapped', 'Giacca'), main_product_image_locator: cell('mapped'), variation_theme: cell('mapped'), not_in_schema: cell('mapped'), brand__value: cell('mapped', 'Xavia'),
+    } }], catalogue: { schema: { present: true }, fields: [field('fabric_type'), field('color__value'), field('merchant_shipping_group', 'Inventory'), field('purchasable_offer__our_price'),
+      field('item_name'), field('main_product_image_locator'), field('variation_theme'), field('not_in_schema'), field('brand__value', 'Listing')] } }] }
+  expect((await prepareAmazonPublication(facts, { fullProductIds: new Set(['p']) })).full).toEqual({ p: { managedRoots: ['brand', 'fabric_type'] } })
+  // Partial update (and a row not asked for): nothing changes in what the builder returns.
+  expect(await prepareAmazonPublication(facts)).not.toHaveProperty('full')
+  expect(await prepareAmazonPublication(facts, { fullProductIds: new Set(['other']) })).not.toHaveProperty('full')
 })
 
 it('an existing (live) Amazon listing is never sent a fulfilment code by Publish, whatever the flags say (design §B)', async () => {

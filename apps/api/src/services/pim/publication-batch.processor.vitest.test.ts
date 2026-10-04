@@ -21,7 +21,8 @@ vi.mock('./publication-batch.service.js', async original => ({ ...await original
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { BATCH_HEARTBEAT_MS, BATCH_KIND, runPublicationBatch } from './publication-batch.processor.js'
+import { BATCH_HEARTBEAT_MS, BATCH_KIND, LIFECYCLE_KIND, LIFECYCLE_LEASE_MS, runPublicationBatch } from './publication-batch.processor.js'
+import { LIFECYCLE_UNKNOWN } from '@nexus/shared/publish-plan'
 import { runPublicationBatchResumeTick } from '../../jobs/publication-batch-resume.job.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 
@@ -64,10 +65,11 @@ function recordingSubmit(options: { fail?: Set<string>; refuse?: Set<string>; du
 const statuses = async (ids: string[]) => (await prisma.bulkOperation.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } }))
   .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).map(row => row.status)
 
+beforeAll(async () => { await scoped(() => prisma.bulkOperation.count()) }, 120_000)
+afterAll(async () => { await fixture.database?.close?.() })
+beforeEach(() => { fixture.published.length = 0; fixture.dispatched.length = 0 })
+
 describe('publication batch sender', () => {
-  beforeAll(async () => { await scoped(() => prisma.bulkOperation.count()) }, 120_000)
-  afterAll(async () => { await fixture.database?.close?.() })
-  beforeEach(() => { fixture.published.length = 0; fixture.dispatched.length = 0 })
 
   it('sends one channel account in the order chosen, with each review\'s own body and its own submitter', () => scoped(async () => {
     const { batchId, ids } = await batch([{ channel: 'AMAZON', account: 'a', market: 'IT' }, { channel: 'AMAZON', account: 'a', market: 'DE' }, { channel: 'AMAZON', account: 'a', market: 'FR' }])
@@ -182,4 +184,168 @@ describe('publication batch sender', () => {
     const running = await prisma.bulkOperation.findUnique({ where: { id: staleRunning.batchId } })
     expect(running!.nextCheckAt!.getTime()).toBeLessThanOrEqual(now.getTime())
   }))
+})
+
+/**
+ * Build shape v2, P6 — a mixed Publish: content children (studio publications) and lifecycle children (listing-action
+ * previews) in one batch. Per channel account: Resume and Relist, the content, Pause, End, Delete. A lifecycle child is
+ * sent only from PREVIEW (the engine claims it PREVIEW → RUNNING), after a lease; one RUNNING past its lease is UNKNOWN.
+ */
+describe('lifecycle children (mixed Publish)', () => {
+  type Child = { kind: 'content' | 'lifecycle'; action?: string; channel: string; account: string; market: string; status?: string; nextCheckAt?: Date | null }
+
+  async function mixedBatch(children: Child[], header: { status?: string; nextCheckAt?: Date | null } = {}) {
+    const batchId = `mixed-${++counter}`
+    const ids: string[] = []
+    for (const [at, child] of children.entries()) {
+      const id = `${batchId}-${at}-${child.action ?? 'content'}-${child.market}`
+      ids.push(id)
+      const destination = { channel: child.channel, marketplace: child.market, accountId: child.account, aliasKey: '' }
+      const changes = child.kind === 'content'
+        ? { kind: 'studio-publication', productId: 'family-member', publicationKey: id, scope: { channel: child.channel, marketplace: child.market, accountId: child.account },
+          batch: { batchId, body: { selectionToken: `token-${id}` } } }
+        : { kind: LIFECYCLE_KIND, action: child.action, requested: ['p1'], preview: { consequence: `${child.action} on ${child.market}` },
+          batch: { batchId, step: child.action, familyId: 'family', destination, values: [{ listingId: `listing-${id}`, productId: 'p1', column: 'status', setAt: '2026-10-04T10:00:00.000Z' }] } }
+      await prisma.bulkOperation.create({ data: { id, userId: USER, status: child.status ?? 'PREVIEW', productCount: 1, changeCount: 1,
+        kind: child.kind === 'content' ? 'studio-publication' : LIFECYCLE_KIND, productId: 'family', channel: child.channel, marketplace: child.market,
+        channelConnectionId: child.account, aliasKey: '', batchId, expiresAt: new Date(Date.now() + 3_600_000), nextCheckAt: child.nextCheckAt ?? null, changes } as never })
+    }
+    await prisma.bulkOperation.create({ data: { id: batchId, userId: USER, status: header.status ?? 'QUEUED', kind: BATCH_KIND, productCount: ids.length, changeCount: 0,
+      checkCount: 0, nextCheckAt: header.nextCheckAt === undefined ? new Date(Date.now() + BATCH_HEARTBEAT_MS) : header.nextCheckAt,
+      changes: { kind: BATCH_KIND, stage: 'send', children: ids, cancelRequestedAt: null } } as never })
+    return { batchId, ids }
+  }
+
+  /** Behaves like `executeListingAction` at its edges: claims PREVIEW → RUNNING (else 409), then stores the run's status. */
+  function recordingExecute(options: { outcome?: Record<string, string>; throwBefore?: Set<string>; throwAfter?: Set<string>; during?: (id: string) => Promise<void> } = {}) {
+    const calls: string[] = []
+    const execute = async (previewId: string, opts: { actorUserId: string | null }) => {
+      calls.push(previewId)
+      expect(opts.actorUserId).toBe(USER)
+      if (options.throwBefore?.has(previewId)) throw Object.assign(new Error('This change no longer exists. Open it again.'), { statusCode: 404 })
+      const claimed = await prisma.bulkOperation.updateMany({ where: { id: previewId, status: 'PREVIEW' }, data: { status: 'RUNNING' } })
+      if (!claimed.count) throw Object.assign(new Error('This change was already sent. Open it again to see its result.'), { statusCode: 409 })
+      await options.during?.(previewId)
+      if (options.throwAfter?.has(previewId)) throw new Error('database went away')
+      const status = options.outcome?.[previewId] ?? 'DONE'
+      await prisma.bulkOperation.update({ where: { id: previewId }, data: { status, completedAt: new Date(), summary: { message: status } } })
+      return { previewId, action: 'pause' as const, status: status as 'DONE', message: status, rows: [] }
+    }
+    return { calls, execute }
+  }
+
+  const settled: any[] = []
+  const settleValues = async (input: unknown) => { settled.push(input) }
+  const live = () => null
+  beforeEach(() => { settled.length = 0 })
+
+  it('sends each channel account in the send order: Resume and Relist, the content, Pause, End, Delete', () => scoped(async () => {
+    const { batchId, ids } = await mixedBatch([
+      { kind: 'lifecycle', action: 'pause', channel: 'AMAZON', account: 'a', market: 'IT' },
+      { kind: 'content', channel: 'AMAZON', account: 'a', market: 'IT' },
+      { kind: 'lifecycle', action: 'delete', channel: 'AMAZON', account: 'a', market: 'IT' },
+      { kind: 'lifecycle', action: 'resume', channel: 'AMAZON', account: 'a', market: 'DE' },
+      { kind: 'content', channel: 'AMAZON', account: 'a', market: 'DE' },
+      { kind: 'lifecycle', action: 'end', channel: 'EBAY', account: 'e', market: 'IT' },
+      { kind: 'lifecycle', action: 'relist', channel: 'EBAY', account: 'e', market: 'DE' },
+      { kind: 'content', channel: 'EBAY', account: 'e', market: 'FR' },
+    ])
+    const order: string[] = []
+    const { submit } = recordingSubmit({ during: async id => { order.push(id) } })
+    const { execute } = recordingExecute({ during: async id => { order.push(id) } })
+    const summary = await runPublicationBatch(batchId, { submit, execute, gate: live, settleValues })
+    expect(summary).toMatchObject({ claimed: true, submitted: 3, lifecycle: 5, notSent: 0, skipped: 0 })
+    const amazon = order.filter(id => ids.indexOf(id) < 5)
+    const ebay = order.filter(id => ids.indexOf(id) >= 5)
+    expect(amazon).toEqual([ids[3], ids[1], ids[4], ids[0], ids[2]])
+    expect(ebay).toEqual([ids[6], ids[7], ids[5]])
+    expect(await statuses(ids)).toEqual(['DONE', 'ACCEPTED', 'DONE', 'DONE', 'ACCEPTED', 'DONE', 'DONE', 'ACCEPTED'])
+    // Each lifecycle child hands its values and its result to the clear step; the lease is released.
+    expect(settled).toHaveLength(5)
+    expect(settled[0]).toMatchObject({ familyId: 'family', values: [expect.objectContaining({ column: 'status' })], result: expect.objectContaining({ status: 'DONE' }) })
+    expect(await prisma.bulkOperation.count({ where: { id: { in: ids }, nextCheckAt: { not: null } } })).toBe(0)
+    expect(await prisma.bulkOperation.findUnique({ where: { id: batchId } })).toMatchObject({ status: 'SENT' })
+    expect(fixture.published).toEqual(expect.arrayContaining([expect.objectContaining({ publicationId: ids[0], status: 'DONE', terminal: true, batchId })]))
+  }))
+
+  it('a failed lifecycle child keeps going; a gated channel is NOT_SENT with its sentence; a refusal before the claim is NOT_SENT', () => scoped(async () => {
+    const { batchId, ids } = await mixedBatch([
+      { kind: 'lifecycle', action: 'pause', channel: 'AMAZON', account: 'a', market: 'IT' },
+      { kind: 'lifecycle', action: 'resume', channel: 'AMAZON', account: 'a', market: 'DE' },
+      { kind: 'lifecycle', action: 'pause', channel: 'SHOPIFY', account: 's', market: 'GLOBAL' },
+    ])
+    const { calls, execute } = recordingExecute({ outcome: { [ids[0]]: 'FAILED' }, throwBefore: new Set([ids[1]]) })
+    const gate = (channel: string) => channel === 'SHOPIFY' ? 'Shopify changes are switched off on this server (publish mode: gated). Nothing was changed.' : null
+    const summary = await runPublicationBatch(batchId, { execute, gate, settleValues })
+    expect(calls.sort()).toEqual([ids[0], ids[1]].sort())
+    expect(summary).toMatchObject({ lifecycle: 1, notSent: 2 })
+    expect(await statuses(ids)).toEqual(['FAILED', 'NOT_SENT', 'NOT_SENT'])
+    expect((await prisma.bulkOperation.findUnique({ where: { id: ids[2] } }))!.summary).toMatchObject({ message: 'Nothing was sent. Shopify changes are switched off on this server (publish mode: gated). Nothing was changed.' })
+    expect((await prisma.bulkOperation.findUnique({ where: { id: ids[1] } }))!.summary).toMatchObject({ message: 'Nothing was sent. This change no longer exists. Open it again.' })
+    // The failed child still hands its result over (the clear step keeps a failed row's value).
+    expect(settled.map(s => s.result.status)).toEqual(['FAILED'])
+  }))
+
+  it('never sends a lifecycle child twice: one already run is skipped; one another run holds is waited for, then UNKNOWN', () => scoped(async () => {
+    const lease = new Date(Date.now() + 10 * 60_000)
+    const { batchId, ids } = await mixedBatch([
+      { kind: 'lifecycle', action: 'pause', channel: 'AMAZON', account: 'a', market: 'IT', status: 'DONE' },
+      { kind: 'lifecycle', action: 'pause', channel: 'AMAZON', account: 'a', market: 'DE', status: 'RUNNING', nextCheckAt: lease },
+      { kind: 'lifecycle', action: 'delete', channel: 'AMAZON', account: 'a', market: 'FR' },
+    ], { status: 'RUNNING', nextCheckAt: new Date(Date.now() - 1_000) })
+    const { calls, execute } = recordingExecute()
+    const first = await runPublicationBatch(batchId, { execute, gate: live, settleValues })
+    expect(first).toMatchObject({ claimed: true, lifecycle: 1, skipped: 1 })
+    expect(calls).toEqual([ids[2]])
+    // The child another run holds is inside its lease: the batch is not finished, it looks again when the lease ends.
+    expect(await prisma.bulkOperation.findUnique({ where: { id: batchId } })).toMatchObject({ status: 'RUNNING', nextCheckAt: lease })
+    expect(await statuses(ids)).toEqual(['DONE', 'RUNNING', 'DONE'])
+    expect(await runPublicationBatch(batchId, { execute, gate: live, settleValues })).toMatchObject({ claimed: false })
+    // After the lease: the run that stopped never answered — UNKNOWN, never sent again, its values keep waiting.
+    const later = new Date(lease.getTime() + 1_000)
+    const second = await runPublicationBatch(batchId, { execute, gate: live, settleValues, now: () => later })
+    expect(second).toMatchObject({ claimed: true, unknown: 1 })
+    expect(second.lifecycle).toBeUndefined()
+    expect(calls).toEqual([ids[2]])
+    const unknown = await prisma.bulkOperation.findUnique({ where: { id: ids[1] } })
+    expect(unknown).toMatchObject({ status: 'UNKNOWN', nextCheckAt: null, summary: { message: LIFECYCLE_UNKNOWN, unknown: true } })
+    expect(settled.map(s => s.values[0].listingId)).toEqual([`listing-${ids[2]}`])
+    expect(await prisma.bulkOperation.findUnique({ where: { id: batchId } })).toMatchObject({ status: 'SENT', nextCheckAt: null })
+    const { batchView } = await import('./publication-batch.service.js')
+    const view = batchView((await prisma.bulkOperation.findUnique({ where: { id: batchId } }))! as never, (await prisma.bulkOperation.findMany({ where: { batchId } })) as never)
+    expect(view).toMatchObject({ done: true, outcome: 'PARTIAL', counts: { succeeded: 2, unknown: 1 } })
+  }))
+
+  it('a child that stopped after the engine claimed it is not sent again: the batch waits for its lease', () => scoped(async () => {
+    const { batchId, ids } = await mixedBatch([{ kind: 'lifecycle', action: 'end', channel: 'EBAY', account: 'e', market: 'IT' }])
+    const { execute } = recordingExecute({ throwAfter: new Set([ids[0]]) })
+    const before = Date.now()
+    await runPublicationBatch(batchId, { execute, gate: live, settleValues })
+    const child = await prisma.bulkOperation.findUnique({ where: { id: ids[0] } })
+    expect(child!.status).toBe('RUNNING')
+    expect(child!.nextCheckAt!.getTime()).toBeGreaterThanOrEqual(before + LIFECYCLE_LEASE_MS - 1_000)
+    expect(await prisma.bulkOperation.findUnique({ where: { id: batchId } })).toMatchObject({ status: 'RUNNING', nextCheckAt: child!.nextCheckAt })
+    expect(settled).toEqual([])
+  }))
+
+  it('a cancel stops before the next child: lifecycle children not started are CANCELLED', () => scoped(async () => {
+    const { batchId, ids } = await mixedBatch([
+      { kind: 'lifecycle', action: 'resume', channel: 'EBAY', account: 'e', market: 'IT' },
+      { kind: 'content', channel: 'EBAY', account: 'e', market: 'IT' },
+      { kind: 'lifecycle', action: 'end', channel: 'EBAY', account: 'e', market: 'IT' },
+    ])
+    const { execute } = recordingExecute({ during: async () => {
+      await prisma.bulkOperation.updateMany({ where: { id: batchId, status: 'RUNNING' }, data: { status: 'CANCELLING' } })
+    } })
+    const { calls, submit } = recordingSubmit()
+    const summary = await runPublicationBatch(batchId, { execute, submit, gate: live, settleValues })
+    expect(calls).toEqual([])
+    expect(summary).toMatchObject({ lifecycle: 1, cancelled: 2 })
+    expect(await statuses(ids)).toEqual(['DONE', 'CANCELLED', 'CANCELLED'])
+  }))
+
+  it('the lifecycle kind is the listing-action engine\'s', async () => {
+    const { LISTING_ACTION_KIND } = await import('../listings/listing-action.service.js')
+    expect(LIFECYCLE_KIND).toBe(LISTING_ACTION_KIND)
+  })
 })

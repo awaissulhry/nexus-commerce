@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest'
 import type { StudioPublicationStatus, StudioRowLastPublish, StudioRowPublicationStatus } from '@nexus/shared/studio-publication'
 import { publishCellModel } from '@/design-system/grid'
 import {
-  PUBLISH_COLUMN, PUBLISH_COLUMN_WIDTH, familyCounts, isRejectedRow, publishCellText, publishColumn, publishColumnLookup, publishIssues, publishSheetColumn,
-  rejectedRowCount, rowPublishValue, samePublishValue, sentFieldLabels, statusRowFor, type PublishRead,
+  PUBLISH_COLUMN, PUBLISH_COLUMN_WIDTH, SELLING_REREAD_WINDOW_MS, familyCounts, isRejectedRow, lastPublishKindLabel, publishCellText, publishColumn,
+  publishColumnLookup, publishIssues, publishSheetColumn, rejectedRowCount, rowPublishValue, samePublishValue, sellingChangeInFlight, sentFieldLabels,
+  statusRowFor, type PublishRead,
 } from './publishColumn'
 
 const SCOPE = 'Amazon · IT'
@@ -220,5 +221,35 @@ describe('rowPublishValue — "Edited" from an offer change waiting for Publish'
   it('does not, for a change saved before that publish or a row with nothing waiting', () => {
     expect(rowPublishValue({ ...row(), values: waitingSince('2026-10-01T19:00:00.000Z') }, ready(), lookup, SCOPE)).not.toHaveProperty('editedSince')
     expect(rowPublishValue({ ...row(), values: {} }, ready(), lookup, SCOPE)).not.toHaveProperty('editedSince')
+  })
+})
+
+describe('build shape v2 (P12) — the kind of the last send, and re-reading while a selling change is in flight', () => {
+  it('names a selling change or a Full update on the card; a plain publish says nothing extra', () => {
+    expect(lastPublishKindLabel('pause')).toBe('Pause offer')
+    expect(lastPublishKindLabel('full_update')).toBe('Full update')
+    expect(lastPublishKindLabel('publish')).toBeNull()
+    expect(lastPublishKindLabel(undefined)).toBeNull()
+    const paused = status({ rows: [statusRow({ last: last({ kind: 'pause', status: 'ACCEPTED', outcome: 'ACCEPTED', sentFields: [], issues: [] }) })] })
+    const value = rowPublishValue(row(), ready(paused), lookup, SCOPE) as unknown as { last: Record<string, unknown> }
+    expect(value.last.kindLabel).toBe('Pause offer')
+    const plain = rowPublishValue(row(), ready(), lookup, SCOPE) as unknown as { last: Record<string, unknown> }
+    expect(plain.last).not.toHaveProperty('kindLabel')
+  })
+  it('is in flight only while a selling change is still sending, and only for 30 minutes', () => {
+    const now = Date.parse('2026-10-01T20:10:00.000Z')
+    const sending = (kind: StudioRowLastPublish['kind'], s: string, at = '2026-10-01T20:07:00.000Z') =>
+      status({ rows: [statusRow({ last: last({ kind, status: s, at, issues: [] }) }), statusRow({ productId: 'child-2', listingId: 'cl-2', last: null })] })
+    expect(sellingChangeInFlight(sending('pause', 'PUBLISHING'), now)).toBe(true)
+    expect(sellingChangeInFlight(sending('end', 'QUEUED'), now)).toBe(true)
+    expect(sellingChangeInFlight(sending('relist', 'SUBMITTED'), now)).toBe(true)
+    // Settled, a content publish (it announces itself), no read, or stopped without a word long ago: no re-read.
+    expect(sellingChangeInFlight(sending('pause', 'ACCEPTED'), now)).toBe(false)
+    expect(sellingChangeInFlight(sending('pause', 'UNVERIFIED'), now)).toBe(false)
+    expect(sellingChangeInFlight(sending('publish', 'PUBLISHING'), now)).toBe(false)
+    expect(sellingChangeInFlight(sending(undefined, 'PUBLISHING'), now)).toBe(false)
+    expect(sellingChangeInFlight(null, now)).toBe(false)
+    const old = new Date(now - SELLING_REREAD_WINDOW_MS - 1000).toISOString()
+    expect(sellingChangeInFlight(sending('pause', 'PUBLISHING', old), now)).toBe(false)
   })
 })

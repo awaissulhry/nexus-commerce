@@ -5,8 +5,8 @@ import { Modal } from './Modal'
 import { SummaryTable } from './SummaryTable'
 import { AsOf } from './AsOf'
 import { Button } from '../primitives/Button'
-import { Input } from '../primitives/Input'
 import { Checkbox } from '../primitives/Checkbox'
+import { ConfirmPhraseField, phraseMatches } from './ConfirmPhraseField'
 import { requiresTypedConfirm, reversalSentence, validateImpact, type ActionImpact } from '../grid/actions/registry'
 import type { AskToConfirm } from '../grid/actions/runAction'
 
@@ -20,7 +20,7 @@ export interface ActionConfirmProps {
 /** Kept pure so direct hook users and registry users share the same safety boundary. */
 export function canConfirmAction(impact: ActionImpact, typed: string, acknowledged: boolean): boolean {
   return !impact.cancelled && !impact.unavailable && !impact.refusal && validateImpact(impact).length === 0 &&
-    (!requiresTypedConfirm(impact) || typed === impact.confirmPhrase) && (!impact.acknowledge || acknowledged)
+    (!requiresTypedConfirm(impact) || phraseMatches(typed, impact.confirmPhrase ?? '')) && (!impact.acknowledge || acknowledged)
 }
 
 /** Itemised consequences, exact subject typing, visible instructions and explicit acknowledgement. */
@@ -71,8 +71,7 @@ export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal' }: A
     </div> : null}
     {problems && <p className="nds-inline-error" role="alert">{problems}{impact.refusal?.whatWouldFix ? ` ${impact.refusal.whatWouldFix}` : ''}</p>}
     {needsTyping && <div className="nds-confirm-block">
-      <label htmlFor={id}>Type <strong className="nds-confirm-h">{impact.confirmPhrase}</strong> exactly to confirm</label>
-      <Input id={id} value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
+      <ConfirmPhraseField id={id} phrase={impact.confirmPhrase ?? ''} value={typed} onChange={setTyped} />
     </div>}
     {impact.acknowledge && <div className="nds-confirm-block"><Checkbox tone="warning" checked={acknowledged}
       onChange={e => setAcknowledged(e.target.checked)} label={impact.acknowledge} /></div>}

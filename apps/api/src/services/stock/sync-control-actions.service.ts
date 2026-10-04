@@ -2,14 +2,22 @@
  * MCP full control 08 S7 — Sync Control's writes, moved out of `routes/sync-control.routes.ts` UNCHANGED so Claude's tools
  * (`bulk-listing-stock`, `set-stock-policy`) run the very code the page runs:
  *
- *   runSyncControlAction   POST /api/stock/sync-control/actions          follow, pin, zero & pin, pause, resume, buffer,
- *                                                                        exclude, include, close/reopen an Amazon offer
+ *   runSyncControlAction   POST /api/stock/sync-control/actions          follow, pin, zero & pin, hold / release the stock
+ *                                                                        sync (PAUSE / RESUME), buffer, exclude, include
  *   setLocationRoutes      POST /api/stock/sync-control/location-routes  which channels and markets a location feeds
  *   setSyncPolicy          POST /api/stock/sync-control/policies         a channel or market's pause and new-listing default
  *
  * Each returns what the route answered: `{ status, body }` — the route sends `body` with `status` (a 200 as the plain
  * object it returned before), byte for byte the answer it gave when this code lived in the route. The rows the page
  * reads (`computeRows`) and the canonical-master fold (`resolveCanonicalMasters`) moved with them; the route imports them.
+ *
+ * Build shape v2 (Owner 2026-10-04): Close offer / Reopen offer left Sync Control — pausing and resuming selling is the
+ * product sheet's Status column (Inactive / Active, then Publish), one engine for every channel. A listing whose selling
+ * is paused (`sellingPaused`: the sheet's Pause offer, or Amazon's market close) shows here as Inactive, read-only, and
+ * gets no quantity from any action here (Follow, Pin, Zero & Pin, Buffer leave it alone and count it). Hold / Release
+ * stock sync (PAUSE / RESUME) is a Nexus flag only and still applies to it, so a hold set while it is paused stays. An
+ * eBay listing an OLDER Claude close-listing paused (pinned at 0 with the presence mark, no hold — `oldClosePauses`)
+ * reads and counts the same way: its pin is lifted only by Resume (Status → Active, then Publish).
  */
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
@@ -24,7 +32,8 @@ import { enqueueOutboundRowsInstant } from '../outbound-enqueue.js'
 import { resolveCanonicalMap, canonicalStem, rowMatchesScope, type SyncScope } from '../sync-control-product-view.js'
 import { projectActionAndDetect, projectBufferAndDetect, AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
 import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
-import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../amazon-market-offer.service.js'
+import { isFbaCoordinate } from '../amazon-market-offer.service.js'
+import { oldClosePauses } from '../listings/listing-action.service.js'
 import { NoConnectionError, resolveConnection } from '../connection-resolver.service.js'
 import { EBAY_ZERO_REFUSAL } from '@nexus/shared/matrix-preview'
 
@@ -102,7 +111,7 @@ export async function computeRows(): Promise<SyncControlRow[]> {
         product: { deletedAt: null, OR: [{ parentId: null }, { parent: { deletedAt: null } }] },
       },
       select: {
-        productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true,
+        id: true, productId: true, channel: true, marketplace: true, quantity: true, quantityOverride: true, stockBuffer: true,
         followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
         pinnedUntil: true, pausedUntil: true, channelConnectionId: true, aliasKey: true,
         product: { select: { sku: true, fulfillmentMethod: true } },
@@ -133,6 +142,8 @@ export async function computeRows(): Promise<SyncControlRow[]> {
   ]
   const ledgers = await buildLedgers(productIds)
   const rows: SyncControlRow[] = []
+  // Build shape v2 (P13) — an eBay listing an older Claude close-listing paused reads Inactive here too (a read rule).
+  const oldPauses = await oldClosePauses(listings)
 
   for (const cl of listings) {
     const isFba =
@@ -143,7 +154,7 @@ export async function computeRows(): Promise<SyncControlRow[]> {
       channel: cl.channel,
       marketplace: cl.marketplace,
       isFba,
-      offerClosed: !!cl.offerClosedAt,
+      offerClosed: !!cl.offerClosedAt || oldPauses.has(cl.id),
       followMasterQuantity: cl.followMasterQuantity,
       syncPaused: cl.syncPaused,
       pinnedQuantity: cl.quantity,
@@ -306,9 +317,23 @@ export const audit = async (
 export interface ListingTarget extends ListingCoordinate {}
 export interface MembershipTarget { itemId: string; marketplace: string; sku: string }
 
+export const SYNC_CONTROL_ACTIONS = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE', 'BUFFER'] as const
+export type SyncControlAction = (typeof SYNC_CONTROL_ACTIONS)[number]
+
+/** The actions that set or send a listing's quantity: a listing whose selling is paused is left out of them. */
+const QUANTITY_ACTIONS = new Set<string>(['FOLLOW', 'PIN', 'ZERO_PIN', 'BUFFER'])
+
+/** Build shape v2: the two offer actions left Sync Control. A caller that still sends them is told where they went. */
+export const OFFER_ACTIONS_MOVED = 'Close offer and Reopen offer are no longer in Sync Control. To pause or resume selling, set the Status column '
+  + 'in the product sheet to Inactive or Active, then Publish. Nothing was changed.'
+
+/** Every chosen listing is Inactive: nothing to write. */
+export const ALL_INACTIVE = `Every listing chosen is Inactive (selling is paused), so Nexus sends it no quantity. Change it in the product sheet's Status column. Nothing was changed.`
+
 /** The body of POST /api/stock/sync-control/actions. */
 export interface SyncControlActionBody {
-  action: 'FOLLOW' | 'PIN' | 'PAUSE' | 'RESUME' | 'ZERO_PIN' | 'EXCLUDE' | 'INCLUDE' | 'BUFFER' | 'CLOSE_OFFER' | 'REOPEN_OFFER'
+  /** PAUSE / RESUME = Hold / Release stock sync (`syncPaused`). */
+  action: SyncControlAction
   buffer?: number
   /** Shared stock step 3 — optional end for PIN, ZERO_PIN, PAUSE (listings) and PIN, EXCLUDE (shared variants). */
   until?: string | null
@@ -337,11 +362,13 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
   const listings = [...(body.listings ?? [])]
   const memberships = body.memberships ?? []
   if (!body.action) return answer(400, { error: 'action required' })
+  if ((body.action as string) === 'CLOSE_OFFER' || (body.action as string) === 'REOPEN_OFFER') return answer(400, { error: OFFER_ACTIONS_MOVED })
+  if (!(SYNC_CONTROL_ACTIONS as readonly string[]).includes(body.action)) return answer(400, { error: `unknown action '${body.action}'` })
   const untilParsed = parseUntil(body.until)
   if ('error' in untilParsed) return answer(400, { error: untilParsed.error })
   const until = untilParsed.until
   if (until !== undefined && !['PIN', 'ZERO_PIN', 'PAUSE', 'EXCLUDE'].includes(body.action)) {
-    return answer(400, { error: 'An end time can be set with Fixed number, Zero & Pin, Pause or Exclude only.' })
+    return answer(400, { error: 'An end time can be set with Fixed number, Zero & Pin, Hold stock sync or Exclude only.' })
   }
   if (body.quantity !== undefined && (body.action !== 'PIN' || !Number.isSafeInteger(body.quantity) || body.quantity < 0)) {
     return answer(400, { error: 'A fixed number is a whole number of 0 or more, given with Fixed number (PIN).' })
@@ -349,6 +376,8 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
   const result: {
     updated: number; skippedFba: number; unchanged: number; recascadeQueued: number
     skippedShared: number; scopedOut: number; error?: string; partial?: boolean
+    /** Build shape v2 — listings left out because their selling is paused (Inactive); only present when > 0. */
+    skippedInactive?: number
   } = { updated: 0, skippedFba: 0, unchanged: 0, recascadeQueued: 0, skippedShared: 0, scopedOut: 0 }
   const recascadeProducts = new Set<string>()
   // SCT.3 — no more bare 500s: any throw below is caught, logged, and
@@ -426,7 +455,7 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
       // "not valid" branch, returning 400 after the fact: the operator was told
       // it failed while it had already happened (and RESUME skipped its
       // recascade, ZERO_PIN had already pushed qty 0 live).
-      const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
+      const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
       // Shared stock step 3 — Fixed number (PIN) and FOLLOW apply to shared eBay variants too.
       const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW']
       if (LISTING_LANE.includes(body.action)) {
@@ -434,6 +463,27 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
       }
       if (SHARED_LANE.includes(body.action)) {
         for (const m of memsT) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+      }
+    }
+
+    // Build shape v2 — a listing whose selling is paused (Inactive) gets no quantity from here: Follow, Pin, Zero & Pin and
+    // Buffer leave it alone and count it. Read on the exact coordinates named (account and alias included).
+    if (QUANTITY_ACTIONS.has(body.action) && listings.length > 0) {
+      const named = await prisma.channelListing.findMany({
+        where: { OR: listings.map(whereCoordinate) },
+        select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, listingStatus: true,
+          offerClosedAt: true, followMasterQuantity: true, quantity: true, quantityOverride: true },
+      })
+      // The hold, or an older Claude close's pin at 0 (`oldClosePauses`): both read Inactive and take no quantity here.
+      const oldPauses = await oldClosePauses(named)
+      const held = named.filter((r) => r.offerClosedAt || oldPauses.has(r.id))
+      if (held.length > 0) {
+        const keyOf = (c: ListingTarget) => JSON.stringify([c.productId, c.channel, c.marketplace, c.channelConnectionId, c.aliasKey])
+        const heldKeys = new Set(held.map(keyOf))
+        const kept = listings.filter((t) => !heldKeys.has(keyOf(whereCoordinate(t))))
+        result.skippedInactive = listings.length - kept.length
+        listings.splice(0, listings.length, ...kept)
+        if (listings.length === 0 && memberships.length === 0) return answer(400, { error: ALL_INACTIVE, skippedInactive: result.skippedInactive })
       }
     }
 
@@ -572,43 +622,6 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
         const channel = groupKey.split('|')[0]
         const productIds = [...new Set(targets.map((t) => t.productId))]
         const markets = [...new Set(targets.map((t) => t.marketplace))]
-
-        // SCT.6 — per-market offer CLOSE/REOPEN (Amazon only; eBay has real
-        // per-listing quantities and never needs this).
-        if (body.action === 'CLOSE_OFFER' || body.action === 'REOPEN_OFFER') {
-          if (channel !== 'AMAZON') {
-            result.unchanged += targets.length
-            continue
-          }
-          const svcTargets = targets
-          const r = body.action === 'CLOSE_OFFER'
-            ? await closeMarketOffers({ targets: svcTargets, actor })
-            : await reopenMarketOffers({ targets: svcTargets, actor })
-          result.updated += r.updated
-          result.skippedFba += r.skippedFba
-          result.unchanged += r.unchanged
-          if (r.failed > 0) {
-            result.partial = true
-            const failures = r.results.filter((x) => x.action === 'FAILED').slice(0, 3)
-              .map((x) => `${x.sku ?? x.productId}@${x.marketplace}: ${x.detail ?? 'failed'}`)
-            const msg = `${body.action}: ${r.failed} row(s) failed — ${failures.join(' · ')}${r.failed > 3 ? ` · +${r.failed - 3} more` : ''}`
-            result.error = result.error ? `${result.error} · ${msg}` : msg
-          }
-          if (r.error) {
-            result.partial = true
-            const msg = `${body.action} stopped after ${r.updated} update(s): ${r.error}${r.remaining ? ` — ${r.remaining} row(s) not attempted; re-run to continue` : ''}`
-            result.error = result.error ? `${result.error} · ${msg}` : msg
-          }
-          await audit(
-            r.results
-              .filter((x) => x.action === 'CLOSED' || x.action === 'REOPENED')
-              .map((x) => ({
-                scopeType: 'LISTING', scopeId: `${x.productId}:AMAZON:${x.marketplace}`,
-                scopeName: `${x.sku ?? '?'}@AMAZON:${x.marketplace}`, field: 'offerClosed',
-                after: { closed: x.action === 'CLOSED' },
-              })), actor)
-          continue
-        }
 
         if (body.action === 'FOLLOW' || body.action === 'PIN') {
           const r = await setFollowMasterQuantity({

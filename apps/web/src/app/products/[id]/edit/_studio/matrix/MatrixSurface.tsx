@@ -76,7 +76,7 @@ import { axisSummary, orderByAxisValues, type AxisSummary } from '../variants/fa
 import { mergeAxisValues } from '../variants/family/projections'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
-import { matrixChips } from './chips'
+import { matrixChip, matrixChips } from './chips'
 import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
@@ -178,11 +178,13 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   const chipBar = useViewChips()
   const chips = useMemo(() => matrixChips(read, visibleKeys), [read, visibleKeys])
-  useRegisterViewChip('matrix-pinned', chips[0] ?? null)
-  useRegisterViewChip('matrix-paused', chips[1] ?? null)
-  useRegisterViewChip('matrix-oversold', chips[2] ?? null)
-  useRegisterViewChip('matrix-sync-issues', chips[3] ?? null)
-  useRegisterViewChip('matrix-suppressed', chips[4] ?? null)
+  /* By id, never by place (P12): a chip added to `matrixChips` cannot shift another chip's count onto the wrong id. */
+  useRegisterViewChip('matrix-pinned', matrixChip(chips, 'matrix-pinned'))
+  useRegisterViewChip('matrix-paused', matrixChip(chips, 'matrix-paused'))
+  useRegisterViewChip('matrix-oversold', matrixChip(chips, 'matrix-oversold'))
+  useRegisterViewChip('matrix-sync-issues', matrixChip(chips, 'matrix-sync-issues'))
+  useRegisterViewChip('matrix-suppressed', matrixChip(chips, 'matrix-suppressed'))
+  useRegisterViewChip('matrix-not-selling', matrixChip(chips, 'matrix-not-selling'))
 
   /* ── refusals: every refused cell, its reason, and a view of the rows they are on ────────── */
 

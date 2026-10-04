@@ -24,7 +24,24 @@ export interface StudioPublishReview {
   aliasLabel: string
   mode: string
   action: 'create' | 'update'
-  rows: Array<{ productId: string; sku: string; title: string; existing: boolean }>
+  /**
+   * `mode` (build shape v2): how this row's content is reviewed and sent — 'partial' (only the changed fields, today's
+   * Publish) or 'full' (every field Nexus manages, ticked and locked). `blocked`: the row asked for a mode this channel
+   * cannot send yet (the sentence says why); nothing of the row is sent.
+   */
+  rows: Array<{ productId: string; sku: string; title: string; existing: boolean; mode?: StudioPublishMode; blocked?: string
+    /** Delete and relist: Nexus deleted this row from the channel and its Status is Not listed, so nothing of it is sent (`blocked` says why). */
+    deleted?: true
+    /** Delete and relist: its Status was set to Active or Inactive after the delete, so this review lists the row again (whole). */
+    relist?: StudioPublishRelist
+    /**
+     * New listings (Owner 2026-10-04): this review CREATES the row, and how it starts — 'active' (it sells) or 'inactive'
+     * (Amazon: no offer in this market; eBay: quantity 0, stock sync held; Shopify: a Draft product). Absent on a row
+     * that is on the channel, held, or not sent. The web says "Creates GALE-M (inactive)" (`createsSentence`).
+     */
+    startsAs?: 'active' | 'inactive'
+    /** New listings: the row, or its family's main row, has Status Not listed — nothing of it is sent (`blocked` says why). */
+    notListed?: true }>
   excluded: number
   issues: StudioPublishIssue[]
   expiresAt: string
@@ -41,6 +58,58 @@ export interface StudioPublishReview {
    * this review. The problems are in `issues`; a selection with any other field is refused.
    */
   photosOnly?: boolean
+  /**
+   * Build shape v2 — "Will be removed": what the channel holds that Nexus does not, on the rows reviewed as Full update.
+   * Sending the review removes each of these from the channel. Absent when no row is a Full update.
+   */
+  removals?: StudioPublishRemoval[]
+}
+
+/** A row this review lists again after Nexus deleted it (its Status was set to Active or Inactive): its create is ticked by default. */
+export interface StudioPublishRelist {
+  /** When the channel accepted the delete (ISO). */
+  deletedAt: string
+  /** The channel number the listing had before the delete (Amazon: its ASIN), or null. */
+  oldReference: string | null
+  /** Amazon: the ASIN this create names (`merchant_suggested_asin`, the product ID cell), or null. */
+  asin: string | null
+  /** "Lists GALE-M on ASIN B0NEW (was B0OLD)." (`relistSentence`, publish-actions.ts). */
+  sentence: string
+  /** Sent, but read this first: Amazon holds FBA units labelled for the old ASIN (`fbaNewAsinWarning`). Null otherwise. */
+  warning: string | null
+}
+
+/** How one review row's content is sent: only the changed fields (the default), or every field Nexus manages. */
+export type StudioPublishMode = 'partial' | 'full'
+
+/** One value a Full update removes from the channel (`StudioPublishReview.removals`). */
+export interface StudioPublishRemoval {
+  productId: string
+  sku: string
+  /** The review field (a change id's second part), or 'variation' for an eBay variation Nexus does not hold. */
+  field: string
+  label: string
+  /** The channel's value now. */
+  value: unknown
+}
+
+/** The blocking sentences of a Full update (the review shows them; nothing of that row is sent). */
+export const FULL_AMAZON_PRODUCT_TYPE_DIFFERS = 'Product type differs on Amazon — use Delete, then Publish.'
+export const FULL_NEEDS_LIVE_READ = (channel: string, error: string) =>
+  `${channel} could not be read just now, so a Full update cannot be checked (${error}). Review again, or use Partial update.`
+export const FULL_EBAY_SHAPE_DIFFERS = 'This listing\'s variations differ on eBay in a way a Full update cannot change — use Delete, then Publish.'
+
+/**
+ * A Full update row's field: ticked and locked (DIFFERS included), with a reason that says what Full sends. Only fields
+ * Nexus can send are passed here; a field Nexus cannot prepare keeps its own reason and stays unticked.
+ */
+export function fullUpdateChange(change: StudioPublishChange): StudioPublishChange {
+  const removes = change.current.state === 'absent' && change.channel.state === 'value'
+  const reason = removes ? 'Full update removes it: Nexus holds no value here.'
+    : change.status === 'SAME' ? 'Full update sends it again (it already matches the channel).'
+      : change.status === 'DIFFERS' ? 'Full update replaces the channel\'s different value with Nexus\'s.'
+        : 'Full update sends Nexus\'s value.'
+  return { ...change, selectable: true, selectedByDefault: true, locked: true, reason }
 }
 
 /** The change-review fields that carry only photos (eBay Trading gallery and colour sets; eBay Inventory's). */
@@ -111,6 +180,59 @@ export interface StudioPublishChange {
    * (Automate Pricing, Always available) or "Live changed since you saved".
    */
   display?: StudioPublishChangeDisplay
+  /**
+   * Build shape v2 — a Full update row's field: always ticked. A selection takes every locked field of a product or none
+   * of them (the row tick), never some.
+   */
+  locked?: boolean
+  /**
+   * One-click "Nexus wins" (Owner 2026-10-04) — on a selectable DIFFERS line (ticked by default): what Publish replaces
+   * on the channel. `channel` / `nexus` are the two values in words (cut to 60 characters; null when there is none),
+   * `sentence` the line's warning ("Changed on Amazon since the last publish. Amazon has 129.00 — Publish sets 149.00."),
+   * `note` an extra warning or null (price lines: "Amazon's Automate Pricing can change it again.").
+   */
+  replaces?: StudioPublishReplaces
+}
+
+/** Why a DIFFERS line replaces the channel's value: changed there, changed on both sides, never published, or a removal. */
+export type StudioPublishReplacesKind = 'channel_changed' | 'both_changed' | 'never_published' | 'removes'
+
+export interface StudioPublishReplaces {
+  kind: StudioPublishReplacesKind
+  channel: string | null
+  nexus: string | null
+  sentence: string
+  note: string | null
+}
+
+/**
+ * One-click "Nexus wins" — the one summary line of a market's tab: "12 values on Amazon · IT differ from Nexus. Publish
+ * replaces them." (1 → "1 value on Amazon · IT differs from Nexus. Publish replaces it."). Counts the selectable
+ * DIFFERS lines; `ticked` = how many of them are ticked (`selectedIds` when given, else the default ticks). When some or
+ * all are unticked ("Keep Amazon's values") the sentence says so. Null when no value differs.
+ */
+export function differsSummary(changes: readonly StudioPublishChange[] | null | undefined, channelLabel: string,
+  selectedIds?: readonly string[] | null): { count: number; ticked: number; sentence: string } | null {
+  const differs = (changes ?? []).filter(c => c.status === 'DIFFERS' && c.selectable)
+  if (!differs.length) return null
+  const selected = selectedIds ? new Set(selectedIds) : null
+  const count = differs.length
+  const ticked = differs.filter(c => (selected ? selected.has(c.id) : c.selectedByDefault)).length
+  return { count, ticked, sentence: differsSentence(count, ticked, channelLabel) }
+}
+
+/**
+ * The words of `differsSummary` from counts alone — for a window that has only each row's counts (the products list's
+ * Publish…: `PublishPlanBatchChild.differs`). `count` must be at least 1; `ticked` is clamped to 0…count.
+ */
+export function differsSentence(count: number, ticked: number, channelLabel: string): string {
+  const shown = Math.max(0, Math.min(ticked, count))
+  const one = count === 1
+  const head = `${count.toLocaleString('en')} ${one ? 'value' : 'values'} on ${channelLabel} ${one ? 'differs' : 'differ'} from Nexus.`
+  const tail = shown === count ? `Publish replaces ${one ? 'it' : 'them'}.`
+    : shown === 0 ? `Publish keeps ${one ? 'it' : 'them'}.`
+      : `Publish replaces ${shown.toLocaleString('en')} of them.`
+  return `${head} ${tail}`
 }
 
 export interface StudioPublishChangeDisplay { current: string; lastAccepted: string; channel: string; note?: string }
@@ -143,6 +265,8 @@ export interface StudioChannelIssue {
  */
 export interface StudioRowLastPublish {
   publicationId: string
+  /** What the last send was: a content publish, a Full update, or a selling change (`LAST_PUBLISH_KIND_LABEL`, publication-history). */
+  kind?: 'publish' | 'full_update' | 'pause' | 'resume' | 'end' | 'relist' | 'delete'
   /** The publication's status (`StudioPublishResult['status']`). */
   status: string
   /** This row's own result inside it: the stored per-SKU result, else the publish journal's outcome; null = not known. */
@@ -328,6 +452,8 @@ export interface PublicationBatchChild {
   expiresAt?: string | null
   /** Not sent because every ticked field already matches the channel. */
   nothingToSend?: boolean
+  /** New listings (ND4 B): the rows this review creates and how each starts ("Creates GALE-M (inactive)", `createsSentence`). */
+  creates?: Array<{ productId: string; sku: string; startsAs: 'active' | 'inactive' }>
 }
 
 /** Step 6 — how long the rest of the batch should take, from the channels' rates. Null when nothing is left. */

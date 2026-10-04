@@ -62,6 +62,9 @@ export const SOURCE_OPTS = [
   { value: 'shared', label: 'Shared with other businesses' },
 ]
 
+/** Build shape v2 (P11) — the products list's Status is the product's status in Nexus ("Catalog status"); it never changes a channel. */
+export const CATALOG_STATUS_HINT = 'Nexus only — no channel changes'
+
 export const STATUS_OPTS = [
   { value: 'ACTIVE', label: 'Active' },
   { value: 'DRAFT', label: 'Draft' },
@@ -288,7 +291,9 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       exportValue: (row) => coverageText(channelsOf(row, activeChannels)),
       preset: { cellClass: 'nds-ag-cell', cellRenderer: CoverageCell },
     },
-    { key: 'status', groupable: true, groupKey: 'products-next:identity', group: 'Identity', label: 'Status', width: 96, sortable: true, preset: statusColumn('status', { tones: STATUS_TONES }) },
+    // Build shape v2 (P11): "Catalog status" — the product's status in Nexus only; a listing's selling state lives in the sheet.
+    { key: 'status', groupable: true, groupKey: 'products-next:identity', group: 'Identity', label: 'Catalog status', width: 140, sortable: true,
+      preset: { ...statusColumn('status', { tones: STATUS_TONES }), minWidth: 140, headerTooltip: CATALOG_STATUS_HINT } },
     { key: 'tags', groupKey: 'products-next:identity', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], exportValue: (row) => (row.tags ?? []).map((t) => t.name).join(', '), preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
     // Sharing studio step 2 — between business profiles: what this product follows, and who follows it.
     { key: 'source', groupKey: 'products-next:identity', group: 'Identity', label: 'Source', width: 170, value: (row) => sourceExport(row.sharing), exportValue: (row) => sourceExport(row.sharing), preset: { cellClass: 'nds-ag-cell' }, render: (row) => <SourceCell row={row} /> },

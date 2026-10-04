@@ -2,14 +2,17 @@
  * MCP full control L8 — stock and price per listing and market (plan section 02, step 8), through the Matrix door, the
  * same door the Studio Matrix page uses (`runMatrixVerb`, `writeMatrixCells`, `revertMatrixOperation`):
  *
- *   set-listing-stock     pin a quantity, follow the stock again, set a buffer, pause or resume the stock sync, push now.
+ *   set-listing-stock     pin a quantity, follow the stock again, set a buffer, hold or release the stock sync, push now.
  *   set-listing-price     set a price, adjust prices by a percentage, copy prices from another market, or set a sale.
  *   revert-listing-change put back a Matrix operation one of them ran (the undo of both).
  *
  * Targets are the Matrix's own: a row (rowId) and a coordinate key (EBAY:IT, AMAZON:EU …) from listing-matrix. The door's
  * rules hold for Claude as for the page: an FBA quantity is never written (refused as Amazon-managed); Amazon's EU markets
  * share ONE merchant quantity, so an EU market's inventory verb lands on the AMAZON:EU cell; an eBay pin to 0 is refused
- * unless the account's out-of-stock option is ON (eBay would end the item); a price needs products.price.edit. The dry run
+ * unless the account's out-of-stock option is ON (eBay would end the item); a listing whose selling is paused (Inactive: the
+ * product sheet's Pause offer, or Amazon's market close) takes no quantity (build shape v2: the Matrix refuses every stock
+ * verb on it but releasing the stock sync, and Push quantity now / Retry ask the store again where the push is written);
+ * a price needs products.price.edit. The dry run
  * is the door's own preview; the run carries the approved changes and the door re-verifies each one, refusing any that
  * moved. Each run is one Matrix operation, and revert-listing-change puts it back while nothing changed it since.
  * The master stock count is not here (part S, set-stock).
@@ -130,7 +133,7 @@ const STOCK_ACTIONS = ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync',
 
 const stockInput = z.object({
   productId: z.string().trim().min(1).max(64).describe('Nexus product id: the family (parent) or one of its variations, as listing-matrix read it'),
-  action: z.enum(STOCK_ACTIONS).describe('pin-quantity (a fixed quantity), set-follow (follow the stock again), set-buffer, pause-sync, resume-sync or push-now'),
+  action: z.enum(STOCK_ACTIONS).describe('pin-quantity (a fixed quantity), set-follow (follow the stock again), set-buffer, pause-sync (hold the stock sync), resume-sync (release it) or push-now'),
   quantity: z.coerce.number().int().min(0).max(1_000_000).optional().describe('pin-quantity: the quantity to pin'),
   buffer: z.coerce.number().int().min(0).max(1_000_000).optional().describe('set-buffer: units held back from the stock the listing follows'),
   targets: targetsInput,
@@ -159,9 +162,10 @@ const setListingStock: AgentTool = {
   undo: MATRIX_UNDO,
   description:
     'Change how listings take their stock, per listing and market, through the Nexus Matrix: pin a quantity, follow the '
-    + 'stock again, set a buffer, pause or resume the stock sync, or push now. Targets are rows and coordinate keys from '
+    + 'stock again, set a buffer, hold or release the stock sync, or push now. Targets are rows and coordinate keys from '
     + 'listing-matrix. FBA quantities are never written; Amazon\'s EU markets share one quantity (AMAZON:EU); an eBay pin '
-    + 'to 0 needs the account\'s out-of-stock option ON (else eBay ends the item). The preview is the Matrix\'s own. Waits '
+    + 'to 0 needs the account\'s out-of-stock option ON (else eBay ends the item); a listing whose selling is paused '
+    + '(Inactive) takes no quantity — resume it in the product sheet\'s Status column. The preview is the Matrix\'s own. Waits '
     + 'for a person to approve it in Nexus; a target that changed since is refused, and revert-listing-change puts it back.',
   handler: (args, ctx) => previewVerbFor('set-listing-stock', args, ctx, stockParams(args)),
   execute: (args, ctx) => runVerbFor(args, ctx, stockParams(args)),

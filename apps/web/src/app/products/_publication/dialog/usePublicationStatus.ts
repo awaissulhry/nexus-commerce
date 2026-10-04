@@ -88,5 +88,7 @@ export function usePublicationStatus({ channel, marketplace, accountId, aliasKey
   const mark: SheetStatus | null = useMemo(() => publicationMark(status, channel, marketplace), [status, channel, marketplace])
   /* Step 3 — the "Last publish" column reads the same answer: one reader for the mark, the toast and every row. */
   const read: PublishRead = useMemo(() => ({ state: readState, status }), [readState, status])
-  return { status, mark, read }
+  /** Read again now (the Last publish column re-reads while a selling change is still being sent). */
+  const reload = useCallback(() => setNonce(n => n + 1), [])
+  return { status, mark, read, reload }
 }

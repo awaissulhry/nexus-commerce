@@ -70,6 +70,14 @@ describe('the seed list itself', () => {
     }
   })
 
+  it('build shape v2: no built-in pauses, resumes, closes or reopens an offer (that is the product sheet\'s Status column)', () => {
+    for (const t of BUILTIN_TEMPLATES) {
+      expect(t.name, t.name).not.toMatch(/\b(pause|resume|close|reopen)\b/i)
+      for (const key of ['offerClosedAt', 'offerActive', 'offerCloseReason', 'syncPaused']) expect(keysOf(t.actionPayload), t.name).not.toContain(key)
+      expect(JSON.stringify(t.actionPayload), t.name).not.toMatch(/CLOSE_OFFER|REOPEN_OFFER/)
+    }
+  })
+
   it('"Round prices to .99" asks for the rounding mode, with no target price to type', () => {
     const round = BUILTIN_TEMPLATES.find((t) => t.name === ROUND)!
     expect(round).toMatchObject({ actionType: 'PRICING_UPDATE', actionPayload: { adjustmentType: 'ROUND_DOWN_TO_99' } })

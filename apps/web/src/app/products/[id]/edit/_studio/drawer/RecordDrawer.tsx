@@ -44,6 +44,7 @@ import { useRestorePoints } from './useRestorePoints'
 import { useRecordImages } from '../images/record'
 import { getBackendUrl } from '@/lib/backend-url'
 import { MAX_WIDTH, MIN_WIDTH } from './useRecordDrawer'
+import { SellingSummaryPill, sellingSummaryOf, type RecordSelling } from '../SellingSummary'
 import {
   isInherited,
   type CompareCell,
@@ -156,6 +157,12 @@ export interface RecordDrawerProps<R extends SheetRow = SheetRow> {
    * `formulaAvailability`'s "a stored formula is always available" arm exists to prevent.
    */
   writesRefused?: string
+  /**
+   * Build shape v2, P9 — the record's selling state in this scope (its listings: every market on the shared scope),
+   * read by the host's sheet (`usePublishActions`). Shown in the head in place of the catalog status, which left the
+   * studio (it is "Catalog status" in the Products list). Absent: the head keeps the catalog status.
+   */
+  selling?: RecordSelling
 }
 
 export function RecordDrawer<R extends SheetRow = SheetRow>({
@@ -177,6 +184,7 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
   formulas,
   onFormulaSaved,
   writesRefused,
+  selling,
 }: RecordDrawerProps<R>) {
   const [tab, setTab] = useState<TabId>('record')
   const [inspecting, setInspecting] = useState<SheetColumn | null>(null)
@@ -527,7 +535,7 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
         row ? (
           <span className={styles.headMeta}>
             <span className={styles.sku}>{row.sku}</span>
-            <Pill tone={row.status === 'ACTIVE' ? 'success' : 'neutral'}>{row.status}</Pill>
+            {selling ? <RecordSellingPill sku={row.sku} rowId={row.id} selling={selling} /> : <Pill tone={row.status === 'ACTIVE' ? 'success' : 'neutral'}>{row.status}</Pill>}
             <Pill tone="neutral">{scopeLabel}</Pill>
             {row.isParent && <Pill tone="neutral">{row.childCount} variations</Pill>}
           </span>
@@ -651,5 +659,29 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
         </div>
       </div>
     </Drawer>
+  )
+}
+
+/**
+ * The record's selling state in the drawer's head (P9): "Active" when every market agrees, "Active in 5 of 7" or
+ * "Mixed" when they differ — the shared Status column's words — opening the list of markets with what waits for Publish.
+ */
+function RecordSellingPill({ sku, rowId, selling }: { sku: string; rowId: string; selling: RecordSelling }) {
+  const cells = selling.cellsOf(rowId)
+  const summary = sellingSummaryOf(cells)
+  const sentence = !cells.length ? `${sku} is not listed on any market yet.`
+    : summary.uniform ? `${sku} is ${summary.word} on ${cells.length === 1 ? 'its market' : `every market (${cells.length})`}.`
+      : `${sku}: ${summary.word}.`
+  return (
+    <SellingSummaryPill
+      status={selling.status}
+      error={selling.error}
+      sku={sku}
+      cells={cells}
+      familyWaiting={null}
+      label={summary.word}
+      tone={summary.tone}
+      ariaLabel={sentence}
+    />
   )
 }

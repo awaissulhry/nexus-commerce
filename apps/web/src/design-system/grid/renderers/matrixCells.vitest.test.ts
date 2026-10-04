@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ICellRendererParams } from 'ag-grid-community'
 
-import type { MatrixCellKind, MatrixCells, MatrixCoordinate } from '../matrix/contract'
+import type { ListingState, MatrixCellKind, MatrixCells, MatrixCoordinate } from '../matrix/contract'
 import { MATRIX_CELL_KINDS } from '../matrix/contract'
 import {
   MATRIX_CELL_CLASSES,
@@ -26,6 +26,8 @@ import {
   MATRIX_OVERSOLD_SENTENCE,
   isSaleEditorValue,
   matrixApplyValue,
+  matrixListingNotSelling,
+  matrixListingProjection,
   matrixCellClasses,
   matrixCellEditable,
   matrixCellState,
@@ -164,10 +166,12 @@ describe('matrixCellState — every §3.4 state is produced by exactly its fixtu
 /* ── text: Appendix A, verbatim ─────────────────────────────────────────────────────────── */
 
 describe('matrixCellText — the word on screen is the word in the export', () => {
-  it('Listing says projectionMeta’s own label for all nine words', () => {
+  it('Listing says projectionMeta’s own label for all nine words (a wire draft reads Not listed)', () => {
     for (const s of ['listed', 'draft', 'excluded', 'not-set-up', 'needs-value', 'suppressed', 'closed', 'error', 'ended'] as const) {
-      expect(matrixCellText('listing', cells({ listing: { state: s } }), COORD)).toBe(projectionMeta(s).label)
+      /* One set of selling words (Owner 2026-10-04): the Matrix never says "Draft"; a draft is Not listed here. */
+      expect(matrixCellText('listing', cells({ listing: { state: s } }), COORD)).toBe(projectionMeta(s === 'draft' ? 'not-listed' : s).label)
     }
+    expect(matrixCellText('listing', cells({ listing: { state: 'draft' } }), COORD)).toBe('Not listed')
   })
   it('Mode: Follow · Pinned · —', () => {
     expect(matrixCellText('syncMode', STATE_FIXTURES.follow.c, COORD)).toBe('Follow')
@@ -194,14 +198,14 @@ describe('matrixCellText — the word on screen is the word in the export', () =
     expect(matrixCellText('syncBuffer', STATE_FIXTURES['amazon-managed'].c, COORD)).toBe(MATRIX_DASH)
     expect(matrixCellText('syncBuffer', STATE_FIXTURES['offer-closed'].c, COORD)).toBe(MATRIX_DASH)
   })
-  it('Sync: Sent <ago> · Queued · Sending · Failed · Dead · Paused · policy/listing · Never', () => {
+  it('Sync: Sent <ago> · Queued · Sending · Failed · Dead · Sync held · policy/listing · Never', () => {
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-sent'].c, COORD, undefined, NOW)).toBe('Sent 2 min')
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-queued'].c, COORD)).toBe('Queued')
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-sending'].c, COORD)).toBe('Sending')
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-failed'].c, COORD)).toBe('Failed')
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-dead'].c, COORD)).toBe('Dead')
-    expect(matrixCellText('syncState', STATE_FIXTURES['queue-paused'].c, COORD)).toBe('Paused · policy')
-    expect(matrixCellText('syncState', cells({ queue: { state: 'paused', via: 'LISTING' } }), COORD)).toBe('Paused · listing')
+    expect(matrixCellText('syncState', STATE_FIXTURES['queue-paused'].c, COORD)).toBe('Sync held · policy')
+    expect(matrixCellText('syncState', cells({ queue: { state: 'paused', via: 'LISTING' } }), COORD)).toBe('Sync held · listing')
     expect(matrixCellText('syncState', STATE_FIXTURES['queue-never'].c, COORD)).toBe('Never')
   })
   it('Price and Sale are money in the COORDINATE currency — GBP prints £, never €', () => {
@@ -244,7 +248,8 @@ describe('matrixCellTone — every painted tone is readinessMeta’s / projectio
   it('the four Matrix listing words read the tones §3.4 names', () => {
     expect(matrixCellToneFrom('listing', STATE_FIXTURES.suppressed.c)).toBe('row:errors')
     expect(matrixCellToneFrom('listing', STATE_FIXTURES.error.c)).toBe('row:errors')
-    expect(matrixCellToneFrom('listing', STATE_FIXTURES.closed.c)).toBe('row:unlisted')
+    /* Build shape v2: `closed` is Inactive — the sheet Status column's warning, read from the row warning state. */
+    expect(matrixCellToneFrom('listing', STATE_FIXTURES.closed.c)).toBe('row:missing')
     expect(matrixCellToneFrom('listing', STATE_FIXTURES.ended.c)).toBe('row:unlisted')
     expect(matrixCellTone('listing', STATE_FIXTURES.excluded.c, COORD)).toBeNull()
   })
@@ -306,11 +311,11 @@ describe('matrixCellClasses — one tint per cell, in §3.4 precedence', () => {
 /* ── tooltips: Appendix A sentences through the copy table ──────────────────────────────── */
 
 describe('matrixCellTooltip — Appendix A through MATRIX_COPY, plus the blocked reason', () => {
-  it('Follow · Pinned · Paused · Amazon-managed · Uncounted · Closed', () => {
+  it('Follow · Pinned · Sync held · Amazon-managed · Uncounted · Inactive', () => {
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES.follow.c, COORD)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES.pinned.c, COORD)).toBe('Pinned at 10')
-    expect(matrixCellTooltip('syncQty', STATE_FIXTURES['paused-policy'].c, COORD)).toBe('Paused by the channel policy — would push 7 · Resume to push')
-    expect(matrixCellTooltip('syncQty', STATE_FIXTURES['paused-listing'].c, COORD)).toBe('Paused by this listing — would push 7 · Resume to push')
+    expect(matrixCellTooltip('syncQty', STATE_FIXTURES['paused-policy'].c, COORD)).toBe('Stock sync held by the channel policy — would push 7 · Release to push')
+    expect(matrixCellTooltip('syncQty', STATE_FIXTURES['paused-listing'].c, COORD)).toBe('Stock sync held by this listing — would push 7 · Release to push')
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES['amazon-managed'].c, COORD)).toBe('Amazon-managed · 49 at Amazon')
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES.uncounted.c, COORD)).toBe(MATRIX_CELL_COPY.uncountedHint)
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES['offer-closed'].c, COORD)).toBe(MATRIX_CELL_COPY.closedHint)
@@ -472,10 +477,10 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(html('syncMode', STATE_FIXTURES.pinned.c)).toMatch(/>Pinned<.*nds-cell-prov-pinned/s)
     const paused = html('syncMode', STATE_FIXTURES['paused-listing'].c)
     expect(paused).toContain('nds-matrix-pause')
-    expect(paused).toContain('title="Paused by this listing"')
+    expect(paused).toContain('title="Stock sync held by this listing"')
     expect(paused).not.toContain('nds-cell-prov-')
     expect(paused).toContain('nds-ag-chev')
-    expect(html('syncMode', STATE_FIXTURES['paused-policy'].c)).toContain('title="Paused by the channel policy"')
+    expect(html('syncMode', STATE_FIXTURES['paused-policy'].c)).toContain('title="Stock sync held by the channel policy"')
     const fba = html('syncMode', STATE_FIXTURES['amazon-managed'].c)
     expect(fba).toContain(MATRIX_DASH)
     expect(fba).not.toContain('nds-cell-prov')
@@ -536,5 +541,65 @@ describe('the eight renderers draw what the rules decided', () => {
     let arms = 0
     for (const kind of MATRIX_CELL_KINDS) { expect(html(kind, null)).toBe(''); arms++ }
     expect(arms).toBe(8)
+  })
+})
+
+/* ── build shape v2 (P12): the Listing cell shows the sheet's selling word ──────────────────────── */
+
+describe('the Listing cell — health words first, then the selling word (build shape v2)', () => {
+  const sell = (state: string, reason: string | null = null, wire: ListingState = 'listed') =>
+    cells({ listing: { state: wire, selling: { state, reason } } })
+
+  it('shows Active · Inactive · Mixed · Ended · Not listed from `selling`, the sheet\'s own words', () => {
+    expect(matrixCellText('listing', sell('active'), COORD)).toBe('Active')
+    expect(matrixCellText('listing', sell('paused', null, 'closed'), COORD)).toBe('Inactive')
+    expect(matrixCellText('listing', sell('mixed'), COORD)).toBe('Mixed')
+    expect(matrixCellText('listing', sell('ended', null, 'ended'), COORD)).toBe('Ended')
+    /* A draft and a listing Nexus deleted are both Not listed (one set of words, Owner 2026-10-04). */
+    expect(matrixCellText('listing', sell('draft', null, 'draft'), COORD)).toBe('Not listed')
+    expect(matrixCellText('listing', sell('not_listed', 'Deleted on Amazon · IT on 4 Oct.', 'draft'), COORD)).toBe('Not listed')
+    for (const word of ['Partly inactive', 'Draft', 'Not selling', 'Deleted']) {
+      for (const state of ['active', 'paused', 'mixed', 'ended', 'draft', 'not_listed']) expect(matrixCellText('listing', sell(state), COORD)).not.toBe(word)
+    }
+    /* No selling state known (an older read, or `unknown`): the wire's own word. */
+    expect(matrixCellText('listing', cells({ listing: { state: 'listed' } }), COORD)).toBe('Listed')
+    expect(matrixCellText('listing', sell('unknown'), COORD)).toBe('Listed')
+  })
+  it('a health word still wins over the selling word', () => {
+    for (const health of ['suppressed', 'error', 'needs-value', 'excluded'] as const) {
+      expect(matrixListingProjection({ state: health, selling: { state: 'active', reason: null } })).toBe(health)
+      expect(matrixCellText('listing', cells({ listing: { state: health, selling: { state: 'paused', reason: 'x' } } }), COORD)).toBe(projectionMeta(health).label)
+    }
+  })
+  it('puts the selling reason in the tooltip, after the word\'s own sentence', () => {
+    const tip = matrixCellTooltip('listing', sell('paused', 'Inactive since 2 Oct (Awais).', 'closed'), COORD)
+    expect(tip).toBe(`${projectionMeta('closed').hint} · Inactive since 2 Oct (Awais). · B0FXD0620C`)
+    expect(projectionMeta('closed').hint).toContain('Status column')
+    /* No reason: no empty line. */
+    expect(matrixCellTooltip('listing', sell('active'), COORD)).toBe(`${projectionMeta('active').hint} · B0FXD0620C`)
+  })
+  it('reads its tone from the shown word, like every other tone', () => {
+    expect(matrixCellTone('listing', sell('active'), COORD)).toBe(readinessMeta('ready', 'row').tone)
+    expect(matrixCellToneFrom('listing', sell('paused', null, 'closed'))).toBe('row:missing')
+    expect(matrixCellToneFrom('listing', sell('mixed'))).toBe('row:missing')
+  })
+  it('draws the selling word on screen (the renderer reads the same rule)', () => {
+    const h = html('listing', sell('paused', null, 'closed'))
+    expect(h).toContain('>Inactive<')
+    expect(h).toContain(`data-tone="${readinessMeta('missing', 'row').tone}"`)
+    expect(html('listing', sell('active'))).toContain('>Active<')
+    expect(html('listing', cells({ listing: { state: 'suppressed', selling: { state: 'active', reason: null } } }))).toContain('>Suppressed<')
+  })
+  it('counts Inactive, Mixed and Ended for the Inactive chip — and nothing else (Not listed is not counted)', () => {
+    expect(matrixListingNotSelling({ state: 'closed', selling: { state: 'paused', reason: null } })).toBe(true)
+    expect(matrixListingNotSelling({ state: 'listed', selling: { state: 'mixed', reason: null } })).toBe(true)
+    expect(matrixListingNotSelling({ state: 'ended', selling: { state: 'ended', reason: null } })).toBe(true)
+    expect(matrixListingNotSelling({ state: 'listed', selling: { state: 'active', reason: null } })).toBe(false)
+    expect(matrixListingNotSelling({ state: 'draft', selling: { state: 'draft', reason: null } })).toBe(false)
+    expect(matrixListingNotSelling({ state: 'draft', selling: { state: 'not_listed', reason: null } })).toBe(false)
+    /* An older read without `selling`: the wire's own closed / ended. */
+    expect(matrixListingNotSelling({ state: 'closed' })).toBe(true)
+    expect(matrixListingNotSelling({ state: 'listed' })).toBe(false)
+    expect(matrixListingNotSelling(null)).toBe(false)
   })
 })

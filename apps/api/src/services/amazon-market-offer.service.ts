@@ -14,11 +14,18 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * in that ONE marketplace. SKU record, content, ASIN, REVIEWS (ASIN-level),
  * sibling markets and the shared EU quantity are untouched.
  * REOPEN = replay the verbatim purchasable_offer captured at close time, then
- * rejoin the pool (Set Follow) so the quantity flows on the next cascade.
+ * rejoin the pool (Set Follow) so the quantity flows on the next cascade. A
+ * listing created Inactive (New listings, ND1 A) had no offer to capture: its
+ * reopen sends the offer Nexus builds from its own data (amazon/offer-from-nexus.ts).
  *
  * Hard rules:
  *   - FBA rows are REFUSED fail-closed (Amazon manages their logistics —
- *     closing them is never our concern, per the owner).
+ *     closing them is never our concern, per the owner) — unless the caller
+ *     passes `allowFba` (only the listing-action engine's Pause / Resume offer,
+ *     build shape v2, Owner 2026-10-04). Then the close deletes THIS market's
+ *     purchasable_offer and nothing else (fulfillment_availability, Amazon's
+ *     FBA quantity, is never in the patch), and the reopen replays the saved
+ *     offer WITHOUT rejoining the pool: no Set Follow, no quantity sent.
  *   - A live snapshot is taken BEFORE closing; without a usable offer
  *     snapshot we still close but record snapshotSource:'db' so reopen
  *     rebuilds the price from our own columns.
@@ -46,6 +53,10 @@ export interface MarketOfferRowResult {
   marketplace: string
   action: 'DRY_RUN' | 'CLOSED' | 'REOPENED' | 'SKIPPED_FBA' | 'SKIPPED_ALREADY' | 'SKIPPED_NOT_CLOSED' | 'SKIPPED_NO_LISTING' | 'FAILED'
   detail?: string
+  /** An FBA offer closed or reopened under `allowFba` (its quantity was not touched). */
+  fba?: boolean
+  /** Reopened with an offer Nexus built from its own data (no offer was saved: a listing created Inactive). */
+  fromNexus?: boolean
 }
 
 export interface MarketOfferResult {
@@ -157,6 +168,8 @@ export async function closeMarketOffers(opts: {
   targets: MarketOfferTarget[]
   actor: string
   reason?: string
+  /** Close FBA offers too (the listing-action engine's Pause offer only). The FBA quantity is never touched. */
+  allowFba?: boolean
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
   // Validate the whole batch before the first side effect.
@@ -173,8 +186,9 @@ export async function closeMarketOffers(opts: {
         processed++
         continue
       }
-      if (isFbaCoordinate(cl)) {
-        // Owner rule: FBA is Amazon-managed — never close it.
+      const fba = isFbaCoordinate(cl)
+      if (fba && !opts.allowFba) {
+        // Owner rule: FBA is Amazon-managed — never close it (outside the engine's Pause offer).
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
         result.skippedFba++
         processed++
@@ -237,6 +251,7 @@ export async function closeMarketOffers(opts: {
             purchasableOffer: offerValue,
             productType,
             snapshotSource,
+            ...(fba ? { fulfillment: 'FBA' } : {}),
             control: {
               followMasterQuantity: cl.followMasterQuantity,
               quantityOverride: cl.quantityOverride,
@@ -249,7 +264,7 @@ export async function closeMarketOffers(opts: {
         where: { channelListingId: cl.id, syncStatus: 'PENDING' },
         data: { syncStatus: 'CANCELLED', errorMessage: 'market offer closed (SCT.6)' },
       })
-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: undefined })
+      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: undefined, ...(fba ? { fba: true } : {}) })
       result.updated++
       processed++
     } catch (e) {
@@ -267,6 +282,8 @@ export async function closeMarketOffers(opts: {
 export async function reopenMarketOffers(opts: {
   targets: MarketOfferTarget[]
   actor: string
+  /** Reopen FBA offers too (the engine's Resume offer only): the offer is replayed; no pool, no quantity. */
+  allowFba?: boolean
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
   // Validate the whole batch before the first side effect.
@@ -283,7 +300,8 @@ export async function reopenMarketOffers(opts: {
         processed++
         continue
       }
-      if (isFbaCoordinate(cl)) {
+      const fba = isFbaCoordinate(cl)
+      if (fba && !opts.allowFba) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
         result.skippedFba++
         processed++
@@ -303,14 +321,55 @@ export async function reopenMarketOffers(opts: {
         purchasableOffer?: Array<Record<string, unknown>>
         productType?: string
       } | null
-      const offerValue = snap?.purchasableOffer ?? []
+      let offerValue = snap?.purchasableOffer ?? []
       const productType = String(snap?.productType ?? (cl.platformAttributes as { productType?: string } | null)?.productType ?? cl.product?.productType ?? '').toUpperCase()
+      // New listings (ND1 A) — no offer was saved (a listing created Inactive never had one here): Nexus builds it from
+      // its own data (price, offer settings), with the rules a new listing's offer follows. Nothing is sent if it cannot.
+      let fromNexus = false
+      if (marketplaceId && productType && offerValue.length === 0) {
+        const { nexusPurchasableOffer } = await import('./amazon/offer-from-nexus.js')
+        const built = await nexusPurchasableOffer(cl.id)
+        if ('refusal' in built) {
+          result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: `No saved offer to put back, and Nexus could not build one: ${built.refusal}` })
+          result.failed++
+          processed++
+          continue
+        }
+        offerValue = built.offer
+        fromNexus = true
+      }
       if (!marketplaceId || offerValue.length === 0 || !productType) {
         result.results.push({
           productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED',
           detail: 'no usable close snapshot — reopen needs a manual price set (edit price, then Set Follow)',
         })
         result.failed++
+        processed++
+        continue
+      }
+
+      if (fba) {
+        // FBA: Amazon owns the quantity. Replay the offer only — no EU quantity guard (no merchant quantity
+        // moves), no Set Follow, no quantity queued; the row's own stock controls stay as they were.
+        const res = await amazonSpApiClient.patchPurchasableOffer({
+          sellerId: seller, sku, marketplaceId, productType, op: 'replace', value: offerValue,
+        })
+        if (!res.success) {
+          result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: res.error, fba: true })
+          result.failed++
+          processed++
+          continue
+        }
+        if (res.dryRun) {
+          result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'DRY_RUN', detail: 'Preview only; offer state unchanged.', fba: true })
+          result.unchanged++; processed++; continue
+        }
+        await prisma.channelListing.update({
+          where: { id: cl.id, ...whereCoordinate({ ...t, channel: 'AMAZON' }) },
+          data: { offerClosedAt: null, offerActive: true, offerClosedBy: null, offerCloseReason: null },
+        })
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined, fba: true, ...(fromNexus ? { fromNexus } : {}) })
+        result.updated++
         processed++
         continue
       }
@@ -374,7 +433,7 @@ export async function reopenMarketOffers(opts: {
           payload: { source: 'SCT6_REOPEN', productId: cl.productId, marketplace: cl.marketplace, actor: opts.actor },
         },
       })
-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined })
+      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined, ...(fromNexus ? { fromNexus } : {}) })
       result.updated++
       processed++
     } catch (e) {

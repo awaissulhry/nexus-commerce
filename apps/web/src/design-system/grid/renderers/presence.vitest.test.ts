@@ -33,8 +33,10 @@ describe('presence is distinct from readiness', () => {
   it('keeps Nexus hold and the channel fact separate and produces the shared sentence', () => {
     const line = presenceLine({ ...current, intent: 'HELD' })
     expect(presenceVerdict({ ...current, intent: 'HELD' })).toBe('unknown')
-    expect(line.fact.label).toBe('Selling')
-    expect(line.sentence).toContain('Held · Selling. We send nothing; the channel keeps what it has.')
+    // One set of selling words (Owner 2026-10-04): the channel's facts read Active / Inactive.
+    expect(line.fact.label).toBe('Active')
+    expect(presenceLine({ ...current, fact: 'NOT_SELLING' }).fact.label).toBe('Inactive')
+    expect(line.sentence).toContain('Held · Active. We send nothing; the channel keeps what it has.')
     expect(line.asOf).toBe(at)
   })
   it('unknown wire members stay verbatim and neutral instead of falling back to known data', () => {

@@ -3514,7 +3514,7 @@ export class BulkActionService {
         throw new Error('Amazon manages this listing\'s quantity (FBA). Nexus never changes an FBA quantity, so nothing was changed.')
       }
       if (item.offerClosedAt) {
-        throw new Error('This Amazon market\'s offer is closed, and a quantity change never reopens it (reopen the offer first), so nothing was changed.')
+        throw new Error('This Amazon market\'s offer is closed (Inactive), and a quantity change never reopens it (set it Active in the product sheet\'s Status column and Publish first), so nothing was changed.')
       }
       if (AMAZON_EU_SHARED_MARKETS.has(item.marketplace.toUpperCase())) {
         const siblings = await this.prisma.channelListing.findMany({

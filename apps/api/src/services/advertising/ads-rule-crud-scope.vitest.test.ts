@@ -161,6 +161,16 @@ describe('4c — a market with no active Amazon Ads connection', () => {
   it('a connected market saves', async () => {
     expect((await createAdsRule(budgetRule([], 'IT'), 'user:test')).ok).toBe(true)
   })
+
+  it('🔴 6b — a connected market with no checked Amazon limits (a sandbox SE profile) is refused, naming the markets', async () => {
+    profiles.adsProfileFor.mockResolvedValue({ profileId: 'P-SE', marketplace: 'SE' })
+    const out = refusal(await createAdsRule(budgetRule([], 'SE'), 'user:test'))
+    expect(out.status).toBe(400)
+    expect(out.body.problems).toEqual([
+      "Nexus does not change ads in SE: it has no checked list of Amazon's currency, bid and budget limits there, so a rule there can never run. Choose IT, DE, FR, ES or All markets.",
+    ])
+    expect(db.automationRule.create).not.toHaveBeenCalled()
+  })
 })
 
 describe('4c — Placement rules are Sponsored Products only', () => {

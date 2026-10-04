@@ -5,6 +5,19 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 // in only for the gateway's database touches and the account/token lookups; the sandbox tests
 // above short-circuit before any of them.
 const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
+// 5a — the wire's negation policy reads the protected terms, the campaign behind an Amazon id and the text Nexus holds
+// for a negative id. Every negative id these tests re-enable is held, and nothing is protected unless a test says so.
+const db = vi.hoisted(() => ({
+  protections: [] as Array<{ term: string; matchType: string | null; isPrefix: boolean; reason: string | null }>,
+  target: { expressionValue: 'giacca pelle', expressionType: 'NEGATIVE_EXACT', adGroup: { campaign: { id: 'c-1', marketplace: 'IT' } } } as unknown,
+}))
+vi.mock('../../db.js', () => ({
+  default: {
+    adKeywordProtection: { findMany: async () => db.protections },
+    campaign: { findFirst: async () => ({ id: 'c-1', marketplace: 'IT' }) },
+    adTarget: { findFirst: async () => db.target },
+  },
+}))
 vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../../lib/workspace-context.js', async (original) => ({ ...(await original<object>()), requireWorkspace: () => ({ workspaceId: 'ws' }) }))
@@ -21,7 +34,8 @@ vi.mock('../outbound-api-call-log.service.js', async (original) => ({
 
 import { gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from '../gateway/rate.js'
-import { v3BatchResult, updateTarget } from './ads-api-client.js'
+import { createNegativeKeyword, createNegativeProductTarget, liveCall, v3BatchResult, updateTarget } from './ads-api-client.js'
+import { NegativeRefusedError } from './ads-negation-policy.js'
 
 // A3 — the v3 batch-response parser must be CONSERVATIVE: flip to failure only on a recognized
 // non-empty error[], and treat any unknown/!2xx-handled shape as ok (no false failures).
@@ -228,5 +242,80 @@ describe('5f updateTarget — sandbox says when a negative archive would be a de
     const pause = (await updateTarget(ctx, 'ext-1', { state: 'paused' }, SP_V3_NEGATIVE_DELETE.adGroupProduct.route)).rawResponse
     expect(archive).toMatchObject({ sandbox: true, route: 'negativeTargets', operation: 'delete' })
     expect(pause).not.toHaveProperty('operation')
+  })
+})
+
+// ── 5a — protected terms bind every negative at the wire, and in sandbox ─────────────────────────
+const XAVIA = { term: 'xavia', matchType: 'CONTAINS', isPrefix: false, reason: 'brand' }
+
+describe('5a liveCall — a negative that would block a protected term is never sent (live, through the gateway)', () => {
+  const ctx = { profileId: '123', region: 'EU' as const }
+  const kwBody = (keywordText: string, matchType = 'NEGATIVE_EXACT') => ({ campaignNegativeKeywords: [{ campaignId: 'EXT-1', keywordText, matchType, state: 'ENABLED' }] })
+
+  beforeEach(() => {
+    __rateTest.useMemory()
+    h.calls = []; h.answers = []; gatewayLedger.length = 0
+    db.protections = [XAVIA]
+    db.target = { expressionValue: 'giacca pelle', expressionType: 'NEGATIVE_EXACT', adGroup: { campaign: { id: 'c-1', marketplace: 'IT' } } }
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_AMAZON_ADS_QUOTA_MODE', 'off')
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      h.calls.push({ url: String(url), init })
+      return h.answers.shift()?.() ?? new Response('{}', { status: 207 })
+    }))
+  })
+  afterEach(() => { db.protections = []; vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
+
+  it('🔴 POST /sp/campaignNegativeKeywords with a protected term (the createNegative call): refused, nothing sent, no gateway row', async () => {
+    const err = await liveCall({ ...ctx, method: 'POST', path: '/sp/campaignNegativeKeywords', body: kwBody('giacca xavia') }).catch((e) => e)
+    expect(err).toBeInstanceOf(NegativeRefusedError)
+    expect(err.message).toBe('"giacca xavia" cannot be negated: it matches the protected term "xavia" (brand).')
+    expect(h.calls).toHaveLength(0)
+    expect(gatewayLedger).toHaveLength(0)
+  })
+
+  it('🔴 createNegativeKeyword (launches, bulk, bulk sheet, AI goals, blueprint, launch-repair) with a protected term: refused before Amazon', async () => {
+    await expect(createNegativeKeyword(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', keywordText: 'Xavia Gale', matchType: 'PHRASE' }))
+      .rejects.toThrow(/protected term "xavia"/)
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('🔴 re-enabling a negative whose text is protected: refused; a pause still goes out', async () => {
+    db.target = { expressionValue: 'xavia', expressionType: 'NEGATIVE_EXACT', adGroup: { campaign: { id: 'c-1', marketplace: 'IT' } } }
+    await expect(updateTarget(ctx, 'neg-9', { state: 'enabled' }, { kind: 'KEYWORD', isNegative: true, negativeLevel: 'AD_GROUP' }))
+      .rejects.toThrow(/^Not re-enabled: "xavia" cannot be negated/)
+    expect(h.calls).toHaveLength(0)
+    await updateTarget(ctx, 'neg-9', { state: 'paused' }, { kind: 'KEYWORD', isNegative: true, negativeLevel: 'AD_GROUP' })
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('a negative over Amazon\'s text limits is refused with a sentence; an unprotected one within them is sent', async () => {
+    await expect(createNegativeKeyword(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', keywordText: 'giacca moto donna estiva rete', matchType: 'PHRASE' }))
+      .rejects.toThrow(/has 5 words; Amazon accepts at most 4 in a negative phrase keyword/)
+    expect(h.calls).toHaveLength(0)
+    h.answers.push(() => new Response(JSON.stringify({ negativeKeywords: { success: [{ negativeKeywordId: 'nk-1', index: 0 }], error: [] } }), { status: 207 }))
+    const r = await createNegativeKeyword(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', keywordText: 'giacca pelle', matchType: 'EXACT' })
+    expect(r).toMatchObject({ ok: true, mode: 'live', externalId: 'nk-1' })
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['POST', '/sp/negativeKeywords']])
+  })
+})
+
+describe('5a sandbox — the negative creators refuse what liveCall would refuse', () => {
+  const ctx = { profileId: 'p1', region: 'EU' as const }
+  beforeEach(() => { db.protections = [XAVIA, { term: 'B07XJ8C8F5', matchType: 'EXACT', isPrefix: false, reason: null }] })
+  afterEach(() => { db.protections = [] })
+
+  it('createNegativeKeyword: a protected term throws; an unprotected one gets its sandbox id', async () => {
+    await expect(createNegativeKeyword(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', keywordText: 'casco xavia', matchType: 'EXACT' }))
+      .rejects.toBeInstanceOf(NegativeRefusedError)
+    expect(await createNegativeKeyword(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', keywordText: 'casco', matchType: 'EXACT' }))
+      .toMatchObject({ ok: true, mode: 'sandbox', externalId: expect.stringMatching(/^sb-nkw-/) })
+  })
+
+  it('createNegativeProductTarget: a protected ASIN throws; another gets its sandbox id', async () => {
+    await expect(createNegativeProductTarget(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', asin: 'B07XJ8C8F5' }))
+      .rejects.toThrow(/protected term "b07xj8c8f5"/)
+    expect(await createNegativeProductTarget(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', asin: 'B000000001' }))
+      .toMatchObject({ ok: true, mode: 'sandbox', externalId: expect.stringMatching(/^sb-ntgt-/) })
   })
 })
