@@ -176,7 +176,7 @@ const wiring = { exprFor: () => null, errorFor: () => null, candidatesFor: () =>
 const channelDefs = (columns: unknown[]) => buildChannelColumns({
   data: { scope: { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT' } },
   gridColumns: columns, formulaWiring: wiring,
-  openCellDetails: () => {}, productLevelOnly: false, refusedReasonFor: () => null,
+  productLevelOnly: false, refusedReasonFor: () => null,
   tracker: new CellSaveTracker(), activeCellsRef: { current: null }, viewCtx: { locale: 'it', variationAxes: [], flaggedKeys: [] },
   mediaEditor: { open: () => {}, actions: {} }, shopifyEditor: { open: () => {} }, auth: { has: () => true },
 } as unknown as BuildChannelColumnsOptions) as unknown as Array<Record<string, any>>

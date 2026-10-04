@@ -450,4 +450,42 @@ describe('Shopify behind the common channel sheet', () => {
     expect(s.workspace.draft.nativeEdits[0].nextValue).toBe('Shared vendor')
     expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.vendor).toMatchObject({ value: 'Shared vendor', pinned: false, inherited: true })
   })
+  it('says which Nexus value Shopify does not have yet (`unsentDraft`), and never says it of a synchronized pin', async () => {
+    // 2026-10-04 (channel cell marks): `nexusDraft` is true for both; only an unsent edit waits for Review synchronization.
+    const identities = [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }]
+    const vendor = () => projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.vendor
+    expect(vendor()).not.toHaveProperty('unsentDraft')
+    // An edit saved in Nexus: Shopify does not have it yet.
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor', 'A durable override')] }, 'editor')
+    expect(s.workspace.draft.nativeEdits).toHaveLength(1)
+    expect(vendor()).toMatchObject({ value: 'A durable override', nexusDraft: true, pinned: true, unsentDraft: true })
+    // A finished synchronization clears the draft's edits and keeps the value as a saved pin: pinned, not unsent.
+    s.workspace.draft.nativeEdits = []
+    expect(vendor()).toMatchObject({ value: 'A durable override', nexusDraft: true, pinned: true })
+    expect(vendor()).not.toHaveProperty('unsentDraft')
+    // A reset back to the Shared value is an edit too, until synchronization sends it.
+    await saveShopifySheetCells('family', scope, { cells: [{ ...change('vendor', 'Untrusted client reset value'), intent: 'reset' }] }, 'editor')
+    expect(vendor()).toMatchObject({ value: 'Shared vendor', pinned: false, nexusDraft: true, unsentDraft: true })
+  })
+  it('says which field the Shared product supplies nothing for (`channelOnly`), also once Nexus holds its value', async () => {
+    // 2026-10-04 (channel cell marks): every value Nexus holds arrives `mapped: null`, so only this fact tells the sheet
+    // that a pin on such a field no longer follows Shopify's own value — not the Shared product.
+    const identities = [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }]
+    const project = () => projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values
+    const flag = 'metafield:PRODUCT:custom.flag'
+    // No Shared mapping reaches the metafield: Shopify's own value.
+    expect(project()[flag]).toMatchObject({ value: 'false', channelOnly: true, mapped: null })
+    // A Shared mapping reaches the vendor: never channel-only.
+    expect(project().vendor).not.toHaveProperty('channelOnly')
+    // An edit Shopify does not have yet, then the saved pin synchronization leaves: still channel-only, still no mapping.
+    await saveShopifySheetCells('family', scope, { cells: [change(flag, 'true')] }, 'editor')
+    expect(project()[flag]).toMatchObject({ value: 'true', pinned: true, nexusDraft: true, unsentDraft: true, channelOnly: true, mapped: null })
+    s.workspace.draft.edits = []
+    expect(project()[flag]).toMatchObject({ value: 'true', pinned: true, nexusDraft: true, channelOnly: true, mapped: null })
+    // A pin on the vendor arrives `mapped: null` too, and is NOT channel-only: its reset returns the Shared value.
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor', 'A durable override')] }, 'editor')
+    s.workspace.draft.nativeEdits = []
+    expect(project().vendor).toMatchObject({ value: 'A durable override', pinned: true, mapped: null })
+    expect(project().vendor).not.toHaveProperty('channelOnly')
+  })
 })

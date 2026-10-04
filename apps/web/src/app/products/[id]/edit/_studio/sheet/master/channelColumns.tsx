@@ -1,7 +1,7 @@
 'use client'
 import { scalarColumnDef, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
-import { columnForCategory, columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
+import { columnForCategory, columnApplies } from '@nexus/shared/master-sheet'
 import { EbayPolicyEditor, isEbayPolicyField } from '../EbayPolicyInput'
 import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
@@ -9,7 +9,8 @@ import { CascadeCell } from '../channel/CascadeCell'
 import { asinColumnDef } from '../channel/AsinCell'
 import { LISTING_ASIN_KEY } from '../channel/stockCells'
 import { stockColumnDef } from '../channel/stockColumns'
-import { isCellEditable, withMappingRun } from '../channel/rows'
+import { isCellEditable } from '../channel/rows'
+import { channelCellDrawsRequired, channelCellMark, channelCellProvenance } from '../channel/channelCellProvenance'
 import { optimisticCell } from '../channel/savedCellPatch'
 import { chipHasCell } from '../channel/viewChips'
 import { parseReferenceOrScalarValue, referenceColumnDef } from '../referenceLabels'
@@ -28,11 +29,11 @@ import { createOwnAxisAttribute, loadOwnAxisSources } from './ownAxisSourcesLoad
    per-variant attribute through the same host. */
 const CHANNEL_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadOwnAxisSources, createOwnAxisAttribute })
 import {
-  classifyProvenance, provenanceClassRules, roundTripClassRules, type CellSaveTracker,
+  provenanceClassRules, roundTripClassRules, type CellSaveTracker,
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
   longTextEditor, textLimitFor, selectEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
-  suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
+  suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef, type CellProvenance,
 } from '@/design-system/grid'
 
 export const channelValidation = (col: SheetColumn) => sheetValidationFor<ChannelSheetRow>(col, row => columnApplies(col, row))
@@ -43,9 +44,10 @@ export interface BuildChannelColumnsOptions {
   gridColumns: SheetColumn[]
   formulaWiring: FormulaWiring<ChannelSheetRow>
   accountId?: string
-  openCellDetails: (row: ChannelSheetRow, column: SheetColumn) => void
   productLevelOnly: boolean
   refusedReasonFor: (rowId: string, key: string) => string | null
+  /** The listing alias's label, or null — read at paint time for the marks' sentences (`CascadeCell`). */
+  aliasLabelOf?: (aliasId: string | null) => string | null
   tracker: CellSaveTracker
   activeCellsRef: { current: { byRow: Record<string, string[]> } | null }
   viewCtx: ViewContext
@@ -57,9 +59,36 @@ export interface BuildChannelColumnsOptions {
 
 /** Channel field factory, beside buildMasterColumns. The host owns only lifecycle and live refs. */
 export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef<ChannelSheetRow>[] {
-  const { data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly, refusedReasonFor,
+  const { data, gridColumns, formulaWiring, accountId, productLevelOnly, refusedReasonFor, aliasLabelOf,
     tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth } = options
   if (!data) return []
+  /* 2026-10-04 (channel cell marks) — the ONE channel verdict (`channelCellProvenance`) for the tint, the mark
+     (`CascadeCell`), the bullets mark and Cell details. `drawsRequired` is the value branch's own rule, so an empty
+     required cell is judged here exactly as the cell draws it. */
+  const columnByKey = new Map(gridColumns.map(c => [c.key, c]))
+  /* One verdict per cell per render pass: `provenanceClassRules` asks once per class key (15 of them), so the verdict is
+     remembered on the cell object, keyed on what else it reads — the formula refusal and the row's values (a required
+     rule may read other cells). A save replaces the cell object (and `row.values`), which forgets it. */
+  const verdicts = new WeakMap<object, { values: object; refusedReason: string | null; member: CellProvenance }>()
+  const provenanceOf = (row: ChannelSheetRow, key: string): CellProvenance => {
+    const cell = row.values?.[key]
+    if (!cell) return 'own'
+    const refusedReason = refusedReasonFor(row.rowId, key)
+    const known = verdicts.get(cell)
+    if (known && known.values === row.values && known.refusedReason === refusedReason) return known.member
+    const column = columnByKey.get(key)
+    const member = channelCellProvenance(cell, { productLevelOnly, refusedReason, shape: column?.shape,
+      drawsRequired: !!column && channelCellDrawsRequired(column, row, cell) })
+    verdicts.set(cell, { values: row.values, refusedReason, member })
+    return member
+  }
+  /* The mark's text for one cell — `from`, and the whole sentence when a reusable rule authors the value — the words
+     `CascadeCell` gives its mark, for the bullets cell's and the theme cell's marks. */
+  const markOf = (row: ChannelSheetRow, key: string) => {
+    const cell = row.values?.[key], column = columnByKey.get(key)
+    return channelCellMark(cell, provenanceOf(row, key), { refusedReason: refusedReasonFor(row.rowId, key), row,
+      aliasLabel: () => aliasLabelOf?.(row.aliasId) ?? null, drawsRequired: !!column && channelCellDrawsRequired(column, row, cell) })
+  }
   const fields: ColDef<ChannelSheetRow>[] = gridColumns.map((col) => ({
     colId: col.key,
     cellClass: 'nds-ag-cell',
@@ -147,19 +176,15 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     },
     ...(Array.isArray(col.validation?.recordFields) ? { valueParser: (p: { newValue: unknown }) => parseRecordValue(p.newValue), valueFormatter: (p: { value: unknown }) => recordSummary(p.value, col.validation!.recordFields as any) } : {}),
     cellRenderer: CascadeCell,
-    // P1 — every cell names its source at rest, on every channel (eBay, Amazon and Shopify hid it: report 2 I-4).
-    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker },
+    /* 2026-10-04 — the Shared scope's rule on every channel: a mark only where the cell differs from the Shared product
+       or its next action differs (`channelCellProvenance`); Cell details explains every cell, marked or not. */
+    cellRendererParams: { column: col, productLevelOnly, refusedReasonFor, tracker, aliasLabelOf },
     cellClassRules: composeSheetCellClassRules<ChannelSheetRow>({
       validation: channelValidation(col),
-      // The tint is PES.2's too (hub ruling #11) — one definition of what "inherited" looks like.
-      // The run-level mapping fact travels with the cell — see `withMappingRun`. Without it
-      // `mappedShared` is unreachable and 15 of 21 Amazon·IT cells mis-classify as `mapped`.
-      provenance: provenanceClassRules<ChannelSheetRow>((d, colId) =>
-        classifyProvenance(
-          { ...withMappingRun(d.values?.[colId], productLevelOnly), refusedReason: refusedReasonFor(d.rowId, colId) },
-          'channel',
-        ),
-      ),
+      // The tint is PES.2's (hub ruling #11) — one definition of what each member looks like — fed the same verdict
+      // the mark draws. The run-level mapping fact (`productLevelOnly`) rides into it: without it `mappedShared` is
+      // unreachable.
+      provenance: provenanceClassRules<ChannelSheetRow>(provenanceOf),
       roundTrip: roundTripClassRules<ChannelSheetRow>(tracker, (d) => d.rowId),
       extra: {
       'nds-cell-is-editable': (p) => isCellEditable(p.data?.values?.[col.key]),
@@ -182,10 +207,13 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     ...(col.kind === 'variationTheme'
       ? { ...variationThemeColumnDef<ChannelSheetRow>(col, (d) => d.values?.[col.key]?.value, composeSheetCellClassRules<ChannelSheetRow>({
           validation: channelValidation(col),
-          provenance: provenanceClassRules<ChannelSheetRow>((d, colId) =>
-            classifyProvenance({ ...withMappingRun(d.values?.[colId], productLevelOnly), refusedReason: refusedReasonFor(d.rowId, colId) }, 'channel')),
+          provenance: provenanceClassRules<ChannelSheetRow>(provenanceOf),
           roundTrip: roundTripClassRules<ChannelSheetRow>(tracker, (d) => d.rowId),
-        }) as never), cellEditorParams: CHANNEL_VARIATION_EDITOR_PARAMS }
+        }) as never,
+        /* 2026-10-04 — the theme's mark and tint from the SHEET verdict, the one Cell details and the other tints read: a
+           theme derived from the family axes follows the Shared product (no mark); only an override is ✎. A cause
+           (attention, pending, a refusal) reads the sheet's sentence, as every other cell's mark does. */
+        (row) => provenanceOf(row, col.key), (row) => markOf(row, col.key)), cellEditorParams: CHANNEL_VARIATION_EDITOR_PARAMS }
       : {}),
     /**
      * Amazon sheet gaps — Mode / Qty / Buffer are the MATRIX's columns (`matrixColumnDef` over the row's own Matrix
@@ -219,12 +247,18 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         },
         rowIdOf: (row) => row.rowId,
         tracker,
-        provenanceOf: (row, key) => classifyProvenance({ ...withMappingRun(row.values?.[key], productLevelOnly), refusedReason: refusedReasonFor(row.rowId, key) }, 'channel'),
-        required: (row) => !!first && columnApplies(first, row) && columnRequiredByAny(first, row),
+        provenanceOf,
+        // A uniform list's mark reads its first filled position's text — the words that position's own cell gives.
+        markOf,
+        // The empty list draws `⚠ required` by the cell's own rule: its first position's (`channelCellDrawsRequired`).
+        required: (row) => !!first && channelCellDrawsRequired(first, row, row.values?.[first.key]),
       })
     }
     if (definition?.shopifyField && !shopifySchema) return { ...column, editable: false }
     return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open, shopifyEditor.closed, shopifyEditor.historyRefused),
+      /* The cell's action (`CascadeCell`'s `CellAction`, `revealOnRowHover`) fades in while the pointer or the focus is
+         on the cell: `nds-reveal-row` is the DS's hook for that (primitives.css), carried by the cell itself. */
+      cellClass: `${typeof column.cellClass === 'string' ? column.cellClass : 'nds-ag-cell'} nds-reveal-row`,
       // Its value setter reads the Shopify draft history's private undo values (`shopify/draftHistory.ts`).
       context: { ...((column as { context?: object }).context ?? {}), readsHistoryValue: true },
       editable: p => !!p.data?.values[definition.key]?.writable && auth.has('products.edit') && (definition.shopifyField?.id !== 'inventory' || auth.has('inventory.adjust')),

@@ -142,7 +142,7 @@ function allMountable(): Mountable[] {
     for (const [label, formula] of [[channel, wiring()], [`${channel} · formulas loading`, wiring(true)]] as const) {
       const defs = buildChannelColumns({
         data: { scope: { channel, marketplace: 'IT', label: `${channel} · IT`, connectionId: 'conn_e2e' } },
-        gridColumns: COLUMNS, formulaWiring: formula, accountId: 'conn_e2e', openCellDetails: () => {}, productLevelOnly: false,
+        gridColumns: COLUMNS, formulaWiring: formula, accountId: 'conn_e2e', productLevelOnly: false,
         refusedReasonFor: () => null, tracker: new CellSaveTracker(), activeCellsRef: { current: null },
         viewCtx: { locale: 'it', variationAxes: [], flaggedKeys: [] }, mediaEditor: { open: () => {}, actions: {} },
         shopifyEditor: { open: () => {}, closed: () => {} }, shopifySchema: channel === 'SHOPIFY' ? { fields: [] } : null, auth: { has: () => true },

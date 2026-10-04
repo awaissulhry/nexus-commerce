@@ -221,3 +221,39 @@ describe('the markup', () => {
     for (const cell of Object.values(VT1_FIXTURES)) expect(html(cell)).not.toContain('[object')
   })
 })
+
+/**
+ * 2026-10-04 (channel cell marks) — the product sheet's channel scopes give the cell their own verdict (`provenanceOf`).
+ * When that verdict names a CAUSE (a mapping error, a change waiting for Publish, a refusal), the mark's words are the
+ * host's (`markOf`), never the theme's source sentence — so the icon and its words agree. Every other member keeps the
+ * theme's own tooltip, and the Variants tab (no host readers) is unchanged.
+ */
+describe('the host verdict and its words', () => {
+  const row = { rowId: 'gale' }
+  const marked = (provenance: string, markOf?: () => { from?: string | null; tooltip?: string } | null) => renderToStaticMarkup(createElement(VariationThemeValue, {
+    value: GALE_EBAY_IT_OVERRIDDEN, data: row, childReason: VARIATION_THEME_CHILD_REASON, provenanceOf: () => provenance, ...(markOf ? { markOf } : {}),
+  } as unknown as ICellRendererParams))
+  const titleOf = (out: string) => /class="nds-cell-prov[^"]*"[^>]*title="([^"]*)"/.exec(out)?.[1]?.replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? null
+  const ariaOf = (out: string) => /class="nds-cell-prov[^"]*"[^>]*aria-label="([^"]*)"/.exec(out)?.[1]?.replace(/&quot;/g, '"').replace(/&#x27;/g, "'") ?? null
+  const themeWords = variationThemeTooltip(GALE_EBAY_IT_OVERRIDDEN)
+
+  it.each([
+    ['attention', 'Mapping error: Variation theme is not allowed for this category'],
+    ['pending', 'Saved — sent when you publish'],
+    ['refused', 'Theme must be one of: COLOR/SIZE.'],
+  ])('a %s mark reads the host’s sentence, not the theme’s source', (member, sentence) => {
+    const out = marked(member, () => ({ from: sentence }))
+    expect(out).toContain(`nds-cell-prov-${member}`)
+    expect(titleOf(out)).toBe(sentence)
+    expect(ariaOf(out)).toBe(sentence)
+    expect(titleOf(out)).not.toBe(themeWords)
+  })
+  it('every other member keeps the theme’s server-stated words, even when the host gives text', () => {
+    const out = marked('pinned', () => ({ from: 'the Shared product' }))
+    expect(out).toContain('nds-cell-prov-pinned')
+    expect(titleOf(out)?.replace(/&#10;/g, '\n')).toBe(themeWords)
+  })
+  it('without a host reader (the Variants tab) a cause keeps the theme’s words, as before', () => {
+    expect(titleOf(marked('attention'))?.replace(/&#10;/g, '\n')).toBe(themeWords)
+  })
+})

@@ -19,7 +19,7 @@ export function VariantIdentity({ sku, isParent, parentId, childCount, image, in
   return <IdentityBand
     role={<ProductRoleChip product={{ isParent, parentId: parentId ?? null, childCount }} />}
     image={image}
-    imageMark={inherited ? <ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own" /> : null}
+    imageMark={inherited ? <ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own" /> : null}
     sku={sku}
     secondary={<>{secondary}{suspect.length > 0 && <span className="nds-cell-warning" aria-label="Shared axis values need review"> ⚠</span>}</>}
     secondaryTitle={suspect.map(entry => entry.reason).join(' ') || secondary}

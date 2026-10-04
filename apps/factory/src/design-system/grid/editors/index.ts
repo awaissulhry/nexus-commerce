@@ -88,7 +88,7 @@ export { matrixWrite, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_
 
 // Step 4.3 #3 (A-52; R-55, R-56, 2026-09-24) — bullets in ONE cell: the editor (slots / list modes) and its cell, the engine
 // column both sheet builders return, and the pure rules (values with holes, changed positions, the R-55 keys).
-export { SlotListEditor, SlotListValue, slotListMoveFact, slotListSaveState, slotListProvenance, slotListSummary, type SlotListEditorParams, type SlotListSettings, type SlotCellLike, type SlotListValueParams } from './SlotListEditor'
+export { SlotListEditor, SlotListValue, slotListMoveFact, slotListSaveState, slotListProvenance, slotListMarkText, slotListMark, slotListSummary, type SlotListEditorParams, type SlotListSettings, type SlotCellLike, type SlotMarkText, type SlotListValueParams } from './SlotListEditor'
 export { slotListColumnDef, slotListEditable, type SlotListColumnOptions } from './slotListColumn'
 export { SLOT_LIST_PREFIX, SLOT_LIST_EDITOR_CLASS, slotListKey, isSlotListKey, slotListValue, slotListChanges, moveSlot, moveByKey, listModeItems, withTrailingEmpty, listModeCommit, slotListText, bulletsEditorKey, slotPositionOf, suppressSlotListKeys, type SlotGroup, type SlotChange, type BulletsKeyAction, type KeyLike } from './slotList'
 export { cellValueOf, isUnchanged, panelValueOf, typedStart, withStoredValue } from './selectPanelModel'

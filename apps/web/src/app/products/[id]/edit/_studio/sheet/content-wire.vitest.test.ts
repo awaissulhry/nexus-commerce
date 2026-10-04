@@ -35,7 +35,9 @@ describe('LX.12 canonical language wire mirrors', () => {
   it('refuses any new field present on just one sheet mirror', () => {
     // Existing scope-specific fields are explicit exemptions; a new one must be reviewed here.
     const exemptions = {
-      StudioCellValue: { masterOnly: [], channelOnly: ['affectsAllChannels', 'nexusDraft', 'resettable', 'shopifyWrite', 'writable', 'writeBlockedReason', 'writeVerb'] },
+      StudioCellValue: { masterOnly: [], channelOnly: ['affectsAllChannels', 'channelOnly', 'nexusDraft', 'resettable', 'shopifyWrite', 'unsentDraft', 'writable', 'writeBlockedReason', 'writeVerb'] },
+      // `unsentDraft` (2026-10-04, channel cell marks): a Shopify edit saved in Nexus that Shopify does not have yet — Shopify channel scope only, like `nexusDraft`.
+      // `channelOnly` (2026-10-04, channel cell marks): a Shopify field the Shared product supplies nothing for — Shopify channel scope only, like `nexusDraft`.
       // `referenceImages` (2026-09-24): pictures for Shopify references, display only, Shopify channel scope only — like `shopifyField`.
       // `referenceSwatches` (2026-09-28, sheet pop-up rebuild P1): the colour of an entry whose picture is a colour — the same kind of field.
       // `matrixCell` (2026-10-03, Amazon sheet gaps): the Matrix cell a `stockControl` column shows — studio channel sheets only.

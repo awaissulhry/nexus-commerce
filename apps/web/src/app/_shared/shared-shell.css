@@ -595,14 +595,21 @@ body:has(.h10-shell),
      in this list is what made the misses invisible in the first place. */
   /* 🔴 A LITERAL, and it has to be. The pin needs the light value of a token that `.dark`
      redefines, so `var(--nds-chrome-bg)` would resolve to the dark value here and pin nothing. The
-     other three below use palette tokens (`--nds-purple-700`, `--nds-cyan-700`, `--nds-blue-700`)
-     because those are theme-independent; NO theme-independent token holds #18263b. Minting one is a
+     provenance inks below use theme-independent `-light` twins; NO theme-independent token holds #18263b. Minting one is a
      DS palette decision, not a page fix — raised rather than taken. This is the raw-hex ratchet's
      +1 on this file. */
   --nds-chrome-bg: #18263b;
-  --nds-prov-ai-fg: var(--nds-purple-700);
-  --nds-prov-formula-fg: #094b5e;
-  --nds-prov-inherited-fg: var(--nds-blue-700);
+  /* 🔴 The provenance mark inks pin to their `-light` TWINS (2026-10-04, channel cell marks). The AAA pass moved
+     every light mark ink, and this block still named the old palette steps (`--nds-purple-700`, `--nds-blue-700`),
+     so on the product sheet — `.h10-shell nds-theme-responsive` — light mode drew the marks at 4.36 / 3.68:1 while
+     every other page drew them at ≥7:1. A twin is declared once in `:root` and never in `.dark`, so it holds the
+     light value in both themes, and there is one copy of each value (css-vars.ts). In dark mode the DS `.dark`
+     block still wins: `.dark body:has(.nds-theme-responsive)` (0,2,1) outranks this selector (0,1,1). */
+  --nds-prov-ai-fg: var(--nds-prov-ai-fg-light);
+  --nds-prov-formula-fg: var(--nds-prov-formula-fg-light);
+  --nds-prov-inherited-fg: var(--nds-prov-inherited-fg-light);
+  --nds-prov-warning-fg: var(--nds-prov-warning-fg-light);
+  --nds-prov-muted-fg: var(--nds-prov-muted-fg-light);
 
   /* 🔴 The ALIAS case (hub #597). `--nds-topbar-bg` is `var(--nds-chrome-bg)` in `:root` with NO
      `.dark` entry of its own, so no text comparison could ever see it — yet its RESOLVED value

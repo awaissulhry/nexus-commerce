@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { classifyProvenance, describeCellSource, provenanceClassRules, type ProvenanceLike } from './provenance'
+import { classifyProvenance, describeCellSource, provenanceClassRules, PROVENANCE_PRECEDENCE, strongestProvenance, type CellProvenance, type ProvenanceLike } from './provenance'
 import { ProvenanceMark } from './provenanceMark'
 
 describe('LX.10 shared language provenance', () => {
@@ -29,7 +29,7 @@ describe('LX.10 shared language provenance', () => {
   })
   it('renders a distinct glyph, class and next action for human outdated text', () => {
     const source = describeCellSource({ provenance: { member: 'outdated', from: 'Italian · source' } })
-    expect(source.tooltip).toContain('Compare with the source; translate again or mark reviewed.')
+    expect(source.tooltip).toContain('Compare with the source; translate again or mark reviewed')
     const markup = renderToStaticMarkup(createElement(ProvenanceMark, { provenance: source.member, from: source.from }))
     expect(markup).toContain('nds-cell-prov-outdated'); expect(markup).toContain('lucide-history')
     expect(markup).not.toContain('tabindex')
@@ -56,7 +56,39 @@ it('keeps machine review ahead of computed provenance and human outdated text', 
 
 it('names the answering pin tier without claiming that the listing follows that same pin', () => {
   const source = describeCellSource({tier:'pin',follows:false,provenance:{member:'pinned',from:'Dutch · Amazon · BE · pin'}})
-  expect(source.tooltip).toBe('Pinned at Dutch · Amazon · BE · pin — changes to the shared language text do not replace this value.')
+  expect(source.tooltip).toBe('Pinned at Dutch · Amazon · BE · pin — changes to the shared language text do not replace this value')
   const html = renderToStaticMarkup(createElement(ProvenanceMark,{provenance:source.member,from:source.from,tooltip:source.tooltip}))
   expect(html).toContain(source.tooltip)
+})
+
+/*
+ * 2026-10-04 (channel cell marks) — ONE precedence for every place that must pick a single mark from several facts: the
+ * channel sheet's verdict, a mixed bullets cell, and (for the members it produces) `classifyProvenance` itself.
+ */
+describe('the precedence chain', () => {
+  it('is the ruled order, every member exactly once', () => {
+    expect(PROVENANCE_PRECEDENCE).toEqual(['refused', 'attention', 'pending', 'aiStale', 'ai', 'outdated', 'formula', 'listingLevel',
+      'listingValue', 'mappedShared', 'mapped', 'inheritedOverride', 'inherited', 'pinned', 'own'])
+    expect(new Set(PROVENANCE_PRECEDENCE).size).toBe(15)
+  })
+  it('strongestProvenance walks it link by link', () => {
+    const chain = PROVENANCE_PRECEDENCE.slice(0, -1)
+    chain.forEach((m, i) => expect(strongestProvenance(chain.slice(i).reverse())).toBe(m))
+    expect(strongestProvenance([])).toBe('own')
+    expect(strongestProvenance(['own', 'own'])).toBe('own')
+    expect(strongestProvenance(['pinned', 'inherited'])).toBe('inherited')
+    expect(strongestProvenance(['listingValue', 'pending', 'mapped'])).toBe('pending')
+  })
+  it('agrees with classifyProvenance: removing the strongest fact never yields a STRONGER verdict', () => {
+    const rank = (m: CellProvenance) => PROVENANCE_PRECEDENCE.indexOf(m)
+    const cell: ProvenanceLike = { refusedReason: 'Too long.', aiDrafted: true, aiStale: true, translation: { outdated: true }, formula: true,
+      mapped: { status: 'mapped' }, mappedProductLevel: true, inherited: true, pinned: true }
+    const seen: CellProvenance[] = []
+    for (const remove of ['refusedReason', 'aiStale', 'aiDrafted', 'translation', 'formula', 'mappedProductLevel', 'mapped', 'inherited', 'pinned', null] as const) {
+      seen.push(classifyProvenance(cell))
+      if (remove) delete cell[remove]
+    }
+    expect(seen).toEqual(['refused', 'aiStale', 'ai', 'outdated', 'formula', 'mappedShared', 'mapped', 'inherited', 'pinned', 'own'])
+    seen.forEach((m, i) => { if (i) expect(rank(m)).toBeGreaterThan(rank(seen[i - 1])) })
+  })
 })

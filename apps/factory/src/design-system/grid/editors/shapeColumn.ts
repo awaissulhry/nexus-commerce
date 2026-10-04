@@ -13,6 +13,7 @@ import { asList, asMeasure, formatList, formatMeasure, listLabelOf, type CellSha
 import { ListPanelEditor } from './ListPanelEditor'
 import { MeasureEditor } from './MeasureEditor'
 import { AxesPanelEditor, suppressAxesPanelKeys } from './AxesPanelEditor'
+import type { CellProvenance } from '../renderers/provenance'
 import { VariationThemeValue, variationThemeText, variationThemeTooltip, variationThemeProvenanceMember, VARIATION_THEME_CHILD_REASON, type VariationThemeCell } from '../renderers/variationTheme'
 import { sameValue } from './writeGate'
 import { parseShape } from './shapeValue'
@@ -103,10 +104,23 @@ export function variationThemeColumnDef<T>(
    * Omitting the argument keeps the old behaviour for any caller that has none.
    */
   baseClassRules?: Record<string, (params: { data?: T }) => boolean>,
+  /**
+   * 2026-10-04 (channel cell marks) — the host's own verdict for this column. The product sheet passes its channel
+   * verdict so the theme's mark and tint agree with every other cell on the scope (a theme derived from the family
+   * axes follows Shared: no mark). Omitted (the Variants tab) = `variationThemeProvenanceMember`, as before.
+   */
+  provenanceOf?: (row: T) => CellProvenance,
+  /**
+   * The host's text for the mark when its verdict names a cause (`refused`, `attention`, `pending`): `{ from, tooltip }`,
+   * as `slotListColumnDef`'s `markOf` gives it — so the icon and its words agree. Omitted (the Variants tab) = the
+   * theme's own tooltip, as before.
+   */
+  markOf?: (row: T) => { from?: string | null; tooltip?: string } | null | undefined,
 ): Partial<ColDef<T>> {
   const cellOf = (row: T | undefined): VariationThemeCell | null =>
     row ? ((read(row) ?? null) as VariationThemeCell | null) : null
-  const memberOf = (row: T | undefined) => {
+  const memberOf = (row: T | undefined): CellProvenance => {
+    if (provenanceOf) return row ? provenanceOf(row) : 'own'
     const cell = cellOf(row)
     return cell ? variationThemeProvenanceMember(cell) : 'own'
   }
@@ -133,7 +147,7 @@ export function variationThemeColumnDef<T>(
       return `nds-ag-cell ${cell && cell.writable !== false ? 'nds-cell-is-editable' : 'nds-cell-is-locked'}`
     },
     cellRenderer: VariationThemeValue,
-    cellRendererParams: { childReason: VARIATION_THEME_CHILD_REASON },
+    cellRendererParams: { childReason: VARIATION_THEME_CHILD_REASON, ...(provenanceOf ? { provenanceOf } : {}), ...(markOf ? { markOf } : {}) },
     cellEditor: AxesPanelEditor as never,
     cellEditorParams: AXES_EDITOR_PARAMS,
     cellEditorPopup: true,

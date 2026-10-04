@@ -3,6 +3,9 @@
  * a horizontal scroll rendered 254 components per frame, 36 of them an empty `CellSaveReason` and `CellSaveMark` in
  * every cell entering the viewport, and every source mark mounted a `Tooltip` that the grid's hint-less host renders as
  * its trigger alone. Rendered here with the real components (node SSR) and counted.
+ *
+ * 2026-10-04 (channel cell marks) — the per-cell source indicator is gone: a cell mounts a mark only when it differs
+ * from the Shared product or its next action differs (`channelCellProvenance`), the Shared scope's rule.
  */
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -28,10 +31,14 @@ import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 import { CascadeCell } from './CascadeCell'
 
 const column = { key: 'brand', writeField: 'attr_brand', label: 'Brand', group: 'Item specifics', kind: 'text', storage: 'categoryAttributes', scope: 'global', requiredBy: [], editable: true, defaultVisible: true } as const
-const row = { rowId: 'r1', id: 'p1', sku: 'SKU-1', rowKind: 'variant', productType: null, values: { brand: { value: 'Brand A', source: 'channelExplicit', inheritedFrom: null, inherited: false, layer: 'channel', pinned: true, follows: false, editable: true, linkGroupId: null, mapped: null, writeField: 'attr_brand', writeTarget: 'channelListing', writeVerb: 'channel', affectsAllChannels: false, writable: true, writeBlockedReason: null } } }
+const row = { rowId: 'r1', id: 'p1', sku: 'SKU-1', rowKind: 'variant', aliasPosition: 0, productType: null, values: { brand: { value: 'Brand A', source: 'channelExplicit', inheritedFrom: null, inherited: false, layer: 'channel', pinned: true, follows: false, editable: true, linkGroupId: null, mapped: null, writeField: 'attr_brand', writeTarget: 'channelListing', writeVerb: 'channel', affectsAllChannels: false, writable: true, writeBlockedReason: null } } }
 const api = { getColumn: () => ({ isCellEditable: () => true }) }
 const cell = (tracker: CellSaveTracker) => createElement(TooltipPortalProvider, { disabled: true,
-  children: createElement(CascadeCell as never, { data: row, value: 'Brand A', node: { rowIndex: 0 }, api, column, tracker, onDetails: () => {} }) })
+  children: createElement(CascadeCell as never, { data: row, value: 'Brand A', node: { rowIndex: 0 }, api, column, tracker }) })
+/** The same cell following the Shared product: no mark at all. */
+const following = { ...row, values: { brand: { ...row.values.brand, source: 'master', layer: 'master', pinned: false, inherited: true, follows: true } } }
+const followingCell = (tracker: CellSaveTracker) => createElement(TooltipPortalProvider, { disabled: true,
+  children: createElement(CascadeCell as never, { data: following, value: 'Brand A', node: { rowIndex: 0 }, api, column, tracker }) })
 
 describe('a channel cell mounts only what it shows', () => {
   beforeEach(() => { counts.reason = 0; counts.mark = 0; counts.tooltip = 0 })
@@ -39,7 +46,18 @@ describe('a channel cell mounts only what it shows', () => {
   it('a cell with no save state mounts no save reason, no save mark and no inert tooltip', () => {
     const markup = renderToStaticMarkup(cell(new CellSaveTracker()))
     expect(markup).toContain('Brand A')
-    expect(markup).toContain('data-value-source="override"')
+    // A listing pin wears the Shared scope's ✎ mark, in the Shared scope's one sentence — one text for hover and screen
+    // reader, naming what the pin no longer follows (never where it lives, never a glyph: "★" reads as "black star").
+    expect(markup).toContain('nds-cell-prov-pinned')
+    expect(markup).toContain('aria-label="Pinned on this row — it no longer follows the Shared product" title="Pinned on this row — it no longer follows the Shared product"')
+    expect(markup).not.toMatch(/[★①②③]/)
+    expect(markup).not.toContain('nds-source-indicator')
+    expect(counts).toEqual({ reason: 0, mark: 0, tooltip: 0 })
+  })
+
+  it('a cell that follows the Shared product mounts no mark and no button', () => {
+    const markup = renderToStaticMarkup(followingCell(new CellSaveTracker()))
+    expect(markup).toBe('<span class="nds-cell-value"><span class="nds-cell-value-text">Brand A</span></span>')
     expect(counts).toEqual({ reason: 0, mark: 0, tooltip: 0 })
   })
 
@@ -54,6 +72,8 @@ describe('a channel cell mounts only what it shows', () => {
   })
 })
 
+/* The DS's SourceIndicator still serves other hint-less hosts (the Variants tab's mapped values); its hint-less mount
+   rule stays guarded here, where it was measured. */
 describe('SourceIndicator in a host without hints', () => {
   beforeEach(() => { counts.tooltip = 0 })
   const mark = () => createElement(SourceIndicator, { kind: 'master', label: 'Follows Shared', description: 'Uses the Shared product.', tooltip: 'Follows Shared. Uses the Shared product', actionLabel: 'Show cell details', onAction: () => {} })
