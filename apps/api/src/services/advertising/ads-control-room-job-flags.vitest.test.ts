@@ -81,6 +81,35 @@ describe('the Control Room reads the engine switches as the jobs do', () => {
     expect((await lever('budget-enforce')).control.switch).toBeNull()
   })
 
+  it('1c — rank-defend and classic dayparting honour the dial: their caps in words, SUGGEST and stopped said plainly', async () => {
+    set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1', NEXUS_ENABLE_RANK_DEFEND: '1' })
+    const rank = await lever('rank-defend')
+    expect(rank).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours' })
+    expect(rank.modeReason).toBe('Armed and writing to Amazon. Honours the account dial; at most 600 changes a run and 3,000 a day')
+    expect(await lever('dayparting')).toMatchObject({ haltBehaviour: 'honours', modeReason: expect.stringContaining('at most 300 changes a run and 1,500 a day') })
+    // Budget enforcement has not moved yet (1d): still gated at the write gate.
+    expect((await lever('budget-enforce')).haltBehaviour).toBe('gated')
+
+    const dial = (data: Record<string, unknown>) => inside(() => database.client.adsAutomationState.update({ where: { id: 'singleton' }, data }))
+    try {
+      await dial({ autonomy: 'SUGGEST' })
+      expect(await lever('rank-defend')).toMatchObject({
+        mode: 'PROPOSE',
+        modeReason: 'Account autonomy is SUGGEST — it computes each run and writes nothing new (the run summary counts what it would change); it still restores bids it floored',
+      })
+      await dial({ autonomy: 'AUTO', halted: true, haltReason: 'TEST halt' })
+      // OFF on the board, yet floors still land: the warning says so instead of "refused at the gate".
+      expect(await lever('rank-defend')).toMatchObject({
+        mode: 'OFF', modeReason: 'Halted: TEST halt',
+        warning: 'Stopped: it only lowers bids to their Min-bid floors; restores and placement moves wait for Resume',
+      })
+      expect((await lever('dayparting')).warning).toBe('Stopped: it only floors bids when a window closes; restores and multipliers wait for Resume')
+      expect((await lever('budget-enforce')).warning).toBe('Still evaluating while stopped — its writes are refused at the gate')
+    } finally {
+      await dial({ autonomy: 'AUTO', halted: false, haltReason: null })
+    }
+  })
+
   it("control: exactly '1' arms both", async () => {
     set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1', NEXUS_BUDGET_ENFORCE_APPLY: '1', NEXUS_ENABLE_RANK_DEFEND: '1' })
     expect((await lever('budget-enforce')).mode).toBe('AUTO')

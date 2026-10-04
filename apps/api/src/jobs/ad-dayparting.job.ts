@@ -5,6 +5,10 @@
  * the desired status differs from what we last applied, enqueue a
  * status change via the shipped write path (grace + audit + sync). Tracks
  * lastApplied to avoid churn. Sandbox-safe (writes short-circuit in sandbox).
+ *
+ * 1c — honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST writes nothing new
+ * but still lifts its own floors and multipliers; halted / OFF only floors bids, restores wait for
+ * Resume; at most N changes a run and a day, one schedule's campaign never split.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -14,6 +18,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { isGoalMode } from './ad-rank-defend.job.js'
+import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 
 // AU.3 — bid multiplier per window. A window can optionally carry a
 // bidMultiplierPct (e.g. +30 to raise bids 30% during peak hours, -50 to
@@ -85,7 +90,9 @@ export function bidAction(o: { inWindow: boolean; effMult: number | null; hasBas
   return 'none'
 }
 
-export async function runDaypartingOnce(): Promise<{ evaluated: number; changed: number; bidsAdjusted: number }> {
+export interface DaypartingSummary { evaluated: number; changed: number; bidsAdjusted: number; guard?: EngineGuardReport }
+
+export async function runDaypartingOnce(): Promise<DaypartingSummary> {
   // Goal-mode schedules (a baseline/window rank target) are owned by the
   // rank-defend loop — it sets placement bias + keeps the campaign serving.
   // Dayparting must skip them or the two crons fight (one pauses, one pushes).
@@ -115,18 +122,26 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
   const clockNow = await dbNow()
   let changed = 0
   let bidsAdjusted = 0
+  // 1c — the account dial and this engine's caps, read once per run. Each schedule's campaign asks for its permit
+  // once, before its first write, so a campaign is never split.
+  const guard = schedules.length ? await openEngineGuard('dayparting') : null
   for (const s of schedules) {
     const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const desired = inWindow ? 'ENABLED' : 'PAUSED'
     const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true } })
     if (!campaign) continue
+    const permit = guard!.permit()
+    const held = nothingHeld()
+    const allow = (kind: 'forward' | 'floor' | 'restore') => allowChange(true, permit, held, kind)
+    let writes = 0
 
     // ── NP — never pause (Amazon algo disruption). Window OPEN: lift any no-pause
     // floor BEFORE the multiplier logic reads current bids, so 'enter' snapshots the
     // true base, not the 2¢ floor. ──
-    if (inWindow && campaign.bidsSuppressedAt) {
-      try { await restoreCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window open → restore bids' }); changed++ } catch (e) { logger.warn('[dayparting] restore failed', { scheduleId: s.id, error: (e as Error).message }) }
+    // 1c — a give-back: never capped; while stopped it waits (the gate would refuse the raise after Nexus restored).
+    if (inWindow && campaign.bidsSuppressedAt && allow('restore')) {
+      try { writes += await restoreCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window open → restore bids' }); changed++ } catch (e) { logger.warn('[dayparting] restore failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
     // ── AU.3 / RC2.TR0 bid multiplier (enter / transition / exit) ───────
@@ -145,13 +160,15 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
     const effMult = (multiplier == null || multiplier === 0) ? null : multiplier
     const action = bidAction({ inWindow, effMult, hasBase, appliedMult })
 
+    // 1c — entering or moving between multiplier windows is a new change (capped; withheld under SUGGEST and while
+    // stopped, where the gate would refuse it after Nexus changed its bids); leaving one gives its own change back.
     if (action === 'enter') {
       // ENTER a multiplier window: snapshot base bids + apply scaled.
       const targets = await prisma.adTarget.findMany({
         where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId } },
         select: { id: true, bidCents: true },
       })
-      if (targets.length > 0) {
+      if (targets.length > 0 && allow('forward')) {
         const originals: Record<string, number> = { [MULT_KEY]: effMult }
         const entries = targets.map((t) => {
           originals[t.id] = t.bidCents
@@ -160,35 +177,47 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
         try {
           await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}%`, applyImmediately: true })
           await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: originals } })
-          bidsAdjusted += entries.length
+          bidsAdjusted += entries.length; writes += entries.length
           logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier: effMult, targets: entries.length })
         } catch (e) { logger.warn('[dayparting] bid multiply failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
-    } else if (action === 'transition') {
+    } else if (action === 'transition' && allow('forward')) {
       // TRANSITION between two multiplier windows: re-apply from base at new level.
       const entries = Object.entries(baseBids).map(([adTargetId, base]) => ({ adTargetId, bidCents: Math.max(5, Math.round(base * (1 + effMult / 100))) }))
       try {
         await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}% (transition)`, applyImmediately: true })
         await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: { [MULT_KEY]: effMult, ...baseBids } } })
-        bidsAdjusted += entries.length
+        bidsAdjusted += entries.length; writes += entries.length
         logger.info('[dayparting] bid multiplier transitioned', { scheduleId: s.id, from: appliedMult, to: effMult, targets: entries.length })
       } catch (e) { logger.warn('[dayparting] bid transition failed', { scheduleId: s.id, error: (e as Error).message }) }
-    } else if (action === 'exit') {
+    } else if (action === 'exit' && !inWindow && campaign.bidsSuppressedAt) {
+      // 1c — already floored (the floor landed while this exit waited, or another engine floored it): pushing the base
+      // bids now would lift the floor in a closed window. The base becomes what the restore returns to instead —
+      // Nexus only, nothing goes to Amazon, which still holds the floor.
+      for (const [adTargetId, bidCents] of Object.entries(baseBids)) {
+        await prisma.adTarget.updateMany({ where: { id: adTargetId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: bidCents } })
+      }
+      await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: {} } })
+      logger.info('[dayparting] bid multiplier left while floored — restore will return to the base bids', { scheduleId: s.id, targets: Object.keys(baseBids).length })
+    } else if (action === 'exit' && allow('restore')) {
       // EXIT: restore base bids.
       const entries = Object.entries(baseBids).map(([adTargetId, bidCents]) => ({ adTargetId, bidCents }))
       try {
         await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'bid multiplier restore', applyImmediately: true })
         await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: {} } })
-        bidsAdjusted += entries.length
+        bidsAdjusted += entries.length; writes += entries.length
         logger.info('[dayparting] bid multiplier restored', { scheduleId: s.id, targets: entries.length })
       } catch (e) { logger.warn('[dayparting] bid restore failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
     // ── NP — window CLOSED: floor bids instead of pausing. The 'exit' branch above
     // has already restored base bids, so we snapshot + floor the true base. ──
-    if (!inWindow && !campaign.bidsSuppressedAt) {
-      try { await suppressCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window closed → bids floored (no-pause)' }); changed++ } catch (e) { logger.warn('[dayparting] suppress failed', { scheduleId: s.id, error: (e as Error).message }) }
+    // 1c — a floor: the one new change allowed while stopped; capped like any other. If the exit above was held
+    // (stopped), this floor remembers the multiplied bids; the next run's exit moves the base into that memory.
+    if (!inWindow && !campaign.bidsSuppressedAt && allow('floor')) {
+      try { writes += await suppressCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window closed → bids floored (no-pause)' }); changed++ } catch (e) { logger.warn('[dayparting] suppress failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
+    guard!.settle(permit, writes, held)
     // SYNC.1 — a PAUSED campaign is left PAUSED. Twin of the block removed from ad-rank-defend:
     // it re-enabled any paused campaign under a schedule and pushed that to Amazon, which meant an
     // operator pausing in Seller Central was overridden within a tick. Worse here than there — it
@@ -199,11 +228,16 @@ export async function runDaypartingOnce(): Promise<{ evaluated: number; changed:
     await prisma.adSchedule.update({ where: { id: s.id }, data: { lastApplied: desired, lastEvaluatedAt: new Date() } })
   }
   logger.info('[dayparting] tick', { evaluated: schedules.length, changed, bidsAdjusted })
-  return { evaluated: schedules.length, changed, bidsAdjusted }
+  return { evaluated: schedules.length, changed, bidsAdjusted, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
+export function daypartingSummaryLine(r: DaypartingSummary): string {
+  return `evaluated=${r.evaluated} changed=${r.changed}${engineGuardNote(r.guard)}`
 }
 
 export async function runDaypartingCron(): Promise<void> {
-  try { await recordCronRun('ad-dayparting', async () => { const r = await runDaypartingOnce(); return `evaluated=${r.evaluated} changed=${r.changed}` }) }
+  try { await recordCronRun('ad-dayparting', async () => daypartingSummaryLine(await runDaypartingOnce())) }
   catch (err) { logger.error('ad-dayparting cron failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 
