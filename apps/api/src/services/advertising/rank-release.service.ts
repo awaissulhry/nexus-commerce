@@ -619,9 +619,15 @@ export function releaseSentence(p: ReleasePreview): string {
 export async function scheduleSwitchBrake(scheduleId: string): Promise<string> {
   const base = 'switched off, it floors no more bids in closed windows'
   try {
-    const s = await prisma.adSchedule.findUnique({ where: { id: scheduleId }, select: { campaignId: true } })
+    const s = await prisma.adSchedule.findUnique({ where: { id: scheduleId }, select: { campaignId: true, originalBids: true } })
     if (!s) return base
-    return `${base}, and ${releaseSentence(await previewRelease([s.campaignId], 'dayparting'))}; placement percentages and the campaign's status stay as they are`
+    // 2d — and its bid multiplier comes off (ad-dayparting.job.ts giveBackMultiplier).
+    const { readSnapshot, multiplierWaitWhy } = await import('../../jobs/ad-dayparting.job.js')
+    const snap = readSnapshot(s.originalBids)
+    const mult = Object.keys(snap.base).length
+      ? `, its bid multiplier${snap.mult != null ? ` (${snap.mult > 0 ? '+' : ''}${snap.mult}%)` : ''} comes off the bids still at the window's level ${(await multiplierWaitWhy(s)) ? 'on the first run after Resume' : 'at once'} (a bid a person changed in the window stays)`
+      : ''
+    return `${base}${mult}, and ${releaseSentence(await previewRelease([s.campaignId], 'dayparting'))}; placement percentages and the campaign's status stay as they are`
   } catch (e) {
     logger.warn('[rank-release] schedule switch text unreadable', { scheduleId, error: (e as Error).message })
     return base
