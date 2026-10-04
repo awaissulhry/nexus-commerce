@@ -38,7 +38,7 @@ export const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
  * unused by the dot ON PURPOSE; flipping to criteria-adaptive bands is a one-line change here
  * if the operator ever asks again.
  */
-export const ACOS_DOT_TIP = 'Green < 30% · yellow 30–100% · red ≥ 100% (spend exceeds sales) — Helium 10’s bands'
+export const ACOS_DOT_TIP = 'Green < 30% · yellow 30–100% · red ≥ 100% (spend exceeds sales)'
 export function AcosCell({ m }: { m: SuggestionMetrics | null | undefined }) {
   if (!m) return dash()
   if (m.acos == null) {
@@ -66,7 +66,7 @@ export function AcosCell({ m }: { m: SuggestionMetrics | null | undefined }) {
  *   green ≥ 3.33 (≙ ACoS < 30%) · yellow 1–3.33 · red < 1 (sales below spend).
  * Spend that bought nothing renders 0.00 with the red dot; no spend → no judgment.
  */
-export const ROAS_DOT_TIP = 'Green ≥ 3.33 · yellow 1–3.33 · red < 1 (sales below spend) — Helium 10’s ACoS bands, inverted'
+export const ROAS_DOT_TIP = 'Green ≥ 3.33 · yellow 1–3.33 · red < 1 (sales below spend) — the ACoS bands, inverted'
 export function RoasCell({ m }: { m: SuggestionMetrics | null | undefined }) {
   if (!m) return dash()
   if (m.roas == null) return dash('Not measurable — no spend in this window')

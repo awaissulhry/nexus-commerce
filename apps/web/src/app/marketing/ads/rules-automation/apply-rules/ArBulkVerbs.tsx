@@ -191,8 +191,8 @@ export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
 
               {v === 'bidauto' && (
                 <div className="rads">
-                  <Radio name="arbidauto" checked={bidAutoOn} onChange={() => setBidAutoOn(true)} label="On — bid suggestions apply themselves here" />
-                  <Radio name="arbidauto" checked={!bidAutoOn} onChange={() => setBidAutoOn(false)} label="Off — bid suggestions stay proposals" />
+                  <Radio name="arbidauto" checked={bidAutoOn} onChange={() => setBidAutoOn(true)} label="On" />
+                  <Radio name="arbidauto" checked={!bidAutoOn} onChange={() => setBidAutoOn(false)} label="Off" />
                   {/* Said plainly, where the decision is made. The field stores durably; nothing
                       reads it yet, and an operator setting it deserves to know that now rather
                       than discover it from an absence of writes. */}

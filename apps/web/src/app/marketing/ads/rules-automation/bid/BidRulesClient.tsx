@@ -14,15 +14,13 @@
  * target drawer are useful — on Analytics, Suggestions and the Ad Manager, not on the rules page.
  * Nothing about them was destroyed and no endpoint was retired: re-mounting one is a single import.
  *
- * ⚠ The market picker is deliberately still here. The grid itself is account-wide (an
- * `AutomationRule` is not per-market), but this header's picker is the section's shared control and
- * every neighbouring tab keeps it; removing it on one tab only would make the section inconsistent
- * for no gain. It writes `?market=` and nothing on this page reads it yet.
+ * The header's market picker writes `?market=`, and since ads fix 7d (review I.1) the rules grid reads it: a rule
+ * scoped to another market is left out, and the grid says how many and offers "Show all markets".
  */
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -35,10 +33,7 @@ export function BidRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Bid"
-        /* U2 correction: the tab's stored subtitle — "what each target bids, why it is that
-           number" — describes the target grid that U1 parked. This page is the rule list. */
-        subtitle="Rules that change bids — what each one does, and whether it acts on its own"
+        {...rulesTabHeader('bid')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

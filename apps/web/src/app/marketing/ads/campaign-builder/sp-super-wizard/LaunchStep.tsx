@@ -90,7 +90,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
         <>
           {/* Bid Strategy */}
           <div className="h10-spw-card">
-            <h3>Bid Strategy <InfoTip tip="The Helium 10 bid algorithm applied to every campaign in this set." /></h3>
+            <h3>Bid Strategy <InfoTip tip="The bid strategy becomes one bid rule for the campaigns in this set. The rule starts in dry run." /></h3>
             <p className="h10-spw-desc">Select a bid algorithm based on your product &amp; campaign goals.</p>
             <BidStrategyCardGrid value={bidConfig} onChange={setBid} />
           </div>
@@ -139,7 +139,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <div className="grp">
             <span className="g0" />
             <span className="g1">Amazon Settings <InfoTip tip="Settings sent to Amazon for each campaign." /></span>
-            <span className="g2">Helium 10 Ads Settings <InfoTip tip="Helium 10 automation applied to each campaign." /></span>
+            <span className="g2">Nexus Settings <InfoTip tip="What Nexus sets up for each campaign: the bid rule’s algorithm and target." /></span>
           </div>
           <div className="hd">
             <span>Campaign</span><span>Type</span><span>Targeting</span><span>Target Type</span><span>Daily Budget</span><span>Default Bid</span><span>Bid Algorithm</span><span>Target Value</span>

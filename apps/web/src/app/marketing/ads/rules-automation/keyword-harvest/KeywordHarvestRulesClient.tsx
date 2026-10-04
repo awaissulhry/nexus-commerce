@@ -19,7 +19,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { useEffect, useState } from 'react'
@@ -66,8 +66,7 @@ export function KeywordHarvestRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Keyword Harvest"
-        subtitle="Rules that create targets from converting search terms — and the ad groups they map"
+        {...rulesTabHeader('keyword-harvest')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m === 'all' ? '' : m })}

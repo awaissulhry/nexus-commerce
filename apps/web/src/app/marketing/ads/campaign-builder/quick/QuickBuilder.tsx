@@ -183,7 +183,7 @@ export function QuickBuilder() {
     <div className="h10-spw h10-qcb">
       <header className="h10-spw-top">
         <div className="hl">
-          <span className="eyebrow">Helium 10 Ads</span>
+          <span className="eyebrow">Amazon Ads</span>
           <h1>Campaign Builder : Quick</h1>
         </div>
         {/* APS.2a — the launch target, always on screen. */}

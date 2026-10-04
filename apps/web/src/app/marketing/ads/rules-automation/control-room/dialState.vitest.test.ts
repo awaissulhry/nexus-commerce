@@ -18,7 +18,7 @@ describe('the status line and its button', () => {
     expect(s).toEqual({
       stopped: true,
       headline: 'Automation is stopped',
-      detail: 'The dial is at Off. Turn the dial to Suggest or Auto to start again.',
+      detail: 'The dial is at Off. Turn the dial to Propose or Auto to start again.',
       action: null,
       dialLocked: null,
     })
@@ -31,9 +31,9 @@ describe('the status line and its button', () => {
     })
   })
 
-  it('running at Auto offers Stop everything; Suggest says what it holds and what it does not', () => {
+  it('running at Auto offers Stop everything; Propose (SUGGEST) says what it holds and what it does not', () => {
     expect(accountStatus(g(), 4, 9, true)).toMatchObject({ stopped: false, headline: 'Automation is running', action: 'halt', detail: '4 of 9 engines are acting on their own.' })
-    expect(accountStatus(g({ autonomy: 'SUGGEST' }), 0, 9, true)).toMatchObject({ stopped: false, action: 'halt', detail: `The dial is at Suggest. ${DIAL_MEANS.SUGGEST}` })
+    expect(accountStatus(g({ autonomy: 'SUGGEST' }), 0, 9, true)).toMatchObject({ stopped: false, action: 'halt', detail: `The dial is at Propose. ${DIAL_MEANS.SUGGEST}` })
   })
 
   it('the dial is locked, with the reason in words, when the env kill is set, the state is unreadable, or the person may not change it', () => {
@@ -67,6 +67,8 @@ describe('moving the dial asks first', () => {
   it('down to Off: a plain confirmation that says bids at their floor stay there', () => {
     const move = dialMove(g({ autonomy: 'SUGGEST' }), 'OFF')!
     expect(move.impact.title).toBe('Turn the account dial down to Off?')
+    // 7d (review 8.8) — SUGGEST is shown as "Propose", the rules' word for the same level.
+    expect(move.impact.consequences?.[0]).toBe('The account dial goes from Propose to Off for this business, from each rule\'s and engine\'s next run.')
     expect(move.impact.consequences).toContain(DIAL_MEANS.OFF)
     expect(DIAL_MEANS.OFF).toContain('Bids already at their floor stay there until the dial is turned up.')
     expect(validateImpact(move.impact)).toEqual([])

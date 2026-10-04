@@ -147,7 +147,6 @@ export function AdsSidebar() {
           )
         })}
       </nav>
-      <div className="h10-railft">Built to match Helium 10 Ads · WIP</div>
     </aside>
   )
 }

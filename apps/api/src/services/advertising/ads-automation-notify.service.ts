@@ -30,6 +30,12 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 
+/**
+ * Ads fix 7d (review 8.8) — where an automation notice links: the Control Room, where Resume and the dial live. The old
+ * default, `/marketing/trading-desk/automation`, has no page (the web 308s it here for notices already stored).
+ */
+export const AUTOMATION_HREF = '/marketing/ads/rules-automation/control-room'
+
 export interface AutomationNotice {
   type: string
   severity?: 'info' | 'success' | 'warn' | 'danger'
@@ -137,7 +143,7 @@ export async function notifyAutomationDetailed(n: AutomationNotice): Promise<Not
         severity,
         title: n.title,
         body: n.body ?? null,
-        href: n.href ?? '/marketing/trading-desk/automation',
+        href: n.href ?? AUTOMATION_HREF,
         meta: (n.meta ?? undefined) as never,
       })),
     })

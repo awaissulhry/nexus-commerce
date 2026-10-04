@@ -3,9 +3,9 @@
  *
  * ── Why this file exists ────────────────────────────────────────────────────────────────────────
  *
- * `RulesAutomationClient.tsx:99` resolves an unknown **or routed** `?tab=` to `'rules'`. So the
- * moment a tab is flipped to `routed: true`, every existing `?tab=<key>` link silently renders
- * Apply Rules instead — no 404, no message, just the wrong page. Each page session has had to
+ * The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown **or routed**
+ * `?tab=` to `'rules'`. So the moment a tab was flipped to `routed: true`, every existing `?tab=<key>`
+ * link silently rendered Apply Rules instead — no 404, no message, just the wrong page. Each page session has had to
  * remember a `next.config.js` entry separately, and **four of them did not**: measured 2026-08-12,
  * `?tab=automations`, `?tab=dayparting`, `?tab=keyword-tracker` and `?tab=share-of-voice` were all
  * still returning 200 and rendering the wrong page on production.
