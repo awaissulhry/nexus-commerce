@@ -86,6 +86,8 @@ function scanProofEntry(file: string) {
   // Nothing of the app is loaded at import: db.js would load .env before the Railway check.
   for (const line of code.split('\n').filter((l) => /^\s*import\s/.test(l))) expect(line).toMatch(/^\s*import type |from ['"]node:/)
   expect(code).toMatch(/RAILWAY_REPLICA_ID/)
+  // The gateway needs the channel specs registered before the read (2026-10-04: the first production run failed without it).
+  expect(code).toContain("await import('../services/cx/connectors/index.js')")
   expect(code).toContain('previewOnlyClient(amazonSpApiClient)')
   expect(code.match(/amazonSpApiClient/g)).toHaveLength(2) // the loader's import and the wrap — nothing else touches it
   expect(code).toContain('inReadOnlyTransaction(prisma,')
@@ -93,6 +95,14 @@ function scanProofEntry(file: string) {
   expect(code).not.toMatch(/\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$queryRaw/)
   expect(code).not.toMatch(/prisma\.channelListing|prisma\.marketplace/) // every table read is inside the read-only transaction
 }
+
+describe('the channel specs the loader imports', () => {
+  it('register the Amazon spec the gateway reads (AMAZON_SP)', async () => {
+    await import('../cx/connectors/index.js')
+    const { getChannelSpec } = await import('../cx/catalog.js')
+    expect(getChannelSpec('AMAZON_SP' as never)).toMatchObject({ key: 'AMAZON_SP' })
+  })
+})
 
 describe('the entry: arguments, the Railway check, and a run on a fake runtime', () => {
   const load = vi.fn()

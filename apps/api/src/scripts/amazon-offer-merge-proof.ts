@@ -69,6 +69,9 @@ export interface ProofRuntime {
 export async function loadRuntime(): Promise<ProofRuntime> {
   // db.js first: it loads the environment before anything reads it.
   const { default: prisma } = await import('../db.js')
+  // The channel specs, as every server role loads them (runtime/registrations.ts): the gateway looks the Amazon spec up at
+  // the read, and without it the read failed "No ChannelSpec registered for AMAZON_SP". Only the specs, no action handlers.
+  await import('../services/cx/connectors/index.js')
   const { withWorkspace } = await import('../lib/workspace-context.js')
   const { readSaleWindows } = await import('../services/pim/sale-window.js')
   const { amazonMarketplaceIdOrNull, buildAmazonListingPatch } = await import('../services/outbound-sync.service.js')
