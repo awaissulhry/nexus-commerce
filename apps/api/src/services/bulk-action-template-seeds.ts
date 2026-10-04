@@ -207,7 +207,8 @@ export const BUILTIN_TEMPLATES: SeedTemplate[] = [
  *
  * - 'Pause listings (Amazon DE)' (2026-10-01): it set `isPublished=false` on every Amazon listing (it never had a DE
  *   scope), so Nexus skipped every push while the offer stayed live on Amazon. Its payload has been refused since
- *   #206; the real per-market close is Sync Control's "Close offer".
+ *   #206. Pausing selling per market is the product sheet's Status column (Inactive, then Publish; build shape v2,
+ *   2026-10-04) — Sync Control's old "Close offer" is gone too. No built-in template pauses or resumes an offer.
  */
 export const RETIRED_BUILTIN_TEMPLATES: ReadonlyArray<{ name: string; actionType: string }> = [
   { name: 'Pause listings (Amazon DE)', actionType: 'MARKETPLACE_OVERRIDE_UPDATE' },

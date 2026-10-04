@@ -80,6 +80,31 @@ it('retains accepted field history while a newly created listing awaits its loca
   expect(field(await read(), 'brand', identities[2].productId)).toEqual({ state: 'value', value: 'Accepted brand' })
 })
 
+it('counts only publishes accepted after the listing\'s last accepted delete (delete and relist)', async () => {
+  await save('before-delete', [value('brand', 'Old brand'), value('item_name', 'Old title')])
+  const before = await read()
+  expect(field(before, 'brand')).toEqual({ state: 'value', value: 'Old brand' })
+  const deleteRecord = (id: string, overrides: Partial<Prisma.ChannelListingSnapshotUncheckedCreateInput> = {}) => {
+    const at = new Date(Date.UTC(2026, 8, 25, 0, 0, sequence++))
+    return prisma.channelListingSnapshot.create({ data: { id, channelListingId: 'baseline-listing-parent', channel: scope.channel, marketplace: scope.marketplace, aliasKey,
+      reason: 'delete', publishEventId: `delete-${id}`, outcome: 'ACCEPTED', acceptedAt: at, createdAt: at, payload: { kind: 'listing-action', action: 'delete' }, ...overrides } })
+  }
+  // A delete the channel did not accept, or one of another listing, ends nothing.
+  await deleteRecord('unaccepted-delete', { outcome: 'UNKNOWN', acceptedAt: null })
+  await deleteRecord('child-delete', { channelListingId: 'baseline-listing-child' })
+  expect(field(await read(), 'brand')).toEqual({ state: 'value', value: 'Old brand' })
+  // The engine's accepted Delete of this listing ends its history: the next Publish reviews it as a new listing.
+  await deleteRecord('the-delete')
+  const after = await read()
+  expect([...after.values]).toEqual([])
+  expect(after.revision).not.toBe(before.revision)
+  // A publish accepted after the delete counts again, alone.
+  await save('after-delete', [value('item_name', 'Relisted title')])
+  const relisted = await read()
+  expect(field(relisted, 'item_name')).toEqual({ state: 'value', value: 'Relisted title' })
+  expect(field(relisted, 'brand')).toBeUndefined()
+})
+
 it('folds sparse accepted publishes per field and applies later request ordinals last', async () => {
   await save('first', [value('item_name', 'First title'), value('brand', 'Original brand')])
   await save('second', [], { payload: envelope([intent([value('item_name', 'Intermediate title')]), intent([value('item_name', 'Final title')])]) as Prisma.InputJsonValue })

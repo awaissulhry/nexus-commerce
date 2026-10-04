@@ -16,7 +16,7 @@ export { MultiSelect, type MultiSelectProps, type MultiSelectOption } from './Mu
 export { OptionList, SEARCH_THRESHOLD, type OptionListProps, type OptionListItem } from './OptionList';
 export { Combobox, type ComboboxProps, type ComboboxOption } from './Combobox';
 export { Listbox, type ListboxProps, type ListboxOption } from './Listbox';
-export { ListboxPanel, LISTBOX_SEARCH_THRESHOLD, type ListboxPanelProps } from './ListboxPanel';
+export { ListboxPanel, LISTBOX_SEARCH_THRESHOLD, type ListboxPanelProps, type ListboxPanelOption } from './ListboxPanel';
 export { AsyncListboxPanel, type AsyncListboxPanelProps } from './AsyncListboxPanel';
 export { DateField, type DateFieldProps, type DateFormat } from './DateField';
 export { MetricStrip, type MetricStripProps, type Metric } from './MetricStrip';
@@ -52,5 +52,6 @@ export { CellAction, type CellActionProps } from './CellAction';
 export { RecordListInput, type RecordListInputProps, type RecordListField } from './RecordListInput';
 export { SummaryTable, type SummaryTableProps } from './SummaryTable';
 export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmProps, type ActionConfirmApi } from './ActionConfirm';
+export { ConfirmPhraseField, phraseMatches, phraseMatchState, PHRASE_STATE_TEXT, type ConfirmPhraseFieldProps, type PhraseMatchState } from './ConfirmPhraseField';
 export { AsOf, type AsOfProps } from './AsOf';
 export { PresenceMark, type PresenceMarkProps } from './PresenceMark';

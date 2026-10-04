@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryRun } from '@nexus/shared/publication-history'
 import {
-  EMPTY_FILTERS, RUN_TILES, activeFilterCount, activeFilterTokens, appendPage, applyTile, attentionOnly, countsPath, eventConcerns,
-  filterOptionsFrom, historyPath, listView, mergeFresh, newlyFinished, readErrorText, startedWindow, tileActive, tileCount,
+  EMPTY_FILTERS, RUN_TILES, WHAT_CHIPS, activeFilterCount, activeFilterTokens, appendPage, applyTile, attentionOnly, countsPath, eventConcerns,
+  filterOptionsFrom, historyPath, isFiltered, listView, mergeFresh, newlyFinished, readErrorText, startedWindow, tileActive, tileCount, toggleWhat,
   type RunFilters,
 } from './usePublishRuns'
 
@@ -237,4 +237,29 @@ it('a dropped connection is said in plain words, not as the browser\'s error', (
   expect(readErrorText(new TypeError('Failed to fetch'), 'x')).toMatch(/could not be reached/)
   expect(readErrorText(new Error('The publish history could not be read. Try again.'), 'x')).toBe('The publish history could not be read. Try again.')
   expect(readErrorText(null, 'fallback')).toBe('fallback')
+})
+
+describe('the What chips (build shape v2) — Updates · Selling changes · Deletes · Photos → what=', () => {
+  it('four chips in a fixed order; pressing adds, pressing again removes, order stays the chips\' own', () => {
+    expect(WHAT_CHIPS).toEqual(['updates', 'selling', 'deletes', 'photos'])
+    expect(toggleWhat([], 'deletes')).toEqual(['deletes'])
+    expect(toggleWhat(['deletes'], 'updates')).toEqual(['updates', 'deletes'])
+    expect(toggleWhat(['updates', 'deletes'], 'updates')).toEqual(['deletes'])
+  })
+  it('the list and the tile counts both ask with what=; none pressed asks for every kind', () => {
+    const f: RunFilters = { ...EMPTY_FILTERS, what: ['selling', 'deletes'] }
+    expect(params(historyPath({ scope: 'business' }, f, { now: NOW })).get('what')).toBe('selling,deletes')
+    expect(params(countsPath({ scope: 'product', productId: 'p1' }, f, NOW)).get('what')).toBe('selling,deletes')
+    expect(params(historyPath({ scope: 'business' }, EMPTY_FILTERS, { now: NOW })).has('what')).toBe(false)
+  })
+  it('a pressed chip makes the list "filtered" but is not counted in the panel or shown as a token (the chip is in view)', () => {
+    const f: RunFilters = { ...EMPTY_FILTERS, what: ['photos'] }
+    expect(isFiltered(f)).toBe(true)
+    expect(isFiltered(EMPTY_FILTERS)).toBe(false)
+    expect(activeFilterCount(f)).toBe(0)
+    const words = { state: String, channel: String, market: String, account: String, source: String, started: String }
+    expect(activeFilterTokens(f, words)).toEqual([])
+    // A tile press keeps the What chips (other filters stay).
+    expect(applyTile(RUN_TILES[0], f).what).toEqual(['photos'])
+  })
 })

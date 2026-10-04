@@ -6,7 +6,7 @@
  * carry a publish status the vocabulary knows; the older sources (flat-file uploads, photo runs) carry their own raw
  * status ("DONE", "FATAL"), so they are labelled by the plain `state` the server derived — never by the raw word.
  */
-import type { HistoryProduct, HistoryProductResult, HistoryRun, HistoryState } from '@nexus/shared/publication-history'
+import type { HistoryKind, HistoryProduct, HistoryProductResult, HistoryRun, HistoryRunDetail, HistoryState } from '@nexus/shared/publication-history'
 import type { StudioPublishChange } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, publishResultMeta, publishFullTime, toCsv, type CsvColumn, type PublishStatusMeta } from '@/design-system/grid'
@@ -90,16 +90,135 @@ export const SOURCE_LABEL: Record<HistoryRun['source'], string> = {
   'amazon-flat-file': 'Amazon flat file (old page)',
   'ebay-flat-file': 'eBay flat file (old page)',
   photos: 'Photos',
+  'listing-action': 'Selling change',
 }
 
-const KIND_LABEL: Record<HistoryRun['kind'], string> = {
-  update: 'Update', create: 'New listing', photos: 'Photos', end: 'End listing', pause: 'Pause selling', resume: 'Resume selling', relist: 'Relist',
+export const KIND_LABEL: Readonly<Record<HistoryKind, string>> = {
+  update: 'Update', create: 'New listing', photos: 'Photos', end: 'End listing', pause: 'Pause offer', resume: 'Resume offer', relist: 'Relist',
+  full_update: 'Full update', delete: 'Delete listing',
 }
 
-/** "Update · 3 fields", "New listing", "Photos". */
-export function runChangeLabel(run: Pick<HistoryRun, 'kind' | 'fieldCount'>): string {
+/** "a", "a and b", "a, b and c". */
+export function listWords(words: readonly string[]): string {
+  if (words.length <= 1) return words[0] ?? ''
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+}
+
+/**
+ * "Update · 3 fields", "New listing", "Photos". One Publish of several parts (build shape v2: content and selling
+ * changes in one click, `kinds`) is ONE run and names every part, in send order: "Resume offer, Update and End listing".
+ */
+export function runChangeLabel(run: Pick<HistoryRun, 'kind' | 'fieldCount'> & { kinds?: HistoryRun['kinds'] }): string {
+  const kinds = [...new Set(run.kinds ?? [])]
+  if (kinds.length > 1) return listWords(kinds.map(kind => KIND_LABEL[kind]))
   const label = KIND_LABEL[run.kind]
   return run.kind === 'update' && run.fieldCount != null ? `${label} · ${plural(run.fieldCount, 'field')}` : label
+}
+
+// ── Undo of a selling change ─────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What putting a selling change back means (build shape v2, D-M2 A: the reverse is PREPARED, never run at once).
+ *  - `resume`: a Pause offer made listings Inactive → "Resume these 3…" sets their Status back to Active and opens
+ *    Publish; nothing is sent until the person publishes.
+ *  - `relist`: an End listing ended them → "Relist…", the same way (eBay gives a relisted item a new item number).
+ *  - `none`: a Delete listing → "Cannot be undone": the listing is gone from the channel.
+ */
+export interface RunUndo {
+  /** The run (or the part of a Publish) this puts back. */
+  run: HistoryRun
+  kind: 'resume' | 'relist' | 'none'
+  /** The button's words, or the note's for `none`. */
+  label: string
+  /** One sentence: what happens when it is pressed (or why it cannot be). */
+  hint: string
+  /** The listings whose change the channel accepted — the only ones there is something to put back on. */
+  listingIds: string[]
+}
+
+const UNDO_OF: Partial<Record<HistoryKind, RunUndo['kind']>> = { pause: 'resume', end: 'relist', delete: 'none' }
+
+const accepted = (p: Pick<HistoryProduct, 'result'>) => p.result === 'ACCEPTED' || p.result === 'VERIFIED'
+
+/**
+ * The Undo of each selling part of a run: the run itself when it is one selling change, else every part of a Publish
+ * (`children`) whose kind can be put back, with ITS products (`HistoryProduct.runId`). Only listings the channel
+ * accepted count: a pause that failed paused nothing. A part with nothing accepted offers nothing. Resume and Relist
+ * are offered on the listings that changed; a Delete only says it cannot be undone.
+ */
+export function runUndos(detail: Pick<HistoryRunDetail, 'run' | 'children'>, products: readonly HistoryProduct[]): RunUndo[] {
+  const parts = detail.children?.length ? detail.children : [detail.run]
+  const out: RunUndo[] = []
+  for (const part of parts) {
+    const kind = UNDO_OF[part.kind]
+    if (!kind) continue
+    const own = detail.children?.length ? products.filter(p => p.runId === part.id) : products
+    const listingIds = [...new Set(own.filter(accepted).map(p => p.listingId).filter((id): id is string => !!id))]
+    if (!listingIds.length) continue
+    const n = listingIds.length
+    const where = runDestination(part)
+    if (kind === 'resume') {
+      out.push({ run: part, kind, listingIds,
+        label: n === 1 ? 'Resume this listing…' : `Resume these ${n}…`,
+        hint: `Sets Status to Active on ${plural(n, 'listing')} on ${where} and opens Publish. Nothing is sent until you publish.` })
+    } else if (kind === 'relist') {
+      out.push({ run: part, kind, listingIds, label: 'Relist…',
+        hint: `Sets Status to Active on ${plural(n, 'ended listing')} on ${where} and opens Publish. Nothing is sent until you publish.${part.channel === 'EBAY' ? ' eBay gives a relisted item a new item number.' : ''}` })
+    } else {
+      out.push({ run: part, kind, listingIds: [], label: 'Cannot be undone',
+        // Simplify (Owner 2026-10-04): a deleted listing reads Not listed; Status Active + Publish lists it again.
+        hint: `${plural(n, 'listing was', 'listings were')} deleted on ${where} and ${n === 1 ? 'reads' : 'read'} Not listed. To list ${n === 1 ? 'it' : 'them'} again, set ${n === 1 ? 'its' : 'their'} Status to Active and Publish.` })
+    }
+  }
+  return out
+}
+
+// ── "Show in sheet" lands on the field ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The channel's names for the field a product's result points at, in the order the sheet should try them: the
+ * server's column key when it knows one, then every attribute the channel named, then the first field label. The SHEET
+ * maps a name to its own column (`publishColumnLookup`, sheet/channel/publishColumn.tsx) — only it knows its columns.
+ */
+export function sheetFieldHints(product: Pick<HistoryProduct, 'columnKey' | 'columnHint' | 'fieldLabel'>): string[] {
+  const names = [product.columnKey, ...product.columnHint, product.fieldLabel]
+  return [...new Set(names.map(name => name?.trim() ?? '').filter(Boolean))]
+}
+
+/**
+ * "Show in sheet" from the history: the row and the field names to land on. The Activity tab cannot reach the sheet's
+ * grid (another tab, mounted after the switch), so it leaves this ONE request and switches tab; the sheet takes it
+ * once its grid is ready, maps the names to a column and lands there with the engine's `landOnCell`. One request at
+ * a time; a request older than `SHEET_LANDING_TTL_MS` is dropped (the person did something else since).
+ */
+export interface SheetLandingRequest {
+  rowId: string
+  /** Field names as the channel named them (`sheetFieldHints`); [] = land on the row. */
+  fieldNames: string[]
+  /** Destination the row belongs to: a sheet showing another one leaves the request alone. */
+  channel: string
+  marketplace: string | null
+  at: number
+}
+
+export const SHEET_LANDING_TTL_MS = 30_000
+let pendingLanding: SheetLandingRequest | null = null
+
+export function requestSheetLanding(request: Omit<SheetLandingRequest, 'at'>, now: number = Date.now()): void {
+  pendingLanding = { ...request, at: now }
+}
+
+/**
+ * The waiting request for this sheet, taken once (a second call answers null). `destination` = the sheet's channel and
+ * market: a request for another destination stays for the sheet it belongs to.
+ */
+export function takeSheetLanding(destination: { channel: string; marketplace: string | null }, now: number = Date.now()): SheetLandingRequest | null {
+  const request = pendingLanding
+  if (!request) return null
+  if (now - request.at > SHEET_LANDING_TTL_MS) { pendingLanding = null; return null }
+  if (request.channel !== destination.channel || (request.marketplace ?? null) !== (destination.marketplace ?? null)) return null
+  pendingLanding = null
+  return request
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────────────────────────────────────────

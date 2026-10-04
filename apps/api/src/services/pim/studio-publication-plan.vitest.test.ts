@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
-vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
+vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) },
+  // Delete and relist: no row here was deleted by Nexus (the facts read the delete records of draft-shaped rows).
+  channelListingSnapshot: { findMany: async () => [] } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: async () => ({ displayName: 'Selected account', authStatus: 'connected' }) }))
 vi.mock('./variation-excluded.js', () => ({ readExcludedListingIds: m.excluded }))
@@ -143,14 +145,62 @@ it('includes a paused still-draft Amazon row in the Publish plan — no refusal,
   expect(facts.issues.filter(i => i.severity === 'error')).toEqual([])
   expect(m.resolve.mock.calls.every(([r]) => r.productIds.join(',') === 'parent,child')).toBe(true)
 })
-it.each([
-  ['an operator-paused LIVE row', { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'LIVE-ITEM', syncPaused: true }],
-  ['a paused DRAFT row a creator left published', { ...stillDraft, isPublished: true }],
-])('still refuses %s with the same sentence as before', async (_, lock) => {
-  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft }, { id: 'listing-child', productId: 'child', ...lock }])
+it('still refuses the CREATE of a paused DRAFT row a creator left published, with the same sentence as before', async () => {
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft }, { id: 'listing-child', productId: 'child', ...stillDraft, isPublished: true }])
   m.excluded.mockResolvedValue(new Set())
   const facts = await readPublicationFacts('parent', scope)
   expect(facts.issues.filter(i => i.severity === 'error')).toEqual([{ severity: 'error', message: PAUSED }])
+})
+
+// D10 (build shape v2, Owner 2026-10-04) — row rules replace the family lock: a row on the channel gets its content while
+// paused (content never carries stock or the offer); an ENDED row is skipped with the reason; the family goes on.
+describe('D10: paused rows still get content, ended rows are skipped', () => {
+  const live = { listingStatus: 'ACTIVE', isPublished: true }
+  const rows = (child: Record<string, unknown>, parent: Record<string, unknown> = {}) => {
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...live, externalListingId: 'LIVE-PARENT', ...parent },
+      { id: 'listing-child', productId: 'child', ...live, externalListingId: 'LIVE-CHILD', ...child }])
+    m.excluded.mockResolvedValue(new Set())
+  }
+  it.each([
+    ['an operator-paused (stock sync held) LIVE row', { syncPaused: true }],
+    ['a LIVE row whose offer is closed (Inactive)', { offerClosedAt: new Date('2026-10-01') }],
+    ['a LIVE row deliberately held', { presenceIntent: 'HELD' }],
+  ])('%s receives its content: included, no refusal', async (_, lock) => {
+    rows(lock)
+    if ('offerClosedAt' in lock) m.closed.mockResolvedValue(new Set(['child|IT']))
+    const facts = await readPublicationFacts('parent', scope)
+    expect(facts.products.map(p => p.id)).toEqual(['parent', 'child'])
+    expect(facts.skipped).toEqual([])
+    expect(facts.issues.filter(i => i.severity === 'error')).toEqual([])
+  })
+  it('a closed offer that is NOT on Amazon yet is still skipped: its create would send the offer', async () => {
+    rows({ externalListingId: null, listingStatus: 'DRAFT', isPublished: false })
+    m.closed.mockResolvedValue(new Set(['child|IT']))
+    expect((await readPublicationFacts('parent', scope)).skipped).toEqual([{ productId: 'child', sku: 'CHILD', reason: 'Offer closed — not sent' }])
+  })
+  it.each([
+    ['its status', { listingStatus: 'ENDED' }],
+    ['endedAt', { endedAt: new Date('2026-10-01') }],
+    ['the ENDED intent', { presenceIntent: 'ENDED' }],
+  ])('Amazon: a row ENDED (by %s) is skipped with "relist it first"; the rest of the family is sent', async (_, ended) => {
+    rows(ended)
+    const facts = await readPublicationFacts('parent', scope)
+    expect(facts.products.map(p => p.id)).toEqual(['parent'])
+    expect(facts.skipped).toEqual([{ productId: 'child', sku: 'CHILD', reason: 'Ended on the channel. Set Active to relist it first.' }])
+    expect(facts.issues).toContainEqual({ productId: 'child', sku: 'CHILD', reason: 'Ended on the channel. Set Active to relist it first.', message: 'Ended on the channel. Set Active to relist it first.', severity: 'warning' })
+    expect(facts.issues.filter(i => i.severity === 'error')).toEqual([])
+  })
+  it('eBay changes a whole listing: an ended item skips every row, and the review says nothing can be sent', async () => {
+    rows({ listingStatus: 'ENDED' }, { listingStatus: 'ENDED' })
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
+    expect(facts.products).toEqual([])
+    expect(facts.skipped.map(s => s.productId)).toEqual(['parent', 'child'])
+    expect(facts.issues.filter(i => i.severity === 'error').map(i => i.message)).toEqual(['Nothing of this family can be sent here: Ended on the channel. Set Active to relist it first.'])
+  })
+  it('a discontinued identity is skipped with the lock\'s own sentence', async () => {
+    rows({ presenceIntent: 'DISCONTINUED' })
+    expect((await readPublicationFacts('parent', scope)).skipped).toEqual([{ productId: 'child', sku: 'CHILD', reason: 'This listing is discontinued. Sending changes is refused.' }])
+  })
 })
 it('still refuses a paused still-draft that is deliberately held — only the pause is lifted for a draft', async () => {
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft, presenceIntent: 'HELD' }, { id: 'listing-child', productId: 'child', ...stillDraft }])

@@ -148,6 +148,26 @@ it('rechecks a hold acquired after API acceptance before the background write', 
   expect(s.send).not.toHaveBeenCalled()
 })
 
+// Build shape v2 (P13) — the old eBay flat-file Push sends no quantity to a listing whose selling is paused (Inactive).
+it('a listing whose selling is paused stops the eBay push, naming the SKU and market; nothing is sent', async () => {
+  const held = { offerClosedAt: new Date('2026-10-04'), offerCloseReason: 'sheet-pause', marketplace: 'IT' }
+  const words = /^Nothing was pushed: SKU is Inactive on eBay · IT \(selling is paused\), and Nexus sends it no quantity\. Change it in the product sheet's Status column/
+  for (const mode of ['api', 'feed']) {
+    s.read.mockResolvedValue([held])
+    const response = await app.inject({ method: 'POST', url: '/api/ebay/flat-file/push', payload: { rows: [row], markets: ['IT'], mode } })
+    expect(response.statusCode, mode).toBe(409)
+    expect(response.json(), mode).toMatchObject({ error: 'PUSH_OFFER_CLOSED', message: expect.stringMatching(words) })
+  }
+  // A pause that lands after the push was accepted: the background re-read stops it with the same words.
+  s.read.mockReset().mockResolvedValueOnce([{}]).mockResolvedValueOnce([held])
+  const late = await invoke('/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'api' })
+  expect(late.response.json().async).toBe(true)
+  expect(late.text).toMatch(/PUSH_OFFER_CLOSED: Nothing was pushed: SKU is Inactive on eBay · IT/)
+  expect(s.send).not.toHaveBeenCalled()
+  expect(s.feed).not.toHaveBeenCalled()
+  expect(s.upload).not.toHaveBeenCalled()
+})
+
 it('keeps a skipped row excluded without asking for an ordinary-push permission', async () => {
   s.read.mockResolvedValue([{ syncPaused: true }])
   const result = await invoke('/api/ebay/flat-file/push', { rows: [{ ...row, row_action: 'skip' }], markets: ['IT'], mode: 'api' })

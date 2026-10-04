@@ -230,6 +230,7 @@ describe('product sheet publications in the publish history', () => {
     const coverage = (await list()).coverage
     expect(coverage.find(c => c.source === 'studio')).toMatchObject({ included: true, since: at(10).toISOString() })
     expect(coverage.filter(c => c.source !== 'studio')).toEqual([
+      { source: 'listing-action', included: true, since: null, note: null },
       { source: 'amazon-flat-file', included: true, since: null, note: null },
       { source: 'ebay-flat-file', included: true, since: null, note: null },
       { source: 'photos', included: true, since: null, note: null },

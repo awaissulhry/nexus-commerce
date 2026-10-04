@@ -17,6 +17,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import type { StudioPublishResult } from '@nexus/shared/studio-publication'
 import { STILL_DRAFT_LISTING } from '@nexus/shared/push-lock'
+import { SHEET_PAUSE_REASON } from '@nexus/shared/listing-actions'
+import { explainAmazonRelist } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { object } from './studio-publication-plan.js'
@@ -170,19 +172,41 @@ const PROMOTE_ON_ACCEPTANCE = new Set(['AMAZON'])
  * no channel id). A live listing is never one, so an operator's own pause on it is never undone.
  * Returns the rows it promoted.
  */
-async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: PublicationRecordContext): Promise<string[]> {
+async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: PublicationRecordContext, data: Record<string, any> = {}): Promise<string[]> {
   if (!PROMOTE_ON_ACCEPTANCE.has(context.channel)) return []
   const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
     channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
   select: { channelListingId: true } })
   if (!accepted.length) return []
   const destination = { channel: context.channel, marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey, ...STILL_DRAFT_LISTING }
-  const drafts = await tx.channelListing.findMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, ...destination }, select: { id: true } })
+  const drafts = await tx.channelListing.findMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, ...destination },
+    select: { id: true, productId: true, followMasterQuantity: true, quantityOverride: true } })
   if (!drafts.length) return []
-  const ids = drafts.map(row => row.id)
-  await tx.channelListing.updateMany({ where: { id: { in: ids }, ...destination },
-    data: { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } })
-  return ids
+  const live = { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } as const
+  // New listings (ND1 A) — a row created Inactive (without this market's offer) becomes live AND paused in the same step,
+  // marked exactly as the engine's Amazon Pause marks a closed offer (SCT.6's fields, reason `sheet-pause`): its Status
+  // reads Inactive and Resume (Active + Publish) puts the offer back from Nexus's price (no offer was remembered).
+  const inactive = createdInactive(data)
+  for (const row of drafts.filter(draft => inactive.has(draft.productId))) {
+    const fact = inactive.get(row.productId)!
+    await tx.channelListing.updateMany({ where: { id: row.id, ...destination }, data: { ...live, offerClosedAt: new Date(), offerActive: false,
+      offerClosedBy: context.userId ?? 'publish', offerCloseReason: SHEET_PAUSE_REASON,
+      offerCloseSnapshot: { purchasableOffer: [], productType: fact.productType, snapshotSource: 'created-inactive', createdInactive: true, publicationId: context.reviewId,
+        ...(fact.fba ? { fulfillment: 'FBA' } : {}), control: { followMasterQuantity: row.followMasterQuantity, quantityOverride: row.quantityOverride, syncPaused: false } } as never } })
+  }
+  const active = drafts.filter(draft => !inactive.has(draft.productId)).map(row => row.id)
+  if (active.length) await tx.channelListing.updateMany({ where: { id: { in: active }, ...destination }, data: live })
+  return drafts.map(row => row.id)
+}
+
+/** New listings — the rows a publication created Inactive (`inactiveProductIds`), with Amazon's product type and FBA fact. */
+function createdInactive(data: Record<string, any>): Map<string, { productType: string | null; fba: boolean }> {
+  const ids: string[] = Array.isArray(data?.inactiveProductIds) ? data.inactiveProductIds.filter((id: unknown): id is string => typeof id === 'string') : []
+  const facts = object(data?.createInactive)
+  return new Map(ids.map(id => {
+    const fact = object(facts[id])
+    return [id, { productType: typeof fact.productType === 'string' ? fact.productType : null, fba: fact.fba === true }]
+  }))
 }
 
 /**
@@ -234,12 +258,16 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
     if (stored.count && data.captureVersion === 1) {
       const context = recordContext(id, data, userId)
       await settlePublicationRecords(tx, context, result)
-      promoted = await promoteAcceptedDrafts(tx, context)
+      promoted = await promoteAcceptedDrafts(tx, context, data)
     }
     return stored
   })
   const previous = before as PublicationRow | null
   if (stored.count && previous && previous.status !== result.status) announcePublication(id, previous, data, result.status)
+  // Build shape v2 (P6) — a Full update's waiting value resets once the channel accepted that row; so does the choice that
+  // listed a deleted row again (delete and relist), and a new row's Status choice (New listings). Never throws.
+  if (stored.count && ['fullProductIds', 'relistProductIds', 'createChoiceProductIds'].some(key => Array.isArray(data[key]) && data[key].length))
+    await (await import('./publish-plan.js')).afterContentSettled(id, data, result)
   if (promoted.length) {
     fillPromotedAsins(promoted)
     // Round 5 — a price change the publication did not carry (a following draft's rule price, a sale), kept in Nexus
@@ -267,7 +295,15 @@ export async function reconcileEbayReceipt(data: Record<string, any>, previous: 
   const live = { externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE', version: { increment: 1 } } as const
   // A still-draft becomes the live listing and loses the pause that kept it inert. It runs first: once promoted, a row
   // no longer matches the second write, so no row is bumped twice. Any other row keeps its own pause.
-  const drafts = (await prisma.channelListing.findMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, select: { id: true } })).map(row => row.id)
+  const draftRows = await prisma.channelListing.findMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, select: { id: true, productId: true } })
+  const drafts = draftRows.map(row => row.id)
+  // New listings — a row created Inactive (at quantity 0) becomes live AND held in the same step, exactly as an eBay
+  // Pause holds it (`offerClosedAt`, reason `sheet-pause`): nothing pushes stock until Resume sends the current stock.
+  const inactive = createdInactive(data)
+  const held = draftRows.filter(row => inactive.has(row.productId)).map(row => row.id)
+  if (held.length) await prisma.channelListing.updateMany({ where: { ...destination, ...STILL_DRAFT_LISTING, id: { in: held } }, data: { ...live, syncPaused: false,
+    offerClosedAt: new Date(), offerClosedBy: userId ?? 'publish', offerCloseReason: SHEET_PAUSE_REASON, offerActive: false,
+    offerCloseSnapshot: { channel: 'EBAY', source: 'product-sheet', previewId: previous.id, createdInactive: true } as never } })
   await prisma.channelListing.updateMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, data: { ...live, syncPaused: false } })
   await prisma.channelListing.updateMany({ where: { ...destination,
     OR: [{ externalListingId: null }, { externalListingId: { not: reference } }, { isPublished: false }, { listingStatus: { not: 'ACTIVE' } }] },
@@ -283,6 +319,7 @@ export async function reconcileEbayReceipt(data: Record<string, any>, previous: 
 }
 
 type AmazonReport = NonNullable<Awaited<ReturnType<typeof readAmazonPublication>>>
+
 
 /** The Amazon attributes one journaled feed message carried: an UPDATE's attributes, or a PATCH's paths. */
 function carriedAttributes(request: unknown): string[] {
@@ -380,8 +417,8 @@ export async function settleStudioPublication(id: string, options: { actorUserId
           const failed = report.results.filter(r => r.failed).length
           const result: StudioPublishResult = { id, status: failed === report.results.length ? 'FAILED' : failed ? 'PARTIAL' : 'ACCEPTED',
             message: failed ? `${failed} products were rejected by Amazon. Review the processing messages before publishing corrected values.` : `Amazon processed feed ${reference}. Storefront visibility is still determined by Amazon.`,
-            results: report.results.map(r => ({ sku: r.sku, status: r.failed ? 'FAILED' : 'ACCEPTED', message: r.message, reference,
-              ...(r.issues?.length ? { issues: r.issues } : {}) })) }
+            results: report.results.map(r => ({ sku: r.sku, status: r.failed ? 'FAILED' : 'ACCEPTED', message: r.failed ? explainAmazonRelist(data, r.sku, r.issues ?? [], r.message) : r.message,
+              reference, ...(r.issues?.length ? { issues: r.issues } : {}) })) }
           const stored = await storeResult(id, data, userId, result, ['SUBMITTED'])
           if (stored.count === 1) await fileAmazonIssues(id, data, report)
           return { result, stored: stored.count === 1 }

@@ -66,6 +66,7 @@ import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 import { loadSharedInventoryTargets } from './shared-inventory-targets.js'
 import { announceListingValues } from '../listing-values-events.js'
+import { SELLING_PAUSED_SENTENCE } from '@nexus/shared/push-lock'
 
 export interface DoorContext {
   productId: string
@@ -123,6 +124,13 @@ async function bumpAll(tx: Prisma.TransactionClient, targets: readonly Target[],
 
 /** A compare-and-set lost to another write; carries the listing's CURRENT version. */
 export class Conflict extends Error { constructor(readonly version: number) { super('conflict') } }
+
+/**
+ * Build shape v2 — the listing's selling is paused (Inactive: `offerClosedAt`, the product sheet's Pause offer or Amazon's
+ * market close). Push quantity now and Retry send nothing to it, whatever the read said a moment ago: the store is asked
+ * again where the push is written (inside its transaction), so a pause that landed after the read still wins.
+ */
+class SellingPaused extends Error { constructor() { super(SELLING_PAUSED_SENTENCE) } }
 
 async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingUpdateManyMutationInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
@@ -367,7 +375,8 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
       const rows = await prisma.$transaction(async (tx) => {
         if (!(await bumpAll(tx, targets, { quantity: intended, lastSyncStatus: 'PENDING' }))) throw new Conflict(cells.version)
         await coalescePendingQuantityRows(tx, targets.map((t) => t.id))
-        const listings = await tx.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { id: true, region: true, externalListingId: true, marketplace: true, channelConnectionId: true } })
+        const listings = await tx.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { id: true, region: true, externalListingId: true, marketplace: true, channelConnectionId: true, offerClosedAt: true } })
+        if (listings.some((l) => l.offerClosedAt)) throw new SellingPaused()
         const out: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
         for (const l of listings) {
           const q = await createOutboundRow(tx, {
@@ -387,6 +396,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
         orderBy: { createdAt: 'desc' }, select: { id: true, productId: true, channelListingId: true, targetChannel: true, syncType: true },
       })
       if (!failed) return { ...base, outcome: 'refused', reason: 'Nothing to retry on this coordinate', version: cells.version }
+      if (await prisma.channelListing.findFirst({ where: { id: { in: targets.map((t) => t.id) }, offerClosedAt: { not: null } }, select: { id: true } })) throw new SellingPaused()
       await bumpTx(targets)
       /* The explicit row id, never the unscoped bulk route (report 28 §5.4) — the same statement `POST /api/outbound-queue/:id/retry` runs. */
       await prisma.outboundSyncQueue.update({ where: { id: failed.id }, data: { syncStatus: 'PENDING', retryCount: 0, errorMessage: null, errorCode: null, nextRetryAt: null, isDead: false, diedAt: null } })
@@ -395,6 +405,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
     }
   } catch (err) {
     if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: err.version }
+    if (err instanceof SellingPaused) return { ...base, outcome: 'refused', reason: SELLING_PAUSED_SENTENCE, version: cells.version }
     throw err
   }
   return { ...base, outcome: 'refused', reason: `${verb} is not a state verb`, version: cells.version }

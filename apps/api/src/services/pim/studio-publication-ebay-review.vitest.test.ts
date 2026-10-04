@@ -17,6 +17,8 @@ const m = vi.hoisted(() => ({
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
 vi.mock('../../db.js', () => ({ default: {
   channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] },
+  // Delete and relist: no listing here was deleted by Nexus.
+  channelListingSnapshot: { findMany: async () => [] },
   bulkOperation: { findFirst: async () => null, create: async (input: unknown) => { m.created.push(input); return input } },
 } }))
 vi.mock('@nexus/database/workspace-context', () => ({ workspaceIdForQuery: () => 'business-a' }))

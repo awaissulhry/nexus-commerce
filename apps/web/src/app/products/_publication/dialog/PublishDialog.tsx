@@ -5,32 +5,55 @@
  *
  * Context-free: the surface that opens it passes the families, the destinations it can reach, the save bridge and
  * what to tick first, so the studio, the publish history and (step 6) the products list mount the SAME dialog.
- * Ticking a destination reviews it — its own change plan and ticks, never merged with another's. One ready
- * destination sends through the single-publish path exactly as before; two or more go to the background batch
- * (`POST /api/publication-batches`), which keeps sending when the dialog closes.
+ * Ticking a destination reviews it — its own change plan and ticks, never merged with another's.
+ *
+ * Build shape v2 (P10): each chosen market reads its part of the Publish PLAN (`POST …/studio-publication/plan`): the
+ * content review (Partial and Full update rows) AND the waiting Status changes and Deletes, the rows whose content is
+ * held back and the values that no longer apply. Each market tab shows the review's metric strip and problems, then
+ * one summary line and one table (`ActionPlanTable`). Ended and Delete need the typed family SKU. One market with
+ * content only sends through the single-publish path exactly as before; several markets, a ticked status change or a
+ * value to clear go to the background batch (`POST /api/publication-batches { plan }`), which keeps sending when the
+ * dialog closes. Done offers Undo for Inactive and Ended (Status Active again, reviewed anew); a Delete cannot be undone.
+ *
+ * One-click publish (Owner 2026-10-04, OD1–OD4 A): the window starts with every market of the sheet's channel and account
+ * where the family is listed (`listed`; from the Shared tab: the first channel where it is listed), reviews them one at a
+ * time per account (the sheet's market first), builds each market's exact request by itself when its review arrives
+ * (and again a short pause after its ticks change), and offers ONE button: "Checking 3 of 7 markets…", then "Publish 41
+ * changes to 6 markets · skip 1 with problems". A market whose request cannot be built is skipped with its reason; a
+ * click waits for a request still being built, then sends. Each tab opens with the "Nexus wins" line and its "Keep
+ * Amazon's values" switch (`DiffersSummary`); the exact request sits in a closed fold.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { PublicationBatchView, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { StudioPublishResult, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { fillResultSentence, type PublishActionWriteResult } from '@nexus/shared/publish-actions'
+import { confirmMatches, defaultLifecycleTicks, type PublishPlan, type PublishPlanBatchView } from '@nexus/shared/publish-plan'
 import { Button, Pill } from '@/design-system/primitives'
-import { Banner, Disclosure, JobProgress, Modal, Tabs, tabPanelProps } from '@/design-system/components'
+import type { Tone } from '@/design-system/primitives/tone'
+import { Banner, ConfirmPhraseField, Disclosure, JobProgress, Modal, Tabs, tabPanelProps } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { saveFirstNotice } from '@/app/products/[id]/edit/_studio/saveFirst'
 import { PublishStatusPill, publicationStatusMeta } from '@/design-system/grid'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { usePermission } from '@/lib/auth/AuthProvider'
-import { matchesPublicationReview, matchesPublicationSelection, retainPublicationReceipt, type PublicationDestinationOption } from './model'
-import { publicationRequest as request } from './request'
+import { matchesPublicationSelection, matchesPublishPlan, retainPublicationReceipt, type PublicationDestinationOption } from './model'
+import { publicationRequest as request, requestFailure } from './request'
 import { destinationLabel, isSettled, publicationEventOf, publicationOutcome, resultCounts } from './outcome'
 import {
-  EMPTY_ENTRY, MAX_BATCH_DESTINATIONS, batchCancellable, batchChildMeta, batchProgress, batchRequest, batchSending, batchSentence, batchTone,
-  destinationState, destinationStateLabel, euRefusal, initialTicked, initialTicks, isSparse, publishButtonText, publishPath,
-  publishPlan, reviewRequestsText, tickedChanges, withInitialOptions, type DestinationEntry, type DestinationState,
+  EMPTY_ENTRY, MAX_BATCH_DESTINATIONS, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchProgress, batchSending, batchSentence, batchTone,
+  checkingButtonText, checkingProgress, destinationState, destinationStateLabel, euRefusal, initialTicked, initialTicks, isSparse, publishButtonText,
+  publishPlan, requestOutstanding, requestsDue, reviewOrder, tickedChanges, withInitialOptions, type DestinationEntry, type DestinationState, type ListedDestinations,
 } from './destinations'
-import { activeTab, familySummary, initialChoice, marketOptionLabel, marketTabLabel, type PickerChoice } from './pickers'
+import {
+  PLAN_CHANGED, PLAN_OUT_OF_DATE, actionPlanRows, actionPlanSend, confirmReason, confirmWhat, createdCounts, destinationChildren, planBatchSentence, planButtonText, planFamilySummary,
+  planResultRows, planResultWord, planStateLabel, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence, tickedLifecycleRows,
+  undoButtonText, undoSentence, type PlanResultRow,
+} from './actionPlan'
+import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, refillChoice, type PickerChoice } from './pickers'
 import { DestinationPicker } from './DestinationPicker'
 import { ReviewBody } from './ReviewBody'
 import { ManyPublishDialog, type ManyPublishDialogProps } from './ManyPublishDialog'
 import styles from './publication.module.css'
+import oneClick from './oneClick.module.css'
 
 export { publicationDestinationParts } from './ReviewBody'
 
@@ -39,6 +62,16 @@ type ResultRow = StudioPublishResult['results'][number]
 const REFUSED_COLUMNS: Column<ResultRow>[] = [
   { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
   { key: 'message', label: 'What the channel said', width: 560, className: styles.textCol, render: row => <span className={styles.fix}>{row.message}</span> },
+]
+/**
+ * A market's results once the batch sent it: the content, and each listing of each status change. The widths fit the
+ * window's 620 px body at desktop (the channel's words wrap instead of hiding past the edge); a phone scrolls sideways.
+ */
+const PLAN_RESULT_COLUMNS: Column<PlanResultRow>[] = [
+  { key: 'sku', label: 'SKU', width: 160, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
+  { key: 'what', label: 'What', width: 120, className: styles.textCol, render: row => <span className={styles.fix}>{row.what}</span> },
+  { key: 'result', label: 'Result', width: 150, render: row => <span title={row.meta.hint}><PublishStatusPill meta={row.meta} /></span> },
+  { key: 'message', label: 'What the channel said', width: 190, className: styles.textCol, render: row => <span className={styles.fix}>{row.message ?? row.meta.hint}</span> },
 ]
 
 export interface PublicationSaveBridge {
@@ -69,6 +102,12 @@ export interface FamilyPublishDialogProps {
   initialSelection?: PublicationInitialSelection | null
   save: PublicationSaveBridge
   discoveryFailed?: boolean | null
+  /**
+   * One-click publish (OD1/OD2 A): where the family is listed. The window starts with every such market of the asked-for
+   * channel and account (none asked for — the Shared tab: the first channel where the family is listed) and refills the
+   * same way when the channel or account changes. Null: only the asked-for destinations (a retry, an Undo review).
+   */
+  listed?: ListedDestinations | null
   onClose(): void
 }
 
@@ -82,12 +121,13 @@ export function PublishDialog(props: PublishDialogProps) {
   return props.mode === 'many' ? <ManyPublishDialog {...props} /> : <FamilyPublishDialog {...props} />
 }
 
-type Busy = 'selection' | 'publish' | 'status' | 'batch' | null
-const REVIEW_SLOTS = 2
+type Busy = 'publish' | 'status' | 'batch' | 'undo' | null
+/** A one-off message above the review: the plan was read again (a value changed, or Undo set Active). */
+type Notice = { tone: Tone; title: string; body: string }
 const BATCH_READ_MS = 4_000
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-function FamilyPublishDialog({ productIds, productLabel, destinations, initialDestinations, initialSelection = null, save, discoveryFailed = null, onClose }: FamilyPublishDialogProps) {
+function FamilyPublishDialog({ productIds, productLabel, destinations, initialDestinations, initialSelection = null, save, discoveryFailed = null, listed = null, onClose }: FamilyPublishDialogProps) {
   const productId = productIds[0]
   const canPublish = usePermission('products.publish')
   const base = `/api/products/${encodeURIComponent(productId)}/studio-publication`
@@ -95,15 +135,30 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   const optionOf = useCallback((key: string) => options.find(o => o.key === key), [options])
   const firstTicked = useMemo(() => initialTicked(options, initialDestinations), [options, initialDestinations])
   // The compact pickers (Owner, 2026-10-02): one channel, one account, the chosen markets — prefilled with the sheet's
-  // own destination. Each chosen market is one tab; only the open tab's review is drawn.
-  const [choice, setChoice] = useState<PickerChoice>(() => initialChoice(options, firstTicked))
-  useEffect(() => { if (!choice.channel && options.length) setChoice(initialChoice(options, firstTicked)) }, [choice.channel, options, firstTicked])
+  // own destination and, with one-click publish (OD1 A), every market of it where the family is listed. Each chosen
+  // market is one tab; only the open tab's review is drawn.
+  const listedKeys = listed && !listed.loading ? listed.keys : null
+  const [choice, setChoice] = useState<PickerChoice>(() => initialChoice(options, firstTicked, listedKeys))
+  // The person changed the markets: the listed markets arriving later never undo that choice.
+  const touched = useRef(false)
+  const filledListed = useRef(!!listedKeys)
+  useEffect(() => {
+    if (touched.current || !options.length) return
+    if (listedKeys && !filledListed.current) { filledListed.current = true; setChoice(initialChoice(options, firstTicked, listedKeys)); return }
+    if (!choice.channel) setChoice(initialChoice(options, firstTicked, listedKeys))
+  }, [choice.channel, options, firstTicked, listedKeys])
   const ticked = useMemo(() => new Set(choice.keys), [choice.keys])
   const [active, setActive] = useState<string | null>(firstTicked[0] ?? null)
   const shownTab = activeTab(choice.keys, active)
+  const shownRef = useRef(shownTab)
+  shownRef.current = shownTab
   const tabBase = useId()
+  const reasonId = useId()
   const [entries, setEntries] = useState<Record<string, DestinationEntry>>({})
   const entryOf = useCallback((key: string) => entries[key] ?? EMPTY_ENTRY, [entries])
+  // The entries as last drawn, for the request builds (they finish after the render that started them).
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
   const update = useCallback((key: string, patch: Partial<DestinationEntry>) => setEntries(prev => ({ ...prev, [key]: { ...(prev[key] ?? EMPTY_ENTRY), ...patch } })), [])
   const [now, setNow] = useState(() => Date.now())
 
@@ -119,27 +174,27 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   const [announced, setAnnounced] = useState<{ key: string; message: string } | null>(null)
   const sending = useRef(false)
   const recheck = useRef(false)
-  // ── the batch (two or more destinations) ──────────────────────────────────────────────────────────────────────
-  const [batch, setBatch] = useState<PublicationBatchView | null>(null)
+  // ── the batch (several markets, a status change, or a value to clear) ────────────────────────────────────────
+  const [batch, setBatch] = useState<PublishPlanBatchView | null>(null)
   const [batchStartedAt, setBatchStartedAt] = useState<number | null>(null)
   const [eu, setEu] = useState<{ title: string; lines: string[] } | null>(null)
-  const [requestsReady, setRequestsReady] = useState(false)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  // The typed confirmation Ended and Delete need (the family SKU). Cleared whenever the rows it confirms change.
+  const [confirmText, setConfirmText] = useState('')
 
   const blockedSave = save.state.kind === 'saving' || save.state.kind === 'error'
   const saveNotice = saveFirstNotice(save.state as Parameters<typeof saveFirstNotice>[0], 'The review loads')
   const saveRevision = save.state.kind === 'saved' ? String(save.state.at) : save.state.kind
   const locked = !!batch || !!result || uncertain || busy === 'publish' || busy === 'batch'
 
-  // ── reviews: every ticked destination is reviewed once, two at a time ─────────────────────────────────────────
+  // ── plans: every chosen market is reviewed once, one at a time per account, the sheet's market first ───────────
   const controllers = useRef(new Map<string, AbortController>())
-  const slots = useRef({ used: 0, waiting: [] as Array<() => void> })
+  // Two Amazon reviews at once were throttled by Amazon: one per account; the next turn goes to the open tab.
+  const queue = useRef<ReviewQueue | null>(null)
+  queue.current ??= new ReviewQueue(() => shownRef.current)
   const preparing = useRef<Promise<string | null> | null>(null)
   const retryApplied = useRef(false)
   const initialKey = firstTicked[0] ?? null
-  const acquire = () => new Promise<void>(resolve => {
-    if (slots.current.used < REVIEW_SLOTS) { slots.current.used++; resolve() } else slots.current.waiting.push(() => { slots.current.used++; resolve() })
-  })
-  const release = () => { slots.current.used--; slots.current.waiting.shift()?.() }
   useEffect(() => () => { for (const c of controllers.current.values()) c.abort() }, [])
 
   const startReview = useCallback((key: string) => {
@@ -149,34 +204,49 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     const controller = new AbortController()
     controllers.current.set(key, controller)
     update(key, { loading: true, error: null })
+    const turn = accountGroup(option.scope)
     void (async () => {
-      await acquire()
+      await queue.current!.acquire(turn, key)
       try {
         preparing.current ??= save.prepare().finally(() => { preparing.current = null })
         const blocker = await preparing.current
         if (controller.signal.aborted) return
         if (blocker) throw new Error(blocker)
-        const data = await request<StudioPublishReview>(`${base}/preview`, 'POST', option.scope, controller.signal)
+        // One destination per plan request: each market keeps its own review, ticks and "Check again".
+        const data = await request<PublishPlan>(`${base}/plan`, 'POST', { destinations: [option.scope] }, controller.signal)
         if (controller.signal.aborted) return
-        if (!matchesPublicationReview(data, productId, option.scope)) throw new Error('The review does not match this product and destination. Check again.')
+        if (!matchesPublishPlan(data, productId, option.scope)) throw new Error('The review does not match this product and destination. Check again.')
+        const planned = data.destinations[0]
+        const review = planned.review
         const given = key === initialKey && initialSelection && !retryApplied.current ? initialSelection : null
         if (given) retryApplied.current = true
-        update(key, { review: data, loading: false, error: null, selectedIds: initialTicks(data, given), selection: null, selecting: false,
-          locationId: data.locations?.length === 1 ? data.locations[0].id : '', confirmedReviewId: null })
+        // "Publish failed products again…" ticks only the failed fields: waiting status changes start unticked there.
+        update(key, { plan: planned, familySku: data.familySku, canDelete: data.canDelete, review, loading: false, error: null,
+          selectedIds: review ? initialTicks(review, given) : [], lifecycleIds: given ? [] : defaultLifecycleTicks({ destinations: [planned] }),
+          selection: null, selecting: false, selectionError: null, ticksAt: 0,
+          locationId: review?.locations?.length === 1 ? review.locations[0].id : '', confirmedReviewId: null })
       } catch (e) {
         if (!controller.signal.aborted) update(key, { loading: false, error: message(e) })
-      } finally { release() }
+      } finally { queue.current!.release(turn) }
     })()
   }, [optionOf, update, save, base, productId, initialKey, initialSelection])
 
-  // Review what is ticked and not reviewed yet. Nothing changes once a publish has started.
+  // Review what is chosen and not reviewed yet — the sheet's market first, then the open tab. Nothing changes once a
+  // publish has started.
   useEffect(() => {
     if (locked || blockedSave || !canPublish || discoveryFailed) return
-    for (const key of ticked) {
+    for (const key of reviewOrder(choice.keys, initialKey, shownTab)) {
       const entry = entries[key]
-      if (!entry || (!entry.loading && !entry.review && !entry.error)) startReview(key)
+      if (!entry || (!entry.loading && !entry.plan && !entry.error)) startReview(key)
     }
-  }, [ticked, entries, locked, blockedSave, canPublish, discoveryFailed, startReview])
+  }, [choice.keys, initialKey, shownTab, entries, locked, blockedSave, canPublish, discoveryFailed, startReview])
+
+  /** Read every chosen market's plan again (a waiting value changed, a save landed, Undo set Active). */
+  const reloadPlans = useCallback((next: Notice | null) => {
+    for (const c of controllers.current.values()) c.abort()
+    controllers.current.clear()
+    setEntries({}); setError(null); setConfirmText(''); setNotice(next)
+  }, [])
 
   // A save after the reviews makes them out of date: review the ticked destinations again (as the single dialog did).
   const lastRevision = useRef(saveRevision)
@@ -184,78 +254,95 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (lastRevision.current === saveRevision) return
     lastRevision.current = saveRevision
     if (sending.current || locked) return
-    for (const c of controllers.current.values()) c.abort()
-    controllers.current.clear()
-    setEntries({}); setRequestsReady(false); setError(null)
-  }, [saveRevision, locked])
+    reloadPlans(null)
+  }, [saveRevision, locked, reloadPlans])
 
   // Reviews expire after 15 minutes: re-read the clock now and then so "Review expired" appears on time.
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
 
   const stateOf = useCallback((key: string): DestinationState => destinationState(entryOf(key), ticked.has(key), now), [entryOf, ticked, now])
   const tickedKeys = useMemo(() => options.map(o => o.key).filter(key => ticked.has(key)), [options, ticked])
+  // `plan`: the content of the ticked markets (as before); `action`: what one click sends with the status changes.
   const plan = useMemo(() => publishPlan(tickedKeys, stateOf), [tickedKeys, stateOf])
-  const path = publishPath(plan)
+  const action = useMemo(() => actionPlanSend(tickedKeys, stateOf, entryOf, plan), [tickedKeys, stateOf, entryOf, plan])
+  // New listings: the listings this Publish creates on the markets whose content goes ("2 new listings (1 inactive)").
+  const created = useMemo(() => action.content.map(key => createdCounts(actionPlanRows(entryOf(key), stateOf(key), now)))
+    .reduce((sum, c) => ({ total: sum.total + c.total, inactive: sum.inactive + c.inactive }), { total: 0, inactive: 0 }), [action.content, entryOf, stateOf, now])
   const singleKey = tickedKeys.length === 1 ? tickedKeys[0] : null
   const scopeOf = useCallback((key: string) => optionOf(key)?.scope, [optionOf])
+  const dangerKey = useMemo(() => tickedKeys.flatMap(key => tickedLifecycleRows(entryOf(key)).filter(row => row.needsTypedConfirm).map(row => row.id)).sort().join(','),
+    [tickedKeys, entryOf])
+  useEffect(() => { setConfirmText('') }, [dangerKey])
 
   const checkAgain = (key: string) => {
     controllers.current.get(key)?.abort()
     setEntries(prev => ({ ...prev, [key]: { ...EMPTY_ENTRY } }))
-    setRequestsReady(false)
   }
-  const pick = (next: PickerChoice) => {
-    if (locked) return
+  const pick = (picked: PickerChoice) => {
+    if (locked || sendWaiting) return
+    touched.current = true
+    // Another channel or account chooses its listed markets the same way (OD1 A).
+    const next = refillChoice(options, choice, picked, listedKeys, firstTicked)
     const keep = new Set(next.keys)
     for (const key of ticked) if (!keep.has(key)) { controllers.current.get(key)?.abort(); const e = entries[key]; if (e?.loading) update(key, { loading: false }) }
     // A market just added opens its tab, so the person sees its review at once.
     const added = next.keys.find(key => !ticked.has(key))
     if (added) setActive(added)
-    setChoice(next); setRequestsReady(false); setError(null); setEu(null)
+    setChoice(next); setError(null); setEu(null)
   }
-  const choose = (key: string, ids: string[]) => { update(key, { selectedIds: ids, selection: null }); setRequestsReady(false); setError(null) }
+  // New ticks need a new exact request: it is built again a short pause after the last change.
+  const choose = (key: string, ids: string[]) => { update(key, { selectedIds: ids, selection: null, selectionError: null, ticksAt: Date.now() }); setError(null) }
+  /** A tick in the plan table: a row's fields (they need a new exact request) or a status change. */
+  const chooseTicks = (key: string, next: { selectedIds: string[]; lifecycleIds: string[] }) => {
+    const entry = entryOf(key)
+    const fieldsChanged = next.selectedIds.length !== entry.selectedIds.length || next.selectedIds.some(id => !entry.selectedIds.includes(id))
+    if (fieldsChanged) choose(key, next.selectedIds)
+    update(key, { lifecycleIds: next.lifecycleIds })
+    setError(null)
+  }
 
-  // ── exact requests (Amazon and eBay): one per ticked destination ──────────────────────────────────────────────
-  const selectionVersion = useRef(new Map<string, number>())
-  const prepareRequest = async (key: string): Promise<boolean> => {
-    const entry = entryOf(key), review = entry.review
+  // ── exact requests (Amazon and eBay): built by themselves, one at a time per market ───────────────────────────────
+  // The `…/selection` call makes no channel call. It runs when a review arrives, and again a short pause after the ticks
+  // change; the server refuses two at once for a market, so a change during a build waits for it. A request that cannot
+  // be built skips its market with the reason (OD4 A); the others are sent.
+  const building = useRef(new Set<string>())
+  const buildRequest = useCallback(async (key: string) => {
+    const entry = entriesRef.current[key], review = entry?.review
+    if (!entry || !review?.id || !review.changes || building.current.has(key)) return
     const ids = tickedChanges(entry)
-    if (!review?.id || !review.changes || !ids.length) return false
-    const version = (selectionVersion.current.get(key) ?? 0) + 1
-    selectionVersion.current.set(key, version)
-    update(key, { selecting: true, selection: null })
+    if (!ids.length) return
+    const reviewId = review.id
+    building.current.add(key)
+    const settle = (patch: (current: DestinationEntry) => Partial<DestinationEntry>) => setEntries(prev => {
+      const current = prev[key]
+      return current?.review?.id === reviewId ? { ...prev, [key]: { ...current, ...patch(current) } } : prev
+    })
+    settle(() => ({ selecting: true }))
+    let outcome: { selection: StudioPublishSelection } | { error: string }
     try {
-      const data = await request<StudioPublishSelection>(`${base}/${encodeURIComponent(review.id)}/selection`, 'POST', { selectedIds: ids })
-      if (selectionVersion.current.get(key) !== version) return false
-      if (!matchesPublicationSelection(data, review, ids)) throw new Error('The request preview does not match your selected fields. Review the selection again.')
-      update(key, { selection: data, selecting: false })
-      return true
-    } catch (e) {
-      if (selectionVersion.current.get(key) === version) { update(key, { selecting: false }); setError(message(e)) }
-      return false
-    }
-  }
-  const requestsRegion = useRef<HTMLDivElement>(null)
-  const singleRequest = useRef<HTMLDivElement>(null)
-  const reviewRequests = async () => {
-    if (busy || locked || !plan.needsRequest.length) return
-    setBusy('selection'); setError(null)
-    const done = await Promise.all(plan.needsRequest.map(prepareRequest))
-    setBusy(null)
-    if (done.every(Boolean)) setRequestsReady(true)
-  }
-  // Focus the prepared request, as the single dialog always did; for several, the summary of all of them.
-  const singleToken = singleKey ? entryOf(singleKey).selection?.token : undefined
+      const data = await request<StudioPublishSelection>(`${base}/${encodeURIComponent(reviewId)}/selection`, 'POST', { selectedIds: ids })
+      outcome = matchesPublicationSelection(data, review, ids) ? { selection: data } : { error: 'The request does not match the ticked fields.' }
+    } catch (e) { outcome = { error: message(e) } }
+    building.current.delete(key)
+    settle(current => {
+      // The ticks changed while it was built: this answer is for the old ones, and a new build follows.
+      const ticks = tickedChanges(current)
+      const same = ticks.length === ids.length && ticks.every(id => ids.includes(id))
+      if (!same) return { selecting: false }
+      return 'selection' in outcome ? { selecting: false, selection: outcome.selection, selectionError: null } : { selecting: false, selection: null, selectionError: outcome.error }
+    })
+  }, [base])
+  // A click on Publish while a request is still to come waits for it: then without the pause.
+  const [sendWaiting, setSendWaiting] = useState(false)
   useEffect(() => {
-    if (!singleToken) return
-    singleRequest.current?.scrollIntoView({ block: 'start' })
-    singleRequest.current?.focus({ preventScroll: true })
-  }, [singleToken])
-  useEffect(() => {
-    if (!requestsReady || singleKey) return
-    requestsRegion.current?.scrollIntoView({ block: 'start' })
-    requestsRegion.current?.focus({ preventScroll: true })
-  }, [requestsReady, singleKey])
+    if (locked || blockedSave || !canPublish) return
+    const due = requestsDue(choice.keys, stateOf, entryOf, sendWaiting ? 0 : REQUEST_PAUSE_MS)
+    const timers = due.map(({ key, at }) => setTimeout(() => void buildRequest(key), Math.max(0, at - Date.now())))
+    return () => { for (const t of timers) clearTimeout(t) }
+  }, [choice.keys, stateOf, entryOf, locked, blockedSave, canPublish, sendWaiting, buildRequest])
+  const retryRequest = (key: string) => update(key, { selectionError: null, selection: null, ticksAt: 0 })
+  const outstanding = choice.keys.some(key => requestOutstanding(stateOf(key), entryOf(key)))
+  const checking = useMemo(() => checkingProgress(choice.keys, stateOf, entryOf), [choice.keys, stateOf, entryOf])
 
   // ── single send ───────────────────────────────────────────────────────────────────────────────────────────────
   const acceptResult = (data: StudioPublishResult, id: string) => {
@@ -267,14 +354,14 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (state.kind !== 'ready' || !review?.id || sending.current || !canPublish || blockedSave || result || uncertain) return
     if (!state.whole && !state.requestReady) return
     const saveBlocker = save.blocker()
-    if (saveBlocker) { update(key, { review: null, error: saveBlocker }); setError(saveBlocker); return }
+    if (saveBlocker) { update(key, { review: null, plan: null, error: saveBlocker }); setError(saveBlocker); return }
     sending.current = true; setBusy('publish'); setError(null); setSentKey(key)
     const id = review.id
     try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(id)}/submit`, 'POST', { locationId: entry.locationId, confirmOverwrite: entry.confirmedReviewId === id, selectionToken: entry.selection?.token }), id) }
     catch (e) {
       const status = (e as { status?: number }).status
       setUncertain(!status || status >= 500)
-      if (status && status < 500) update(key, { review: null, selection: null, error: message(e) })
+      if (status && status < 500) update(key, { review: null, plan: null, selection: null, error: message(e) })
       setError(message(e))
     }
     finally { sending.current = false; setBusy(null) }
@@ -300,28 +387,54 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   const checkStatusRef = useRef(checkStatus)
   checkStatusRef.current = checkStatus
 
-  // ── batch send ────────────────────────────────────────────────────────────────────────────────────────────────
+  // ── batch send: the whole plan ────────────────────────────────────────────────────────────────────────────────
   const readBatch = useCallback(async (id: string) => {
-    try { setBatch(await request<PublicationBatchView>(`/api/publication-batches/${encodeURIComponent(id)}`, 'GET')) }
+    try { setBatch(await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(id)}`, 'GET')) }
     catch (e) { setError(message(e)) }
   }, [])
-  const sendBatch = async () => {
-    if (path !== 'batch' || busy || locked || plan.needsRequest.length || plan.pending.length || !canPublish || blockedSave) return
+  const confirmed = !action.confirm || confirmMatches(action.confirm.expected, confirmText)
+  const sendPlan = async () => {
+    if (!action.batch || busy || locked || plan.needsRequest.length || plan.pending.length || !action.send.length || !canPublish || blockedSave || !confirmed) return
     const saveBlocker = save.blocker()
     if (saveBlocker) { setError(saveBlocker); return }
-    setBusy('batch'); setError(null); setEu(null)
+    setBusy('batch'); setError(null); setEu(null); setNotice(null)
     try {
-      const created = await request<{ batchId: string }>('/api/publication-batches', 'POST', batchRequest(plan.send, entryOf))
+      const body = planSubmit(productId, action, entryOf, scopeOf, action.confirm ? confirmText : null)
+      const created = await request<{ batchId: string }>('/api/publication-batches', 'POST', { plan: body })
       setBatchStartedAt(Date.now())
       await readBatch(created.batchId)
     } catch (e) {
+      const failure = requestFailure(e)
+      // A ticked value changed since the review (someone else, another window), or the review went out of date: read
+      // the plan again, nothing was sent.
+      if (failure.status === 409) {
+        reloadPlans({ tone: 'warning', title: failure.code === 'changed' ? PLAN_CHANGED : PLAN_OUT_OF_DATE, body: message(e).replace(/\s*(Review|Check) again\.?\s*$/, '') })
+        return
+      }
       const refusal = euRefusal(e)
       if (refusal) setEu(refusal); else setError(message(e))
     } finally { setBusy(null) }
   }
+  /** The one button: send now — through today's single publish when one market sends content only, else the batch. */
+  const sendNow = () => {
+    if (tickedKeys.length <= 1 && !action.batch) { if (singleKey) void sendSingle(singleKey); return }
+    if (!action.batch) { if (plan.send[0]) void sendSingle(plan.send[0]); return }
+    void sendPlan()
+  }
+  // A click while an exact request is still to come waits for it (built at once), then sends what is ready: a market
+  // whose request could not be built is skipped with its reason (OD4 A).
+  const publish = () => { if (outstanding) setSendWaiting(true); else sendNow() }
+  useEffect(() => {
+    if (!sendWaiting) return
+    if (locked || blockedSave) { setSendWaiting(false); return }
+    if (outstanding) return
+    setSendWaiting(false)
+    sendNow()
+    // sendNow is this render's: it reads the requests just built.
+  }, [sendWaiting, outstanding, locked, blockedSave]) // eslint-disable-line react-hooks/exhaustive-deps
   const cancelBatch = async () => {
     if (!batch) return
-    try { setBatch(await request<PublicationBatchView>(`/api/publication-batches/${encodeURIComponent(batch.batchId)}/cancel`, 'POST', {})) }
+    try { setBatch(await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(batch.batchId)}/cancel`, 'POST', {})) }
     catch (e) { setError(message(e)) }
   }
   // While the batch is still SENDING, read it every few seconds (it ends in seconds to minutes). Afterwards the
@@ -342,6 +455,10 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     void checkStatusRef.current()
   })
 
+  const withStatusChanges = !!batch?.children.some(child => child.kind === 'lifecycle')
+  const word = new Set(tickedKeys.map(k => optionOf(k)?.scope.channel)).size <= 1 ? { one: 'market', many: 'markets' } : { one: 'destination', many: 'destinations' }
+  const batchLine = (view: PublishPlanBatchView) => (view.children.some(child => child.kind === 'lifecycle') ? planBatchSentence(view) : batchSentence(view, word))
+
   // Announce a final result once, politely. The banner shows it; this line is for a screen reader.
   useEffect(() => {
     if (!result || !shownReview || !(isSettled(result.status) || result.status === 'UNVERIFIED')) return
@@ -354,8 +471,25 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (!batch?.done) return
     const key = `${batch.batchId}:${batch.outcome}`
     if (announced?.key === key) return
-    setAnnounced({ key, message: batchSentence(batch) })
+    setAnnounced({ key, message: batchLine(batch) })
   }, [batch, announced?.key])
+
+  // ── Done, with Undo: Inactive and Ended rows become Active again — written as waiting values, then reviewed anew ──
+  const undo = useMemo(() => (batch?.done ? planUndo(batch.children) : null), [batch])
+  const undoText = undo ? undoButtonText(undo) : null
+  const undoLine = undo ? undoSentence(undo) : null
+  const runUndo = async () => {
+    if (!undo?.listingIds.length || busy) return
+    setBusy('undo'); setError(null)
+    try {
+      const written = await request<PublishActionWriteResult>(`/api/products/${encodeURIComponent(productId)}/studio/publish-actions/status/active`, 'PUT',
+        { listingIds: undo.listingIds, expected: Object.fromEntries(undo.listingIds.map(id => [id, null])) })
+      setBatch(null); setBatchStartedAt(null); setAnnounced(null)
+      reloadPlans({ tone: written.applied.length ? 'info' : 'warning', title: 'Undo: check the review, then publish',
+        body: `${fillResultSentence('Active', written)} Nothing is sent until you press Publish.` })
+    } catch (e) { setError(message(e)) }
+    finally { setBusy(null) }
+  }
 
   // The earlier publish just got its answer: the review below was made while it blocked the destination, so its notes
   // are out of date. Offer a fresh review instead of showing two statements that disagree.
@@ -373,87 +507,116 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     panelRef.current?.focus()
   }, [result, uncertain])
 
-  // ── what the footer offers ────────────────────────────────────────────────────────────────────────────────────
+  // ── what the footer offers: ONE button ─────────────────────────────────────────────────────────────────────────
   const pending = busy === 'publish' || busy === 'status' || busy === 'batch'
   const singleState = singleKey ? stateOf(singleKey) : null
   const singleSparse = !!singleReview && isSparse(singleReview)
-  const singleCanReview = !!singleKey && singleState?.kind === 'ready' && !singleState.whole && !singleState.requestReady && !busy && !blockedSave && canPublish && !locked
-  const singleCanSend = !!singleKey && singleState?.kind === 'ready' && (singleState.whole || singleState.requestReady) && !busy && !blockedSave && canPublish && !locked
-  const multiReady = !busy && !blockedSave && canPublish && !locked && plan.pending.length === 0 && plan.send.length > 0
+  const ready = !busy && !sendWaiting && !blockedSave && canPublish && !locked
+  const singleCanSend = !!singleKey && singleState?.kind === 'ready' && ready
+  const multiReady = ready && plan.pending.length === 0 && action.send.length > 0
+  // "Checking 3 of 7 markets…" while a review (or its first exact request) is still to come.
+  const checkingNow = checking.checking > 0 && canPublish && !discoveryFailed && !locked && save.state.kind !== 'error'
   const singleButtonText = () => {
-    const selection = singleKey ? entryOf(singleKey).selection : null
-    if (singleSparse) return selection ? `Publish ${selection.fieldCount} ${selection.fieldCount === 1 ? 'change' : 'changes'}` : 'Publish changes'
+    if (singleSparse) return singleState?.kind === 'ready' ? `Publish ${singleState.changes} ${singleState.changes === 1 ? 'change' : 'changes'}` : 'Publish changes'
     return singleReview?.visibility === 'DRAFT' ? 'Send draft to Shopify' : 'Publish product'
   }
+  const footReason = !batch && !result && action.batch && action.confirm && !confirmed ? confirmReason(action.confirm) : null
   const primary = (() => {
     if (batch) return null
-    if (uncertain || earlierWaiting) return <Button size="sm" disabled={!!busy} onClick={checkStatus}>{busy === 'status' ? 'Checking…' : 'Check now'}</Button>
+    if (uncertain || (earlierWaiting && !action.lifecycle.length)) return <Button size="sm" disabled={!!busy} onClick={checkStatus}>{busy === 'status' ? 'Checking…' : 'Check now'}</Button>
     if (staleReview) return <Button size="sm" variant="primary" disabled={!!busy || blockedSave} onClick={reviewAgain}>Review again</Button>
     if (result) return null
-    if (tickedKeys.length <= 1) {
-      if (singleSparse && singleState?.kind !== 'ready') return <Button size="sm" variant="primary" disabled>Review selected changes</Button>
-      if (singleSparse && singleState?.kind === 'ready' && !singleState.requestReady) {
-        return <Button size="sm" variant="primary" disabled={!singleCanReview} onClick={reviewRequests}>{busy === 'selection' ? 'Preparing request…' : 'Review selected changes'}</Button>
-      }
-      return <Button size="sm" variant="primary" disabled={!singleCanSend} onClick={() => singleKey && void sendSingle(singleKey)}>{busy === 'publish' ? 'Publishing…' : singleButtonText()}</Button>
+    // The one button keeps its place while the window works; its words wrap on a phone.
+    const one = { size: 'sm' as const, wrap: true, className: oneClick.oneButton }
+    if (listed?.loading && !choice.keys.length && !locked) return <Button {...one} variant="primary" disabled>Finding the markets…</Button>
+    if (checkingNow) return <Button {...one} variant="primary" disabled>{checkingButtonText(checking)}</Button>
+    if (sendWaiting) return <Button {...one} variant="primary" disabled>{tickedKeys.length > 1 ? 'Preparing the requests…' : 'Preparing the request…'}</Button>
+    // One market with content only: today's single publish.
+    if (tickedKeys.length <= 1 && !action.batch) {
+      return <Button {...one} variant="primary" disabled={!singleCanSend} onClick={publish}>{busy === 'publish' ? 'Publishing…' : singleButtonText()}</Button>
     }
-    if (plan.needsRequest.length) {
-      return <Button size="sm" variant="primary" disabled={!(!busy && !blockedSave && canPublish && !locked && plan.pending.length === 0)} onClick={reviewRequests}>
-        {busy === 'selection' ? 'Preparing requests…' : reviewRequestsText(plan.needsRequest.length)}</Button>
+    // Several markets with content only, of which one is ready: that one goes through today's single publish.
+    if (!action.batch) {
+      return <Button {...one} variant="primary" disabled={!multiReady || !plan.send[0]} onClick={publish}>
+        {busy === 'publish' ? 'Publishing…' : publishButtonText(plan, scopeOf)}</Button>
     }
-    const send = path === 'single' ? () => void sendSingle(plan.send[0]) : () => void sendBatch()
-    return <Button size="sm" variant="primary" disabled={!multiReady} onClick={send}>{busy === 'publish' || busy === 'batch' ? 'Publishing…' : publishButtonText(plan, scopeOf)}</Button>
+    // "skip N with problems": the markets that send nothing at all (a market whose content has problems but whose
+    // status changes go is published, not skipped) — `planButtonText` counts them itself.
+    const text = action.lifecycle.length
+      ? planButtonText(action.counts, action.send, word, plan.skipped, action.wholeProducts)
+      : publishButtonText(plan, scopeOf)
+    return <Button {...one} variant={action.confirm ? 'danger' : 'primary'} disabled={!multiReady || !confirmed} aria-describedby={footReason ? reasonId : undefined}
+      onClick={publish}>{busy === 'batch' ? 'Publishing…' : text}</Button>
   })()
-  const waitingHint = tickedKeys.length > 1 && !locked && plan.pending.length > 0
+  const waitingHint = tickedKeys.length > 1 && !locked && !checkingNow && plan.pending.length > 0
     ? `${plan.pending.length} ${plan.pending.length === 1 ? 'destination is' : 'destinations are'} not ready yet: ${plan.pending.map(key => `${optionOf(key)?.marketName ?? ''} (${destinationStateLabel(stateOf(key)).label.toLowerCase()})`).join(', ')}.`
     : null
+  // Markets with nothing to send stay as quiet tabs: they are not counted in the line above the tabs.
+  const quiet = plan.nothing.filter(key => !action.send.includes(key))
+  const counted = choice.keys.length - quiet.length
+  const roleLock = !locked ? roleLockSentence(action.roleLocked) : null
 
   // ── one tab per chosen market ───────────────────────────────────────────────────────────────────────────────
-  const childOf = useCallback((key: string) => {
-    const id = entryOf(key).review?.id
-    return batch && id ? batch.children.find(child => child.publicationId === id) ?? null : null
+  const childrenOf = useCallback((key: string) => {
+    if (!batch) return []
+    const entry = entryOf(key)
+    return destinationChildren(batch.children, entry.review?.id, entry.plan?.destination)
   }, [batch, entryOf])
   const sentWord = (key: string) => {
-    const child = childOf(key)
-    if (child) return batchChildMeta(child).label
+    const sent = planResultWord(childrenOf(key))
+    if (sent) return sent
     return result && key === shownKey ? publicationStatusMeta(result.status).label : null
   }
-  const tabs = choice.keys.flatMap(key => { const o = optionOf(key); return o ? [{ id: key, label: marketTabLabel(o, stateOf(key), sentWord(key)) }] : [] })
+  const tabs = choice.keys.flatMap(key => {
+    const o = optionOf(key)
+    return o ? [{ id: key, label: marketTabLabel(o, stateOf(key), sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))) }] : []
+  })
   const renderPanel = (key: string) => {
     const option = optionOf(key)
     if (!option) return null
-    const entry = entryOf(key), state = stateOf(key), child = childOf(key)
-    const shown = destinationStateLabel(state)
-    const status = child
-      ? <span className={styles.resultTitle}><PublishStatusPill meta={batchChildMeta(child)} />{child.message && <span className={styles.muted}>{child.message}</span>}</span>
-      : result && key === shownKey ? null
+    const entry = entryOf(key), state = stateOf(key), kids = childrenOf(key)
+    const shown = planStateLabel(state, entry, destinationStateLabel(state))
+    const status = kids.length || (result && key === shownKey) ? null
       : <span className={styles.resultTitle}><Pill tone={shown.tone} dot>{shown.label}</Pill><span className={styles.muted}>{shown.hint}</span></span>
     const canCheckAgain = !locked && (state.kind === 'expired' || state.kind === 'error' || state.kind === 'earlier') && choice.keys.length > 1
+    const requestFailed = !locked && state.kind === 'blocked' && !!state.request
     const stale = staleReview && key === singleKey
+    const own = entry.plan ? actionPlanSend([key], stateOf, entryOf) : null
+    const rows = entry.plan ? actionPlanRows(entry, state, now) : []
+    const planPart = entry.plan && own ? {
+      label: entry.plan.label, summary: planSummaryLine(own.counts, own.wholeProducts, own.content.includes(key) ? createdCounts(rows) : null), rows,
+      lifecycleIds: entry.lifecycleIds, contentError: entry.plan.error, now, onTicksChange: (next: { selectedIds: string[]; lifecycleIds: string[] }) => chooseTicks(key, next),
+    } : null
     return <div className={styles.tabPanel} {...tabPanelProps(tabBase, key)} ref={panelRef} aria-label={`Review for ${marketOptionLabel(option)}`}>
       {status}
+      {kids.length > 0 && <DataGrid ariaLabel={`Results on ${entry.plan?.label ?? marketOptionLabel(option)}`} size="sm" columns={PLAN_RESULT_COLUMNS}
+        rows={planResultRows(kids, productLabel, tickedLifecycleRows(entry))} rowKey={row => row.key} />}
       {canCheckAgain && <div className={styles.actions}><Button size="sm" onClick={() => checkAgain(key)} aria-label={`Check ${option.marketName} again`}>Check again</Button></div>}
-      {entry.error && !entry.review && <Banner tone="danger" title="Review could not complete" action={!locked && <Button size="sm" onClick={() => checkAgain(key)}>Check again</Button>}>{entry.error}</Banner>}
-      {!entry.review && !entry.error && <p className={styles.muted}>Reading the saved values and the channel for {marketOptionLabel(option)}…</p>}
+      {requestFailed && <div className={styles.actions}><Button size="sm" disabled={!!busy || sendWaiting} onClick={() => retryRequest(key)} aria-label={`Build the exact request for ${option.marketName} again`}>Try again</Button></div>}
+      {entry.error && !entry.plan && <Banner tone="danger" title="Review could not complete" action={!locked && <Button size="sm" onClick={() => checkAgain(key)}>Check again</Button>}>{entry.error}</Banner>}
+      {!entry.plan && !entry.error && <p className={styles.muted}>Reading the saved values, the waiting status changes and the channel for {marketOptionLabel(option)}…</p>}
       {entry.review && stale && <p>This review was made while that publish was still waiting, so its notes are out of date. Review again to publish to {destinationLabel(entry.review.scope.channel, entry.review.scope.marketplace)}.</p>}
-      {entry.review && !stale && <ReviewBody review={entry.review} selectedIds={entry.selectedIds} selection={matchesPublicationSelection(entry.selection, entry.review, tickedChanges(entry)) ? entry.selection : null}
-        locationId={entry.locationId} confirmed={entry.confirmedReviewId === entry.review.id} locked={locked || !!busy}
+      {entry.plan && !stale && <ReviewBody review={entry.review} selectedIds={entry.selectedIds} plan={planPart}
+        selection={matchesPublicationSelection(entry.selection, entry.review, tickedChanges(entry)) ? entry.selection : null}
+        selecting={entry.selecting || requestOutstanding(state, entry)} nexusWins
+        locationId={entry.locationId} confirmed={!!entry.review && entry.confirmedReviewId === entry.review.id} locked={locked || !!busy || sendWaiting}
         onSelectionChange={ids => choose(key, ids)} onLocationChange={id => update(key, { locationId: id })}
-        onConfirmChange={confirmed => update(key, { confirmedReviewId: confirmed ? entry.review!.id : null })}
-        requestRef={key === singleKey ? singleRequest : undefined} />}
+        onConfirmChange={confirmed => update(key, { confirmedReviewId: confirmed ? entry.review?.id ?? null : null })} />}
       {state.kind === 'expired' && !locked && choice.keys.length === 1 && <div className={styles.actions}><Button size="sm" onClick={() => checkAgain(key)}>Check again</Button></div>}
     </div>
   }
 
   const progress = batch ? batchProgress(batch) : null
-  const word = new Set(tickedKeys.map(k => optionOf(k)?.scope.channel)).size <= 1 ? { one: 'market', many: 'markets' } : { one: 'destination', many: 'destinations' }
+  const batchPlaces = batch ? new Set(batch.children.map(c => `${c.channel}|${c.marketplace}|${c.accountId}`)).size : 0
 
   return <Modal open onClose={() => { if (!pending) onClose() }} size="lg" readable title="Publish product"
     subtitle={`${productLabel} · Saved product information and included variants`}
     footer={<>
+      {footReason && <span id={reasonId} className={`grow ${styles.footReason}`}>{footReason}</span>}
       <Button size="sm" disabled={pending} onClick={onClose}>{result || batch ? 'Done' : 'Cancel'}</Button>
       {batch && !batch.done && <Button size="sm" disabled={!!busy} onClick={() => void readBatch(batch.batchId)}>Check now</Button>}
-      {batchCancellable(batch) && <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => void cancelBatch()}>Cancel {word.many} not sent yet</Button>}
+      {batchCancellable(batch) && <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => void cancelBatch()}>Cancel {withStatusChanges ? 'steps' : word.many} not sent yet</Button>}
+      {undoText && <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => void runUndo()}>{busy === 'undo' ? 'Setting Active…' : undoText}</Button>}
       {primary}
     </>}>
     <div className={styles.body} aria-busy={!!busy}>
@@ -468,6 +631,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       {initialSelection && !locked && <Banner tone="info" title="Publishing the failed products again">
         This is a new review against the current saved values. The fields that failed are ticked; nothing is sent until you publish, and no earlier request is sent again.
       </Banner>}
+      {notice && !locked && <Banner tone={notice.tone} title={notice.title} onDismiss={() => setNotice(null)}>{notice.body}</Banner>}
       {!options.length && !discoveryFailed && <Banner tone="neutral" title="No connected destinations">Connect a sales channel to publish this product.</Banner>}
       {pending && <JobProgress label={busy === 'status' ? 'Checking publication status' : busy === 'batch' ? 'Starting the publish' : 'Publishing'}
         detail={busy === 'status' ? 'Asking the channel for the result…' : busy === 'batch' ? 'Starting the publish to every ready destination…' : 'Submitting the reviewed changes. Waiting for the channel’s response…'}
@@ -494,32 +658,32 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
         <ul className={styles.issues}>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul>
       </Disclosure>}
       {batch && progress && <>
-        <Banner tone={batchTone(batch)} title={`Publish to ${progress.total} ${progress.total === 1 ? word.one : word.many}`}>
-          <p>{batchSentence(batch, word)}</p>
+        <Banner tone={batchTone(batch)} title={`Publish to ${batchPlaces} ${batchPlaces === 1 ? word.one : word.many}`}>
+          <p>{batchLine(batch)}</p>
           {!batch.done && <p>You can close this window. Results appear on the sheet and in publish history.</p>}
+          {batch.done && undoLine && <p>{undoLine}</p>}
         </Banner>
-        {!batch.done && <JobProgress label={`Publishing to ${progress.total} ${word.many}`} value={progress.done} max={progress.total}
-          detail={`${progress.done} of ${progress.total} ${progress.total === 1 ? word.one : word.many}`} startedAt={batchStartedAt ?? undefined} />}
+        {!batch.done && <JobProgress label={`Publishing to ${batchPlaces} ${batchPlaces === 1 ? word.one : word.many}`} value={progress.done} max={progress.total}
+          detail={withStatusChanges ? `${progress.done} of ${progress.total} ${progress.total === 1 ? 'step' : 'steps'}` : `${progress.done} of ${progress.total} ${progress.total === 1 ? word.one : word.many}`}
+          startedAt={batchStartedAt ?? undefined} />}
       </>}
       <p className="nds-vh" role="status" aria-live="polite">{announced?.message ?? ''}</p>
 
-      {options.length > 0 && !choice.keys.length && !locked && <p className={styles.muted}>Choose one or more markets above. Each market gets its own review, in its own tab.</p>}
-      {choice.keys.length > 1 && !batch && !result && <p className={styles.summary}>{familySummary(choice.keys.length, plan)}</p>}
+      {options.length > 0 && !choice.keys.length && !locked && <p className={styles.muted}>{listed?.loading
+        ? 'Finding the markets where this product is listed…' : 'Choose one or more markets above. Each market gets its own review, in its own tab.'}</p>}
+      {listed?.failed && !touched.current && !locked && <p className={styles.muted}>Where this product is listed could not be read, so only the markets shown are chosen. Add others above.</p>}
+      {choice.keys.length > 1 && !batch && !result && <p className={styles.summary}>{counted > 0 || checkingNow
+        ? planFamilySummary(counted, { ...plan, nothing: [] }, action.counts, action.wholeProducts, action.send, created)
+        : 'Nothing to send: these markets already have the saved values.'}</p>}
+      {roleLock && <Banner tone="warning" title={roleLock}>The other changes can still be sent.</Banner>}
       {shownTab && renderPanel(shownTab)}
       {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>At most {MAX_BATCH_DESTINATIONS} markets can be published at once.</p>}
       {waitingHint && <p className={styles.muted}>{waitingHint}</p>}
 
-      {requestsReady && !singleKey && !locked && <div ref={requestsRegion} tabIndex={-1} role="region" aria-label="Prepared requests">
-        <Banner tone="info" title={`${plan.send.length} ${plan.send.length === 1 ? 'request' : 'requests'} ready`}>
-          <ul className={styles.issues}>{plan.send.map(key => {
-            const entry = entryOf(key), selection = entry.selection
-            const option = optionOf(key)
-            return <li key={key}><strong>{option?.marketName ?? key}: </strong>{selection
-              ? `${selection.fieldCount} ${selection.fieldCount === 1 ? 'change' : 'changes'} affecting ${selection.products.length} ${selection.products.length === 1 ? 'product' : 'products'}.`
-              : 'The whole product.'}</li>
-          })}</ul>
-          <p>Open a destination’s review to see its exact request. Only the selected changes will be applied.</p>
-        </Banner>
+      {/* Ended and Delete: the publisher's own typed confirmation (the family SKU), last, right above the button. */}
+      {action.confirm && !locked && <div className={styles.confirm}>
+        <ConfirmPhraseField phrase={action.confirm.expected} value={confirmText} onChange={setConfirmText} disabled={!!busy}
+          label={<>Type <strong className="nds-confirm-h">{action.confirm.expected}</strong> {confirmWhat(action.confirm)}</>} />
       </div>}
 
       {singleKey && !locked && (singleState?.kind === 'error' || singleState?.kind === 'blocked') && <div className={styles.actions}>

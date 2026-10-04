@@ -85,6 +85,8 @@ export { RecordListInput, type RecordListInputProps, type RecordListField } from
 export { SummaryTable, type SummaryTableProps } from './SummaryTable'
 
 export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmProps, type ActionConfirmApi } from './ActionConfirm'
+// Sheet publish parity (2026-10-04) — the typed confirmation, shared by ActionConfirm, the Publish window and the selling dialogs.
+export { ConfirmPhraseField, phraseMatches, phraseMatchState, PHRASE_STATE_TEXT, type ConfirmPhraseFieldProps, type PhraseMatchState } from './ConfirmPhraseField'
 export { AsOf, type AsOfProps } from './AsOf'
 export { PresenceMark, type PresenceMarkProps } from './PresenceMark'
 export { DetailPopover, type DetailPopoverProps } from './DetailPopover'

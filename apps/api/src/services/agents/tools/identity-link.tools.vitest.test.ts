@@ -31,6 +31,11 @@ vi.mock('../../ebay-trading-api.service.js', () => ({
   callTradingApi: async (_call: string, xml: string) => ({ ack: 'Success', raw: channel.getItem(/<ItemID>([^<]+)<\/ItemID>/.exec(xml)?.[1] ?? '') }),
   siteIdForMarket: () => 101,
   escapeXml: (s: string) => s,
+  // outbound-sync.service binds these at load (bulk-edit → sheet-quantity-door → matrix-write → follow-master); this test
+  // never revises eBay stock, so a call is a failure, not a silent no-op.
+  reviseInventoryStatus: async () => { throw new Error('identity-link test: no eBay stock revise expected') },
+  reviseInventoryStatusBatch: async () => { throw new Error('identity-link test: no eBay stock revise expected') },
+  REVISE_INVENTORY_STATUS_MAX_ENTRIES: 4,
 }))
 vi.mock('../../ebay-auth.service.js', () => ({ EbayAuthService: class { async getValidToken(connectionId: string) { return channel.token(connectionId) } } }))
 vi.mock('../../amazon/listing-asin-fill.service.js', () => ({

@@ -14,6 +14,8 @@
  *     `syncRoutes`, `policyFor`, `offerClosedAt`, `isFba` = `isFbaListing`'s fail-closed verdict) — verbatim.
  *   - `queue`: the newest non-cancelled `OutboundSyncQueue` row per (listing, QUANTITY_UPDATE | PRICE_UPDATE), folded.
  *   - `price`: `ChannelListing.price` (the number the push reads); `sale`: `salePrice` + the two window columns.
+ *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
+ *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
  *
  * One query per table, joined in memory (two waves: the family's tables, then the tables keyed by listing id).
  * Amazon coordinates never touch the schema cache, so no live SP-API product-type call can be triggered here.
@@ -34,6 +36,8 @@ import {
   type SaleCell,
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
+import type { SellingStateRead } from '@nexus/shared/listing-actions'
+import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
@@ -72,7 +76,7 @@ export const MATRIX_LISTING_SELECT = {
   listingStatus: true, isPublished: true, externalListingId: true, version: true,
   price: true, salePrice: true, priceOverride: true, followMasterPrice: true,
   followMasterQuantity: true, quantity: true, quantityOverride: true, stockBuffer: true, syncPaused: true, sourceLocationCodes: true,
-  offerClosedAt: true, fulfillmentMethod: true, platformAttributes: true, lastSyncStatus: true, syncStatus: true,
+  offerClosedAt: true, offerCloseReason: true, offerActive: true, fulfillmentMethod: true, platformAttributes: true, lastSyncStatus: true, syncStatus: true,
 } as const
 
 export type MatrixListing = Prisma.ChannelListingGetPayload<{ select: typeof MATRIX_LISTING_SELECT }>
@@ -299,6 +303,20 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   coordinates.push(...unlisted)
 
   // ── 7. cells ───────────────────────────────────────────────────────────────────────────────
+  /* The selling word per coordinate: the engine's reader over this coordinate's rows (one per member), once. */
+  const sellingMembers = members.map((m) => ({ id: m.id, sku: m.sku, isParent: m.id === root.id && children.length > 0, fulfillmentMethod: m.fulfillmentMethod }))
+  // P13 — an eBay listing an older Claude close-listing paused (pinned at 0, no hold) reads Inactive, as in the engine.
+  const oldPauses = await oldClosePauses(listings.filter((l) => l.channel === 'EBAY'))
+  const sellingByCoord = new Map<CoordinateKey, Map<string, SellingStateRead>>()
+  const sellingOf = (coord: Coord, memberId: string): SellingStateRead => {
+    let states = sellingByCoord.get(coord.key)
+    if (!states) {
+      const rows = members.flatMap((m) => coord.rowsOf(m.id).slice(0, 1))
+      states = destinationSellingStates({ familyId: root.id, channel: coord.channel, products: sellingMembers, listings: rows, oldClosePauses: oldPauses }).states
+      sellingByCoord.set(coord.key, states)
+    }
+    return states.get(memberId) ?? { state: 'not_listed', reason: null }
+  }
   const resolveListing = (l: MatrixListing, member: Member) => {
     const ch = upper(l.channel), mk = upper(l.marketplace)
     /* The one quantity verdict (fail-closed FBA, `resolveIntendedQuantity` over the routed ledger), shared with the
@@ -351,7 +369,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       }
     }
     const listing = serves('listing') ? {
-      ...listingStateOf({ listingStatus: primary.listingStatus, isPublished: primary.isPublished, externalListingId: primary.externalListingId, offerClosedAt: primary.offerClosedAt, suppressed: suppressed.has(primary.id), excluded: excluded.has(primary.id), needsValue: needsValue(member) }),
+      ...listingStateOf({ listingStatus: primary.listingStatus, isPublished: primary.isPublished, externalListingId: primary.externalListingId, suppressed: suppressed.has(primary.id), excluded: excluded.has(primary.id), needsValue: needsValue(member), selling: sellingOf(coord, member.id) }),
       ...(isParent ? { detail: `${rows.length} listing${rows.length === 1 ? '' : 's'}` } : {}),
     } : null
     const snapshot = snapshotByCell.get(`${member.sku}|${coord.channel}|${coord.market}`)

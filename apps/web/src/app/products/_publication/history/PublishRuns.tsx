@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Search, SlidersHorizontal } from 'lucide-react'
-import type { HistoryRun, HistorySource, HistoryState } from '@nexus/shared/publication-history'
+import { HISTORY_WHAT_LABEL, type HistoryRun, type HistorySource, type HistoryState } from '@nexus/shared/publication-history'
 import { AsOf, Banner, DateRangePicker, EmptyState, Listbox, MetricStrip, MultiSelect, type ListboxOption, type Metric } from '@/design-system/components'
 import { FilterField, FilterPanel, GridToolbar } from '@/design-system/patterns'
 import { Button, FilterChip, Input, Skeleton, TokenChip, ToolbarButton } from '@/design-system/primitives'
@@ -27,8 +27,8 @@ import {
   type RunColumnKey,
 } from './runColumns'
 import {
-  EMPTY_FILTERS, PAGE_SIZE, RUN_TILES, activeFilterCount, activeFilterTokens, applyTile, listView, tileActive, usePublishRuns,
-  useRunFilterOptions, useRunTileCounts, type FilterToken, type PublishRunsScope, type RunFilters, type StartedPreset,
+  EMPTY_FILTERS, PAGE_SIZE, RUN_TILES, WHAT_CHIPS, activeFilterCount, activeFilterTokens, applyTile, isFiltered, listView, tileActive, toggleWhat,
+  usePublishRuns, useRunFilterOptions, useRunTileCounts, type FilterToken, type PublishRunsScope, type RunFilters, type StartedPreset,
 } from './usePublishRuns'
 import styles from './publishRuns.module.css'
 
@@ -144,16 +144,32 @@ export function PublishRuns(props: PublishRunsProps) {
 
   // ── The drawer ──────────────────────────────────────────────────────────────────────────────────────────────
   const [openRunId, setOpenRunId] = useState<string | null>(null)
+  /** The Publish a part was opened from (its drawer's "Back to the whole Publish"); null = a run opened from the list. */
+  const [parentRunId, setParentRunId] = useState<string | null>(null)
   const dock = useDockReserve(scope.scope === 'product' && openRunId != null)
   const returnFocus = useRef<HTMLElement | null>(null)
   useEffect(() => { setOpenRunId(parseHistoryDeepLink(window.location.search).run) }, [])
   const openRun = useCallback((runId: string) => {
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setParentRunId(null)
     setOpenRunId(runId)
     writeRunParam(runId)
   }, [])
+  /** A part of the open Publish, opened in the same drawer; Back returns to the Publish. Focus still returns to the row. */
+  const openPart = useCallback((runId: string) => {
+    setParentRunId(openRunId)
+    setOpenRunId(runId)
+    writeRunParam(runId)
+  }, [openRunId])
+  const backToParent = useCallback(() => {
+    if (!parentRunId) return
+    setOpenRunId(parentRunId)
+    setParentRunId(null)
+    writeRunParam(parentRunId)
+  }, [parentRunId])
   const closeRun = useCallback(() => {
     setOpenRunId(null)
+    setParentRunId(null)
     writeRunParam(null)
     // Back to the row the reader came from (AG keeps the cell focusable while the row is rendered).
     const target = returnFocus.current
@@ -211,7 +227,8 @@ export function PublishRuns(props: PublishRunsProps) {
           )
         },
       },
-      change: { key: 'change', label: 'Change', width: 150, render: run => runChangeLabel(run) },
+      // A Publish of several parts names each part ("Pause offer and Delete listing"): the whole words on hover.
+      change: { key: 'change', label: 'Change', width: 170, render: run => <span title={runChangeLabel(run)}>{runChangeLabel(run)}</span> },
       results: { key: 'results', label: 'Results', width: 220, render: run => <span className={styles.results}>{resultsText(run.counts)}</span> },
       source: { key: 'source', label: 'Source', width: 190, render: run => SOURCE_LABEL[run.source] },
       by: { key: 'by', label: 'By', width: 150, render: run => (run.userName ? byText(run) : <span className={styles.muted}>{byText(run)}</span>) },
@@ -227,7 +244,7 @@ export function PublishRuns(props: PublishRunsProps) {
 
   // ── Filters ─────────────────────────────────────────────────────────────────────────────────────────────────
   const activeCount = activeFilterCount(filters)
-  const filtered = activeCount > 0
+  const filtered = isFiltered(filters)
   const set = (patch: Partial<RunFilters>) => setFilters(f => ({ ...f, ...patch }))
   const clearFilters = () => { setFilters(EMPTY_FILTERS); setQuery('') }
   const removeToken = (token: FilterToken) => {
@@ -337,6 +354,15 @@ export function PublishRuns(props: PublishRunsProps) {
       </FilterPanel>
 
       <div className="nds-gridcard">
+        {/* What the publishes changed (build shape v2): always in view, so they are not tokens; none pressed = every kind. */}
+        <div className={styles.what} role="group" aria-label="What changed">
+          <span className={styles.whatLabel} aria-hidden="true">What</span>
+          {WHAT_CHIPS.map(what => (
+            <FilterChip key={what} pressed={filters.what.includes(what)} onClick={() => set({ what: toggleWhat(filters.what, what) })}>
+              {HISTORY_WHAT_LABEL[what]}
+            </FilterChip>
+          ))}
+        </div>
         {tokens.length > 0 && (
           <div className={styles.tokens} role="group" aria-label="Filters on">
             {tokens.map(token => (
@@ -422,6 +448,8 @@ export function PublishRuns(props: PublishRunsProps) {
         mode={scope.scope === 'business' ? 'modal' : 'dock'}
         onClose={closeRun}
         onRunChanged={list.refresh}
+        onOpenPart={openPart}
+        onBack={parentRunId ? backToParent : undefined}
       />
     </div>
   )

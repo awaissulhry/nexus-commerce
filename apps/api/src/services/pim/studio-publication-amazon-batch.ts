@@ -18,6 +18,7 @@
  * publish (`validateAmazonMessages`, `submitAmazonFeed`).
  */
 import type { StudioPublishResult } from '@nexus/shared/studio-publication'
+import { explainAmazonRelist } from '@nexus/shared/publish-actions'
 import { logger } from '../../utils/logger.js'
 import type { AmazonFeedMessage, AmazonFeedMessageRef, AmazonFeedRequest, AmazonPublication } from './studio-publication-amazon.js'
 import type { ClaimedPublication } from './studio-publication.service.js'
@@ -134,8 +135,9 @@ async function recordAmazonRequests(claim: ClaimedPublication, request: AmazonFe
 }
 
 const reasonOf = (error: unknown) => error instanceof Error ? error.message : String(error)
+/** Delete and relist (S3): a relist Amazon refused is explained in plain words beside Amazon's own (`explainAmazonRelist`). */
 const notSubmitted = (claim: ClaimedPublication, reason: string): StudioPublishResult =>
-  ({ id: claim.id, status: 'FAILED', message: `Nothing was submitted. ${reason}`, results: [] })
+  ({ id: claim.id, status: 'FAILED', message: `Nothing was submitted. ${explainAmazonRelist(claim.data, null, [], reason)}`, results: [] })
 
 export interface MergedSendOutcome { id: string; result: StudioPublishResult }
 

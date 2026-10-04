@@ -1,65 +1,29 @@
 /**
- * MasterStatusService — single entrypoint for every master-status (Product.status)
- * mutation. Mirrors master-price.service.ts: one service all writers route through,
- * so the cascade to ChannelListing.listingStatus + AuditLog + OutboundSyncQueue
- * happens atomically regardless of caller.
+ * MasterStatusService — single entrypoint for every master-status (Product.status) mutation, so every writer
+ * (bulk action, products-list bulk status, scheduled changes, assortment copy) records the same audit row.
  *
- * The bug class this closes (TECH_DEBT #53): Product.status was being written
- * directly (e.g. bulk-action.service.ts:processStatusUpdate) without informing
- * marketplaces. Going ACTIVE → INACTIVE in bulk should pull the listings down on
- * Amazon and eBay; before this service it was a database-only flip and the
- * marketplaces continued showing items as available, with buyers placing orders
- * on items the seller had marked off-shelf.
+ * 🔴 Sheet publish parity, step 7 (the Owner's D4 choice, 2026-10-01): the master Status is a NEXUS-ONLY catalog
+ * field. It no longer touches channel listings at all.
  *
- * Cascade rules (per ChannelListing):
+ * What it did before, and why that was removed (measured on 087224821):
+ *   - It set every listing's `listingStatus` to the new product status. That column is the CHANNEL's state (the
+ *     Shopify sync, the publisher and the sheet's Status column read it), so an INACTIVE product showed its live
+ *     listings as inactive while the channels kept selling.
+ *   - It queued a STATUS_UPDATE row per listing. No dispatcher turns that row into a channel change: Amazon skipped it
+ *     (`AMAZON_EMPTY_PATCH_NOT_SENT`), eBay reported SUCCESS with nothing sent, Shopify family products failed with
+ *     "Unsupported native Shopify sync type", and older Shopify and Etsy rows were treated as a quantity push. So the
+ *     screen said the change reached the channels when it had not.
+ * Stopping, pausing and ending a listing is now the sheet's per-channel Status column (listing-action.service.ts):
+ * preview, confirm, then the channel calls through the gateway.
  *
- *   Product.status = ACTIVE   → listingStatus := ACTIVE
- *   Product.status = INACTIVE → listingStatus := INACTIVE
- *   Product.status = DRAFT    → listingStatus := DRAFT
- *
- *   Listings already in a terminal/error state are skipped, since their state
- *   is owned by the marketplace, not the master:
- *     ENDED  — listing was retired on the marketplace; resurrecting it is a
- *              re-listing flow, not a status flip
- *     ERROR  — operator must resolve the underlying issue first; cascading
- *              over an ERROR can mask the failure
- *
- *   A still-draft listing (listingStatus DRAFT with no externalListingId) is
- *   skipped too: it has never reached the channel, and only Publish makes it
- *   live. A product status change flipped it to ACTIVE before, so a draft read
- *   as live without anything having been sent.
- *
- * Outbound push:
- *   For every listing whose listingStatus actually changes, an OutboundSyncQueue
- *   row is enqueued with syncType='STATUS_UPDATE' and the standard 5-minute
- *   holdUntil grace window. The cron worker (sync.worker.ts → processPendingSyncs)
- *   drains it within ~60s of the grace window expiring.
- *
- * Audit:
- *   AuditLog row written with slim before/after diff (status only) and metadata
- *   listing exactly which listings cascaded and which were skipped (and why),
- *   so the audit viewer can answer "who changed status, when, what propagated."
- *
- * Idempotency:
- *   Same approach as MasterPriceService: identical no-op write returns
- *   changed=false, no audit/queue noise. ctx.idempotencyKey lands on
- *   AuditLog.metadata for caller-side retry detection.
- *
- * Transactional guarantees:
- *   Product update + ChannelListing fan-out + OutboundSyncQueue inserts +
- *   AuditLog write all run inside a single Prisma $transaction. BullMQ enqueue
- *   runs after commit; if Redis is down the DB row stays PENDING and the cron
- *   drain picks it up.
+ * Audit: an AuditLog row with the status diff; its metadata lists the listings left untouched and says why.
+ * Idempotency: an identical write returns changed=false with no audit row. ctx.idempotencyKey lands on the metadata.
  */
 
-import { createOutboundRows } from './outbound-rows.js'
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
-
-const DEFAULT_HOLD_MS = 5 * 60 * 1000
 
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE'
 
@@ -69,24 +33,11 @@ const VALID_PRODUCT_STATUS: readonly ProductStatus[] = [
   'INACTIVE',
 ] as const
 
-// Mirrors the docstring above. ENDED + ERROR rows are skipped because the
-// marketplace owns those states, not the master.
-const TERMINAL_LISTING_STATUSES = new Set(['ENDED', 'ERROR'])
-
-/**
- * A row that has never reached the channel: DRAFT and no channel id. Deliberately BROADER than the shared still-draft
- * rule (`isStillDraftListing` in @nexus/shared/push-lock, which also needs `isPublished: false`): several creators
- * leave a DRAFT row `isPublished: true`, and it has not reached the channel either, so a product status change must
- * not flip it ACTIVE. The shared rule decides what Publish may send and promote; this one only what the master skips.
- */
-const neverReachedChannel = (listing: Pick<ChannelListingForStatusCascade, 'listingStatus' | 'externalListingId'>) =>
-  listing.listingStatus === 'DRAFT' && !listing.externalListingId
-
 export interface MasterStatusUpdateContext {
   actor?: string | null
   reason?: string
   idempotencyKey?: string
-  /** Override the 5-minute push grace window. Defaults to true. */
+  /** Kept so existing callers compile; nothing is queued any more (see the header). */
   applyGrace?: boolean
   tx?: Prisma.TransactionClient
 }
@@ -99,15 +50,6 @@ export interface MasterStatusUpdateResult {
   skippedListingIds: string[]
   queuedSyncIds: string[]
   auditLogId: string | null
-}
-
-interface ChannelListingForStatusCascade {
-  id: string
-  channel: string
-  region: string
-  marketplace: string
-  externalListingId: string | null
-  listingStatus: string
 }
 
 export class MasterStatusService {
@@ -150,98 +92,17 @@ export class MasterStatusService {
         }
       }
 
-      const listings = (await tx.channelListing.findMany({
-        where: { productId },
-        select: {
-          id: true,
-          channel: true,
-          region: true,
-          marketplace: true,
-          externalListingId: true,
-          listingStatus: true,
-        },
-      })) as ChannelListingForStatusCascade[]
+      const listings = await tx.channelListing.findMany({ where: { productId }, select: { id: true } })
 
       await tx.product.update({
         where: { id: productId },
         data: { status: newStatus },
       })
 
+      // Nexus-only (see the header): no listing is changed and nothing is queued for a channel.
       const cascadedListingIds: string[] = []
-      const skippedListingIds: string[] = []
-      const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
-      const holdUntil =
-        ctx.applyGrace === false
-          ? null
-          : new Date(Date.now() + DEFAULT_HOLD_MS)
-
-      for (const listing of listings) {
-        if (TERMINAL_LISTING_STATUSES.has(listing.listingStatus)) {
-          skippedListingIds.push(listing.id)
-          continue
-        }
-        if (neverReachedChannel(listing)) {
-          // Never sent to the channel: its status belongs to Publish, not to the master.
-          skippedListingIds.push(listing.id)
-          continue
-        }
-        if (listing.listingStatus === newStatus) {
-          // Already in target state — nothing to push, but still skip; this
-          // happens after a partial cascade was retried.
-          skippedListingIds.push(listing.id)
-          continue
-        }
-
-        await tx.channelListing.update({
-          where: { id: listing.id },
-          data: {
-            listingStatus: newStatus,
-            lastSyncStatus: 'PENDING',
-            lastSyncedAt: null,
-            version: { increment: 1 },
-          },
-        })
-        cascadedListingIds.push(listing.id)
-        queueRowsToCreate.push({
-          productId,
-          channelListingId: listing.id,
-          targetChannel: listing.channel as any,
-          targetRegion: listing.region,
-          syncStatus: 'PENDING' as any,
-          syncType: 'STATUS_UPDATE',
-          holdUntil,
-          externalListingId: listing.externalListingId,
-          payload: {
-            source: 'MASTER_STATUS_CHANGE',
-            productId,
-            productSku: product.sku,
-            channel: listing.channel,
-            marketplace: listing.marketplace,
-            oldListingStatus: listing.listingStatus,
-            newListingStatus: newStatus,
-            oldProductStatus: oldStatus,
-            newProductStatus: newStatus,
-            reason: ctx.reason ?? null,
-            idempotencyKey: ctx.idempotencyKey ?? null,
-          },
-        })
-      }
-
-      let queuedSyncIds: string[] = []
-      if (queueRowsToCreate.length > 0) {
-        await createOutboundRows(tx, { data: queueRowsToCreate })
-        const justEnqueued = await tx.outboundSyncQueue.findMany({
-          where: {
-            channelListingId: { in: cascadedListingIds },
-            syncType: 'STATUS_UPDATE',
-            syncStatus: 'PENDING',
-          },
-          orderBy: { createdAt: 'desc' },
-          take: cascadedListingIds.length,
-          select: { id: true },
-        })
-        queuedSyncIds = justEnqueued.map((r) => r.id)
-      }
+      const skippedListingIds = listings.map((listing) => listing.id)
+      const queuedSyncIds: string[] = []
 
       const audit = await tx.auditLog.create({
         data: {
@@ -258,7 +119,7 @@ export class MasterStatusService {
             cascadedListingIds,
             skippedListingIds,
             queuedSyncIds,
-            graceMs: holdUntil ? holdUntil.getTime() - Date.now() : 0,
+            listingsUntouched: 'The master Status is Nexus-only; use the sheet Status column to change how a listing sells.',
           },
           createdAt: new Date(),
         },
@@ -279,29 +140,6 @@ export class MasterStatusService {
     const result = ctx.tx
       ? await runner(ctx.tx)
       : await this.client.$transaction(runner)
-
-    // Skip post-commit BullMQ enqueue when running inside a caller-supplied
-    // outer transaction — the outer tx hasn't committed yet. The cron
-    // worker drains PENDING queue rows after the outer commit. Mirrors
-    // master-price.service.ts and stock-movement.service.ts.
-    if (!ctx.tx && result.queuedSyncIds.length > 0) {
-      const delay = ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
-      for (const queueId of result.queuedSyncIds) {
-        // Bounded + circuit-broken: an unreachable Redis can't hang the request;
-        // the DB row stays PENDING for the drain cron.
-        await addJobSafely(
-          outboundSyncQueue,
-          'sync-job',
-          {
-            queueId,
-            productId,
-            syncType: 'STATUS_UPDATE',
-            source: 'MASTER_STATUS_CHANGE',
-          },
-          { delay, jobId: queueId },
-        )
-      }
-    }
 
     if (result.changed) {
       logger.info('MasterStatusService.update', {

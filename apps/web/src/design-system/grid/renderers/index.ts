@@ -101,3 +101,25 @@ export { listingStatusMeta, LISTING_STATUSES, type ListingStatusMeta } from './l
 // Sheet publish parity (2026-10-02) — the ONE publish status vocabulary, and the "Last publish" cell and its card.
 export { publicationStatusMeta, publishResultMeta, publishFamilyMeta, publishCellModel, publishCardModel, publishShortTime, publishFullTime, publishShownStatus, NO_PUBLISH, CREATE_FIELD, PUBLICATION_STATUSES, PUBLISH_RESULT_STATUSES, type PublishStatusMeta, type PublicationStatus, type PublishResultStatus, type PublishIssue, type PublishLast, type PublishFamilyCounts, type PublishStatusValue, type PublishCellState, type PublishCellModel, type PublishCardIssue, type PublishCardModel } from './publishStatus'
 export { PublishStatusCell, PublishStatusView, PublishStatusCard, PublishStatusPill, type PublishStatusCellParams, type PublishStatusViewProps, type PublishStatusCardProps } from './PublishStatusCell'
+// Sheet publish parity, build shape v2 (2026-10-04) — the Status column (selling state + a target waiting for Publish,
+// the inactive row-start mark) and the Action column (Partial update quiet; Full update / Delete waiting), with their
+// editor options. Words equal to @nexus/shared/listing-actions and publish-actions; only types come from there.
+export {
+  sellingStatusModel, statusEditorOptions, rowCarriesInactiveMark, isInactiveSellingState, waitingWhen, waitingSetPhrase,
+  SELLING_STATE_WORD, STATUS_TARGET_WORD, STATUS_TARGET_SELLING_STATE, SELLING_STATE_TONE, STATUS_TARGET_TONE, SELLING_STATE_HINT,
+  SELLING_READ_ONLY_STATES, SELLING_ROW_MARK_CLASS, STATUS_NOW_NOTE, STATUS_REFUSED_FALLBACK,
+  // New listings (2026-10-04): a row not on the channel yet chooses what Publish creates.
+  newListingEditorOptions, newListingPill, newListingAside, NEW_LISTING_MARK, NEW_LISTING_MARK_MAIN, NEW_LISTING_AS_MAIN, NEW_CHOICE_MAIN,
+  NEW_CHOICE_DEFAULT, NEW_CHOICE_DELETED, NEW_SOURCE_SENTENCE, RELIST_MARK,
+  type SellingState, type StatusTarget, type WaitingBy, type SellingStatusValue, type SellingCellKind, type SellingPillMeta,
+  type SellingStatusModel, type StatusChoiceLike, type NewListingCellFacts, type NewListingTarget, type NewListingSource,
+} from './sellingStatus'
+export { SellingStatusCell, SellingStatusView, SellingStatePill, type SellingStatusViewProps } from './SellingStatusCell'
+export {
+  publishActionModel, sendModeEditorOptions, SEND_MODE_WORD, SEND_MODE_TONE, SEND_MODE_HINT, SEND_MODE_GROUP,
+  SEND_MODE_DEFAULT_NOTE, SEND_MODE_REFUSED_FALLBACK,
+  // A row not on the channel (new, or deleted by Nexus) reads Full update: sent whole (simplify, 2026-10-04).
+  NEW_ROW_SENT_WHOLE, NEW_ROW_LEFT_OUT_HINT, DELETED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE,
+  type SendMode, type PublishActionValue, type PublishActionKind, type PublishActionModel, type SendModeChoiceLike,
+} from './publishAction'
+export { PublishActionCell, PublishActionView, type PublishActionViewProps } from './PublishActionCell'

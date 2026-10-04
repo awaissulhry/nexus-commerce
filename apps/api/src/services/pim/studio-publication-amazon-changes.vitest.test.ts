@@ -1,14 +1,15 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StudioPublishValue } from '@nexus/shared/studio-publication'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import type { AmazonPublication } from './studio-publication-amazon.js'
 const m = vi.hoisted(() => ({ read: vi.fn(), spec: vi.fn(), bound: vi.fn() }))
 vi.mock('../../clients/amazon-sp-api.client.js', () => ({ AmazonSpApiClient: class { constructor(account: unknown) { m.bound(account) }; getListingsItem = m.read } }))
 vi.mock('../../lib/amazon-sp-client.js', () => ({ getAmazonRegion: async () => 'eu' }))
-vi.mock('./channel-specs/index.js', () => ({ loadAmazonSpec: m.spec }))
+vi.mock('./channel-specs/index.js', async importOriginal => ({ ...(await importOriginal<object>()), loadAmazonSpec: m.spec }))
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import { publicationChangeId } from './studio-publication-changes.js'
 import { prepareAmazonChanges, compileAmazonChanges } from './studio-publication-amazon-changes.js'
+import { compileSelection } from './studio-publication-selection.js'
 
 const entries = (value: string, language_tag?: string) => [{ value, marketplace_id: 'MARKET', ...(language_tag ? { language_tag } : {}) }]
 const contentKey = (root: string, tag = 'de_DE') => `${root}:${JSON.stringify(['MARKET', tag])}`
@@ -72,10 +73,11 @@ it('🔴 a live listing\'s RRP (list_price) change is a root line against its pu
   expect(compileAmazonChanges(plan, defaults(plan)).feed.messages[0].patches).toEqual([{ op: 'replace', path: '/attributes/list_price', value: entries('45') }])
 })
 
-it('no accepted baseline shows differences unticked, and no selected IDs submits no messages', async () => {
+it('no accepted baseline ticks a difference (Nexus wins, Owner 2026-10-04) with its warning, and no selected IDs submits no messages', async () => {
   const pub = publication(); pub.feed.messages[1].attributes!.brand = entries('Changed')
   const plan = await prepareAmazonChanges(facts(), pub, new Map())
-  expect(plan.changes.find(c => c.productId === 'child' && c.field === 'brand')).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: false })
+  expect(plan.changes.find(c => c.productId === 'child' && c.field === 'brand')).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: true,
+    replaces: { kind: 'never_published', channel: 'Brand', nexus: 'Changed', sentence: 'Not published from Nexus before. Amazon has Brand — Publish sets Changed.', note: null } })
   expect(compileAmazonChanges(plan, []).feed.messages).toEqual([])
   expect(compileAmazonChanges(plan, []).products).toEqual([])
 })
@@ -104,7 +106,7 @@ it('clears only the accepted language instance using the live selector values', 
   accepted.set(publicationChangeId('parent', 'item_name'), { state: 'value', value: entries('English before', 'en_GB') })
   delete pub.feed.messages[0].attributes!.item_name
   pub.feed.messages[0].patches = [{ op: 'delete', path: '/attributes/item_name', value: [{ marketplace_id: 'MARKET', language_tag: 'en_GB' }] }]
-  m.read.mockResolvedValue(remote({ brand: entries('Brand'), item_name: [...entries('English before', 'en_GB'), ...entries('German to preserve', 'de_DE')] }))
+  m.read.mockResolvedValue(remote({ brand: entries('Brand'), list_price: entries('39'), item_name: [...entries('English before', 'en_GB'), ...entries('German to preserve', 'de_DE')] }))
   const plan = await prepareAmazonChanges(facts(['parent']), pub, accepted)
   const sent = compileAmazonChanges(plan, defaults(plan))
   expect(sent.feed.messages[0].patches).toContainEqual({ op: 'delete', path: '/attributes/item_name', value: [{ marketplace_id: 'MARKET', language_tag: 'en_GB' }] })
@@ -122,13 +124,14 @@ it('does not turn omitted gallery/content roots from an accepted create into del
   expect(compileAmazonChanges(plan, defaults(plan)).feed.messages[0].patches).toEqual([{ op: 'replace', path: '/attributes/brand', value: entries('Changed brand') }])
 })
 
-it('first-publish authored blank content clears only its requested language after an explicit tick', async () => {
+it('first-publish authored blank content clears only its requested language (ticked: Nexus wins)', async () => {
   const input = facts(['parent']), pub = publication(['parent'])
   contentClear(input, 'de', '')
   m.read.mockResolvedValue(remote({ ...pub.feed.messages[0].attributes, product_description: [...entries('Old German', 'de_DE'), ...entries('Keep English', 'en_GB')] }))
   const plan = await prepareAmazonChanges(input, pub, new Map())
   const change = plan.changes.find(c => c.field === contentKey('product_description'))!
-  expect(change).toMatchObject({ current: { state: 'absent' }, status: 'DIFFERS', selectable: true, selectedByDefault: false })
+  expect(change).toMatchObject({ current: { state: 'absent' }, status: 'DIFFERS', selectable: true, selectedByDefault: true,
+    replaces: { kind: 'removes', channel: 'Old German', nexus: null, sentence: 'Amazon has Old German — Publish removes it.' } })
   expect(compileAmazonChanges(plan, [change.id]).feed.messages[0].patches).toEqual([{ op: 'delete', path: '/attributes/product_description', value: [{ marketplace_id: 'MARKET', language_tag: 'de_DE' }] }])
 })
 
@@ -146,7 +149,7 @@ it('clears one authored language without resending desired or preserved language
   m.read.mockResolvedValue(remote({ ...pub.feed.messages[0].attributes, product_description: [...entries('German stays', 'de_DE'), ...entries('Remove this English', 'en_DE'), ...entries('Foreign English stays', 'en_GB')] }))
   const plan = await prepareAmazonChanges(input, pub, new Map())
   const change = plan.changes.find(c => c.field === contentKey('product_description', 'en_DE'))!
-  expect(change).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: false })
+  expect(change).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: true, replaces: { kind: 'removes' } })
   const compiled = compileAmazonChanges(plan, [change.id])
   expect(compiled.feed.messages[0].patches).toEqual([{ op: 'delete', path: '/attributes/product_description', value: [{ marketplace_id: 'MARKET', language_tag: 'en_DE' }] }])
   expect(compiled.fieldWrites?.parent).toEqual([{ field: contentKey('product_description', 'en_DE'), value: { state: 'absent' } }])
@@ -201,6 +204,9 @@ it('creates a new SKU atomically with its complete UPDATE, but never sends an un
   expect(sent.fieldWrites?.parent).toContainEqual({ field: 'brand', value: { state: 'value', value: entries('Brand') } })
   expect(compileAmazonChanges(plan, []).feed.messages).toEqual([])
 })
+// The accepted history here is what `readPublicationBaseline` returns: only publishes accepted AFTER the listing's last
+// accepted delete (delete and relist, Owner 2026-10-04; studio-publication-baseline.vitest.test.ts pins that rule). A
+// listing accepted and still waiting for its ASIN keeps its history; one deleted since has none (the next test).
 it('uses accepted history for a new listing awaiting local identity instead of sending another full UPDATE', async () => {
   const pub = publication(['parent']), accepted = baseline(pub), before = structuredClone(pub.feed.messages[0].attributes)
   pub.feed.messages[0].operationType = 'UPDATE'
@@ -216,6 +222,28 @@ it('uses accepted history for a new listing awaiting local identity instead of s
   const propagating = await prepareAmazonChanges(pendingIdentity, pub, accepted)
   expect(propagating.changes.every(change => !change.selectable)).toBe(true)
   expect(propagating.changes.some(change => change.field === '$create')).toBe(false)
+})
+
+it('after a delete (no accepted publish since) the listing is new again: one complete create, ticked by default', async () => {
+  const pub = publication(['parent']), input = facts(['parent'])
+  input.listings[0].externalListingId = null; pub.feed.messages[0].operationType = 'UPDATE'
+  m.read.mockResolvedValue({ success: true, sku: 'SELLER-parent', asin: null, status: null })
+  // The baseline after the delete is empty (the old publishes belong to the deleted listing).
+  const plan = await prepareAmazonChanges(input, pub, new Map(), { relist: new Map([['parent', { deletedAt: new Date(Date.now() - 3_600_000).toISOString() }]]) })
+  expect(plan.products[0].newListing).toBe(true)
+  expect(plan.changes).toEqual([expect.objectContaining({ field: '$create', selectable: true, selectedByDefault: true })])
+  expect(compileAmazonChanges(plan, defaults(plan)).feed.messages).toEqual(pub.feed.messages)
+})
+
+it('a relist whose SKU Amazon still shows within a day of the delete says Amazon is still removing it; later, the old refusal', async () => {
+  const pub = publication(['parent']), input = facts(['parent'])
+  input.listings[0].externalListingId = null; pub.feed.messages[0].operationType = 'UPDATE'
+  const recent = new Map([['parent', { deletedAt: new Date(Date.now() - 12 * 60_000 - 5_000).toISOString() }]])
+  const soon = await prepareAmazonChanges(input, pub, new Map(), { relist: recent })
+  expect(soon.changes[0]).toMatchObject({ field: '$create', selectable: false, selectedByDefault: false,
+    reason: 'Amazon is still removing this SKU (deleted 12 minutes ago). Try again later; Amazon can take up to 24 hours. (Amazon still shows this SKU here.)' })
+  const old = await prepareAmazonChanges(input, pub, new Map(), { relist: new Map([['parent', { deletedAt: new Date(Date.now() - 2 * 86_400_000).toISOString() }]]) })
+  expect(old.changes[0]).toMatchObject({ selectable: false, reason: expect.stringMatching(/already exists on Amazon/) })
 })
 
 it('refuses atomic creation when the supposedly new seller SKU already exists on Amazon', async () => {
@@ -370,4 +398,113 @@ it('refuses a language clear when the category selectors cannot isolate that lan
   m.read.mockResolvedValue(remote({ ...pub.feed.messages[0].attributes, product_description: [...entries('Same text', 'de_DE'), ...entries('Same text', 'en_DE')] }))
   const plan = await prepareAmazonChanges(input, pub, new Map())
   expect(plan.changes.find(c => c.field === contentKey('product_description'))).toMatchObject({ selectable: false, reason: expect.stringContaining('language_tag') })
+})
+
+// Build shape v2 P4 — Full update: one PATCH per SKU that replaces every root Nexus manages (unchanged ones included),
+// deletes the managed roots Amazon holds and Nexus does not ("Will be removed"), and never touches price, offer or stock.
+describe('Full update', () => {
+  const full = (ids: string[]) => ({ fullProductIds: new Set(ids) })
+  const withManaged = (pub: AmazonPublication, roots: Record<string, string[]>) =>
+    Object.assign(pub, { full: Object.fromEntries(Object.entries(roots).map(([id, managedRoots]) => [id, { managedRoots }])) })
+  const childRemote = (extra: Record<string, unknown> = {}) => m.read.mockImplementation(async ({ sku }) => remote({
+    ...publication().feed.messages.find(msg => msg.sku === sku)?.attributes, ...(sku === 'SELLER-child' ? extra : {}) }))
+
+  it('replaces every managed root of the Full row (unchanged ones too), removes what only Amazon holds, never the offer — the sibling stays Partial', async () => {
+    const pub = withManaged(publication(), { child: ['brand', 'fabric_type'] }), accepted = baseline(pub)
+    childRemote({ fabric_type: entries('Old material') })
+    const plan = await prepareAmazonChanges(facts(), pub, accepted, full(['child']))
+    const child = plan.changes.filter(c => c.productId === 'child')
+    // D7 = A — the RRP (`list_price`, a root line since the sheet gaps) keeps its Partial tick on the Full row: not locked,
+    // not re-sent while unchanged, never removed.
+    expect(child.map(c => [c.field, c.status, !!c.locked, c.selectedByDefault])).toEqual([
+      ['brand', 'SAME', true, true], ['fabric_type', 'DIFFERS', true, true], [contentKey('item_name'), 'SAME', true, true], ['list_price', 'SAME', false, false]])
+    expect(child.find(c => c.field === 'fabric_type')?.reason).toBe('Full update removes it: Nexus holds no value here.')
+    // The Partial sibling keeps today's ticks: an unchanged field is not sent.
+    expect(plan.changes.filter(c => c.productId === 'parent').every(c => !c.locked && !c.selectedByDefault)).toBe(true)
+    expect(plan.changes.some(c => ['purchasable_offer', 'fulfillment_availability'].includes(c.field))).toBe(false)
+    expect(plan.removals).toEqual([{ productId: 'child', sku: 'SELLER-child', field: 'fabric_type', label: 'fabric_type', value: entries('Old material') }])
+    const sent = compileSelection(JSON.parse(JSON.stringify(plan)), defaults(plan), 'review').prepared as AmazonPublication
+    expect(sent.feed.messages).toEqual([{ messageId: 1, sku: 'SELLER-child', operationType: 'PATCH', productType: 'COAT', patches: [
+      { op: 'replace', path: '/attributes/brand', value: entries('Brand') },
+      { op: 'delete', path: '/attributes/fabric_type', value: [{ marketplace_id: 'MARKET' }] },
+      { op: 'replace', path: '/attributes/item_name', value: entries('child title', 'de_DE') },
+    ] }])
+    expect(sent.fieldWrites?.child.map(w => [w.field, w.value.state])).toEqual([['brand', 'value'], ['fabric_type', 'absent'], [contentKey('item_name'), 'value']])
+    expect(JSON.stringify(sent)).not.toMatch(/purchasable_offer|fulfillment_availability|list_price/)
+  })
+
+  it('🔴 never removes the RRP or the offer Amazon holds, even when Nexus holds none and the managed list names them', async () => {
+    const pub = withManaged(publication(['child']), { child: ['brand', 'list_price', 'purchasable_offer', 'fulfillment_availability'] })
+    for (const root of ['list_price', 'purchasable_offer', 'fulfillment_availability']) delete pub.feed.messages[0].attributes![root]
+    childRemote({ list_price: entries('39'), purchasable_offer: entries('29'), fulfillment_availability: entries('5') })
+    const plan = await prepareAmazonChanges(facts(['child']), pub, new Map(), full(['child']))
+    expect(plan.removals).toBeUndefined()
+    // No removal line is even offered (a tickable delete of the RRP would be one click from sending).
+    expect(plan.changes.some(c => ['list_price', 'purchasable_offer', 'fulfillment_availability'].includes(c.field))).toBe(false)
+    expect(plan.changes.filter(c => c.locked).map(c => c.field)).toEqual(['brand', contentKey('item_name')])
+    const sent = compileSelection(JSON.parse(JSON.stringify(plan)), defaults(plan), 'review').prepared as AmazonPublication
+    expect(JSON.stringify(sent)).not.toMatch(/purchasable_offer|fulfillment_availability|list_price/)
+  })
+
+  it('leaves a root Nexus does not manage exactly as Amazon holds it', async () => {
+    const pub = withManaged(publication(), { child: ['brand'] })
+    childRemote({ fabric_type: entries('Amazon only') })
+    const plan = await prepareAmazonChanges(facts(), pub, baseline(pub), full(['child']))
+    expect(plan.changes.some(c => c.field === 'fabric_type')).toBe(false)
+    expect(plan.removals).toBeUndefined()
+  })
+
+  it('clears a language Nexus manages for this market and keeps other markets\' and unmanaged languages', async () => {
+    const input = facts(); input.languages = ['de', 'en']
+    const pub = withManaged(publication(), { child: [] })
+    childRemote({ item_name: [...entries('child title', 'de_DE'), ...entries('English to remove', 'en_DE'), ...entries('UK English stays', 'en_GB'),
+      { value: 'Other market', marketplace_id: 'OTHER', language_tag: 'de_DE' }] })
+    const plan = await prepareAmazonChanges(input, pub, baseline(pub), full(['child']))
+    expect(plan.removals).toEqual([{ productId: 'child', sku: 'SELLER-child', field: contentKey('item_name', 'en_DE'), label: 'item_name · en_DE', value: entries('English to remove', 'en_DE') }])
+    const sent = compileSelection(plan, defaults(plan), 'review').prepared as AmazonPublication
+    expect(sent.feed.messages[0].patches).toContainEqual({ op: 'replace', path: '/attributes/item_name', value: [
+      ...entries('child title', 'de_DE'), ...entries('UK English stays', 'en_GB'), { value: 'Other market', marketplace_id: 'OTHER', language_tag: 'de_DE' }] })
+  })
+
+  it('a required root Amazon holds is never removed: the row says which fields stay as on Amazon', async () => {
+    m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'DE', productType: 'COAT', schemaDefinition: { required: ['fabric_type'], properties: {
+      item_name: rootSchema(true), brand: rootSchema(), fabric_type: rootSchema(), purchasable_offer: rootSchema() } } }))
+    const pub = withManaged(publication(['child']), { child: ['brand', 'fabric_type'] })
+    childRemote({ fabric_type: entries('Required on Amazon') })
+    const plan = await prepareAmazonChanges(facts(['child']), pub, baseline(pub), full(['child']))
+    expect(plan.changes.find(c => c.field === 'fabric_type')).toMatchObject({ selectable: false, reason: expect.stringContaining('required on Amazon') })
+    expect(plan.removals).toBeUndefined()
+    expect(plan.fullIssues).toEqual([expect.objectContaining({ sku: 'SELLER-child', severity: 'warning', message: expect.stringContaining('as Amazon holds it: fabric_type') })])
+  })
+
+  it.each([
+    ['another product type', () => m.read.mockResolvedValue(remote(publication(['child']).feed.messages[0].attributes, 'SHOES')), 'Product type differs on Amazon — use Delete, then Publish.'],
+    ['no live read', () => m.read.mockResolvedValue({ success: false, error: 'throttled' }), 'Amazon could not be read just now, so a Full update cannot be checked (throttled).'],
+  ])('%s blocks the Full row by name; nothing of it can be ticked', async (_, arrange, sentence) => {
+    arrange()
+    const pub = withManaged(publication(['child']), { child: ['brand'] })
+    const plan = await prepareAmazonChanges(facts(['child']), pub, baseline(pub), full(['child']))
+    expect(plan.fullIssues).toEqual([{ productId: 'child', sku: 'SELLER-child', severity: 'error', message: expect.stringContaining(sentence) }])
+    expect(plan.changes.every(c => !c.selectable && !c.locked)).toBe(true)
+  })
+
+  it('a Full row is sent whole or not at all: a partial tick is refused, no tick leaves it out', async () => {
+    const pub = withManaged(publication(), { child: ['brand'] })
+    const plan = await prepareAmazonChanges(facts(), pub, baseline(pub), full(['child']))
+    const locked = plan.changes.filter(c => c.locked).map(c => c.id)
+    expect(locked.length).toBeGreaterThan(1)
+    expect(() => compileSelection(plan, locked.slice(1), 'review')).toThrow('SELLER-child: a Full update sends every field of this row. Tick all of them, or leave the row out.')
+    expect(compileSelection(plan, [], 'review').prepared).toBeNull()
+  })
+
+  it('a NEW listing asked for Full is created whole, exactly as before', async () => {
+    const input = facts(['parent']), pub = publication(['parent'])
+    input.listings[0].externalListingId = null
+    pub.feed.messages[0].operationType = 'UPDATE'
+    m.read.mockResolvedValue({ success: true, sku: 'SELLER-parent', asin: null, status: null })
+    const asked = await prepareAmazonChanges(input, JSON.parse(JSON.stringify(pub)), new Map(), full(['parent']))
+    const plain = await prepareAmazonChanges(input, JSON.parse(JSON.stringify(pub)), new Map())
+    expect(asked.changes).toEqual(plain.changes)
+    expect(asked.products[0].full).toBeUndefined()
+  })
 })

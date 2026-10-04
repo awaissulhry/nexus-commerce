@@ -1,7 +1,7 @@
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { createOutboundRow, createOutboundRows } from './outbound-rows.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
-import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { isStillDraftListing, sellingPaused } from '@nexus/shared/push-lock'
 /**
  * Stock Import Service — IM.1
  *
@@ -130,7 +130,9 @@ export interface ApplyResult {
   total: number
   /** SC.4 — sync-control column application summary (present when the sheet
    *  carried follow/buffer columns). */
-  controls?: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number }
+  controls?: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number
+    /** Build shape v2 — listings left alone because their selling is paused (Inactive); only present when > 0. */
+    skippedInactive?: number }
   results: Array<{
     sku: string
     raw: string
@@ -1685,13 +1687,26 @@ export async function applyControlColumns(
   jobId: string,
 ): Promise<ApplyResult['controls'] | undefined> {
   const actor = `import:${jobId}`
-  const out: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number; partialError?: string } =
+  const out: { followSet: number; pinned: number; paused: number; buffered: number; skippedFba: number; invalid: number; skippedInactive?: number; partialError?: string } =
     { followSet: 0, pinned: 0, paused: 0, buffered: 0, skippedFba: 0, invalid: 0 }
   const withControls = rows.filter((r) => (r.follow !== undefined && r.follow !== null && String(r.follow).trim() !== '') || r.buffer !== undefined)
   if (withControls.length === 0) return undefined
 
   const { setFollowMasterQuantity, setStockBuffer } = await import('./follow-master.service.js')
   const resumeProducts = new Set<string>()
+  // Build shape v2 (P13) — a listing whose selling is paused (Inactive: the product sheet's Pause offer, or Amazon's
+  // market close) takes no quantity from a sheet: Follow, Pinned and Buffer write the exact listings that sell, and the
+  // paused ones are counted. Resuming is the product sheet's Status column, never an import side effect.
+  const counted = new Set<string>()
+  const sellingCoordinates = async (productIds: string[], channel: string, markets: string[] | 'ALL') => {
+    const listings = await prisma.channelListing.findMany({
+      where: { productId: { in: productIds }, channel: channel as never, ...(markets === 'ALL' ? {} : { marketplace: { in: markets } }), listingStatus: { not: 'ENDED' } },
+      select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, offerClosedAt: true },
+    })
+    for (const l of listings) if (sellingPaused(l)) counted.add(l.id)
+    out.skippedInactive = counted.size || undefined
+    return listings.filter((l) => !sellingPaused(l)).map(({ productId, channel: ch, marketplace, channelConnectionId, aliasKey }) => ({ productId, channel: ch, marketplace, channelConnectionId, aliasKey }))
+  }
 
   type Group = { productIds: Set<string>; markets: Set<string> }
   const groups = new Map<string, Group>() // `${mode}|${channel}` → group
@@ -1747,12 +1762,16 @@ export async function applyControlColumns(
 
   for (const [key, g] of groups) {
     const [mode, channel] = key.split('|')
+    const markets = g.markets.size > 0 ? [...g.markets] : 'ALL' as const
+    const coordinates = await sellingCoordinates([...g.productIds], channel, markets)
+    if (coordinates.length === 0) continue
     const r = await setFollowMasterQuantity({
       productIds: [...g.productIds],
       channel: channel as never,
-      markets: g.markets.size > 0 ? [...g.markets] : 'ALL',
+      markets,
       follow: mode === 'FOLLOW',
       actor,
+      coordinates,
     })
     if (mode === 'FOLLOW') out.followSet += r.updated
     else out.pinned += r.updated
@@ -1763,12 +1782,16 @@ export async function applyControlColumns(
   }
 
   for (const g of bufferGroups.values()) {
+    const markets = g.markets.size > 0 ? [...g.markets] : 'ALL' as const
+    const coordinates = await sellingCoordinates([...g.productIds], 'AMAZON', markets)
+    if (coordinates.length === 0) continue
     const r = await setStockBuffer({
       productIds: [...g.productIds],
       channel: 'AMAZON' as never,
-      markets: g.markets.size > 0 ? [...g.markets] : 'ALL',
+      markets,
       buffer: g.buffer,
       actor,
+      coordinates,
     })
     out.buffered += (r as { updated?: number }).updated ?? 0
     out.skippedFba += (r as { skippedFba?: number }).skippedFba ?? 0

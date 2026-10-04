@@ -1,4 +1,4 @@
-import type { StudioPublishFieldWrite, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { StudioPublishChange, StudioPublishFieldWrite, StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { selectPublicationChanges } from './studio-publication-changes.js'
 import { compileAmazonChanges, type AmazonChangePlan } from './studio-publication-amazon-changes.js'
 import { compileEbayChanges, type EbayChangePlan } from './studio-publication-ebay-changes.js'
@@ -17,8 +17,34 @@ export interface EbayInventorySend {
 const sortedJson = (value: unknown) => JSON.stringify(value, (_key, entry) =>
   entry && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry, 2)
 
+/**
+ * Build shape v2 — a Full update row's fields are locked: a selection takes all of a product's locked fields or none of
+ * them (the row tick). Partial rows are chosen field by field, as before.
+ */
+export function assertWholeFullRows(changes: readonly StudioPublishChange[], selectedIds: readonly string[]) {
+  const selected = new Set(selectedIds)
+  const rows = new Map<string, StudioPublishChange[]>()
+  for (const change of changes) if (change.locked) rows.set(change.productId, [...(rows.get(change.productId) ?? []), change])
+  for (const locked of rows.values()) {
+    const ticked = locked.filter(change => selected.has(change.id)).length
+    if (ticked && ticked !== locked.length) throw new Error(`${locked[0].sku}: a Full update sends every field of this row. Tick all of them, or leave the row out.`)
+  }
+}
+
+/**
+ * Build shape v2 — rows that asked for a mode their channel cannot send yet (eBay Inventory or an existing Shopify
+ * product asked for Full update; a Full update on an eBay variation row): nothing of the row is sent, and each of its
+ * fields says why. Every other row is unchanged.
+ */
+export function blockRowChanges(changes: StudioPublishChange[], blocked: ReadonlyMap<string, string>): StudioPublishChange[] {
+  if (!blocked.size) return changes
+  // A blocked or held row is never ticked, so none of its lines replaces a channel value ("Nexus wins" words dropped).
+  return changes.map(change => blocked.has(change.productId) ? { ...change, selectable: false, selectedByDefault: false, locked: undefined, replaces: undefined, reason: blocked.get(change.productId)! } : change)
+}
+
 /** Pure compilation from the durable plan; choosing fields never performs another provider read. */
 export function compileSelection(plan: PublicationChangePlan, selectedIds: string[], reviewId: string) {
+  assertWholeFullRows(plan.changes, selectedIds)
   const changes = selectPublicationChanges(plan.changes, selectedIds)
   const selection: Omit<StudioPublishSelection, 'token'> = { reviewId, selectedIds: changes.map(c => c.id),
     products: [], fieldCount: changes.length, payload: { format: plan.kind === 'ebay-changes' ? 'xml' : 'json', content: '' } }

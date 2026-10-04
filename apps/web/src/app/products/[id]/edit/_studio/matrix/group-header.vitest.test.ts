@@ -15,12 +15,12 @@ const coord = (over: Record<string, unknown>) => ({ ...previewCoordinates(COORDS
 describe('the channel group strip', () => {
   it('the tag counts listings, and adds drafts only when there are some', () => {
     expect(stripTag(coord({}))).toBe('20 listed')
-    expect(stripTag(coord({ listed: 0, draft: 1 }))).toBe('0 listed · 1 draft')
+    expect(stripTag(coord({ listed: 0, draft: 1 }))).toBe('0 listed · 1 not listed')
     expect(stripTag(undefined)).toBeNull()
   })
   it('the tooltip carries the whole name AND the counts a narrow group moves off its line', () => {
     expect(stripTitle(coord({}), 'eBay · IT')).toBe('eBay · IT — 7 cells · 20 listed')   // eBay serves no Sale cell: 7 of the 8 kinds
-    expect(stripTitle(coord({ listed: 0, draft: 1 }), 'eBay · IT')).toBe('eBay · IT — 7 cells · 0 listed · 1 draft')
+    expect(stripTitle(coord({ listed: 0, draft: 1 }), 'eBay · IT')).toBe('eBay · IT — 7 cells · 0 listed · 1 not listed')
     expect(stripTitle(undefined, 'Shared')).toBe('Shared')
   })
 })

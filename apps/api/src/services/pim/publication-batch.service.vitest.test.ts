@@ -199,7 +199,7 @@ describe('batch view (derived, never stored twice)', () => {
     const view = batchView(header('SENT', []), [child('A', 'PREVIEW'), child('B', 'PUBLISHING'), child('C', 'UNVERIFIED'), child('D', 'PARTIAL'), child('E', 'FAILED'),
       child('F', 'NOT_SENT', { message: 'Nothing was sent. Live publishing is disabled.' }), child('G', 'CANCELLED'), child('H', 'BLOCKED'),
       child('I', 'SUBMITTED', { checkedAt: '2026-10-02T11:00:00Z', checkedBy: 'u' })])
-    expect(view.counts).toEqual({ total: 9, waiting: 1, sending: 1, awaitingChannel: 1, succeeded: 0, partial: 1, failed: 1, notSent: 1, cancelled: 1, blocked: 1, checked: 1 })
+    expect(view.counts).toEqual({ total: 9, waiting: 1, sending: 1, awaitingChannel: 1, succeeded: 0, partial: 1, failed: 1, notSent: 1, cancelled: 1, blocked: 1, checked: 1, unknown: 0 })
     expect(view.children.find(c => c.publicationId === 'I')).toMatchObject({ checked: true, terminal: true })
     expect(view.children.find(c => c.publicationId === 'F')).toMatchObject({ terminal: true, message: 'Nothing was sent. Live publishing is disabled.' })
   })

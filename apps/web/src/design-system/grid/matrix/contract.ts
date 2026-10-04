@@ -66,6 +66,11 @@ export interface ListingCell {
   externalId: string | null
   detail: string | null
   published: boolean
+  /**
+   * The selling state the sheet's Status column shows (`SellingState` keys: active · paused · mixed · ended · draft ·
+   * not_listed · unknown), and why. The Listing cell shows its word below the health words (`matrixListingProjection`).
+   */
+  selling?: { state: string; reason: string | null }
 }
 
 export type FulfilmentMethod = 'FBA' | 'FBM' | 'MCF'
@@ -189,7 +194,7 @@ export type MatrixVerbId =
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
-  'pause-sync': 'Pause sync', 'resume-sync': 'Resume sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
+  'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
 }
 

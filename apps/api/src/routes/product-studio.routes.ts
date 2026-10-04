@@ -138,6 +138,17 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       return await previewStudioPublication(request.params.id, publicationScope(request.body), request.authUser?.id ?? null)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
+  // Sheet publish parity, build shape v2 (P6) — the review of ONE mixed Publish: per destination the content review (with
+  // the Full update rows), the waiting Status changes and Deletes, held rows and outgrown values (`publish-plan.ts`).
+  // products.publish (the `/studio-publication` rule); Ended and Delete rows say whether this caller may send them.
+  fastify.post<{ Params: { id: string } }>('/products/:id/studio-publication/plan', async (request, reply) => {
+    try {
+      const { reviewPublishPlan } = await import('../services/pim/publish-plan.js')
+      const { permissionCheckerFor } = await import('./studio-matrix.routes.js')
+      reply.header('Cache-Control', 'no-store')
+      return await reviewPublishPlan(request.params.id, request.body, { userId: request.authUser?.id ?? null, can: permissionCheckerFor(request) })
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/submit', async (request, reply) => {
     try {
       const { submitStudioPublication } = await import('../services/pim/studio-publication.service.js')

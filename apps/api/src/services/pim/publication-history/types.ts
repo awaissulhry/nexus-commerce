@@ -8,7 +8,8 @@
  * Global order (the cursor is a position in it): `sortAt` DESC, then `rank` ASC, then `localId` DESC. `rank` is the
  * source's fixed place in that order, so two sources with the same timestamp never swap places between pages.
  */
-import type { HistoryCoverage, HistoryKind, HistoryRun, HistoryRunDetail, HistorySource, HistoryState } from '@nexus/shared/publication-history'
+import { HISTORY_KINDS, type HistoryCoverage, type HistoryKind, type HistoryRun, type HistoryRunDetail, type HistorySource, type HistoryState,
+  type HistoryWhat } from '@nexus/shared/publication-history'
 import type { StudioChannelIssue } from '@nexus/shared/studio-publication'
 
 /** A position in the global order. `at` is epoch milliseconds. */
@@ -39,6 +40,11 @@ export interface HistoryFilters {
    * such runs returns no rows for `true` and ignores `false`.
    */
   checked?: boolean
+  /**
+   * The "What" filter: only runs with at least one part in these groups. Empty or absent = every run. A source whose
+   * runs all belong to fixed groups declares them (`PublicationHistoryAdapter.what`) and is never asked to filter.
+   */
+  what?: HistoryWhat[]
 }
 
 export interface HistoryListInput {
@@ -100,6 +106,12 @@ export interface PublicationHistoryAdapter {
   source: HistorySource
   /** Fixed position among sources at an equal timestamp. Unique per source. */
   rank: number
+  /**
+   * Every run of this source belongs to these "What" groups (the old flat files: updates; photo runs: photos). The core
+   * leaves the source out of a list or count whose `what` names none of them, and never asks it to filter. A source
+   * without it filters `filters.what` itself, in its list AND its count.
+   */
+  what?: readonly HistoryWhat[]
   /** Rows strictly after `cursor`, in the global order (`sortAt` DESC, `localId` DESC), at most `limit`. */
   list(input: HistoryListInput): Promise<HistorySourceRow[]>
   /**
@@ -119,7 +131,11 @@ export interface PublicationHistoryAdapter {
 }
 
 export const kindOf = (value: unknown, fallback: HistoryKind): HistoryKind =>
-  value === 'update' || value === 'create' || value === 'photos' || value === 'end' || value === 'pause' || value === 'resume' || value === 'relist' ? value : fallback
+  typeof value === 'string' && (HISTORY_KINDS as readonly string[]).includes(value) ? value as HistoryKind : fallback
+
+/** Does this source answer a list or count with this "What" filter? (A source with fixed groups answers all or nothing.) */
+export const answersWhat = (adapter: Pick<PublicationHistoryAdapter, 'what'>, filters: Pick<HistoryFilters, 'what'>): boolean =>
+  !filters.what?.length || !adapter.what || adapter.what.some(group => filters.what!.includes(group))
 
 /** Every attribute the channel named, in order, without repeats: what "Show in sheet" maps to sheet columns. */
 export const columnHintOf = (issues: Pick<StudioChannelIssue, 'attributeNames'>[]): string[] =>

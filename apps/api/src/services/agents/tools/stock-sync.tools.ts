@@ -3,9 +3,9 @@
  * location feeds the stock sync follows. Both run the page's own code (services/stock/sync-control-actions.service.ts)
  * after a person approves them in Nexus.
  *
- *   bulk-listing-stock  follow the stock, a fixed number (pin), zero & pin, pause, resume, a buffer — on listings; and
+ *   bulk-listing-stock  follow the stock, a fixed number (pin), zero & pin, hold / release the stock sync, a buffer — on listings; and
  *                       exclude, include, a fixed number, follow, a buffer — on shared eBay variants. At most 250 rows.
- *   set-stock-policy    a channel's or market's (or one account's) push pause and the mode a new listing starts in; or
+ *   set-stock-policy    a channel's or market's (or one account's) stock-sync hold and the mode a new listing starts in; or
  *                       the channels and markets one location's stock feeds.
  *
  * What a person meets on the page holds for Claude, and four rules are held here before anything is queued:
@@ -17,6 +17,9 @@
  *   - A pin to 0 on eBay is refused unless the account's out-of-stock option is ON (eBay would END the listing) — the
  *     Matrix's own check (L8, `ebayZeroAllowedFor`, the same sentence).
  *   - Amazon FBA quantity is Amazon's: a named FBA listing is refused, and a product's FBA listings are left out.
+ *   - A listing whose selling is paused (Inactive: the product sheet's Pause offer, or Amazon's market close) gets no
+ *     quantity: a quantity action (follow, pin, zero & pin, buffer) refuses a named one and leaves a product's out, as
+ *     for FBA; the page's own service skips it too. Hold / release of the stock sync is a Nexus flag and still applies.
  * Nothing names another business: listings, products and accounts are found in the caller's business only.
  */
 
@@ -24,7 +27,9 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { EBAY_ZERO_REFUSAL } from '@nexus/shared/matrix-preview'
+import { sellingPaused } from '@nexus/shared/push-lock'
 import prisma from '../../../db.js'
+import { oldClosePauses } from '../../listings/listing-action.service.js'
 import { AMAZON_EU_SHARED_MARKETS } from '../../amazon-eu-quantity-guard.js'
 import { isFbaCoordinate } from '../../../lib/amazon-fulfillment.js'
 import { pooledNow } from '../../stock-pool/pool-guard.js'
@@ -65,7 +70,7 @@ const COORDINATE_FBA = new Set<Action>(['PAUSE', 'RESUME', 'ZERO_PIN'])
 const UNTIL_ACTIONS = new Set<Action>(['PIN', 'ZERO_PIN', 'PAUSE', 'EXCLUDE'])
 
 const VERB: Record<Action, string> = {
-  PAUSE: 'Pause the stock sync of', RESUME: 'Resume the stock sync of', FOLLOW: 'Follow the stock on', PIN: 'Keep a fixed number on',
+  PAUSE: 'Hold the stock sync of', RESUME: 'Release the stock sync of', FOLLOW: 'Follow the stock on', PIN: 'Keep a fixed number on',
   ZERO_PIN: 'Zero & pin (stop selling)', BUFFER: 'Set the buffer on', EXCLUDE: 'Exclude from the stock', INCLUDE: 'Include in the stock',
 }
 
@@ -91,12 +96,13 @@ interface SharedRow {
 interface Cell { sku: string; channel: string; market: string; account: string | null; kind: 'listing' | 'shared variant'; from: string; to: string }
 
 const ENDED = new Set(['ENDED', 'REMOVED'])
+const INACTIVE_REASON = 'Inactive (selling is paused): Nexus sends it no quantity. Change it in the product sheet\'s Status column'
 const isEu = (row: { channel: string; marketplace: string }) => row.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(row.marketplace.toUpperCase())
 const euKey = (row: ListingRow) => JSON.stringify([row.productId, row.channelConnectionId, row.aliasKey])
 
 function listingMode(row: ListingRow): string {
   const mode = row.followMasterQuantity === false ? `Fixed ${row.quantity ?? row.quantityOverride ?? '?'}` : 'Follow'
-  return `${mode}${row.syncPaused ? ', paused' : ''}${row.stockBuffer ? `, buffer ${row.stockBuffer}` : ''}`
+  return `${mode}${row.syncPaused ? ', sync held' : ''}${row.stockBuffer ? `, buffer ${row.stockBuffer}` : ''}`
 }
 function sharedMode(row: SharedRow): string {
   if (row.followPool === false) return 'Excluded'
@@ -134,7 +140,7 @@ function sharedAfter(action: Action, row: SharedRow, args: { buffer?: number; qu
 
 const bulkInput = z.object({
   action: z.preprocess(upper, z.enum(ACTIONS)).describe(
-    'PAUSE or RESUME a listing\'s stock sync; FOLLOW the stock; PIN a fixed number (the number it shows now; a shared eBay '
+    'PAUSE (hold) or RESUME (release) a listing\'s stock sync; FOLLOW the stock; PIN a fixed number (the number it shows now; a shared eBay '
     + 'variant may take `quantity`); ZERO_PIN (fixed 0: stops selling now); BUFFER (units held back); EXCLUDE or INCLUDE a '
     + 'shared eBay variant in the stock'),
   listingIds: z.array(z.string().trim().min(1).max(64)).min(1).max(MAX_ROWS).optional()
@@ -261,6 +267,17 @@ async function planBulk(args: Record<string, unknown>): Promise<BulkPlan | Refus
     if (explicit.has(row.id)) problems.push(`${row.product?.sku ?? row.id} on ${row.channel} ${row.marketplace} is fulfilled by Amazon (FBA): its quantity is Amazon's, and Nexus never changes it`)
     leftOut.push({ sku: row.product?.sku ?? row.productId, channel: row.channel, market: row.marketplace, reason: 'fulfilled by Amazon (FBA): Nexus leaves its quantity to Amazon' })
     listingRows.delete(row.id)
+  }
+  // Selling paused here (Inactive): no quantity from a quantity action. Named → refused; a product's → left out (as FBA).
+  if (EU_ACTIONS.has(action)) {
+    // An eBay listing an older Claude close-listing paused (pinned at 0, no hold) is Inactive too (`oldClosePauses`).
+    const oldPauses = await oldClosePauses([...listingRows.values()])
+    for (const row of [...listingRows.values()]) {
+      if (!sellingPaused(row) && !oldPauses.has(row.id)) continue
+      if (explicit.has(row.id)) problems.push(`${row.product?.sku ?? row.id} on ${row.channel} ${row.marketplace} is ${INACTIVE_REASON}`)
+      leftOut.push({ sku: row.product?.sku ?? row.productId, channel: row.channel, market: row.marketplace, reason: INACTIVE_REASON })
+      listingRows.delete(row.id)
+    }
   }
   if (problems.length) return { error: `Not queued: ${listed(problems)}.` }
 
@@ -487,13 +504,14 @@ const bulkListingStock: AgentTool = {
   maxClaudeTrust: 'confirm',
   undo: BULK_LISTING_STOCK_UNDO,
   description:
-    `Change how up to ${MAX_ROWS} listings and shared eBay variants take their stock, as the Sync Control page does: pause or `
-    + 'resume the sync, follow the stock, keep a fixed number, zero & pin (stops selling now), set a buffer, exclude or '
+    `Change how up to ${MAX_ROWS} listings and shared eBay variants take their stock, as the Sync Control page does: hold or `
+    + 'release the stock sync, follow the stock, keep a fixed number, zero & pin (stops selling now), set a buffer, exclude or '
     + 'include a shared eBay variant. Name listings, or products (each with all its listings and shared variants, narrowed '
     + 'by channel or market). Amazon keeps one quantity per SKU for every EU market, so a quantity change on an Amazon EU '
     + 'market covers every EU market of that SKU (one EU line in the preview). Refused: a fixed number on a SKU that sells '
     + 'from another business\'s shared stock; a pin to 0 on eBay while the account\'s out-of-stock option is off (eBay '
-    + 'would end the listing); an Amazon FBA listing (its quantity is Amazon\'s). Always waits for a person to approve it '
+    + 'would end the listing); an Amazon FBA listing (its quantity is Amazon\'s); a quantity change on a listing whose selling is '
+    + 'paused (Inactive — resume it in the product sheet\'s Status column). Always waits for a person to approve it '
     + 'in Nexus; a row that changed since stops the run.',
   async handler(args): Promise<ToolResult> {
     const plan = await planBulk(args)
@@ -517,13 +535,13 @@ const bulkListingStock: AgentTool = {
       expandEuAligned: true,
     }
     const out = await (await syncControl()).runSyncControlAction(body, actorOf(ctx, 'bulk-listing-stock'))
-    const result = out.body as { updated?: number; skippedFba?: number; unchanged?: number; recascadeQueued?: number; partial?: boolean; error?: string }
+    const result = out.body as { updated?: number; skippedFba?: number; skippedInactive?: number; unchanged?: number; recascadeQueued?: number; partial?: boolean; error?: string }
     if (out.status !== 200) return { ok: false, error: `${result.error ?? 'Sync Control refused it.'} Nothing changed.` }
     if (!result.updated) return { ok: false, error: `Nothing changed${result.error ? `: ${result.error}` : ': every row already was as asked.'}` }
     const after = await storedState(plan.action, plan.listings.map((c) => c.row.id), plan.shared.map((c) => c.row.id))
     return {
       ok: true,
-      data: { updated: result.updated, unchanged: result.unchanged ?? 0, skippedFba: result.skippedFba ?? 0, recascadeQueued: result.recascadeQueued ?? 0, ...(result.partial ? { partial: true, error: result.error } : {}) },
+      data: { updated: result.updated, unchanged: result.unchanged ?? 0, skippedFba: result.skippedFba ?? 0, recascadeQueued: result.recascadeQueued ?? 0, ...(result.skippedInactive ? { skippedInactive: result.skippedInactive } : {}), ...(result.partial ? { partial: true, error: result.error } : {}) },
       change: {
         before: {
           action: plan.action,
@@ -545,9 +563,9 @@ const policyInput = z.object({
   accountId: z.string().trim().min(1).max(64).optional()
     .describe('a policy: one account of the channel (listing-coordinates names accounts); left out = every account'),
   pushesPaused: flag.optional()
-    .describe('a policy: true stops every stock push there (its listings show "paused by policy"); false resumes them and re-sends'),
+    .describe('a policy: true holds the stock sync there — no stock push (its listings show "Sync held (policy)"); false releases it and re-sends'),
   newListingDefaultMode: z.preprocess(upper, z.enum(['FOLLOW', 'PAUSED'])).optional()
-    .describe('a policy: how a new listing there starts — FOLLOW the stock, or PAUSED until a person resumes it'),
+    .describe('a policy: how a new listing there starts — FOLLOW the stock, or PAUSED (stock sync held) until a person releases it'),
   locationCode: z.string().trim().min(1).max(30).optional()
     .describe('a location\'s feeds: the location code (stock-locations), instead of a policy'),
   feeds: z.array(z.string().trim().min(1).max(40)).max(50).optional()
@@ -615,7 +633,7 @@ function policyPreview(plan: PolicyPlan) {
   }
   const where = `${plan.channel} ${plan.marketplace === '*' ? '(every market)' : plan.marketplace}${plan.accountLabel ? ` on ${plan.accountLabel}` : plan.accountId ? '' : ' (every account)'}`
   const changes: Record<string, { from: unknown; to: unknown }> = {}
-  if (plan.before.pushesPaused !== plan.after.pushesPaused) changes['stock pushes'] = { from: plan.before.pushesPaused ? 'paused' : 'on', to: plan.after.pushesPaused ? 'paused' : 'on' }
+  if (plan.before.pushesPaused !== plan.after.pushesPaused) changes['stock pushes'] = { from: plan.before.pushesPaused ? 'held' : 'on', to: plan.after.pushesPaused ? 'held' : 'on' }
   if (plan.before.newListingDefaultMode !== plan.after.newListingDefaultMode) changes['a new listing starts'] = { from: plan.before.newListingDefaultMode, to: plan.after.newListingDefaultMode }
   return {
     action: 'set-stock-policy',
@@ -623,9 +641,9 @@ function policyPreview(plan: PolicyPlan) {
     summary: `Stock policy for ${where}: ${Object.entries(changes).map(([k, v]) => `${k} ${v.from} → ${v.to}`).join('; ')}.`,
     changes,
     totals: { listingsInScope: plan.listings },
-    ...(plan.after.pushesPaused && !plan.before.pushesPaused ? { warning: `No stock number is sent to ${where} while it is paused: its ${plural(plan.listings, 'listing')} keep what the channel shows now, and can oversell.` } : {}),
-    note: `${NOT_YET} ${!plan.after.pushesPaused && plan.before.pushesPaused ? 'Resuming recomputes every product there and queues its listings. ' : ''}`
-      + `${plan.after.newListingDefaultMode === 'PAUSED' && plan.before.newListingDefaultMode !== 'PAUSED' ? 'New listings there start paused, and listings still new are paused now. ' : ''}`.trim(),
+    ...(plan.after.pushesPaused && !plan.before.pushesPaused ? { warning: `No stock number is sent to ${where} while its stock sync is held: its ${plural(plan.listings, 'listing')} keep what the channel shows now, and can oversell.` } : {}),
+    note: `${NOT_YET} ${!plan.after.pushesPaused && plan.before.pushesPaused ? 'Releasing the stock sync recomputes every product there and queues its listings. ' : ''}`
+      + `${plan.after.newListingDefaultMode === 'PAUSED' && plan.before.newListingDefaultMode !== 'PAUSED' ? 'New listings there start with the stock sync held, and listings still new are held now. ' : ''}`.trim(),
   }
 }
 
@@ -667,9 +685,9 @@ const setStockPolicy: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: STOCK_POLICY_UNDO,
   description:
-    'Set what the stock sync does for a channel, a market or one account: pause every stock push there (its listings keep '
-    + 'what the channel shows and can oversell) or resume it (every product there is recomputed and sent), and whether a '
-    + 'new listing there starts following the stock or paused. Or set which channels and markets one location\'s stock '
+    'Set what the stock sync does for a channel, a market or one account: hold it — no stock push there (its listings keep '
+    + 'what the channel shows and can oversell) — or release it (every product there is recomputed and sent), and whether a '
+    + 'new listing there starts following the stock or with the sync held. Or set which channels and markets one location\'s stock '
     + 'feeds (an Amazon FBA location is refused). As the Sync Control page does it. Always waits for a person to approve '
     + 'it in Nexus.',
   async handler(args): Promise<ToolResult> {

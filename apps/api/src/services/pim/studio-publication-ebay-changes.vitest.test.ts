@@ -139,10 +139,11 @@ it('does not infer an aspect deletion from an omitted previously accepted value'
   expect(compileEbayChanges(plan, select(plan, 'title')).xml).not.toContain('ItemSpecifics')
 })
 
-it('offers a first-publish explicit optional aspect clear unticked', async () => {
+it('offers a first-publish explicit optional aspect clear, ticked (Nexus wins, Owner 2026-10-04) with its removal warning', async () => {
   const input = facts(); authoredAspectClear(input, 'Material')
   const plan = await prepareEbayChanges(input, publication(item('New title', null, 'Nexus brand')), new Map())
-  expect(plan.changes.find(change => change.field === 'aspect:material')).toMatchObject({ current: { state: 'absent' }, status: 'DIFFERS', operation: 'delete', selectable: true, selectedByDefault: false })
+  expect(plan.changes.find(change => change.field === 'aspect:material')).toMatchObject({ current: { state: 'absent' }, status: 'DIFFERS', operation: 'delete', selectable: true, selectedByDefault: true,
+    replaces: { kind: 'removes', channel: 'Cotton', nexus: null, sentence: 'eBay has Cotton — Publish removes it.', note: null } })
   expect(compileEbayChanges(plan, select(plan, 'aspect:material')).xml).not.toContain('<Name>Material</Name>')
 })
 

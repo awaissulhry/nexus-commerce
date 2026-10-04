@@ -57,6 +57,10 @@ export type ProjectionState =
   | 'listed' | 'asin-pending' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'collides'
   /* MX.G — the four the Matrix adds (design `docs/2026-09-13-matrix-page-design.md` §3.4). */
   | 'suppressed' | 'closed' | 'error' | 'ended'
+  /* Build shape v2 (P12) — the selling words the Matrix's Listing cell shows, the sheet's Status column's own.
+     One set of words (Owner 2026-10-04): `partly-inactive` (the key is kept for saved state) reads **Mixed**, and
+     `not-listed` is the Matrix's word for a row not on the channel (a draft, or a listing Nexus deleted). */
+  | 'active' | 'partly-inactive' | 'not-listed'
 
 export interface ProjectionMeta {
   /** Taken from `readinessMeta()`; never chosen here. See `from`. */
@@ -198,16 +202,17 @@ const PROJECTION: Record<ProjectionState, ProjectionMeta> = {
     hint: 'The channel is suppressing this listing — the reason is on Needs attention',
   },
   closed: {
-    /* `offerClosedAt` (SCT.6). Nothing is wrong and nothing is live: exactly `unlisted`'s meaning,
-       and the same neutral a `draft` reads. A DIFFERENT word from `Draft` because the remedy is a
-       different control — Sync Control reopens an offer; publishing promotes a draft. */
-    tone: readinessMeta('unlisted', 'row').tone,
-    from: 'row:unlisted',
-    label: 'Closed',
-    dot: 'hollow',
-    muted: true,
+    /* Build shape v2 (Owner 2026-10-04): the wire's `closed` is the selling state Inactive — the offer is paused (Amazon
+       offer removed, eBay / Shopify quantity 0 held by Nexus, Etsy inactive). The word is the sheet's Status column's,
+       and so is the tone: a warning, read from the row warning state (`missing`), the same tone the Status cell and the
+       Matrix's "Inactive" chip paint. The remedy is the Status column + Publish (Sync Control no longer reopens offers). */
+    tone: readinessMeta('missing', 'row').tone,
+    from: 'row:missing',
+    label: 'Inactive',
+    dot: 'solid',
+    muted: false,
     interactive: true,
-    hint: 'The offer is closed on this market — reopen it in Sync Control',
+    hint: 'Selling is paused here — set Active in the sheet\'s Status column and Publish',
   },
   error: {
     tone: readinessMeta('errors', 'row').tone,
@@ -226,7 +231,45 @@ const PROJECTION: Record<ProjectionState, ProjectionMeta> = {
     dot: 'hollow',
     muted: true,
     interactive: true,
-    hint: 'This listing has ended on the channel — relist it to sell again',
+    hint: 'This listing has ended on the channel — set Active in the sheet\'s Status column and Publish to relist it',
+  },
+  /**
+   * Build shape v2 (P12) — the two selling words `listed` cannot say. A listed row whose selling state is known reads the
+   * sheet's own word (`matrixListingProjection`, matrixCells.ts); `listed` stays for a row whose state Nexus does not know.
+   *  - `active`: buyers can buy it. Its tone is the Status column's Active (success), read from `ready` — the one
+   *    success row state — so the Matrix and the sheet paint the same word the same way.
+   *  - `partly-inactive`: a main product whose variations are not all in the same state — the Status column's **Mixed**
+   *    and its warning (the key is kept so saved state and filters read the same).
+   *  - `not-listed`: not on the channel here — never sent (a draft) or deleted by Nexus. The Status column's **Not listed**:
+   *    neutral, read from `unlisted` (as `draft` is), hollow dot. One set of words (Owner 2026-10-04): the Matrix never
+   *    says "Draft" for a selling state.
+   */
+  active: {
+    tone: readinessMeta('ready', 'row').tone,
+    from: 'row:ready',
+    label: 'Active',
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'Selling here — buyers can buy it',
+  },
+  'partly-inactive': {
+    tone: readinessMeta('missing', 'row').tone,
+    from: 'row:missing',
+    label: 'Mixed',
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'Its variations are in different states here — open a variation to see each one',
+  },
+  'not-listed': {
+    tone: readinessMeta('unlisted', 'row').tone,
+    from: 'row:unlisted',
+    label: 'Not listed',
+    dot: 'hollow',
+    muted: false,
+    interactive: true,
+    hint: 'Not on the channel here — set Active or Inactive in the sheet\'s Status column and Publish to list it',
   },
 }
 

@@ -44,8 +44,16 @@ import type { ListboxOption } from './Listbox';
  * appears when there are MORE than 8). Below it the list is short enough to read.
  */
 export declare const LISTBOX_SEARCH_THRESHOLD = 8;
+/**
+ * A panel option may be HELD (reachable and announced, never committed) and carry a `note`: one short line under the
+ * label, read as the option's description (sheet publish parity, 2026-10-04).
+ */
+export type ListboxPanelOption = ListboxOption & {
+    heldReason?: string;
+    note?: string;
+};
 export interface ListboxPanelProps {
-    options: ListboxOption[];
+    options: ListboxPanelOption[];
     /** the currently selected value; highlighted and scrolled into view on mount */
     value?: string;
     /** the operator chose an option */

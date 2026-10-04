@@ -315,7 +315,7 @@ describe('the merged history', () => {
 
   it('every source is covered, since its oldest run', async () => {
     const coverage = (await list()).coverage
-    expect(coverage.map(c => [c.source, c.included])).toEqual([['studio', true], ['amazon-flat-file', true], ['ebay-flat-file', true], ['photos', true]])
+    expect(coverage.map(c => [c.source, c.included])).toEqual([['studio', true], ['listing-action', true], ['amazon-flat-file', true], ['ebay-flat-file', true], ['photos', true]])
     expect(coverage.find(c => c.source === 'ebay-flat-file')!.since).toBe(SAME.toISOString())
   })
 

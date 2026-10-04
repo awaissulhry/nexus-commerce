@@ -98,6 +98,20 @@
   gap: var(--nds-space-8);
 }
 
+/* The What chips — what the publishes changed — first in the grid card; the chips wrap on a phone. */
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-space-16) 0;
+}
+
+.whatLabel {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-sm);
+}
+
 /* The filters that are on, as removable tokens, at the top of the grid card. */
 .tokens {
   display: flex;

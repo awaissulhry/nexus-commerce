@@ -125,6 +125,25 @@ describe('set-listing-stock', () => {
   })
 })
 
+describe('set-listing-stock — build shape v2 (P13): a listing whose selling is paused (Inactive) takes no quantity', () => {
+  it('pin, follow, buffer and push now are refused with the plain sentence; nothing is written or queued', async () => {
+    const { MATRIX_COPY } = await import('@nexus/shared/matrix-contract')
+    await inside(() => db().channelListing.update({ where: { id: ids.ebay }, data: { offerClosedAt: new Date(), offerCloseReason: 'sheet-pause', offerActive: false } }))
+    try {
+      const queued = () => inside(() => db().outboundSyncQueue.count({ where: { channelListingId: ids.ebay } }))
+      const before = { row: await raw(ids.ebay), queued: await queued() }
+      const target = [{ rowId: ids.child, coordinateKey: 'EBAY:IT' }]
+      for (const args of [{ action: 'pin-quantity', quantity: 6 }, { action: 'set-follow' }, { action: 'set-buffer', buffer: 3 }, { action: 'push-now' }]) {
+        expect(await dryRun('set-listing-stock', { productId: ids.child, ...args, targets: target }), args.action)
+          .toMatchObject({ ok: false, error: expect.stringContaining(MATRIX_COPY.closedHint) })
+      }
+      expect({ row: await raw(ids.ebay), queued: await queued() }).toEqual(before)
+    } finally {
+      await inside(() => db().channelListing.update({ where: { id: ids.ebay }, data: { offerClosedAt: null, offerCloseReason: null, offerActive: true } }))
+    }
+  })
+})
+
 describe('set-listing-price', () => {
   it('sets a price per market as approved; its undo is the Matrix revert', async () => {
     const { preview, ran } = await approveAndRun('set-listing-price', { productId: ids.child, action: 'set-price', price: 12.5, targets: [{ rowId: ids.child, coordinateKey: 'EBAY:IT' }] })

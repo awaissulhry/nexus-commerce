@@ -1,4 +1,5 @@
-import type { StudioPublishChange, StudioPublishFieldWrite, StudioPublishValue } from '@nexus/shared/studio-publication'
+import { FULL_NEEDS_LIVE_READ, fullUpdateChange, type StudioPublishChange, type StudioPublishFieldWrite, type StudioPublishIssue, type StudioPublishRemoval,
+  type StudioPublishValue } from '@nexus/shared/studio-publication'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import type { EbayPublication } from './studio-publication-ebay.js'
 import { planPublicationChanges, publicationChangeId, selectPublicationChanges, type PublicationChangeInput } from './studio-publication-changes.js'
@@ -16,6 +17,14 @@ export interface EbayChangePlan {
   liveSpecifics: Record<string, string[]>
   aspectNames: Record<string, string>
   createWrites: Record<string, StudioPublishFieldWrite[]>
+  /**
+   * Build shape v2 — the item is reviewed as Full update: every field it sends is ticked and locked, and the selection
+   * sends the whole Revise (`publication.full.xml`) or nothing. `removals`: what eBay holds that Nexus does not;
+   * `fullIssues`: why it cannot be sent (errors) and what stays as on eBay (warnings).
+   */
+  full?: true
+  removals?: StudioPublishRemoval[]
+  fullIssues?: StudioPublishIssue[]
 }
 
 const unknown = (reason: string): StudioPublishValue => ({ state: 'unknown', reason })
@@ -23,6 +32,34 @@ const known = (value: unknown): StudioPublishValue => value == null || value ===
 const strip = (value: unknown): unknown => Array.isArray(value) ? value.map(strip) : value && typeof value === 'object'
   ? Object.fromEntries(Object.entries(ebayXmlObject(value)).filter(([key, value]) => !['SKU', 'StartPrice', 'Quantity', 'SellingStatus'].includes(key) && !(key === '#text' && typeof value === 'string' && !value.trim())).map(([key, value]) => [key, strip(value)])) : value
 const pictures = (item: Record<string, unknown>) => ebayXmlList(ebayXmlObject(item.PictureDetails).PictureURL).map(ebayXmlText).filter((value): value is string => value !== null)
+
+/**
+ * eBay copies every picture to its own picture service, and GetItem can show ITS address (i.ebayimg.com) in PictureURL —
+ * with the seller's original in ExternalPictureURL when eBay keeps it. The live read is compared on the seller's
+ * addresses when eBay returns them; a read that still shows eBay's addresses is eBay's own copy and is never compared
+ * (one-click "Nexus wins", Owner 2026-10-04: otherwise every picture line would differ and be resent on every Publish).
+ */
+const EBAY_PHOTO_HOST = /^https?:\/\/([a-z0-9-]+\.)*ebayimg\.com(\/|$)/i
+export const EBAY_PHOTO_COPY = 'eBay shows its own copy of the photos, so Nexus cannot compare them. Tick it to send Nexus\'s photos.'
+const urlTexts = (value: unknown) => ebayXmlList(value).map(ebayXmlText).filter((url): url is string => url !== null)
+/** The live gallery as the seller's addresses: ExternalPictureURL when eBay returned it, else PictureURL. */
+const livePictures = (item: Record<string, unknown>) => {
+  const details = ebayXmlObject(item.PictureDetails), external = urlTexts(details.ExternalPictureURL)
+  return external.length ? external : urlTexts(details.PictureURL)
+}
+/** The live variation picture sets with the seller's addresses (ExternalPictureURL, when returned) in PictureURL. */
+function liveVariationPictures(value: unknown): unknown {
+  if (value === undefined) return value
+  const sellerSet = (set: unknown) => {
+    const { ExternalPictureURL: external, ...rest } = ebayXmlObject(set)
+    const urls = urlTexts(external)
+    return urls.length ? { ...rest, PictureURL: urls.length === 1 ? urls[0] : urls } : rest
+  }
+  const collection = ebayXmlObject(value), sets = collection.VariationSpecificPictureSet
+  return sets === undefined ? collection : { ...collection, VariationSpecificPictureSet: Array.isArray(sets) ? sets.map(sellerSet) : sellerSet(sets) }
+}
+const variationPictureUrls = (value: unknown) => ebayXmlList(ebayXmlObject(value).VariationSpecificPictureSet).flatMap(set => urlTexts(ebayXmlObject(set).PictureURL))
+const ebayHosted = (urls: string[]) => urls.some(url => EBAY_PHOTO_HOST.test(url))
 const variants = (item: Record<string, unknown>) => ebayXmlList(ebayXmlObject(item.Variations).Variation).map(ebayXmlObject)
 const aspectMap = (specifics: Record<string, string[]>) => {
   const result = new Map<string, { name: string; values: string[] }>()
@@ -63,8 +100,18 @@ function comparison(field: string, value: StudioPublishValue, live: Record<strin
   return undefined
 }
 
+export interface EbayChangeOptions {
+  /** Build shape v2 — the item is reviewed as Full update (its main row asked for it). A new item is created whole anyway. */
+  full?: boolean
+}
+
+/** The item fields whose removal a Full update sends (`<DeletedField>`); any other eBay value Nexus lacks stays. */
+const FULL_REMOVABLE_ROOTS = new Set(['SubTitle'])
+const FULL_FIELD_NOTE = (label: string) => `${label}: no eBay field of its own here; a Full update sends the eBay fields above.`
+
 /** Base preparation owns the fresh GetItem read. No second read or provider write occurs here. */
-export async function prepareEbayChanges(facts: PublicationFacts, publication: EbayPublication, baselineValues: Map<string, StudioPublishValue>): Promise<EbayChangePlan> {
+export async function prepareEbayChanges(facts: PublicationFacts, publication: EbayPublication, baselineValues: Map<string, StudioPublishValue>,
+  options: EbayChangeOptions = {}): Promise<EbayChangePlan> {
   const identities = publication.products
   const live = publication.liveContent ?? null
   const liveSkus = new Set(variants(live ?? {}).map(variant => ebayXmlText(variant.SKU)))
@@ -73,28 +120,40 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
     && (product.productId === facts.parent.id || liveSkus.has(product.sku))) : identities
   const owner = products.find(product => product.productId === facts.parent.id) ?? products[0] ?? identities[0]
   if (!owner) throw new Error('No included eBay product can own this listing publication.')
-  const current = parseEbayItemDocument(publication.xml)
+  const readError = publication.liveReadError ?? 'The current eBay content could not be read.'
+  // Build shape v2 — a Full update reviews the Revise it sends (`publication.full.xml`), which needs the live read.
+  const full = !!options.full && !!publication.itemId
+  const fullIssues: StudioPublishIssue[] = []
+  const blockFull = (message: string) => fullIssues.push({ productId: owner.productId, sku: owner.sku, severity: 'error', message: `${owner.sku}: ${message}` })
+  if (full && !live) blockFull(FULL_NEEDS_LIVE_READ('eBay', readError))
+  else if (full && !publication.full) blockFull('The Full update could not be prepared. Review again.')
+  for (const blocker of full ? publication.full?.blockers ?? [] : []) blockFull(blocker)
+  /** A field Full update cannot send whole (an empty title…) blocks it: its Revise would send the field as it is. */
+  const must = (reason: string | undefined) => { if (full && reason && live) blockFull(`Full update cannot be sent: ${reason}`); return reason }
+  const current = parseEbayItemDocument(full && publication.full?.xml ? publication.full.xml : publication.xml)
   const ours = ebayContentFromItem(current), theirs = live ? ebayContentFromItem(live) : null
   const ourAspects = aspectMap(ours.itemSpecifics), theirAspects = aspectMap(theirs?.itemSpecifics ?? {})
   const aspectNames: Record<string, string> = {}, inputs: PublicationChangeInput[] = []
-  const readError = publication.liveReadError ?? 'The current eBay content could not be read.'
-  const add = (product: ProductIdentity, field: string, label: string, current: StudioPublishValue, channel: StudioPublishValue, refusal?: string) => {
+  const add = (product: ProductIdentity, field: string, label: string, current: StudioPublishValue, channel: StudioPublishValue, refusal?: string, channelCopy?: string) => {
     const lastAccepted = baselineValues.get(publicationChangeId(product.productId, field)) ?? unknown('No accepted publish record for this field.')
     inputs.push({ ...product, field, label, current, lastAccepted, channel,
       currentMatchesChannel: comparison(field, current, live), acceptedMatchesChannel: comparison(field, lastAccepted, live),
-      ...(publication.itemId && !live ? { refusal: readError } : refusal ? { refusal } : {}) })
+      ...(publication.itemId && !live ? { refusal: readError } : refusal ? { refusal } : {}), ...(channelCopy ? { channelCopy } : {}) })
   }
   const channel = (value: unknown) => live ? known(value) : unknown(readError)
-  add(owner, 'SKU', 'Seller SKU', known(ebayXmlText(current.SKU)), channel(ebayXmlText(live?.SKU)), 'Changing the seller SKU is unsupported by change-only Publish.')
-  add(owner, 'title', 'Title', known(ours.title), channel(theirs?.title), !ours.title?.trim() ? 'A title is required; it cannot be cleared.' : undefined)
+  // A Full update sends eBay's own seller SKU (it never changes it); a narrow revise refuses the row.
+  add(owner, 'SKU', 'Seller SKU', known(ebayXmlText(current.SKU)), channel(ebayXmlText(live?.SKU)), full ? undefined : 'Changing the seller SKU is unsupported by change-only Publish.')
+  add(owner, 'title', 'Title', known(ours.title), channel(theirs?.title), must(!ours.title?.trim() ? 'A title is required; it cannot be cleared.' : undefined))
   const description = ebayXmlText(current.Description)
-  add(owner, 'description', 'Description', known(description), channel(ebayXmlText(live?.Description)), !description?.trim() ? 'Clearing the description is unsupported; eBay requires a description.' : undefined)
-  const gallery = pictures(current)
-  add(owner, 'pictures', 'Listing pictures', known(gallery), channel(live ? pictures(live) : null), !gallery.length ? 'The gallery cannot be cleared; at least one picture is required.'
-    : gallery.some(url => !/^https:\/\//i.test(url)) || gallery.length > 24 ? 'eBay requires at most 24 HTTPS picture URLs.' : undefined)
+  add(owner, 'description', 'Description', known(description), channel(ebayXmlText(live?.Description)), must(!description?.trim() ? 'Clearing the description is unsupported; eBay requires a description.' : undefined))
+  const gallery = pictures(current), liveGallery = live ? livePictures(live) : null
+  add(owner, 'pictures', 'Listing pictures', known(gallery), channel(liveGallery), must(!gallery.length ? 'The gallery cannot be cleared; at least one picture is required.'
+    : gallery.some(url => !/^https:\/\//i.test(url)) || gallery.length > 24 ? 'eBay requires at most 24 HTTPS picture URLs.' : undefined),
+    liveGallery && ebayHosted(liveGallery) ? EBAY_PHOTO_COPY : undefined)
 
   // Baseline keys retain explicit deletions; channel-only catalogue aspects are preserved, never inferred as local deletions.
-  const aspectKeys = new Set(ourAspects.keys())
+  // A Full update replaces the item specifics whole: every aspect eBay holds is a row, and one Nexus lacks is removed.
+  const aspectKeys = new Set([...ourAspects.keys(), ...(full ? theirAspects.keys() : [])])
   const priorRoots = new Set<string>()
   for (const key of baselineValues.keys()) {
     const coordinate: unknown = JSON.parse(key)
@@ -117,23 +176,33 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
   for (const key of aspectKeys) {
     const ours = ourAspects.get(key), theirs = theirAspects.get(key)
     aspectNames[key] = theirs?.name ?? ours?.name ?? key
-    const current = ours?.values.length ? known(ours.values) : authoredClears.has(key) ? { state: 'absent' as const }
+    const current = ours?.values.length ? known(ours.values) : full || authoredClears.has(key) ? { state: 'absent' as const }
       : unknown('This item specific is omitted; no valid authored clear was prepared.')
     add(owner, `aspect:${key}`, ours?.name ?? theirs?.name ?? key, current, channel(theirs?.values),
-      !ours?.values.length && requiredAspects.has(key) ? 'This required item specific cannot be cleared.' : undefined)
+      must(!ours?.values.length && requiredAspects.has(key) ? 'This required item specific cannot be cleared.' : undefined))
   }
-  for (const root of [...new Set([...Object.keys(current), ...priorRoots])].filter(root => !ignoredRoots.has(root) && !root.startsWith('@_'))) {
-    add(owner, root, root, known(strip(current[root])), channel(live?.[root] === undefined ? null : strip(live[root])), `${root}: this structural or policy update is unsupported by change-only Publish.`)
+  const liveOnlyRemovable = full ? [...FULL_REMOVABLE_ROOTS].filter(root => live?.[root] !== undefined) : []
+  for (const root of [...new Set([...Object.keys(current), ...priorRoots, ...liveOnlyRemovable])].filter(root => !ignoredRoots.has(root) && !root.startsWith('@_'))) {
+    const ours = known(strip(current[root])), theirs = channel(live?.[root] === undefined ? null : strip(live[root]))
+    // Full update: the Revise sends every root it holds; a root Nexus lacks is removed only where eBay allows it.
+    const refusal = !full ? `${root}: this structural or policy update is unsupported by change-only Publish.`
+      : ours.state === 'absent' && theirs.state === 'value' && !FULL_REMOVABLE_ROOTS.has(root) ? `${root}: Full update keeps eBay's value (Nexus holds none, and eBay cannot remove it here).` : undefined
+    add(owner, root, root, ours, theirs, refusal)
   }
-  const ourVariations = ebayXmlObject(current.Variations), liveVariations = ebayXmlObject(live?.Variations)
+  const ourVariations = ebayXmlObject(current.Variations), rawLiveVariations = ebayXmlObject(live?.Variations)
+  const liveVariations = { ...rawLiveVariations, ...(rawLiveVariations.Pictures !== undefined ? { Pictures: liveVariationPictures(rawLiveVariations.Pictures) } : {}) }
   for (const root of ['VariationSpecificsSet', 'Pictures']) if (ourVariations[root] !== undefined || liveVariations[root] !== undefined) {
-    let refusal: string | undefined = `${root}: this variation structure update is unsupported by change-only Publish.`
+    let refusal: string | undefined = full ? undefined : `${root}: this variation structure update is unsupported by change-only Publish.`
     if (root === 'Pictures') {
       try { variationPicturesXml(ourVariations.Pictures); refusal = undefined }
-      catch (error) { refusal = error instanceof Error ? error.message : String(error) }
+      catch (error) {
+        refusal = error instanceof Error ? error.message : String(error)
+        // Full update: no picture sets of Nexus's leave eBay's as they are; an invalid set would be sent, so it blocks.
+        if (full) refusal = ourVariations.Pictures === undefined ? 'Full update keeps eBay\'s variation pictures: Nexus has none to send.' : must(refusal)
+      }
     }
     add(owner, root, root === 'Pictures' ? 'Variation pictures' : 'Variation theme', known(strip(ourVariations[root])), channel(strip(liveVariations[root])),
-      refusal)
+      refusal, root === 'Pictures' && live && ebayHosted(variationPictureUrls(liveVariations.Pictures)) ? EBAY_PHOTO_COPY : undefined)
   }
   const currentVariants = variants(current), liveVariants = live ? variants(live) : []
   for (const product of identities) {
@@ -141,8 +210,11 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
     const remote = liveVariants.find(variant => ebayXmlText(variant.SKU) === product.sku)
     const linked = products.some(linked => linked.productId === product.productId)
     if (variant || !linked) add(product, 'variation', linked ? 'Variation content' : 'New variation', known(variant ? strip(variant) : { sku: product.sku }), channel(remote ? strip(remote) : null),
-      'Variation content requires price and quantity writes. It is not supported by change-only Publish; this variation will not be sent.')
+      full ? undefined : 'Variation content requires price and quantity writes. It is not supported by change-only Publish; this variation will not be sent.')
   }
+  // Full update — each eBay variation Nexus does not hold: deleted, or kept at quantity 0 when it has sales.
+  for (const extra of full ? publication.full?.extras ?? [] : [])
+    add(owner, `variation:${extra.sku}`, `Variation ${extra.sku}`, extra.action === 'delete' ? { state: 'absent' } : known({ Quantity: '0' }), channel(strip(extra.content)))
   // Fields omitted by the legacy full builder still have an honest refused review row.
   for (const row of facts.resolved[0]?.products ?? []) {
     const product = identities.find(product => product.productId === row.productId)
@@ -154,14 +226,35 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
       if (product.productId === owner.productId && (['title', 'description', 'imageUrls', 'descriptionThemeId'].includes(field)
         || (spec?.channelStore?.kind === 'platformAttributes' && spec.channelStore.path[0] === 'itemSpecifics'))) continue
       add(product, `content:${field}`, label, known(cell.value), unknown('This field has no supported eBay comparison in this publisher.'),
-        `${label}: this field is unsupported by change-only Publish.`)
+        full ? FULL_FIELD_NOTE(label) : `${label}: this field is unsupported by change-only Publish.`)
     }
   }
   const createWrites: Record<string, StudioPublishFieldWrite[]> = {}
   for (const input of inputs) if (input.current.state === 'value' && !input.field.startsWith('content:')) (createWrites[input.productId] ??= []).push({ field: input.field, value: input.current })
-  const changes = publication.itemId ? planPublicationChanges(inputs) : planPublicationChanges([{ ...owner, field: '__create__', label: 'Create eBay listing', current: known(current), lastAccepted: unknown('No listing exists.'), channel: { state: 'absent' }, newListing: true }])
+  let changes = publication.itemId ? planPublicationChanges(inputs, { channel: 'eBay' }) : planPublicationChanges([{ ...owner, field: '__create__', label: 'Create eBay listing', current: known(current), lastAccepted: unknown('No listing exists.'), channel: { state: 'absent' }, newListing: true }])
+  const removals: StudioPublishRemoval[] = []
+  if (full) {
+    // Every field the Revise sends is ticked and locked; a field it cannot send keeps its reason (said once, below).
+    const kept: string[] = []
+    changes = changes.map((change, index) => {
+      if (inputs[index].refusal !== undefined) { if (!change.field.startsWith('content:') && live) kept.push(change.label); return change }
+      const sendable = change.current.state !== 'unknown' && change.channel.state !== 'unknown' && !(change.current.state === 'absent' && change.channel.state === 'absent')
+      return sendable ? fullUpdateChange(change) : change
+    })
+    for (const change of changes) if (change.locked && change.current.state === 'absent' && change.channel.state === 'value' && !change.field.startsWith('variation:'))
+      removals.push({ productId: change.productId, sku: change.sku, field: change.field, label: change.label, value: (change.channel as { value: unknown }).value })
+    for (const extra of publication.full?.extras ?? []) removals.push({ productId: owner.productId, sku: extra.sku, field: 'variation',
+      label: extra.action === 'delete' ? 'Variation removed from the listing' : 'Variation kept at quantity 0 (it has sales, so eBay keeps it)', value: extra.specifics })
+    const nexusSku = ebayXmlText(parseEbayItemDocument(publication.xml).SKU)
+    const warn = (message: string) => fullIssues.push({ productId: owner.productId, sku: owner.sku, severity: 'warning', message: `${owner.sku}: ${message}` })
+    if (live && nexusSku && nexusSku !== ebayXmlText(live.SKU)) warn(`the seller SKU stays ${ebayXmlText(live.SKU) ?? 'empty'} on eBay (Nexus holds ${nexusSku}); a Full update never changes it.`)
+    const keptAll = [...new Set([...kept, ...(publication.full?.keptRoots ?? [])])]
+    if (live && keptAll.length) warn(`Full update leaves ${keptAll.length === 1 ? 'this field' : `these ${keptAll.length} fields`} as eBay holds ${keptAll.length === 1 ? 'it' : 'them'}: ${keptAll.join(', ')}.`)
+    for (const sku of publication.full?.added ?? []) warn(`${sku} is new on this eBay item. Full update adds it at quantity 0 (it never sends stock); send its stock from the Matrix (Push quantity now) after the publish.`)
+  }
   return { kind: 'ebay-changes', changes, remoteRevision: publication.liveRevision ?? (publication.itemId ? 'unavailable' : 'new'), publication,
-    products, ownerProductId: owner.productId, liveSpecifics: theirs?.itemSpecifics ?? {}, aspectNames, createWrites }
+    products: full ? identities : products, ownerProductId: owner.productId, liveSpecifics: theirs?.itemSpecifics ?? {}, aspectNames, createWrites,
+    ...(full ? { full: true as const } : {}), ...(removals.length ? { removals } : {}), ...(fullIssues.length ? { fullIssues } : {}) }
 }
 
 export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]): EbayPublication & { products: ProductIdentity[]; fieldWrites: Record<string, StudioPublishFieldWrite[]> } {
@@ -169,6 +262,19 @@ export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]):
   if (!selected.length) return { ...plan.publication, xml: '', products: [], fieldWrites: {} }
   if (!plan.publication.itemId) return { ...plan.publication, products: plan.products, fieldWrites: plan.createWrites }
   if (!plan.publication.liveRevision || !plan.publication.liveContent || !plan.products.length) throw new Error('A successful live eBay read and linked listing are required before sending changes.')
+  if (plan.full) {
+    // Build shape v2 — a Full update is ONE Revise of the whole listing: every locked field, or nothing.
+    const locked = plan.changes.filter(change => change.locked)
+    if (selected.some(change => !change.locked) || selected.length !== locked.length) throw new Error('A Full update sends the whole eBay listing. Tick all of its fields, or none.')
+    const full = plan.publication.full
+    if (!full?.xml || full.blockers.length) throw new Error('This Full update cannot be sent. Review again.')
+    const fieldWrites: Record<string, StudioPublishFieldWrite[]> = {}
+    for (const change of selected) {
+      if (change.current.state === 'unknown') throw new Error('An unknown value cannot be sent to eBay.')
+      ;(fieldWrites[change.productId] ??= []).push({ field: change.field, value: change.current })
+    }
+    return { ...plan.publication, xml: full.xml, products: plan.products, fieldWrites }
+  }
   const fields: string[] = [], deleted: string[] = [], fieldWrites: Record<string, StudioPublishFieldWrite[]> = {}
   const specifics = { ...plan.liveSpecifics }
   let aspectChanged = false

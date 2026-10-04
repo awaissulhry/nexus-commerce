@@ -30,7 +30,7 @@ import styles from './styles.module.css'
 import SyncProductsGrid from './SyncProductsGrid'
 import {
   ebayZeroRefusal,
-  listingTarget,
+  listingTarget, BULK_ACTIONS, INACTIVE_NOTE, INACTIVE_ROW, actionLabel, actionCounts,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor, marketFilterOptions,
   type Mode, type Row, type Density,
@@ -125,7 +125,7 @@ export default function SyncControlClient() {
   const [polChannel, setPolChannel] = useState('AMAZON')
   const [polMarket, setPolMarket] = useState('*')
   const confirm = useConfirm()
-  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  // Shared stock step 3 — Pin, Zero & Pin, Hold stock sync and Exclude can end by themselves.
   const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
   const [pageSize, setPageSize] = useState(50)
   const [density, setDensity] = useState<Density>('cozy')
@@ -209,20 +209,21 @@ export default function SyncControlClient() {
 
   const runAction = async (action: string, opts: { buffer?: number } = {}) => {
     const rows = [...selected.values()]
-    const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
+    // An Inactive row (selling paused) is read-only here: it cannot be selected, and is never sent.
+    const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.mode !== 'CLOSED' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
-    const listingActions = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
+    const listingActions = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER']
     const sharedActions = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW'] // PIN/FOLLOW: shared stock step 3
     const l = listingActions.includes(action) ? listings : []
     const m = sharedActions.includes(action) ? memberships : []
-    if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${action}.`); return }
+    if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${actionLabel(action)}.`); return }
     const fbaSkipped = rows.filter((r) => r.mode === 'FBA').length
-    const title = `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`
+    const title = `${actionLabel(action)} — ${l.length + m.length} row(s)`
     const description =
         `${l.length} listing row(s)${m.length ? ` + ${m.length} shared variant(s)` : ''}` +
         (fbaSkipped ? ` · ${fbaSkipped} FBA row(s) skipped (Amazon-managed)` : '') +
-        (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there (resume via Set Follow)' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume' : '')
+        (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there (undo with Set Follow)' : '') +
+        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Release stock sync' : '')
     // Shared stock step 3 — these four can end by themselves; a number only for shared variants alone.
     let extra: Partial<SyncActionAnswer> = {}
     if (END_TIME_ACTIONS.has(action)) {
@@ -231,44 +232,6 @@ export default function SyncControlClient() {
       extra = answer
     } else if (!(await confirm({ title, description, confirmLabel: 'Apply' }))) return
     setBusy(true)
-
-    // SCT.6b — Close/Reopen make 1-2 Amazon API calls PER ROW; a big selection
-    // on one HTTP request outlives the browser timeout and false-reports
-    // "Failed to fetch" while the server keeps going (the 302-row close DID
-    // fully succeed behind exactly that error). Batch client-side with live
-    // progress so what you see is always what happened.
-    if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
-      const targets = l.map(listingTarget)
-      const BATCH = 20
-      const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
-      try {
-        for (let i = 0; i < targets.length; i += BATCH) {
-          setNotice(`${action.replace('_', ' ')}: ${i}/${targets.length} done — working…`)
-          const res = await fetch(`${API}/api/stock/sync-control/actions`, {
-            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, listings: targets.slice(i, i + BATCH) }),
-          })
-          const d = await res.json()
-          if (!res.ok) {
-            setNotice(`${action} stopped at ${i}/${targets.length}: ${d?.error ?? `HTTP ${res.status}`} — selection kept, run again to continue (done rows are skipped automatically)`)
-            return
-          }
-          agg.updated += d.updated ?? 0; agg.skippedFba += d.skippedFba ?? 0; agg.unchanged += d.unchanged ?? 0
-          if (d.error) {
-            setNotice(`${action} PARTIAL at ~${Math.min(i + BATCH, targets.length)}/${targets.length} — ${d.error}`)
-            return
-          }
-        }
-        setNotice(`${action}: updated ${agg.updated}, unchanged ${agg.unchanged}, FBA skipped ${agg.skippedFba}`)
-        setSelected(new Map())
-        await Promise.all([loadRows(), loadOverview()])
-      } catch (e) {
-        setNotice(`${action} stopped: ${e instanceof Error ? e.message : String(e)} — selection kept, run again to continue`)
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
 
     setNotice(null)
     setRefusal(null)
@@ -297,7 +260,7 @@ export default function SyncControlClient() {
           description:
             `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
             `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
-          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+          confirmLabel: `${actionLabel(action)} on all EU markets`,
         })
         if (!okEu) { return }
         const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
@@ -322,14 +285,14 @@ export default function SyncControlClient() {
       }
       if (data.error) {
         // Keep the selection — "re-run to continue" must be one click.
-        setNotice(`${action} PARTIAL — ${data.error}`)
+        setNotice(`${actionLabel(action)} PARTIAL — ${data.error}`)
       } else {
-        setNotice(`${action}: updated ${data.updated}, unchanged ${data.unchanged ?? 0}, FBA skipped ${data.skippedFba ?? 0}${data.euExpanded ? `, incl. ${data.euExpanded} sibling EU row(s)` : ''}${data.recascadeQueued ? `, recascading ${data.recascadeQueued} product(s)` : ''}`)
+        setNotice(`${actionLabel(action)}: updated ${data.updated}${actionCounts(data)}`)
         setSelected(new Map())
       }
       await Promise.all([loadRows(), loadOverview()])
     } catch (e) {
-      setNotice(`${action} failed: ${e instanceof Error ? e.message : String(e)}`)
+      setNotice(`${actionLabel(action)} failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
@@ -375,11 +338,11 @@ export default function SyncControlClient() {
     const scope = `${channel}:${marketplace === '*' ? 'all markets' : marketplace}`
     const desc =
       patch.pushesPaused === true
-        ? `KILL-SWITCH: nothing pushes to ${scope} until you resume. Current marketplace quantities freeze as they are.`
+        ? `KILL-SWITCH: the stock sync of ${scope} is held — nothing pushes there until you release it. Current marketplace quantities freeze as they are.`
         : patch.pushesPaused === false
-          ? `Pushes to ${scope} resume — every product in scope recascades to pool truth now.`
+          ? `The stock sync of ${scope} is released — every product in scope recascades to pool truth now.`
           : patch.newListingDefaultMode === 'PAUSED'
-            ? `New listings on ${scope} created from now on start PAUSED (dark) instead of following the pool. Existing listings are untouched.`
+            ? `New listings on ${scope} created from now on start with their stock sync held (dark) instead of following the pool. Existing listings are untouched.`
             : `New listings on ${scope} follow the pool from birth again.`
     const ok = await confirm({
       title: `Policy — ${scope}`,
@@ -450,6 +413,7 @@ export default function SyncControlClient() {
             <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>
           </TipText>
           {endsAtWords(r.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.endsAt)}</span>}
+          {r.mode === 'CLOSED' && <span className={styles.inactiveNote}>{INACTIVE_NOTE}</span>}
         </>
       ),
     },
@@ -511,7 +475,7 @@ export default function SyncControlClient() {
           ['Rows', s?.rows, 'Every controllable listing row: each listing per channel and market, plus each shared eBay variant.'],
           ['Follow', s?.byMode?.FOLLOW ?? 0, 'Listings whose quantity follows the shared stock pool automatically.'],
           ['Pinned', s?.byMode?.PINNED ?? 0, 'Listings held at a fixed manual quantity — the pool never moves them.'],
-          ['Paused', (s?.byMode?.PAUSED ?? 0) + (s?.byMode?.PAUSED_POLICY ?? 0) + (s?.byMode?.EXCLUDED ?? 0), 'Listings frozen right now: paused individually, paused by a channel policy, or excluded shared variants.'],
+          ['Sync held', (s?.byMode?.PAUSED ?? 0) + (s?.byMode?.PAUSED_POLICY ?? 0) + (s?.byMode?.EXCLUDED ?? 0), 'Listings whose stock sync is held right now: held one by one, held by a channel policy, or excluded shared variants. They keep selling; no quantity is sent.'],
           ['FBA (excluded)', s?.byMode?.FBA ?? 0, 'Amazon-managed (FBA) listings. Amazon owns the quantity — Sync Control never writes them.'],
           ['Routed locations', s?.routedLocations, 'Warehouse locations restricted to specific channels/markets. 0 means every location feeds everywhere.'],
           ['Policies', s?.policies, 'Active channel/market rules (push kill-switches and new-listing defaults).'],
@@ -533,13 +497,13 @@ export default function SyncControlClient() {
 
       {pausedPolicies.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-          <span className="font-semibold">Pushes paused:</span>
+          <span className="font-semibold">Stock sync held:</span>
           {pausedPolicies.map((p) => (
             <span key={`${p.channel}:${p.marketplace}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium dark:bg-amber-900">
               {p.channel}:{p.marketplace === '*' ? 'ALL' : p.marketplace}
             </span>
           ))}
-          <span>— quantities are NOT being sent to these markets. Resume in Channel policies below.</span>
+          <span>— quantities are NOT being sent to these markets. Release it in Channel policies below.</span>
         </div>
       )}
 
@@ -615,17 +579,7 @@ export default function SyncControlClient() {
         >
           {selected.size > 0 ? (
             <span className={styles.selActions}>
-              {[
-                ['FOLLOW', 'Set Follow'],
-                ['PIN', 'Pin'],
-                ['PAUSE', 'Pause'],
-                ['RESUME', 'Resume'],
-                ['ZERO_PIN', 'Zero & Pin'],
-                ['CLOSE_OFFER', 'Close offer'],
-                ['REOPEN_OFFER', 'Reopen offer'],
-                ['EXCLUDE', 'Exclude'],
-                ['INCLUDE', 'Include'],
-              ].map(([a, label]) => (
+              {BULK_ACTIONS.map(([a, label]) => (
                 <Tip key={a} help={ACTION_HELP[a]}>
                   <Button size="sm" disabled={busy} onClick={() => void runAction(a)}>
                     {label}
@@ -678,9 +632,9 @@ export default function SyncControlClient() {
             selectable
             selected={selectedKeys}
             onSelectedChange={onGridSelect}
-            rowSelectable={(r) => r.mode !== 'FBA'}
+            rowSelectable={(r) => r.mode !== 'FBA' && r.mode !== 'CLOSED'}
             selectAllHint={CONTROL_HELP.selectAll}
-            rowSelectableHint="Amazon-managed (FBA) — excluded from actions"
+            rowSelectableHint={`Not selectable: Amazon-managed (FBA), or ${INACTIVE_ROW}`}
             emptyState={
               loading ? (
                 <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
@@ -773,9 +727,9 @@ export default function SyncControlClient() {
                     <tr key={`${p.channel}-${p.marketplace}`}>
                       <td className="px-3 py-1.5 font-medium">{p.channel}:{p.marketplace === '*' ? 'ALL' : p.marketplace}</td>
                       <td className="px-3 py-1.5">
-                        {p.pushesPaused ? <span className="font-semibold text-amber-600">pushes PAUSED</span> : <span className="text-emerald-600">active</span>}
+                        {p.pushesPaused ? <span className="font-semibold text-amber-600">Sync held</span> : <span className="text-emerald-600">active</span>}
                       </td>
-                      <td className="px-3 py-1.5 text-xs text-zinc-500">new: {p.newListingDefaultMode === 'PAUSED' ? 'born paused' : 'follow'}</td>
+                      <td className="px-3 py-1.5 text-xs text-zinc-500">new: {p.newListingDefaultMode === 'PAUSED' ? 'sync held' : 'follow'}</td>
                       <td className="px-3 py-1.5 text-right">
                         <div className="inline-flex gap-1">
                           <Tooltip content={p.pushesPaused ? CONTROL_HELP.policyResume : CONTROL_HELP.policyPause}>
@@ -785,7 +739,7 @@ export default function SyncControlClient() {
                               onClick={() => void savePolicy(p.channel, p.marketplace, { pushesPaused: !p.pushesPaused })}
                               className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                             >
-                              {p.pushesPaused ? 'Resume' : 'Pause'}
+                              {p.pushesPaused ? 'Release stock sync' : 'Hold stock sync'}
                             </button>
                           </Tooltip>
                           <Tooltip content={CONTROL_HELP.policyNewDefault}>
@@ -795,7 +749,7 @@ export default function SyncControlClient() {
                               onClick={() => void savePolicy(p.channel, p.marketplace, { newListingDefaultMode: p.newListingDefaultMode === 'PAUSED' ? 'FOLLOW' : 'PAUSED' })}
                               className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                             >
-                              {p.newListingDefaultMode === 'PAUSED' ? 'New: follow' : 'New: paused'}
+                              {p.newListingDefaultMode === 'PAUSED' ? 'New: follow' : 'New: sync held'}
                             </button>
                           </Tooltip>
                         </div>
@@ -829,7 +783,7 @@ export default function SyncControlClient() {
                   onClick={() => void savePolicy(polChannel, polMarket, { pushesPaused: true })}
                   className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
                 >
-                  Pause pushes
+                  Hold stock sync
                 </button>
               </Tooltip>
               <Tooltip content={CONTROL_HELP.policyAddBornPaused}>
@@ -839,12 +793,12 @@ export default function SyncControlClient() {
                   onClick={() => void savePolicy(polChannel, polMarket, { newListingDefaultMode: 'PAUSED' })}
                   className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                 >
-                  New listings born paused
+                  New listings start held
                 </button>
               </Tooltip>
             </div>
             <div className="border-t border-zinc-200 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800">
-              Pause = channel-market kill-switch: quantities freeze on the marketplace until Resume (which recascades pool truth). FBA stays Amazon-managed regardless.
+              Hold stock sync = channel-market kill-switch: quantities freeze on the marketplace until Release stock sync (which recascades pool truth). It never stops selling. FBA stays Amazon-managed regardless.
             </div>
           </div>
 

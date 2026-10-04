@@ -250,7 +250,7 @@ describe.skipIf(!serverUrl)(`Shared stock step 3 — end times (needs ${CONCURRE
         [{ action: 'PIN', until: 'next monday', listings: [coordinate(id.eIT)] }, /not a valid date/],
         [{ action: 'PIN', until: new Date(Date.now() + 20_000).toISOString(), listings: [coordinate(id.eIT)] }, /at least one minute/],
         [{ action: 'PIN', until: new Date(Date.now() + 400 * 24 * 60 * MINUTE).toISOString(), listings: [coordinate(id.eIT)] }, /within one year/],
-        [{ action: 'RESUME', until: inMinutes(5), listings: [coordinate(id.eIT)] }, /Fixed number, Zero & Pin, Pause or Exclude only/],
+        [{ action: 'RESUME', until: inMinutes(5), listings: [coordinate(id.eIT)] }, /Fixed number, Zero & Pin, Hold stock sync or Exclude only/],
         [{ action: 'FOLLOW', quantity: 2, listings: [coordinate(id.eIT)] }, /whole number of 0 or more/],
         [{ action: 'PIN', quantity: -1, memberships: [{ itemId: 'ITEM-1', marketplace: 'IT', sku: 'COAT' }] }, /whole number of 0 or more/],
         [{ action: 'PIN', quantity: 2.5, memberships: [{ itemId: 'ITEM-1', marketplace: 'IT', sku: 'COAT' }] }, /whole number of 0 or more/],
