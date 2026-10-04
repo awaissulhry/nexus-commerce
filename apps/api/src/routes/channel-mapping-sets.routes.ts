@@ -152,7 +152,11 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
     const out = await exportAmazonTemplate({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [], includePrices: request.body?.includePrices ?? true, recordAction: 'partial_update' })
     reply.header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
     reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
-    reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows, gaps: out.gaps.filter(g => g.required).length, blankColumns: out.blankByDesign.length, mapping: out.set.label })))
+    // B4 — lists longer than the template's columns, and the notes (offer changes waiting for Publish, where a document
+    // went): each a count and its first 10, so the header stays small.
+    reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows, gaps: out.gaps.filter(g => g.required).length, blankColumns: out.blankByDesign.length, mapping: out.set.label,
+      truncated: { count: out.truncated.length, items: out.truncated.slice(0, 10).map(t => ({ sku: t.sellerSku, label: t.label, held: t.held, columns: t.columns })) },
+      notes: { count: out.notes.length, items: out.notes.slice(0, 10).map(n => n.note) } })))
     return reply.send(out.bytes)
   }))
 }

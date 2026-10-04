@@ -339,10 +339,17 @@ export function parseSkus(text: string): string[] {
   return [...new Set(text.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean))]
 }
 
+/** B4 — one list longer than the template's columns for it (10 bullet points, 5 columns). */
+export interface TruncatedList { sku: string; label: string; held: number; columns: number }
+
 export interface ExportSummary {
   rows: number; gaps: number; blankColumns: number; mapping: string
   /** NCF — Shopify's product CSV: products written, columns left out on purpose, and the products not written (with why). */
   products?: number; omitted?: string[]; refused?: { sku: string; reason: string }[]
+  /** Amazon template (B4) — lists cut at the template's last column: how many, and the first ones. */
+  truncated?: { count: number; items: TruncatedList[] }
+  /** Amazon template — what to know before uploading (a saved offer change waiting for Publish, where a document went). */
+  notes?: { count: number; items: string[] }
 }
 
 /** `X-Nexus-Export-Summary`: URL-encoded JSON. Null when absent or not the expected shape — never a guess. */
@@ -357,8 +364,27 @@ export function parseExportSummary(header: string | null | undefined): ExportSum
     const omitted = Array.isArray(v.omitted) && v.omitted.every(x => typeof x === 'string') ? v.omitted as string[] : undefined
     const refused = Array.isArray(v.refused) && v.refused.every(x => x && typeof x === 'object' && typeof (x as { sku?: unknown }).sku === 'string' && typeof (x as { reason?: unknown }).reason === 'string')
       ? (v.refused as { sku: string; reason: string }[]) : undefined
-    return { rows, gaps, blankColumns, mapping: v.mapping, ...(products != null ? { products } : {}), ...(omitted ? { omitted } : {}), ...(refused ? { refused } : {}) }
+    const truncated = countedList(v.truncated, (x): x is TruncatedList => !!x && typeof x === 'object' && typeof (x as TruncatedList).sku === 'string' && typeof (x as TruncatedList).label === 'string'
+      && whole((x as TruncatedList).held) && whole((x as TruncatedList).columns))
+    const notes = countedList(v.notes, (x): x is string => typeof x === 'string')
+    return { rows, gaps, blankColumns, mapping: v.mapping, ...(products != null ? { products } : {}), ...(omitted ? { omitted } : {}), ...(refused ? { refused } : {}),
+      ...(truncated ? { truncated } : {}), ...(notes ? { notes } : {}) }
   } catch { return null }
+}
+const whole = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0
+/** `{ count, items }` with every item of the expected shape and no more items than the count; otherwise dropped, never guessed. */
+function countedList<T>(raw: unknown, isItem: (x: unknown) => x is T): { count: number; items: T[] } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const { count, items } = raw as { count?: unknown; items?: unknown }
+  if (!whole(count) || !Array.isArray(items) || items.length > count || !items.every(isItem)) return undefined
+  return { count, items }
+}
+
+/** B4 — "Bullet point on GALE-M: 10 in Nexus, 5 in the template: items 6–10 are not in the file; uploading it leaves Amazon with 5." */
+export function truncatedSentence(t: TruncatedList, fmt: (n: number) => string = String): string {
+  const first = t.columns + 1
+  const items = first === t.held ? `item ${fmt(first)} is` : `items ${fmt(first)}–${fmt(t.held)} are`
+  return `${t.label} on ${t.sku}: ${fmt(t.held)} in Nexus, ${fmt(t.columns)} in the template: ${items} not in the file; uploading it leaves Amazon with ${fmt(t.columns)}.`
 }
 
 const plural = (n: number, one: string, many: string, fmt: (n: number) => string) => `${fmt(n)} ${n === 1 ? one : many}`

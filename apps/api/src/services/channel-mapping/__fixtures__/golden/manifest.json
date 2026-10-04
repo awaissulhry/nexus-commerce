@@ -52,7 +52,21 @@
      "blankByDesign": 20,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 1430,
+     "equal": 1430,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 700,
+    "reimport": {
+     "kept": 700,
+     "pinned": 0
+    }
    }
   },
   {
@@ -105,7 +119,21 @@
      "blankByDesign": 20,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 680,
+    "reimport": {
+     "kept": 680,
+     "pinned": 0
+    }
    }
   },
   {
@@ -158,7 +186,21 @@
      "blankByDesign": 20,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 680,
+    "reimport": {
+     "kept": 680,
+     "pinned": 0
+    }
    }
   },
   {
@@ -211,7 +253,21 @@
      "blankByDesign": 20,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 680,
+    "reimport": {
+     "kept": 680,
+     "pinned": 0
+    }
    }
   },
   {
@@ -264,7 +320,21 @@
      "blankByDesign": 101,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 2524,
+     "equal": 2524,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 101,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 1136,
+    "reimport": {
+     "kept": 1136,
+     "pinned": 0
+    }
    }
   },
   {
@@ -317,7 +387,21 @@
      "blankByDesign": 30,
      "rowsRefusedOnImport": 0
     },
-    "differences": []
+    "differences": [],
+    "roundTripInherited": {
+     "compared": 2049,
+     "equal": 2049,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 30,
+     "rowsRefusedOnImport": 0
+    },
+    "inheritedCells": 1029,
+    "reimport": {
+     "kept": 1029,
+     "pinned": 0
+    }
    }
   },
   {
