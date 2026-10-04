@@ -11,6 +11,7 @@ import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
 import { amazonChannelKey } from '@nexus/shared/channel-mapping'
 import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
+import { AMAZON_OFFER_FIELDS, AMAZON_SUB_ATTRIBUTE, rootOfLeaf, type AmazonOfferLeaf } from '../amazon/offer-fields.js'
 
 /**
  * CFI (R-CFI-1, `docs/channel-file-import/BUILD.md`) — the Owner's native Amazon template, read AS IS.
@@ -74,6 +75,7 @@ export type Placement =
   | { kind: 'id-type' } | { kind: 'id-value' } | { kind: 'identifier' }
   | { kind: 'price' } | { kind: 'sale'; part: 'value' | 'start' | 'end' } | { kind: 'currency' }
   | { kind: 'pricing-rule'; what: string } | { kind: 'quantity' } | { kind: 'managed' }
+  | { kind: 'offer-draft'; leaf: AmazonOfferLeaf }
   | { kind: 'foreign-market'; market: string } | { kind: 'foreign-language'; language: string }
   | { kind: 'duplicate'; of: string } | { kind: 'not-in-type'; attribute: string; legacy: boolean }
   | { kind: 'unplaced'; path: string[]; legacy: boolean }
@@ -87,6 +89,25 @@ const qualifier = (header: string, key: string) => new RegExp(`\\[${key}=([^\\]]
 const PRICE_ROOTS = new Set(['purchasable_offer', 'standard_price', 'sale_price'])
 const QUANTITY_ROOTS = new Set(['fulfillment_availability'])
 const RELATIONSHIP_ROOTS = new Set(['parentage_level', 'child_parent_sku_relationship'])
+/**
+ * The offer and fulfilment facts Nexus keeps as offer DRAFTS (`offer-fields.ts`, lane `draft`): handling time, restock
+ * date, always available, the seller price bounds, MAP, the offer dates and the Automate Pricing rule. A file does not
+ * write them (the Owner's decision, 2026-10-05: routing a file into offer drafts is later); the selling price and the
+ * sale go through the price door, and quantity and the fulfilment method stay managed.
+ */
+const OFFER_DRAFT_LEAVES = new Map<string, AmazonOfferLeaf>(AMAZON_OFFER_FIELDS
+  .filter(f => f.lane === 'draft' && f.leaf && f.leaf !== 'our_price' && f.leaf !== 'sale')
+  .map(f => [`${rootOfLeaf(f.leaf!)}.${AMAZON_SUB_ATTRIBUTE[f.leaf!]}`, f.leaf!] as const))
+const OFFER_DRAFT_LABEL: Record<AmazonOfferLeaf, string> = {
+  our_price: 'Price', sale: 'Sale price', minimum_seller_allowed_price: 'Minimum seller price', maximum_seller_allowed_price: 'Maximum seller price',
+  map_price: 'Minimum advertised price', offer_start_at: 'Offer start date', offer_end_at: 'Offer end date', automated_pricing_rule_id: 'Automate Pricing rule',
+  lead_time_to_ship_max_days: 'Handling time', restock_date: 'Restock date', is_inventory_available: 'Always available',
+}
+/** The words for an offer-draft column, on import and on the mapping page. */
+export function offerDraftReason(leaf: AmazonOfferLeaf, fileValue?: string) {
+  return `${OFFER_DRAFT_LABEL[leaf]}: an Amazon offer setting, not read from a file${fileValue === undefined ? '' : ` (file value ${fileValue})`}. Change it in the sheet's Amazon columns; it is sent when you publish.`
+}
+const offerDraftLeaf = (root: string, sub: string | undefined) => sub ? OFFER_DRAFT_LEAVES.get(`${root}.${sub}`) : undefined
 const isText = (field: ChannelFieldSpec) => (field.kind === 'text' || field.kind === 'longtext') && !field.options?.length
 const excelDate = (raw: string) => /^\d{5}(\.\d+)?$/.test(raw.trim()) ? new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(raw)) * 86_400_000).toISOString().slice(0, 10) : raw.trim()
 /**
@@ -133,6 +154,58 @@ function sourceValue(parsed: AmazonTemplateParse, header: string, value: string,
   return value
 }
 
+const keyOfHeader = (parsed: AmazonTemplateParse, header: string) => parsed.meta.grammar === 'legacy' ? legacyAttributePath(header) ?? header : header
+/** The attribute's own selectors a column names (`[content_type=user_manual]`) — not its market, language or audience. */
+const ownSelectors = (key: string) => [...key.matchAll(/\[([^=\]]+)=([^\]]+)\]/g)]
+  .map(m => ({ name: m[1], value: m[2] })).filter(s => !['marketplace_id', 'language_tag', 'audience'].includes(s.name))
+/** B5 — the schema leaf that keeps one of those selectors (`compliance_media__content_type`), when the cached schema has it. */
+const selectorLeaf = (spec: ChannelSpec, field: ChannelFieldSpec, name: string) => spec.fields.find(f => f.key === `${field.attribute}__${name}` && f.attribute === field.attribute)
+/** A leaf holds its value in its own shape (a schema without `maxItems: 1` makes every leaf of the attribute a list). */
+const leafValue = (leaf: ChannelFieldSpec | undefined, value: string) => leaf?.shape === 'list' ? [value] : value
+/** One value per listing, several filled columns: name what they differ by (B5: two compliance documents on one row). */
+function scalarConflict(field: ChannelFieldSpec, keys: string[]): string {
+  for (const name of new Set(keys.flatMap(k => ownSelectors(k).map(s => s.name)))) {
+    const kinds = [...new Set(keys.map(k => ownSelectors(k).find(s => s.name === name)?.value).filter((v): v is string => !!v))]
+    if (kinds.length < 2) continue
+    const words = kinds.map(v => v.replace(/_/g, ' '))
+    const list = `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
+    return name === 'content_type'
+      ? `This row fills ${kinds.length} ${field.attribute} documents (${list}). Nexus keeps one document per listing: keep one of them in the file.`
+      : `This row fills ${kinds.length} ${field.attribute} columns that differ by ${name.replace(/_/g, ' ')} (${list}). Nexus keeps one value per listing: keep one of them in the file.`
+  }
+  return 'Multiple values target a scalar attribute'
+}
+
+export const PRODUCT_ID_TYPE_FIELD = 'externally_assigned_product_identifier__type'
+/**
+ * The product ID types this schema accepts (`externally_assigned_product_identifier.type`): its own leaf's options, else the
+ * schema's enum. `null` = the cached schema names none, so the type cannot be checked.
+ */
+function productIdTypes(spec: ChannelSpec): { options: string[]; labels: Record<string, string> } | null {
+  const leaf = spec.fields.find(f => f.key === PRODUCT_ID_TYPE_FIELD)
+  if (leaf?.options?.length) return { options: leaf.options, labels: leaf.optionLabels ?? {} }
+  const node = (spec.validationSchema?.properties as Record<string, any> | undefined)?.externally_assigned_product_identifier?.items?.properties?.type
+  if (!Array.isArray(node?.enum) || !node.enum.length) return null
+  const options = node.enum.map(String)
+  return { options, labels: Array.isArray(node.enumNames) ? Object.fromEntries(options.map((o: string, i: number) => [o, String(node.enumNames[i] ?? o)])) : {} }
+}
+/**
+ * B7 — a product ID with its type (not an ASIN, not a GTIN exemption): the type is checked against the schema's own list
+ * (MINSAN, PZN … when the schema offers them) and kept beside the value, so an export writes the real type back.
+ */
+type ProductIdDecision = { kind: 'store'; value: string; type: string; typeField: boolean } | { kind: 'refuse'; message: string } | { kind: 'no-field'; reason: string }
+function productIdDecision(spec: ChannelSpec, category: string, marketplace: string, type: string, rawType: string, value: string): ProductIdDecision | null {
+  if (!value || !type || type === 'asin' || type === 'exempt') return null
+  if (!spec.fields.some(f => f.key === 'externally_assigned_product_identifier')) return { kind: 'no-field', reason: `Amazon catalog identifier (${type}: ${value}); this ${category} schema has no field for it.` }
+  const types = productIdTypes(spec)
+  const found = types ? types.options.find(o => o.toLowerCase() === type) ?? types.options.find(o => types.labels[o]?.trim().toLowerCase() === type) : type
+  if (!found) {
+    const allowed = types!.options.map(o => types!.labels[o] ?? o).join(', ')
+    return { kind: 'refuse', message: `The product ID type "${rawType}" is not one Amazon ${marketplace} accepts for ${category} (${allowed}). Correct the type in the file.` }
+  }
+  return { kind: 'store', value, type: found, typeField: spec.fields.some(f => f.key === PRODUCT_ID_TYPE_FIELD) }
+}
+
 /** Where one file column goes, decided once per product type. CHMAP: also the RULE a mapping draft records. */
 export function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelSpec, destination: AmazonDestination, primaryLanguage: string, marketLanguages: string[]): Placement {
   if (header.includes(DUPLICATE_MARK)) return { kind: 'duplicate', of: header.slice(0, header.indexOf(DUPLICATE_MARK)) }
@@ -148,14 +221,19 @@ export function placeHeader(parsed: AmazonTemplateParse, header: string, spec: C
   const market = qualifier(key, 'marketplace_id')
   if (market && parsed.meta.primaryMarketplaceId && market !== parsed.meta.primaryMarketplaceId) return { kind: 'foreign-market', market: MARKETPLACE_ID_TO_CODE[market] ?? market }
   if (RELATIONSHIP_ROOTS.has(root)) return { kind: 'relationship' }
-  if (QUANTITY_ROOTS.has(root)) return { kind: 'quantity' }
+  if (QUANTITY_ROOTS.has(root)) {
+    // Handling time, restock date and always available are offer drafts; quantity and the fulfilment method stay managed.
+    const leaf = offerDraftLeaf(root, path[1])
+    return leaf ? { kind: 'offer-draft', leaf } : { kind: 'quantity' }
+  }
   if (PRICE_ROOTS.has(root)) {
     const audience = qualifier(key, 'audience')
     if (audience && audience !== 'ALL') return { kind: 'pricing-rule', what: `the ${audience} audience price` }
     if (path.at(-1) === 'currency') return { kind: 'currency' }
     if (root === 'purchasable_offer' && path[1] === 'our_price') return { kind: 'price' }
     if (root === 'purchasable_offer' && path[1] === 'discounted_price') return { kind: 'sale', part: path.at(-1) === 'start_at' ? 'start' : path.at(-1) === 'end_at' ? 'end' : 'value' }
-    if (root === 'purchasable_offer' && ['start_at', 'end_at'].includes(path[1])) return { kind: 'pricing-rule', what: 'the offer start/end date' }
+    const leaf = root === 'purchasable_offer' ? offerDraftLeaf(root, path[1]) : undefined
+    if (leaf) return { kind: 'offer-draft', leaf }
     if (root === 'purchasable_offer' && path[1]) return { kind: 'pricing-rule', what: path[1].replace(/_/g, ' ') }
     return { kind: 'managed' }
   }
@@ -240,6 +318,20 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
     if (!byHeader) placements.set(category, byHeader = new Map())
     if (!byHeader.has(header)) byHeader.set(header, decidePlacement(placeHeader(parsed, header, spec, destination, primaryLanguage, marketLanguages), parsed, header, spec, destination.mapping, primaryLanguage, marketLanguages))
     return byHeader.get(header)!
+  }
+  // B4 — how many template columns a list field has (bullet_point #1…#5): the planner keeps a longer Nexus list whose start the file restates.
+  const listSlotCounts = new Map<string, number>()
+  const listSlotsFor = (category: string, spec: ChannelSpec, fieldKey: string, locale: string) => {
+    const key = JSON.stringify([category, fieldKey, locale])
+    if (!listSlotCounts.has(key)) {
+      const slots = new Set<string>()
+      for (const header of parsed.headers) {
+        const place = placementFor(category, spec, header)
+        if (place.kind === 'field' && place.field.key === fieldKey && place.locale === locale) slots.add(JSON.stringify(place.slots))
+      }
+      listSlotCounts.set(key, slots.size)
+    }
+    return listSlotCounts.get(key)!
   }
   const fileSkuRows = new Map<string, number[]>()
   for (const [index, record] of parsed.rows.entries()) {
@@ -378,6 +470,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
     } else log(skuHeader, 'excluded', { reason: 'row identity (SKU)' })
 
     const identifierType = idTypeHeader ? sourceValue(parsed, idTypeHeader, record[idTypeHeader] ?? '').trim().toLowerCase() : ''
+    const productId = productIdDecision(spec, category, destination.marketplace, identifierType, idTypeHeader ? (record[idTypeHeader] ?? '').trim() : '', idValueCol ? (record[idValueCol] ?? '').trim() : '')
     const grouped = new Map<string, { field: ChannelFieldSpec; locale: string; values: { header: string; path: string[]; value: string; slots: number[] }[] }>()
     const sale: { value?: string; start?: string; end?: string; headers: string[] } = { headers: [] }
     let priceCell: { header: string; raw: string } | undefined, currencyCell: { header: string; raw: string } | undefined
@@ -400,16 +493,21 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
           // kept, so an export can declare it again. Every other type is read together with the identifier value.
           if (identifierType === 'exempt' && spec.fields.some(f => f.key === 'supplier_declared_has_product_identifier_exemption')) {
             out.rows.push({ ...identityRow, field: 'supplier_declared_has_product_identifier_exemption', value: true }); log(header, 'row', { field: 'supplier_declared_has_product_identifier_exemption' })
-          } else { const reason = 'Identifier type, read together with the identifier value'; log(header, 'excluded', { reason }) }
+          } else if (productId?.kind === 'store' && productId.typeField) {
+            out.rows.push({ ...identityRow, field: PRODUCT_ID_TYPE_FIELD, value: leafValue(spec.fields.find(f => f.key === PRODUCT_ID_TYPE_FIELD), productId.type) }); log(header, 'row', { field: PRODUCT_ID_TYPE_FIELD })
+          } else if (productId?.kind === 'refuse') log(header, 'refused', { reason: 'product ID type not in the schema' })
+          else { const reason = 'Identifier type, read together with the identifier value'; log(header, 'excluded', { reason }) }
           continue
         }
         case 'id-value': {
           if (identifierType === 'asin') {
             if (!/^[A-Z0-9]{10}$/.test(raw) || !spec.fields.some(f => f.key === 'merchant_suggested_asin')) { issue(header, 'The declared ASIN needs a valid ten-character value and a Merchant Suggested ASIN schema field'); log(header, 'refused', { reason: 'invalid ASIN' }) }
             else { out.rows.push({ ...identityRow, field: 'merchant_suggested_asin', value: raw }); log(header, 'row', { field: 'merchant_suggested_asin' }) }
-          } else if (['ean', 'upc', 'gtin', 'isbn', 'jan'].includes(identifierType) && spec.fields.some(f => f.key === 'externally_assigned_product_identifier')) {
+          } else if (productId?.kind === 'store') {
             out.rows.push({ ...identityRow, field: 'externally_assigned_product_identifier', value: raw }); log(header, 'row', { field: 'externally_assigned_product_identifier' })
-          } else { const reason = `Amazon catalog identifier (${identifierType || 'no type'}: ${raw}); this ${category} schema has no field for it.`; exclude(header, reason); log(header, 'excluded', { reason }) }
+          } else if (productId?.kind === 'refuse') { issue(header, productId.message); log(header, 'refused', { reason: 'product ID type not in the schema' }) }
+          else if (!identifierType) { const reason = `Product ID ${raw} has no product ID type in the file, so Nexus cannot tell what it is; it is not imported.`; exclude(header, reason); log(header, 'excluded', { reason }) }
+          else { const reason = productId?.kind === 'no-field' ? productId.reason : `Amazon catalog identifier (${identifierType}: ${raw}); this ${category} schema has no field for it.`; exclude(header, reason); log(header, 'excluded', { reason }) }
           continue
         }
         case 'identifier': { const reason = 'Amazon catalog identifier/reference. A declared ASIN is imported as Merchant Suggested ASIN; confirmed remote links are reconciled from Amazon.'; exclude(header, reason); log(header, 'excluded', { reason }); continue }
@@ -417,6 +515,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
         case 'currency': currencyCell = { header, raw }; continue
         case 'sale': sale[place.part] = raw; sale.headers.push(header); continue
         case 'pricing-rule': { const reason = `Automated pricing rules stay in the pricing workspace (${place.what}; file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
+        case 'offer-draft': { const reason = offerDraftReason(place.leaf, raw); exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'quantity': { const reason = `Stock is not imported: EU merchant quantity is one number for all EU markets, and FBA stock is Amazon's (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'managed': { const reason = `Managed commercial field: use the dedicated pricing or inventory workflow (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'foreign-market': { const reason = `This column is for Amazon ${place.market}; import it with the ${place.market} file.`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
@@ -523,8 +622,14 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
           if (measures.length !== 1 || units.length !== 1 || JSON.stringify(measures[0].slots) !== JSON.stringify(units[0].slots)) throw new Error('A measure needs exactly one value and its matching unit')
           value = { value: typed(measures[0].value), unit: unitOf(units[0].value, field) }
         } else if (field.shape === 'list') value = values.map(v => typed(v.value))
-        else { if (values.length !== 1) throw new Error('Multiple values target a scalar attribute'); value = typed(values[0].value) }
-        out.rows.push({ ...identityRow, locale, field: field.key, value })
+        else { if (values.length !== 1) throw new Error(scalarConflict(field, values.map(v => keyOfHeader(parsed, v.header)))); value = typed(values[0].value) }
+        out.rows.push({ ...identityRow, locale, field: field.key, value, ...(field.shape === 'list' ? { listSlots: listSlotsFor(category, spec, field.key, locale) } : {}) })
+        // B5 — the column's own selectors (`compliance_media[content_type=user_manual][content_language=de_DE]`) are kept
+        // beside its value when the schema has a leaf for them, so an export writes the document into its own column.
+        if (field.shape !== 'list' && field.shape !== 'measure') for (const s of ownSelectors(keyOfHeader(parsed, values[0].header))) {
+          const leaf = selectorLeaf(spec, field, s.name)
+          if (leaf) out.rows.push({ ...identityRow, field: leaf.key, value: leafValue(leaf, s.value) })
+        }
         for (const v of values) log(v.header, 'row', { field: field.key })
       } catch (e) {
         out.issues.push({ row, sku, field: field.key, message: e instanceof Error ? e.message : String(e) })
@@ -549,6 +654,11 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
         if (filled || field.requirement === 'required' || !field.editable || grouped.has(`${field.key}\u0000${locale}`)) continue
         out.rows.push({ ...identityRow, locale, field: field.key, action: 'CLEAR', clearIfPresent: true })
         out.ledger.push({ row, sku, header: headers[0], outcome: 'row', field: field.key, reason: 'full-update blank' })
+        // B5 — a document's type and language go with it: a type kept without its document would publish half an entry.
+        for (const name of new Set(headers.flatMap(h => ownSelectors(keyOfHeader(parsed, h)).map(s => s.name)))) {
+          const leaf = selectorLeaf(spec, field, name)
+          if (leaf?.editable) out.rows.push({ ...identityRow, field: leaf.key, action: 'CLEAR', clearIfPresent: true })
+        }
       }
     }
     // A NEW product (create/upsert with a family, primary-language file — checked above).

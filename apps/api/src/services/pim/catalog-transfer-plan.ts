@@ -226,19 +226,34 @@ function listingOwnPrice(listing: ValueRecord | null): { state: 'stored' | 'inhe
   if (!listing || listing.followMasterPrice !== false) return { state: 'inherited', value: null }
   return { state: 'stored', value: priceNumber(listing.priceOverride) ?? priceNumber(listing.price) }
 }
+/**
+ * B2 — a channel value in the form it is SENT, the way `resolveBatch` builds the effective value: the content wire form,
+ * then the channel's own normalisation (`validateChannelValue`). Both sides of a comparison go through it.
+ */
+function sentValue(field: CatalogueField, value: unknown): unknown {
+  const wire = contentWireValue(value ?? null, field.shape, contentField(field.sheetKey ?? field.fieldKey))
+  return contentWireValue(validateChannelValue(field, wire).value ?? null, field.shape)
+}
+const sameSent = (field: CatalogueField, a: unknown, b: unknown) => transferCanonical(sentValue(field, a)) === transferCanonical(sentValue(field, b))
+/** A list item named in a warning: quoted, and cut short (a bullet point can be 500 characters). */
+const quoted = (item: unknown) => { const text = typeof item === 'string' ? item : JSON.stringify(item); return `"${text.length > 60 ? `${text.slice(0, 57)}…` : text}"` }
 const round2 = (n: number) => Math.round(n * 100) / 100
 const clearKey = (targetKey: string, locale: string, field: string) => JSON.stringify([targetKey, locale, field])
 
+/** A channel file's own price rows: the price door reads them, never the effective channel value. */
+const CHANNEL_FILE_PRICE_FIELDS = new Set(['price', 'sale', 'compareAt'])
 /**
  * CFI-3 (Q1, D3) — for every `clearIfPresent` row, the value Nexus would publish on that coordinate today (a listing
  * override, else the mapped master value): ONE `resolveBatch` per channel · account · market · alias · category · locale,
  * never one per cell. `null` = could not be read; the row is then left alone and the plan says so.
+ * B2 — also every channel-file SET row on Overrides: a value equal to what Nexus already sends keeps following Shared.
+ * One read per coordinate, the clears and the sets in the same batch.
  */
 async function effectiveForClears(groups: Map<string, TransferRow[]>, context: TransferContext, contracts: TransferContracts, warnings: Set<string>) {
   const out = new Map<string, { value: unknown } | null>()
-  const batches = new Map<string, { channel: string; accountId: string; marketplace: string; aliasKey: string; category: string; locale: string; productIds: Set<string>; fieldKeys: Set<string>; keys: { cellKey: string; productId: string; fieldKey: string }[] }>()
+  const batches = new Map<string, { channel: string; accountId: string; marketplace: string; aliasKey: string; category: string; locale: string; productIds: Set<string>; fieldKeys: Set<string>; keys: { cellKey: string; productId: string; fieldKey: string }[]; clears: boolean; sets: boolean }>()
   for (const [key, group] of groups) {
-    const clears = group.filter(r => r.clearIfPresent && fromChannelFile(r) && r.action === 'CLEAR' && r.entity === 'Overrides')
+    const clears = group.filter(r => fromChannelFile(r) && r.entity === 'Overrides' && (r.clearIfPresent && r.action === 'CLEAR' || !r.clearIfPresent && r.action === 'SET' && !CHANNEL_FILE_PRICE_FIELDS.has(r.field)))
     if (!clears.length) continue
     const first = group[0], product = context.products.get(first.sku), listing = context.listings.get(key)?.[0]
     // A product this file creates holds nothing Nexus could publish yet.
@@ -255,10 +270,11 @@ async function effectiveForClears(groups: Map<string, TransferRow[]>, context: T
       if (!field) continue // the row loop names it
       const locale = r.locale || languages[0] || ''
       const batchKey = JSON.stringify([first.channel, first.accountId, first.marketplace, first.aliasKey, category, locale])
-      if (!batches.has(batchKey)) batches.set(batchKey, { channel: first.channel, accountId: first.accountId, marketplace: first.marketplace, aliasKey: first.aliasKey, category, locale, productIds: new Set(), fieldKeys: new Set(), keys: [] })
+      if (!batches.has(batchKey)) batches.set(batchKey, { channel: first.channel, accountId: first.accountId, marketplace: first.marketplace, aliasKey: first.aliasKey, category, locale, productIds: new Set(), fieldKeys: new Set(), keys: [], clears: false, sets: false })
       const batch = batches.get(batchKey)!
       batch.productIds.add(String(product.id)); batch.fieldKeys.add(field.fieldKey)
       batch.keys.push({ cellKey: clearKey(key, r.locale, r.field), productId: String(product.id), fieldKey: field.fieldKey })
+      if (r.action === 'CLEAR') batch.clears = true; else batch.sets = true
     }
   }
   if (!batches.size) return out
@@ -274,7 +290,8 @@ async function effectiveForClears(groups: Map<string, TransferRow[]>, context: T
       }
     } catch {
       for (const k of batch.keys) out.set(k.cellKey, null)
-      warnings.add(`${batch.channel} ${batch.marketplace}: the current values behind the blank cells of full-update rows could not be read, so none of them was cleared. Review those fields after this import.`)
+      if (batch.clears) warnings.add(`${batch.channel} ${batch.marketplace}: the current values behind the blank cells of full-update rows could not be read, so none of them was cleared. Review those fields after this import.`)
+      if (batch.sets) warnings.add(`${batch.channel} ${batch.marketplace}: what Nexus already sends could not be read, so the file's values were not compared with Shared; each one is saved on its listing.`)
     }
   }
   return out
@@ -358,6 +375,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
   const productRows = new Map([...groups.values()].filter(r => r[0].entity === 'Products').map(r => [r[0].sku, r]))
   const effective = await effectiveForClears(groups, context, contracts, warnings)
   const stats = { alreadyEmpty: 0, clearUnchecked: 0 }
+  /** B2 — per channel · market, the file values that equal what Nexus already sends (they keep following Shared). */
+  const followsShared = new Map<string, number>()
   const familyFor = (sku: string, visiting = new Set<string>()): string | null => {
     if (visiting.has(sku)) throw new Error('Parent relationships contain a cycle')
     visiting.add(sku)
@@ -699,6 +718,32 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             if (old.state === 'inherited') old.value = current.value
           }
           if (preserve(row, old.state === 'stored')) continue
+          // B2 (the Owner's decision 4, every channel file) — a cell that follows Shared, which the file sets to exactly what
+          // Nexus already sends, keeps following Shared: a channel file restates every value, it does not choose them.
+          const current = fromChannelFile(row) && row.action === 'SET' ? effective.get(clearKey(key, row.locale, row.field)) : undefined
+          if (current && old.state === 'inherited' && sameSent(field, row.value, current.value)) {
+            target.cells.push(cell(row, { state: 'inherited', value: current.value }, current.value, 'inherited'))
+            const market = `${first.channel} ${first.marketplace}`
+            followsShared.set(market, (followsShared.get(market) ?? 0) + 1)
+            continue
+          }
+          // B4 — a list longer than the template's columns (10 bullets, 5 columns): a file that fills every column with the
+          // START of the Nexus list keeps the whole list; any other list replaces it, and the review names what goes.
+          const slots = row.listSlots
+          if (fromChannelFile(row) && row.action === 'SET' && field.shape === 'list' && typeof slots === 'number' && Array.isArray(row.value)) {
+            const held = old.state === 'stored' ? old.value : current?.value
+            if (Array.isArray(held) && held.length > slots) {
+              const where = `${first.channel} ${first.marketplace}: ${row.sku} ${field.label}`
+              if (row.value.length === slots && sameSent(field, row.value, held.slice(0, slots))) {
+                target.cells.push(cell(row, { state: old.state, value: held }, held, old.state))
+                warnings.add(`${where}: the file has ${slots} columns; Nexus keeps all ${held.length}.`)
+                continue
+              }
+              const kept = new Set((sentValue(field, row.value) as unknown[]).map(transferCanonical))
+              const removed = (sentValue(field, held) as unknown[]).filter(item => !kept.has(transferCanonical(item)))
+              if (removed.length) warnings.add(`${where}: the file has ${slots} columns and replaces the ${held.length} Nexus holds; removed: ${removed.map(quoted).join(', ')}.`)
+            }
+          }
           const state = row.action === 'INHERIT' ? 'inherited' : 'stored'
           let value = row.action === 'SET' ? row.value : null
           if (cell(row, old, value, state).verdict !== 'unchanged') {
@@ -745,5 +790,6 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     }
     if (issues.length === groupIssueStart) targets.push(target)
   }
+  for (const [market, n] of followsShared) warnings.add(`${market}: ${n} ${n === 1 ? 'value equals' : 'values equal'} what Nexus already sends; ${n === 1 ? 'it keeps' : 'they keep'} following Shared.`)
   return { targets, issues, warnings: [...warnings], ...(policy || exclusions.length ? { exclusions } : {}), stats }
 }

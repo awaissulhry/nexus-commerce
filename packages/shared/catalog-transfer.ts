@@ -66,6 +66,11 @@ export interface TransferRow {
   /** CFI-4 — the SKU as written in the file, when the row was resolved to a different Nexus SKU. */
   fileSku?: string
   /**
+   * A list field read from a channel's own template: how many columns the template gives it (Amazon's
+   * `bullet_point` #1…#5). The planner keeps a longer Nexus list whose start the file restates in full.
+   */
+  listSlots?: number
+  /**
    * PSIE — what the EXPORT held for this cell (its editing baseline), on a changed cell of a Nexus editing
    * file read in changes-only mode. The review compares it with the current value: a cell that also changed
    * in Nexus after the export is a problem for that cell only. `null` = the export held no value here.
