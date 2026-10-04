@@ -147,6 +147,8 @@ describe('budgetStarters — prose', () => {
     expect(DAY_MOVE_NOTE).toContain('−30%')
     expect(DAY_MOVE_NOTE).toContain('+50%')
     expect(DAY_MOVE_NOTE).toContain('counting every writer')
+    // 3b — a give-back is exempt from the day-move cap (3a), and the note says so.
+    expect(DAY_MOVE_NOTE).toContain('Giving the budget back when a window closes does not count against it.')
     expect(DAY_MOVE_NOTE).not.toMatch(/guarantee|will be applied/i)
   })
 

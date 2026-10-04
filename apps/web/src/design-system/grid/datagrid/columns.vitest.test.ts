@@ -213,3 +213,12 @@ describe('columnsSignature — structure, never identity', () => {
     expect(columnsSignature([...COLS].reverse())).not.toBe(sig)
   })
 })
+
+describe('splitColumns — defaultHidden', () => {
+  it('keeps a hidden-by-default column togglable and listed, but out of the default visible set', () => {
+    const split = splitColumns([col('a'), col('ref', { defaultHidden: true }), col('b')])
+    expect(split.togglableKeys).toEqual(['a', 'ref', 'b'])
+    expect(split.defaultVisibleKeys).toEqual(['a', 'b'])
+    expect(split.prefsColumns.map((c) => c.key)).toEqual(['a', 'ref', 'b'])
+  })
+})

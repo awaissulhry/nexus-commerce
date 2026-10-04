@@ -51,7 +51,7 @@ export interface BudgetStarter {
 
 /** The gate's own words, so a starter cannot imply a guarantee the gate will not honour. */
 export const DAY_MOVE_NOTE =
-  'The write gate caps total daily budget movement at −30% / +50% (or €10, whichever is larger) per campaign per UTC day, counting every writer — so a campaign the pacer has already moved today may refuse part of this.'
+  'The write gate caps total daily budget movement at −30% / +50% (or €10, whichever is larger) per campaign per UTC day, counting every writer — so a campaign the pacer has already moved today may refuse part of this. Giving the budget back when a window closes does not count against it.'
 
 const hh = (h: number) => `${String(h % 24).padStart(2, '0')}:00`
 

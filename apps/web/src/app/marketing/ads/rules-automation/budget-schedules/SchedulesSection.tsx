@@ -157,8 +157,8 @@ export function SchedulesSection({ market }: { market?: string }) {
   /**
    * W4 — pause/resume, on the PATCH that existed with no caller. Optimistic with revert-on-failure
    * (the list is cached 15s server-side, so a refetch would flip the switch back under the
-   * operator's finger — the U13 lesson). Turning a schedule OFF also restores base budgets
-   * server-side; the tooltip says so, because that is a spend-affecting side effect.
+   * operator's finger — the U13 lesson). Turning a schedule OFF also gives back the budgets it
+   * still holds, server-side (3b); the tooltip says so, because that is a spend-affecting side effect.
    */
   const toggleEnabled = useCallback(async (id: string, on: boolean) => {
     setToggleErr(null)
@@ -201,7 +201,7 @@ export function SchedulesSection({ market }: { market?: string }) {
             <Toggle
               checked={r.enabled}
               aria-label={`${r.enabled ? 'Pause' : 'Resume'} ${r.name}`}
-              title={r.enabled ? 'Pause this schedule — its campaigns are restored to their base budgets.' : 'Resume this schedule.'}
+              title={r.enabled ? 'Pause this schedule — it gives back each budget it still holds; a budget someone changed since stays as it is.' : 'Resume this schedule.'}
               onClick={() => void toggleEnabled(r.id, !r.enabled)}
             />
             <span className={`h10-bd7-posture ${s.cls}`} title={s.why}>{s.word}</span>

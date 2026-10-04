@@ -51,15 +51,17 @@ export interface DrawerProps {
    * focus trapped inside. The page behind it is inert on purpose.
    *
    * `dock` is the opposite contract, and the difference is not cosmetic. A
-   * docked drawer is a SECOND pane of one workspace: it renders in the normal
-   * flow so the surface beside it reflows instead of being covered, it takes
+   * docked drawer is a SECOND pane of one workspace: it sits beside a live
+   * surface (fixed to the viewport, see below), it takes
    * no backdrop and no `aria-modal`, it never traps focus, and it never steals
    * focus on open. That is what makes "expand the record without leaving the
    * sheet" true rather than a claim — the grid behind a dock is still
    * keyboard-navigable, still editable, still the thing the operator is doing.
    *
-   * A dock is therefore laid out by its PARENT: put it in a flex row beside
-   * the surface it annotates. It contributes its own width and full height.
+   * The dock is FIXED to the viewport's right edge under the top bar (`.nds-drawer-dock`,
+   * layout-v2 §5): it overlays the surface instead of reflowing it, and a flex row around it
+   * reserves nothing. A host whose content must stay fully visible reserves the panel's width
+   * itself (the publish history list pads its right edge by the dock width).
    */
   /** `embedded` renders the editor in its parent's layout, without covering shell navigation. */
   mode?: 'modal' | 'dock' | 'embedded'
@@ -82,10 +84,11 @@ export interface DrawerProps {
  *
  *   modal (default)  slide-over portaled to <body>; backdrop, aria-modal, Esc
  *                    and backdrop close, focus trapped inside.
- *   dock (PES.4.1)   a second pane in the normal flow beside a live surface:
+ *   dock (PES.4.1)   a second pane beside a live surface:
  *                    no portal, no backdrop, not aria-modal, no focus trap, no
- *                    focus steal, optional drag/arrow-key resize. Lay it out
- *                    yourself — put it in a flex row next to what it annotates.
+ *                    focus steal, optional drag/arrow-key resize. Fixed to the
+ *                    viewport's right edge (layout-v2 §5): it covers what is
+ *                    under it, so a host that must stay visible reserves its width.
  *
  * Both render the same header/body/footer/overlay DOM, so a drawer cannot look
  * like two different components depending on where it is standing.

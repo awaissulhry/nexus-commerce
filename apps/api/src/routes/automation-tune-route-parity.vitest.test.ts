@@ -9,7 +9,7 @@
  *
  * The answers AND the rows each request leaves (the row itself, the campaigns a disable gives back, the audit rows) are
  * recorded. On a real PostgreSQL (PGlite). The snapshot beside this file was WRITTEN BY THE ROUTES BEFORE THE MOVE and
- * is read unchanged after it.
+ * is read unchanged after it — except 3b's `kept` count in a pause's or a delete's give-back result.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'

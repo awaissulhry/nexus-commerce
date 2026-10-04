@@ -16,19 +16,27 @@
  * keyed by `<coordinateKey>.<kind>`, so a Matrix cell wears exactly the round-trip marks an
  * Information cell wears — `saving` → `saved` (fades) | `refused` (stays, reason on hover). A
  * `conflict` repaints from the current read and refetches in live mode, like every sheet cell.
+ *
+ * Live (Amazon sheet gaps): `useListingValuesLive` re-reads when this family's listings change elsewhere — at once
+ * when idle, otherwise owed until the write in flight settles or the open editor closes. An applied write tells the
+ * other windows of this browser (`listing.values_changed`, local), so they move even without the server's stream.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { SAVED_FADE_MS, type CellSaveTracker, type GridApi } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
+import { useListingValuesLive } from '../useListingValuesLive'
 import {
+  MATRIX_COPY,
   MATRIX_ENDPOINTS,
   type CoordinateKey,
   type MatrixCells,
   type MatrixRead,
   type MatrixRowRead,
   type MatrixVerbRequest,
+  type MatrixWritableKind,
   type MatrixWriteCell,
   type MatrixWriteOutcome,
   type VerbOperation,
@@ -82,6 +90,33 @@ export interface MatrixState {
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
+/** The `listing.values_changed` fields a cell write moves — the words the server's write services announce with. */
+const FIELDS_OF: Readonly<Record<MatrixWritableKind, readonly string[]>> = {
+  syncMode: ['quantityMode', 'quantity'], syncQty: ['quantityMode', 'quantity'], syncBuffer: ['stockBuffer', 'quantity'],
+  fulfilment: ['fulfilment'], price: ['price'], salePrice: ['salePrice'],
+}
+
+/** Each cell names the listing it was read from (the PRISTINE read), so a write onto another listing is a conflict. */
+const withListing = (c: MatrixWriteCell, read: MatrixRead): MatrixWriteCell => {
+  if (c.expectedListingId) return c
+  const listingId = read.rows.find((r) => r.id === c.rowId)?.cells[c.coordinateKey]?.listingId
+  return listingId ? { ...c, expectedListingId: listingId } : c
+}
+
+type ChangedListing = { listingId: string; productId: string; version: number }
+
+/** The listings an applied write moved, at their new versions: the server's list, else the cell's own listing. */
+function changedListings(outcomes: readonly MatrixWriteOutcome[], read: MatrixRead): ChangedListing[] {
+  const out = new Map<string, ChangedListing>()
+  for (const o of outcomes) {
+    if (o.outcome !== 'applied') continue
+    if (o.listings?.length) { for (const l of o.listings) out.set(l.listingId, { listingId: l.listingId, productId: l.productId, version: l.version }); continue }
+    const listingId = read.rows.find((r) => r.id === o.rowId)?.cells[o.coordinateKey]?.listingId
+    if (listingId) out.set(listingId, { listingId, productId: o.rowId, version: o.version })
+  }
+  return [...out.values()]
+}
+
 export function useMatrix(opts: UseMatrixOptions): MatrixState {
   const { productId, accountId, locale, rows, coordinates, tracker, getApi, can } = opts
   const [probe, setProbe] = useState<MatrixSource | null>(null)
@@ -92,11 +127,23 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
   const optsRef = useRef(opts)
   optsRef.current = opts
   const [pins, setPins] = useState<Array<{ rowId: string; coordinateKey: CoordinateKey; before: MatrixCells }>>([])
+  /* The live rule's view of what this page holds — refilled IN PLACE by `commitRead`, so an event dispatched in the
+     same tick as a commit (this tab's own echo) already sees the new versions. */
+  const liveMembers = useRef(new Set<string>())
+  const liveVersions = useRef(new Map<string, number>())
 
   /* The read, its ref and its row index move TOGETHER, synchronously: a repaint issued in the same
      tick as a store write must already see the new cells, and React state alone lands a frame late. */
   const commitRead = useCallback((next: MatrixRead | null) => {
     readRef.current = next
+    liveMembers.current.clear()
+    liveVersions.current.clear()
+    if (next?.source === 'live') {
+      for (const r of next.rows) {
+        liveMembers.current.add(r.id)
+        for (const c of Object.values(r.cells)) if (c.listingId) liveVersions.current.set(c.listingId, Math.max(liveVersions.current.get(c.listingId) ?? -1, c.version))
+      }
+    }
     /* 🔴 The grid reads CLONES. The engine's `valueSetter` MUTATES the `MatrixCells` object the
        column's reader returns (AG discards a value whose getter did not move), and `applyCells`
        must compare the write against the PRISTINE read — on the same object a Buffer/Mode/Sale write
@@ -151,6 +198,82 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
      would discard every edit the operator made this session without a word. */
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
+  /* ── live: this family's listings changed elsewhere ─────────────────────────────────────── */
+
+  /* `seq` counts live requests; `owedSeq` is the newest one still owed (0 = none). A write whose own re-read started
+     after every owed request already shows them, so it pays the debt; anything later is fetched once it settles. */
+  const live = useMemo(() => {
+    const l = { writes: 0, writeEpoch: 0, seq: 0, owedSeq: 0, fetching: false, again: false, alive: true }
+    let watching: { api: GridApi<{ id: string }>; onStop: () => void } | null = null
+    const openEditor = (): GridApi<{ id: string }> | null => {
+      const api = optsRef.current.getApi()
+      return api && !api.isDestroyed() && api.getEditingCells().length > 0 ? api : null
+    }
+    const idle = () => l.writes === 0 && !openEditor()
+    const unwatch = () => {
+      if (watching && !watching.api.isDestroyed()) watching.api.removeEventListener('cellEditingStopped', watching.onStop)
+      watching = null
+    }
+    /* An open editor is never repainted under the person: the re-read waits for it to close (and, when the close
+       commits a value, for that write to settle). */
+    const owe = () => {
+      l.owedSeq = l.seq
+      const api = openEditor()
+      if (!api || watching?.api === api) return
+      unwatch()
+      const onStop = () => { unwatch(); setTimeout(flush, 0) }
+      api.addEventListener('cellEditingStopped', onStop)
+      watching = { api, onStop }
+    }
+    const run = async (): Promise<void> => {
+      if (l.fetching) { l.again = true; return }
+      l.fetching = true
+      const { productId: pid, accountId: acc, locale: loc } = optsRef.current
+      const epoch = l.writeEpoch
+      const got = await fetchMatrix(pid, { accountId: acc, locale: loc })
+      l.fetching = false
+      const o = optsRef.current
+      const stale = !l.alive || o.productId !== pid || o.accountId !== acc || o.locale !== loc || readRef.current?.source !== 'live'
+      /* A transport failure keeps what the page holds; the next event or Reload reads again. */
+      if (!stale && got.kind === 'live') {
+        if (l.writeEpoch !== epoch || !idle()) owe()
+        else commitRead(got.read)
+      }
+      const more = l.again && !stale
+      l.again = false
+      if (more) void run()
+    }
+    function flush() {
+      if (!l.alive || l.owedSeq === 0 || !idle()) return
+      l.owedSeq = 0
+      void run()
+    }
+    return {
+      state: l,
+      request: () => { l.seq += 1; if (idle()) void run(); else owe() },
+      /** A live write (a cell, a verb, a revert) starts: no live re-read lands while one is in flight. */
+      begin: () => { l.writes += 1; l.writeEpoch += 1 },
+      /** It settled; `coveredSeq` = `seq` when its own re-read started, `null` when it did not re-read. */
+      end: (coveredSeq: number | null) => {
+        l.writes -= 1
+        if (l.owedSeq !== 0 && coveredSeq !== null && l.owedSeq <= coveredSeq) l.owedSeq = 0
+        flush()
+      },
+      dispose: () => { l.alive = false; unwatch() },
+    }
+  }, [commitRead])
+  useEffect(() => { live.state.alive = true; return live.dispose }, [live])
+
+  const liveFamily = read?.source === 'live' ? read.productId : null
+  useListingValuesLive({
+    familyId: liveFamily,
+    memberIds: liveMembers.current,
+    knownVersions: liveVersions.current,
+    enabled: liveFamily !== null,
+    onStock: live.request,
+    onFull: live.request,
+  })
+
   /* ── the marks ──────────────────────────────────────────────────────────────────────────── */
 
   const repaint = useCallback((rowId: string, colId: string) => {
@@ -170,7 +293,8 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
         tracker.set(o.rowId, colId, 'saved')
         setTimeout(() => { if (tracker.get(o.rowId, colId)?.state === 'saved') { tracker.clear(o.rowId, colId); repaint(o.rowId, colId) } }, SAVED_FADE_MS)
       } else {
-        const reason = o.reason ?? (o.outcome === 'conflict' ? 'Changed elsewhere — reloaded' : 'Refused')
+        /* A conflict is never retried: the cell says so (its hover leads with the reason, then the fresh read). */
+        const reason = o.reason ?? (o.outcome === 'conflict' ? MATRIX_COPY.changedElsewhere : 'Refused')
         tracker.set(o.rowId, colId, 'refused', reason)
         if (o.outcome === 'refused') optsRef.current.onRefused?.(reason)
       }
@@ -201,19 +325,29 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       mark(result.results)
       return result.results
     }
+    live.begin()
+    let covered: number | null = null
     try {
-      const result = await patchMatrix(productId, cells)
+      const result = await patchMatrix(productId, cells.map((c) => withListing(c, current)), { accountId })
       const after = afterLiveWrite(result.results)
       if (after === 'reread') {
+        const seqAtReread = live.state.seq
         const again = await fetchMatrix(productId, { accountId, locale })
-        if (again.kind === 'live') commitRead(again.read)
+        if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
       } else if (after === 'restore' && readRef.current) {
         /* A refusal wrote nothing, but the grid EDITED its clone of the cells (the engine's valueSetter): the typed
            number would stay on screen, and the cell's own hover would describe it as saved. Re-commit the stored read
            — a new object, so every cell repaints from fresh clones of what the server holds. */
         commitRead({ ...readRef.current })
       }
+      const changed = changedListings(result.results, current)
+      for (const c of changed) liveVersions.current.set(c.listingId, Math.max(liveVersions.current.get(c.listingId) ?? -1, c.version))
       mark(result.results)
+      if (changed.length) {
+        /* The other windows of this browser move at once, server stream or not; this tab already holds these versions. */
+        const fields = [...new Set(result.results.filter((o) => o.outcome === 'applied').flatMap((o) => FIELDS_OF[o.cell] ?? []))]
+        emitInvalidation({ type: 'listing.values_changed', id: current.productId, fields, meta: { source: 'local', productId: current.productId, listings: changed, fields } })
+      }
       return result.results
     } catch (e) {
       /* A transport failure is an UNKNOWN outcome, not a refusal: say so, and ask for a re-read. */
@@ -221,8 +355,10 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       for (const c of cells) { const colId = matrixColId(c.coordinateKey, c.cell); tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`); repaint(c.rowId, colId) }
       optsRef.current.onSettled?.({ ok: false, savedAt: new Date().toISOString() })
       return cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'refused' as const, reason, version: c.expectedVersion }))
+    } finally {
+      live.end(covered)
     }
-  }, [productId, accountId, locale, tracker, repaint, mark, commitRead])
+  }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live])
 
   /* ── verbs: preview → apply → revert ────────────────────────────────────────────────────── */
 
@@ -247,16 +383,23 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       mark(results)
       return operation
     }
-    const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.verbs(productId)}`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ params: { verb: preview.verb }, targets: preview.changes.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey })), commit: true, preview }),
-    })
-    const body = await res.json().catch(() => null)
-    if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The verb was refused (HTTP ${res.status})`)
-    const again = await fetchMatrix(productId, { accountId, locale })
-    if (again.kind === 'live') commitRead(again.read)
-    return (body as { operation: VerbOperation }).operation
-  }, [productId, accountId, locale, mark, commitRead])
+    live.begin()
+    let covered: number | null = null
+    try {
+      const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.verbs(productId)}`, {
+        method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ params: { verb: preview.verb }, targets: preview.changes.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey })), commit: true, preview }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The verb was refused (HTTP ${res.status})`)
+      const seqAtReread = live.state.seq
+      const again = await fetchMatrix(productId, { accountId, locale })
+      if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+      return (body as { operation: VerbOperation }).operation
+    } finally {
+      live.end(covered)
+    }
+  }, [productId, accountId, locale, mark, commitRead, live])
 
   const revert = useCallback(async (op: VerbOperation) => {
     const current = readRef.current
@@ -266,11 +409,18 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       commitRead(next)
       return
     }
-    const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.revert(productId, op.id)}`, { method: 'POST', credentials: 'include' })
-    if (!res.ok) throw new Error(`The revert was refused (HTTP ${res.status})`)
-    const again = await fetchMatrix(productId, { accountId, locale })
-    if (again.kind === 'live') commitRead(again.read)
-  }, [productId, accountId, locale, commitRead])
+    live.begin()
+    let covered: number | null = null
+    try {
+      const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.revert(productId, op.id)}`, { method: 'POST', credentials: 'include' })
+      if (!res.ok) throw new Error(`The revert was refused (HTTP ${res.status})`)
+      const seqAtReread = live.state.seq
+      const again = await fetchMatrix(productId, { accountId, locale })
+      if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+    } finally {
+      live.end(covered)
+    }
+  }, [productId, accountId, locale, commitRead, live])
 
   /* ── the footer's one-step undo of the last pin, through the store ──────────────────────── */
 

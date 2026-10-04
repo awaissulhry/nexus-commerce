@@ -1,12 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ ebayNotices: [] as string[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
+const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
 })
 vi.mock('@nexus/database/workspace-context', () => ({ workspaceIdForQuery: () => 'business-a' }))
 vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: m.mode }))
+// A status change is a refresh hint on the listing bus; here it is only recorded, never sent.
+vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: any) => m.published.push(event) }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
 vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
@@ -59,7 +61,7 @@ vi.mock('../../db.js', () => {
   channelListingSnapshot: { findMany: m.snapshots }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => { const out = await fn(db); m.events.push('commit'); return out } }
   return { default: db }
 })
-import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, reviewStudioPublication, publicationResultFor } from './studio-publication.service.js'
+import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, publicationSummary, publicationColumns, reviewStudioPublication, publicationResultFor } from './studio-publication.service.js'
 
 // Existing recovery tests explicitly review a selection before their send/result scenario.
 async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
@@ -75,7 +77,7 @@ const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alia
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
 beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
-  m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0
+  m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0; m.published.length = 0
   m.fill.mockImplementation(async () => { m.events.push('fill'); return { dryRun: false, rows: [], counts: {} } }) })
 
 const existingFacts = () => ({ ...facts(), listings: [{ id: 'listing-parent', productId: 'parent', externalListingId: 'existing-item' }] })
@@ -351,6 +353,50 @@ it('an error that names no field still blocks the whole review, photos included'
   expect(await previewRaw('parent', ebayScope, 'user')).toMatchObject({ id: null })
   expect(m.rows.size).toBe(0)
   m.photoFields.on = false
+})
+
+// Sheet publish parity, step 1 — the history's columns and counts.
+it('counts a result per SKU status, each SKU once', () => {
+  expect(publicationSummary({ id: 'p', status: 'PARTIAL', message: 'Two of four', results: [
+    { sku: 'A', status: 'ACCEPTED', message: '' }, { sku: 'B', status: 'VERIFIED', message: '' },
+    { sku: 'C', status: 'FAILED', message: '' }, { sku: 'D', status: 'SUBMITTED', message: '' }] }))
+    .toEqual({ message: 'Two of four', products: 4, accepted: 1, verified: 1, failed: 1, submitted: 1 })
+  expect(publicationSummary({ id: 'p', status: 'FAILED', message: 'Nothing was submitted.', results: [] }))
+    .toEqual({ message: 'Nothing was submitted.', products: 0, accepted: 0, verified: 0, failed: 0, submitted: 0 })
+})
+
+it('stores the family and the exact destination as columns when a review is saved and when it is sent', async () => {
+  const review = await previewStudioPublication('child', scope, 'user')
+  const destination = { kind: 'studio-publication', productId: 'parent', channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'seller-b', aliasKey: 'alias-b' }
+  expect(m.rows.get(review.id!)).toMatchObject(destination)
+  expect(m.rows.get(review.id!).submittedAt).toBeUndefined()
+  expect(publicationColumns('parent', scope, 'alias-b')).toEqual(destination)
+  await submitStudioPublication('child', review.id!, {}, 'user')
+  const sent = m.rows.get(review.id!)
+  expect(sent).toMatchObject({ ...destination, status: 'SUBMITTED', submittedAt: expect.any(Date), summary: expect.objectContaining({ products: 2, submitted: 2 }) })
+  // Step 2 schedules the result sweep on send (pinned in the next test).
+  expect(sent.nextCheckAt).toEqual(expect.any(Date))
+})
+
+/**
+ * Sheet publish parity, step 2 — a send schedules the result sweep and announces each status change once: the claim
+ * (PUBLISHING, first look at its 30-minute deadline), then the receipt (SUBMITTED, first look in two minutes). The
+ * final store keeps SUBMITTED, so it announces nothing more.
+ */
+it('schedules the result sweep when it sends and announces each status once', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(m.rows.get(review.id!)).not.toHaveProperty('checkCount')
+  const before = Date.now()
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: 'SUBMITTED' })
+  const row = m.rows.get(review.id!)
+  expect(row).toMatchObject({ status: 'SUBMITTED', checkCount: 0, nextCheckAt: expect.any(Date) })
+  const firstLook = row.nextCheckAt.getTime() - before
+  expect(firstLook).toBeGreaterThanOrEqual(2 * 60_000)
+  expect(firstLook).toBeLessThan(3 * 60_000)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  expect(m.published.map(event => event.status)).toEqual(['PUBLISHING', 'SUBMITTED'])
+  expect(m.published[1]).toMatchObject({ type: 'publication.status_changed', publicationId: review.id, productId: 'parent', channel: 'AMAZON',
+    marketplace: 'IT', accountId: 'seller-b', aliasKey: 'alias-b', terminal: false })
 })
 
 // MCP full control L3 — Claude's review saves nothing, and a publication's result is the business's, not one person's.

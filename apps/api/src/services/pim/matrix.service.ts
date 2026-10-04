@@ -31,15 +31,15 @@ import {
   type MatrixRead,
   type MatrixRowRead,
   type QueueCell,
+  type SaleCell,
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
-import { locationServes, resolveIntendedQuantity } from '../sync-control-core.js'
-import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
-import { isFbaListing } from '../outbound-sync.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
-import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
+import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
+import { listingQuantityVerdict } from './listing-quantity-verdict.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
 import { axisSynonymKey } from '../ebay-theme-axes.js'
 import { familyAccountId } from './family-account.js'
@@ -49,7 +49,7 @@ import { readSaleWindows } from './sale-window.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
-  effectiveFulfilment, listingStateOf, priceCellOf, reportedFulfilment, syncCellOf, withoutInventory, writableFor, type QueueRowFacts,
+  effectiveFulfilment, listingStateOf, priceCellOf, reportedFulfilment, withoutInventory, writableFor, type QueueRowFacts,
 } from './matrix-cells.js'
 
 export interface MatrixReadInput {
@@ -58,6 +58,8 @@ export interface MatrixReadInput {
   locale?: string | null
   /** `products.price.edit` for the caller — the price cells are held with the reason without it (Add 4(d)). */
   canEditPrice: boolean
+  /** Only these coordinates' cells (the product sheet's stock columns read one or two); every coordinate is still listed. */
+  only?: readonly CoordinateKey[]
 }
 
 export type MatrixReadWithMeta = MatrixRead & { meta: { tookMs: number; phases: Record<string, number>; queries: number } }
@@ -214,6 +216,10 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     for (let i = 0; i < axes.length; i++) { const d = rankOf(a, i) - rankOf(b, i); if (d !== 0) return d }
     return a.sku.localeCompare(b.sku)
   })
+  /* The family PARENT has no offer of its own. A standalone product (no variations, not flagged a parent) is its own
+     buyable listing: its row is a variant row, so its cells are read and written like any variation's — the product
+     sheet's stock columns show them on every product, not only on families. */
+  const isFamilyParent = (memberId: string): boolean => memberId === root.id && (children.length > 0 || root.isParent === true)
   const needsValue = (member: Member): boolean =>
     member.id !== root.id && axes.length > 0 && axes.some((axis) => !childValues.get(member.id)?.[axis.key])
 
@@ -295,24 +301,14 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 7. cells ───────────────────────────────────────────────────────────────────────────────
   const resolveListing = (l: MatrixListing, member: Member) => {
     const ch = upper(l.channel), mk = upper(l.marketplace)
-    const isFba = ch === 'AMAZON' && isFbaListing(
-      { fulfillmentMethod: l.fulfillmentMethod, platformAttributes: l.platformAttributes },
-      { fulfillmentMethod: member.fulfillmentMethod },
-      { fbaStockQty: fbaBucket.get(member.id) ?? 0, hasActiveFbaOffer: fbaOfferOn.has(l.id) },
-    )
-    const inputs = ledgerInputs(syncLedgers.get(member.id), l.sourceLocationCodes ?? [])
-    const ledger = inputs.ledger
-    const res = resolveIntendedQuantity({
-      channel: ch, marketplace: mk, isFba, offerClosed: !!l.offerClosedAt,
-      followMasterQuantity: l.followMasterQuantity !== false, syncPaused: l.syncPaused,
-      pinnedQuantity: l.quantity, stockBuffer: l.stockBuffer ?? 0,
-      channelPolicy: policyFor(policies, ch, mk, l.channelConnectionId), ...inputs,
+    /* The one quantity verdict (fail-closed FBA, `resolveIntendedQuantity` over the routed ledger), shared with the
+       product sheet's stock columns so the two never read a listing two ways. */
+    const { isFba, sync } = listingQuantityVerdict({
+      listing: l, productFulfillmentMethod: member.fulfillmentMethod, ledger: syncLedgers.get(member.id),
+      fbaStockQty: fbaBucket.get(member.id) ?? 0, hasActiveFbaOffer: fbaOfferOn.has(l.id),
+      channelPolicy: policyFor(policies, ch, mk, l.channelConnectionId),
+      fbaAtAmazon: ch === 'AMAZON' ? (fbaSellable.get(`${member.sku}|${mk}`) ?? fbaBucket.get(member.id) ?? null) : null,
     })
-    const routed = ledger.filter((r) => locationServes(r.syncRoutes, ch, mk)).map((r) => ({ locationCode: r.locationCode, available: r.available }))
-    const warehouseAvailable = routed.reduce((s, r) => s + r.available, 0)
-    const publishable = isFba ? null : computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable, fbaSellable: 0, stockBuffer: l.stockBuffer ?? 0 }).available
-    const fbaAtAmazon = ch === 'AMAZON' ? (fbaSellable.get(`${member.sku}|${mk}`) ?? fbaBucket.get(member.id) ?? null) : null
-    const sync = syncCellOf(res, { followMasterQuantity: l.followMasterQuantity, held: l.quantity, buffer: l.stockBuffer ?? 0, routed, fbaAtAmazon, publishable })
     const pa = (l.platformAttributes ?? {}) as Record<string, unknown>
     const typed = l.fulfillmentMethod as FulfilmentMethod | null
     // 2026-09-27 — Amazon reads the ONE rule the sheet and the publish step read (`effectiveFulfilment`).
@@ -331,7 +327,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const rows = coord.rowsOf(member.id)
     const primary = rows[0]
     if (!primary) return null
-    const isParent = member.id === root.id
+    const isParent = isFamilyParent(member.id)
     const serves = (k: keyof typeof INVENTORY_CELL_KINDS extends never ? never : string) => coord.cells.includes(k as never)
     const inventory = coord.cells.some((k) => INVENTORY_CELL_KINDS.includes(k))
     let sync: SyncCell | null = null
@@ -366,7 +362,16 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       clamped: snapshot?.isClamped ? (decimalToNumber(snapshot.clampedFrom) ?? 0) > (decimalToNumber(snapshot.computedPrice) ?? 0) ? 'ceiling' : 'floor' : null,
     }) : null
     const window = saleWindows.get(primary.id)
-    const sale = serves('salePrice') ? (isParent ? { value: null, start: null, end: null } : { value: decimalToNumber(primary.salePrice), start: window?.start ?? null, end: window?.end ?? null }) : null
+    const sale: SaleCell | null = serves('salePrice') ? (isParent ? { value: null, start: null, end: null } : { value: decimalToNumber(primary.salePrice), start: window?.start ?? null, end: window?.end ?? null }) : null
+    /* D4=B: a product sheet price or sale saved on a live Amazon listing waits for Publish. The cells keep the live value
+       (what the push reads); `waiting` is the tooltip line only (`MATRIX_COPY.waitingForPublish`). */
+    const draft = coord.channel === 'AMAZON' && !isParent ? readAmazonOfferDraft(primary.platformAttributes)?.leaves : undefined
+    const ourPrice = draft?.our_price?.value as { pin?: number; follow?: true } | null | undefined
+    if (price && ourPrice) price.waiting = { value: typeof ourPrice.pin === 'number' ? ourPrice.pin : null }
+    if (sale && draft?.sale) {
+      const s = draft.sale.value as { price: number; start: string; end: string } | null
+      sale.waiting = s ? { value: s.price, start: s.start, end: s.end } : { value: null, start: null, end: null }
+    }
     const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom: sourceOf(member.id)?.lenderName ?? null })
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
@@ -375,9 +380,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   }
 
   const rowOf = (member: Member): MatrixRowRead => {
-    const isParent = member.id === root.id
+    const isParent = isFamilyParent(member.id)
     const cells: Record<CoordinateKey, MatrixCells> = {}
-    for (const c of coordinates) { if (c.cells.length === 0) continue; const hit = cellsFor(member, c); if (hit) cells[c.key] = hit }
+    for (const c of coordinates) { if (c.cells.length === 0 || (input.only && !input.only.includes(c.key))) continue; const hit = cellsFor(member, c); if (hit) cells[c.key] = hit }
     const locations = isParent
       ? [...children.reduce((m, c) => { for (const l of poolLocations.get(c.id) ?? []) m.set(l.code, (m.get(l.code) ?? 0) + l.available); return m }, new Map<string, number>()).entries()].map(([code, available]) => ({ code, available }))
       : poolLocations.get(member.id) ?? []

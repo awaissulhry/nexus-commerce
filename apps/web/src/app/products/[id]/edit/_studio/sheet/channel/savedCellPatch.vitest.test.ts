@@ -109,6 +109,11 @@ describe('a save the browser cannot rebuild is read again', () => {
     expect(plan(set(4), {}, { formula: '=1' })).toBe('read')
     expect(plan(set(4), {}, { contentVersion: 3 })).toBe('read')
     expect(plan([{ ...set(4)[0], target: 'master' }])).toBe('read')
+    // Amazon sheet gaps (D4 = B): an Amazon offer column, or a cell with a change waiting for Publish, is read again —
+    // only the server knows whether the edit waits (live listing) or went through a door (never published).
+    expect(plan(set(4), { key: 'purchasable_offer__our_price' })).toBe('read')
+    expect(plan(set(4), { key: 'attr_fulfillment_availability__lead_time_to_ship_max_days' })).toBe('read')
+    expect(plan(set(4), {}, { pendingPublish: { value: 4, live: 5, savedAt: '2026-10-03T10:00:00Z' } })).toBe('read')
     row.completeness = { ...row.completeness, required: { filled: 0, total: 1, missing: [{ key: plain.column.key, label: 'x' }] } }
     expect(plan(set(4), {}, { value: null })).toBe('read')
   })

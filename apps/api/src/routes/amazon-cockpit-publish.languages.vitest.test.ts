@@ -25,7 +25,10 @@ vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: cl
 vi.mock('../services/amazon/flat-file.service.js', () => ({
   MARKETPLACE_ID_MAP: { IT: 'APJ6JRA9NG5V4', BE: 'AMEN7PMS3EDWL' },
   AmazonFlatFileService: class { async getFeedSchemaHints() { return {} } buildJsonFeedBody() { return '{"messages":[]}' } },
+  withAmazonOfferRoots: (body: string) => body,
 }))
+vi.mock('../services/amazon/offer-facts.js', () => ({ loadAmazonOfferFacts: vi.fn(async (_db: unknown, ids: string[]) => new Map(ids.map(id => [id, {}]))) }))
+vi.mock('../services/amazon/send-quantity.js', () => ({ loadAmazonSendQuantity: vi.fn(async () => ({ quantity: 1, fba: false, refusal: null })) }))
 vi.mock('../services/amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'dry-run' }))
 vi.mock('../services/listing-preflight.service.js', () => ({ checkLengthLimits: () => [] }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: {} }))

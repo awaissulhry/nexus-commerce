@@ -28,12 +28,25 @@
  * cumulative daily movement across every writer at −30%/+50%-or-€10, so an oscillation would spend
  * that allowance in a few ticks and then block both engines for the rest of the day.
  *
- * The delete/disable give-back (`bsRestoreBase`, advertising.routes.ts) is a SEPARATE mechanism and
- * is deliberately untouched by this rule — it runs when the operator removes the schedule.
+ * The delete/disable give-back (`restoreBudgetScheduleBase`, ads-budget-schedule.service.ts) is a
+ * SEPARATE mechanism — it runs when the operator removes the schedule — but since 3b it makes the
+ * same "is it still ours?" check (`giveBackCheck`).
  *
  * 1d — honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST enters no window but
  * still gives back a budget it set; halted / OFF writes nothing, give-backs wait for Resume; at most N
  * changes a run and a day. A held-back entry is not committed, so it is entered once allowed.
+ *
+ * 3b — what a give-back puts back, and when (review 6.2, 6.3, 6.6; the decision is `decideCampaign`):
+ *   · the base is the budget just before the window opened — not the creation-time snapshot and not
+ *     the rules' captured baseline (Owner S14). If the campaign still sits at the value this schedule
+ *     set (back-to-back windows, a give-back that has not landed), the base it recorded before stands;
+ *   · the give-back is written only while the campaign still sits at the value this schedule set.
+ *     Anyone else's change made meanwhile wins: `yielded`, and nothing is written;
+ *   · the record is kept outside windows, so the screen can still say what became of the give-back;
+ *   · a give-back that did not reach Amazon is tried again once an hour while the campaign still sits
+ *     at this schedule's value, at most GIVE_BACK_RETRIES times; then it shows as refused.
+ * Every give-back carries `giveBackOf` evidence; the write gate recognises it from the action log
+ * (ads-budget-giveback.ts, 3a) and exempts it from the day-move bound only.
  */
 import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
@@ -171,17 +184,19 @@ export function computeBudget(base: number, type: string, adj?: string, value?: 
 /**
  * BSP-P3 — what the memo records, per campaign.
  *
- * `budget` is unchanged and is still the churn key every existing reader uses
- * (`bsRestoreBase` in advertising.routes.ts reads `last[id]?.budget`), so this shape is purely
- * ADDITIVE — no migration, and a row written before this change still reads correctly.
+ * `budget` is unchanged — the value this record last asked for — so this shape is purely
+ * ADDITIVE — no migration, and a row written before this change still reads correctly
+ * (`ownCentsOf` / `baseCentsOf` read the older rows).
  *
  * `state` is the word the tab needs and never had:
  *   · `applied` — we asked for it and the local write + enqueue succeeded;
  *   · `held`    — the live budget already equals the target, so there was nothing to do;
  *   · `yielded` — 🔴 another writer moved this budget away from our target after we set it, and we
- *                 stand down for the rest of this window entry. BSP.6 adds `overriddenBy`, so the
- *                 tab can say WHO — the pacer, a rule, or the operator's own hand;
- *   · `refused` — the mutation layer declined (`ok:false`), which it does by RETURN VALUE;
+ *                 stand down for the rest of this window entry — and, since 3b, give nothing back
+ *                 when it closes. BSP.6 adds `overriddenBy`, so the tab can say WHO — the pacer, a
+ *                 rule, or the operator's own hand;
+ *   · `refused` — the mutation layer declined (`ok:false`), which it does by RETURN VALUE; or (3b) a
+ *                 give-back was given up after GIVE_BACK_RETRIES tries that did not reach Amazon;
  *   · `failed`  — the call threw.
  *
  * `actionLogId` / `outboundQueueId` are the receipt handles. They only exist on the outcome
@@ -198,7 +213,7 @@ export function computeBudget(base: number, type: string, adj?: string, value?: 
  * `<thatKey>#restore` for the single give-back that follows it. Same intent, now durable across a
  * failed restore, and immune to the value collision the old key had.
  */
-interface BSApplied {
+export interface BSApplied {
   budget: number
   at: string
   state?: 'applied' | 'held' | 'yielded' | 'refused' | 'failed'
@@ -211,6 +226,154 @@ interface BSApplied {
   actionLogId?: string | null
   outboundQueueId?: string | null
   error?: string | null
+  /** 3b — the budget just before the window opened, in cents: what the give-back puts back. */
+  baseCents?: number | null
+  /** 3b — the budget this schedule set, in cents. The give-back is written only while the campaign sits at it. */
+  ownCents?: number | null
+  /** 3b — give-back tries for this entry so far. */
+  attempts?: number
+  /** 3b — when a give-back that did not land may be tried again (ISO). */
+  nextRetryAt?: string | null
+}
+
+/**
+ * 3b — a give-back that did not reach Amazon (the gate SKIPPED it, the call FAILED, or the mutation
+ * layer refused it) is tried again once an hour, while the campaign still sits at this schedule's
+ * value, at most this many times after the first try. Then it shows as refused and a person decides.
+ */
+export const GIVE_BACK_RETRIES = 24
+const GIVE_BACK_RETRY_MS = 60 * 60_000
+const RESTORE = '#restore'
+/** Outbound queue states in which a write did not reach Amazon. SKIPPED is the write gate's. */
+const NOT_LANDED = new Set(['SKIPPED', 'FAILED', 'CANCELLED'])
+const toCents = (euros: number): number => Math.round(euros * 100)
+const eur = (cents: number): string => `€${(cents / 100).toFixed(2)}`
+
+/**
+ * 3b — the budget this schedule set, in cents; null when it set none. A record written before 3b has
+ * no `ownCents`: there `budget` is the value it set — unless the record is a refusal or a failure
+ * (its `budget` may be the live value it found) or a give-back (its `budget` is the base).
+ */
+export function ownCentsOf(prev: BSApplied | undefined): number | null {
+  if (!prev) return null
+  if (prev.ownCents !== undefined) return prev.ownCents
+  if (prev.budget == null || prev.state === 'refused' || prev.state === 'failed' || prev.windowKey?.endsWith(RESTORE)) return null
+  return toCents(Number(prev.budget))
+}
+
+/** 3b — what a give-back puts back, in cents. A record written before 3b has none: the creation-time snapshot stands in. */
+export function baseCentsOf(prev: BSApplied | undefined, legacyBaseCents: number | null): number | null {
+  return prev?.baseCents ?? legacyBaseCents ?? null
+}
+
+/**
+ * 3b — THE "is it still ours?" check, shared by the give-back when a window closes and by pause/delete
+ * (`restoreBudgetScheduleBase`):
+ *   · `giveBack` — the campaign still sits at the value this schedule set, and that is not the base;
+ *   · `kept`     — someone else moved it since (a person, a rule, the pacer): their change wins;
+ *   · `nothing`  — this schedule set nothing, or the budget already is the base.
+ */
+export function giveBackCheck(prev: BSApplied | undefined, liveCents: number, legacyBaseCents: number | null): { act: 'giveBack' | 'kept' | 'nothing'; baseCents: number | null; ownCents: number | null } {
+  const ownCents = ownCentsOf(prev)
+  const baseCents = baseCentsOf(prev, legacyBaseCents)
+  if (ownCents == null || baseCents == null || liveCents === baseCents) return { act: 'nothing', baseCents, ownCents }
+  return { act: liveCents === ownCents ? 'giveBack' : 'kept', baseCents, ownCents }
+}
+
+/** 3b — what one campaign needs this run: nothing, a new record and no write, or one write. */
+export type BSDecision =
+  | { act: 'none' }
+  | { act: 'keep'; record: BSApplied; outcome?: 'yielded' | 'refused' }
+  | { act: 'write'; purpose: 'enter' | 'giveBack'; windowKey: string; targetCents: number; baseCents: number; ownCents: number; attempts?: number; giveBackOf?: string }
+
+/** 3b — the give-back is given up: shown as refused, no longer tried, and no longer waiting on a queue row. */
+function gaveUpRecord(prev: BSApplied, at: string, live: number, windowKey: string, tries: number, baseCents: number, ownCents: number, last: string | null): BSApplied {
+  return {
+    ...prev, at, live, state: 'refused', windowKey, attempts: tries, nextRetryAt: null, outboundQueueId: null,
+    error: `not given back: ${tries} tries did not reach Amazon${last ? ` (last: ${last})` : ''}. The campaign keeps ${eur(ownCents)}; change it by hand if it should go back to ${eur(baseCents)}`,
+  }
+}
+
+/** 3b — a give-back try that did not land at once (refused or failed): tried again in an hour, or given up. */
+export function missedGiveBackRecord(prev: BSApplied, d: Extract<BSDecision, { act: 'write' }>, now: Date, live: number, state: 'refused' | 'failed', error: string | null): BSApplied {
+  const tries = d.attempts ?? 1
+  if (tries > GIVE_BACK_RETRIES) return gaveUpRecord(prev, now.toISOString(), live, d.windowKey, tries, d.baseCents, d.ownCents, error)
+  return { ...prev, at: now.toISOString(), state, live, error, attempts: tries, nextRetryAt: new Date(now.getTime() + GIVE_BACK_RETRY_MS).toISOString() }
+}
+
+/**
+ * 3b — the decision for one campaign, pure. `liveCents` is its budget now; `active` the window open
+ * now (null outside every window or outside the schedule's dates); `legacyBaseCents` the
+ * creation-time snapshot, read only for records written before 3b; `giveBack` what became of the
+ * queued write when the previous record is a give-back.
+ */
+export function decideCampaign(
+  prev: BSApplied | undefined,
+  liveCents: number,
+  active: ActiveWindow | null,
+  legacyBaseCents: number | null,
+  ctx: { type: string; now: Date; giveBack?: { status: string | null; error: string | null } | null },
+): BSDecision {
+  const at = ctx.now.toISOString()
+  const live = liveCents / 100
+
+  if (active) {
+    // Already handled this entry: report reality, write nothing.
+    if (prev?.windowKey === active.key) {
+      if (liveCents === ownCentsOf(prev)) return { act: 'keep', record: { ...prev, at, state: 'held', live } }
+      // Carry the entry key (so we stay stood down) and the receipt handles (so delivery still
+      // resolves) — but NOT a stale `overriddenBy`: it is re-resolved by the caller, and showing last
+      // tick's attributor for a yield we could not attribute this tick would be a fabrication.
+      const { overriddenBy: _stale, ...carried } = prev
+      return { act: 'keep', record: { ...carried, at, state: 'yielded', live }, outcome: 'yielded' }
+    }
+    // A new entry. 🔴 S14 — the base is the budget just before the window: the live value, unless the
+    // campaign still sits at what this schedule set; then the base recorded with that value stands.
+    const own = ownCentsOf(prev)
+    const recorded = baseCentsOf(prev, legacyBaseCents)
+    const baseCents = own != null && liveCents === own && recorded != null ? recorded : liveCents
+    const targetCents = toCents(computeBudget(baseCents / 100, ctx.type, active.win.adj, active.win.value))
+    // Reality already matches the new entry — nothing to do, but the entry is satisfied.
+    if (liveCents === targetCents) {
+      return { act: 'keep', record: { budget: targetCents / 100, at, state: 'held', live, windowKey: active.key, baseCents, ownCents: targetCents } }
+    }
+    return { act: 'write', purpose: 'enter', windowKey: active.key, targetCents, baseCents, ownCents: targetCents }
+  }
+
+  // Out of window. No record, or one older than BSP.6 (no entry key): nothing is owed. 6.6 — a record
+  // is KEPT outside windows; it is the only place the screen can read what became of a give-back.
+  if (!prev) return { act: 'none' }
+  const wk = prev.windowKey
+  if (!wk) return { act: 'keep', record: prev }
+  const isRestore = wk.endsWith(RESTORE)
+  const entryKey = isRestore ? wk.slice(0, -RESTORE.length) : wk
+  const restoreKey = `${entryKey}${RESTORE}`
+  const check = giveBackCheck(prev, liveCents, legacyBaseCents)
+  const tries = prev.attempts ?? 0
+
+  if (!isRestore) {
+    // The entry this record belongs to has closed: its give-back is owed now — if the budget is still ours.
+    if (check.act === 'kept') {
+      const { overriddenBy: _stale, ...carried } = prev
+      return { act: 'keep', record: { ...carried, at, state: 'yielded', live, windowKey: restoreKey }, outcome: 'yielded' }
+    }
+    if (check.act === 'nothing') return { act: 'keep', record: { ...prev, at, state: 'held', live, windowKey: restoreKey } }
+  } else {
+    // The give-back was decided. Only one that did not land is tried again, and only while the
+    // campaign still sits at this schedule's value: Amazon may have refused it and the sync copied
+    // Amazon's budget back. Anything else keeps the record as it is.
+    const st = ctx.giveBack?.status ?? null
+    const missed = prev.state === 'refused' || prev.state === 'failed' || (prev.state === 'applied' && st != null && NOT_LANDED.has(st))
+    if (!missed || check.act !== 'giveBack') return { act: 'keep', record: prev }
+    if (prev.state === 'refused' && tries > GIVE_BACK_RETRIES) return { act: 'keep', record: prev } // given up already
+  }
+  const baseCents = check.baseCents as number
+  const ownCents = check.ownCents as number
+  if (tries > GIVE_BACK_RETRIES) {
+    return { act: 'keep', record: gaveUpRecord(prev, at, live, restoreKey, tries, baseCents, ownCents, ctx.giveBack?.error ?? prev.error ?? null), outcome: 'refused' }
+  }
+  if (prev.nextRetryAt && ctx.now.getTime() < Date.parse(prev.nextRetryAt)) return { act: 'keep', record: prev }
+  return { act: 'write', purpose: 'giveBack', windowKey: restoreKey, targetCents: baseCents, baseCents, ownCents, attempts: tries + 1, giveBackOf: entryKey }
 }
 
 /**
@@ -239,7 +402,7 @@ export function classifyOverride(actor: string | null | undefined): { kind: BSOv
 // 1d — `guard`: the dial posture and the caps this run ran under, and what they held back.
 export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport }
 
-export async function runBudgetScheduleOnce(): Promise<BSTick> {
+export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BSTick> {
   const schedules = await prisma.budgetSchedule.findMany({
     where: { kind: 'BUDGET', enabled: true },
     // BSP-P4 — deterministic order. H10's law is "settings for the MOST RECENTLY CREATED schedule
@@ -256,34 +419,26 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
   for (const s of schedules) {
     const windows = (s.windows as unknown as BSWindow[]) ?? []
     const camps = (s.campaigns as unknown as BSCampaign[]) ?? []
-    const within = dateActive(s)
-    const active = within ? activeWindow(windows, s.timezone) : null
-    const win = active?.win ?? null
+    const within = dateActive(s, now)
+    const active = within ? activeWindow(windows, s.timezone, now) : null
     const last = (s.lastApplied as unknown as Record<string, BSApplied> | null) ?? {}
     const nextLast: Record<string, BSApplied> = {}
     /** BSP.6 — campaigns that yielded this tick; their overriders are resolved in ONE query below. */
     const yieldedIds: string[] = []
+    // 3b — what became of each give-back's queued write (SKIPPED by the gate → tried again), in ONE query.
+    const giveBackQueueIds = Object.values(last).filter((r) => r?.windowKey?.endsWith(RESTORE) && r.outboundQueueId).map((r) => r.outboundQueueId as string)
+    const giveBackRows = giveBackQueueIds.length
+      ? await prisma.outboundSyncQueue.findMany({ where: { id: { in: giveBackQueueIds } }, select: { id: true, syncStatus: true, errorMessage: true } })
+      : []
+    const giveBackById = new Map(giveBackRows.map((q) => [q.id, { status: String(q.syncStatus), error: q.errorMessage ?? null }]))
 
     for (const c of camps) {
-      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true, budgetBaselineCents: true } })
+      // 3b — `budgetBaselineCents` is no longer read here: it is the rules' anchor (group 4), not the
+      // budget a schedule found before its window (review 6.3).
+      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true } })
       if (!campaign || campaign.status === 'ARCHIVED') continue
-      /**
-       * BSP.2 (§2.5) — the base, in precedence order:
-       *   1. the operator's CAPTURED BASELINE (BUD.2's anchor — the one number every relative
-       *      budget mechanism now agrees to return to);
-       *   2. the creation-time snapshot (the old behaviour, for campaigns with no baseline);
-       *   3. the live value, when the snapshot never carried one.
-       * A schedule created before the August ratchet used to keep restoring pre-ratchet budgets
-       * forever — undoing both the rules and the pacer — because the snapshot was frozen at
-       * creation and nothing could refresh it.
-       */
-      const base = campaign.budgetBaselineCents != null
-        ? campaign.budgetBaselineCents / 100
-        : c.dailyBudget != null ? Number(c.dailyBudget) : Number(campaign.dailyBudget ?? 0)
-      // In a window → the window's budget; otherwise restore base.
-      const target = win ? computeBudget(base, s.type, win.adj, win.value) : Math.max(1, Math.round(base * 100) / 100)
       const live = Number(campaign.dailyBudget ?? 0)
-      const at = new Date().toISOString()
+      const at = now.toISOString()
       const prev = last[c.id]
 
       /**
@@ -308,38 +463,32 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
        * Why yielding is right rather than merely safe: `AdBudgetPlan` (€4,000/month) is the
        * AUTHORITY over how much money exists, and a schedule is a SHAPE within it. An instrument
        * overriding its own authority is incoherent. So the schedule stands down — and says who to.
-       */
-      const owedRestoreKey = prev?.windowKey && !prev.windowKey.endsWith('#restore') ? `${prev.windowKey}#restore` : null
-      const entryKey = active ? active.key : owedRestoreKey
-
-      /**
-       * Out of window with nothing owed → **do not touch this campaign at all.**
        *
-       * ⚠ This is a deliberate contract change. The old executor asserted `base` on every tick it
-       * was outside a window, which meant a brand-new schedule moved budgets before its first
-       * window had ever opened, and kept re-asserting base against the pacer forever. Neither is
-       * this object's job: outside its hours a schedule has no claim on the campaign. The
-       * give-back still happens — once, keyed to the entry it is giving back — and the
-       * delete/disable restore path (`bsRestoreBase`) is a separate mechanism, untouched.
+       * 3b — and the give-back yields too: it is written only while the campaign still sits at the
+       * value this schedule set (`decideCampaign`). It used to put the base back whatever the live
+       * value was, overwriting a person's, a rule's, the pacer's or a newer schedule's change (6.2, 6.8).
+       *
+       * Out of window with nothing owed → **no write.** (BSP.6: the old executor asserted `base` on
+       * every tick outside a window, moving budgets before a new schedule's first window had opened.)
        */
-      if (entryKey == null) continue
-
-      // Already handled this entry: report reality, write nothing.
-      if (prev?.windowKey === entryKey) {
-        if (live === target) { nextLast[c.id] = { ...prev, at, state: 'held', live }; continue }
-        yielded++
-        yieldedIds.push(c.id)
-        // Carry the entry key (so we stay stood down) and the receipt handles (so delivery still
-        // resolves) — but NOT a stale `overriddenBy`: it is re-resolved below, and showing last
-        // tick's attributor for a yield we could not attribute this tick would be a fabrication.
-        const { overriddenBy: _stale, ...carried } = prev
-        nextLast[c.id] = { ...carried, at, state: 'yielded', live }
-        logger.info('[budget-schedule] yielded — another writer owns this budget for the rest of the entry', { scheduleId: s.id, campaignId: c.id, target, live, entryKey })
+      const legacyBaseCents = c.dailyBudget != null ? toCents(Number(c.dailyBudget)) : null
+      const giveBack = prev?.outboundQueueId ? giveBackById.get(prev.outboundQueueId) ?? null : null
+      const d = decideCampaign(prev, toCents(live), active, legacyBaseCents, { type: s.type, now, giveBack })
+      if (d.act === 'none') continue
+      if (d.act === 'keep') {
+        nextLast[c.id] = d.record
+        if (d.outcome === 'yielded') {
+          yielded++
+          yieldedIds.push(c.id)
+          logger.info('[budget-schedule] yielded — another writer owns this budget', { scheduleId: s.id, campaignId: c.id, live, windowKey: d.record.windowKey })
+        } else if (d.outcome === 'refused') {
+          refused++
+          logger.warn('[budget-schedule] give-back given up — it never reached Amazon', { scheduleId: s.id, campaignId: c.id, live, error: d.record.error })
+        }
         continue
       }
-
-      // A new entry, and reality already matches it — nothing to do, but the entry is satisfied.
-      if (live === target) { nextLast[c.id] = { budget: target, at, state: 'held', live, windowKey: entryKey }; continue }
+      const target = d.targetCents / 100
+      const isGiveBack = d.purpose === 'giveBack'
 
       /**
        * 1d — the dial and the caps, asked once per campaign before its one write. Entering a window is a new
@@ -352,7 +501,7 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
        */
       const permit = guard!.permit()
       const held = nothingHeld()
-      if (!allowChange(true, permit, held, active ? 'forward' : 'restore')) {
+      if (!allowChange(true, permit, held, isGiveBack ? 'restore' : 'forward')) {
         guard!.settle(permit, 0, held)
         if (prev) nextLast[c.id] = prev
         continue
@@ -376,8 +525,10 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
           campaignId: c.id,
           patch: { dailyBudget: target },
           actor: `automation:budget-schedule-${s.id}`,
-          reason: win ? `budget schedule: window → €${target}` : 'budget schedule: outside window → base',
+          reason: isGiveBack ? `budget schedule: window closed → give back €${target}, the budget before the window` : `budget schedule: window → €${target}`,
           applyImmediately: true,
+          // 3b — the entry this write gives back, for the history (the gate reads the action log, not this).
+          ...(d.giveBackOf ? { evidence: { giveBackOf: d.giveBackOf } } : {}),
         })
         if (!outcome.ok) {
           refused++
@@ -385,11 +536,12 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
            * 🔴 The entry key is NOT committed here. That is the whole point of keying on the entry
            * rather than the value: a refused write leaves the entry unhandled, so the next tick
            * tries it again — and the previous entry's key is carried so a later give-back still
-           * knows which entry it owes.
+           * knows which entry it owes. 3b — a refused give-back is tried again in an hour, not the next tick.
            */
-          if (prev?.budget != null) nextLast[c.id] = { ...prev, at, state: 'refused', live, error: outcome.error ?? null }
+          if (isGiveBack && prev) nextLast[c.id] = missedGiveBackRecord(prev, d, now, live, 'refused', outcome.error ?? null)
+          else if (prev?.budget != null) nextLast[c.id] = { ...prev, at, state: 'refused', live, error: outcome.error ?? null }
           else nextLast[c.id] = { budget: live, at, state: 'refused', live, error: outcome.error ?? null }
-          logger.warn('[budget-schedule] refused by the mutation layer — will retry next tick', { scheduleId: s.id, campaignId: c.id, target, error: outcome.error })
+          logger.warn('[budget-schedule] refused by the mutation layer — will retry', { scheduleId: s.id, campaignId: c.id, target, giveBack: isGiveBack, error: outcome.error })
           continue
         }
         /**
@@ -403,7 +555,7 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
          * but "rare" is how the memo laundering got in, and the honest branch costs one line.
          */
         if (outcome.error === 'no_changes' || outcome.outboundQueueId == null) {
-          nextLast[c.id] = { budget: target, at, state: 'held', live, windowKey: entryKey }
+          nextLast[c.id] = { budget: target, at, state: 'held', live, windowKey: d.windowKey, baseCents: d.baseCents, ownCents: d.ownCents }
           logger.info('[budget-schedule] no change to make', { scheduleId: s.id, campaignId: c.id, target })
           continue
         }
@@ -416,14 +568,20 @@ export async function runBudgetScheduleOnce(): Promise<BSTick> {
          * delivery answer therefore lives on `OutboundSyncQueue.syncStatus`, which is why the queue
          * id is kept here: it is the handle the tab uses to ask "did this actually reach Amazon?"
          * rather than assuming. [[reference_mutation_outcome_returned_not_thrown]]
+         * 3b — and for a give-back, the handle the next runs read to try it again if it was SKIPPED.
          */
-        nextLast[c.id] = { budget: target, at, state: 'applied', live, windowKey: entryKey, actionLogId: outcome.actionLogId, outboundQueueId: outcome.outboundQueueId }
-        logger.info('[budget-schedule] applied locally + queued', { scheduleId: s.id, campaignId: c.id, budget: target, inWindow: !!win, entryKey, outboundQueueId: outcome.outboundQueueId })
+        nextLast[c.id] = {
+          budget: target, at, state: 'applied', live, windowKey: d.windowKey, baseCents: d.baseCents, ownCents: d.ownCents,
+          actionLogId: outcome.actionLogId, outboundQueueId: outcome.outboundQueueId,
+          ...(isGiveBack ? { attempts: d.attempts, nextRetryAt: new Date(now.getTime() + GIVE_BACK_RETRY_MS).toISOString() } : {}),
+        }
+        logger.info('[budget-schedule] applied locally + queued', { scheduleId: s.id, campaignId: c.id, budget: target, giveBack: isGiveBack, windowKey: d.windowKey, outboundQueueId: outcome.outboundQueueId })
       } catch (e) {
         // Same as the refusal path: the entry key stays uncommitted so the next tick retries.
-        if (prev?.budget != null) nextLast[c.id] = { ...prev, at, state: 'failed', live, error: (e as Error).message }
+        if (isGiveBack && prev) nextLast[c.id] = missedGiveBackRecord(prev, d, now, live, 'failed', (e as Error).message)
+        else if (prev?.budget != null) nextLast[c.id] = { ...prev, at, state: 'failed', live, error: (e as Error).message }
         else nextLast[c.id] = { budget: live, at, state: 'failed', live, error: (e as Error).message }
-        logger.warn('[budget-schedule] apply failed — will retry next tick', { scheduleId: s.id, campaignId: c.id, error: (e as Error).message })
+        logger.warn('[budget-schedule] apply failed — will retry', { scheduleId: s.id, campaignId: c.id, giveBack: isGiveBack, error: (e as Error).message })
       } finally {
         guard!.settle(permit, writes, held)
       }

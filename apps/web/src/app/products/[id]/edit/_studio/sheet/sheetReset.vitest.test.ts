@@ -142,3 +142,24 @@ describe('an emptied list leaves as a clear (report 1 I-10)', () => {
     expect(wireCellValue('')).toBe('')
   })
 })
+
+/** Amazon sheet gaps (D4=B) — an offer change waiting for Publish is discarded by its reset; the stock columns have none. */
+describe('channelResetOffer — an Amazon offer change waiting for Publish', () => {
+  const waiting = (over: Partial<StudioCellValue> = {}) => cell({ value: [44.9], writeField: 'attr_purchasable_offer__our_price', layer: 'master', pinned: false, inherited: true,
+    pendingPublish: { value: 44.9, live: 49.9, savedAt: '2026-10-02T12:03:00.000Z', savedBy: 'sheet@test', note: 'Saved — pins at 44.90 when you publish', sent: true }, ...over } as never)
+  it('offers "Discard saved change (live: …)" whatever the cascade says, as a plain reset', () => {
+    expect(channelResetOffer(channelRow({ price: waiting() }), 'price')).toEqual({ intent: 'reset', formula: false, label: 'Discard saved change (live: 49.90)' })
+    expect(channelResetOffer(channelRow({ price: waiting({ layer: 'channel', pinned: true, inherited: false }) }), 'price')?.label).toBe('Discard saved change (live: 49.90)')
+  })
+  it('a formula cell removes its formula first; a held waiting cell offers nothing', () => {
+    expect(channelResetOffer(channelRow({ price: waiting() }), 'price', true)).toEqual({ intent: 'reset', formula: true, label: 'Remove formula and reset to inherited' })
+    expect(channelResetOffer(channelRow({ price: waiting({ editable: false, writable: false, writeBlockedReason: 'You need permission to change prices' }) }), 'price')).toBeNull()
+  })
+  it('the stock columns (Mode / Qty / Buffer) get no reset, no clear and no "Set every row…"', () => {
+    expect(controlColumnFacts({ key: 'stock_qty', label: 'Qty', kind: 'stockControl', editable: true })).toBeNull()
+    expect(controlColumnFacts({ key: 'stock_mode', label: 'Mode', kind: 'stockControl', editable: true })).toBeNull()
+    const stock = cell({ value: 12, source: 'matrix' as never, layer: 'channel', pinned: false, resettable: false })
+    expect(channelResetOffer(channelRow({ stock_qty: stock }), 'stock_qty')).toBeNull()
+    expect(controlColumnFacts({ key: 'purchasable_offer__our_price', label: 'Price', kind: 'number', editable: true })).toMatchObject({ colId: 'purchasable_offer__our_price' })
+  })
+})

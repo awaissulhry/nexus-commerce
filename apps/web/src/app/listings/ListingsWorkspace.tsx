@@ -871,6 +871,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         title={title}
         description={description}
         breadcrumbs={breadcrumbs}
+        actions={
+          <NexusButton asChild variant="secondary" size="sm">
+            <Link href="/listings/publish-status">Publish history</Link>
+          </NexusButton>
+        }
       />
 
       {/* KPI strip — clickable tiles drive grid filters. Matches the

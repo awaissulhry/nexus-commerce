@@ -79,9 +79,9 @@ export const localDayKey = (now: Date = new Date()): string =>
  * second is the system working as designed, not a fault to chase.
  */
 export function scheduleStatus(r: ScheduleStateRow, todayIso: string): StateWord {
-  if (!r.enabled) return { word: 'Off', cls: 'off', why: 'Paused — the executor skips this schedule and campaigns hold their base budgets.' }
+  if (!r.enabled) return { word: 'Off', cls: 'off', why: 'Paused — this schedule changes nothing now. Pausing gives back each budget it still holds; a budget someone changed since stays as it is.' }
   if (r.startDate !== '—' && r.startDate > todayIso) return { word: 'Scheduled', cls: 'bs-sched', why: `Starts ${r.startDate}. Until then, nothing is changed.` }
-  if (r.endDate !== '—' && r.endDate < todayIso) return { word: 'Completed', cls: 'bs-done', why: `Ended ${r.endDate}. Budgets have been restored to base.` }
+  if (r.endDate !== '—' && r.endDate < todayIso) return { word: 'Completed', cls: 'bs-done', why: `Ended ${r.endDate}. It gives back each budget it still holds and leaves a budget someone changed since as it is.` }
   const d = r.delivery
   if (d && (d.yielded > 0 || d.notDelivered > 0 || d.refused > 0 || d.failed > 0)) {
     return {
@@ -104,10 +104,10 @@ export function scheduleStatus(r: ScheduleStateRow, todayIso: string): StateWord
  */
 export function describeYields(d: ScheduleDelivery): string {
   const by = d.yieldedBy ?? []
-  if (by.length === 0) return `${d.yielded} of ${d.campaigns} were moved by another writer, so this schedule stood down for the rest of the window`
+  if (by.length === 0) return `${d.yielded} of ${d.campaigns} were moved by another writer, so this schedule stood down and leaves that budget in place when the window closes`
   const parts = by.map((b) => `${b.count} to ${b.label}`)
   const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
-  return `${d.yielded} of ${d.campaigns} yielded — ${list}; a schedule owns a campaign only while its own window is open, so it stands down for the rest of this one rather than re-fighting`
+  return `${d.yielded} of ${d.campaigns} yielded — ${list}; a schedule owns a campaign only while its own window is open, so it stands down rather than re-fighting and leaves their budget in place when the window closes`
 }
 
 /** True when every yield was the operator's own hand — not an automation conflict at all. */
@@ -126,7 +126,8 @@ const allOperator = (d: ScheduleDelivery): boolean => {
 export function deliveryCell(d: ScheduleDelivery | null): StateWord {
   if (!d || d.campaigns === 0) return { word: '—', cls: 'none', why: 'This schedule has not evaluated any campaign yet.' }
   if (d.notDelivered > 0) return { word: `${d.notDelivered} not at Amazon`, cls: 'bad', why: `${d.notDelivered} of ${d.campaigns} writes were rejected before reaching Amazon${d.lastError ? ` — ${d.lastError}` : ''}. The local budget was changed; the channel was not.` }
-  if (d.refused + d.failed > 0) return { word: `${d.refused + d.failed} refused`, cls: 'bad', why: `${d.refused + d.failed} of ${d.campaigns} writes were refused before they were queued${d.lastError ? ` — ${d.lastError}` : ''}. They are retried on the next tick.` }
+  // 3b — "24 times" is GIVE_BACK_RETRIES in apps/api/src/jobs/ad-budget-schedule.job.ts.
+  if (d.refused + d.failed > 0) return { word: `${d.refused + d.failed} refused`, cls: 'bad', why: `${d.refused + d.failed} of ${d.campaigns} writes were refused${d.lastError ? ` — ${d.lastError}` : ''}. A refused window change is tried again on the next run, a refused give-back once an hour, up to 24 times.` }
   // A budget the OPERATOR moved is not a conflict the operator needs to investigate — say so.
   if (d.yielded > 0) return { word: allOperator(d) ? `${d.yielded} held by you` : `${d.yielded} yielded`, cls: 'warn', why: `${describeYields(d)}. Those campaigns are NOT on their window value.` }
   if (d.unknown > 0) return { word: 'in flight', cls: 'wait', why: `${d.unknown} of ${d.campaigns} writes are queued and not yet confirmed at Amazon.` }

@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   region: vi.fn(),
   marketplaceId: vi.fn(),
   refresh: vi.fn(),
+  announce: vi.fn(),
 }))
 
 vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: m.findMany, findFirst: m.findFirst, updateMany: m.updateMany } } }))
@@ -23,6 +24,7 @@ vi.mock('../../clients/amazon-sp-api.client.js', () => ({
 vi.mock('../../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: m.sellerId, getAmazonRegion: m.region }))
 vi.mock('../categories/marketplace-ids.js', () => ({ configuredAmazonMarketplaceId: m.marketplaceId }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: m.refresh } }))
+vi.mock('../listing-values-events.js', () => ({ announceListingValues: m.announce }))
 
 import { fillAmazonListingAsins, pendingAsinListingIds, sellerSkuOf, summaryStatus, unfilledAmazonListingIds, ASIN_SWEEP_WINDOW_MS } from './listing-asin-fill.service.js'
 
@@ -162,6 +164,23 @@ describe('fillAmazonListingAsins', () => {
     expect(m.read).toHaveBeenCalledTimes(8)
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(3)
+  })
+
+  // Amazon sheet gaps (design-sync §1.B): open sheets and Matrix tabs show the new ASIN without a reload.
+  it('announces externalListingId for the rows it filled — never for a 404, a row that had one, a lost race or a dry run', async () => {
+    m.listings = [listing('a'), listing('b'), listing('c', { externalListingId: 'B0HAD00001' }), listing('d')]
+    m.read.mockResolvedValueOnce(found('B0FILLED0A')).mockResolvedValueOnce(absent).mockResolvedValueOnce(found('B0MINE000D'))
+    m.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+    m.findFirst.mockResolvedValue({ externalListingId: 'B0THEIRS0D' })
+    const report = await fillAmazonListingAsins(['a', 'b', 'c', 'd'])
+    expect(report.rows.map(r => [r.id, r.outcome])).toEqual([['a', 'filled'], ['b', 'not_visible_yet'], ['c', 'already_had_asin'], ['d', 'already_had_asin']])
+    expect(m.announce).toHaveBeenCalledTimes(1)
+    expect(m.announce).toHaveBeenCalledWith(['a'], ['externalListingId'], 'asin-fill')
+
+    m.announce.mockClear()
+    m.read.mockResolvedValue(found('B0DRY00001'))
+    await fillAmazonListingAsins(['b'], { dryRun: true })
+    expect(m.announce).not.toHaveBeenCalled()
   })
 
   it('refuses more than 200 rows in one call', async () => {

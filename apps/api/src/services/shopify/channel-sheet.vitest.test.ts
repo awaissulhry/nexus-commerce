@@ -354,6 +354,18 @@ describe('Shopify behind the common channel sheet', () => {
     expect(rows[1].values.weight.value).toBe('{"value":0,"unit":"KILOGRAMS"}')
     expect(rows[1].values.inventory.value).toBe(s.snapshot.rows[1].values.inventory)
   })
+  it('D2 — while Nexus sends the quantity (Follow or Pinned), Shopify\'s own inventory field is held and points to Qty; paused → editable', () => {
+    const base = page()
+    base.rows[1].listing = { ...(base.rows[1].listing ?? {}), syncPaused: false, follows: { followMasterQuantity: true } }
+    s.snapshot.rows[1].values.inventory = JSON.stringify({ inventoryItemId: 'gid://shopify/InventoryItem/12', tracked: true, locations: [] })
+    const listings = [{ id: 'variant-listing', productId: 'child', externalListingId: '10', platformAttributes: { variantId: '11' } }]
+    const held = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema, listings, 'alias-a')[1].values.inventory
+    expect(held).toMatchObject({ editable: false, writable: false })
+    expect(held.writeBlockedReason).toMatch(/^Nexus sends this quantity to Shopify \(Mode: Follow\)\. Change it in the Qty column/)
+    base.rows[1].listing = { ...base.rows[1].listing, syncPaused: true }
+    const paused = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema, listings, 'alias-a')[1].values.inventory
+    expect(String(paused.writeBlockedReason ?? '')).not.toMatch(/Nexus sends this quantity/)
+  })
   it('uses the persisted publish map without changing row hierarchy or media', () => {
     const base = page()
     base.rows[0].productMedia = [{ id: 'nexus-file', type: 'IMAGE', alt: 'Shared media' }]

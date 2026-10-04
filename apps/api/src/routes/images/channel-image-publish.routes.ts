@@ -26,27 +26,7 @@ import { publishShopifyImages } from '../../services/images/shopify-image-publis
 import { submitAmazonImageFeed } from '../../services/images/amazon-image-feed.service.js'
 import { recordImagePublishAudit } from '../../utils/image-publish-audit.js'
 import prisma from '../../db.js'
-
-interface UnifiedJob {
-  id: string
-  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
-  marketplace: string | null
-  status: string
-  errorMessage: string | null
-  vendorEntityId: string | null
-  submittedAt: string
-  completedAt: string | null
-  // IA.3 — Per-SKU receipt from Amazon's processing report. Only
-  // populated on AMAZON jobs once feed-status reaches DONE. Shape:
-  // { perSku: [{ sku, asin, accepted, errors }] } embedded in
-  // AmazonImageFeedJob.resultSummary.
-  perSku?: Array<{
-    sku: string
-    asin: string | null
-    accepted: boolean
-    errors: Array<{ code: string; message: string }>
-  }>
-}
+import { listProductImagePublishJobs } from '../../services/images/image-publish-jobs.service.js'
 
 const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
   // ── POST /api/products/:productId/ebay-images/publish ─────────────
@@ -148,72 +128,7 @@ const channelImagePublishRoutes: FastifyPluginAsync = async (fastify) => {
       const { productId } = request.params
       const limit = Math.min(parseInt(request.query.limit ?? '20', 10) || 20, 100)
 
-      const [amazonJobs, channelJobs] = await Promise.all([
-        prisma.amazonImageFeedJob.findMany({
-          where: { productId },
-          orderBy: { submittedAt: 'desc' },
-          take: limit,
-          select: {
-            id: true,
-            marketplace: true,
-            status: true,
-            errorMessage: true,
-            feedId: true,
-            submittedAt: true,
-            completedAt: true,
-            // IA.3 — pull resultSummary so the FE can render per-SKU
-            // receipts without a second round-trip per job.
-            resultSummary: true,
-          },
-        }),
-        prisma.channelImagePublishJob.findMany({
-          where: { productId },
-          orderBy: { submittedAt: 'desc' },
-          take: limit,
-          select: {
-            id: true,
-            channel: true,
-            marketplace: true,
-            status: true,
-            errorMessage: true,
-            vendorEntityId: true,
-            submittedAt: true,
-            completedAt: true,
-          },
-        }),
-      ])
-
-      const unified: UnifiedJob[] = [
-        ...amazonJobs.map((j): UnifiedJob => {
-          // IA.3 — Surface the per-SKU receipt when present. The raw
-          // resultSummary may include other Amazon fields; we only
-          // expose perSku to the FE to keep the payload narrow.
-          const rs = j.resultSummary as { perSku?: UnifiedJob['perSku'] } | null
-          return {
-            id: j.id,
-            channel: 'AMAZON',
-            marketplace: j.marketplace,
-            status: j.status,
-            errorMessage: j.errorMessage,
-            vendorEntityId: j.feedId,
-            submittedAt: j.submittedAt.toISOString(),
-            completedAt: j.completedAt?.toISOString() ?? null,
-            perSku: rs?.perSku,
-          }
-        }),
-        ...channelJobs.map((j): UnifiedJob => ({
-          id: j.id,
-          channel: j.channel as 'EBAY' | 'SHOPIFY',
-          marketplace: j.marketplace,
-          status: j.status,
-          errorMessage: j.errorMessage,
-          vendorEntityId: j.vendorEntityId,
-          submittedAt: j.submittedAt.toISOString(),
-          completedAt: j.completedAt?.toISOString() ?? null,
-        })),
-      ]
-        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
-        .slice(0, limit)
+      const unified = await listProductImagePublishJobs(productId, limit)
 
       return reply.send({ jobs: unified })
     },

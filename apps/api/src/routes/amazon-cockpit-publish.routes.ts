@@ -41,7 +41,10 @@ import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
   AmazonFlatFileService,
   MARKETPLACE_ID_MAP,
+  withAmazonOfferRoots,
 } from '../services/amazon/flat-file.service.js'
+import { loadAmazonOfferFacts } from '../services/amazon/offer-facts.js'
+import { loadAmazonSendQuantity } from '../services/amazon/send-quantity.js'
 import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js'
 import { checkLengthLimits, type LengthColumn } from '../services/listing-preflight.service.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
@@ -202,8 +205,20 @@ export default async function amazonCockpitPublishRoutes(
           COCKPIT_EXPANDED_FIELDS,
           feedSchema,
         )
+        // U4b — the full UPDATE replaces both offer roots whole: they come from the one builder over the job lane (live
+        // values, never a draft), with the stock job's own quantity. A quantity the job would refuse sends nothing here.
+        const [offerFacts, sendQuantity] = await Promise.all([
+          loadAmazonOfferFacts(prisma, [listing.id], 'job'),
+          product.isParent ? null : loadAmazonSendQuantity(prisma, { listingId: listing.id }),
+        ])
+        const facts = offerFacts.get(listing.id)
+        if (!facts) throw new Error('This listing no longer exists. Reload the product and publish again.')
+        if (sendQuantity?.refusal && !sendQuantity.fba) throw new Error(sendQuantity.refusal)
+        const offerFeedBody = withAmazonOfferRoots(legacyFeedBody, {
+          facts, fba: sendQuantity?.fba ?? false, quantity: sendQuantity?.quantity ?? null, isParent: !!product.isParent, marketplaceId,
+        })
         const spec = await loadAmazonSpec(mp, resolved.products[0]?.category.channelCategoryId ?? String(row.product_type ?? ''))
-        const feedBody = applyResolvedMappingToAmazonFeed(legacyFeedBody, resolved, spec)
+        const feedBody = applyResolvedMappingToAmazonFeed(offerFeedBody, resolved, spec)
         if (dryRun) {
           submissions.push({ ...result, ok: true, messageCount: 1, payload: JSON.parse(feedBody), validation: 'local-only' })
           continue

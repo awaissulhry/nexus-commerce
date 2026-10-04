@@ -56,6 +56,9 @@ export type InvalidationType =
   | 'listing.updated'
   | 'listing.created'
   | 'listing.deleted'
+  // Sheet publish parity, step 2 — a product sheet publication changed status (sent, waiting for the channel, settled
+  // by the server's result sweep). `id` = the publication; `meta` carries the family and the exact destination.
+  | 'publication.status_changed'
   | 'wizard.submitted'
   | 'wizard.created'
   | 'wizard.deleted'
@@ -88,6 +91,11 @@ export type InvalidationType =
   // the stock workspace and any other open stock tab refreshes immediately.
   | 'stock.adjusted'
   | 'stock.transferred'
+  // Amazon sheet gaps — the SSE bridge's narrow stock fact (`id` = the product whose stock moved; never mapped onto
+  // 'stock.adjusted') and listing values of one family changing (`id` = the family root; `meta` carries `listings`
+  // with their versions and `fields`). The product sheet and the Matrix re-read through `listingValuesLive.ts`.
+  | 'inventory.stock_changed'
+  | 'listing.values_changed'
   // F-RT.1 — inbound shipment events. Originally H.14 wired this through
   // a per-page EventSource; now flows through useInboundEvents → here so
   // stock / replenishment / returns / POs (anything that cares about

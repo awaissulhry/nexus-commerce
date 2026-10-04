@@ -1,5 +1,5 @@
 import type { PublicationFacts } from './studio-publication-plan.js'
-import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
+import type { StudioChannelIssue, StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { object } from './studio-publication-plan.js'
 import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../amazon/cockpit-publish-row.js'
 import { AmazonFlatFileService, normalizeVariationTheme } from '../amazon/flat-file.service.js'
@@ -32,6 +32,17 @@ import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
 import { assertNoMerchantQuantityForFba } from '../../lib/amazon-fba-boundary.js'
+import { describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
+import { readAmazonOfferFacts } from '../amazon/offer-facts.js'
+import { amazonFulfillmentAvailability, amazonPurchasableOffer, amazonSellerBoundsRefusal } from '../amazon/offer-attributes.js'
+import { amazonSendQuantity, readEuIntentRows, type SendQuantity } from '../amazon/send-quantity.js'
+import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
+import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
+import { masterCurrency } from '../fx-rate.service.js'
+import { priceBoundsOf, priceBoundsRefusal } from '../price-bounds.service.js'
+import type { ProductLedger } from '../stock-pool/sync-ledgers.js'
+import { readSaleWindows, type SaleWindow } from './sale-window.js'
+import type { AmazonOfferJournal } from './studio-publication-amazon-offer.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -39,6 +50,8 @@ export interface AmazonPublication {
   marketplaceId: string
   products: Array<{ productId: string; sku: string }>
   fieldWrites?: Record<string, StudioPublishFieldWrite[]>
+  /** Amazon sheet gaps — per product, the offer leaves the message carries (the journal's `request.offer`). */
+  offers?: Record<string, AmazonOfferJournal>
   feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; requirements?: string; attributes?: Record<string, unknown>; patches?: any[] }> }
 }
 
@@ -60,6 +73,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
+  const saleWindows = await readSaleWindows(prisma as never, listings.filter(l => !l.externalListingId).map(l => l.id))
   const identityProducts = products.some(product => product.id === parent.id) ? products : [parent, ...products]
   const sellerSkus = new Map(identityProducts.map(product => {
     const listing = listings.find(l => l.productId === product.id)
@@ -104,15 +118,13 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const data = resolved[0]?.products.find(p => p.productId === product.id)
     if (!data) throw new Error(`${product.sku} could not be resolved.`)
     const ledger = ledgers.get(product.id)
-    // Tracked = warehouse rows to draw from (own or pooled), or it left a pool (then own stock is 0).
-    const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
     // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master in
     // the master currency, else the price the listing holds. It sent a follower the master price: "master +10%" went live
     // at the master, and Amazon UK was sent the EUR number as pounds. Nothing to send is refused for that SKU, by name.
     const send = listingSendPrice(listing ?? NO_LISTING_PRICE_FACTS, { masterPrice: product.basePrice, marketCurrency: marketCur, where: `Amazon ${scope.marketplace}` })
     if (send.price == null && !product.isParent) throw new Error(`${product.sku}: ${send.reason}`)
-    const current = { ...listing, priceOverride: send.price,
-      quantityOverride: listing?.followMasterQuantity !== false ? (tracked ? ledger!.quantity : product.totalStock) : listing.quantityOverride ?? listing.quantity }
+    // Amazon sheet gaps — the quantity is the offer builder's (a new listing, below) or the stock job's: never the row's.
+    const current = { ...listing, priceOverride: send.price, quantityOverride: null, quantity: null }
     // `data.category` is resolveBatch's answer for this listing (the #82 rule); the row builder takes it, no second read.
     const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id), productType: data.category.channelCategoryId })
     // Condition belongs to its own attribute, not the purchasable_offer object.
@@ -128,11 +140,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     // the flat mirror now sit above the product flag, so an FBA listing is never sent as FBM because of that flag.
     const fulfillment = effectiveFulfilment({ activeOfferMethod: activeOffer?.fulfillmentMethod, typed: listing?.fulfillmentMethod,
       platformAttributes: listing?.platformAttributes, productMethod: product.fulfillmentMethod })?.method
-    if (fulfillment) row.fulfillment_availability__fulfillment_channel_code = fulfillment === 'FBA' ? `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(scope.accountId)]}` : 'DEFAULT'
-    if (row._isNew && !product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
-    const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))
-    row.fulfillment_availability__quantity = Math.min(available, Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0)))
-    if (row._isNew && !Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
+      ?? describeAmazonFulfilmentCode(row.fulfillment_availability__fulfillment_channel_code).method ?? undefined
+    if (row._isNew && !product.isParent && !fulfillment) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
+    // A live listing's fulfilment root is the offer lane's (never a code from here, never AMAZON_<region>): see below.
+    delete row.fulfillment_availability__fulfillment_channel_code
     if (planMedia && planLayout) {
       for (const slot of amazonImageSlots) delete row[slot.attribute]
       if (row._isNew) {
@@ -194,6 +205,16 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
+    // Amazon sheet gaps — a new listing's two offer roots from the one builder, over whatever the row and the mapping
+    // wrote (an old sheet value in `overrideData` never leaks into them). A parent has none.
+    if (row._isNew && message.attributes) {
+      const roots = await newListingOfferRoots({ sku: String(row.item_sku), product, listing, ledger, method: fulfillment, sendPrice: send.price,
+        saleWindow: listing ? saleWindows.get(listing.id) ?? null : null, marketplace: scope.marketplace, marketplaceId, currency: facts.destination.currency, accountId: scope.accountId })
+      for (const [root, value] of Object.entries(roots)) {
+        if (value) message.attributes[root] = value
+        else delete message.attributes[root]
+      }
+    }
     // The content resolver owns every supported language, including reviewed pins.
     const content = await buildAmazonContentAttributes({ product: product as any, parent: product.id === parent.id ? null : parent as any,
       listing, marketplace: scope.marketplace, marketplaceId })
@@ -215,12 +236,69 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })) }
 }
 
-/** Validate the complete family before submitting its single feed. An acknowledgement is not live status. */
-export async function sendAmazonPublication(plan: AmazonPublication, accountId: string,
-  beforeSend?: (request: { feedType: string; marketplaceIds: string[]; feed: AmazonPublication['feed'] }) => Promise<void>) {
-  const request = { feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [plan.marketplaceId], feed: plan.feed }
-  let documentId: string
-  let sp: Awaited<ReturnType<typeof getAmazonSpClient>>
+type PublicationListing = PublicationFacts['listings'][number]
+type PublicationProduct = PublicationFacts['products'][number]
+
+/**
+ * Amazon sheet gaps (bug 3) — THE quantity a new listing is created with: the stock job's rule (`amazonSendQuantity`:
+ * FBA → none, the committed or resolved number, the routed oversell clamp, the EU shared-quantity guard), never the
+ * buffer taken off a pin nor stock routed to another market. Publish refuses any paused listing but a still-draft, whose
+ * pause only keeps it inert until this send, so the pause does not hold its quantity here.
+ */
+async function newListingQuantity(input: { sku: string; product: PublicationProduct; listing: PublicationListing | undefined; ledger: ProductLedger | undefined;
+  marketplace: string; accountId: string }): Promise<SendQuantity> {
+  const { product, listing } = input
+  const [fbaStock, policies] = await Promise.all([
+    prisma.stockLevel.aggregate({ where: { productId: product.id, location: { code: 'AMAZON-EU-FBA' } }, _sum: { quantity: true } }),
+    loadChannelPolicies(prisma as never),
+  ])
+  let euRows: Awaited<ReturnType<typeof readEuIntentRows>> | null = null, euRowsError: string | null = null
+  if (AMAZON_EU_SHARED_MARKETS.has(input.marketplace.toUpperCase())) {
+    try { euRows = await readEuIntentRows(prisma, product.id) } catch (error) { euRowsError = error instanceof Error ? error.message : String(error) }
+  }
+  return amazonSendQuantity({ sku: input.sku, listing: listing ? { ...listing, syncPaused: false } : null, marketplace: input.marketplace,
+    product: { id: product.id, fulfillmentMethod: product.fulfillmentMethod ?? null }, ledger: input.ledger,
+    evidence: { fbaStockQty: fbaStock._sum.quantity ?? null, hasActiveFbaOffer: !!listing?.offers.some(o => o.isActive && o.fulfillmentMethod === 'FBA') },
+    channelPolicy: policyFor(policies, 'AMAZON', input.marketplace, input.accountId), euRows, euRowsError })
+}
+
+/**
+ * A new listing's `purchasable_offer` and `fulfillment_availability` (null = leave the root out), from the one builder:
+ * the send price inside the product's floor and ceiling and Amazon's minimum and maximum, Nexus's sale with both dates,
+ * the offer settings Nexus holds, and the stock job's quantity. FBA evidence on a listing set to FBM is refused by
+ * name — never re-coded, never sent a merchant quantity.
+ */
+async function newListingOfferRoots(input: { sku: string; product: PublicationProduct; listing: PublicationListing | undefined; ledger: ProductLedger | undefined;
+  method: 'FBA' | 'FBM' | undefined; sendPrice: number | null; saleWindow: SaleWindow | null; marketplace: string; marketplaceId: string; currency: string; accountId: string }) {
+  if (input.product.isParent) return { purchasable_offer: null, fulfillment_availability: null }
+  const facts = readAmazonOfferFacts({ ...(input.listing ?? {}), marketplace: input.marketplace, saleWindow: input.saleWindow }, 'publish', { followPrice: input.sendPrice })
+  const sale = facts.values.sale?.start && facts.values.sale.end ? facts.values.sale.price : null
+  const priceRefusal = input.sendPrice == null ? null
+    : priceBoundsRefusal({ price: input.sendPrice, bounds: priceBoundsOf(input.product), channel: 'Amazon', sku: input.sku, currency: currencyCode(input.currency), masterCurrency: masterCurrency() })
+      ?? amazonSellerBoundsRefusal({ price: input.sendPrice, salePrice: sale, min: facts.values.minimum_seller_allowed_price, max: facts.values.maximum_seller_allowed_price, sku: input.sku })
+  if (priceRefusal) throw new Error(priceRefusal)
+  const quantity = await newListingQuantity(input)
+  if (input.method !== 'FBA' && (quantity.fba || facts.fbaByCode))
+    throw new Error(`${input.sku}: Amazon fulfils this product (FBA), but this listing is set to FBM. Nexus never sends it a merchant quantity: choose FBA for it, or move its stock out of FBA, before publishing.`)
+  if (input.method !== 'FBA' && quantity.quantity == null) throw new Error(`${input.sku}: ${quantity.refusal ?? 'No quantity was worked out for this listing.'}`)
+  const fbaCode = `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(input.accountId)]}`
+  const fulfilment = amazonFulfillmentAvailability({ facts, fba: input.method === 'FBA', live: false, quantity: input.method === 'FBA' ? undefined : quantity.quantity, fbaCode })
+  if (!fulfilment) {
+    const kept = facts.fulfilmentCodes.map(describeAmazonFulfilmentCode).find(p => p.readOnlyReason)
+    throw new Error(`${input.sku}: ${kept?.readOnlyReason ?? 'its fulfilment could not be built.'}`)
+  }
+  return { purchasable_offer: amazonPurchasableOffer({ marketplaceId: input.marketplaceId, currency: input.currency, facts, sendPrice: input.sendPrice }), fulfillment_availability: fulfilment }
+}
+
+export type AmazonFeedMessage = AmazonPublication['feed']['messages'][number]
+export interface AmazonFeedRequest { feedType: string; marketplaceIds: string[]; feed: AmazonPublication['feed'] }
+
+/**
+ * Amazon's own dry run (Listings Items VALIDATION_PREVIEW) for each message. The first refusal throws `notSent`: nothing
+ * was submitted. `onChecked` is told after each message (a batch keeps its heartbeat with it).
+ */
+export async function validateAmazonMessages(plan: Pick<AmazonPublication, 'sellerId' | 'marketplaceId'> & { feed: { messages: AmazonFeedMessage[] } },
+  accountId: string, onChecked?: () => Promise<unknown> | void) {
   try {
     // FBA boundary first: a merchant quantity for an FBA SKU refuses the whole feed before any preview or upload.
     await assertNoMerchantQuantityForFba(plan.feed, accountId)
@@ -230,7 +308,25 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
         sku: message.sku, productType: message.productType, requirements: message.requirements,
         ...(message.operationType === 'UPDATE' ? { attributes: message.attributes ?? {} } : { patches: message.patches ?? Object.entries(message.attributes ?? {}).map(([key, value]) => ({ op: 'replace' as const, path: `/attributes/${key}`, value })) }) })
       if (!checked.available || !checked.ok) throw Object.assign(new Error(`${message.sku}: ${checked.available ? checked.errors : 'Amazon validation is unavailable. Nothing was submitted.'}`), { notSent: true })
+      await onChecked?.()
     }
+  } catch (error) { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
+}
+
+/**
+ * Upload one JSON_LISTINGS_FEED and create it. `beforeSend` runs first (the publication journal is written before any
+ * byte leaves). Anything that fails before `createFeed` throws `notSent`; a `createFeed` failure does not (Amazon may
+ * have it). Returns Amazon's feed id.
+ */
+export async function submitAmazonFeed(plan: { marketplaceId: string; feed: AmazonPublication['feed'] }, accountId: string,
+  beforeSend?: (request: AmazonFeedRequest) => Promise<void>) {
+  const request: AmazonFeedRequest = { feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [plan.marketplaceId], feed: plan.feed }
+  let documentId: string
+  let sp: Awaited<ReturnType<typeof getAmazonSpClient>>
+  try {
+    // The FBA boundary again at the upload itself: a feed shared by several publications (a batch) is checked whole,
+    // so no path to `createFeedDocument` can carry a merchant quantity for an FBA SKU.
+    await assertNoMerchantQuantityForFba(plan.feed, accountId)
     sp = await getAmazonSpClient(accountId)
     await beforeSend?.(request)
     const document = await sp.callAPI({ operation: 'createFeedDocument', endpoint: 'feeds', body: { contentType: 'application/json; charset=UTF-8' } })
@@ -245,34 +341,123 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
   return feed.feedId as string
 }
 
-/** Poll with the reviewed account; processing success does not prove storefront visibility. */
-export async function readAmazonPublication(feedId: string, accountId: string, skus: string[]) {
-  const sp = await getAmazonSpClient(accountId)
-  const feed = await sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } })
-  if (!['DONE', 'CANCELLED', 'FATAL'].includes(feed.processingStatus)) return null
-  if (feed.processingStatus === 'CANCELLED') return { failed: true, results: skus.map(sku => ({ sku, failed: true, message: 'Amazon feed cancelled.' })) }
-  if (!feed.resultFeedDocumentId) return null
-  const document = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: feed.resultFeedDocumentId } })
-  // gateway-exempt: pre-signed feed document on Amazon's storage; the feed itself goes through the gateway
-  const response = await fetch(document.url, { signal: AbortSignal.timeout(20_000) })
-  if (!response.ok) throw new Error(`Amazon processing report is unavailable (${response.status}).`)
-  const { decodeReportBytes, parseProcessingReport } = await import('../amazon-flat-file-feed.service.js')
-  const report = parseProcessingReport(
-    decodeReportBytes(Buffer.from(await response.arrayBuffer()), document.compressionAlgorithm),
-    skus,
-    skus.map((sku, index) => ({ messageId: index + 1, sku })),
-  )
+/** Validate the complete family before submitting its single feed. An acknowledgement is not live status. */
+export async function sendAmazonPublication(plan: AmazonPublication, accountId: string, beforeSend?: (request: AmazonFeedRequest) => Promise<void>) {
+  await validateAmazonMessages(plan, accountId)
+  return submitAmazonFeed(plan, accountId, beforeSend)
+}
+
+/** Where one publication's products sit in a feed: the message ids Amazon reports issues against. */
+export interface AmazonFeedMessageRef { messageId: number; sku: string }
+export interface AmazonFeedReadOptions {
+  /** This publication's messages in the feed. Absent: messages 1..n in SKU order (a feed of one publication). */
+  messages?: AmazonFeedMessageRef[]
+  /** How many messages the feed holds in all. Absent: this publication's own count. */
+  feedTotal?: number
+}
+
+/** A feed's processing state and report, read once. `text` is null while there is no report document. */
+interface AmazonFeedRead { status: string; completedAt: Date | null; text: string | null }
+
+/**
+ * Step 6 — several publications of one batch can share a feed; the result sweep settles each of them, one after another
+ * in the same tick. A SHARED feed's finished report is read once and kept for a minute, so it costs one getFeed +
+ * getFeedDocument per tick, not one per publication. Only a finished read is kept (a finished report never changes);
+ * a feed still processing, and a failed read, are never kept. A feed of one publication is read fresh every time.
+ */
+const FEED_READ_TTL_MS = 60_000
+const feedReads = new Map<string, { at: number; read: AmazonFeedRead }>()
+const finishedRead = (read: AmazonFeedRead) => read.status === 'CANCELLED' || ((read.status === 'DONE' || read.status === 'FATAL') && read.text != null)
+
+async function readFeedOnce(feedId: string, accountId: string, keep: boolean, now = Date.now()): Promise<AmazonFeedRead> {
+  for (const [key, entry] of feedReads) if (now - entry.at > FEED_READ_TTL_MS) feedReads.delete(key)
+  const key = `${accountId}\u0000${feedId}`
+  const kept = keep ? feedReads.get(key) : undefined
+  if (kept) return kept.read
+  const read = await (async (): Promise<AmazonFeedRead> => {
+    const sp = await getAmazonSpClient(accountId)
+    const feed = await sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } })
+    // When Amazon finished processing: the as-of of every issue the report carries (not the time somebody read it).
+    const completedAt = typeof feed.processingEndTime === 'string' && !Number.isNaN(Date.parse(feed.processingEndTime)) ? new Date(feed.processingEndTime) : null
+    if (feed.processingStatus !== 'DONE' && feed.processingStatus !== 'FATAL') return { status: String(feed.processingStatus), completedAt, text: null }
+    if (!feed.resultFeedDocumentId) return { status: String(feed.processingStatus), completedAt, text: null }
+    const document = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: feed.resultFeedDocumentId } })
+    // gateway-exempt: pre-signed feed document on Amazon's storage; the feed itself goes through the gateway
+    const response = await fetch(document.url, { signal: AbortSignal.timeout(20_000) })
+    if (!response.ok) throw new Error(`Amazon processing report is unavailable (${response.status}).`)
+    const { decodeReportBytes } = await import('../amazon-flat-file-feed.service.js')
+    return { status: String(feed.processingStatus), completedAt, text: decodeReportBytes(Buffer.from(await response.arrayBuffer()), document.compressionAlgorithm) }
+  })()
+  if (keep && finishedRead(read)) feedReads.set(key, { at: now, read })
+  return read
+}
+
+/** Test seam: forget every kept feed read. */
+export function clearAmazonFeedReads() { feedReads.clear() }
+
+/**
+ * PURE. The part of a SHARED feed's report that is about one publication: its own messages' issues, plus any issue
+ * that names no message and no SKU (it concerns the whole feed). Null while the report does not cover every message.
+ * `everyInvalid` = Amazon refused every message of the feed (a feed-level failure).
+ */
+export function sharedFeedReport(text: string, skus: string[], messages: AmazonFeedMessageRef[], feedTotal: number): { text: string; everyInvalid: boolean } | null {
+  let report: any
+  try { report = JSON.parse((text ?? '').trim()) } catch { return null }
+  if (!report || !Array.isArray(report.issues) || !Number.isFinite(Number(report.summary?.messagesProcessed))) return null
+  if (Number(report.summary.messagesProcessed) !== feedTotal) return null
+  const ids = new Set(messages.map(message => message.messageId))
+  const own = new Set(skus)
+  const issues = report.issues.filter((issue: any) => {
+    const messageId = Number(issue?.messageId)
+    if (issue?.messageId != null && Number.isSafeInteger(messageId)) return ids.has(messageId)
+    if (typeof issue?.sku === 'string' && issue.sku) return own.has(issue.sku)
+    return true
+  })
+  return { text: JSON.stringify({ issues, summary: { messagesProcessed: messages.length } }), everyInvalid: Number(report.summary.messagesInvalid) === feedTotal }
+}
+
+/**
+ * PURE. One publication's result from a processing report: per SKU, failed or not, with each issue kept apart.
+ * Null while the report is not final for every one of its messages.
+ */
+export async function amazonReportResults(text: string, skus: string[], options: AmazonFeedReadOptions = {}) {
+  const messages = options.messages?.length ? options.messages : skus.map((sku, index) => ({ messageId: index + 1, sku }))
+  const feedTotal = options.feedTotal ?? messages.length
+  const shared = feedTotal > messages.length ? sharedFeedReport(text, skus, messages, feedTotal) : null
+  if (feedTotal > messages.length && !shared) return null
+  const { parseProcessingReport } = await import('../amazon-flat-file-feed.service.js')
+  const report = parseProcessingReport(shared ? shared.text : text, skus, messages)
   if (report.pending || (!report.feedError && skus.some(sku => !report.perSku.some(row => row.sku === sku)))) return null
   if (report.summary.messagesProcessed !== skus.length
     || report.summary.messagesSuccessful + report.summary.messagesWithError !== skus.length) return null
   const submitted = new Set(skus)
   const mappedFailures = report.perSku.filter(row => submitted.has(row.sku) && row.status === 'error').length
-  const allMessagesFailed = report.summary.messagesWithError === skus.length
+  const allMessagesFailed = shared?.everyInvalid === true || report.summary.messagesWithError === skus.length
   if (!allMessagesFailed && mappedFailures !== report.summary.messagesWithError) return null
-  const results = skus.map(sku => {
+  return skus.map(sku => {
     const row = report.perSku.find(r => r.sku === sku)
     const failed = allMessagesFailed || row?.status === 'error'
-    return { sku, failed, message: row?.issues.map(i => i.message).join('; ') || (failed ? report.feedError : undefined) || 'Amazon processed this product.' }
+    // Each issue kept apart with its code and the attributes Amazon named, so the result sweep can file them on the
+    // exact listing and a sheet row can point at the column (sheet publish parity, step 2).
+    const issues: StudioChannelIssue[] = (row?.issues ?? []).map(issue => ({ code: String(issue.code ?? ''), severity: issue.severity, message: issue.message,
+      attributeNames: [...(issue.attributeNames ?? [])].map(String) }))
+    return { sku, failed, issues, message: row?.issues.map(i => i.message).join('; ') || (failed ? report.feedError : undefined) || 'Amazon processed this product.' }
   })
-  return { failed: results.every(result => result.failed), results }
+}
+
+/**
+ * Poll with the reviewed account; processing success does not prove storefront visibility. A publication that shares
+ * its feed with others of a batch passes its own `messages` and the feed's `feedTotal` (step 6); one without them is
+ * read as a feed of its own, messages 1..n, as before.
+ */
+export async function readAmazonPublication(feedId: string, accountId: string, skus: string[], options: AmazonFeedReadOptions = {}) {
+  const shared = (options.feedTotal ?? 0) > (options.messages?.length ?? skus.length)
+  const read = await readFeedOnce(feedId, accountId, shared)
+  if (!['DONE', 'CANCELLED', 'FATAL'].includes(read.status)) return null
+  const { completedAt } = read
+  if (read.status === 'CANCELLED') return { failed: true, completedAt, results: skus.map(sku => ({ sku, failed: true, issues: [] as StudioChannelIssue[], message: 'Amazon feed cancelled.' })) }
+  if (read.text == null) return null
+  const results = await amazonReportResults(read.text, skus, options)
+  if (!results) return null
+  return { failed: results.every(result => result.failed), completedAt, results }
 }

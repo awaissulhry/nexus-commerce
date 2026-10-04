@@ -21,7 +21,7 @@ export type SheetChannel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY
 /** `'variationTheme'` — VT.2 (2026-09-13, additive): the drawer receives the sheet's columns, so a
  *  kind this mirror cannot name makes the whole `columns` array unassignable. The drawer renders it
  *  through its existing default path; the editor is the cell's and the dock's (design §3.5). */
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme' | 'stockControl'
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
 /**

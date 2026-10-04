@@ -22,6 +22,10 @@
       "types": "./dist/studio-publication.d.ts",
       "default": "./dist/studio-publication.js"
     },
+    "./publication-history": {
+      "types": "./dist/publication-history.d.ts",
+      "default": "./dist/publication-history.js"
+    },
     "./live-read": {
       "types": "./dist/live-read.d.ts",
       "default": "./dist/live-read.js"

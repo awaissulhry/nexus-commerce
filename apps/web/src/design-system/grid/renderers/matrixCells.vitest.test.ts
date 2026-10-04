@@ -388,7 +388,11 @@ describe('editability, the fill-safe value and the default mutation', () => {
     expect(matrixCoerceValue('price', '99.75')).toBe(99.75)
     expect(matrixCoerceValue('price', 'abc')).toBeUndefined()
     expect(matrixCoerceValue('syncMode', 'PINNED')).toBe('PINNED')
-    expect(matrixCoerceValue('syncMode', 'Pinned')).toBeUndefined()
+    // A pasted word is its code: copying a Mode cell gives the word it shows (Amazon sheet gaps, browser sweep).
+    expect(matrixCoerceValue('syncMode', 'Pinned')).toBe('PINNED')
+    expect(matrixCoerceValue('syncMode', ' follow ')).toBe('FOLLOW')
+    expect(matrixCoerceValue('syncMode', 'Paused')).toBeUndefined()
+    expect(matrixCoerceValue('fulfilment', 'fbm')).toBe('FBM')
     expect(matrixCoerceValue('fulfilment', 'MCF')).toBe('MCF')
     expect(matrixCoerceValue('salePrice', null)).toEqual({ value: null, start: null, end: null })
     expect(matrixCoerceValue('salePrice', { value: '89', start: '', end: '2026-09-30' })).toEqual({ value: 89, start: null, end: '2026-09-30' })
