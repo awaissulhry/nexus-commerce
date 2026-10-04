@@ -11,6 +11,7 @@ import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync } from './ads-mutation.service.js'
 import { adsActorOf } from './ads-actor.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
+import { isCampaignOutOfBudget } from './delivery-reasons.js'
 
 const RAISE_PCT = 0.25
 const CUT_PCT = 0.2
@@ -36,7 +37,9 @@ export async function previewPacing(opts: { targetRoas?: number } = {}): Promise
     const spendCents = Math.round(parseFloat(c.spend?.toString() ?? '0') * 100)
     const salesCents = Math.round(parseFloat(c.sales?.toString() ?? '0') * 100)
     const roas = c.roas != null ? parseFloat(c.roas.toString()) : spendCents > 0 ? salesCents / spendCents : null
-    const outOfBudget = (c.deliveryReasons ?? []).includes('OUT_OF_BUDGET')
+    // 2b (review N2) — Amazon sends CAMPAIGN_OUT_OF_BUDGET, never the bare OUT_OF_BUDGET matched here before. Only the
+    // campaign's own budget counts: a raise here cannot lift a portfolio that ran out.
+    const outOfBudget = isCampaignOutOfBudget(c.deliveryReasons)
     if (outOfBudget && roas != null && roas >= targetRoas) {
       const proposed = Math.min(MAX_BUDGET_CENTS, Math.round(budgetCents * (1 + RAISE_PCT)))
       if (proposed > budgetCents) proposals.push({ campaignId: c.id, name: c.name, marketplace: c.marketplace, currentBudgetCents: budgetCents, proposedBudgetCents: proposed, spendCents, salesCents, roas, outOfBudget, reason: `Out of budget at ${roas.toFixed(1)}× ROAS — raise ${Math.round(RAISE_PCT * 100)}% to capture demand` })

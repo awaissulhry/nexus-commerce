@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveSpec, applyTargetOverrides, groupReceipts, isGoalMode, pickActiveEvents, rankDefendSummaryLine, rankReleaseNote } from './ad-rank-defend.job.js'
+import { effectiveSpec, applyTargetOverrides, firstOutOfBudgetNoticeToday, groupReceipts, isGoalMode, pickActiveEvents, rankDefendSummaryLine, rankReleaseNote } from './ad-rank-defend.job.js'
 import type { RankTargetSpec } from '../services/advertising/rank-controller.js'
 
 // RD.5 — family guardrail target transform (pure). OOS/lost-buybox → pause (stop
@@ -219,5 +219,24 @@ describe('2a rankReleaseNote — the give-back in the summary line', () => {
     expect(rankReleaseNote({ ...none, restored: 1, writes: 1 })).toBe(' released=1 (1 bid back)')
     expect(rankReleaseNote({ ...none, failed: 1 })).toBe(' release-failed=1 (kept for the next run)')
     expect(rankReleaseNote({ ...none, deferred: 2, swept: 2, deferredWhy: 'ads automation is stopped (halted: x)' })).toBe(' swept=2 release-waiting=2 (ads automation is stopped (halted: x))')
+  })
+})
+
+// 2b — an out-of-budget campaign holds its placement raise every 15-minute tick; the warning says so once a day per
+// schedule (the end-to-end tick is in ad-rank-defend-budget.vitest.test.ts).
+describe('2b firstOutOfBudgetNoticeToday — once per schedule per UTC day', () => {
+  it('answers yes once per key per UTC day, again on the next UTC day', () => {
+    const at = (iso: string) => new Date(iso)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s1|c1', at('2026-10-04T00:05:00Z'))).toBe(true)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s1|c1', at('2026-10-04T00:20:00Z'))).toBe(false)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s1|c1', at('2026-10-04T23:59:00Z'))).toBe(false)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s2|c2', at('2026-10-04T23:59:00Z'))).toBe(true) // another schedule
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s1|c1', at('2026-10-05T00:00:00Z'))).toBe(true)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-defend-s1|c1', at('2026-10-05T00:15:00Z'))).toBe(false)
+  })
+  it('the day is the UTC one, not the local one', () => {
+    // 23:30 on 2026-10-04 and 00:30 on 2026-10-05 in Rome (CEST, UTC+2) are both 2026-10-04 in UTC.
+    expect(firstOutOfBudgetNoticeToday('automation:rank-plan-p1|c9', new Date('2026-10-04T21:30:00Z'))).toBe(true)
+    expect(firstOutOfBudgetNoticeToday('automation:rank-plan-p1|c9', new Date('2026-10-04T22:30:00Z'))).toBe(false)
   })
 })
