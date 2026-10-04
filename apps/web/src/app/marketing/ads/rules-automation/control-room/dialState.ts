@@ -18,14 +18,15 @@ export const DIAL_LABEL: Record<Dial, string> = { OFF: 'Off', SUGGEST: 'Suggest'
 export const isDial = (v: string): v is Dial => (DIAL_LEVELS as readonly string[]).includes(v)
 
 /**
- * What each level does. 🔴 SUGGEST: today only the rules and the bid optimiser read it (review finding 2.3); the
- * other engines keep writing at Suggest. Change that sentence when they honour the dial (fix PRs 1c and 1d).
+ * What each level does. 🔴 SUGGEST: engines join it one PR at a time (review finding 2.3: rank-defend and dayparting
+ * in 1c, the budget/pool/ToS/coverage/autopilot engines in 1d), so the sentence names no engine list — the Levers
+ * board says per engine whether it honours the dial.
  * OFF: the write gate still lets bid-lowering writes through (a stop must never hold bids high), and refuses the raise
  * that would bring a floored bid back.
  */
 export const DIAL_MEANS: Record<Dial, string> = {
   OFF: 'No rule or engine changes your ads by itself, except to lower bids to their floor. Bids already at their floor stay there until the dial is turned up.',
-  SUGGEST: 'Rules and the bid optimiser propose changes for you to approve instead of making them. The other engines do not read this setting yet: Suggest does not hold them back.',
+  SUGGEST: 'Rules propose changes for you to approve, and every engine that honours the dial only counts what it would change. Each engine\'s line on the Levers board says whether it honours the dial. An engine still undoes its own earlier changes, such as giving back bids it lowered to their floor.',
   AUTO: 'Rules and engines make changes by themselves, inside the write gate and every guardrail.',
 }
 
