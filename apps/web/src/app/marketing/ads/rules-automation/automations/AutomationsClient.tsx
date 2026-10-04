@@ -502,7 +502,7 @@ export function AutomationsClient() {
       render: (a) => {
         if (a.k !== 'rule') return <span className="h10-au-obsdash" title="Engines and observed actors carry their own bounds, in their own services">—</span>
         const re = a.r.reach
-        if (!re) return <span className="h10-au-obsdash" title="This build of the server did not report reach">unknown</span>
+        if (!re) return <span className="h10-au-obsdash" title="The server did not say how many campaigns this rule can reach">unknown</span>
         if (re.campaigns === 0) {
           return <span className="h10-au-reach dead" title="This rule's scope resolves to no campaign at all. It is armed and cannot act — which looks identical to a quiet week until you read this number.">0 <em>dead</em></span>
         }
@@ -712,6 +712,8 @@ export function AutomationsClient() {
   const openBulk = (b: { kind: 'mode'; level: Level } | { kind: 'delete' }) => { setDetailId(null); setBulk(b) }
 
   const detail = detailId && !bulk ? all.find((r) => r.id === detailId) ?? null : null
+  // 7d — the page title is the tab's label, as on every other Rules & Automation tab.
+  const title = rulesTabByKey('automations')?.label ?? 'Automations'
   const subtitle = rulesTabByKey('automations')?.subtitle ?? ''
 
   // ── FB.2 — one bar. Exposure leads it, because it is the coarsest thing on the page and the
@@ -781,7 +783,7 @@ export function AutomationsClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Rules & Automation"
+        title={title}
         subtitle={subtitle}
         markets={markets}
         market={market}
@@ -840,7 +842,7 @@ export function AutomationsClient() {
         <div className="h10-au-stat">
           <div className="k">Awaiting you</div>
           <div className="v">{pendingCount === null ? '—' : num(pendingCount)}</div>
-          <div className="s">{pendingCount === null ? 'the queue could not be counted' : 'pending proposals — the inbox is A6’s build'}</div>
+          <div className="s">{pendingCount === null ? 'the queue could not be counted' : <>pending proposals — <Link href="/marketing/ads/suggestions">review them on Suggestions</Link></>}</div>
         </div>
         {counts.ready > 0 && (
           <div className="h10-au-stat ready">
