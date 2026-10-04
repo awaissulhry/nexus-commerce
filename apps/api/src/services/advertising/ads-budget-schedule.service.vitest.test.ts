@@ -162,3 +162,36 @@ describe('3c — a campaign taken out of a schedule gets its budget back (review
     expect([await budget('rb-a'), await budget('rb-b')]).toEqual([10, 10])
   })
 })
+
+describe('4b — window values are read and range-checked before anything is stored (review 4.1)', () => {
+  it('🔴 a decimal comma is read, and stored as the number it says ("Set budget 15,50" used to put €1 on every campaign)', async () => {
+    const out = await inside(() => createBudgetSchedule({ name: 'Comma', campaigns: pick('dv-a'), windows: [{ day: 1, start: '18:00', end: '22:00', adj: 'set', value: '15,50' }] }, 'user:awais'))
+    expect('schedule' in out).toBe(true)
+    expect((await schedule('Comma')).windows).toEqual([{ day: 1, start: '18:00', end: '22:00', adj: 'set', value: 15.5 }])
+  })
+
+  it('a value that cannot be read, or is out of range, refuses the save with a sentence naming the window; nothing is written', async () => {
+    const bad = (windows: unknown[], type?: string) =>
+      inside(() => createBudgetSchedule({ name: 'Refused', campaigns: pick('dv-b'), windows, ...(type ? { type } : {}) }, 'user:awais'))
+    expect(await bad([{ day: 1, start: '18:00', end: '22:00', adj: 'set', value: 'abc' }])).toEqual({ invalid: {
+      error: 'Monday 18:00–22:00: Set budget to (€): "abc" is not a number — type digits with at most one decimal comma or point, for example 2,5.',
+    } })
+    expect(await bad([{ day: 2, start: '08:00', end: '12:00', adj: 'decPct', value: 150 }])).toEqual({ invalid: { error: 'Tuesday 08:00–12:00: Decrease budget by (%) must be at most 100 (it is 150).' } })
+    expect(await bad([{ day: 3, start: '18:00', end: '22:00', adj: 'set', value: '0,5' }])).toEqual({ invalid: { error: 'Wednesday 18:00–22:00: Set budget to (€) must be at least 1 (it is 0.5).' } })
+    expect(await bad([{ day: 4, start: '18:00', end: '22:00', adj: 'incPct', value: '' }])).toEqual({ invalid: { error: 'Thursday 18:00–22:00: Increase budget by (%) is empty: type a number.' } })
+    expect(await bad([{ day: 0, start: '', end: '', adj: 'mult', value: 0 }], 'budget-multiplier')).toEqual({ invalid: { error: 'Sunday (all day): Multiplier (×) must be above 0 (it is 0).' } })
+    expect(await schedule('Refused')).toBeNull()
+  })
+
+  it('an edit reads new windows against the stored type, and a refused edit changes nothing', async () => {
+    const made = await inside(() => createBudgetSchedule({ name: 'Multiplier', type: 'budget-multiplier', campaigns: pick('dv-c'), windows: [{ day: 1, start: '', end: '', adj: 'mult', value: 2 }] }, 'user:awais'))
+    const id = ('schedule' in made ? made.schedule.id : '') as string
+    expect(await inside(() => patchBudgetSchedule(id, { windows: [{ day: 1, start: '', end: '', adj: 'mult', value: '-1' }] }, 'user:awais')))
+      .toEqual({ invalid: { error: 'Monday (all day): Multiplier (×) must be above 0 (it is -1).' } })
+    expect((await schedule('Multiplier')).windows).toEqual([{ day: 1, start: '', end: '', adj: 'mult', value: 2 }])
+    expect(await inside(() => patchBudgetSchedule(id, { windows: [{ day: 1, start: '', end: '', adj: 'mult', value: '1,25' }] }, 'user:awais')))
+      .toMatchObject({ schedule: { windows: [{ value: 1.25 }] } })
+    // A schedule that does not exist is still "not found", whatever its windows say.
+    expect(await inside(() => patchBudgetSchedule('nope', { windows: [{ day: 1, adj: 'set', value: 'abc' }] }, 'user:awais'))).toBeNull()
+  })
+})
