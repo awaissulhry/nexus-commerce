@@ -126,8 +126,9 @@ async function negativesCreatedBy(changeSetId: string): Promise<UndoNegative[]> 
   const listed = ((change?.after ?? null) as { negatives?: Array<{ targetId?: unknown; keywordText?: unknown }> } | null)?.negatives ?? []
   const ids = listed.map((n) => String(n.targetId ?? '')).filter(Boolean)
   if (!ids.length) return []
+  // 5f — status decides, as in retireNegatives: a stale `retiredAt` from a failed retire blocks nothing.
   const standing = await prisma.adTarget.findMany({
-    where: { id: { in: ids }, isNegative: true, retiredAt: null, status: { not: 'ARCHIVED' } },
+    where: { id: { in: ids }, isNegative: true, status: { not: 'ARCHIVED' } },
     select: { id: true, expressionValue: true },
   })
   return standing.map((t) => ({ targetId: t.id, keywordText: t.expressionValue }))
