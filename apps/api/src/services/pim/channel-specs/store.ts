@@ -1,5 +1,5 @@
 import { normalizeLanguage } from '../content-language.js'
-import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey } from '@nexus/shared/shopify-information'
+import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
 import { shopifyDefinitionApplicability, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
 
@@ -47,14 +47,19 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     price: { masterKey: 'basePrice', channelStore: column('price', 'followMasterPrice'), validation: { minimum: 0 } },
     cost: { masterKey: 'costPrice', validation: { minimum: 0 } },
     sku: { defaultRule: { source: 'sku' } },
+    // S1 (Owner decision 10) — a variant's barcode is its Shared EAN, else its GTIN; a listing value still wins.
+    barcode: { defaultRule: { source: 'ean', fallback: 'gtin' } },
     countryCodeOfOrigin: { masterKey: 'countryOfOrigin', validation: { pattern: '^[A-Z]{2}$' } },
     harmonizedSystemCode: { masterKey: 'hsCode' },
-    weight: { shape: 'measure', kind: 'number', unitOptions: ['g', 'kg', 'oz', 'lb'],
-      defaultRule: { source: 'weightValue', transforms: [{ type: 'expr', expr: 'measure($weightValue, $weightUnit, "g|kg|oz|lb")' }] } },
+    // S1 item 6 — the units are Shopify's own codes, the ones its publish rule takes (`nativeFieldValueError`); `measure()`
+    // reads a Shared g / kg / oz / lb as the code without changing the number. People see the symbols (1.2 kg).
+    weight: { shape: 'measure', kind: 'number', unitOptions: [...SHOPIFY_WEIGHT_UNITS],
+      defaultRule: { source: 'weightValue', transforms: [{ type: 'expr', expr: `measure($weightValue, $weightUnit, "${SHOPIFY_WEIGHT_UNITS.join('|')}")` }] } },
     compareAtPrice: { validation: { minimum: 0 }, channelStore: { kind: 'platformAttributes', path: ['compareAtPrice'], legacyPaths: [['shopifyCompareAtPrice']] } },
     inventoryPolicy: { kind: 'select', mode: 'strict', options: schema?.native?.enums.inventoryPolicy?.map(choice => choice.name) ?? [] },
     category: { validation: { pattern: '^gid://shopify/TaxonomyCategory/[a-zA-Z0-9-]+$' } },
-    handle: { validation: { pattern: '^[a-zA-Z0-9-]+$' } },
+    // Shopify's handle rule, the one Publish checks (`nativeFieldValueError`): capitals are refused, never lowered (decision 12).
+    handle: { validation: { pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } },
     tags: { validation: { uniqueItems: true }, maxLength: 255 },
   }
   const fields = informationRegistry(schema).flatMap(info => {

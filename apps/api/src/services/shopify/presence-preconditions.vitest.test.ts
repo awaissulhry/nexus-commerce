@@ -11,6 +11,8 @@ vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: 
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))
 vi.mock('./linked-products-gateway.js', () => ({ readLinkedStoreSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }], publications: [{ id: 'publication', name: 'Fixture storefront' }] }) }))
 vi.mock('./linked-state-guard.js', () => ({ shopifyInformationPublicationIssue: () => null }))
+// S1 item 5 — no Shared values to inherit in this suite (`inherited-information.vitest.test.ts` covers them).
+vi.mock('./inherited-information.js', () => ({ noInheritedInformation: () => ({ values: {}, problems: [], review: [] }), resolveInheritedInformation: async () => ({ values: {}, problems: [], review: [] }) }))
 vi.mock('./listing-information-plan.js', () => ({ validateListingInformationOverrides: () => {}, listingInformationOverrideReview: () => [], listingInformationDraft: async () => ({ edits: [], nativeEdits: [] }), listingInformationTranslations: async () => ({ edits: [], nativeEdits: [] }) }))
 vi.mock('./linked-products.service.js', () => ({ buildLinkedPlan: async () => ({ changes: [], nativeEdits: [] }), applyLinkedBatch: async () => { throw new Error('Unexpected channel write') } }))
 vi.mock('./information-gateway.js', () => ({ applyNativeEdit: async () => { throw new Error('Unexpected channel write') } }))

@@ -1,6 +1,6 @@
 import { shopifyJson } from '@nexus/shared/shopify-linked-products'
 import { informationDraftFieldError } from '@nexus/shared/shopify-information-editing'
-import { nativeFieldValueError, type InformationField, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldValueError, shopifyWeightSymbol, type InformationField, type NativeEdit } from '@nexus/shared/shopify-information'
 
 /** The sheet's draft check; native content capability comes from its actual write route. */
 export function informationDraftCellError(field: InformationField, value: string | null, baseline: string | null, hasContentAddress: boolean): string | null {
@@ -24,7 +24,8 @@ export function informationValueLabel(type: string, raw: string | null | undefin
     }
     if (raw.startsWith('{')) {
       const value = shopifyJson.parse(raw)
-      if (value.unit !== undefined && value.value !== undefined) return `${value.value} ${String(value.unit).replace(/_/g, ' ')}`
+      // A weight reads as its symbol (Shopify stores KILOGRAMS: "1.2 kg"); other units as Shopify names them.
+      if (value.unit !== undefined && value.value !== undefined) return type === 'weight' ? `${value.value} ${shopifyWeightSymbol(value.unit)}` : `${value.value} ${String(value.unit).replace(/_/g, ' ')}`
       if (type === 'money') return `${value.amount} ${value.currency_code}`
       if (type === 'rating') return `${value.value} / ${value.scale_max}`
       if (type === 'link') return value.text

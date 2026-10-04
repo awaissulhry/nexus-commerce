@@ -1,5 +1,6 @@
 import type { InformationField, InformationRow } from './shopify-information.js'
 import type { ShopifyLinkedDraft } from './shopify-linked-products.js'
+import { normalizeShopifyWeight, shopifyWeightUnit } from './shopify-weight.js'
 
 /** Channel-specific addresses ride the common sheet contract; they never identify a shared write. */
 export interface ShopifySheetWrite {
@@ -23,16 +24,16 @@ export interface ShopifySheetRow {
   listingId: string
 }
 
-/** Nexus measure units and Shopify's native weight enums describe the same magnitude. */
+/**
+ * A Shared value as the native Shopify cell holds it. A weight is Shopify's JSON text with Shopify's unit code (a Shared
+ * `{ value: 1.2, unit: 'kg' }` is `{"value":1.2,"unit":"KILOGRAMS"}`); a weight whose unit is not a weight unit is left as
+ * it is, for the validator to name. Every other value is unchanged.
+ */
 export function informationSheetValue(field: InformationField, value: unknown): unknown {
   if (field.definition || field.id !== 'weight' || value == null) return value
-  let measure: unknown = value
-  try { if (typeof measure === 'string') measure = JSON.parse(measure) } catch { return value }
-  if (!measure || typeof measure !== 'object' || Array.isArray(measure)) return value
-  const object = measure as Record<string, unknown>
-  const units: Record<string, string> = { g: 'GRAMS', kg: 'KILOGRAMS', oz: 'OUNCES', lb: 'POUNDS' }
-  const unit = typeof object.unit === 'string' ? units[object.unit] : undefined
-  return unit ? JSON.stringify({ ...object, unit }) : value
+  if (typeof value === 'string') return normalizeShopifyWeight(value)
+  const weight = normalizeShopifyWeight(value)
+  return weight && typeof weight === 'object' && !Array.isArray(weight) && shopifyWeightUnit((weight as Record<string, unknown>).unit) ? JSON.stringify(weight) : value
 }
 
 export function informationPendingValue(row: InformationRow, field: InformationField, draft: ShopifyLinkedDraft): string | null | undefined {

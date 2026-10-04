@@ -2,7 +2,7 @@ import { completenessFor } from '../pim/sheet-rows.service.js'
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { informationRestriction, informationSharingRule, informationSharedValue, informationSharingFacts, sharedInformationSource } from '@nexus/shared/shopify-information-editing'
 import { createHash } from 'node:crypto'
-import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
+import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, nativeValuesEqual, shopifyWeightGrams, shopifyWeightSymbol, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
 import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { shopifyInventoryHeldReason } from '../pim/shopify-inventory-hold.js'
@@ -11,6 +11,36 @@ const linkedDigest = (value: unknown) => createHash('sha256').update(JSON.string
 type ListingIdentity = { id: string; productId: string; externalListingId: string | null; platformAttributes: unknown }
 const gid = (type: string, value: unknown) => typeof value === 'string' && new RegExp(`^(gid://shopify/${type}/)?\\d+$`).test(value) ? value.startsWith('gid:') ? value : `gid://shopify/${type}/${value}` : null
 export const active = (workspace: ShopifyLinkedWorkspace) => !!workspace.operation && workspace.operation.status !== 'VERIFIED'
+
+/**
+ * S1 item 5 (f), Owner decision 11 — the native fields whose Shared value a synchronisation of a Nexus-created product
+ * DOES send (`productSet` / the price sync): title, description, vendor, product type, price, SKU. Every other native or
+ * metafield value of a product already on Shopify changes only through an edit here, so a Shared value that differs
+ * from Shopify's is marked on the cell (`liveSharedDivergence`).
+ */
+const SENT_FROM_SHARED = new Set(['title', 'descriptionHtml', 'vendor', 'productType', 'price', 'sku'])
+/** Shopify's value as a person reads it: a weight as "1.2 kg", a list as its items, nothing as "no value". */
+function shopifyValueWords(field: InformationField, value: string | null): string {
+  if (value == null || value === '') return 'no value'
+  try {
+    const parsed = JSON.parse(value)
+    if (!field.definition && field.id === 'weight' && parsed && typeof parsed === 'object') return `${parsed.value} ${shopifyWeightSymbol(parsed.unit)}`
+    if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) return parsed.length ? parsed.join(', ') : 'no value'
+  } catch { /* plain text */ }
+  return value.length > 80 ? `${value.slice(0, 79)}…` : value
+}
+/**
+ * A live cell that follows Shared while Shopify keeps another value: the value Shopify has and why it stays. A weight is
+ * compared in grams (1.2 kg equals 1200 g). Null when they agree, or for a field a synchronisation sends from Shared.
+ */
+export function liveSharedDivergence(field: InformationField, shared: unknown, shopify: string | null): { publishesAs: string | null; note: string } | null {
+  if (!field.definition && SENT_FROM_SHARED.has(field.id)) return null
+  const text = shared == null ? null : typeof shared === 'string' ? shared : JSON.stringify(shared)
+  const sharedGrams = !field.definition && field.id === 'weight' ? shopifyWeightGrams(text) : null
+  const same = sharedGrams !== null ? sharedGrams === shopifyWeightGrams(shopify) : (text ?? '') === (shopify ?? '') || nativeValuesEqual(field.id, text, shopify)
+  if (same) return null
+  return { publishesAs: shopify, note: `Shopify keeps ${shopifyValueWords(field, shopify)}. Shared changes are not sent to a product already on Shopify; enter the value here to send it.` }
+}
 
 function pendingRecord(draft: ShopifyLinkedDraft, ownerId: string, field: InformationField, locale?: string) {
   if (locale) return draft.nativeEdits?.find(e => e.ownerId === ownerId && e.translation?.locale === locale && e.translation.fieldId === field.id) ?? null
@@ -130,10 +160,13 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const ownValue = !sharedValue && (pending !== undefined || !!pin || !mapped)
       // Remaining fields are provider-owned facts. Only the content resolver above assigns language readiness.
       const pinned = excluded || !!pin || pending !== undefined && !saved?.inherited || !rule && !saved && !!base?.pinned
+      // S1 item 5 (f) — this cell shows the Shared value of a product Shopify already holds; Shopify keeps its own value.
+      // A pending edit or a pin is the operator's own value, so it carries no mark.
+      const keeps = mapped && !pinned && pending === undefined && !pin && !sharedValue ? liveSharedDivergence(field, value, baseline) : null
       row.values[column.key] = { ...base,
         ...(rule ? { contentAddress: undefined, contentAcknowledgement: undefined, contentVersion: undefined, contentAcknowledged: undefined,
           tier: undefined, language: undefined, requested: undefined, provenance: undefined, translation: undefined } : {}),
-        divergence: sharedConflict ? { publishesAs: sharedConflict.value, note: conflictMessage } : rule ? undefined : base?.divergence,
+        divergence: sharedConflict ? { publishesAs: sharedConflict.value, note: conflictMessage } : rule ? undefined : keeps ?? base?.divergence,
         // `unsentDraft`: an edit saved in Nexus that Shopify does not have yet (a finished synchronization clears the
         // draft's edits and keeps the value as a saved pin). Additive, set only when true.
         value, nexusDraft: pending !== undefined || !!pin, ...(pending !== undefined ? { unsentDraft: true } : {}),

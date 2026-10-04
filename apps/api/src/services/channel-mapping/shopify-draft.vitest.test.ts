@@ -49,7 +49,7 @@ describe('NCF N1 — Shopify product CSV contract', () => {
     expect(by.get('Title')).toMatchObject({ targetKind: 'channelField', targetKey: 'title', requirement: 'required' })
     expect(by.get('SEO Title')).toMatchObject({ targetKind: 'channelField', targetKey: 'seo_title' })
     expect(by.get('Variant Barcodes')).toMatchObject({ targetKind: 'channelField', targetKey: 'barcode' })
-    // Measured: Nexus's Shopify weight field takes no value through a transfer (two unit vocabularies disagree).
+    // A file's weight columns are not carried yet (S1 item 6 settled the units; the file step is its own later PR).
     for (const weight of ['Variant Grams', 'Variant Weight Unit']) expect(by.get(weight)).toMatchObject({ state: 'ignored', targetKind: 'none', reason: expect.stringMatching(/Weight is not carried by a file yet/) })
     expect(by.get('Variant Price')).toMatchObject({ targetKind: 'price', state: 'mapped' })
     expect(by.get('Variant Compare At Price')).toMatchObject({ targetKind: 'compareAt', targetKey: 'compareAtPrice', state: 'mapped' })

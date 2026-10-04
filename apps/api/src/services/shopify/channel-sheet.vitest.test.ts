@@ -354,6 +354,41 @@ describe('Shopify behind the common channel sheet', () => {
     expect(rows[1].values.weight.value).toBe('{"value":0,"unit":"KILOGRAMS"}')
     expect(rows[1].values.inventory.value).toBe(s.snapshot.rows[1].values.inventory)
   })
+  /* S1 item 5 (f), Owner decision 11 — a live cell that follows Shared while Shopify keeps another value says so. */
+  describe('a product already on Shopify keeps its own value', () => {
+    const note = (words: string) => `Shopify keeps ${words}. Shared changes are not sent to a product already on Shopify; enter the value here to send it.`
+    const project = (base: any) => projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema, [{ id: 'variant-listing', productId: 'child', externalListingId: '10', platformAttributes: { variantId: '11' } }], 'alias-a')
+    const following = (base: any, key: string, value: unknown) => { base.rows[1].values = { ...base.rows[1].values, [key]: { ...base.rows[1].values[key], value, mapped: { status: 'mapped', value } } } }
+    it('marks a Shared value Shopify does not have, with Shopify\'s value and the reason', () => {
+      const base = page()
+      following(base, 'barcode', '0001'); following(base, 'weight', { value: 1.2, unit: 'kg' }); following(base, 'cost', 9)
+      Object.assign(s.snapshot.rows[1].values, { barcode: '0002', weight: '{"value":1,"unit":"KILOGRAMS"}', cost: '9.00' })
+      const values = project(base)[1].values
+      expect(values.barcode).toMatchObject({ value: '0001', divergence: { publishesAs: '0002', note: note('0002') } })
+      expect(values.weight).toMatchObject({ value: '{"value":1.2,"unit":"KILOGRAMS"}', divergence: { publishesAs: '{"value":1,"unit":"KILOGRAMS"}', note: note('1 kg') } })
+      expect(values.cost.divergence).toBeUndefined()
+    })
+    it('compares a weight in grams, treats an empty Shopify value as no value, and names it', () => {
+      const base = page()
+      following(base, 'weight', { value: 1.2, unit: 'kg' }); following(base, 'barcode', null); following(base, 'harmonizedSystemCode', '640399')
+      Object.assign(s.snapshot.rows[1].values, { weight: '{"value":1200,"unit":"GRAMS"}', barcode: '', harmonizedSystemCode: null })
+      const values = project(base)[1].values
+      expect(values.weight.divergence).toBeUndefined()
+      expect(values.barcode.divergence).toBeUndefined()
+      expect(values.harmonizedSystemCode.divergence).toEqual({ publishesAs: null, note: note('no value') })
+    })
+    it('no mark where a synchronisation sends the Shared value, or where the operator has an edit waiting', () => {
+      const base = page()
+      following(base, 'barcode', '0001')
+      Object.assign(s.snapshot.rows[1].values, { barcode: '0002' })
+      s.workspace.draft.nativeEdits = [{ ownerId: variant, productId: product, ownerLabel: 'Small', field: 'barcode', value: '0002', nextValue: '0003' }]
+      const rows = project(base)
+      expect(rows[0].values.vendor).toMatchObject({ value: 'Shared vendor' })
+      expect(rows[0].values.vendor.divergence).toBeUndefined()
+      expect(rows[1].values.barcode).toMatchObject({ value: '0003', unsentDraft: true })
+      expect(rows[1].values.barcode.divergence).toBeUndefined()
+    })
+  })
   it('D2 — while Nexus sends the quantity (Follow or Pinned), Shopify\'s own inventory field is held and points to Qty; paused → editable', () => {
     const base = page()
     base.rows[1].listing = { ...(base.rows[1].listing ?? {}), syncPaused: false, follows: { followMasterQuantity: true } }

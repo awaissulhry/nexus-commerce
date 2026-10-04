@@ -3,7 +3,8 @@ import { contentField, translationMissing } from '../pim/content-resolver.js'
 import { normalizeLanguage } from '../pim/content-language.js'
 import type { ChannelFieldSpec } from '../pim/channel-specs/types.js'
 import { emptyShopifyLinkedDraft, validateShopifyField, shopifyDefinitionApplicability, type ShopifyLinkedDraft, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { nativeFieldKeys, nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldKeys, nativeFieldValueError, nativeValuesEqual, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
+import type { InheritedInformationValues } from './inherited-information.js'
 import { shopifyProductSpec } from '../pim/channel-specs/store.js'
 import { storedChannelState } from '../pim/channel-value-mutation.js'
 import { readInformation } from './information-gateway.js'
@@ -13,6 +14,8 @@ import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 type Listing = { productId: string; channelConnectionId: string | null; platformAttributes: unknown; [key: string]: unknown }
 const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const raw = (value: unknown) => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
+/** A saved native Shopify weight in Shopify's unit code (S1 item 6): the review and Publish read it the same way. */
+const savedValue = (field: { id: string; definition?: unknown }, value: unknown) => !field.definition && field.id === 'weight' ? normalizeShopifyWeight(value) : value
 function listingLanguages(listing: Listing): string[] {
   const product = listing.product as Record<string, any> | undefined
   if (!product) throw new Error('Shopify content requires hydrated product translations.')
@@ -41,7 +44,7 @@ export function validateListingInformationOverrides(listings: Listing[], account
       const category = object(listing.platformAttributes).category
       // Existing Shopify products can inherit their remote category. Their reviewed plan checks
       // that exact category; a new product must have a category before constrained fields are created.
-      const value = raw(stored.value), error = spec.readOnlyReason ?? (field.definition && value !== null && (requireCategory || category !== undefined) ? shopifyDefinitionApplicability(field.definition, category) : null) ?? (locale && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value))
+      const value = raw(savedValue(field, stored.value)), error = spec.readOnlyReason ?? (field.definition && value !== null && (requireCategory || category !== undefined) ? shopifyDefinitionApplicability(field.definition, category) : null) ?? (locale && value === null ? null : field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value))
       if (error) throw new WorkspaceScopeError(`${field.label}${locale ? ` (${locale})` : ''}: ${error}`, 422)
       if (field.definition && field.type === 'money' && value !== null && schema.currency && JSON.parse(value).currency_code !== schema.currency) throw new WorkspaceScopeError(`${field.label}: use the selected store’s ${schema.currency} currency.`, 422)
     }
@@ -51,7 +54,7 @@ export function validateListingInformationOverrides(listings: Listing[], account
 export function listingInformationOverrideReview(listings: Listing[], accountId: string, schema: ShopifyStoreSchema) {
   return listings.flatMap(listing => [undefined, ...listingLanguages(listing)].flatMap(locale => shopifyProductSpec(schema, accountId, locale).fields.flatMap(spec => {
     const field = spec.shopifyField!, stored = informationContentState(listing, spec, locale)
-    return stored.state === 'stored' && (field.definition || nativeFieldKeys.includes(field.id as NativeEdit['field'])) ? [{ productId: listing.productId, label: field.label, type: field.type, locale: locale ?? schema.locales.find(l => l.primary)?.locale ?? '', value: raw(stored.value) }] : []
+    return stored.state === 'stored' && (field.definition || nativeFieldKeys.includes(field.id as NativeEdit['field'])) ? [{ productId: listing.productId, label: field.label, type: field.type, locale: locale ?? schema.locales.find(l => l.primary)?.locale ?? '', value: raw(savedValue(field, stored.value)) }] : []
   })))
 }
 
@@ -84,9 +87,11 @@ export async function listingInformationTranslations(gql: ShopifyGraphql, input:
 }
 
 /** Explicit listing overrides only. The reviewed publication owns native creation and ID mapping.
- * This bridge never matches a variant by SKU, chooses a store, or touches a shared Product. */
+ * This bridge never matches a variant by SKU, chooses a store, or touches a shared Product.
+ * `inherited` (S1 item 5): the values new variants took from Shared and `productSet` sent when it created them, by Nexus
+ * variant id. Each value Shopify did not keep becomes one checked edit, as a typed value does. */
 export async function listingInformationDraft(gql: ShopifyGraphql, input: {
-  accountId: string; familyId: string; productId: string; variantIds: Record<string, string>; listings: Listing[]
+  accountId: string; familyId: string; productId: string; variantIds: Record<string, string>; listings: Listing[]; inherited?: InheritedInformationValues
 }, schema: ShopifyStoreSchema): Promise<ShopifyLinkedDraft> {
   const fields = shopifyProductSpec(schema, input.accountId).fields
   const rows = (await readInformation(gql, [input.productId], schema)).rows
@@ -107,12 +112,21 @@ export async function listingInformationDraft(gql: ShopifyGraphql, input: {
       const ownerId = field.owner === 'PRODUCT' ? input.productId : input.variantIds[listing.productId]
       const row = rows.find(r => r.id === ownerId)
       if (!row || row.productId !== input.productId) throw new WorkspaceScopeError('The Shopify draft variant mapping changed. Review publication again.', 409)
-      const value = stored.value == null ? null : typeof stored.value === 'object' ? JSON.stringify(stored.value) : String(stored.value)
+      const value = raw(savedValue(field, stored.value))
       if (field.definition) {
         const { namespace, key } = field.definition
         const existing = row.fields.find(f => f.namespace === namespace && f.key === key) ?? { ownerId, namespace, key, value: null, type: field.type, compareDigest: null }
         if (existing.value !== value) draft.edits.push({ ...existing, nextValue: value, ownerLabel: row.title })
       } else if (row.values[field.id] !== value) (draft.nativeEdits ??= []).push({ ownerId, productId: row.productId, ownerLabel: row.title, field: field.id as NativeEdit['field'], value: row.values[field.id], nextValue: value })
+    }
+  }
+  for (const [nexusId, values] of Object.entries(input.inherited ?? {})) {
+    const ownerId = input.variantIds[nexusId], row = rows.find(r => r.id === ownerId)
+    if (!ownerId || !row || row.productId !== input.productId) throw new WorkspaceScopeError('The Shopify draft variant mapping changed. Review publication again.', 409)
+    for (const [fieldId, nextValue] of Object.entries(values) as Array<[NativeEdit['field'], string | undefined]>) {
+      if (nextValue === undefined || draft.nativeEdits?.some(e => e.ownerId === ownerId && e.field === fieldId)) continue
+      const current = row.values[fieldId] ?? null
+      if (!nativeValuesEqual(fieldId, current, nextValue)) (draft.nativeEdits ??= []).push({ ownerId, productId: row.productId, ownerLabel: row.title, field: fieldId, value: current, nextValue })
     }
   }
   return draft

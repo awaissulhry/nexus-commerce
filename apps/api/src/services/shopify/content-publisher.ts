@@ -4,6 +4,7 @@ import { assertShopifyResult as checked, type ShopifyGraphql } from './admin-cli
 import { readInformationMedia, advanceMediaOrder } from './information-gateway.js'
 import { verifyMediaMembership } from './information-media-membership.js'
 import type { MediaOrderEdit } from '@nexus/shared/shopify-information'
+import type { InheritedInformationField, InheritedInformationValues } from './inherited-information.js'
 
 export type ContentGalleryOperation = { edit: MediaOrderEdit; state?: { submitted?: boolean; jobId?: string }; verified?: boolean }
 export async function resumeContentGallery(gql: ShopifyGraphql, operation: ContentGalleryOperation, productId: string | undefined, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
@@ -266,7 +267,21 @@ export function shopifyOptionValueProblems(content: Pick<ShopifyContent, 'axes' 
   return problems
 }
 
-export interface PublishContentInput { identity: string; title: string; description: string; vendor: string; productType: string; tags?: string[]; content: ShopifyContent; variants: ContentVariant[]; locationId: string; remote: ShopifyRemoteProduct | null; confirmActive?: boolean; managedMediaIds?: string[]; reconcileGallery?: boolean; galleryOperation?: ContentGalleryOperation }
+/**
+ * S1 item 5 (d) — a NEW variant's Shared facts inside the one `productSet` that creates it, in the shapes the one-field
+ * writer sends them (`applyNativeEdit`): barcode on the variant; cost, country, HS code and weight on its inventory item.
+ * A variant Shopify already holds never gets these here.
+ */
+export function newVariantFacts(facts: Partial<Record<InheritedInformationField, string>> = {}) {
+  const inventoryItem: Record<string, unknown> = { tracked: true }
+  for (const key of ['cost', 'countryCodeOfOrigin', 'harmonizedSystemCode'] as const) if (facts[key] !== undefined) inventoryItem[key] = facts[key]
+  if (facts.weight !== undefined) inventoryItem.measurement = { weight: JSON.parse(facts.weight) }
+  return { ...(facts.barcode !== undefined ? { barcode: facts.barcode } : {}), inventoryItem }
+}
+
+export interface PublishContentInput { identity: string; title: string; description: string; vendor: string; productType: string; tags?: string[]; content: ShopifyContent; variants: ContentVariant[]; locationId: string; remote: ShopifyRemoteProduct | null; confirmActive?: boolean; managedMediaIds?: string[]; reconcileGallery?: boolean; galleryOperation?: ContentGalleryOperation
+  /** S1 item 5 — reviewed Shared values for variants Shopify does not hold yet, by Nexus variant id (`inherited-information.ts`). */
+  variantFacts?: InheritedInformationValues }
 export async function publishContent(gql: ShopifyGraphql, input: PublishContentInput, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
   const { content, variants, remote } = input
   const problems = [...inspectShopifyContent(content, variants), ...shopifyOptionValueProblems(content, variants)]
@@ -298,7 +313,7 @@ export async function publishContent(gql: ShopifyGraphql, input: PublishContentI
   if (remote && hash(await readRemoteProduct(gql, remote.id)) !== hash(remote)) throw new Error('The Shopify product changed while preparing images and entries. Refresh the review before synchronising.')
   // Metafields are written separately: preserve unrelated merchant/app fields.
   const productSet = { title: input.title, descriptionHtml: input.description, vendor: input.vendor, productType: input.productType, ...(Array.isArray(input.tags) ? { tags: input.tags } : {}), ...(!remote ? { status: 'DRAFT', templateSuffix: 'nexus' } : {}), productOptions, files,
-    variants: resolved.map(({ variant: v, content: r }) => ({ ...(variantIds[v.id] ? { id: variantIds[v.id] } : { inventoryPolicy: 'DENY', inventoryItem: { tracked: true } }), sku: v.sku, price: v.price, ...(v.compareAtPrice !== undefined ? { compareAtPrice: v.compareAtPrice } : {}),
+    variants: resolved.map(({ variant: v, content: r }) => ({ ...(variantIds[v.id] ? { id: variantIds[v.id] } : { inventoryPolicy: 'DENY', ...newVariantFacts(input.variantFacts?.[v.id]) }), sku: v.sku, price: v.price, ...(v.compareAtPrice !== undefined ? { compareAtPrice: v.compareAtPrice } : {}),
       ...(!variantIds[v.id] ? { inventoryQuantities: [{ locationId: input.locationId, name: 'available', quantity: v.stock }] } : {}), optionValues: axes.map(optionName => ({ optionName: content.optionNames?.[optionName] ?? optionName, name: content.axes.length ? v.options[optionName] : 'Default Title' })), ...(r.featuredId ? { file: { id: mediaIds[r.featuredId] } } : {}),
     })) }
   const result = checked((await gql(`mutation NexusProductSet($input:ProductSetInput!,$identifier:ProductSetIdentifiers) { productSet(input:$input,identifier:$identifier,synchronous:true) { product { id } userErrors { field message } } }`, { input: productSet, identifier: remote ? { id: remote.id } : { customId: { namespace: 'nexus', key: 'family_id', value: input.identity } } })).productSet, 'Synchronise native variants')

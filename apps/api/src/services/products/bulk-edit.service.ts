@@ -12,7 +12,7 @@ import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.ser
 import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
-import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldValueError, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
 import { writeChannelOverrideMerge } from '../pim/channel-value-write.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver } from '../pim/reference-values.service.js'
@@ -1158,6 +1158,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (rowColumn?.shopifyField) {
         const field = rowColumn.shopifyField
         if (c.cascade) { errors.push({ id: c.id, field: c.field, error: 'Shopify fields belong to exact product or variant rows. Select the intended rows explicitly instead of cascading a parent value.' }); continue }
+        // S1 item 6 — a weight typed or pasted as g / kg / oz / lb is stored in Shopify's unit code (KILOGRAMS); same number.
+        if (!field.definition && field.id === 'weight') value = normalizeShopifyWeight(value)
         const raw = value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
         const store = storeFor(c.id, c.field.replace(/^attr_/, ''))
         const translation = store?.kind === 'platformAttributes' && store.path[0] === '_shopifyInformationLocales'

@@ -65,6 +65,19 @@ describe('the Shopify pop-up names a preserved pin and the value Shopify receive
   })
 })
 
+/* S1 item 5 (f) — a cell following Shared on a product Shopify already holds: Shopify keeps its own value. */
+describe('Shopify keeps its own value', () => {
+  const keeps = 'Shopify keeps Own value. Shared changes are not sent to a product already on Shopify; enter the value here to send it.'
+  const html = () => renderToStaticMarkup(createElement(ShopifyDivergenceBanner, { type: label.type, kept: 'Shared value', follows: true, divergence: { publishesAs: 'Own value', note: keeps } }))
+  it('names the Shared value shown, the value Shopify has, and why it stays', () => {
+    expect(html()).toContain('Shopify keeps its own value')
+    expect(html()).toContain('<dt>Shared value, shown here</dt><dd>Shared value</dd>')
+    expect(html()).toContain('<dt>Shopify has</dt><dd>Own value</dd>')
+    expect(html()).toContain(keeps)
+    expect(html()).not.toContain('Publishing uses the shared value')
+  })
+})
+
 describe('reading or cancelling the pop-up writes nothing', () => {
   const base = { schema, locked: false, translated: false, contentWrite: false, hasSession: true }
   it.each([['different', 'Saved separate label', label], ['equal', 'false', flag]] as const)('a %s-value conflict closed unchanged is not committed', (_kind, kept, field) => {

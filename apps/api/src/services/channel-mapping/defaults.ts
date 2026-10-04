@@ -142,12 +142,11 @@ export type ShopifyCsvRole =
 export interface ShopifyCsvColumn { header: string; aliases: readonly string[]; role: ShopifyCsvRole; level: 'product' | 'variant' | 'image'; field?: string; reason?: string }
 
 /**
- * NCF — measured 2026-09-26: Nexus's Shopify `weight` field cannot take a value through a transfer. Its spec checks the
- * unit against `g, kg, oz, lb` (`channel-specs/store.ts`) while Shopify's own rule for the same field demands `GRAMS,
- * KILOGRAMS, OUNCES, POUNDS` (`nativeFieldValueError`), so every value fails one of the two. Until that is settled the
- * weight columns are left to Shopify.
+ * NCF — a Shopify file's weight columns are not read or written yet. The 2026-09-26 reason (two unit lists that disagreed)
+ * is gone: since S1 item 6 the sheet and Publish both take Shopify's codes (GRAMS, KILOGRAMS, OUNCES, POUNDS). Carrying
+ * the file's grams (`Variant Grams` + `Variant Weight Unit`) is its own later step; until then Shopify keeps its weight.
  */
-const WEIGHT = 'Weight is not carried by a file yet: Nexus’s Shopify weight field checks two unit vocabularies that disagree (g/kg/oz/lb and GRAMS/KILOGRAMS/…). Shopify keeps its weight; edit it in the Shopify tab.'
+const WEIGHT = 'Weight is not carried by a file yet. Shopify keeps its weight; edit it in the Shopify tab.'
 
 export const SHOPIFY_CSV_COLUMNS = {
   columns: [
