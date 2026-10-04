@@ -12,6 +12,7 @@
  * `DATE_PRESETS` → `RangePreset` table, including every key with no equivalent.
  */
 import { describe, it, expect } from 'vitest'
+import { ADS_LIMIT_MARKETS } from '@nexus/shared/ads-market-limits'
 import {
   ALL_MARKETS, MARKETS, MARKET_ANY, marketOne,
   PICKER_TO_SERVER, adsScopeKeys, adsScopeNeedsNormalising, datePatchFromDays, datePatchFromPicker,
@@ -66,6 +67,10 @@ describe('market — the hook owns the mechanism, the page owns the policy', () 
 
   it('a sandbox marketplace is not a scope', () => {
     for (const m of ['UK', 'NL', 'PL', 'SE', 'IE']) expect(at(`market=${m}`).market).toBe(ALL_MARKETS)
+  })
+
+  it('🔴 6b — the screens offer exactly the markets the write gate accepts (a checked Amazon limits row)', () => {
+    expect([...MARKETS].sort()).toEqual([...ADS_LIMIT_MARKETS].sort())
   })
 })
 

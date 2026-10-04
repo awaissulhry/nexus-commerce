@@ -218,13 +218,14 @@ describe('N1 — the spend ceiling measures a queued raise from the budget it re
   })
 
   it('the write\'s own audit row is not counted twice: a raise inside the ceiling still goes', async () => {
-    // +£7 under a £10 ceiling. Counting this write's own audit row as "already authorised" would make it £14.
-    await inside(() => database.client.adSpendCeiling.create({ data: { grain: 'CAMPAIGN', scopeId: 'c-uk', label: 'the UK exact ceiling', dailyCapCents: 1000 } }))
-    const r = await inside(() => updateCampaignWithSync({ campaignId: 'c-uk', patch: { dailyBudget: 22 }, actor: RULE, applyImmediately: true }))
+    // +€7 under a €10 ceiling. Counting this write's own audit row as "already authorised" would make it €14.
+    // 6b — an Italian campaign (bids pinned, budget free): the gate refuses every live write in UK (no checked limits row).
+    await inside(() => database.client.adSpendCeiling.create({ data: { grain: 'CAMPAIGN', scopeId: 'c-pin', label: 'the Italy pinned ceiling', dailyCapCents: 1000 } }))
+    const r = await inside(() => updateCampaignWithSync({ campaignId: 'c-pin', patch: { dailyBudget: 27 }, actor: RULE, applyImmediately: true }))
     expect(r.ok).toBe(true)
     const rows = await drain()
     expect(rows).toEqual([expect.objectContaining({ syncStatus: 'SUCCESS' })])
-    expect(amazon.calls).toEqual([{ externalId: 'EXT-c-uk', patch: { dailyBudget: 22 } }])
-    expect(Number((await campaignOf('c-uk')).dailyBudget)).toBe(22)
+    expect(amazon.calls).toEqual([{ externalId: 'EXT-c-pin', patch: { dailyBudget: 27 } }])
+    expect(Number((await campaignOf('c-pin')).dailyBudget)).toBe(27)
   })
 })

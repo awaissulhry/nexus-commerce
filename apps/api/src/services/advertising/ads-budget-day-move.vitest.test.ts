@@ -165,7 +165,7 @@ describe('AUTO.P0 guard ④ — daily budget movement', () => {
   })
 
   it('never touches a write that is not a budget', async () => {
-    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 1 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2 }) // 6b — 2¢, Amazon's minimum in IT
     expect(r.allowed).toBe(true)
     expect(actionLogFindFirst).not.toHaveBeenCalled()
   })

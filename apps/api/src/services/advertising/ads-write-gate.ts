@@ -5,6 +5,7 @@
  *   1. NEXUS_AMAZON_ADS_MODE=live (deploy-wide env flag)
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
  *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
+ *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
  * marks the OutboundSyncQueue row SKIPPED with a `[ADS-WRITE-GATE-DENY]`
@@ -24,6 +25,8 @@ import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-au
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
+import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
 export type GateDeniedAt =
@@ -51,6 +54,8 @@ export type GateDeniedAt =
   | 'budget_day_move'
   // 6a — the campaign is Sponsored Brands or Display; every write behind this gate goes to a Sponsored Products endpoint.
   | 'ad_product_unsupported'
+  // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
+  | 'market_limits'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -261,6 +266,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       deniedAt: 'connection_writes',
     }
   }
+
+  // 6b — Amazon's own limits in this market (review G.5, Owner decision S10). Every amount behind this gate is in euro
+  // cents, so a market without a checked row (UK, SE, PL, NL, …) is refused outright rather than converted, and a bid or
+  // budget outside Amazon's range is refused before Amazon answers with an error. Suppression is not exempt: it lowers a
+  // bid to Amazon's minimum, never below. `marketplace` may be an Amazon marketplace id on older rows (HB.8), hence the
+  // normaliser. The ad product is Sponsored Products here unless the caller says otherwise — 6a refused the others above.
+  const outsideLimits = marketLimitsRefusal({
+    market: normalizeMarketplaceCode(ctx.marketplace, '') || ctx.marketplace,
+    adProduct: ctx.adProduct ?? null,
+    field: ctx.field ?? null,
+    valueMinor: ctx.intendedValueCents ?? null,
+  })
+  if (outsideLimits) return { allowed: false, reason: outsideLimits, deniedAt: 'market_limits' }
 
   // Apex A.2a — per-campaign allowlist (default-deny). When the worker passes a
   // campaignId (every existing-entity bid/state mutation), the campaign must be

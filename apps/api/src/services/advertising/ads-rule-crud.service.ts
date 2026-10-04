@@ -19,6 +19,8 @@ import type { AdsActor } from './ads-mutation.service.js'
 import { done, isRefused, refused, type ServiceOutcome } from '../automation/service-outcome.js'
 import { invalidValuesBody, readRuleCaps, ruleValueProblems } from './ads-rule-values.js'
 import { adProductLabel, adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
+import { ADS_LIMIT_MARKETS, marketLimitsOf } from '@nexus/shared/ads-market-limits'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 
 /** The triggers the advertising evaluator emits. A rule on any other trigger would never run. */
 export const ADS_RULE_TRIGGERS: ReadonlySet<string> = new Set([
@@ -112,6 +114,10 @@ async function ruleScopeProblems(rule: { actions?: unknown; scopeMarketplace?: s
     const { adsProfileFor } = await import('./ads-profile-resolver.js')
     if (!(await adsProfileFor(market))) {
       out.push(`Nexus has no active Amazon Ads connection for ${market}, so a rule there can never run. Choose a market Nexus is connected to, or All markets.`)
+    } else if (!marketLimitsOf(normalizeMarketplaceCode(market, ''))) {
+      // 6b (S10) — the write gate refuses every write in a market without a checked Amazon limits row (a sandbox UK/SE/PL
+      // connection is still "active"), so a rule there would only ever be refused.
+      out.push(`Nexus does not change ads in ${market}: it has no checked list of Amazon's currency, bid and budget limits there, so a rule there can never run. Choose ${ADS_LIMIT_MARKETS.join(', ')} or All markets.`)
     }
   }
   const { builderScopeCampaignIds } = await import('./ads-rule-adapter.service.js')
