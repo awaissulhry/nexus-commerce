@@ -11,7 +11,7 @@ import { Button, Textarea, Toggle } from '@/design-system/primitives'
 import { Banner, Drawer, Field, useToast } from '@/design-system/components'
 import { num } from '@/design-system/lib/format'
 import { errorText, exportMappingSet, saveFile } from './api'
-import { exportExtension, exportSummarySentence, formLabel, needsTemplateUpload, parseSkus, shopifyExportSummarySentence, type ExportSummary, type TemplateUploadResult } from './model'
+import { exportExtension, exportSummarySentence, formLabel, needsTemplateUpload, parseSkus, shopifyExportSummarySentence, truncatedSentence, type ExportSummary, type TemplateUploadResult } from './model'
 import { TemplateUpload } from './TemplateUpload'
 import styles from './files.module.css'
 
@@ -89,6 +89,19 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
         {done?.details?.refused && done.details.refused.length > 0 && (
           <Banner tone="warning" title={`Not written (${num(done.details.gaps)})`}>
             <ul className={styles.keyList}>{done.details.refused.map((r, i) => <li key={i}>{r.sku}: {r.reason}</li>)}</ul>
+          </Banner>
+        )}
+        {/* B4 — warn, not refuse (the Owner's decision): the items past the template's last column are not in the file. */}
+        {done?.details?.truncated && done.details.truncated.count > 0 && (
+          <Banner tone="warning" title={`Lists longer than the template (${num(done.details.truncated.count)})`}>
+            <ul className={styles.keyList}>{done.details.truncated.items.map((t, i) => <li key={i}>{truncatedSentence(t, num)}</li>)}</ul>
+            {done.details.truncated.count > done.details.truncated.items.length && <p className={styles.plain}>And {num(done.details.truncated.count - done.details.truncated.items.length)} more.</p>}
+          </Banner>
+        )}
+        {done?.details?.notes && done.details.notes.count > 0 && (
+          <Banner tone="info" title={`Before you upload (${num(done.details.notes.count)})`}>
+            <ul className={styles.keyList}>{done.details.notes.items.map((n, i) => <li key={i}>{n}</li>)}</ul>
+            {done.details.notes.count > done.details.notes.items.length && <p className={styles.plain}>And {num(done.details.notes.count - done.details.notes.items.length)} more.</p>}
           </Banner>
         )}
       </div>

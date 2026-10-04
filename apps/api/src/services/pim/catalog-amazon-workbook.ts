@@ -98,7 +98,7 @@ const RELATIONSHIP_ROOTS = new Set(['parentage_level', 'child_parent_sku_relatio
 const OFFER_DRAFT_LEAVES = new Map<string, AmazonOfferLeaf>(AMAZON_OFFER_FIELDS
   .filter(f => f.lane === 'draft' && f.leaf && f.leaf !== 'our_price' && f.leaf !== 'sale')
   .map(f => [`${rootOfLeaf(f.leaf!)}.${AMAZON_SUB_ATTRIBUTE[f.leaf!]}`, f.leaf!] as const))
-const OFFER_DRAFT_LABEL: Record<AmazonOfferLeaf, string> = {
+export const OFFER_DRAFT_LABEL: Record<AmazonOfferLeaf, string> = {
   our_price: 'Price', sale: 'Sale price', minimum_seller_allowed_price: 'Minimum seller price', maximum_seller_allowed_price: 'Maximum seller price',
   map_price: 'Minimum advertised price', offer_start_at: 'Offer start date', offer_end_at: 'Offer end date', automated_pricing_rule_id: 'Automate Pricing rule',
   lead_time_to_ship_max_days: 'Handling time', restock_date: 'Restock date', is_inventory_available: 'Always available',
@@ -108,6 +108,17 @@ export function offerDraftReason(leaf: AmazonOfferLeaf, fileValue?: string) {
   return `${OFFER_DRAFT_LABEL[leaf]}: an Amazon offer setting, not read from a file${fileValue === undefined ? '' : ` (file value ${fileValue})`}. Change it in the sheet's Amazon columns; it is sent when you publish.`
 }
 const offerDraftLeaf = (root: string, sub: string | undefined) => sub ? OFFER_DRAFT_LEAVES.get(`${root}.${sub}`) : undefined
+/**
+ * B3 — the offer-draft leaf a current-template column carries, by `placeHeader`'s own rule (the B2B audience price and a
+ * currency are not offer drafts). The import excludes these columns; the export writes their live values.
+ */
+export function offerDraftLeafOfColumn(header: string): AmazonOfferLeaf | undefined {
+  const path = pathOf(header), root = path[0]
+  if (QUANTITY_ROOTS.has(root)) return offerDraftLeaf(root, path[1])
+  if (root !== 'purchasable_offer' || path.at(-1) === 'currency') return undefined
+  const audience = qualifier(header, 'audience')
+  return audience && audience !== 'ALL' ? undefined : offerDraftLeaf(root, path[1])
+}
 const isText = (field: ChannelFieldSpec) => (field.kind === 'text' || field.kind === 'longtext') && !field.options?.length
 const excelDate = (raw: string) => /^\d{5}(\.\d+)?$/.test(raw.trim()) ? new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(raw)) * 86_400_000).toISOString().slice(0, 10) : raw.trim()
 /**
@@ -156,7 +167,7 @@ function sourceValue(parsed: AmazonTemplateParse, header: string, value: string,
 
 const keyOfHeader = (parsed: AmazonTemplateParse, header: string) => parsed.meta.grammar === 'legacy' ? legacyAttributePath(header) ?? header : header
 /** The attribute's own selectors a column names (`[content_type=user_manual]`) — not its market, language or audience. */
-const ownSelectors = (key: string) => [...key.matchAll(/\[([^=\]]+)=([^\]]+)\]/g)]
+export const ownSelectors = (key: string) => [...key.matchAll(/\[([^=\]]+)=([^\]]+)\]/g)]
   .map(m => ({ name: m[1], value: m[2] })).filter(s => !['marketplace_id', 'language_tag', 'audience'].includes(s.name))
 /** B5 — the schema leaf that keeps one of those selectors (`compliance_media__content_type`), when the cached schema has it. */
 const selectorLeaf = (spec: ChannelSpec, field: ChannelFieldSpec, name: string) => spec.fields.find(f => f.key === `${field.attribute}__${name}` && f.attribute === field.attribute)

@@ -235,6 +235,12 @@ function sentValue(field: CatalogueField, value: unknown): unknown {
   return contentWireValue(validateChannelValue(field, wire).value ?? null, field.shape)
 }
 const sameSent = (field: CatalogueField, a: unknown, b: unknown) => transferCanonical(sentValue(field, a)) === transferCanonical(sentValue(field, b))
+/**
+ * B2 — the planner's rule for a channel-file value on a cell that follows Shared: equal (in the form it is SENT) to what
+ * Nexus already sends → the cell keeps following Shared; otherwise the file's value is saved on the listing. Exported for
+ * the golden round trip (export → re-import), which must keep every inherited cell inherited.
+ */
+export const channelFileKeepsShared = (field: CatalogueField, fileValue: unknown, sentNow: unknown) => sameSent(field, fileValue, sentNow)
 /** A list item named in a warning: quoted, and cut short (a bullet point can be 500 characters). */
 const quoted = (item: unknown) => { const text = typeof item === 'string' ? item : JSON.stringify(item); return `"${text.length > 60 ? `${text.slice(0, 57)}…` : text}"` }
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -721,7 +727,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           // B2 (the Owner's decision 4, every channel file) — a cell that follows Shared, which the file sets to exactly what
           // Nexus already sends, keeps following Shared: a channel file restates every value, it does not choose them.
           const current = fromChannelFile(row) && row.action === 'SET' ? effective.get(clearKey(key, row.locale, row.field)) : undefined
-          if (current && old.state === 'inherited' && sameSent(field, row.value, current.value)) {
+          if (current && old.state === 'inherited' && channelFileKeepsShared(field, row.value, current.value)) {
             target.cells.push(cell(row, { state: 'inherited', value: current.value }, current.value, 'inherited'))
             const market = `${first.channel} ${first.marketplace}`
             followsShared.set(market, (followsShared.get(market) ?? 0) + 1)

@@ -33,6 +33,13 @@ describe('CHMAP golden files (anonymised copies of the Owner’s files)', () => 
       expect(got.read).toMatchObject({ unaccounted: 0, duplicated: 0, dangling: 0 })
       // check 2 — the round trip: the differences are exactly the pinned ones (for most files: none).
       expect(got.differences).toEqual(fixture.expected.differences)
+      // check 4 (Amazon templates) — the cells that follow Shared come back the same, and reading the file again keeps
+      // every one of them following Shared.
+      if (got.roundTripInherited) {
+        expect(got.roundTripInherited).toEqual(got.roundTrip)
+        expect(got.inheritedCells).toBeGreaterThan(0)
+        expect(got.reimport).toEqual({ kept: got.inheritedCells, pinned: 0 })
+      }
       // check 3 — the version pin: the form, the decisions and every count.
       expect(got).toEqual(fixture.expected)
     }, 60_000)

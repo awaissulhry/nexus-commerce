@@ -2,7 +2,8 @@ import { amazonChannelKey } from '@nexus/shared/channel-mapping'
 import prisma from '../../db.js'
 import { detectAmazonTemplate, rewriteTemplateDataRows } from '../amazon/template-workbook.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
-import { buildAmazonTemplateRows, type AmazonExportOptions, type AmazonExportRecord } from './amazon-export.js'
+import { amazonExportValues, buildAmazonTemplateRows, type AmazonExportOptions, type AmazonExportRecord, type AmazonOfferExportCell } from './amazon-export.js'
+import { AMAZON_OFFER_LEAVES, amazonOfferKeysOf } from '../amazon/offer-fields.js'
 import { keyFingerprint, formLabel } from './form.js'
 import { fieldRowOf, MappingError, recordUse } from './store.js'
 
@@ -13,6 +14,10 @@ import { fieldRowOf, MappingError, recordUse } from './store.js'
  * (captured when the Owner uploads or imports it). The values come from the product sheet's own reader
  * (`catalogRows`) — the same store the import writes — so a file read in and written out goes through the same
  * mapping both ways. Nothing is sent to Amazon; the Owner uploads the file.
+ *
+ * B2 (2026-10-05) — the file holds what the sheet shows: a cell that follows Shared carries the value Nexus sends
+ * (`catalogRows(…, { effective: true })`, the sheet's own `resolveBatch` read). B3 — the offer settings come from the
+ * sheet's own loader (`loadAmazonOfferCells`): the LIVE value, the parent and FBA holds, the saved change waiting.
  */
 export interface AmazonExportRequest {
   marketplace: string
@@ -60,8 +65,42 @@ export async function exportAmazonTemplate(request: AmazonExportRequest) {
   if (!market) throw new MappingError(`Amazon ${marketplace} is not a configured market`)
   const languages = new Map([[JSON.stringify(['AMAZON', marketplace]), marketLanguages('AMAZON', marketplace, [{ channel: 'AMAZON', code: marketplace, language: market.language, languages: market.languages ?? [] }])]])
   const families = await prisma.productFamily.findMany({ select: { id: true, code: true } })
-  const rows = await catalogRows(products, { market: marketplace, marketplaces: [marketplace] }, transferContracts(marketplace, { allowIncompleteSchema: true }), families, undefined, languages) as ChannelValueRow[]
+  const scope = { market: marketplace, marketplaces: [marketplace] }
+  const contracts = transferContracts(marketplace, { allowIncompleteSchema: true })
+  const rows = await catalogRows(products, scope, contracts, families, undefined, languages) as ChannelValueRow[]
+  // B2 — what Nexus sends for every cell: the stored rows say which cells follow Shared, these give their values.
+  const sent = await catalogRows(products, { ...scope, effective: true }, contracts, families, undefined, languages) as ChannelValueRow[]
   const windows = await readSaleWindows(prisma as never, listings.map(l => l.id))
+  const { amazonOfferCellOf, loadAmazonOfferCells, offerValueWords } = await import('../pim/amazon-offer-cells.js')
+  const { liveDraftValues } = await import('../amazon/offer-facts.js')
+  const { pricingRuleLabel } = await import('@nexus/shared/listing-price')
+  // B3 — the sheet's own offer facts. The price permission is a sheet EDIT hold, not a read one: the file only reads.
+  const offerBook = await loadAmazonOfferCells({ listingIds: listings.map(l => l.id), canEditPrice: true })
+  const offerCellsOf = (listingId: string, isParent: boolean): AmazonOfferExportCell[] => {
+    const facts = offerBook.listing(listingId)
+    if (!facts) return []
+    const rule = pricingRuleLabel(facts.pricingRule, facts.priceAdjustmentPercent as never)
+    const liveNow = liveDraftValues(facts.live)
+    return AMAZON_OFFER_LEAVES.map(leaf => {
+      const cell = amazonOfferCellOf({ key: amazonOfferKeysOf(leaf)[0], listing: facts, isParent, canEditPrice: true })!
+      const entry = facts.facts.draft?.leaves[leaf]
+      return { leaf, hold: cell.hold, live: cell.pendingPublish ? cell.pendingPublish.live : cell.value ?? null,
+        waiting: cell.pendingPublish && entry ? { saved: offerValueWords(leaf, entry.value, rule), live: offerValueWords(leaf, liveNow[leaf], rule), sent: cell.pendingPublish.sent } : null }
+    })
+  }
+  const listingRows = (list: ChannelValueRow[]) => {
+    const out = new Map<string, ChannelValueRow[]>()
+    for (const r of list) {
+      if (r.entity !== 'Overrides' || r.channel !== 'AMAZON' || r.marketplace !== marketplace) continue
+      const key = `${r.sku}\u0000${r.aliasKey ?? ''}`
+      out.set(key, [...(out.get(key) ?? []), r])
+    }
+    return out
+  }
+  const storedOf = listingRows(rows), sentOf = listingRows(sent)
+  const { normalizeLanguage } = await import('../pim/content-language.js')
+  const primaryLanguage = normalizeLanguage(market.language)
+  let inherited = 0
 
   const productById = new Map(products.map(p => [p.id, p]))
   const sellerSkuOf = (l: { productId: string; platformAttributes: unknown }) => {
@@ -72,8 +111,10 @@ export async function exportAmazonTemplate(request: AmazonExportRequest) {
   const num = (v: unknown) => v == null ? null : typeof v === 'object' && 'toNumber' in (v as object) ? (v as { toNumber(): number }).toNumber() : Number(v)
   const records: AmazonExportRecord[] = listings.map(l => {
     const product = productById.get(l.productId)!
-    const values = new Map<string, unknown>()
-    for (const r of rows) if (r.entity === 'Overrides' && r.channel === 'AMAZON' && r.marketplace === marketplace && r.sku === product.sku && r.aliasKey === l.aliasKey && r.action === 'SET' && r.value !== undefined) values.set(`${r.field}\u0000${r.locale ?? ''}`, r.value)
+    const isParent = !product.parentId && !!product.isParent
+    const key = `${product.sku}\u0000${l.aliasKey ?? ''}`
+    const { values, cleared, offers, inherited: followed } = amazonExportValues(storedOf.get(key) ?? [], sentOf.get(key) ?? [], offerCellsOf(l.id, isParent), primaryLanguage)
+    inherited += followed
     const pa = (l.platformAttributes ?? {}) as Record<string, unknown>
     const parent = product.parentId ? primaryListing.get(product.parentId) : null
     const window = windows.get(l.id)
@@ -82,14 +123,13 @@ export async function exportAmazonTemplate(request: AmazonExportRequest) {
       // Item 12 (2026-10-05) — the role is the family's: a single product (no parent, not a parent) is neither, so it
       // exports a blank role and keeps its price (it was written as a "parent" with a blank price).
       sku: product.sku, sellerSku: sellerSkuOf(l), parentSellerSku: parent ? sellerSkuOf(parent) : product.parent?.sku ?? null,
-      isParent: !product.parentId && !!product.isParent, role: product.parentId ? 'child' as const : product.isParent ? 'parent' as const : 'single' as const,
+      isParent, role: product.parentId ? 'child' as const : product.isParent ? 'parent' as const : 'single' as const,
       productType: String(pa.productType ?? set.formKey.split('+')[0]), asin: l.externalListingId ?? (typeof values.get('merchant_suggested_asin\u0000') === 'string' ? values.get('merchant_suggested_asin\u0000') as string : null),
-      values, price: num(l.priceOverride ?? l.price), sale: sale != null && window?.start && window?.end ? { value: sale, start: window.start, end: window.end } : null,
+      values, cleared, offers, price: num(l.priceOverride ?? l.price), sale: sale != null && window?.start && window?.end ? { value: sale, start: window.start, end: window.end } : null,
     }
   }).sort((a, b) => (a.isParent === b.isParent ? a.sellerSku.localeCompare(b.sellerSku) : a.isParent ? -1 : 1))
-  const { normalizeLanguage } = await import('../pim/content-language.js')
   const built = buildAmazonTemplateRows(template, set.fields.map(fieldRowOf), records, {
-    recordAction: request.recordAction ?? 'partial_update', primaryLanguage: normalizeLanguage(market.language), currency: market.currency ?? null, includePrices: request.includePrices ?? true,
+    recordAction: request.recordAction ?? 'partial_update', primaryLanguage, currency: market.currency ?? null, includePrices: request.includePrices ?? true,
   })
   const file = await rewriteTemplateDataRows(vault.bytes, built.rows)
   const filename = `Amazon ${marketplace} ${set.formKey} v${set.version}.xlsm`
@@ -97,6 +137,7 @@ export async function exportAmazonTemplate(request: AmazonExportRequest) {
   return {
     filename, bytes: file.bytes, set: { id: set.id, version: set.version, status: set.status, label },
     rows: built.rows.length, gaps: built.gaps, blankByDesign: [...built.blankByDesign].map(([header, reason]) => ({ header, reason })), blankForRow: built.blankForRow,
+    truncated: built.truncated, notes: built.notes, inherited,
     template, exportedRows: built.rows,
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MappingDiff, MappingFieldRow, MappingSetSummary } from '@nexus/shared/channel-mapping'
 import {
-  changedKeys, decisionBody, decisionSentence, DIRECTION_WORD, exportBlocker, exportSummarySentence, filenameFromDisposition, filterCounts, filterRows, filterSets, formLabel, groupByForm, initialDraft, isLocked, marketsOf, matchesSearch, needsTemplateUpload, pageOf, parseExportSummary, parseSkus, pushImpactReview, requirementWord, sharedTarget, siblingsOf, stateTone, targetLabel, templateResultSentence, transformSummary, useCount, versionName, exportExtension, formSourceWord, shopifyExportSummarySentence, shopifyPreviewSentence,
+  changedKeys, decisionBody, decisionSentence, DIRECTION_WORD, exportBlocker, exportSummarySentence, truncatedSentence, filenameFromDisposition, filterCounts, filterRows, filterSets, formLabel, groupByForm, initialDraft, isLocked, marketsOf, matchesSearch, needsTemplateUpload, pageOf, parseExportSummary, parseSkus, pushImpactReview, requirementWord, sharedTarget, siblingsOf, stateTone, targetLabel, templateResultSentence, transformSummary, useCount, versionName, exportExtension, formSourceWord, shopifyExportSummarySentence, shopifyPreviewSentence,
 } from './model'
 import { fileSetHref, mappingViewHref, readMappingView } from './urls'
 
@@ -223,6 +223,23 @@ describe('export', () => {
     expect(exportSummarySentence(summary!)).toBe('12 rows written with Amazon IT · COAT+PANTS · v3 (active). 4 required cells had no value in Nexus; 21 columns left blank on purpose.')
     expect(exportSummarySentence({ rows: 1, gaps: 1, blankColumns: 1, mapping: 'X' })).toBe('1 row written with X. 1 required cell had no value in Nexus; 1 column left blank on purpose.')
     expect(exportSummarySentence({ rows: 1204, gaps: 0, blankColumns: 2, mapping: 'X' }, n => n.toLocaleString('en-US'))).toMatch(/^1,204 rows/)
+  })
+
+  // Product sheet consistency B4 (2026-10-05) — a list longer than the template is a warning, not a refusal.
+  it('reads the Amazon lists cut at the template and the notes, and words each cut list', () => {
+    const header = encodeURIComponent(JSON.stringify({ rows: 21, gaps: 0, blankColumns: 3, mapping: 'Amazon IT · COAT · v2 (active)',
+      truncated: { count: 12, items: [{ sku: 'GALE-JACKET-M', label: 'Bullet point', held: 10, columns: 5 }] },
+      notes: { count: 1, items: ['Handling time on GALE-JACKET-M: saved 3 days, waiting for Publish; the file holds the live 2 days.'] } }))
+    const summary = parseExportSummary(header)!
+    expect(summary.truncated).toEqual({ count: 12, items: [{ sku: 'GALE-JACKET-M', label: 'Bullet point', held: 10, columns: 5 }] })
+    expect(summary.notes).toEqual({ count: 1, items: ['Handling time on GALE-JACKET-M: saved 3 days, waiting for Publish; the file holds the live 2 days.'] })
+    expect(truncatedSentence(summary.truncated!.items[0])).toBe('Bullet point on GALE-JACKET-M: 10 in Nexus, 5 in the template: items 6–10 are not in the file; uploading it leaves Amazon with 5.')
+    expect(truncatedSentence({ sku: 'X', label: 'Bullet point', held: 6, columns: 5 })).toBe('Bullet point on X: 6 in Nexus, 5 in the template: item 6 is not in the file; uploading it leaves Amazon with 5.')
+    // A malformed extra is dropped, never guessed: the summary itself still reads.
+    const bad = (extra: object) => parseExportSummary(encodeURIComponent(JSON.stringify({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm', ...extra })))
+    expect(bad({ truncated: { count: 1, items: [{ sku: 'X', label: 'Bullet point', held: '10', columns: 5 }] } })).toEqual({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm' })
+    expect(bad({ truncated: { count: 0, items: [{ sku: 'X', label: 'Bullet point', held: 10, columns: 5 }] } })).toEqual({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm' })
+    expect(bad({ notes: { count: 2, items: [3] } })).toEqual({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm' })
   })
 
   it('refuses a summary it cannot read rather than guess', () => {
