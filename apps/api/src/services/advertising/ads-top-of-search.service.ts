@@ -15,6 +15,7 @@ import prisma from '../../db.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { logger } from '../../utils/logger.js'
+import { nothingHeld, type EngineGuard } from './ads-engine-guard.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -197,6 +198,8 @@ export async function defendTopOfSearch(opts: {
   dryRun?: boolean
   /** Who writes: the cron's own actor by default; a rule passes its own (automation:<ruleId>) so its write cap counts. */
   actor?: string
+  /** 1d — the cron's guard (the account dial and its caps), asked once per campaign before its one write. A rule passes none. */
+  guard?: EngineGuard
 } = {}): Promise<DefendTosResult> {
   const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, targetIS: opts.targetIS, marketplace: opts.marketplace, windowDays: opts.windowDays })
   // RC2.T4 — respect dayparting: never RAISE top-of-search on a campaign that is
@@ -220,8 +223,11 @@ export async function defendTopOfSearch(opts: {
   let skippedNotAllowlisted = 0
   for (const r of actionable) {
     if (allowed && !allowed.has(r.campaignId)) { skippedNotAllowlisted += 1; continue }
+    const permit = opts.guard?.permit()
+    if (permit && !permit.forward) { opts.guard!.settle(permit, 0, { ...nothingHeld(), forward: true }); continue }
     await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: opts.actor ?? 'automation:tos-optimizer', reason: r.reason })
     applied += 1
+    if (permit) opts.guard!.settle(permit, 1, nothingHeld())
   }
   return { evaluated: rows.length, changed: actionable.length, applied, skippedNotAllowlisted, skippedPaused, dryRun: false, sample }
 }

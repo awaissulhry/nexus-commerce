@@ -7,13 +7,22 @@
  *
  * Gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1 alongside the other AD-series
  * crons.
+ *
+ * 1d — a live pool honours the account dial and this engine's caps (ads-engine-guard.ts), asked once
+ * per pool, so a rebalance is never split (its cuts and raises go together):
+ *   auto     applies while under the caps; a pool the cap holds back is not even audited, so its
+ *            cool-down does not start and the next run applies it.
+ *   suggest  the native dry run (forceDryRun): the audit row records what it would move.
+ *   stopped  nothing — no audit, no cool-down — so the first run after Resume applies it. (A budget
+ *            write is never a suppression, so the gate would refuse it after Nexus changed its copy.)
  */
 
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { BUDGET_POOL_CRON_ACTOR, rebalanceAndAudit } from '../services/advertising/budget-pool-rebalancer.service.js'
+import { BUDGET_POOL_CRON_ACTOR, computeRebalance, rebalanceAndAudit, type ProposedAllocation } from '../services/advertising/budget-pool-rebalancer.service.js'
+import { engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -26,24 +35,50 @@ interface TickSummary {
   poolsSkipped: number
   totalShiftCents: number
   durationMs: number
+  /** 1d — the dial posture and the caps this run ran under, and what they held back (live pools only). */
+  guard?: EngineGuardReport
 }
+
+/** 1d — a rebalance writes one budget per allocation that has a campaign and a shift. */
+const movesOf = (proposed: ProposedAllocation[]): number => proposed.filter((p) => p.campaignId && p.shiftCents !== 0).length
 
 export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
   const startedAt = Date.now()
   const pools = await prisma.budgetPool.findMany({
     where: { enabled: true },
-    select: { id: true },
+    select: { id: true, dryRun: true },
   })
   let rebalanced = 0
   let appliedLive = 0
   let skipped = 0
   let totalShiftCents = 0
+  // 1d — only a live pool writes, so only then are the dial and the caps read.
+  const guard = pools.some((p) => !p.dryRun) ? await openEngineGuard('budget-pools') : null
   for (const p of pools) {
+    const permit = !p.dryRun && guard ? guard.permit() : null
+    if (permit && !permit.forward) {
+      const held = nothingHeld()
+      if (guard!.posture === 'suggest') {
+        // The native dry run: the audit row records what it would move (its cool-down starts, as for a dry-run pool).
+        const dry = await rebalanceAndAudit({ poolId: p.id, triggeredBy: 'cron', actor: BUDGET_POOL_CRON_ACTOR, forceDryRun: true })
+        if (dry.skipped) skipped += 1
+        else { rebalanced += 1; totalShiftCents += dry.totalShiftCents }
+        held.forward = dry.ok && !dry.skipped && movesOf(dry.proposed) > 0
+      } else {
+        // Capped or stopped: computed only (computeRebalance writes nothing), so no audit row and no cool-down.
+        const would = await computeRebalance({ poolId: p.id, triggeredBy: 'cron' })
+        skipped += 1
+        held.forward = would.ok && !would.skipped && movesOf(would.proposed) > 0
+      }
+      guard!.settle(permit, 0, held)
+      continue
+    }
     const outcome = await rebalanceAndAudit({
       poolId: p.id,
       triggeredBy: 'cron',
       actor: BUDGET_POOL_CRON_ACTOR,
     })
+    if (permit) guard!.settle(permit, outcome.applied?.applied ?? 0, nothingHeld())
     if (outcome.skipped) {
       skipped += 1
       continue
@@ -59,9 +94,13 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
     poolsSkipped: skipped,
     totalShiftCents,
     durationMs: Date.now() - startedAt,
+    ...(guard ? { guard: guard.report() } : {}),
   }
   lastRunAt = new Date()
-  lastSummary = `pools=${pools.length} rebalanced=${rebalanced} live=${appliedLive} skipped=${skipped} shift=${totalShiftCents}¢ ${summary.durationMs}ms`
+  lastSummary = `pools=${pools.length} rebalanced=${rebalanced} live=${appliedLive} skipped=${skipped} shift=${totalShiftCents}¢ ${summary.durationMs}ms${engineGuardNote(summary.guard, {
+    suggest: 'each due rebalance of a live pool is recorded as a dry run; nothing is written',
+    stopped: 'nothing is written; rebalances wait for Resume',
+  })}`
   return summary
 }
 

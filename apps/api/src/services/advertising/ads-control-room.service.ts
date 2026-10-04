@@ -57,9 +57,9 @@ export interface EngineLever {
    * Whether this engine actually consults the account halt / autonomy dial.
    *
    * Measured, not assumed: `ads-auto-bid` checks `state.effectivelyStopped`
-   * (`ads-auto-harvest` did too, until HP5 retired it 2026-08-21), and since 1c
-   * `ad-rank-defend` and `ad-dayparting` read the dial through ads-engine-guard.ts;
-   * `ad-budget-enforce`, `budget-pool-rebalance` and the delivery drain contain no such check at all.
+   * (`ads-auto-harvest` did too, until HP5 retired it 2026-08-21), and since 1c / 1d
+   * rank-defend, dayparting, budget enforcement, pools, top-of-search defense and the coverage
+   * engine read the dial through ads-engine-guard.ts; the delivery drain contains no such check.
    *
    * This distinction is the difference between a control surface and a decorative one. On
    * 2026-08-05 the breaker was tripped ("264 actions in the last hour") and rank-defend's
@@ -87,14 +87,14 @@ export interface EngineLever {
 /**
  * How an engine relates to the account halt / autonomy dial.
  *
- *   honours  — reads the dial itself before it writes. `ads-auto-bid` stands down when
- *              stopped. 1c: rank-defend and classic dayparting, while stopped, only floor
- *              bids (restores wait for Resume) and under SUGGEST write nothing new
- *              (ads-engine-guard.ts); they also keep their own per-run and per-day caps.
+ *   honours  — reads the dial itself before it writes (ads-engine-guard.ts), and keeps its
+ *              own per-run and per-day caps. Under SUGGEST it writes nothing new; while
+ *              stopped only bid floors may land (rank-defend, dayparting, budget
+ *              enforcement) and restores wait for Resume. `ads-auto-bid` stands down when
+ *              stopped (1c, 1d).
  *   gated    — still evaluates while halted, but every write it produces is refused by
  *              `ads-write-gate` (ACR.0.7). Nothing reaches Amazon; the engine merely
- *              wastes a tick. This is the state budget enforcement, pools and the
- *              delivery drain are in.
+ *              wastes a tick. Only the delivery drain is in this state now.
  *   exempt   — runs regardless, correctly: the anomaly breaker must keep evaluating
  *              (it is what would clear the halt) and the reconcile is read-only.
  *
@@ -249,9 +249,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     return m
   }
   /**
-   * 1c — what an engine that honours the dial still does under it, for the two engines that read it through
+   * 1c / 1d — what an engine that honours the dial still does under it, for the engines that read it through
    * ads-engine-guard.ts. Under SUGGEST it is said beside the dial; while stopped it is the warning, because the
-   * lever reads OFF and yet floors still land.
+   * lever reads OFF and yet floors may still land. Said only when the engine is armed to write (AUTO): an engine
+   * in OBSERVE writes nothing under any dial.
    */
   const DIAL_WORDS: Record<string, { suggest: string; stopped: string }> = {
     'rank-defend': {
@@ -261,6 +262,22 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     dayparting: {
       suggest: 'computes each run and writes nothing new (the run summary counts what it would change); it still lifts its own floors and multipliers',
       stopped: 'Stopped: it only floors bids when a window closes; restores and multipliers wait for Resume',
+    },
+    'budget-enforce': {
+      suggest: 'computes each run and writes no pacing and no new floors (the run summary counts what it would change); it still restores bids it floored over the cap',
+      stopped: 'Stopped: it only floors bids when a cap is reached; restores and budget pacing wait for Resume',
+    },
+    'budget-pools': {
+      suggest: 'records each due rebalance as a dry run and writes nothing',
+      stopped: 'Stopped: it writes nothing; rebalances wait for Resume',
+    },
+    'tos-defense': {
+      suggest: 'computes each run and writes nothing (the run summary counts what it would move)',
+      stopped: 'Stopped: it writes nothing; placement moves wait for Resume',
+    },
+    'coverage-engine': {
+      suggest: 'logs the bids it would set, as in observe mode, and writes nothing',
+      stopped: 'Stopped: it logs the bids it would set and writes nothing until Resume',
     },
   }
   const capReason = (): string | null => {
@@ -294,7 +311,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     const dialWords = haltBehaviour === 'honours' ? DIAL_WORDS[key] : undefined
     // A gate that is already OFF is not "overridden" by the account dial — say the local reason.
     let modeReason = rawMode === 'OFF' ? rawReason : (haltBehaviour === 'exempt' ? rawReason : (cap ?? rawReason))
-    if (rawMode !== 'OFF' && dialWords && !accountStopped && state.autonomy === 'SUGGEST') modeReason = `Account autonomy is SUGGEST — it ${dialWords.suggest}`
+    if (rawMode === 'AUTO' && dialWords && !accountStopped && state.autonomy === 'SUGGEST') modeReason = `Account autonomy is SUGGEST — it ${dialWords.suggest}`
 
     let warning: string | null = null
     // The loudest thing this page can say: the account is stopped and this engine is not.
@@ -302,7 +319,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       // Not a defect since ACR.0.7 — but worth saying, because the cron will keep
       // logging activity and an operator should not read that as writes landing.
       warning = 'Still evaluating while stopped — its writes are refused at the gate'
-    } else if (accountStopped && dialWords && rawMode !== 'OFF') {
+    } else if (accountStopped && dialWords && rawMode === 'AUTO') {
       warning = dialWords.stopped
     } else if (cron && adsCron && h.runs === 0 && rawMode !== 'OFF') {
       warning = 'Enabled but has not run in 7 days'
@@ -339,19 +356,19 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       'ad-budget-enforce', 'every 30 min',
       masterOff ? 'OFF' : jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY') ? 'AUTO' : 'OBSERVE',
       masterOff?.why ?? (jobSwitchOn('NEXUS_BUDGET_ENFORCE_APPLY')
-        ? 'NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts'
+        ? `NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts. Honours the account dial; ${engineCapsText('budget-enforce')}`
         : 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 — computes, never applies'),
-      `${budgetPlans} plans active this month`, 'gated'),
+      `${budgetPlans} plans active this month`, 'honours'),
 
     mk('budget-pools', 'Budget pools', 'Moves daily budget between campaigns inside a pool',
       'budget-pool-rebalance', 'every 15 min',
       masterOff ? 'OFF' : pools > 0 ? 'AUTO' : 'OFF',
-      masterOff?.why ?? (pools > 0 ? 'Rebalancing live pools' : 'No pools configured — nothing to rebalance'),
-      `${pools} pools`, 'gated'),
+      masterOff?.why ?? (pools > 0 ? `Rebalancing live pools. Honours the account dial; ${engineCapsText('budget-pools')}` : 'No pools configured — nothing to rebalance'),
+      `${pools} pools`, 'honours'),
 
     mk('auto-bid', 'Bid optimiser', 'Moves target bids toward a target ACOS',
       'ads-auto-bid', 'every 6 h',
-      masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? 'Runs on the account autonomy dial', null, 'honours'),
+      masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? `Runs on the account autonomy dial; ${engineCapsText('auto-bid')}`, null, 'honours'),
 
     mk('anomaly-guard', 'Anomaly breaker', 'Stops ads automation account-wide when rule actions, one engine\'s changes or hourly ad spend pass their limits',
       'ads-anomaly-guard', 'every 10 min',
@@ -363,9 +380,9 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       'top-of-search-defense', 'every 30 min',
       envEnabled('NEXUS_ENABLE_TOS_DEFENSE_CRON') && adsCron ? 'AUTO' : 'OFF',
       envEnabled('NEXUS_ENABLE_TOS_DEFENSE_CRON')
-        ? (masterOff?.why ?? 'Armed')
+        ? (masterOff?.why ?? `Armed. Honours the account dial; ${engineCapsText('tos-defense')}`)
         : 'NEXUS_ENABLE_TOS_DEFENSE_CRON is off — the most direct SERP lever has never run',
-      null, 'gated'),
+      null, 'honours'),
 
     mk('write-delivery', 'Write delivery', 'Drains queued changes to Amazon and retries failures',
       'drain-ads-sync', 'every minute',
@@ -379,9 +396,9 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
         : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto' ? 'AUTO'
           : (process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'off' ? 'OFF' : 'OBSERVE',
       masterOff?.why ?? ((process.env.NEXUS_COVERAGE_ENGINE_MODE ?? 'observe').toLowerCase() === 'auto'
-        ? 'Writing — enabled coverage sets only, through the gate'
+        ? `Writing — enabled coverage sets only, through the gate. Honours the account dial; ${engineCapsText('coverage-engine')}`
         : 'Observe-first: logs would-do bids; writes need NEXUS_COVERAGE_ENGINE_MODE=auto AND an enabled set'),
-      `${coverageSets} enabled coverage sets`, 'gated'),
+      `${coverageSets} enabled coverage sets`, 'honours'),
 
     mk('structural-reconcile', 'Account reconcile', 'Compares the whole account against Amazon and records disagreement',
       'ads-structural-reconcile', 'every 6 h',

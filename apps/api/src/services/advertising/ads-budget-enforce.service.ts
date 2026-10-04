@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
 import { currentMonth } from './ads-budget-manager.service.js'
+import { allowChange, nothingHeld, openEngineGuard, type EngineGuardReport, type EngineGuardWords } from './ads-engine-guard.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
@@ -176,27 +177,50 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
   return { month, plans: planDecisions, totals: { plans: planDecisions.length, budgetChanges, suppressing, restoring, netDeltaCents: netDelta } }
 }
 
-export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; result: EnforcementResult }> {
+/**
+ * 1d — a live run honours the account dial and this engine's caps (ads-engine-guard.ts), asked once per campaign
+ * before its first write:
+ *   auto     pacing, floors and restores, inside the caps; a restore is never refused by a cap, only counted.
+ *   suggest  no pacing and no new floor; it still restores the bids it floored (its own state).
+ *   stopped  only the floor. Pacing and restores are NOT attempted: both change Nexus's own copy before the gate,
+ *            which refuses them while stopped (a pacing write is never a suppression, a restore raises bids) — Nexus
+ *            would show the restored bids while Amazon stays at 2¢. Not calling them keeps `bidsSuppressedAt` set, so
+ *            the first run after Resume restores.
+ */
+export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; result: EnforcementResult; guard?: EngineGuardReport }> {
   const result = await computeBudgetEnforcement({ month: opts.month })
   const dryRun = opts.dryRun ?? true
   const actor: AdsActor = opts.actor ?? 'automation:budget-manager'
   let budgetApplied = 0, suppressed = 0, restored = 0, failed = 0
+  const guard = !dryRun && result.plans.length ? await openEngineGuard('budget-enforce') : null
 
-  if (!dryRun) {
+  if (guard) {
     for (const plan of result.plans) {
       for (const d of plan.campaigns) {
+        const paces = d.targetDailyCents != null && d.deltaCents !== 0
+        if (!paces && !d.suppress && !d.restore) continue
+        const permit = guard.permit()
+        const held = nothingHeld()
+        let writes = 0
         try {
-          if (d.targetDailyCents != null && d.deltaCents !== 0) {
-            const r = await updateCampaignWithSync({ campaignId: d.id, patch: { dailyBudget: d.targetDailyCents / 100 }, actor, reason: `budget pacing: ${plan.marketplace} ${plan.month} → €${(d.targetDailyCents / 100).toFixed(2)}/day` })
-            if (r.ok) budgetApplied++; else failed++
+          if (paces && allowChange(true, permit, held, 'forward')) {
+            const r = await updateCampaignWithSync({ campaignId: d.id, patch: { dailyBudget: d.targetDailyCents! / 100 }, actor, reason: `budget pacing: ${plan.marketplace} ${plan.month} → €${(d.targetDailyCents! / 100).toFixed(2)}/day` })
+            if (r.ok) { budgetApplied++; writes++ } else failed++
           }
-          if (d.suppress) { await suppressCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} cap €${(plan.capCents / 100).toFixed(2)} reached` }); suppressed++ }
-          else if (d.restore) { await restoreCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} back under cap` }); restored++ }
+          if (d.suppress && allowChange(true, permit, held, 'floor')) { writes += await suppressCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} cap €${(plan.capCents / 100).toFixed(2)} reached` }); suppressed++ }
+          else if (d.restore && allowChange(true, permit, held, 'restore')) { writes += await restoreCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} back under cap` }); restored++ }
         } catch (e) { failed++; logger.warn('[budget-enforce] apply failed', { campaignId: d.id, error: (e as Error).message }) }
+        guard.settle(permit, writes, held)
       }
     }
   }
 
   logger.info(`[budget-enforce] ${dryRun ? 'dry-run' : 'applied'}`, { month: result.month, plans: result.totals.plans, budgetApplied, suppressed, restored, failed })
-  return { dryRun, budgetApplied, suppressed, restored, failed, result }
+  return { dryRun, budgetApplied, suppressed, restored, failed, result, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** 1d — what enforcement still does under the dial, for its run summary. */
+export const BUDGET_ENFORCE_DIAL_WORDS: EngineGuardWords = {
+  suggest: 'no pacing and no new floors; it still restores bids it floored over the cap',
+  stopped: 'only bid floors land when a cap is reached; restores and budget pacing wait for Resume',
 }

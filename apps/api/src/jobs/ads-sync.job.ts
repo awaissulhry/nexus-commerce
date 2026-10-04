@@ -712,9 +712,8 @@ export function startAutoBidCron(): void {
 // after the report ingest has landed yesterday's grain.
 export async function runCoverageEngineCron(): Promise<void> {
   await recordCronRun('ads-coverage-engine', async () => {
-    const { runCoverageEngineOnce } = await import('../services/advertising/ads-coverage-engine.service.js')
-    const r = await runCoverageEngineOnce()
-    return `mode=${r.mode} sets=${r.setsEnabled} terms=${r.termsEvaluated} up=${r.ups} down=${r.downs} hold=${r.holds} applied=${r.applied} blocked=${r.blocked}`
+    const { runCoverageEngineOnce, coverageEngineSummaryLine } = await import('../services/advertising/ads-coverage-engine.service.js')
+    return coverageEngineSummaryLine(await runCoverageEngineOnce())
   }).catch((err) => logger.error('ads-coverage-engine cron: failure', { error: String(err) }))
 }
 

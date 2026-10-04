@@ -5,6 +5,10 @@
  * AUTO application (behind the write-gate) lands in a later phase. Harvest/Negate are NOT produced
  * here — they are delegated to the Rule-Setting session (provisioned + read by AC-5).
  * See docs/ai-control-autopilot-spec.md.
+ *
+ * 1d — an AUTO plan honours the account dial and this engine's caps (ads-engine-guard.ts): it applies
+ * only while the dial is AUTO, campaign by campaign inside the caps (a campaign is never split); under
+ * SUGGEST or a halt / OFF it records proposals instead, as a SUGGEST plan does, and writes nothing.
  */
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
@@ -13,7 +17,9 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { runConductorCycle, type PlanModules } from '../services/advertising/autopilot/conductor.js'
 import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } from '../services/advertising/autopilot/presets.js'
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
-import { applyPlanActions } from '../services/advertising/autopilot/apply.js'
+import { applyPlanActions, type AppliedDecision } from '../services/advertising/autopilot/apply.js'
+import type { ProposedAction } from '../services/advertising/autopilot/modules.js'
+import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertising/autopilot/decisions.js'
 import { mutedKeys } from '../services/advertising/ads-suggestions.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
@@ -81,9 +87,21 @@ export async function gatherSignals(campaignIds: string[]): Promise<CampaignSign
   })
 }
 
-export async function runAutopilotOnce(): Promise<{ plans: number; decisions: number }> {
+/** 1d — the changes an AUTO apply made, as the action log counts them: one per bid moved, one per budget or placement. */
+function appliedChanges(decisions: AppliedDecision[]): number {
+  return decisions
+    .filter((d) => d.status === 'APPLIED')
+    .reduce((n, d) => n + (d.module === 'bid' ? Number((d.after as { targets?: number } | undefined)?.targets ?? 0) : 1), 0)
+}
+
+// 1d — `guard`: the dial posture and the caps this run ran under, and what they held back (AUTO plans only).
+export interface AutopilotTick { plans: number; decisions: number; guard?: EngineGuardReport }
+
+export async function runAutopilotOnce(): Promise<AutopilotTick> {
   const plans = await prisma.autopilotPlan.findMany({ where: { enabled: true, autonomy: { not: 'OFF' } } })
   let decisions = 0
+  // 1d — the account dial and this engine's caps, read once per run when an AUTO plan could write.
+  const guard = plans.some((p) => p.autonomy === 'AUTO') ? await openEngineGuard('autopilot') : null
   for (const plan of plans) {
     const ids = Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : []
     const signals = await gatherSignals(ids)
@@ -95,17 +113,30 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
     })
     // Clear this plan's stale autopilot proposals; AUTO then applies, SUGGEST re-records proposals.
     await prisma.autopilotDecision.deleteMany({ where: { planId: plan.id, status: 'PROPOSED', source: 'autopilot' } })
-    if (plan.autonomy === 'AUTO') {
+    // 1d — an AUTO plan applies only while the dial is AUTO; under SUGGEST or stopped it takes the SUGGEST branch below.
+    if (plan.autonomy === 'AUTO' && guard?.posture === 'auto') {
       // AUTO: apply live (write-gated + audited). APPLIED/DENIED/SKIPPED rows are kept as history.
       const merged: Guardrails = { ...DEFAULT_GUARDRAILS, ...((plan.guardrails ?? {}) as Partial<Guardrails>) }
-      const res = await applyPlanActions({ planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace, guardrails: merged, actions: result.actions, signals })
-      if (res.decisions.length) {
-        await prisma.autopilotDecision.createMany({ data: res.decisions.map((d) => ({
+      // 1d — one campaign at a time, each asking the guard first, so the caps never split a campaign. A campaign the
+      // cap holds back is not recorded: it is decided again next run.
+      const byCampaign = new Map<string, ProposedAction[]>()
+      for (const a of result.actions) byCampaign.set(a.campaignId, [...(byCampaign.get(a.campaignId) ?? []), a])
+      const applied: AppliedDecision[] = []
+      for (const acts of byCampaign.values()) {
+        const permit = guard.permit()
+        const held = nothingHeld()
+        if (!allowChange(true, permit, held, 'forward')) { guard.settle(permit, 0, held); continue }
+        const res = await applyPlanActions({ planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace, guardrails: merged, actions: acts, signals })
+        guard.settle(permit, appliedChanges(res.decisions), held)
+        applied.push(...res.decisions)
+      }
+      if (applied.length) {
+        await prisma.autopilotDecision.createMany({ data: applied.map((d) => ({
           planId: plan.id, cycle: 'fast', module: d.module, campaignId: d.campaignId, action: d.action,
           before: (d.before ?? undefined) as object | undefined, after: (d.after ?? undefined) as object | undefined,
           reason: d.reason, status: d.status, source: 'autopilot', executionId: d.executionId ?? null,
         })) })
-        decisions += res.decisions.length
+        decisions += applied.length
       }
     } else if (result.actions.length) {
       // SG.8 — a dismissal from the Suggestions tab must STICK. This branch deletes and
@@ -139,6 +170,11 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
         })
       }
       decisions += fresh.length
+      // 1d — what the dial held back from an AUTO plan: each campaign it would have applied to.
+      if (plan.autonomy === 'AUTO' && guard) {
+        const campaigns = new Set(result.actions.map((a) => a.campaignId)).size
+        for (let i = 0; i < campaigns; i++) guard.settle(guard.permit(), 0, { ...nothingHeld(), forward: true })
+      }
     }
     // Coordinate with the Rule-Setting session's harvest/negate engine: provision the linked
     // rules for this plan + mirror their pending decisions into our unified feed (real-time sync).
@@ -150,11 +186,19 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
     })
   }
   logger.info('[autopilot] tick', { plans: plans.length, decisions })
-  return { plans: plans.length, decisions }
+  return { plans: plans.length, decisions, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** 1d — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
+export function autopilotSummaryLine(r: AutopilotTick): string {
+  return `plans=${r.plans} decisions=${r.decisions}${engineGuardNote(r.guard, {
+    suggest: 'AUTO plans record proposals and write nothing',
+    stopped: 'AUTO plans record proposals and write nothing until Resume',
+  })}`
 }
 
 export async function runAutopilotCron(): Promise<void> {
-  try { await recordCronRun('ad-autopilot', async () => { const r = await runAutopilotOnce(); return `plans=${r.plans} decisions=${r.decisions}` }) }
+  try { await recordCronRun('ad-autopilot', async () => autopilotSummaryLine(await runAutopilotOnce())) }
   catch (err) { logger.error('ad-autopilot cron failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 

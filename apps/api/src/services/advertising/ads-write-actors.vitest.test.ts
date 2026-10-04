@@ -16,7 +16,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 
 const db = vi.hoisted(() => ({
-  budgetPool: { findMany: vi.fn(async () => [{ id: 'pool-1' }]) },
+  budgetPool: { findMany: vi.fn(async () => [{ id: 'pool-1', dryRun: false }]) },
+  // 1d — a live pool reads the account dial and today's changes first (ads-engine-guard.ts): AUTO, none yet.
+  adsAutomationState: { upsert: vi.fn(async () => ({ autonomy: 'AUTO', halted: false })) },
+  advertisingActionLog: { count: vi.fn(async () => 0) },
 }))
 vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('./ads-mutation.service.js', async (importOriginal) => ({

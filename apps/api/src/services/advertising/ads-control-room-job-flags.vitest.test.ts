@@ -87,8 +87,9 @@ describe('the Control Room reads the engine switches as the jobs do', () => {
     expect(rank).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours' })
     expect(rank.modeReason).toBe('Armed and writing to Amazon. Honours the account dial; at most 600 changes a run and 3,000 a day')
     expect(await lever('dayparting')).toMatchObject({ haltBehaviour: 'honours', modeReason: expect.stringContaining('at most 300 changes a run and 1,500 a day') })
-    // Budget enforcement has not moved yet (1d): still gated at the write gate.
-    expect((await lever('budget-enforce')).haltBehaviour).toBe('gated')
+    // 1d moved budget enforcement too; only the delivery drain is still gated at the write gate.
+    expect((await lever('budget-enforce')).haltBehaviour).toBe('honours')
+    expect((await lever('write-delivery')).haltBehaviour).toBe('gated')
 
     const dial = (data: Record<string, unknown>) => inside(() => database.client.adsAutomationState.update({ where: { id: 'singleton' }, data }))
     try {
@@ -104,7 +105,35 @@ describe('the Control Room reads the engine switches as the jobs do', () => {
         warning: 'Stopped: it only lowers bids to their Min-bid floors; restores and placement moves wait for Resume',
       })
       expect((await lever('dayparting')).warning).toBe('Stopped: it only floors bids when a window closes; restores and multipliers wait for Resume')
-      expect((await lever('budget-enforce')).warning).toBe('Still evaluating while stopped — its writes are refused at the gate')
+      expect((await lever('write-delivery')).warning).toBe('Still evaluating while stopped — its writes are refused at the gate')
+    } finally {
+      await dial({ autonomy: 'AUTO', halted: false, haltReason: null })
+    }
+  })
+
+  it('1d — budget enforcement, pools, top-of-search and coverage honour the dial too: caps in words, SUGGEST and stopped said plainly', async () => {
+    set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1', NEXUS_BUDGET_ENFORCE_APPLY: '1' })
+    const enforce = await lever('budget-enforce')
+    expect(enforce).toMatchObject({ mode: 'AUTO', haltBehaviour: 'honours' })
+    expect(enforce.modeReason).toBe('NEXUS_BUDGET_ENFORCE_APPLY is 1 — this one acts. Honours the account dial; at most 100 changes a run and 400 a day')
+    for (const key of ['budget-pools', 'tos-defense', 'coverage-engine', 'auto-bid']) expect((await lever(key)).haltBehaviour).toBe('honours')
+    expect((await lever('auto-bid')).modeReason).toBe('Runs on the account autonomy dial; at most 300 changes a run and 1,200 a day')
+
+    const dial = (data: Record<string, unknown>) => inside(() => database.client.adsAutomationState.update({ where: { id: 'singleton' }, data }))
+    try {
+      await dial({ autonomy: 'SUGGEST' })
+      expect(await lever('budget-enforce')).toMatchObject({
+        mode: 'PROPOSE',
+        modeReason: 'Account autonomy is SUGGEST — it computes each run and writes no pacing and no new floors (the run summary counts what it would change); it still restores bids it floored over the cap',
+      })
+      await dial({ autonomy: 'OFF' })
+      expect(await lever('budget-enforce')).toMatchObject({
+        mode: 'OFF', modeReason: 'Account autonomy is OFF',
+        warning: 'Stopped: it only floors bids when a cap is reached; restores and budget pacing wait for Resume',
+      })
+      // In OBSERVE it writes nothing under any dial, so it claims no floors.
+      set({ NEXUS_ENABLE_AMAZON_ADS_CRON: '1' })
+      expect((await lever('budget-enforce')).warning).not.toContain('floors')
     } finally {
       await dial({ autonomy: 'AUTO', halted: false, haltReason: null })
     }
