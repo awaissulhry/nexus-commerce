@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { ruleMatchesScope, contextIdentity } from './automation-rule-scope.js'
+import { builderScopeCampaignIds } from './advertising/ads-rule-adapter.service.js'
 
 const unscoped = { scopeMarketplace: null, scopePortfolioId: null, scopeCampaignId: null }
 
@@ -204,5 +205,31 @@ describe('ruleMatchesScope — assignment (D1)', () => {
 
   it('still honours a single-valued scopeCampaignId alongside an assignment', () => {
     expect(ruleMatchesScope({ ...bare, scopeCampaignId: 'c2', assignedCampaignIds: ['c1'] }, ctx)).toBe(false)
+  })
+})
+
+/**
+ * 4a (review 4.2) — a builder rule's PICKER is an assignment for every campaign-picker slug, not only
+ * Budget. Composed here exactly as the evaluator composes it: `builderScopeCampaignIds` feeds
+ * `assignedCampaignIds`, and `ruleMatchesScope` decides.
+ */
+describe('ruleMatchesScope — a builder picker binds Bid, SOV, Keyword Tracker and Placement rules (4a)', () => {
+  const bare = { scopeMarketplace: null, scopePortfolioId: null, scopeCampaignId: null }
+  const bound = (actions: unknown) => ({ ...bare, assignedCampaignIds: builderScopeCampaignIds(actions) })
+  const at = (campaignId: string | null) => ({ marketplace: 'IT', campaignId, portfolioId: null })
+
+  it('🔴 the live "Trim Top of Search — GALE BROAD IT" shape fires on its one pick and nowhere else', () => {
+    const rule = bound([{ type: 'placement', campaigns: [{ id: 'gale-broad-it', name: 'GALE BROAD IT' }] }])
+    expect(ruleMatchesScope(rule, at('gale-broad-it'))).toBe(true)
+    expect(ruleMatchesScope(rule, at('another-it-campaign'))).toBe(false)
+  })
+
+  it('a Bid rule with picks does not fire on a target whose campaign is unknown', () => {
+    expect(ruleMatchesScope(bound([{ type: 'bid', campaigns: [{ id: 'c1' }] }]), at(null))).toBe(false)
+  })
+
+  it('a rule with no picks is still account-wide — today\'s behaviour, unchanged', () => {
+    expect(ruleMatchesScope(bound([{ type: 'placement', campaigns: [] }]), at('any'))).toBe(true)
+    expect(ruleMatchesScope(bound([{ type: 'sov' }]), at('any'))).toBe(true)
   })
 })
