@@ -58,7 +58,10 @@ export interface TabsProps {
    * indicator meets its edge, and no hairline of its own because the host draws one.
    */
   size?: 'sm' | 'md' | 'lg'
-  /** Keep long labels within a narrow container; the active tab scrolls into view. */
+  /**
+   * Keep long labels within a narrow container; the active tab scrolls into view — when it changes, when tabs are
+   * added or removed around it, and when a label grows (each moves it out of view on a phone). Only the strip scrolls.
+   */
   overflow?: 'scroll'
   /**
    * Shared id base for the `tab`/`tabpanel` pairing. Pass the same value to `tabPanelProps()` on
@@ -70,16 +73,39 @@ export interface TabsProps {
   idBase?: string
 }
 
+/**
+ * Scroll the strip — only the strip, never the page around it — so the tab is wholly in view (a tab wider than the
+ * strip shows its start). A tab already in view does not move it.
+ */
+function revealInStrip(list: HTMLElement, tab: HTMLElement) {
+  const strip = list.getBoundingClientRect(), box = tab.getBoundingClientRect()
+  if (box.left < strip.left) list.scrollLeft -= strip.left - box.left
+  else if (box.right > strip.right) list.scrollLeft += Math.min(box.right - strip.right, box.left - strip.left)
+}
+
 /** Underline tab bar (active = primary text + primary indicator). Controlled. */
 export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md', idBase, overflow }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const autoBase = useId()
   const base = idBase ?? autoBase
+  // The tab ids in order, as one value: a tab added before the active one (a market chosen by itself) pushes it along.
+  const tabKey = tabs.map((t) => t.id).join('\u0000')
   useEffect(() => {
     if (overflow !== 'scroll') return
-    const tab = listRef.current?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(active)}"]`)
-    tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [active, overflow])
+    const list = listRef.current
+    if (!list) return
+    const reveal = () => {
+      const tab = list.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(active)}"]`)
+      if (tab) revealInStrip(list, tab)
+    }
+    reveal()
+    // A label that grows after the tab was shown (a market's words arrive once it is checked) pushes the active tab
+    // out again: follow every tab's size while these tabs are shown.
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(reveal)
+    list.querySelectorAll<HTMLElement>('[role="tab"]').forEach((tab) => observer.observe(tab))
+    return () => observer.disconnect()
+  }, [active, overflow, tabKey])
 
   /**
    * Arrow-key selection, the ARIA tablist pattern.

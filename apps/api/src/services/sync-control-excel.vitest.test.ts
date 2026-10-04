@@ -13,6 +13,8 @@ describe('SCV.3 — normalizeModeCell', () => {
     expect(normalizeModeCell('segui')).toBe('FOLLOW')
     expect(normalizeModeCell('Pinned')).toBe('PINNED')
     expect(normalizeModeCell('bloccato')).toBe('PINNED')
+    // The export writes the page's word, "Sync held"; it reads back as a hold (an older sheet's "Paused" still does).
+    expect(normalizeModeCell('Sync held')).toBe('PAUSED')
     expect(normalizeModeCell('Paused')).toBe('PAUSED')
     expect(normalizeModeCell('pausa')).toBe('PAUSED')
     expect(normalizeModeCell('Excluded')).toBe('EXCLUDED')

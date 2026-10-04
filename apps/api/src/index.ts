@@ -130,6 +130,8 @@ import productsSheetRoutes from "./routes/products-sheet.routes.js";
 import productStudioRoutes from "./routes/product-studio.routes.js";
 import publicationHistoryRoutes from "./routes/publication-history.routes.js";
 import publicationBatchRoutes from "./routes/publication-batches.routes.js";
+import listingActionRoutes from "./routes/listing-actions.routes.js";
+import publishActionRoutes from "./routes/publish-actions.routes.js";
 import liveReadRoutes from "./routes/live-read.routes.js"; // PE — read what a channel holds live (read only)
 import studioMatrixRoutes from "./routes/studio-matrix.routes.js"; // MX.1 — the Matrix page
 import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
@@ -693,6 +695,10 @@ app.register(productStudioRoutes, { prefix: '/api' });
 app.register(publicationHistoryRoutes, { prefix: '/api' });
 // Sheet publish parity, step 5 — one family to several destinations in one action: /api/publication-batches (products.publish).
 app.register(publicationBatchRoutes, { prefix: '/api' });
+// Sheet publish parity, step 7 — the Status column: /api/products/:id/listing-actions (state: products.view; pause/resume/relist: products.publish; end: products.delete).
+app.register(listingActionRoutes, { prefix: '/api' });
+// Build shape v2 — the waiting Action and Status values: /api/products/:id/studio/publish-actions (read: products.view; send/delete and status/ended: products.delete; the rest: products.publish).
+app.register(publishActionRoutes, { prefix: '/api' });
 // PE — GET /api/products/:id/live-read: what the channel holds right now (read only; products:view by the prefix rule).
 app.register(liveReadRoutes, { prefix: '/api' });
 // MX.1 — the Matrix page's read, write door, verbs and revert (explicit manifest entry, most-specific-first).

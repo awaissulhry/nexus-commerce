@@ -3,7 +3,7 @@
 /**
  * Shared stock plan step 3/5 — the end of an override, chosen when it is set (plan
  * docs/2026-09-19-shared-stock-plan.md §5): "Fixed number 2 until Monday 09:00". For Pin, Zero & Pin,
- * Pause and Exclude the Sync Control screens ask here instead of the plain confirm: no end, or an end
+ * Hold stock sync and Exclude the Sync Control screens ask here instead of the plain confirm: no end, or an end
  * date and time in the person's own time zone (the API stores it in UTC and ends the override within a
  * minute of it, with a history row). For a Fixed number on shared eBay variants only, the number to
  * fix can be chosen (a listing's Fixed number keeps what it shows now — the API refuses a number there).
@@ -23,7 +23,7 @@ interface Ask { action: string; title: string; description: string; allowQuantit
 const WHAT_ENDS: Record<string, string> = {
   PIN: 'At that time the listing goes back to Follow by itself.',
   ZERO_PIN: 'At that time the listing goes back to Follow by itself.',
-  PAUSE: 'At that time the pause ends by itself: the listing goes back to Follow or its Fixed number.',
+  PAUSE: 'At that time the hold ends by itself: the stock sync is released, and the listing goes back to Follow or its Fixed number.',
   EXCLUDE: 'At that time the variant is included again by itself.',
 }
 

@@ -14,7 +14,7 @@ vi.mock('../../db.js', () => ({ default: {
 } }))
 
 import type { HistoryCoverage, HistorySource } from '@nexus/shared/publication-history'
-import { decodeCursor, encodeCursor, listPublicationHistory, parseHistoryQuery, publicationRunDetail, sourceOfRunId, coverageOf } from './publication-history.service.js'
+import { countPublicationHistory, decodeCursor, encodeCursor, listPublicationHistory, parseHistoryQuery, publicationRunDetail, sourceOfRunId, coverageOf } from './publication-history.service.js'
 import type { HistoryListInput, HistorySourceRow, PublicationHistoryAdapter } from './publication-history/types.js'
 
 const T = (minute: number) => Date.UTC(2026, 9, 1, 10, minute)
@@ -96,9 +96,26 @@ describe('publish history core', () => {
 
   it('coverage names every source; one without an adapter is not included and says so', async () => {
     const coverage = await coverageOf([fake('studio', 0, studio)])
-    expect(coverage.map(c => c.source)).toEqual(['studio', 'amazon-flat-file', 'ebay-flat-file', 'photos'])
+    expect(coverage.map(c => c.source)).toEqual(['studio', 'listing-action', 'amazon-flat-file', 'ebay-flat-file', 'photos'])
     expect(coverage.find(c => c.source === 'studio')).toMatchObject({ included: true })
     expect(coverage.find(c => c.source === 'ebay-flat-file')).toMatchObject({ included: false, note: expect.stringMatching(/eBay flat file/) })
+    expect(coverage.find(c => c.source === 'listing-action')).toMatchObject({ included: false, note: expect.stringMatching(/Selling changes/) })
+  })
+
+  it('"What": a source with fixed groups is asked only when the filter names one of them, and never asked to filter', async () => {
+    const calls: HistoryListInput[] = []
+    const updatesOnly = { ...fake('amazon-flat-file', 1, amazon, calls), what: ['updates'] as const }
+    const alwaysAsked = fake('studio', 0, studio)
+    const both = () => [alwaysAsked, updatesOnly]
+    const selling = await listPublicationHistory({ ...query(10), filters: { what: ['selling'] } }, { adapters: both() })
+    expect(selling.runs.every(run => run.source === 'studio')).toBe(true)
+    expect(calls).toHaveLength(0)
+    const updates = await listPublicationHistory({ ...query(10), filters: { what: ['updates'] } }, { adapters: both() })
+    expect(updates.runs.some(run => run.source === 'amazon-flat-file')).toBe(true)
+    expect(calls).toHaveLength(1)
+    // The count leaves the same source out, so a tile's number is the list's length.
+    expect((await countPublicationHistory({ sources: query(10).sources, filters: { what: ['selling'] } }, { adapters: both() })).total).toBe(studio.length)
+    expect((await countPublicationHistory({ sources: query(10).sources, filters: { what: ['updates', 'photos'] } }, { adapters: both() })).total).toBe(studio.length + amazon.length)
   })
 
   it('a cursor round-trips, and a damaged one is refused with plain words', () => {
@@ -128,11 +145,14 @@ describe('publish history query', () => {
     expect(parsed.sources).toEqual(['studio'])
     expect(parsed.limit).toBe(100)
     expect((await parseHistoryQuery({})).limit).toBe(50)
+    expect((await parseHistoryQuery({})).filters).not.toHaveProperty('what')
+    expect((await parseHistoryQuery({ what: 'selling,deletes,selling' })).filters.what).toEqual(['selling', 'deletes'])
   })
 
   it.each([
     [{ state: 'done' }, /Unknown state "done"/],
     [{ source: 'ftp' }, /Unknown source "ftp"/],
+    [{ what: 'everything' }, /Unknown "what" value "everything"/],
     [{ limit: '0' }, /at least 1/],
     [{ from: 'yesterday' }, /"from" must be a date/],
     [{ from: '2026-10-02T00:00:00Z', to: '2026-10-01T00:00:00Z' }, /must not be after/],

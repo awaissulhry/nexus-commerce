@@ -7,7 +7,7 @@ const p: Presence = { intent: 'LIVE', intentAt: null, fact: 'SELLING', observedA
 it('keeps intent and channel fact on separate Tag/Pill primitives and includes the observation time', () => {
  const html = render(createElement(PresenceMark, { presence: p }))
  expect(html).toContain('nds-tag info'); expect(html).toContain('nds-pill success has-dot')
- expect(html).toContain('Listed'); expect(html).toContain('Selling'); expect(html).toContain('<time')
+ expect(html).toContain('Listed'); expect(html).toContain('Active'); expect(html).toContain('<time')
  expect(html).not.toContain('nds-badge')
 })
 it('cannot paint green for missing, old, pending or unknown-source observations', () => {

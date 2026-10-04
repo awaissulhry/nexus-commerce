@@ -1145,6 +1145,19 @@
 
 @container (max-width: 1320px) { .nds-grid-selbar-lbl { display: none; } }
 @container (max-width: 1100px) { .nds-grid-selbar-note { display: none; } }
+/* A PAGE card at phone width (sheet publish parity, 2026-10-04): the toolbar wraps, and the selection cluster takes a
+   line of its own under the count and the right-hand controls and wraps its buttons. Measured on /products at 390 px
+   (the card is 216 px there) with two rows ticked: the no-wrap toolbar kept Customise, Views, Export and the Live pill
+   at their width, so `.nds-grid-selbar` (`min-width: 0`) shrank to 0 px and its seven buttons overflowed from x=264
+   to x=584, under Customise and past the card's clipped edge — not one could be hit (`elementFromPoint`), and Views,
+   Export and the pill were clipped off as well, ticked or not. Now every control is on screen and hit-testable. A
+   second line beats a hidden button here; above 640 px nothing changes (the cluster never wraps, labels hide at
+   1320 px). Scoped to `.nds-grid-card` (`GridCard`, /products): the studio sheet's toolbar has its own fixed height
+   and fold. */
+@container (max-width: 640px) {
+  .nds-grid-card > .nds-toolbar { flex-wrap: wrap; row-gap: var(--nds-space-8); }
+  .nds-grid-card > .nds-toolbar > .nds-grid-selbar { flex: 1 0 100%; order: 3; flex-wrap: wrap; row-gap: var(--nds-space-6); }
+}
 
 /* ══ the SHEET host (`../hosts/GridSheet`) ═══════════════════════════════════════════════════
    The one page-level grid that is bounded and virtualised: it fills the viewport below its own top
@@ -1666,6 +1679,11 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   .nds-toolbar .nds-fchip-full { display: none; }
   .nds-fchip .nds-fchip-compact { display: inline; }
 }
+/* Build shape v2 (P14) — a phone: the studio sheet's selection bar wraps its buttons onto more lines instead of
+   squeezing them under each other (with Action ▾ the family scope has five; at 390 px they shrank to 4–7 px). */
+@container nds-sheet-toolbar (max-width: 640px) {
+  .nds-grid-selbar { flex-wrap: wrap; row-gap: var(--nds-space-6); max-width: 100%; }
+}
 
 /* Formula-aware value mode retains the sheet long-text sizing contract. */
 .ag-popup-editor .nds-formula-fieldwrap textarea { resize: none; overflow-y: auto; }
@@ -1947,3 +1965,33 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-ag-head-tone--red { --nds-ag-tone-bg: var(--nds-grid-tone-red-bg); --nds-ag-tone-fg: var(--nds-grid-tone-red-fg); --nds-ag-tone-rule: var(--nds-grid-tone-red-rule); }
 .nds-ag-head-tone--violet { --nds-ag-tone-bg: var(--nds-grid-tone-violet-bg); --nds-ag-tone-fg: var(--nds-grid-tone-violet-fg); --nds-ag-tone-rule: var(--nds-grid-tone-violet-rule); }
 .nds-ag-head-tone--cyan { --nds-ag-tone-bg: var(--nds-grid-tone-cyan-bg); --nds-ag-tone-fg: var(--nds-grid-tone-cyan-fg); --nds-ag-tone-rule: var(--nds-grid-tone-cyan-rule); }
+
+/* ══ Status and Action cells (`../renderers/SellingStatusCell`, `PublishActionCell`) — sheet publish parity, build
+   shape v2 (2026-10-04) ════════════════════════════════════════════════════════════════════════════════════════════
+   A pill (DS tones: 7:1 text in both themes) and, beside it, small muted text (`--nds-grid-muted-fg`, 7:1). The quiet
+   default "Partial update" is that muted text at the cell's own size, no pill. The cells are never painted: an inactive
+   ROW carries the row-start mark below instead. */
+.nds-selling-cell, .nds-action-cell { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; vertical-align: middle; }
+.nds-selling-visual { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; max-width: 100%; }
+.nds-selling-visual > .nds-pill { flex: none; }
+.nds-selling-aside { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); }
+.nds-selling-lock { flex: none; color: var(--nds-grid-muted-fg); }
+.nds-action-quiet { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-grid-muted-fg); }
+
+/* The ROW-START MARK of an inactive listing row (`SELLING_ROW_MARK_CLASS`, `rowCarriesInactiveMark`; apply with
+   `rowClassRules`). A slim warning bar at the row's start edge — NEVER a whole-row tint (Owner, 2026-10-04): the Status
+   cell's warning pill says "Inactive" in words, the bar only lets the eye find those rows down a long sheet.
+   `--nds-warning-strong` clears the 3:1 a graphic needs on every row ground in both themes. On the ROW, as the child
+   rail is, so it runs unbroken across the row rule; `::before`, because the child rail owns `::after`, and on a child
+   row it stands just inside the rail so both read. AG 36 draws nothing on a data row's `::before`. */
+.nds-ag-wrap .ag-row.nds-row-inactive:not(.ag-full-width-row)::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 3px;
+  background-color: var(--nds-warning-strong);
+  z-index: 2;
+  pointer-events: none;
+}
+.nds-ag-flat-tree .ag-row.nds-row-inactive:not(.ag-row-level-0):not(.ag-full-width-row)::before { left: 3px; }

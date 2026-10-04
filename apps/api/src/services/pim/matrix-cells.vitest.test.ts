@@ -5,8 +5,9 @@
  * FBA row has no writable inventory cell and every refusal is named `Amazon-managed`; the parent writes nothing
  * but price; a pinned row's buffer is held) plus the two only the live read can know (a missing
  * `products.price.edit` holds the price cells; a CLOSED offer holds the inventory lane). The listing-state
- * TABLE is asserted row by row in its precedence order; the queue fold's ranking and the PAUSED/FBA overrides
- * are asserted with a positive control beside every negative.
+ * TABLE is asserted row by row in its precedence order, and against THE engine's selling reader
+ * (`destinationSellingStates`: pure, no query) so the Matrix and the sheet share one vocabulary; the queue fold's
+ * ranking and the PAUSED/FBA overrides are asserted with a positive control beside every negative.
  */
 import { describe, expect, it } from 'vitest'
 import { MATRIX_COPY, type SyncCell } from '@nexus/shared/matrix-contract'
@@ -15,31 +16,62 @@ import {
   reportedFulfilment, syncCellOf, withoutInventory, writableFor, FORMULA_REASON, PARENT_PRICE_REASON, PARENT_REASON, PINNED_BUFFER_REASON, PRICE_PERMISSION_REASON,
 } from './matrix-cells.js'
 import { businessAbsence, effectiveFulfilment, flattenAudience } from './matrix-cells.js'
+import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
+const ACTIVE = { state: 'active', reason: null } as const
 const facts = (over: Partial<Parameters<typeof listingStateOf>[0]> = {}) => ({
-  listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0X', offerClosedAt: null, suppressed: false, excluded: false, needsValue: false, ...over,
-})
+  listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0X', suppressed: false, excluded: false, needsValue: false, selling: ACTIVE, ...over,
+}) as Parameters<typeof listingStateOf>[0]
+const inactive = { state: 'paused', reason: 'Inactive: quantity 0 in Shopify, and Nexus holds every stock push.' } as const
 
-describe('listing state — the table, in precedence order', () => {
+describe('listing state — the table, in precedence order (build shape v2: the engine\'s selling state below the health words)', () => {
   it.each([
-    ['excluded beats everything', facts({ excluded: true, offerClosedAt: new Date(), suppressed: true }), 'excluded', null],
-    ['a closed offer beats a suppression', facts({ offerClosedAt: new Date(), suppressed: true }), 'closed', null],
-    ['an open suppression beats ENDED', facts({ suppressed: true, listingStatus: 'ENDED' }), 'suppressed', null],
-    ['ENDED', facts({ listingStatus: 'ENDED' }), 'ended', null],
-    ['REMOVED reads as ended', facts({ listingStatus: 'REMOVED' }), 'ended', null],
-    ['ERROR', facts({ listingStatus: 'ERROR' }), 'error', null],
-    ['a variant missing an axis value', facts({ needsValue: true }), 'needs-value', null],
+    ['excluded beats everything', facts({ excluded: true, suppressed: true, selling: inactive }), 'excluded', null],
+    ['a suppression beats an inactive offer (health words win)', facts({ suppressed: true, selling: inactive }), 'suppressed', null],
+    ['an open suppression beats ENDED', facts({ suppressed: true, listingStatus: 'ENDED', selling: { state: 'ended', reason: null } }), 'suppressed', null],
+    ['ERROR beats the selling word', facts({ listingStatus: 'ERROR', selling: inactive }), 'error', null],
+    ['a variant missing an axis value beats the selling word', facts({ needsValue: true, selling: inactive }), 'needs-value', null],
+    ['Ended', facts({ listingStatus: 'ENDED', selling: { state: 'ended', reason: 'Ended on the channel.' } }), 'ended', null],
+    ['Inactive is the wire\'s `closed` key (the word comes from `selling`)', facts({ selling: inactive }), 'closed', null],
+    ['Not listed: a draft (never sent) is the wire\'s `draft` key', facts({ listingStatus: 'DRAFT', externalListingId: null, selling: { state: 'draft', reason: null } }), 'draft', null],
+    ['Not listed: a listing Nexus deleted (not listed again) is the wire\'s `draft` key, never "Ended"', facts({ listingStatus: 'DRAFT', externalListingId: null,
+      selling: { state: 'not_listed', reason: 'Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active and Publish.' } }), 'draft', null],
     ['DISCOVERABLE is listed and not buyable — Amazon\'s own meaning', facts({ listingStatus: 'DISCOVERABLE' }), 'listed', 'not buyable'],
-    ['INACTIVE is listed with the detail', facts({ listingStatus: 'INACTIVE' }), 'listed', 'inactive'],
-    ['ACTIVE', facts(), 'listed', null],
-    ['BUYABLE', facts({ listingStatus: 'BUYABLE' }), 'listed', null],
-    ['an external id with an unknown status is listed', facts({ listingStatus: 'WHATEVER' }), 'listed', null],
-    ['DRAFT without an external id', facts({ listingStatus: 'DRAFT', externalListingId: null }), 'draft', null],
+    ['Active', facts(), 'listed', null],
+    ['Mixed (a main product) is listed', facts({ selling: { state: 'mixed', reason: '1 of 2 variations are inactive.' } }), 'listed', null],
+    ['Unknown: REMOVED reads as ended', facts({ listingStatus: 'REMOVED', selling: { state: 'unknown', reason: null } }), 'ended', null],
+    ['Unknown: a Nexus-only INACTIVE mark is listed, with no "inactive" detail', facts({ listingStatus: 'INACTIVE', selling: { state: 'unknown', reason: 'never told' } }), 'listed', null],
+    ['Unknown: an external id with an unknown status is listed', facts({ listingStatus: 'WHATEVER', selling: { state: 'unknown', reason: null } }), 'listed', null],
+    ['Unknown: no external id and no known status is a draft', facts({ listingStatus: 'PENDING', externalListingId: null, selling: { state: 'unknown', reason: null } }), 'draft', null],
   ])('%s', (_name, f, state, detail) => {
     expect(listingStateOf(f)).toMatchObject({ state, detail })
   })
-  it('carries isPublished and the external id verbatim', () => {
-    expect(listingStateOf(facts({ isPublished: false }))).toMatchObject({ published: false, externalId: 'B0X' })
+  it('carries isPublished, the external id and the selling facts verbatim', () => {
+    expect(listingStateOf(facts({ isPublished: false, selling: inactive }))).toEqual({ state: 'closed', externalId: 'B0X', detail: null, published: false, selling: inactive })
+  })
+})
+
+describe('listing state — one vocabulary with the engine (the Shopify pause bug)', () => {
+  const family = (listings: Array<Partial<SellingStateListing> & { productId: string }>, channel = 'SHOPIFY') => destinationSellingStates({
+    familyId: 'root', channel,
+    products: [{ id: 'root', sku: 'ROOT', isParent: true }, { id: 's', sku: 'ROOT-S', isParent: false }, { id: 'm', sku: 'ROOT-M', isParent: false }],
+    listings: listings.map((l, i) => ({ id: `l${i}`, externalListingId: 'gid://shopify/Product/1', listingStatus: 'ACTIVE', isPublished: true, offerClosedAt: null,
+      offerCloseReason: null, offerActive: true, fulfillmentMethod: null, platformAttributes: { status: 'ACTIVE' }, ...l })),
+  }).states
+  it('a Shopify pause (quantity-0 hold, offerClosedAt + sheet-pause) reads Inactive, never "Listed · inactive"', () => {
+    const states = family([{ productId: 'root' }, { productId: 's', offerClosedAt: new Date(), offerCloseReason: 'sheet-pause' }, { productId: 'm' }])
+    const s = listingStateOf(facts({ selling: states.get('s')! }))
+    expect(s).toMatchObject({ state: 'closed', detail: null, selling: { state: 'paused' } })
+    expect(s.selling.reason).toMatch(/quantity 0 in Shopify/)
+    // Its product reads Mixed; the other size Active.
+    expect(listingStateOf(facts({ selling: states.get('root')! }))).toMatchObject({ state: 'listed', selling: { state: 'mixed' } })
+    expect(listingStateOf(facts({ selling: states.get('m')! }))).toMatchObject({ state: 'listed', selling: { state: 'active' } })
+  })
+  it('the old Shopify pause (Draft in Shopify) and an archive read Inactive and Ended', () => {
+    expect(listingStateOf(facts({ listingStatus: 'INACTIVE', selling: family([{ productId: 'root', platformAttributes: { status: 'DRAFT' } }, { productId: 's' }]).get('s')! })))
+      .toMatchObject({ state: 'closed', detail: null, selling: { state: 'paused' } })
+    expect(listingStateOf(facts({ selling: family([{ productId: 'root', platformAttributes: { status: 'ARCHIVED' } }, { productId: 's' }]).get('s')! })))
+      .toMatchObject({ state: 'ended', selling: { state: 'ended' } })
   })
 })
 

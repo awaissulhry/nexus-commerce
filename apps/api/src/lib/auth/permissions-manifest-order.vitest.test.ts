@@ -62,6 +62,27 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/publication-batches', 'products.publish'],
     ['GET', '/api/publication-batches/:id', 'products.publish'],
     ['POST', '/api/publication-batches/:id/cancel', 'products.publish'],
+    // Sheet publish parity, step 7 — ending a live listing is a delete; the other Status changes are publishing.
+    ['POST', '/api/products/:id/listing-actions/end/preview', 'products.delete'],
+    ['POST', '/api/products/:id/listing-actions/end/run', 'products.delete'],
+    ['POST', '/api/products/:id/listing-actions/pause/run', 'products.publish'],
+    ['POST', '/api/products/:id/listing-actions/resume/preview', 'products.publish'],
+    ['POST', '/api/products/:id/listing-actions/relist/run', 'products.publish'],
+    ['GET', '/api/products/:id/listing-actions/state', 'products.view'],
+    // Build shape v2 — deleting a listing from the channel is a delete.
+    ['POST', '/api/products/:id/listing-actions/delete/preview', 'products.delete'],
+    ['POST', '/api/products/:id/listing-actions/delete/run', 'products.delete'],
+    // Build shape v2 — the waiting Action and Status values: reading them is a view; setting one needs what sending it
+    // needs (Delete and Ended are deletes, every other value is publishing).
+    ['GET', '/api/products/:id/studio/publish-actions', 'products.view'],
+    ['PUT', '/api/products/:id/studio/publish-actions/send/partial', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/send/full', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/send/delete', 'products.delete'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/active', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/inactive', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/not_listed', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/none', 'products.publish'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/ended', 'products.delete'],
     ['POST', '/etsy/sync/listings', 'products.edit'],
     ['POST', '/etsy/sync/inventory/from-etsy', 'inventory.adjust'],
     ['POST', '/etsy/sync/orders', 'orders.edit'],

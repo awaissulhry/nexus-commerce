@@ -1,4 +1,5 @@
 import type { StudioPublishIssue, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { PublishPlan } from '@nexus/shared/publish-plan'
 
 /**
  * The markets the dialog can publish to, as any surface describes them (the studio's `MarketplaceLite` fits). Kept
@@ -72,6 +73,21 @@ export function matchesPublicationReview(value: unknown, productId: string, scop
   return !!review && review.productId === productId && !!review.scope && publicationScopeKey(review.scope) === publicationScopeKey(scope)
     && Array.isArray(review.rows) && Array.isArray(review.issues) && typeof review.expiresAt === 'string'
     && (review.id === null || typeof review.id === 'string')
+}
+
+/**
+ * Build shape v2 (P10) — the Publish window reads ONE destination per plan request: the answer must be for this product
+ * and exactly this destination, and its content review (when there is one) must pass the review guard above. A plan
+ * from an older server, or for another destination, is refused rather than shown.
+ */
+export function matchesPublishPlan(value: unknown, productId: string, scope: StudioPublishScope): value is PublishPlan {
+  const plan = value as PublishPlan | null
+  if (!plan || plan.productId !== productId || typeof plan.familySku !== 'string' || typeof plan.canDelete !== 'boolean'
+    || !Array.isArray(plan.destinations) || plan.destinations.length !== 1) return false
+  const destination = plan.destinations[0]
+  return !!destination?.scope && publicationScopeKey(destination.scope) === publicationScopeKey(scope)
+    && Array.isArray(destination.lifecycle) && Array.isArray(destination.outgrown) && Array.isArray(destination.contentHeld)
+    && (destination.review === null || matchesPublicationReview(destination.review, productId, scope))
 }
 
 /** One row of the review's problem table: the SKU (or the whole listing) and what to fix, with the channel's own words. */

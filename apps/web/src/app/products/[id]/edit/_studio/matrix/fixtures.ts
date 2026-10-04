@@ -132,7 +132,12 @@ function fixtureCells(row: PreviewRowInput, coord: MatrixCoordinate, pool: numbe
   const fbaRow = coord.channel === 'AMAZON' && h % 5 !== 1 && !parent
   const paused = coord.channel !== 'AMAZON' && coord.channel !== 'EBAY' ? true : h % 13 === 0
   const method: FulfilmentMethod | null = coord.channel === 'AMAZON' ? (fbaRow ? 'FBA' : 'FBM') : coord.channel === 'EBAY' ? 'FBM' : null
-  const listingState: ListingState = parent ? 'listed' : coord.alias ? 'listed' : pick(h >>> 3, LISTING_STATES)
+  const picked: ListingState = parent ? 'listed' : coord.alias ? 'listed' : pick(h >>> 3, LISTING_STATES)
+  /* Build shape v2 (P12): the selling word the Listing cell shows. One listed row in eleven is Inactive (the wire's
+     `closed`), so the preview shows the word and the "Inactive" chip has something to count. */
+  const inactive = picked === 'listed' && !parent && !coord.alias && h % 11 === 0
+  const listingState: ListingState = inactive ? 'closed' : picked
+  const selling = { state: inactive ? 'paused' : listingState === 'draft' ? 'draft' : 'active', reason: inactive ? 'Inactive: Nexus paused selling here (preview fixture).' : null }
   const price = coord.alias ? 0 : coord.market === 'DE' ? 99 : (row.basePrice ?? 105)
   const source = coord.alias ? 'override' : coord.market === 'DE' ? 'override' : h % 17 === 0 ? 'formula' : 'master'
   const sync = serves('syncMode') ? fixtureSync(h, pool, fbaRow, paused) : null
@@ -148,7 +153,7 @@ function fixtureCells(row: PreviewRowInput, coord: MatrixCoordinate, pool: numbe
   }
   return {
     listingId: `${row.id}:${coord.key}`, version: 1 + (h % 4),
-    listing: serves('listing') ? { state: listingState, externalId: parent ? (coord.channel === 'AMAZON' ? 'B0FXD0620C' : coord.channel === 'EBAY' ? '938554736087' : null) : null, detail: parent ? '1 listing' : listingState === 'listed' && coord.channel === 'AMAZON' && h % 6 === 0 ? 'not buyable' : null, published: listingState === 'listed' } : null,
+    listing: serves('listing') ? { state: listingState, externalId: parent ? (coord.channel === 'AMAZON' ? 'B0FXD0620C' : coord.channel === 'EBAY' ? '938554736087' : null) : null, detail: parent ? '1 listing' : listingState === 'listed' && coord.channel === 'AMAZON' && h % 6 === 0 ? 'not buyable' : null, published: listingState === 'listed' || inactive, selling } : null,
     fulfilment: serves('fulfilment') ? { method, source: h % 4 === 0 ? 'derived' : 'set', guard: coord.channel === 'AMAZON' ? (fbaRow ? 'FBA' : h % 19 === 0 ? 'FBA' : 'FBM') : 'FBM', reported: coord.channel === 'AMAZON' && h % 23 === 0 ? 'MFN' : null } : null,
     sync,
     queue: serves('syncState') ? (sync?.kind === 'PAUSED' ? { state: 'paused', at: null, reason: null, syncType: null, via: sync.via } : sync?.kind === 'FBA_EXCLUDED' ? { state: 'never', at: null, reason: null, syncType: null, via: null } : { state: pick(h >>> 5, QUEUE), at: new Date(Date.UTC(2026, 8, 13, 5, (h % 50), 0)).toISOString(), reason: pick(h >>> 5, QUEUE) === 'failed' ? 'eBay: 25002 — the item is not active on this site' : pick(h >>> 5, QUEUE) === 'dead' ? 'MAX_RETRIES_EXCEEDED after 3 attempts' : null, syncType: 'QUANTITY_UPDATE', via: null }) : null,

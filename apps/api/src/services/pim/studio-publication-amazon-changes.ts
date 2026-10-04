@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { StudioPublishChange, StudioPublishFieldWrite, StudioPublishValue } from '@nexus/shared/studio-publication'
+import { AMAZON_RELIST_TOO_EARLY } from '@nexus/shared/publish-actions'
+import { FULL_AMAZON_PRODUCT_TYPE_DIFFERS, FULL_NEEDS_LIVE_READ, fullUpdateChange, type StudioPublishChange, type StudioPublishFieldWrite, type StudioPublishIssue,
+  type StudioPublishRemoval, type StudioPublishValue } from '@nexus/shared/studio-publication'
 import { AmazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { getAmazonRegion } from '../../lib/amazon-sp-client.js'
 import { amazonRootPatch, type AttributePatch } from '../amazon/mapping-payload.js'
@@ -24,14 +26,47 @@ const contentOnly = (attributes: Record<string, unknown>) => Object.fromEntries(
 type Message = AmazonPublication['feed']['messages'][number]
 type ProductPlan = { productId: string; sku: string; newListing: boolean; patches: Record<string, AttributePatch>;
   content: Record<string, { root: string; tag: string; deletion?: AttributePatch }>;
-  contentRoots: Record<string, { remote: Record<string, unknown>[]; replacement: AttributePatch }>; offer?: AmazonOfferPlan }
+  contentRoots: Record<string, { remote: Record<string, unknown>[]; replacement: AttributePatch }>
+  /** Build shape v2 — this row is reviewed as Full update (its fields are ticked and locked). */
+  full?: true
+  offer?: AmazonOfferPlan }
 export interface AmazonChangePlan {
   kind: 'amazon-changes'
   changes: StudioPublishChange[]
   remoteRevision: string
   publication: AmazonPublication
   products: ProductPlan[]
+  /** Full update rows only: what Amazon holds that Nexus does not (sending removes it), and why a Full row cannot be sent. */
+  removals?: StudioPublishRemoval[]
+  fullIssues?: StudioPublishIssue[]
 }
+
+export interface AmazonChangeOptions {
+  /** The rows reviewed as Full update. Everything else is reviewed as Partial update, exactly as before. */
+  fullProductIds?: ReadonlySet<string>
+  /**
+   * Delete and relist — the rows this review lists again after Nexus deleted them (product id → when Amazon accepted the
+   * delete). A create whose SKU Amazon still shows within a day of the delete says Amazon is still removing it (S3).
+   */
+  relist?: ReadonlyMap<string, { deletedAt: string }>
+}
+
+/** Amazon can take up to a day to remove a deleted SKU before it can be created again. */
+const RELIST_WAIT_MS = 24 * 60 * 60_000
+
+/**
+ * Amazon re-hosts every photo it accepts and its read shows ITS address (m.media-amazon.com, images-amazon.com,
+ * ssl-images-amazon.com), never the one Nexus sent — so an image root's channel value is Amazon's own copy and is never
+ * compared (one-click "Nexus wins", Owner 2026-10-04: otherwise every image line would differ and be resent on every
+ * Publish). Image roots: main_product_image_locator, other_product_image_locator_*, swatch_product_image_locator,
+ * image_locator_ps01… — every root named `*image_locator*`.
+ */
+const AMAZON_IMAGE_ROOT = /image_locator/
+const AMAZON_PHOTO_HOST = /^https?:\/\/([a-z0-9-]+\.)*(media-amazon\.com|images-amazon\.com|ssl-images-amazon\.com)(\/|$)/i
+export const AMAZON_PHOTO_COPY = 'Amazon shows its own copy of the photos, so Nexus cannot compare them. Tick it to send Nexus\'s photos.'
+/** Amazon's read of an image root holds a photo at an Amazon address (its own copy). */
+export const isAmazonHostedPhoto = (root: string, channel: StudioPublishValue): boolean => AMAZON_IMAGE_ROOT.test(root) && channel.state === 'value'
+  && leaves(channel.value).some(([path, url]) => /(^|\.)media_location$/.test(path) && AMAZON_PHOTO_HOST.test(url))
 
 /** Language instances are independent accepted baselines, even when Amazon requires one full-root replacement. */
 export const amazonContentField = (root: string, marketplaceId: string, tag: string) => `${root}:${JSON.stringify([marketplaceId, tag])}`
@@ -171,13 +206,45 @@ function providerEqual(root: string, ours: StudioPublishValue, theirs: StudioPub
   return compared.compared.includes(root) && !compared.differing.length
 }
 
+/**
+ * Build shape v2 — a Full update row, after the live read: Amazon's instances of this market that Nexus does not hold
+ * become removals. Content roots: each language Nexus manages for this market (its content languages) that Amazon holds
+ * and Nexus does not is cleared (`clears`); other markets and other languages stay. Other roots: a root Nexus manages
+ * (`managedRoots`) that Amazon holds here and Nexus omits is deleted, every instance of this market (`deletes`).
+ */
+function fullRemovals(input: { current: Record<string, StudioPublishValue>; remote: Record<string, unknown>; managedRoots: ReadonlySet<string>;
+  tags: ReadonlySet<string>; marketplaceId: string }) {
+  const clears: Record<string, Record<string, unknown>[]> = {}, deletes: Record<string, Record<string, unknown>[]> = {}
+  for (const root of CONTENT_ROOTS) {
+    if (input.remote[root] === undefined) continue
+    let held: Map<string, Record<string, unknown>[]>, ours = new Map<string, Record<string, unknown>[]>()
+    // An unreadable instance is named by the field's own refusal (`contentInputs`); nothing is removed here.
+    try { held = contentGroups(root, input.remote[root], input.marketplaceId, true) } catch { continue }
+    try { if (input.current[root]?.state === 'value') ours = contentGroups(root, (input.current[root] as { value: unknown }).value, input.marketplaceId) } catch { continue }
+    const missing = [...held.keys()].filter(tag => input.tags.has(tag) && !ours.has(tag)).sort()
+    if (missing.length) clears[root] = missing.map(tag => ({ marketplace_id: input.marketplaceId, language_tag: tag }))
+  }
+  for (const root of input.managedRoots) {
+    // D7 = A — the offer and the RRP are never removed by a Full update, whatever the managed list says.
+    if (OUT_OF_SCOPE_ROOTS.has(root)) continue
+    if (Object.prototype.hasOwnProperty.call(input.current, root) || !Array.isArray(input.remote[root])) continue
+    const here = (input.remote[root] as unknown[]).filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+      .filter(entry => !entry.marketplace_id || entry.marketplace_id === input.marketplaceId)
+    if (here.length) deletes[root] = here
+  }
+  return { clears, deletes }
+}
+
 /** Five concurrent reads; each group of up to21 products gets a finite 9.5-second family budget. */
-export async function prepareAmazonChanges(facts: PublicationFacts, publication: AmazonPublication, baselineValues: Map<string, StudioPublishValue>): Promise<AmazonChangePlan> {
+export async function prepareAmazonChanges(facts: PublicationFacts, publication: AmazonPublication, baselineValues: Map<string, StudioPublishValue>,
+  options: AmazonChangeOptions = {}): Promise<AmazonChangePlan> {
   const prepared = clone(publication)
   const previouslyPublished = new Set([...baselineValues.keys()].map(key => (JSON.parse(key) as [string, string])[0]))
   const client = prepared.products.length ? new AmazonSpApiClient({ id: facts.scope.accountId, region: await getAmazonRegion(facts.scope.accountId) }) : null
   const schemaPromises = new Map<string, Promise<ChannelSpec>>()
   const products: ProductPlan[] = [], inputs: PublicationChangeInput[][] = [], observations: unknown[] = []
+  const fullIssues: StudioPublishIssue[] = []
+  const managedTags = new Set((facts.languages ?? []).map(locale => languageTag(locale, facts.scope.marketplace)))
   const readBudgetMs = 9_500 * Math.max(1, Math.ceil(prepared.products.length / 21))
   const deadline = Date.now() + readBudgetMs
   const timeoutMessage = `The live content read exceeded the ${readBudgetMs / 1_000}-second review budget.`
@@ -189,7 +256,9 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       if (messages.length !== 1 || !facts.products.some(p => p.id === product.productId)) throw new Error(`${product.sku}: the prepared product identity is ambiguous.`)
       const message = messages[0], current = currentRoots(message)
       const newListing = !facts.listings.find(listing => listing.productId === product.productId)?.externalListingId && !previouslyPublished.has(product.productId)
-      const meta: ProductPlan = { ...product, newListing, patches: {}, content: {}, contentRoots: {} }
+      // A new listing is always sent whole (its create); Full update is a mode of an existing listing only.
+      const full = !newListing && !!options.fullProductIds?.has(product.productId)
+      const meta: ProductPlan = { ...product, newListing, patches: {}, content: {}, contentRoots: {}, ...(full ? { full: true as const } : {}) }
       products[index] = meta; inputs[index] = []
       if (newListing && (message.operationType !== 'UPDATE' || !message.attributes)) throw new Error(`${product.sku}: a new listing requires its complete UPDATE.`)
       if (!newListing && !schemaPromises.has(message.productType)) schemaPromises.set(message.productType, loadAmazonSpec(facts.scope.marketplace, message.productType, facts.scope.accountId))
@@ -216,7 +285,10 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       } catch (error) { readError = error instanceof Error ? error.message : String(error) }
       finally { if (timer) clearTimeout(timer) }
       if (newListing) {
-        const refusal = readError ?? (confirmedAbsent ? null : 'This seller SKU already exists on Amazon. Link the existing listing before publishing; a full UPDATE was refused.')
+        const relisted = options.relist?.get(product.productId)
+        const stillRemoving = relisted && Date.now() - Date.parse(relisted.deletedAt) < RELIST_WAIT_MS
+        const refusal = readError ?? (confirmedAbsent ? null : stillRemoving ? `${AMAZON_RELIST_TOO_EARLY(relisted.deletedAt)} (Amazon still shows this SKU here.)`
+          : 'This seller SKU already exists on Amazon. Link the existing listing before publishing; a full UPDATE was refused.')
         observations[index] = { sku: product.sku, newListing: true, confirmedAbsent, error: refusal }
         inputs[index].push({ ...product, field: '$create', label: 'Create complete listing', current: known(message), lastAccepted: unknown('No accepted publish record'),
           channel: confirmedAbsent && !readError ? absent : unknown(refusal!), newListing: confirmedAbsent && !readError, ...(refusal ? { refusal } : {}) })
@@ -225,6 +297,19 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       const productType = Array.isArray(raw.summaries) ? raw.summaries.find((summary: any) => summary.marketplaceId === prepared.marketplaceId)?.productType : undefined
       const refusal = readError ?? (!productType ? 'Amazon did not confirm the selected marketplace and product type.' : productType !== message.productType ? `Amazon product type ${productType} differs from prepared product type ${message.productType}. Reconcile it before publishing.` : null)
       observations[index] = { sku: product.sku, productType: productType ?? null, attributes: readError ? null : contentOnly(object(raw.attributes)), error: refusal }
+      // Build shape v2 — a Full update needs a successful live read and the same product type (else: Delete, then Publish).
+      const fullDeletes: Record<string, Record<string, unknown>[]> = {}
+      if (full && refusal) fullIssues.push({ productId: product.productId, sku: product.sku, severity: 'error', message: `${product.sku}: ${readError
+        ? FULL_NEEDS_LIVE_READ('Amazon', readError) : productType && productType !== message.productType ? FULL_AMAZON_PRODUCT_TYPE_DIFFERS : refusal}` })
+      else if (full) {
+        const removed = fullRemovals({ current, remote: object(raw.attributes), managedRoots: new Set(prepared.full?.[product.productId]?.managedRoots ?? []),
+          tags: managedTags, marketplaceId: prepared.marketplaceId })
+        for (const [root, selectors] of Object.entries(removed.clears)) {
+          clearSelectors[root] = [...(clearSelectors[root] ?? []), ...selectors]
+          if (current[root]?.state !== 'value') current[root] = absent
+        }
+        for (const [root, instances] of Object.entries(removed.deletes)) { fullDeletes[root] = instances; current[root] = absent }
+      }
       const roots = new Set(Object.keys(current))
       const scoped = new Map<string, StudioPublishValue>()
       for (const key of baselineValues.keys()) {
@@ -239,7 +324,7 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       for (const root of [...roots].sort().filter(root => !isOfferLaneRoot(root) && root !== '$create')) {
         const local = Object.prototype.hasOwnProperty.call(current, root) ? current[root] : unknown(`${root} is omitted by the content builder; no explicit clear was prepared.`)
         const baseline = baselineValues.get(publicationChangeId(product.productId, root)) ?? unknown('No accepted publish record')
-        const clear = clearSelectors[root] ?? message.patches?.find(patch => patch.op === 'delete' && patch.path === `/attributes/${root}`)?.value
+        const clear = clearSelectors[root] ?? fullDeletes[root] ?? message.patches?.find(patch => patch.op === 'delete' && patch.path === `/attributes/${root}`)?.value
         if ((CONTENT_ROOTS as readonly string[]).includes(root)) {
           inputs[index].push(...contentInputs(root, local, baseline, scoped, clear, object(raw.attributes)[root], spec, prepared.marketplaceId, meta, refusal ?? undefined))
           continue
@@ -253,17 +338,40 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
             comparisonBaseline = built.baseline
             if (built.patch) meta.patches[root] = built.patch
             if (spec.fields.filter(field => field.attribute === root).some(field => !field.editable)) blocked = `${root} cannot be edited on an existing Amazon listing.`
+            else if (fullDeletes[root] && spec.fields.some(field => field.attribute === root && field.requirement === 'required'))
+              blocked = `${root} is required on Amazon, so a Full update cannot remove it. Fill it in, or keep Amazon's value with Partial update.`
           }
         } catch (error) { blocked = error instanceof Error ? error.message : String(error) }
         inputs[index].push({ ...product, field: root, label: spec.fields.find(field => field.attribute === root)?.englishLabel ?? root,
-          current: local, lastAccepted: baseline, channel, ...(blocked ? { refusal: blocked } : {}),
+          current: local, lastAccepted: baseline, channel, ...(blocked ? { refusal: blocked } : {}), ...(isAmazonHostedPhoto(root, channel) ? { channelCopy: AMAZON_PHOTO_COPY } : {}),
           currentMatchesChannel: providerEqual(root, local, channel, prepared.marketplaceId), acceptedMatchesChannel: providerEqual(root, comparisonBaseline, channel, prepared.marketplaceId) })
       }
       inputs[index].push(...await amazonOfferLines(facts, meta, { marketplaceId: prepared.marketplaceId, remote: refusal ? null : object(raw.attributes), refusal: refusal ?? undefined }))
     }
   }
   await Promise.all(Array.from({ length: Math.min(5, prepared.products.length) }, () => worker()))
-  return { kind: 'amazon-changes', publication: prepared, products, changes: withOfferDisplay(planPublicationChanges(inputs.flat()), products), remoteRevision: createHash('sha256').update(canonical(observations)).digest('hex') }
+  const flat = inputs.flat()
+  const fullRows = new Map(products.filter(product => product.full).map(product => [product.productId, product]))
+  // Build shape v2 — a Full row's fields are ticked and locked when Nexus can send them; a field it cannot send keeps its
+  // reason (and Amazon keeps that value, said once per row). Partial rows keep today's ticks.
+  // D7 = A — price, offer and stock are never part of a Full update: the RRP (`list_price`) and the offer lane's lines keep
+  // their Partial ticks on a Full row; they are never locked, never removed, never named as "left as Amazon holds them".
+  const kept = new Map<string, string[]>()
+  const changes = withOfferDisplay(planPublicationChanges(flat, { channel: 'Amazon' }).map((change, index) => {
+    const product = fullRows.get(change.productId)
+    if (!product || OUT_OF_SCOPE_ROOTS.has(change.field) || product.offer?.lines[change.field]) return change
+    if (flat[index].refusal !== undefined) { kept.set(product.sku, [...(kept.get(product.sku) ?? []), change.label]); return change }
+    const sendable = change.current.state !== 'unknown' && change.channel.state !== 'unknown' && !(change.current.state === 'absent' && change.channel.state === 'absent')
+      && (!!product.content[change.field] || !!product.patches[change.field])
+    return sendable ? fullUpdateChange(change) : change
+  }), products)
+  const removals: StudioPublishRemoval[] = changes.filter(change => change.locked && change.current.state === 'absent' && change.channel.state === 'value')
+    .map(change => ({ productId: change.productId, sku: change.sku, field: change.field, label: change.label, value: (change.channel as { value: unknown }).value }))
+  for (const [sku, labels] of kept) if (!fullIssues.some(issue => issue.sku === sku && issue.severity === 'error'))
+    fullIssues.push({ productId: [...fullRows.values()].find(product => product.sku === sku)?.productId, sku, severity: 'warning',
+      message: `${sku}: Full update leaves ${labels.length === 1 ? 'this field' : `these ${labels.length} fields`} as Amazon holds ${labels.length === 1 ? 'it' : 'them'}: ${labels.join(', ')}. The field list says why.` })
+  return { kind: 'amazon-changes', publication: prepared, products, changes, remoteRevision: createHash('sha256').update(canonical(observations)).digest('hex'),
+    ...(removals.length ? { removals } : {}), ...(fullIssues.length ? { fullIssues } : {}) }
 }
 
 /** Compile only the selected reviewed fields; companions preserved in a patch never become intentional writes. */

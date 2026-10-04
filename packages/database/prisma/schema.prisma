@@ -1643,6 +1643,22 @@ model ChannelListing {
   offerCloseReason   String?
   offerCloseSnapshot Json?
 
+  // Sheet publish parity, build shape v2 (2026-10-04) — the two values a row WAITS with until Publish
+  // (`@nexus/shared/publish-actions`). Setting one sends nothing; Publish sends it after the review.
+  //  - publishAction: how Publish sends the content — FULL_UPDATE | DELETE (CHECK); null = Partial update.
+  //  - sellingTarget: the selling state to reach — ACTIVE | INACTIVE | ENDED (CHECK); null = no change waiting. On a row
+  //    not on the channel yet it is the New listings choice: ACTIVE | INACTIVE | NOT_LISTED (migration 20261004c).
+  // Each has its own who and when; `…At` is the compare-and-set guard of a write (a different stored value is a
+  // conflict naming who changed it). publishActionBasis keeps what the row was when a value was set (selling state
+  // and channel id, per column), so a value the listing has outgrown can say "No longer applies".
+  publishAction      String?
+  publishActionAt    DateTime?
+  publishActionById  String?
+  sellingTarget      String?
+  sellingTargetAt    DateTime?
+  sellingTargetById  String?
+  publishActionBasis Json?
+
   // ── PIM A.1 — Channel-level master attribute overrides ─────────
   // JSONB bag of overrides for master Product attributes (categoryAttributes,
   // localizedContent keys). Distinct from platformAttributes:

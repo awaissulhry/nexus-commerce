@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { matrixChips, MATRIX_CHIP_IDS } from './chips'
+import { matrixChip, matrixChips, MATRIX_CHIP_IDS } from './chips'
 import type { MatrixRead } from './contract'
 import { buildPreviewMatrix } from './fixtures'
 import { applyCells, applyVerb } from './store'
@@ -65,7 +65,7 @@ describe('matrixChips — counts from the read, null before it, cells keyed <key
     const wasPinnedElsewhere = Object.entries(row.cells).some(([k, c]) => k !== 'EBAY:IT' && c.sync?.kind === 'PINNED')
     expect(matrixChips(after).find(c => c.id === 'matrix-pinned')!.count).toEqual({ n: before + (wasPinnedElsewhere ? 0 : 1), unit: 'variants' })
   })
-  it('Paused follows a pause verb: pausing one Follow row on eBay·IT adds it to the chip', () => {
+  it('Sync held follows a hold verb: holding one Follow row on eBay·IT adds it to the chip', () => {
     const r = read()
     const row = r.rows.find(x => x.role === 'variant' && x.cells['EBAY:IT']?.sync?.kind === 'FOLLOW')!
     const preview = previewVerb(r, { params: { verb: 'pause-sync' }, targets: [{ rowId: row.id, coordinateKey: 'EBAY:IT' }], commit: false }, { can: () => true, simulated: true })
@@ -73,5 +73,41 @@ describe('matrixChips — counts from the read, null before it, cells keyed <key
     const { read: after } = applyVerb(r, preview)
     const paused = matrixChips(after).find(c => c.id === 'matrix-paused')!
     expect(paused.cells.byRow[row.id]).toContain('EBAY:IT.syncMode')
+  })
+})
+
+describe('build shape v2 (P12) — Sync held, Inactive, chips by id', () => {
+  it('the held-sync chip reads "Sync held" and keeps its id (saved views)', () => {
+    const held = matrixChip(matrixChips(read()), 'matrix-paused')!
+    expect(held.label).toBe('Sync held')
+    expect(held.tone).toBe('warning')
+  })
+  it('Inactive counts the rows whose listing is Inactive, Mixed or Ended — tinting the Listing cell only', () => {
+    const r = read()
+    const rows = r.rows.filter(x => x.role === 'variant')
+    const states = ['paused', 'mixed', 'ended', 'active', 'draft', 'not_listed'] as const
+    rows.slice(0, states.length).forEach((row, i) => {
+      const listing = row.cells['EBAY:IT']?.listing
+      if (listing) listing.selling = { state: states[i], reason: null }
+    })
+    const expected = r.rows.filter(row => Object.values(row.cells).some(c => {
+      const l = c.listing
+      if (!l) return false
+      const s = l.selling?.state
+      return s && s !== 'unknown' && s !== 'not_listed' ? ['paused', 'mixed', 'ended'].includes(s) : l.state === 'closed' || l.state === 'ended'
+    })).length
+    const chip = matrixChip(matrixChips(r), 'matrix-not-selling')!
+    /* One set of selling words (Owner 2026-10-04): the chip reads Inactive; its id stays for saved views. */
+    expect(chip).toMatchObject({ label: 'Inactive', tone: 'warning', count: { n: expected, unit: 'variants' } })
+    expect(chip.note).toBe('Listings that are Inactive, Mixed or Ended — set Active in the sheet\'s Status column and Publish')
+    /* Positive control: the three we set are on it; the Active, draft and Not listed rows only when another coordinate puts them there. */
+    for (const row of rows.slice(0, 3)) expect(chip.cells.byRow[row.id]).toContain('EBAY:IT.listing')
+    for (const cols of Object.values(chip.cells.byRow)) for (const col of cols) expect(col.endsWith('.listing')).toBe(true)
+    expect(expected).toBeGreaterThanOrEqual(3)
+  })
+  it('matrixChip finds a chip by id whatever its place, and answers null for none', () => {
+    const chips = matrixChips(read())
+    for (const id of MATRIX_CHIP_IDS) expect(matrixChip([...chips].reverse(), id)?.id).toBe(id)
+    expect(matrixChip([], 'matrix-not-selling')).toBeNull()
   })
 })

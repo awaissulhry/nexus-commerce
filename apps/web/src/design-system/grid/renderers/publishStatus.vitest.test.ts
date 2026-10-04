@@ -200,3 +200,27 @@ describe('family total on a main row (step 3 review, 2026-10-02)', () => {
     expect(publishCardModel(value({ last: last({ status: 'PARTIAL' }) }), now).hint).toBe('Some products in this publish failed.')
   })
 })
+
+describe('what the last send was — kindLabel (build shape v2, P12)', () => {
+  const NOW = Date.parse('2026-10-01T12:00:00')
+  it('leads the card with "Pause offer · Accepted · 10:42 · Awais" and names a selling change instead of a missing field list', () => {
+    const card = publishCardModel(value({ last: last({ kindLabel: 'Pause offer', status: 'ACCEPTED', at: '2026-10-01T10:42:00', userName: 'Awais', sentFields: [] }) }), NOW)
+    expect(card.headline).toBe(`Pause offer · Accepted · ${publishShortTime('2026-10-01T10:42:00', NOW)} · Awais`)
+    expect(card.sentSummary).toBe('Pause offer.')
+    // No person recorded: the line simply ends at the time (never "Not recorded" in the headline).
+    expect(publishCardModel(value({ last: last({ kindLabel: 'End listing', status: 'ACCEPTED', userName: null, sentFields: [] }) }), NOW).headline)
+      .toBe(`End listing · Accepted · ${publishShortTime('2026-10-01T10:04:00', NOW)}`)
+  })
+  it('a plain publish (no kindLabel, or a blank one) keeps the card as it was: no headline', () => {
+    expect(publishCardModel(value(), NOW).headline).toBeNull()
+    expect(publishCardModel(value({ last: last({ kindLabel: '  ' }) }), NOW).headline).toBeNull()
+    expect(publishCardModel(value({ last: last({ kindLabel: null, sentFields: [] }) }), NOW).sentSummary).toBe('No field list is recorded for this publish.')
+  })
+  it('the cell names the kind to a screen reader and on hover, but not while a newer publish is in flight', () => {
+    const model = publishCellModel(value({ last: last({ kindLabel: 'Full update', status: 'ACCEPTED' }) }), NOW)
+    expect(model.ariaLabel).toMatch(/^Last publish: Full update, Accepted, Amazon · IT/)
+    expect(model.title).toBe(`Full update. ${publicationStatusMeta('ACCEPTED').hint}`)
+    const busy = publishCellModel(value({ inFlight: { status: 'PUBLISHING' }, last: last({ kindLabel: 'Full update' }) }), NOW)
+    expect(busy.ariaLabel).not.toContain('Full update')
+  })
+})

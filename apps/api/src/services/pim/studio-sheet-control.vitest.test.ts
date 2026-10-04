@@ -115,3 +115,26 @@ describe('the family row and per-variant columns (report 2 I-11)', () => {
     expect(parent.values.color.writeBlockedReason).toBe('Set on each variant — this is a variation axis, so the family row has no single value.')
   })
 })
+
+describe('build shape v2 — the Nexus product status leaves the Shared sheet (Owner 2026-10-04)', () => {
+  const column = (key: string, storage: string) => ({ key, writeField: key, label: key, group: 'Identity', kind: 'select', storage,
+    scope: 'global', requiredBy: [], editable: true, defaultVisible: true })
+
+  it('drops the master Status column on Shared and keeps every other column, a dictionary "status" attribute included', async () => {
+    getStudioColumns.mockResolvedValue({ columns: [column('sku', 'column'), column('status', 'column'), column('brand', 'column')], coordinates: [] })
+    channelListingFindMany.mockResolvedValue([])
+    const shared = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
+    const keys = shared.columns.map(c => c.key)
+    expect(keys).not.toContain('status')
+    expect(keys).toEqual(expect.arrayContaining(['sku', 'brand']))
+    getStudioColumns.mockResolvedValue({ columns: [column('sku', 'column'), column('status', 'categoryAttributes')], coordinates: [] })
+    expect((await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)).columns.map(c => c.key)).toContain('status')
+  })
+
+  it('leaves a channel scope’s columns as they are', async () => {
+    getStudioColumns.mockResolvedValue({ columns: [title, column('status', 'column')], coordinates: [EBAY_IT] })
+    channelListingFindMany.mockResolvedValue([listing('child'), listing(PARENT)])
+    const ebay = await getStudioSheet({ productId: PARENT, scope: 'channel', channel: 'EBAY', market: 'IT', locale: 'it' })
+    expect(ebay.columns.map(c => c.key)).toContain('status')
+  })
+})

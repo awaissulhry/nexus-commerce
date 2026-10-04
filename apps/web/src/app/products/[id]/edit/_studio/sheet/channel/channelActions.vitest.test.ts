@@ -1,24 +1,17 @@
 /**
  * PES.3 — the channel verbs' refusals, which are the part that must never lie.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { AVAILABLE, actionLabel } from '@/design-system/grid/actions/registry'
+import { AVAILABLE } from '@/design-system/grid/actions/registry'
+import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { tidyServerMessage } from './rows'
 
-import { CHANNEL_VERB_PERMISSION, offerMarkConsequence, broadcastToListings, offerToggle, openRecordAction, permissionRefusal, type ChannelActionDeps } from './channelActions'
+import {
+  ACTION_NOT_ON_CHANNEL, ACTION_ROLE_CANNOT_DELETE, CHANNEL_VERB_PERMISSION, actionMenuEntries, broadcastToListings, channelActions,
+  openRecordAction, permissionRefusal, type ChannelActionDeps,
+} from './channelActions'
 import type { ChannelSheetRow } from './types'
-
-it.each([false, true, undefined])('the offer effect follows the wire flag %s, without guessing an absent flag', async offerActiveHonoured => {
-  const deps: ChannelActionDeps = { permission: 'granted', channelConnectionId: 'shopify-account',
-    channel: 'SHOPIFY', marketplace: 'GLOBAL', scopeLabel: 'Shopify', aliases: [], siblingMarkets: [],
-    pickMarkets: async () => null, openRecord: () => {}, openRecordId: null }
-  const row = { id: 'p', rowId: 'primary:p', rowKind: 'variant', aliasId: null, sku: 'XAVIA',
-    listing: { offerActive: true, offerActiveHonoured } } as unknown as ChannelSheetRow
-  const impact = await offerToggle(deps).preflight!([row])
-  expect(impact.consequences).toContain('Recorded as paused in Nexus. Nothing is sent to Shopify — the offer keeps selling there until you end it on the channel itself.')
-  expect(impact.consequences?.includes('This channel does not act on the Nexus offer mark.')).toBe(offerActiveHonoured === false)
-})
 
 describe('permission refusals name the RIGHT permission (ruling #123)', () => {
   it('names products.edit, not a channels permission', () => {
@@ -118,139 +111,101 @@ describe('#327·10 — a server sentence never ends mid-clause', () => {
   })
 })
 
-describe('#363 — the offer verb words itself from the SELECTION', () => {
-  /**
-   * The reason the resolver takes ROWS and not a count: with 2 of 3 paused, "Activate 3 offers"
-   * is a lie about one of them. Only the verb knows which rows it would actually touch.
-   */
-  const deps2 = (): ChannelActionDeps => ({
-    permission: 'granted', channelConnectionId: null, channel: 'EBAY', marketplace: 'IT', scopeLabel: 'eBay · IT',
-    aliases: [], siblingMarkets: [], pickMarkets: async () => null,
-    openRecord: () => {}, openRecordId: null,
-  })
-  const r = (offerActive: boolean | null) =>
-    ({ id: 'p1', rowId: `r${Math.random()}`, rowKind: 'variant', aliasId: null,
-       listing: offerActive === null ? null : { offerActive } }) as unknown as ChannelSheetRow
-
-  const labelFor = (rows: ChannelSheetRow[]) => actionLabel(offerToggle(deps2()), rows)
-
-  it('says "Pause N offers" when every selected offer is active', () => {
-    expect(labelFor([r(true), r(true), r(true)])).toBe('Mark paused 3 offers on eBay · IT')
-  })
-
-  it('says "Activate N offers" when every selected offer is paused', () => {
-    expect(labelFor([r(false), r(false)])).toBe('Mark active 2 offers on eBay · IT')
-  })
-
-  it('🔴 names the SUBSET on a mixed selection — the sentence a fixed string could not produce', () => {
-    // 2 paused of 3: "Activate 3 offers" would be a lie about the active one.
-    expect(labelFor([r(false), r(false), r(true)])).toBe('Mark active 2 of 3 offers on eBay · IT')
-  })
-
-  it('falls back to the bare verb when no selected row has a listing', () => {
-    expect(labelFor([r(null)])).toBe('Mark paused offer on eBay · IT')
-  })
-
-  it('the label and the availability agree — both read the same plan', () => {
-    const rows = [r(false), r(false), r(true)]
-    expect(labelFor(rows)).toContain('Mark active 2 of 3')
-    expect(offerToggle(deps2()).available(rows)).toEqual(AVAILABLE)
-  })
-
-  it('refuses only an EVEN split, where neither verb is more useful', () => {
-    const a = offerToggle(deps2()).available([r(true), r(false)])
-    expect(a.kind).toBe('disabled')
-    expect((a as { reason: string }).reason).toMatch(/even split/)
-  })
-})
-
-
-describe('Presence W0 honest offer consequences and refusal shape', () => {
+describe('Presence W0 — broadcast stays held', () => {
   const deps = (channel: ChannelActionDeps['channel']): ChannelActionDeps => ({
     permission: 'granted', channelConnectionId: null, channel, marketplace: 'IT', scopeLabel: `${channel} · IT`,
     aliases: [], siblingMarkets: [{ code: 'DE', label: 'Germany' }], pickMarkets: async () => ['DE'],
     openRecord: () => {}, openRecordId: null,
   })
   const row = { id: 'p1', sku: 'GALE-JACKET', rowId: 'primary:p1', rowKind: 'variant', aliasId: null, listing: { offerActive: true } } as ChannelSheetRow
-  it.each([
-    ['AMAZON', false, 'Recorded as paused in Nexus. Amazon is told at the next Amazon flat-file publish, which suppresses the offer.'],
-    ['AMAZON', true, "The pause mark is cleared, and Nexus queues this SKU's stock to Amazon straight away."],
-    ['EBAY', false, 'Recorded as paused in Nexus. Nothing is sent to eBay — the offer keeps selling there until you end it on the channel itself.'],
-    ['EBAY', true, "The pause mark is cleared, and Nexus queues this SKU's stock to eBay straight away."],
-    ['SHOPIFY', false, 'Recorded as paused in Nexus. Nothing is sent to Shopify — the offer keeps selling there until you end it on the channel itself.'],
-    ['SHOPIFY', true, "The pause mark is cleared, and Nexus queues this SKU's stock to Shopify straight away."],
-    ['WOOCOMMERCE', false, 'Recorded in Nexus. Nothing is sent to WooCommerce from here.'],
-    ['WOOCOMMERCE', true, 'Recorded in Nexus. Nothing is sent to WooCommerce from here.'],
-    ['ETSY', false, 'Recorded as paused in Nexus. Nothing is ever sent to Etsy from here.'],
-    ['ETSY', true, 'Recorded as paused in Nexus. Nothing is ever sent to Etsy from here.'],
-  ] as const)('%s active=%s pins the sentence the operator reads', async (channel, active, sentence) => {
-    expect(offerMarkConsequence(channel, active)).toBe(sentence)
-    const selected = { ...row, listing: { ...row.listing!, offerActive: !active } }
-    expect((await offerToggle(deps(channel)).preflight!([selected])).consequences?.[0]).toBe(sentence)
-  })
-  it('unavailable means level none; a channel-id row cannot ask for confirmation', async () => {
-    const d = deps('EBAY')
-    d.aliases = [{ id: null, externalListingId: '938554736087' }] as ChannelActionDeps['aliases']
-    const impact = await offerToggle(d).preflight!([row])
-    expect(impact.level).toBe('none')
-    expect(impact.unavailable).toBe('Refused on 1 rows whose listing holds a channel id on EBAY. This verb only writes a Nexus record, and this studio has no verb that can carry it to EBAY.')
-    expect(impact.sideEffects).toEqual(['Refused: 1 of these belong to a listing that holds a channel id, and this verb cannot touch those. Nothing is marked.'])
-    expect((await offerToggle(deps('EBAY')).preflight!([row])).level).toBe('confirm')
-    expect((await offerToggle(deps('EBAY')).preflight!([row])).sideEffects).toEqual(['None of these hold a channel id. A listing record is created on this coordinate for any row that has none.'])
-  })
-  it.each([[null, null, ''], ['account-b', 'alias-b', 'alias-b']] as const)('names account %s and alias %s in the narrowed write', async (account, aliasId, aliasKey) => {
-    const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
-    vi.stubGlobal('fetch', fetcher)
-    try {
-      const action = offerToggle({ ...deps('EBAY'), channelConnectionId: account })
-      expect((await action.run([{ ...row, aliasId }])).ok).toBe(true)
-      expect(fetcher).toHaveBeenCalledTimes(1)
-      expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ markets: [{ channel: 'EBAY', marketplace: 'IT', channelConnectionId: account, aliasKey, offerActive: false }] })
-    } finally { vi.unstubAllGlobals() }
-  })
-  it.each(['account', 'alias'])('refuses a missing %s before any write or confirmation', async missing => {
-    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
-    try {
-      const d = { ...deps('EBAY'), ...(missing === 'account' ? { channelConnectionId: undefined } : {}) } as ChannelActionDeps
-      const selected = { ...row, ...(missing === 'alias' ? { aliasId: undefined } : {}) } as ChannelSheetRow
-      const action = offerToggle(d)
-      expect(action.available([selected]).kind).toBe('disabled')
-      const impact = await action.preflight!([selected])
-      expect(impact.level).toBe('none')
-      expect(impact.unavailable).toBe('The listing’s account or alias was not reported. Reload before changing its offer mark.')
-      expect(await action.run([selected])).toMatchObject({ ok: false, message: impact.unavailable })
-      expect(fetcher).not.toHaveBeenCalled()
-    } finally { vi.unstubAllGlobals() }
-  })
-  it('an Amazon listing whose ASIN is pending is live: the offer verb refuses it, and names why', async () => {
-    const pending = [{ id: null, externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' }] as unknown as ChannelActionDeps['aliases']
-    const amazon = { ...deps('AMAZON'), aliases: pending }
-    const impact = await offerToggle(amazon).preflight!([row])
-    expect(impact.level).toBe('none')
-    expect(impact.unavailable).toContain('Refused on 1 rows')
-    expect(impact.findings).toEqual([{ rowId: 'primary:p1', label: 'GALE-JACKET · published, ASIN pending', severity: 'warn' }])
-    expect(await offerToggle(amazon).run([row])).toEqual({ ok: false, message: impact.unavailable })
-    // eBay keeps the id rule alone: the same facts without an ItemID are not live there.
-    expect((await offerToggle({ ...deps('EBAY'), aliases: pending }).preflight!([row])).level).toBe('confirm')
-    // A still-draft on Amazon is not live either.
-    const draft = [{ id: null, externalListingId: null, isPublished: false, listingStatus: 'DRAFT' }] as unknown as ChannelActionDeps['aliases']
-    expect((await offerToggle({ ...deps('AMAZON'), aliases: draft }).preflight!([row])).level).toBe('confirm')
-  })
-  it('the held run and preflight expose the same sentence without transport', async () => {
-    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
-    try {
-      const d = deps('EBAY'); d.aliases = [{ id: null, externalListingId: '938554736087' }] as ChannelActionDeps['aliases']
-      const action = offerToggle(d)
-      const impact = await action.preflight!([row])
-      expect(await action.run([row])).toEqual({ ok: false, message: impact.unavailable })
-      expect(fetcher).not.toHaveBeenCalled()
-    } finally { vi.unstubAllGlobals() }
-  })
   it('broadcast is held on rows with and without an identity', async () => {
     const verb = broadcastToListings(deps('EBAY'))
     const impact = await verb.preflight!([row])
     expect(impact.level).toBe('none')
     expect(impact.unavailable).toBe('Broadcast is not built. Nothing is sent on any row, live or not.')
     expect((await verb.run([row])).message).toBe(impact.unavailable)
+  })
+})
+
+describe('build shape v2 — "Mark paused / active" is gone; Action ▾ counts what it would do', () => {
+  const deps: ChannelActionDeps = { permission: 'granted', channelConnectionId: null, channel: 'AMAZON', marketplace: 'IT', scopeLabel: 'Amazon · IT',
+    aliases: [], siblingMarkets: [], pickMarkets: async () => null, openRecord: () => {}, openRecordId: null }
+
+  it('the channel verbs are Open record and Broadcast — no offer toggle', () => {
+    expect(channelActions(deps).map(action => action.id)).toEqual(['open-record', 'broadcast-to-listings'])
+  })
+
+  const cell = (over: Partial<PublishActionCell> & { inactive?: boolean; end?: string | null; fba?: boolean } = {}): PublishActionCell => ({
+    listingId: `l-${Math.random()}`, productId: 'p', sku: 'GALE-M', channel: 'AMAZON', marketplace: 'IT', accountId: 'a', aliasKey: '',
+    state: 'active', stateReason: null,
+    send: { mode: 'partial', setAt: null, setById: null, setByName: null, noLongerApplies: null },
+    status: { target: null, setAt: null, setById: null, setByName: null, noLongerApplies: null },
+    sendOptions: [
+      { mode: 'partial', offered: true, reason: null, warning: null },
+      { mode: 'full', offered: true, reason: null, warning: 'Every field…' },
+      { mode: 'delete', offered: !over.fba, reason: over.fba ? 'Amazon holds FBA units for this offer.' : null, warning: null },
+    ],
+    statusOptions: [
+      { target: 'active', offered: true, action: null, reason: null, warning: null, checkedAtSend: null },
+      { target: 'inactive', offered: over.inactive ?? true, action: 'pause', reason: over.inactive === false ? 'Not possible from this state.' : null, warning: null, checkedAtSend: null },
+      { target: 'ended', offered: over.end === undefined ? false : over.end === null, action: 'end', reason: over.end ?? 'Amazon has no End.', warning: null, checkedAtSend: null },
+    ],
+    ...over,
+  })
+
+  it('"Inactive — 18 of 21": each item counts the ticked rows whose own options allow it, and names why the rest cannot', () => {
+    const rows = [
+      ...Array.from({ length: 18 }, (_, i) => ({ sku: `GALE-${i}`, cell: cell() })),
+      { sku: 'GALE-X', cell: cell({ inactive: false }) },
+      { sku: 'GALE-Y', cell: cell({ inactive: false }) },
+      { sku: 'GALE-NEW', cell: null },
+    ]
+    const entries = actionMenuEntries(rows, { publish: true, delete: true })
+    expect(entries.map(e => e.label)).toEqual([
+      'Active — 20 of 21', 'Inactive — 18 of 21', 'Ended — 0 of 21',
+      'Partial update — 20 of 21', 'Full update — 20 of 21', 'Delete — 20 of 21',
+    ])
+    expect(entries.map(e => e.group)).toEqual(['Status', 'Status', 'Status', 'Send as', 'Send as', 'Send as'])
+    const inactive = entries.find(e => e.id === 'status:inactive')!
+    expect(inactive.note).toBe('3 not allowed: Not possible from this state.')
+    expect(inactive.disabled).toBe(false)
+    expect(inactive.change).toEqual({ column: 'status', target: 'inactive' })
+    // None allow it: disabled, and the reason itself is the note.
+    const ended = entries.find(e => e.id === 'status:ended')!
+    expect(ended).toMatchObject({ disabled: true, note: 'Amazon has no End.', danger: true })
+    expect(entries.find(e => e.id === 'send:partial')!.note).toBe(`1 not allowed: ${ACTION_NOT_ON_CHANNEL}`)
+  })
+
+  it('Ended and Delete need products.delete — the rest only products.publish', () => {
+    const rows = [{ sku: 'A', cell: cell({ end: null }) }, { sku: 'B', cell: cell({ end: null, fba: true }) }]
+    const entries = actionMenuEntries(rows, { publish: true, delete: false })
+    expect(entries.find(e => e.id === 'status:ended')).toMatchObject({ allowed: 2, disabled: true, note: ACTION_ROLE_CANNOT_DELETE })
+    expect(entries.find(e => e.id === 'send:delete')).toMatchObject({ allowed: 1, disabled: true, note: ACTION_ROLE_CANNOT_DELETE })
+    expect(entries.find(e => e.id === 'send:full')).toMatchObject({ allowed: 2, disabled: false, note: null })
+    const withRole = actionMenuEntries(rows, { publish: true, delete: true })
+    expect(withRole.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 1 of 2', disabled: false, note: '1 not allowed: Amazon holds FBA units for this offer.' })
+  })
+
+  it('delete and relist (simplify): a deleted row is a row not on the channel — its Status lists it again, its Full update changes nothing', () => {
+    const already = 'Already deleted on Amazon · IT. To keep it off, leave its Status Not listed.'
+    const deleted = cell({ state: 'not_listed', deleted: { at: '2026-10-04T06:00:00.000Z', where: 'Amazon · IT', oldReference: null, relistChosenAt: null, sentence: 'Deleted on Amazon · IT on 4 Oct.' },
+      create: { target: 'not_listed', source: 'default', defaultTarget: 'not_listed', noRecord: false, sentence: 'Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active and Publish.' },
+      sendOptions: [{ mode: 'partial', offered: false, reason: 'A new listing is always sent whole.', warning: null }, { mode: 'full', offered: true, reason: null, warning: 'A new listing is always sent whole.' },
+        { mode: 'delete', offered: false, reason: already, warning: null }],
+      statusOptions: (['active', 'inactive', 'not_listed'] as const).map(target => ({ target, offered: true, action: null, reason: null, warning: null, checkedAtSend: null })) })
+    const mixed = actionMenuEntries([{ sku: 'A', cell: cell() }, { sku: 'B', cell: deleted }], { publish: true, delete: true })
+    expect(mixed.find(e => e.id === 'status:active')).toMatchObject({ label: 'Active — 2 of 2', note: '1 deleted row is listed again on the next Publish.' })
+    expect(mixed.find(e => e.id === 'status:not_listed')!.note).toMatch(/1 deleted row stays off\.$/)
+    expect(mixed.find(e => e.id === 'send:full')).toMatchObject({ label: 'Full update — 2 of 2', note: '1 not on the channel is always sent whole.' })
+    expect(mixed.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 1 of 2', note: `1 not allowed: ${already}`, danger: true })
+    // No "Keep deleted" any more: Delete on a deleted row alone is held with the reason.
+    const only = actionMenuEntries([{ sku: 'B', cell: deleted }], { publish: true, delete: true })
+    expect(only.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 0 of 1', disabled: true, note: already })
+    expect(only.some(e => e.label.startsWith('Keep deleted'))).toBe(false)
+  })
+
+  it('Ended appears only when a ticked row\'s channel can end a listing (never on Amazon)', () => {
+    const amazon = cell({ statusOptions: (['active', 'inactive'] as const).map(target => ({ target, offered: true, action: target === 'inactive' ? 'pause' as const : null, reason: null, warning: null, checkedAtSend: null })) })
+    expect(actionMenuEntries([{ sku: 'A', cell: amazon }], { publish: true, delete: true }).some(e => e.id === 'status:ended')).toBe(false)
   })
 })

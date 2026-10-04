@@ -62,6 +62,12 @@ export interface ListingCell {
   /** A short mono detail beside the word — `not buyable`, `1 listing`. */
   detail: string | null
   published: boolean
+  /**
+   * The selling state the sheet's Status column shows (`SellingState` of @nexus/shared/listing-actions: active · paused ·
+   * mixed · ended · draft · not_listed · unknown — read "Active · Inactive · Mixed · Ended · Not listed"), and why.
+   * The Matrix shows the word; it changes nothing (no selling verbs here — Status column + Publish does).
+   */
+  selling?: { state: string; reason: string | null }
 }
 
 export type FulfilmentMethod = 'FBA' | 'FBM' | 'MCF'
@@ -275,7 +281,7 @@ export type MatrixVerbId =
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
-  'pause-sync': 'Pause sync', 'resume-sync': 'Resume sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
+  'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
 }
 
@@ -354,15 +360,16 @@ export const MATRIX_COPY = {
   previewBanner: 'Preview data — the Matrix service is not built yet. Rows are this family; every cell below is a fixture and nothing is sent to a channel.',
   amazonManaged: 'Amazon-managed',
   uncounted: 'Uncounted',
-  closed: 'Closed',
+  /** Build shape v2: the Sync cell of a listing whose selling is paused (the wire's CLOSED). Selling words, not sync words. */
+  closed: 'Inactive',
   notListed: 'Not listed',
   sharedEu: (markets: readonly string[]) => `Shared by ${markets.join(' ')} — one quantity per SKU on Amazon EU`,
   euNotice: (markets: readonly string[]) => `Amazon EU: this covers ${markets.join(' ')}`,
   followsPool: (n: number, locations: readonly string[], buffer: number) => `Follows the pool · ${n} available at ${locations.join(', ') || 'no routed location'} − ${buffer} buffer`,
   pinnedAt: (n: number) => `Pinned at ${n}`,
-  pausedBy: (via: 'POLICY' | 'LISTING', would: number | null) => `Paused by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? '—'} · Resume to push`,
+  pausedBy: (via: 'POLICY' | 'LISTING', would: number | null) => `Stock sync held by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? '—'} · Release to push`,
   uncountedHint: 'No routed location holds this SKU — nothing is pushed',
-  closedHint: 'Offer closed — reopen in Sync Control',
+  closedHint: 'Selling is paused here — set Active in the sheet\'s Status column and Publish',
   guardFba: 'Guard reads FBA — the quantity is not pushed',
   reported: (r: 'AFN' | 'MFN') => `Amazon reports ${r} — differs from Nexus`,
   followsBase: (price: string) => `Follows the base price ${price}`,

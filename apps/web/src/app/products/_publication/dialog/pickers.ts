@@ -6,6 +6,9 @@
  * and Markets — and for the one tab each chosen market gets. The same rules serve the studio's family publish and the
  * products list's many-product publish. One channel and one account at a time, as the sheet's own top bar works; the
  * markets keep their order in the market list, whatever order they were picked in.
+ *
+ * One-click publish (Owner 2026-10-04, OD1/OD2 A): the window opens with every market where the family is listed
+ * (`initialChoice` with `listed`), and another channel or account refills the same way (`refillChoice`).
  */
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
@@ -54,21 +57,63 @@ export function marketOptionLabel(option: PublicationDestinationOption): string 
 export const marketShortLabel = (option: PublicationDestinationOption) =>
   option.scope.listingId ? `${option.scope.marketplace} · selected listing` : option.scope.marketplace
 
+/** OD2 A — the channel the Shared tab opens with: the first where the family is listed, in this order, then the rest. */
+export const LISTED_CHANNEL_ORDER: readonly string[] = ['AMAZON', 'EBAY', 'SHOPIFY']
+
+/**
+ * OD1 A — the markets of one channel and account the window chooses: every market where the family is listed
+ * (`listed`, see `listedDestinationKeys`), plus `extra` (the sheet's own market), in the market list's order, at most
+ * the batch limit. A market the sheet shows on a second listing keeps that listing.
+ */
+export function listedMarkets(options: readonly PublicationDestinationOption[], listed: ReadonlySet<string>, channel: string | null, accountId: string | null,
+  extra: readonly string[] = []): string[] {
+  const wanted = new Set(extra)
+  return pickerMarkets(options, channel, accountId)
+    .filter(o => wanted.has(o.key) || (!o.scope.listingId && listed.has(marketKeyOf(o))))
+    .map(o => o.key).slice(0, MAX_BATCH_DESTINATIONS)
+}
+const marketKeyOf = (o: PublicationDestinationOption) => publicationScopeKey({ channel: o.scope.channel, marketplace: o.scope.marketplace, accountId: o.scope.accountId })
+
 /**
  * What the window opens with. The asked-for destinations (the sheet's own channel, market and account) when they
- * exist; otherwise the only destination there is; otherwise the first channel and its first account with no market
- * chosen — nothing is reviewed until a market is picked.
+ * exist — with `listed` (one-click publish, OD1 A), every market of that channel and account where the family is listed
+ * as well; otherwise, with `listed` (the Shared tab, OD2 A), the first channel where the family is listed (Amazon, eBay,
+ * Shopify, then the rest) on its first such account, with all its listed markets; otherwise the only destination there
+ * is; otherwise the first channel and its first account with no market chosen — nothing is reviewed until one is picked.
  */
-export function initialChoice(options: readonly PublicationDestinationOption[], initialKeys: readonly string[]): PickerChoice {
+export function initialChoice(options: readonly PublicationDestinationOption[], initialKeys: readonly string[], listed?: ReadonlySet<string> | null): PickerChoice {
   const byKey = new Map(options.map(o => [o.key, o]))
   const first = initialKeys.map(key => byKey.get(key)).find(Boolean)
   if (first) {
     const keys = initialKeys.filter(key => { const o = byKey.get(key); return !!o && o.scope.channel === first.scope.channel && o.scope.accountId === first.scope.accountId })
-    return { channel: first.scope.channel, accountId: first.scope.accountId, keys: [...new Set(keys)] }
+    const chosen = listed ? listedMarkets(options, listed, first.scope.channel, first.scope.accountId, keys) : [...new Set(keys)]
+    return { channel: first.scope.channel, accountId: first.scope.accountId, keys: chosen }
+  }
+  if (listed?.size) {
+    const rank = (channel: string) => { const at = LISTED_CHANNEL_ORDER.indexOf(channel); return at < 0 ? LISTED_CHANNEL_ORDER.length : at }
+    const channels = pickerChannels(options).map(c => c.value).sort((a, b) => rank(a) - rank(b))
+    for (const channel of channels) {
+      for (const account of pickerAccounts(options, channel)) {
+        const keys = listedMarkets(options, listed, channel, account.value)
+        if (keys.length) return { channel, accountId: account.value, keys }
+      }
+    }
   }
   if (options.length === 1) return { channel: options[0].scope.channel, accountId: options[0].scope.accountId, keys: [options[0].key] }
   const channel = options[0]?.scope.channel ?? null
   return { channel, accountId: pickerAccounts(options, channel)[0]?.value ?? null, keys: [] }
+}
+
+/**
+ * OD1 A — another channel or account in the pickers chooses its listed markets the same way (plus the sheet's own
+ * market when it belongs there). Where the family is listed nowhere on it, the pickers' own choice stands (the same
+ * market codes).
+ */
+export function refillChoice(options: readonly PublicationDestinationOption[], previous: PickerChoice, next: PickerChoice, listed: ReadonlySet<string> | null | undefined,
+  sheetKeys: readonly string[] = []): PickerChoice {
+  if (!listed || (next.channel === previous.channel && next.accountId === previous.accountId)) return next
+  const keys = listedMarkets(options, listed, next.channel, next.accountId, sheetKeys)
+  return keys.length ? { ...next, keys } : next
 }
 
 /** Keep the same market codes on the new channel or account (IT stays IT), where that market exists. */
@@ -111,7 +156,7 @@ export function reviewTabWords(state: DestinationState): string {
     case 'checking': return 'checking…'
     case 'error': return 'could not check'
     case 'earlier': return 'earlier publish waiting'
-    case 'blocked': return state.problems ? plural(state.problems, 'problem', 'problems') : 'cannot be sent'
+    case 'blocked': return state.request ? 'skipped' : state.problems ? plural(state.problems, 'problem', 'problems') : 'cannot be sent'
     case 'expired': return 'review expired'
     case 'nothing': return state.reason === 'unticked' ? 'no fields ticked' : 'nothing to send'
     case 'input': return state.needs === 'location' ? 'choose a location' : 'confirm the overwrite'

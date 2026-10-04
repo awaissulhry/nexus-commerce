@@ -9,9 +9,11 @@
  *   GET /api/publications/:id/listings/:listingId/request      the exact request one listing received (products.publish:
  *                                                              it shows raw seller and item identifiers)
  *
- * Query (both lists): channel, marketplace (or market), accountId, state (comma list), source (comma list), productId,
- * userId (or by=me), from, to, q, checked (true | false), cursor, limit (default 50, max 100). The counts take the same
- * query and ignore state, checked, cursor and limit. No database access here — the service owns it.
+ * Query (both lists): channel, marketplace (or market), accountId, state (comma list), source (comma list), what (comma
+ * list: updates, selling, deletes, photos — the "What" filter; a Publish of several parts matches when any part does),
+ * productId, userId (or by=me), from, to, q, checked (true | false), cursor, limit (default 50, max 100). The counts take
+ * the same query (`what` included) and ignore state, checked, cursor and limit. No database access here — the service
+ * owns it.
  */
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { requestUserId } from '../lib/auth/request-permission.js'

@@ -8,7 +8,7 @@ import { workspaceIdForQuery } from '@nexus/database/workspace-context'
 import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
-import { readPublicationFacts, publicationDigest, object } from './studio-publication-plan.js'
+import { readPublicationFacts, publicationDigest, object, type PublicationFacts } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { ensureDraftListings } from './draft-listing.service.js'
 import { prepareAmazonPublication, sendAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
@@ -24,8 +24,13 @@ import { readPublicationBaseline } from './studio-publication-baseline.js'
 import { sharedListingWarnings } from '../assortment/shared-listing-warning.js'
 import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
-import { compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
+import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
+import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
+  SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
+import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, type ListingDeletion } from '@nexus/shared/listing-actions'
+import type { PublishCreateRow, StartAsTarget } from '@nexus/shared/publish-plan'
 import { verifyNewEbayListing } from './studio-publication-ebay-verify.js'
+import { readFbaUnits } from '../listings/listing-deletions.js'
 
 const publishMode = (channel: string) => channel === 'AMAZON' ? getAmazonPublishMode() : channel === 'EBAY' ? getEbayPublishMode() : channel === 'SHOPIFY' ? getShopifyPublishMode() : 'unavailable'
 type Prepared = AmazonPublication | EbayPublication | EbayInventoryPublication | EbayInventorySend | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
@@ -56,24 +61,122 @@ const gateMessage = (channel: string, mode: string) => mode === 'unavailable' ? 
   : `Sending is off: publishing to ${channel === 'EBAY' ? 'eBay' : channel === 'AMAZON' ? 'Amazon' : channel === 'SHOPIFY' ? 'Shopify' : channel} is ${mode === 'gated' ? 'turned off' : `in ${mode} mode`} on this server. Every check above ran; nothing will be sent until live publishing is turned on.`
 
 /**
+ * Build shape v2 — which rows of this destination are reviewed as Full update, from the rows the caller asked for
+ * (`fullProductIds`; P6 passes the stored Action values). Everything else is Partial update, exactly as before.
+ * Amazon: each existing SKU on its own. eBay Trading: the whole item, from its main row (a variation row alone is
+ * refused). eBay Inventory and existing Shopify products: refused for now — the row is blocked with the shared sentence.
+ * A row not on the channel yet is created whole either way (its mode is Partial: the create).
+ */
+function sendModes(facts: PublicationFacts, requested: readonly string[] | undefined) {
+  const asked = new Set((requested ?? []).filter(id => facts.products.some(product => product.id === id)))
+  const onChannel = (productId: string) => facts.listings.some(listing => listing.productId === productId && listing.externalListingId)
+  const full = new Set<string>(), blocked = new Map<string, string>()
+  const { channel } = facts.scope
+  if (channel === 'AMAZON') for (const id of asked) { if (onChannel(id)) full.add(id) }
+  else if (channel === 'EBAY' && usesEbayInventory(facts)) for (const id of asked) { if (onChannel(id)) blocked.set(id, FULL_EBAY_INVENTORY_LATER) }
+  else if (channel === 'EBAY') {
+    const item = facts.listings.some(listing => listing.externalListingId)
+    if (asked.has(facts.parent.id) && item) for (const product of facts.products) full.add(product.id)
+    else if (item) for (const id of asked) if (id !== facts.parent.id) blocked.set(id, FULL_EBAY_VARIATION)
+  } else if (channel === 'SHOPIFY') for (const id of asked) { if (onChannel(id)) blocked.set(id, SHOPIFY_EXISTING_NOT_YET) }
+  return { asked, full, blocked }
+}
+
+/**
+ * New listings (Owner 2026-10-04) — what this review does with the rows it would CREATE: every row not on the channel,
+ * those Nexus deleted included (simplify: a deleted row is a row not on the channel, default Not listed):
+ *  - `held`: a main row whose Status is Not listed holds its family here (eBay and Shopify: the whole listing; Amazon: the
+ *    main row and every row not on the channel — they need their main product); a standalone product set Not listed is
+ *    held too, and so is a deleted row left Not listed. Nothing of a held row is sent and its create is never ticked
+ *    (`blocked` says why: a deleted row in the delete's own words). A new variation set Not listed is not in this review at
+ *    all (`readPublicationFacts` leaves it out, as an excluded one).
+ *  - `relist`: the deleted rows this review lists again (their Status is Active or Inactive): created whole, ticked.
+ *  - `inactive`: Amazon and eBay rows created Inactive (never a family's main row: it has no offer or stock of its own) —
+ *    Amazon without this market's offer, eBay at quantity 0; the settle step marks them paused once the channel accepts.
+ *  - `startsAs`: every created row and how it starts ("Creates GALE-M (inactive)").
+ *  - `createStatus`: Shopify — the new product's status, from the main row's choice (Active → ACTIVE, Inactive → DRAFT).
+ *  - `choiceIds`: rows whose own stored choice the settle clears once the channel accepted them.
+ * `startAs` (the products list's "New listings start as", ND4 B) replaces every row's Active / Inactive, never a Not listed.
+ */
+function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
+  const { scope, parent, products } = facts
+  // Facts read before New listings (a caller's stand-in) carry no choices: nothing is held or created Inactive.
+  const choices: PublicationFacts['createChoices'] = facts.createChoices ?? new Map()
+  const deletions: ReadonlyMap<string, ListingDeletion> = facts.deletions ?? new Map()
+  // Not on the channel by the selling state's own rule (`newListingChoices` holds exactly those, deleted rows included).
+  const isNew = (productId: string) => choices.has(productId)
+  const targetOf = (productId: string) => {
+    const choice = choices.get(productId)
+    if (!choice) return null
+    return startAs && choice.target !== 'not_listed' ? startAs : choice.target
+  }
+  // Shopify creates (or lists again) the whole product: its main row's choice decides for every variant.
+  const effective = (productId: string) => scope.channel === 'SHOPIFY' ? targetOf(parent.id) : targetOf(productId)
+  // A deleted row says why in the delete's own words ("Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active.").
+  const heldWords = (productId: string, reason: string) => deletions.has(productId) ? deletedPublishSkip(deletions.get(productId)!) : reason
+  const family = products.length > 1 || products.some(product => product.id !== parent.id)
+  const held = new Map<string, string>()
+  if (isNew(parent.id) && products.some(product => product.id === parent.id) && targetOf(parent.id) === 'not_listed') {
+    const reason = family ? NOT_LISTED_MAIN_HELD : NOT_LISTED_LEFT_OUT
+    for (const product of products) if (scope.channel === 'EBAY' || scope.channel === 'SHOPIFY' || product.id === parent.id || isNew(product.id)) held.set(product.id, heldWords(product.id, reason))
+  }
+  // A deleted row left Not listed sends nothing (every Publish skips it until its Status lists it again).
+  for (const product of products) if (!held.has(product.id) && deletions.has(product.id) && effective(product.id) === 'not_listed') held.set(product.id, heldWords(product.id, NOT_LISTED_LEFT_OUT))
+  const relist = new Map<string, ListingDeletion>()
+  for (const product of products) {
+    const deletion = deletions.get(product.id)
+    const target = effective(product.id)
+    if (deletion && !held.has(product.id) && (target === 'active' || target === 'inactive')) relist.set(product.id, deletion)
+  }
+  const inactive = new Set<string>()
+  const startsAs: PublishCreateRow[] = []
+  const choiceIds: string[] = []
+  for (const product of products) {
+    if (!isNew(product.id) || held.has(product.id)) continue
+    const target = effective(product.id)
+    if (target !== 'active' && target !== 'inactive') continue
+    startsAs.push({ productId: product.id, sku: product.sku, startsAs: target })
+    if (choices.get(product.id)?.own) choiceIds.push(product.id)
+    const familyMain = family && product.id === parent.id
+    if (target === 'inactive' && !familyMain && (scope.channel === 'AMAZON' || scope.channel === 'EBAY')) inactive.add(product.id)
+  }
+  const mainTarget = isNew(parent.id) && !held.has(parent.id) ? targetOf(parent.id) : null
+  const createStatus = scope.channel === 'SHOPIFY' && (mainTarget === 'active' || mainTarget === 'inactive') ? (mainTarget === 'active' ? 'ACTIVE' as const : 'DRAFT' as const) : null
+  return { held, relist, inactive, startsAs, createStatus, choiceIds, deleted: (productId: string) => deletions.has(productId) }
+}
+
+/** One row a review lists again, as the publication keeps it (S3 explains Amazon's refusal with it; the settle clears the choice). */
+type PublicationRelist = Required<PublicationRelistRecord>
+
+/**
  * `verify` (the preview only): a NEW eBay listing whose own checks pass is checked by eBay too (VerifyAddFixedPriceItem,
  * which creates nothing), so its problems are in this review, not at the send. The send runs eBay's check again.
+ * `fullProductIds` (build shape v2): the rows to review as Full update (`sendModes`).
  */
-async function buildReview(productId: string, scope: StudioPublishScope, options: { verify?: boolean } = {}) {
+async function buildReview(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null } = {}) {
   const facts = await readPublicationFacts(productId, scope)
   const mode = publishMode(scope.channel)
   const issues = [...facts.issues]
   // Sharing studio step 5 — the same shared product already live on this channel in the other business (a warning).
   issues.push(...await sharedListingWarnings(facts.parent.id, scope.channel, scope.marketplace))
   const existingProducts = new Set(facts.listings.filter(listing => listing.externalListingId).map(listing => listing.productId))
+  const modes = sendModes(facts, options.fullProductIds)
+  for (const [blockedId, reason] of modes.blocked) {
+    const product = facts.products.find(p => p.id === blockedId)
+    issues.push({ productId: blockedId, sku: product?.sku, severity: 'warning', message: `${product?.sku ?? 'This row'}: ${reason}` })
+  }
+  // New listings — the rows this review would create (deleted rows included): held (Not listed), listed again, created
+  // Inactive, how each starts.
+  const creates = newRowsOf(facts, options.startAs ?? null)
+  const inactiveOption = creates.inactive.size ? { inactiveProductIds: creates.inactive } : {}
   let prepared: Prepared | null = null
   let changePlan: PublicationChangePlan | null = null
   let baselineRevision: string | null = null
   let locations: StudioPublishReview['locations'], visibility: string | undefined
   try {
-    if (scope.channel === 'AMAZON') prepared = await prepareAmazonPublication(facts)
+    if (scope.channel === 'AMAZON') prepared = await prepareAmazonPublication(facts, { ...(modes.full.size ? { fullProductIds: modes.full } : {}), ...inactiveOption })
     else if (scope.channel === 'EBAY') {
-      prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts)
+      prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts, { ...(modes.full.size ? { full: true } : {}), ...inactiveOption })
       if (prepared.kind === 'ebay') for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
     }
     else if (scope.channel === 'SHOPIFY') {
@@ -85,7 +188,8 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       for (const message of preview.errors) issues.push({ severity: 'error', message })
       locations = preview.locations.filter(l => l.isActive).map(({ id, name }) => ({ id, name }))
       if (!locations.length) issues.push({ severity: 'error', message: 'This Shopify store has no active inventory location.' })
-      visibility = String(preview.changes.newProductStatus)
+      // New listings — a product Shopify does not hold yet is created with the main row's Status (Active or a Draft).
+      visibility = String(!preview.remote && creates.createStatus ? creates.createStatus : preview.changes.newProductStatus)
       const products = facts.products.map(product => {
         const variants = preview.variants.filter(variant => variant.id === product.id)
         if (variants.length > 1 || (!variants.length && product.id !== facts.parent.id)) throw new Error(`${product.sku}: the Shopify variant identity is unavailable.`)
@@ -101,12 +205,19 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       const baselineFacts = owner ? { ...facts, products: facts.products.filter(product => product.id === owner) } : facts
       const baseline = await readPublicationBaseline(baselineFacts, prepared.products)
       baselineRevision = baseline.revision
-      changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values)
+      changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values, { ...(modes.full.size ? { fullProductIds: modes.full } : {}),
+        ...(creates.relist.size ? { relist: new Map([...creates.relist].map(([productId, deletion]) => [productId, { deletedAt: deletion.at }])) } : {}) })
         : prepared.kind === 'ebay-inventory' ? prepareEbayInventoryChanges({ owner: prepared.owner, ours: prepared.ours, live: prepared.live, destination: prepared.destination, baselineValues: baseline.values })
-        : await prepareEbayChanges(facts, prepared as EbayPublication, baseline.values)
+        : await prepareEbayChanges(facts, prepared as EbayPublication, baseline.values, modes.full.size ? { full: true } : {})
       if (changePlan.kind === 'amazon-changes') for (const product of changePlan.products) {
         if (product.newListing === false) existingProducts.add(product.productId)
       }
+      // Build shape v2 — a blocked row sends nothing; a Full row's own problems (no live read, another product type…).
+      if (modes.blocked.size) changePlan.changes = blockRowChanges(changePlan.changes, modes.blocked)
+      // New listings — a row held by Not listed (its own, its main row's, or a deleted row's default) sends nothing: no
+      // create, never ticked.
+      if (creates.held.size) changePlan.changes = blockRowChanges(changePlan.changes, creates.held)
+      if (changePlan.kind !== 'ebay-inventory-changes') issues.push(...changePlan.fullIssues ?? [])
       if (changePlan.kind === 'amazon-changes' && changePlan.changes.some(change => change.field === 'variation_theme' && change.status !== 'SAME'
         && existingProducts.has(change.productId)))
         issues.push({ severity: 'warning', field: 'variation_theme', message: 'Changing a live variation theme can regroup its variants. Review the variation relationships before publishing.' })
@@ -116,17 +227,81 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   if (options.verify && prepared?.kind === 'ebay' && !prepared.itemId && mode === 'live' && !issues.some(issue => issue.severity === 'error'))
     issues.push(...await verifyNewEbayListing(prepared, scope.accountId))
   if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
+  // New listings — a Shopify product is one listing with no field ticks: held by Not listed (a deleted product left Not
+  // listed included), nothing of it is sent.
+  if (scope.channel === 'SHOPIFY' && creates.held.size) issues.push({ severity: 'error', message: [...creates.held.values()][0] })
+  const relist = await relistRows(facts, prepared, creates.relist)
+  const startsAsOf = new Map(creates.startsAs.map(row => [row.productId, row.startsAs]))
   const overwrite = await readPublicationOverwrite(facts)
+  const removals = changePlan && changePlan.kind !== 'ebay-inventory-changes' ? changePlan.removals : undefined
   const review: StudioPublishReview = {
     id: null, productId, scope, accountLabel: facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
     action: existingProducts.size ? 'update' : 'create', excluded: facts.excluded,
     changes: changePlan?.changes, skipped: facts.skipped,
     rows: facts.products.map(p => ({ productId: p.id, sku: p.sku,
       title: String(facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.title?.value ?? facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.item_name?.value ?? p.name ?? p.sku),
-      existing: existingProducts.has(p.id) })),
+      existing: existingProducts.has(p.id), mode: modes.full.has(p.id) || modes.blocked.has(p.id) ? 'full' as const : 'partial' as const,
+      ...(modes.blocked.has(p.id) ? { blocked: modes.blocked.get(p.id) } : {}),
+      ...(creates.held.has(p.id) ? { blocked: creates.held.get(p.id)!, ...(creates.deleted(p.id) ? { deleted: true as const } : { notListed: true as const }) } : {}),
+      ...(startsAsOf.has(p.id) ? { startsAs: startsAsOf.get(p.id)! } : {}),
+      ...(relist.rows.has(p.id) ? { relist: relist.rows.get(p.id)! } : {}) })),
     issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility, overwrite,
+    ...(removals?.length ? { removals } : {}),
   }
-  return { facts, review, prepared, changePlan, revision: publicationDigest([facts.revision, changePlan ?? prepared, baselineRevision, mode, overwrite]) }
+  return { facts, review, prepared, changePlan, relist: relist.kept, creates: createsRecord(creates, prepared),
+    // New listings — only a review that holds, creates Inactive or starts rows a certain way adds them (others keep their digest).
+    revision: publicationDigest([facts.revision, changePlan ?? prepared, baselineRevision, mode, overwrite, [...creates.held.keys()].filter(creates.deleted).sort(), relist.kept,
+      ...(creates.held.size || creates.inactive.size || creates.startsAs.length || creates.createStatus || options.startAs
+        ? [[...creates.held.keys()].sort(), [...creates.inactive].sort(), creates.startsAs, creates.createStatus, options.startAs ?? null] : [])]) }
+}
+
+/**
+ * New listings — what a publication keeps about the rows it creates: `inactiveProductIds` (the settle marks them paused
+ * once accepted; Amazon also keeps each one's product type and FBA fact for the mark), `createChoiceProductIds` (their
+ * stored Status choice is cleared once accepted), `creates` (the batch view's "Creates GALE-M (inactive)") and, for
+ * Shopify, `createStatus`.
+ */
+function createsRecord(creates: ReturnType<typeof newRowsOf>, prepared: Prepared | null) {
+  const amazon = prepared?.kind === 'amazon' ? prepared : null
+  const inactive = [...creates.inactive].filter(productId => prepared?.products.some(product => product.productId === productId))
+  const createInactive = amazon ? Object.fromEntries(inactive.map(productId => {
+    const sku = amazon.products.find(product => product.productId === productId)?.sku
+    const message = amazon.feed.messages.find(entry => entry.sku === sku)
+    const fulfilment = (message?.attributes?.fulfillment_availability as Array<{ fulfillment_channel_code?: unknown }> | undefined) ?? []
+    return [productId, { productType: message?.productType ?? null, fba: fulfilment.some(entry => String(entry.fulfillment_channel_code ?? '').startsWith('AMAZON')) }]
+  })) : {}
+  return { inactiveProductIds: inactive, createInactive, createChoiceProductIds: creates.choiceIds, creates: creates.startsAs, createStatus: creates.createStatus }
+}
+
+/**
+ * S4 — what the review says about each row it lists again: "Lists GALE-M on ASIN B0NEW (was B0OLD).", and, when Amazon
+ * still holds FBA units labelled for the old ASIN, a warning (never a refusal). The ASIN is the one the create names
+ * (`merchant_suggested_asin`: the product ID cell, editable on a deleted row). `kept` is what the publication stores.
+ */
+async function relistRows(facts: PublicationFacts, prepared: Prepared | null, deletions: ReadonlyMap<string, ListingDeletion>) {
+  const rows = new Map<string, NonNullable<StudioPublishReview['rows'][number]['relist']>>()
+  const kept: PublicationRelist[] = []
+  if (!deletions.size) return { rows, kept }
+  const amazon = prepared?.kind === 'amazon' ? prepared : null
+  const sellerSku = (productId: string) => amazon?.products.find(p => p.productId === productId)?.sku ?? facts.products.find(p => p.id === productId)?.sku ?? ''
+  const asinOf = (productId: string) => {
+    const message = amazon?.feed.messages.find(m => m.sku === sellerSku(productId))
+    const value = (message?.attributes?.merchant_suggested_asin as Array<{ value?: unknown }> | undefined)?.[0]?.value
+    return typeof value === 'string' && value.trim() ? value.trim() : null
+  }
+  for (const product of facts.products) {
+    const deletion = deletions.get(product.id)
+    if (!deletion) continue
+    const asin = facts.scope.channel === 'AMAZON' ? asinOf(product.id) : null
+    let warning: string | null = null
+    if (amazon && asin && deletion.oldReference && asin !== deletion.oldReference) {
+      const units = (await readFbaUnits(amazon.marketplaceId, [{ productId: product.id, sku: sellerSku(product.id) }], { asin: deletion.oldReference })).get(product.id)
+      warning = units ? fbaNewAsinWarning(units, deletion.oldReference) : null
+    }
+    rows.set(product.id, { deletedAt: deletion.at, oldReference: deletion.oldReference, asin, sentence: relistSentence(product.sku, asin, deletion.oldReference, facts.scope.channel), warning })
+    kept.push({ productId: product.id, sku: sellerSku(product.id), deletedAt: deletion.at, oldReference: deletion.oldReference, asin })
+  }
+  return { rows, kept }
 }
 
 /**
@@ -135,14 +310,45 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
  * `batchId`, a review that cannot be sent is kept as a BLOCKED row (never sent, never in flight, never in the history),
  * so the batch can show why; without one, a blocked review is returned unsaved, as before.
  */
-export interface PreviewOptions { batchId?: string; expiresInMs?: number }
+export interface PreviewOptions {
+  batchId?: string
+  expiresInMs?: number
+  /**
+   * Build shape v2 — the rows to review as Full update (every field Nexus manages, ticked and locked). Everything else is
+   * Partial update, exactly as before. Kept with the review, so its submit rebuilds the same plan.
+   */
+  fullProductIds?: string[]
+  /**
+   * New listings (ND4 B) — the products list's "New listings start as": Active or Inactive for every row this review
+   * creates (a row set Not listed stays out). Kept with the review, so its submit rebuilds the same plan.
+   */
+  startAs?: StartAsTarget | null
+}
+
+/** A stored "New listings start as", or null. */
+const storedStartAs = (value: unknown): StartAsTarget | null => value === 'active' || value === 'inactive' ? value : null
+
+/** New listings — the record a publication keeps about the rows it creates (`createsRecord`), only what is set. */
+const createsColumns = (record: ReturnType<typeof createsRecord>, startAs: StartAsTarget | null) => ({
+  ...(record.inactiveProductIds.length ? { inactiveProductIds: record.inactiveProductIds, createInactive: record.createInactive } : {}),
+  ...(record.createChoiceProductIds.length ? { createChoiceProductIds: record.createChoiceProductIds } : {}),
+  ...(record.creates.length ? { creates: record.creates } : {}),
+  ...(record.createStatus ? { createStatus: record.createStatus } : {}),
+  ...(startAs ? { startAs } : {}),
+})
+
+/** The Full update rows a review was asked for, as stored with it: unique, sorted, none = absent. */
+const storedFullIds = (ids: unknown): string[] | undefined => {
+  const list = Array.isArray(ids) ? [...new Set(ids.filter((id): id is string => typeof id === 'string' && !!id && id.length <= 200))].sort() : []
+  return list.length ? list : undefined
+}
 
 /**
  * The review of one destination and what decides whether it may be stored: the publication key, a publication at this
  * destination still waiting for its result (D3: one a person marked checked no longer blocks), and whether only photos
  * may be sent. Reads only (the channel too, through the studio transports); it writes nothing.
  */
-async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean } = {}) {
+async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null } = {}) {
   const plan = await buildReview(productId, scope, options)
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { ...OPEN_PUBLICATION, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
@@ -163,7 +369,9 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     const workspace = await getContentWorkspace(productId, contentScope)
     if (!workspace.initialized) await saveContentWorkspace(productId, contentScope, { draft: workspace.draft, expectedRevision: workspace.revision })
   }
-  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true })
+  const fullProductIds = storedFullIds(options.fullProductIds)
+  const startAs = storedStartAs(options.startAs)
+  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true, fullProductIds, startAs })
   if (options.expiresInMs) plan.review.expiresAt = new Date(Date.now() + options.expiresInMs).toISOString()
   const id = randomUUID()
   const columns = { ...publicationColumns(plan.facts.destination.familyId, scope, plan.facts.destination.aliasKey ?? ''), ...(options.batchId ? { batchId: options.batchId } : {}) }
@@ -173,7 +381,8 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     const kept = { ...review, id }
     await prisma.bulkOperation.create({ data: { id, userId, status: 'BLOCKED', productCount: review.rows.length, changeCount: 0, ...columns,
       completedAt: new Date(), summary: json({ message: blockingIssues(review.issues).map(i => i.message).join('\n') || 'This review cannot be sent.', blocked: true }),
-      changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision, review: kept }) } })
+      changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision, review: kept, ...(fullProductIds ? { fullProductIds } : {}),
+        ...createsColumns(plan.creates, startAs) }) } })
     return kept
   }
   // D3 — a publication a person marked checked is closed (`OPEN_PUBLICATION`) and no longer blocks its destination.
@@ -183,7 +392,9 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     ...columns,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
-      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review }) } })
+      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review, ...(fullProductIds ? { fullProductIds } : {}),
+      ...(plan.relist.length ? { relistProductIds: plan.relist.map(row => row.productId), relist: plan.relist } : {}),
+      ...createsColumns(plan.creates, startAs) }) } })
   return review
 }
 
@@ -314,7 +525,9 @@ export async function claimPublication(productId: string, id: string, body: unkn
   if (sparse && (data.changeVersion !== 1 || !data.changePlan)) throw new WorkspaceScopeError('Refresh this review to choose the fields to publish.')
   if (sparse && (typeof input.selectionToken !== 'string' || input.selectionToken !== data.selection?.token))
     throw new WorkspaceScopeError('Review the exact selected changes before publishing. This selection token is missing or stale.', 400)
-  const plan = await buildReview(productId, data.scope as StudioPublishScope)
+  // Build shape v2 — the same rows as Full update as the review (its stored list), so the same plan is rebuilt; New
+  // listings — and the same "New listings start as".
+  const plan = await buildReview(productId, data.scope as StudioPublishScope, { fullProductIds: storedFullIds(data.fullProductIds), startAs: storedStartAs(data.startAs) })
   if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination, channel settings or content-read evidence changed. Review the current values before publishing.')
   // A photos-only selection is not blocked by other fields' problems (P4c); everything else is, as before.
   const blockers = sparse ? blockingIssues(plan.review.issues, data.selection?.selectedIds) : plan.review.issues.filter(i => i.severity === 'error')
@@ -414,8 +627,9 @@ export async function deliverPublication(claim: ClaimedPublication): Promise<Del
       const { synchronizeContent } = await import('../shopify/content-sync.service.js')
       let requestIndex = 0
       let journal = Promise.resolve()
+      // New listings — a product Shopify does not hold yet is created with the main row's Status (ACTIVE, or a Draft).
       const sent = await synchronizeContent(productId, contentScope, { expectedRevision: revision, expectedRemoteRevision: plan.prepared.remoteRevision,
-        locationId: input.locationId, confirmActive: true }, request => {
+        locationId: input.locationId, confirmActive: true, ...(plan.creates.createStatus ? { createStatus: plan.creates.createStatus } : {}) }, request => {
           const index = requestIndex++
           // The publisher may start independent mutations together. Their durable ordinals remain ordered.
           journal = journal.then(async () => {
@@ -469,9 +683,11 @@ export async function deliverPublication(claim: ClaimedPublication): Promise<Del
     }
   } catch (error) {
     const refused = !providerStarted || (error as { notSent?: boolean })?.notSent === true
+    const text = error instanceof Error ? error.message : String(error)
     result = receipt ? { ...receipt, status: receipt.status === 'SUBMITTED' ? 'SUBMITTED' : 'UNVERIFIED',
-      message: `${receipt.message} Confirmation could not finish: ${error instanceof Error ? error.message : String(error)}` }
-      : { id, status: refused ? 'FAILED' : 'UNVERIFIED', message: `${refused ? 'Nothing was submitted.' : 'Publication could not be verified. Check the channel before retrying:'} ${error instanceof Error ? error.message : String(error)}`, results: [] }
+      message: `${receipt.message} Confirmation could not finish: ${text}` }
+      // Delete and relist (S3) — Amazon's validation refusal of a relist, in plain words beside Amazon's own.
+      : { id, status: refused ? 'FAILED' : 'UNVERIFIED', message: `${refused ? 'Nothing was submitted.' : 'Publication could not be verified. Check the channel before retrying:'} ${refused ? explainAmazonRelist(data, null, [], text) : text}`, results: [] }
   }
   return { result, receipt }
 }

@@ -1,0 +1,2 @@
+/* One-click "Nexus wins" — the switch and its words on one line, under the summary sentence. */
+.row { display: inline-flex; align-items: center; gap: var(--nds-space-8); color: var(--nds-text); cursor: pointer; overflow-wrap: anywhere; }

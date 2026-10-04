@@ -52,6 +52,7 @@ import {
   matrixCellState,
   matrixCellTone,
   matrixGuardDiffers,
+  matrixListingProjection,
   matrixModeWord,
   matrixMoney,
   matrixQtyText,
@@ -110,7 +111,7 @@ const Reported = ({ title }: { title: string }) => (
 )
 /** The ⏸ carries the LEVER on its title: at the contract's 96px a `· paused (listing)` suffix truncated the word (measured). */
 const PauseGlyph = ({ via }: { via: 'POLICY' | 'LISTING' | null }) => (
-  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Paused by the channel policy' : 'Paused by this listing'}>⏸</span>
+  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Stock sync held by the channel policy' : 'Stock sync held by this listing'}>⏸</span>
 )
 
 /* ── Listing ────────────────────────────────────────────────────────────────────────────── */
@@ -122,8 +123,9 @@ const listingFacts = (params: ICellRendererParams): ProjectionFacts | null => {
   const cells = (params as ListingHostParams).matrixFacts?.(params)
   const l = cells?.listing
   if (!l) return null
-  /* The mono id leads, the note takes the right edge — `ProjectionCell`'s own order. */
-  return { state: l.state, detail: l.externalId ?? undefined, note: l.detail ?? undefined }
+  /* The mono id leads, the note takes the right edge — `ProjectionCell`'s own order. The word is the health word, else
+     the sheet's selling word (`matrixListingProjection`, build shape v2). */
+  return { state: matrixListingProjection(l), detail: l.externalId ?? undefined, note: l.detail ?? undefined }
 }
 
 export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProps) {

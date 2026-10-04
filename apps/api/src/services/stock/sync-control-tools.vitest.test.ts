@@ -9,6 +9,9 @@
  * shared stock is refused; a zero & pin on eBay is refused while the account's out-of-stock option is OFF (the Matrix's
  * own check, read once per account and market) and runs when it is ON; a shared eBay variant excluded and included
  * again; a channel policy paused and put back; a location's feeds changed and put back; an FBA location refused.
+ * Build shape v2 (P13): Close offer / Reopen offer are gone from the page's service; a listing whose selling is paused
+ * (Inactive) gets no quantity from Follow, Pin, Zero & Pin or Buffer — on the page and through Claude — while Hold /
+ * Release stock sync still applies to it.
  *
  * Real SQL (PGlite with the production schema); eBay's out-of-stock option and the shared-stock predicate are stood in.
  */
@@ -132,6 +135,9 @@ beforeAll(async () => {
     await list('fbaIt', 'fba', 'AMAZON', 'IT', { fulfillmentMethod: 'FBA', quantity: 7, quantityOverride: 7, followMasterQuantity: false })
     await product('pooled', 'TEST-SKU-S7-POOLED')
     await list('pooledEbay', 'pooled', 'EBAY', 'IT')
+    // Build shape v2 — an eBay listing paused from the product sheet (Inactive): quantity 0 on eBay, held by Nexus.
+    await product('paused', 'TEST-SKU-S7-PAUSED')
+    await list('pausedEbay', 'paused', 'EBAY', 'IT', { quantity: 0, offerClosedAt: new Date(), offerClosedBy: 'sheet person', offerCloseReason: 'sheet-pause', offerActive: false })
     await product('family', 'TEST-SKU-S7-FAM', { isParent: true })
     await product('variant', 'TEST-SKU-S7-FAM-M', { parentId: ids.family })
     ids.member = (await c.sharedListingMembership.create({ data: {
@@ -217,7 +223,7 @@ describe('08 S7 — bulk-listing-stock', { timeout: 60_000 }, () => {
     expect(shown.ok, shown.error).toBe(true)
     expect(shown.preview).toMatchObject({
       verb: 'PAUSE', totals: { listings: 1, sharedVariants: 0, unchanged: 0, leftOut: 0 },
-      cells: [{ sku: 'TEST-SKU-S7-JACKET', channel: 'EBAY', market: 'IT', account: 'Test eBay', kind: 'listing', from: 'Follow', to: 'Follow, paused' }],
+      cells: [{ sku: 'TEST-SKU-S7-JACKET', channel: 'EBAY', market: 'IT', account: 'Test eBay', kind: 'listing', from: 'Follow', to: 'Follow, sync held' }],
     })
     expect((await listing(ids.jacketEbay)).syncPaused).toBe(false)
     const { approvalId } = await askAndRun('bulk-listing-stock', { action: 'PAUSE', listingIds: [ids.jacketEbay] })
@@ -300,7 +306,7 @@ describe('08 S7 — set-stock-policy', { timeout: 60_000 }, () => {
     expect(shown.ok, shown.error).toBe(true)
     expect(shown.preview).toMatchObject({
       policy: { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, account: 'Test eBay' },
-      changes: { 'stock pushes': { from: 'on', to: 'paused' } }, warning: expect.stringContaining('can oversell'),
+      changes: { 'stock pushes': { from: 'on', to: 'held' } }, warning: expect.stringContaining('can oversell'),
     })
     const { approvalId } = await askAndRun('set-stock-policy', { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, pushesPaused: true })
     expect(await inside(() => db().syncChannelPolicy.findMany({ where: { channel: 'EBAY', marketplace: 'IT' } }))).toEqual([expect.objectContaining({ pushesPaused: true, channelConnectionId: ids.ebay })])
@@ -320,5 +326,78 @@ describe('08 S7 — set-stock-policy', { timeout: 60_000 }, () => {
     expect(await preview('set-stock-policy', { locationCode: 'NO-SUCH', feeds: [] })).toMatchObject({ ok: false, error: expect.stringContaining('Location not found') })
     expect(await preview('set-stock-policy', { locationCode: 'TEST-S7-MAIN', feeds: ['NOPE:IT'] })).toMatchObject({ ok: false, error: expect.stringContaining("unknown channel 'NOPE'") })
     expect(await preview('set-stock-policy', { locationCode: 'TEST-S7-MAIN', channel: 'EBAY', marketplace: 'IT', pushesPaused: true })).toMatchObject({ ok: false, error: expect.stringContaining('one per request') })
+  })
+})
+
+describe('build shape v2 — a listing whose selling is paused (Inactive) gets no quantity', { timeout: 60_000 }, () => {
+  const post = async (payload: unknown) => {
+    const response = await app.inject({ method: 'POST', url: '/api/stock/sync-control/actions', payload: payload as never })
+    return { status: response.statusCode, body: response.json() }
+  }
+  const held = () => ({ productId: ids.paused, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, aliasKey: '' })
+  const jacket = () => ({ productId: ids.jacket, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, aliasKey: '' })
+  const queued = (id: string) => inside(() => db().outboundSyncQueue.count({ where: { channelListingId: id } }))
+  const quantityFields = { quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true, offerClosedAt: true }
+  const stored = (id: string) => inside(() => db().channelListing.findUniqueOrThrow({ where: { id }, select: quantityFields }))
+
+  it('the page: Close offer and Reopen offer are gone, and say where they went', async () => {
+    const { OFFER_ACTIONS_MOVED } = await import('./sync-control-actions.service.js')
+    for (const action of ['CLOSE_OFFER', 'REOPEN_OFFER']) expect(await post({ action, listings: [held()] })).toEqual({ status: 400, body: { error: OFFER_ACTIONS_MOVED } })
+    expect(OFFER_ACTIONS_MOVED).toMatch(/Status column/)
+    expect(await post({ action: 'NOPE', listings: [held()] })).toEqual({ status: 400, body: { error: "unknown action 'NOPE'" } })
+  })
+
+  it('the page: Follow, Pin, Zero & Pin and Buffer leave it alone and count it; nothing is queued for it', async () => {
+    const { ALL_INACTIVE } = await import('./sync-control-actions.service.js')
+    stand.outOfStock = 'ON'
+    const before = await stored(ids.pausedEbay)
+    for (const action of ['FOLLOW', 'PIN', 'ZERO_PIN']) {
+      expect(await post({ action, listings: [held()] }), action).toEqual({ status: 400, body: { error: ALL_INACTIVE, skippedInactive: 1 } })
+    }
+    // Mixed with a listing that sells: that one is written, the paused one is counted and left alone.
+    expect(await post({ action: 'BUFFER', buffer: 1, listings: [held(), jacket()] })).toMatchObject({ status: 200, body: { updated: 1, skippedInactive: 1 } })
+    expect(await stored(ids.pausedEbay)).toEqual(before)
+    expect(await queued(ids.pausedEbay)).toBe(0)
+    await post({ action: 'BUFFER', buffer: 0, listings: [jacket()] })
+  })
+
+  it('the page: Hold / Release stock sync still applies to it (a Nexus flag; nothing is sent)', async () => {
+    expect(await post({ action: 'PAUSE', listings: [held()] })).toMatchObject({ status: 200, body: { updated: 1 } })
+    expect((await listing(ids.pausedEbay)).syncPaused).toBe(true)
+    expect(await post({ action: 'RESUME', listings: [held()] })).toMatchObject({ status: 200, body: { updated: 1 } })
+    expect((await listing(ids.pausedEbay)).syncPaused).toBe(false)
+    expect(await queued(ids.pausedEbay)).toBe(0)
+  })
+
+  it('Claude (bulk-listing-stock): a named one is refused for a quantity action, a product\'s is left out; hold still offered', async () => {
+    const before = await stored(ids.pausedEbay)
+    for (const action of ['FOLLOW', 'PIN', 'ZERO_PIN']) {
+      expect(await preview('bulk-listing-stock', { action, listingIds: [ids.pausedEbay] }), action).toMatchObject({ ok: false, error: expect.stringContaining('is Inactive (selling is paused)') })
+    }
+    expect(await preview('bulk-listing-stock', { action: 'BUFFER', buffer: 2, productIds: [ids.paused] })).toMatchObject({ ok: false, error: expect.stringContaining('every row named is left out') })
+    const hold = await preview('bulk-listing-stock', { action: 'PAUSE', listingIds: [ids.pausedEbay] })
+    expect(hold.ok, hold.error).toBe(true)
+    expect(hold.preview.summary).toMatch(/^Hold the stock sync of 1 row/)
+    expect(await stored(ids.pausedEbay)).toEqual(before)
+  })
+
+  it('an eBay listing an OLDER Claude close paused (pinned at 0 + endedAt, no hold) reads Inactive and takes no quantity, here and through Claude', async () => {
+    // The presence columns are a raw-SQL migration (20260913180000_pr_presence): the disposable schema lacks them.
+    await database.db.exec('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "endedAt" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "endedBy" TEXT, ADD COLUMN IF NOT EXISTS "endedReason" TEXT')
+    const old = await inside(async () => {
+      const product = await db().product.create({ data: { sku: 'TEST-SKU-S7-OLDCLOSE', name: 'TEST-SKU-S7-OLDCLOSE', basePrice: '10.00' } })
+      const row = await db().channelListing.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT',
+        channelConnectionId: ids.ebay, listingStatus: 'ACTIVE', isPublished: true, quantity: 0, quantityOverride: 0, followMasterQuantity: false } as never })
+      await db().$executeRawUnsafe('UPDATE "ChannelListing" SET "endedAt" = now(), "endedBy" = $2 WHERE id = $1', row.id, 'claude')
+      return { productId: product.id, listingId: row.id }
+    })
+    const { computeRows, ALL_INACTIVE } = await import('./sync-control-actions.service.js')
+    expect((await inside(() => computeRows())).find((r) => r.sku === 'TEST-SKU-S7-OLDCLOSE')).toMatchObject({ mode: 'CLOSED' })
+    const before = await stored(old.listingId)
+    const coordinate = { productId: old.productId, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, aliasKey: '' }
+    expect(await post({ action: 'FOLLOW', listings: [coordinate] })).toEqual({ status: 400, body: { error: ALL_INACTIVE, skippedInactive: 1 } })
+    expect(await preview('bulk-listing-stock', { action: 'FOLLOW', listingIds: [old.listingId] })).toMatchObject({ ok: false, error: expect.stringContaining('is Inactive (selling is paused)') })
+    expect(await stored(old.listingId)).toEqual(before)
+    expect(await queued(old.listingId)).toBe(0)
   })
 })

@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { ACTION_HELP, COLUMN_HELP, CONTROL_HELP, MODE_HELP, MODE_LABEL, PAGE_SIZES } from './sync-control-shared'
+import { ACTION_HELP, BULK_ACTIONS, COLUMN_HELP, CONTROL_HELP, INACTIVE_ROW, MODE_HELP, MODE_LABEL, PAGE_SIZES, actionCounts, actionLabel } from './sync-control-shared'
 
 // Resolved from THIS file, not cwd: the suite runs from the repo root and from
 // apps/web, and a cwd-relative path silently fails in one of them.
@@ -28,7 +28,7 @@ const SURFACES = [
   'SyncProductsGrid.tsx',
   'product/[masterId]/ProductDetailClient.tsx',
 ]
-const ACTIONS = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
+const ACTIONS = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE', 'BUFFER']
 
 describe('SCT.1 — action help', () => {
   it('covers every bulk action on every surface', () => {
@@ -42,14 +42,57 @@ describe('SCT.1 — action help', () => {
   it('tells the operator how to undo the destructive ones', () => {
     expect(ACTION_HELP.ZERO_PIN).toMatch(/Set Follow/)
     expect(ACTION_HELP.PIN).toMatch(/Set Follow/)
-    expect(ACTION_HELP.PAUSE).toMatch(/Resume/)
+    expect(ACTION_HELP.PAUSE).toMatch(/Release stock sync/)
   })
 
-  it('Close offer states the reviews/ASIN/other-markets safety + FBA refusal (SCT.6)', () => {
-    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/reviews/i)
-    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/FBA/)
-    expect(ACTION_HELP.CLOSE_OFFER).toMatch(/Reopen offer/)
-    expect(ACTION_HELP.REOPEN_OFFER).toMatch(/Follow/)
+  it('build shape v2: Close offer and Reopen offer are gone from every surface; selling pauses in the product sheet', () => {
+    expect(ACTION_HELP.CLOSE_OFFER).toBeUndefined()
+    expect(ACTION_HELP.REOPEN_OFFER).toBeUndefined()
+    expect(BULK_ACTIONS.map(([a]) => a)).toEqual(['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'EXCLUDE', 'INCLUDE'])
+    for (const f of SURFACES) {
+      const src = read(f)
+      expect(src, f).not.toMatch(/CLOSE_OFFER|REOPEN_OFFER|Close offer|Reopen offer/)
+      // One list of actions for every surface: no screen keeps its own copy.
+      expect(src, f).toMatch(/BULK_ACTIONS\.map/)
+      expect(src, f).not.toMatch(/const BULK_ACTIONS/)
+    }
+    // The help never sends anyone to Seller Central or to Sync Control to stop selling in one market.
+    expect(Object.values(ACTION_HELP).join(' ')).not.toMatch(/Seller Central|close that offer/)
+    expect(ACTION_HELP.ZERO_PIN).toMatch(/Status column/)
+  })
+
+  it('Pause / Resume read "Hold stock sync" / "Release stock sync", and the state reads "Sync held"', () => {
+    expect(Object.fromEntries(BULK_ACTIONS)).toMatchObject({ PAUSE: 'Hold stock sync', RESUME: 'Release stock sync' })
+    expect(actionLabel('PAUSE')).toBe('Hold stock sync')
+    expect(actionLabel('RESUME')).toBe('Release stock sync')
+    expect(actionLabel('BUFFER')).toBe('Buffer')
+    expect(MODE_LABEL.PAUSED).toBe('Sync held')
+    expect(MODE_LABEL.PAUSED_POLICY).toBe('Sync held (policy)')
+    // Holding the stock sync never stops selling; the help says where selling stops.
+    expect(ACTION_HELP.PAUSE).toMatch(/does not stop selling/)
+    expect(ACTION_HELP.PAUSE).toMatch(/Status column to Inactive/)
+    for (const f of SURFACES) expect(read(f), f).not.toMatch(/\['PAUSE', 'Pause'\]|\['RESUME', 'Resume'\]/)
+  })
+
+  it('an Inactive row (selling paused) is read-only, with the words that say where to change it', () => {
+    expect(MODE_LABEL.CLOSED).toBe('Inactive')
+    expect(INACTIVE_ROW).toBe("Inactive — change it in the product sheet's Status column")
+    expect(MODE_HELP.CLOSED.startsWith(INACTIVE_ROW)).toBe(true)
+    expect(MODE_HELP.CLOSED).not.toMatch(/Reopen|SCT\.6|Closed/)
+    // The two surfaces that list single rows never let one be selected, and show the note under its mode.
+    for (const f of ['SyncControlClient.tsx', 'product/[masterId]/ProductDetailClient.tsx']) {
+      const src = read(f)
+      expect(src, f).toMatch(/rowSelectable=\{\(r\) => r\.mode !== 'FBA' && r\.mode !== 'CLOSED'\}/)
+      expect(src, f).toMatch(/r\.mode !== 'CLOSED' && r\.productId/)
+      expect(src, f).toMatch(/r\.mode === 'CLOSED' && <span className=\{styles\.inactiveNote\}>\{INACTIVE_NOTE\}/)
+    }
+    expect(read('SyncProductsGrid.tsx')).toMatch(/r\.c\.mode === 'CLOSED' && <span className=\{styles\.inactiveNote\}>\{INACTIVE_NOTE\}/)
+    expect(CONTROL_HELP.selectAll).toMatch(/Inactive rows cannot be selected/)
+  })
+
+  it('a quantity action names the Inactive listings it left alone', () => {
+    expect(actionCounts({ unchanged: 1, skippedFba: 0, skippedInactive: 2 })).toBe(", unchanged 1, FBA skipped 0, 2 Inactive left alone (change those in the product sheet's Status column)")
+    expect(actionCounts({})).toBe(', unchanged 0, FBA skipped 0')
   })
 
   it('states what Zero & Pin does NOT touch, so it is not mistaken for a delist', () => {

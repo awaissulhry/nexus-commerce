@@ -29,7 +29,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { Tip } from './SyncTip'
 import SyncExcelBar from './SyncExcelBar'
 import {
-  ebayZeroRefusal,
+  ebayZeroRefusal, BULK_ACTIONS, INACTIVE_NOTE, actionLabel, actionCounts,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES, mapDensity,
   type Density, type Mode, type Row, type ProductMaster,
 } from './sync-control-shared'
@@ -64,18 +64,6 @@ interface Props {
   onSearch: (v: string) => void
 }
 
-const BULK_ACTIONS: Array<[string, string]> = [
-  ['FOLLOW', 'Set Follow'],
-  ['PIN', 'Pin'],
-  ['PAUSE', 'Pause'],
-  ['RESUME', 'Resume'],
-  ['ZERO_PIN', 'Zero & Pin'],
-  ['CLOSE_OFFER', 'Close offer'],
-  ['REOPEN_OFFER', 'Reopen offer'],
-  ['EXCLUDE', 'Exclude'],
-  ['INCLUDE', 'Include'],
-]
-
 /** A master is all-FBA (nothing to act on) when every listing is FBA. */
 function allFba(m: ProductMaster): boolean {
   return m.rollup.listings > 0 && (m.rollup.modeCounts.FBA ?? 0) === m.rollup.listings
@@ -95,7 +83,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   // still be acted on while hidden. Narrowing the list clears the selection.
   useEffect(() => { setSelected(new Set()) }, [search, family])
   const confirm = useConfirm()
-  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  // Shared stock step 3 — Pin, Zero & Pin, Hold stock sync and Exclude can end by themselves.
   const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
 
   const url = useMemo(() => {
@@ -183,13 +171,13 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       filters.modes.length ? `mode ${filters.modes.join('/')}` : '',
       filters.drift ? 'drifted rows only (evaluated at apply time — drift moves as syncs converge)' : '',
     ].filter(Boolean)
-    const title = `${action.replace('_', ' ')} — ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}`
+    const title = `${actionLabel(action)} — ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}`
     const description =
         `Applies to every non-FBA listing across ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}` +
         (scopeBits.length ? ` matching your filters (${scopeBits.join(', ')}) — other markets/listings stay untouched.` : ` (all channels + markets).`) +
-        ` FBA stays Amazon-managed.` +
+        ` FBA stays Amazon-managed, and an Inactive listing (selling paused) gets no quantity.` +
         (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there.' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume.' : '')
+        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Release stock sync.' : '')
     // Shared stock step 3 — these four can end by themselves (a chosen number needs shared variants alone,
     // and a product always carries its listings, so the product view never offers one).
     let extra: Partial<SyncActionAnswer> = {}
@@ -208,43 +196,6 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       return [gid, ...(p?.memberMasterIds ?? [])]
     }))]
 
-    // SCT.6b — Close/Reopen run one FAMILY per request (1-2 Amazon calls per
-    // row): one long request would outlive the browser timeout and
-    // false-report failure while the server kept working.
-    if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
-      const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
-      try {
-        for (let i = 0; i < expandedMasterIds.length; i++) {
-          notify(`${action.replace('_', ' ')}: product ${i + 1}/${expandedMasterIds.length}…`)
-          const res = await fetch(`${API}/api/stock/sync-control/actions`, {
-            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action, masterIds: [expandedMasterIds[i]],
-              scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
-            }),
-          })
-          const d = await res.json()
-          if (!res.ok) {
-            notify(`${action} stopped at product ${i + 1}/${expandedMasterIds.length}: ${d?.error ?? `HTTP ${res.status}`} — selection kept, run again to continue`)
-            return
-          }
-          agg.updated += d.updated ?? 0; agg.skippedFba += d.skippedFba ?? 0; agg.unchanged += d.unchanged ?? 0
-          if (d.error) {
-            notify(`${action} PARTIAL at product ${i + 1}/${expandedMasterIds.length} — ${d.error}`)
-            return
-          }
-        }
-        notify(`${action}: updated ${agg.updated}, unchanged ${agg.unchanged}, FBA skipped ${agg.skippedFba}`)
-        setSelected(new Set())
-        emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-products', masters: expandedMasterIds.length } })
-        onChanged()
-      } catch (e) {
-        notify(`${action} stopped: ${e instanceof Error ? e.message : String(e)} — selection kept, run again to continue`)
-      } finally {
-        setBusy(false)
-      }
-      return
-    }
     try {
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
         method: 'POST',
@@ -268,7 +219,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
           description:
             `${d.error} Example: ${(d.preview ?? []).slice(0, 3).map((p2: { sku: string; addedMarkets: string[] }) => `${p2.sku} → also ${p2.addedMarkets.join('/')}`).join(' · ')}` +
             `${(d.preview ?? []).length > 3 ? ` · +${(d.preview ?? []).length - 3} more` : ''}. Proceed with the full EU scope?`,
-          confirmLabel: `${action.replace('_', ' ')} on all EU markets`,
+          confirmLabel: `${actionLabel(action)} on all EU markets`,
         })
         if (!okEu) { setBusy(false); return }
         const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
@@ -292,15 +243,15 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         // Partial: some rows committed, then a later chunk failed. KEEP the
         // selection — the message says "re-run to continue", so the re-run
         // must be one click, not a re-hunt for the same products.
-        notify(`${action} PARTIAL — ${d.error}`)
+        notify(`${actionLabel(action)} PARTIAL — ${d.error}`)
       } else {
-        notify(`${action}: updated ${d.updated}, unchanged ${d.unchanged ?? 0}, FBA skipped ${d.skippedFba ?? 0}${d.euExpanded ? `, incl. ${d.euExpanded} sibling EU row(s)` : ''}${d.scopedOut ? `, ${d.scopedOut} outside filters untouched` : ''}${d.recascadeQueued ? `, recascading ${d.recascadeQueued} product(s)` : ''}`)
+        notify(`${actionLabel(action)}: updated ${d.updated}${actionCounts(d)}`)
         setSelected(new Set())
       }
       emitInvalidation({ type: 'listing.updated', meta: { source: 'sync-control-products', masters: selectedMasterIds.length } })
       onChanged()
     } catch (e) {
-      notify(`${action} failed: ${e instanceof Error ? e.message : String(e)}`)
+      notify(`${actionLabel(action)} failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
@@ -321,7 +272,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     },
     {
       key: 'sync', label: <Hdr k="sync" label="Sync" />, width: 170,
-      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : r.kind === 'child' ? <><ModePill mode={r.c.mode} />{endsAtWords(r.c.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.c.endsAt)}</span>}</> : null,
+      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : r.kind === 'child' ? <><ModePill mode={r.c.mode} />{endsAtWords(r.c.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.c.endsAt)}</span>}{r.c.mode === 'CLOSED' && <span className={styles.inactiveNote}>{INACTIVE_NOTE}</span>}</> : null,
     },
     {
       key: 'intended', label: <Hdr k="intended" label="Intended" />, align: 'right', width: 80,

@@ -45,9 +45,10 @@ describe('prepareEbayInventoryChanges', () => {
     expect(send.fieldWrites).toEqual({ family: [{ field: 'title', value: { state: 'value', value: 'Winter jacket' } }] })
   })
 
-  it('with no accepted record a differing channel value is DIFFERS: selectable, never by default', () => {
+  it('with no accepted record a differing channel value is DIFFERS, ticked (Nexus wins, Owner 2026-10-04) with its warning', () => {
     const plan = prepareEbayInventoryChanges({ owner, destination, ours: ours({ description: '<p>New</p>' }), live: live(), baselineValues: new Map() })
-    expect(byField(plan).description).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: false })
+    expect(byField(plan).description).toMatchObject({ status: 'DIFFERS', selectable: true, selectedByDefault: true,
+      replaces: { kind: 'never_published', channel: 'Warm', nexus: 'New', sentence: 'Not published from Nexus before. eBay has Warm — Publish sets New.' } })
   })
 
   it('an unread group: every row CANNOT_COMPARE, and nothing can be compiled', () => {

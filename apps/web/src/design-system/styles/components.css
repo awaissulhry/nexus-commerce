@@ -2928,6 +2928,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-confirm-error, .nds-inline-error { color: var(--nds-danger-text); }
 .nds-confirm-warn { color: var(--nds-warning-text); }
 .nds-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); margin-top: var(--nds-space-14); }
+/* ConfirmPhraseField's "Matches." glyph sits in the hint's line (the app's reset makes an svg a block). */
+.nds-confirm-phrase-ok { display: inline; vertical-align: -2px; margin-right: var(--nds-space-4); }
 .nds-disclosure.warning { border-color: var(--nds-warning); }
 .nds-disclosure.danger { border-color: var(--nds-danger); }
 .nds-disclosure.warning > .nds-disclosure-summary { color: var(--nds-warning-text); }
@@ -2970,6 +2972,14 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
    colour like a held ScopeBar chip — a greyed label would fail contrast and hide the reason. */
 .nds-combo-pop button.held { cursor: default; }
 .nds-combo-pop button.held .nds-listbox-trailing { font-style: italic; }
+/* A panel option with a `note` (ListboxPanel, sheet publish parity 2026-10-04): the label and one short line under it in
+   one text column — who set a waiting value, a warning, why a held option is refused. `--nds-text-2` (8.7:1 on every
+   ground) at the hint size, regular weight, so a selected option's bold link colour stays on the label only. */
+.nds-listbox-text { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.nds-listbox-note { font-size: var(--nds-font-size-xs-plus); font-weight: 400; line-height: 1.35; color: var(--nds-text-2); white-space: normal; overflow-wrap: anywhere; }
+.nds-combo-pop button.has-note { padding-block: 6px; }
+/* A held option's note is its refusal: italic, as a held option's trailing text already is. */
+.nds-combo-pop button.held .nds-listbox-note { font-style: italic; }
 
 /* ScopeBar variant="menu": one trigger in the chip's own box (`.nds-scope`, 28px), the coordinate
    controls pinned right as the chip track's `flex: 1` used to do. */

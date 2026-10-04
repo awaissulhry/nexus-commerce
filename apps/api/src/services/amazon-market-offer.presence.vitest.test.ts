@@ -57,6 +57,31 @@ describe('acknowledged offer lifecycle and ONE fail-closed FBA predicate', () =>
       expect(s.patch).not.toHaveBeenCalled(); expect(s.update).not.toHaveBeenCalled()
     })
   }
+  // Build shape v2 (P3): the listing-action engine's Pause / Resume offer may close an FBA offer (allowFba). Only the
+  // offer moves: the close patch names purchasable_offer alone, and the reopen neither rejoins the pool nor queues stock.
+  it('allowFba closes an FBA offer by its offer selector only, and records the closure', async () => {
+    s.findFirst.mockResolvedValue({ ...row(), fulfillmentMethod: 'FBA' })
+    const r = await closeMarketOffers({ targets: [c], actor: 'user', reason: 'sheet-pause', allowFba: true })
+    expect(r).toMatchObject({ updated: 1, skippedFba: 0, results: [{ action: 'CLOSED', fba: true }] })
+    expect(s.patch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ op: 'delete', value: [{ marketplace_id: 'it', currency: 'EUR' }] }))
+    expect(JSON.stringify(s.patch.mock.calls)).not.toMatch(/fulfillment_availability|quantity/)
+    expect(s.update.mock.calls[0][0].data).toMatchObject({ offerClosedAt: expect.any(Date), offerCloseReason: 'sheet-pause', offerCloseSnapshot: expect.objectContaining({ fulfillment: 'FBA' }) })
+  })
+  it('allowFba reopens an FBA offer: the saved offer is replayed, no Set Follow, no quantity queued, no EU guard read', async () => {
+    s.findFirst.mockResolvedValue({ ...row(), fulfillmentMethod: 'FBA', offerClosedAt: new Date(), followMasterQuantity: false, quantityOverride: 3 })
+    const r = await reopenMarketOffers({ targets: [c], actor: 'user', allowFba: true })
+    expect(r).toMatchObject({ updated: 1, results: [{ action: 'REOPENED', fba: true }] })
+    expect(s.patch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ op: 'replace', value: offer }))
+    const data = s.update.mock.calls[0][0].data
+    expect(data).toEqual({ offerClosedAt: null, offerActive: true, offerClosedBy: null, offerCloseReason: null })
+    expect(s.queue).not.toHaveBeenCalled()
+    expect(s.findMany).not.toHaveBeenCalled()
+  })
+  it('without allowFba an FBA row is still refused (Sync Control and every other caller)', async () => {
+    s.findFirst.mockResolvedValue({ ...row(), fulfillmentMethod: 'FBA' })
+    expect((await closeMarketOffers({ targets: [c], actor: 'user' })).skippedFba).toBe(1)
+    expect(s.patch).not.toHaveBeenCalled()
+  })
   it('canonical push predicate retains stock/offer evidence and FBM positive control', () => {
     expect(isFbaCoordinate(row())).toBe(false)
     expect(isFbaCoordinate(row(), row().product, { fbaStockQty: 1 })).toBe(true)

@@ -14,9 +14,12 @@
  * "a column the sheet builds itself": listed in Customise but not counted, kept by a narrowing filter, shown on a saved
  * layout that predates it. Its Customise group is its own ("Publish").
  */
+import { useEffect, useRef } from 'react'
+import { LAST_PUBLISH_KIND_LABEL } from '@nexus/shared/publication-history'
 import type { StudioPublicationStatus, StudioRowLastPublish, StudioRowPublicationStatus } from '@nexus/shared/studio-publication'
 import { CREATE_FIELD, PublishStatusCell, cellDetailKeys, publishCellModel, type ColDef, type ICellRendererParams, type PublishIssue, type PublishStatusCellParams, type PublishStatusValue } from '@/design-system/grid'
 import { offerDraftEditedSince } from './offerDrafts'
+import { historyDeepLinkPatch } from '@/app/products/_publication/history/runActions'
 
 export const PUBLISH_COLUMN = 'publish:scope'
 export const PUBLISH_COLUMN_LABEL = 'Last publish'
@@ -150,6 +153,14 @@ export function familyCounts(rows: readonly StudioRowPublicationStatus[], public
 }
 
 /**
+ * The card's first words for a row's last send (build shape v2): "Pause offer", "Full update", "End listing" — the card
+ * then leads with "Pause offer · Accepted · 10:42 · Awais". A plain content publish says nothing extra: null.
+ */
+export function lastPublishKindLabel(kind: StudioRowLastPublish['kind']): string | null {
+  return kind && kind !== 'publish' ? LAST_PUBLISH_KIND_LABEL[kind] ?? null : null
+}
+
+/**
  * One row's cell value. `undefined` = the first read has not answered (the cell shows a skeleton, never a dash that
  * would claim "never published"). A row that belongs to a different listing than the one read is said so.
  *
@@ -177,6 +188,7 @@ export function rowPublishValue(row: PublishRowLike, read: PublishRead, lookup: 
     ...(offerDraftEditedSince({ rowId: row.id, values: row.values }, last.at) ? { editedSince: true } : {}),
     last: {
       publicationId: last.publicationId,
+      ...(lastPublishKindLabel(last.kind) ? { kindLabel: lastPublishKindLabel(last.kind) } : {}),
       status: family && family.total > 1 ? last.status : rowStatus(last),
       outcome: last.outcome,
       at: last.at,
@@ -213,6 +225,66 @@ export function publishCellText(value: PublishCellValue, now: number = Date.now(
   const model = publishCellModel(value, now)
   if (model.state !== 'status') return ''
   return model.shortTime ? `${model.meta.label} · ${model.shortTime}` : model.meta.label
+}
+
+/**
+ * The card's "See publish history": the studio's Activity tab on this publish — `?tab=activity&view=publishes&run=<id>`
+ * and `&sku=<sku>` for the row it was opened from (the history drawer expands that SKU; `parseHistoryDeepLink`,
+ * history/runActions.ts). Every other key of the address (scope, market, account, languages) is kept.
+ */
+export function publishHistorySearch(search: string, runId: string, sku: string | null): string {
+  const params = new URLSearchParams(search)
+  params.set('tab', 'activity')
+  for (const [key, value] of Object.entries(historyDeepLinkPatch({ view: 'publishes', run: runId, sku }))) {
+    if (value === undefined) params.delete(key)
+    else params.set(key, value)
+  }
+  return `?${params.toString()}`
+}
+
+// ── A selling change in flight (build shape v2, P12 item 3) ──────────────────────────────────────────────────────
+
+const SELLING_KINDS: ReadonlySet<string> = new Set(['pause', 'resume', 'end', 'relist', 'delete'])
+/** A send that has not settled: waiting its turn in the batch, being sent, or waiting for the channel. */
+const STILL_SENDING: ReadonlySet<string> = new Set(['QUEUED', 'PUBLISHING', 'SUBMITTED'])
+/** How often the sheet reads again while a selling change is in flight (the tab visible). */
+export const SELLING_REREAD_MS = 5_000
+/** A selling change still "sending" this long after it was sent has stopped without a word: the history says check it. */
+export const SELLING_REREAD_WINDOW_MS = 30 * 60_000
+
+/**
+ * A selling change on this destination has not settled: some row's last send is a Pause offer, Resume offer, End
+ * listing, Relist or Delete listing that is still sending, and was sent within `SELLING_REREAD_WINDOW_MS`. A selling
+ * change does not announce its result to the sheet (only a content publication sends `publication.status_changed`), so
+ * the "Last publish" column must read again by itself until it settles, or it would say "Sending" until a reload.
+ */
+export function sellingChangeInFlight(status: StudioPublicationStatus | null, now: number = Date.now()): boolean {
+  if (!status) return false
+  return status.rows.some(row => {
+    const last = row.last
+    if (!last || !last.kind || !SELLING_KINDS.has(last.kind) || !STILL_SENDING.has(last.status.trim().toUpperCase())) return false
+    const at = Date.parse(last.at)
+    return !Number.isFinite(at) || now - at <= SELLING_REREAD_WINDOW_MS
+  })
+}
+
+/**
+ * Keeps the "Last publish" column reading again every `everyMs` while a selling change is in flight
+ * (`sellingChangeInFlight`) and the tab is visible; it stops by itself once the read says the change settled. `reRead`
+ * is the sheet's own read of the publication status (one reader for the mark, the toast and every row).
+ */
+export function useSellingChangeReRead(status: StudioPublicationStatus | null, reRead: () => void, everyMs: number = SELLING_REREAD_MS): boolean {
+  const inFlight = sellingChangeInFlight(status)
+  const latest = useRef(reRead)
+  latest.current = reRead
+  useEffect(() => {
+    if (!inFlight) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') latest.current()
+    }, everyMs)
+    return () => window.clearInterval(timer)
+  }, [inFlight, everyMs])
+  return inFlight
 }
 
 /** Two values that draw the same cell — a re-read of unchanged facts must not repaint the column. */

@@ -1,0 +1,4 @@
+/* One-click publish — the ONE counted button ("Publish 41 changes to 6 markets · skip 1 with problems") wraps its words
+   on a phone instead of running past the window's edge (DS `wrap`; the sm tier's fixed height becomes a minimum). One
+   step more specific than `.nds-btn.sm`, so the order the stylesheets load in does not matter. */
+.oneButton:global(.nds-btn.sm) { height: auto; min-height: var(--nds-control-h-sm); padding-block: var(--nds-space-4); }

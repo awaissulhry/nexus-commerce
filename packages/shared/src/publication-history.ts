@@ -8,10 +8,16 @@
  * system's `publishStatus.ts` labels). `state` is the plain group a list filters by. A product inside a run carries a
  * per-SKU `result` from the same design-system table (`PUBLISH_RESULT_STATUSES`). The server never invents a result:
  * what the channel has not said is WAITING or UNKNOWN, never a success.
+ *
+ * Build shape v2 (P7): a fifth source, `listing-action` — the selling changes the listing-action engine runs (Pause
+ * offer, Resume offer, End listing, Relist, Delete listing; apps/api/src/services/listings/listing-action.service.ts).
+ * One Publish that sends content AND selling changes is a publication batch: the history shows it as ONE run (id
+ * `listing-action:batch:<batchId>`, `kinds` = every change inside it) whose detail lists its parts (`children`).
  */
+import { LISTING_ACTION_LABEL, type ListingAction } from './listing-actions.js'
 import type { StudioChannelIssue, StudioPublishChange } from './studio-publication.js'
 
-export const HISTORY_SOURCES = ['studio', 'amazon-flat-file', 'ebay-flat-file', 'photos'] as const
+export const HISTORY_SOURCES = ['studio', 'listing-action', 'amazon-flat-file', 'ebay-flat-file', 'photos'] as const
 export type HistorySource = (typeof HISTORY_SOURCES)[number]
 
 /**
@@ -23,8 +29,46 @@ export type HistorySource = (typeof HISTORY_SOURCES)[number]
 export const HISTORY_STATES = ['in_progress', 'succeeded', 'partial', 'failed', 'needs_check'] as const
 export type HistoryState = (typeof HISTORY_STATES)[number]
 
-export const HISTORY_KINDS = ['update', 'create', 'photos', 'end', 'pause', 'resume', 'relist'] as const
+/**
+ * What a run (or one part of a run) changed.
+ * - `update`: today's Publish — only the changed fields (Partial update). `full_update`: every field Nexus manages was
+ *   sent again (the sheet's Action column, Full update). `create`: a new listing. `photos`: photos only.
+ * - `pause` / `resume` / `end` / `relist` / `delete`: a selling change (`LISTING_ACTION_LABEL` names them: Pause offer,
+ *   Resume offer, End listing, Relist, Delete listing).
+ */
+export const HISTORY_KINDS = ['update', 'create', 'full_update', 'photos', 'pause', 'resume', 'end', 'relist', 'delete'] as const
 export type HistoryKind = (typeof HISTORY_KINDS)[number]
+
+/** The order one Publish sends its parts in (build shape v2): Resume/Relist → content → Inactive → Ended → Delete. */
+export const HISTORY_SEND_ORDER: readonly HistoryKind[] = ['resume', 'relist', 'create', 'full_update', 'update', 'photos', 'pause', 'end', 'delete']
+
+/**
+ * The sheet's "Last publish" column (GET …/studio-publication-status): what the row's newest publish was, so the card
+ * can be titled "Pause offer · Accepted · 10:42 · Awais". `publish` = a content publish (Partial update, or a new
+ * listing); `full_update` = the row was sent as a Full update; the rest are selling changes.
+ */
+export type LastPublishKind = 'publish' | 'full_update' | ListingAction
+export const LAST_PUBLISH_KIND_LABEL: Readonly<Record<LastPublishKind, string>> = { publish: 'Publish', full_update: 'Full update', ...LISTING_ACTION_LABEL }
+
+/**
+ * The history's "What" filter: four groups that together hold every kind exactly once. A run of several parts (one
+ * Publish) matches a group when ANY of its parts does.
+ */
+export const HISTORY_WHAT = ['updates', 'selling', 'deletes', 'photos'] as const
+export type HistoryWhat = (typeof HISTORY_WHAT)[number]
+export const HISTORY_WHAT_LABEL: Readonly<Record<HistoryWhat, string>> = { updates: 'Updates', selling: 'Selling changes', deletes: 'Deletes', photos: 'Photos' }
+export const HISTORY_WHAT_KINDS: Readonly<Record<HistoryWhat, readonly HistoryKind[]>> = {
+  updates: ['update', 'create', 'full_update'],
+  selling: ['pause', 'resume', 'end', 'relist'],
+  deletes: ['delete'],
+  photos: ['photos'],
+}
+/** The group a kind belongs to. */
+export const whatOfKind = (kind: HistoryKind): HistoryWhat =>
+  HISTORY_WHAT.find(what => HISTORY_WHAT_KINDS[what].includes(kind)) ?? 'updates'
+/** Every kind the chosen groups hold; an empty choice = every kind. */
+export const kindsOfWhat = (what: readonly HistoryWhat[]): HistoryKind[] =>
+  what.length ? HISTORY_KINDS.filter(kind => what.includes(whatOfKind(kind))) : [...HISTORY_KINDS]
 
 /** Per product. Disjoint: their sum is the run's product count. */
 export interface HistoryCounts {
@@ -51,6 +95,11 @@ export interface HistoryRun {
   /** The source's own status, as stored. */
   status: string
   kind: HistoryKind
+  /**
+   * A run of several parts (one Publish with content and selling changes): every kind inside it, in send order
+   * (`HISTORY_SEND_ORDER`); `kind` is the first of them. Absent = the run is one change, `kind`.
+   */
+  kinds?: HistoryKind[]
   /** The family (parent) product; null when the run is not tied to one product family. */
   productId: string | null
   familySku: string | null
@@ -144,6 +193,10 @@ export interface HistoryProduct {
   issues: StudioChannelIssue[]
   /** The change rows the person chose for this product (current, last accepted, channel at review time). */
   changes?: StudioPublishChange[]
+  /** In a run of several parts: what this product's part changed (absent = the run's `kind`). */
+  kind?: HistoryKind
+  /** In a run of several parts: the part (a run of `HistoryRunDetail.children`) this result belongs to. */
+  runId?: string
 }
 
 export interface HistoryRunDetail {
@@ -155,6 +208,12 @@ export interface HistoryRunDetail {
   hasRequest: boolean
   /** The channel's answer as Nexus recorded it; null = none recorded. */
   rawResponse: unknown | null
+  /**
+   * A run of several parts (one Publish): each part as a run of its own, in send order — a content publication per
+   * destination (open it by its own id for its fields and request) and a selling change per family and destination.
+   * Absent = the run has no parts.
+   */
+  children?: HistoryRun[]
 }
 
 /**
@@ -167,6 +226,8 @@ export interface HistoryQuery {
   accountId?: string
   state?: HistoryState[]
   source?: HistorySource[]
+  /** The "What" filter (`what=updates,selling`): runs with at least one part in a chosen group. */
+  what?: HistoryWhat[]
   productId?: string
   userId?: string
   from?: string

@@ -33,7 +33,7 @@ import prisma from '../../db.js'
 import { currencyCode, listingSendPrice } from './follower-price.js'
 import { readSaleWindows } from './sale-window.js'
 import { loadSharedInventoryTargets } from './shared-inventory-targets.js'
-import type { PublicationChangeInput } from './studio-publication-changes.js'
+import { publicationReplaces, type PublicationChangeInput } from './studio-publication-changes.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import type { AmazonPublication } from './studio-publication-amazon.js'
 
@@ -80,6 +80,8 @@ const LABELS: Readonly<Record<AmazonOfferLeaf, string>> = {
   lead_time_to_ship_max_days: 'Handling time', restock_date: 'Restock date', is_inventory_available: 'Always available',
 }
 export const AUTOMATE_PRICING_WARNING = 'Automate Pricing: Amazon changes this price by your Seller Central rule, inside your minimum and maximum price. Nexus still sends its own price; the rule can change it again.'
+/** One-click "Nexus wins" (Owner 2026-10-04) — the extra warning on a ticked price line that replaces Amazon's price. */
+export const AUTOMATE_PRICING_AGAIN_NOTE = 'Amazon\'s Automate Pricing can change it again.'
 export const ALWAYS_AVAILABLE_WARNING = 'Always available: Amazon ignores the quantity Nexus sends and keeps the offer buyable at any stock. Use it only for made-to-order items.'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const record = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null)
@@ -198,6 +200,21 @@ export function planAmazonOfferLines(input: OfferLaneInput): { inputs: Publicati
   const floor = price == null ? null : priceBoundsRefusal({ price, bounds: input.bounds, channel: 'Amazon', sku: input.sku, currency: input.currency, masterCurrency: input.masterCurrency })
   const sellerBounds = amazonSellerBoundsRefusal({ price, salePrice: sendable('sale', values) ? values.sale!.price : null,
     min: values.minimum_seller_allowed_price, max: values.maximum_seller_allowed_price, sku: input.sku })
+  // One-click "Nexus wins" (Owner 2026-10-04) — a bound the draft does not send stays as Amazon holds it (the replace keeps
+  // the rest of Amazon's offer), so Amazon's own minimum / maximum, read now, judge the price and the sale price here
+  // instead of when the request is built (`compileAmazonOffer`). Reached only when Nexus's stored bounds pass
+  // (`sellerBounds` is checked first), so Amazon's bound was changed outside Nexus.
+  const amazonBoundRefusal = (leaf: AmazonOfferLeaf): string | null => {
+    if (!amazon || (leaf !== 'our_price' && leaf !== 'sale')) return null
+    const sent = leaf === 'our_price' ? price : sendable('sale', values) ? values.sale!.price : null
+    if (sent == null) return null
+    const what = leaf === 'our_price' ? 'the price' : 'the sale price'
+    const min = draft.leaves.minimum_seller_allowed_price ? null : amazon.minimum_seller_allowed_price
+    const max = draft.leaves.maximum_seller_allowed_price ? null : amazon.maximum_seller_allowed_price
+    const refuse = (bound: 'minimum' | 'maximum', at: number) => `${input.sku}: Amazon's own ${bound} price is ${money(at)} (changed outside Nexus), so Amazon `
+      + `would refuse ${what} ${money(sent)}. Change ${what}, or save a ${bound} price on the sheet and publish them together.`
+    return min != null && sent < min ? refuse('minimum', min) : max != null && sent > max ? refuse('maximum', max) : null
+  }
   const euWords = input.euMarkets.length > 1 ? ` — all EU markets (${input.euMarkets.join(' ')}); sent with the current quantity` : ' — sent with the current quantity'
   const priceWords = (v: AmazonOfferFacts['values']) => v.our_price.mode === 'follow' && v.our_price.price != null
     ? `${money(v.our_price.price)} (follows ${ruleLabel})` : money(v.our_price.price)
@@ -211,7 +228,8 @@ export function planAmazonOfferLines(input: OfferLaneInput): { inputs: Publicati
     const fulfilment = rootOfLeaf(leaf) === 'fulfillment_availability'
     const ours = sendable(leaf, values), nexus = sendable(leaf, input.live.values), theirs = amazon ? sendable(leaf, amazon) : null
     const refusal = [readRefusal, input.isParent ? amazonOfferFieldFor(field)?.parentReason : null, amazonOfferLeafRefusal(leaf, value, input.today),
-      fulfilment ? fulfilmentRefusal : noPrice, leaf === 'our_price' ? floor : null, BOUNDED.includes(leaf) ? sellerBounds : null].find((r): r is string => !!r)
+      fulfilment ? fulfilmentRefusal : noPrice, leaf === 'our_price' ? floor : null, BOUNDED.includes(leaf) ? sellerBounds : null, amazonBoundRefusal(leaf)]
+      .find((r): r is string => !!r)
 
     let label: string
     if (leaf === 'our_price') {
@@ -272,12 +290,19 @@ export async function amazonOfferLines(facts: PublicationFacts, product: { produ
   return planned.inputs
 }
 
-/** The plan's words on its reviewed changes: the three values, and the DIFFERS sentence. Other changes are untouched. */
+/**
+ * The plan's words on its reviewed changes: the three values, the DIFFERS sentence, and — on a ticked DIFFERS line
+ * (one-click "Nexus wins") — what Publish replaces in the offer's own words, a price line with its Automate Pricing note.
+ * Other changes are untouched.
+ */
 export function withOfferDisplay(changes: StudioPublishChange[], products: ReadonlyArray<{ productId: string; offer?: AmazonOfferPlan }>): StudioPublishChange[] {
   return changes.map((change) => {
     const line = products.find((p) => p.productId === change.productId)?.offer?.lines[change.field]
     if (!line) return change
-    return { ...change, display: line.display, ...(change.status === 'DIFFERS' && change.selectable && line.differs ? { reason: line.differs } : {}) }
+    const replaces = change.replaces ? publicationReplaces(change, 'Amazon', { channel: line.display.channel, nexus: line.display.current },
+      line.leaf === 'our_price' ? AUTOMATE_PRICING_AGAIN_NOTE : null) : undefined
+    return { ...change, display: line.display, ...(change.status === 'DIFFERS' && change.selectable && line.differs ? { reason: line.differs } : {}),
+      ...(replaces ? { replaces } : {}) }
   })
 }
 

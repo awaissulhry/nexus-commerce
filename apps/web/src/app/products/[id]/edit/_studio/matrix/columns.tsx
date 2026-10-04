@@ -108,7 +108,7 @@ function MatrixIdentity(p: ICellRendererParams<StudioRow> & Partial<IdentityPara
 /* ── the strip tag ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The coordinate's strip label + roll-up tag (`19 listed · 1 draft`). `listed: null` = not counted
+ * The coordinate's strip label + roll-up tag (`19 listed · 1 not listed`). `listed: null` = not counted
  * → NO tag, never `0 listed` (rule 7). A counted zero is shown: it is a fact.
  */
 /**
@@ -122,12 +122,15 @@ export function notListedTitle(c: MatrixCoordinate): string {
   return `${c.label} — ${c.cells.length} ${c.cells.length === 1 ? 'cell' : 'cells'}${c.sharedInventoryWith ? ` · ${MATRIX_COPY.sharedEu(c.sharedInventoryWith)}` : ''}`
 }
 
-/** The group's roll-up tag: `20 listed`, `0 listed · 1 draft`; null for a group that serves no `Listing` cell. */
+/**
+ * The group's roll-up tag: `20 listed`, `0 listed · 1 not listed` (a draft is Not listed — one set of selling words,
+ * Owner 2026-10-04); null for a group that serves no `Listing` cell.
+ */
 export function stripTag(c: MatrixCoordinate | undefined): string | null {
   /* A group that serves no `Listing` cell (the EU inventory group) has nothing to count: no tag,
      rather than a `0 listed` that reads as "nothing is listed here". */
   return c && c.listed !== null && c.cells.includes('listing')
-    ? `${c.listed} listed${c.draft !== null && c.draft > 0 ? ` · ${c.draft} draft` : ''}`
+    ? `${c.listed} listed${c.draft !== null && c.draft > 0 ? ` · ${c.draft} not listed` : ''}`
     : null
 }
 

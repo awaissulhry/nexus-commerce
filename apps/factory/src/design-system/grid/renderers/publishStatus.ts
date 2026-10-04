@@ -118,6 +118,13 @@ export interface PublishIssue {
 
 export interface PublishLast {
   publicationId: string
+  /**
+   * What the send was, in words — "Pause offer", "Full update", "End listing" (build shape v2: `LAST_PUBLISH_KIND_LABEL`
+   * of @nexus/shared/publication-history). Absent or null = a plain publish: the card says nothing extra. With it the card
+   * leads with one line — "Pause offer · Accepted · 10:42 · Awais" — and the cell names it to a screen reader. A selling
+   * change is never Verified (Nexus does not read it back): the server sends Accepted, and this word only repeats it.
+   */
+  kindLabel?: string | null
   status: string
   /** This row's own result inside the publication (per-SKU vocabulary), when the server has one. */
   outcome?: string | null
@@ -251,10 +258,11 @@ export function publishCellModel(value: PublishStatusValue | undefined, now: num
   const time = !value.inFlight && at ? `, ${publishFullTime(at, now)}` : ''
   const edited = value.editedSince ? ' Edited since.' : ''
   const spoken = family && value.family ? familyWords(Math.min(value.family.failed, value.family.total), value.family.total) : meta.label
+  const kind = !value.inFlight ? value.last?.kindLabel?.trim() || null : null
   return {
     state: 'status', meta, shortTime,
-    ariaLabel: `Last publish: ${spoken}, ${value.destinationLabel}${time}.${edited} Press Enter for details.`,
-    title: meta.hint,
+    ariaLabel: `Last publish: ${kind ? `${kind}, ` : ''}${spoken}, ${value.destinationLabel}${time}.${edited} Press Enter for details.`,
+    title: kind ? `${kind}. ${meta.hint}` : meta.hint,
   }
 }
 
@@ -262,6 +270,8 @@ export interface PublishCardIssue extends PublishIssue { canGoTo: boolean }
 
 export interface PublishCardModel {
   title: string
+  /** "Pause offer · Accepted · 10:42 · Awais" — what the send was, its word, when and who; null for a plain publish. */
+  headline: string | null
   meta: PublishStatusMeta
   /**
    * The sentence under the title: on a family's main row with failures, the family's count ("2 of 11 products in this
@@ -288,9 +298,11 @@ export function publishCardModel(value: PublishStatusValue, now: number = Date.n
   const meta = last ? publicationStatusMeta(last.status) : NO_PUBLISH
   const rowResult = last?.outcome ? publishResultMeta(last.outcome) : null
   const sent = !last ? [] : last.sentFields.includes(CREATE_FIELD) ? ['Complete listing'] : [...last.sentFields]
+  const kind = last?.kindLabel?.trim() || null
   const sentSummary = !last ? '' : last.sentFields.includes(CREATE_FIELD)
     ? 'A complete new listing was sent.'
-    : sent.length === 0 ? 'No field list is recorded for this publish.' : `${sent.length} ${sent.length === 1 ? 'field' : 'fields'} sent.`
+    // A selling change carries no fields: it IS what was sent ("Pause offer."), never "no field list is recorded".
+    : sent.length === 0 ? (kind ? `${kind}.` : 'No field list is recorded for this publish.') : `${sent.length} ${sent.length === 1 ? 'field' : 'fields'} sent.`
   const facts: Array<{ label: string; value: string }> = []
   if (last) {
     // The cell's own shape plus the relative words AsOf and Timeline use, so cell, card and history agree.
@@ -298,8 +310,12 @@ export function publishCardModel(value: PublishStatusValue, now: number = Date.n
     facts.push({ label: 'By', value: last.userName?.trim() || 'Not recorded' })
     if (last.reference) facts.push({ label: 'Channel reference', value: last.reference })
   }
+  const headline = last && kind
+    ? [kind, meta.label, publishShortTime(last.at, now), last.userName?.trim() || null].filter((part): part is string => !!part).join(' · ')
+    : null
   return {
     title: `Last publish · ${value.destinationLabel}`,
+    headline,
     meta,
     hint: (last && value.family ? publishFamilyMeta(last.status, value.family)?.detailHint : null) ?? meta.detailHint ?? meta.hint,
     rowResult: rowResult && rowResult.label !== meta.label ? rowResult : null,

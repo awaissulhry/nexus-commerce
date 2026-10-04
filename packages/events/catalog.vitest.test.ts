@@ -142,6 +142,7 @@ describe('subject derivation', () => {
       'listing.syncing': { listingId: 'l1' },
       'listing.synced': { listingId: 'l1', status: 'SUCCESS' },
       'listing.values_changed': { productId: 'p1', listings: [{ listingId: 'l1', productId: 'p2', version: 4 }], fields: ['quantity'] },
+      'listing.publish_action_changed': { productId: 'p1', listingIds: ['l1'], column: 'status', value: 'inactive' },
       'wizard.submitted': { wizardId: 'w1', productId: 'p1', status: 'LIVE' },
       'bulk.progress': { jobId: 'j1', processed: 1, total: 2, succeeded: 1, failed: 0 },
       'bulk.completed': { jobId: 'j1', status: 'DONE' },
@@ -335,5 +336,22 @@ describe('MCP full control C8 — what Claude’s changes did, for the bell and 
     expect(deriveSubject('agent.change.executed', executed)).toBe('chg_1')
     expect(deriveSubject('agent.change.undone', { changeId: 'chg_1', undoneByApprovalId: 'apr_2' })).toBe('chg_1')
     expect(deriveSubject('agent.autorun.paused', { autonomyId: 'aut_1', automatic: false, failures: null, handedBack: 0 })).toBe('aut_1')
+  })
+})
+
+describe('sheet publish, build shape v2 — a waiting Action or Status value changed', () => {
+  it('carries the family, the rows, the column and the value (null when cleared), partitioned by the family', () => {
+    const set = { productId: 'fam_1', listingIds: ['cl_1', 'cl_2'], column: 'send', value: 'full' }
+    expect(parseEventPayload('listing.publish_action_changed', set)).toEqual(set)
+    expect(parseEventPayload('listing.publish_action_changed', { ...set, column: 'status', value: null }).value).toBeNull()
+    expect(deriveSubject('listing.publish_action_changed', set as never)).toBe('fam_1')
+  })
+
+  it('refuses an unknown column or value, an empty row list and anything beyond ids and words', () => {
+    const set = { productId: 'fam_1', listingIds: ['cl_1'], column: 'status', value: 'inactive' }
+    expect(() => parseEventPayload('listing.publish_action_changed', { ...set, column: 'price' })).toThrow()
+    expect(() => parseEventPayload('listing.publish_action_changed', { ...set, value: 'paused' })).toThrow()
+    expect(() => parseEventPayload('listing.publish_action_changed', { ...set, listingIds: [] })).toThrow()
+    expect(() => parseEventPayload('listing.publish_action_changed', { ...set, setBy: 'u1' })).toThrow()
   })
 })
