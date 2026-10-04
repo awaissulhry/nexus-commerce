@@ -17,9 +17,11 @@ export interface ScheduleDelivery {
   applied: number
   /** already on target; nothing to do */
   held: number
-  /** another writer moved the budget and this schedule stood down */
+  /** another writer moved the budget inside the window and this schedule stood down */
   yielded: number
-  /** the mutation layer declined (`ok:false`) before anything was queued */
+  /** 3c — the window closed after someone else changed the budget, so nothing was given back and their change stays */
+  kept?: number
+  /** the mutation layer declined (`ok:false`) before anything was queued, or the write gate refused a window change */
   refused: number
   /** the call threw */
   failed: number
@@ -118,12 +120,43 @@ const allOperator = (d: ScheduleDelivery): boolean => {
  */
 export function deliveryCell(d: ScheduleDelivery | null): StateWord {
   if (!d || d.campaigns === 0) return { word: '—', cls: 'none', why: 'This schedule has not evaluated any campaign yet.' }
-  if (d.notDelivered > 0) return { word: `${d.notDelivered} not at Amazon`, cls: 'bad', why: `${d.notDelivered} of ${d.campaigns} writes were rejected before reaching Amazon${d.lastError ? ` — ${d.lastError}` : ''}. The local budget was changed; the channel was not.` }
-  // 3b — "24 times" is GIVE_BACK_RETRIES in apps/api/src/jobs/ad-budget-schedule.job.ts.
-  if (d.refused + d.failed > 0) return { word: `${d.refused + d.failed} refused`, cls: 'bad', why: `${d.refused + d.failed} of ${d.campaigns} writes were refused${d.lastError ? ` — ${d.lastError}` : ''}. A refused window change is tried again on the next run, a refused give-back once an hour, up to 24 times.` }
+  // 3c — since 4k a write the gate refused is undone in Nexus too, so "the local budget was changed" is no longer true of it.
+  if (d.notDelivered > 0) return { word: `${d.notDelivered} not at Amazon`, cls: 'bad', why: `${d.notDelivered} of ${d.campaigns} writes were not applied at Amazon${d.lastError ? ` — ${d.lastError}` : ''}. Amazon’s budget did not change; a write the gate refused is also undone in Nexus.` }
+  // 3b — "24 times" is GIVE_BACK_RETRIES in apps/api/src/jobs/ad-budget-schedule.job.ts. 3c — a window change the gate
+  // refused is not tried again inside that window (it would be refused every run); the next window tries it.
+  if (d.refused + d.failed > 0) return { word: `${d.refused + d.failed} refused`, cls: 'bad', why: `${d.refused + d.failed} of ${d.campaigns} writes were refused${d.lastError ? ` — ${d.lastError}` : ''}. A window change refused before it was queued is tried again on the next run; one the write gate refused, at the next window; a refused give-back once an hour, up to 24 times.` }
   // A budget the OPERATOR moved is not a conflict the operator needs to investigate — say so.
   if (d.yielded > 0) return { word: allOperator(d) ? `${d.yielded} held by you` : `${d.yielded} yielded`, cls: 'warn', why: `${describeYields(d)}. Those campaigns are NOT on their window value.` }
+  // 3c — a closed window that gave nothing back because someone changed the budget: their change stays, by design (3b).
+  const kept = d.kept ?? 0
+  if (kept > 0) return { word: `${kept} kept a later change`, cls: 'warn', why: `${kept} of ${d.campaigns} campaigns had their budget changed by someone else after this schedule set it, so the schedule gave nothing back when the window closed and that change stays.` }
   if (d.unknown > 0) return { word: 'in flight', cls: 'wait', why: `${d.unknown} of ${d.campaigns} writes are queued and not yet confirmed at Amazon.` }
   if (d.delivered > 0) return { word: `${d.delivered} at Amazon`, cls: 'ok', why: `${d.delivered} of ${d.campaigns} writes are confirmed delivered to Amazon.` }
   return { word: 'nothing to do', cls: 'none', why: `All ${d.campaigns} campaigns already sit at the value this schedule wants, so it has written nothing.` }
+}
+
+/** 3c — what a pause, a delete or a campaigns edit did with the budgets the schedule held (`restore` in the API answer). */
+export interface ScheduleRestore { restored: number; kept: number; refused: number }
+
+/**
+ * 3c (review 6.5) — the give-back result in words. The API has always answered it (BSP-P3) and the screen dropped it,
+ * so a pause that gave nothing back looked exactly like one that gave every budget back. `null` when there is nothing to
+ * report (no answer at all). The counts are summed by the caller when several schedules were deleted at once.
+ */
+export function restoreSummary(r: ScheduleRestore | null, did: string): { tone: 'success' | 'warning'; title: string; text: string } | null {
+  if (!r) return null
+  const { restored, kept, refused } = r
+  if (restored + kept + refused === 0) {
+    return { tone: 'success', title: `${did}.`, text: 'It held no budget it had set, so nothing needed to be given back.' }
+  }
+  const parts = [
+    restored > 0 ? 'given back: the budget from before the window is queued for Amazon' : null,
+    kept > 0 ? 'kept a later change: someone changed the budget after this schedule set it, so that change stays' : null,
+    refused > 0 ? 'refused: the give-back did not go through, so the campaign keeps the schedule’s budget — change it by hand if it should go back' : null,
+  ].filter(Boolean) as string[]
+  return {
+    tone: refused > 0 ? 'warning' : 'success',
+    title: `${did}: ${restored} given back · ${kept} kept a later change · ${refused} refused`,
+    text: `${parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('. ')}.`,
+  }
 }

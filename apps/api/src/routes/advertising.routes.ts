@@ -7862,15 +7862,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       : []
     const byQueueId = new Map(rows.map((r) => [r.id, r]))
     return (s: { id: string; lastApplied: unknown }) => {
-      const la = (s.lastApplied ?? null) as Record<string, { state?: string; live?: number; budget?: number; outboundQueueId?: string | null; error?: string | null; overriddenBy?: { kind?: string; label?: string } }> | null
+      const la = (s.lastApplied ?? null) as Record<string, { state?: string; live?: number; budget?: number; windowKey?: string; outboundQueueId?: string | null; error?: string | null; overriddenBy?: { kind?: string; label?: string } }> | null
       const entries = Object.entries(la ?? {})
-      const tally = { campaigns: entries.length, applied: 0, held: 0, yielded: 0, refused: 0, failed: 0, delivered: 0, notDelivered: 0, unknown: 0 }
+      const tally = { campaigns: entries.length, applied: 0, held: 0, yielded: 0, kept: 0, refused: 0, failed: 0, delivered: 0, notDelivered: 0, unknown: 0 }
       // BSP.6 item 2 — WHO took the budget, counted per kind. A yield to the operator's own hand
       // is a different fact from a yield to the pacer, and the grid must not blur them into one word.
       const byKind = new Map<string, { kind: string; label: string; count: number }>()
       let lastError: string | null = null
       for (const [, v] of entries) {
-        if (v?.state === 'yielded' && v.overriddenBy) {
+        // 3c — a yield on a give-back (`<entry>#restore`) is not the schedule standing down inside its window: the window
+        // has closed and someone's later change was KEPT instead of given back (3b). Counted apart, so `yielded` means
+        // "not on its window value right now" and `kept` means "the budget someone changed stays".
+        const keptChange = v?.state === 'yielded' && (v.windowKey ?? '').endsWith('#restore')
+        if (v?.state === 'yielded' && !keptChange && v.overriddenBy) {
           const k = String(v.overriddenBy.kind ?? 'job')
           const e = byKind.get(k) ?? { kind: k, label: String(v.overriddenBy.label ?? k), count: 0 }
           e.count++
@@ -7879,6 +7883,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         // Rows written before BSP-P3 carry no `state`; call them `held` rather than inventing one.
         const st = v?.state ?? 'held'
         if (st === 'applied') tally.applied++
+        else if (keptChange) tally.kept++
         else if (st === 'yielded') tally.yielded++
         else if (st === 'refused') { tally.refused++; lastError ??= v?.error ?? null }
         else if (st === 'failed') { tally.failed++; lastError ??= v?.error ?? null }
@@ -7934,49 +7939,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { schedule }
   })
 
+  // 3c — the create moved into ads-budget-schedule.service.ts (createBudgetSchedule), unchanged, plus the one-schedule
+  // rule (Owner S13): a campaign already in another switched-on budget schedule refuses it, 409 with the sentence.
   fastify.post('/advertising/budget-schedules', async (request, reply) => {
     const b = (request.body ?? {}) as Record<string, unknown>
     if (!b.name) { reply.status(400); return { error: 'name required' } }
-    const schedule = await prisma.budgetSchedule.create({ data: {
-      name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
-      campaigns: (b.campaigns as object) ?? [], windows: (b.windows as object) ?? [],
-      timezone: (b.timezone as string) ?? 'Europe/Rome', chartPrefs: (b.chartPrefs as object) ?? {},
-      startDate: b.startDate ? new Date(String(b.startDate)) : null,
-      endDate: b.endDate ? new Date(String(b.endDate)) : null,
-      // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
-      // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
-      neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
-      /**
-       * 🔴 BSP-B5 sweep — `autoRefill` is NOT read from the body any more.
-       *
-       * The column has zero readers: `ad-budget-schedule.job.ts` never consults it, the builder
-       * never sends it, and BSP.2 removed its grid column for exactly that reason. Accepting a
-       * value the system cannot honour is the same false wiring one layer down — an API caller
-       * could set it, see it echoed back, and reasonably believe something would refill. The
-       * column stays (dropping it is a destructive migration and H10 does have the feature), but
-       * it is now writable only by a future executor that actually implements it.
-       */
-    } })
-    // BSP.2 (§2.6) — the schedule's own edit history was unrecorded (unlike the rank side's
-    // RankScheduleVersion). One audit row per CRUD; best-effort, never fails the write.
-    await prisma.advertisingActionLog.create({
-      data: {
-        userId: actorFromHeaders(request.headers as Record<string, unknown>),
-        actionType: 'budget_schedule_create', entityType: 'BUDGET_SCHEDULE', entityId: schedule.id,
-        payloadBefore: {}, payloadAfter: { name: schedule.name, type: schedule.type, enabled: schedule.enabled },
-        amazonResponseStatus: 'SUCCESS',
-      },
-    }).catch(() => { /* audit must never fail the write it describes */ })
-    return { schedule }
+    const { createBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
+    const out = await createBudgetSchedule(b, actorFromHeaders(request.headers as Record<string, unknown>))
+    if ('conflict' in out) { reply.status(409); return out.conflict }
+    return out
   })
 
   // W4 / BSP-P3 — the edit and the delete give back what a schedule applied; R14 moved both, unchanged, into
-  // ads-budget-schedule.service.ts (tune-ad-engine and the budget-schedule switch use the same code).
+  // ads-budget-schedule.service.ts (tune-ad-engine and the budget-schedule switch use the same code). 3c — an edit also
+  // gives back the campaigns it takes out, and a campaigns edit or a re-enable that breaks the one-schedule rule is a 409.
   fastify.patch('/advertising/budget-schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const { patchBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
     const out = await patchBudgetSchedule(id, (request.body ?? {}) as Record<string, unknown>, actorFromHeaders(request.headers as Record<string, unknown>))
     if (!out) { reply.status(404); return { error: 'not found' } }
+    if ('conflict' in out) { reply.status(409); return out.conflict }
     return out
   })
 

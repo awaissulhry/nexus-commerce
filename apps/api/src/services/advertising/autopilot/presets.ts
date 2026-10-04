@@ -21,7 +21,7 @@ export interface CampaignSignals {
   daysOfSupply: number | null      // inventory throttle (null = unknown → no throttle)
   marginPct: number | null         // product margin %, drives break-even ACoS (null = unknown)
   tosImpressionSharePct: number | null  // Top-of-Search IS for the rank module
-  deliveryOutOfBudget: boolean     // pacing signal (Amazon deliveryReasons includes OUT_OF_BUDGET)
+  deliveryOutOfBudget: boolean     // pacing signal (Amazon says the campaign's own budget ran out — delivery-reasons.ts)
   acos1hPct: number | null         // intraday correction (null = none)
 }
 

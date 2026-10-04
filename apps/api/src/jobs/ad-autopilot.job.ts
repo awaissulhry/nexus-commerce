@@ -23,6 +23,7 @@ import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type Engine
 import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertising/autopilot/decisions.js'
 import { mutedKeys } from '../services/advertising/ads-suggestions.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
+import { isCampaignOutOfBudget } from '../services/advertising/delivery-reasons.js'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 
 /** Assemble per-campaign signals from Campaign aggregates + AdTarget perf roll-up. */
@@ -81,7 +82,7 @@ export async function gatherSignals(campaignIds: string[]): Promise<CampaignSign
       daysOfSupply: null,            // enrichment follow-up (FbaStorageAge → DoS)
       marginPct,
       tosImpressionSharePct: null,   // enrichment follow-up (placement report)
-      deliveryOutOfBudget: Array.isArray(c.deliveryReasons) && c.deliveryReasons.includes('OUT_OF_BUDGET'),
+      deliveryOutOfBudget: isCampaignOutOfBudget(c.deliveryReasons), // 2b — Amazon's real code, not the bare OUT_OF_BUDGET
       acos1hPct: null,               // enrichment follow-up (AMS hourly)
     }
   })
