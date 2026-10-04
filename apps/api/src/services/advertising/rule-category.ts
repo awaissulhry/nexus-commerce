@@ -37,11 +37,14 @@ const CATEGORY_ACTIONS: Array<[RuleCategory, string[]]> = [
   ['budget', ['adjust_ad_budget', 'budget_apply', 'shift_budget']],
   // RA.2 — `refresh_dayparting` rewrites the dayparting plan the engine turns into
   // hour-window bid multipliers, which is the same family as rank-defense already here.
-  ['placement', ['set_placement_multiplier', 'defend_top_of_search', 'raise_bids_for_rank_defense', 'refresh_dayparting']],
+  // 4e (review 4.7) — `placement_apply` is what a builder Placement rule writes. It runs on the budget trigger by design
+  // (PLC-P7), so the trigger can never say what such a rule is; the action it produces does.
+  ['placement', ['set_placement_multiplier', 'defend_top_of_search', 'raise_bids_for_rank_defense', 'refresh_dayparting', 'placement_apply']],
   // RA.2 — `pause_ad_group` and `pause_all_campaigns` suppress spend exactly as
   // `pause_campaign` does; they differ only in blast radius, not in kind.
   ['guard', ['retail_guard', 'pause_campaign', 'pause_ads_for_product', 'pause_target', 'pause_ad_group', 'pause_all_campaigns']],
-  ['bid', ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'set_bid']],
+  // 4e — `bid_apply` is what a builder Bid, Share-of-Voice or Keyword-rank rule writes.
+  ['bid', ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'set_bid', 'bid_apply']],
 ]
 
 /**

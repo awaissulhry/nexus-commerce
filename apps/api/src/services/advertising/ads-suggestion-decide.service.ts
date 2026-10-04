@@ -73,7 +73,8 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}): Promi
   }
   const handler = ACTION_HANDLERS[String(action.type)]
   if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
-  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId })
+  // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
+  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: true })
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
    *

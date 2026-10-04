@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   findUnique: vi.fn(), updatePlacementBidding: vi.fn(),
   // 4d — the lane's measured spend and the rule's daily spend ceiling
   laneAggregate: vi.fn(), ruleFindUnique: vi.fn(), execFindMany: vi.fn(), sugFindMany: vi.fn(),
+  // 4e — the rank engine's schedules, targets and events on the campaign
+  schedFindMany: vi.fn(), targetFindMany: vi.fn(), eventFindMany: vi.fn(),
 }))
 
 vi.mock('../../db.js', () => ({
@@ -31,6 +33,9 @@ vi.mock('../../db.js', () => ({
     automationRule: { findUnique: h.ruleFindUnique },
     automationRuleExecution: { findMany: h.execFindMany },
     adsRuleSuggestion: { findMany: h.sugFindMany },
+    adSchedule: { findMany: h.schedFindMany },
+    rankTarget: { findMany: h.targetFindMany },
+    rankScheduleEvent: { findMany: h.eventFindMany },
   },
 }))
 vi.mock('./ads-create.service.js', () => ({ updatePlacementBidding: h.updatePlacementBidding }))
@@ -42,9 +47,9 @@ const TOP = 'PLACEMENT_TOP'
 const REST = 'PLACEMENT_REST_OF_SEARCH'
 const PDP = 'PLACEMENT_PRODUCT_PAGE'
 
-const run = (action: Record<string, unknown>, dryRun = false) =>
+const run = (action: Record<string, unknown>, dryRun = false, operatorApproved?: boolean) =>
   (ACTION_HANDLERS.placement_apply as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string; estimatedValueCentsEur?: number; output?: Record<string, unknown> }>)(
-    { campaignId: 'c1', ...action }, {}, { dryRun, ruleId: 'rule-1' },
+    { campaignId: 'c1', ...action }, {}, { dryRun, ruleId: 'rule-1', ...(operatorApproved ? { operatorApproved } : {}) },
   )
 
 const profile = (lanes: Array<{ placement: string; percentage: number }>) => {
@@ -62,6 +67,9 @@ beforeEach(() => {
   h.updatePlacementBidding.mockResolvedValue({ ok: true, mode: 'live', adjustments: [] })
   h.laneAggregate.mockResolvedValue({ _sum: { costMicros: null } })
   h.ruleFindUnique.mockResolvedValue({ maxDailyAdSpendCentsEur: null })
+  h.schedFindMany.mockResolvedValue([])
+  h.targetFindMany.mockResolvedValue([])
+  h.eventFindMany.mockResolvedValue([])
   today.executions = []
   today.suggestions = []
   h.execFindMany.mockImplementation(async ({ where }: { where: { ruleId: string; dryRun?: boolean } }) =>
@@ -281,5 +289,118 @@ describe('4d — the daily spend ceiling binds a placement raise', () => {
     expect(r.ok).toBe(true)
     expect(r.estimatedValueCentsEur).toBe(0)
     expect(r.output?.spendEstimate).toBe('unmeasured')
+  })
+})
+
+/**
+ * 4e (review 5.3) — an automated run does not write a lane the rank engine holds on the campaign.
+ *
+ * The level dial refused AUTO on a contested rule only when the level changed; a schedule enabled later, a widened
+ * picker or a blend added to the hourly plan left an AUTO rule writing a lane the engine reverted within the hour. The
+ * handler now checks at write time. A change a person approved goes through.
+ */
+describe('4e — an automated run skips a lane the rank engine holds', () => {
+  const governedBy = (target: { key: string; placement: string; lanes?: unknown }, schedule: Record<string, unknown> = {}) => {
+    h.schedFindMany.mockResolvedValue([{ campaignId: 'c1', windows: [{ days: [0, 1, 2, 3, 4, 5, 6], startHour: 8, endHour: 20, targetKey: target.key }], defaultTargetKey: null, targetOverrides: {}, groupId: null, ...schedule }])
+    h.targetFindMany.mockResolvedValue([{ lanes: null, ...target }])
+  }
+  const blend = [{ placement: TOP, biasPct: 100 }, { placement: REST, biasPct: 20 }]
+
+  it('🔴 skips Top of Search on a campaign an enabled schedule governs, says why, and writes nothing', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    governedBy({ key: 'own-top', placement: TOP })
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(true)
+    expect(r.output?.skipped).toBe('contested_by_rank_engine')
+    expect(r.output?.reason).toMatch(/Rank & Dayparting controls Top of Search on this campaign/)
+    expect(r.output?.reason).toMatch(/Set the rule to Manual/)
+    expect(h.updatePlacementBidding).not.toHaveBeenCalled()
+  })
+
+  it('🔴 a change a person approved goes through (operatorApproved)', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    governedBy({ key: 'own-top', placement: TOP })
+    const r = await run({ placement: TOP, op: 'set', value: 50 }, false, true)
+    expect(r.ok).toBe(true)
+    expect(r.output?.skipped).toBeUndefined()
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+    expect(h.schedFindMany).not.toHaveBeenCalled()
+  })
+
+  it('a dry run still proposes, so a person can approve it', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    governedBy({ key: 'own-top', placement: TOP })
+    const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
+    expect(r.output?.wouldChange).toBe('30% → 50%')
+    expect(r.output?.skipped).toBeUndefined()
+  })
+
+  it('a campaign no enabled schedule governs is written as before', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.output?.skipped).toBeUndefined()
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+    expect(h.schedFindMany.mock.calls[0][0].where).toEqual({ enabled: true, campaignId: { in: ['c1'] } })
+  })
+
+  it('Product Pages holds under a single Top of Search target — that lane is the engine’s to leave alone', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'own-top', placement: TOP })
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBeUndefined()
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+  })
+
+  it('🔴 Product Pages is skipped when the schedule holds a BLEND — it sets every lane it does not name to 0', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'blend-day', placement: TOP, lanes: blend })
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBe('contested_by_rank_engine')
+    expect(r.output?.reason).toMatch(/Product Pages on this campaign/)
+    expect(r.output?.reason).toMatch(/blend/)
+    expect(h.updatePlacementBidding).not.toHaveBeenCalled()
+  })
+
+  it('…in ANY window it can hold, not only this hour’s — and through the baseline', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'blend-night', placement: TOP, lanes: blend }, { windows: [], defaultTargetKey: 'blend-night' })
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBe('contested_by_rank_engine')
+  })
+
+  it('a campaign override with an empty lane list clears the blend, so Product Pages holds again', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'blend-day', placement: TOP, lanes: blend }, { targetOverrides: { 'blend-day': { lanes: [] } } })
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBeUndefined()
+    expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
+  })
+
+  it('a single Product Pages target writes that lane directly, so it is contested too', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'pdp-only', placement: PDP })
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBe('contested_by_rank_engine')
+  })
+
+  it('an enabled event of the schedule’s group that holds a blend counts as well', async () => {
+    profile([{ placement: PDP, percentage: 10 }])
+    governedBy({ key: 'own-top', placement: TOP }, { groupId: 'g1' })
+    h.eventFindMany.mockResolvedValue([{ groupId: 'g1', windows: [], defaultTargetKey: 'bf-blend' }])
+    h.targetFindMany.mockResolvedValue([{ key: 'own-top', placement: TOP, lanes: null }, { key: 'bf-blend', placement: TOP, lanes: blend }])
+    const r = await run({ placement: PDP, op: 'set', value: 25 })
+    expect(r.output?.skipped).toBe('contested_by_rank_engine')
+    expect(h.eventFindMany.mock.calls[0][0].where).toMatchObject({ groupId: { in: ['g1'] }, enabled: true })
+  })
+})
+
+describe('4e (review 5.9) — a failed push says Amazon, not the gate', () => {
+  it('🔴 a live push Amazon did not take reports Amazon’s error, never “the write gate declined”', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    h.updatePlacementBidding.mockResolvedValue({ ok: false, mode: 'live', adjustments: [], error: 'HTTP 400 INVALID_ARGUMENT' })
+    const r = await run({ placement: TOP, op: 'set', value: 50 })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/^Amazon did not take this placement change: HTTP 400 INVALID_ARGUMENT\./)
+    expect(r.error).not.toMatch(/write gate/)
   })
 })

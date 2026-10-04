@@ -169,7 +169,15 @@ export async function listAdsRuleBoard() {
   const items = rules.map((r) => {
     const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
       .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
-    const ceiling = graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0 })
+    const produced = producedActionTypes(r)
+    const ceiling = graduationCeiling({ actionTypes: produced, hasKeywordProtections: protectionCount > 0 })
+    /**
+     * 4e (review 4.7) — what the rule IS comes from what its translation writes, never from its stored type or trigger.
+     * A builder rule stores its slug (`placement`), which no category claims, so every builder rule read "Other changes";
+     * and a Placement rule runs on the budget trigger by design (PLC-P7), so a surface keyed on the trigger called
+     * "Trim Top of Search" a budget rule. `kind` is the word a surface keys its wording on: placement · budget · bid · …
+     */
+    const category = ruleCategory(produced)
     const week = weekBy.get(r.id) ?? {}
     return {
       id: r.id,
@@ -205,9 +213,10 @@ export async function listAdsRuleBoard() {
       blockedBy: ceiling.blockedBy,
       actionTypes: actionTypes.filter((t) => !['notify', 'alert_operator', 'log_only'].includes(t)),
       // ACR.7 — colour carries the grouping now that emojis are gone from names.
-      category: ruleCategory(actionTypes),
-      categoryColor: RULE_CATEGORY_META[ruleCategory(actionTypes)].color,
-      categoryLabel: RULE_CATEGORY_META[ruleCategory(actionTypes)].label,
+      category,
+      categoryColor: RULE_CATEGORY_META[category].color,
+      categoryLabel: RULE_CATEGORY_META[category].label,
+      kind: category,
       // `kind`/`id`/`name` are unchanged — the AutomationDock and the Control Room's Levers view
       // both read them, so RA.GRAIN adds `product` beside them rather than restructuring.
       scope: {
