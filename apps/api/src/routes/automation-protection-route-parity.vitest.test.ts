@@ -4,7 +4,8 @@
  * terms: one path for both.
  *
  * On a real PostgreSQL (PGlite). The snapshot beside this file was WRITTEN BY THE ROUTE BEFORE THE MOVE and is read
- * unchanged after it.
+ * unchanged after it — with one deliberate change since: ads fix 5c removed "Always negate", so the two BLACKLIST
+ * posts (any letter case) now answer 400 instead of storing a row (the lower-case one used to store a WHITELIST).
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -74,6 +75,7 @@ describe('R13 — the protected-term routes answer as before the move', () => {
     await send('POST', '/api/advertising/keyword-protections', { term: 'gale jacket', matchType: 'contains' })
     await send('POST', '/api/advertising/keyword-protections', { term: 'gale', isPrefix: true, marketplace: 'IT', campaignId: rows.campaign })
     await send('POST', '/api/advertising/keyword-protections', { term: 'cheap', mode: 'BLACKLIST', matchType: 'CONTAINS' })
+    await send('POST', '/api/advertising/keyword-protections', { term: 'cheap', mode: 'blacklist' })
     await send('DELETE', '/api/advertising/keyword-protections/nope')
     await send('DELETE', `/api/advertising/keyword-protections/${first.json().item.id}`)
     expect(answers.join('\n')).toMatchSnapshot()

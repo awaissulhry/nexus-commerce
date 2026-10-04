@@ -124,7 +124,16 @@ export interface KeywordProtectionInput {
  * (`add_keyword_protection`), which the route never wrote.
  */
 export async function addKeywordProtection(b: KeywordProtectionInput, actor: string): Promise<ServiceOutcome<{ ok: true; item: AdKeywordProtection }>> {
-  const mode = b.mode === 'BLACKLIST' ? 'BLACKLIST' : 'WHITELIST'
+  // Ads fix 5c (review 7.2, Owner D3) — "Always negate" (BLACKLIST) is removed: it was saved and counted but no engine
+  // ever negated anything for it. Refused in any letter case: 'blacklist' used to be stored as WHITELIST, the opposite.
+  if (typeof b.mode === 'string' && b.mode.trim().toUpperCase() === 'BLACKLIST') {
+    return refused(400, {
+      ok: false,
+      error: '“Always negate” was removed: nothing ever negated these terms. To block a search term, add it as a negative keyword.',
+      code: 'blacklist_removed',
+    })
+  }
+  const mode = 'WHITELIST'
   const MATCH_TYPES = ['EXACT', 'PREFIX', 'CONTAINS']
   const rawMatch = typeof b.matchType === 'string' ? b.matchType.trim().toUpperCase() : ''
   if (rawMatch && !MATCH_TYPES.includes(rawMatch)) {

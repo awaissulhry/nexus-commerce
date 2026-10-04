@@ -12,6 +12,10 @@
  * protected-terms whitelist, the converting-term guard and the write gate live on the server and
  * are still armed. The file stays at this path on purpose: re-mounting it is one import.
  * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ *
+ * Ads fix 5c (2026-10-04): the "Always negate" create option is removed here too — the API now
+ * refuses BLACKLIST with a 400 (no engine ever read it). Contains-by-default and the failed-load
+ * rendering were already here. Any stored BLACKLIST row is shown as not used.
  */
 
 /**
@@ -59,7 +63,6 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps } from './slot-contract'
 import { Listbox } from '@/design-system/components'
 
-type Mode = 'WHITELIST' | 'BLACKLIST'
 type MatchType = 'CONTAINS' | 'PREFIX' | 'EXACT'
 type Classification = 'own-line-brand' | 'other-line-brand' | 'non-brand'
 
@@ -154,7 +157,6 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
 
   // the create form
   const [term, setTerm] = useState('')
-  const [mode, setMode] = useState<Mode>('WHITELIST')
   const [matchType, setMatchType] = useState<MatchType>('CONTAINS')
   const [marketplace, setMarketplace] = useState('')
   const [reason, setReason] = useState('')
@@ -193,7 +195,7 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/keyword-protections`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, term: t, matchType, marketplace: marketplace || null, reason: reason.trim() || null }),
+        body: JSON.stringify({ mode: 'WHITELIST', term: t, matchType, marketplace: marketplace || null, reason: reason.trim() || null }),
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) { setFormErr(j?.error ?? `HTTP ${r.status}`); return }
@@ -345,7 +347,7 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
 
         {blacklist.length > 0 && (
           <>
-            <div className="h10-ngp-subhd"><b>Always negate</b><span>{blacklist.length}</span></div>
+            <div className="h10-ngp-subhd"><b>Stored but not used (“Always negate” was removed)</b><span>{blacklist.length}</span></div>
             <ul className="h10-ngp-plist">
               {blacklist.map((p) => (
                 <li key={p.id}>
@@ -382,11 +384,6 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
             onChange={(e) => setTerm(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') void addProtection() }}
             aria-label="Term"
-          />
-          <Listbox
-            ariaLabel="Protection mode" width={150} value={mode}
-            onChange={(v) => setMode(v as Mode)}
-            options={[{ value: 'WHITELIST', label: 'Never negate' }, { value: 'BLACKLIST', label: 'Always negate' }]}
           />
           <Listbox
             ariaLabel="Match type" width={140} value={matchType}
