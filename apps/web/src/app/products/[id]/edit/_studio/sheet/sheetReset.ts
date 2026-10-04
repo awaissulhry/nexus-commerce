@@ -12,6 +12,7 @@ import { familyRowHoldsValue, isProductRelationshipColumn } from '@nexus/shared/
 import { cascadeIntent, cascadeOf, hasValue, wholeListWriteField } from './channel/provenance'
 import { isCellEditable, offersCascade } from './channel/rows'
 import { offerDraftResetLabel, pendingPublishOf } from './channel/offerDrafts'
+import { channelResetLabel } from './channel/value-source'
 import type { ChannelSheetRow } from './channel/types'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { SheetColumn as MasterColumn, StudioRow } from './master/types'
@@ -54,7 +55,8 @@ export function channelResetOffer(row: ChannelSheetRow | undefined, colId: strin
   return {
     intent: list ? 'reset-list' : 'reset',
     formula,
-    label: label(formula, cell.source === 'channelSnapshot' ? 'Follow Shared' : list ? 'Reset list to inherited…' : 'Reset to inherited'),
+    // The one reset name a channel cell has — Cell details says the same (`channelResetLabel`).
+    label: label(formula, channelResetLabel(cell)),
   }
 }
 

@@ -1,8 +1,8 @@
 'use client';
-import { describeValueSource } from './cellDetailsSource';
+import { cellDetailsActionKind, describeValueSource } from './cellDetailsSource';
 import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { reviewCopy } from './reviewCopy';
-import { classifyProvenance } from '@/design-system/grid/renderers/provenance';
+import { channelCellDrawsRequired, channelCellProvenance } from './channelCellProvenance';
 import { useSheetPreferences } from '../useSheetPreferences';
 import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
@@ -60,7 +60,7 @@ import { useCellFormulas } from '../../useCellFormulas';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
-import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
+import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
 import { FollowUpRead, rowSettle } from './saveSettle';
@@ -907,12 +907,17 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         const cell = row.values[column.key];
         const value = cell?.value;
         const formulaReason = refusedReasonFor(row.rowId, column.key);
-        const source = describeValueSource(cell, classifyProvenance({ ...withMappingRun(cell, data?.meta?.mapping?.productLevelOnly ?? false), refusedReason: formulaReason }, 'channel'), formulaReason);
+        /* The ONE channel verdict the cell's mark and tint draw (`channelCellProvenance`); Cell details only words it. */
+        const drawsRequired = channelCellDrawsRequired(column, row, cell);
+        const verdict = { productLevelOnly: data?.meta?.mapping?.productLevelOnly ?? false, refusedReason: formulaReason, drawsRequired, shape: column.shape };
+        const member = channelCellProvenance(cell, verdict);
+        const source = describeValueSource(cell, member, formulaReason, drawsRequired);
         const layer = cascadeOf(cell, row.rowKind);
         /* P1 — a reset is offered wherever one exists (the cell menu's rule, `channelResetOffer`): formula, translation and
-           AI cells included. A pin is offered only on a plain inherited value. */
+           AI cells included. A pin is offered only on a plain inherited value — judged by what the value IS underneath
+           (`cellDetailsActionKind`), never by an attention or pending mark on top of it (2026-10-04). */
         const reset = channelResetOffer(row, column.key, !!formulaReason || !!formulaLive.current.formulas.exprFor(row.rowId, column.key));
-        const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && (reset || !['formula', 'warning', 'ai'].includes(source.kind))
+        const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && (reset || !['formula', 'warning', 'ai'].includes(cellDetailsActionKind(cell, verdict)))
             ? cascadeIntent(layer, row.rowKind, value ?? null) : null;
         setCellDetails({
             title: `${column.label}: ${row.sku}`,
@@ -977,9 +982,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const columnsKey = useMemo(() => JSON.stringify(data?.columns ?? []), [data?.columns]);
     const stableColumns = useMemo(() => data?.columns ?? [], [columnsKey]);
     const scopePage = useMemo(() => (data ? { scope: data.scope } : null), [JSON.stringify(data?.scope ?? null)]);
-    const openCellDetailsRef = useRef(openCellDetails);
-    openCellDetailsRef.current = openCellDetails;
-    const openCellDetailsLive = useCallback((row: ChannelSheetRow, column: SheetColumn) => openCellDetailsRef.current(row, column), []);
+    /* The alias label for the marks' sentences, read at paint time: a renamed alias must not rebuild every column. */
+    const aliasLabelOf = useCallback((aliasId: string | null) => dataRef.current?.aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(aliasId))?.label ?? null, []);
     const authRef = useRef(auth);
     authRef.current = auth;
     const authKey = `${auth.status}:${auth.isOwner}:${[...auth.permissions].sort().join(',')}`;
@@ -1005,9 +1009,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
        group's colour (`../sheetGroups`). */
     const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
-        data: scopePage, gridColumns, formulaWiring, accountId, openCellDetails: openCellDetailsLive, productLevelOnly,
+        data: scopePage, gridColumns, formulaWiring, accountId, productLevelOnly, aliasLabelOf,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
-    })), [scopePage, gridColumns, formulaWiring, accountId, openCellDetailsLive, productLevelOnly, refusedReasonFor,
+    })), [scopePage, gridColumns, formulaWiring, accountId, aliasLabelOf, productLevelOnly, refusedReasonFor,
         tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, authLive, control.decorate]);
     /**
      * The scope's PROGRESS COLUMN (2026-09-26) — the bar left the Product cell. The same builder as master
@@ -1220,7 +1224,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             }
             const axes = familyShowsAxesRef.current ? Object.values(row.axisValues ?? {}).filter(Boolean) : [];
             const axisTitle = Object.entries(row.axisValues ?? {}).map(([axis, value]) => `${axis}: ${value}`).join(' · ');
-            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? <SkuTag>{row.sku}</SkuTag> : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
+            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? <SkuTag>{row.sku}</SkuTag> : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
         },
         headerTooltip: 'One group per listing alias; the child SKUs beneath it are shared by every alias',
         headerName: 'Product',

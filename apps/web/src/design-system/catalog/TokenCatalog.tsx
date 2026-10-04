@@ -859,8 +859,8 @@ export function TokenCatalog() {
           <SellingStatusExample />
           <div style={{ marginTop: 18, color: 'var(--nds-text)', fontWeight: 600 }}>Value sources · compact container</div>
           <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 16px', maxWidth: 320 }} aria-label="Value source indicators">
-            <SourceIndicator showLabel kind="master" label="Follows Master" description="Uses the resolved Master value through the channel mapping" />
-            <SourceIndicator showLabel quiet kind="master" label="Follows Master · quiet" description="A routine source on a dense sheet: muted, never hidden" />
+            <SourceIndicator showLabel kind="master" label="Follows Shared" description="Uses the resolved Shared value through the channel mapping" />
+            <SourceIndicator showLabel quiet kind="master" label="Follows Shared · quiet" description="A routine source on a dense sheet: muted, never hidden" />
             <SourceIndicator showLabel kind="override" label="Listing override" description="This listing stores its own value" />
             <SourceIndicator showLabel kind="pending" label="Waits for Publish" description="Saved in Nexus; sent to the channel when you publish" />
             <SourceIndicator showLabel kind="rule" label="Mapping rule" description="Calculated by the configured rule" />
@@ -1128,7 +1128,7 @@ export function TokenCatalog() {
             active={scope}
             onChange={setScope}
             items={[
-              { id: 'master', label: 'Master', readiness: { pct: 96, state: 'ready' } },
+              { id: 'master', label: 'Shared', readiness: { pct: 96, state: 'ready' } },
               { id: 'AMAZON', label: 'Amazon', readiness: { pct: 92, state: 'warn' } },
               { id: 'EBAY', label: 'eBay', readiness: { pct: 71, state: 'blocked', note: 'Missing: EAN, country of origin.' } },
               { id: 'SHOPIFY', label: 'Shopify', readiness: { pct: null, state: 'absent', note: 'Not scored for this product type.' } },

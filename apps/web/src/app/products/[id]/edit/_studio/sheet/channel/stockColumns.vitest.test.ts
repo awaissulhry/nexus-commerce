@@ -124,7 +124,7 @@ describe('the sheet\'s column builder spreads the stock column LAST — no formu
   function build(columns: SheetColumn[]) {
     return buildChannelColumns({
       data: { scope }, gridColumns: columns, formulaWiring: { exprFor: () => null, errorFor: () => null },
-      openCellDetails: () => {}, productLevelOnly: false, refusedReasonFor: () => null,
+      productLevelOnly: false, refusedReasonFor: () => null,
       tracker: new CellSaveTracker(), activeCellsRef: { current: null }, viewCtx: { locale: 'de', variationAxes: [], flaggedKeys: [] },
       mediaEditor: { open: () => {}, actions: {} }, shopifyEditor: { open: () => {} }, auth: { has: () => true },
     } as unknown as BuildChannelColumnsOptions)

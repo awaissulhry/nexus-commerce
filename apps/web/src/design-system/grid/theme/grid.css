@@ -340,9 +340,11 @@
 .nds-ag-nexus .ag-cell.nds-cell-na {
   background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--nds-border) 5px 6px);
 }
-/* Follows an EMPTY parent: the link mark alone, in the muted text tone instead of the link blue —
-   "there is a source, and it holds nothing". `--nds-text-3` is 7:1 on every grid ground. */
-.nds-cell-value:has(.nds-cell-blank) > .nds-cell-prov-inherited { color: var(--nds-text-3); }
+/* Follows an EMPTY parent: the link mark alone, in the muted mark tone instead of the link blue —
+   "there is a source, and it holds nothing". 2026-10-04: `--nds-prov-muted-fg`, not `--nds-text-3` — text-3 is 7:1 on
+   the plain grounds but 5.57 (light) / 5.34 (dark) on an inherited cell of a selected variation row; the mark token is
+   ≥7.2 on every resting ground (see `--nds-prov-*` in tokens/css-vars.ts). */
+.nds-cell-value:has(.nds-cell-blank) > .nds-cell-prov-inherited { color: var(--nds-prov-muted-fg); }
 /* 2026-09-26 (Owner: "When I click on a checkbox, it should be selecting the whole row, not just a single
    thing … it looks very odd"). A selected row must read as ONE selected row.
    Measured before, master·IT: `--nds-grid-selected-bg` is #eef5ff and a variation row's tint is #eef1f5, and
@@ -706,20 +708,22 @@
    have "fixed" a 2.07:1 contrast by making the glyph invisible. The fallback keeps today's colour
    until the token lands, at which point it takes over with no further edit. */
 .nds-cell-prov-ai { color: var(--nds-prov-ai-fg, var(--nds-purple-700)); }
-.nds-cell-prov-ai-stale { color: var(--nds-warning-strong); }
+/* 2026-10-04: the warning MARK ink, not `--nds-warning-strong` (3.18:1 on the AI wash of a selected variation row). */
+.nds-cell-prov-ai-stale { color: var(--nds-prov-warning-fg); }
 /* §9.6's derived-value marks. `provenanceMark.tsx` has emitted these classes since the union was
    widened and `grid.css` had NO rule for either — the tests assert the class is APPLIED, never that
    it does anything, so both marks inherited the cell's own colour and said nothing by their tint.
-   `--nds-grid-muted-fg` is chosen because it is already measured (5.32:1 light, 7.38:1 dark) and
-   because a derived value is informative rather than alarming: it is not a warning, it is a
-   statement about where the value came from. If DS.2 would rather mint a semantic token for
-   provenance-derived, this is the line to change. */
-.nds-cell-prov-mapped { color: var(--nds-grid-muted-fg); }
+   A muted ink because a derived value is informative rather than alarming: it is not a warning, it is a
+   statement about where the value came from. 2026-10-04: that ink is the mark token `--nds-prov-muted-fg`, no longer
+   the grid-wide `--nds-grid-muted-fg` (5.97:1 light on a selected variation row) — darkening the grid's muted TEXT to
+   7:1 would move every muted cell, so the mark has its own ink. */
+.nds-cell-prov-mapped { color: var(--nds-prov-muted-fg); }
 /* Product-grain: the same family, distinguished by its own glyph (Share2), not by a shade. */
-.nds-cell-prov-mapped-shared { color: var(--nds-grid-muted-fg); }
+.nds-cell-prov-mapped-shared { color: var(--nds-prov-muted-fg); }
 /* §9.6's ninth member: a cell whose value is produced by a stored `CellFormula` (D16, hub #730).
    The token is DS.2's, landed in BOTH themes and measured there — light `#0e7490` (surface 5.36 ·
-   ai-tint 4.43 · pinned 4.88), dark `#22d3ee` (8.43 · 8.36 · 7.87). No fallback here, unlike
+   ai-tint 4.43 · pinned 4.88), dark `#22d3ee` (8.43 · 8.36 · 7.87); PR.6 and the 2026-10-04 AAA pass moved both (see
+   `tokens/css-vars.ts`). No fallback here, unlike
    `--nds-prov-ai-fg` above: that one was written with one because the token did not exist yet and
    an undefined custom property in a `color` computes to `rgba(0,0,0,0)` — the mark vanishing
    silently. This token exists (`tokens/css-vars.ts:287,574`), verified before the rule was written
@@ -728,11 +732,25 @@
 
 /* 🔴 #780 — a REFUSED formula's mark. It replaces the ƒ rather than joining it, so this is the only
    thing in the cell saying where the value came from, and it has to read as a WARNING at 11px.
-   `--nds-warning` rather than `--nds-danger`: the cell still holds its previous value and nothing is
+   The warning family rather than danger (2026-10-04: its AAA mark ink `--nds-prov-warning-fg`, shared with
+   outdated, aiStale and attention): the cell still holds its previous value and nothing is
    broken — the formula simply produced nothing — and reserving danger for a cell that is actually
    invalid keeps the two distinguishable on a sheet showing both. Not `opacity`: an informative glyph
    is never dimmed (the banked contrast rule). */
-.nds-cell-prov-refused { color: var(--nds-warning-text); font-weight: 700; }
+.nds-cell-prov-refused { color: var(--nds-prov-warning-fg); font-weight: 700; }
+/* ── 2026-10-04 (channel cell marks) — the four channel-sheet members. A glyph each (ruling #16); the inks are the
+   family the next action belongs to, every one ≥7:1 on every resting ground in both themes:
+     pending       blue, like a pin — a value YOU changed that the listing does not show yet. No tint (see
+                   `provenanceClassRules`: never the save tracker's `nds-cell-is-pending` wash).
+     attention     the warning ink, on the warning wash `outdated` wears — read the reason before acting.
+     listingValue  blue, on the pinned wash — it differs from the Shared product; "Follow Shared" returns it there.
+     listingLevel  the muted ink and no tint, like `mappedShared` — a statement about scope, not a call to act. */
+.nds-cell-prov-pending { color: var(--nds-prov-inherited-fg); }
+.nds-cell-prov-attention { color: var(--nds-prov-warning-fg); }
+.nds-cell-prov-listing { color: var(--nds-prov-inherited-fg); }
+.nds-cell-prov-listing-level { color: var(--nds-prov-muted-fg); }
+.nds-ag-wrap .ag-cell.nds-cell-is-attention { background: var(--nds-warning-soft); }
+.nds-ag-wrap .ag-cell.nds-cell-is-listing-value { background: color-mix(in srgb, var(--nds-primary) 7%, transparent); }
 /* Only the typography is local — italic and weight are what make a `ƒ` read as a function rather
    than an `f`, and they are not what was ruled into the engine. */
 .nds-formula-glyph { font-style: italic; font-weight: 700; line-height: 1; font-size: var(--nds-font-size-sm); }
@@ -930,6 +948,23 @@
 /* A cell that carries a mark lays out as a row so the glyph and the text share the line. */
 .nds-cell-value { display: inline-flex; align-items: center; min-width: 0; width: 100%; }
 .nds-cell-value-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* 2026-10-04 — the select chevron never touches the ellipsis. It is parked right by `margin-left: auto`, which
+   collapses to 0 once the text overflows: the Shared scope measured 0px between the "…" and the chevron. The text keeps
+   a minimum end gap only when a chevron follows it — the same 4px the save mark keeps (`.nds-save-mark`) — so a cell
+   with room to spare looks exactly as before, and no other trailing content (the Matrix's marks) moves. */
+.nds-cell-value > .nds-cell-value-text:has(+ .nds-ag-chev) { margin-inline-end: var(--nds-space-4); }
+/* The cell's hover action (`CellAction`, `[data-nds-cell-action]`; wrapped in `.nds-tooltip` where hints are on) sits
+   at the right edge like the chevron, with the same 4px minimum gap after the text. `.nds-cell-value-text` does not
+   grow, so without this the action sat flush after a short value in the middle of the cell (the channel cell used to
+   pin it right with `gap: 6px`). After a chevron it takes a fixed 4px instead of a second auto margin: two auto
+   margins would split the free space and park the chevron mid-cell. The chevron and the action never overlap — both
+   are `flex: none` siblings. */
+.nds-cell-value > [data-nds-cell-action],
+.nds-cell-value > .nds-tooltip:has(> [data-nds-cell-action]) { flex: none; margin-inline-start: auto; }
+.nds-cell-value > .nds-ag-chev ~ [data-nds-cell-action],
+.nds-cell-value > .nds-ag-chev ~ .nds-tooltip:has(> [data-nds-cell-action]) { margin-inline-start: var(--nds-space-4); }
+.nds-cell-value > .nds-cell-value-text:has(+ [data-nds-cell-action]),
+.nds-cell-value > .nds-cell-value-text:has(+ .nds-tooltip > [data-nds-cell-action]) { margin-inline-end: var(--nds-space-4); }
 /* 🔴 ITALIC OVERHANG (Owner, 2026-09-05: "required … is cropped a bit at the end"). The clip box is
    `.nds-cell-value-text`'s padding box, sized to the text's ADVANCE width; an italic glyph paints past
    its advance, so the last letter's tail was cut off. Every italic run inside a clipped cell carries
@@ -1562,7 +1597,6 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-slotlist-count.over { color: var(--nds-danger-text); font-weight: 600; }
 .nds-slotlist-position .nds-textarea { min-height: 0; }
 .nds-slotlist-keys { display: grid; gap: var(--nds-space-2); min-width: 0; }
-.nds-slotlist-cell { gap: var(--nds-space-4); }
 
 /* Shared formula assistance: grid, drawer, and bulk editor. */
 .nds-formula-composer, .nds-formula-guidance { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
@@ -1690,7 +1724,8 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 
 /* LX.10: reviewed human text older than its source; distinct from an AI draft. */
 .nds-ag-wrap .ag-cell.nds-cell-is-outdated { background: var(--nds-warning-soft); }
-.nds-cell-prov-outdated { color: var(--nds-warning-strong); }
+/* 2026-10-04: the warning MARK ink — `--nds-warning-strong` measured 3.79:1 on a selected variation row (light). */
+.nds-cell-prov-outdated { color: var(--nds-prov-warning-fg); }
 
 /* A wide field group must name itself in the visible viewport, including while scrolling. */
 .nds-ag-nexus .ag-header-group-cell.nds-ag-group-start .ag-header-group-cell-label {

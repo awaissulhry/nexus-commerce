@@ -309,12 +309,40 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // 5.88 on the AI tint. The defect was the absence of a dark value, which only a semantic token
   // can carry. `grid.css:527` already reads `var(--nds-prov-ai-fg, var(--nds-purple-700))`, so
   // these take over with no edit there.
-  { name: '--nds-prov-ai-fg', value: '#6d28d9' },        // surface 7.10 · ai-tint 5.88 · pinned 6.48
-  { name: '--nds-prov-formula-fg', value: '#094b5e' },   // PR.6: character ink; full declared-ground measurements in presence/pr6/contrast.mjs
+  //
+  // 2026-10-04 — AAA (Owner-approved, channel cell marks): every mark ink is ≥7:1 on every RESTING ground it can land
+  // on, light and dark. Grounds: the five row grounds (`--nds-grid-bg`, `-hover-bg`, `-selected-bg`, `-child-bg`,
+  // `-child-hover-bg`), each with and without the mark's own cell wash, each with and without the selected row's 12%
+  // primary wash (grid.css). The pre-AAA values measured, worst case: inherited/via/pinned #1a60c4 3.68 · ai #6d28d9
+  // 4.36 · outdated/aiStale `--nds-warning-strong` 3.79/3.18 · refused `--nds-warning-text` 6.32 · mapped
+  // `--nds-grid-muted-fg` 5.97 (light); 5.33 · 5.96 · 5.72/6.00 · 5.93 · 6.78 and formula 6.42 (dark). Each value
+  // below is the SAME hue darkened (light) or lightened (dark) until its worst ground clears ~7.25. Only the mark
+  // inks moved — `--nds-warning-strong`, `--nds-warning-text` and `--nds-grid-muted-fg` keep their values for
+  // everything else that reads them. Of the media-cell provenance BORDERS only `inherited` and `ai` read these tokens;
+  // pinned / via borders read `--nds-primary` and the aiStale border `--nds-warning-strong` (grid.css), unchanged.
+  //
+  // 🔴 THE `-light` TWIN (2026-10-04). Each mark ink's light value lives in a `--nds-prov-*-fg-light` token that `.dark`
+  // never redefines, and the ink points at it — the `--nds-info-text-light` pattern. The light-pinned shell
+  // (`app/_shared/shared-shell.css`, `body:has(.h10-shell)`) must restate every token `.dark` flips with its LIGHT
+  // value, and `var(--nds-prov-ai-fg)` there would resolve to the dark one. The pin used to name palette steps
+  // (`--nds-purple-700`, `--nds-blue-700`), which silently dragged the AAA inks back to 4.36 / 3.68 on the product
+  // sheet in light mode. Pinning to the twin keeps ONE copy of each value: change it here and the pin follows.
+  { name: '--nds-prov-ai-fg-light', value: '#45198a' },        // AAA: worst 7.33 (selected variation row + AI wash); was #6d28d9 (4.36)
+  { name: '--nds-prov-ai-fg', value: 'var(--nds-prov-ai-fg-light)' },
+  { name: '--nds-prov-formula-fg-light', value: '#094b5e' },   // PR.6: character ink; AAA: worst 7.05 (selected variation row) — unchanged
+  { name: '--nds-prov-formula-fg', value: 'var(--nds-prov-formula-fg-light)' },
   // `inherited` / `via` read `--nds-info-strong`, which is `var(--nds-blue-700)` declared once at
-  // `:root` and never in `.dark` — the third instance of the same class in one night. The light
-  // value is unchanged (5.98 / 4.94 / 5.45); only dark was ever broken.
-  { name: '--nds-prov-inherited-fg', value: '#1a60c4' },  // surface 5.98 · ai-tint 4.94 · pinned 5.45
+  // `:root` and never in `.dark` — the third instance of the same class in one night. Also read by
+  // `pinned`, `pending` and `listingValue` (2026-10-04): one blue for "differs from / follows the layer above".
+  { name: '--nds-prov-inherited-fg-light', value: '#0f366f' },  // AAA: worst 7.27 (selected variation row + inherited wash); was #1a60c4 (3.68)
+  { name: '--nds-prov-inherited-fg', value: 'var(--nds-prov-inherited-fg-light)' },
+  // The WARNING mark ink: outdated, aiStale, attention and refused (2026-10-04). The `--nds-warning-text` hue,
+  // darker — one brown for "read why before you act", where the marks used two (#c2410c and #653a0f).
+  { name: '--nds-prov-warning-fg-light', value: '#522f0c' },    // AAA: worst 7.28 (selected variation row + AI wash)
+  { name: '--nds-prov-warning-fg', value: 'var(--nds-prov-warning-fg-light)' },
+  // The QUIET mark ink: mapped, mappedShared, listingLevel and the link mark over an empty parent (2026-10-04).
+  { name: '--nds-prov-muted-fg-light', value: '#383f47' },      // AAA: worst 7.27 (selected variation row + inherited wash)
+  { name: '--nds-prov-muted-fg', value: 'var(--nds-prov-muted-fg-light)' },
 
   // PROGRESS BARS (2026-09-26, the sheet's progress columns — colour rule A). Bright on purpose (Owner: "bright
   // green / red / yellow"). The colour says WHAT is missing, never how much: missing = a required field is empty,
@@ -653,12 +681,15 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // surface drifting apart in dark. Re-declaring the SAME var(X) here is the whole fix; the
   // value still follows `--nds-chrome-bg`, so this never needs updating when that ground moves.
   { name: '--nds-topbar-bg', value: 'var(--nds-chrome-bg)' },
-  { name: '--nds-prov-ai-fg', value: '#c4b5fd' },        // surface 8.25 · ai-tint 8.18 · pinned 7.70
-  { name: '--nds-prov-formula-fg', value: '#39d8f0' },   // PR.6: >=7.08 across the full declared-ground matrix
+  // 2026-10-04 AAA (see the light block): worst case over every resting ground incl. the selected row's wash.
+  { name: '--nds-prov-ai-fg', value: '#d6ccfe' },        // AAA: worst 7.30 (hovered selected row); was #c4b5fd (5.96)
+  { name: '--nds-prov-formula-fg', value: '#6de2f4' },   // AAA: worst 7.25 (hovered selected row); was #39d8f0 (6.42)
   // Deliberately NOT #8ab6f0: that is `--nds-text-link` in dark, and reusing it would make
   // "inherited" and "a link" the same colour in dark and different in light — the same reasoning
   // the dark `--nds-primary` entry above already records for itself.
-  { name: '--nds-prov-inherited-fg', value: '#93c5fd' },  // surface 8.44 · ai-tint 8.38 · pinned 7.55
+  { name: '--nds-prov-inherited-fg', value: '#cae3fe' },  // AAA: worst 7.29 (hovered selected row + pinned wash); was #93c5fd (5.33)
+  { name: '--nds-prov-warning-fg', value: '#f7d5aa' },    // AAA: worst 7.29 (hovered selected row + refused wash)
+  { name: '--nds-prov-muted-fg', value: '#d1d8e0' },      // AAA: worst 7.25 (hovered selected row + inherited wash)
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
   { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 9.74

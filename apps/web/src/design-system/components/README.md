@@ -8,6 +8,11 @@ generalized (ads-specific assumptions stripped) so they work platform-wide.
 supply both `actionLabel` and `onAction`; otherwise it is a focusable informational
 mark. Hover/focus explanations use `Tooltip portal`. Icons, target size and focus
 styling belong to this component; the feature owns resolution and write routing.
+It is NOT the product sheet's cell mark (since 2026-10-04): both sheet scopes draw
+`grid/renderers` `MarkedValue` + `ProvenanceMark`, which mark only a value that does
+not simply follow Shared. `SourceIndicator` stays for the Variants tab projection
+(where the icon is the pin button), the media popup, Sharing, compare dialogs and
+legends.
 
 Planned (Phase 4): `DataGrid` (the universal grid), `FilterDropdown` family +
 `HoverCard`, `Modal`/`Drawer`/`Popover`/`Menu`, `Tabs`, `Card`, `Toast`,

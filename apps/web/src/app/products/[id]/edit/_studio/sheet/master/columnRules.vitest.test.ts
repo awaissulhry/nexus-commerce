@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { cellIsEditable, cellOf, editRefusalReason, requiredOnRow, sourceLabel, validationApplies, widthFor } from './columnRules'
+import { classifyProvenance } from '@/design-system/grid/renderers/provenance'
+import { cellIsEditable, cellOf, editRefusalReason, markSourceLabel, requiredOnRow, sharedMember, sourceLabel, validationApplies, widthFor } from './columnRules'
 import type { SheetColumn, StudioCellValue, StudioRow } from './types'
 
 /**
@@ -55,6 +56,83 @@ describe('sourceLabel — an operator reads SKUs, never cuids', () => {
   it('🔴 returns null — NOT the raw id — when the parent is not on screen', () => {
     // A cuid rendered in a tooltip is not a source label; it is noise that looks like one.
     expect(sourceLabel(child, 'k', [child])).toBeNull()
+  })
+})
+
+/** 2026-10-04 (channel cell marks) — the mark's source on the Shared scope: the same rule as the channel scopes. */
+describe('markSourceLabel — a source only where it names where the value comes from, never the row itself', () => {
+  const parent = row({ id: 'p1', sku: 'GALE-JACKET' })
+  const child = row({ id: 'c1', sku: 'GALE-1', values: { k: cell({ value: 'x', inheritedFrom: 'p1', inherited: true }) } })
+
+  it('names the parent a value is inherited from', () => {
+    expect(markSourceLabel('inherited', child, 'k', [parent, child])).toBe('GALE-JACKET')
+  })
+  it('names nothing for a formula, an out-of-date translation or an AI draft — they name no source', () => {
+    for (const member of ['formula', 'outdated', 'ai', 'aiStale', 'refused', 'own'] as const) expect(markSourceLabel(member, child, 'k', [parent, child])).toBeNull()
+  })
+  it('🔴 never names the row it is on ("Calculated by a formula — GALE-JACKET" on the parent)', () => {
+    const own = row({ id: 'p1', sku: 'GALE-JACKET', values: { k: cell({ value: 'x', inheritedFrom: 'p1' }) } })
+    expect(markSourceLabel('inherited', own, 'k', [own])).toBeNull()
+    expect(markSourceLabel('formula', own, 'k', [own])).toBeNull()
+  })
+  it('names a language fallback by the language it shows, never its code', () => {
+    const fallback = row({ id: 'p1', sku: 'GALE-JACKET', values: { k: cell({ value: 'Giacca', inheritedFrom: 'p1', language: 'it', requested: 'de' } as Partial<StudioCellValue>) } })
+    expect(markSourceLabel('inherited', fallback, 'k', [fallback])).toBe('the Italian text')
+  })
+  /* 2026-10-04 (fix C) — a pin names the layer it NO LONGER follows, as on the channel scopes. A variation's own value
+     arrives as `pinned` with `inheritedFrom` = the variation itself, so the pin named nothing and the mark said a bare
+     "Pinned". */
+  it('names the parent a variation’s pin no longer follows — from the wire’s `parentSku`, else the parent row on screen', () => {
+    const own = cell({ value: 'Rosso', source: 'variant', inheritedFrom: 'c1', layer: 'variant', pinned: true } as Partial<StudioCellValue>)
+    expect(markSourceLabel('pinned', row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', parentSku: 'GALE-JACKET', values: { k: own } }), 'k', [])).toBe('GALE-JACKET')
+    expect(markSourceLabel('pinned', row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', values: { k: own } }), 'k', [parent])).toBe('GALE-JACKET')
+  })
+  it('names nothing for a pin with nothing above it on this scope (a parent row), and never the row’s own SKU', () => {
+    const own = cell({ value: 'x', inheritedFrom: 'p1', pinned: true } as Partial<StudioCellValue>)
+    expect(markSourceLabel('pinned', row({ id: 'p1', sku: 'GALE-JACKET', parentId: null, values: { k: own } }), 'k', [parent])).toBeNull()
+    expect(markSourceLabel('pinned', row({ id: 'c1', sku: 'GALE-JACKET', parentSku: 'GALE-JACKET', values: { k: own } }), 'k', [])).toBeNull()
+    // The parent is not on screen and the wire named none: nothing, never the raw id.
+    expect(markSourceLabel('pinned', row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', values: { k: own } }), 'k', [])).toBeNull()
+  })
+})
+
+describe('sharedMember — a row never inherits from itself; a variation that follows its parent keeps its mark', () => {
+  /**
+   * The content resolver's answer for a field nobody filled (`content-resolver.ts`, last line) as the wire carries it
+   * (`content-read.ts`): `inherited`, no owner — so `inheritedFrom` is the row ITSELF, on a parent and on a variation alike.
+   */
+  const nothingAnywhere = (rowId: string, over: Partial<StudioCellValue> = {}) => cell({ value: null, source: 'default' as never, inheritedFrom: rowId,
+    inherited: true, tier: 'computed', language: 'it', requested: 'it', provenance: { member: 'inherited', from: null }, ...over } as Partial<StudioCellValue>)
+  const member = (r: StudioRow) => sharedMember(classifyProvenance(r.values.k, 'master'), r, r.values.k)
+  const parent = row({ id: 'p1', sku: 'GALE-JACKET', parentId: null })
+
+  it('🔴 the parent row: an empty field "inherited" from itself wears no mark (61 on GALE-JACKET in Italian)', () => {
+    const p = row({ ...parent, values: { k: nothingAnywhere('p1') } })
+    expect(classifyProvenance(p.values.k, 'master')).toBe('inherited')
+    expect(member(p)).toBe('own')
+    expect(member(row({ ...parent, values: { k: nothingAnywhere('p1', { value: [] }) } }))).toBe('own')
+  })
+  it('a variation whose parent holds nothing either keeps the muted 🔗 "follows an empty parent" (2026-09-26), named by its parent', () => {
+    // The same wire on a variation (`inheritedFrom` = the variation itself): it follows its parent, which is empty.
+    const child = row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', values: { k: nothingAnywhere('c1') } })
+    expect(member(child)).toBe('inherited')
+    expect(markSourceLabel('inherited', child, 'k', [parent, child])).toBe('GALE-JACKET')
+    // A slot the parent's list does not reach: the source is the parent, the value empty — kept as on base.
+    const slot = row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', values: { k: cell({ value: null, inheritedFrom: 'p1', inherited: true }) } })
+    expect(member(slot)).toBe('inherited')
+  })
+  it('a variation that follows its parent’s value keeps its mark', () => {
+    const child = row({ id: 'c1', sku: 'GALE-1', parentId: 'p1', values: { k: cell({ value: 'Giacca', inheritedFrom: 'p1', inherited: true }) } })
+    expect(member(child)).toBe('inherited')
+  })
+  it('a language fallback on the parent row keeps its mark — it follows the Italian text, filled or not', () => {
+    expect(member(row({ ...parent, values: { k: nothingAnywhere('p1', { requested: 'de' } as Partial<StudioCellValue>) } }))).toBe('inherited')
+    expect(member(row({ ...parent, values: { k: nothingAnywhere('p1', { value: 'Giacca', requested: 'de', tier: 'source' } as Partial<StudioCellValue>) } }))).toBe('inherited')
+  })
+  it('changes no other member', () => {
+    for (const m of ['pinned', 'refused', 'formula', 'ai', 'outdated', 'inheritedOverride', 'own'] as const)
+      expect(sharedMember(m, parent, nothingAnywhere('p1'))).toBe(m)
+    expect(sharedMember('inherited', parent, undefined)).toBe('inherited')
   })
 })
 

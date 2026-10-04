@@ -1,7 +1,7 @@
 /**
  * GDS / PES.2 — cell PROVENANCE: where the value in this cell actually came from.
  *
- * The Product Edit Studio's whole claim is that one grid can show a master value, a variation's own
+ * The Product Edit Studio's whole claim is that one grid can show a Shared product value, a variation's own
  * value, a channel override and an AI draft without the operator having to remember which surface
  * they are on. That only works if every cell says, on its own, which layer it is reading — so this
  * is a mark, in the cell, next to the value:
@@ -18,7 +18,7 @@
  * (the icon) is `provenanceMark.tsx` beside this file; splitting them is the DS's own convention
  * (`format.ts` pure + tested, `cells.tsx` React), and it is what lets these rules be tested at all.
  *
- * The classifier lives here rather than in a page because PES.2 (master), PES.3
+ * The classifier lives here rather than in a page because PES.2 (the Shared scope), PES.3
  * (channel aliases) and PES.4 (the record drawer) must all reach the same verdict about the same
  * cell — a drawer that says "inherited" over a cell drawn "pinned" is worse than either alone.
  */
@@ -31,8 +31,8 @@
  *
  * `inheritedOverride` is PES.3's, ratified as hub ruling #16, and it earns its own state for a
  * sharper reason: **it resets to a different place.** A variant row inheriting from its ALIAS looks
- * identical to one inheriting from the master, but the alias is itself an override — so "reset this
- * cell" returns it to the alias's value, not the master's, and an operator who read the plain 🔗
+ * identical to one inheriting from the Shared product, but the alias is itself an override — so "reset this
+ * cell" returns it to the alias's value, not the Shared product's, and an operator who read the plain 🔗
  * has been told the wrong thing about what their next click does. Layout §1 draws the alias level
  * with its own glyph, so a tooltip-only distinction is below the bar.
  */
@@ -150,7 +150,7 @@ export declare function classifyProvenance(cell: ProvenanceLike | null | undefin
  * The sentence a cell's tooltip carries for its provenance. One wording, so the sheet, the drawer
  * and the channel scopes cannot describe the same cell three ways.
  */
-export declare function provenanceTooltip(provenance: CellProvenance, from?: string | null): string;
+export declare function provenanceTooltip(provenance: CellProvenance, from?: string | null, by?: string | null): string;
 /**
  * `cellClassRules` for provenance. Pair with `ProvenanceMark` in the renderer: the class carries
  * the tint, the mark carries the meaning.
@@ -210,7 +210,7 @@ export declare function provenanceClassRules<T>(read: (data: T, colId: string) =
      *
      * `roundTripClassRules` has owned `nds-cell-is-refused` since long before this member existed,
      * where it means THIS CELL'S SAVE WAS REJECTED. I reused the name for a refused FORMULA, which
-     * is a different fact about a different mechanism, and on master the sheet spreads
+     * is a different fact about a different mechanism, and on the Shared scope the sheet spreads
      * `...prov, ...rt` — so the round-trip rule, correctly returning false for a cell with no
      * rejected save, silently overrode this one. Both spreads were right; the collision was mine.
      * It cost a long hunt because every part in isolation was correct: the reader returned the

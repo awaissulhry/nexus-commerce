@@ -94,8 +94,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── The cascade badge ───────────────────────────────────────────────────────────────────────── */
+/* ── The cascade value layout ────────────────────────────────────────────────────────────────── */
 
+/* 2026-10-04 (channel cell marks) — the product sheet's channel cell draws the DS's `MarkedValue` now, the same layout
+   as the Shared scope. These two rules stay for the Variants tab's mapped-value cell
+   (`variants/channel/projectionColumns.tsx`), which still lays out value · chevron · source with them. */
 .nds-cascade {
   display: inline-flex;
   align-items: center;
@@ -149,24 +152,6 @@
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
-}
-
-/* Mapping error. The one mapping state visible without hovering: a derived value that would not
-   ship. `unmapped` and a clean mapping stay in the tooltip — an icon on every cell of a fully
-   mapped sheet tells the operator nothing. */
-.nds-cascade-maperr {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: var(--nds-radius-pill);
-  background: var(--nds-danger);
-  color: var(--nds-text-inverse);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
 }
 
 /* The chip-hit ring lives in the ENGINE now (grid/theme/grid.css) — PES.2 hoisted it verbatim

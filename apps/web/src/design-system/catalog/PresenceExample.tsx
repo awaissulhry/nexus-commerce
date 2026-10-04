@@ -38,7 +38,7 @@ function PresenceControls() {
     <PresenceMark presence={{ ...p, now: p.now + 600000 }} via="Earlier channel read" />
     <div>Absent check: <AsOf at={null} /> · Absent event: <AsOf at={null} kind="event" /></div>
     <div>Save states: <CellSaveMark state="saving" /> <CellSaveMark state="waiting" /> <CellSaveMark state="unknown" /></div>
-    <div>Value provenance: {(['outdated','inherited','inheritedOverride','pinned','mapped','mappedShared','ai','aiStale','formula','refused'] as const).map(provenance => <ProvenanceMark key={provenance} provenance={provenance} />)}</div>
+    <div>Value provenance: {(['outdated','inherited','inheritedOverride','pinned','mapped','mappedShared','ai','aiStale','formula','refused','pending','attention','listingValue','listingLevel'] as const).map(provenance => <ProvenanceMark key={provenance} provenance={provenance} />)}</div>
     <SheetStatuses status={[{ tone: 'neutral', label: 'Read only', detail: 'Choose a coordinate first.' }, { tone: 'warning', label: 'Pending write' }, { tone: 'info', label: 'Checking' }, { tone: 'danger', label: 'Read failed', detail: 'Try again.' }]} />
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-8)' }}>
       <Menu label="Presence actions" selectedId="reset" items={[

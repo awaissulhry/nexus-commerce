@@ -257,10 +257,20 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
   { name: '--nds-danger-text', value: '#7d2621' },
   // Provenance marks (D-#533/#563) — semantic, because a palette step is not where a theme lives.
-  // Light was never the defect; these keep the shipped values. Dark is in the .dark list below.
-  { name: '--nds-prov-ai-fg', value: '#6d28d9' },
-  { name: '--nds-prov-formula-fg', value: '#094b5e' },
-  { name: '--nds-prov-inherited-fg', value: '#1a60c4' },
+  // 2026-10-04 AAA (mirrors apps/web `tokens/css-vars.ts`, where the measurement is written out): every mark ink ≥7:1
+  // on every resting grid ground, both themes. Dark is in the .dark list below.
+  // Each light value lives in a `-light` twin that `.dark` never redefines (as in apps/web, whose light-pinned shell
+  // needs it); the ink points at the twin.
+  { name: '--nds-prov-ai-fg-light', value: '#45198a' },
+  { name: '--nds-prov-ai-fg', value: 'var(--nds-prov-ai-fg-light)' },
+  { name: '--nds-prov-formula-fg-light', value: '#094b5e' },
+  { name: '--nds-prov-formula-fg', value: 'var(--nds-prov-formula-fg-light)' },
+  { name: '--nds-prov-inherited-fg-light', value: '#0f366f' },
+  { name: '--nds-prov-inherited-fg', value: 'var(--nds-prov-inherited-fg-light)' },
+  { name: '--nds-prov-warning-fg-light', value: '#522f0c' },
+  { name: '--nds-prov-warning-fg', value: 'var(--nds-prov-warning-fg-light)' },
+  { name: '--nds-prov-muted-fg-light', value: '#383f47' },
+  { name: '--nds-prov-muted-fg', value: 'var(--nds-prov-muted-fg-light)' },
   // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays
   // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text
   // has no dark override: 6.27:1 in BOTH themes (was 4.63 light / 1.9 dark).
@@ -439,9 +449,12 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-chrome-bg', value: '#1e3050' },
   // Provenance marks in dark (D-#533/#563). The light values are dark by construction, so on
   // #18263b they measured 2.14 / 2.00 / 2.55 — the failure a semantic token exists to prevent.
-  { name: '--nds-prov-ai-fg', value: '#c4b5fd' },
-  { name: '--nds-prov-formula-fg', value: '#39d8f0' },
-  { name: '--nds-prov-inherited-fg', value: '#93c5fd' },
+  // 2026-10-04 AAA: see the light list and apps/web.
+  { name: '--nds-prov-ai-fg', value: '#d6ccfe' },
+  { name: '--nds-prov-formula-fg', value: '#6de2f4' },
+  { name: '--nds-prov-inherited-fg', value: '#cae3fe' },
+  { name: '--nds-prov-warning-fg', value: '#f7d5aa' },
+  { name: '--nds-prov-muted-fg', value: '#d1d8e0' },
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
   { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 9.74

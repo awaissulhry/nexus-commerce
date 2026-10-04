@@ -58,8 +58,73 @@
  * formula's OUTPUT with no mark at all — indistinguishable from a typed value — while the cell that
  * had just been committed showed the formula TEXT as though that were the value.
  */
+/**
+ * 2026-10-04 (channel cell marks) — four members for the channel scopes, each minted by ruling #16's test (the next
+ * action differs), each with its own glyph:
+ *
+ *   🕒  pending       saved in Nexus; the channel gets it only when you publish.
+ *   ⓘ   attention     the channel or the mapping disagrees with what Nexus would send (saved but not sent, a reported
+ *                     FBA listing, a mapping error). Read the reason before acting.
+ *   🏪  listingValue  the listing still holds its own older text, not the Shared product's. "Follow Shared" fixes it.
+ *   ≋   listingLevel  one value for the whole listing (an eBay item specific on a variation row): editing it here
+ *                     edits every variation.
+ *
+ * `classifyProvenance` does NOT produce them from the generic inputs — the Shared scope and the Variants tab keep their
+ * verdicts. The product sheet's channel verdict is one sheet function that may return them; this file only describes
+ * them (label, sentence, tint, precedence).
+ */
 import type { CellProvenance } from '@nexus/shared/cell-provenance'
 export type { CellProvenance } from '@nexus/shared/cell-provenance'
+
+/**
+ * What a screen reader says for each mark, and the first words of its hover. Short, plain English. A `Record`, so a
+ * member added to `CellProvenance` without a label fails the typecheck instead of reading as an empty name.
+ */
+const PROVENANCE_LABEL: Record<CellProvenance, string> = {
+  own: '',
+  outdated: 'Out of date',
+  inherited: 'Inherited',
+  inheritedOverride: 'Inherited via an override',
+  pinned: 'Pinned',
+  mapped: 'Derived by a mapping rule',
+  mappedShared: 'Derived per product, shared by every alias',
+  ai: 'AI-drafted',
+  aiStale: 'AI-drafted, out of date',
+  formula: 'Calculated by a formula',
+  refused: 'The formula produced no value',
+  pending: 'Waits for Publish',
+  attention: 'Needs attention',
+  listingValue: 'Listing value',
+  listingLevel: 'One value for the whole listing',
+}
+
+/** The mark's short name — its accessible name when no source or sentence is given. Empty for `own` (no mark). */
+export function provenanceLabel(provenance: CellProvenance): string {
+  return PROVENANCE_LABEL[provenance] ?? ''
+}
+
+/**
+ * Which member a cell wears when several facts hold at once — strongest first, by §9.6b's rule: the fact that most
+ * changes the NEXT action wins. `classifyProvenance` already follows this order for the members it produces; the
+ * channel sheet's verdict and a mixed slot list (bullets) pick by it.
+ *
+ * refused › attention › pending › aiStale › ai › outdated › formula › listingLevel › listingValue › mappedShared ›
+ * mapped › inheritedOverride › inherited › pinned › own
+ */
+export const PROVENANCE_PRECEDENCE: readonly CellProvenance[] = [
+  'refused', 'attention', 'pending', 'aiStale', 'ai', 'outdated', 'formula', 'listingLevel', 'listingValue',
+  'mappedShared', 'mapped', 'inheritedOverride', 'inherited', 'pinned', 'own',
+]
+
+/** The strongest of several members by `PROVENANCE_PRECEDENCE`; `own` for none. */
+export function strongestProvenance(members: Iterable<CellProvenance>): CellProvenance {
+  let best = PROVENANCE_PRECEDENCE.length - 1
+  for (const m of members) {
+    const at = PROVENANCE_PRECEDENCE.indexOf(m)
+    if (at >= 0 && at < best) best = at
+  }
+  return PROVENANCE_PRECEDENCE[best]
+}
 
 /**
  * The minimal cell shape the classifier needs. Both apps' fuller `SheetCellValue`
@@ -261,32 +326,41 @@ export function classifyProvenance(cell: ProvenanceLike | null | undefined, laye
 
 /**
  * The sentence a cell's tooltip carries for its provenance. One wording, so the sheet, the drawer
- * and the channel scopes cannot describe the same cell three ways.
+ * and the channel scopes cannot describe the same cell three ways. It is also the mark's own text — its hover and its
+ * accessible name (`ProvenanceMark`, 2026-10-04) — so `from` means ONE thing everywhere: the layer or source the value
+ * follows, came from, or no longer follows ("GALE-JACKET", "the Shared product", "the Primary listing", "the Italian
+ * text"), never the row's own SKU and never where a pin is stored.
+ *
+ * Punctuation rule (2026-10-04): no sentence ENDS with a full stop — the hover, the accessible name and the
+ * mark-plus-source text all read as one line. A sentence may hold a full stop inside (outdated, aiStale, a formula
+ * named by `from`). A `from` that IS the server's sentence (refused, pending, attention) is returned verbatim, with
+ * whatever punctuation the server wrote.
+ *
+ * `by` (`mapped`, `mappedShared` only, 2026-10-04): the rule that derives the value when it has a name of its own — "the
+ * reusable rule “Apparel brand”" — so the sentence names its author and its source apart ("Derived by the reusable rule
+ * “Apparel brand” from the Shared product"). Absent = "a mapping rule"; every other member ignores it.
  */
-export function provenanceTooltip(provenance: CellProvenance, from?: string | null): string {
+export function provenanceTooltip(provenance: CellProvenance, from?: string | null, by?: string | null): string {
   switch (provenance) {
     case 'inherited':
       return from
         ? `Inherited from ${from} — edit to give this row its own value`
         : 'Inherited from the parent — edit to give this row its own value'
     case 'inheritedOverride':
+      // "the Shared product", never "the master": the UI renamed Master → Shared (PR #250).
       return from
-        ? `Inherited from ${from}, which itself overrides the master — resetting returns it to ${from}, not to the master`
-        : 'Inherited from a layer that itself overrides the master — resetting returns it there, not to the master'
+        ? `Inherited from ${from}, which itself overrides the Shared product — resetting returns it to ${from}, not to the Shared product`
+        : 'Inherited from a layer that itself overrides the Shared product — resetting returns it there, not to the Shared product'
     case 'pinned':
       return from ? `Pinned on this row — it no longer follows ${from}` : 'Pinned on this row — it no longer follows the layer above'
     case 'mapped':
       // §9.6 requires the mark to NAME ITS SOURCE — and to say where the value is actually decided,
       // because this cell is not the place.
-      return from
-        ? `Derived by a mapping rule from ${from}`
-        : 'Derived by a mapping rule'
+      return `Derived by ${by || 'a mapping rule'}${from ? ` from ${from}` : ''}`
     case 'mappedShared':
       // The scope statement is the whole point: without it, N identical rows assert N independent
       // resolutions when there was one.
-      return from
-        ? `Derived per product from ${from} — every alias of this product shares this value, so editing one changes all of them`
-        : 'Derived per product — every alias of this product shares this value, so editing one changes all of them'
+      return `Derived per product${by ? ` by ${by}` : ''}${from ? ` from ${from}` : ''} — every alias of this product shares this value, so editing one changes all of them`
     case 'refused':
       /**
        * 🔴 THE SERVER'S OWN REASON AND NOTHING ELSE (#780). No prefix, no "the formula was
@@ -298,20 +372,37 @@ export function provenanceTooltip(provenance: CellProvenance, from?: string | nu
        * no reason text, which the classifier makes impossible — it is here so a future caller that
        * sets the member some other way cannot render an empty tooltip.
        */
-      return from ?? 'This formula produced no value.'
+      return from ?? 'This formula produced no value'
     case 'formula':
       // Names WHERE the next click lands, like every other member's wording.
       return from
         ? `Calculated by a formula on this cell — ${from}. Edit the cell to change the formula`
         : 'Calculated by a formula on this cell — edit the cell to change the formula'
     case 'outdated':
-      return `Out of date — ${from ?? 'the source'} changed after this translation was written. Compare with the source; translate again or mark reviewed.`
+      return `Out of date — ${from ?? 'the source'} changed after this translation was written. Compare with the source; translate again or mark reviewed`
     case 'ai':
       return 'Drafted by AI and not yet approved — review before it counts as confirmed'
     case 'aiStale':
+      /* With a source (a machine translation of an older source text — the sheets pass "the source text"): approving it
+         overwrites nothing, so the sentence says what to do instead. Without one (an AI draft of this cell, PES.8): the
+         cell moved since the draft, and approving the draft would overwrite that edit. */
       return from
-        ? `Drafted by AI from an older value — ${from} has changed since. Approving this overwrites that change.`
-        : 'Drafted by AI from an older value — this cell has changed since. Approving this overwrites that change.'
+        ? `Drafted by AI from an older value — ${from} has changed since. Compare with it before approving`
+        : 'Drafted by AI from an older value — this cell has changed since. Approving this overwrites that change'
+    /*
+     * `pending` and `attention` work like `refused`: `from` is the SERVER'S sentence and is returned verbatim — no
+     * prefix, no restatement. The fallbacks fire only for a caller that sets the member without a sentence.
+     */
+    case 'pending':
+      return from ?? 'Saved in Nexus — the channel gets this value when you publish'
+    case 'attention':
+      return from ?? 'Needs attention — this value may not reach the channel as shown'
+    case 'listingValue':
+      // `from` is not used: the sentence is about the listing's own text, whichever layer named it. The typographic ’, as
+      // the sheet's Cell details writes the same sentence.
+      return 'This listing still holds its own text, not the Shared product’s — the next change to the Shared product replaces it; Follow Shared uses the Shared product’s text now'
+    case 'listingLevel':
+      return `One value for the whole listing${from ? `, from ${from}` : ''} — setting or clearing it here sets it for every variation`
     default:
       return ''
   }
@@ -350,8 +441,40 @@ export function provenanceClassRules<T>(read: (data: T, colId: string) => CellPr
     'nds-cell-is-formula-refused': (p: P) => of(p) === 'refused',
     'nds-cell-is-ai-draft': (p: P) => of(p) === 'ai' || of(p) === 'aiStale',
     'nds-cell-is-ai-draft-stale': (p: P) => of(p) === 'aiStale',
+    /*
+     * 2026-10-04 (channel cell marks). Every name is new — none of these may share a key with `roundTripClassRules` or
+     * `sheetClassRules` (`classRuleKeys.vitest.test.ts`).
+     *
+     * 🔴 `awaiting-publish`, NEVER `nds-cell-is-pending`: the save tracker owns that class (a save in flight, a warning
+     * wash, `grid.css`). A value waiting for Publish is SAVED — painting it like an unsaved edit would be false. It gets
+     * no tint at all: the mark carries it, and the row's Status cell already says the row waits for Publish.
+     */
+    'nds-cell-is-awaiting-publish': (p: P) => of(p) === 'pending',
+    /* The warning wash `outdated` wears: the next action is the same family — read why before you act. */
+    'nds-cell-is-attention': (p: P) => of(p) === 'attention',
+    /* The pinned wash: like a pin it differs from the Shared product, and "Follow Shared" returns it there. */
+    'nds-cell-is-listing-value': (p: P) => of(p) === 'listingValue',
+    /* No tint, like `mappedShared` (its sibling: a claim about SCOPE — editing one row changes all of them). */
+    'nds-cell-is-listing-level': (p: P) => of(p) === 'listingLevel',
   }
 }
+
+/**
+ * The words a `from` falls back to when the server named no source — never a storage id, and never "master"
+ * (the UI calls it the Shared product since PR #250). An unknown layer names nothing rather than leaking its id.
+ */
+const LAYER_WORDS: Record<string, string> = {
+  master: 'the Shared product',
+  default: 'the default',
+  variant: 'the variation',
+  alias: 'the listing',
+  aliasvariant: 'this variation\'s listing',
+  channel: 'the listing',
+  linked: 'a linked field',
+}
+
+/** Members whose `from` is the SERVER'S sentence, shown verbatim — never a layer name standing in for one. */
+const SENTENCE_MEMBERS: ReadonlySet<CellProvenance> = new Set<CellProvenance>(['refused', 'pending', 'attention'])
 
 /** One source sentence for cells, tooltips and compare on both sheet hosts. */
 export function describeCellSource(
@@ -359,10 +482,13 @@ export function describeCellSource(
   options: { layer?: 'master' | 'variant' | 'channel'; from?: string | null; refusedReason?: string | null } = {},
 ): { member: CellProvenance; from: string | null; tooltip: string } {
   const member = classifyProvenance({ ...cell, refusedReason: options.refusedReason ?? cell?.refusedReason }, options.layer)
+  /* refused, pending, attention: `from` is the server's sentence (provenanceTooltip returns it verbatim), so a layer
+     fallback would become the whole hover text. No sentence → null → the member's own default sentence. */
   const from = member === 'refused' ? options.refusedReason ?? cell?.refusedReason ?? cell?.provenance?.from ?? null
-    : cell?.provenance?.from ?? options.from ?? (cell?.layer ? `${cell.layer} tier` : null)
+    : SENTENCE_MEMBERS.has(member) ? cell?.provenance?.from ?? null
+    : cell?.provenance?.from ?? options.from ?? (cell?.layer ? LAYER_WORDS[cell.layer.toLowerCase()] ?? null : null)
   const tooltip = member === 'pinned' && cell?.tier === 'pin'
-    ? `Pinned at ${from ?? 'this listing'} — changes to the shared language text do not replace this value.`
+    ? `Pinned at ${from ?? 'this listing'} — changes to the shared language text do not replace this value`
     : provenanceTooltip(member, from)
   return { member, from, tooltip }
 }
