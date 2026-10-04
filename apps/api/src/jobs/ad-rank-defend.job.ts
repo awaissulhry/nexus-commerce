@@ -396,6 +396,9 @@ async function decideAndMaybeApply(
   // active target names.
   const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, planId }
+  // 6e — the hour's CPC ceiling goes with every placement write below: the write gate holds a raise to it when the
+  // campaign has no ceiling of its own (MB.4's cap already keeps the serving paths' raises under it).
+  const cpcCeiling = spec.maxCpcCents != null && spec.maxCpcCents > 0 ? { cents: spec.maxCpcCents, source: `the hourly plan's CPC ceiling (target "${spec.key}")` } : null
   let applied = 0
   // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders the slot): a placement
   // raise waits, a lowering and a floor still land. 2b (review N2) — read from Amazon's real codes (delivery-reasons.ts);
@@ -468,7 +471,7 @@ async function decideAndMaybeApply(
         if (allow('forward')) {
           // Floor first, then the multiplier: for one tick the campaign is at the floored bid
           // with the OLD multiplier, never at the old bid with a new one.
-          try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%` }); applied++; writes.placement++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
+          try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%`, cpcCeiling }); applied++; writes.placement++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
         }
       } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
     }
@@ -540,7 +543,7 @@ async function decideAndMaybeApply(
     const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${budgetHeld.length ? ` · ${budgetWait(budgetHeld.join(', '))}` : ''}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
     const placeAllowed = changed && allow('forward')
     if (placeAllowed) {
-      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+      try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key, cpcCeiling }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     const baseRes = await applyBaseBidDirective(camp, spec, ctx, held, writes)
     applied += baseRes.applied
@@ -577,7 +580,7 @@ async function decideAndMaybeApply(
   if (willApply) {
     // HX.1 — attribute the write. Without the actor this row lands with userId:null and cannot be
     // traced back to the schedule or plan that made it.
-    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason, cpcCeiling }); applied++; writes.placement++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   const baseRes = await applyBaseBidDirective(camp, spec, ctx, held, writes)
   applied += baseRes.applied

@@ -6,6 +6,7 @@
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
  *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
  *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
+ *   5. a placement raise that keeps one click's most under the campaign's ceiling (6e, @nexus/shared/ads-effective-cpc)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
  * marks the OutboundSyncQueue row SKIPPED with a `[ADS-WRITE-GATE-DENY]`
@@ -26,6 +27,7 @@ import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
+import { effectiveCpcRefusal, placementRaiseOverCeiling, raisesAnyPlacement, type PlacementPct } from '@nexus/shared/ads-effective-cpc'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
@@ -56,6 +58,8 @@ export type GateDeniedAt =
   | 'ad_product_unsupported'
   // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
   | 'market_limits'
+  // 6e — a placement raise would let one click cost more than the campaign's ceiling (bid × placement × strategy).
+  | 'effective_cpc'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -143,6 +147,25 @@ export interface GateContext {
   previousValueCents?: number | null
   /** The OutboundSyncQueue row this write is. Its own action-log row is not part of its history (nor of the spend ceiling's ledger). */
   queueId?: string | null
+
+  // ── 6e ────────────────────────────────────────────────────────────────────
+  /** A placement write (`updatePlacementBidding`): checked against the campaign's ceiling by placementCpcDenial below. */
+  placement?: PlacementWriteCheck | null
+}
+
+/** 6e — what a placement write changes, for placementCpcDenial. */
+export interface PlacementWriteCheck {
+  /** The adjustments this write sends. A placement it leaves out keeps its value (the live write merges, G.4). */
+  adjustments: PlacementPct[]
+  /** The adjustments it replaces: Nexus's copy of the campaign's. */
+  prior: PlacementPct[]
+  /** A bidding strategy the write sets too ('autoForSales' | 'legacyForSales' | 'manual'), when it sets one. */
+  biddingStrategy?: string | null
+  /**
+   * A ceiling the caller serves — the rank engine's hourly target `maxCpcCents` — read only when the campaign has none
+   * of its own (Campaign.maxBidCents ?? bid policy ?? this). `source` reads after "the ceiling from".
+   */
+  ceiling?: { cents: number; source: string } | null
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -317,6 +340,8 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         minBudgetCents: true, maxBudgetCents: true,
         // 6a — the ad product, refused below before the allowlist.
         adProduct: true, type: true, name: true,
+        // 6e — whether Amazon may raise bids on top of a placement adjustment.
+        biddingStrategy: true,
       },
     })
     // 6a — the broader refusal first (the pin-before-bounds order below): no allowlist entry makes an SB/SD campaign
@@ -373,6 +398,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       isSuppression: ctx.isSuppression,
     })
     if (bounds) return bounds
+
+    // 6e (review G.3) — the bid bounds' twin for placement writes, on the same campaign read (placementCpcDenial below).
+    if (ctx.placement) {
+      const overCeiling = await placementCpcDenial({ campaignId: ctx.campaignId, campaign, placement: ctx.placement })
+      if (overCeiling) return overCeiling
+    }
 
     /**
      * AUTO.A7 — per-SCOPE spend ceilings, at the one door every write passes.
@@ -552,6 +583,62 @@ export async function entityBoundsDenial(args: {
     }
   }
   return null
+}
+
+/**
+ * 6e (review G.3, Owner decision D4) — a placement raise may not let one click cost more than the campaign's ceiling.
+ *
+ * Amazon pays bid × (1 + placement %) × what "dynamic bids – up and down" adds (up to +100% at Top of search, +50%
+ * elsewhere): 900% with up and down is 20× the bid, and every bid bound judged the bid alone — the gate saw a placement
+ * write as value 0. So a placement write that RAISES a placement (or switches to up and down) is measured on the
+ * campaign's highest live bid (@nexus/shared/ads-effective-cpc, the formula the bid grid and the rank cap read).
+ *
+ * The ceiling is the campaign's own maximum bid ?? its bid policy's ?? the one the caller serves (the rank engine's hourly
+ * target `maxCpcCents`). Only existing ceilings (D4): none set → allowed, no new default. A DENY, never a clamp, like the
+ * bid bounds. A lowering or a hold always passes and costs no read — taking spend down must never be refused.
+ *
+ * The highest live bid: enabled keywords and targets in enabled ad groups, and those groups' default bids; a suppressed
+ * bid counts at the value it is restored to, as the rank engine measures it (MB.4) — the placement outlives the floor.
+ */
+export async function placementCpcDenial(args: {
+  campaignId: string
+  campaign: Pick<EntityBoundsCampaign, 'maxBidCents' | 'portfolioId' | 'marketplace'> & { biddingStrategy?: string | null }
+  placement: PlacementWriteCheck
+}): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const { campaignId, campaign, placement } = args
+  const shape = {
+    prior: placement.prior,
+    next: placement.adjustments,
+    strategy: campaign.biddingStrategy ?? null,
+    nextStrategy: placement.biddingStrategy ?? null,
+  }
+  if (!raisesAnyPlacement(shape)) return null
+
+  let ceiling: { cents: number; source: string } | null =
+    campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: 'the campaign\'s own maximum bid' } : null
+  if (!ceiling) {
+    const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
+    if (policy.max) ceiling = { cents: policy.max.cents, source: `the bid policy "${policy.max.label}"` }
+  }
+  ceiling ??= placement.ceiling ?? null
+  if (!ceiling) return null
+
+  const [groups, targets] = await Promise.all([
+    prisma.adGroup.aggregate({
+      where: { campaignId, status: 'ENABLED' },
+      _max: { defaultBidCents: true, suppressedFromBidCents: true },
+    }),
+    prisma.adTarget.aggregate({
+      where: { adGroup: { campaignId, status: 'ENABLED' }, status: 'ENABLED', isNegative: false },
+      _max: { bidCents: true, suppressedFromBidCents: true },
+    }),
+  ])
+  const highestBidCents = Math.max(
+    groups._max.defaultBidCents ?? 0, groups._max.suppressedFromBidCents ?? 0,
+    targets._max.bidCents ?? 0, targets._max.suppressedFromBidCents ?? 0,
+  )
+  const breach = placementRaiseOverCeiling({ ...shape, highestBidCents, ceilingCents: ceiling.cents })
+  return breach ? { allowed: false, reason: effectiveCpcRefusal(breach, ceiling.source), deniedAt: 'effective_cpc' } : null
 }
 
 /**

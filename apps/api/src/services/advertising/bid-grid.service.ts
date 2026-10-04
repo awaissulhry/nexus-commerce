@@ -54,6 +54,7 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 // The ONE actor classifier. `AdvertisingActionLog.userId` holds an actor STRING, not an operator
 // id — see `bidderByCampaign` for the defect that cost.
 import { parseActor } from './ads-changes.service.js'
+import { effectiveMaxCpc as effectiveMaxCpcOf } from '@nexus/shared/ads-effective-cpc'
 
 /** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
 export const BID_MARKETS = ['IT', 'DE', 'FR', 'ES'] as const
@@ -380,40 +381,23 @@ async function resolveScope(req: BidGridRequest) {
  * The CONVENTION is verified and is not the defect: `+300%` means the bid is multiplied by
  * **×4.00**, i.e. `bid × (1 + pct/100)`.
  */
-const LANE_UPLIFT: Record<string, number> = {
-  PLACEMENT_TOP: 1.0,
-  PLACEMENT_REST_OF_SEARCH: 0.5,
-  PLACEMENT_PRODUCT_PAGE: 0.5,
-  // BID.S3 — the fourth lane, named rather than left to the `?? 0.5` fallback below. 7 campaigns
-  // carry it, max +10%. Its uplift IS 0.5 (Amazon's non-top figure), so the behaviour is unchanged
-  // — but a lane arriving at its value through a fallback is a lane nobody has checked.
-  SITE_AMAZON_BUSINESS: 0.5,
-}
+// 6e — the lane uplifts (Top of search +100%, every other placement +50%, Amazon Business included) and the formula live in
+// @nexus/shared/ads-effective-cpc, which the write gate's placement check and the rank engine's headroom read too.
 export function effectiveMaxCpc(bidCents: number, dynamicBidding: unknown): { cents: number | null; placementPct: number; strategy: string | null } {
   const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement?: string; percentage?: number }>; strategy?: string }
   const strategy = typeof db.strategy === 'string' ? db.strategy : null
-  const lanes = Array.isArray(db.placementBidding) ? db.placementBidding : []
-  const canRaise = strategy === 'AUTO_FOR_SALES'
-  let best = 0
-  let bestPct = 0
-  for (const lane of lanes) {
-    const pct = Number(lane?.percentage)
-    if (!Number.isFinite(pct) || pct <= 0) continue
-    const uplift = canRaise ? (LANE_UPLIFT[String(lane.placement)] ?? 0.5) : 0
-    const cents = bidCents * (1 + pct / 100) * (1 + uplift)
-    if (cents > best) { best = cents; bestPct = pct }
-  }
-  // A strategy that can raise still lifts the bid on a lane with no placement adjustment.
-  if (canRaise && best === 0 && bidCents > 0) best = bidCents * (1 + LANE_UPLIFT.PLACEMENT_TOP)
+  const lanes = (Array.isArray(db.placementBidding) ? db.placementBidding : []).map((l) => ({ placement: String(l?.placement ?? ''), percentage: Number(l?.percentage) }))
+  // Every placement counts, an unset one at 0%: a strategy that can raise still lifts the bid at Top of search there.
+  const best = effectiveMaxCpcOf(bidCents, lanes, strategy)
   // 🔴 Round BEFORE comparing. Rounding after it lets a small multiplier survive the `>` and then
   // collapse onto the bid: a 2¢ bid with a +1% adjustment is 2.02 → rounds to 2 → the column
   // renders €0.02 next to a Bid column reading €0.02. Caught by `_bid-s2-verify.mts` on prod.
   // A ceiling equal to the bid is not a ceiling, and a column that restates its neighbour on some
   // rows is the Apply Rules defect arriving by the back door.
-  const rounded = Math.round(best)
+  // (`effectiveMaxCpcOf` returns the rounded cents.)
   return {
-    cents: rounded > bidCents ? rounded : null,
-    placementPct: bestPct,
+    cents: best.cents > bidCents ? best.cents : null,
+    placementPct: best.pct,
     strategy,
   }
 }

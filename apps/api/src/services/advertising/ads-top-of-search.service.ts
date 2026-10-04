@@ -141,11 +141,12 @@ export { buildBlendedAdjustments, MANAGED_PLACEMENTS } from './ads-placement-mat
  * traced to the schedule, family plan or operator that caused it. Optional so existing manual /
  * recommendation call sites keep working unchanged; they simply record no actor, as before.
  */
-export async function setSearchPlacement(campaignId: string, placement: string, percentage: number, opts?: { actor?: string; reason?: string }): Promise<unknown> {
+// 6e — `cpcCeiling`: the rank engine's hourly target ceiling, handed to the write gate (PlacementBiddingInput.cpcCeiling).
+export async function setSearchPlacement(campaignId: string, placement: string, percentage: number, opts?: { actor?: string; reason?: string; cpcCeiling?: { cents: number; source: string } | null }): Promise<unknown> {
   const { updatePlacementBidding } = await import('./ads-create.service.js')
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
-  return updatePlacementBidding({ campaignId, adjustments: buildSearchPlacementAdjustments(db.placementBidding ?? [], placement, percentage), actor: opts?.actor, reason: opts?.reason })
+  return updatePlacementBidding({ campaignId, adjustments: buildSearchPlacementAdjustments(db.placementBidding ?? [], placement, percentage), actor: opts?.actor, reason: opts?.reason, ...(opts?.cpcCeiling ? { cpcCeiling: opts.cpcCeiling } : {}) })
 }
 
 // Back-compat wrapper for the Top-of-Search recommendation / manual paths.

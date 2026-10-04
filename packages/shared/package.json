@@ -150,6 +150,10 @@
       "types": "./dist/ads-market-limits.d.ts",
       "default": "./dist/ads-market-limits.js"
     },
+    "./ads-effective-cpc": {
+      "types": "./dist/ads-effective-cpc.d.ts",
+      "default": "./dist/ads-effective-cpc.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

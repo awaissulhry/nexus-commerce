@@ -7,6 +7,7 @@
  * hour's FIXED Placement % and nothing else: no impression-share or ACoS reading, no climb/ease step, no keep-
  * climbing, no all-out climb, no ceiling chase. The goal fields stay in the database but are not read.
  */
+import { maxStrategyUplift } from '@nexus/shared/ads-effective-cpc'
 
 // 2e — the fields marked "not read" are kept (the database still holds them) but no tick reads them since 2e.
 export interface RankTargetSpec {
@@ -115,10 +116,12 @@ export function biasBand(target: Pick<RankTargetSpec, 'biasPct'>): { floor: numb
  * to see: the base bid ALONE already exceeds the ceiling, so even a 0% placement breaches it
  * and no multiplier cap can rescue it.
  */
+// 6e — from the one table of what each strategy may add (@nexus/shared/ads-effective-cpc), so this headroom and the write
+// gate's effective-CPC check cannot drift. Deliberately the LARGEST uplift on any placement (Top of search), on every lane.
 export const STRATEGY_HEADROOM: Record<string, number> = {
-  AUTO_FOR_SALES: 2, // up-and-down — Amazon may add up to +100% again at Top of Search
-  LEGACY_FOR_SALES: 1, // down only
-  MANUAL: 1, // fixed
+  AUTO_FOR_SALES: 1 + maxStrategyUplift('AUTO_FOR_SALES'), // up-and-down — Amazon may add up to +100% again at Top of Search
+  LEGACY_FOR_SALES: 1 + maxStrategyUplift('LEGACY_FOR_SALES'), // down only
+  MANUAL: 1 + maxStrategyUplift('MANUAL'), // fixed
 }
 export function strategyHeadroom(biddingStrategy: string | null | undefined): number {
   return (biddingStrategy && STRATEGY_HEADROOM[biddingStrategy]) || 1

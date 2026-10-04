@@ -25,7 +25,7 @@ import {
   type AdsRegion,
 } from './ads-api-client.js'
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
-import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
+import { checkAdsWriteGate, logGateDeny, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
@@ -1038,6 +1038,11 @@ export interface PlacementBiddingInput {
    * undelivered values, so every placement in `adjustments` counts as set by this write, none as carried.
    */
   resend?: boolean
+  /**
+   * 6e — a CPC ceiling this caller serves (the rank engine: its hourly target's `maxCpcCents`). The write gate holds a
+   * placement raise to it only when the campaign has no ceiling of its own (Campaign.maxBidCents ?? bid policy).
+   */
+  cpcCeiling?: { cents: number; source: string } | null
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1106,11 +1111,20 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       // has no fieldChanges for the gate to derive a dimension from. It names its own.
       // Without this the placement pin would be the one pin that never bound anything —
       // and placement bias is the rank engine's primary actuator, running to +900%.
-      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement' })
+      // 6e (review G.3) — and what the write changes, so a raise is held to the campaign's ceiling on what one click
+      // can then cost (bid × placement × strategy), not judged as value 0. Measured on the local copy, before the read.
+      const gate = await checkAdsWriteGate({
+        marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement',
+        placement: { adjustments, prior: priorAdjustments, biddingStrategy: input.biddingStrategy ?? null, ceiling: input.cpcCeiling ?? null },
+      })
       if (!gate.allowed) {
         gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
         gateDeniedAt = (gate as { deniedAt?: string }).deniedAt ?? null
         logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial, deniedAt: gateDeniedAt })
+        // 6e — recorded where the gate records its refusals (AdWriteRefusal), so a refused raise can be counted.
+        if (gateDeniedAt === 'effective_cpc') {
+          logGateDeny({ queueId: null, marketplace: c.marketplace, payloadValueCents: 0, campaignId: input.campaignId, entityType: 'CAMPAIGN', entityId: input.campaignId }, gateDenial, 'effective_cpc')
+        }
       } else {
         /**
          * G.4 — read Amazon's current array (through the gateway, like the PUT) and merge onto it.
