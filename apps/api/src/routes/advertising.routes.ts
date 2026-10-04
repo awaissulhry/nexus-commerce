@@ -7946,6 +7946,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b.name) { reply.status(400); return { error: 'name required' } }
     const { createBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
     const out = await createBudgetSchedule(b, actorFromHeaders(request.headers as Record<string, unknown>))
+    if ('invalid' in out) { reply.status(400); return out.invalid } // 4b — a window value unreadable or out of range
     if ('conflict' in out) { reply.status(409); return out.conflict }
     return out
   })
@@ -7958,6 +7959,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { patchBudgetSchedule } = await import('../services/advertising/ads-budget-schedule.service.js')
     const out = await patchBudgetSchedule(id, (request.body ?? {}) as Record<string, unknown>, actorFromHeaders(request.headers as Record<string, unknown>))
     if (!out) { reply.status(404); return { error: 'not found' } }
+    if ('invalid' in out) { reply.status(400); return out.invalid } // 4b
     if ('conflict' in out) { reply.status(409); return out.conflict }
     return out
   })

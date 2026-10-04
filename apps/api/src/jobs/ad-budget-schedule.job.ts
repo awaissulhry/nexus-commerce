@@ -56,6 +56,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync } from '../services/advertising/ads-mutation.service.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 import { budgetDayKey, budgetDayStart } from '@nexus/shared/ads-budget-day'
+import { parseDecimalInput } from '@nexus/shared/ads-number'
 
 interface BSWindow { day?: number; start?: string; end?: string; adj?: string; value?: number }
 interface BSCampaign { id: string; name?: string; dailyBudget?: number | null }
@@ -181,11 +182,19 @@ export function dateActive(s: { startDate: Date | null; endDate: Date | null; ne
   return true
 }
 
-/** New daily budget for a window, clamped to Amazon's €1 floor. */
-export function computeBudget(base: number, type: string, adj?: string, value?: number): number {
-  const v = Number(value) || 0
+/**
+ * New daily budget for a window, clamped to Amazon's €1 floor.
+ *
+ * 4b (review 4.1) — the value is read with the shared reader: "15,50" is €15.50, not 0 → €1. A value it cannot read
+ * (or a blank one) leaves the budget where it is — the same as a × 0 multiplier always did — never a €1 budget. The
+ * save routes refuse such a window now; this guards the ones stored before.
+ */
+export function computeBudget(base: number, type: string, adj?: string, value?: number | string): number {
+  const read = parseDecimalInput(value)
+  const v = read.ok ? read.value : null
   let next = base
-  if (type === 'budget-multiplier') next = base * (v || 1)
+  if (v == null) next = base // unreadable or blank: the budget stays
+  else if (type === 'budget-multiplier') next = base * (v || 1)
   else if (adj === 'set') next = v
   else if (adj === 'incPct') next = base * (1 + v / 100)
   else if (adj === 'decPct') next = base * (1 - v / 100)

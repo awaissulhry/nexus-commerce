@@ -11,10 +11,11 @@
 import { describe, it, expect } from 'vitest'
 import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes, builderScopeCampaignIds } from './ads-rule-adapter.service.js'
 
+// 4b — each block carries a THEN value, as the builder always sends one: a blank THEN now refuses the rule.
 const rule = (slug: string, metrics: string[], action: Record<string, unknown> = {}) => ({
   id: 'test-rule',
   actions: [{ type: slug, ...action }],
-  conditions: [{ match: 'all', lookback: 'Last 30 Days', exclude: 'None', conditions: metrics.map((m) => ({ metric: m, op: 'gte', value: '10' })) }],
+  conditions: [{ match: 'all', lookback: 'Last 30 Days', exclude: 'None', conditions: metrics.map((m) => ({ metric: m, op: 'gte', value: '10' })), action: { op: 'set', value: '1' } }],
 })
 
 // Mirrors PerformanceCriteria.tsx (METRICS_BASE / _SOV / _RANK / _PLACEMENT) — keep in step by hand.
@@ -500,6 +501,102 @@ describe('HP1 — the harvest builder form survives into execution', () => {
     const promote = t.actions[0] as Record<string, unknown>
     expect((promote.harvest as { blocks: unknown }).blocks).toBeNull()
     expect(promote.bid).toEqual({ mode: 'fixed', value: 0.65 })
+  })
+})
+
+describe('4b (review 4.1) — a typed number is read with its decimal comma, and junk refuses the rule', () => {
+  const block = (conditions: Array<{ metric: string; op: string; value: unknown }>, action?: Record<string, unknown>) =>
+    [{ match: 'all', conditions, ...(action ? { action } : {}) }]
+  const one = (t: ReturnType<typeof maybeTranslateAdsRule>) => t!.actions[0] as Record<string, unknown>
+
+  it('🔴 "Spend ≥ 2,5" is 2.5 euro (250 cents), not 0 — it used to match every campaign', () => {
+    const t = maybeTranslateAdsRule({
+      id: 'comma',
+      actions: [{ type: 'budget', campaigns: [] }],
+      conditions: block([{ metric: 'Spend', op: 'gte', value: '2,5' }, { metric: 'ACOS', op: 'gt', value: '40,5' }], { op: 'set', value: '12,50' }),
+    })!
+    expect(t.untranslatable).toBeUndefined()
+    const by = Object.fromEntries(t.conditions.map((c) => [c.field, c.value]))
+    expect(by['campaign.spendCents']).toBe(250)
+    expect(by['campaign.acos']).toBeCloseTo(0.405)
+    expect(one(t).value).toBe(12.5) // "Set budget 12,50" used to ask for €0 → Amazon's €1 floor
+  })
+
+  it('🔴 a ceiling typed with a comma is that ceiling; one that cannot be read refuses the rule — never "no ceiling"', () => {
+    const budget = (a0: Record<string, unknown>) => maybeTranslateAdsRule({
+      id: 'ceil', actions: [{ type: 'budget', campaigns: [], ...a0 }],
+      conditions: block([{ metric: 'Clicks', op: 'gte', value: '10' }], { op: 'incPct', value: '10' }),
+    })!
+    expect(one(budget({ budgetFloor: '1,5', budgetCeiling: '12,50' }))).toMatchObject({ minEur: 1.5, maxEur: 12.5 })
+    // Blank stays what it always meant: the €1 floor, no ceiling.
+    expect(one(budget({ budgetCeiling: null }))).toMatchObject({ minEur: 1, maxEur: null })
+    expect(one(budget({ budgetFloor: '', budgetCeiling: '' }))).toMatchObject({ minEur: 1, maxEur: null })
+    const junk = budget({ budgetCeiling: '12,50 €' })
+    expect(junk.untranslatable).toEqual(['Budget ceiling: "12,50 €" is not a number — type digits with at most one decimal comma or point, for example 2,5'])
+    // …and the save-time question refuses it too.
+    expect(listUntranslatableMetrics({
+      actions: [{ type: 'budget', campaigns: [], budgetCeiling: '12,50 €' }],
+      conditions: block([{ metric: 'Clicks', op: 'gte', value: '10' }], { op: 'incPct', value: '10' }),
+    })).toHaveLength(1)
+  })
+
+  it('🔴 a threshold that cannot be read, or is blank, refuses the rule instead of comparing against 0', () => {
+    const t = maybeTranslateAdsRule({
+      id: 'junk', actions: [{ type: 'budget', campaigns: [] }],
+      conditions: block([{ metric: 'Spend', op: 'gte', value: 'abc' }, { metric: 'Clicks', op: 'gte', value: '' }], { op: 'set', value: '5' }),
+    })!
+    expect(t.untranslatable).toEqual([
+      'Spend: "abc" is not a number — type digits with at most one decimal comma or point, for example 2,5',
+      'Clicks is empty',
+    ])
+    expect(t.conditions).toEqual([]) // nothing left that could compare against 0
+  })
+
+  it('a blank THEN refuses an arithmetic op; the computed Bid ops may leave it blank', () => {
+    const bid = (action: Record<string, unknown>) => maybeTranslateAdsRule({
+      id: 'then', actions: [{ type: 'bid', campaigns: [] }],
+      conditions: block([{ metric: 'Clicks', op: 'gte', value: '10' }], action),
+    })!
+    expect(bid({ op: 'set', value: '' }).untranslatable).toEqual(['THEN value is empty'])
+    expect(bid({ op: 'decPct', value: '2,5' }).untranslatable).toBeUndefined()
+    expect(one(bid({ op: 'decPct', value: '2,5' })).value).toBe(2.5)
+    for (const op of ['setCpc', 'revPerClick', 'targetAcos', 'curBidTargetAcos']) {
+      const t = bid({ op, value: '' })
+      expect(t.untranslatable, op).toBeUndefined()
+      expect(one(t).value, op).toBe(0) // bid_apply ignores it, or uses the account's target ACoS
+    }
+  })
+
+  it('placement values, bid floors, protect days and the harvest bid fail closed too', () => {
+    const placement = maybeTranslateAdsRule({
+      id: 'pl', actions: [{ type: 'placement', campaigns: [], placeFloor: '0', placeCeiling: '9OO' }],
+      conditions: block([{ metric: 'ACOS', op: 'gt', value: '30' }], { op: 'set', value: '12,5', placeTarget: 'tos' }),
+    })!
+    expect(one(placement).value).toBe(12.5)
+    expect(placement.untranslatable).toEqual([expect.stringMatching(/^Placement ceiling: "9OO" is not a number/)])
+    const bidFloor = maybeTranslateAdsRule({
+      id: 'bf', actions: [{ type: 'bid', campaigns: [], bidFloor: '0,05', bidCeiling: 'x' }],
+      conditions: block([{ metric: 'Clicks', op: 'gte', value: '10' }], { op: 'set', value: '0,40' }),
+    })!
+    expect(one(bidFloor).minEur).toBe(0.05)
+    expect(bidFloor.untranslatable).toEqual([expect.stringMatching(/^Bid ceiling: "x" is not a number/)])
+    const negative = maybeTranslateAdsRule({ id: 'ng', actions: [{ type: 'negative-targeting', protectDays: 'thirty' }], conditions: block([{ metric: 'Clicks', op: 'gte', value: '10' }]) })!
+    expect(negative.untranslatable).toEqual([expect.stringMatching(/^Protect days: "thirty" is not a number/)])
+    const harvest = (value: unknown) => maybeTranslateAdsRule({ id: 'hv', actions: [{ type: 'keyword-harvesting', bid: { mode: 'fixed', value } }], conditions: block([{ metric: 'Orders', op: 'gte', value: '1' }]) })!
+    expect(one(harvest('0,65')).bid).toEqual({ mode: 'fixed', value: 0.65 })
+    expect(one(harvest('')).bid).toEqual({ mode: 'fixed', value: null })
+    expect(harvest('€0.65').untranslatable).toEqual([expect.stringMatching(/^Harvest bid: "€0.65" is not a number/)])
+  })
+
+  it('a rule-wide field is named once, however many blocks re-read it', () => {
+    const t = maybeTranslateAdsRule({
+      id: 'twice', actions: [{ type: 'budget', campaigns: [], budgetCeiling: 'abc' }],
+      conditions: [
+        { match: 'all', conditions: [{ metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'set', value: '5' } },
+        { match: 'all', conditions: [{ metric: 'Spend', op: 'gte', value: '1' }], action: { op: 'set', value: '6' } },
+      ],
+    })!
+    expect(t.untranslatable).toHaveLength(1)
   })
 })
 
