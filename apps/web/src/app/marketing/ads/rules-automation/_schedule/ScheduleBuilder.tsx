@@ -23,7 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 // (`recommendWindows` below) and is not touched by any of this.
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Listbox } from '@/design-system/components'
+import { Banner, Listbox } from '@/design-system/components'
 import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
@@ -141,6 +141,10 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
    */
   const [excludeRanges, setExcludeRanges] = useState<Array<{ id: number; start: string; end: string }>>([])
   const [creating, setCreating] = useState(false)
+  // 3c — a refused save says why (e.g. the 409 "already in the budget schedule …") instead of doing nothing.
+  const [saveErr, setSaveErr] = useState<string | null>(null)
+  const saveErrRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (saveErr) saveErrRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [saveErr])
   /** BSP-P1 — computed once per mount, not per render: a date label that ticks over mid-session
    *  would make the field flicker between two truths. Both branches render it. */
   const [periodLabel] = useState(() => chartWindowLabel())
@@ -339,6 +343,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
   const submit = useCallback(async () => {
     if (!valid || creating) return
     setCreating(true)
+    setSaveErr(null)
     try {
       const campaigns = selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, dailyBudget: c.dailyBudget }))
       // BSP-P4 — an all-day row sends NO hours. Without this, switching Campaign Budget →
@@ -351,6 +356,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         adj: w.adj, value: Number(w.value) || 0,
       }))
       let ok = false
+      let error: string | null = null
       if (isDayparting) {
         // Dayparting persists through the automation-rules store (trigger SCHEDULE) — starts disabled + dry-run.
         // Its date shape (incl. the boolean excludeDates) is untouched by W4.
@@ -362,6 +368,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         const base = `${getBackendUrl()}/api/advertising/automation-rules`
         const r = await fetch(isEdit ? `${base}/${scheduleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         const j = await r.json().catch(() => ({})); ok = r.ok && j?.error == null
+        if (!ok) error = typeof j?.error === 'string' && j.error ? j.error : `The server answered ${r.status}.`
       } else {
         /**
          * W4 — the budget date block, rebuilt on three facts:
@@ -390,8 +397,13 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         const base = `${getBackendUrl()}/api/advertising/budget-schedules`
         const r = await fetch(isEdit ? `${base}/${scheduleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         const j = await r.json().catch(() => ({})); ok = r.ok && j?.error == null
+        // 3c — the route's sentence (409: a campaign already in another switched-on budget schedule), or the status.
+        if (!ok) error = typeof j?.error === 'string' && j.error ? j.error : `The server answered ${r.status}.`
       }
       if (ok) router.push('/marketing/ads/rules-automation')
+      else setSaveErr(error ?? 'The schedule was not saved.')
+    } catch (e) {
+      setSaveErr(`The schedule was not saved: ${(e as Error).message}.`)
     } finally { setCreating(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valid, creating, name, type, isDayparting, timezone, selCampaigns, windows, metric1, metric2, groupBy, daysFilter, startDate, endDate, neverExpire, excludeDates, excludeRanges, isEdit, scheduleId, router])
@@ -643,7 +655,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                   <div className="h10-sb-exd">
                     <div className="hd2">
                       <b>Exclude Dates</b>
-                      <span>Blackout ranges — on these days the schedule stands down and campaigns hold their base budget.</span>
+                      <span>Blackout ranges — on these days no window opens. A budget this schedule set is given back; a budget someone changed since stays as it is.</span>
                     </div>
                     {excludeRanges.map((r) => (
                       <div className="h10-sb-dates exrow" key={r.id}>
@@ -659,6 +671,12 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                 )}
               </div>
             </section>
+
+            {saveErr && (
+              <div ref={saveErrRef}>
+                <Banner tone="danger" title={isEdit ? 'Not saved' : 'Not created'} onDismiss={() => setSaveErr(null)}>{saveErr}</Banner>
+              </div>
+            )}
 
             {/* footer */}
             <div className="h10-rb-foot">

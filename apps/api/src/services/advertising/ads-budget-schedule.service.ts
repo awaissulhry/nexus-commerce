@@ -4,6 +4,11 @@
  * windows and turn-down-automation switches one off through the same code — with the same give-back (W4): a schedule
  * disabled or deleted while it holds a budget gives that budget back. The routes answer byte for byte as before
  * (automation-tune-route-parity.vitest.test.ts), plus 3b's `kept` count in the give-back result.
+ *
+ * 3c — the create moved here too (`POST`, same answers), and two rules were added (review 6.5, 6.8):
+ *   · a campaign taken out of a switched-on schedule gets its budget back, with the same check as a pause;
+ *   · a campaign is in one switched-on budget schedule at a time (Owner S13): a create, a campaigns edit or a
+ *     re-enable that would put it in a second one is refused, and the answer names the other schedule (409).
  */
 import type { BudgetSchedule } from '@prisma/client'
 import prisma from '../../db.js'
@@ -80,26 +85,132 @@ export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unkn
   return { restored, kept, refused }
 }
 
-/** PATCH /advertising/budget-schedules/:id. null = not found (the route's 404), as any failure inside always was. */
-export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | null> {
+type ScheduleCampaign = { id: string; name?: string | null; dailyBudget?: number | null }
+const campaignsOf = (v: unknown): ScheduleCampaign[] =>
+  Array.isArray(v) ? (v as ScheduleCampaign[]).filter((c) => c != null && typeof c.id === 'string' && c.id !== '') : []
+
+/** 3c — a create, edit or re-enable refused because a campaign is already in another switched-on budget schedule. */
+export interface BudgetScheduleConflict {
+  /** The sentence the screen shows: which campaigns, which schedule, what to do. */
+  error: string
+  scheduleId: string
+  scheduleName: string
+  campaignIds: string[]
+}
+
+/**
+ * 3c (review 6.8, Owner S13) — is any of these campaigns already in ANOTHER switched-on budget schedule?
+ *
+ * Two schedules on one campaign fight: each records the budget it found and gives back its own, so the older one's
+ * give-back reset the budget inside the newer one's window, and the newer one then stood down. One schedule per
+ * campaign removes the fight instead of ranking the two. A switched-off schedule does not count — it holds nothing
+ * (its pause gave the budgets back) — which is why switching one back on is checked too.
+ */
+export async function budgetScheduleConflict(campaigns: unknown, exceptId: string | null): Promise<BudgetScheduleConflict | null> {
+  const mine = new Map(campaignsOf(campaigns).map((c) => [c.id, c]))
+  if (mine.size === 0) return null
+  const others = await prisma.budgetSchedule.findMany({
+    where: { kind: 'BUDGET', enabled: true, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true, name: true, campaigns: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const hits = others
+    .map((o) => ({ o, shared: campaignsOf(o.campaigns).filter((c) => mine.has(c.id)) }))
+    .filter((h) => h.shared.length > 0)
+  if (hits.length === 0) return null
+  const { o, shared } = hits[0]
+  const names = shared.map((c) => `“${mine.get(c.id)?.name || c.name || c.id}”`)
+  const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`
+  const who = shared.length === 1 ? `The campaign ${list} is` : `${shared.length} campaigns (${list}) are`
+  const more = hits.length > 1 ? ` ${hits.length - 1} other budget schedule${hits.length === 2 ? '' : 's'} also hold${hits.length === 2 ? 's' : ''} some of these campaigns.` : ''
+  return {
+    error: `${who} already in the budget schedule “${o.name}”. A campaign can be in one switched-on budget schedule at a time: take ${shared.length === 1 ? 'it' : 'them'} out of “${o.name}”, or pause that schedule, first.${more}`,
+    scheduleId: o.id,
+    scheduleName: o.name,
+    campaignIds: shared.map((c) => c.id),
+  }
+}
+
+/**
+ * POST /advertising/budget-schedules, moved unchanged out of advertising.routes.ts (3c) — plus the one-schedule rule:
+ * a new schedule is switched on, so a campaign already in another switched-on schedule refuses the create.
+ * The route checks the name (400) before it calls this.
+ */
+export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict }> {
+  const conflict = await budgetScheduleConflict(b.campaigns, null)
+  if (conflict) return { conflict }
+  const schedule = await prisma.budgetSchedule.create({ data: {
+    name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
+    campaigns: (b.campaigns as object) ?? [], windows: (b.windows as object) ?? [],
+    timezone: (b.timezone as string) ?? 'Europe/Rome', chartPrefs: (b.chartPrefs as object) ?? {},
+    startDate: b.startDate ? new Date(String(b.startDate)) : null,
+    endDate: b.endDate ? new Date(String(b.endDate)) : null,
+    // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
+    // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
+    neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
+    /**
+     * 🔴 BSP-B5 sweep — `autoRefill` is NOT read from the body any more.
+     *
+     * The column has zero readers: `ad-budget-schedule.job.ts` never consults it, the builder
+     * never sends it, and BSP.2 removed its grid column for exactly that reason. Accepting a
+     * value the system cannot honour is the same false wiring one layer down — an API caller
+     * could set it, see it echoed back, and reasonably believe something would refill. The
+     * column stays (dropping it is a destructive migration and H10 does have the feature), but
+     * it is now writable only by a future executor that actually implements it.
+     */
+  } })
+  // BSP.2 (§2.6) — the schedule's own edit history was unrecorded (unlike the rank side's
+  // RankScheduleVersion). One audit row per CRUD; best-effort, never fails the write.
+  await prisma.advertisingActionLog.create({
+    data: {
+      userId: actor,
+      actionType: 'budget_schedule_create', entityType: 'BUDGET_SCHEDULE', entityId: schedule.id,
+      payloadBefore: {}, payloadAfter: { name: schedule.name, type: schedule.type, enabled: schedule.enabled },
+      amazonResponseStatus: 'SUCCESS',
+    },
+  }).catch(() => { /* audit must never fail the write it describes */ })
+  return { schedule }
+}
+
+/**
+ * PATCH /advertising/budget-schedules/:id. null = not found (the route's 404), as any failure inside always was;
+ * `conflict` = 3c's one-schedule rule refused the edit (the route's 409) and nothing was changed.
+ */
+export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | { conflict: BudgetScheduleConflict } | null> {
   const data: Record<string, unknown> = {}
-  // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in POST (advertising.routes.ts).
+  // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in createBudgetSchedule.
   for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
   // BSP.2 (§2.2) — same sanitisation as create: an array or nothing.
   if (data.excludeDates !== undefined && !Array.isArray(data.excludeDates)) data.excludeDates = []
   if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
   if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
+  const editsCampaigns = data.campaigns !== undefined
   try {
     // W4 — read before write, so a disable can give back what THIS schedule applied.
-    const before = data.enabled === false
+    // 3c — and so a campaigns edit can give back the campaigns it takes out, and an edit or a re-enable can be checked.
+    const before = data.enabled !== undefined || editsCampaigns
       ? await prisma.budgetSchedule.findUnique({ where: { id }, select: { id: true, enabled: true, campaigns: true, lastApplied: true } })
       : null
+    // 3c (Owner S13) — still switched on after this edit, with new campaigns or just switched back on: one schedule per campaign.
+    const onAfter = data.enabled !== undefined ? data.enabled === true : before?.enabled === true
+    if (before && onAfter && (editsCampaigns || !before.enabled)) {
+      const conflict = await budgetScheduleConflict(editsCampaigns ? data.campaigns : before.campaigns, id)
+      if (conflict) return { conflict }
+    }
     const schedule = await prisma.budgetSchedule.update({ where: { id }, data })
     // Disable AFTER the update: the executor only reads enabled schedules, so once the row says
     // enabled:false the cron cannot race this restore by re-applying the window.
     // BSP-P3 — the outcome is REPORTED now: "paused" and "paused, and 3 campaigns kept the boost
     // because the restore was refused" are different facts and the operator gets the second one.
-    const restore = before?.enabled === true ? await restoreBudgetScheduleBase(before) : null
+    // 3c (review 6.5) — a campaign taken out of a switched-on schedule is given back the same way, AFTER the update
+    // for the same reason: the executor only reads the schedule's campaigns, so it can no longer re-apply the window.
+    // Before, the executor simply stopped seeing it and its boost stayed for good.
+    const staying = new Set(editsCampaigns ? campaignsOf(data.campaigns).map((c) => c.id) : [])
+    const removed = editsCampaigns && before ? campaignsOf(before.campaigns).filter((c) => !staying.has(c.id)) : []
+    const restore = before?.enabled !== true ? null
+      : data.enabled === false ? await restoreBudgetScheduleBase(before)
+      : removed.length > 0 ? await restoreBudgetScheduleBase({ id, campaigns: removed, lastApplied: before.lastApplied })
+      : null
     await prisma.advertisingActionLog.create({
       data: {
         userId: actor,

@@ -207,7 +207,8 @@ export function computeBudget(base: number, type: string, adj?: string, value?: 
  *                 when it closes. BSP.6 adds `overriddenBy`, so the tab can say WHO — the pacer, a
  *                 rule, or the operator's own hand;
  *   · `refused` — the mutation layer declined (`ok:false`), which it does by RETURN VALUE; or (3b) a
- *                 give-back was given up after GIVE_BACK_RETRIES tries that did not reach Amazon;
+ *                 give-back was given up after GIVE_BACK_RETRIES tries that did not reach Amazon; or (3c) the
+ *                 window entry's queued write did not reach Amazon and Nexus's copy went back (4k);
  *   · `failed`  — the call threw.
  *
  * `actionLogId` / `outboundQueueId` are the receipt handles. They only exist on the outcome
@@ -323,6 +324,7 @@ export function decideCampaign(
   liveCents: number,
   active: ActiveWindow | null,
   legacyBaseCents: number | null,
+  // `giveBack`: what became of the previous record's queued write — a give-back's (3b) or, 3c, the window entry's.
   ctx: { type: string; now: Date; giveBack?: { status: string | null; error: string | null } | null },
 ): BSDecision {
   const at = ctx.now.toISOString()
@@ -336,6 +338,13 @@ export function decideCampaign(
       // resolves) — but NOT a stale `overriddenBy`: it is re-resolved by the caller, and showing last
       // tick's attributor for a yield we could not attribute this tick would be a fabrication.
       const { overriddenBy: _stale, ...carried } = prev
+      // 3c — since 4k the worker puts a write the gate refused back in Nexus, so the budget moves away from ours with
+      // no one else's change. When this entry's own write did not reach Amazon, that is a refusal — the queue row says
+      // why — not a yield. Still stood down for this entry: the next entry tries again.
+      const st = ctx.giveBack?.status ?? null
+      if (st != null && NOT_LANDED.has(st)) {
+        return { act: 'keep', record: { ...carried, at, state: 'refused', live, error: ctx.giveBack?.error ?? prev.error ?? null }, outcome: 'refused' }
+      }
       return { act: 'keep', record: { ...carried, at, state: 'yielded', live }, outcome: 'yielded' }
     }
     // A new entry. 🔴 S14 — the base is the budget just before the window: the live value, unless the
@@ -437,7 +446,8 @@ export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BST
     /** BSP.6 — campaigns that yielded this tick; their overriders are resolved in ONE query below. */
     const yieldedIds: string[] = []
     // 3b — what became of each give-back's queued write (SKIPPED by the gate → tried again), in ONE query.
-    const giveBackQueueIds = Object.values(last).filter((r) => r?.windowKey?.endsWith(RESTORE) && r.outboundQueueId).map((r) => r.outboundQueueId as string)
+    // 3c — and of each window entry's: refused by the gate, it is shown refused rather than yielded.
+    const giveBackQueueIds = Object.values(last).filter((r) => r?.windowKey && r.outboundQueueId).map((r) => r.outboundQueueId as string)
     const giveBackRows = giveBackQueueIds.length
       ? await prisma.outboundSyncQueue.findMany({ where: { id: { in: giveBackQueueIds } }, select: { id: true, syncStatus: true, errorMessage: true } })
       : []
