@@ -5,7 +5,9 @@
  *
  * The real `updatePlacementBidding` → the real write gate in LIVE mode, on PGlite (production schema) with the shared ads
  * fixture (c-it: highest live bid 50¢ — the ad group's default, and a keyword floored at 2¢ that returns to 50¢). The
- * last case runs the real rank tick: a Min-bid hour's placement raise carries the hour's CPC ceiling to the gate.
+ * ceiling is a click-cost limit only — the IT market's bid policy (€1.50) or the rank engine's hourly one; c-it's own
+ * keyword maximum bid (€1.00) is never read as one (Owner). The last case runs the real rank tick: a Min-bid hour's
+ * placement raise carries the hour's CPC ceiling to the gate.
  * Amazon is a recorder; nothing leaves the process.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -91,14 +93,16 @@ beforeAll(async () => {
   database = await formulaDatabase()
   await inside(async () => {
     await seedAdsFixture(database.client)
-    await db().campaign.update({ where: { id: 'c-it' }, data: { maxBidCents: 150 } })
+    // a keyword bid bound under every cost below: it must refuse no placement write
+    await db().campaign.update({ where: { id: 'c-it' }, data: { maxBidCents: 100 } })
+    await db().adBidPolicy.create({ data: { grain: 'MARKET', scopeId: 'IT', label: 'the IT market\'s €1.50 click ceiling', maxBidCents: 150 } })
     await db().adsAutomationState.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', autonomy: 'AUTO', halted: false }, update: { autonomy: 'AUTO', halted: false } })
   })
 }, 180_000)
 afterAll(async () => { await database?.close() }, 30_000)
 beforeEach(() => { amazon.puts = [] })
 
-describe('6e — a placement raise past the campaign\'s ceiling is refused and changes nothing', () => {
+describe('6e — a placement raise past the bid policy\'s ceiling is refused and changes nothing', () => {
   it('Top of search 0% → 300% (50¢ × 4 = €2.00 > €1.50): not sent, Nexus unchanged, no history row, the refusal recorded', async () => {
     await placeBoth('c-it', [{ placement: TOP, percentage: 0 }, { placement: REST, percentage: 20 }])
     const history = await historyCount('c-it')
@@ -108,7 +112,7 @@ describe('6e — a placement raise past the campaign\'s ceiling is refused and c
     expect(r).toMatchObject({ ok: false, mode: 'blocked', deniedAt: 'effective_cpc' })
     expect(r.reason).toBe(
       'Raising Top of search from 0% to 300% would let one click cost up to €2.00 (highest bid €0.50 ×4.00 for the placement), '
-      + 'above the €1.50 ceiling from the campaign\'s own maximum bid, so nothing was sent to Amazon. At most 200% fits under that ceiling there. '
+      + 'above the €1.50 ceiling from the bid policy "the IT market\'s €1.50 click ceiling", so nothing was sent to Amazon. At most 200% fits under that ceiling there. '
       + 'Lowering a placement is always allowed.',
     )
     expect(amazon.puts).toEqual([])
@@ -136,25 +140,21 @@ describe('6e — a placement raise past the campaign\'s ceiling is refused and c
     expect(await localPlacements('c-it')).toEqual([{ placement: TOP, percentage: 350 }])
   })
 
-  it('a bid policy is the ceiling when the campaign sets none of its own; with neither, nothing is refused (no new default)', async () => {
-    await inside(() => db().campaign.update({ where: { id: 'c-it' }, data: { maxBidCents: null } }))
-    await placeBoth('c-it', [{ placement: TOP, percentage: 0 }])
-    const free = await inside(() => updatePlacementBidding({ campaignId: 'c-it', adjustments: [{ placement: TOP, percentage: 900 }], actor: RULE }))
-    expect(free).toMatchObject({ ok: true, mode: 'live' })
-
-    await placeBoth('c-it', [{ placement: TOP, percentage: 0 }])
-    await inside(() => db().adBidPolicy.create({ data: { grain: 'MARKET', scopeId: 'IT', label: 'the IT market\'s €1.00 ceiling', maxBidCents: 100 } }))
-    const r = await inside(() => updatePlacementBidding({ campaignId: 'c-it', adjustments: [{ placement: TOP, percentage: 150 }], actor: RULE }))
-    expect(r).toMatchObject({ ok: false, deniedAt: 'effective_cpc' })
-    expect(r.reason).toContain('above the €1.00 ceiling from the bid policy "the IT market\'s €1.00 ceiling"')
-    expect(await localPlacements('c-it')).toEqual([{ placement: TOP, percentage: 0 }])
+  it('with no bid policy and no hourly ceiling nothing is refused — the campaign\'s keyword maximum bid is not a click-cost ceiling', async () => {
     await inside(() => db().adBidPolicy.deleteMany({ where: { grain: 'MARKET', scopeId: 'IT' } }))
+    await placeBoth('c-it', [{ placement: TOP, percentage: 0 }])
+    // 50¢ × 10 = €5.00 a click, five times c-it's €1.00 maximum bid: sent, as it was before 6e (no new default)
+    const r = await inside(() => updatePlacementBidding({ campaignId: 'c-it', adjustments: [{ placement: TOP, percentage: 900 }], actor: RULE }))
+    expect(r).toMatchObject({ ok: true, mode: 'live' })
+    expect(amazon.puts).toEqual([{ externalId: 'EXT-c-it', placementBidding: [{ placement: TOP, percentage: 900 }] }])
+    expect(await localPlacements('c-it')).toEqual([{ placement: TOP, percentage: 900 }])
   })
 })
 
 describe('6e — the rank engine hands the hour\'s CPC ceiling to the gate', () => {
   it('a Min-bid hour raising Top of search past it is refused: bids floored at 2¢ return to 40¢, 40¢ × 4 = €1.60 > €1.00', async () => {
     await inside(async () => {
+      await db().adBidPolicy.deleteMany({ where: { grain: 'MARKET', scopeId: 'IT' } }) // no policy: the hour's ceiling binds
       await db().rankTarget.create({ data: { key: 'minbid-capped', name: 'Min bid, Top +300%', pause: true, floorBidCents: 2, biasPct: 300, maxCpcCents: 100 } })
       await db().campaign.create({
         data: {

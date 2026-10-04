@@ -1040,7 +1040,7 @@ export interface PlacementBiddingInput {
   resend?: boolean
   /**
    * 6e — a CPC ceiling this caller serves (the rank engine: its hourly target's `maxCpcCents`). The write gate holds a
-   * placement raise to it only when the campaign has no ceiling of its own (Campaign.maxBidCents ?? bid policy).
+   * placement raise to it only when no bid policy sets a maximum for the campaign (bid policy ?? this).
    */
   cpcCeiling?: { cents: number; source: string } | null
 }
@@ -1111,8 +1111,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       // has no fieldChanges for the gate to derive a dimension from. It names its own.
       // Without this the placement pin would be the one pin that never bound anything —
       // and placement bias is the rank engine's primary actuator, running to +900%.
-      // 6e (review G.3) — and what the write changes, so a raise is held to the campaign's ceiling on what one click
-      // can then cost (bid × placement × strategy), not judged as value 0. Measured on the local copy, before the read.
+      // 6e (review G.3) — and what the write changes, so a raise is held to a click-cost ceiling on what one click can
+      // then cost (bid × placement × strategy), not judged as value 0. Measured on the local copy, before the read.
       const gate = await checkAdsWriteGate({
         marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement',
         placement: { adjustments, prior: priorAdjustments, biddingStrategy: input.biddingStrategy ?? null, ceiling: input.cpcCeiling ?? null },

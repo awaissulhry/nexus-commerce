@@ -196,7 +196,7 @@ const times = (f: number): string => `×${f.toFixed(2)}`
 
 /**
  * The one sentence that refuses the raise: what one click could cost, how, the ceiling and where it comes from (`source`
- * reads after "the ceiling from", e.g. "the campaign's own maximum bid"), and what still fits.
+ * reads after "the ceiling from", e.g. `the bid policy "…"`), and what still fits.
  */
 export function effectiveCpcRefusal(breach: PlacementBreach, source: string): string {
   const what = breach.fromPct === breach.toPct

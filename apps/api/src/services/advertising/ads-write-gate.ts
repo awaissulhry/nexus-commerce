@@ -6,7 +6,7 @@
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
  *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
  *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
- *   5. a placement raise that keeps one click's most under the campaign's ceiling (6e, @nexus/shared/ads-effective-cpc)
+ *   5. a placement raise that keeps one click's most under a click-cost ceiling (6e, @nexus/shared/ads-effective-cpc)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
  * marks the OutboundSyncQueue row SKIPPED with a `[ADS-WRITE-GATE-DENY]`
@@ -58,7 +58,7 @@ export type GateDeniedAt =
   | 'ad_product_unsupported'
   // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
   | 'market_limits'
-  // 6e — a placement raise would let one click cost more than the campaign's ceiling (bid × placement × strategy).
+  // 6e — a placement raise would let one click cost more than a click-cost ceiling (bid × placement × strategy).
   | 'effective_cpc'
 
 export type GateDecision =
@@ -149,7 +149,7 @@ export interface GateContext {
   queueId?: string | null
 
   // ── 6e ────────────────────────────────────────────────────────────────────
-  /** A placement write (`updatePlacementBidding`): checked against the campaign's ceiling by placementCpcDenial below. */
+  /** A placement write (`updatePlacementBidding`): checked against a click-cost ceiling by placementCpcDenial below. */
   placement?: PlacementWriteCheck | null
 }
 
@@ -162,8 +162,8 @@ export interface PlacementWriteCheck {
   /** A bidding strategy the write sets too ('autoForSales' | 'legacyForSales' | 'manual'), when it sets one. */
   biddingStrategy?: string | null
   /**
-   * A ceiling the caller serves — the rank engine's hourly target `maxCpcCents` — read only when the campaign has none
-   * of its own (Campaign.maxBidCents ?? bid policy ?? this). `source` reads after "the ceiling from".
+   * A ceiling the caller serves — the rank engine's hourly target `maxCpcCents` — read only when no bid policy sets a
+   * maximum (bid policy ?? this). `source` reads after "the ceiling from".
    */
   ceiling?: { cents: number; source: string } | null
 }
@@ -399,7 +399,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     })
     if (bounds) return bounds
 
-    // 6e (review G.3) — the bid bounds' twin for placement writes, on the same campaign read (placementCpcDenial below).
+    // 6e (review G.3) — the click-cost check for placement writes, on the same campaign read (placementCpcDenial below).
     if (ctx.placement) {
       const overCeiling = await placementCpcDenial({ campaignId: ctx.campaignId, campaign, placement: ctx.placement })
       if (overCeiling) return overCeiling
@@ -586,23 +586,26 @@ export async function entityBoundsDenial(args: {
 }
 
 /**
- * 6e (review G.3, Owner decision D4) — a placement raise may not let one click cost more than the campaign's ceiling.
+ * 6e (review G.3, Owner decision D4) — a placement raise may not let one click cost more than a click-cost ceiling.
  *
  * Amazon pays bid × (1 + placement %) × what "dynamic bids – up and down" adds (up to +100% at Top of search, +50%
  * elsewhere): 900% with up and down is 20× the bid, and every bid bound judged the bid alone — the gate saw a placement
  * write as value 0. So a placement write that RAISES a placement (or switches to up and down) is measured on the
  * campaign's highest live bid (@nexus/shared/ads-effective-cpc, the formula the bid grid and the rank cap read).
  *
- * The ceiling is the campaign's own maximum bid ?? its bid policy's ?? the one the caller serves (the rank engine's hourly
- * target `maxCpcCents`). Only existing ceilings (D4): none set → allowed, no new default. A DENY, never a clamp, like the
- * bid bounds. A lowering or a hold always passes and costs no read — taking spend down must never be refused.
+ * The ceiling is the campaign's bid policy maximum (line ?? portfolio ?? market) ?? the one the caller serves (the rank
+ * engine's hourly target `maxCpcCents`). Click-cost limits only (Owner, 2026-10-04): `Campaign.maxBidCents` is a keyword
+ * base-bid bound, not a click-cost ceiling, and is NOT read here — with it first, most placement raises on the 82
+ * campaigns that carry it would be refused and the rank engine would retry into refusals every tick. Only existing
+ * ceilings (D4): none set → allowed, no new default. A DENY, never a clamp, like the bid bounds. A lowering or a hold
+ * always passes and costs no read — taking spend down must never be refused.
  *
  * The highest live bid: enabled keywords and targets in enabled ad groups, and those groups' default bids; a suppressed
  * bid counts at the value it is restored to, as the rank engine measures it (MB.4) — the placement outlives the floor.
  */
 export async function placementCpcDenial(args: {
   campaignId: string
-  campaign: Pick<EntityBoundsCampaign, 'maxBidCents' | 'portfolioId' | 'marketplace'> & { biddingStrategy?: string | null }
+  campaign: Pick<EntityBoundsCampaign, 'portfolioId' | 'marketplace'> & { biddingStrategy?: string | null }
   placement: PlacementWriteCheck
 }): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const { campaignId, campaign, placement } = args
@@ -614,13 +617,10 @@ export async function placementCpcDenial(args: {
   }
   if (!raisesAnyPlacement(shape)) return null
 
-  let ceiling: { cents: number; source: string } | null =
-    campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: 'the campaign\'s own maximum bid' } : null
-  if (!ceiling) {
-    const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
-    if (policy.max) ceiling = { cents: policy.max.cents, source: `the bid policy "${policy.max.label}"` }
-  }
-  ceiling ??= placement.ceiling ?? null
+  const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
+  const ceiling: { cents: number; source: string } | null = policy.max
+    ? { cents: policy.max.cents, source: `the bid policy "${policy.max.label}"` }
+    : placement.ceiling ?? null
   if (!ceiling) return null
 
   const [groups, targets] = await Promise.all([

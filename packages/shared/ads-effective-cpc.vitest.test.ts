@@ -122,9 +122,9 @@ describe('placementRaiseOverCeiling — Owner decision D4', () => {
 describe('effectiveCpcRefusal — one plain sentence', () => {
   it('says what one click could cost, how, the ceiling and where it comes from, and what still fits', () => {
     const breach = placementRaiseOverCeiling({ highestBidCents: 80, ceilingCents: 200, strategy: 'AUTO_FOR_SALES', prior: at(0), next: at(100) })!
-    expect(effectiveCpcRefusal(breach, 'the campaign\'s own maximum bid')).toBe(
+    expect(effectiveCpcRefusal(breach, 'the bid policy "the IT market\'s €2.00 ceiling"')).toBe(
       'Raising Top of search from 0% to 100% would let one click cost up to €3.20 (highest bid €0.80 ×2.00 for the placement ×2.00 for "dynamic bids – up and down"), '
-      + 'above the €2.00 ceiling from the campaign\'s own maximum bid, so nothing was sent to Amazon. At most 25% fits under that ceiling there. Lowering a placement is always allowed.',
+      + 'above the €2.00 ceiling from the bid policy "the IT market\'s €2.00 ceiling", so nothing was sent to Amazon. At most 25% fits under that ceiling there. Lowering a placement is always allowed.',
     )
   })
 

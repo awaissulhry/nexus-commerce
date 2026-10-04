@@ -396,8 +396,8 @@ async function decideAndMaybeApply(
   // active target names.
   const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
   const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, planId }
-  // 6e — the hour's CPC ceiling goes with every placement write below: the write gate holds a raise to it when the
-  // campaign has no ceiling of its own (MB.4's cap already keeps the serving paths' raises under it).
+  // 6e — the hour's CPC ceiling goes with every placement write below: the write gate holds a raise to it when no bid
+  // policy sets a maximum for the campaign (MB.4's cap already keeps the serving paths' raises under it).
   const cpcCeiling = spec.maxCpcCents != null && spec.maxCpcCents > 0 ? { cents: spec.maxCpcCents, source: `the hourly plan's CPC ceiling (target "${spec.key}")` } : null
   let applied = 0
   // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders the slot): a placement
