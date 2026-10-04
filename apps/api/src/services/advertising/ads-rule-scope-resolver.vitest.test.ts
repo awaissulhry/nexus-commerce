@@ -185,7 +185,8 @@ describe('simulateOneRule — the same scope and the same window as the tick', (
   })
   /** Days spanned by the window the context builder queried. */
   const queriedDays = () => {
-    const where = (h.perf.mock.calls[0][0] as { where: { date: { gte: Date; lte: Date } } }).where
+    // 6c — the window is per ad product now; the Sponsored Products branch carries the same length.
+    const where = (h.perf.mock.calls[0][0] as { where: { OR: Array<{ date: { gte: Date; lte: Date } }> } }).where.OR[0]
     return Math.round((where.date.lte.getTime() - where.date.gte.getTime()) / 86_400_000)
   }
 

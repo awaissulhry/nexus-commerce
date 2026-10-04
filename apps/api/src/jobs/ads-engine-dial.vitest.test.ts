@@ -311,7 +311,7 @@ describe('budget pools: one rebalance is never split; SUGGEST records a dry run,
 
 describe('top-of-search defense: SUGGEST and stopped move nothing; the cap defers whole campaigns', () => {
   it('counts what it would move, then writes only up to its run cap', async () => {
-    const day = new Date(Date.now() - 3 * 86_400_000)
+    const day = new Date(Date.now() - 10 * 86_400_000) // 6c — inside the settled window (it ends 7 days ago)
     for (const id of ['tos-a', 'tos-b']) {
       await seedCampaign(id, 40, [35])
       // ACOS 10% on the top slot, well under the 25% default target: each wants Top 0 → 15%.

@@ -10,6 +10,7 @@ import { X, Plus } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
 import { TARGET_PERFORMANCE_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import { Listbox } from '@/design-system/components'
+import { LATE_SALES_NOTE, SETTLED_EXCLUDE_LABEL, settledWindowText } from './ruleWindowCopy'
 
 export interface Condition {
   metric: string
@@ -39,8 +40,8 @@ export const PC_OPERATORS = [
 ]
 /**
  * P2.1 — the measurement window is the TRIGGER'S, not the rule author's. The engine evaluates
- * each trigger over its own fixed window (`ruleWindowBounds`, which also excludes the last 2
- * still-settling days), and nothing ever read the stored lookback/exclude — so the old
+ * each trigger over its own fixed window (6c: ending at the ad product's attribution lag, 7 days
+ * ago for Sponsored Products and 14 for Brands and Display), and nothing ever read the stored lookback/exclude — so the old
  * Lookback/Exclude selects were controls whose value changed no behaviour: a stored
  * "Last 60 Days" beside a 7-day evaluation was a lie with a dropdown. The sentence below states
  * the real window; the stored lookback/exclude fields now carry that truth for the record.
@@ -54,7 +55,7 @@ export const pcWindowLabel = (slug: string): string => {
   const d = PC_WINDOW_DAYS[slug]
   return d == null ? 'Latest snapshot' : `Last ${d} Days`
 }
-export const PC_TRUTH_EXCLUDE = 'Last 2 Days'
+export const PC_TRUTH_EXCLUDE = SETTLED_EXCLUDE_LABEL
 export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
   // BUD-P3 — a rule that chooses its own lookback (Bid, Budget) passes the chosen days so the
   // sentence states the window the engine will actually read, not the trigger's default.
@@ -81,7 +82,7 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
         skipped entirely rather than measured on a partial one.{' '}
         <b>Campaign Concentration</b> is your biggest campaign’s share of the impressions <i>you</i>{' '}
         took on that term, over the last 30 days including the 2 most recent.{' '}
-        Spend, Sales, Orders and ACOS cover the last 30 days, excluding the 2 still settling.{' '}
+        Spend, Sales, Orders and ACOS cover {settledWindowText(30)}.{' '}
         A keyword Amazon has not reported a market total for is not measured as zero — it is left
         alone.
       </p>
@@ -108,7 +109,7 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
         not an average over a window. <b>Rank Change</b> compares that observation with the previous
         one for the same product; a keyword observed only once has no change and is left alone rather
         than counted as “unchanged”.{' '}
-        Spend and ACOS cover the last 30 days, excluding the 2 still settling.{' '}
+        Spend and ACOS cover {settledWindowText(30)}.{' '}
         🔴 <b>A keyword with no rank observation is skipped entirely.</b> It is not treated as ranking
         last, so a rule reading “Organic Rank &gt; 50” will not reach the keywords you have never
         ranked for — which are usually the ones such a rule is meant to find.
@@ -118,10 +119,10 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
   return (
     <p className="h10-pc-winnote">
       {d == null
-        ? 'Rank is the latest observation; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
+        ? `Rank is the latest observation; spend and ACOS cover ${settledWindowText(30)}. ${LATE_SALES_NOTE}`
         : days != null
-          ? `Measured over the last ${d} days — this rule's own lookback. The most recent 2 days are still settling and are excluded.`
-          : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
+          ? `Measured over ${settledWindowText(d)} — this rule's own lookback. ${LATE_SALES_NOTE}`
+          : `Measured over ${settledWindowText(d)} — this trigger's fixed window. ${LATE_SALES_NOTE}`}
       {/* HP1 — the invisible floor, made visible: the emitter only surfaces terms already at
           ≥2 orders, so conditions can tighten that bar but never lower it. */}
       {slug === 'keyword-harvesting' && ' Search terms surface only once they have at least 2 orders in the window — conditions can raise that bar, never lower it.'}

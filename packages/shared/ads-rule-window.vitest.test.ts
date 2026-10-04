@@ -51,11 +51,13 @@ describe('TRIGGER_WINDOW — the values the engine runs on', () => {
     }
   })
 
-  it('marks the three hand-rolled comparisons as unsettled, not as plain windows', () => {
-    // These build their own dates instead of calling ruleWindowBounds, so they count today.
+  it('6c — marks the three comparisons as settled comparisons, not as plain windows', () => {
+    // Both halves go through settledWhere now; before 6c they built their own dates and counted today.
     for (const t of ['CVR_DROP', 'CAMPAIGN_ROAS_DECLINING', 'KEYWORD_RISING_STAR']) {
       expect(TRIGGER_WINDOW[t].kind, t).toBe('compare')
-      expect(TRIGGER_WINDOW[t].settled, t).toBe(false)
+      expect(TRIGGER_WINDOW[t].settled, t).toBe(true)
+      expect(ruleLookback(t).why, t).toContain('ending 7 days ago (14 for Sponsored Brands and Display)')
+      expect(ruleLookback(t).why, t).not.toContain('includes today')
     }
   })
 
@@ -94,13 +96,31 @@ describe('ruleLookback', () => {
   })
 
   it('warns in the tooltip when a window includes the still-settling days', () => {
-    const unsettled = ruleLookback('SCHEDULE', ['bid_to_target_acos'])
+    // harvest_and_negate is the one reader 6c left on its own dates (ads-harvest.service.ts).
+    const unsettled = ruleLookback('SCHEDULE', ['harvest_and_negate'], 60)
     expect(unsettled.settled).toBe(false)
     expect(unsettled.why).toContain(`INCLUDES the last ${PROVISIONAL_DAYS} days`)
 
     const settled = ruleLookback('KEYWORD_WASTED_SPEND', ['lower_bid_to_floor'])
     expect(settled.settled).toBe(true)
     expect(settled.why).not.toContain('INCLUDES')
+  })
+
+  /** 6c (review G.2, Owner S9) — every settled window ends at the ad product's attribution lag, and says so. */
+  it('6c — a settled window says it ends 7 days ago for Sponsored Products and 14 for Brands and Display', () => {
+    expect(ruleLookback('KEYWORD_WASTED_SPEND').why)
+      .toContain('selected over the last 14 days, ending 7 days ago (14 for Sponsored Brands and Display), because Amazon is still attributing late sales')
+    expect(ruleLookback('KEYWORD_WASTED_SPEND').why).not.toContain(`excluding the ${PROVISIONAL_DAYS}`)
+  })
+
+  it('6c — the bid optimiser and Top-of-Search windows are settled now, and say where they end', () => {
+    for (const act of ['bid_to_target_acos', 'defend_top_of_search']) {
+      const r = ruleLookback('SCHEDULE', [act])
+      expect(ACTION_WINDOW[act].settled, act).toBe(true)
+      expect(r.settled, act).toBe(true)
+      expect(r.why, act).toContain('stops short of the newest days, ending 7 days ago (14 for Sponsored Brands and Display)')
+      expect(r.why, act).not.toContain('INCLUDES')
+    }
   })
 
   it('carries the bid optimiser caveat, because a declared window it never reads is worse than none', () => {
@@ -145,7 +165,7 @@ describe('ruleLookback', () => {
       expect(ACTION_WINDOW.harvest_and_negate.days).toBe(HARVEST_DEFAULTS.windowDays)
     })
 
-    it('is unsettled — previewHarvest never calls ruleWindowBounds', () => {
+    it('is unsettled — previewHarvest never calls settledWhere', () => {
       expect(ACTION_WINDOW.harvest_and_negate.settled).toBe(false)
       expect(ruleLookback('SCHEDULE', ['harvest_and_negate'], 60).why)
         .toContain(`INCLUDES the last ${PROVISIONAL_DAYS} days`)
