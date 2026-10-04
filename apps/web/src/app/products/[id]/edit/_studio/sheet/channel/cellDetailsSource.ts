@@ -57,10 +57,12 @@ export function describeValueSource(cell: StudioCellValue | undefined, member: C
       /* Amazon sheet gaps (D4=B) — an offer change saved in Nexus that Publish sends: never drawn as a live value. A Shopify
          edit Shopify does not have yet waits for Review synchronization. */
       return marked('pending', waiting ? offerDraftCellWords(waiting).description : SHOPIFY_DRAFT_WORDS)
+    /* The fact only (2026-10-04, honest words): the sheet has no per-cell "translate again" or "review" for a translation
+       on any scope, so these no longer advise one — the mark's sentence says the same (`provenanceTooltip`). */
     case 'ai':
-      return marked('ai', 'Translated by machine and not reviewed yet. Review it before it counts as confirmed')
+      return marked('ai', 'Translated by machine and not reviewed yet')
     case 'aiStale':
-      return marked('ai', 'Translated by machine from an older Shared text: the Shared product changed after it was written. Translate it again or review it')
+      return marked('ai', 'Translated by machine from an older Shared text: the Shared product changed after it was written')
     case 'outdated':
       return marked('warning', provenanceTooltip('outdated', null))
     case 'formula':

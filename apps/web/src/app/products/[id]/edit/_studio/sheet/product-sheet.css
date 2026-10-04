@@ -21,3 +21,12 @@
 }
 .ps-dialog-body p { margin: 0; }
 
+/* Cell details — the one window both scopes open (`CellDetailsDialog`; was `.cs-cell-details` in channel-sheet.css,
+   which only the channel scope loads). The notes keep their line breaks; a long value or URL wraps. */
+.ps-cell-details {
+  display: grid;
+  gap: var(--nds-space-16);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ps-cell-details p { margin: 0; }

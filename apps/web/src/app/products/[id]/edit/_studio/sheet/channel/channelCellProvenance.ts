@@ -300,9 +300,10 @@ export function listingName(label: string | null | undefined, position: number):
  *                      that supplies the value is the sentence's `by` (`channelCellBy`), not its source
  *   listingLevel       the SKU whose value the listing holds — unless it is this row's own
  *   listingValue       nothing (the DS sentence names no listing)
- *   aiStale            "the source text" for a machine translation of an older source (the text changed, not the cell)
+ *   ai · aiStale       "the source text" for a machine translation ("Translated by machine and not reviewed yet"; of an
+ *                      older source, the text changed, not the cell) — the Shared scope passes the same
  *   refused · pending · attention   the server's sentence, verbatim
- *   ai · outdated · formula   nothing (the Shared scope names none either)
+ *   outdated · formula   nothing (the Shared scope names none either)
  */
 export function channelCellFrom(cell: StudioCellValue | undefined, member: CellProvenance, context: ChannelCellFromContext = {}): string | null {
   if (!cell || member === 'own') return null
@@ -345,11 +346,12 @@ export function channelCellFrom(cell: StudioCellValue | undefined, member: CellP
     case 'pinned':
       // What the pin no longer follows: where its reset returns it (`resetSourceLabel`'s rule, `resetFollowsShared`).
       return !cell.mapped || resetFollowsShared(cell) ? 'the Shared product' : null
+    case 'ai':
     case 'aiStale':
-      // A machine translation of an older source text: the text it came from changed, not this cell (as on Shared).
+      // A machine translation: it came from the source text — of an older version, for `aiStale` (as on Shared).
       return cell.translation ? 'the source text' : null
     default:
-      // ai, outdated, formula: the shared sentence needs no name (the Shared scope passes none either).
+      // outdated, formula: the shared sentence needs no name (the Shared scope passes none either).
       return null
   }
 }

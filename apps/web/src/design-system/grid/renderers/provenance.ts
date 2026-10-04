@@ -378,16 +378,25 @@ export function provenanceTooltip(provenance: CellProvenance, from?: string | nu
       return from
         ? `Calculated by a formula on this cell — ${from}. Edit the cell to change the formula`
         : 'Calculated by a formula on this cell — edit the cell to change the formula'
+    /*
+     * The three translation states say the FACT only (2026-10-04, honest words). No sheet scope has a per-cell "translate
+     * again", "mark reviewed" or "approve" for a translation — the AI drafts review approves AI drafts (PES.8), not
+     * translations — so a sentence that advised one sent the operator looking for a control that does not exist.
+     */
     case 'outdated':
-      return `Out of date — ${from ?? 'the source'} changed after this translation was written. Compare with the source; translate again or mark reviewed`
+      return `Out of date — ${from ?? 'the source'} changed after this translation was written`
     case 'ai':
-      return 'Drafted by AI and not yet approved — review before it counts as confirmed'
-    case 'aiStale':
-      /* With a source (a machine translation of an older source text — the sheets pass "the source text"): approving it
-         overwrites nothing, so the sentence says what to do instead. Without one (an AI draft of this cell, PES.8): the
-         cell moved since the draft, and approving the draft would overwrite that edit. */
+      /* With a source (a machine translation — the sheets pass "the source text"): translated by machine, not reviewed.
+         Without one (an AI draft of this cell, PES.8): the AI drafts review does approve or reject it. */
       return from
-        ? `Drafted by AI from an older value — ${from} has changed since. Compare with it before approving`
+        ? 'Translated by machine and not reviewed yet'
+        : 'Drafted by AI and not yet approved — review before it counts as confirmed'
+    case 'aiStale':
+      /* With a source (a machine translation of an older source text — the sheets pass "the source text"): the text it
+         came from changed. Without one (an AI draft of this cell, PES.8): the cell moved since the draft, and approving the
+         draft would overwrite that edit. */
+      return from
+        ? `Translated by machine from an older value — ${from} has changed since`
         : 'Drafted by AI from an older value — this cell has changed since. Approving this overwrites that change'
     /*
      * `pending` and `attention` work like `refused`: `from` is the SERVER'S sentence and is returned verbatim — no

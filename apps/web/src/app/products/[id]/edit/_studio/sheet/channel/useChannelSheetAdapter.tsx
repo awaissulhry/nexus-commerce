@@ -1,8 +1,8 @@
 'use client';
-import { cellDetailsActionKind, describeValueSource } from './cellDetailsSource';
+import { channelCellDetails } from './channelCellDetails';
+import type { CellDetailsContent } from '../cellDetails';
 import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { reviewCopy } from './reviewCopy';
-import { channelCellDrawsRequired, channelCellProvenance } from './channelCellProvenance';
 import { useSheetPreferences } from '../useSheetPreferences';
 import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
@@ -41,27 +41,26 @@ import { useProductMediaEditor, withProductMediaColumn } from '../../media/produ
 import { withSheetGroups } from '../sheetGroups';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, saveNote, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
 import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
-import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { usePublicationStatus } from '@/app/products/_publication/dialog/usePublicationStatus';
 import { destinationLabel as publishDestinationLabel, rejectedFilterMenuLabel, withRejectedFilter } from '@/app/products/_publication/dialog/outcome';
 import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishHistorySearch, publishSheetColumn, rejectedRowCount, rowPublishValue, useSellingChangeReRead, type PublishCellValue } from './publishColumn';
 import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
-import { OFFER_DRAFT_COPY, discardOfferDrafts, offerDraftControls, pendingPublishOf } from './offerDrafts';
+import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
 import { useCellFormulas } from '../../useCellFormulas';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
-import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, reviewRowsOf } from './rows';
-import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
+import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, crossChannelColumnCount, reviewRowsOf } from './rows';
+import { aliasMark, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
 import { FollowUpRead, rowSettle } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
@@ -88,7 +87,7 @@ import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
 import { actionContextMenu, actionMenuItems } from '@/design-system/grid/actions/menuAdapters';
 import { useActionPress } from '@/design-system/grid/actions/useActionPress';
 import { useReferenceNames } from '../useReferenceNames';
-import { referenceSearchText, referenceTooltip } from '../referenceLabels';
+import { referenceSearchText } from '../referenceLabels';
 import { RESERVED_COLUMN_IDS } from '../views';
 import { flaggedColumnKeys } from '../flaggedColumns';
 import { ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, actionMenuEntries, channelActions, type PermissionState } from './channelActions';
@@ -98,9 +97,8 @@ import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, action
 import { isClearKey, selectedCells } from '../sheetReset';
 import type { PublishActionChange } from '@nexus/shared/publish-actions';
 import { SELLING_ROW_MARK_CLASS, publishActionModel, rowCarriesInactiveMark, sellingStatusModel, waitingWhen } from '@/design-system/grid';
-import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type SheetColumn, type StudioCellValue } from './types';
+import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue } from './types';
 import './channel-sheet.css';
-import { channelValidation } from '../master/channelColumns';
 import { buildSheetColumns } from '../buildSheetColumns';
 import { useSheetControl } from '../useSheetControl';
 import { channelResetOffer, controlColumnFacts } from '../sheetReset';
@@ -191,18 +189,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }> | null>(null);
     const [transferIntent, setTransferIntent] = useState<'import' | 'export'>('import');
     const [transferOpen, setTransferOpen] = useState(false);
-    const [cellDetails, setCellDetails] = useState<{
-        title: string;
-        value: string;
-        notes: string;
-        rowId: string;
-        colKey: string;
-        action?: {
-            label: string;
-            description: string;
-            run: () => void;
-        };
-    } | null>(null);
     const surfaceKey = channelSurfaceKey(channel, marketplace);
     const [exportNote, setExportNote] = useState<string | null>(null);
     /* P2 (I4-4) — a server row keeps its grid row object: reference names landing, or a read that returns the row
@@ -532,7 +518,20 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             void onCascade(row, cell, { action: 'reset', target: row.rowKind === 'parent' ? 'alias' : 'aliasVariant', value: null });
             return true;
         },
-        say: message => toast(message, 'danger'),
+        say: (message, tone = 'danger') => toast(message, tone),
+        /* Cell details (2026-10-04) — the shared window, menu item and ⋯ item; the channel's own words (`channelCellDetails`)
+           on every column of the scope, read-only ones included. */
+        details: {
+            explains: colId => !!data?.columns.some(column => column.key === colId),
+            describe: (row, colId): CellDetailsContent | null => {
+                const column = data?.columns.find(c => c.key === colId);
+                return column ? channelCellDetails(row, column, {
+                    productLevelOnly: data?.meta?.mapping?.productLevelOnly ?? false, scopeLabel: data?.scope.label ?? '', channel, marketplace,
+                    refusedReasonFor, exprFor: (rowId, colKey) => formulaLive.current.formulas.exprFor(rowId, colKey), tracker, aliasLabel,
+                    reset: (targets): Promise<void> => control.reset(targets), cascade: onCascade,
+                }) : null;
+            },
+        },
     });
     /* Amazon sheet gaps (D4=B) — offer changes waiting for Publish: toolbar mark, its filter, the ⋯ items (`offerDrafts.ts`). */
     const [showWaitingOnly, setShowWaitingOnly] = useState(false);
@@ -903,50 +902,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const { press, problem, clearProblem, confirmElement } = useActionPress<ChannelSheetRow>();
     const isRecordRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'variant', []);
     const menuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: verbs, onSelect: press, isRecord: isRecordRow }), [verbs, press, isRecordRow]);
-    const openCellDetails = useCallback((row: ChannelSheetRow, column: SheetColumn) => {
-        const cell = row.values[column.key];
-        const value = cell?.value;
-        const formulaReason = refusedReasonFor(row.rowId, column.key);
-        /* The ONE channel verdict the cell's mark and tint draw (`channelCellProvenance`); Cell details only words it. */
-        const drawsRequired = channelCellDrawsRequired(column, row, cell);
-        const verdict = { productLevelOnly: data?.meta?.mapping?.productLevelOnly ?? false, refusedReason: formulaReason, drawsRequired, shape: column.shape };
-        const member = channelCellProvenance(cell, verdict);
-        const source = describeValueSource(cell, member, formulaReason, drawsRequired);
-        const layer = cascadeOf(cell, row.rowKind);
-        /* P1 — a reset is offered wherever one exists (the cell menu's rule, `channelResetOffer`): formula, translation and
-           AI cells included. A pin is offered only on a plain inherited value — judged by what the value IS underneath
-           (`cellDetailsActionKind`), never by an attention or pending mark on top of it (2026-10-04). */
-        const reset = channelResetOffer(row, column.key, !!formulaReason || !!formulaLive.current.formulas.exprFor(row.rowId, column.key));
-        const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && (reset || !['formula', 'warning', 'ai'].includes(cellDetailsActionKind(cell, verdict)))
-            ? cascadeIntent(layer, row.rowKind, value ?? null) : null;
-        setCellDetails({
-            title: `${column.label}: ${row.sku}`,
-            rowId: row.rowId,
-            colKey: column.key,
-            action: reset && pendingPublishOf(cell) ? { label: reset.label, description: OFFER_DRAFT_COPY.resetDetail(publishDestinationLabel(channel, marketplace)), run: () => void control.reset([{ rowId: row.rowId, colId: column.key, intent: 'reset', formula: reset.formula }]) } : intent && cell ? {
-                label: intent.action === 'pin' ? 'Keep as listing override' : reset?.formula ? reset.label : resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).label,
-                description: intent.action === 'pin'
-                    ? `Keep the current value for ${row.sku} · ${aliasLabel(row.aliasId)} on this channel and market.`
-                    : `${reset?.formula ? 'Remove this cell’s formula (its last value is kept), then: ' : ''}${resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).description}`,
-                run: () => {
-                    if (intent.action === 'reset' && reset?.formula) void control.reset([{ rowId: row.rowId, colId: column.key, intent: reset.intent, formula: true }]);
-                    else void onCascade(row, cell, intent);
-                },
-            } : undefined,
-            value: value == null || value === '' ? 'Empty' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value),
-            notes: composeCellTooltip(saveNote(tracker.get(row.rowId, column.key)), channelValidation(column).validate(value, row, column.key).message, cell?.mapped?.errors.join('\n'), cell?.mapped?.warnings.join('\n'), `${source.label}. ${source.description}`, column.kind === 'longtext' ? longTextTooltipLine(value, column) : null, shapeTooltipLine(column, value), referenceTooltip(value, column.optionLabels), cellHoverNote(cell, data?.scope.label ?? ''), column.helpText),
-        });
-    }, [data, tracker, refusedReasonFor, onCascade, aliasLabel, control.reset]);
-    const closeCellDetails = useCallback(() => {
-        const previous = cellDetails;
-        setCellDetails(null);
-        if (previous)
-            requestAnimationFrame(() => {
-                const api = getGridApi(), node = api?.getRowNode(previous.rowId);
-                if (node?.rowIndex != null)
-                    api?.setFocusedCell(node.rowIndex, previous.colKey);
-            });
-    }, [cellDetails, getGridApi]);
     const contextMenu = useMemo(() => {
         const actions = actionContextMenu<ChannelSheetRow>({ actions: verbs, onSelect: press, isRecord: isRecordRow });
         return (params: GetContextMenuItemsParams<ChannelSheetRow>) => {
@@ -954,7 +909,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             const row = params.node?.data;
             const column = data?.columns.find(c => c.key === params.column?.getColId());
             if (row && column)
-                items.unshift(...control.cellMenuItems(params), { name: 'Cell details…', action: () => openCellDetails(row, column) });
+                items.unshift(...control.cellMenuItems(params));
             const mapping = data && column?.channels?.[data.scope.label];
             const field = mapping?.key ?? mapping?.attribute;
             if (!row || !field)
@@ -963,7 +918,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return [{ name: 'Open reusable mapping for this field', tooltip: 'This rule can affect other matching products. Opens separately to preserve your edits.',
                     action: () => window.open(supplyingRule?.href ?? mappingHref({ channel, market: marketplace, category: row.productType, field, productId: row.id }), '_blank', 'noopener') }, ...items];
         };
-    }, [verbs, press, isRecordRow, data, channel, marketplace, openCellDetails, control.cellMenuItems]);
+    }, [verbs, press, isRecordRow, data, channel, marketplace, control.cellMenuItems]);
     const productLevelOnly = data?.meta?.mapping?.productLevelOnly ?? false;
     const familyShowsAxes = useMemo(() => {
         const variants = rows.filter((r) => r.rowKind === 'variant');
@@ -1286,20 +1241,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             ...(addError ? { description: addError } : {}),
             onSelect: () => void onAddAlias(),
         });
-        items.unshift({
-            id: 'cell-details', label: 'Cell details…', description: 'Select a cell to inspect its full value, source and validation.',
-            onSelect: () => {
-                const api = getGridApi(), focused = api?.getFocusedCell();
-                const row = focused ? api?.getDisplayedRowAtIndex(focused.rowIndex)?.data : undefined;
-                const column = data?.columns.find(col => col.key === focused?.column.getColId());
-                if (row && column)
-                    openCellDetails(row, column);
-                else
-                    toast('Select an attribute cell first, then open Cell details.', 'info');
-            },
-        });
+        items.unshift(control.cellDetails.overflowItem);
         return items;
-    }, [data, rows, adding, addError, onAddAlias, alternateAccount, channel, refused, getGridApi, openCellDetails, toast, auth.has]);
+    }, [data, rows, adding, addError, onAddAlias, alternateAccount, channel, refused, control.cellDetails.overflowItem, auth.has]);
     const unavailable = !loading && (backendMissing || !!error || !data);
     const emptyState = sheetEmptyState(rows.length, () => {
         setSearch('');
@@ -1512,15 +1456,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
     {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}
-        {shopifyEditor.element}
-    {cellDetails && <Modal open readable size="md" title={cellDetails.title} onClose={closeCellDetails} footer={<><Button size="sm" onClick={closeCellDetails}>Close</Button>
-          {cellDetails.action && <Button size="sm" variant="primary" onClick={() => { cellDetails.action?.run(); closeCellDetails(); }}>{cellDetails.action.label}</Button>}
-        </>}>
-        <div className="cs-cell-details">
-          <p>{cellDetails.value}</p>
-          <p>{cellDetails.notes}</p>
-          {cellDetails.action && <p>{cellDetails.action.description}</p>}
-        </div>
-      </Modal>}</>,
+        {shopifyEditor.element}</>,
     };
 }

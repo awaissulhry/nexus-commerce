@@ -213,14 +213,5 @@
   color: var(--nds-warning-text);
 }
 
-.cs-cell-details {
-  display: grid;
-  gap: var(--nds-space-16);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.cs-cell-details p { margin: 0; }
-
 /* The grid's body. A missing field list is said once, by its banner above the grid (step 4, D2), never over the grid. */
 .cs-sheet-body { position: relative; display: flex; flex: 1; min-height: 0; }

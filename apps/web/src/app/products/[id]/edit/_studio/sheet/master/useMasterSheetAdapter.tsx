@@ -49,6 +49,7 @@ import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { cellOf, editRefusalReason } from './columnRules';
 import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
+import { sharedCellDetailsSource, type SharedCellDetailsContext } from './sharedCellDetails';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { productMediaColumn, useProductMediaEditor, withProductMediaColumn, PRODUCT_MEDIA_COLUMN } from '../../media/productMediaColumn';
 import { withSheetGroups } from '../sheetGroups';
@@ -266,6 +267,11 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     const { toast } = useToast();
+    /* Cell details (2026-10-04) — how the Shared scope describes a cell; the window, its cell-menu item (right-click,
+       Shift+F10) and its ⋯ item are the shared control's. Read through refs when it opens: the columns, the rows, the AI
+       drafts and the formulas all arrive after this point. */
+    const detailsLive = useRef<SharedCellDetailsContext>({ rows: [], reset: () => undefined });
+    const details = useMemo(() => sharedCellDetailsSource(colId => columnByKeyRef.current.get(colId), () => detailsLive.current), []);
     /* P1 — full control, the channel sheet's same hook: Reset to inherited (a variation's own value, a row's own
        translation), on a selection and on a whole column; Set every row…; Delete asks Clear or Reset; Shift+F10. */
     const control = useSheetControl<StudioRow>({
@@ -275,7 +281,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         columnFacts: colId => controlColumnFacts(columnByKeyRef.current.get(colId)),
         hidesInherited: row => !!row.parentId,
         removeFormula: (rowId, colId) => formulas.pinOver(rowId, colId),
-        say: message => toast(message, 'danger'),
+        details,
+        say: (message, tone = 'danger') => toast(message, tone),
     });
     cellMenuRef.current = control.cellMenuItems;
     refusalReason.current = (key, row) => {
@@ -571,6 +578,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const contentAiChip = useLanguageChips(sheet ? scopeRows : null, schemaColumns, false);
     const aiLayer = useAiDraftLayer({ productIds, channel: null, marketplace: market, locale, locales: languageScope.locales, columnKeys: allColumnKeys }, contentAiChip);
     const skuById = useMemo(() => Object.fromEntries(rows.map((r) => [r.id, r.sku])), [rows]);
+    detailsLive.current = {
+        rows, saveOf: (rowId, colId) => tracker.get(rowId, colId), draftFor: aiLayer.draftFor,
+        exprFor: formulas.exprFor, errorFor: formulas.errorFor,
+        // The cell menu's own reset writer — the window's one action is that menu item (Owner decision 1).
+        reset: targets => { void control.reset(targets); },
+    };
     const activeChip = chipBar.active;
     const chipCellsRef = useRef(activeChip?.cells ?? null);
     chipCellsRef.current = activeChip?.cells ?? null;
@@ -865,7 +878,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onReload: onReload,
             loading: loading,
             unavailable: !!error,
-            overflow: [...(waitingRowCount ? [{ id: 'show-waiting', label: waitingOnly ? 'Show all rows' : `Show the ${waitingRowCount === 1 ? 'product' : `${waitingRowCount} products`} waiting for Publish`, description: 'Products with a Status or Action that Publish will send, on any market', onSelect: () => setWaitingOnly((on) => !on) }] : []), { id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [...(waitingRowCount ? [{ id: 'show-waiting', label: waitingOnly ? 'Show all rows' : `Show the ${waitingRowCount === 1 ? 'product' : `${waitingRowCount} products`} waiting for Publish`, description: 'Products with a Status or Action that Publish will send, on any market', onSelect: () => setWaitingOnly((on) => !on) }] : []), { id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, control.cellDetails.overflowItem, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: [
                 ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
                 /* Step 4 (D3, 2026-10-01) — a missing setup is the notice above the grid, in plain words and with the button
@@ -895,8 +908,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         {rowPress.confirmElement}
         {familyVerbs.dialogs}
         {reloadConfirm.element}
-        {deleteConfirm.element}
-        {control.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
+        {deleteConfirm.element}</>, footerExtra: <>{exportNote && <span className="nds-cell-muted">{exportNote}</span>}
     {sheet?.meta.source === 'legacy' && (<InfoTip tip="The studio sheet route is not deployed yet, so this is the catalogue read adapted to the same shape. Cell values and versions are real; the layer each value came from is INFERRED here rather than stated by the server.">
                 <Pill tone="neutral" size="sm">adapted read</Pill>
               </InfoTip>)}
@@ -958,6 +970,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     {bulkFormulaRows && <FormulaBulkDialog rows={bulkFormulaRows} columns={sheet?.columns ?? []} coordinate={{ scope: 'master', market, locale }} functions={formulas.functions} preview={formulas.preview} candidatesFor={(id, fieldKey) => { const row = rowsRef.current.find(row => row.id === id); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); refresh(); }}/>}</>, afterGrid: <>{chipBar.activeId === 'ai-drafts' && <AiDraftReview drafts={aiLayer.drafts} skuById={skuById} onApplied={reload}/>}</>, beforePreferences: <>
         <ClassificationDialog productId={productId} open={classificationOpen} onClose={() => setClassificationOpen(false)} onChanged={onFamilyChanged}/>
     {sheet && (<SheetTransfer open={importOpen} intent={transferIntent} onClose={() => setImportOpen(false)} productId={productId} market={market} locale={locale} selectedIds={selectedRows.map(row => row.id)} visibleFields={sheetColumns.visibleAttributeKeys().flatMap(key => { const c = sheet.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key] : []; })} onReference={() => onExport('view')} onApplied={() => { formulas.reload(); reload(); familyQuery.reload(); }}/>)}
-        {familyProductPicker.element}</>,
+        {familyProductPicker.element}
+        {/* The control's dialogs (Cell details, Clear or reset, Set every row) sit where the channel scope puts them: the
+            footer unmounts while the sheet reloads (`ProductSheetSurface`), and an open window must not vanish and
+            come back. */}
+        {control.element}</>,
     };
 }
