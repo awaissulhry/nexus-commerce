@@ -17,21 +17,23 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const createNegative = vi.fn()
+// 5b — applyHarvest negates through the one negative write service (`writeNegativeKeyword`), which pushes, reads back a
+// missing id (HV.9a) and records the row. Its result is what this file feeds in; the service's own read-back and
+// recording are pinned in negative-write-paths.vitest.test.ts.
+const writeNegativeKeyword = vi.fn()
 const createNegativeKeywordCampaignLocal = vi.fn(async () => ({ id: 'local-1', created: true }))
-const createNegativeKeywordLocal = vi.fn(async () => ({ id: 'local-2', created: true }))
 const mirrorNegativeKeywordLocal = vi.fn(async () => ({ id: 'mirror-1', created: true }))
-const listNegativeKeywords = vi.fn(async () => [] as unknown[])
 
-vi.mock('./ads-negative-kw.service.js', () => ({ createNegative: (...a: unknown[]) => createNegative(...a) }))
+vi.mock('./ads-negative-kw.service.js', () => ({
+  writeNegativeKeyword: (...a: unknown[]) => writeNegativeKeyword(...a),
+  writeNegativeProductTarget: vi.fn(),
+}))
 vi.mock('./ads-create.service.js', () => ({
   createNegativeKeywordCampaignLocal: (...a: unknown[]) => createNegativeKeywordCampaignLocal(...a),
-  createNegativeKeywordLocal: (...a: unknown[]) => createNegativeKeywordLocal(...a),
   createKeywordLocal: vi.fn(),
-  createProductTargetLocal: vi.fn(),
+  createTargetLocal: vi.fn(),
   mirrorNegativeKeywordLocal: (...a: unknown[]) => mirrorNegativeKeywordLocal(...a),
 }))
-vi.mock('./ads-api-client.js', () => ({ listNegativeKeywords: (...a: unknown[]) => listNegativeKeywords(...a) }))
 vi.mock('./ads-protect-converting.js', () => ({
   checkProtectConverting: vi.fn(async () => new Map()),
   protectConvertingConfig: vi.fn(() => ({})),
@@ -59,17 +61,21 @@ const candidate = {
   orders: 0,
 } as never
 
+/** What writeNegativeKeyword answers. */
+const result = (over: Record<string, unknown>) => ({
+  outcome: 'created', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: null, error: null, rawResponse: null, ...over,
+})
+const NO_ID = 'Amazon returned no id and a read-back did not find it, so this term is NOT negated at Amazon. Nothing was recorded here; retrying is safe.'
+
 beforeEach(() => {
+  writeNegativeKeyword.mockReset()
   mirrorNegativeKeywordLocal.mockClear()
-  listNegativeKeywords.mockReset(); listNegativeKeywords.mockResolvedValue([])
-  createNegative.mockReset()
   createNegativeKeywordCampaignLocal.mockClear()
-  createNegativeKeywordLocal.mockClear()
 })
 
 describe('HV.8a — the wasteful negation reports what actually landed', () => {
   it('counts a negative Amazon confirmed', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: 'AMZ-99', denied: null, alreadyExisted: false })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-99', reachedAmazon: true, adTargetId: 'row-1' }))
     const r = await applyHarvest({ negatives: [candidate] })
     expect(r.negativesAdded).toBe(1)
     expect(r.negativeOutcomes).toHaveLength(1)
@@ -77,101 +83,72 @@ describe('HV.8a — the wasteful negation reports what actually landed', () => {
   })
 
   it('🔴 does NOT count a negative that returned no Amazon id — the neg=8/8 defect', async () => {
-    // This is exactly what every one of the 20 campaign-scoped rows looks like: a local row exists,
-    // and nothing is negated at Amazon. The old code reported this as "+1 negative".
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
+    // This is exactly what every one of the 20 campaign-scoped rows looked like: a local row existed, and nothing was
+    // negated at Amazon. The old code reported this as "+1 negative"; the service now records no row for it at all.
+    writeNegativeKeyword.mockResolvedValue(result({ outcome: 'failed', error: NO_ID }))
     const r = await applyHarvest({ negatives: [candidate] })
     expect(r.negativesAdded).toBe(0)
     expect(r.negativeOutcomes[0]).toMatchObject({ reachedAmazon: false, outcome: 'failed' })
     expect(r.negativeOutcomes[0].reason).toMatch(/NOT negated at Amazon/)
+    expect(r.negativeOutcomes[0].reason).toMatch(/read-back did not find it/)
   })
 
   it('reports a gate refusal as refused, not failed and not created (C7)', async () => {
-    createNegative.mockResolvedValue({ ok: false, externalNegativeKeywordId: null, denied: { deniedAt: 'keyword_protected', reason: 'term is whitelisted' }, alreadyExisted: false })
+    writeNegativeKeyword.mockResolvedValue(result({ outcome: 'refused', refusal: { deniedAt: 'keyword_protected', reason: 'term is whitelisted' } }))
     const r = await applyHarvest({ negatives: [candidate] })
     expect(r.negativesAdded).toBe(0)
     expect(r.negativeOutcomes[0].outcome).toBe('refused')
     expect(r.negativeOutcomes[0].refusal).toMatchObject({ deniedAt: 'keyword_protected' })
   })
+
+  it('5b — a campaign-scope refusal is refused too (it used to be thrown and reported as failed)', async () => {
+    writeNegativeKeyword.mockResolvedValue(result({ outcome: 'refused', refusal: { deniedAt: 'campaign_allowlist', reason: 'not on the live-write allowlist' } }))
+    const r = await applyHarvest({ negatives: [candidate], negateScope: 'CAMPAIGN' })
+    expect(r.negativeOutcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'campaign_allowlist' } })
+    expect(r.errors).toEqual([])
+  })
 })
 
 describe('HV.8a — the default scope moved to AD_GROUP', () => {
   it('negates at AD_GROUP when no scope is passed', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: 'AMZ-1', denied: null, alreadyExisted: false })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-1', reachedAmazon: true }))
     await applyHarvest({ negatives: [candidate] })
-    expect(createNegative).toHaveBeenCalledWith(expect.objectContaining({ scope: 'AD_GROUP', externalAdGroupId: 'EAG1' }))
+    expect(writeNegativeKeyword).toHaveBeenCalledWith(expect.objectContaining({ scope: 'AD_GROUP', externalCampaignId: 'EC1', externalAdGroupId: 'EAG1', keywordText: 'giacca moto', matchType: 'EXACT' }))
   })
 
   it('still honours an explicit CAMPAIGN scope', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: 'AMZ-2', denied: null, alreadyExisted: false })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-2', reachedAmazon: true }))
     await applyHarvest({ negatives: [candidate], negateScope: 'CAMPAIGN' })
-    expect(createNegative).toHaveBeenCalledWith(expect.objectContaining({ scope: 'CAMPAIGN' }))
+    expect(writeNegativeKeyword).toHaveBeenCalledWith(expect.objectContaining({ scope: 'CAMPAIGN', externalCampaignId: 'EC1' }))
+    expect(writeNegativeKeyword.mock.calls[0]![0]).not.toHaveProperty('externalAdGroupId')
   })
 
-  it('🔴 refuses rather than calling Amazon with an empty profileId', async () => {
-    const db = (await import('../../db.js')).default as unknown as { amazonAdsConnection: { findFirst: ReturnType<typeof vi.fn> } }
-    db.amazonAdsConnection.findFirst.mockResolvedValueOnce(null)
-    const r = await applyHarvest({ negatives: [candidate] })
-    expect(createNegative).not.toHaveBeenCalled()
-    expect(r.negativesAdded).toBe(0)
+  it('names a negative-broad plan instead of sending it', async () => {
+    const r = await applyHarvest({ negatives: [candidate], plan: { EAG1: { negate: ['BROAD'] } } })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
     expect(r.negativeOutcomes[0].outcome).toBe('failed')
-    expect(r.errors[0]).toMatch(/empty profileId/)
+    expect(r.errors[0]).toMatch(/Amazon SP accepts EXACT and PHRASE only/)
   })
 })
 
 /**
- * 🔴 HV.9a — found by the proof writes, not by any test.
- *
- * Amazon can CREATE the negative and return no keywordId. Measured 2026-08-13: createNegative
- * logged `success … externalId: null` for "veste moto homme homologué", we reported
- * `outcome: failed / reachedAmazon: false`, and the negative is ENABLED at Amazon as
- * id 48498817150724. A false failure is not the safe direction — an operator who believes it
- * failed retries, and the retry is a duplicate.
+ * 🔴 HV.9a / 5b — the read-back and the local row belong to the service now. applyHarvest records nothing itself: no
+ * mirror helper is called, so a refused or failed negative cannot leave a row behind here.
  */
-describe('HV.9a — a null id does not mean Amazon did not create it', () => {
-  it('🔴 recovers the id by reading back, and reports acted', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
-    listNegativeKeywords.mockResolvedValue([
-      { keywordId: '48498817150724', keywordText: 'giacca moto', adGroupId: 'EAG1', matchType: 'NEGATIVE_EXACT' },
-    ])
-    const r = await applyHarvest({ negatives: [candidate] })
+describe('HV.9a — the row is the service\'s, written only for a negative that stands', () => {
+  it('reports the id the service read back, and calls no mirror helper itself', async () => {
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: '48498817150724', reachedAmazon: true, adTargetId: 'row-9' }))
+    const r = await applyHarvest({ negatives: [candidate], userId: 'u-1' })
     expect(r.negativeOutcomes[0]).toMatchObject({ reachedAmazon: true, outcome: 'acted', externalTargetId: '48498817150724' })
-    expect(r.negativesAdded).toBe(1)
-  })
-
-  it('still reports failed when the read-back genuinely does not find it', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
-    listNegativeKeywords.mockResolvedValue([])
-    const r = await applyHarvest({ negatives: [candidate] })
-    expect(r.negativeOutcomes[0]).toMatchObject({ reachedAmazon: false, outcome: 'failed' })
-    expect(r.negativeOutcomes[0].reason).toMatch(/read-back did not find it/)
-    expect(r.negativeOutcomes[0].reason).not.toMatch(/Written locally/)
-  })
-
-  it('does not throw when the read-back itself fails', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
-    listNegativeKeywords.mockRejectedValue(new Error('429 from Amazon'))
-    const r = await applyHarvest({ negatives: [candidate] })
-    expect(r.negativeOutcomes[0].outcome).toBe('failed')
-  })
-})
-
-/**
- * 🔴 HV.9a — `negateCampaign` always mirrored locally; `negateAdGroup` never did. Both proof
- * writes landed at Amazon and left no row here, which is the 209-row defect pointing the other way.
- */
-describe('HV.9a — an ad-group negative is mirrored locally', () => {
-  it('writes a local mirror carrying the Amazon id', async () => {
-    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: 'AMZ-7', denied: null, alreadyExisted: false })
-    await applyHarvest({ negatives: [candidate] })
-    expect(mirrorNegativeKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({
-      keywordText: 'giacca moto', matchType: 'NEGATIVE_EXACT', externalTargetId: 'AMZ-7',
-    }))
+    expect(writeNegativeKeyword).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-1' }))
+    expect(mirrorNegativeKeywordLocal).not.toHaveBeenCalled()
+    expect(createNegativeKeywordCampaignLocal).not.toHaveBeenCalled()
   })
 
   it('does not mirror when the gate refused — nothing was created', async () => {
-    createNegative.mockResolvedValue({ ok: false, externalNegativeKeywordId: null, denied: { deniedAt: 'keyword_protected', reason: 'whitelisted' }, alreadyExisted: false })
-    await applyHarvest({ negatives: [candidate] })
+    writeNegativeKeyword.mockResolvedValue(result({ outcome: 'refused', refusal: { deniedAt: 'keyword_protected', reason: 'whitelisted' } }))
+    await applyHarvest({ negatives: [candidate], negateScope: 'CAMPAIGN' })
     expect(mirrorNegativeKeywordLocal).not.toHaveBeenCalled()
+    expect(createNegativeKeywordCampaignLocal).not.toHaveBeenCalled()
   })
 })
