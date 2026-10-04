@@ -593,24 +593,22 @@ ACTION_HANDLERS.create_amazon_promotion = async (action, context, meta): Promise
 
 // ── reroute_marketplace_budget (AD.5 real implementation) ─────────────
 //
-// Two operating modes:
-//   1. budgetPoolId supplied → trigger an immediate rebalance on that
-//      pool (ignoring its cooldown). Pool's own strategy decides who
-//      gets what; this handler just kicks the trigger.
-//   2. fromMarketplace + toMarketplace + percent → no pool needed.
-//      Identify the loudest-spend Campaign on fromMarketplace, cut its
-//      dailyBudget by `percent`. Spread the freed budget across active
-//      campaigns on toMarketplace.
+// budgetPoolId supplied → trigger an immediate rebalance on that pool
+// (ignoring its cooldown). Pool's own strategy decides who gets what;
+// this handler just kicks the trigger. The pool writes every budget
+// through updateCampaignWithSync.
 //
-// Pre-flight: respects per-rule daily spend cap. Reports estimated
-// value cents = budget shifted (cap counts only the increases, not
-// the decreases).
+// 3e (review 6.9) — without a pool the action is refused. Its second mode (fromMarketplace +
+// toMarketplace + percent) cut the highest-spend campaign on one market and raised up to five on the
+// other with direct `prisma.campaign.update` calls: no action-log row, no queue row, so the write gate never
+// judged it, Undo could not put it back, and Amazon never received it — the local budget diverged until
+// the next sync copied Amazon's back. Refused in a dry run too, so no rule proposes a move its approval
+// would then refuse.
 
 ACTION_HANDLERS.reroute_marketplace_budget = async (action, _context, meta): Promise<ActionResult> => {
   const budgetPoolId = action.budgetPoolId as string | undefined
   const fromMarketplace = action.fromMarketplace as string | undefined
   const toMarketplace = action.toMarketplace as string | undefined
-  const percent = Number(action.percent ?? 25)
 
   // Mode 1: pool-driven.
   if (budgetPoolId) {
@@ -658,86 +656,12 @@ ACTION_HANDLERS.reroute_marketplace_budget = async (action, _context, meta): Pro
     }
   }
 
-  // Mode 2: ad-hoc from→to.
-  if (!fromMarketplace || !toMarketplace) {
-    return {
-      type: action.type,
-      ok: false,
-      error: 'Specify budgetPoolId, OR fromMarketplace + toMarketplace + percent',
-    }
-  }
-
-  // Find the loudest-spend campaign on fromMarketplace.
-  const fromCamp = await prisma.campaign.findFirst({
-    where: { marketplace: fromMarketplace, status: 'ENABLED' },
-    orderBy: { spend: 'desc' },
-    select: { id: true, dailyBudget: true, marketplace: true, name: true },
-  })
-  if (!fromCamp) {
-    return { type: action.type, ok: false, error: `no enabled campaign on ${fromMarketplace}` }
-  }
-  const cutCents = Math.round(Number(fromCamp.dailyBudget) * 100 * (percent / 100))
-  const newFromBudget = Math.max(100, Math.round(Number(fromCamp.dailyBudget) * 100 - cutCents))
-  const actualCutCents = Math.round(Number(fromCamp.dailyBudget) * 100) - newFromBudget
-
-  // Spread the cut across enabled campaigns on toMarketplace.
-  const toCamps = await prisma.campaign.findMany({
-    where: { marketplace: toMarketplace, status: 'ENABLED' },
-    // ACR.0.5 — nulls last. trueProfitCents is nullable now ("no cost price loaded"), and
-    // Postgres sorts NULLS FIRST on DESC, which would have handed the budget to the
-    // campaigns we know least about while calling them the most profitable.
-    orderBy: { trueProfitCents: { sort: 'desc', nulls: 'last' } },
-    take: 5, // top-5 most-profitable campaigns absorb the shift
-    select: { id: true, dailyBudget: true, name: true },
-  })
-  if (toCamps.length === 0) {
-    return { type: action.type, ok: false, error: `no enabled campaign on ${toMarketplace}` }
-  }
-  const perCampPlusCents = Math.floor(actualCutCents / toCamps.length)
-
-  if (meta.dryRun) {
-    return {
-      type: action.type,
-      ok: true,
-      estimatedValueCentsEur: actualCutCents,
-      output: {
-        mode: 'adhoc',
-        dryRun: true,
-        from: { campaignId: fromCamp.id, name: fromCamp.name, oldCents: Math.round(Number(fromCamp.dailyBudget) * 100), newCents: newFromBudget },
-        to: toCamps.map((c) => ({ campaignId: c.id, name: c.name, plusCents: perCampPlusCents })),
-        percent,
-      },
-    }
-  }
-
-  const cap = await checkDailySpendCap(meta.ruleId, actualCutCents)
-  if (!cap.allowed) {
-    return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0 }
-  }
-
-  // Apply: cut "from", boost each "to".
-  const cutResult = await prisma.campaign.update({
-    where: { id: fromCamp.id },
-    data: { dailyBudget: newFromBudget / 100 },
-    select: { id: true },
-  })
-  for (const c of toCamps) {
-    const newCents = Math.round(Number(c.dailyBudget) * 100) + perCampPlusCents
-    await prisma.campaign.update({
-      where: { id: c.id },
-      data: { dailyBudget: newCents / 100 },
-    })
-  }
+  // No pool: refused (3e — see the note above the handler).
   return {
     type: action.type,
-    ok: true,
-    estimatedValueCentsEur: actualCutCents,
-    output: {
-      mode: 'adhoc',
-      from: { campaignId: cutResult.id, cutCents: actualCutCents },
-      to: toCamps.map((c) => ({ campaignId: c.id, plusCents: perCampPlusCents })),
-      percent,
-    },
+    ok: false,
+    error: 'Refused: moving budget between marketplaces is done by a budget pool. Choose a budget pool for this action; it no longer changes budgets by itself.',
+    output: { refusedBy: 'budget-pool-only', fromMarketplace: fromMarketplace ?? null, toMarketplace: toMarketplace ?? null },
   }
 }
 
@@ -1445,16 +1369,32 @@ ACTION_HANDLERS.set_campaign_target_acos = async (action, context, meta): Promis
 // ── increase_daily_budget_cap ────────────────────────────────────────
 // Set a campaign's daily budget to a fixed value (not a % — used for
 // "unlock this campaign on Prime Day" style automation).
+//
+// 3e (review 6.9) — every check runs in a dry run too, so a rule never proposes a budget its approval would
+// then refuse. Below Amazon's €1 minimum is refused, not clamped: a clamp rewrites the rule's intent without
+// telling anyone. The write goes through updateCampaignWithSync (action log, queue, write gate) with no
+// `as never`, and its refusal is returned instead of a bare ok:false.
 ACTION_HANDLERS.set_daily_budget = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   const budgetEur = Number(action.budgetEur)
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
   if (!Number.isFinite(budgetEur) || budgetEur <= 0) return { type: action.type, ok: false, error: 'budgetEur must be a positive number' }
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, budgetEur } }
+  if (budgetEur < 1) return { type: action.type, ok: false, error: `Refused: €${budgetEur.toFixed(2)} is below Amazon's minimum daily budget of €1.00.`, output: { campaignId: id, budgetEur } }
+  const c = await prisma.campaign.findUnique({ where: { id }, select: { dailyBudget: true } })
+  if (!c) return { type: action.type, ok: false, error: 'Campaign not found' }
+  const current = Number(c.dailyBudget)
+  if (budgetEur === current) return { type: action.type, ok: true, estimatedValueCentsEur: 0, output: { campaignId: id, noChange: true, dailyBudget: budgetEur } }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, budgetEur, wouldChange: `€${current.toFixed(2)} → €${budgetEur.toFixed(2)}` } }
   const cap = await checkDailySpendCap(meta.ruleId, Math.round(budgetEur * 100))
   if (!cap.allowed) return { type: action.type, ok: false, error: `daily spend cap: ${cap.capCents}¢` }
-  const res = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: budgetEur } as never, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string | undefined) ?? `set_daily_budget via rule ${meta.ruleId}`, applyImmediately: true } as never)
-  return { type: action.type, ok: res.ok, output: { campaignId: id, budgetEur, outboundQueueId: res.outboundQueueId } }
+  const res = await updateCampaignWithSync({
+    campaignId: id,
+    patch: { dailyBudget: budgetEur },
+    actor: RULE_ACTOR(meta.ruleId),
+    reason: (action.reason as string | undefined) ?? `set_daily_budget via rule ${meta.ruleId}`,
+    applyImmediately: true,
+  })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { campaignId: id, budgetEur, outboundQueueId: res.outboundQueueId } }
 }
 
 // ── scale_bids_for_price_change ───────────────────────────────────────
