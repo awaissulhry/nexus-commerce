@@ -3,10 +3,11 @@
  * This is deliberately an allow-list of attribute drafts, not Product/Offer/listing identities
  * or the shared parent relationship. Observations and unknown fields keep their locks.
  * Column/row rules still apply, and publication uses the schema for the whole attribute root.
+ * Item 12 (2026-10-05): the relationship type and parent SKU are no longer drafts — they are read-only system values
+ * from the family (`sheet-columns.service.ts`), so a direct write is refused and nothing is stored.
  */
 const DRAFT_FACTS = new Set(['brand', 'condition_type', 'externally_assigned_product_identifier',
-  'externally_assigned_product_identifier__type', 'child_parent_sku_relationship__parent_sku',
-  'child_parent_sku_relationship__child_relationship_type'])
+  'externally_assigned_product_identifier__type'])
 
 export function amazonImmutableDraftWarning(input: {
   channel?: string

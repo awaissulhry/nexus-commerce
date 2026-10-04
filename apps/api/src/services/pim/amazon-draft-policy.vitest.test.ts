@@ -12,15 +12,16 @@ import { publicationChangeId } from './studio-publication-changes.js'
 import { prepareAmazonChanges, compileAmazonChanges } from './studio-publication-amazon-changes.js'
 
 const existing = { channel: 'AMAZON', externalListingId: 'SYNTHETIC-ASIN', editableOnExisting: false }
-it.each(['brand', 'condition_type', 'externally_assigned_product_identifier', 'externally_assigned_product_identifier__type', 'child_parent_sku_relationship__child_relationship_type', 'child_parent_sku_relationship__parent_sku'])('allows a %s draft with the exact existing-listing warning', fieldKey => {
+it.each(['brand', 'condition_type', 'externally_assigned_product_identifier', 'externally_assigned_product_identifier__type'])('allows a %s draft with the exact existing-listing warning', fieldKey => {
   expect(amazonImmutableDraftWarning({ ...existing, fieldKey })).toBe(`${fieldKey.split('__')[0]} cannot be edited on an existing Amazon listing. You can save a draft here, but cannot publish this change.`)
 })
-it.each(['sku', 'externalListingId', 'externalParentId', 'platformProductId', 'parentId', '__productRole', '__parentSku', 'parentage_level', 'merchant_suggested_asin', 'brand__unknown', 'unknown', 'condition_type__value'])('does not unlock protected or unclassified %s', fieldKey => {
+it.each(['sku', 'externalListingId', 'externalParentId', 'platformProductId', 'parentId', '__productRole', '__parentSku', 'parentage_level', 'merchant_suggested_asin', 'brand__unknown', 'unknown', 'condition_type__value',
+  // Item 12 (2026-10-05): read-only family values, never drafts.
+  'child_parent_sku_relationship__child_relationship_type', 'child_parent_sku_relationship__parent_sku'])('does not unlock protected or unclassified %s', fieldKey => {
   expect(amazonImmutableDraftWarning({ ...existing, fieldKey })).toBeNull()
 })
-it('warns when an editable parent-SKU leaf shares the immutable relationship root that publication replaces', () => {
-  expect(amazonImmutableDraftWarning({ ...existing, fieldKey: 'child_parent_sku_relationship__parent_sku', editableOnExisting: true, rootImmutable: true }))
-    .toBe('child_parent_sku_relationship cannot be edited on an existing Amazon listing. You can save a draft here, but cannot publish this change.')
+it('gives no draft warning for a parent-SKU leaf: it is a read-only family value (Item 12), not a draft', () => {
+  expect(amazonImmutableDraftWarning({ ...existing, fieldKey: 'child_parent_sku_relationship__parent_sku', editableOnExisting: true, rootImmutable: true })).toBeNull()
 })
 it.each([{ externalListingId: null }, { externalListingId: '' }, { editableOnExisting: true }, { editableOnExisting: undefined }, { channel: 'EBAY' }, { channel: undefined }])('does not apply an Amazon update warning outside its scope: %j', change => {
   expect(amazonImmutableDraftWarning({ ...existing, fieldKey: 'brand', ...change })).toBeNull()
