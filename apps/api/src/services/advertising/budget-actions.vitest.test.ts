@@ -127,15 +127,15 @@ describe('set_daily_budget', () => {
 
   it('live at exactly €1: writes through the mutation path — one action-log row and one queue row for the gate', async () => {
     const beforeWrites = await writes()
-    const out = await run('set_daily_budget', { budgetEur: 1 }, { campaign: { id: 'c-sb' } })
+    const out = await run('set_daily_budget', { budgetEur: 1 }, { campaign: { id: 'c-it' } })
     expect(out.ok).toBe(true)
     expect(out.error).toBeUndefined()
     const queueId = (out.output as { outboundQueueId: string | null }).outboundQueueId
     expect(queueId).toBeTruthy()
-    expect((await budgets())['c-sb']).toBe(1)
+    expect((await budgets())['c-it']).toBe(1)
     expect(await writes()).toEqual({ actionLog: beforeWrites.actionLog + 1, queue: beforeWrites.queue + 1 })
     const log = await inside(() => database.client.advertisingActionLog.findFirstOrThrow({
-      where: { entityId: 'c-sb', actionType: 'AD_BUDGET_UPDATE' },
+      where: { entityId: 'c-it', actionType: 'AD_BUDGET_UPDATE' },
       select: { userId: true, payloadBefore: true, payloadAfter: true, outboundQueueId: true },
     }))
     expect(log).toMatchObject({ userId: RULE_ACTOR, payloadBefore: { dailyBudget: 20 }, payloadAfter: { dailyBudget: 1 }, outboundQueueId: queueId })
