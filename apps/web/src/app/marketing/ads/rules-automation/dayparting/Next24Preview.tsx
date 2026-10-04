@@ -8,17 +8,17 @@
  * someone clicks Automate.
  *
  * What it adds over the painted grid: the grid shows which hours are COVERED. It does not show
- * what each hour's target does to a bid, and it does not show where that bid may climb to. Two
- * schedules that look identical on the grid can differ ninefold in what they permit. So each row
- * carries the governing target, the bias the loop holds, and the ceiling it may reach.
+ * what each hour's target does to a bid. So each row carries the governing target and the fixed
+ * placement % the engine holds in that hour (2e, Owner D1 = A: no hour climbs or chases a goal), or
+ * the Min-bid floor, and says when the CPC ceiling holds it lower.
  *
  * Every number comes from GET /rank-schedule-groups/:id/next-24h, which derives them from the same
- * two functions the live loop uses (resolveActiveWindow, biasBand). Nothing is recomputed here —
- * a preview that paraphrased the engine would be free to drift from it.
+ * functions the live loop uses (resolveActiveWindow, biasBand, cpcCapPct). Nothing is recomputed
+ * here — a preview that paraphrased the engine would be free to drift from it.
  */
 import { useEffect, useState } from 'react'
 import { DataGrid } from '@/design-system/grid/datagrid'
-import { AlertTriangle, TrendingUp, CalendarClock } from 'lucide-react'
+import { AlertTriangle, CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface Row {
@@ -30,16 +30,12 @@ interface Row {
   color: string | null
   source: 'window' | 'baseline' | 'none'
   eventName: string | null
+  /** the placement % the engine holds in this hour (already lowered to the CPC cap when it binds) */
   floorPct: number | null
-  ceilingPct: number | null
-  canChase: boolean
-  /** MB.6 — set when the CPC ceiling, not the target's own Ceiling, is what stops the climb */
+  /** MB.6 — set when the CPC ceiling holds this hour below what its target sets */
   cpcCapPct?: number | null
   maxCpcCents: number | null
-  acosCapPct: number | null
-  allOut: boolean
   suppressed: boolean
-  unbounded: boolean
   missingTarget: boolean
 }
 
@@ -55,8 +51,6 @@ interface Payload {
     hoursCovered: number
     hoursUncovered: number
     hoursSuppressed: number
-    hoursUnbounded: number
-    maxCeilingPct: number | null
     missingTargetKeys: string[]
     events: Array<{ name: string; hours: number }>
   }
@@ -134,19 +128,6 @@ export function Next24Preview({ groupId }: { groupId: string }) {
           </p>
         )}
 
-        {/* THE compounding trap, stated as a count rather than left for someone to infer from a
-            table: all-out ignores the ACOS ceiling by design, so with no maxCPC the only thing
-            bounding the bid is Amazon's own 900% cap. */}
-        {s.hoursUnbounded > 0 && (
-          <p className="note bad">
-            <AlertTriangle size={13} />
-            <span>
-              <b>{s.hoursUnbounded} all-out hour{s.hoursUnbounded === 1 ? '' : 's'} with no CPC ceiling.</b> All-out ignores the ACOS cap by design,
-              so nothing bounds the bid in {s.hoursUnbounded === 1 ? 'that hour' : 'those hours'} but Amazon’s 900% limit. Set a max CPC on the target.
-            </span>
-          </p>
-        )}
-
         {s.hoursSuppressed > 0 && (
           <p className="note">
             {/* Named suppression, not "paused": the engine floors bids and keeps the campaign
@@ -210,32 +191,20 @@ export function Next24Preview({ groupId }: { groupId: string }) {
                 <span className="sup">bids at ~2¢ floor</span>
               ) : h.floorPct == null ? (
                 <span className="none">—</span>
-              ) : h.canChase ? (
-                /* "300% → 900%" rather than "300% → up to 900%": the arrow already carries
-                   "up to", and the longer phrasing wrapped across three lines in the column,
-                   which broke the vertical alignment the whole table depends on. */
-                /* Green reads as "fine", which a climb WITHOUT a ceiling is not — an
-                   unbounded row would otherwise show a reassuring colour beside its own red
-                   "no ceiling" guardrail. A bounded climb stays green: that one IS fine. */
-                <span className={h.unbounded ? 'chase risk' : 'chase'}><TrendingUp size={12} /> {h.floorPct}% → <b>{h.ceilingPct}%</b></span>
               ) : (
                 <span className="hold">hold {h.floorPct}%</span>
               )}
-              {/* MB.6 — on its OWN line. Inside .chase (white-space: nowrap) it widened the
-                  cell past its column and overprinted the guardrail beside it. */}
+              {/* MB.6 — on its OWN line, so it never widens the cell past its column. */}
               {h.cpcCapPct != null && !h.suppressed && (
-                <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling stops this hour at ${h.cpcCapPct}% — the target itself would allow more`}>CPC-capped</span>
+                <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling holds this hour at ${h.cpcCapPct}% — the target itself sets more`}>CPC-capped</span>
               )}
             </>),
           },
           {
             key: 'gd', label: 'Guardrails', width: 108, className: 'gd',
             render: (h) => (<>
-              {h.allOut && <span className="ao">all-out</span>}
               {h.maxCpcCents != null && <span>max {eur(h.maxCpcCents)}</span>}
-              {h.acosCapPct != null && <span>ACoS ≤ {h.acosCapPct}%</span>}
-              {h.unbounded && <span className="bad">no ceiling</span>}
-              {!h.allOut && h.maxCpcCents == null && h.acosCapPct == null && !h.suppressed && h.floorPct != null && <span className="none">—</span>}
+              {h.maxCpcCents == null && !h.suppressed && h.floorPct != null && <span className="none">—</span>}
             </>),
           },
         ]}

@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Rank Schedules list — the Dayparting Schedules tab's real content. A rank schedule is now ONE
+ * Hourly bid plans list (2e — formerly "Rank Schedules") — the Hourly Bids tab's real content. A rank schedule is now ONE
  * NAMED GROUP (RankScheduleGroup, GET /advertising/rank-schedule-groups) that binds MANY campaigns;
  * the API materializes one AdSchedule row per member for the rank-defend cron to run (engine
  * untouched), but this list shows a single named row per group with a member count — so "test over
@@ -9,6 +9,9 @@
  * toolbar/customize/selection chrome as Apply Rules + Ads Manager): a truncating name + Manage link
  * (contained in the sticky first column), a Campaigns count, a colored Baseline chip matching the
  * builder's target palette, and persisted group-level enable/pause.
+ *
+ * 2e (Owner D1 = A) — the engine holds each hour's fixed values and reads no rank or share signal,
+ * so the "Goal vs actual" and "Signal" columns are gone.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
@@ -26,7 +29,7 @@ import { LiveOrphansReview } from '../dayparting/LiveOrphansReview'
 import { liveOrphanHeadline, liveOrphanWhy, type LiveOrphanList } from '../dayparting/liveOrphans'
 import { useRdData } from '../dayparting/_rd/RdData'
 import { GrainSwitch } from '../dayparting/_rd/GrainSwitch'
-import { ModeSpreadCell, SignalCell } from '../dayparting/_rd/RuntimeCells'
+import { ModeSpreadCell } from '../dayparting/_rd/RuntimeCells'
 import type { RdGroupRuntime } from '../dayparting/_rd/types'
 import { useRdUrlState } from '../dayparting/_rd/useRdUrlState'
 import { GRAIN_LABEL, boundBy, groupMatchesScope } from '../dayparting/_rd/scope'
@@ -113,7 +116,7 @@ export function RankGoalsList() {
           failedWrites: g.failedWrites,
           governedElsewhere: g.governedElsewhere,
           membersTotal: g.membersTotal,
-          // RD.P2 — the state this column most needed: running, and unable to reach its goal.
+          // RD.P2 / 2e — running, and held below its hour's % by the CPC ceiling.
           cannotConverge: groupRuntime.get(g.id)?.cannotConverge ?? 0,
         }),
       }
@@ -195,8 +198,8 @@ export function RankGoalsList() {
 
   const columns: GridColumn<RankRow>[] = useMemo(() => [
     {
-      key: 'baseline', label: 'Baseline rank', metric: false, sortable: true, sortValue: (r) => r.baseline,
-      tip: 'The rank held outside every window — "for the rest of the week, hold Y".',
+      key: 'baseline', label: 'Baseline', metric: false, sortable: true, sortValue: (r) => r.baseline,
+      tip: 'The target held outside every painted window — "for the rest of the week, hold Y".',
       render: (r) => (
         <span className="h10-rg-chip" style={r.baselineColor ? { borderColor: r.baselineColor } : undefined} title={r.baseline}>
           <span className="sw" style={{ background: r.baselineColor ?? '#99a1ac' }} />
@@ -209,7 +212,7 @@ export function RankGoalsList() {
       // "Rest of Search" because Baseline was the only rank shown; this is what the engine is
       // actually holding this hour, resolved server-side in the schedule's own timezone.
       key: 'nowHolding', label: 'Now holding', metric: false, sortable: true, sortValue: (r) => r.activeName,
-      tip: 'The rank this schedule resolves to right now. Differs from Baseline while a window is open.',
+      tip: 'The target this plan holds this hour. Differs from Baseline while a painted window is open.',
       render: (r) => (
         r.activeKey
           ? (
@@ -222,31 +225,12 @@ export function RankGoalsList() {
       ),
     },
     {
-      // RD.P2 — a SPREAD, never one collapsed word. "IT AIRMESH: 8 capped · 2 all-out" is the
+      // RD.P2 — a SPREAD, never one collapsed word. "IT AIRMESH: 8 capped · 2 min bid" is the
       // sentence the page could not say: one row hid eleven campaigns with four different fates.
       key: 'mode', label: 'Mode', metric: false, sortable: true, sortValue: (r) => r.runtime?.modeSummary ?? 'zz',
-      tip: 'What the controller will actually do this hour across this schedule\u2019s campaigns. Where they disagree, every state is listed.',
+      tip: 'What this plan holds this hour across its campaigns. Where they differ, every state is listed.',
       render: (r) => (r.runtime
         ? <ModeSpreadCell summary={r.runtime.modeSummary} mixed={r.runtime.mixed} members={r.runtime.members} />
-        : <span className="rd-none">—</span>),
-    },
-    {
-      key: 'goal', label: 'Goal vs actual', metric: false, sortable: true,
-      sortValue: (r) => -(r.runtime?.goalsLive ?? -1),
-      tip: 'How many of this schedule\u2019s campaigns have a goal the controller actually reads. A dash means none do.',
-      render: (r) => {
-        if (!r.runtime) return <span className="rd-none">—</span>
-        if (r.runtime.goalsLive === 0) {
-          return <span className="rd-goal dead" title="No campaign in this schedule has a goal the controller reads — every one of them either holds a fixed placement or is all-out."><span className="v">—</span><span className="was">no goal is read</span></span>
-        }
-        return <span className="rd-goal" title={`${r.runtime.goalsLive} of ${r.runtime.members} campaigns are chasing a live goal.`}><b>{r.runtime.goalsLive}</b><span className="vs">of</span><span className="v">{r.runtime.members}</span><span className="unit">live</span></span>
-      },
-    },
-    {
-      key: 'signal', label: 'Signal', metric: false, sortable: true, sortValue: (r) => r.runtime?.signalSummary ?? 'zz',
-      tip: 'The feedback lane the ACTIVE targets drive across this schedule. "No signal" and "no coverage" are different problems.',
-      render: (r) => (r.runtime
-        ? <SignalCell signal={{ kind: r.runtime.signalSummary.includes('coverage') ? 'no-coverage' : r.runtime.signalSummary.includes('no signal') ? 'no-signal' : 'top-is', lane: null, valuePct: null, ageDays: null, rows: null, label: r.runtime.signalSummary }} />
         : <span className="rd-none">—</span>),
     },
     {
@@ -305,7 +289,7 @@ export function RankGoalsList() {
       // order it alphabetically. Never-run rows sort last rather than first.
       key: 'lastRun', label: 'Last run', metric: false, sortable: true,
       sortValue: (r) => (r.lastEvaluatedAt ? -new Date(r.lastEvaluatedAt).getTime() : Number.MAX_SAFE_INTEGER),
-      tip: 'When the rank loop last evaluated this schedule. It runs every 15 minutes.',
+      tip: 'When the engine last evaluated this plan. It runs every 15 minutes.',
       render: (r) => <span className={r.health.tone === 'warn' && r.health.label === 'Stale' ? 'h10-rg-warn' : undefined} title={r.lastEvaluatedAt ? new Date(r.lastEvaluatedAt).toLocaleString() : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
     },
     {
@@ -422,8 +406,8 @@ export function RankGoalsList() {
       loading={loading}
       rowId={(r) => r.id}
       enabledFirst={(r) => r.enabled}
-      noun="Rank Schedule"
-      firstColLabel="Rank Schedule"
+      noun="Hourly Bid Plan"
+      firstColLabel="Hourly Bid Plan"
       renderFirst={renderFirst}
       firstSortValue={(r) => r.name}
       columns={columns}
@@ -449,29 +433,29 @@ export function RankGoalsList() {
       // the column the operator asked to see.
       storageKey="rank-goals-grid-v2"
       searchable
-      searchPlaceholder="Search rank schedules…"
+      searchPlaceholder="Search hourly bid plans…"
       searchValue={(r) => r.name}
       pagerCentered
       defaultSort={{ key: '__first', dir: 'asc' }}
-      emptyLabel={narrowedToEmpty ? `No rank schedules in ${narrowedWhere}.` : 'No rank schedules yet.'}
+      emptyLabel={narrowedToEmpty ? `No hourly bid plans in ${narrowedWhere}.` : 'No hourly bid plans yet.'}
       // RDX/B1 — "no schedules yet" would be a lie when the account has 16 and you simply picked a
       // market none of them serve, and offering "Create Rank Schedule" there points at the wrong
       // fix. Narrowed-to-empty gets its own copy, and no CTA.
       emptyNode={narrowedToEmpty ? (
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
-          <b>No rank schedules in {narrowedWhere}.</b>
+          <b>No hourly bid plans in {narrowedWhere}.</b>
           <span className="sub">{rows.length} schedule{rows.length === 1 ? '' : 's'} exist outside it — widen the scope to see them.</span>
         </span>
       ) : (
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
-          <b>No rank schedules yet — create one named schedule to hold a rank across many campaigns.</b>
-          <a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Schedule</a>
+          <b>No hourly bid plans yet — create one named plan to set what each hour of the week holds across many campaigns.</b>
+          <a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Create Hourly Bid Plan</a>
         </span>
       )}
       toolbarLeft={<GrainSwitch schedules={rows.length} campaigns={campaigns.length} skewMinutes={clock?.skewMinutes ?? null} />}
-      toolbarRight={<a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
+      toolbarRight={<a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Hourly Bid Plan</a>}
       /* RDX/E1 — a plain row click opens the forward view ("what is this about to do"), which is
          the more useful default; the explicit Activity button still opens the history it names. */
       onRowClick={(r) => openRow(r.id, 'next24')}

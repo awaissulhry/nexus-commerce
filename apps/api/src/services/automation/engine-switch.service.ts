@@ -34,7 +34,7 @@ export interface EngineDef {
 
 export const ENGINES: Record<EngineKey, EngineDef> = {
   'rank-defend': {
-    key: 'rank-defend', name: 'Rank-defend', automation: 'A10', levels: ['OFF', 'AUTO'], manage: FEATURES.adsAutomationManage,
+    key: 'rank-defend', name: 'Hourly bid plans', automation: 'A10', levels: ['OFF', 'AUTO'], manage: FEATURES.adsAutomationManage,
     brake: 'it suppresses bids outside its windows and moves placements: switched off, whatever it last set stays — its boosts included',
   },
   'budget-enforce': {

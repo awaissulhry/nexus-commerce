@@ -563,7 +563,7 @@ const tuneAdEngine: AgentTool = {
   category: 'automation',
   description:
     'Change one setting an ads engine runs by: a budget pool (budget-pool: daily budget, strategy, cool-down, largest shift), a coverage ' +
-    'set\'s caps (coverage-set), a rank target (rank-target: impression-share target, ACOS and bid ceilings, steps, floor), a budget ' +
+    'set\'s caps (coverage-set), a rank target of the hourly bid plans (rank-target: placement %, bid ceiling, Min-bid floor), a budget ' +
     'schedule\'s windows (budget-schedule), a harvest policy (harvest-policy: the criteria that qualify a search term, per scope), an eBay ' +
     'campaign\'s automation policy (ebay-campaign-policy), the account default target ACOS (account-target-acos) or the anomaly breaker\'s ' +
     'limits (breaker). Waits for a person to approve it in Nexus. The preview shows every change and whether it can raise spend (a higher ' +
@@ -597,16 +597,11 @@ const tuneAdEngine: AgentTool = {
       dailySpendCapCents: CENTS.nullable().optional().describe('the set\'s daily spend cap in euro cents; null clears it'),
       acosCapPct: z.coerce.number().min(1).max(500).nullable().optional().describe('the set\'s ACOS cap in % (e.g. 35); null clears it'),
     }).optional().describe('coverage-set: the caps to change'),
+    // 2e — only what the hourly bid plan reads; it reads no impression-share goal, ACOS cap, step or climb.
     rankTarget: z.object({
-      targetISPct: PCT(100).nullable().optional().describe('the top-of-search impression share to hold, in %'),
-      acosCapPct: PCT(500).nullable().optional().describe('the ACOS ceiling the loop respects, in %; null = the campaign default'),
-      maxCpcCents: CENTS.nullable().optional().describe('the highest bid the loop may set, in cents; null = the CPC guardrail'),
-      maxBiasPct: PCT(900).nullable().optional().describe('the highest placement percentage; null = 900'),
-      stepUpPct: PCT(900).nullable().optional().describe('the climb per cycle, in %'),
-      stepDownPct: PCT(900).nullable().optional().describe('the ease per cycle, in %; null = snap down'),
-      jumpStartPct: PCT(900).nullable().optional().describe('the opening jump on entry, in %; null = a gradual ramp'),
-      floorBidCents: CENTS.nullable().optional().describe('the floor bid, in cents'),
-      keepClimbing: z.boolean().optional().describe('keep climbing to the ceiling with no signal'),
+      biasPct: PCT(900).nullable().optional().describe('the placement percentage the target holds in its hours (0–900); null = 0% (on a Min-bid target: leave the placement as it is)'),
+      maxCpcCents: CENTS.nullable().optional().describe('the CPC ceiling, in cents: the placement percentage is held low enough that no bid passes it; null = none'),
+      floorBidCents: CENTS.nullable().optional().describe('a Min-bid target\'s floor bid, in cents; null = €0.02'),
     }).optional().describe('rank-target: the fields to change'),
     budgetSchedule: z.object({
       windows: z.array(z.object({

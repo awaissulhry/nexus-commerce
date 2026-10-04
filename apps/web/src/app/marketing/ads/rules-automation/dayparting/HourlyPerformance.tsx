@@ -5,8 +5,15 @@
  *
  * Every best-in-class dayparting tool (Adtomic, AdLabs, Eva, Pacvue) leads with the 7×24 grid and
  * treats authoring as the second step: you look, then you decide. This panel puts that grid above
- * the schedule list so the page answers "which hours are worth holding a rank in" before it asks
- * you to name windows.
+ * the schedule list so the page answers "which hours are worth a higher placement %, and which only
+ * the bid floor" before it asks you to paint the hourly bid plan (a fixed value per hour — nothing
+ * here chases a rank).
+ *
+ * 3.10 — the grid says what the data can honestly say: a ratio with no denominator is "no value",
+ * not 0% (an hour that spent and sold nothing used to be the palest, best-looking ACoS cell); the
+ * one-line read names the BUSIEST hour only for volume metrics and the HIGHEST hour for ratios (the
+ * top ACoS hour is the costliest, not the busiest); sales and orders are disclosed as Amazon's
+ * 1-day attribution; and "all markets" is disclosed as a plain sum without currency conversion.
  *
  * Data is REAL Amazon Marketing Stream hourly performance (AmazonAdsHourlyPerformance) via
  * GET /advertising/dayparting/heatmap — the signal most tools charge four figures a month for.
@@ -21,7 +28,7 @@ import { Button, Input } from '@/design-system/primitives'
 
 import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap'
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
-import { metricVal, type RawCell } from '../_schedule/heatMetrics'
+import { metricLegendNote, metricReading, metricVal, oneDayNote, peakLine, type RawCell } from '../_schedule/heatMetrics'
 import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
 import { useRdData } from './_rd/RdData'
@@ -128,23 +135,20 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
     return () => { alive = false }
   }, [scope, from, to, market])
 
-  const cells = useMemo<HeatCell[]>(() => {
-    const read = metricVal(metric).f
-    return raw.map((c) => ({ dow: c.dow, hour: c.hour, value: read(c) }))
-  }, [raw, metric])
+  // 3.10 — a cell with no value for this metric (no clicks, no spend, spend with no sales) carries
+  // that in words instead of a 0 that would paint it as the best hour.
+  const readings = useMemo(() => raw.map((c) => ({ dow: c.dow, hour: c.hour, ...metricReading(metric, c) })), [raw, metric])
+  const cells = useMemo<HeatCell[]>(
+    () => readings.map((r) => ({ dow: r.dow, hour: r.hour, value: r.value ?? 0, ...(r.value == null ? { empty: r.empty, worst: r.worst } : {}) })),
+    [readings],
+  )
 
   const scopeOptions = useMemo(() => [{ value: 'all', label: 'All campaigns' }, ...scopes], [scopes])
 
   // Peak hour is the single most actionable read on this grid, so state it in words rather than
-  // making the operator scan 168 cells for the darkest one.
-  const peak = useMemo(() => {
-    if (!cells.length) return null
-    const top = cells.reduce((a, b) => (b.value > a.value ? b : a), cells[0])
-    if (top.value <= 0) return null
-    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
-    return `${DAYS[top.dow]} ${hh(top.hour)}`
-  }, [cells])
+  // making the operator scan 168 cells for the darkest one. 3.10 — "Busiest" for volume metrics
+  // only; a ratio names its highest hour, which for ACoS, CPC and CPA is the costliest one.
+  const peak = useMemo(() => peakLine(metric, readings), [metric, readings])
 
   return (
     <div className="h10-dp-panel">
@@ -153,8 +157,12 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           <h3>Hourly performance</h3>
           <p>
             Amazon Marketing Stream, {metric} by day and hour, Europe/Rome
-            {market && market !== 'all' ? <>, {market} only</> : null}.
-            {peak ? <> Busiest: <b>{peak}</b>.</> : null}
+            {market && market !== 'all' ? <>, {market} only</> : <>, all markets added together without currency conversion</>}.
+            {peak ? <> {peak.label}: {peak.when ? <b>{peak.when}</b> : 'no hour has a value'}{peak.note ? ` (${peak.note})` : ''}.</> : null}
+          </p>
+          {/* 3.10 — what the numbers are, so a cell is not read as more than it is. */}
+          <p className="h10-dp-panelrange">
+            {[oneDayNote(metric), metricLegendNote(metric)].filter(Boolean).join(' ')}
           </p>
           {/* The exact range summed, and how many of its days actually carry data. FB.3d — the
               range comes from the shared header picker; when it is a whole number of weeks every

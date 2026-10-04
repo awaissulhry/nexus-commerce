@@ -7,7 +7,7 @@
  * number in front of the operator was how many campaigns they had picked. These two answers sit
  * where that decision is made:
  *
- *   E1  NEXT 24 HOURS — the rank this plan resolves to, hour by hour, starting now. A plan reads as
+ *   E1  NEXT 24 HOURS — the target this plan resolves to, hour by hour, starting now. A plan reads as
  *       a grid of windows; what it DOES is a sequence. Seeing "Rest of Search until 18:00, then Own
  *       Top until 23:00" is what catches an off-by-one window before it runs, not after.
  *   E3  BLAST RADIUS — the campaigns, ad groups and targets the writes land on, and how many of
@@ -24,23 +24,22 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 export interface RankTargetLite {
   key: string; name: string; color: string | null
-  /** The bias the loop HOLDS (Placement %). Without it the ceiling below cannot be stated: for a
-   *  non-all-out target with no maxBiasPct the ceiling IS the floor, not 900%. */
+  /** The placement % the engine HOLDS in every hour this target covers. */
   biasPct?: number | null
-  maxBiasPct: number | null; maxCpcCents: number | null; acosCapPct: number | null; allOut: boolean
+  maxCpcCents: number | null
+  /** 2e — stored on older targets, not read by the engine and not shown here. */
+  maxBiasPct?: number | null; acosCapPct?: number | null; allOut?: boolean
   pause?: boolean
 }
 
 /**
- * Mirror of `biasBand` in apps/api/src/services/advertising/rank-controller.ts — the [floor,
- * ceiling] the engine derives before it moves anything. Duplicated deliberately and minimally:
- * this panel must also describe an UNSAVED plan being edited, which no server endpoint can read.
- * Keep the two in step; rank-controller is the source of truth.
+ * Mirror of `biasBand(...).floor` in apps/api/src/services/advertising/rank-controller.ts — the
+ * fixed placement % the engine holds (2e, Owner D1 = A: no hour climbs above it). Duplicated
+ * deliberately and minimally: this panel must also describe an UNSAVED plan being edited, which
+ * no server endpoint can read. Keep the two in step; rank-controller is the source of truth.
  */
-function band(t: RankTargetLite): { floor: number; ceiling: number } {
-  const floor = Math.max(0, Math.min(900, Math.round(t.biasPct ?? 0)))
-  const ceiling = t.allOut ? (t.maxBiasPct ?? 900) : (t.maxBiasPct ?? floor)
-  return { floor, ceiling: Math.max(floor, ceiling) }
+function heldPct(t: RankTargetLite): number {
+  return Math.max(0, Math.min(900, Math.round(t.biasPct ?? 0)))
 }
 interface Fit {
   hasData: boolean; weeks: number; campaigns: number
@@ -133,8 +132,7 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
     return runs(nextDay(grid, baselineKey, new Date()))
   }, [windows, baselineKey])
 
-  // The ceiling each distinct target in the next day can reach. The compounding trap AdLabs warns
-  // about is invisible unless the bound is stated next to the plan that reaches for it.
+  // What each distinct target in the next day holds, stated next to the plan that uses it.
   const ceilings = useMemo(() => {
     const keys = [...new Set(schedule.map((r) => r.key).filter(Boolean))]
     return keys.map((k) => meta.get(k)).filter(Boolean) as RankTargetLite[]
@@ -165,43 +163,18 @@ export function ArmPreview({ groupId, campaignIds, windows, baselineKey, targets
               <span key={t.key} className="c">
                 <b>{t.name}</b>
                 {/*
-                  Every clause here was wrong before RDX/E2 measured it against the engine:
-                   · "up to {maxBiasPct ?? 900}% bias" told the operator EVERY target could reach
-                     900%. For a non-all-out target with no maxBiasPct the ceiling is the FLOOR —
-                     it holds at its Placement %, it does not climb. Most targets read 900% here.
-                   · "holds at any cost up to the CPC ceiling" implied a ceiling exists. On
-                     `own-top-allout` maxCpcCents is null, so there is none — the one case where
-                     the sentence most needed to warn, it reassured instead.
-                   · A Min-bid target was described as "up to 900% bias · no ACoS cap" when it in
-                     fact floors bids to ~2¢ and never reaches the placement stage at all.
-                */}
-                {/*
-                  MB.4 — the CPC ceiling now genuinely BINDS the climb (it was read by nothing
-                  before), so "up to 900% bias · max CPC €2.00" would overstate the reach: on a
-                  €0.35 base bid that ceiling stops the multiplier at 471%. Where the cap lands
-                  depends on the campaigns' live base bids, which this panel cannot know — it
-                  also describes UNSAVED plans, with no campaign set to read. So it states the
-                  bound instead of inventing a number; the exact figure is in Next 24 hours,
-                  which is computed server-side from those bids.
+                  2e — each target holds ONE fixed placement % (no climb, no goal, no ACoS cap).
+                  Where the CPC ceiling lands depends on the campaigns' live base bids, which this
+                  panel cannot know — it also describes UNSAVED plans, with no campaign set to read.
+                  So it states the bound instead of inventing a number; the exact figure is in Next
+                  24 hours, which is computed server-side from those bids.
                 */}
                 {t.pause ? (
                   <em>holds bids at the ~2¢ floor — delivery continues, prior bids restored after</em>
-                ) : t.allOut ? (
-                  <em>
-                    {band(t).floor}% → up to {band(t).ceiling}% bias · ignores the ACoS cap
-                    {t.maxCpcCents != null
-                      ? ` · or wherever the €${(t.maxCpcCents / 100).toFixed(2)} CPC ceiling binds first`
-                      : ' · NO CPC ceiling — nothing bounds the bid but Amazon’s 900% cap'}
-                  </em>
                 ) : (
                   <em>
-                    {band(t).ceiling > band(t).floor
-                      ? `${band(t).floor}% → up to ${band(t).ceiling}% bias`
-                      : `holds ${band(t).floor}% bias`}
-                    {t.acosCapPct != null ? ` · ACoS cap ${t.acosCapPct}%` : ' · no ACoS cap'}
-                    {t.maxCpcCents != null
-                      ? ` · ${band(t).ceiling > band(t).floor ? `or wherever the €${(t.maxCpcCents / 100).toFixed(2)} CPC ceiling binds first` : `max CPC €${(t.maxCpcCents / 100).toFixed(2)}`}`
-                      : ''}
+                    {`holds ${heldPct(t)}% placement`}
+                    {t.maxCpcCents != null ? ` · lowered where the €${(t.maxCpcCents / 100).toFixed(2)} CPC ceiling binds` : ''}
                   </em>
                 )}
               </span>

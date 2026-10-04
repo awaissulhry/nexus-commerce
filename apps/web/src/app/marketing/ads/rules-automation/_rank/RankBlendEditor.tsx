@@ -1,11 +1,14 @@
 'use client'
 
 /**
- * BL — blended-target editor. Turns one RankTarget into a strategy that drives Top of
- * Search + Rest of Search + Product pages SIMULTANEOUSLY (each its own bias / ceiling /
- * target-IS), plus a base-bid lever the placement multipliers stack on. Empty (no lanes
- * enabled) = the target stays single-placement (legacy). Shown in Global defaults view —
- * a blend is a library-level strategy. Effective-bid preview (BL.5) is inline per lane.
+ * BL — blended-target editor. Turns one RankTarget into a strategy that sets Top of
+ * Search + Rest of Search + Product pages SIMULTANEOUSLY (each its own Placement %), plus a
+ * base-bid lever the placement multipliers stack on. Empty (no lanes enabled) = the target
+ * stays single-placement (legacy). Effective-bid preview (BL.5) is inline per lane.
+ *
+ * 2e (Owner D1 = A) — each lane holds a FIXED Placement % for the hours the target covers. The
+ * engine reads no impression share or ACoS and never climbs, so the lane ceiling, target IS/SQP
+ * and ACOS cap inputs are gone; saving a lane stores only its placement and %.
  */
 import { useState } from 'react'
 import { Save, Layers } from 'lucide-react'
@@ -14,16 +17,17 @@ import { Button, Checkbox, Input, Select } from '@/design-system/primitives'
 export interface BlendLane {
   placement: string
   biasPct: number | null
+  // Stored by blends saved before 2e; not read by the engine and not shown.
   maxBiasPct?: number | null
   targetISPct?: number | null
   acosCapPct?: number | null
   keepClimbing?: boolean
 }
 
-const LANES: { placement: string; label: string; signal: string; chase: boolean; acos: boolean; def: number }[] = [
-  { placement: 'PLACEMENT_TOP', label: 'Top of Search', signal: 'Amazon Top-IS (closed-loop)', chase: true, acos: true, def: 100 },
-  { placement: 'PLACEMENT_REST_OF_SEARCH', label: 'Rest of Search', signal: 'SQP brand share (approx)', chase: true, acos: false, def: 50 },
-  { placement: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', signal: 'open-loop (set & hold)', chase: false, acos: false, def: 30 },
+const LANES: { placement: string; label: string; def: number }[] = [
+  { placement: 'PLACEMENT_TOP', label: 'Top of Search', def: 100 },
+  { placement: 'PLACEMENT_REST_OF_SEARCH', label: 'Rest of Search', def: 50 },
+  { placement: 'PLACEMENT_PRODUCT_PAGE', label: 'Product pages', def: 30 },
 ]
 
 export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
@@ -60,14 +64,7 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
   const save = () => {
     const lanes: BlendLane[] = LANES.filter((l) => enabled[l.placement]).map((l) => {
       const v = vals[l.placement] || { placement: l.placement, biasPct: l.def }
-      return {
-        placement: l.placement,
-        biasPct: v.biasPct ?? 0,
-        maxBiasPct: v.maxBiasPct ?? null,
-        targetISPct: l.chase ? (v.targetISPct ?? null) : null,
-        acosCapPct: l.acos ? (v.acosCapPct ?? null) : null,
-        keepClimbing: !!v.keepClimbing,
-      }
+      return { placement: l.placement, biasPct: v.biasPct ?? 0 }
     })
     onSave({ lanes, bidMode, bidValueCents: bidMode === 'absolute' ? bidValueCents : null, bidDeltaPct: bidMode === 'deltaPct' ? bidDeltaPct : null })
   }
@@ -75,23 +72,17 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
   return (
     <div className="h10-rte-motion h10-rte-blend">
       <div className="h10-mtitle"><Layers size={12} /> Blend — run Top + Rest of Search + Product pages in the SAME window{scopeNote ? <span style={{ color: '#7c3aed', fontWeight: 700 }}> · for {scopeNote}</span> : ''}</div>
-      <div className="h10-msub">Toggle a placement to drive it. Each gets its own bias + ceiling + signal; the base bid (below) is what these % stack on. No lanes enabled = {scopeNote ? `${scopeNote} uses single-placement` : 'the target stays single-placement'}.</div>
+      <div className="h10-msub">Toggle a placement to set it. Each holds its own Placement % in every hour this target covers; the base bid (below) is what these % stack on. No lanes enabled = {scopeNote ? `${scopeNote} uses single-placement` : 'the target stays single-placement'}.</div>
       {LANES.map((l) => {
         const on = !!enabled[l.placement]
         const v = vals[l.placement] || { placement: l.placement, biasPct: null }
         return (
           <div key={l.placement} className={`h10-blend-lane ${on ? 'on' : ''}`}>
             <Checkbox className="h10-blend-en" checked={on} onChange={(e) => toggle(l.placement, e.target.checked, l.def)} label={<b>{l.label}</b>} />
-            <span className="h10-blend-sig" title="The closed-loop feedback signal available for this placement">{l.signal}</span>
             {on && (
               <span className="h10-blend-fields">
-                <label className="h10-mfield" title="Placement bid multiplier 0–900%"><span>Bias %</span><Input size="xs" type="number" min={0} max={900} value={v.biasPct ?? ''} onChange={(e) => setLaneField(l.placement, 'biasPct', e.target.value)} /></label>
-                <label className="h10-mfield" title="Blank = hold the bias. Set above it to let this lane climb toward the ceiling."><span>Ceiling %</span><Input size="xs" type="number" min={0} max={900} value={v.maxBiasPct ?? ''} placeholder="hold" onChange={(e) => setLaneField(l.placement, 'maxBiasPct', e.target.value)} /></label>
-                {l.chase
-                  ? <label className="h10-mfield" title={l.placement === 'PLACEMENT_TOP' ? 'Top-of-Search impression share to chase (when a ceiling is set)' : 'SQP brand impression share to chase (approximate)'}><span>Target {l.placement === 'PLACEMENT_TOP' ? 'IS' : 'SQP'} %</span><Input size="xs" type="number" min={0} max={100} value={v.targetISPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'targetISPct', e.target.value)} /></label>
-                  : <span className="h10-mfield h10-rte-na" title="Amazon exposes no impression share for Product pages — this lane is set-and-hold (open-loop)">open-loop</span>}
-                {l.acos && <label className="h10-mfield" title="Ease off above this ACOS while climbing (Top only — Amazon exposes no ACOS for Rest/Product)"><span>ACOS cap %</span><Input size="xs" type="number" min={0} value={v.acosCapPct ?? ''} placeholder="—" onChange={(e) => setLaneField(l.placement, 'acosCapPct', e.target.value)} /></label>}
-                <span className="h10-blend-eff" title="Effective bid for this placement = base bid × (1 + bias%)">eff {eff(v.biasPct)}</span>
+                <label className="h10-mfield" title="The placement multiplier 0–900% this lane holds in every hour the target covers"><span>Placement %</span><Input size="xs" type="number" min={0} max={900} value={v.biasPct ?? ''} onChange={(e) => setLaneField(l.placement, 'biasPct', e.target.value)} /></label>
+                <span className="h10-blend-eff" title="Effective bid for this placement = base bid × (1 + Placement %)">eff {eff(v.biasPct)}</span>
               </span>
             )}
           </div>

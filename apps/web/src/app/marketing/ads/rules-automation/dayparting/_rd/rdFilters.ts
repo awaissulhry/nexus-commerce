@@ -1,6 +1,10 @@
 /**
- * FB.3 — Rank & Dayparting's filter bar, defined once for the page that RENDERS it and the grid
+ * FB.3 — the Hourly Bids filter bar, defined once for the page that RENDERS it and the grid
  * that FILTERS with it.
+ *
+ * 2e (Owner D1 = A) — the Signal, Signal freshness and Convergence facets are gone: the engine reads
+ * no signal, and "cannot converge" now means only that the CPC ceiling binds, which the Ceiling
+ * facet already answers (Base at cap · Cap binding).
  *
  * This page had three control surfaces for one grid and only one of them was linkable:
  *
@@ -30,9 +34,7 @@ import type { RdUrlState } from './scope'
 
 const TILE_LABEL: Record<string, string> = {
   holding: 'Holding',
-  chasing: 'Chasing',
   capped: 'Capped',
-  blind: 'Blind',
   'min-bid': 'Min bid',
 }
 
@@ -142,26 +144,6 @@ export function rdFilters({ options, url, campaigns, tileCounts, baselineOptions
       options: kinds((r) => r.runtime.mode?.kind).map((k) => ({ value: k, label: words(k) })),
       value: (r) => (r as RdCampaignRow).runtime.mode?.kind ?? '',
     },
-    {
-      key: '__signal', label: 'Signal', kind: 'multiselect', wide: true, placeholder: 'Any signal',
-      options: kinds((r) => r.runtime.signal?.kind).map((k) => ({ value: k, label: words(k) })),
-      value: (r) => (r as RdCampaignRow).runtime.signal?.kind ?? '',
-    },
-    {
-      key: '__converge', label: 'Convergence', kind: 'select', placeholder: 'Any',
-      options: [
-        { value: 'no', label: 'Cannot converge', title: 'This campaign cannot reach what it is being asked to hold.' },
-        { value: 'yes', label: 'OK', title: 'Nothing is stopping this campaign from holding its target.' },
-      ],
-      value: (r) => ((r as RdCampaignRow).runtime.canConverge ? 'yes' : 'no'),
-    },
-    // FB.3c — the Signal column renders freshness (fresh · stale · never · none) and nothing could
-    // filter on it; "show me the campaigns steering on stale data" is a one-click question now.
-    {
-      key: '__fresh', label: 'Signal freshness', kind: 'multiselect', placeholder: 'Any freshness',
-      options: kinds((r) => r.runtime.signal?.freshness).map((k) => ({ value: k, label: words(k) })),
-      value: (r) => (r as RdCampaignRow).runtime.signal?.freshness ?? '',
-    },
     // FB.3c — the Ceiling column's three real states, filterable. `base-alone` (the base bid alone
     // is at or over the cap — the campaign cannot move at all) was previously reachable only by
     // SORTING the Ceiling column, which is what the retired ceilings section told you to do.
@@ -169,7 +151,7 @@ export function rdFilters({ options, url, campaigns, tileCounts, baselineOptions
       key: '__ceiling', label: 'Ceiling', kind: 'select', placeholder: 'Any',
       options: [
         { value: 'base-alone', label: 'Base at cap', title: 'The base bid alone is at or over the CPC ceiling — no window can push this campaign anywhere.' },
-        { value: 'binding', label: 'Cap binding', title: 'The ceiling is currently clipping what a window asks for.' },
+        { value: 'binding', label: 'Cap binding', title: 'The ceiling holds this campaign below the placement % its hour sets.' },
         { value: 'under', label: 'Under cap', title: 'A ceiling exists and is not in the way right now.' },
         { value: 'none', label: 'No ceiling' },
       ],
@@ -204,13 +186,10 @@ export function rdFilterState(url: RdUrlState): FilterState {
     ...scopeToFilterState({ line: url.product, portfolio: url.portfolio, campaign: url.campaign }),
     __tile: url.tile,
     __mode: list(url.mode),
-    __signal: list(url.signal),
-    __converge: url.converge,
     __status: url.status,
     __health: list(url.health),
     __baseline: list(url.baseline),
     __windows: url.windows,
-    __fresh: list(url.fresh),
     __ceiling: url.ceiling,
     __cstatus: url.cstatus,
     __schedule: url.schedule,
@@ -225,13 +204,10 @@ export function rdUrlPatch(next: Record<string, string>): Partial<RdUrlState> {
     campaign: next.__campaign ?? '',
     tile: next.__tile ?? '',
     mode: next.__mode ?? '',
-    signal: next.__signal ?? '',
-    converge: next.__converge ?? '',
     status: next.__status ?? '',
     health: next.__health ?? '',
     baseline: next.__baseline ?? '',
     windows: next.__windows ?? '',
-    fresh: next.__fresh ?? '',
     ceiling: next.__ceiling ?? '',
     cstatus: next.__cstatus ?? '',
     schedule: next.__schedule ?? '',

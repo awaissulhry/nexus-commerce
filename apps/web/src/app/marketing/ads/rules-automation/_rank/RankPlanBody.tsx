@@ -1,12 +1,15 @@
 'use client'
 
 /**
- * RGD.1 — Rank Plan body (the §2 "Your rank goal & schedule" cockpit), re-skinned to H10 and made
+ * RGD.1 — Rank Plan body (the §2 "Your hourly bid plan" section), re-skinned to H10 and made
  * MULTI-CAMPAIGN. Author ONE plan — a baseline rank ("for the rest of the week, hold Y") + time
  * windows ("Mon–Fri 18–22 → Own Top") — applied across every selected campaign at once. Saved as
  * ONE NAMED GROUP (RankScheduleGroup): the API materializes one AdSchedule row per member campaign
  * (which the rank-defend cron runs — engine untouched) but the list shows a single named row. Edit
- * via ?groupId reloads name + all members. Live defend preview + delivery truth are shown per campaign.
+ * via ?groupId reloads name + all members. Live preview + delivery truth are shown per campaign.
+ *
+ * 2e (Owner D1 = A) — each hour holds its target's FIXED values (Placement %, Min-bid floor, base
+ * bid). The engine reads no rank, impression share or ACoS, so nothing here offers or reports one.
  *
  * RGD.7 — the action model follows the rules-automation convention: there's no Save/Publish/Discard
  * trio here. The parent builder owns ONE "Create Schedule" action + a Manual/Automate Control section
@@ -32,10 +35,10 @@ export interface RankPlanStatus { valid: boolean; busy: boolean; dirty: boolean;
 interface DemandData { grid: DemandCell[][]; hourProfile: DemandProfile[]; weekdayProfile: DemandProfile[]; hasData: boolean; familyOrders: number; timezone?: string; metric?: 'revenue' | 'orders' }
 interface RecData { windows: Win[]; baselineTargetKey: string; peakHours: number[] }
 
-interface RankTarget { key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; allOut: boolean; color: string | null }
+interface RankTarget { key: string; name: string; placement: string; biasPct?: number | null; pause?: boolean; color: string | null }
 interface Win { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Sched { id: string; campaignId: string; name: string; windows: Win[]; timezone: string; enabled: boolean; defaultTargetKey?: string | null; targetOverrides?: OvMap }
-interface Decision { campaignId: string; campaignName?: string; action: string; reason: string; currentPct?: number; nextPct?: number; achievedISPct: number | null; lossDetected?: boolean }
+interface Decision { campaignId: string; campaignName?: string; action: string; reason: string; currentPct?: number; nextPct?: number }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
@@ -187,14 +190,14 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
 
   return (
     <div className="h10-rp">
-      {!loaded ? <div className="h10-rp-load">Loading rank plan…</div> : <>
+      {!loaded ? <div className="h10-rp-load">Loading hourly bid plan…</div> : <>
         {/* Baseline — "for the rest, hold Y" */}
         <div className="h10-rp-sec">
           <div className="h10-rp-lbl">Baseline — the rest of the week, hold:</div>
           <div className="h10-rp-chips">
             {targets.map(t => (
-              <Button key={t.key} className={`h10-rp-chip ${baseline === t.key ? 'on' : ''}`} style={baseline === t.key && t.color ? { borderColor: t.color, boxShadow: `0 0 0 1px ${t.color} inset` } : undefined} onClick={() => setBaseline(baseline === t.key ? '' : t.key)} title={t.allOut ? 'Ignores ACOS — holds at any cost' : t.targetISPct != null ? `Target ${t.targetISPct}% top-of-search share` : ''}>
-                <span className="sw" style={{ background: t.color ?? '#999' }} />{t.name}{t.allOut && <span className="ao">ALL-OUT</span>}
+              <Button key={t.key} className={`h10-rp-chip ${baseline === t.key ? 'on' : ''}`} style={baseline === t.key && t.color ? { borderColor: t.color, boxShadow: `0 0 0 1px ${t.color} inset` } : undefined} onClick={() => setBaseline(baseline === t.key ? '' : t.key)} title={t.pause ? 'Floors every bid to the Min-bid floor (the campaign stays live)' : `Holds ${t.biasPct ?? 0}% placement`}>
+                <span className="sw" style={{ background: t.color ?? '#999' }} />{t.name}
               </Button>
             ))}
           </div>
@@ -259,7 +262,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
           </>)}
         </div>
 
-        {/* Live defend preview + delivery, per campaign */}
+        {/* Live preview + delivery, per campaign */}
         {decisions.length > 0 && (
           <div className="h10-rp-sec">
             <div className="h10-rp-lbl"><Sparkles size={13} /> Right now, per campaign:</div>
@@ -267,7 +270,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
               {decisions.map(d => (
                 <div key={d.campaignId} className="h10-rp-dec">
                   <b title={d.campaignName ?? d.campaignId}>{d.campaignName ?? d.campaignId}</b>
-                  <span className="act">would <b>{d.action === 'pause' ? 'drop to Min bid' : d.action}</b>{d.nextPct != null && (d.action === 'raise' || d.action === 'lower') ? ` → ${d.nextPct}% bias` : ''}{d.lossDetected ? ' (slipping — re-taking)' : ''} — <i>{d.reason}</i>{d.achievedISPct != null ? ` · IS ${d.achievedISPct}%` : ''}</span>
+                  <span className="act">would <b>{d.action === 'pause' ? 'drop to Min bid' : d.action}</b>{d.nextPct != null && (d.action === 'raise' || d.action === 'lower') ? ` → ${d.nextPct}% placement` : ''} — <i>{d.reason}</i></span>
                   <DeliveryChip campaignId={d.campaignId} reloadSignal={deliverySignal} />
                 </div>
               ))}
@@ -276,7 +279,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
         )}
 
         {msg && <div className="h10-rp-msg">{msg}</div>}
-        <div className="h10-rp-note">Choose <b>Manual</b> or <b>Automate</b> in Control below, then <b>Create Schedule</b>. Manual stores the plan for every selected campaign but runs nothing; Automate has the engine hold this rank on its cadence. Either way, real Amazon pushes honour each campaign&apos;s write-gate (sandbox stays local).</div>
+        <div className="h10-rp-note">Choose <b>Manual</b> or <b>Automate</b> in Control below, then <b>Create Schedule</b>. Manual stores the plan for every selected campaign but runs nothing; Automate has the engine set each hour&apos;s values on its cadence, writing only when the hour&apos;s value changes. Either way, real Amazon pushes honour each campaign&apos;s write-gate (sandbox stays local).</div>
       </>}
 
       <RankTargetEditor

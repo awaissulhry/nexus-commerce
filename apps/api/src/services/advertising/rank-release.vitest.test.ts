@@ -281,7 +281,7 @@ describe('while ads automation is stopped, nothing is attempted; the first run a
     const { id: groupId } = await inside(() => saveRankScheduleGroup({ name: 'RR off', windows: [], defaultTargetKey: 'pause', campaignIds: ['rr-off'] }))
     await isolate('rr-off')
     await inside(() => setEngineSwitch('rank-defend', 'OFF', 'user:test'))
-    expect(await inside(() => rankSwitchBrake('base'))).toBe('base; 1 campaign holds a bid floor it set right now: switched off, it stays floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Rank & Dayparting list)')
+    expect(await inside(() => rankSwitchBrake('base'))).toBe('base; 1 campaign holds a bid floor it set right now: switched off, it stays floored until it is switched back on, and its first run then gives back every floor no schedule holds on a paused campaign (a live one waits for a person on the Hourly Bids list)')
 
     const res = await app.inject({ method: 'PATCH', url: `/api/advertising/rank-schedule-groups/${groupId}`, payload: { enabled: false } })
     expect(res.json().release).toMatchObject({ deferred: 1, restored: 0, deferredWhy: 'Rank & Dayparting is switched off for this business' })
@@ -475,7 +475,7 @@ describe('a live campaign: the sweep leaves it, the list shows it, a person give
   it('the automation catalog\'s scope line counts the live campaigns that wait', async () => {
     await seed('rc-live', 40, [20], 'automation:rank-defend-gone')
     await isolate('rc-live')
-    expect(await inside(() => enabledOrphanScope())).toEqual({ scope: '1 live campaign still carries bids it changed and no schedule or plan holds it: it never changes a live campaign by itself, so it waits for a person to give the bids back on the Rank & Dayparting list.' })
+    expect(await inside(() => enabledOrphanScope())).toEqual({ scope: '1 live campaign still carries bids it changed and no schedule or plan holds it: it never changes a live campaign by itself, so it waits for a person to give the bids back on the Hourly Bids list.' })
     await giveBack('rc-live')
     expect(await inside(() => enabledOrphanScope())).toEqual({})
   })

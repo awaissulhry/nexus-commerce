@@ -162,7 +162,7 @@ function DaypartingSchedulesBody() {
         // Without an explicit primary the header falls back to an "Action ▾" dropdown, which on this
         // page would open EMPTY (no `actions` to put in it). The section's one creation verb is
         // making a schedule, so name it — same slot the index uses for "+ Rule".
-        primaryAction={{ label: 'Rank Schedule', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
+        primaryAction={{ label: 'Hourly Bid Plan', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
       />
       <RulesTabs active="dayparting" />
       <StaleBanner stale={dpRefresh.stale} subject="A schedule, a rank target or the engine's applied state" onRefresh={refresh} />
@@ -179,8 +179,8 @@ function DaypartingSchedulesBody() {
       {/* FB.3 — ONE bar: controls, then the numbers they produce, then the rows. It holds the three
           scope grains always, plus the showing grain's own filters — Status / Health / Baseline /
           Windows at schedules grain (FB.3c: they lived in a SECOND "Filters" panel inside the grid,
-          the duplicate the operator reported), and Fleet state / Mode / Signal / Convergence /
-          Signal freshness / Ceiling / Campaign status / Schedule at campaigns grain. The fleet
+          the duplicate the operator reported), and Fleet state / Mode / Ceiling / Campaign status /
+          Schedule at campaigns grain (2e dropped Signal, Signal freshness and Convergence). The fleet
           tiles below write the same `?tile=` this bar's Fleet state select does — one store, two
           affordances, so a tile and the select can no longer disagree about what is filtered. */}
       <AdsFilterBar

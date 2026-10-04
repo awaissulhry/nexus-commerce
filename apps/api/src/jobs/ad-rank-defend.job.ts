@@ -1,17 +1,17 @@
 /**
- * RS.5 — the continuous rank-defend loop. For each enabled GOAL-mode AdSchedule
- * (windows carry a targetKey and/or a defaultTargetKey baseline), resolve which
- * RankTarget governs right now, read the campaign's achieved Top-of-Search
- * impression share + ACOS, and converge the PLACEMENT_TOP bias toward the
- * target's IS — pushing to re-take the slot, easing off to respect the profit
- * ceiling (or ignoring ACOS in all-out mode). This is the engine behind "hold
- * rank these hours, the baseline the rest, and snap back when we lose it".
+ * RS.5 — the rank-defend loop, since 2e an hour-of-day bid plan. For each enabled GOAL-mode AdSchedule (windows carry
+ * a targetKey and/or a defaultTargetKey baseline) and each enabled product plan, resolve which RankTarget the hour's
+ * plan names and set that target's FIXED values: the Placement % per lane, the Min-bid floor (and its placement), the
+ * base bid. The CPC ceiling still caps the placement %.
  *
- * Reuses the proven plumbing: analyzeTopOfSearch (signals) + applyTopOfSearch
- * (gated actuation) + the pure controller (rank-controller.ts). Sandbox-safe —
- * applyTopOfSearch writes locally and only pushes to Amazon when the write-gate
- * is open. Cron is OFF unless NEXUS_ENABLE_RANK_DEFEND=1; the run-now endpoint
- * (dryRun) previews decisions without writing.
+ * 2e (Owner D1 = A, 2026-10-04) — no Amazon signal can feed a 15-minute loop (Top-of-search share is daily and 1–3
+ * days late, SQP weekly, no organic-rank API), so nothing here reads one any more: no impression share, no ACoS, no
+ * loss proxy, no SQP, no climb/ease step, no keep-climbing, no all-out climb, no ceiling chase. A tick writes only
+ * when the value the hour holds differs from what is live — in practice at the painted hour boundaries.
+ *
+ * Writes go through the gated actuation (setSearchPlacement / updatePlacementBidding / the bid-suppression service):
+ * local first, pushed to Amazon only when the write gate is open. Cron is OFF unless NEXUS_ENABLE_RANK_DEFEND=1; the
+ * run-now endpoint (dryRun) previews decisions without writing.
  *
  * 1c — a live run honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST writes
  * nothing new; halted / OFF only floors bids, restores wait for Resume; at most N changes a run and a day.
@@ -25,9 +25,8 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { computeStep, resolveActiveTargetKey, isRankLoss, cpcCapPct, strategyHeadroom, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
-import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
-import { sqpShareForAsins, SQP_STALL_DAYS } from '../services/advertising/sqp.service.js'
+import { computeStep, resolveActiveTargetKey, cpcCapPct, strategyHeadroom, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
+import { setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
 import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
@@ -152,9 +151,10 @@ export function groupReceipts(receipts: Map<string, string | null>): Map<string 
   return byKey
 }
 
+// 2e — no achieved impression share, ACoS or loss flag any more: the tick reads none of them.
 export interface RankDefendDecision {
   campaignId: string; campaignName: string; targetKey: string; action: string; reason: string
-  currentPct: number; nextPct: number; achievedISPct: number | null; achievedAcosPct: number | null; lossDetected: boolean; applied: boolean
+  currentPct: number; nextPct: number; applied: boolean
   planId?: string | null
   // BL — per-placement decisions when the target is a blend (Top/Rest/Product driven at once).
   lanes?: Array<{ placement: string; fromPct: number; toPct: number; action: string }>
@@ -168,8 +168,6 @@ export interface RankPlanRunSummary { planId: string; productId: string; marketp
 export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: number }
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary }
 
-const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
-type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
 
 // RD.4 — one per-campaign decision body, shared by the schedule loop and the
@@ -177,13 +175,12 @@ interface CampRow { id: string; name: string; status: string; dynamicBidding: un
 // bias); when false it is a pure decision (preview / plan dry-run). currentPct is
 // always read from dynamicBidding (the bias WE control), never the sparse T+1
 // placement report — else the loop is blind to its own prior changes.
-// BL — expand one lane into a single-placement RankTargetSpec the controller understands.
+// BL — expand one lane into a single-placement RankTargetSpec the controller understands. 2e — only the lane's own
+// Placement % is carried: its ceiling, IS/ACoS, steps, keep-climbing and all-out are not read.
 function laneToSpec(parent: RankTargetSpec, lane: LaneSpec): RankTargetSpec {
   return {
     key: parent.key, placement: lane.placement, biasPct: lane.biasPct,
-    maxBiasPct: lane.maxBiasPct ?? null, targetISPct: lane.targetISPct ?? null, acosCapPct: lane.acosCapPct ?? null,
-    maxCpcCents: parent.maxCpcCents, stepUpPct: lane.stepUpPct ?? null, stepDownPct: lane.stepDownPct ?? null,
-    keepClimbing: !!lane.keepClimbing, allOut: !!lane.allOut, pause: false, jumpStartPct: null,
+    targetISPct: null, acosCapPct: null, maxCpcCents: parent.maxCpcCents, allOut: false, pause: false,
   }
 }
 const SHORT_PLACE: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' }
@@ -284,19 +281,18 @@ export function firstOutOfBudgetNoticeToday(key: string, now: Date = new Date())
 
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; permit: CampaignPermit; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null>; maxBaseBidByCampaign?: Map<string, number> },
+  ctx: { write: boolean; permit: CampaignPermit; actor: string; suppressRaise?: boolean; maxBaseBidByCampaign?: Map<string, number> },
 ): Promise<{ decision: RankDefendDecision; applied: number; held: HeldBack }> {
   // 1c — every write below asks the campaign's permit first (dial posture + caps, decided once per campaign by the
   // caller). What it may not write is noted in `held`; on a dry run (`write` false) nothing is written or noted.
   const held = nothingHeld()
   const allow = (kind: keyof HeldBack) => allowChange(ctx.write, ctx.permit, held, kind)
-  const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   // PP — read the bias of the TARGET's placement (Top for own-top/defend/all-out, Rest
   // for rest-of-search), not always Top. The engine drives whichever placement the
   // active target names.
   const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
-  const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, achievedISPct: pctOf(sigRaw.topIS), achievedAcosPct: pctOf(sigRaw.topAcos), planId }
+  const base = { campaignId: camp.id, campaignName: camp.name, targetKey: key, currentPct, planId }
   let applied = 0
   // C2 — never bid UP into a capped campaign (burns the fixed daily budget early + surrenders the slot): a placement
   // raise waits, a lowering and a floor still land. 2b (review N2) — read from Amazon's real codes (delivery-reasons.ts);
@@ -312,7 +308,7 @@ async function decideAndMaybeApply(
   // its to lift, move or build on: no restore, no re-floor, no base-bid or placement change while it holds. The serve
   // path used to restore any floor at all.
   if (camp.bidsSuppressedAt && !isRankOwnedFloor(camp.bidsSuppressedBy)) {
-    return { decision: { ...base, action: 'hold', reason: `bids held at a floor set by ${floorOwnerWords(camp.bidsSuppressedBy)} — rank leaves this campaign alone until that floor is lifted`, nextPct: currentPct, lossDetected: false, applied: false }, applied: 0, held }
+    return { decision: { ...base, action: 'hold', reason: `bids held at a floor set by ${floorOwnerWords(camp.bidsSuppressedBy)} — rank leaves this campaign alone until that floor is lifted`, nextPct: currentPct, applied: false }, applied: 0, held }
   }
   // NP — no-pause: a Pause target (or OOS/lost-buybox via effectiveSpec) drops every
   // bid to the floor (~2¢) and keeps the campaign ENABLED — NEVER status=PAUSED, which
@@ -365,7 +361,7 @@ async function decideAndMaybeApply(
       } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
     }
     const reason = `target = Min bid → bids at floor €${(floor / 100).toFixed(2)} (campaign live, restorable)${placeNote}`
-    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null && !placeHeld ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
+    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null && !placeHeld ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
   }
   // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
   // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
@@ -385,7 +381,6 @@ async function decideAndMaybeApply(
   //
   // Bid suppression above is still restored on a serve target — that IS ours, and it is the lever
   // the engine is meant to pull.
-  const loss = ctx.lossByCampaign.get(camp.id) ?? false
   // MB.4 — the campaign's CPC ceiling, expressed as the highest placement % that still
   // respects it. Computed once here and applied to every path below, so a blend cannot
   // breach a ceiling the single-placement path honours.
@@ -400,8 +395,7 @@ async function decideAndMaybeApply(
   }
 
   // ── BL — blended path: drive Top + Rest of Search + Product pages SIMULTANEOUSLY ──
-  // in one combined placement write. Each lane gets its own feedback signal: Top = Amazon
-  // Top-of-Search IS, Rest = SQP brand impression share, Product = open-loop (set-and-hold).
+  // in one combined placement write. 2e — each lane holds its own fixed Placement %; no lane reads a signal.
   if (spec.lanes && spec.lanes.length) {
     const laneDecisions: NonNullable<RankDefendDecision['lanes']> = []
     const driven: Array<{ placement: string; percentage: number }> = []
@@ -409,10 +403,7 @@ async function decideAndMaybeApply(
     const budgetHeld: string[] = [] // 2b — lane raises waiting on an out-of-budget campaign, named in the reason
     for (const lane of spec.lanes) {
       const laneCur = cdb.placementBidding?.find((x) => x.placement === lane.placement)?.percentage ?? 0
-      const lTop = lane.placement === 'PLACEMENT_TOP'
-      const lRest = lane.placement === 'PLACEMENT_REST_OF_SEARCH'
-      const laneIS = lTop ? sigRaw.topIS : lRest ? (ctx.sqpByCampaign?.get(camp.id) ?? null) : null
-      const dd = computeStep(laneToSpec(spec, lane), { currentPct: laneCur, achievedISFraction: laneIS, achievedAcosFraction: lTop ? sigRaw.topAcos : null, lossDetected: lTop ? loss : false })
+      const dd = computeStep(laneToSpec(spec, lane), { currentPct: laneCur })
       let toPct = dd.nextPct, act = dd.action
       if (campOutOfBudget && act === 'raise') budgetHeld.push(`${shortPlace(lane.placement)} ${laneCur}→${toPct}%`)
       if ((ctx.suppressRaise || campOutOfBudget) && act === 'raise') { toPct = laneCur; act = 'hold' }
@@ -440,15 +431,12 @@ async function decideAndMaybeApply(
     applied += baseApplied
     const head = laneDecisions.find((l) => l.placement === 'PLACEMENT_TOP') ?? laneDecisions[0]
     const reason = `${blendReason}${baseBidNote(spec)}`
-    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, lossDetected: loss, applied: placeAllowed || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
+    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, applied: placeAllowed || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
   }
 
-  // ── Legacy single-placement path (behaviour unchanged) ──────────────────────────
-  // PP — the IS / ACOS / loss signals are Top-of-Search-specific. RM2 — non-Top targets
-  // use the family's SQP brand impression share as a coarse feedback signal.
-  const isTop = spec.placement === 'PLACEMENT_TOP'
-  const achievedIS = isTop ? sigRaw.topIS : (ctx.sqpByCampaign?.get(camp.id) ?? null)
-  const d = computeStep(spec, { currentPct, achievedISFraction: achievedIS, achievedAcosFraction: isTop ? sigRaw.topAcos : null, lossDetected: isTop ? loss : false })
+  // ── Single-placement path ──────────────────────────────────────────────────────
+  // 2e — the target's fixed Placement %; no impression share, ACoS, SQP or loss proxy is read.
+  const d = computeStep(spec, { currentPct })
   let action = d.action, nextPct = d.nextPct, reason = d.reason
   if ((ctx.suppressRaise || campOutOfBudget) && action === 'raise') {
     const move = `${shortPlace(spec.placement)} ${currentPct}→${nextPct}%`
@@ -478,19 +466,18 @@ async function decideAndMaybeApply(
   }
   const baseApplied = await applyBaseBidDirective(camp, spec, ctx, held)
   applied += baseApplied
-  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, lossDetected: loss, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
+  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
 }
 
 // RD.5 — family guardrails. effectiveSpec transforms the window target before the
-// controller sees it: OOS/lost-buybox → pause (stop wasting spend); family over
-// its ACOS cap → drop all-out so even a must-win window respects a profit ceiling.
-export function effectiveSpec(spec: RankTargetSpec, flags: { oos?: boolean; overAcos?: boolean; familyAcosCapPct?: number | null }): RankTargetSpec {
+// controller sees it: OOS/lost-buybox → pause (stop wasting spend). 2e — the family ACOS cap only ever took
+// all-out off a target; nothing climbs any more, so it has nothing left to do and is not read.
+export function effectiveSpec(spec: RankTargetSpec, flags: { oos?: boolean }): RankTargetSpec {
   if (flags.oos) return { ...spec, pause: true }
-  if (flags.overAcos && spec.allOut) return { ...spec, allOut: false, acosCapPct: spec.acosCapPct ?? flags.familyAcosCapPct ?? null }
   return spec
 }
 
-// Family-aggregate spend (most recent day with data) + ACOS (window) over a set of
+// Family-aggregate spend (most recent day with data) over a set of
 // campaigns. localEntityId = Campaign.id; costMicros → cents (÷10000).
 async function familySpendRecentCents(campaignIds: string[]): Promise<number> {
   if (!campaignIds.length) return 0
@@ -498,14 +485,6 @@ async function familySpendRecentCents(campaignIds: string[]): Promise<number> {
   if (!latest) return 0
   const agg = await prisma.amazonAdsDailyPerformance.aggregate({ where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: latest.date }, _sum: { costMicros: true } })
   return Math.round(Number(agg._sum.costMicros ?? 0n) / 10000)
-}
-async function familyAcosFraction(campaignIds: string[], windowDays = 14): Promise<number | null> {
-  if (!campaignIds.length) return null
-  const since = new Date(Date.now() - windowDays * 86_400_000)
-  const agg = await prisma.amazonAdsDailyPerformance.aggregate({ where: { entityType: 'CAMPAIGN', localEntityId: { in: campaignIds }, date: { gte: since } }, _sum: { costMicros: true, sales7dCents: true } })
-  const spend = Math.round(Number(agg._sum.costMicros ?? 0n) / 10000)
-  const sales = agg._sum.sales7dCents ?? 0
-  return sales > 0 ? spend / sales : null
 }
 
 // RD.6 — load each family campaign's positive EXACT/PHRASE keywords + AUTO flag +
@@ -612,38 +591,8 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     for (const s of so) { const m = s.targetOverrides as TargetOverrideMap; if (m && Object.keys(m).length) schedOverrides.set(s.campaignId, m) }
   } catch { /* best-effort */ }
 
-  // One analyzeTopOfSearch call per marketplace gives every campaign's topIS + topAcos signals.
-  const markets = [...new Set(campaigns.map((c) => c.marketplace).filter(Boolean) as string[])]
-  const sigByCampaign: SigMap = new Map()
-  for (const mk of markets) {
-    try {
-      const { rows } = await analyzeTopOfSearch({ marketplace: mk, windowDays: 14 })
-      for (const r of rows) sigByCampaign.set(r.campaignId, { currentPct: r.currentPct, topIS: r.topIS, topAcos: r.topAcos })
-    } catch (e) { logger.warn('[rank-defend] signal read failed', { marketplace: mk, error: (e as Error).message }) }
-  }
-
-  // RS.6 — loss proxy: the latest hour's impressions cratering vs the campaign's
-  // own ~2-day baseline is the fastest "we're slipping" signal. Conservative
-  // threshold → sparse/low-volume campaigns never trip it (no false snap-backs).
-  const lossByCampaign = new Map<string, boolean>()
-  const extIds = campaigns.map((c) => c.externalCampaignId).filter(Boolean) as string[]
-  if (extIds.length > 0) {
-    try {
-      const since = new Date(Date.now() - 2 * 24 * 3600 * 1000)
-      const hourly = await prisma.amazonAdsHourlyPerformance.findMany({ where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, date: { gte: since } }, select: { entityId: true, date: true, hour: true, impressions: true } })
-      const byExt = new Map<string, { ts: number; impr: number }[]>()
-      for (const h of hourly) { const ts = h.date.getTime() + (h.hour ?? 0) * 3600_000; const arr = byExt.get(h.entityId) ?? []; arr.push({ ts, impr: h.impressions ?? 0 }); byExt.set(h.entityId, arr) }
-      for (const c of campaigns) {
-        if (!c.externalCampaignId) continue
-        const series = (byExt.get(c.externalCampaignId) ?? []).sort((a, b) => a.ts - b.ts)
-        if (series.length < 3) continue
-        const latest = series[series.length - 1].impr
-        const prior = series.slice(0, -1)
-        const baseline = prior.reduce((s, x) => s + x.impr, 0) / prior.length
-        lossByCampaign.set(c.id, isRankLoss(latest, baseline))
-      }
-    } catch (e) { logger.warn('[rank-defend] loss-proxy read failed', { error: (e as Error).message }) }
-  }
+  // 2e — no signal reads here any more (Top-of-search share, the hourly loss proxy, SQP share): the tick sets the
+  // hour's fixed values and none of them fed anything else.
 
   // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured
   // against. `suppressedFromBidCents` is taken into account because it is what the bid
@@ -668,52 +617,6 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
       if (v > (maxBaseBidByCampaign.get(cid) ?? 0)) maxBaseBidByCampaign.set(cid, v)
     }
   } catch (e) { logger.warn('[rank-defend] max-base-bid read failed — CPC ceilings not enforced this tick', { error: (e as Error).message }) }
-
-  // RM2 — per-campaign SQP brand impression share, the feedback signal for Rest-of-Search targets
-  // (Amazon exposes no Rest placement-IS). Resolve each campaign's advertised ASINs → latest weekly
-  // SQP share for its market. Best-effort: any failure leaves a campaign open-loop (null).
-  const sqpByCampaign = new Map<string, number | null>()
-  try {
-    const ads = await prisma.adProductAd.findMany({ where: { adGroup: { campaignId: { in: unionIds } }, status: 'ENABLED' }, select: { asin: true, adGroup: { select: { campaignId: true } } } })
-    const asinsByCampaign = new Map<string, Set<string>>()
-    for (const a of ads) { const cid = a.adGroup?.campaignId; if (!cid || !a.asin) continue; const s = asinsByCampaign.get(cid) ?? new Set<string>(); s.add(a.asin); asinsByCampaign.set(cid, s) }
-    for (const c of campaigns) {
-      const asins = [...(asinsByCampaign.get(c.id) ?? [])]
-      if (!asins.length || !c.marketplace) { sqpByCampaign.set(c.id, null); continue }
-      try {
-        /**
-         * 🔴 RA.BASIS-B B1 — the recency guard, at the place the decision is taken.
-         *
-         * This share is the ONLY feedback signal a Rest-of-Search lane has (Amazon exposes no
-         * placement-IS for Rest), and it reaches `laneIS`/`achievedIS` below. Until now it was read
-         * with no age check at all: a report that stopped advancing would keep the bidder
-         * converging toward a rank target using a number from an arbitrarily old week, and nothing
-         * anywhere would have said so.
-         *
-         * Past `SQP_STALL_DAYS` the lane goes OPEN-LOOP (null) rather than acting on a dead number.
-         * Open-loop is the honest failure here and is already this map's contract for "no signal" —
-         * every other branch above sets null for exactly that reason.
-         *
-         * ⚠ Measured 2026-08-16: the newest SQP week is 14 days old against a 28-day limit, so this
-         * branch does not currently fire and live bidding is UNCHANGED by its introduction. It is
-         * armed for the day the feed stalls, which is the day it would otherwise have been silent.
-         *
-         * A skipped signal is logged once per campaign. A guard that moves money without leaving a
-         * trace is the same defect as no guard at all — it just fails in the other direction.
-         */
-        const reading = await sqpShareForAsins(c.marketplace, asins)
-        if (reading.freshness === 'too-old') {
-          sqpByCampaign.set(c.id, null)
-          logger.warn('[rank-defend] SQP too old — Rest-of-Search lane is open-loop for this campaign', {
-            campaignId: c.id, marketplace: c.marketplace, weekStart: reading.weekStart,
-            ageDays: reading.ageDays, limitDays: SQP_STALL_DAYS, reason: reading.reason,
-          })
-        } else {
-          sqpByCampaign.set(c.id, reading.share)
-        }
-      } catch { sqpByCampaign.set(c.id, null) }
-    }
-  } catch (e) { logger.warn('[rank-defend] SQP signal read failed', { error: (e as Error).message }) }
 
   const decisions: RankDefendDecision[] = []
   const planSummaries: RankPlanRunSummary[] = []
@@ -749,13 +652,10 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
       const target = targetByKey.get(key)
       if (target) {
         // RD.5 — family pre-flight guards (once per plan, shared by every campaign):
-        // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap,
-        // family ACOS vs cap.
+        // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap.
         const famCampIds = famCamps.map((c) => c.id)
         const readinessByCamp = await getReadiness(plan.marketplace)
         const overBudget = plan.familyDailyBudgetCents != null && (await familySpendRecentCents(famCampIds)) >= plan.familyDailyBudgetCents
-        const acosFrac = plan.familyAcosCapPct != null ? await familyAcosFraction(famCampIds) : null
-        const overAcos = plan.familyAcosCapPct != null && acosFrac != null && acosFrac > plan.familyAcosCapPct / 100
         // RD.6 — self-competition: demote redundant family campaigns (lose a keyword/
         // auto contest and win none) to the plan baseline so we stop outbidding ourselves.
         const sc = detectSelfCompetition(await loadFamilyTargeting(famCampIds, campById))
@@ -766,9 +666,9 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
-          const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
+          const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos })
           const permit = write && guard ? guard.permit() : DRY_RUN
-          const { decision, applied: a, held } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, permit, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign, suppressRaise: overBudget })
+          const { decision, applied: a, held } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, permit, actor: `automation:rank-plan-${plan.id}`, maxBaseBidByCampaign, suppressRaise: overBudget })
           if (write) guard?.settle(permit, a, held)
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
@@ -841,7 +741,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const target = targetByKey.get(key)
     if (!target) { receipts.set(s.id, null); idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: `its schedule names "${key}", which no longer exists` }); continue }
     const permit = guard ? guard.permit() : DRY_RUN
-    const { decision, applied: a, held } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, permit, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign })
+    const { decision, applied: a, held } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, permit, actor: `automation:rank-defend-${s.id}`, maxBaseBidByCampaign })
     guard?.settle(permit, a, held)
     decisions.push(decision); applied += a
   }

@@ -30,13 +30,11 @@ import { RD_TILE_KEYS, tileMatch, type RdTileKey } from './_rd/tiles'
 import { RdSection } from './_rd/RdSection'
 
 const TILE_LABEL: Record<RdTileKey, string> = {
-  holding: 'Holding', chasing: 'Chasing', capped: 'Capped', blind: 'Blind', 'min-bid': 'At min bid now',
+  holding: 'Holding', capped: 'Capped', 'min-bid': 'At min bid now',
 }
 const TILE_TITLE: Record<RdTileKey, string> = {
-  holding: 'Snap-and-hold: the multiplier is parked on its window value and no goal is being pursued.',
-  chasing: 'A real closed loop — the engine is moving the multiplier toward a goal (all-out counts: its 900 ceiling still chases).',
-  capped: 'The CPC ceiling, not the target, is deciding the placement right now.',
-  blind: 'The controller reads a signal that is not there — no rank data, or these ASINs never appeared in Brand Analytics. Open-loop-by-design is NOT counted here.',
+  holding: 'The placement multiplier is held at this hour\'s value.',
+  capped: 'The CPC ceiling holds the placement below this hour\'s value right now.',
   'min-bid': 'Bids are floored at this hour while the campaign stays live. A clock reading — it changes when the window does.',
 }
 

@@ -8,7 +8,7 @@
  * second implementation of the most intricate control in the product. It also would not be the
  * right answer: an event plan is almost never hand-painted. In practice it is one of two things —
  *
- *   · "hold ONE rank for the whole event"  — the common case. Black Friday is not a shape, it is
+ *   · "hold ONE target for the whole event" — the common case. Black Friday is not a shape, it is
  *     a decision to push everywhere for four days.
  *   · "use a saved template"               — for anything with real structure, authored once in
  *     the builder and reused, which is what templates already exist for.
@@ -44,7 +44,7 @@ interface ArmPreview {
   spanHours: number; previewedHours: number; truncated: boolean
   diff: {
     hoursChanged: number; hoursSame: number
-    allOutHours: number; unboundedHours: number; suppressedHours: number
+    suppressedHours: number
     changed: Array<{ at: string; dow: number; hour: number; from: string | null; to: string | null }>
   }
 }
@@ -101,7 +101,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
     if (busy) return
     setErr('')
     if (!name.trim()) { setErr('Give the event a name.'); return }
-    if (mode === 'rank' && !rank) { setErr('Choose the rank to hold.'); return }
+    if (mode === 'rank' && !rank) { setErr('Choose the target to hold.'); return }
     if (mode === 'template' && !templateId) { setErr('Choose a template.'); return }
     const tpl = templates.find((t) => t.id === templateId)
     setBusy(true)
@@ -216,21 +216,6 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
                       </span>
                     </div>
 
-                    {/* The same warning E1 gives, at the moment it can still be acted on. */}
-                    {armPrev.diff.unboundedHours > 0 && (
-                      <div className="h10-d2-note bad">
-                        <AlertTriangle size={13} />
-                        <span>
-                          <b>{armPrev.diff.unboundedHours} of these hours run all-out with no CPC ceiling.</b>{' '}
-                          All-out ignores the ACoS cap by design, so nothing bounds the bid in{' '}
-                          {armPrev.diff.unboundedHours === 1 ? 'that hour' : 'those hours'}{' '}
-                          but Amazon&rsquo;s 900% limit.
-                        </span>
-                      </div>
-                    )}
-                    {armPrev.diff.allOutHours > 0 && armPrev.diff.unboundedHours === 0 && (
-                      <div className="h10-d2-note"><AlertTriangle size={13} /><span><b>{armPrev.diff.allOutHours} all-out hour{armPrev.diff.allOutHours === 1 ? '' : 's'}</b> — the ACoS cap is ignored, bounded by the target&rsquo;s max CPC.</span></div>
-                    )}
                     {/* Arming an event on a paused schedule is harmless and easy to misread as live. */}
                     {!armPrev.group.enabled && (
                       <div className="h10-d2-note"><span>The schedule itself is <b>off</b>, so arming this event writes nothing to Amazon until the schedule is armed too.</span></div>
@@ -280,10 +265,10 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
             ariaLabel="Event plan" size="sm"
             value={mode}
             onChange={(v) => setMode(v as 'rank' | 'template')}
-            options={[{ value: 'rank', label: 'Hold one rank' }, { value: 'template', label: 'Use a template' }]}
+            options={[{ value: 'rank', label: 'Hold one target' }, { value: 'template', label: 'Use a template' }]}
           />
           {mode === 'rank'
-            ? <label>Rank to hold<Listbox width={260} options={rankOptions} value={rank} onChange={setRank} ariaLabel="Rank to hold" /></label>
+            ? <label>Target to hold<Listbox width={260} options={rankOptions} value={rank} onChange={setRank} ariaLabel="Target to hold" /></label>
             : <label>Template<Listbox width={260} options={tplOptions.length ? tplOptions : [{ value: '', label: 'No templates saved yet' }]} value={templateId} onChange={setTemplateId} ariaLabel="Template" searchable /></label>}
           <p className="h10-evt-note">
             Created disarmed. Authoring an event ahead of time is the point; arming it ahead of time is

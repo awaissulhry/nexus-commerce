@@ -6,7 +6,7 @@
  * A shell only. All three panels live in components shared with the BUILDER, so the surfaces
  * cannot drift:
  *   · Next24Preview     — RDX/E1, the FORWARD view: the next 24 hours hour by hour, with each
- *                         hour's governing target, the bias held, and the ceiling permitted. It
+ *                         hour's governing target and the placement % held (2e: no climb). It
  *                         leads because it is the one that informs a decision still to be made.
  *   · ScheduleActivity  — what the ENGINE changed on Amazon: bid moves, placement percentages,
  *                         and separately whether each one actually landed.

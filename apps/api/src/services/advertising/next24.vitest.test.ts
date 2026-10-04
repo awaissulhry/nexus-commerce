@@ -39,24 +39,17 @@ describe('buildNext24', () => {
     }
   })
 
-  it('quotes the engine band, and all-out lifts the ceiling to the cap', () => {
+  it('quotes the engine band — 2e: the hour holds its Placement %, no ACoS cap is quoted', () => {
     const { hours } = buildNext24(slotsFrom(1, 0, 1), null, 'own-top', lib(OWN_TOP))
-    expect(hours[0]).toMatchObject({ floorPct: 120, ceilingPct: 120, canChase: false, acosCapPct: 35, maxCpcCents: 90 })
+    expect(hours[0]).toMatchObject({ floorPct: 120, ceilingPct: 120, canChase: false, acosCapPct: null, maxCpcCents: 90 })
     expect({ floor: hours[0].floorPct, ceiling: hours[0].ceilingPct }).toEqual(biasBand(OWN_TOP))
-
-    const out = buildNext24(slotsFrom(1, 0, 1), null, 'defend', lib(ALL_OUT))
-    expect(out.hours[0]).toMatchObject({ floorPct: 200, ceilingPct: 900, canChase: true, allOut: true })
-    // all-out ignores the ACOS ceiling, so reporting one would be a lie the operator could act on
-    expect(out.hours[0].acosCapPct).toBeNull()
   })
 
-  it('counts all-out-with-no-CPC-ceiling as unbounded', () => {
-    const capped: Next24Target = { ...ALL_OUT, maxCpcCents: 120 }
-    const a = buildNext24(slotsFrom(1, 0), null, 'defend', lib(ALL_OUT))
-    expect(a.summary.hoursUnbounded).toBe(24)
-    const b = buildNext24(slotsFrom(1, 0), null, 'defend', lib(capped))
-    expect(b.summary.hoursUnbounded).toBe(0)
-    expect(b.hours[0].unbounded).toBe(false)
+  it('2e: an all-out hour holds its Placement % — no 900% ceiling, not all-out, not unbounded', () => {
+    const out = buildNext24(slotsFrom(1, 0), null, 'defend', lib(ALL_OUT))
+    expect(out.hours[0]).toMatchObject({ floorPct: 200, ceilingPct: 200, canChase: false, allOut: false, unbounded: false, acosCapPct: null })
+    expect(out.summary.hoursUnbounded).toBe(0) // before 2e: 24
+    expect(out.summary.maxCeilingPct).toBe(200) // before 2e: 900
   })
 
   it('reports a deleted target as a hole, not a comfortable row', () => {
@@ -93,7 +86,7 @@ describe('buildNext24', () => {
       { key: 'own-top', name: 'Own Top of Search', color: '#0a7', hours: 20 },
       { key: 'defend', name: 'Defend', color: null, hours: 4 },
     ])
-    expect(summary.maxCeilingPct).toBe(900)
+    expect(summary.maxCeilingPct).toBe(200) // 2e — the all-out hours hold their 200%
   })
 
   it('a dated event replaces the plan for the hours it covers — windows AND baseline', () => {
@@ -144,30 +137,24 @@ describe('MB.6 buildNext24 — the CPC ceiling in the preview', () => {
   const slots1 = (): Next24Slot[] => [{ at: '2026-08-03T10:00:00.000Z', dow: 1, hour: 10 }]
   const libOf = (t: Next24Target) => new Map([[t.key, t]])
 
-  it('without bid data the ceiling is the band — unchanged from before MB.6', () => {
+  it('without bid data the ceiling is the band: the Placement % (2e — not 900)', () => {
     const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED))
-    expect(hours[0].ceilingPct).toBe(900)
+    expect(hours[0].ceilingPct).toBe(150)
     expect(hours[0].cpcCapPct).toBeNull()
   })
 
-  it('with bid data the ceiling becomes the CPC cap, and says that is why', () => {
-    // €0.35 base, €2.00 ceiling → 471%
-    const { hours } = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 1 })
-    expect(hours[0].ceilingPct).toBe(471)
-    expect(hours[0].cpcCapPct).toBe(471)
-    expect(hours[0].canChase).toBe(true)
-  })
-
-  it('a cap ABOVE the band does not lower it, and is not reported as capping', () => {
+  it('a cap ABOVE the Placement % does not lower it, and is not reported as capping', () => {
+    // €0.35 base, €2.00 ceiling → 471%, far above the 150% the hour holds (and a stored 300% ceiling is not read)
     const modest: Next24Target = { key: 'ao', name: 'All-Out', biasPct: 150, maxBiasPct: 300, allOut: true, maxCpcCents: 200 }
-    const { hours } = buildNext24(slots1(), [], 'ao', libOf(modest), { maxBaseBidCents: 20, strategyMultiple: 1 })
-    expect(hours[0].ceilingPct).toBe(300)
-    expect(hours[0].cpcCapPct).toBeNull()
+    const { hours } = buildNext24(slots1(), [], 'ao', libOf(modest), { maxBaseBidCents: 35, strategyMultiple: 1 })
+    expect(hours[0]).toMatchObject({ floorPct: 150, ceilingPct: 150, cpcCapPct: null, canChase: false })
   })
 
   it('an up-and-down campaign caps lower than a legacy one on identical bids', () => {
-    const legacy = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 1 })
-    const auto = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 35, strategyMultiple: 2 })
+    // €1.20 base, €2.00 ceiling → legacy 66%, up-and-down (×2) 0% — both under the 150% hold
+    const legacy = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 120, strategyMultiple: 1 })
+    const auto = buildNext24(slots1(), [], 'ao', libOf(CAPPED), { maxBaseBidCents: 120, strategyMultiple: 2 })
+    expect(legacy.hours[0].ceilingPct).toBe(66)
     expect(auto.hours[0].ceilingPct!).toBeLessThan(legacy.hours[0].ceilingPct!)
   })
 
@@ -182,11 +169,11 @@ describe('MB.6 buildNext24 — the CPC ceiling in the preview', () => {
     expect(hours[0].canChase).toBe(false) // nothing to chase — the ceiling has closed the band
   })
 
-  it('a target with NO ceiling is still reported unbounded — the warning must survive MB.4', () => {
+  it('2e: an all-out target with NO CPC ceiling is no longer unbounded — it holds its Placement %', () => {
     const none: Next24Target = { key: 'ao', name: 'All-Out', biasPct: 150, allOut: true }
     const { hours, summary } = buildNext24(slots1(), [], 'ao', libOf(none), { maxBaseBidCents: 35, strategyMultiple: 1 })
-    expect(hours[0].unbounded).toBe(true)
-    expect(summary.hoursUnbounded).toBe(1)
+    expect(hours[0]).toMatchObject({ unbounded: false, ceilingPct: 150 })
+    expect(summary.hoursUnbounded).toBe(0)
   })
 
   it('a suppressed (Min bid) hour reports no cap — it never reaches the placement stage', () => {

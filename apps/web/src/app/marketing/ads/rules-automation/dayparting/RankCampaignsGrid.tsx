@@ -24,7 +24,7 @@ import { campaignMatchesScope } from './_rd/scope'
 import { RD_TILE_KEYS, isTileKey, tileMatch } from './_rd/tiles'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange } from './_rd/rdFilters'
 import { GrainSwitch } from './_rd/GrainSwitch'
-import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
+import { CeilingCell, ModeCell, PlacementCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
 import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
@@ -71,7 +71,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
   const columns: GridColumn<RdCampaignRow>[] = useMemo(() => [
     {
       key: 'schedule', label: 'Schedule', metric: false, sortable: true, sortValue: (r) => r.groupName ?? '',
-      tip: 'The rank schedule that holds this campaign. One campaign, one schedule — the database enforces it.',
+      tip: 'The hourly bid plan that holds this campaign. One campaign, one plan — the database enforces it.',
       render: (r) => (r.groupName
         ? <a className="h10-nt-name rd-trunc" href={`?grain=schedules&row=${r.groupId}`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); setUrl({ grain: 'schedules', row: r.groupId ?? '', drawer: '' }) }} title={r.groupName}>{r.groupName}</a>
         : <span className="rd-none">—</span>),
@@ -92,7 +92,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     },
     {
       key: 'mode', label: 'Mode', metric: false, sortable: true, sortValue: (r) => r.runtime.mode?.kind ?? 'zz',
-      tip: 'What the controller will actually do this hour — derived from the engine’s own biasBand() and cpcCapPct(), not from the target’s name.',
+      tip: 'What this campaign holds this hour — derived from the engine’s own functions (the hour’s target and the CPC ceiling), not from the target’s name.',
       render: (r) => <ModeCell mode={r.runtime.mode} />,
     },
     {
@@ -101,20 +101,9 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       render: (r) => <PlacementCell p={r.runtime.placement} />,
     },
     {
-      key: 'goal', label: 'Goal vs actual', metric: false, sortable: true,
-      sortValue: (r) => (r.runtime.goal?.live ? 0 : r.runtime.goal?.targetPct != null ? 1 : 2),
-      tip: 'A dash means the controller never reads this goal — hover it for which of the two reasons applies.',
-      render: (r) => <GoalCell goal={r.runtime.goal} />,
-    },
-    {
-      key: 'signal', label: 'Signal', metric: false, sortable: true, sortValue: (r) => r.runtime.signal?.kind ?? 'zz',
-      tip: 'The feedback lane the ACTIVE target drives, and how old it is. "No signal" and "no coverage" are different problems.',
-      render: (r) => <SignalCell signal={r.runtime.signal} />,
-    },
-    {
       key: 'ceiling', label: 'Ceiling', metric: false, sortable: true,
       sortValue: (r) => (r.runtime.ceiling?.baseAlone ? 0 : r.runtime.ceiling?.binding ? 1 : 2),
-      tip: 'The CPC ceiling, and whether it is the thing deciding this placement.',
+      tip: 'The CPC ceiling, and whether it holds this placement below the hour’s value.',
       render: (r) => <CeilingCell ceiling={r.runtime.ceiling} />,
     },
     /**
@@ -176,10 +165,10 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     {
       key: 'health', label: 'Health', metric: false, sortable: true,
       sortValue: (r) => (r.runtime.canConverge ? 1 : 0),
-      tip: 'Whether this campaign can reach what it is being asked to hold. Status only says whether it is switched on.',
+      tip: 'Whether this campaign can hold the placement % its hour sets. Status only says whether it is switched on.',
       render: (r) => (r.runtime.canConverge
-        ? <Pill tone="success" title="Nothing is stopping this campaign from holding its target.">OK</Pill>
-        : <Pill tone="warning" title={r.runtime.cannotConvergeReason ?? ''}>Cannot converge</Pill>),
+        ? <Pill tone="success" title="Nothing is stopping this campaign from holding its hour’s values.">OK</Pill>
+        : <Pill tone="warning" title={r.runtime.cannotConvergeReason ?? ''}>Capped by CPC ceiling</Pill>),
     },
     {
       key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.scheduleEnabled ? 0 : 1),

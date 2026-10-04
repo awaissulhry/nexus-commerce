@@ -2,21 +2,26 @@
 
 /**
  * RTC — Rank-target customizer. A modal to inspect + change what each paint swatch
- * actually does (Top-of-Search %, target IS%, ACOS cap, max CPC), add your own custom
- * swatches, and do it at the right SCOPE:
+ * actually does (Placement %, max CPC, the Min-bid floor, a blend's lanes + base bid), add your
+ * own custom swatches, and do it at the right SCOPE:
  *   • Scope view ("This product" / "This campaign") edits an OVERRIDE layer stored on
  *     the plan/schedule — affects only here. Empty field = inherit the global default.
  *   • Global view edits the shared library default (affects everywhere); built-ins can
  *     be Reset, customs deleted.
  * Custom swatches can be Global (everywhere) or Scope-only (just this product/campaign).
  * Effective at runtime = global ⊕ product ⊕ campaign (the engine merges; RTC.2).
+ *
+ * 2e (Owner D1 = A) — the engine holds each hour's FIXED values: it reads no impression share,
+ * no ACoS and no rank, and it never climbs. So this modal no longer offers Target IS, ACOS cap,
+ * the Motion knobs (climb/ease step, ceiling, keep climbing) or all-out. Those columns stay in
+ * the database, unread and unshown.
  */
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
-import { Button, Checkbox, Input, Radio, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Radio, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -83,26 +88,10 @@ const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const PLACE_LABEL: Record<string, string> = { PLACEMENT_TOP: 'Top of Search', PLACEMENT_REST_OF_SEARCH: 'Rest of Search', PLACEMENT_PRODUCT_PAGE: 'Product pages' }
 const placeLabel = (p: string) => PLACE_LABEL[p] ?? p
 const SHORT_PLACE: Record<string, string> = { PLACEMENT_TOP: 'Top', PLACEMENT_REST_OF_SEARCH: 'Rest', PLACEMENT_PRODUCT_PAGE: 'Product' }
+// 2e — the two values a serving hour holds: its placement multiplier and the bid ceiling that caps it.
 const FIELDS: { f: OvField; label: string; unit: '%' | '€'; hint: string }[] = [
-  { f: 'biasPct', label: 'Placement', unit: '%', hint: "bid multiplier 0–900% for THIS target's placement (Top or Rest of Search)" },
-  { f: 'targetISPct', label: 'Target IS', unit: '%', hint: 'Impression share to chase when a Ceiling above Placement % is set. Top of Search uses Amazon Top-IS; Rest of Search uses SQP brand impression share.' },
-  { f: 'acosCapPct', label: 'ACOS cap', unit: '%', hint: 'Ease off above this ACOS while climbing — only used when a Ceiling above Placement % is set.' },
-  { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'never bid above this' },
-]
-// MP v2 — motion profile: HOW the loop moves the bid. Blank everywhere = snap to Placement %
-// both ways and hold (the bid you set is the bid you get).
-const MOTION_FIELDS: { f: OvField; label: string; hint: string }[] = [
-  { f: 'stepUpPct', label: 'Climb step', hint: 'Blank = SNAP up to Placement %. A number = ramp up +N%/cycle instead.' },
-  { f: 'stepDownPct', label: 'Ease step', hint: 'Blank = SNAP down to Placement %. A number = ease down −N%/cycle instead. (The opposite of Climb step.)' },
-  { f: 'maxBiasPct', label: 'Ceiling', hint: 'Blank = hold at Placement %, never above. Set ABOVE Placement % to let the bid climb up to here.' },
-]
-// MP v2 — one-click recipes that fill the knobs + keep-climbing. null = leave that knob blank.
-type Motion = { stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean }
-const RECIPES: { id: string; label: string; hint: string; m: Motion }[] = [
-  { id: 'hold', label: 'Hold', hint: 'Snap to Placement % and hold — the bid you set is the bid you get. (The default.)', m: { stepUpPct: null, stepDownPct: null, maxBiasPct: null, keepClimbing: false } },
-  { id: 'gradual', label: 'Gradual', hint: 'Ramp ±15%/cycle to Placement % instead of snapping; still never above it.', m: { stepUpPct: 15, stepDownPct: 15, maxBiasPct: null, keepClimbing: false } },
-  { id: 'chase', label: 'Chase', hint: 'Hold Placement %, but climb up to 300% when Amazon says you are winning (signal-driven), then ease back.', m: { stepUpPct: 15, stepDownPct: 15, maxBiasPct: 300, keepClimbing: false } },
-  { id: 'push', label: 'Push', hint: 'Always climb to a 300% ceiling on its own (no signal needed), within the ACOS cap.', m: { stepUpPct: 25, stepDownPct: null, maxBiasPct: 300, keepClimbing: true } },
+  { f: 'biasPct', label: 'Placement', unit: '%', hint: "The placement multiplier 0–900% held for THIS target's placement in every hour it covers (Top or Rest of Search)" },
+  { f: 'maxCpcCents', label: 'Max CPC', unit: '€', hint: 'Never bid above this: the placement % is lowered so base bid × placement stays under it' },
 ]
 
 export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOverrides, onSaveScopeOverrides, productId, campaignId }: {
@@ -123,7 +112,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
   const [msg, setMsg] = useState('')
   const [changed, setChanged] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [motionOpen, setMotionOpen] = useState<Record<string, boolean>>({}) // per-target Motion drawer
+  const [motionOpen, setMotionOpen] = useState<Record<string, boolean>>({}) // per-target Min-bid drawer
   const [draft, setDraft] = useState<Record<string, string>>({}) // MB.2 — in-flight money keystrokes
   const [blendOpen, setBlendOpen] = useState<Record<string, boolean>>({}) // BL — per-target Blend drawer
   const [form, setForm] = useState<{ name: string; color: string; scope: 'global' | 'scope' } & Ov>({ name: '', color: '#3aa873', scope: scopeKind === 'campaign' ? 'scope' : 'scope' })
@@ -180,40 +169,21 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     // BL.9 — in scope view a per-campaign/product override blend wins over the global one.
     const blend = effBlend(t)
     if (blend.lanes && blend.lanes.length) {
-      const parts = blend.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%${l.maxBiasPct != null && l.maxBiasPct > (l.biasPct ?? 0) ? `→${l.maxBiasPct}` : ''}`)
+      const parts = blend.lanes.map((l) => `${SHORT_PLACE[l.placement] ?? l.placement} +${l.biasPct ?? 0}%`)
       let bb = ''
       if (blend.bidMode === 'absolute' && blend.bidValueCents != null) bb = ` · base €${(blend.bidValueCents / 100).toFixed(2)}`
       else if (blend.bidMode === 'deltaPct' && blend.bidDeltaPct != null) bb = ` · base ${blend.bidDeltaPct >= 0 ? '+' : ''}${blend.bidDeltaPct}%`
       else if (blend.bidMode === 'suppress') bb = ' · base floored'
       return `blend: ${parts.join(' · ')}${bb}`
     }
+    // 2e — what the hour holds, and nothing the engine does not read.
     const p: string[] = []
-    const isTop = t.placement === 'PLACEMENT_TOP'
-    const b = effOf(t, 'biasPct'); if (b != null) p.push(`${placeLabel(t.placement)} +${b}%`)
-    const ceil = effOf(t, 'maxBiasPct')
-    // MP v2 — IS / ACOS only act when the bid is ALLOWED above Placement % (a Ceiling above it,
-    // or all-out). Without a Ceiling the loop just snaps to Placement %, so don't advertise them.
-    const canChase = t.allOut || (ceil != null && ceil > (b ?? 0))
-    const is = effOf(t, 'targetISPct'); if (is != null && canChase) p.push(`hold ${is}% ${isTop ? 'IS' : 'SQP'}`)
-    const a = effOf(t, 'acosCapPct'); if (a != null && isTop && canChase) p.push(`ease above ${a}% ACOS`)
+    const b = effOf(t, 'biasPct')
+    p.push(`holds ${placeLabel(t.placement)} +${b ?? 0}%`)
     const c = effOf(t, 'maxCpcCents'); if (c != null) p.push(`max CPC €${(c / 100).toFixed(2)}`)
-    if (t.allOut) p.push('all-out (ignore ACOS)')
-    // MP v2 — motion summary (only the parts tuned away from snap-and-hold, to avoid clutter).
-    const motion: string[] = []
-    const up = effOf(t, 'stepUpPct'); if (up != null) motion.push(`ramp +${up}↑`)
-    const down = effOf(t, 'stepDownPct'); if (down != null) motion.push(`ease −${down}↓`)
-    if (ceil != null && ceil > (b ?? 0)) motion.push(effKeep(t) ? `push→${ceil}%` : `chase→${ceil}%`)
-    else if (effKeep(t)) motion.push('keep-climbing')
-    if (motion.length) p.push(motion.join(' '))
-    return p.join(' · ') || 'baseline (no push)'
+    return p.join(' · ')
   }
   const hasOverride = (t: RankTarget) => !!ov[t.key] && Object.keys(ov[t.key]).length > 0
-  // MP — effective keepClimbing (scope override wins → global draft → saved value).
-  const effKeep = (t: RankTarget): boolean => {
-    if (view === 'scope' && ov[t.key]?.keepClimbing !== undefined) return !!ov[t.key]!.keepClimbing
-    if (lib[t.id]?.keepClimbing !== undefined) return !!lib[t.id]!.keepClimbing
-    return !!t.keepClimbing
-  }
   // BL.9 — effective blend: in scope view a saved override blend wins over the global one.
   const effBlend = (t: RankTarget): { lanes: BlendLane[] | null | undefined; bidMode: string | null | undefined; bidValueCents: number | null | undefined; bidDeltaPct: number | null | undefined } => {
     if (view === 'scope' && ov[t.key]?.lanes !== undefined) {
@@ -234,31 +204,6 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     })
     setBlendOpen((m) => ({ ...m, [t.id]: false }))
     setMsg(`Staged a ${scopeLabel}-specific blend — click Save overrides to apply.`)
-  }
-  const setLibKeep = (id: string, checked: boolean) => { setChanged(true); setLib(m => ({ ...m, [id]: { ...(m[id] || {}), keepClimbing: checked } })) }
-  // MP v2 — apply a recipe to the knobs + keep-climbing, in whichever view is active.
-  const applyRecipe = (t: RankTarget, m: Motion) => {
-    setChanged(true)
-    const num: OvField[] = ['stepUpPct', 'stepDownPct', 'maxBiasPct']
-    if (view === 'scope') {
-      setOv(prev => {
-        const next = { ...prev }; const cur = { ...(next[t.key] || {}) }
-        for (const f of num) { if (m[f as keyof Motion] == null) delete cur[f]; else cur[f] = m[f as keyof Motion] as number }
-        cur.keepClimbing = m.keepClimbing // a recipe makes an explicit choice at this scope
-        next[t.key] = cur; return next
-      })
-    } else {
-      setLib(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), stepUpPct: m.stepUpPct, stepDownPct: m.stepDownPct, maxBiasPct: m.maxBiasPct, keepClimbing: m.keepClimbing } }))
-    }
-  }
-  const setScopeKeep = (key: string, val: '' | 'on' | 'off') => {
-    setChanged(true)
-    setOv(m => {
-      const next = { ...m }; const cur = { ...(next[key] || {}) }
-      if (val === '') delete cur.keepClimbing; else cur.keepClimbing = val === 'on'
-      if (Object.keys(cur).length) next[key] = cur; else delete next[key]
-      return next
-    })
   }
 
   // scope-view: edit the override map (empty = inherit)
@@ -311,7 +256,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
     if (!form.name.trim()) { setMsg('Name required.'); return }
     setBusy(true); setMsg('')
     try {
-      const body: Record<string, unknown> = { name: form.name.trim(), color: form.color, biasPct: form.biasPct ?? null, targetISPct: form.targetISPct ?? null, acosCapPct: form.acosCapPct ?? null, maxCpcCents: form.maxCpcCents ?? null }
+      const body: Record<string, unknown> = { name: form.name.trim(), color: form.color, biasPct: form.biasPct ?? null, maxCpcCents: form.maxCpcCents ?? null }
       if (form.scope === 'scope') { if (scopeKind === 'product' && productId) body.scopeProductId = productId; if (scopeKind === 'campaign' && campaignId) body.scopeCampaignId = campaignId }
       await fetch(api('/rank-targets'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       setChanged(true); setAdding(false); setForm({ name: '', color: '#3aa873', scope: 'scope' }); load()
@@ -362,24 +307,15 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   <span className="desc">{describe(t)}</span>
                 </span>
                 {FIELDS.map(f => {
-                  // MB.2 — a Min-bid row used to render four dashes: no floor, no placement, no
-                  // control of any kind. Placement % is now the ONE editable field here (it is
-                  // the lever that decides what the floored bid actually costs), the floor lives
-                  // in the drawer next to the explanation it needs, and the two chase knobs stay
-                  // n/a because Min bid holds no share — but they now say WHY.
+                  // MB.2 — Placement % is the ONE editable field on a Min-bid row (it is the lever
+                  // that decides what the floored bid actually costs); the floor lives in the
+                  // drawer next to the explanation it needs.
                   if (t.pause) {
-                    if (f.f === 'targetISPct') return <span key={f.f} className="fld h10-rte-na" title="Min bid holds no impression share — there is nothing to chase, so no target to set">n/a</span>
-                    if (f.f === 'acosCapPct') return <span key={f.f} className="fld h10-rte-na" title="An ACOS cap only eases a climbing bid. Min bid never climbs.">n/a</span>
                     // Not a ceiling to set: floor × placement already determines the cost exactly.
                     // Putting that computed number under a "Max CPC" header would misname it.
                     if (f.f === 'maxCpcCents') return <span key={f.f} className="fld h10-rte-na" title={`No ceiling to set — the cost is fully determined: ${effCpcNote(t)}`}>n/a</span>
                     // biasPct falls through to the editable input below.
                   }
-                  if (t.allOut && f.f === 'acosCapPct') return <span key={f.f} className="fld">—</span>
-                  // RM2 — Target IS is now fed by SQP brand impression share for Rest of Search, so
-                  // it's editable for non-Top too; only ACOS stays n/a (Amazon exposes no Rest ACOS).
-                  if (f.f === 'acosCapPct' && t.placement !== 'PLACEMENT_TOP')
-                    return <span key={f.f} className="fld h10-rte-na" title="Top of Search only — Amazon exposes no ACOS for Rest/Product placements">n/a</span>
                   // MB.2 — blank on a Min-bid placement means "leave the multiplier alone", not
                   // "zero". A dash would read as the latter.
                   const blank = t.pause && f.f === 'biasPct' ? 'keep' : '—'
@@ -396,7 +332,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 })}
                 <span className="act">
                   {/* MB.2 — Min bid gets the same drawer affordance as every other target; only its CONTENTS differ. */}
-                  <ToolbarButton className="h10-kebab" icon={<SlidersHorizontal size={13} />} label={t.pause ? 'Min bid' : 'Motion'} description={t.pause ? 'The floor bids are held at, and what a click then costs' : 'How the bid moves (jump / climb / ease / ceiling)'} aria-expanded={mOpen} style={mOpen ? { color: t.pause ? '#c2410c' : '#3730a3' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))} />
+                  {t.pause && <ToolbarButton className="h10-kebab" icon={<SlidersHorizontal size={13} />} label="Min bid" description="The floor bids are held at, and what a click then costs" aria-expanded={mOpen} style={mOpen ? { color: '#c2410c' } : undefined} onClick={() => setMotionOpen(m => ({ ...m, [t.id]: !m[t.id] }))} />}
                   {!t.pause && <ToolbarButton className="h10-kebab" icon={<Layers size={13} />} label="Blend" description={view === 'scope' ? `For ${scopeLabel} only — drive Top + Rest of Search + Product pages at once (+ base bid)` : 'Drive Top + Rest of Search + Product pages at once (+ base bid)'} disabled={view === 'scope' && !scopeAvailable} aria-expanded={!!blendOpen[t.id]} style={blendOpen[t.id] ? { color: '#7c3aed' } : undefined} onClick={() => setBlendOpen(m => ({ ...m, [t.id]: !m[t.id] }))} />}
                   {view === 'scope' && hasOverride(t) && <ToolbarButton className="h10-kebab" icon={<RotateCcw size={13} />} label="Clear override" description="Use the default again" onClick={() => clearOverride(t.key)} />}
                   {view === 'global' && t.builtIn && <ToolbarButton className="h10-kebab" icon={<RotateCcw size={13} />} label="Reset to default" onClick={() => void resetTarget(t.id)} />}
@@ -404,8 +340,7 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 </span>
               </div>
               {/*
-                MB.2 — the Min-bid drawer. Sibling of the Motion drawer below, deliberately in
-                the same idiom. The floor lives HERE rather than as a sixth table column because
+                MB.2 — the Min-bid drawer. The floor lives HERE rather than as a sixth table column because
                 it is the one field only this row can use, and because the number is meaningless
                 without the sentence next to it: €0.02 is a BASE bid, and what it costs per click
                 depends on a placement multiplier this modal cannot see until MB.3 sets one.
@@ -428,41 +363,8 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                   </div>
                   {floorClamped(t) && <div className="h10-mwarn">That is under Amazon&apos;s €0.02 minimum — the engine will hold €0.02, which is what the figures here show.</div>}
                   <div className="h10-mnote">{effCpcNote(t)}. {effOf(t, 'biasPct') == null
-                    ? <>Set <b>Placement %</b> on this row to take control of the multiplier — leave it blank and these hours inherit whatever the previous window left behind (an all-out hour can leave +300%).</>
+                    ? <>Set <b>Placement %</b> on this row to take control of the multiplier — leave it blank and these hours inherit whatever the previous hour left behind.</>
                     : <>Placement is pinned, so this cost is the whole story.</>} Floors under €0.02 are raised to €0.02 — Amazon rejects anything lower.</div>
-                </div>
-              )}
-              {mOpen && !t.pause && (
-                <div className="h10-rte-motion">
-                  <div className="h10-mtitle"><SlidersHorizontal size={12} /> Motion — how the bid moves{view === 'scope' ? ` · override for ${scopeLabel}` : ''}</div>
-                  <div className="h10-msub">Default: <b>snap to {effOf(t, 'biasPct') ?? 0}% Placement</b>, up or down, then hold. Tune below to ramp instead, or set a Ceiling to climb above it.</div>
-                  <div className="h10-mfields">
-                    {MOTION_FIELDS.map(f => {
-                      const ph = defOf(t, f.f)
-                      const lv = lib[t.id]?.[f.f] as number | null | undefined
-                      const v = view === 'scope' ? ov[t.key]?.[f.f] : (lv !== undefined ? lv : (t[f.f] as number | null))
-                      return (
-                        <label key={f.f} className="h10-mfield" title={f.hint}>
-                          <span>{f.label}</span>
-                          <Input size="xs" type="number" min={0} max={900} disabled={view === 'scope' && !scopeAvailable}
-                            value={v == null ? '' : v}
-                            placeholder={view === 'scope' ? (ph == null ? '—' : String(ph)) : '—'}
-                            onChange={e => view === 'scope' ? setScope(t.key, f.f, e.target.value) : setLibField(t.id, f.f, e.target.value)} />
-                        </label>
-                      )
-                    })}
-                    <label className="h10-mfield h10-mkeep" title="Climb to the Ceiling on its own every cycle, even with no signal (bounded by the Ceiling + ACOS cap). Off = only climb when Amazon's data says you're winning.">
-                      <span>Keep climbing</span>
-                      {view === 'scope'
-                        ? <Select size="xs" disabled={!scopeAvailable} value={ov[t.key]?.keepClimbing === undefined ? '' : ov[t.key]!.keepClimbing ? 'on' : 'off'} onChange={e => setScopeKeep(t.key, e.target.value as '' | 'on' | 'off')}><option value="">inherit</option><option value="on">on</option><option value="off">off</option></Select>
-                        : <Checkbox checked={effKeep(t)} onChange={e => setLibKeep(t.id, e.target.checked)} />}
-                    </label>
-                  </div>
-                  <div className="h10-mrecipes">
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#3730a3' }}>Recipes:</span>
-                    {RECIPES.map(r => <Button key={r.id} variant="tonal" size="xs" className="h10-rcp" disabled={view === 'scope' && !scopeAvailable} title={r.hint} onClick={() => applyRecipe(t, r.m)}>{r.label}</Button>)}
-                  </div>
-                  <div className="h10-mnote">Blank = snap to {effOf(t, 'biasPct') ?? 0}% Placement (up or down) and hold — never above it. Set a Ceiling above Placement % to let it climb.{effKeep(t) ? ' Keep-climbing ON → pushes to the Ceiling on its own.' : ''}</div>
                 </div>
               )}
               {!!blendOpen[t.id] && !t.pause && (

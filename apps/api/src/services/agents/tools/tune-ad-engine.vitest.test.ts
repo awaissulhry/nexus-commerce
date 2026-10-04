@@ -105,17 +105,19 @@ describe('R14 — tune-ad-engine', () => {
     expect(undoArgs(done.change).args).toEqual({ setting: 'coverage-set', subjectId: ids.coverage, coverageSet: { dailySpendCapCents: 2000, acosCapPct: 30 } })
   })
 
-  it('a rank target: a lower bid ceiling is inside; climbing with no signal or a cleared ceiling needs a person; a built-in says so', async () => {
-    expect((await dry({ setting: 'rank-target', subjectId: ids.target, rankTarget: { maxCpcCents: 90, stepUpPct: 0 } })).preview).toMatchObject({ raises: [], spend: 'cannot-rise' })
-    expect((await dry({ setting: 'rank-target', subjectId: ids.target, rankTarget: { keepClimbing: true, acosCapPct: null, targetISPct: 30 } })).preview!.raises).toEqual([
-      'the impression-share target rises (none → 30)',
-      'the ACOS ceiling (40) is cleared',
-      'it keeps climbing to the ceiling with no signal',
+  it('a rank target (2e: only what the hourly plan reads): a lower bid ceiling is inside; a higher placement %, a cleared ceiling or a higher floor needs a person; a built-in says so', async () => {
+    expect((await dry({ setting: 'rank-target', subjectId: ids.target, rankTarget: { maxCpcCents: 90 } })).preview).toMatchObject({ raises: [], spend: 'cannot-rise' })
+    expect((await dry({ setting: 'rank-target', subjectId: ids.target, rankTarget: { biasPct: 200, maxCpcCents: null, floorBidCents: 5 } })).preview!.raises).toEqual([
+      'the placement percentage rises (none → 200)',
+      'the bid ceiling (120) is cleared',
+      'the floor bid rises (none → 5)',
     ])
+    // The goal / ACoS / climb fields are not read by the engine any more, so they are not tunable here.
+    expect(await dry({ setting: 'rank-target', subjectId: ids.target, rankTarget: { keepClimbing: true, acosCapPct: null, targetISPct: 30 } })).toMatchObject({ ok: false, error: expect.stringContaining('nothing to change') })
     expect((await dry({ setting: 'rank-target', subjectId: ids.builtIn, rankTarget: { maxCpcCents: 50 } })).preview!.effect).toContain('a built-in target: every plan and schedule using it changes')
     const done = await run({ setting: 'rank-target', subjectId: ids.target, rankTarget: { maxCpcCents: 90 } })
     expect(await inside(() => database.client.rankTarget.findUniqueOrThrow({ where: { id: ids.target } }))).toMatchObject({ maxCpcCents: 90, acosCapPct: 40, pause: false })
-    expect(undoArgs(done.change).args).toMatchObject({ setting: 'rank-target', rankTarget: { maxCpcCents: 120, acosCapPct: 40 } })
+    expect(undoArgs(done.change).args).toMatchObject({ setting: 'rank-target', rankTarget: { maxCpcCents: 120 } })
   })
 
   it('a budget schedule: another lowering window is inside; removing the lowering window or a raise needs a person; the route\'s writer writes it', async () => {

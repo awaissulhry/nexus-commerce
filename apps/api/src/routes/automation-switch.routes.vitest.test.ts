@@ -70,11 +70,11 @@ describe('R16 — a person sets an engine switch in the Control Room', () => {
     armRankDefend()
     await press('rank-defend', { mode: 'OFF' })
     const unconfirmed = await press('rank-defend', { mode: 'AUTO' })
-    expect([unconfirmed.statusCode, unconfirmed.json()]).toEqual([400, { error: 'Turning Rank-defend up needs a confirmation (confirm: true).' }])
+    expect([unconfirmed.statusCode, unconfirmed.json()]).toEqual([400, { error: 'Turning Hourly bid plans up needs a confirmation (confirm: true).' }])
     delete process.env.NEXUS_ENABLE_RANK_DEFEND
     const pastEnv = await press('rank-defend', { mode: 'AUTO', confirm: true })
     expect(pastEnv.statusCode).toBe(409)
-    expect(pastEnv.json().error).toMatch(/^The server env lets Rank-defend go no higher than OFF \(NEXUS_ENABLE_RANK_DEFEND is not 1/)
+    expect(pastEnv.json().error).toMatch(/^The server env lets Hourly bid plans go no higher than OFF \(NEXUS_ENABLE_RANK_DEFEND is not 1/)
     armRankDefend()
     const up = await press('rank-defend', { mode: 'AUTO', confirm: true })
     expect(up.json()).toMatchObject({ ok: true, from: 'OFF', mode: 'AUTO' })

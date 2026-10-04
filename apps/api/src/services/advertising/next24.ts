@@ -10,7 +10,9 @@
  *
  * Everything here is derived from the same two functions the live loop uses — `resolveActiveWindow`
  * for coverage and `biasBand` for the floor/ceiling — so the preview cannot say one thing while the
- * engine does another. This module is pure: the caller supplies the 24 already-resolved local
+ * engine does another. 2e — the loop is an hour-of-day bid plan: an hour holds its target's Placement %
+ * (ceiling = floor), so `canChase`, `allOut` and `unbounded` are always false and no ACoS cap is quoted;
+ * the fields stay so the payload keeps its shape. This module is pure: the caller supplies the 24 already-resolved local
  * (dow, hour) slots, because deriving those is a timezone question for the database, not arithmetic
  * to be re-invented per call site.
  */
@@ -156,9 +158,10 @@ export function buildNext24(
         allOut: false, suppressed: false, unbounded: false, missingTarget: true,
       }
     }
-    const allOut = !!t.allOut
+    // 2e — an all-out target holds its Placement % like any other; nothing climbs, so no hour is all-out.
+    const allOut = false
     const suppressed = !!t.pause
-    const band = biasBand({ biasPct: t.biasPct ?? null, maxBiasPct: t.maxBiasPct ?? null, allOut })
+    const band = biasBand({ biasPct: t.biasPct ?? null })
     // MB.6 — the CPC ceiling can bind below the band. When it does it IS the ceiling, because
     // the engine will not let the bid past it; reporting the band's number would overstate the
     // reach of every hour this target governs.
@@ -191,14 +194,12 @@ export function buildNext24(
       canChase: suppressed ? false : ceiling > floor,
       cpcCapPct: suppressed ? null : capPct,
       maxCpcCents: t.maxCpcCents ?? null,
-      // all-out ignores the ACOS ceiling by design, so reporting one here would be a lie the
-      // operator could act on. computeStep nulls it the same way.
-      acosCapPct: allOut || suppressed ? null : (t.acosCapPct ?? null),
+      // 2e — no ACoS cap is read by the loop, so none is quoted.
+      acosCapPct: null,
       allOut,
       suppressed,
-      // MB.4 — with the ceiling enforced, "unbounded" means exactly what it says: no ceiling
-      // set at all. A target WITH one is now genuinely bounded, which it was not before.
-      unbounded: !suppressed && allOut && (t.maxCpcCents ?? null) == null,
+      // 2e — "unbounded" meant an all-out climb with no CPC ceiling; nothing climbs any more.
+      unbounded: false,
       missingTarget: false,
     }
   })

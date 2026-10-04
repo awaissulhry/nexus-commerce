@@ -136,7 +136,7 @@ describe('R5 — the automation catalog', () => {
     env({ ...adsOn, NEXUS_ENABLE_RANK_DEFEND: undefined })
     const all = await catalog()
     expect(all.A10.env.ceiling).toBe('OFF')
-    expect(all.A10.env.flags.find((f) => f.flag === 'NEXUS_ENABLE_RANK_DEFEND')?.says).toContain('does not run')
+    expect(all.A10.env.flags.find((f) => f.flag === 'NEXUS_ENABLE_RANK_DEFEND')?.says).toContain('hourly bid plans do not run')
   })
 
   it("E1 — an AUTOPILOT rule under the eBay dial; eBay's sandbox holds it at OBSERVE", async () => {

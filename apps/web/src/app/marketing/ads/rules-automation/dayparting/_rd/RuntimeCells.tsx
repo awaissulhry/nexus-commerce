@@ -1,13 +1,13 @@
 'use client'
 
 /**
- * RD.P2 — the four columns that carry the whole argument, rendered once and used by both grains.
+ * RD.P2 — the runtime columns, rendered once and used by both grains.
  *
  * Every value here is derived server-side from the engine's own functions, so these components
  * only choose words and colour. That split matters: the moment a cell computes something, the page
  * has a second opinion about what the engine is doing, which is the defect this section removes.
  */
-import type { RdCeiling, RdGoal, RdMode, RdModeKind, RdSignal } from './types'
+import type { RdCeiling, RdMode, RdModeKind } from './types'
 
 /** Tone per mode. Capped and dangling are the two an operator must act on. */
 const MODE_TONE: Record<RdModeKind, string> = {
@@ -18,8 +18,6 @@ const MODE_TONE: Record<RdModeKind, string> = {
   'nothing-held': 'muted',
   'not-running': 'muted',
   'min-bid': 'muted',
-  'all-out': 'allout',
-  chasing: 'ok',
   holding: 'hold',
 }
 
@@ -43,69 +41,8 @@ export function ModeSpreadCell({ summary, mixed, members }: { summary: string; m
   )
 }
 
-/**
- * Goal vs actual — and a DASH where the goal is not read.
- *
- * Printing a live-looking goal on a target the controller never consults is the lie the page
- * currently tells on 33 rows. There are two different reasons for it (the ceiling equals the floor,
- * or the target is all-out and ignores the goal), and the tooltip says which.
- */
-export function GoalCell({ goal }: { goal: RdGoal | null }) {
-  if (!goal || goal.targetPct == null) {
-    return <span className="rd-none" title="This target carries no impression-share goal.">—</span>
-  }
-  if (!goal.live) {
-    return (
-      <span className="rd-goal dead" title={goal.deadReason ?? 'The controller does not read this goal.'}>
-        <span className="v">—</span>
-        <span className="was">goal {goal.targetPct}% not read</span>
-      </span>
-    )
-  }
-  return (
-    <span className="rd-goal" title={`Chasing ${goal.targetPct}% impression share; ${goal.actualPct == null ? 'no measurement yet' : `currently ${goal.actualPct}%`}.`}>
-      <b>{goal.targetPct}%</b>
-      <span className="vs">vs</span>
-      <span className="v">{goal.actualPct == null ? '—' : `${goal.actualPct}%`}</span>
-      <span className="unit">IS</span>
-    </span>
-  )
-}
-
-const SIGNAL_TONE: Record<RdSignal['kind'], string> = {
-  'top-is': 'ok', sqp: 'ok', 'none-by-design': 'muted',
-  'no-signal': 'warn', 'no-coverage': 'bad', 'not-applicable': 'muted',
-}
-
-/**
- * RD.P4 — Signal, in three states that are never merged.
- *
- *   fresh  — a value the controller could act on, with its age
- *   stale  — a value that exists and should not be trusted, and the reason WHY it should not
- *   never  — no coverage at all: an onboarding problem, not a cron problem
- *
- * The middle state is the one the page did not have, and the reason it needs its own tone is that
- * a stale number looks exactly like a fresh one. What makes it stale is measured rather than
- * assumed: the SQP programme found 20 of 34 campaigns steered by exactly ONE ASIN, so the axis is
- * the BASIS — how much of the campaign the number actually describes — not row count and not age.
- * Age is a stall alarm here, not a quality test: the feed structurally cannot be fresher than about
- * 11 days plus the week length, so any tighter age threshold would null every campaign forever.
- *
- * This column DISPLAYS and never enforces. Nulling a signal changes what the engine does — a null
- * IS branch falls through to the ACoS branch, which raises — so the guard belongs to the programme
- * that owns the reader.
- */
-export function SignalCell({ signal }: { signal: RdSignal | null }) {
-  if (!signal) return <span className="rd-none">—</span>
-  const stale = signal.freshness === 'stale'
-  const tone = stale ? 'stale' : SIGNAL_TONE[signal.kind]
-  const basis = signal.contributors && signal.contributors.total > 0
-    ? ` Basis: ${signal.contributors.withData} of ${signal.contributors.total} advertised ASINs.`
-    : ''
-  const title = [signal.detail || signal.label, signal.staleReason ? `Not to be trusted: ${signal.staleReason}.` : '', basis]
-    .filter(Boolean).join(' ')
-  return <span className={`rd-sig ${tone}`} title={title}>{signal.label}</span>
-}
+// 2e (Owner D1 = A) — GoalCell and SignalCell are gone: the engine reads no goal and no signal, so
+// neither column is shown any more.
 
 /** The CPC ceiling. Bold only when it is actually deciding, so a harmless cap stays quiet. */
 export function CeilingCell({ ceiling }: { ceiling: RdCeiling | null }) {
@@ -114,8 +51,8 @@ export function CeilingCell({ ceiling }: { ceiling: RdCeiling | null }) {
     <span
       className={`rd-ceil ${ceiling.binding ? (ceiling.baseAlone ? 'bad' : 'warn') : 'muted'}`}
       title={ceiling.binding
-        ? 'The CPC ceiling is deciding this placement, not the rank target.'
-        : 'A ceiling is set but is not binding — the target decides.'}
+        ? 'The CPC ceiling holds this placement below the value its hour sets.'
+        : 'A ceiling is set but is not binding — the hour’s value holds.'}
     >
       {ceiling.label}
     </span>

@@ -14,7 +14,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import './dayparting.css'
 
-export interface HeatCell { dow: number; hour: number; value: number } // dow 0=Sun..6=Sat
+/**
+ * dow 0=Sun..6=Sat. 3.10 — `empty` (optional) says the metric has NO value in this hour and why, in
+ * words ("no clicks", "spend, no sales"); such a cell is left out of the colour scale and drawn as
+ * "—", so a ratio with no denominator no longer shows as the palest, best-looking cell. `worst`
+ * marks the no-value case worse than any value shown (money spent, nothing sold): darkest colour,
+ * drawn as "∞". Cells without `empty` render exactly as before (the schedule builder sends none).
+ */
+export interface HeatCell { dow: number; hour: number; value: number; empty?: string; worst?: boolean }
 export type MetricUnit = 'eur' | 'pct' | 'int'
 
 // Stable identity so the `selected ?? EMPTY_SET` default never triggers a re-render loop.
@@ -72,12 +79,12 @@ export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresh
     window.addEventListener('mouseup', end)
     return () => window.removeEventListener('mouseup', end)
   }, [drag])
-  const lookup = useMemo(() => { const m = new Map<string, number>(); for (const c of cells) m.set(`${c.dow}:${c.hour}`, c.value); return m }, [cells])
+  const lookup = useMemo(() => { const m = new Map<string, HeatCell>(); for (const c of cells) m.set(`${c.dow}:${c.hour}`, c); return m }, [cells])
 
   // bucket boundaries: explicit, else 5 evenly-spaced steps up to the max non-zero value
   const bounds = useMemo<[number, number, number, number, number]>(() => {
     if (thresholds) return thresholds
-    const max = cells.reduce((m, c) => Math.max(m, c.value), 0)
+    const max = cells.reduce((m, c) => (c.empty ? m : Math.max(m, c.value)), 0)
     if (max <= 0) return [1, 2, 3, 4, 5]
     return [1, 2, 3, 4, 5].map((i) => Math.round((max * i / 5) * 100) / 100) as [number, number, number, number, number]
   }, [cells, thresholds])
@@ -85,7 +92,8 @@ export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresh
 
   if (loading) return <div className="h10-dp-heat loading"><div className="h10-dp-skel" /></div>
 
-  const hv = hover ? lookup.get(`${hover.dow}:${hover.hour}`) ?? 0 : 0
+  const hc = hover ? lookup.get(`${hover.dow}:${hover.hour}`) : undefined
+  const hv = hc?.value ?? 0
   const hLabel = hover ? ROWS.find((r) => r.dow === hover.dow)?.label : ''
 
   return (
@@ -95,14 +103,18 @@ export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresh
           <div className="h10-dp-row" key={r.dow}>
             <span className="h10-dp-daylbl">{r.short}</span>
             {Array.from({ length: 24 }, (_, h) => {
-              const v = lookup.get(`${r.dow}:${h}`) ?? 0
-              const b = bucketOf(v)
+              const c = lookup.get(`${r.dow}:${h}`)
+              const v = c?.value ?? 0
+              const empty = c?.empty
+              const b = empty ? (c?.worst ? 5 : -1) : bucketOf(v)
               const isSel = selectable && sel.has(`${r.dow}:${h}`)
               return (
                 <span
                   key={h}
                   className={`h10-dp-cell${selectable ? ' pick' : ''}${isSel ? ' sel' : ''}`}
-                  style={{ background: SCALE[b], color: cellText(b) }}
+                  style={b < 0
+                    ? { background: 'var(--nds-surface-sunken)', color: 'var(--nds-text-muted)', boxShadow: 'inset 0 0 0 1px var(--nds-border-subtle)' }
+                    : { background: SCALE[b], color: cellText(b) }}
                   onMouseDown={selectable ? (e) => {
                     e.preventDefault() // stop the browser text-selecting across the grid mid-drag
                     const mode: 'add' | 'remove' = sel.has(`${r.dow}:${h}`) ? 'remove' : 'add'
@@ -114,14 +126,14 @@ export function DaypartingHeatmap({ cells, unit = 'eur', loading = false, thresh
                     if (selectable && drag) paint(r.dow, h, drag.mode)
                   }}
                   onMouseLeave={() => setHover(null)}
-                >{v > 0 ? fmt(v, unit) : 0}</span>
+                >{empty ? (c?.worst ? '∞' : '—') : v > 0 ? fmt(v, unit) : 0}</span>
               )
             })}
           </div>
         ))}
         {hover && (
           <div className="h10-dp-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
-            <b>{hLabel}, {hourClock(hover.hour)}</b><span>{fmt(hv, unit)}</span>
+            <b>{hLabel}, {hourClock(hover.hour)}</b><span>{hc?.empty ? `No value: ${hc.empty}` : fmt(hv, unit)}</span>
           </div>
         )}
       </div>
