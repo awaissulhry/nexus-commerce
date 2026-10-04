@@ -77,3 +77,34 @@ describe('Shared gender to Amazon target gender and department, by the concept\'
     expect(resolve('target_gender', 'kids')).toBe('kids')
   })
 })
+
+// E1b (product sheet consistency, 2026-10-05) — an automatic link into an eBay item specific reads the value maps whatever
+// its list mode, so a value-map row wins and a miss reaches the market word (`black` → `Nero`, resolve-batch). eBay
+// listing settings (title, price, quantity) get no step; Amazon's open lists stay as Item 1 left them.
+describe('automatic eBay item-specific links read the value maps whatever the list mode', () => {
+  const spec = ebaySpecFromCache({ marketplace: 'IT', categoryId: '57988', aspects: [
+    { id: 'Colore', label: 'Colore (Color)', kind: 'enum', options: ['Nero', 'Bianco'] },
+    { id: 'Taglia', label: 'Taglia (Size)' },
+    { id: 'Stagione', label: 'Stagione (Season)', kind: 'enum', options: ['Estate', 'Inverno'], enumMode: 'strict' },
+  ] as never })
+  const concepts = { channel: 'EBAY' as const, sourceFor: new Map([['color', 'color'], ['size', 'size']]) }
+  const masterKeys = new Set(['name', 'basePrice', 'totalStock', 'color', 'size', 'season'])
+  const rule = (key: string) => masterDefaultRule(spec.fields.find(f => f.key === key), masterKeys, concepts)
+
+  it('an open list (Colore), a free-text aspect (Taglia) and a strict list (Stagione) each get ONE value-map step', () => {
+    expect(spec.fields.find(f => f.key === 'color')?.mode).toBe('open')
+    expect(rule('color')?.transforms).toEqual([{ type: 'valueMap', attribute: 'color' }])
+    expect(rule('size')?.transforms).toEqual([{ type: 'valueMap', attribute: 'size' }])
+    expect(rule('season')?.transforms).toEqual([{ type: 'valueMap', attribute: 'season' }])
+  })
+  it('eBay listing settings get none', () => {
+    expect(rule('title')?.transforms).toBeUndefined()
+    expect(rule('price')?.transforms).toBeUndefined()
+    expect(rule('quantity')?.transforms).toBeUndefined()
+  })
+  it('without the eBay channel (no concept links) an open aspect keeps no step, as before', () => {
+    const unlinked = (key: string) => masterDefaultRule(spec.fields.find(f => f.key === key), masterKeys)
+    expect(unlinked('color')?.transforms).toBeUndefined()
+    expect(unlinked('season')?.transforms).toEqual([{ type: 'valueMap', attribute: 'season' }])
+  })
+})

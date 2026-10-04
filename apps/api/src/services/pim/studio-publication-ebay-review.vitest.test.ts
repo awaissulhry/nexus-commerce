@@ -16,6 +16,8 @@ const m = vi.hoisted(() => ({
 
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
 vi.mock('../../db.js', () => ({ default: {
+  // E1b — the publisher reads the dictionary and the market language for the variation values' market words.
+  marketplace: { findFirst: async () => ({ languages: ['it'] }) }, customAttribute: { findMany: async () => [] },
   channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] },
   // Delete and relist: no listing here was deleted by Nexus.
   channelListingSnapshot: { findMany: async () => [] },

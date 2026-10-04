@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
-const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn(), valueMap: vi.fn(), categoryId: { value: '177104' } }))
+const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn(), valueMap: vi.fn(), dictionary: vi.fn(async () => [] as unknown[]), categoryId: { value: '177104' } }))
 vi.mock('../../../db.js', () => ({ default: {
   marketplace: { findFirst: async ({ where }: any) => ({ languages: [{ IT: 'it', DE: 'de', FR: 'fr', ES: 'es', GLOBAL: 'en' }[where.code as string]] }) },
+  customAttribute: { findMany: db.dictionary },
   product: { findMany: db.products }, channelListing: { findMany: db.listings }, fieldLinkGroup: { findMany: async () => [] }, productCategory: { findMany: async () => [] },
 } }))
 vi.mock('../../connection-resolver.service.js', () => ({ primaryConnectionIds: async () => new Map([['EBAY', 'primary']]) }))
@@ -507,5 +508,54 @@ describe('Shared gender reaches Amazon as the code and the market word', () => {
     expect(result.department).toMatchObject({ value: 'herr', provenance: 'override', autoCorrected: null, errors: [] })
     expect(result.target_gender).toMatchObject({ value: 'men', provenance: 'override', autoCorrected: null })
     expect(result.target_gender.errors.join(' ')).toMatch(/unaccepted value/)
+  })
+})
+
+// E1b (product sheet consistency, 2026-10-05) — a colour stored as the sheet's code (`black`) reached eBay as `black`. eBay
+// now gets the dictionary option's word in the market's language; the stored value is unchanged and Amazon still gets
+// the code. A value-map row, a listing pin and a rule the operator wrote all win over it.
+describe('eBay gets a colour or size as the market word', () => {
+  const colour = { id: 'attr-color', code: 'color', label: 'Color', semanticKey: 'color', archivedAt: null, options: [
+    { id: 'o-black', code: 'black', label: 'Nero', metadata: { labels: { en: 'Black', it: 'Nero', de: 'Schwarz', fr: 'Noir', es: 'Negro' } }, synonyms: ['Black', 'Schwarz'], sortOrder: 0, archivedAt: null },
+  ] }
+  const automatic = { source: 'color', transforms: [{ type: 'valueMap' as const, attribute: 'color' }] }
+  const setup = (input: { stored?: string; itemSpecifics?: Record<string, unknown>; channel?: string; rules?: Record<string, unknown> } = {}) => {
+    db.dictionary.mockResolvedValue([colour])
+    db.products.mockResolvedValue([{ id: 'p', sku: 'TEST-SKU', name: 'T', translations: [], categoryAttributes: { color: input.stored ?? 'black' }, variantAttributes: {}, parentId: null }])
+    db.listings.mockResolvedValue(input.itemSpecifics ? [{ productId: 'p', channel: input.channel ?? 'EBAY', marketplace: 'IT', platformAttributes: { itemSpecifics: input.itemSpecifics } }] : [])
+    db.mapping.mockResolvedValue({ fields: input.rules ?? {} })
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('color', { label: 'Colore', options: ['Nero', 'Bianco'], rule: automatic, ruleOrigin: 'master',
+      channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Colore'] } })] })
+  }
+  const cell = async (channel = 'EBAY', marketplace = 'IT') => (await resolveBatch({ channel, marketplace, productIds: ['p'] })).products[0].cells.color
+
+  it('eBay IT gets Nero for a stored black, and eBay DE gets Schwarz for a stored Nero; the stored value is unchanged', async () => {
+    setup()
+    expect(await cell()).toMatchObject({ value: 'Nero', errors: [] })
+    setup({ stored: 'Nero' })
+    expect(await cell('EBAY', 'DE')).toMatchObject({ value: 'Schwarz', errors: [] })
+    expect(db.dictionary).toHaveBeenCalledTimes(2)
+  })
+  it('Amazon still gets the stored code, and reads no dictionary', async () => {
+    setup()
+    expect(await cell('AMAZON')).toMatchObject({ value: 'black' })
+    expect(db.dictionary).not.toHaveBeenCalled()
+  })
+  it('a value-map row wins over the market word', async () => {
+    setup()
+    db.valueMap.mockImplementation((attribute: string, from: string) => attribute === 'color' && from === 'black' ? 'Nero lucido' : null)
+    expect(await cell()).toMatchObject({ value: 'Nero lucido' })
+  })
+  it('a listing pin wins: the old word typed in the eBay cell is what eBay gets', async () => {
+    setup({ itemSpecifics: { Colore: 'black' } })
+    expect(await cell()).toMatchObject({ value: 'black', provenance: 'override' })
+  })
+  it('a rule the operator wrote is left alone', async () => {
+    setup({ rules: { color: automatic } })
+    expect(await cell()).toMatchObject({ value: 'black' })
+  })
+  it('a value the dictionary does not know goes out as it is', async () => {
+    setup({ stored: 'Fucsia acceso' })
+    expect(await cell()).toMatchObject({ value: 'Fucsia acceso' })
   })
 })

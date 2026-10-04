@@ -9,7 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ stock: 0, outOfStock: 'ON' as 'ON' | 'OFF' | 'UNKNOWN', reads: 0, pa: {} as Record<string, Record<string, unknown>> }))
 
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false }))
-vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] } } }))
+// E1b — the publisher reads the dictionary and the market language for the variation values' market words.
+vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: async () => ({ languages: ['it'] }) }, customAttribute: { findMany: async () => [] }, channelListing: { findFirst: async () => null }, channelMappingSet: { findMany: async () => [] }, channelMappingField: { findMany: async () => [] } } }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'token' } }))
 vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async (_db: unknown, input: { body: string }) => ({ html: `<p>${input.body}</p>`, warnings: [] }) }))

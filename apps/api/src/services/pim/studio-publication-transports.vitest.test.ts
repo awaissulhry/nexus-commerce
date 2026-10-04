@@ -34,7 +34,7 @@ vi.mock('../ebay-trading-api.service.js', async original => ({ ...await original
 
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { ebayPublicationXml, readEbayPublication, sendEbayPublication, ebayLiveContentRevision, ebayLiveStock, ebayStockRevision } from './studio-publication-ebay.js'
-import { parseEbayItemDocument } from '../channel-drift/ebay-content-compare.js'
+import { parseEbayItemDocument, parseEbayPublicationItem } from '../channel-drift/ebay-content-compare.js'
 import { publicationImages } from './studio-publication-media.js'
 import { writeMediaCollection } from '@nexus/shared/product-media'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
@@ -253,6 +253,24 @@ it('a Full update is refused, nothing sent, when eBay\'s stock moved after the r
   await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234', beforeSend)).rejects.toMatchObject({ notSent: true, message: expect.stringContaining('stock changed after the review') })
   expect(beforeSend).not.toHaveBeenCalled()
   expect(m.trading.mock.calls.filter(([call]) => call === 'ReviseFixedPriceItem')).toHaveLength(1)
+})
+// E1b (decision 9) — a Full update that renames a live variation value (black → Nero) and that eBay refuses for it
+// (code 21916664, the answer proven for a renamed variation name) is said in plain words, with eBay's own text after it;
+// any other refusal keeps eBay's text alone. Nothing is sent either way (eBay's Revise is all or nothing).
+it('a Full update eBay refuses for a renamed variation value says how to keep the old word, keeping eBay\'s own text', async () => {
+  const raw = `<GetItemResponse><Ack>Success</Ack><Item><ItemID>456</ItemID><SKU>PARENT</SKU><Title>T</Title><Variations><Variation><SKU>CHILD-M</SKU><StartPrice>20</StartPrice><Quantity>3</Quantity><VariationSpecifics><NameValueList><Name>Colore</Name><Value>black</Value></NameValueList></VariationSpecifics><SellingStatus><QuantitySold>1</QuantitySold></SellingStatus></Variation></Variations><SellingStatus><ListingStatus>Active</ListingStatus></SellingStatus></Item></GetItemResponse>`
+  const xml = '<?xml version="1.0" encoding="UTF-8"?><ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>456</ItemID><Variations><Variation><SKU>CHILD-M</SKU><StartPrice>20</StartPrice><Quantity>2</Quantity><VariationSpecifics><NameValueList><Name>Colore</Name><Value>Nero</Value></NameValueList></VariationSpecifics></Variation></Variations></Item></ReviseFixedPriceItemRequest>'
+  const full = { xml, stockRevision: ebayStockRevision(ebayLiveStock(parseEbayItemDocument(raw))), extras: [], added: [], deletedFields: [], keptRoots: [], blockers: [] }
+  const plan = { kind: 'ebay' as const, products: [], marketplace: 'IT', itemId: '456', liveRevision: ebayLiveRevision(raw), liveContent: parseEbayPublicationItem(raw), xml, full }
+  const refused = (code: string) => new TradingApiFailure(`eBay ReviseFixedPriceItem Failure: Variation specifics provided does not match. (code ${code})`, false, undefined, [{ code, message: 'Variation specifics provided does not match.' }])
+  m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw }).mockRejectedValueOnce(refused('21916664'))
+  const error = await sendEbayPublication(plan, 'account-b', 'abcd-1234').catch(e => e)
+  expect(error).toMatchObject({ notSent: true })
+  expect(error.message).toContain('eBay refused to rename a variation value (CHILD-M Colore black → Nero)')
+  expect(error.message).toContain('type "black" in CHILD-M\'s Colore cell on the eBay sheet')
+  expect(error.message).toContain('eBay said: eBay ReviseFixedPriceItem Failure: Variation specifics provided does not match. (code 21916664)')
+  m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw }).mockRejectedValueOnce(refused('21919301'))
+  await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234')).rejects.toMatchObject({ notSent: true, message: 'eBay ReviseFixedPriceItem Failure: Variation specifics provided does not match. (code 21919301)' })
 })
 it('preserves eBay acknowledgement warnings and the item reference independently of later read-back', async () => {
   m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: '<Ack>Success</Ack>' })

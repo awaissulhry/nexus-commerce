@@ -19,7 +19,7 @@ vi.mock('@nexus/database', async () => {
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
 import prisma from '../../db.js'
 import { masterDefaultRule } from './mapping/master-default-rule.js'
-import { conceptSources } from './mapping/field-catalogue.service.js'
+import { conceptSources, getFieldCatalogue } from './mapping/field-catalogue.service.js'
 import { autoMatchValueMaps } from './value-map-auto.service.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 /** Production runs with business profiles on: every database call here runs inside a business, as real callers do. */
@@ -51,6 +51,13 @@ describe('masterDefaultRule with concept links', () => {
     expect(masterDefaultRule(f('color', { mode: 'open', options: ['Black'] }), masterKeys, concepts('EBAY'))).not.toHaveProperty('transforms')
   }))
 
+  it('E1b: an eBay ITEM SPECIFIC reads the value maps whatever its list mode; Amazon\'s open lists still do not', () => scoped(async () => {
+    const aspect = { channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Colore'] } }
+    expect(masterDefaultRule(f('color', { mode: 'open', options: ['Black'], ...aspect }), masterKeys, concepts('EBAY'))).toMatchObject({ source: 'color', transforms: [{ type: 'valueMap', attribute: 'color' }] })
+    expect(masterDefaultRule(f('colore', aspect), masterKeys, concepts('EBAY'))).toMatchObject({ source: 'color', transforms: [{ type: 'valueMap', attribute: 'color' }] })
+    expect(masterDefaultRule(f('color', { mode: 'open', options: ['Black'], channelStore: { kind: 'platformAttributes', path: ['color'] } }), masterKeys, concepts('AMAZON'))).not.toHaveProperty('transforms')
+  }))
+
   it('never links a measure or a non-text Shopify field by concept', () => scoped(async () => {
     expect(masterDefaultRule(f('item_weight', { shape: 'measure' }), masterKeys, concepts('AMAZON'))).toBeNull()
     const reference = { id: 'x', definition: { type: 'list.metaobject_reference' }, type: 'list.metaobject_reference', source: 'shopify.color-pattern' }
@@ -67,9 +74,12 @@ describe('autoMatchValueMaps on a cached eBay category', () => {
       schemaDefinition: { conditions: [], aspects: [
         // A localized key with no English name — as measured in stored listings (`aspect_Colore`).
         { id: 'aspect_Colore', label: 'Colore', localizedName: 'Colore', englishName: null, kind: 'enum', options: ['Black', 'Blue', 'Red'], enumMode: 'strict', cardinality: 'SINGLE' },
+        // E1b — an OPEN list (eBay's suggestions): its automatic link reads the value maps, but it is never auto-matched.
+        { id: 'aspect_Taglia', label: 'Taglia', localizedName: 'Taglia', englishName: 'Size', kind: 'enum', options: ['S', 'M', 'L'], cardinality: 'SINGLE' },
       ] } as never } })
     const group = await prisma.attributeGroup.create({ data: { code: 'vma', label: 'Specs' } })
     await prisma.customAttribute.create({ data: { code: 'color', label: 'Color', groupId: group.id, type: 'text', scope: 'per_variant', semanticKey: 'color' } })
+    await prisma.customAttribute.create({ data: { code: 'size', label: 'Size', groupId: group.id, type: 'text', scope: 'per_variant', semanticKey: 'size' } })
     const values: Array<[string, Record<string, unknown>]> = [
       ['vma-1', { color: 'Nero' }], ['vma-2', { color: 'Black' }], ['vma-3', { color: 'blu' }], ['vma-4', { color: 'Chartreuse' }],
       ['vma-5', { variations: { Colore: 'Rosso' } }], ['vma-6', { color: 'RED' }],
@@ -105,5 +115,12 @@ describe('autoMatchValueMaps on a cached eBay category', () => {
     const again = await autoMatchValueMaps({ channel: 'EBAY', marketplace: 'IT', productType: '177104', dryRun: false })
     expect(again.written).toBe(0)
     expect(again.fields.find(f => f.attribute === 'color')).toMatchObject({ alreadyMapped: 4, matched: [], unmatched: ['Chartreuse'] })
+  }))
+
+  it('E1b: the open Taglia list reads the value maps (its link is automatic) and is still never auto-matched', () => scoped(async () => {
+    const catalogue = await getFieldCatalogue({ channel: 'EBAY', marketplace: 'IT', productType: '177104' })
+    expect(catalogue.fields.find(f => f.fieldKey === 'size')).toMatchObject({ selectionOnly: false, ruleOrigin: 'master', rule: { source: 'size', transforms: [{ type: 'valueMap', attribute: 'size' }] } })
+    const result = await autoMatchValueMaps({ channel: 'EBAY', marketplace: 'IT', productType: '177104' })
+    expect(result.fields.map(f => f.attribute)).toEqual(['color'])
   }))
 })
