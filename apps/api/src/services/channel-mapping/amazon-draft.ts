@@ -1,6 +1,7 @@
 import { amazonChannelKey, type MappingFieldRow, type MappingRequirement, type MappingTransform } from '@nexus/shared/channel-mapping'
 import type { AmazonTemplateParse } from '../amazon/template-workbook.js'
-import { placeHeader, type AmazonDestination, type Placement } from '../pim/catalog-amazon-workbook.js'
+import { offerDraftReason, placeHeader, type AmazonDestination, type Placement } from '../pim/catalog-amazon-workbook.js'
+import { rootOfLeaf } from '../amazon/offer-fields.js'
 import type { ChannelSpec } from '../pim/channel-specs/types.js'
 
 /**
@@ -27,7 +28,7 @@ function rank(p: Placement): number {
     case 'field': return 7
     case 'identity': case 'type': case 'action': case 'price': case 'sale': case 'currency': case 'id-type': case 'id-value': return 6
     case 'unplaced': return 5 // a validated selector, decided below; otherwise the column is unmapped
-    case 'relationship': case 'quantity': case 'managed': case 'pricing-rule': case 'identifier': return 4
+    case 'relationship': case 'quantity': case 'managed': case 'pricing-rule': case 'offer-draft': case 'identifier': return 4
     case 'duplicate': case 'foreign-market': case 'foreign-language': return 3
     case 'not-in-type': return 2
   }
@@ -90,6 +91,9 @@ function decisionOf(parsed: AmazonTemplateParse, header: string, p: Placement, s
     case 'currency': return { ...base, targetKind: 'currency', state: 'mapped', reason: 'Must equal the market currency.' }
     case 'pricing-rule': return { ...base, targetKind: 'price', state: 'managed', reason: `Automated pricing rules stay in the pricing workspace (${p.what}).` }
     case 'quantity': return { ...base, targetKind: 'quantity', state: 'managed', reason: 'Stock is not imported: EU merchant quantity is one number for all EU markets, and FBA stock is Amazon’s.' }
+    // The same state and target as before (a fulfilment leaf was `quantity`, an offer leaf `price`): only the words are honest
+    // now, so a version made earlier is not reported as stale.
+    case 'offer-draft': return { ...base, targetKind: rootOfLeaf(p.leaf) === 'fulfillment_availability' ? 'quantity' : 'price', state: 'managed', reason: offerDraftReason(p.leaf) }
     case 'relationship': return { ...base, targetKind: 'relationship', state: 'managed', reason: 'Amazon variation relationship: shared parentage is managed on the Products sheet.' }
     case 'managed': return { ...base, targetKind: 'none', state: 'managed', reason: 'Managed commercial field: use the dedicated pricing or inventory workflow.' }
     case 'foreign-market': return { ...base, targetKind: 'none', state: 'ignored', reason: `This column is for Amazon ${p.market}; it is read with the ${p.market} file.` }

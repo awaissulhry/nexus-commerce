@@ -147,6 +147,95 @@ describe('channel-file planning (origin: channel-file)', () => {
   })
 })
 
+// PR 2 (2026-10-05) — B2: a file value equal to what Nexus already sends keeps following Shared (every channel file,
+// the Owner's decision 4). B4: a list longer than the template's columns is kept when the file restates its start.
+describe('channel-file values that Nexus already sends (B2) and lists longer than the template (B4)', () => {
+  it('an inherited cell set to the value Nexus sends stays inherited; a different value is pinned; a stored cell is untouched — one effective read', async () => {
+    state.effective.set('p0:color', 'Nero'); state.effective.set('p1:color', 'Nero'); state.effective.set('p0:material', 'Protected cotton')
+    const planned = await plan([cf({ field: 'color', value: 'Nero' }), cf({ field: 'material', value: 'Protected cotton' }),
+      cf({ field: 'list_price', action: 'CLEAR', value: undefined, clearIfPresent: true }), cf({ sku: '000001', field: 'color', value: 'Blu' })])
+    expect(planned.issues).toEqual([])
+    const p0 = planned.targets.find(t => t.identity.sku === '000000')!, p1 = planned.targets.find(t => t.identity.sku === '000001')!
+    expect(p0.cells.find(c => c.field === 'color')).toMatchObject({ before: 'Nero', after: 'Nero', beforeState: 'inherited', afterState: 'inherited', verdict: 'unchanged' })
+    // The listing's own value is never turned back into "follows Shared".
+    expect(p0.cells.find(c => c.field === 'material')).toMatchObject({ before: 'Protected cotton', after: 'Protected cotton', beforeState: 'stored', afterState: 'stored', verdict: 'unchanged' })
+    expect(p0.patch).toEqual({})
+    expect(p1.cells.find(c => c.field === 'color')).toMatchObject({ before: null, after: 'Blu', beforeState: 'inherited', afterState: 'stored', verdict: 'changed' })
+    expect(p1.patch.platformAttributes).toMatchObject({ color: 'Blu' })
+    expect(planned.warnings).toContain('AMAZON IT: 1 value equals what Nexus already sends; it keeps following Shared.')
+    // ONE read for the whole market: the sets and the full-update blank in the same batch, each coordinate once.
+    expect(state.resolveCalls).toHaveLength(1)
+    expect(state.resolveCalls[0]).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', productIds: ['p0', 'p1'] })
+    expect([...state.resolveCalls[0].fieldKeys].sort()).toEqual(['color', 'list_price', 'material'])
+    // An operator's file chooses its values: it pins as before and reads nothing.
+    state.resolveCalls = []
+    const operator = await plan([{ ...cf({ field: 'color', value: 'Nero' }), origin: undefined }])
+    expect(operator.targets[0].cells[0]).toMatchObject({ beforeState: 'inherited', afterState: 'stored', verdict: 'changed' })
+    expect(state.resolveCalls).toEqual([])
+  })
+
+  it('a title that follows Shared keeps following it when the file restates it; another title is pinned in the market language', async () => {
+    for (const id of ['p0', 'p1']) {
+      state.store.data.product.set(id, { ...state.store.data.product.get(id)!, workspaceId: 'nexus_legacy_workspace' })
+      state.store.data.channelListing.set(`${id}-account-a`, { ...state.store.data.channelListing.get(`${id}-account-a`)!, workspaceId: 'nexus_legacy_workspace' })
+    }
+    state.effective.set('p0:item_name', 'Giacca Gale'); state.effective.set('p1:item_name', 'Giacca Gale')
+    const planned = await plan([cf({ field: 'item_name', value: 'Giacca Gale' }), cf({ sku: '000001', field: 'item_name', value: 'Giacca Gale Pro' })])
+    expect(planned.issues).toEqual([])
+    const p0 = planned.targets.find(t => t.identity.sku === '000000')!, p1 = planned.targets.find(t => t.identity.sku === '000001')!
+    expect(p0.cells[0]).toMatchObject({ field: 'item_name', beforeState: 'inherited', afterState: 'inherited', verdict: 'unchanged' })
+    expect(p0.contentWrites).toBeUndefined()
+    expect(p1.cells[0]).toMatchObject({ field: 'item_name', afterState: 'stored', after: 'Giacca Gale Pro', verdict: 'changed' })
+    expect(p1.contentWrites).toEqual([expect.objectContaining({ address: expect.objectContaining({ tier: 'pin', language: 'it' }), values: { title: 'Giacca Gale Pro' } })])
+  })
+
+  it('compares the way the value is sent (the channel spelling of a choice), and pins when what Nexus sends cannot be read', async () => {
+    const choice = { fieldKey: 'season', sheetKey: 'season', label: 'Season', kind: 'select', shape: 'scalar', editable: true, selectionOnly: true, options: ['all_season', 'summer'], channelStore: { kind: 'platformAttributes', path: ['season'] } }
+    fields.push(choice as never)
+    try {
+      state.effective.set('p0:season', 'all_season')
+      // "ALL_SEASON" is sent as `all_season` (validateChannelValue's code spelling): the same value.
+      const same = await plan([cf({ field: 'season', value: 'ALL_SEASON' })])
+      expect(same.targets[0].cells[0]).toMatchObject({ afterState: 'inherited', verdict: 'unchanged' })
+      state.resolveFails = true
+      const unread = await plan([cf({ field: 'season', value: 'ALL_SEASON' })])
+      expect(unread.targets[0].cells[0]).toMatchObject({ afterState: 'stored', verdict: 'changed', after: 'all_season' })
+      expect(unread.warnings.join(' ')).toContain("what Nexus already sends could not be read, so the file's values were not compared with Shared")
+      expect(unread.warnings.join(' ')).not.toContain('none of them was cleared')
+    } finally { fields.pop() }
+  })
+
+  it('a list longer than the template: restating its start keeps it all; any other list replaces it and the review names what goes', async () => {
+    fields.push({ fieldKey: 'special_feature', sheetKey: 'special_feature', label: 'Special features', kind: 'text', shape: 'list', editable: true, channelStore: { kind: 'platformAttributes', path: ['special_feature'] } } as never)
+    try {
+      const ten = Array.from({ length: 10 }, (_, i) => `F${i + 1}`)
+      state.store.data.channelListing.set('p0-account-a', { ...state.store.data.channelListing.get('p0-account-a')!, platformAttributes: { productType: 'COAT', special_feature: ten } })
+      state.effective.set('p0:special_feature', ten); state.effective.set('p1:special_feature', ten)
+      const kept = await plan([cf({ field: 'special_feature', value: ten.slice(0, 5), listSlots: 5 })])
+      expect(kept.issues).toEqual([])
+      expect(kept.targets[0].cells[0]).toMatchObject({ beforeState: 'stored', afterState: 'stored', after: ten, verdict: 'unchanged' })
+      expect(kept.targets[0].patch).toEqual({})
+      expect(kept.warnings).toContain('AMAZON IT: 000000 Special features: the file has 5 columns; Nexus keeps all 10.')
+      // Following Shared: the list Nexus sends is kept the same way, and the cell keeps following Shared.
+      const inherited = await plan([cf({ sku: '000001', field: 'special_feature', value: ten.slice(0, 5), listSlots: 5 })])
+      expect(inherited.targets[0].cells[0]).toMatchObject({ beforeState: 'inherited', afterState: 'inherited', verdict: 'unchanged' })
+      expect(inherited.targets[0].patch).toEqual({})
+      // One item changed: the file's list replaces the Nexus list, and the removed items are named.
+      const replaced = await plan([cf({ field: 'special_feature', value: ['F1', 'F2', 'NEW', 'F4', 'F5'], listSlots: 5 })])
+      expect(replaced.targets[0].cells[0]).toMatchObject({ afterState: 'stored', after: ['F1', 'F2', 'NEW', 'F4', 'F5'], verdict: 'changed' })
+      expect(replaced.targets[0].patch.platformAttributes).toMatchObject({ special_feature: ['F1', 'F2', 'NEW', 'F4', 'F5'] })
+      expect(replaced.warnings).toContain('AMAZON IT: 000000 Special features: the file has 5 columns and replaces the 10 Nexus holds; removed: "F3", "F6", "F7", "F8", "F9", "F10".')
+      // Not every column filled: the file chose a shorter list.
+      const shorter = await plan([cf({ field: 'special_feature', value: ['F1', 'F2', 'F3'], listSlots: 5 })])
+      expect(shorter.targets[0].cells[0]).toMatchObject({ after: ['F1', 'F2', 'F3'], verdict: 'changed' })
+      expect(shorter.warnings.join(' ')).toContain('removed: "F4", "F5", "F6", "F7", "F8", "F9", "F10".')
+      // No column count (an eBay or Shopify file): the file's list is the list.
+      const counted = await plan([cf({ field: 'special_feature', value: ten.slice(0, 5) })])
+      expect(counted.targets[0].cells[0]).toMatchObject({ after: ten.slice(0, 5), verdict: 'changed' })
+    } finally { fields.pop() }
+  })
+})
+
 describe('channel-file jobs', () => {
   it('previews and applies a whole channel file — ends, clears, records the price and identity — and sends nothing', async () => {
     state.effective.set('p0:color', 'Nero')

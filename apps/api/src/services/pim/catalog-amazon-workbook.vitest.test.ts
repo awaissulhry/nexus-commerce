@@ -9,6 +9,7 @@ import type { TransferRow } from '@nexus/shared/catalog-transfer'
 import { detectAmazonTemplate, classifyRecordAction, legacyAttributePath, type AmazonTemplateParse } from '../amazon/template-workbook.js'
 import { mapAmazonWorkbook, checkLedger, matchAmazonIdentities, amazonProductTypes, type AmazonDestination, type AmazonListingCandidate } from './catalog-amazon-workbook.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
+import { buildAmazonDraftFields } from '../channel-mapping/amazon-draft.js'
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 const IT = 'APJ6JRA9NG5V4'
@@ -254,7 +255,8 @@ describe('CFI — prices (rule 9, Q2 a)', () => {
       [['P1', 'partial_update', 'COAT', '99', '79.9', '46023', '2026-10-31', '60', '129', '7']])
     const result = mapAmazonWorkbook(parsed, specs, { ...base, currency: 'EUR' })
     expect(fields(result.rows)).toMatchObject({ price: 99, sale: { value: 79.9, start: '2026-01-01', end: '2026-10-31' }, list_price: 129 })
-    expect(result.exclusions.map(e => e.message).join(' ')).toMatch(/Automated pricing rules.*file value 60/)
+    // B3 (2026-10-05) — an offer setting is named as one, not as an automated pricing rule.
+    expect(result.exclusions.map(e => e.message).join(' ')).toMatch(/Minimum seller price: an Amazon offer setting, not read from a file \(file value 60\)/)
     expect(result.exclusions.map(e => e.message).join(' ')).toMatch(/Stock is not imported.*file value 7/)
     clean(parsed, result)
   })
@@ -396,5 +398,133 @@ describe('CFI review fixes (2026-09-25)', () => {
     expect(parsed.meta.productTypes).toEqual(['CAPPOTTO'])
     expect(amazonProductTypes(parsed)).toContain('COAT')
     expect(fields(mapAmazonWorkbook(parsed, specs, base).rows).productType).toBe('COAT')
+  })
+})
+
+// ── Amazon file import (PR 2, 2026-10-05): honest offer words, document and product ID types, list columns ──────────
+/** A schema cached before 2026-09-27 has the selectors but not their `key__selector` leaves (the golden fixtures' shape). */
+const withoutLeaves = <T extends { fields: { key: string }[] }>(spec: T): T => ({ ...spec, fields: spec.fields.filter(f => !/^(compliance_media|externally_assigned_product_identifier)__/.test(f.key)) })
+describe('Amazon file import — offer and fulfilment columns stay out, in honest words (B3)', () => {
+  const offer = (leaf: string) => `purchasable_offer[marketplace_id=${IT}][audience=ALL]#1.${leaf}`
+  const keys = [SKU, ACTION, TYPE, 'fulfillment_availability#1.lead_time_to_ship_max_days', 'fulfillment_availability#1.restock_date', 'fulfillment_availability#1.is_inventory_available',
+    offer('minimum_seller_allowed_price#1.schedule#1.value_with_tax'), offer('maximum_seller_allowed_price#1.schedule#1.value_with_tax'), offer('start_at.value'), offer('end_at.value'),
+    offer('automated_pricing_merchandising_rule_plan#1.merchandising_rule.rule_id'), 'fulfillment_availability#1.quantity', 'fulfillment_availability#1.fulfillment_channel_code']
+  it('names each offer setting and where it is changed; quantity and the fulfilment method stay managed; nothing becomes a row', async () => {
+    const parsed = await template(keys, [['O1', 'partial_update', 'COAT', '3', '2026-11-01', 'No', '60', '150', '2026-10-01', '2026-12-31', 'rule-1', '7', 'DEFAULT']])
+    const result = mapAmazonWorkbook(parsed, specs, base)
+    const reason = (header: string) => result.exclusions.find(e => e.field === header)?.message ?? ''
+    for (const [header, label] of [[keys[3], 'Handling time'], [keys[4], 'Restock date'], [keys[5], 'Always available'], [keys[6], 'Minimum seller price'], [keys[7], 'Maximum seller price'],
+      [keys[8], 'Offer start date'], [keys[9], 'Offer end date'], [keys[10], 'Automate Pricing rule']]) {
+      expect(reason(header)).toContain(`${label}: an Amazon offer setting, not read from a file`)
+      expect(reason(header)).toContain("Change it in the sheet's Amazon columns; it is sent when you publish.")
+    }
+    expect(reason(keys[3])).toContain('(file value 3)')
+    // FBA quantity and the fulfilment method are untouchable: still the stock sentence, never an offer setting.
+    expect(reason(keys[11])).toMatch(/^Modello: Stock is not imported/)
+    expect(reason(keys[12])).toMatch(/^Modello: Stock is not imported/)
+    expect(result.rows.map(r => r.field)).toEqual(['productType'])
+    expect(result.issues).toEqual([])
+    clean(parsed, result)
+  })
+  it('the mapping version records the same decision as before (managed, same target), only the words change', async () => {
+    const parsed = await template(keys, [['O1', 'partial_update', 'COAT', '3', '', '', '', '', '', '', '', '', '']])
+    const rows = buildAmazonDraftFields(parsed, specs, { marketplace: 'IT', primaryLanguage: 'it', marketLanguages: ['it'], productTypes: ['COAT'] })
+    const row = (key: string) => rows.find(r => r.columnKey === key)!
+    expect(row(keys[3])).toMatchObject({ state: 'managed', targetKind: 'quantity', reason: expect.stringContaining('Handling time: an Amazon offer setting') })
+    expect(row(keys[6])).toMatchObject({ state: 'managed', targetKind: 'price', reason: expect.stringContaining('Minimum seller price: an Amazon offer setting') })
+    expect(row(keys[11])).toMatchObject({ state: 'managed', targetKind: 'quantity', reason: expect.stringContaining('Stock is not imported') })
+  })
+})
+
+describe('Amazon file import — compliance documents keep their type and language (B5)', () => {
+  const doc = (type: string) => `compliance_media[marketplace_id=${IT}][content_language=it_IT][content_type=${type}]#1.source_location`
+  const media = { type: 'array', maxItems: 1, selectors: ['marketplace_id', 'content_type', 'content_language'], items: { type: 'object', properties: {
+    marketplace_id: { type: 'string' }, content_type: { type: 'string', enum: ['user_manual', 'safety_information'] }, content_language: { type: 'string', enum: ['it_IT', 'de_DE'] }, source_location: { type: 'string' } } } }
+  const withLeaves = new Map([['COAT', amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { item_name: attr({ value: { type: 'string' } }), compliance_media: media } } })]])
+  const keys = [SKU, ACTION, TYPE, doc('user_manual'), doc('safety_information')]
+  it('stores the document with the type and language its column names', async () => {
+    expect(withLeaves.get('COAT')!.fields.map(f => [f.key, f.shape])).toEqual(expect.arrayContaining([['compliance_media', 'scalar'], ['compliance_media__content_type', 'scalar'], ['compliance_media__content_language', 'scalar']]))
+    const parsed = await template(keys, [['D1', 'partial_update', 'COAT', '', 'https://example.test/safety.pdf']])
+    const result = mapAmazonWorkbook(parsed, withLeaves, base)
+    expect(fields(result.rows)).toMatchObject({ compliance_media: 'https://example.test/safety.pdf', compliance_media__content_type: 'safety_information', compliance_media__content_language: 'it_IT' })
+    expect(result.issues).toEqual([])
+    clean(parsed, result)
+  })
+  it('two documents on one row are refused, naming both types', async () => {
+    const parsed = await template(keys, [['D2', 'partial_update', 'COAT', 'https://example.test/manual.pdf', 'https://example.test/safety.pdf']])
+    const result = mapAmazonWorkbook(parsed, withLeaves, base)
+    expect(result.rows.some(r => r.field.startsWith('compliance_media'))).toBe(false)
+    expect(result.issues.map(i => i.message)).toEqual(['This row fills 2 compliance_media documents (user manual and safety information). Nexus keeps one document per listing: keep one of them in the file.'])
+    expect(result.ledger.filter(e => e.header.startsWith('compliance_media')).map(e => e.outcome)).toEqual(['refused', 'refused'])
+    clean(parsed, result)
+  })
+  it('a full-update row with no document clears the document with its type and language', async () => {
+    const parsed = await template(keys, [['D3', 'full_update', 'COAT', '', '']])
+    const result = mapAmazonWorkbook(parsed, withLeaves, base)
+    expect(result.rows.filter(r => r.action === 'CLEAR').map(r => [r.field, r.clearIfPresent]).sort()).toEqual([['compliance_media', true], ['compliance_media__content_language', true], ['compliance_media__content_type', true]])
+    clean(parsed, result)
+  })
+  it('a cached schema without the selector leaves keeps the document alone, as before', async () => {
+    // A schema cached before the selector leaves were authored (2026-09-27): the golden fixtures' own shape.
+    const without = new Map([['COAT', withoutLeaves(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { compliance_media: media } } }))]])
+    expect(without.get('COAT')!.fields.some(f => f.key === 'compliance_media__content_type')).toBe(false)
+    const parsed = await template(keys, [['D4', 'partial_update', 'COAT', 'https://example.test/manual.pdf', '']])
+    const result = mapAmazonWorkbook(parsed, without, base)
+    expect(result.rows.filter(r => r.entity === 'Overrides').map(r => [r.field, r.value])).toEqual([['compliance_media', 'https://example.test/manual.pdf']])
+    clean(parsed, result)
+  })
+})
+
+describe('Amazon file import — the product ID keeps its type, checked against the schema (B7)', () => {
+  const ID_TYPE = 'amzn1.volt.ca.product_id_type', ID_VALUE = 'amzn1.volt.ca.product_id_value'
+  const identifier = { type: 'array', maxItems: 1, selectors: ['marketplace_id', 'type'], items: { type: 'object', properties: {
+    marketplace_id: { type: 'string' }, type: { type: 'string', enum: ['ean', 'gtin', 'minsan_code', 'upc'], enumNames: ['EAN', 'GTIN', 'MINSAN', 'UPC'] }, value: { type: 'string' } } } }
+  const spec = (leaf: boolean) => {
+    const built = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+      item_name: attr({ value: { type: 'string' } }), merchant_suggested_asin: attr({ value: { type: 'string' } }), supplier_declared_has_product_identifier_exemption: attr({ value: { type: 'boolean' } }),
+      externally_assigned_product_identifier: identifier } } })
+    expect(built.fields.find(f => f.key === 'externally_assigned_product_identifier__type')?.options).toEqual(['ean', 'gtin', 'minsan_code', 'upc'])
+    return new Map([['COAT', leaf ? built : withoutLeaves(built)]])
+  }
+  const keys = [SKU, ACTION, TYPE, ID_TYPE, ID_VALUE]
+  it('stores the type beside the value; MINSAN is accepted because this schema offers it (label or the template\'s own code)', async () => {
+    const parsed = await template(keys, [['E1', 'partial_update', 'COAT', 'EAN', '8000000000001'], ['M1', 'partial_update', 'COAT', 'MINSAN', '012345678'], ['M2', 'partial_update', 'COAT', 'Codice MINSAN', '012345679']],
+      { aliases: [{ attribute: ID_TYPE, aliases: { 'Codice MINSAN': 'minsan_code', EAN: 'ean' } }] })
+    const result = mapAmazonWorkbook(parsed, spec(true), base)
+    expect(fields(result.rows, 'E1')).toMatchObject({ externally_assigned_product_identifier: '8000000000001', externally_assigned_product_identifier__type: 'ean' })
+    expect(fields(result.rows, 'M1')).toMatchObject({ externally_assigned_product_identifier: '012345678', externally_assigned_product_identifier__type: 'minsan_code' })
+    expect(fields(result.rows, 'M2')).toMatchObject({ externally_assigned_product_identifier: '012345679', externally_assigned_product_identifier__type: 'minsan_code' })
+    expect(result.ledger.filter(e => e.header === ID_TYPE).map(e => [e.outcome, e.field])).toEqual(Array(3).fill(['row', 'externally_assigned_product_identifier__type']))
+    expect(result.issues).toEqual([])
+    clean(parsed, result)
+  })
+  it('a type the schema does not offer is refused with its list, never guessed; ASIN and the GTIN exemption read as before', async () => {
+    const parsed = await template(keys, [['I1', 'partial_update', 'COAT', 'ISBN', '9780000000002'], ['A1', 'partial_update', 'COAT', 'ASIN', 'B0TESTASIN'], ['X1', 'partial_update', 'COAT', 'exempt', '']])
+    const result = mapAmazonWorkbook(parsed, spec(true), base)
+    expect(result.rows.some(r => r.sku === 'I1' && r.field.startsWith('externally_assigned'))).toBe(false)
+    expect(result.issues.map(i => [i.sku, i.message])).toEqual([['I1', 'Modello: The product ID type "ISBN" is not one Amazon IT accepts for COAT (EAN, GTIN, MINSAN, UPC). Correct the type in the file.']])
+    expect(result.ledger.filter(e => e.sku === 'I1' && [ID_TYPE, ID_VALUE].includes(e.header)).map(e => e.outcome)).toEqual(['refused', 'refused'])
+    expect(fields(result.rows, 'A1')).toMatchObject({ merchant_suggested_asin: 'B0TESTASIN' })
+    expect(fields(result.rows, 'X1')).toMatchObject({ supplier_declared_has_product_identifier_exemption: true })
+    expect(result.rows.some(r => (r.sku === 'A1' || r.sku === 'X1') && r.field === 'externally_assigned_product_identifier__type')).toBe(false)
+    clean(parsed, result)
+  })
+  it('a cached schema without the type leaf still checks the type against its own list and stores the value alone', async () => {
+    const parsed = await template(keys, [['U1', 'partial_update', 'COAT', 'UPC', '012345678905'], ['J1', 'partial_update', 'COAT', 'JAN', '4900000000001']])
+    const result = mapAmazonWorkbook(parsed, spec(false), base)
+    expect(result.rows.filter(r => r.sku === 'U1' && r.entity === 'Overrides').map(r => [r.field, r.value])).toEqual([['externally_assigned_product_identifier', '012345678905']])
+    expect(result.issues.map(i => i.sku)).toEqual(['J1'])
+    clean(parsed, result)
+  })
+})
+
+describe('Amazon file import — a list row says how many template columns it had (B4)', () => {
+  it('bullet_point with three columns, two filled: the row carries listSlots 3; a scalar carries none', async () => {
+    const parsed = await template([SKU, ACTION, TYPE, h('item_name', 1, 'value', 'it_IT'), h('bullet_point', 1, 'value', 'it_IT'), h('bullet_point', 2, 'value', 'it_IT'), h('bullet_point', 3, 'value', 'it_IT')],
+      [['B1', 'partial_update', 'COAT', 'Giacca', 'Uno', '', 'Tre']])
+    const result = mapAmazonWorkbook(parsed, specs, base)
+    expect(result.rows.find(r => r.field === 'bullet_point')).toMatchObject({ value: ['Uno', 'Tre'], listSlots: 3 })
+    expect(result.rows.find(r => r.field === 'item_name')).not.toHaveProperty('listSlots')
+    clean(parsed, result)
   })
 })
