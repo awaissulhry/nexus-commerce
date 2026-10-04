@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({ findUnique: vi.fn(), updatePlacementBidding: vi.fn
 
 vi.mock('../../db.js', () => ({ default: { campaign: { findUnique: h.findUnique } } }))
 vi.mock('./ads-create.service.js', () => ({ updatePlacementBidding: h.updatePlacementBidding }))
+// 4m — no campaign here is held by Hourly Bids (ads-tos-rank-owned.vitest.test.ts covers the ones that are).
+vi.mock('./rank-release.service.js', () => ({ rankOwnedCampaignIds: async () => new Set<string>() }))
 
 import { ACTION_HANDLERS } from '../automation-rule.service.js'
 import './automation-action-handlers.js'

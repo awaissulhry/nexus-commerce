@@ -884,6 +884,22 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   }
 }
 
+/**
+ * 4m (review 3.7) — a rule leaves alone what Hourly Bids holds.
+ *
+ * The rank engine sets the Top of Search placement (and the bids) of every campaign an enabled goal schedule or
+ * product plan holds, every run. A rule writing the same lever there is undone on the next run and undoes it in turn,
+ * so the rule skips such a campaign and says why. A skip, not a failure, and asked BEFORE the dry-run return, so a
+ * PROPOSE rule offers no suggestion a person could accept into the same fight (`recordSuggestions` skips `skipped`).
+ * The decision is re-read when a suggestion is accepted, because the handler runs again then.
+ */
+async function rankOwnedSkip(type: string, campaignId: string, what: string): Promise<ActionResult | null> {
+  const { rankOwnedCampaignIds } = await import('./rank-release.service.js')
+  if (!(await rankOwnedCampaignIds()).has(campaignId)) return null
+  const { rankOwnedWhy } = await import('./ads-top-of-search.service.js')
+  return { type, ok: true, output: { skipped: 'rank-owned', campaignId, why: rankOwnedWhy(what) } }
+}
+
 // ── AU.6: set_placement_multiplier ────────────────────────────────────
 // Adjusts the PLACEMENT_TOP (or other placement) bid adjustment % for a
 // campaign. Lets rules like "raise top-of-search bids when ACOS is low" or
@@ -895,6 +911,10 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
   const campaignId = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   if (!campaignId) return { type: action.type, ok: false, error: 'No campaign.id in context' }
   const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  if (placement === 'PLACEMENT_TOP') {
+    const held = await rankOwnedSkip(action.type, campaignId, 'Top of Search placement')
+    if (held) return held
+  }
   const pct = Math.max(0, Math.min(900, Math.round(Number(action.percentage ?? 0))))
   if (meta.dryRun) {
     return { type: action.type, ok: true, output: { dryRun: true, campaignId, placement, percentage: pct } }
@@ -1451,11 +1471,15 @@ ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<Acti
 
 // ── raise_bids_for_rank_defense ───────────────────────────────────────
 // When impression share drops, raise bids aggressively to defend position.
-// Rate-limited: caps at MAX_PCT and one-step-at-a-time per rule fire.
+// 4m (review 3.7) — each fire raises every enabled target of the campaign by 5–50% (default 20%), from the bid it has
+// now. Nothing here limits how often that repeats: only the rule's own caps do (executions and writes a day). The old
+// line here claimed a cap per fire it never had. A campaign Hourly Bids holds is left alone (`rankOwnedSkip`).
 ACTION_HANDLERS.raise_bids_for_rank_defense = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   const pct = Math.min(50, Math.max(5, Number(action.percent ?? 20)))
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
+  const held = await rankOwnedSkip(action.type, id, 'bids')
+  if (held) return held
   const targets = await prisma.adTarget.findMany({ where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: id } }, select: { id: true, bidCents: true }, take: 200 })
   const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.round(t.bidCents * (1 + pct / 100)) }))
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: entries.length, raisePct: pct } }
@@ -1620,6 +1644,10 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
     return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', campaignId: id } }
   }
   const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
+  if (placement === 'PLACEMENT_TOP') {
+    const held = await rankOwnedSkip(action.type, id, 'Top of Search placement')
+    if (held) return held
+  }
   const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const current = db.placementBidding?.find((x) => x.placement === placement)?.percentage ?? 0

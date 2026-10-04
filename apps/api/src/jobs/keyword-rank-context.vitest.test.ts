@@ -9,7 +9,7 @@
  * These tests would have failed against the original code and would also have failed against the
  * `: null` "fix" — which is the point of writing them.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../db.js', () => ({
   default: {
@@ -20,7 +20,7 @@ vi.mock('../db.js', () => ({
 }))
 
 import prisma from '../db.js'
-import { buildKeywordRankBidContexts } from './advertising-rule-evaluator.job.js'
+import { buildKeywordRankBidContexts, KEYWORD_RANK_MAX_AGE_DAYS } from './advertising-rule-evaluator.job.js'
 import { applyOperator } from '../services/automation-rule.service.js'
 
 const db = vi.mocked(prisma, true)
@@ -40,7 +40,11 @@ const target = (o: Partial<Record<string, unknown>> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   db.amazonAdsDailyPerformance.groupBy.mockResolvedValue([] as never)
+  // 4m — readings expire (KEYWORD_RANK_MAX_AGE_DAYS), so "now" is pinned the day after the fixtures' readings.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-21T00:00:00Z'))
 })
+afterEach(() => { vi.useRealTimers() })
 
 const ctxOf = async () => (await buildKeywordRankBidContexts())[0] as { adTarget: Record<string, unknown> }
 
@@ -158,5 +162,63 @@ describe('buildKeywordRankBidContexts', () => {
     ] as never)
     const out = await buildKeywordRankBidContexts()
     expect(out.map((c) => (c as { adTarget: { id: string } }).adTarget.id)).toEqual(['t1'])
+  })
+})
+
+/**
+ * 4m (review 3.13) — a rank reading expires. Before this, an import from months ago still moved bids as if it were
+ * today's. A stale reading is ABSENT (every rank condition refuses), never 0, and the context says why in words.
+ */
+describe('buildKeywordRankBidContexts — readings expire after KEYWORD_RANK_MAX_AGE_DAYS', () => {
+  const daysAgo = (n: number) => new Date(Date.parse('2026-08-21T00:00:00Z') - n * 864e5)
+
+  it('is 14 days', () => {
+    expect(KEYWORD_RANK_MAX_AGE_DAYS).toBe(14)
+  })
+
+  it('uses a reading inside the limit, with no note', async () => {
+    db.keywordRank.findMany.mockResolvedValue([
+      rank({ id: 'b', organicRank: 40, capturedAt: daysAgo(13) }),
+      rank({ id: 'c', organicRank: 55, capturedAt: daysAgo(14) }),
+    ] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+    expect(ctx.adTarget.organicRank).toBe(40)
+    expect(ctx.adTarget.sponsoredRank).toBe(8)
+    expect(ctx.adTarget.rankDelta).toBe(15)
+    expect('rankNote' in ctx.adTarget).toBe(false)
+  })
+
+  it('🔴 leaves a stale reading ABSENT — not 0 — and says why in plain words', async () => {
+    db.keywordRank.findMany.mockResolvedValue([
+      rank({ id: 'b', organicRank: 40, capturedAt: daysAgo(15) }),
+      rank({ id: 'c', organicRank: 55, capturedAt: daysAgo(30) }),
+    ] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    db.amazonAdsDailyPerformance.groupBy.mockResolvedValue([
+      { localEntityId: 't1', _sum: { costMicros: 5_000_000, sales7dCents: 2000, orders7d: 1, clicks: 10, impressions: 500 } },
+    ] as never)
+    const ctx = await ctxOf()
+
+    for (const k of ['organicRank', 'sponsoredRank', 'searchVolume', 'rankDelta']) expect(k in ctx.adTarget).toBe(false)
+    // "Organic Rank > 20 → raise the bid" no longer fires on a reading from weeks ago
+    expect(applyOperator('gt', ctx.adTarget.organicRank, 20)).toBe(false)
+    expect(applyOperator('lte', ctx.adTarget.rankDelta, 0)).toBe(false)
+    expect(ctx.adTarget.rankNote).toBe('Rank not used: the newest rank reading for this keyword is 15 days old, and readings older than 14 days are ignored.')
+    // the target's own performance is still a measurement
+    expect(ctx.adTarget.spendCents).toBe(500)
+  })
+
+  it('keeps a fresh rank but drops the change when the reading before it is stale', async () => {
+    db.keywordRank.findMany.mockResolvedValue([
+      rank({ id: 'b', organicRank: 40, capturedAt: daysAgo(2) }),
+      rank({ id: 'c', organicRank: 55, capturedAt: daysAgo(40) }),
+    ] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+
+    expect(ctx.adTarget.organicRank).toBe(40)
+    expect('rankDelta' in ctx.adTarget).toBe(false) // NOT 15: that change happened over 38 days
+    expect(ctx.adTarget.rankNote).toBe('Rank change not used: the reading before the newest is 40 days old, and readings older than 14 days are ignored.')
   })
 })
