@@ -28,7 +28,7 @@ describe('localized content edits', () => {
 })
 
 describe('eBay listing representations', () => {
-  it.each([['conditionId', '1000', 'NEW'], ['conditionId', '2990', 'PRE_OWNED_EXCELLENT'], ['conditionId', '3010', 'PRE_OWNED_FAIR'], ['listingFormat', 'FixedPriceItem', 'FIXED_PRICE'], ['listingFormat', 'Chinese', 'AUCTION'], ['listingDuration', 'Days_7', 'DAYS_7']])('normalizes %s %s to %s', (key, raw, expected) => {
+  it.each([['conditionId', '1000', 'NEW'], ['conditionId', '2990', 'PRE_OWNED_EXCELLENT'], ['conditionId', '3010', 'PRE_OWNED_FAIR'], ['listingFormat', 'FixedPriceItem', 'FIXED_PRICE'], ['listingFormat', 'Chinese', 'AUCTION'], ['listingDuration', 'Days_7', 'DAYS_7'], ['packageType', 'PackageThickEnvelope', 'PACKAGE_THICK_ENVELOPE'], ['packageType', '', '']])('normalizes %s %s to %s', (key, raw, expected) => {
     expect(normalizeEbayListingValue(key, raw)).toBe(expected)
   })
   it('preserves unknown values for a named validation failure', () => {

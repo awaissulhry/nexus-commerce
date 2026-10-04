@@ -25,6 +25,7 @@ import {
 import { toInventoryCondition } from '../../ebay-condition.js'
 import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
 import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
+import { EBAY_PACKAGE_TYPES } from '../ebay-packages.js'
 
 export interface EbayCachedAspect {
   id: string
@@ -78,7 +79,7 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
   title: 'content', subtitle: 'content', description: 'content', descriptionThemeId: 'content',
   variationTheme: 'variations', sharedSkuListing: 'variations',
   imageUrls: 'images', videoId: 'images',
-  conditionId: 'offer', listingFormat: 'offer', listingDuration: 'offer',
+  conditionId: 'offer', listingFormat: 'offer', listingDuration: 'offer', quantityLimitPerBuyer: 'offer',
   bestOffer: 'offer', bestOfferFloor: 'offer', bestOfferCeiling: 'offer', vatRate: 'offer',
   dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', itemLocation: 'shipping', itemPostalCode: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
   packageLength: 'shipping', packageWidth: 'shipping', packageHeight: 'shipping',
@@ -86,11 +87,14 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
 }
 
 /** eBay's own enums for the listing-level fields (Sell Inventory API vocabularies). */
-const LISTING_FORMATS = ['FIXED_PRICE', 'AUCTION']
+// E1 (2026-10-04) — Nexus publishes fixed-price eBay listings only, so the list offers only that. A stored AUCTION shows
+// as off the list (it can be cleared) and publish still refuses it with its reason.
+const LISTING_FORMATS = ['FIXED_PRICE']
 const LISTING_DURATIONS = ['GTC', 'DAYS_1', 'DAYS_3', 'DAYS_5', 'DAYS_7', 'DAYS_10', 'DAYS_30']
 const WEIGHT_UNITS = ['KILOGRAM', 'GRAM', 'POUND', 'OUNCE']
 const LENGTH_UNITS = ['CENTIMETER', 'METER', 'INCH', 'FEET']
-const PACKAGE_TYPES = ['LETTER', 'BULKY_GOODS', 'CARAVAN', 'CARS', 'EUROPALLET', 'EXPANDABLE_TOUGH_BAGS', 'EXTRA_LARGE_PACK', 'FURNITURE', 'INDUSTRY_VEHICLES', 'LARGE_CANADA_POSTBOX', 'LARGE_CANADA_POST_BUBBLE_MAILER', 'LARGE_ENVELOPE', 'MAILING_BOX', 'MEDIUM_CANADA_POST_BOX', 'MEDIUM_CANADA_POST_BUBBLE_MAILER', 'MOTORBIKES', 'ONE_WAY_PALLET', 'PACKAGE_THICK_ENVELOPE', 'PADDED_BAGS', 'PARCEL_OR_PADDED_ENVELOPE', 'ROLL', 'SMALL_CANADA_POST_BOX', 'SMALL_CANADA_POST_BUBBLE_MAILER', 'TOUGH_BAGS', 'UPS_LETTER', 'USPS_FLAT_RATE_ENVELOPE', 'USPS_LARGE_PACK', 'VERY_LARGE_PACK', 'WINE_PAK']
+// E1 — the one package list publish knows (`ebay-packages.ts`); the column is strict: a type outside it cannot be sent.
+const PACKAGE_TYPES = EBAY_PACKAGE_TYPES
 
 export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const marketplace = String(input.marketplace).toUpperCase()
@@ -124,13 +128,15 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     // CHMAP M7 (B3) — the floor is eBay's autoDeclinePrice and the ceiling its autoAcceptPrice (`ebay-variation-push.service.ts`).
     listing('bestOfferFloor', 'Rifiuto automatico sotto', 'Best offer auto-decline below', { kind: 'number', channelStore: pa('bestOfferFloor'), helpText: 'Offers below this are declined automatically (eBay autoDeclinePrice). Must be below the auto-accept price.' }),
     listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: 'Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price.' }),
+    // E1 (2026-10-04) — publish already sent the stored value (`QuantityRestrictionPerBuyer`) with no column to see or edit it.
+    listing('quantityLimitPerBuyer', 'Quantità massima per acquirente', 'Max per buyer', { kind: 'number', channelStore: pa('quantityLimitPerBuyer'), helpText: 'The most units one buyer may buy from this listing: a whole number, 1 or more. Blank: Publish sends no limit, and a live listing keeps the limit eBay holds.' }),
     listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
     listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
     // #30 (2026-09-30) — the city and postal code publish already reads (`studio-publication-ebay.ts`, `settings.itemLocation`
     // / `settings.itemPostalCode`) had no column, so a new listing on an account with no default location could not be published.
     listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: 'City or town where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account\'s default location.' }),
     listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: 'Postal code where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account\'s default location.' }),
-    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'open', options: PACKAGE_TYPES, channelStore: pa('packageType') }),
+    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'strict', options: [...PACKAGE_TYPES], channelStore: pa('packageType') }),
     listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] } }),
     listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: 'Uses the shared package dimension unit.' }),
     listing('packageWidth', 'Larghezza del pacco', 'Package width', { kind: 'number', channelStore: pa('packageWidth'), helpText: 'Uses the shared package dimension unit.' }),

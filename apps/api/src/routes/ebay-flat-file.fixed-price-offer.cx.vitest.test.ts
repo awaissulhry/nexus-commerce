@@ -108,8 +108,15 @@ describe('eBay flat-file routes act on the fixed-price offer, never the auction 
     expect(offerWrites(), JSON.stringify(results)).toEqual(['DELETE /offer/fp-1'])
   })
   it('push, single-SKU offer writer (price and quantity)', async () => {
-    const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2, category_id: '123', image_1: 'https://fixture.invalid/a.jpg' }
+    const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2, category_id: '123', image_1: 'https://fixture.invalid/a.jpg', condition: 'NEW' }
     const results = await pushed({ rows: [row], markets: ['IT'], mode: 'api' })
     expect(offerWrites(), JSON.stringify(results)).toEqual(['PUT /offer/fp-1', 'POST /offer/fp-1/publish'])
+  })
+  it('push, single-SKU row without a condition: refused by name, never sent as NEW, nothing reaches eBay (E1)', async () => {
+    const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2, category_id: '123', image_1: 'https://fixture.invalid/a.jpg', condition: '' }
+    const results = await pushed({ rows: [row], markets: ['IT'], mode: 'api' })
+    expect(results, JSON.stringify(results)).toEqual(expect.arrayContaining([expect.objectContaining({ sku: 'SKU', status: 'ERROR', message: 'Condition is empty on this listing\'s main row; Nexus does not guess one.' })]))
+    // No write of any kind (the inventory item included) went to eBay.
+    expect(s.send.mock.calls.filter(([, init]) => String((init as RequestInit | undefined)?.method ?? 'GET') !== 'GET')).toEqual([])
   })
 })

@@ -34,6 +34,7 @@ import { ebayAccountService } from '../ebay-account.service.js'
 import { EBAY_POLICY_FIELD, EBAY_POLICY_KINDS, ebayLocationKnownMissing, ebayMarketplaceId, ebayPolicyKnownMissing, isCompleteEbayLocation, resolveEbayItemLocation, usableEbayLocation, type EbayPolicyKind } from '../ebay-account-defaults.js'
 import { EbaySendingOff, ebayFieldLabel, ebayProblems, stripSku, type EbayProblems } from './studio-publication-ebay-problems.js'
 import { ebaySendsLive } from './studio-publication-ebay-verify.js'
+import { ebayTradingPackage } from './ebay-packages.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -105,7 +106,9 @@ export const ebayStockRevision = (stock: EbayLiveStock) => publicationDigest({ i
 /** Item fields a Full update removes with `<DeletedField>` when Nexus holds them empty (eBay lets a Revise delete these). */
 const FULL_DELETABLE: Readonly<Record<string, string>> = { SubTitle: 'Item.SubTitle', ItemSpecifics: 'Item.ItemSpecifics' }
 /** Item fields the full builder leaves out when Nexus holds none: eBay keeps its own value (said in the review). */
-const FULL_KEPT_ROOTS = ['VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer', 'DispatchTimeMax', 'ProductListingDetails', 'Location', 'PostalCode', 'Country']
+// E1 (2026-10-04) — a blank Condition in Nexus sends no <ConditionID> (never a guess), and Best Offer prices Nexus does not
+// hold send no <ListingDetails>: eBay keeps its own, and the review says so.
+const FULL_KEPT_ROOTS = ['VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer', 'DispatchTimeMax', 'ProductListingDetails', 'Location', 'PostalCode', 'Country', 'ConditionID', 'ListingDetails']
 
 const blank = (value: unknown) => value == null || (typeof value === 'string' && !value.trim())
 
@@ -190,16 +193,7 @@ function setPath(target: Record<string, any>, path: string[], value: unknown) {
 }
 
 // #36 (2026-10-01) — eBay Trading takes a listing's package type, weight and size as ONE item-level ShippingPackageDetails.
-// The sheet stores eBay's Inventory names (PACKAGE_THICK_ENVELOPE); Trading names them differently (ShippingPackageCodeType).
-const TRADING_PACKAGES: Readonly<Record<string, string>> = {
-  LETTER: 'Letter', BULKY_GOODS: 'BulkyGoods', CARAVAN: 'Caravan', CARS: 'Cars', EUROPALLET: 'Europallet', EXPANDABLE_TOUGH_BAGS: 'ExpandableToughBags',
-  EXTRA_LARGE_PACK: 'ExtraLargePack', FURNITURE: 'Furniture', INDUSTRY_VEHICLES: 'IndustryVehicles', LARGE_CANADA_POSTBOX: 'LargeCanadaPostBox',
-  LARGE_CANADA_POST_BUBBLE_MAILER: 'LargeCanadaPostBubbleMailer', LARGE_ENVELOPE: 'LargeEnvelope', MAILING_BOX: 'MailingBoxes', MEDIUM_CANADA_POST_BOX: 'MediumCanadaPostBox',
-  MEDIUM_CANADA_POST_BUBBLE_MAILER: 'MediumCanadaPostBubbleMailer', MOTORBIKES: 'Motorbikes', ONE_WAY_PALLET: 'OneWayPallet', PACKAGE_THICK_ENVELOPE: 'PackageThickEnvelope',
-  PADDED_BAGS: 'PaddedBags', PARCEL_OR_PADDED_ENVELOPE: 'ParcelOrPaddedEnvelope', ROLL: 'Roll', SMALL_CANADA_POST_BOX: 'SmallCanadaPostBox',
-  SMALL_CANADA_POST_BUBBLE_MAILER: 'SmallCanadaPostBubbleMailer', TOUGH_BAGS: 'ToughBags', UPS_LETTER: 'UPSLetter', USPS_FLAT_RATE_ENVELOPE: 'USPSFlatRateEnvelope',
-  USPS_LARGE_PACK: 'USPSLargePack', VERY_LARGE_PACK: 'VeryLargePack', WINE_PAK: 'Winepak',
-}
+// The sheet stores eBay's Inventory names (PACKAGE_THICK_ENVELOPE); Trading names them differently (`ebay-packages.ts`).
 const GRAMS: Readonly<Record<string, number>> = { KILOGRAM: 1000, GRAM: 1, POUND: 453.59237, OUNCE: 28.349523125 }
 const CENTIMETERS: Readonly<Record<string, number>> = { CENTIMETER: 1, METER: 100, INCH: 2.54, FEET: 30.48 }
 const measure = (value: unknown) => {
@@ -215,7 +209,7 @@ export function ebayPackageXml(pa: Record<string, any>, sku: string): string {
   const parts: string[] = []
   const type = typeof pa.packageType === 'string' ? pa.packageType.trim() : ''
   if (type) {
-    const code = TRADING_PACKAGES[type.toUpperCase()] ?? (Object.values(TRADING_PACKAGES).includes(type) ? type : null)
+    const code = ebayTradingPackage(type)
     if (!code) throw new Error(`${sku}: eBay does not know the package type "${type}". Choose one from the list.`)
     parts.push(`<ShippingPackage>${code}</ShippingPackage>`)
   }
@@ -239,6 +233,61 @@ export function ebayPackageXml(pa: Record<string, any>, sku: string): string {
 }
 
 /**
+ * E1 (2026-10-04) — Max per buyer as eBay takes it (`QuantityRestrictionPerBuyer`): a whole number, 1 or more. Blank (null,
+ * '') is not set: nothing is sent. `problem` names a value that is set but cannot be sent.
+ */
+export function ebayQuantityLimit(value: unknown): { limit: number | null; problem: string | null } {
+  if (value == null || (typeof value === 'string' && !value.trim())) return { limit: null, problem: null }
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN
+  if (Number.isSafeInteger(n) && n >= 1) return { limit: n, problem: null }
+  return { limit: null, problem: `${ebayFieldLabel('quantityLimitPerBuyer')}: eBay takes a whole number, 1 or more (this row has ${JSON.stringify(value)}). Fix it on this listing's main row, or leave it blank.` }
+}
+
+type BestOfferField = 'bestOfferFloor' | 'bestOfferCeiling'
+/** A saved Best Offer price: 0, '' and null are not set (every live listing holds the keys; the old flat-file save wrote 0). */
+function bestOfferAmount(value: unknown): { amount: number | null; invalid: boolean } {
+  if (value == null || (typeof value === 'string' && !value.trim())) return { amount: null, invalid: false }
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN
+  if (n === 0) return { amount: null, invalid: false }
+  return Number.isFinite(n) && n > 0 ? { amount: Math.round(n * 100) / 100, invalid: false } : { amount: null, invalid: true }
+}
+const money = (n: number) => n.toFixed(2)
+
+/**
+ * E1 (Owner decision 8, 2026-10-04) — Best Offer auto-decline (`bestOfferFloor`, eBay's MinimumBestOfferPrice) and
+ * auto-accept (`bestOfferCeiling`, eBay's BestOfferAutoAcceptPrice) for a single-SKU listing. Only the prices that are set
+ * are checked: 0 < auto-decline < auto-accept < price (the price comparison is skipped when the price is unknown).
+ */
+export function ebayBestOfferPrices(settings: Record<string, any>, price: number | null | undefined): {
+  decline: number | null; accept: number | null; problems: Array<{ field: BestOfferField; message: string }>
+} {
+  const problems: Array<{ field: BestOfferField; message: string }> = []
+  const read = (field: BestOfferField) => {
+    const { amount, invalid } = bestOfferAmount(settings[field])
+    if (invalid) problems.push({ field, message: `${ebayFieldLabel(field)}: set an amount above 0, or leave it blank (this row has ${JSON.stringify(settings[field])}).` })
+    return amount
+  }
+  const decline = read('bestOfferFloor'), accept = read('bestOfferCeiling')
+  const sale = typeof price === 'number' && Number.isFinite(price) && price > 0 ? price : null
+  if (decline != null && accept != null && decline >= accept)
+    problems.push({ field: 'bestOfferFloor', message: `${ebayFieldLabel('bestOfferFloor')} (${money(decline)}) must be below ${ebayFieldLabel('bestOfferCeiling')} (${money(accept)}).` })
+  if (sale != null && accept != null && accept >= sale)
+    problems.push({ field: 'bestOfferCeiling', message: `${ebayFieldLabel('bestOfferCeiling')} (${money(accept)}) must be below the price (${money(sale)}).` })
+  // With an auto-accept price set, the two checks above already keep auto-decline below the price.
+  if (sale != null && decline != null && accept == null && decline >= sale)
+    problems.push({ field: 'bestOfferFloor', message: `${ebayFieldLabel('bestOfferFloor')} (${money(decline)}) must be below the price (${money(sale)}).` })
+  return { decline, accept, problems }
+}
+
+/** The Best Offer prices as Trading `<ListingDetails>`, two decimals; '' when none is set or one cannot be sent. */
+export function ebayBestOfferXml(settings: Record<string, any>, currency: string, price: number | null | undefined): string {
+  const { decline, accept, problems } = ebayBestOfferPrices(settings, price)
+  if (problems.length || (decline == null && accept == null)) return ''
+  const amount = (tag: string, n: number) => `<${tag} currencyID="${escapeXml(currency)}">${money(n)}</${tag}>`
+  return `<ListingDetails>${accept != null ? amount('BestOfferAutoAcceptPrice', accept) : ''}${decline != null ? amount('MinimumBestOfferPrice', decline) : ''}</ListingDetails>`
+}
+
+/**
  * Trading revisions preserve fields outside the submitted product payload. `options.package`: a Full update revise sends
  * the package too (a narrow revise keeps eBay's; #36 sends it when the listing is created).
  */
@@ -248,12 +297,16 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
     const variant = input.variations[0]
     xml = xml.replace(/    <Variations>[\s\S]*?<\/Variations>/, `    <StartPrice>${variant.price}</StartPrice><Quantity>${variant.quantity}</Quantity>${variant.ean ? `<ProductListingDetails><EAN>${escapeXml(variant.ean)}</EAN></ProductListingDetails>` : ''}`)
   }
+  const limit = ebayQuantityLimit(settings.quantityLimitPerBuyer).limit
   const extra = [
     settings.subtitle != null ? `<SubTitle>${escapeXml(String(settings.subtitle))}</SubTitle>` : '',
     settings.handlingTime != null ? `<DispatchTimeMax>${Number(settings.handlingTime)}</DispatchTimeMax>` : '',
     settings.vatRate != null ? `<VATDetails><VATPercent>${Number(settings.vatRate)}</VATPercent></VATDetails>` : '',
     single && settings.bestOffer != null ? `<BestOfferDetails><BestOfferEnabled>${settings.bestOffer === true}</BestOfferEnabled></BestOfferDetails>` : '',
-    settings.quantityLimitPerBuyer != null ? `<QuantityRestrictionPerBuyer><MaximumQuantity>${Number(settings.quantityLimitPerBuyer)}</MaximumQuantity></QuantityRestrictionPerBuyer>` : '',
+    // E1 — the Best Offer prices go with Best Offer on a single-SKU listing only, and only when they can be sent.
+    single && settings.bestOffer === true ? ebayBestOfferXml(settings, input.currency, input.variations[0]?.price) : '',
+    // E1 — only a whole number, 1 or more; blank (or a value eBay cannot take, named by the review) sends nothing.
+    limit != null ? `<QuantityRestrictionPerBuyer><MaximumQuantity>${limit}</MaximumQuantity></QuantityRestrictionPerBuyer>` : '',
     // A revision keeps eBay's package (#36 sends it only when the listing is created).
     !itemId || options.package ? ebayPackageXml(settings, input.sku ?? 'This listing') : '',
   ].join('')
@@ -381,15 +434,14 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     // Follow-up 2026-10-01 — item-level fields (`EBAY_ITEM_LEVEL_FIELDS`) go to eBay once, from the main row: a variation
     // row's own value is never sent, so only the main row's is judged.
     const mainRow = product.id === parent.id
-    // Saved fields this builder cannot send; silently omitting them would publish a different product. Audit P8 — the Best
-    // Offer floor and ceiling only matter while Best Offer is on (eBay ignores them otherwise), so they are ignored when it is off.
+    // Saved fields this builder cannot send; silently omitting them would publish a different product. (E1, 2026-10-04: the
+    // Best Offer prices are sent now — `ebayOfferChecks`.)
     if (!itemId && mainRow) {
       if (filled(pa.videoId)) problems.add(`${ebayFieldLabel('videoId')}: Nexus cannot send a video with a new eBay listing yet. Clear the "${ebayFieldLabel('videoId')}" cell on this row in the sheet.`, { ...at, field: 'videoId' })
-      for (const key of ['compatibility', 'regulatory']) if (filled(pa[key])) problems.add(`${ebayFieldLabel(key)}: Nexus cannot send this with a new eBay listing yet.`, { ...at, field: key })
-      if (pa.bestOffer === true) for (const key of ['bestOfferFloor', 'bestOfferCeiling']) {
-        if (filled(pa[key])) problems.add(`${ebayFieldLabel(key)}: Nexus cannot send it with a new eBay listing yet. Clear it on this row, or turn "${ebayFieldLabel('bestOffer')}" off.`, { ...at, field: key })
-      }
     }
+    // E1 (2026-10-04) — product safety (GPSR) and parts compatibility have no sheet cell and no publisher: a saved value is
+    // said in the review and blocks nothing (it blocked a new listing with no cell to clear it).
+    if (mainRow) for (const key of ['compatibility', 'regulatory']) if (filled(pa[key])) problems.note(`${ebayFieldLabel(key)}: Nexus does not send this to eBay; the saved value is not sent.`)
     // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none. The main
     // row's is checked; a variation's that cannot be read counts as a different package (named once, below).
     if (!itemId) {
@@ -554,6 +606,31 @@ async function accountSnapshot(accountId: string, market: string) {
 
 const POLICY_WORD: Readonly<Record<EbayPolicyKind, string>> = { shipping: 'shipping', payment: 'payment', return: 'return' }
 
+/** eBay sites in the EU, where eBay asks sellers for product safety (GPSR) details. Not the UK. */
+const EBAY_EU_MARKETS: ReadonlySet<string> = new Set(['IT', 'DE', 'FR', 'ES', 'AT', 'BE', 'IE', 'NL', 'PL'])
+export const EBAY_EU_SAFETY_NOTE = 'eBay asks EU sellers for the manufacturer and EU responsible person. Nexus does not send them yet; add them in eBay Seller Hub.'
+
+/**
+ * E1 (2026-10-04) — the main-row offer fields a Trading listing sends besides its price: Max per buyer and the Best Offer
+ * prices. A value Nexus cannot send refuses a NEW listing by name. On a live listing it is not sent and the review says
+ * so (eBay keeps its own): it never newly refuses a live listing. 0, '' and null are not set, and say nothing.
+ */
+function ebayOfferChecks(input: { settings: Record<string, any>; shared: AddFixedPriceItemInput; single: boolean; itemId: string | null
+  main: { productId: string; sku: string }; problems: EbayProblems }) {
+  const { settings, shared, single, itemId, main, problems } = input
+  const say = (field: string, message: string, kept: string) => itemId ? problems.note(`${message} ${kept}`) : problems.add(message, { ...main, field })
+  const limit = ebayQuantityLimit(settings.quantityLimitPerBuyer)
+  if (limit.problem) say('quantityLimitPerBuyer', limit.problem, 'Nexus does not send it; eBay keeps the limit it holds.')
+  const offerFields: BestOfferField[] = ['bestOfferFloor', 'bestOfferCeiling']
+  if (settings.bestOffer === true && single) {
+    for (const problem of ebayBestOfferPrices(settings, shared.variations[0]?.price).problems)
+      say(problem.field, problem.message, 'Nexus does not send the Best Offer prices; eBay keeps the ones it holds.')
+  } else if (settings.bestOffer !== true) {
+    const set = offerFields.filter(field => bestOfferAmount(settings[field]).amount != null)
+    if (set.length) problems.note(`${set.map(ebayFieldLabel).join(' and ')}: not sent to eBay while "${ebayFieldLabel('bestOffer')}" is off.`)
+  }
+}
+
 /**
  * Origin, pictures, policies and the rendered description — the same for a Trading and an Inventory listing. Every check
  * names its problem in `problems` and goes on (audit P1). `live`: this server really sends to eBay, so eBay may be read
@@ -572,6 +649,11 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
     const named = (facts.issues ?? []).some(issue => issue.severity === 'error' && issue.productId === parent.id && issue.field === 'conditionId')
     if (!filled(condition)) { if (!named) problems.add(`${ebayFieldLabel('conditionId')} is empty. Choose a condition on this listing's main row.`, { ...main, field: 'conditionId' }) }
     else if (!shared.conditionId) problems.add(`${ebayFieldLabel('conditionId')}: eBay does not know "${String(condition)}". Choose a condition from the list on the main row.`, { ...main, field: 'conditionId' })
+    // E1 (2026-10-04) — EU product safety (GPSR): no publisher sends it yet, so a new listing on an EU site is told where to add it.
+    if (EBAY_EU_MARKETS.has(scope.marketplace.toUpperCase())) problems.note(EBAY_EU_SAFETY_NOTE)
+  } else if (filled(settings.conditionId) && !shared.conditionId) {
+    // E1 — a live listing: a condition eBay does not know is not sent (eBay keeps its own); a blank one is the review's warning.
+    problems.note(`${ebayFieldLabel('conditionId')}: eBay does not know "${String(settings.conditionId)}", so Nexus does not send it; eBay keeps the listing's current condition.`)
   }
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   // A blank cell falls through to the account's default, then the server's (`resolveEbayItemLocation`). Audit P3 — the
@@ -698,6 +780,7 @@ export async function prepareEbayPublication(facts: PublicationFacts, options: {
   const inactiveSkus = new Set(identities.filter(identity => options.inactiveProductIds?.has(identity.productId)).map(identity => identity.sku))
   if (inactiveSkus.size && built.shared) for (const variation of built.shared.variations) if (inactiveSkus.has(variation.sku)) variation.quantity = 0
   const shared = await finishEbayListingInput(facts, built, problems, live, { inactive: inactiveSkus.size > 0 })
+  ebayOfferChecks({ settings, shared: shared as AddFixedPriceItemInput, single: products.length === 1, itemId, main: { productId: facts.parent.id, sku: facts.parent.sku }, problems })
   problems.throwIfAny()
   // Audit P9 — every check above ran in every mode; eBay is read (the live item) only when this server really sends to eBay.
   if (!live) throw sendingOff(problems.notes)

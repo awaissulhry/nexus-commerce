@@ -48,6 +48,7 @@ import {
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
 import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { EBAY_CONDITION_NOT_GUESSED } from '../services/ebay-condition.js';
 import { familyPushRefusal } from '../services/ebay-push-lock.js';
 import { ebayListingLanguage } from '../services/gateway/channels.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
@@ -2230,7 +2231,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (sharedParent?.shared_sku_listing === true && !inventoryManagedFamily) {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               familyRows as Array<Record<string, unknown>>,
-              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm, accountMetadata: connection.connectionMetadata },
             )
             for (const r of sharedResults) {
               perRowResults.push({
@@ -2493,7 +2494,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           try {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               [row] as Array<Record<string, unknown>>,
-              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm, accountMetadata: connection.connectionMetadata },
             )
             for (const sr of sharedResults) {
               perRowResults.push({
@@ -2562,6 +2563,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         // !(> 0), not `<= 0`, so a non-finite quantity (NaN/null) is also caught.
         if (!(Number(qty) > 0)) {
           perRowResults.push({ sku, market: mp, status: 'ERROR', message: `Out of stock — the shared pool has 0 available for this variant${buffer > 0 ? ` (buffer ${buffer})` : ''}. eBay can't list a 0-quantity variant (error 25004); restock or lower the buffer, then re-push.` });
+          continue;
+        }
+
+        // Condition is never guessed (Owner 2026-10-04): this row IS the listing's main row, and the inventory_item PUT
+        // replaces the whole item, so a blank condition is refused by name before anything reaches eBay.
+        const rawCond = String(row.condition ?? '').trim();
+        if (!rawCond) {
+          perRowResults.push({ sku, market: mp, status: 'ERROR', message: EBAY_CONDITION_NOT_GUESSED });
           continue;
         }
 
@@ -2660,9 +2669,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             aspects[singleAspectNames.get(lk) ?? lk] = v
           }
 
-          // Translate numeric conditionId ('1000') to eBay ConditionEnum ('NEW').
-          const rawCond = String(row.condition ?? '');
-          const condition = CONDITION_ID_TO_ENUM[rawCond] ?? (rawCond || 'NEW');
+          // Translate numeric conditionId ('1000') to eBay ConditionEnum ('NEW'); a blank one was refused above.
+          const condition = CONDITION_ID_TO_ENUM[rawCond] ?? rawCond;
 
           const pkgSize = buildPackageWeightAndSize(row);
           const invBody = {

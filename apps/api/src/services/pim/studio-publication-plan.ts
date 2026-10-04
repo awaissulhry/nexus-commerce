@@ -25,6 +25,8 @@ import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.j
 export const publicationDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, entry) =>
   entry && typeof entry === 'object' && !Array.isArray(entry)
     ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)).digest('hex')
+/** E1 — what the review says for a live eBay listing whose Condition is empty in Nexus. */
+export const EBAY_CONDITION_KEPT = 'Condition is empty in Nexus; eBay keeps the listing\'s current condition.'
 export const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 
 export function publicationScope(body: unknown): StudioPublishScope {
@@ -132,6 +134,12 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
       if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
       if (itemLevelKeys.has(field) && row.productId !== parent.id) continue
+      // E1 (Owner decision 7, 2026-10-04) — a live eBay listing whose Condition is empty in Nexus sends none, so eBay keeps
+      // its own: a warning, not a block. A new listing still needs one (its "required" blocks below).
+      if (existing && scope.channel === 'EBAY' && field === 'conditionId' && (cell.value == null || (typeof cell.value === 'string' && !cell.value.trim()))) {
+        issues.push({ productId: row.productId, sku: row.sku, field, severity: 'warning', message: EBAY_CONDITION_KEPT })
+        continue
+      }
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })

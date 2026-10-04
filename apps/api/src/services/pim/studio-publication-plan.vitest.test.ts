@@ -372,4 +372,12 @@ describe('eBay item-level fields are judged on the main row only', () => {
     const facts = await readPublicationFacts('parent', ebay)
     expect(facts.issues.filter(i => i.field === 'conditionId')).toEqual([{ productId: 'parent', sku: 'PARENT', field: 'conditionId', severity: 'error', message: 'Condition: Field \'Condition\' is required.' }])
   })
+  it('E1 (Owner decision 7): a LIVE listing whose Condition is empty in Nexus warns, once, that eBay keeps its own; it blocks nothing', async () => {
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', externalListingId: '111' }, { id: 'listing-child', productId: 'child', externalListingId: '111' },
+      { id: 'listing-excluded', productId: 'excluded', externalListingId: '111' }])
+    resolveWith({ conditionId: required('Condition'), title: { value: 'Giacca', label: 'Title', errors: [] } })
+    const facts = await readPublicationFacts('parent', ebay)
+    expect(facts.issues.filter(i => i.field === 'conditionId')).toEqual([{ productId: 'parent', sku: 'PARENT', field: 'conditionId', severity: 'warning',
+      message: 'Condition is empty in Nexus; eBay keeps the listing\'s current condition.' }])
+  })
 })

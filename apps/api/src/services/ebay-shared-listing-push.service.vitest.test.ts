@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 // These tests own the legacy creation contract; the new presentation boundary is tested
 // through its real store and adapters in ebay-presentation-workflow.vitest.test.ts.
 vi.mock('./ebay-presentation-consumer.service.js', () => ({ assertLegacyPresentationPublishAllowed: vi.fn(async () => undefined) }))
@@ -12,7 +12,7 @@ import { buildSharedListingInput, createSharedListing, pushSharedListings } from
 
 const parent = {
   sku: 'LNR-BLK', _isParent: true, title: 'Inner Liner', description: '<p>x</p>',
-  category_id: '57988', condition: '1000', item_location_country: 'IT',
+  category_id: '57988', condition: '1000', item_location_country: 'IT', item_postal_code: '99999', // a made-up postal code
   image_1: 'https://img/a.jpg', fulfillment_policy_id: 'F1', payment_policy_id: 'P1', return_policy_id: 'R1',
 }
 const variants = [
@@ -240,15 +240,72 @@ describe('createSharedListing', () => {
   })
 })
 
+// ── E1 (2026-10-04) — never a guessed condition, never an address written into code ──────────────────────────────
+describe('E1 — condition and item location come from Nexus, never from a guess', () => {
+  const blankEnv = () => { vi.stubEnv('EBAY_ITEM_COUNTRY', ''); vi.stubEnv('EBAY_ITEM_LOCATION', ''); vi.stubEnv('EBAY_ITEM_POSTAL_CODE', '') }
+  const noLocation = { ...parent, item_location_country: '', item_postal_code: '' }
+  const account = { itemLocation: { country: 'DE', postalCode: '11111', city: 'Musterstadt', source: 'ebay' } } // made-up values
+  afterEach(() => { vi.unstubAllEnvs() })
+
+  it('a blank condition stays blank (no ConditionID 1000)', () => {
+    expect(buildSharedListingInput({ ...parent, condition: '' }, variants, 'IT', undefined, undefined, 'EUR').conditionId).toBe('')
+  })
+  it('the row\'s location wins over the account\'s and the server\'s', () => {
+    blankEnv(); vi.stubEnv('EBAY_ITEM_POSTAL_CODE', '22222')
+    const input = buildSharedListingInput({ ...parent, item_location: 'Testville' }, variants, 'IT', undefined, undefined, 'EUR', account)
+    expect([input.country, input.postalCode, input.location]).toEqual(['IT', '99999', 'Testville'])
+  })
+  it('a blank row takes the eBay account\'s stored location', () => {
+    blankEnv()
+    const input = buildSharedListingInput(noLocation, variants, 'IT', undefined, undefined, 'EUR', account)
+    expect([input.country, input.postalCode, input.location]).toEqual(['DE', '11111', 'Musterstadt'])
+  })
+  it('with no account location, the server\'s EBAY_ITEM_* settings', () => {
+    blankEnv(); vi.stubEnv('EBAY_ITEM_COUNTRY', 'IT'); vi.stubEnv('EBAY_ITEM_LOCATION', 'Testville')
+    const input = buildSharedListingInput(noLocation, variants, 'IT', undefined, undefined, 'EUR', {})
+    expect([input.country, input.postalCode, input.location]).toEqual(['IT', undefined, 'Testville'])
+  })
+  it('nothing anywhere: no location at all (no built-in address)', () => {
+    blankEnv()
+    const input = buildSharedListingInput(noLocation, variants, 'IT', undefined, undefined, 'EUR')
+    expect([input.country, input.postalCode, input.location]).toEqual(['', undefined, undefined])
+  })
+  it('createSharedListing names a missing location and sends nothing', async () => {
+    blankEnv()
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'NEVER' }))
+    const res = await createSharedListing(noLocation, variants, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn } as never)
+    expect(res.status).toBe('ERROR')
+    expect(res.message).toMatch(/missing: item location \(a country with a postal code or town/)
+    expect(addFn).not.toHaveBeenCalled()
+  })
+  it('createSharedListing uses the account location the caller passes', async () => {
+    blankEnv()
+    const db = mockDb(null)
+    const addFn = vi.fn(async (_input: any) => ({ itemId: '1234' }))
+    const res = await createSharedListing(noLocation, variants, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn, accountMetadata: account } as never)
+    expect(res.status).toBe('CREATED')
+    expect(addFn.mock.calls[0][0]).toMatchObject({ country: 'DE', postalCode: '11111', location: 'Musterstadt' })
+  })
+  it('createSharedListing names a blank condition and sends nothing (never New)', async () => {
+    const db = mockDb(null)
+    const addFn = vi.fn(async () => ({ itemId: 'NEVER' }))
+    const res = await createSharedListing({ ...parent, condition: '' }, variants, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn } as never)
+    expect(res.status).toBe('ERROR')
+    expect(res.message).toMatch(/missing: condition/)
+    expect(addFn).not.toHaveBeenCalled()
+  })
+})
+
 describe('pushSharedListings', () => {
   it('groups rows into families and creates one listing per family', async () => {
     const db = mockDb(null)
     const addFn = vi.fn(async () => ({ itemId: 'IT-' + Math.random().toString(36).slice(2, 6) }))
     const rows = [
-      { sku: 'A', _isParent: true, platformProductId: 'A', title: 'A', category_id: '1', condition: '1000', image_1: 'https://img.example/a.jpg' },
+      { sku: 'A', _isParent: true, platformProductId: 'A', title: 'A', category_id: '1', condition: '1000', image_1: 'https://img.example/a.jpg', item_location_country: 'IT', item_location: 'Testville' },
       { sku: 'A-M', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'M', _productId: 'a1' },
       { sku: 'A-L', platformProductId: 'A', it_price: 5, it_qty: 1, aspect_Size: 'L', _productId: 'a2' },
-      { sku: 'B', _isParent: true, platformProductId: 'B', title: 'B', category_id: '1', condition: '1000', image_1: 'https://img.example/b.jpg' },
+      { sku: 'B', _isParent: true, platformProductId: 'B', title: 'B', category_id: '1', condition: '1000', image_1: 'https://img.example/b.jpg', item_location_country: 'IT', item_location: 'Testville' },
       { sku: 'B-M', platformProductId: 'B', it_price: 7, it_qty: 2, aspect_Size: 'M', _productId: 'b1' },
     ]
     const results = await pushSharedListings(rows, { oauthToken: 'O', market: 'IT', db, addFixedPriceItemFn: addFn })

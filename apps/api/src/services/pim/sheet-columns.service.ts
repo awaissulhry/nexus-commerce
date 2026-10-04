@@ -381,7 +381,7 @@ const FIELD_ORDER_BY_GROUP: Record<string, string[]> = {
   'AMAZON:product_details': [...CONTENT_FIELD_ORDER, 'brand', 'manufacturer', 'material', 'fabric_type', 'color', 'size', 'target_gender', 'age_range_description', 'fit_type', 'care_instructions', 'water_resistance_level'],
   'EBAY:content': ['name', 'title', 'subtitle', 'description', 'descriptionThemeId'],
   'EBAY:aspects': ['brand', 'type', 'model', 'material', 'color', 'size', 'department'],
-  'EBAY:offer': ['conditionId', 'price', 'quantity', 'listingFormat', 'listingDuration', 'vatRate', 'bestOffer', 'bestOfferFloor', 'bestOfferCeiling'],
+  'EBAY:offer': ['conditionId', 'price', 'quantity', 'quantityLimitPerBuyer', 'listingFormat', 'listingDuration', 'vatRate', 'bestOffer', 'bestOfferFloor', 'bestOfferCeiling'],
   'EBAY:shipping': ['handlingTime', 'packageType', 'packageWeight', 'packageLength', 'packageWidth', 'packageHeight', 'dimensionUnit'],
   'EBAY:policies': ['fulfillmentPolicyId', 'returnPolicyId', 'paymentPolicyId'],
 }

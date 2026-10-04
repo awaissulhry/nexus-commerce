@@ -53,8 +53,9 @@ vi.mock('./ebay-price-readback.service.js', async (original) => ({ ...await orig
 
 const { pushVariationGroup, pushOffersOnly } = await import('./ebay-variation-push.service.js')
 
+// The first row is the listing's main row here (no `_isParent`); SKU-B has no condition of its own and takes it (E1).
 const rows = () => [
-  { sku: 'SKU-A', _productId: 'product-a', price: 10, quantity: 2, aspect_Taglia: 'S', image_1: 'https://fixture.invalid/a.jpg' },
+  { sku: 'SKU-A', _productId: 'product-a', price: 10, quantity: 2, aspect_Taglia: 'S', image_1: 'https://fixture.invalid/a.jpg', condition: 'NEW' },
   { sku: 'SKU-B', _productId: 'product-b', price: 20, quantity: 0, aspect_Taglia: 'M', image_1: 'https://fixture.invalid/b.jpg' },
 ]
 const offer = (sku: string, format = 'FIXED_PRICE', listingId = '123456789012') => ({ offerId: `${format === 'AUCTION' ? 'au' : 'fp'}-${sku}`, sku, marketplaceId: 'EBAY_IT', format,
@@ -136,6 +137,30 @@ describe('A — the FIXED_PRICE offer, never offers[0]', () => {
     expect(result.map((r) => (r as { itemId?: string }).itemId)).toEqual(['123456789012', '123456789012'])
     expect(h.recordLive).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ channel: 'EBAY', market: 'IT', accountId: 'account-a',
       rows: expect.arrayContaining([expect.objectContaining({ listingStatus: 'ACTIVE', externalListingId: '123456789012' })]) }))
+  })
+})
+
+describe('E1 — the condition is never guessed (Owner 2026-10-04)', () => {
+  const itemPuts = () => h.send.mock.calls.filter(([url, init]) => init?.method === 'PUT' && new URL(url).pathname.startsWith('/sell/inventory/v1/inventory_item/'))
+    .map(([url, init]) => ({ sku: decodeURIComponent(new URL(url).pathname.split('/').pop()!), condition: JSON.parse(init.body).condition }))
+  it('a variation without a condition of its own takes the main row\'s, translated for the Inventory API', async () => {
+    const [main, other] = rows()
+    const result = await call('group', [{ ...main, condition: '3000' }, other])
+    expect(result.map((r) => r.status)).toEqual(['PUSHED', 'PUSHED'])
+    expect(itemPuts()).toEqual([{ sku: 'SKU-A', condition: 'USED_EXCELLENT' }, { sku: 'SKU-B', condition: 'USED_EXCELLENT' }])
+  })
+  it('a variation\'s own condition wins over the main row\'s', async () => {
+    const [main, other] = rows()
+    await call('group', [main, { ...other, condition: 'NEW_OTHER' }])
+    expect(itemPuts()).toEqual([{ sku: 'SKU-A', condition: 'NEW' }, { sku: 'SKU-B', condition: 'NEW_OTHER' }])
+  })
+  it('blank on the row and on the main row: that SKU is refused by name, never sent as NEW, and nothing reaches eBay', async () => {
+    const result = await call('group', rows().map((row) => ({ ...row, condition: '' })))
+    expect(result).toEqual([
+      { sku: 'SKU-A', market: 'IT', status: 'ERROR', message: 'Condition is empty on this listing\'s main row; Nexus does not guess one.' },
+      { sku: 'SKU-B', market: 'IT', status: 'ERROR', message: 'Condition is empty on this listing\'s main row; Nexus does not guess one.' },
+    ])
+    expect(h.send).not.toHaveBeenCalled()
   })
 })
 
