@@ -19,6 +19,7 @@ import { getAutomationState } from './ads-automation-state.service.js'
 import { lowest } from '../automation/automation-levels.js'
 import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../automation/engine-switch.service.js'
 import { breakerLimitsText } from './ads-engine-actors.js'
+import { engineCapsText } from './ads-engine-guard.js'
 
 /**
  * Engines are gated by env flags and apply-switches, not by `AutomationRule.autonomyLevel`.
@@ -56,9 +57,9 @@ export interface EngineLever {
    * Whether this engine actually consults the account halt / autonomy dial.
    *
    * Measured, not assumed: `ads-auto-bid` checks `state.effectivelyStopped`
-   * (`ads-auto-harvest` did too, until HP5 retired it 2026-08-21);
-   * `ad-rank-defend`, `ad-dayparting`, `ad-budget-enforce`,
-   * `budget-pool-rebalance` and the delivery drain contain no such check at all.
+   * (`ads-auto-harvest` did too, until HP5 retired it 2026-08-21), and since 1c
+   * `ad-rank-defend` and `ad-dayparting` read the dial through ads-engine-guard.ts;
+   * `ad-budget-enforce`, `budget-pool-rebalance` and the delivery drain contain no such check at all.
    *
    * This distinction is the difference between a control surface and a decorative one. On
    * 2026-08-05 the breaker was tripped ("264 actions in the last hour") and rank-defend's
@@ -86,12 +87,14 @@ export interface EngineLever {
 /**
  * How an engine relates to the account halt / autonomy dial.
  *
- *   honours  — reads `effectivelyStopped` itself and stands down before doing any work.
- *              Only `ads-auto-bid` does this.
+ *   honours  — reads the dial itself before it writes. `ads-auto-bid` stands down when
+ *              stopped. 1c: rank-defend and classic dayparting, while stopped, only floor
+ *              bids (restores wait for Resume) and under SUGGEST write nothing new
+ *              (ads-engine-guard.ts); they also keep their own per-run and per-day caps.
  *   gated    — still evaluates while halted, but every write it produces is refused by
  *              `ads-write-gate` (ACR.0.7). Nothing reaches Amazon; the engine merely
- *              wastes a tick. This is the state rank-defend, dayparting, budget
- *              enforcement, pools and the delivery drain are in.
+ *              wastes a tick. This is the state budget enforcement, pools and the
+ *              delivery drain are in.
  *   exempt   — runs regardless, correctly: the anomaly breaker must keep evaluating
  *              (it is what would clear the halt) and the reconcile is read-only.
  *
@@ -245,6 +248,21 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     if (state.autonomy === 'SUGGEST' && m === 'AUTO') return 'PROPOSE'
     return m
   }
+  /**
+   * 1c — what an engine that honours the dial still does under it, for the two engines that read it through
+   * ads-engine-guard.ts. Under SUGGEST it is said beside the dial; while stopped it is the warning, because the
+   * lever reads OFF and yet floors still land.
+   */
+  const DIAL_WORDS: Record<string, { suggest: string; stopped: string }> = {
+    'rank-defend': {
+      suggest: 'computes each run and writes nothing new (the run summary counts what it would change); it still restores bids it floored',
+      stopped: 'Stopped: it only lowers bids to their Min-bid floors; restores and placement moves wait for Resume',
+    },
+    dayparting: {
+      suggest: 'computes each run and writes nothing new (the run summary counts what it would change); it still lifts its own floors and multipliers',
+      stopped: 'Stopped: it only floors bids when a window closes; restores and multipliers wait for Resume',
+    },
+  }
   const capReason = (): string | null => {
     if (envKill) return 'NEXUS_ADS_AUTOMATION_KILL is set — nothing runs until it is cleared'
     if (state.halted) return `Halted${state.haltReason ? `: ${state.haltReason}` : ''}`
@@ -273,8 +291,10 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     const h = (cron ? facts.health.get(cron) : undefined) ?? { runs: 0, failures: 0 }
     const cap = capReason()
     const mode = capped(rawMode, haltBehaviour)
+    const dialWords = haltBehaviour === 'honours' ? DIAL_WORDS[key] : undefined
     // A gate that is already OFF is not "overridden" by the account dial — say the local reason.
-    const modeReason = rawMode === 'OFF' ? rawReason : (haltBehaviour === 'exempt' ? rawReason : (cap ?? rawReason))
+    let modeReason = rawMode === 'OFF' ? rawReason : (haltBehaviour === 'exempt' ? rawReason : (cap ?? rawReason))
+    if (rawMode !== 'OFF' && dialWords && !accountStopped && state.autonomy === 'SUGGEST') modeReason = `Account autonomy is SUGGEST — it ${dialWords.suggest}`
 
     let warning: string | null = null
     // The loudest thing this page can say: the account is stopped and this engine is not.
@@ -282,6 +302,8 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       // Not a defect since ACR.0.7 — but worth saying, because the cron will keep
       // logging activity and an operator should not read that as writes landing.
       warning = 'Still evaluating while stopped — its writes are refused at the gate'
+    } else if (accountStopped && dialWords && rawMode !== 'OFF') {
+      warning = dialWords.stopped
     } else if (cron && adsCron && h.runs === 0 && rawMode !== 'OFF') {
       warning = 'Enabled but has not run in 7 days'
     } else if (h.runs > 0 && h.failures / h.runs > 0.2) {
@@ -304,14 +326,14 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     mk('rank-defend', 'Rank & Dayparting', 'Holds a target rank on a schedule by moving placement bids',
       'ad-rank-defend', 'every 15 min',
       masterOff ? 'OFF' : jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? 'AUTO' : 'OFF',
-      masterOff?.why ?? (jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? 'Armed and writing to Amazon' : 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run'),
-      `${enabledSchedules} schedules · ${enabledPlans} product plans`, 'gated'),
+      masterOff?.why ?? (jobSwitchOn('NEXUS_ENABLE_RANK_DEFEND') ? `Armed and writing to Amazon. Honours the account dial; ${engineCapsText('rank-defend')}` : 'NEXUS_ENABLE_RANK_DEFEND is not 1 — rank-defend does not run'),
+      `${enabledSchedules} schedules · ${enabledPlans} product plans`, 'honours'),
 
     mk('dayparting', 'Classic dayparting', 'Enables/pauses and multiplies bids on fixed hour windows',
       'ad-dayparting', 'every 15 min',
       masterOff ? 'OFF' : 'AUTO',
-      masterOff?.why ?? 'Runs, but every live schedule is rank-goal mode — this evaluates almost nothing',
-      null, 'gated'),
+      masterOff?.why ?? `Runs, but every live schedule is rank-goal mode — this evaluates almost nothing. Honours the account dial; ${engineCapsText('dayparting')}`,
+      null, 'honours'),
 
     mk('budget-enforce', 'Budget enforcement', 'Paces a monthly budget and suppresses over-spending campaigns',
       'ad-budget-enforce', 'every 30 min',

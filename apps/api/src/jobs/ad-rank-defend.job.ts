@@ -12,6 +12,9 @@
  * applyTopOfSearch writes locally and only pushes to Amazon when the write-gate
  * is open. Cron is OFF unless NEXUS_ENABLE_RANK_DEFEND=1; the run-now endpoint
  * (dryRun) previews decisions without writing.
+ *
+ * 1c — a live run honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST writes
+ * nothing new; halted / OFF only floors bids, restores wait for Resume; at most N changes a run and a day.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -24,6 +27,8 @@ import { sqpShareForAsins, SQP_STALL_DAYS } from '../services/advertising/sqp.se
 import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
+import { deltaBidCents } from '../services/advertising/ads-placement-math.js'
+import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -150,7 +155,8 @@ export interface RankDefendDecision {
   baseBid?: { mode: string; valueCents?: number | null } | null // BL — base-bid directive applied
 }
 export interface RankPlanRunSummary { planId: string; productId: string; marketplace: string; campaigns: number; decisions: RankDefendDecision[]; selfCompetition?: SelfCompetitionConflict[] }
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[] }
+// 1c — `guard` (live runs only): the dial posture and the caps this run ran under, and what they held back.
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport }
 
 const pctOf = (f: number | null): number | null => (f != null ? Math.round(f * 100) : null)
 type SigMap = Map<string, { currentPct: number; topIS: number | null; topAcos: number | null }>
@@ -195,40 +201,73 @@ function samePlacements(a: Array<{ placement: string; percentage: number }>, b: 
 // on). hold/null = no change (but still revert any prior delta); absolute = set ad-group
 // default to bidValueCents (idempotent); suppress = floor to ~2¢ (placements stay set);
 // deltaPct (BL.7) = scale every bid ±% from a stable baseline (no compounding). Returns writes.
-async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: { write: boolean; actor: string }): Promise<number> {
+// 1c — `permit` says which of these this campaign may write this run; what it may not is noted in `held`.
+async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: { write: boolean; actor: string; permit: CampaignPermit }, held: HeldBack): Promise<number> {
   if (!ctx.write) return 0
+  const allow = (kind: keyof HeldBack) => allowChange(ctx.write, ctx.permit, held, kind)
   let n = 0
   const mode = spec.bidMode
   // Leaving deltaPct (or never in it) → restore each entity's stable baseline + clear it.
+  // 1c — a give-back: never capped, but it waits while stopped (the gate would refuse it after Nexus moved its bids).
   if (mode !== 'deltaPct') {
-    try { n += await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
+    if (ctx.permit.restore) {
+      try { n += await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
+    } else if (await hasBaseBidDelta(camp.id)) held.restore = true
   }
   if (!mode || mode === 'hold') return n
   if (mode === 'suppress') {
-    if (!camp.bidsSuppressedAt) {
+    if (!camp.bidsSuppressedAt && allow('floor')) {
       try { n += await suppressCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank base-bid = suppress (placements stay set)' }) } catch (e) { logger.warn('[rank-defend] base-bid suppress failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
     return n
   }
   if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
     const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
-    for (const g of ags) {
-      if (g.defaultBidCents === spec.bidValueCents) continue
+    const moves = ags.filter((g) => g.defaultBidCents !== spec.bidValueCents)
+    if (!moves.length || !allow('forward')) return n
+    for (const g of moves) {
       try { const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: spec.bidValueCents }, actor: ctx.actor as AdsActor, reason: 'rank base-bid (absolute)', applyImmediately: true }); if (r.ok) n++ } catch (e) { logger.warn('[rank-defend] base-bid absolute failed', { campaignId: camp.id, adGroupId: g.id, error: (e as Error).message }) }
     }
     return n
   }
   if (mode === 'deltaPct' && spec.bidDeltaPct != null) {
+    if (!ctx.permit.forward) {
+      // Only note it as held back when it would actually move a bid (applyBaseBidDelta is idempotent).
+      if (await baseBidDeltaWouldMove(camp.id, spec.bidDeltaPct)) held.forward = true
+      return n
+    }
     try { n += await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%` }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
     return n
   }
   return n
 }
 
+// 1c — read-only twins of revertBaseBidDelta / applyBaseBidDelta's own skip rules, used only when the permit
+// withholds them, so a held-back run reports a change it would really have made rather than every delta campaign.
+async function hasBaseBidDelta(campaignId: string): Promise<boolean> {
+  const [g, t] = await Promise.all([
+    prisma.adGroup.count({ where: { campaignId, baseBidFromCents: { not: null } } }),
+    prisma.adTarget.count({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } } }),
+  ])
+  return g + t > 0
+}
+async function baseBidDeltaWouldMove(campaignId: string, deltaPct: number): Promise<boolean> {
+  const [groups, targets] = await Promise.all([
+    prisma.adGroup.findMany({ where: { campaignId }, select: { defaultBidCents: true, baseBidFromCents: true } }),
+    prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { bidCents: true, baseBidFromCents: true } }),
+  ])
+  const moves = (cur: number, from: number | null) => !(from != null && cur === deltaBidCents(from, deltaPct))
+  return groups.some((g) => moves(g.defaultBidCents, g.baseBidFromCents)) || targets.some((t) => moves(t.bidCents, t.baseBidFromCents))
+}
+
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null>; maxBaseBidByCampaign?: Map<string, number> },
-): Promise<{ decision: RankDefendDecision; applied: number }> {
+  ctx: { write: boolean; permit: CampaignPermit; actor: string; sigByCampaign: SigMap; lossByCampaign: Map<string, boolean>; suppressRaise?: boolean; sqpByCampaign?: Map<string, number | null>; maxBaseBidByCampaign?: Map<string, number> },
+): Promise<{ decision: RankDefendDecision; applied: number; held: HeldBack }> {
+  // 1c — every write below asks the campaign's permit first (dial posture + caps, decided once per campaign by the
+  // caller). What it may not write is noted in `held`; on a dry run (`write` false) nothing is written or noted.
+  const held = nothingHeld()
+  const allow = (kind: keyof HeldBack) => allowChange(ctx.write, ctx.permit, held, kind)
   const sigRaw = ctx.sigByCampaign.get(camp.id) ?? { currentPct: 0, topIS: null, topAcos: null }
   const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   // PP — read the bias of the TARGET's placement (Top for own-top/defend/all-out, Rest
@@ -249,7 +288,10 @@ async function decideAndMaybeApply(
     // unchanged answer four times an hour is load bought for nothing.
     const atFloorAlready = !!camp.bidsSuppressedAt && normaliseFloorCents(camp.bidsSuppressedFloorCents) === floor
     let suppressed = 0
-    if (ctx.write && !atFloorAlready) {
+    // 1c — moving an already-floored campaign to a HIGHER floor raises bids: that is a raise, not a floor (it waits
+    // while stopped, where the gate passes only lowering writes).
+    const raisesFloor = !!camp.bidsSuppressedAt && floor > normaliseFloorCents(camp.bidsSuppressedFloorCents)
+    if (!atFloorAlready && allow(raisesFloor ? 'forward' : 'floor')) {
       try {
         // Not-yet-suppressed → suppress at this floor. Already suppressed at a DIFFERENT
         // floor → move it, which is the case suppressCampaignBids refuses by design.
@@ -270,7 +312,7 @@ async function decideAndMaybeApply(
       const want = Math.max(0, Math.min(900, Math.round(spec.biasPct)))
       if (currentPct !== want) {
         placeNote = ` · ${shortPlace(spec.placement)} ${currentPct}→${want}%`
-        if (ctx.write) {
+        if (allow('forward')) {
           // Floor first, then the multiplier: for one tick the campaign is at the floored bid
           // with the OLD multiplier, never at the old bid with a new one.
           try { await setSearchPlacement(camp.id, spec.placement, want, { actor: ctx.actor, reason: `rank — Min bid placement ${currentPct}→${want}%` }); applied++; placed = true } catch (e) { logger.warn('[rank-defend] min-bid placement failed', { campaignId: camp.id, error: (e as Error).message }) }
@@ -278,11 +320,13 @@ async function decideAndMaybeApply(
       } else placeNote = ` · ${shortPlace(spec.placement)} held ${want}%`
     }
     const reason = `target = Min bid → bids at floor €${(floor / 100).toFixed(2)} (campaign live, restorable)${placeNote}`
-    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied }
+    return { decision: { ...base, action: 'pause', reason, nextPct: spec.biasPct != null ? Math.max(0, Math.min(900, Math.round(spec.biasPct))) : currentPct, lossDetected: false, applied: suppressed > 0 || placed || (ctx.write && !!camp.bidsSuppressedAt) }, applied, held }
   }
   // Serve target → restore any no-pause bid suppression (exact prior bids), UNLESS the
   // target's own base-bid directive is 'suppress' (then we keep bids floored on purpose).
-  if (ctx.write && camp.bidsSuppressedAt && spec.bidMode !== 'suppress') {
+  // 1c — a give-back, so a cap never refuses it; while stopped it is not attempted at all (bidsSuppressedAt stays set
+  // and the first run after Resume restores), because the gate would refuse the raise after Nexus restored its copy.
+  if (camp.bidsSuppressedAt && spec.bidMode !== 'suppress' && allow('restore')) {
     try { applied += await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }) } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   // SYNC.1 — a PAUSED campaign is left PAUSED. This used to read "resume only if something ELSE
@@ -343,14 +387,15 @@ async function decideAndMaybeApply(
     // HX.1 — computed BEFORE the write so the audit row carries the same explanation the console
     // shows in the decision preview. A history entry without a reason is just a number moving.
     const blendReason = `blend: ${laneDecisions.map((l) => `${shortPlace(l.placement)} ${l.fromPct}→${l.toPct}`).join(', ')}${capped.length ? ` · CPC ceiling €${((spec.maxCpcCents ?? 0) / 100).toFixed(2)} capped ${capped.join(', ')}${cpcCap?.baseAlone ? ' (base bid ALONE exceeds it)' : ''}` : ''}`
-    if (ctx.write && changed) {
+    const placeAllowed = changed && allow('forward')
+    if (placeAllowed) {
       try { const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); await updatePlacementBidding({ campaignId: camp.id, adjustments, actor: ctx.actor, reason: blendReason, targetKey: spec.key }); applied++ } catch (e) { logger.warn('[rank-defend] blended apply failed', { campaignId: camp.id, error: (e as Error).message }) }
     }
-    const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
+    const baseApplied = await applyBaseBidDirective(camp, spec, ctx, held)
     applied += baseApplied
     const head = laneDecisions.find((l) => l.placement === 'PLACEMENT_TOP') ?? laneDecisions[0]
     const reason = `${blendReason}${baseBidNote(spec)}`
-    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, lossDetected: loss, applied: (ctx.write && changed) || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied }
+    return { decision: { ...base, action: head?.action ?? 'hold', reason, nextPct: head?.toPct ?? currentPct, lossDetected: loss, applied: placeAllowed || baseApplied > 0, lanes: laneDecisions, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
   }
 
   // ── Legacy single-placement path (behaviour unchanged) ──────────────────────────
@@ -378,15 +423,15 @@ async function decideAndMaybeApply(
   const otherCur = otherSearch ? (cdb.placementBidding?.find((x) => x.placement === otherSearch)?.percentage ?? 0) : 0
   const targetChanges = (action === 'raise' || action === 'lower') && nextPct !== currentPct
   if (otherCur > 0) reason = `${reason} · dropping ${otherSearch === 'PLACEMENT_TOP' ? 'Top' : 'Rest'} ${otherCur}→0`
-  const willApply = ctx.write && (targetChanges || otherCur > 0)
+  const willApply = (targetChanges || otherCur > 0) && allow('forward')
   if (willApply) {
     // HX.1 — attribute the write. Without the actor this row lands with userId:null and cannot be
     // traced back to the schedule or plan that made it.
     try { await setSearchPlacement(camp.id, spec.placement, targetChanges ? nextPct : currentPct, { actor: ctx.actor, reason }); applied++ } catch (e) { logger.warn('[rank-defend] apply failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
-  const baseApplied = await applyBaseBidDirective(camp, spec, ctx)
+  const baseApplied = await applyBaseBidDirective(camp, spec, ctx, held)
   applied += baseApplied
-  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, lossDetected: loss, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied }
+  return { decision: { ...base, action, reason: reason + baseBidNote(spec), nextPct, lossDetected: loss, applied: willApply || baseApplied > 0, baseBid: spec.bidMode && spec.bidMode !== 'hold' ? { mode: spec.bidMode, valueCents: spec.bidValueCents } : null }, applied, held }
 }
 
 // RD.5 — family guardrails. effectiveSpec transforms the window target before the
@@ -609,6 +654,9 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
   const decisions: RankDefendDecision[] = []
   const planSummaries: RankPlanRunSummary[] = []
   let applied = 0
+  // 1c — the account dial and this engine's caps, read once per run. Each campaign asks for its permit once, before
+  // its first write, so a campaign is never split; a dry run reads neither (it writes nothing).
+  const guard = dryRun ? null : await openEngineGuard('rank-defend')
 
   // RD.5 — retail-readiness (OOS/lost-buybox) per market, memoised across plans.
   const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
@@ -649,7 +697,9 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
           const eff = effectiveSpec(applyTargetOverrides(toSpec(demote ? baselineTarget! : target), plan.targetOverrides as TargetOverrideMap, schedOverrides.get(fc.id)), { oos, overAcos, familyAcosCapPct: plan.familyAcosCapPct })
-          const { decision, applied: a } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign, suppressRaise: overBudget })
+          const permit = write && guard ? guard.permit() : DRY_RUN
+          const { decision, applied: a, held } = await decideAndMaybeApply(camp, useKey, eff, plan.id, { write, permit, actor: `automation:rank-plan-${plan.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign, suppressRaise: overBudget })
+          if (write) guard?.settle(permit, a, held)
           planDecisions.push(decision); decisions.push(decision); applied += a
         }
       }
@@ -718,7 +768,9 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     // A resolved key with no RankTarget behind it is a dangling reference (the target was
     // deleted after the schedule was authored). Nothing is held, so record nothing held.
     const target = targetByKey.get(key); if (!target) { receipts.set(s.id, null); continue }
-    const { decision, applied: a } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign })
+    const permit = guard ? guard.permit() : DRY_RUN
+    const { decision, applied: a, held } = await decideAndMaybeApply(camp, key, applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), null, { write: !dryRun, permit, actor: `automation:rank-defend-${s.id}`, sigByCampaign, lossByCampaign, sqpByCampaign, maxBaseBidByCampaign })
+    guard?.settle(permit, a, held)
     decisions.push(decision); applied += a
   }
   // Grouped by resolved key so the 33 live schedules cost ~2 statements rather than 33.
@@ -732,7 +784,12 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     }
   }
 
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
+export function rankDefendSummaryLine(r: RankDefendSummary): string {
+  return `evaluated=${r.evaluated} applied=${r.applied}${engineGuardNote(r.guard)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {
@@ -755,7 +812,7 @@ export async function runRankDefendCron(): Promise<void> {
           rec = ` reconciled=${rr.attempted}(ag=${rr.adGroups},tg=${rr.adTargets},cm=${rr.campaigns})${rr.skippedPermanent ? ` skip-perm=${rr.skippedPermanent}` : ''}${rr.orphansCleared ? ` orphans-cleared=${rr.orphansCleared}` : ''}`
         }
       } catch (e) { logger.warn('[ad-rank-defend] reconcile sweep failed', { error: (e as Error).message }) }
-      return `evaluated=${r.evaluated} applied=${r.applied}${rec}`
+      return `${rankDefendSummaryLine(r)}${rec}`
     })
   }
   catch (err) { logger.error('ad-rank-defend cron failure', { error: err instanceof Error ? err.message : String(err) }) }
