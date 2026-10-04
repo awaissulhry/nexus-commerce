@@ -42,7 +42,8 @@ import assert from 'node:assert/strict'
 
 process.chdir(execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim())
 const DEFAULT_ROOTS = {
-  'apps/web/src/app/marketing/ads/rules-automation': 21,
+  // 21 → 19 (ads fix 7d): the Control Room rule notch is held, not disabled (one site), and one more site was already gone.
+  'apps/web/src/app/marketing/ads/rules-automation': 19,
   // First DS census under the original detector, 2026-09-13: 10 web / 8 Factory.
   // Frozen BEFORE tightening. New detector findings must be repaired, never re-baselined.
   'apps/web/src/design-system': 10,

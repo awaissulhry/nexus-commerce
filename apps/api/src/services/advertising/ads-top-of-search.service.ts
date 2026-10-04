@@ -34,7 +34,7 @@ export interface TosRow {
   recommendedPct: number
   action: 'raise' | 'lower' | 'keep'
   reason: string
-  status: string // RC2.T4 — so the hold-loop can skip dayparting-paused campaigns
+  status: string // RC2.T4 — so the hold-loop can skip paused campaigns
 }
 
 export async function analyzeTopOfSearch(opts: { windowDays?: number; marketplace?: string; targetAcos?: number; targetIS?: number } = {}): Promise<{ windowDays: number; targetAcos: number; targetIS: number | null; rows: TosRow[] }> {
@@ -196,7 +196,7 @@ export interface DefendTosResult {
   changed: number
   applied: number
   skippedNotAllowlisted: number
-  skippedPaused: number // RC2.T4 — raises skipped because dayparting paused the campaign
+  skippedPaused: number // RC2.T4 — raises skipped because the campaign is paused
   /** 4m (review 3.7) — moves left alone because Hourly Bids holds the campaign (`rankOwnedCampaignIds`). */
   skippedRankOwned: number
   /** 4m — the same, in plain words; absent when none was left alone. */
@@ -218,9 +218,8 @@ export async function defendTopOfSearch(opts: {
   guard?: EngineGuard
 } = {}): Promise<DefendTosResult> {
   const { rows } = await analyzeTopOfSearch({ targetAcos: opts.targetAcos, targetIS: opts.targetIS, marketplace: opts.marketplace, windowDays: opts.windowDays })
-  // RC2.T4 — respect dayparting: never RAISE top-of-search on a campaign that is
-  // currently PAUSED (dayparting pauses dead windows; pushing the slot then just
-  // queues more spend for when it un-pauses). Easing off (lower) still applies.
+  // RC2.T4 — never RAISE top-of-search on a campaign that is currently PAUSED (pushing the slot
+  // then just queues more spend for when it is resumed). Easing off (lower) still applies.
   // 4m (review 3.7) — a campaign Hourly Bids holds is left alone, raise or lower: the rank engine sets its Top of
   // Search every run, so a second writer here would only be undone (and undo it). Asked before the dry-run return, so a
   // preview never offers the move either.

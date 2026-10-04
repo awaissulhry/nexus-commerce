@@ -3,8 +3,8 @@
 /**
  * ADX G4 — protected terms.
  *
- * Sits on the Negative Targeting tab because it is that tab's opposite: those rules
- * decide what gets negated, this decides what never can be.
+ * Sits on Control Room › Guardrails (the Negative Targeting tab links there). It is that tab's
+ * opposite: those rules decide what gets negated, this decides what never can be.
  *
  * It exists because "Auto harvest & negate" has been running enabled with nothing at
  * all stopping it negating a brand term, and its current proposals are on exactly the

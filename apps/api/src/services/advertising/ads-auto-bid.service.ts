@@ -67,8 +67,7 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
     type: 'ads-auto-bid',
     severity: 'info',
     title: forceDry ? `Auto-bid: ${changes.length} bid changes proposed` : `Auto-bid: ${res.applied} bid changes applied`,
-    body: `Profit-native target-ACOS optimization (${changes.length} candidates). ${forceDry ? 'SUGGEST mode — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
-    href: '/marketing/trading-desk/automation',
+    body: `Profit-native target-ACOS optimization (${changes.length} candidates). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
   }).catch(() => {})
   return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, guard: report }
 }

@@ -122,9 +122,9 @@ const nextConfig = {
       { source: '/products/upload', destination: '/products/catalog-transfer', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
-      // `RulesAutomationClient.tsx:99` resolves an unknown OR ROUTED `?tab=` to 'rules'. So the
-      // moment a tab is flipped to `routed: true`, every existing `?tab=<key>` link silently
-      // renders Apply Rules instead — no 404, no message, just the wrong page. These are real 308s
+      // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED
+      // `?tab=` to 'rules'. So the moment a tab was flipped to `routed: true`, every existing `?tab=<key>`
+      // link silently rendered Apply Rules instead — no 404, no message, just the wrong page. These are real 308s
       // rather than one-line `redirect()` stubs for the reason the ACR.6 block below gives.
       //
       // NEG.1, HV.1, BID.S0, BUD.1, BSP.0 and PLC.0 each hand-wrote one, and BUD.1's own comment
@@ -277,6 +277,15 @@ const nextConfig = {
       // the components and the worker page still live. Different path, untouched.
       { source: '/marketing/ads/fleet', destination: '/fleet', permanent: true },
       { source: '/marketing/ads/fleet/:path*', destination: '/fleet/:path*', permanent: true },
+
+      // ── Ads fix 7d (review 8.8) — the dead "trading desk" links ────────────
+      // Automation notices (a halt, the anomaly breaker, auto-bid) linked to /marketing/trading-desk/automation,
+      // a page that does not exist. New notices link to the Control Room, where Resume and the dial live; stored
+      // notices keep the old link, so it lands there too. The old console's campaign links use
+      // /marketing/trading-desk/campaigns/:id, also never a page: that is the Ad Manager's campaign page, which
+      // takes the same local campaign id.
+      { source: '/marketing/trading-desk/automation', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
+      { source: '/marketing/trading-desk/campaigns/:id', destination: '/marketing/ads/campaigns/:id', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

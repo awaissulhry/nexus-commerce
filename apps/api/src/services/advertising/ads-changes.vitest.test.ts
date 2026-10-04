@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseActor } from './ads-changes.service.js'
+import { parseActor, unexplainedUndoReason } from './ads-changes.service.js'
 
 /**
  * HX.4 — every row in the change feed is classified by parseActor, and getting it wrong is not
@@ -92,3 +92,28 @@ describe('HX.4 parseActor — source + origin from the actor string', () => {
     expect(parseActor('automation:rank-defend-').origin.id).toBeNull()
   })
 })
+
+/**
+ * Ads fix 7d (review I.5) — a change that cannot be undone says why. A target bid past its window and an ad group's
+ * default bid used to show no Undo and no reason at all.
+ */
+describe('7d unexplainedUndoReason — every not-undoable history row says why', () => {
+  const row = (type: string, field: string, oldValue: string | null = '0.35') => ({ entity: { type }, field, oldValue })
+
+  it('a target bid past its window names the 24-hour window', () => {
+    expect(unexplainedUndoReason(row('AD_TARGET', 'bid'), true)).toBe('Older than the 24-hour undo window for this kind of change.')
+  })
+
+  it('a target bid with no prior value says there is nothing to restore', () => {
+    expect(unexplainedUndoReason(row('AD_TARGET', 'bid', null), true)).toBe('No prior value was recorded, so there is nothing to restore.')
+  })
+
+  it('a placement or budget row with no matching record says so, in the pairing pass\'s own words', () => {
+    expect(unexplainedUndoReason(row('CAMPAIGN', 'dailyBudget'), true)).toBe('This change could not be matched to a reversible record with certainty, so undo is not offered.')
+  })
+
+  it('any other kind (an ad group\'s default bid) says undo is not offered for it', () => {
+    expect(unexplainedUndoReason(row('AD_GROUP', 'defaultBid'), false)).toBe('Undo is not offered for this kind of change.')
+  })
+})
+

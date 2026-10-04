@@ -101,7 +101,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'bid',
     label: 'Bid',
     routed: true,
-    subtitle: 'What each target bids, why it is that number, and who decided',
+    subtitle: 'Rules that change bids — what each one does, and whether it acts on its own',
   },
   // ── Terms ────────────────────────────────────────────────────────────────────────────────────
   // HV.1 — its own page. The tab used to render a rule list that filtered every rule out of
@@ -111,7 +111,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-harvest',
     label: 'Keyword Harvest',
     routed: true,
-    subtitle: 'Which search terms have earned their own keyword',
+    subtitle: 'Rules that create targets from converting search terms — and the ad groups they map',
   },
   // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
   // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.
@@ -119,20 +119,19 @@ export const RULES_TABS: RulesTab[] = [
     key: 'negative-targeting',
     label: 'Negative Targeting',
     routed: true,
-    subtitle: 'What you are blocking, where, and who decided',
+    subtitle: 'Rules that create negatives — what each one blocks, and whether it acts on its own',
   },
   // ── Spend ────────────────────────────────────────────────────────────────────────────────────
   // BUD.1 — its own page, and relabelled. The tab used to render a rule list whose column edits
   // changed React state only and whose Delete removed a row while the rule survived — showing
   // neither the 2,386 budget changes in 60 days nor the two AUTO rules cutting −15%/−20% of the
-  // CURRENT value every 15 minutes with no cooldown and no floor but Amazon's €1. "Budget Rules"
-  // rather than "Budget", because tab 4 is now "Budget Pacing & Schedules" and the two answer
-  // different questions: that one decides how much money exists, this one decides what may spend it.
+  // CURRENT value every 15 minutes with no cooldown and no floor but Amazon's €1. U10 relabelled it
+  // "Budget" (see above); the page header now reads the label too (7d), so the two cannot differ.
   {
     key: 'budget',
     label: 'Budget',
     routed: true,
-    subtitle: 'What may change a budget, by how much, and what it actually did',
+    subtitle: 'Rules that change budgets — what each one does, and whether it acts on its own',
   },
   { key: 'dayparting', label: 'Hourly Bids', routed: true, subtitle: 'A fixed placement % and bid floor for each hour of the week, across many campaigns' },
   // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
@@ -143,7 +142,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'budget-schedules',
     label: 'Budget Schedules',
     routed: true,
-    subtitle: 'Where the money goes, how fast, and whether it lasts the month',
+    subtitle: 'When budgets change through the day, and the schedules that change them',
   },
   // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
   // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
@@ -152,7 +151,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'placement',
     label: 'Placement',
     routed: true,
-    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
+    subtitle: 'Rules that change placement modifiers — what each one does, and whether it acts on its own',
   },
   // SOV.0 — its own page. The tab used to render SovTrackerTab kind="sov": a [ Rules | Report ]
   // segment whose Rules half is the DEFAULT view and can never render a row, over a column that
@@ -161,7 +160,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'share-of-voice',
     label: 'Share of Voice',
     routed: true,
-    subtitle: 'On the queries that matter, how much of each market do we hold?',
+    subtitle: 'Rules that bid on share of voice — what each one does, and whether it acts on its own',
   },
   // KT.1 — its own page. The tab used to render SovTrackerTab kind="tracker": a [ Rules | Report ]
   // segment over KeywordRank, a table with 0 rows, so all four columns read `#—` on every row.
@@ -169,11 +168,21 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-tracker',
     label: 'Keyword Tracker',
     routed: true,
-    subtitle: 'On the keywords you chose — are we on the page, and is it moving?',
+    subtitle: 'Rules that bid on organic and paid rank — what each one does, and whether it acts on its own',
   },
 ]
 
 export const rulesTabByKey = (key: string): RulesTab | undefined => RULES_TABS.find((t) => t.key === key)
+
+/**
+ * Ads fix 7d (review D.6, I.8) — a tab page's header, from this list only: the title is the tab's own label and the
+ * subtitle is its `subtitle`. The pages hard-coded both, so "Budget Rules" sat over a tab named "Budget" and the stored
+ * subtitles described the parked pages.
+ */
+export function rulesTabHeader(key: string): { title: string; subtitle: string } {
+  const tab = rulesTabByKey(key)
+  return { title: tab?.label ?? key, subtitle: tab?.subtitle ?? '' }
+}
 
 /**
  * Which ACTION TYPES belong to each tab.
@@ -281,8 +290,8 @@ export function RulesTabs({ active }: { active: string }) {
   // where the work is before clicking anything. Computed from RULE_TAB_ACTION_TYPES — the same
   // map the lists filter by — so a label can never claim a number its tab won't show.
   //
-  // Only the five mapped tabs get a count. The rest genuinely have no number to state here, and
-  // a blank is honest where a 0 would read as "nothing to do".
+  // Only the tabs in RULE_TAB_ACTION_TYPES (seven today) get a count. The rest genuinely have no
+  // number to state here, and a blank is honest where a 0 would read as "nothing to do".
   //
   // S4 — read from the layout's provider (one fetch per session) instead of fetching here on
   // every page mount. Null when the provider's fetch failed or has not landed: badge-less labels.

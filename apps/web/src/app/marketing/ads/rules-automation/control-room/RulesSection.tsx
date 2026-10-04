@@ -239,11 +239,16 @@ export function RulesSection() {
                     key={lv}
                     className={`acr-notch ${on ? 'on' : ''} ${lv.toLowerCase()}${earned ? ' earned' : ''}`}
                     aria-pressed={on}
-                    disabled={above || busy === r.id}
-                    // Disabled notches keep their reason: a control that refuses silently
-                    // is the thing that makes an operator distrust the whole surface.
+                    // 7d (review 8.5) — HELD, not `disabled`: a disabled notch takes no focus and shows no
+                    // title, so its reason never reached anyone. Clicking a notch above the ceiling now
+                    // says why in the banner above, the way ModeNotches already does.
+                    aria-disabled={above || busy === r.id}
                     title={above ? r.ceilingReason : earned ? `${g!.summary} Click to graduate this rule to Auto.` : M.hint}
-                    onClick={() => void setLevel(r, lv)}
+                    onClick={() => {
+                      if (busy === r.id) return
+                      if (above) { setErr(`“${r.name}” cannot be set to ${M.label}: ${r.ceilingReason}`); return }
+                      void setLevel(r, lv)
+                    }}
                   >
                     <M.Icon size={12} /> {M.label}
                   </Button>

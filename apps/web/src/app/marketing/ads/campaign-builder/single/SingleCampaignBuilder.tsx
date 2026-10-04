@@ -223,7 +223,7 @@ export function SingleCampaignBuilder() {
     <div className="h10-spw h10-scb">
       <header className="h10-spw-top">
         <div className="hl">
-          <span className="eyebrow">Helium 10 Ads</span>
+          <span className="eyebrow">Amazon Ads</span>
           <h1>Campaign Builder : Single Campaign</h1>
         </div>
         {/* APS.2a — the launch target, always on screen. */}

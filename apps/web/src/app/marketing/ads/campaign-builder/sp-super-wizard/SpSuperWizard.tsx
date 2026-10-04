@@ -199,7 +199,7 @@ export function SpSuperWizard() {
     <div className={`h10-spw${step === 2 ? ' cset' : ''}`}>
       <header className="h10-spw-top">
         <div className="hl">
-          <span className="eyebrow">Helium 10 Ads</span>
+          <span className="eyebrow">Amazon Ads</span>
           <h1>Campaign Builder : SP Super Wizard</h1>
         </div>
         {/* APS.2a — the launch target, always on screen. A builder that does not

@@ -1,8 +1,8 @@
 /**
  * AC-3 — AI Control / Autopilot Conductor cron. Every 15 min, for each enabled AutopilotPlan,
  * gather per-campaign signals, run the pure Conductor, and record its proposed actions as
- * AutopilotDecision rows (the live SSE feed + audit). **SUGGEST/dry-run only — zero live writes.**
- * AUTO application (behind the write-gate) lands in a later phase. Harvest/Negate are NOT produced
+ * AutopilotDecision rows (the live SSE feed + audit). A SUGGEST plan only records proposals; an AUTO
+ * plan applies them live, behind the write gate (see 1d below). Harvest/Negate are NOT produced
  * here — they are delegated to the Rule-Setting session (provisioned + read by AC-5).
  * See docs/ai-control-autopilot-spec.md.
  *

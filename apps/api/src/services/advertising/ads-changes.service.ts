@@ -287,6 +287,24 @@ function sameNumber(a: unknown, b: string | null): boolean {
 }
 
 /**
+ * Ads fix 7d (review I.5) — why a change-history row cannot be undone, for the rows the pairing pass below leaves with
+ * no reason. Two kinds reached the screen with none: a target bid older than its 24-hour window, and a change this feed
+ * offers no undo for (an ad group's default bid, for one). Words only: `undoable` is decided elsewhere and stays as it is.
+ */
+export function unexplainedUndoReason(
+  row: { entity: { type: string }; field: string; oldValue: string | null },
+  pairedKind: boolean,
+): string {
+  if (row.entity.type === 'AD_TARGET' && row.field === 'bid') {
+    return row.oldValue == null
+      ? 'No prior value was recorded, so there is nothing to restore.'
+      : `Older than the ${rollbackWindowLabel('AD_BID_UPDATE')} undo window for this kind of change.`
+  }
+  if (pairedKind) return 'This change could not be matched to a reversible record with certainty, so undo is not offered.'
+  return 'Undo is not offered for this kind of change.'
+}
+
+/**
  * Does this operation row describe the SAME change as this field row?
  *
  * Exact agreement on the before AND after value, not proximity. Both sides must match: an op
@@ -551,6 +569,11 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       r.undoable = usable
       r.undoActionLogId = usable ? chosen.id : null
     }
+  }
+
+  // 7d (review I.5) — a row that cannot be undone says why, as the paired rows above already do.
+  for (const r of fieldRows) {
+    if (!r.undoable && !r.undoBlockedReason) r.undoBlockedReason = unexplainedUndoReason(r, PAIRED.some((p) => p.fieldMatches(r.field)))
   }
 
   let items = [...fieldRows, ...dedupe(opRows, fieldRows)].sort((a, b) => b.at.getTime() - a.at.getTime())

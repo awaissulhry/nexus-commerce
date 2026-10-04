@@ -394,7 +394,7 @@ export function HvAdGroupView() {
     },
     {
       key: 'negates', label: 'Negates', metric: false, sortable: false,
-      tip: 'H10 calls this Search Term Isolation: once the harvested term has landed in another ad group, it is added as a negative in its source ad group (exact for a keyword, a negative product target for an ASIN), so the source stops competing with the new target. If the term did not land, or landed in its own ad group, nothing is negated.',
+      tip: 'Search term isolation: once the harvested term has landed in another ad group, it is added as a negative in its source ad group (exact for a keyword, a negative product target for an ASIN), so the source stops competing with the new target. If the term did not land, or landed in its own ad group, nothing is negated.',
       render: (r) => (r.negates.length
         ? <span className="h10-hv-badges">{r.negates.map((t) => <span key={t} className="h10-hv-mt neg" title="Once the harvested term has landed in another ad group, it is negated here, in its source">{t}</span>)}</span>
         : <span className="h10-rg-thr none" title="Nothing is negated at source, so this ad group keeps competing for a term after it has been promoted elsewhere.">—</span>),

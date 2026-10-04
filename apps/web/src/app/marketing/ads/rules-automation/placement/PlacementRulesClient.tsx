@@ -23,7 +23,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs } from '../_shared/tabs'
+import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -61,10 +61,7 @@ export function PlacementRulesClient() {
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
-        title="Placement"
-        /* The tab's stored subtitle describes the lane grid that is now parked ("which lane your
-           ads show in, what each one is worth"). This page is the rule list, so it says that. */
-        subtitle="Rules that change placement modifiers — what each one does, and whether it acts on its own"
+        {...rulesTabHeader('placement')}
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {
@@ -96,7 +93,7 @@ export function PlacementRulesClient() {
                 /* The supporting measurement, on the link the clause already invites you to hover.
                    Not a bare ⓘ glyph: the sentence is complete without this, so the tooltip is
                    detail and must not look like a control. */
-                title={`Measured from CampaignBidHistory, one row per lane actually moved: ${n(strip.engineWrites7d)} automation writes across ${n(strip.engineCampaigns7d)} campaigns in the last 7 days${strip.engineLastWriteAt ? `, most recently ${new Date(strip.engineLastWriteAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Humans made ${n(strip.humanWrites30d)} lane edits in 30 days. A placement rule writing to a governed campaign is snapped back on the engine's next pass.`}
+                title={`Counted from the change history, one row per lane actually moved: ${n(strip.engineWrites7d)} automation writes across ${n(strip.engineCampaigns7d)} campaigns in the last 7 days${strip.engineLastWriteAt ? `, most recently ${new Date(strip.engineLastWriteAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Humans made ${n(strip.humanWrites30d)} lane edits in 30 days. A placement rule writing to a governed campaign is snapped back on the engine's next pass.`}
               >the rank engine</a>
               , which rewrote these lanes <b>{n(strip.engineWrites7d)}×</b> in 7 days
               {strip.ruleWrites7d === 0 ? <> and no rule did any of it</> : <> — <b>{n(strip.ruleWrites7d)}×</b> of it from a rule</>}

@@ -115,7 +115,7 @@ export const THRESHOLD_SPEC: Record<ThresholdKey, ThresholdSpec> = {
   },
   minBudgetUtilPct: {
     column: 'Spend Threshold',
-    columnTip: 'How much of the campaign’s daily budget must already be spent before this rule wakes up — H10’s "Spend > 85% of Daily Budget" gate.',
+    columnTip: 'How much of the campaign’s daily budget must already be spent before this rule acts, for example “Spend > 85% of Daily Budget”.',
     // 🔴 stored as a FRACTION (0.85) by the engine; the >1 guard covers a whole-number write,
     // the same 0.3-vs-30 trap targetAcos already fell into (AIREON).
     cell: (v) => `≥ ${v > 1 ? v : Math.round(v * 100)}% of budget`,
@@ -127,7 +127,7 @@ export const THRESHOLD_SPEC: Record<ThresholdKey, ThresholdSpec> = {
   },
   maxBudgetAcosPct: {
     column: 'ACoS Threshold',
-    columnTip: 'The profitability bar a campaign must be UNDER before this rule will raise its budget — H10’s "AND ACoS < 25%" check.',
+    columnTip: 'The profitability bar a campaign must be UNDER before this rule will raise its budget, for example “ACoS < 25%”.',
     cell: (v) => `Max ${v > 1 ? v : Math.round(v * 100)}%`,
     clause: (v) => `ACoS ≤ ${v > 1 ? v : Math.round(v * 100)}%`,
     fallback: () => null,

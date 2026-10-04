@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * "Select a Rule Type" modal — opened by the "+ Rule" button. 7 radio options
- * (verbatim H10 copy); Next routes to the builder for the chosen type. Shared so the
+ * "Select a Rule Type" modal — opened by the "+ Rule" button. One radio option per entry in
+ * `RULE_TYPES` (nine today); Next routes to the builder for the chosen type. Shared so the
  * Keyword-Harvest session opens the same modal.
  *
  * B1 (2026-08-20) — `initial` seeds which radio is selected on open, nothing else. Every rule-type
