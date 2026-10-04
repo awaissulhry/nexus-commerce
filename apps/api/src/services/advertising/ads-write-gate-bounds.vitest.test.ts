@@ -38,7 +38,9 @@ vi.mock('../../db.js', () => ({
     adWriteRefusal: { get create() { return refusalCreate } },
   },
 }))
-vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
+// 5a — switchable, so a protected term can be shown refused in sandbox too. Live for every other case.
+const gateMode = vi.hoisted(() => ({ value: 'live' as 'live' | 'sandbox' }))
+vi.mock('./ads-api-client.js', () => ({ adsMode: () => gateMode.value }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
 // ACR.0.7 — the gate now consults the account halt. Mock it explicitly: without this the
@@ -66,6 +68,7 @@ const OPEN_CAMPAIGN = {
 }
 
 beforeEach(() => {
+  gateMode.value = 'live'
   campaignFindUnique.mockReset()
   campaignFindMany.mockReset()
   connFindFirst.mockReset()
@@ -224,6 +227,34 @@ describe('ADX A1 — keyword protection', () => {
   it('does not consult protections when the write is not a negation', async () => {
     await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 50 })
     expect(protectionFindMany).not.toHaveBeenCalled()
+  })
+
+  // 5a — the block sits above the sandbox return: a sandbox run refuses what a live one would.
+  it('🔴 refuses a protected term in sandbox too, with a sentence naming the term', async () => {
+    gateMode.value = 'sandbox'
+    protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: false, matchType: 'CONTAINS', reason: 'brand' }])
+    expect(await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'giacca xavia' })).toEqual({
+      allowed: false, deniedAt: 'keyword_protected', reason: '"giacca xavia" cannot be negated: it matches the protected term "xavia" (brand).',
+    })
+    expect(await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'giacca pelle' })).toEqual({ allowed: true, mode: 'sandbox' })
+  })
+
+  it('🔴 a phrase negative that a protected term contains is refused; the same text as exact is not', async () => {
+    protectionFindMany.mockResolvedValue([{ term: 'xavia gale', isPrefix: false, matchType: 'CONTAINS', reason: null }])
+    const phrase = await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'gale', negativeMatchType: 'NEGATIVE_PHRASE' })
+    expect(phrase).toMatchObject({ allowed: false, deniedAt: 'keyword_protected', reason: expect.stringMatching(/^"gale" cannot be a phrase negative: .*"xavia gale"/) })
+    expect((await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'gale', negativeMatchType: 'NEGATIVE_EXACT' })).allowed).toBe(true)
+  })
+
+  it('a protected term is refused before the halt and allowlist are read', async () => {
+    automationState.mockResolvedValue({ autonomy: 'AUTO', halted: true, haltReason: 'breaker', effectivelyStopped: true, degraded: false })
+    protectionFindMany.mockResolvedValue([{ term: 'xavia', isPrefix: false, matchType: 'CONTAINS', reason: null }])
+    expect(await checkAdsWriteGate({ ...base, isNegation: true, keywordText: 'xavia' })).toMatchObject({ allowed: false, deniedAt: 'keyword_protected' })
+  })
+
+  it('a market the write does not name binds every protection, not only the global ones', async () => {
+    await checkAdsWriteGate({ ...base, marketplace: null, campaignId: undefined, isNegation: true, keywordText: 'giacca' })
+    expect(protectionFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { mode: 'WHITELIST' } }))
   })
 })
 
