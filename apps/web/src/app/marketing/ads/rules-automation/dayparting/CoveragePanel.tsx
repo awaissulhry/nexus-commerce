@@ -25,7 +25,10 @@ import { Listbox } from '@/design-system/components'
 
 interface OpenCampaign { id: string; name: string; marketplace: string | null; status: string; spendCents: number; impressions: number; clicks: number }
 interface Coverage {
+  /** 7b — every campaign, archived included: the same total the other screens state (ads-census.service.ts). */
   total: number; covered: number; governed: number; uncovered: number
+  /** 7b — campaigns whose schedule is switched off (not control), and archived ones (nothing can change them). Absent on an older API. */
+  switchedOff?: number; archived?: number
   windowDays: number; uncoveredSpendCents: number; truncated: number; items: OpenCampaign[]
 }
 export interface ScheduleOption { value: string; label: string }
@@ -136,6 +139,8 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
         <span className="ttl">
           <b>{data.covered + data.governed} of {data.total}</b> campaigns are under rank control
           {data.governed > 0 && <span className="sub"> · {data.governed} by a family plan</span>}
+          {(data.switchedOff ?? 0) > 0 && <span className="sub"> · {data.switchedOff} with a schedule switched off</span>}
+          {(data.archived ?? 0) > 0 && <span className="sub"> · {data.archived} archived</span>}
         </span>
         {!clean && (
           <span className="gap">

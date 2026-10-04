@@ -67,7 +67,7 @@ export async function listAdsRuleBoard() {
   }
 
   /**
-   * RA.AUTO — the cap rows, counted SEPARATELY rather than merged back in.
+   * RA.AUTO — the cap refusals, counted SEPARATELY rather than merged back in.
    *
    * Excluding them from `failed` (above) is right: the engine declining to run a rule is not
    * the rule failing. But dropping them entirely hid the thing that actually governs this
@@ -76,13 +76,13 @@ export async function listAdsRuleBoard() {
    * is what decides how much of the account it reaches. A health strip that shows only the
    * writes describes the wrong bottleneck, and an operator raising a threshold to get more
    * coverage would be turning the one knob that cannot deliver it.
+   *
+   * 7b (review 8.4) — read from the refusal record (`refusalCountsByActor`, the reader the refusal screens and
+   * Claude's explain use). It counted DAILY_CAP_EXCEEDED execution rows, which the engine stopped writing on
+   * 2026-08-04 (ADX.1), so the chip read 0 for every rule. Seven UTC days, today included: the record's own grain.
    */
-  const cappedRows = await prisma.automationRuleExecution.groupBy({
-    by: ['ruleId'],
-    where: { startedAt: { gte: weekAgo }, ruleId: { in: rules.map((r) => r.id) }, errorMessage: 'DAILY_CAP_EXCEEDED' },
-    _count: { _all: true },
-  })
-  const cappedBy = new Map(cappedRows.map((g) => [g.ruleId, g._count._all]))
+  const { refusalCountsByActor } = await import('../automation-refusals.service.js')
+  const refusals = await refusalCountsByActor(7)
 
   const { resolveAutonomy } = await import('./ads-autonomy.js')
   const { graduationCeiling } = await import('./ads-graduation.js')
@@ -185,6 +185,15 @@ export async function listAdsRuleBoard() {
     const picks = r.scopeCampaignId || r.scopePortfolioId ? null : builderScopeCampaignIds(r.actions)
     const pickCount = picks ? new Set(picks).size : 0
     const week = weekBy.get(r.id) ?? {}
+    const level = resolveAutonomy(r)
+    /**
+     * 7b (review 8.2) — the level the engine really runs it at. A builder rule whose control is Manual
+     * (`actions[0].control`) runs as a dry run on every tick and sends its changes to Suggestions, whatever its level
+     * says (`evaluateRule`, automation-rule.service.ts): on Auto or on Observe it proposes. Display only — `level` stays
+     * what was set, and nothing here changes how the rule runs.
+     */
+    const manual = (Array.isArray(r.actions) ? (r.actions[0] as { control?: unknown } | undefined) : undefined)?.control === 'manual'
+    const runsAs = manual && (level === 'AUTO' || level === 'OBSERVE') ? 'PROPOSE' as const : level
     return {
       id: r.id,
       name: r.name,
@@ -213,7 +222,14 @@ export async function listAdsRuleBoard() {
       priority: r.priority,
       trigger: r.trigger,
       marketplace: r.scopeMarketplace,
-      level: resolveAutonomy(r),
+      level,
+      /** 7b — the level it runs at; differs from `level` only for a Manual-control builder rule. */
+      runsAs,
+      runsAsReason: runsAs === level
+        ? null
+        : level === 'AUTO'
+          ? 'It runs as Propose: its builder control is Manual, so every run is a dry run and its changes wait on the Suggestions page. Pick Automate in the rule to let it act on its own.'
+          : 'It runs as Propose: its builder control is Manual, so even on Observe its changes go to the Suggestions page.',
       ceiling: ceiling.maxLevel,
       ceilingReason: ceiling.reason,
       blockedBy: ceiling.blockedBy,
@@ -261,8 +277,8 @@ export async function listAdsRuleBoard() {
         acted: (week.SUCCESS ?? 0) + (week.PARTIAL ?? 0),
         proposed: week.DRY_RUN ?? 0,
         failed: week.FAILED ?? 0,
-        /** The engine declining to run it. Never merged into `failed` — see cappedBy above. */
-        capped: cappedBy.get(r.id) ?? 0,
+        /** Its daily cap declining to run it (refusal record). Never merged into `failed` — see refusals above. */
+        capped: refusals.get(r.id)?.byReason.DAILY_CAP_EXCEEDED ?? 0,
       },
       lifetime: { evaluations: r.evaluationCount, matches: r.matchCount, executions: r.executionCount },
       lastEvaluatedAt: r.lastEvaluatedAt,

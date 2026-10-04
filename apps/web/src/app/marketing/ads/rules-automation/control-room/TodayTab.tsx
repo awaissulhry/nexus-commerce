@@ -23,6 +23,7 @@ import { Button } from '@/design-system/primitives'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, AlertOctagon, Info, ArrowRight, CheckCircle2, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { headlineAmount, money, rowAmounts, type Amount } from './todayAmounts'
 
 type Severity = 'critical' | 'warning' | 'info'
 
@@ -33,6 +34,8 @@ interface Exception {
   detail: string
   count: number
   amountCents: number | null
+  /** 7b — the price per currency; never added across currencies. */
+  amounts?: Amount[]
   amountNote: string
   action: { label: string; href: string } | null
   since: string | null
@@ -40,7 +43,7 @@ interface Exception {
 
 interface Board {
   generatedAt: string
-  headline: { wastedSpend30dCents: number | null; wastedTargets: number; note: string }
+  headline: { wastedSpend30dCents: number | null; wastedTargets: number; wasted?: Array<Amount & { targets: number }>; note: string }
   exceptions: Exception[]
   totals: { critical: number; warning: number; info: number }
 }
@@ -50,9 +53,6 @@ const SEV: Record<Severity, { Icon: typeof AlertTriangle; label: string }> = {
   warning: { Icon: AlertTriangle, label: 'Needs attention' },
   info: { Icon: Info, label: 'Worth knowing' },
 }
-
-const eur = (cents: number) =>
-  new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(cents / 100)
 
 /** "3 days" / "6 weeks" — the age of the oldest instance, not a timestamp nobody reads. */
 const waiting = (iso: string | null): string | null => {
@@ -100,9 +100,9 @@ export function TodayTab() {
         {/* The headline is the wasted-spend figure, because it is the only number here that is
             both measurable and directly recoverable. Everything else is exposure or absence. */}
         <div className="acr-today-hero">
-          <div className="acr-today-hero-k">Recoverable waste · 30 days</div>
+          <div className="acr-today-hero-k">Recoverable waste · 30 settled days</div>
           <div className="acr-today-hero-v">
-            {headline.wastedSpend30dCents == null ? '—' : eur(headline.wastedSpend30dCents)}
+            {headlineAmount(headline)}
             {headline.wastedTargets > 0 && (
               <span className="acr-today-hero-sub">across {headline.wastedTargets} targets</span>
             )}
@@ -152,6 +152,7 @@ export function TodayTab() {
           {exceptions.map((e) => {
             const S = SEV[e.severity]
             const age = waiting(e.since)
+            const amounts = rowAmounts(e)
             return (
               <li key={e.key} className={`acr-exc ${e.severity}`}>
                 <div className="acr-exc-bar" aria-hidden />
@@ -170,15 +171,16 @@ export function TodayTab() {
                     holds only figures. A dash is not used: six rows each opening with an em-dash
                     read as a bulleted list rather than as "no value".
                   */}
-                  {e.amountCents == null && <p className="acr-exc-noprice">{e.amountNote}</p>}
+                  {amounts.length === 0 && <p className="acr-exc-noprice">{e.amountNote}</p>}
                 </div>
 
                 {/* Figures only, fixed width, so the € values form a straight edge down the page
                     and can be compared at a glance — the reason the board is priced at all. */}
                 <div className="acr-exc-side">
-                  {e.amountCents != null && (
+                  {amounts.length > 0 && (
                     <>
-                      <span className="acr-exc-amount">{eur(e.amountCents)}</span>
+                      {/* 7b — one figure per currency, never a sum across them. */}
+                      {amounts.map((a) => <span key={a.currency} className="acr-exc-amount">{money(a)}</span>)}
                       <span className="acr-exc-amount-note">{e.amountNote}</span>
                     </>
                   )}

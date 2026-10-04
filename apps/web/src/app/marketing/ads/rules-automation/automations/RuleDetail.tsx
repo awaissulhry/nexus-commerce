@@ -48,6 +48,12 @@ export interface DetailRule {
    */
   priority?: number | null
   level: Level
+  /**
+   * 7b (review 8.2) — the level the engine runs it at. Differs from `level` only for a builder rule whose control is
+   * Manual: it proposes whatever its level says. `runsAsReason` says why. Absent on an older API.
+   */
+  runsAs?: Level | null
+  runsAsReason?: string | null
   ceiling: Level
   ceilingReason: string
   writes: boolean
@@ -82,6 +88,9 @@ export interface DetailRule {
    *  as nothing rather than as either state. */
   legacy?: boolean | null
 }
+
+/** 7b — the level a rule runs at: `runsAs` when the API sends it, else its level. */
+export const runsAt = (r: Pick<DetailRule, 'level' | 'runsAs'>): Level => r.runsAs ?? r.level
 
 const eur = (c: number | null) => (c == null ? null : `€${(c / 100).toFixed(2)}`)
 const num = (n: number) => n.toLocaleString('en-IE')
@@ -202,6 +211,11 @@ export function RuleDetail({
           {rule.ceiling !== 'AUTO' && (
             <p className="h10-au-ceiling">
               <ShieldAlert size={13} aria-hidden /> <span>{rule.ceilingReason}</span>
+            </p>
+          )}
+          {rule.runsAs && rule.runsAs !== rule.level && rule.runsAsReason && (
+            <p className="h10-au-ceiling">
+              <ShieldAlert size={13} aria-hidden /> <span>{rule.runsAsReason}</span>
             </p>
           )}
 

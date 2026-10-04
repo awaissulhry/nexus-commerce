@@ -12,6 +12,8 @@ vi.mock('../../db.js', () => ({
     automationRule: { findMany: vi.fn(async () => h.rules) },
     adKeywordProtection: { count: vi.fn(async () => 0) },
     automationRuleExecution: { groupBy: vi.fn(async () => []) },
+    // 7b — the capped chip reads the refusal record.
+    automationRefusalDaily: { findMany: vi.fn(async () => []) },
     campaign: { findMany: vi.fn(async () => [{ id: 'c7', name: 'GALE | DE | Broad' }]) },
     amazonAdsPortfolio: { findMany: vi.fn(async () => [{ externalPortfolioId: 'p1', name: 'Xavia GALE DE' }]) },
   },

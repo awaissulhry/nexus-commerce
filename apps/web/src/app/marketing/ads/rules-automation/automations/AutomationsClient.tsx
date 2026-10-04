@@ -36,7 +36,7 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { HistoryDrawer } from '../tabs/RuleListTab'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ModeNotches, RANK, type Level } from './ModeNotches'
-import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
+import { RuleDetail, runsAt, type Readiness, type DetailRule } from './RuleDetail'
 import { EngineDetail, type EngineActor as EngineActorBase, type ObservedActor } from './EngineDetail'
 import { actsOnItsOwn, engineInTile, groupSummary, GROUP_TONE, type ExposureFields } from './exposure'
 import { LimitsView } from './LimitsView'
@@ -329,11 +329,12 @@ export function AutomationsClient() {
     // construction, so 'unscoped' keeps the ones that act; 'off' keeps OFF engines.
     // 7a — an engine "writes" only when it changes Amazon on its own (exposure.ts), not because it is on Auto.
     if (tile) engineRows = engineRows.filter((a) => a.k === 'engine' && engineInTile(a.e, tile))
+    // 7b — a rule "writes" when it RUNS at Auto (`runsAt`): a Manual-control rule on Auto only proposes.
     if (tile === 'writing') {
-      ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes)
+      ruleRows = ruleRows.filter((a) => a.k === 'rule' && runsAt(a.r) === 'AUTO' && a.r.writes)
       obsRows = []
     } else if (tile === 'unscoped') {
-      ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes && isUnscoped(a.r))
+      ruleRows = ruleRows.filter((a) => a.k === 'rule' && runsAt(a.r) === 'AUTO' && a.r.writes && isUnscoped(a.r))
       obsRows = []
     } else if (tile === 'off') {
       ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'OFF')
@@ -359,14 +360,15 @@ export function AutomationsClient() {
   const counts = useMemo(() => ({
     total: all.length,
     off: all.filter((r) => r.level === 'OFF').length,
-    observe: all.filter((r) => r.level === 'OBSERVE').length,
-    propose: all.filter((r) => r.level === 'PROPOSE').length,
-    auto: all.filter((r) => r.level === 'AUTO').length,
+    // 7b — counted by the level each rule RUNS at (`runsAt`): a Manual-control rule set to Auto proposes.
+    observe: all.filter((r) => runsAt(r) === 'OBSERVE').length,
+    propose: all.filter((r) => runsAt(r) === 'PROPOSE').length,
+    auto: all.filter((r) => runsAt(r) === 'AUTO').length,
     // The number that matters: on AUTO *and* able to reach Amazon.
-    writing: all.filter((r) => r.level === 'AUTO' && r.writes).length,
-    autoNotifyOnly: all.filter((r) => r.level === 'AUTO' && !r.writes).length,
+    writing: all.filter((r) => runsAt(r) === 'AUTO' && r.writes).length,
+    autoNotifyOnly: all.filter((r) => runsAt(r) === 'AUTO' && !r.writes).length,
     // A1 — the account's actual exposure: writes, on AUTO, and bound to NOTHING.
-    unscopedWriting: all.filter((r) => r.level === 'AUTO' && r.writes && isUnscoped(r)).length,
+    unscopedWriting: all.filter((r) => runsAt(r) === 'AUTO' && r.writes && isUnscoped(r)).length,
     // 7a — engines that change Amazon on their own. The breaker and write delivery are on Auto and never do; an
     // engine on Auto with no plan or schedule switched on does nothing. Every engine still has its row and group.
     engineActing: (actors?.engines ?? []).filter(actsOnItsOwn).length,
@@ -409,6 +411,7 @@ export function AutomationsClient() {
         const r = a.r
         const g = grad.get(r.id)
         return (
+          <>
           <ModeNotches
             level={r.level}
             ceiling={r.ceiling}
@@ -423,6 +426,9 @@ export function AutomationsClient() {
                stopped it here or the server's 409 did. */
             onRefused={(why) => { setNote(null); setErr(`“${r.name}” — ${why}`) }}
           />
+          {/* 7b — the notches show what was set; this says what the engine does with it. */}
+          {runsAt(r) !== r.level && <Pill tone="warning" title={r.runsAsReason ?? undefined}>Runs as {LEVEL_WORD[runsAt(r)]}</Pill>}
+          </>
         )
       },
     },
@@ -621,7 +627,7 @@ export function AutomationsClient() {
           </Button>
           <em>{r.categoryLabel}{!r.writes && <> · reaches nothing</>}</em>
         </span>
-        {r.level === 'AUTO' && r.writes && (
+        {runsAt(r) === 'AUTO' && r.writes && (
           <span className="h10-au-badge writes" title="On Auto and able to change your account">writes</span>
         )}
         {/* W1 — provenance, not behaviour. `=== true` on purpose: an older API payload omits the

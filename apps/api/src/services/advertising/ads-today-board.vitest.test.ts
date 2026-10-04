@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const queryRawUnsafe = vi.fn()
+/** 7b — the waste read: one group per (target, currency) that cleared the click floor with no sale. */
+const perfGroupBy = vi.fn(async (_args?: unknown) => [] as unknown[])
 const counts = {
   suggestionCount: vi.fn(async () => 0),
   suggestionFirst: vi.fn(async () => null as { createdAt: Date } | null),
@@ -17,6 +19,8 @@ const counts = {
   mutationCount: vi.fn(async () => 0),
   mutationFirst: vi.fn(async () => null as unknown),
   cronGroupBy: vi.fn(async () => [] as unknown[]),
+  cronFirst: vi.fn(async () => null as { startedAt: Date; outputSummary: string | null } | null),
+  actionLogCount: vi.fn(async (_args?: unknown) => 0),
   rankFindMany: vi.fn(async () => [] as unknown[]),
 }
 
@@ -35,10 +39,24 @@ vi.mock('../../db.js', () => ({
       get count() { return counts.mutationCount },
       get findFirst() { return counts.mutationFirst },
     },
-    cronRun: { get groupBy() { return counts.cronGroupBy } },
+    cronRun: { get groupBy() { return counts.cronGroupBy }, get findFirst() { return counts.cronFirst } },
+    advertisingActionLog: { get count() { return counts.actionLogCount } },
     rankTarget: { get findMany() { return counts.rankFindMany } },
+    amazonAdsDailyPerformance: { get groupBy() { return perfGroupBy } },
   },
 }))
+
+/** 7b — the campaign counts and bid bounds come from the census (its own tests pin them). */
+const census = vi.fn(async () => ({ total: 220, archived: 1, allowlisted: 82, withMinBid: 0, withMaxBid: 0 }))
+const bidBounds = vi.fn(async () => ({ noMinBid: 0, noMinBidNoMax: 0 }))
+vi.mock('./ads-census.service.js', () => ({ get campaignCensus() { return census }, get allowlistedBidBounds() { return bidBounds } }))
+
+/** `n` waste groups in one currency, spending `cents` between them. */
+const wasteRows = (currency: string, n: number, cents: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    entityId: `${currency}-t${i}`, currencyCode: currency,
+    _sum: { costMicros: BigInt(i === 0 ? (cents - Math.floor(cents / n) * (n - 1)) * 10_000 : Math.floor(cents / n) * 10_000), clicks: 12, sales7dCents: 0 },
+  }))
 
 const automationState = vi.fn(async () => ({
   autonomy: 'AUTO', halted: false, haltReason: null as string | null, haltedAt: null as string | null,
@@ -56,12 +74,12 @@ const { getTodayBoard } = await import('./ads-today-board.service.js')
  */
 function cleanAccount() {
   queryRawUnsafe.mockImplementation(async (sql: string) => {
-    if (sql.includes('HAVING SUM(d.clicks)')) return [{ spend_c: 0, targets: 0 }]
     if (sql.includes("w->>'targetKey'")) return []
     if (sql.includes('NOT EXISTS')) return [{ n: 0 }]
     if (sql.includes('AdProductAd')) return [{ n: 200 }]
     return []
   })
+  perfGroupBy.mockResolvedValue([])
 }
 
 beforeEach(() => {
@@ -74,7 +92,11 @@ beforeEach(() => {
   counts.mutationCount.mockResolvedValue(0)
   counts.mutationFirst.mockResolvedValue(null)
   counts.cronGroupBy.mockResolvedValue([])
+  counts.cronFirst.mockResolvedValue(null)
+  counts.actionLogCount.mockResolvedValue(0)
   counts.rankFindMany.mockResolvedValue([])
+  census.mockResolvedValue({ total: 220, archived: 1, allowlisted: 82, withMinBid: 0, withMaxBid: 0 })
+  bidBounds.mockResolvedValue({ noMinBid: 0, noMinBidNoMax: 0 })
   automationState.mockResolvedValue({
     autonomy: 'AUTO', halted: false, haltReason: null, haltedAt: null,
     effectivelyStopped: false, degraded: false,
@@ -107,13 +129,7 @@ describe('nothing prints a confident zero', () => {
   })
 
   it('a real waste figure is reported as measured', async () => {
-    queryRawUnsafe.mockImplementation(async (sql: string) => {
-      if (sql.includes('HAVING SUM(d.clicks)')) return [{ spend_c: 7620, targets: 7 }]
-      if (sql.includes("w->>'targetKey'")) return []
-      if (sql.includes('NOT EXISTS')) return [{ n: 0 }]
-      if (sql.includes('AdProductAd')) return [{ n: 200 }]
-      return []
-    })
+    perfGroupBy.mockResolvedValue(wasteRows('EUR', 7, 7620))
     const b = await getTodayBoard()
     expect(b.headline.wastedSpend30dCents).toBe(7620)
     expect(b.exceptions.find((e) => e.key === 'wasted-spend')?.amountCents).toBe(7620)
@@ -123,8 +139,8 @@ describe('nothing prints a confident zero', () => {
 describe('ranking', () => {
   it('puts critical first, and orders by € inside a severity', async () => {
     // Two criticals with different costs, plus a warning that costs more than both.
+    perfGroupBy.mockResolvedValue(wasteRows('EUR', 40, 50_000)) // critical, €500
     queryRawUnsafe.mockImplementation(async (sql: string) => {
-      if (sql.includes('HAVING SUM(d.clicks)')) return [{ spend_c: 50_000, targets: 40 }] // critical, €500
       if (sql.includes("w->>'targetKey'")) return [{ window_target: 'rest-of-search', windows: 825 }]
       if (sql.includes('NOT EXISTS')) return [{ n: 0 }]
       if (sql.includes('AdProductAd')) return [{ n: 200 }]
@@ -158,7 +174,6 @@ describe('rank modes without a CPC ceiling', () => {
   it('ignores a mode nothing schedules — an unused hole is not an exposure', async () => {
     counts.rankFindMany.mockResolvedValue([{ key: 'own-top', name: 'Own Top of Search', acosCapPct: 45 }])
     queryRawUnsafe.mockImplementation(async (sql: string) => {
-      if (sql.includes('HAVING SUM(d.clicks)')) return [{ spend_c: 0, targets: 0 }]
       if (sql.includes("w->>'targetKey'")) return [] // no windows use it
       if (sql.includes('NOT EXISTS')) return [{ n: 0 }]
       if (sql.includes('AdProductAd')) return [{ n: 200 }]
@@ -174,7 +189,6 @@ describe('rank modes without a CPC ceiling', () => {
       { key: 'defend-top', name: 'Defend Top', acosCapPct: 35 },
     ])
     queryRawUnsafe.mockImplementation(async (sql: string) => {
-      if (sql.includes('HAVING SUM(d.clicks)')) return [{ spend_c: 0, targets: 0 }]
       if (sql.includes("w->>'targetKey'")) return [
         { window_target: 'rest-of-search', windows: 825 },
         { window_target: 'defend-top', windows: 660 },
@@ -218,5 +232,106 @@ describe('freshness', () => {
     expect(counts.mutationCount).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ state: 'FAILED' }) }),
     )
+  })
+})
+
+/**
+ * 7b (review 8.6) — the waste figure reads settled days per currency; the min-bid row states a maximum only when every
+ * campaign has one; the 30% line names the fallback and what the Bid optimiser did.
+ */
+describe('7b — waste on settled days, per currency', () => {
+  it('reads the settled window: no day newer than the Sponsored Products attribution lag', async () => {
+    await getTodayBoard()
+    const where = (perfGroupBy.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where
+    expect(where.entityType).toBe('AD_TARGET')
+    // Sponsored Products and the rest end at different lags, so the window is an OR of two date ranges.
+    const ranges = ((where.OR as Array<{ date: { gte: Date; lte: Date } }>) ?? [where as { date: { gte: Date; lte: Date } }]).map((r) => r.date)
+    const sevenDaysAgo = Date.now() - 7 * 86_400_000
+    for (const r of ranges) expect(r.lte.getTime()).toBeLessThanOrEqual(sevenDaysAgo + 86_400_000)
+    expect(ranges.length).toBeGreaterThan(0)
+  })
+
+  it('never adds two currencies: each is reported apart, and there is no single amount', async () => {
+    perfGroupBy.mockResolvedValue([...wasteRows('EUR', 3, 24_761), ...wasteRows('GBP', 2, 1_230)])
+    const b = await getTodayBoard()
+    expect(b.headline.wastedSpend30dCents).toBeNull()
+    expect(b.headline.wastedTargets).toBe(5)
+    expect(b.headline.wasted).toEqual([
+      { currency: 'EUR', cents: 24_761, targets: 3 },
+      { currency: 'GBP', cents: 1_230, targets: 2 },
+    ])
+    const row = b.exceptions.find((e) => e.key === 'wasted-spend')!
+    expect(row.amountCents).toBeNull()
+    expect(row.amounts).toEqual([{ currency: 'EUR', cents: 24_761 }, { currency: 'GBP', cents: 1_230 }])
+    expect(row.detail).toContain('€247.61 on 3')
+    expect(row.detail).toContain('£12.30 on 2')
+    expect(row.detail).not.toContain('259.91')
+  })
+
+  it('one currency keeps its single amount, and the note says what it cannot leave out', async () => {
+    perfGroupBy.mockResolvedValue(wasteRows('EUR', 2, 900))
+    const b = await getTodayBoard()
+    expect(b.headline.wastedSpend30dCents).toBe(900)
+    expect(b.headline.note).toContain('settled days')
+    expect(b.headline.note).toContain('suppression floor')
+    // The link stays: Recommendations is a live page.
+    expect(b.exceptions.find((e) => e.key === 'wasted-spend')?.action?.href).toBe('/marketing/ads/recommendations')
+  })
+})
+
+describe('7b — the no-minimum-bid row says a maximum only when there is one', () => {
+  it('none of them has a maximum: it does not claim the gate enforces one', async () => {
+    bidBounds.mockResolvedValue({ noMinBid: 82, noMinBidNoMax: 82 })
+    const row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-min-bid')!
+    expect(row.title).toBe('82 of 82 allowlisted campaigns have no minimum bid')
+    expect(row.detail).not.toMatch(/enforces a maximum|Each has a maximum/)
+    expect(row.detail).toContain('None of them has a maximum bid either')
+  })
+
+  it('every one has a maximum: then it says so', async () => {
+    bidBounds.mockResolvedValue({ noMinBid: 5, noMinBidNoMax: 0 })
+    const row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-min-bid')!
+    expect(row.title).toBe('5 of 82 allowlisted campaigns have no minimum bid')
+    expect(row.detail).toContain('Each has a maximum bid')
+  })
+
+  it('some have one: it names how many do not', async () => {
+    bidBounds.mockResolvedValue({ noMinBid: 5, noMinBidNoMax: 3 })
+    const row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-min-bid')!
+    expect(row.detail).toContain('3 of them have no maximum bid either')
+  })
+})
+
+describe('7b — the 30% target ACOS line', () => {
+  const noCostAccount = () => queryRawUnsafe.mockImplementation(async (sql: string) => {
+    if (sql.includes("w->>'targetKey'")) return []
+    if (sql.includes('NOT EXISTS')) return [{ n: 12 }]
+    if (sql.includes('AdProductAd')) return [{ n: 200 }]
+    return []
+  })
+
+  it('names 30% as the Bid optimiser\'s fallback, and says it changed nothing when it changed nothing', async () => {
+    noCostAccount()
+    counts.cronFirst.mockResolvedValue({ startedAt: new Date('2026-10-04T12:20:00Z'), outputSummary: 'proposed=0 applied=0' })
+    const row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-cost-data')!
+    expect(row.detail).toContain('falls back to a flat 30% target ACOS')
+    expect(row.detail).toContain('not a setting')
+    expect(row.detail).toContain('changed no bid in the last 7 days')
+    expect(row.detail).toContain('proposed=0 applied=0')
+    expect(row.detail).not.toContain('Target ACOS uses the flat 30% default')
+  })
+
+  it('counts its writes by its own actor when it did act, and says when it never ran', async () => {
+    noCostAccount()
+    counts.cronFirst.mockResolvedValue({ startedAt: new Date('2026-10-04T12:20:00Z'), outputSummary: null })
+    counts.actionLogCount.mockResolvedValue(14)
+    let row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-cost-data')!
+    expect(row.detail).toContain('changed 14 bids in the last 7 days')
+    expect(counts.actionLogCount).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: { in: ['automation:auto-bid'] } }) }))
+
+    counts.cronFirst.mockResolvedValue(null)
+    counts.actionLogCount.mockResolvedValue(0)
+    row = (await getTodayBoard()).exceptions.find((e) => e.key === 'no-cost-data')!
+    expect(row.detail).toContain('The Bid optimiser has never run.')
   })
 })

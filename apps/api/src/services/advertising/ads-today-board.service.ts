@@ -28,6 +28,10 @@ import { getAutomationState } from './ads-automation-state.service.js'
 import { getCoverageScoreboard } from './ads-coverage.service.js'
 import { pricePendingProposals } from './ads-proposal-pricing.service.js'
 import { getGraduationBoard } from './ads-graduation-readiness.service.js'
+import { allowlistedBidBounds, campaignCensus } from './ads-census.service.js'
+import { settledEndText, settledWhere } from './ads-settled-window.js'
+import { ENGINE_ACTORS } from './ads-engine-actors.js'
+import { engineActivity } from './ads-control-room.service.js'
 
 export type Severity = 'critical' | 'warning' | 'info'
 
@@ -40,8 +44,10 @@ export interface Exception {
   detail: string
   /** How many things are in this state. */
   count: number
-  /** The price of ignoring it. null when it genuinely cannot be computed. */
+  /** The price of ignoring it. null when it genuinely cannot be computed, or when it is in more than one currency. */
   amountCents: number | null
+  /** 7b — the price per currency, when it has one; never added across currencies. */
+  amounts?: Array<{ currency: string; cents: number }>
   /** What the amount measures ("wasted in 30 days"), or why there isn't one. */
   amountNote: string
   /** Where to go and do something about it. */
@@ -53,7 +59,14 @@ export interface Exception {
 export interface TodayBoard {
   generatedAt: string
   /** The one number that belongs above the fold. */
-  headline: { wastedSpend30dCents: number | null; wastedTargets: number; note: string }
+  headline: {
+    /** The waste when it is in one currency; null when there is none or it is in several (see `wasted`). */
+    wastedSpend30dCents: number | null
+    wastedTargets: number
+    /** 7b — the waste per currency, largest first. */
+    wasted: WasteRow[]
+    note: string
+  }
   exceptions: Exception[]
   /** Counts by severity, so the tab can carry a badge without re-deriving. */
   totals: { critical: number; warning: number; info: number }
@@ -69,22 +82,53 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null)
 const WASTE_MIN_CLICKS = 10
 const WASTE_WINDOW_DAYS = 30
 
-async function wastedSpend(): Promise<{ cents: number; targets: number }> {
-  const rows = await prisma.$queryRawUnsafe<{ spend_c: bigint | number | null; targets: bigint | number | null }[]>(`
-    SELECT COALESCE(SUM(spend), 0) AS spend_c, COUNT(*) AS targets FROM (
-      SELECT d."entityId",
-             SUM(d."costMicros") / 10000 AS spend,
-             SUM(d.clicks) AS clicks,
-             SUM(d."sales7dCents") AS sales
-      FROM "AmazonAdsDailyPerformance" d
-      WHERE d."entityType" = 'AD_TARGET'
-        AND d.date > now() - interval '${WASTE_WINDOW_DAYS} days'
-      GROUP BY 1
-      HAVING SUM(d.clicks) >= ${WASTE_MIN_CLICKS} AND SUM(d."sales7dCents") = 0
-    ) x
-  `)
-  const r = rows[0]
-  return { cents: Number(r?.spend_c ?? 0), targets: Number(r?.targets ?? 0) }
+export interface WasteRow { currency: string; cents: number; targets: number }
+
+/**
+ * 7b (review 8.6) — on settled days only, per currency.
+ *
+ * It read the last 30 calendar days, so a target whose sales were still being attributed (up to 7 days for Sponsored
+ * Products, 14 for Brands and Display) read as waste; and it added euros, pounds and kronor into one "€" figure. It now
+ * reads the same settled window as every ads decision (`settledWhere`, 6c) and keeps each currency apart.
+ *
+ * Spend while bids sat at a suppression floor (the night-time Min bid) stays in: the daily report has no hours, and the
+ * hourly table is per campaign, not per target, so it cannot be taken out here. The note says so.
+ */
+async function wastedSpend(): Promise<{ byCurrency: WasteRow[]; targets: number }> {
+  const groups = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['entityId', 'currencyCode'],
+    where: { entityType: 'AD_TARGET', ...settledWhere(WASTE_WINDOW_DAYS) },
+    _sum: { costMicros: true, clicks: true, sales7dCents: true },
+    having: { clicks: { _sum: { gte: WASTE_MIN_CLICKS } }, sales7dCents: { _sum: { equals: 0 } } },
+  })
+  const micros = new Map<string, { micros: bigint; targets: number }>()
+  for (const g of groups) {
+    const cur = micros.get(g.currencyCode) ?? { micros: 0n, targets: 0 }
+    cur.micros += BigInt(g._sum.costMicros ?? 0)
+    cur.targets += 1
+    micros.set(g.currencyCode, cur)
+  }
+  const byCurrency = [...micros.entries()]
+    .map(([currency, v]) => ({ currency, cents: Math.round(Number(v.micros) / 10_000), targets: v.targets }))
+    .sort((a, b) => b.cents - a.cents)
+  return { byCurrency, targets: groups.length }
+}
+
+/** "€247.61" / "£12.30 · €40.00" — each currency on its own. */
+const money = (rows: Array<{ currency: string; cents: number }>) =>
+  rows.map((r) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: r.currency }).format(r.cents / 100)).join(' · ')
+
+/** 7b — what the Bid optimiser has done (the activity 7a's Control Room row shows), in one sentence. */
+async function bidOptimiserActivity(): Promise<string> {
+  const actors = ENGINE_ACTORS.find((d) => d.key === 'auto-bid')?.actors ?? []
+  const [last, writes7d] = await Promise.all([
+    prisma.cronRun.findFirst({ where: { jobName: 'ads-auto-bid' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true, outputSummary: true } }),
+    prisma.advertisingActionLog.count({ where: { userId: { in: [...actors] }, createdAt: { gte: new Date(Date.now() - 7 * DAY) } } }),
+  ])
+  const activity = engineActivity(last?.startedAt ?? null, writes7d)
+  if (activity === 'acted') return `The Bid optimiser changed ${writes7d} bid${writes7d === 1 ? '' : 's'} in the last 7 days.`
+  if (activity === 'idle') return `The Bid optimiser ran (last ${last!.startedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC${last!.outputSummary ? `: ${last!.outputSummary.slice(0, 120)}` : ''}) and changed no bid in the last 7 days.`
+  return 'The Bid optimiser has never run.'
 }
 
 /**
@@ -142,8 +186,8 @@ export async function getTodayBoard(): Promise<TodayBoard> {
     advertisedOnEstimate,
     advertisedTotal,
     state,
-    allowlisted,
-    withoutFloor,
+    census,
+    bidBounds,
   ] = await Promise.all([
     // ACR.5 — priced, so the row is a decision rather than a count. Fails soft like the rest.
     pricePendingProposals(5).catch(() => null),
@@ -204,9 +248,13 @@ export async function getTodayBoard(): Promise<TodayBoard> {
       SELECT COUNT(DISTINCT pa."productId") AS n FROM "AdProductAd" pa WHERE pa."productId" IS NOT NULL
     `),
     getAutomationState(),
-    prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
-    prisma.campaign.count({ where: { liveBidWritesEnabled: true, minBidCents: null } }),
+    // 7b — the census every screen counts campaigns from, and the bid bounds as the write gate applies them
+    // (ads-census.service.ts).
+    campaignCensus(),
+    allowlistedBidBounds(),
   ])
+  const { allowlisted } = census
+  const { noMinBid: withoutFloor, noMinBidNoMax: withoutAnyBound } = bidBounds
 
   const ex: Exception[] = []
 
@@ -229,15 +277,21 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   }
 
   // ── Wasted spend ──────────────────────────────────────────────────────
+  // 7b — one currency gives one amount; several are listed apart and never added (`amounts`).
+  const oneCurrency = waste.byCurrency.length === 1 ? waste.byCurrency[0].cents : null
+  const wasteWindow = `${WASTE_WINDOW_DAYS} settled days, ${settledEndText()}`
   if (waste.targets > 0) {
     ex.push({
       key: 'wasted-spend',
-      severity: waste.cents >= 10_000 ? 'critical' : 'warning',
+      severity: waste.byCurrency.some((w) => w.cents >= 10_000) ? 'critical' : 'warning',
       title: 'Keywords taking clicks and returning nothing',
-      detail: `${waste.targets} target${waste.targets === 1 ? '' : 's'} took ${WASTE_MIN_CLICKS}+ clicks in ${WASTE_WINDOW_DAYS} days and converted zero times. Judged at target grain, so each one is a keyword you could bid down or negate.`,
+      detail: `${waste.targets} target${waste.targets === 1 ? '' : 's'} took ${WASTE_MIN_CLICKS}+ clicks in ${wasteWindow}, and sold nothing.` +
+        (waste.byCurrency.length > 1 ? ` By currency: ${waste.byCurrency.map((w) => `${money([w])} on ${w.targets}`).join(', ')}.` : '') +
+        ' Judged at target grain, so each one is a keyword you could bid down or negate.',
       count: waste.targets,
-      amountCents: waste.cents,
-      amountNote: `spent, last ${WASTE_WINDOW_DAYS} days`,
+      amountCents: oneCurrency,
+      amounts: waste.byCurrency.map(({ currency, cents }) => ({ currency, cents })),
+      amountNote: `spent in ${WASTE_WINDOW_DAYS} settled days`,
       action: { label: 'Open Recommendations', href: '/marketing/ads/recommendations' },
       since: null,
     })
@@ -402,6 +456,7 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   const onEstimate = Number(advertisedOnEstimate[0]?.n ?? 0)
   const advertised = Number(advertisedTotal[0]?.n ?? 0)
   if (noCost > 0) {
+    const optimiser = await bidOptimiserActivity()
     ex.push({
       key: 'no-cost-data',
       severity: noCost === advertised ? 'warning' : 'info',
@@ -410,7 +465,10 @@ export async function getTodayBoard(): Promise<TodayBoard> {
         (onEstimate > 0
           ? `${onEstimate} are running on the interim estimate, so their profit figures are shown but labelled — an estimate is not a measurement and never sets a bid target. `
           : '') +
-        'Target ACOS uses the flat 30% default instead of the product\'s real break-even until a real cost lands. ' +
+        // 7b — 30% is the Bid optimiser's fallback (ads-bid-optimizer.service.ts), not a setting, and the optimiser is the
+        // one that uses it: say so, and say whether it does anything at all.
+        'Without a real cost there is no break-even, so the Bid optimiser falls back to a flat 30% target ACOS for them — its default when no target can be worked out, not a setting. ' +
+        `${optimiser} ` +
         'Loading costs is an operator action through the product cost grid — no engineering is waiting on it.',
       count: noCost,
       amountCents: null,
@@ -449,14 +507,21 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   }
 
   // ── Campaigns automation may write to with no floor ───────────────────
+  // 7b (review 8.6) — counted as the write gate bounds them (their own row or a bid policy), and the maximum is stated
+  // only when every one of them has one: "enforces a maximum on all of them" was printed whether or not any did.
   if (withoutFloor > 0) {
     ex.push({
       key: 'no-min-bid',
       severity: 'info',
       title: `${withoutFloor} of ${allowlisted} allowlisted campaigns have no minimum bid`,
       detail:
-        'The write gate enforces a maximum on all of them, so nothing can bid up without limit. There is no floor, which means a suppression ' +
-        'or a down-only engine can take a bid as low as Amazon allows and quietly stop delivery under the no-pause rule.',
+        'Neither the campaign nor a market, portfolio or product-line bid policy sets one. ' +
+        (withoutAnyBound === 0
+          ? `${withoutFloor === 1 ? 'It has' : 'Each has'} a maximum bid, so the write gate refuses a raise above it. `
+          : withoutAnyBound === withoutFloor
+            ? `${withoutFloor === 1 ? 'It has no maximum bid either' : 'None of them has a maximum bid either'}, so only the per-write value cap bounds a raise. `
+            : `${withoutAnyBound} of them have no maximum bid either, so only the per-write value cap bounds a raise on those. `) +
+        'With no floor, a rule or engine that lowers bids can take one as low as Amazon allows and quietly stop delivery under the no-pause rule.',
       count: withoutFloor,
       amountCents: null,
       amountNote: 'A missing floor risks silence, not spend',
@@ -471,12 +536,15 @@ export async function getTodayBoard(): Promise<TodayBoard> {
   return {
     generatedAt: now.toISOString(),
     headline: {
-      wastedSpend30dCents: waste.targets > 0 ? waste.cents : null,
+      wastedSpend30dCents: waste.targets > 0 ? oneCurrency : null,
       wastedTargets: waste.targets,
+      wasted: waste.byCurrency,
       note:
         waste.targets > 0
-          ? `Spend on targets that took ${WASTE_MIN_CLICKS}+ clicks and converted nothing, last ${WASTE_WINDOW_DAYS} days.`
-          : `No target took ${WASTE_MIN_CLICKS}+ clicks without converting in the last ${WASTE_WINDOW_DAYS} days.`,
+          ? `Spend on targets that took ${WASTE_MIN_CLICKS}+ clicks and sold nothing in ${wasteWindow}.` +
+            `${waste.byCurrency.length > 1 ? ' Each currency is shown on its own.' : ''}` +
+            ' It includes spend while bids sat at a suppression floor: the daily report has no hours, so that part cannot be taken out.'
+          : `No target took ${WASTE_MIN_CLICKS}+ clicks without a sale in ${wasteWindow}.`,
     },
     exceptions: ex,
     totals: {

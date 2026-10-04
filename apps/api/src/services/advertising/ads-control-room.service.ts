@@ -20,6 +20,7 @@ import { lowest } from '../automation/automation-levels.js'
 import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../automation/engine-switch.service.js'
 import { breakerLimitsText, engineForActor } from './ads-engine-actors.js'
 import { engineCapsText } from './ads-engine-guard.js'
+import { campaignCensus } from './ads-census.service.js'
 import type { AutomationEntry } from '../automation/automation-catalog.service.js'
 
 /**
@@ -235,14 +236,13 @@ const DEFAULT_MAX_ACTIONS_PER_HOUR = 250
 const DEFAULT_MAX_HOURLY_SPEND_CENTS = 50_000
 
 export async function getAccountGuardrails(): Promise<AccountGuardrails> {
-  const [state, total, managed, withMin, withMax, protectedTerms] = await Promise.all([
+  // 7b — campaign counts from the census every screen reads (ads-census.service.ts).
+  const [state, census, protectedTerms] = await Promise.all([
     getAutomationState(),
-    prisma.campaign.count(),
-    prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
-    prisma.campaign.count({ where: { minBidCents: { not: null } } }),
-    prisma.campaign.count({ where: { maxBidCents: { not: null } } }),
+    campaignCensus(),
     prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }).catch(() => 0),
   ])
+  const { total, allowlisted: managed, withMinBid: withMin, withMaxBid: withMax } = census
   const { adsMode } = await import('./ads-api-client.js')
   return {
     actionsPerHour: {
@@ -289,15 +289,16 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
   const { getAutomationCatalog } = await import('../automation/automation-catalog.service.js')
   const catalogIds = new Set(Object.values(CATALOG_OF).filter((id) => id !== 'A3'))
 
-  const [state, facts, catalog, writeGroups, allowlisted, totalCampaigns, enabledAnalysts] = await Promise.all([
+  const [state, facts, catalog, writeGroups, census, enabledAnalysts] = await Promise.all([
     getAutomationState(),
     cronFacts(CRONS),
     getAutomationCatalog((a) => catalogIds.has(a.id)),
     prisma.advertisingActionLog.groupBy({ by: ['userId'], where: { createdAt: { gte: new Date(Date.now() - 7 * DAY) } }, _count: { _all: true } }),
-    prisma.campaign.count({ where: { liveBidWritesEnabled: true } }),
-    prisma.campaign.count(),
+    campaignCensus(),
     prisma.agentCharter.count({ where: { enabled: true, tier: 'analyst', key: { not: 'fleet-selftest' } } }),
   ])
+  // 7b — the census every screen reads, so "82 of 220 allowlisted" is one number everywhere.
+  const { allowlisted, total: totalCampaigns } = census
   const entries = new Map(catalog.map((e) => [e.id as string, e]))
   // 7a — each engine's changes in 7 days, by the one actor map (ads-engine-actors.ts).
   const writesBy = new Map<string, number>()
