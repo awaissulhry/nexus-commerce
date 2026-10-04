@@ -35,6 +35,8 @@ export const ADS_RULE_TRIGGERS: ReadonlySet<string> = new Set([
   'SEARCH_TERM_CONVERTING',
   // Engine expansion (E-series) — net-new triggers
   'KEYWORD_HIGH_ACOS',
+  // 4f — builder Bid rules: every clicked, enabled, unsuppressed positive target
+  'TARGET_PERFORMANCE',
   'KEYWORD_SCALE_OPPORTUNITY',
   'AD_GROUP_UNDERPERFORMING',
   'NEW_TO_BRAND_WINNER',
