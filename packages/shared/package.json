@@ -126,6 +126,10 @@
       "types": "./dist/ads-ad-product.d.ts",
       "default": "./dist/ads-ad-product.js"
     },
+    "./ads-budget-day": {
+      "types": "./dist/ads-budget-day.d.ts",
+      "default": "./dist/ads-budget-day.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

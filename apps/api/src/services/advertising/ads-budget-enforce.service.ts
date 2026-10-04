@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
 import { currentMonth } from './ads-budget-manager.service.js'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { allowChange, nothingHeld, openEngineGuard, type EngineGuardReport, type EngineGuardWords } from './ads-engine-guard.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
@@ -58,9 +59,9 @@ export interface EnforcementResult {
 function bounds(month: string) {
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const now = new Date()
-  const sameMonth = now.getUTCFullYear() === y && now.getUTCMonth() === m - 1
-  const dayOfMonth = sameMonth ? now.getUTCDate() : daysInMonth
+  const today = budgetDayStart(new Date()) // 3d — today's budget day (ads-budget-day.ts), the same in every market
+  const sameMonth = today.getUTCFullYear() === y && today.getUTCMonth() === m - 1
+  const dayOfMonth = sameMonth ? today.getUTCDate() : daysInMonth
   return { daysInMonth, dayOfMonth, start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) }
 }
 

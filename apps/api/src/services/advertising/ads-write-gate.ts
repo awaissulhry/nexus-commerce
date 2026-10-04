@@ -22,6 +22,7 @@ import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
 
 export type GateDeniedAt =
@@ -393,6 +394,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         actor: ctx.actor ?? null,
         previousValueCents: ctx.previousValueCents ?? null,
         queueId: ctx.queueId ?? null,
+        marketplace: campaign.marketplace,
       })
       if (denial) return denial
     }
@@ -650,7 +652,7 @@ async function spendCeilingDenial(args: {
   const GRAIN_ORDER: Record<string, number> = { CAMPAIGN: 0, LINE: 1, PORTFOLIO: 2, MARKET: 3 }
   ceilings.sort((a, b) => (GRAIN_ORDER[a.grain] ?? 9) - (GRAIN_ORDER[b.grain] ?? 9))
 
-  const midnightUtc = new Date(`${utcDayKey()}T00:00:00.000Z`)
+  const midnightUtc = budgetDayStart(new Date(), args.marketplace) // 3d — the budget day (ads-budget-day.ts)
   for (const c of ceilings) {
     // The campaigns this ceiling contains.
     let campaignIds: string[]
@@ -746,13 +748,15 @@ export async function budgetDayMoveDenial(args: {
   actor?: string | null
   previousValueCents?: number | null
   queueId?: string | null
+  /** 3d — the campaign's market, passed to `budgetDayStart` (the same 00:00 UTC in every market today). */
+  marketplace?: string | null
 }): Promise<GateDecision | null> {
   const dropPct = pctEnv('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30)
   const risePct = pctEnv('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50)
   const riseAbs = Number(process.env.NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS)
   const riseAbsCents = Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000 // €10
 
-  const midnightUtc = new Date(`${utcDayKey()}T00:00:00.000Z`)
+  const midnightUtc = budgetDayStart(new Date(), args.marketplace) // 3d — the budget day (ads-budget-day.ts)
   const previousCents = Number.isFinite(args.previousValueCents ?? NaN) ? (args.previousValueCents as number) : null
   // This campaign's budget history, without this write's own row. NULL-safe on purpose: a bare
   // `not` would also drop every row that has no queue id.

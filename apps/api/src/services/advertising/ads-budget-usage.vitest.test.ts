@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { budgetDayStartUtc, isReadingCurrent, hoursFromSpans, type ObservedSpan } from './ads-budget-usage.service.js'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
+import { isReadingCurrent, hoursFromSpans, type ObservedSpan } from './ads-budget-usage.service.js'
 
 /**
  * ADM-P6. Every case here is a measurement from prod on 2026-08-22, not an invented example,
@@ -8,9 +9,9 @@ import { budgetDayStartUtc, isReadingCurrent, hoursFromSpans, type ObservedSpan 
 
 const iso = (s: string) => new Date(s)
 
-describe('budgetDayStartUtc — the boundary that was measured, not assumed', () => {
+describe('budgetDayStart (@nexus/shared/ads-budget-day) — the boundary that was measured, not assumed', () => {
   it('anchors on 00:00 UTC', () => {
-    expect(budgetDayStartUtc(iso('2026-08-22T09:57:08.786Z')).toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(budgetDayStart(iso('2026-08-22T09:57:08.786Z')).toISOString()).toBe('2026-08-22T00:00:00.000Z')
   })
 
   /**
@@ -24,13 +25,13 @@ describe('budgetDayStartUtc — the boundary that was measured, not assumed', ()
    */
   it('does NOT shift to the marketplace day in the hours after local midnight', () => {
     const at = iso('2026-08-22T01:30:00.000Z') // 03:30 Europe/Rome, same date in both calendars
-    expect(budgetDayStartUtc(at).toISOString()).toBe('2026-08-22T00:00:00.000Z')
-    expect(budgetDayStartUtc(at).toISOString()).not.toBe('2026-08-21T22:00:00.000Z')
+    expect(budgetDayStart(at).toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(budgetDayStart(at).toISOString()).not.toBe('2026-08-21T22:00:00.000Z')
   })
 
   it('is stable across a UTC midnight it straddles', () => {
-    expect(budgetDayStartUtc(iso('2026-08-21T23:59:59.999Z')).toISOString()).toBe('2026-08-21T00:00:00.000Z')
-    expect(budgetDayStartUtc(iso('2026-08-22T00:00:00.000Z')).toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(budgetDayStart(iso('2026-08-21T23:59:59.999Z')).toISOString()).toBe('2026-08-21T00:00:00.000Z')
+    expect(budgetDayStart(iso('2026-08-22T00:00:00.000Z')).toISOString()).toBe('2026-08-22T00:00:00.000Z')
   })
 })
 

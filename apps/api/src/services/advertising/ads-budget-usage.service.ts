@@ -43,6 +43,7 @@ import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 
 /** Amazon's Sponsored Products budget-usage query. A POST, but a pure read. */
 const BUDGET_USAGE_PATH = '/sp/campaigns/budget/usage'
@@ -97,21 +98,13 @@ export interface CurrentBudgetUsage {
 
 // ── the day boundary ────────────────────────────────────────────────────────
 
-/**
- * The start of the budget day that `at` falls in: 00:00 UTC.
- *
- * Measured, not assumed — see the header. Deliberately not parameterised by
- * marketplace: making it configurable would invite a future caller to pass a
- * timezone that the data says is wrong, and a wrong day boundary is invisible
- * except in the two hours after local midnight.
- */
-export function budgetDayStartUtc(at: Date): Date {
-  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()))
-}
+// The start of the budget day is `budgetDayStart` (@nexus/shared/ads-budget-day, 3d): 00:00 UTC
+// in every market, measured as the header says. This file keeps the measurement; that one is the
+// one definition the gate, the pacer and budget schedules read too.
 
 /** A reading describes TODAY only if Amazon stamped it after today's reset. */
 export function isReadingCurrent(asOf: Date, now: Date): boolean {
-  return asOf.getTime() >= budgetDayStartUtc(now).getTime()
+  return asOf.getTime() >= budgetDayStart(now).getTime()
 }
 
 // ── the hour columns ────────────────────────────────────────────────────────
@@ -141,7 +134,7 @@ export interface UsageHours {
  * honest unit is the hour, and `observed` is reported beside it so a partial day
  * reads as a partial day instead of a quiet one.
  */
-export function hoursFromSpans(spans: ObservedSpan[], now: Date, dayStart = budgetDayStartUtc(now)): UsageHours {
+export function hoursFromSpans(spans: ObservedSpan[], now: Date, dayStart = budgetDayStart(now)): UsageHours {
   const HOUR = 3_600_000
   const start = dayStart.getTime()
   const hoursElapsed = Math.min(24, Math.floor((now.getTime() - start) / HOUR) + 1)
@@ -406,7 +399,7 @@ export async function readCurrentBudgetUsage(
   if (!supported.length) return out
 
   const ids = supported.map((c) => c.id)
-  const dayStart = budgetDayStartUtc(now)
+  const dayStart = budgetDayStart(now)
   const [latest, hourly] = await Promise.all([latestReadings(ids), hourlySpendToday(ids, dayStart)])
 
   for (const c of supported) {
@@ -460,7 +453,7 @@ export async function readBudgetUsageHours(
   }
   if (!supported.length) return out
 
-  const dayStart = budgetDayStartUtc(now)
+  const dayStart = budgetDayStart(now)
   const spans = await prisma.adBudgetUsageSample.findMany({
     where: { campaignId: { in: supported.map((c) => c.id) }, lastSeenAt: { gte: dayStart } },
     select: { campaignId: true, percent: true, firstSeenAt: true, lastSeenAt: true },

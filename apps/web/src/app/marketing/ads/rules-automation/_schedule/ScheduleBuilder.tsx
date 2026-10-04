@@ -578,7 +578,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       {/* BSP-P4 — a multiplier row is all-day, so it says so instead of offering
                           hour bounds the engine will ignore and the radio never promised. */}
                       {isAllDay
-                        ? <span className="h10-sb-allday" title="A Budget Multiplier applies for the whole day — the executor treats a window with no hours as covering that weekday.">All day</span>
+                        ? <span className="h10-sb-allday" title="A Budget Multiplier applies for the whole budget day of that weekday. Like Amazon's daily budget, the day runs 00:00–24:00 UTC: from 02:00 Rome time in summer and 01:00 in winter.">All day</span>
                         : <>
                           <Listbox width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.start} onChange={(v) => setWin(w.id, { start: v })} ariaLabel="Start time" />
                           <span className="dash">-</span>

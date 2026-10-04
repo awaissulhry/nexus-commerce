@@ -45,9 +45,8 @@
  *   envelope holding) and yielding to the operator's own hand call for opposite responses, and one
  *   word for both hid the only distinction that matters. `describeYields` is shared by the Status
  *   tooltip and the Delivery tooltip so they cannot tell different stories about the same row.
- * · **The Status pill uses a LOCAL day key.** It was `new Date().toISOString().slice(0,10)` — UTC —
- *   compared against local calendar dates, so between 00:00 and 02:00 Rome a schedule that ended
- *   yesterday still read "Active" ([[reference_day_grouping_utc_local_trap]]).
+ * · **The Status pill uses the BUDGET day** (3d): 00:00 UTC, the day the executor counts. It used a
+ *   local day key for a while, which disagreed with the executor between 00:00 and 02:00 Rome.
  * · **All blackout ranges are visible.** The route has always returned `excludeRanges` (a count)
  *   and this grid dropped it while showing only the FIRST range — a partial truth shown as a whole
  *   one.
@@ -75,7 +74,8 @@ import { SectionEmpty } from './SectionShell'
 // BSP-P5 — the state vocabulary lives in a pure module so it can be TESTED. A client component
 // cannot be loaded under vitest here, and these three functions are exactly what the operator
 // reads about whether a schedule is working. Same move as `bid/bidState.ts`.
-import { deliveryCell, localDayKey, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { deliveryCell, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { budgetDayKey } from '@nexus/shared/ads-budget-day'
 import { ScheduleContextStrip } from './ScheduleContextStrip'
 import { Listbox } from '@/design-system/components'
 
@@ -176,14 +176,15 @@ export function SchedulesSection({ market }: { market?: string }) {
   }, [])
 
   /**
-   * 🔴 BSP-P4 — a LOCAL day key. This was `toISOString().slice(0,10)` — UTC — compared against
-   * `startDate`/`endDate`, which are local calendar dates the operator typed. In Europe/Rome every
-   * instant between 00:00 and 02:00 local is still "yesterday" in UTC, so a schedule that ended
-   * yesterday kept reporting **Active** for the first two hours of every day, and one starting
-   * today read **Scheduled**. [[reference_day_grouping_utc_local_trap]] — derive the key from
-   * getFullYear/getMonth/getDate, never from an ISO string.
+   * 🔴 3d — the BUDGET day (00:00 UTC, `@nexus/shared/ads-budget-day`), the same day the executor's
+   * date range counts, so the pill and the executor agree at 01:00 Rome too. Read again every minute:
+   * computed once, the pill went stale after midnight on a page left open.
    */
-  const todayIso = useMemo(() => localDayKey(), [])
+  const [todayIso, setTodayIso] = useState(() => budgetDayKey(new Date()))
+  useEffect(() => {
+    const t = setInterval(() => setTodayIso(budgetDayKey(new Date())), 60_000)
+    return () => clearInterval(t)
+  }, [])
   const columns: GridColumn<ScheduleRow>[] = useMemo(() => [
     /**
      * W4 — H10's color-coded Status pill (Scheduled / Active / Completed), plus the pause switch.
