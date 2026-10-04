@@ -9,6 +9,12 @@
  * 1c — honours the account dial and its own caps (ads-engine-guard.ts): SUGGEST writes nothing new
  * but still lifts its own floors and multipliers; halted / OFF only floors bids, restores wait for
  * Resume; at most N changes a run and a day, one schedule's campaign never split.
+ *
+ * 2d (review 3.9) — it leaves alone what is not its own: the window-open restore lifts only a Rank &
+ * Dayparting floor (2a's `isRankOwnedFloor`), the multiplier never enters, moves or leaves over a floor
+ * (it would raise it), and leaving a multiplier window gives back only bids still at what the window set
+ * (a person's in-window edit stays). Switching a schedule off or deleting it gives its multiplier back
+ * (`giveBackMultiplier`).
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -18,7 +24,8 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { bulkUpdateAdTargetBids, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids } from '../services/advertising/ads-bid-suppression.service.js'
 import { isGoalMode } from './ad-rank-defend.job.js'
-import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
+import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, readEnginePosture, type EngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
+import { isRankOwnedFloor } from '../services/advertising/rank-release.service.js'
 
 // AU.3 — bid multiplier per window. A window can optionally carry a
 // bidMultiplierPct (e.g. +30 to raise bids 30% during peak hours, -50 to
@@ -90,6 +97,113 @@ export function bidAction(o: { inWindow: boolean; effMult: number | null; hasBas
   return 'none'
 }
 
+// ── The multiplier snapshot (AdSchedule.originalBids) ─────────────────────────────────────────────────────────────
+// { [adTargetId]: base bid, __mult__: the multiplier applied, __set__: { [adTargetId]: the bid the window set } }.
+// 2d — `__set__` is read back after the write, so it holds what landed (a campaign's max-change clamp can trim it).
+const MULT_KEY = '__mult__'
+const SET_KEY = '__set__'
+export interface MultiplierSnapshot { base: Record<string, number>; mult: number | null; set: Record<string, number> | null }
+
+export function readSnapshot(stored: unknown): MultiplierSnapshot {
+  const raw = (stored ?? {}) as Record<string, unknown>
+  const base: Record<string, number> = {}
+  for (const [k, v] of Object.entries(raw)) if (k !== MULT_KEY && k !== SET_KEY && typeof v === 'number') base[k] = v
+  const mult = typeof raw[MULT_KEY] === 'number' ? raw[MULT_KEY] as number : null
+  const set = raw[SET_KEY] && typeof raw[SET_KEY] === 'object' ? raw[SET_KEY] as Record<string, number> : null
+  return { base, mult, set }
+}
+
+const scaled = (base: number, mult: number) => Math.max(5, Math.round(base * (1 + mult / 100)))
+
+/**
+ * 2d — the snapshot's targets the window still owns: those whose bid now (for a floored campaign, the bid its floor
+ * remembers) is still what the window set. A bid that moved since is a person's (or another engine's) and stays.
+ * A snapshot from before `__set__` falls back to the multiplied base; one with neither owns every target, as before.
+ */
+export function ownedTargets(snap: MultiplierSnapshot, now: Map<string, number | null>): string[] {
+  return Object.keys(snap.base).filter((id) => {
+    const want = snap.set?.[id] ?? (snap.mult != null ? scaled(snap.base[id], snap.mult) : null)
+    return now.get(id) != null && (want == null || now.get(id) === want)
+  })
+}
+
+/** Each target's bid now, or (`remembered`) the bid its floor will restore. */
+async function bidsNow(ids: string[], remembered: boolean): Promise<Map<string, number | null>> {
+  const rows = ids.length ? await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true, suppressedFromBidCents: true } }) : []
+  return new Map(rows.map((r) => [r.id, remembered ? r.suppressedFromBidCents : r.bidCents]))
+}
+
+/** Apply `mult` to each base bid, then keep the snapshot: the base, the multiplier and the bids that landed. */
+async function applyMultiplier(scheduleId: string, base: Record<string, number>, mult: number, reason: string): Promise<number> {
+  const entries = Object.entries(base).map(([adTargetId, b]) => ({ adTargetId, bidCents: scaled(b, mult) }))
+  await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${scheduleId}` as AdsActor, reason, applyImmediately: true })
+  const landed = await bidsNow(Object.keys(base), false)
+  const set: Record<string, number> = {}
+  for (const id of Object.keys(base)) { const b = landed.get(id); if (b != null) set[id] = b }
+  await prisma.adSchedule.update({ where: { id: scheduleId }, data: { originalBids: { [MULT_KEY]: mult, ...base, [SET_KEY]: set } } })
+  return entries.length
+}
+
+/**
+ * Leave a multiplier: the targets the window still owns go back to their base. On a floored campaign (any owner) the
+ * base goes into the floor's memory instead — Nexus only, nothing to Amazon, which keeps the floor — so whoever lifts
+ * it returns to the base. Returns the bids written to Amazon, or null when it must wait (`mayWrite` false and not
+ * floored). The snapshot is cleared once done.
+ */
+async function leaveMultiplier(s: { id: string; campaignId: string }, snap: MultiplierSnapshot, floored: boolean, mayWrite: boolean, reason: string): Promise<number | null> {
+  const ids = Object.keys(snap.base)
+  if (floored) {
+    const owned = ownedTargets(snap, await bidsNow(ids, true))
+    for (const adTargetId of owned) {
+      await prisma.adTarget.updateMany({ where: { id: adTargetId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: snap.base[adTargetId] } })
+    }
+    await prisma.adSchedule.updateMany({ where: { id: s.id }, data: { originalBids: {} } })
+    logger.info('[dayparting] bid multiplier left while floored — restore will return to the base bids', { scheduleId: s.id, targets: owned.length, keptChangedInWindow: ids.length - owned.length })
+    return 0
+  }
+  if (!mayWrite) return null
+  const entries = ownedTargets(snap, await bidsNow(ids, false)).map((adTargetId) => ({ adTargetId, bidCents: snap.base[adTargetId] }))
+  if (entries.length) await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason, applyImmediately: true })
+  await prisma.adSchedule.updateMany({ where: { id: s.id }, data: { originalBids: {} } })
+  logger.info('[dayparting] bid multiplier restored', { scheduleId: s.id, targets: entries.length, keptChangedInWindow: ids.length - entries.length })
+  return entries.length
+}
+
+const isFloored = async (campaignId: string) =>
+  !!(await prisma.campaign.findUnique({ where: { id: campaignId }, select: { bidsSuppressedAt: true } }))?.bidsSuppressedAt
+
+export interface MultiplierGiveBack { restored: number; deferred: boolean; why: string | null }
+
+/**
+ * 2d (review 3.9; left open by 2a) — a classic schedule switched off or deleted gives its bid multiplier back: the bids
+ * still at the window's level return to their base, a bid a person changed in the window stays. While ads automation
+ * is stopped the change would be refused, so it waits (`deferred`) and the snapshot stays: a switched-off schedule
+ * keeps it on its row and the next run that may write gives it back (`runDaypartingOnce`). `guard` = the run's.
+ */
+export async function giveBackMultiplier(s: { id: string; campaignId: string; originalBids: unknown }, reason: string, guard?: EngineGuard): Promise<MultiplierGiveBack> {
+  const snap = readSnapshot(s.originalBids)
+  if (!Object.keys(snap.base).length) return { restored: 0, deferred: false, why: null }
+  const g = guard ?? await openEngineGuard('dayparting')
+  const permit = g.permit()
+  const held = nothingHeld()
+  let restored: number | null = 0
+  try {
+    const floored = await isFloored(s.campaignId)
+    restored = await leaveMultiplier(s, snap, floored, !floored && allowChange(true, permit, held, 'restore'), reason)
+  } catch (e) { logger.warn('[dayparting] multiplier give-back failed — kept for the next run', { scheduleId: s.id, error: (e as Error).message }); restored = null }
+  g.settle(permit, restored ?? 0, held)
+  return restored == null
+    ? { restored: 0, deferred: true, why: held.restore ? `ads automation is stopped (${g.report().why})` : 'the give-back did not finish; the next run retries' }
+    : { restored, deferred: false, why: null }
+}
+
+/** Why a multiplier give-back would wait right now (null = it would run): applied, campaign not floored, stopped. */
+export async function multiplierWaitWhy(s: { campaignId: string; originalBids: unknown }): Promise<string | null> {
+  if (!Object.keys(readSnapshot(s.originalBids).base).length || await isFloored(s.campaignId)) return null
+  const { posture, why } = await readEnginePosture()
+  return posture === 'stopped' ? `ads automation is stopped (${why})` : null
+}
+
 export interface DaypartingSummary { evaluated: number; changed: number; bidsAdjusted: number; guard?: EngineGuardReport }
 
 export async function runDaypartingOnce(): Promise<DaypartingSummary> {
@@ -118,30 +232,38 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
 
   const schedules = (await prisma.adSchedule.findMany({ where: { enabled: true } }))
     .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey) && !planGoverned.has(s.campaignId))
+  // 2d — classic schedules switched off while their multiplier was on, whose give-back had to wait (ads automation was
+  // stopped): each row keeps its snapshot, and the first run that may write gives the bids back.
+  const parked = (await prisma.adSchedule.findMany({ where: { enabled: false }, select: { id: true, campaignId: true, windows: true, defaultTargetKey: true, originalBids: true } }))
+    .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey) && Object.keys(readSnapshot(s.originalBids).base).length > 0)
   // Authoritative clock (DB) for all window checks this run — immune to container clock skew.
   const clockNow = await dbNow()
   let changed = 0
   let bidsAdjusted = 0
   // 1c — the account dial and this engine's caps, read once per run. Each schedule's campaign asks for its permit
   // once, before its first write, so a campaign is never split.
-  const guard = schedules.length ? await openEngineGuard('dayparting') : null
+  const guard = schedules.length || parked.length ? await openEngineGuard('dayparting') : null
   for (const s of schedules) {
     const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const desired = inWindow ? 'ENABLED' : 'PAUSED'
     const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone, clockNow)
-    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true } })
+    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
     if (!campaign) continue
     const permit = guard!.permit()
     const held = nothingHeld()
     const allow = (kind: 'forward' | 'floor' | 'restore') => allowChange(true, permit, held, kind)
     let writes = 0
+    let floored = !!campaign.bidsSuppressedAt
 
     // ── NP — never pause (Amazon algo disruption). Window OPEN: lift any no-pause
     // floor BEFORE the multiplier logic reads current bids, so 'enter' snapshots the
     // true base, not the 2¢ floor. ──
     // 1c — a give-back: never capped; while stopped it waits (the gate would refuse the raise after Nexus restored).
-    if (inWindow && campaign.bidsSuppressedAt && allow('restore')) {
+    // 2d — only a Rank & Dayparting floor (2a's owner rule): a person's, the out-of-stock check's or budget enforcement's
+    // floor stays until its owner lifts it.
+    if (inWindow && floored && isRankOwnedFloor(campaign.bidsSuppressedBy) && allow('restore')) {
       try { writes += await restoreCampaignBids(s.campaignId, { actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'dayparting: window open → restore bids' }); changed++ } catch (e) { logger.warn('[dayparting] restore failed', { scheduleId: s.id, error: (e as Error).message }) }
+      floored = await isFloored(s.campaignId)
     }
 
     // ── AU.3 / RC2.TR0 bid multiplier (enter / transition / exit) ───────
@@ -149,64 +271,48 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     // __mult__ key = the multiplier currently applied. Tracking the applied level
     // lets us re-apply from base when moving between two DIFFERENT multiplier
     // windows on the same day (e.g. +0% morning → +50% evening) — without it the
-    // bids stuck at the first level. (originalBids is touched only here.)
-    const MULT_KEY = '__mult__'
-    const stored = (s.originalBids ?? {}) as Record<string, number>
-    const appliedMult = MULT_KEY in stored ? stored[MULT_KEY] : null
-    const baseBids: Record<string, number> = {}
-    for (const [k, v] of Object.entries(stored)) if (k !== MULT_KEY) baseBids[k] = v
-    const hasBase = Object.keys(baseBids).length > 0
+    // bids stuck at the first level. (The snapshot's shape: `readSnapshot`.)
+    const snap = readSnapshot(s.originalBids)
+    // 2d — a multiplier is on while `__mult__` is set, even when every bid in it has become a person's (a transition
+    // dropped them all): otherwise the next run would enter again and scale the bids they set.
+    const hasBase = Object.keys(snap.base).length > 0 || snap.mult != null
     // 0 / undefined multiplier behaves like "no adjustment".
     const effMult = (multiplier == null || multiplier === 0) ? null : multiplier
-    const action = bidAction({ inWindow, effMult, hasBase, appliedMult })
+    const action = bidAction({ inWindow, effMult, hasBase, appliedMult: snap.mult })
 
     // 1c — entering or moving between multiplier windows is a new change (capped; withheld under SUGGEST and while
     // stopped, where the gate would refuse it after Nexus changed its bids); leaving one gives its own change back.
-    if (action === 'enter') {
+    // 2d — never over a floor (anyone's, or its own while that restore waits): entering would snapshot the floor as the
+    // base, and entering or moving would raise floored bids. Both wait until the floor is lifted.
+    if (action === 'enter' && !floored) {
       // ENTER a multiplier window: snapshot base bids + apply scaled.
       const targets = await prisma.adTarget.findMany({
         where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId } },
         select: { id: true, bidCents: true },
       })
       if (targets.length > 0 && allow('forward')) {
-        const originals: Record<string, number> = { [MULT_KEY]: effMult }
-        const entries = targets.map((t) => {
-          originals[t.id] = t.bidCents
-          return { adTargetId: t.id, bidCents: Math.max(5, Math.round(t.bidCents * (1 + effMult / 100))) }
-        })
         try {
-          await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}%`, applyImmediately: true })
-          await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: originals } })
-          bidsAdjusted += entries.length; writes += entries.length
-          logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier: effMult, targets: entries.length })
+          const n = await applyMultiplier(s.id, Object.fromEntries(targets.map((t) => [t.id, t.bidCents])), effMult, `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}%`)
+          bidsAdjusted += n; writes += n
+          logger.info('[dayparting] bid multiplier applied', { scheduleId: s.id, multiplier: effMult, targets: n })
         } catch (e) { logger.warn('[dayparting] bid multiply failed', { scheduleId: s.id, error: (e as Error).message }) }
       }
-    } else if (action === 'transition' && allow('forward')) {
-      // TRANSITION between two multiplier windows: re-apply from base at new level.
-      const entries = Object.entries(baseBids).map(([adTargetId, base]) => ({ adTargetId, bidCents: Math.max(5, Math.round(base * (1 + effMult / 100))) }))
+    } else if (action === 'transition' && !floored && allow('forward')) {
+      // TRANSITION between two multiplier windows: re-apply from base at new level. 2d — only to the bids the window
+      // still owns; a bid a person changed in the window leaves the snapshot and stays as they set it.
+      const owned = ownedTargets(snap, await bidsNow(Object.keys(snap.base), false))
       try {
-        await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}% (transition)`, applyImmediately: true })
-        await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: { [MULT_KEY]: effMult, ...baseBids } } })
-        bidsAdjusted += entries.length; writes += entries.length
-        logger.info('[dayparting] bid multiplier transitioned', { scheduleId: s.id, from: appliedMult, to: effMult, targets: entries.length })
+        const n = await applyMultiplier(s.id, Object.fromEntries(owned.map((id) => [id, snap.base[id]])), effMult, `bid multiplier ${effMult >= 0 ? '+' : ''}${effMult}% (transition)`)
+        bidsAdjusted += n; writes += n
+        logger.info('[dayparting] bid multiplier transitioned', { scheduleId: s.id, from: snap.mult, to: effMult, targets: n })
       } catch (e) { logger.warn('[dayparting] bid transition failed', { scheduleId: s.id, error: (e as Error).message }) }
-    } else if (action === 'exit' && !inWindow && campaign.bidsSuppressedAt) {
-      // 1c — already floored (the floor landed while this exit waited, or another engine floored it): pushing the base
-      // bids now would lift the floor in a closed window. The base becomes what the restore returns to instead —
-      // Nexus only, nothing goes to Amazon, which still holds the floor.
-      for (const [adTargetId, bidCents] of Object.entries(baseBids)) {
-        await prisma.adTarget.updateMany({ where: { id: adTargetId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: bidCents } })
-      }
-      await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: {} } })
-      logger.info('[dayparting] bid multiplier left while floored — restore will return to the base bids', { scheduleId: s.id, targets: Object.keys(baseBids).length })
-    } else if (action === 'exit' && allow('restore')) {
-      // EXIT: restore base bids.
-      const entries = Object.entries(baseBids).map(([adTargetId, bidCents]) => ({ adTargetId, bidCents }))
+    } else if (action === 'exit') {
+      // EXIT: restore base bids — 2d: only those still at what the window set. 1c — already floored (the floor landed
+      // while this exit waited, or someone else floored it): pushing the base now would lift the floor, so the base
+      // becomes what the restore returns to instead (Nexus only; `leaveMultiplier`).
       try {
-        await bulkUpdateAdTargetBids({ entries, actor: `automation:dayparting-${s.id}` as AdsActor, reason: 'bid multiplier restore', applyImmediately: true })
-        await prisma.adSchedule.update({ where: { id: s.id }, data: { originalBids: {} } })
-        bidsAdjusted += entries.length; writes += entries.length
-        logger.info('[dayparting] bid multiplier restored', { scheduleId: s.id, targets: entries.length })
+        const n = await leaveMultiplier(s, snap, floored, !floored && allow('restore'), 'bid multiplier restore')
+        if (n) { bidsAdjusted += n; writes += n }
       } catch (e) { logger.warn('[dayparting] bid restore failed', { scheduleId: s.id, error: (e as Error).message }) }
     }
 
@@ -226,6 +332,10 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     // suppress call above); campaign state is not its lever.
 
     await prisma.adSchedule.update({ where: { id: s.id }, data: { lastApplied: desired, lastEvaluatedAt: new Date() } })
+  }
+  for (const s of parked) {
+    const r = await giveBackMultiplier(s, 'bid multiplier given back — its schedule is switched off', guard!)
+    if (r.restored) { changed++; bidsAdjusted += r.restored }
   }
   logger.info('[dayparting] tick', { evaluated: schedules.length, changed, bidsAdjusted })
   return { evaluated: schedules.length, changed, bidsAdjusted, ...(guard ? { guard: guard.report() } : {}) }

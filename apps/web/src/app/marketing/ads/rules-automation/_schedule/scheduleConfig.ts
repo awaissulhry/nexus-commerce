@@ -57,7 +57,7 @@ export const SCHEDULE_CONFIG: Record<ScheduleKind, ScheduleConfig> = {
       { id: 'advanced', label: 'Advanced Settings' },
     ],
     sectionTitle: 'Dayparting Schedule Criteria',
-    sectionDesc: 'Setup a schedule for campaign status and define the time periods and criteria when this schedule will be active.',
+    sectionDesc: 'Set the hours each campaign runs at its normal bids and the hours its bids drop to 2¢. A campaign is never paused.',
     types: [],
     hasTimezone: true,
     heatmapDefault: true,
@@ -139,10 +139,11 @@ export const BUDGET_ADJUSTMENTS = [
 export const MULTIPLIER_ADJUSTMENTS = [
   { value: 'mult', label: 'Apply Multiplier (×)', unit: 'mult' as const },
 ]
-// Dayparting turns campaign status on/off per time window — no value input (unit 'none').
+// Dayparting moves bids per time window, never campaign status (no-pause rule): 'pause' lowers every bid to 2¢ and
+// remembers it, 'enable' gives back the bids this schedule lowered — no value input (unit 'none').
 export const DAYPARTING_ADJUSTMENTS = [
-  { value: 'enable', label: 'Enable Campaign', unit: 'none' as const },
-  { value: 'pause', label: 'Pause Campaign', unit: 'none' as const },
+  { value: 'enable', label: 'Normal bids', unit: 'none' as const },
+  { value: 'pause', label: 'Lower bids to 2¢', unit: 'none' as const },
 ]
 export const adjustmentsFor = (kind: ScheduleKind, type: string) =>
   kind === 'dayparting' ? DAYPARTING_ADJUSTMENTS : type === 'budget-multiplier' ? MULTIPLIER_ADJUSTMENTS : BUDGET_ADJUSTMENTS

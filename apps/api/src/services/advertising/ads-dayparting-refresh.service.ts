@@ -236,29 +236,36 @@ export function recommendRankWindows(
   return { windows, baselineTargetKey, peakHours, peakDays }
 }
 
-export interface RefreshResult { parentName: string | null; marketplace: string | null; campaigns: number; updated: number; created: number; windows: number; dryRun: boolean }
+export interface RefreshResult { parentName: string | null; marketplace: string | null; campaigns: number; updated: number; created: number; windows: number; dryRun: boolean; rankLeftAlone: number }
 
 // Re-derive a family's windows from fresh demand and update its AdSchedules
 // (update existing, preserving enabled; create disabled for newly-covered
 // campaigns). The autonomous loop behind the `refresh_dayparting` rule.
+// 2d (review 3.8) — a campaign with a goal-mode (rank) schedule is left alone: overwriting its windows with multiplier
+// windows wiped the rank targets, and a second, classic schedule beside it would fight the rank loop. `rankLeftAlone`
+// counts them.
 export async function refreshFamilySchedules(opts: { campaignId?: string; parentProductId?: string; marketplace?: string } & GenParams & { windowDays?: number; dryRun?: boolean }): Promise<RefreshResult> {
   const fam = await resolveProductFamily({ campaignId: opts.campaignId, parentProductId: opts.parentProductId, marketplace: opts.marketplace })
-  const base: RefreshResult = { parentName: fam.parentName, marketplace: fam.marketplace ?? null, campaigns: fam.campaigns.length, updated: 0, created: 0, windows: 0, dryRun: !!opts.dryRun }
+  const base: RefreshResult = { parentName: fam.parentName, marketplace: fam.marketplace ?? null, campaigns: fam.campaigns.length, updated: 0, created: 0, windows: 0, dryRun: !!opts.dryRun, rankLeftAlone: 0 }
   if (!fam.parentProductId || fam.campaigns.length === 0) return base
   const demand = await blendedFamilyDemand(fam.productIds, fam.marketplace, opts.windowDays ?? 180, undefined, fam.skus)
   const windows = generateDaypartingWindows(demand.weekdayProfile, demand.hourProfile, { bidUpPct: opts.bidUpPct, bidDownPct: opts.bidDownPct, pauseOvernight: opts.pauseOvernight })
-  if (opts.dryRun) return { ...base, windows: windows.length }
+  const existing = await prisma.adSchedule.findMany({ where: { campaignId: { in: fam.campaigns.map((c) => c.id) } }, select: { id: true, campaignId: true, windows: true, defaultTargetKey: true } })
+  const { isGoalMode } = await import('../../jobs/ad-rank-defend.job.js')
+  const rankHeld = new Set(existing.filter((s) => isGoalMode(s.windows, s.defaultTargetKey)).map((s) => s.campaignId))
+  const rankLeftAlone = fam.campaigns.filter((c) => rankHeld.has(c.id)).length
+  if (opts.dryRun) return { ...base, windows: windows.length, rankLeftAlone }
   const timezone = MARKET_TZ[fam.marketplace ?? ''] ?? 'Europe/Rome'
-  const existing = await prisma.adSchedule.findMany({ where: { campaignId: { in: fam.campaigns.map((c) => c.id) } }, select: { id: true, campaignId: true } })
   const byCampaign = new Map(existing.map((s) => [s.campaignId, s.id]))
   let updated = 0, created = 0
   for (const c of fam.campaigns) {
+    if (rankHeld.has(c.id)) continue
     const sid = byCampaign.get(c.id)
     if (sid) { await prisma.adSchedule.update({ where: { id: sid }, data: { windows: windows as never, timezone } }); updated++ }
     else { await prisma.adSchedule.create({ data: { campaignId: c.id, name: `Dayparting — ${fam.parentName ?? 'product'} (${fam.marketplace ?? ''})`, windows: windows as never, timezone, enabled: false } }); created++ }
   }
-  logger.info('[T6] refreshFamilySchedules', { parent: fam.parentName, marketplace: fam.marketplace, campaigns: fam.campaigns.length, updated, created, windows: windows.length })
-  return { ...base, updated, created, windows: windows.length }
+  logger.info('[T6] refreshFamilySchedules', { parent: fam.parentName, marketplace: fam.marketplace, campaigns: fam.campaigns.length, updated, created, rankLeftAlone, windows: windows.length })
+  return { ...base, updated, created, windows: windows.length, rankLeftAlone }
 }
 
 // Rule action — re-derive + update the family schedules. Dry-run honored.
