@@ -27,9 +27,10 @@ describe('LX.10 shared language provenance', () => {
   it('never turns a following snapshot into an operator pin', () => {
     expect(describeCellSource({ provenance: { member: 'pinned', from: 'German · shared' }, follows: true }).member).toBe('inherited')
   })
-  it('renders a distinct glyph, class and next action for human outdated text', () => {
+  it('renders a distinct glyph and class for human outdated text, and says the fact only', () => {
     const source = describeCellSource({ provenance: { member: 'outdated', from: 'Italian · source' } })
-    expect(source.tooltip).toContain('Compare with the source; translate again or mark reviewed')
+    // The fact only: no sheet scope can "translate again" or "mark reviewed" a cell (2026-10-04).
+    expect(source.tooltip).toBe('Out of date — Italian · source changed after this translation was written')
     const markup = renderToStaticMarkup(createElement(ProvenanceMark, { provenance: source.member, from: source.from }))
     expect(markup).toContain('nds-cell-prov-outdated'); expect(markup).toContain('lucide-history')
     expect(markup).not.toContain('tabindex')

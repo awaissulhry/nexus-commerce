@@ -80,12 +80,15 @@ const provOfState = (state: LangState): CellProvenance =>
 
 /** What the mark names as its source, per member — the same `from` for the cell, its hover and the legend. */
 const fromOf = (prov: CellProvenance): string | undefined =>
-  prov === 'inherited' ? SOURCE : prov === 'aiStale' || prov === 'outdated' ? 'the Italian source' : undefined
+  prov === 'inherited' ? SOURCE : prov === 'ai' || prov === 'aiStale' ? MACHINE_SOURCE : prov === 'outdated' ? 'the Italian source' : undefined
 
 /* The mark names a source the way the product sheet does — "the Italian text", never a server tier string ("Italian ·
    source"): it is read into the mark's one sentence ("Inherited from the Italian text — edit to …"). */
 const SOURCE = 'the Italian text'
 const SHARED_DUTCH = 'the shared Dutch text'
+/* A machine translation names where it came from as the sheet does ("the source text"): with a source, `ai` / `aiStale`
+   read the machine translation's words; without one, an AI draft's (PES.8). */
+const MACHINE_SOURCE = 'the source text'
 
 /* ── scaffolding ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -393,9 +396,9 @@ function Legend() {
     { mark: <ProvenanceMark provenance="inherited" from={SOURCE} />, name: 'inherited · from the source language', tooltip: provenanceTooltip('inherited', SOURCE), next: 'Edit writes this language\'s own value; the source is untouched.' },
     { mark: <ProvenanceMark provenance="inherited" from={SHARED_DUTCH} />, name: 'inherited · from the shared language text', tooltip: provenanceTooltip('inherited', SHARED_DUTCH), next: 'On a channel scope: acknowledge (edit the shared text) or pin on this coordinate. Declining reverts.' },
     { mark: <ProvenanceMark provenance="pinned" from={SHARED_DUTCH} />, name: 'pinned · on (channel, market, language)', tooltip: provenanceTooltip('pinned', SHARED_DUTCH), next: 'Edit changes the pin; Reset returns the cell to the shared text.' },
-    { mark: <ProvenanceMark provenance="ai" />, name: 'ai · machine draft awaiting review', tooltip: provenanceTooltip('ai'), next: 'Approve, edit, or reject. It never reaches a listing unreviewed.' },
-    { mark: <ProvenanceMark provenance="aiStale" from="the Italian source" />, name: 'aiStale · draft from an older source', tooltip: provenanceTooltip('aiStale', 'the Italian source'), next: 'Compare with the source before approving.' },
-    { mark: <ProvenanceMark provenance="outdated" from="the Italian source" />, name: 'outdated · translation older than its source', tooltip: provenanceTooltip('outdated', 'the Italian source'), next: 'Compare with the source; translate again or mark reviewed.' },
+    { mark: <ProvenanceMark provenance="ai" from={MACHINE_SOURCE} />, name: 'ai · machine translation, not reviewed', tooltip: provenanceTooltip('ai', MACHINE_SOURCE), next: 'Edit writes your own text in its place.' },
+    { mark: <ProvenanceMark provenance="aiStale" from={MACHINE_SOURCE} />, name: 'aiStale · machine translation of an older source', tooltip: provenanceTooltip('aiStale', MACHINE_SOURCE), next: 'Edit writes your own text in its place.' },
+    { mark: <ProvenanceMark provenance="outdated" from="the Italian source" />, name: 'outdated · translation older than its source', tooltip: provenanceTooltip('outdated', 'the Italian source'), next: 'Edit writes the text again.' },
     { mark: <ProvenanceMark provenance="mapped" from="the Shared product" />, name: 'mapped · derived by a rule', tooltip: provenanceTooltip('mapped', 'the Shared product'), next: 'Unchanged. Language never changes where a rule is edited.' },
     { mark: <ProvenanceMark provenance="formula" from="=UPPER(title)" />, name: 'formula', tooltip: provenanceTooltip('formula', '=UPPER(title)'), next: 'Unchanged. A formula can target one language (ruled D16).' },
     { mark: <ProvenanceMark provenance="refused" from="German title exceeds 200 bytes for Amazon · DE" />, name: 'refused', tooltip: 'The server\'s own sentence, verbatim.', next: 'Unchanged.' },

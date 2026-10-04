@@ -1,3 +1,7 @@
+## The translation marks say the fact only — 2026-10-04
+
+`provenanceTooltip`: `outdated` drops "Compare with the source; translate again or mark reviewed"; `ai` / `aiStale` with a source (a machine translation) read "Translated by machine and not reviewed yet" / "Translated by machine from an older value — {from} has changed since"; without one (an AI draft) they keep their sentences. Mirrored from the web app.
+
 ## Simplify: Status is the one control for "is it on this market"; one set of selling words — 2026-10-04
 
 Sheet publish parity, "SIMPLIFY BEFORE ONE-CLICK" items 1–2 (`docs/sheet-publish-parity/PLAN.md`). Mirrored in Factory except the catalog example and `sellingStatus.shared.vitest.test.ts`.

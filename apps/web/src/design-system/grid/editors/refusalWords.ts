@@ -66,7 +66,7 @@ export function refusalWords(label: string, reason: RefusalReason): string {
         ? `${label} does not apply to ${reason.productType} products.`
         : `${label} does not apply to this product.`
     case 'channel-not-writable':
-      return `${label} is not writable on this channel — edit it on the master sheet.`
+      return `${label} is not writable on this channel — edit it on the Shared product.`
     case 'cell-locked':
       return `${label} cannot be edited on this row.`
   }

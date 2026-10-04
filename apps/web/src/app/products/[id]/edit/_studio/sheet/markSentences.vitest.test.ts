@@ -17,6 +17,8 @@ import { describe, expect, it } from 'vitest'
 import { CellSaveTracker } from '@/design-system/grid'
 import { buildMasterColumns } from './master/columns'
 import { buildChannelColumns, type BuildChannelColumnsOptions } from './master/channelColumns'
+import { sharedCellDetails } from './master/sharedCellDetails'
+import type { AiDraft } from './master/columnRules'
 import type { SheetColumn } from './master/types'
 
 const titleOf = (html: string) => /class="nds-cell-prov[^"]*"[^>]*title="([^"]*)"/.exec(html)?.[1]
@@ -30,17 +32,25 @@ const memberOf = (html: string) => /nds-cell-prov-([a-z-]+)/.exec(html)?.[1] ?? 
 const PARENT = { id: 'gale', sku: 'GALE-JACKET', parentId: null, parentSku: null, isParent: true, values: {} }
 const CHILD = { id: 'gale-s', sku: 'GALE-JACKET-S', parentId: 'gale', parentSku: 'GALE-JACKET', isParent: false, values: {} }
 
-function sharedTitle(row: typeof PARENT | typeof CHILD, cell: Record<string, unknown>, opts: { locale?: string; expr?: string; refused?: string } = {}) {
-  const key = opts.locale ? `name@${opts.locale}` : 'brand'
+function sharedTitle(row: typeof PARENT | typeof CHILD, cell: Record<string, unknown>,
+  opts: { locale?: string; expr?: string; refused?: string; draft?: AiDraft; column?: Partial<SheetColumn> } = {}) {
+  const key = opts.column?.key ?? (opts.locale ? `name@${opts.locale}` : 'brand')
   const column = { key, writeField: opts.locale ? 'name' : 'brand', group: 'Content', defaultVisible: true, label: 'Brand', kind: 'text',
-    storage: opts.locale ? 'column' : 'categoryAttributes', scope: 'global', requiredBy: [], editable: true, ...(opts.locale ? { locale: opts.locale } : {}) } as SheetColumn
+    storage: opts.locale ? 'column' : 'categoryAttributes', scope: 'global', requiredBy: [], editable: true, ...(opts.locale ? { locale: opts.locale } : {}),
+    ...opts.column } as SheetColumn
   const formula = { exprFor: () => opts.expr ?? null, errorFor: () => opts.refused ?? null, candidatesFor: () => [], preview: async () => ({}), functions: () => [],
     colIdOfRef: () => null } as never
   const data = { ...row, values: { [key]: { value: 'Rosso', source: 'master', inheritedFrom: null, inherited: false, ...cell } } }
-  const [definition] = buildMasterColumns({ columns: [column], tracker: new CellSaveTracker(), locale: opts.locale ?? 'it', formula }, { current: [PARENT, CHILD, data] as never })
-  const html = renderToStaticMarkup(('cellRenderer' in definition ? definition.cellRenderer : null)({ data, value: 'Rosso' }))
+  const rows = [PARENT, CHILD, data]
+  const draftFor = () => opts.draft ?? null
+  const [definition] = buildMasterColumns({ columns: [column], tracker: new CellSaveTracker(), locale: opts.locale ?? 'it', formula, draftFor }, { current: rows as never })
+  const html = renderToStaticMarkup(('cellRenderer' in definition ? definition.cellRenderer : null)({ data, value: data.values[key].value }))
   expect(ariaOf(html)).toBe(titleOf(html))
-  return { member: memberOf(html), sentence: titleOf(html) }
+  // Cell details on the same cell: its "where it comes from" paragraph is the mark's sentence, word for word.
+  const details = sharedCellDetails(data as never, column, { rows: rows as never, draftFor, exprFor: () => opts.expr ?? null, errorFor: () => opts.refused ?? null, reset: () => {} })
+  // The hover's first line says the same (an AI draft's lines follow it on the next lines, as before).
+  const hover = String((definition as { tooltipValueGetter: (p: unknown) => unknown }).tooltipValueGetter({ data, value: data.values[key].value }))
+  return { member: memberOf(html), sentence: titleOf(html), window: details!.notes.split('\n\n')[0], hover: hover.split('\n')[0] }
 }
 
 const SHARED: [string, () => ReturnType<typeof sharedTitle>, string, string][] = [
@@ -62,13 +72,28 @@ const SHARED: [string, () => ReturnType<typeof sharedTitle>, string, string][] =
     'refused', 'Brand must be one of: Xavia, Gale.'],
   ['a translation older than its source', () => sharedTitle(PARENT, { tier: 'language', language: 'de', requested: 'de',
     translation: { source: 'manual', reviewedAt: '2026-09-01T00:00:00Z', outdated: true } }, { locale: 'de' }),
-    'outdated', 'Out of date — the source changed after this translation was written. Compare with the source; translate again or mark reviewed'],
+    'outdated', 'Out of date — the source changed after this translation was written'],
   ['a machine translation not reviewed', () => sharedTitle(PARENT, { tier: 'language', language: 'de', requested: 'de',
     translation: { source: 'ai', reviewedAt: null, outdated: false } }, { locale: 'de' }),
-    'ai', 'Drafted by AI and not yet approved — review before it counts as confirmed'],
+    'ai', 'Translated by machine and not reviewed yet'],
   ['a machine translation of an older source', () => sharedTitle(PARENT, { tier: 'language', language: 'de', requested: 'de',
     translation: { source: 'ai', reviewedAt: null, outdated: true } }, { locale: 'de' }),
-    'ai', 'Drafted by AI from an older value — the source text has changed since. Compare with it before approving'],
+    'ai', 'Translated by machine from an older value — the source text has changed since'],
+  /* PES.8's AI draft keeps the AI draft's sentence: the AI drafts view does approve or reject it (no source = a draft). */
+  ['an AI draft of this cell', () => sharedTitle(PARENT, {}, { draft: { draftValue: 'Xavia Racing' } }),
+    'ai', 'Drafted by AI and not yet approved — review before it counts as confirmed'],
+  ['an AI draft of a cell edited since', () => sharedTitle(PARENT, {}, { draft: { draftValue: 'Xavia Racing', stale: true } }),
+    'ai', 'Drafted by AI from an older value — this cell has changed since. Approving this overwrites that change'],
+  /* Owner decision 2: a variation's own axis value has no mark — but a variation that overrides a family-held value does. */
+  ['a variation’s own value of a family-held per-variation field', () => sharedTitle(CHILD, { source: 'variant', inheritedFrom: 'gale-s', layer: 'variant', pinned: true },
+    { column: { key: 'fabric', label: 'Fabric', scope: 'per_variant', axis: false } }),
+    'pinned', 'Pinned on this row — it no longer follows GALE-JACKET'],
+  /* …but an axis stored as text, German asked, showing the variation's own Italian "Nero" IS a fallback: it keeps its 🔗
+     (the wire names the variation itself, as for an empty axis value — the fallback tells them apart). */
+  ['a variation’s axis stored as text, showing its own Italian value', () => sharedTitle(CHILD, { value: 'Nero', source: 'masterColumn', inheritedFrom: 'gale-s',
+    inherited: true, tier: 'source', language: 'it', requested: 'de', provenance: { member: 'inherited', from: 'Italian · source' } },
+    { locale: 'de', column: { key: 'color@de', writeField: 'color', label: 'Colour', storage: 'localizedContent', scope: 'per_variant', axis: true } }),
+    'inherited', 'Inherited from the Italian text — edit to give this row its own value'],
 ]
 
 describe('the Shared scope: one sentence per mark', () => {
@@ -76,11 +101,22 @@ describe('the Shared scope: one sentence per mark', () => {
     const out = read()
     expect(out.member).toBe(member)
     expect(out.sentence).toBe(sentence)
+    // Cell details and the hover say the mark's sentence, word for word (one function: `sharedCellSentence`).
+    expect(out.window).toBe(sentence)
+    expect(out.hover).toBe(sentence)
+  })
+  it('🔴 no mark on a variation’s own axis value (Owner decision 2) — Cell details says whose it is', () => {
+    // GALE-JACKET drew ✎ "Pinned on this row — it no longer follows GALE-JACKET" on 40 colour and size cells.
+    const out = sharedTitle(CHILD, { value: 'nero', source: 'variant', inheritedFrom: 'gale-s', layer: 'variant', pinned: true },
+      { column: { key: 'color', label: 'Colour', kind: 'select', scope: 'per_variant', axis: true, options: ['nero'], optionLabels: { nero: 'Nero' } } })
+    expect(out).toMatchObject({ member: null, sentence: null, window: 'This variation’s own Colour' })
+    // The hover says nothing about a source (its first line is the closed list's formula hint).
+    expect(out.hover).not.toMatch(/Pinned|Inherited|follows/)
   })
   it('🔴 no mark on a parent row’s field nobody filled — a row never inherits from itself', () => {
     // GALE-JACKET in Italian drew 🔗 "Inherited" on 61 such cells: the wire names the row itself as the source.
     expect(sharedTitle(PARENT, { value: null, source: 'default', inheritedFrom: 'gale', inherited: true, tier: 'computed', language: 'it', requested: 'it',
-      provenance: { member: 'inherited', from: null } })).toEqual({ member: null, sentence: null })
+      provenance: { member: 'inherited', from: null } })).toEqual({ member: null, sentence: null, window: 'No value yet', hover: '' })
   })
 })
 
@@ -158,12 +194,14 @@ const CHANNEL: [string, () => ReturnType<typeof channelTitle>, string, string | 
     'refused', 'Brand must be one of: Xavia, Gale.'],
   ['a cell formula', () => channelTitle({ formula: 'UPPER(brand)' }),
     'formula', 'Calculated by a formula on this cell — edit the cell to change the formula'],
+  /* The same three translation sentences as the Shared scope, word for word — the fact only, no advice the sheet cannot
+     follow ("translate again", "mark reviewed", "approve"): one sentence in the design system, no per-scope override. */
   ['a translation older than its source', () => channelTitle({ tier: 'language', mapped: null, translation: { source: 'manual', reviewedAt: '2026-09-01T00:00:00Z', outdated: true } }),
-    'outdated', 'Out of date — the source changed after this translation was written. Compare with the source; translate again or mark reviewed'],
+    'outdated', 'Out of date — the source changed after this translation was written'],
   ['a machine translation not reviewed', () => channelTitle({ tier: 'language', mapped: null, translation: { source: 'ai', reviewedAt: null, outdated: false } }),
-    'ai', 'Drafted by AI and not yet approved — review before it counts as confirmed'],
+    'ai', 'Translated by machine and not reviewed yet'],
   ['a machine translation of an older source', () => channelTitle({ tier: 'language', mapped: null, translation: { source: 'ai', reviewedAt: null, outdated: true } }),
-    'ai', 'Drafted by AI from an older value — the source text has changed since. Compare with it before approving'],
+    'ai', 'Translated by machine from an older value — the source text has changed since'],
 ]
 
 describe('the channel scopes: one sentence per mark, `from` meaning what the Shared scope means', () => {
@@ -182,6 +220,14 @@ describe('the channel scopes: one sentence per mark, `from` meaning what the Sha
 })
 
 describe('one meaning of the source on both scopes', () => {
+  it('the three translation states read the same words on both scopes, and none advises what the sheet cannot do', () => {
+    for (const name of ['a translation older than its source', 'a machine translation not reviewed', 'a machine translation of an older source']) {
+      const shared = SHARED.find(([n]) => n === name)![1]().sentence
+      const channel = CHANNEL.find(([n]) => n === name)![1]().sentence
+      expect([name, channel]).toEqual([name, shared])
+      expect(shared).not.toMatch(/translate again|mark reviewed|Compare with|approv|Review it/i)
+    }
+  })
   it('no sentence is "label — source", and none names a listing by its bare label or its glyph', () => {
     for (const [name, read] of [...SHARED, ...CHANNEL]) {
       const { sentence } = read()

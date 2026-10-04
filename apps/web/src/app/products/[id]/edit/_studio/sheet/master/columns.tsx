@@ -20,7 +20,7 @@ import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
-import { CellSaveReason, saveNote, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, MarkedValue, classifyProvenance, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellProvenance, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveReason, saveNote, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, MarkedValue, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
@@ -28,7 +28,7 @@ import { variationThemeColumnDef } from '@/design-system/grid'
 import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
-import { cellIsEditable, cellOf, holdsFamilyValue, markSourceLabel, sharedMember, validationApplies, widthFor } from './columnRules'
+import { cellIsEditable, cellOf, holdsFamilyValue, requirementLabel, sharedCellFrom, sharedCellMember, sharedCellNotes, sharedHoverNote, validationApplies, widthFor, type AiDraft, type SharedCellFacts } from './columnRules'
 import { optionLabel } from '../optionLabel'
 import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
@@ -100,33 +100,8 @@ export interface BuildColumnsOptions {
  */
 export type MasterFormulaWiring = FormulaWiring<StudioRow>
 
-/** PES.8 supplies these; PES.2 owns how they render. */
-export interface AiDraft {
-  draftValue: unknown
-  baseValue?: unknown
-  /** The underlying cell moved since the draft was generated — approving it overwrites an edit. */
-  stale?: boolean
-  unverified?: boolean
-  violations?: string[]
-}
-
-
-/**
- * The one place a cell's provenance is decided on this sheet.
- *
- * A pending AI draft is layered ON TOP of whatever the cell already was: the operator needs to know
- * a machine is proposing something here before they need to know where the current value came from.
- */
-const provOf = (row: StudioRow, key: string, draft?: AiDraft | null, hasFormula?: boolean, refusedReason?: string | null) => {
-  const cell = cellOf(row, key)
-  // `sharedMember`: a row never inherits from itself (the DS classifier stays as the Variants tab reads it).
-  return sharedMember(classifyProvenance(
-    { ...cell, aiDrafted: !!draft, aiStale: !!draft?.stale, formula: !!hasFormula, refusedReason },
-    'master',
-  ), row, cell)
-}
-
-
+/** PES.8 supplies these; PES.2 owns how they render. The shape lives in `columnRules.ts`, beside the mark's rules. */
+export type { AiDraft } from './columnRules'
 
 /**
  * The `=` selector, from the ENGINE — not a local copy (#775, PES.3's request).
@@ -166,14 +141,18 @@ export function buildMasterColumns(
   // stays correct without rebuilding column defs when a draft arrives.
   /* `opts.formula.exprFor` is a REF-READING function (see `MasterFormulaWiring`), so the mark tracks
      the family's formulas as they load without rebuilding a hundred column definitions. */
-  const prov = provenanceClassRules<StudioRow>((row, key) =>
-    provOf(row, key, draftFor?.(row.id, key) ?? null, !!opts.formula?.exprFor(row.id, key), opts.formula?.errorFor?.(row.id, key)),
-  )
-
-  /* The mark's `from`, ONE rule for the cell (`withMark`) and the bullets cell (`markOf`): the server's refusal reason
-     verbatim; nothing over an AI draft; else the source by the rule both scopes share (`markSourceLabel`). */
-  const markFrom = (row: StudioRow, key: string, member: CellProvenance, draft: AiDraft | null, refusedReason: string | null): string | null =>
-    member === 'refused' ? refusedReason : draft ? null : markSourceLabel(member, row, key, rowsRef.current)
+  /* What the mark reads beside the wire, at PAINT time: the pending AI draft, the stored formula and the server's refusal
+     (#780) — through the ref-backed wiring, so a draft or a formula batch repaints without a column rebuild. */
+  const factsOf = (row: StudioRow, key: string): SharedCellFacts & { draft: AiDraft | null; refusedReason: string | null } => ({
+    draft: draftFor?.(row.id, key) ?? null,
+    formula: !!opts.formula?.exprFor(row.id, key),
+    refusedReason: opts.formula?.errorFor?.(row.id, key) ?? null,
+  })
+  /* The column the mark reads (its key and the server's `axis` verdict); a slot key or an unknown id reads as no axis. */
+  const byKey = new Map(columns.map((c) => [c.key, c] as const))
+  const markColumn = (key: string) => byKey.get(key) ?? { key }
+  /* ONE member per cell — the mark, the tint, the hover and Cell details (`sharedCellMember`, `columnRules.ts`). */
+  const prov = provenanceClassRules<StudioRow>((row, key) => sharedCellMember(row, markColumn(key), factsOf(row, key)))
 
   // Both now read from `columnRules.ts`, where they are tested — see that file for why the pure
   // decisions had to leave this `.tsx` to be reachable at all.
@@ -204,11 +183,12 @@ export function buildMasterColumns(
      */
     const withMark = (p: ICellRendererParams<StudioRow>, body: React.ReactNode, trail?: React.ReactNode) => {
       if (!p.data || isProductRelationshipColumn(col.key)) return body
-      const draft = draftFor?.(p.data.id, col.key) ?? null
       /* #780 — the server's refusal reason, read at PAINT time through the ref-backed wiring, so a
          refusal that arrives with the formula batch repaints the mark without a column rebuild. */
-      const refusedReason = opts.formula?.errorFor?.(p.data.id, col.key) ?? null
-      const provenance = provOf(p.data, col.key, draft, !!opts.formula?.exprFor(p.data.id, col.key), refusedReason)
+      const facts = factsOf(p.data, col.key)
+      const draft = facts.draft
+      const provenance = sharedCellMember(p.data, col, facts)
+      const from = sharedCellFrom(provenance, p.data, col.key, rowsRef.current, facts)
       // P2 (I4-8) — a cell with no save state mounts no save reason and no save mark.
       const save = tracker.get(p.data.id, col.key)
       // A drafted cell SHOWS the proposal; the value underneath is untouched and still what saves.
@@ -222,8 +202,9 @@ export function buildMasterColumns(
              for every other member. The mark's tooltip is the reason and nothing else (#780,
              hub-ruled) — no prefix, no field name, no client-side label logic, because the server
              is being fixed to name the field by the sheet's own label and a second voice here
-             would put two labels back. */
-          from={markFrom(p.data, col.key, provenance, draft, refusedReason)}
+             would put two labels back. The mark reads its ONE sentence from it (`provenanceTooltip`); the
+             hover and Cell details say the same (`sharedCellSentence`), as the channel scopes do. */
+          from={from}
           /* A SIBLING of the text, so it is a flex item of `.nds-cell-value` and the value
              truncates before it moves. */
           trail={trail}
@@ -249,7 +230,8 @@ export function buildMasterColumns(
       headerName: col.label + (col.requiredBy.length > 0 ? ' *' : ''),
       headerTooltip:
         [
-          col.requiredBy.length > 0 ? `Required by ${col.requiredBy.join(', ')}` : null,
+          // Never "Master" in user words: the Shared record's own requirement, or the product family's (`requirementLabel`).
+          col.requiredBy.length > 0 ? `Required by ${[...new Set(col.requiredBy.map((label) => requirementLabel(col, label)))].join(', ')}` : null,
           col.maxLength ? `Max ${col.maxLength} characters${col.capFrom ? ` (${col.capFrom})` : ''}` : null,
           col.maxBytes ? `Max ${col.maxBytes} bytes` : null,
           col.helpText,
@@ -332,30 +314,14 @@ export function buildMasterColumns(
        */
       tooltipValueGetter: (p) => {
         if (!p.data) return ''
-        const own = (): string => {
-          const v = validation.validate(p.value, p.data!, col.key)
-          if (v.message) return v.message
-          if (holdsFamilyValue(col, p.data!)) return 'The family value: each variation without its own value inherits it'
-          if (!applies(p.data!, col)) {
-            return p.data!.isParent ? col.axis ? 'A variation axis: each variation has its own value' : 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
-          }
-          const draft = draftFor?.(p.data!.id, col.key) ?? null
-          /* The server's refusal, as the mark reads it (`withMark`): without it the hover said "Calculated by a formula…"
-             while the ⚠ mark said the reason. */
-          const refusedReason = opts.formula?.errorFor?.(p.data!.id, col.key) ?? null
-          if (draft) {
-            const base = draft.baseValue ?? cellOf(p.data!, col.key)?.value
-            const member = provOf(p.data!, col.key, draft, !!opts.formula?.exprFor(p.data!.id, col.key), refusedReason)
-            return [
-              provenanceTooltip(member, member === 'refused' ? refusedReason : null),
-              base == null || base === '' ? 'The cell is empty now' : `Now: ${String(base)}`,
-              draft.violations?.length ? `⚠ ${draft.violations.join(' · ')}` : null,
-              draft.unverified ? 'Not verified against the channel' : null,
-            ].filter(Boolean).join('\n')
-          }
-          const member = provOf(p.data!, col.key, null, !!opts.formula?.exprFor(p.data!.id, col.key), refusedReason)
-          return provenanceTooltip(member, member === 'refused' ? refusedReason : markSourceLabel(member, p.data!, col.key, rowsRef.current))
-        }
+        /* The hover's own note: the validation message, else the family value, else why the column does not apply, else
+           the mark's sentence (with an AI draft's lines) — the pieces Cell details shows too (`sharedCellNotes`). The
+           server's refusal is read as the mark reads it: without it the hover said "Calculated by a formula…" while the
+           ⚠ mark said the reason. */
+        const own = (): string => sharedHoverNote(
+          validation.validate(p.value, p.data!, col.key).message,
+          sharedCellNotes(p.data!, col, rowsRef.current, factsOf(p.data!, col.key)),
+        )
         return composeCellTooltip(
           saveNote(tracker.get(p.data.id, col.key)),
           own(),
@@ -407,11 +373,11 @@ export function buildMasterColumns(
         },
         rowIdOf: (row) => row.id,
         tracker,
-        provenanceOf: (row, key) => provOf(row, key, draftFor?.(row.id, key) ?? null, !!opts.formula?.exprFor(row.id, key), opts.formula?.errorFor?.(row.id, key)),
+        provenanceOf: (row, key) => sharedCellMember(row, markColumn(key), factsOf(row, key)),
         // A uniform list's mark reads its first filled position's text — the same `from` that position's own cell gives.
         markOf: (row, key) => {
-          const draft = draftFor?.(row.id, key) ?? null, refusedReason = opts.formula?.errorFor?.(row.id, key) ?? null
-          return { from: markFrom(row, key, provOf(row, key, draft, !!opts.formula?.exprFor(row.id, key), refusedReason), draft, refusedReason) }
+          const facts = factsOf(row, key), member = sharedCellMember(row, markColumn(key), facts)
+          return { from: sharedCellFrom(member, row, key, rowsRef.current, facts) }
         },
         required: (row) => !!first && applies(row, first) && requiredHere(row, first),
       })

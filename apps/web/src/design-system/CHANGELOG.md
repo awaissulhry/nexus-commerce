@@ -1,3 +1,17 @@
+## Words: the translation marks say the fact, not an action the sheet cannot do — 2026-10-04
+
+Shared Cell details (`docs/shared-cell-details/PLAN.md`, "Words fixed in the same PR"). One change in `provenanceTooltip` for both sheet scopes — the Shared scope's per-page `tooltip` override is gone. Mirrored in Factory (`provenance.ts`), except the tests and the `/design/language-axis` page.
+
+- **`outdated`**: "Out of date — {from} changed after this translation was written" (dropped "Compare with the source; translate again or mark reviewed": no sheet scope has a per-cell translate-again or mark-reviewed).
+- **`ai` / `aiStale` with a `from`** (a machine translation; the sheets pass "the source text"): "Translated by machine and not reviewed yet" / "Translated by machine from an older value — {from} has changed since" (were "Drafted by AI and not yet approved — review …" / "… Compare with it before approving": the AI drafts review approves AI drafts, not translations). **Without a `from`** (a PES.8 AI draft of the cell) both keep their sentences.
+- `/design/language-axis`: the legend's `ai`, `aiStale` and `outdated` rows read the machine-translation words and name what an edit does instead of the old advice.
+
+## Words: a channel refusal names the Shared product, not "the master sheet" — 2026-10-04
+
+Shared Cell details (`docs/shared-cell-details/PLAN.md`). Web only (Factory has no `refusalWords.ts`).
+
+- **`refusalWords`** `channel-not-writable`: "… is not writable on this channel — edit it on the Shared product." (was "on the master sheet"; the UI calls it the Shared product since PR #250).
+
 ## Channel cell marks: one mark for both sheet scopes, four channel members, a full accessible name, AAA mark inks — 2026-10-04
 
 `docs/channel-cell-marks/PLAN.md` (approved 2026-10-04). The product sheet's channel scopes (eBay, Amazon, Shopify, Etsy) draw their cells with the same part and the same rule as the Shared scope: no mark on a cell that simply follows Shared, a small mark only where the value differs or the next action does. Mirrored in Factory (`provenance.ts`, `provenanceMark.tsx`, `MarkedValue.tsx`, `SlotListEditor.tsx`, `slotListColumn.ts`, `variationTheme.tsx`, `shapeColumn.ts`, `renderers/index.ts`, `grid.css`, the mark tokens), except the catalog example and the tests.

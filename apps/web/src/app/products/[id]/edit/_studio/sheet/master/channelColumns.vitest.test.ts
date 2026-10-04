@@ -104,9 +104,9 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
     ['a Shopify edit Shopify does not have yet', { source: 'channelExplicit', layer: 'channel', pinned: true, inherited: false, nexusDraft: true, unsentDraft: true },
       'pending', 'Saved in Nexus — not sent to Shopify yet. Review synchronization to send it'],
     ['an AI translation not reviewed', { translation: { source: 'ai', reviewedAt: null, outdated: false } }, 'ai',
-      'Drafted by AI and not yet approved — review before it counts as confirmed'],
+      'Translated by machine and not reviewed yet'],
     ['an out-of-date translation', { translation: { source: 'manual', reviewedAt: null, outdated: true } }, 'outdated',
-      'Out of date — the source changed after this translation was written. Compare with the source; translate again or mark reviewed'],
+      'Out of date — the source changed after this translation was written'],
     ['a language fallback (German asked, Italian shown)', { tier: 'source', language: 'it', requested: 'de', provenance: { member: 'inherited', from: 'Italian · source' } },
       'inherited', 'Inherited from the Italian text — edit to give this row its own value'],
   ])('marks %s, in the one sentence both scopes read', (_, cell, mark, sentence) => {

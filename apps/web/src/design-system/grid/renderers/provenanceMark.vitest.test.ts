@@ -106,8 +106,14 @@ describe('the four channel members', () => {
   it('the other members read their sentence too — no "label — from" left', () => {
     expect(attrs(render(createElement(ProvenanceMark, { provenance: 'mappedShared', from: 'the Shared product' }))).label)
       .toBe('Derived per product from the Shared product — every alias of this product shares this value, so editing one changes all of them')
-    expect(attrs(render(createElement(ProvenanceMark, { provenance: 'aiStale', from: 'the Italian source' }))).label)
-      .toBe('Drafted by AI from an older value — the Italian source has changed since. Compare with it before approving')
+    // With a source: a machine translation of an older source text — the fact only, no advice to approve or compare.
+    expect(attrs(render(createElement(ProvenanceMark, { provenance: 'aiStale', from: 'the source text' }))).label)
+      .toBe('Translated by machine from an older value — the source text has changed since')
+    expect(attrs(render(createElement(ProvenanceMark, { provenance: 'ai', from: 'the source text' }))).label)
+      .toBe('Translated by machine and not reviewed yet')
+    // No source: an AI draft of THIS cell (PES.8) — the AI drafts review approves it.
+    expect(attrs(render(createElement(ProvenanceMark, { provenance: 'ai' }))).label)
+      .toBe('Drafted by AI and not yet approved — review before it counts as confirmed')
     // No source: an AI draft of THIS cell — approving it would overwrite the edit made since (PES.8).
     expect(attrs(render(createElement(ProvenanceMark, { provenance: 'aiStale' }))).label)
       .toBe('Drafted by AI from an older value — this cell has changed since. Approving this overwrites that change')

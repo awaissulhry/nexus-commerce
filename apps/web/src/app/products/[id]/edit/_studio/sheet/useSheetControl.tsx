@@ -7,7 +7,9 @@
  *    override on a channel, nothing at all on Master), and a range offers "Reset selection to inherited";
  *  - a column's header menu offers "Set every row…" and "Reset column to inherited";
  *  - Delete asks once, "Clear" or "Reset to inherited", instead of silently storing a blank;
- *  - Shift+F10 (or the ContextMenu key) opens a focused cell's menu, so all of it works from the keyboard.
+ *  - Shift+F10 (or the ContextMenu key) opens a focused cell's menu, so all of it works from the keyboard;
+ *  - Cell details (2026-10-04): ONE window, ONE cell-menu item and ONE ⋯ item for both scopes; a scope supplies only how
+ *    a cell is described (`details`, `cellDetails.ts`). The window was the channel adapter's own before.
  *
  * Every write takes the existing roads: a reset is `writer.set(…, { intent })` (the intent the bulk-save path already
  * honours), a clear or a set is `setDataValue` through the grid (the typed-edit road: write gate, acknowledgement,
@@ -15,6 +17,9 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useActionConfirm, type AgMenuItemDef, type ColDef, type ColGroupDef, type GetContextMenuItemsParams, type GridApi, type IRowNode, type SheetWriter } from '@/design-system/grid'
+import type { MenuItemDef } from '@/design-system/components'
+import { CellDetailsDialog } from './CellDetailsDialog'
+import { CELL_DETAILS_COPY, type CellDetailsContent, type CellDetailsSource } from './cellDetails'
 import { ClearOrResetDialog, SetColumnDialog, type ClearChoiceRequest, type SetColumnRequest } from './SheetControlDialogs'
 import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
 
@@ -36,8 +41,28 @@ export interface SheetControlOptions<Row> {
   removeFormula: (rowId: string, colId: string) => Promise<{ ok: boolean; error?: string }>
   /** One cell's reset from its menu, when the scope owns a review for it (a channel list). `true` = handled. */
   resetOne?: (row: Row, colId: string, offer: ResetOffer) => boolean
-  /** A refusal said out loud (the sheet's toast). */
-  say: (message: string) => void
+  /**
+   * How this scope describes a cell for Cell details: the window, its cell-menu item (after the resets) and the toolbar ⋯
+   * item (`cellDetails.overflowItem`). Absent: no menu item, and the ⋯ item (if placed) says `CELL_DETAILS_COPY.noCell`.
+   */
+  details?: CellDetailsSource<Row>
+  /** Said out loud (the sheet's toast): a refusal (`danger`, the default) or a pointer (`info`: Cell details' "Select…"). */
+  say: (message: string, tone?: 'danger' | 'info') => void
+}
+
+/** The open Cell details window and the cell it describes (the focus goes back there on close). */
+interface OpenCellDetails {
+  content: CellDetailsContent
+  rowId: string
+  colId: string
+}
+
+/** What the control gives a scope for Cell details. */
+export interface SheetCellDetails<Row> {
+  /** Open the window for one cell (the scope's `describe`); a cell it cannot describe says `noCell`. */
+  open: (row: Row, colId: string) => void
+  /** The toolbar ⋯ item: it reads the focused cell. One object for the hook's life. */
+  overflowItem: MenuItemDef
 }
 
 type Cell<Row> = { rowId: string; colId: string; row: Row }
@@ -48,6 +73,7 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
   const confirm = useActionConfirm()
   const [clearAsk, setClearAsk] = useState<(ClearChoiceRequest & { resolve: (choice: ClearChoice | null) => void }) | null>(null)
   const [setAsk, setSetAsk] = useState<(SetColumnRequest & { targets: IRowNode<Row>[] }) | null>(null)
+  const [detailsShown, setDetailsShown] = useState<OpenCellDetails | null>(null)
 
   const rowOf = (rowId: string): Row | null => live.current.getGridApi()?.getRowNode(rowId)?.data ?? null
   const editable = (rowId: string, colId: string): boolean => {
@@ -165,28 +191,67 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     })), 'setColumn')
   }, [setAsk, writeValues])
 
+  /** Cell details: the scope describes the cell, the window shows it. */
+  const openDetails = useCallback((row: Row, colId: string) => {
+    const { details, rowIdOf, say } = live.current
+    const content = details?.describe(row, colId) ?? null
+    if (!content) return say(CELL_DETAILS_COPY.noCell, 'info')
+    setDetailsShown({ content, rowId: rowIdOf(row), colId })
+  }, [])
+  /** Close, then the focus goes back to the cell, found by its row id (a row inside a collapsed group keeps none). */
+  const closeDetails = useCallback((shown: OpenCellDetails) => {
+    setDetailsShown(null)
+    requestAnimationFrame(() => {
+      const api = live.current.getGridApi(), node = api?.getRowNode(shown.rowId)
+      if (node?.rowIndex != null) api?.setFocusedCell(node.rowIndex, shown.colId)
+    })
+  }, [])
+  const cellDetails = useMemo<SheetCellDetails<Row>>(() => ({
+    open: openDetails,
+    overflowItem: {
+      id: 'cell-details', label: CELL_DETAILS_COPY.item, description: CELL_DETAILS_COPY.itemDescription,
+      onSelect: () => {
+        const { getGridApi, details, say } = live.current
+        const api = getGridApi(), focused = api?.getFocusedCell()
+        const colId = focused?.column.getColId()
+        const explains = colId && details ? details.explains(colId) : false
+        if (typeof explains === 'object') return say(explains.refusal, 'info')
+        const row = focused ? api?.getDisplayedRowAtIndex(focused.rowIndex)?.data : undefined
+        if (explains && row && colId) openDetails(row, colId)
+        else say(CELL_DETAILS_COPY.noCell, 'info')
+      },
+    },
+  }), [openDetails])
+
   const cellMenuItems = useCallback((params: GetContextMenuItemsParams<Row>): AgMenuItemDef<Row>[] => {
     const row = params.node?.data, colId = params.column?.getColId()
-    const { columnFacts, rowIdOf, resetOne } = live.current
-    if (!row || !colId || !columnFacts(colId)) return []
-    const cells = attributeCells(selectedCells(params.api, rowIdOf))
-    const rowId = rowIdOf(row)
-    if (cells.length > 1 && cells.some(c => c.rowId === rowId && c.colId === colId)) {
-      const targets = resetTargets(cells, offer, listOf)
-      return [{ name: `Reset selection to inherited (${targets.length})`, disabled: targets.length === 0,
-        tooltip: targets.length ? undefined : 'No selected cell holds a value of its own.',
-        action: () => { void confirmReset(targets, `Reset ${subject(targets)} to inherited?`) } }]
+    const { columnFacts, rowIdOf, resetOne, details } = live.current
+    if (!row || !colId) return []
+    /** The resets: one cell, or the selection it belongs to — attribute columns only. */
+    const resets = (): AgMenuItemDef<Row>[] => {
+      if (!columnFacts(colId)) return []
+      const cells = attributeCells(selectedCells(params.api, rowIdOf))
+      const rowId = rowIdOf(row)
+      if (cells.length > 1 && cells.some(c => c.rowId === rowId && c.colId === colId)) {
+        const targets = resetTargets(cells, offer, listOf)
+        return [{ name: `Reset selection to inherited (${targets.length})`, disabled: targets.length === 0,
+          tooltip: targets.length ? undefined : 'No selected cell holds a value of its own.',
+          action: () => { void confirmReset(targets, `Reset ${subject(targets)} to inherited?`) } }]
+      }
+      const own = offer(rowId, colId)
+      /* P1 review (4) — an eBay listing-level value on a variation row is the listing's: nothing of the row's own to reset. */
+      const level = (row as { values?: Record<string, { mapped?: { listingLevel?: { variation?: boolean } } | null } | undefined> }).values?.[colId]?.mapped?.listingLevel
+      if (!own && level?.variation) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'eBay takes one value for the whole listing: set or clear it here, for every variation. This row holds no value of its own to reset.' }]
+      if (!own) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'This cell holds no value of its own: it already shows what it inherits, or nothing sits above it.' }]
+      return [{ name: own.label, action: () => {
+        if (resetOne?.(row, colId, own)) return
+        void reset([{ rowId, colId, intent: own.intent, formula: own.formula }])
+      } }]
     }
-    const own = offer(rowId, colId)
-    /* P1 review (4) — an eBay listing-level value on a variation row is the listing's: nothing of the row's own to reset. */
-    const level = (row as { values?: Record<string, { mapped?: { listingLevel?: { variation?: boolean } } | null } | undefined> }).values?.[colId]?.mapped?.listingLevel
-    if (!own && level?.variation) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'eBay takes one value for the whole listing: set or clear it here, for every variation. This row holds no value of its own to reset.' }]
-    if (!own) return [{ name: 'Reset to inherited', disabled: true, tooltip: 'This cell holds no value of its own: it already shows what it inherits, or nothing sits above it.' }]
-    return [{ name: own.label, action: () => {
-      if (resetOne?.(row, colId, own)) return
-      void reset([{ rowId, colId, intent: own.intent, formula: own.formula }])
-    } }]
-  }, [reset, confirmReset])
+    /* Cell details, after the resets, on every column the scope explains — read-only and non-attribute columns too. */
+    const explain: AgMenuItemDef<Row>[] = details?.explains(colId) === true ? [{ name: CELL_DETAILS_COPY.item, action: () => openDetails(row, colId) }] : []
+    return [...resets(), ...explain]
+  }, [reset, confirmReset, openDetails])
 
   /** Delete / Backspace and the menu key on a cell. `true` = handled here (the column already kept AG off it). */
   const onKeyDown = useCallback((event: { event?: Event | null; node?: IRowNode<Row> | null; column?: { getColId(): string } | null; api?: GridApi<Row> }): boolean => {
@@ -220,7 +285,8 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     <ClearOrResetDialog request={clearAsk} onChoose={choice => clearAsk?.resolve(choice)} />
     <SetColumnDialog request={setAsk} onApply={applySetColumn} onClose={() => setSetAsk(null)} />
     {confirm.element}
-  </>, [clearAsk, setAsk, applySetColumn, confirm.element])
+    <CellDetailsDialog content={detailsShown?.content ?? null} onClose={() => { if (detailsShown) closeDetails(detailsShown) }} />
+  </>, [clearAsk, setAsk, applySetColumn, confirm.element, detailsShown, closeDetails])
 
-  return { cellMenuItems, columnMenuItems, onKeyDown, decorate, element, reset }
+  return { cellMenuItems, columnMenuItems, onKeyDown, decorate, element, reset, cellDetails }
 }
