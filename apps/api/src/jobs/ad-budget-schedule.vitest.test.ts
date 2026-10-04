@@ -182,6 +182,64 @@ describe('activeWindow — the entry key (BSP.6)', () => {
   })
 })
 
+/**
+ * 3d (review G.6, N2; Owner D2) — the BUDGET day is 00:00–24:00 UTC (@nexus/shared/ads-budget-day). An all-day
+ * window is one budget day, and the date range counts budget days. Timed windows stay in the schedule's zone
+ * (the BSP.6 cases above).
+ */
+describe('the budget day (3d) — all-day windows and the date range follow 00:00 UTC', () => {
+  const TZ = 'Europe/Rome'
+  const at = (utc: string) => new Date(utc)
+  const friday = [{ day: 5, start: '', end: '', adj: 'mult', value: 1.5 }] // 2026-08-21 is a Friday
+
+  it('🔴 an all-day Friday window is still open at 00:30 Rome on Saturday — Friday’s budget day runs to 02:00 Rome', () => {
+    const a = activeWindow(friday, TZ, at('2026-08-21T22:30:00Z'))
+    expect(a?.win).toBeTruthy()
+    expect(a?.entryDate).toBe('2026-08-21')
+  })
+
+  it('🔴 and not yet open at 01:30 Rome on Friday — that is still Thursday’s budget day; it opens at 00:00 UTC', () => {
+    expect(activeWindow(friday, TZ, at('2026-08-20T23:30:00Z'))).toBeNull()
+    expect(activeWindow(friday, TZ, at('2026-08-21T00:00:00Z'))?.entryDate).toBe('2026-08-21')
+  })
+
+  it('the schedule’s timezone does not move an all-day window', () => {
+    for (const tz of ['Europe/Rome', 'Europe/London', 'America/New_York', 'UTC']) {
+      expect(activeWindow(friday, tz, at('2026-08-21T22:30:00Z'))?.key).toBe(activeWindow(friday, 'UTC', at('2026-08-21T22:30:00Z'))?.key)
+      expect(activeWindow(friday, tz, at('2026-08-20T23:30:00Z'))).toBeNull()
+    }
+  })
+
+  it('after the 2026-10-25 clock change the all-day window opens at 01:00 Rome instead of 02:00', () => {
+    const sunday = [{ day: 0, start: '', end: '', adj: 'mult', value: 1.5 }]
+    expect(activeWindow(sunday, TZ, at('2026-10-24T23:30:00Z'))).toBeNull()              // 01:30 Rome Sun (CEST) — still Saturday
+    expect(activeWindow(sunday, TZ, at('2026-10-25T00:00:00Z'))?.entryDate).toBe('2026-10-25') // 02:00 Rome Sun (CEST)
+    expect(activeWindow(sunday, TZ, at('2026-10-25T23:30:00Z'))?.entryDate).toBe('2026-10-25') // 00:30 Rome Mon (CET) — still Sunday
+    expect(activeWindow(sunday, TZ, at('2026-10-26T00:00:00Z'))).toBeNull()              // 01:00 Rome Mon (CET) — Monday
+  })
+
+  it('the date range counts budget days: the end date runs to 02:00 Rome the next morning, the start opens at 02:00 Rome', () => {
+    const s = { startDate: new Date('2026-08-10'), endDate: new Date('2026-08-30'), neverExpire: false, excludeDates: [] }
+    expect(dateActive(s, at('2026-08-09T22:30:00Z'))).toBe(false) // 00:30 Rome on the 10th — still the 9th
+    expect(dateActive(s, at('2026-08-10T00:00:00Z'))).toBe(true)
+    expect(dateActive(s, at('2026-08-30T23:59:00Z'))).toBe(true)  // 01:59 Rome on the 31st — still the 30th
+    expect(dateActive(s, at('2026-08-31T00:00:00Z'))).toBe(false)
+  })
+
+  it('a blackout day is a budget day, both ends inclusive', () => {
+    const s = { startDate: null, endDate: null, neverExpire: true, excludeDates: [{ start: '2026-08-25', end: '2026-08-26' }] }
+    expect(dateActive(s, at('2026-08-24T23:59:59Z'))).toBe(true)
+    expect(dateActive(s, at('2026-08-25T00:00:00Z'))).toBe(false)
+    expect(dateActive(s, at('2026-08-26T23:59:59Z'))).toBe(false)
+    expect(dateActive(s, at('2026-08-27T00:00:00Z'))).toBe(true)
+  })
+
+  it('an unreadable date bounds nothing, never a crash', () => {
+    const s = { startDate: new Date('not a date'), endDate: null, neverExpire: true, excludeDates: [{ start: 'x', end: 'y' }] }
+    expect(dateActive(s, at('2026-08-20T12:00:00Z'))).toBe(true)
+  })
+})
+
 describe('classifyOverride — who took the budget (BSP.6 item 2)', () => {
   it('the pacer is named as the envelope holder, because yielding to it is CORRECT', () => {
     const c = classifyOverride('automation:budget-manager-cron')
