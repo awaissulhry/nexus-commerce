@@ -34,8 +34,9 @@ describe('resolveAutonomy', () => {
     expect(resolveAutonomy({ enabled: true, dryRun: false, autonomyLevel: 'BANANA' })).toBe('AUTO')
   })
 
-  it('an explicit OFF on an enabled rule falls back — enabled is the real gate', () => {
-    expect(resolveAutonomy({ enabled: true, dryRun: true, autonomyLevel: 'OFF' })).toBe('PROPOSE')
+  it('🔴 4l — an explicit OFF on an enabled rule is OFF: it never falls back to dryRun (dryRun=false was AUTO)', () => {
+    expect(resolveAutonomy({ enabled: true, dryRun: true, autonomyLevel: 'OFF' })).toBe('OFF')
+    expect(resolveAutonomy({ enabled: true, dryRun: false, autonomyLevel: 'OFF' })).toBe('OFF')
   })
 })
 

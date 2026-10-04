@@ -179,7 +179,7 @@ export function decideVerdict(e: VerdictInput, now = new Date()): { verdict: Ver
   if (e.decisionWeeks >= GRADUATION_WEEKS && e.editedApplies === 0 && !stale) {
     return {
       verdict: 'ready',
-      summary: `You applied its proposals unchanged in ${e.decisionWeeks} separate weeks, most recently ${e.lastDecisionAt ? daysAgo(e.lastDecisionAt, now) : 'recently'}, and nothing it ran failed. That is agreement, repeated — the evidence AUTO asks for.`,
+      summary: `You applied its proposals unchanged in ${e.decisionWeeks} separate weeks, most recently ${e.lastDecisionAt ? daysAgo(e.lastDecisionAt, now) : 'recently'}, and nothing it ran failed. That is agreement, repeated.`, // 4l — AUTO asks for the graduation gate, not this
     }
   }
   if (e.decisionWeeks >= GRADUATION_WEEKS && e.editedApplies > 0) {
