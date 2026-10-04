@@ -77,6 +77,7 @@ export const MATRIX_CELL_COPY: MatrixCopy = {
   setHere: 'Set here',
   formula: (expr) => `Formula ${expr}`,
   clamped: (which) => `Clamped to the ${which}`,
+  waitingForPublish: (value) => `Product sheet change waits for Publish: ${value}`,
 }
 
 /* ── the states §3.4 enumerates, named so a screenshot table and a gate row can address them ── */
@@ -736,10 +737,15 @@ export function matrixCoerceValue(kind: MatrixCellKind, value: unknown): unknown
       const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN
       return Number.isFinite(n) && n >= 0 ? n : undefined
     }
-    case 'syncMode':
-      return value === 'FOLLOW' || value === 'PINNED' ? value : undefined
-    case 'fulfilment':
-      return value === 'FBA' || value === 'FBM' || value === 'MCF' ? value : undefined
+    case 'syncMode': {
+      // A pasted or typed word ("Follow", "pinned") is its code: copying a Mode cell gives the word it shows.
+      const code = typeof value === 'string' ? value.trim().toUpperCase() : value
+      return code === 'FOLLOW' || code === 'PINNED' ? code : undefined
+    }
+    case 'fulfilment': {
+      const code = typeof value === 'string' ? value.trim().toUpperCase() : value
+      return code === 'FBA' || code === 'FBM' || code === 'MCF' ? code : undefined
+    }
     case 'salePrice': {
       if (value == null) return { value: null, start: null, end: null }
       if (isSaleEditorValue(value)) {

@@ -90,3 +90,19 @@ describe('the header as an input to the preferences', () => {
     expect(withWidth(w, 'spend', 120.2)).toBe(w)
   })
 })
+
+describe('Column.defaultHidden — a column that starts hidden but is listed in Customise', () => {
+  it('defaults leave it out of the visible columns', () => {
+    expect(defaultPrefs(TOGGLABLE, LOCKED, ['status', 'spend', 'acos']).visibleColumns).toEqual(['status', 'spend', 'acos'])
+  })
+  it('a saved layout that never knew it does not switch it on; a new ordinary column still appears', () => {
+    const saved = { visibleColumns: ['status', 'acos'], knownColumns: ['status', 'acos'] }
+    const { patch } = reconcileStoredPrefs(saved, { ...input, defaultHiddenKeys: ['type'] })
+    expect(patch.visibleColumns).toEqual(['status', 'spend', 'acos'])
+  })
+  it('a layout where the operator switched it on keeps it on', () => {
+    const saved = { visibleColumns: ['status', 'type', 'spend', 'acos'], knownColumns: TOGGLABLE }
+    const { patch } = reconcileStoredPrefs(saved, { ...input, defaultHiddenKeys: ['type'] })
+    expect(patch.visibleColumns).toEqual(['status', 'type', 'spend', 'acos'])
+  })
+})

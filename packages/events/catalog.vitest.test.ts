@@ -94,6 +94,37 @@ describe('payload validation', () => {
   })
 })
 
+describe('listing.values_changed — the live-sync hint of the sheet and the Matrix', () => {
+  const valid = {
+    productId: 'root', reason: 'matrix',
+    listings: [{ listingId: 'l-it', productId: 'child', version: 4 }, { listingId: 'l-de', productId: 'child', version: 7 }],
+    fields: ['quantityMode', 'quantity', 'stockBuffer', 'syncState', 'fulfilment', 'price', 'salePrice', 'externalListingId', 'offer', 'fulfilmentSettings', 'offerDraft'],
+  }
+
+  it('accepts every declared field and partitions by the family root', () => {
+    const payload = parseEventPayload('listing.values_changed', valid)
+    expect(payload.listings).toHaveLength(2)
+    expect(deriveSubject('listing.values_changed', payload)).toBe('root')
+    expect(getEventDefinition('listing.values_changed').context).toBe('catalog')
+  })
+
+  it('is strict at the top and on each listing: an unknown key is refused', () => {
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, accountId: 'a1' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: [{ listingId: 'l', productId: 'p', version: 1, sku: 'S' }] })).toThrow(/Invalid payload/)
+  })
+
+  it('refuses an unknown field, an empty list, a negative or fractional version and more than 500 listings', () => {
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, fields: ['title'] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, fields: [] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: [] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: [{ listingId: 'l', productId: 'p', version: -1 }] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: [{ listingId: 'l', productId: 'p', version: 1.5 }] })).toThrow(/Invalid payload/)
+    const many = Array.from({ length: 501 }, (_, i) => ({ listingId: `l${i}`, productId: 'p', version: 1 }))
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: many })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('listing.values_changed', { ...valid, listings: many.slice(0, 500) })).not.toThrow()
+  })
+})
+
 describe('subject derivation', () => {
   it('derives a non-empty subject for every event from a minimal payload', () => {
     // Every definition must be able to produce a partition key. A definition
@@ -110,6 +141,7 @@ describe('subject derivation', () => {
       'listing.deleted': { listingId: 'l1' },
       'listing.syncing': { listingId: 'l1' },
       'listing.synced': { listingId: 'l1', status: 'SUCCESS' },
+      'listing.values_changed': { productId: 'p1', listings: [{ listingId: 'l1', productId: 'p2', version: 4 }], fields: ['quantity'] },
       'wizard.submitted': { wizardId: 'w1', productId: 'p1', status: 'LIVE' },
       'bulk.progress': { jobId: 'j1', processed: 1, total: 2, succeeded: 1, failed: 0 },
       'bulk.completed': { jobId: 'j1', status: 'DONE' },
@@ -178,6 +210,10 @@ describe('subject derivation', () => {
       'flat_file_feed.status_changed': {
         feedId: 'f1', processingStatus: 'DONE', marketplace: null, productType: null,
         messagesWithError: null, terminal: true,
+      },
+      'publication.status_changed': {
+        publicationId: 'pub1', batchId: null, productId: 'p1', channel: 'AMAZON', marketplace: 'IT',
+        accountId: 'acct1', aliasKey: '', status: 'ACCEPTED', terminal: true,
       },
       'ebay_push.status_changed': { jobId: 'j1', taskId: 't1', status: 'DONE', pushed: 1, failed: 0 },
       'account.health.changed': { accountStatus: 'WARNING', marketplaceId: 'A1PA6795UKMFR9' },

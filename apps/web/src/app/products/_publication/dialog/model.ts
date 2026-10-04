@@ -1,5 +1,28 @@
 import type { StudioPublishIssue, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
-import type { MarketplaceLite } from '../types'
+
+/**
+ * The markets the dialog can publish to, as any surface describes them (the studio's `MarketplaceLite` fits). Kept
+ * structural so the shared dialog never imports a studio type.
+ */
+export interface PublicationMarket {
+  id?: string
+  channel: string
+  code: string
+  name: string
+  connected?: boolean
+  accounts?: Array<{ id: string; label: string }>
+}
+
+/** One place the dialog can publish to: a market of a channel on one connected account (and, rarely, one listing). */
+export interface PublicationDestinationOption {
+  key: string
+  scope: StudioPublishScope
+  /** "Amazon Italy · Xavia Racing" — the old one-line label. */
+  label: string
+  /** The market's own name ("Amazon Italy"). */
+  marketName: string
+  accountLabel: string
+}
 
 export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify([scope.channel, scope.marketplace, scope.accountId, scope.listingId ?? null])
 
@@ -36,11 +59,11 @@ export function retainPublicationReceipt(previous: StudioPublishResult | null, n
     message: `${next.message} Previously received channel reference: ${references.join(', ')}.` }
 }
 
-export function publicationDestinations(markets: MarketplaceLite[], current?: StudioPublishScope) {
+export function publicationDestinations(markets: PublicationMarket[], current?: StudioPublishScope): PublicationDestinationOption[] {
   const options = markets.filter(m => m.connected !== false).flatMap(m => (m.accounts ?? []).map(a => {
     const scope: StudioPublishScope = { channel: m.channel, marketplace: m.code, accountId: a.id,
       ...(current?.channel === m.channel && current.marketplace === m.code && current.accountId === a.id && current.listingId ? { listingId: current.listingId } : {}) }
-    return { key: publicationScopeKey(scope), scope, label: `${m.name} · ${a.label}${scope.listingId ? ' · Selected listing' : ''}` }
+    return { key: publicationScopeKey(scope), scope, label: `${m.name} · ${a.label}${scope.listingId ? ' · Selected listing' : ''}`, marketName: m.name, accountLabel: a.label }
   }))
   return [...new Map(options.map(option => [option.key, option])).values()]
 }

@@ -5,7 +5,9 @@
  * editable, one value is committed by KEYBOARD, by MOUSE and by PASTE (where the editor takes a paste), each on a row the
  * sweep owns, and each commit must:
  *   · send exactly ONE `bulk-save`, one unit, one change — the cell's own field, target and content address, the value
- *     chosen, intent `set`, the scope's marketplace context and the version the GET gave the row;
+ *     chosen, intent `set`, the scope's marketplace context and the version the GET gave the row; a stock cell (Mode / Qty /
+ *     Buffer, kind `stockControl`) sends exactly ONE `PATCH …/studio/matrix` instead, one cell — the row, the coordinate
+ *     its stock sits on, the Matrix cell, the value chosen, the listing's version and the listing the read gave it;
  *   · be answered saved (200, `saved: 1, failed: 0`) and show on the cell;
  *   · be STORED: after each gesture, the sheet API must hold its value before a later gesture overwrites it.
  *     A final chunk read also verifies that later edits did not overwrite another cell.
@@ -26,7 +28,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixture'
 import { DRIVERS, NETWORK_STUBS, PATHS, editorOf, labelledCodes, pickFor, type EditorId, type Path } from './drivers'
-import { focusCell, gridLabels, openSheet, readSheet, revealAllColumns, scopeOf, type ApiColumn, type ApiRow, type ScopeName, type SheetRead } from './grid'
+import { editingCells, focusCell, gridLabels, openSheet, readSheet, revealAllColumns, scopeOf, type ApiColumn, type ApiRow, type ScopeName, type SheetRead } from './grid'
 import { sheetSeed } from './seed'
 import { Wire, assertSaved } from './wire'
 
@@ -149,6 +151,9 @@ for (const [scopeIndex, scopeName] of SCOPES.entries()) {
         await revealAllColumns(page)
         const expected = new Map<string, { row: string; key: string; value: unknown; editor: EditorId }>()
         const versions = new Map(read.rows.map((r) => [r.id, versionOf(r, scopeName)]))
+        // Each row as the latest read gave it: a stock cell's write carries the version its listing is at.
+        const latest = new Map(read.rows.map((r) => [r.id, r]))
+        const remember = (sheet: SheetRead) => { for (const r of sheet.rows) latest.set(r.id, r) }
         const results: string[] = []
         const failures: string[] = []
         let attempted = 0
@@ -176,6 +181,35 @@ for (const [scopeIndex, scopeName] of SCOPES.entries()) {
               await expect.poll(async () => wire.mark() > mark || await pin.isVisible(), { timeout: 10_000, message: `${what}: neither a write nor a question` }).toBe(true)
               const pinned = wire.mark() === mark
               if (pinned) { await pin.click(); results.push(`  (${column.key}: follows the shared text — pinned on the listing)`) }
+              if (column.kind === 'stockControl') {
+                // Qty and Buffer edit in the cell, not in a popup.
+                await expect.poll(() => editingCells(page), { message: `${what}: the editor stayed open` }).toBe(0)
+                const stock = latest.get(row.id)?.stock
+                if (!stock?.cells?.listingId) throw new Error(`${what}: the read gave this row no stock cells`)
+                const save = await wire.oneMatrix(mark, what)
+                expect(save.status, `${what}: HTTP ${save.status} ${JSON.stringify(save.answer)}`).toBe(200)
+                const path = new URL(save.request.url()).pathname
+                expect(path.endsWith(`/api/products/${encodeURIComponent(scope.family)}/studio/matrix`), `${what}: the family's Matrix (${path})`).toBe(true)
+                expect(save.body.cells, `${what}: cells`).toHaveLength(1)
+                expect(save.body.cells[0], `${what}: the Matrix cell`).toEqual({
+                  rowId: row.id, coordinateKey: stock.key, cell: column.matrixCell, value: pick.wire,
+                  expectedVersion: stock.cells.version, expectedListingId: stock.cells.listingId,
+                })
+                if (stock.coordinate?.accountId) expect(save.body.accountId, `${what}: the account of the read`).toBe(stock.coordinate.accountId)
+                expect(save.answer?.results, `${what}: answered cells`).toHaveLength(1)
+                expect(save.answer?.results[0], `${what}: answer`).toMatchObject({ rowId: row.id, coordinateKey: stock.key, cell: column.matrixCell, outcome: 'applied' })
+                if (pick.shows) await expect(cell, `${what}: the cell shows it`).toContainText(pick.shows)
+                const persisted = await readSheet(page, scope, seed.workspace)
+                remember(persisted)
+                const savedRow = persisted.rows.find((r) => r.id === row.id)
+                expect(stripped(savedRow?.values[column.key]?.value), `${what}: persisted value`).toEqual(stripped(pick.wire))
+                // The door moved the listing's version; the next bulk write on this row carries the new one.
+                if (savedRow) versions.set(row.id, versionOf(savedRow, scopeName))
+                current = pick.wire
+                expected.set(`${row.id}|${column.key}`, { row: row.id, key: column.key, value: pick.wire, editor })
+                results.push(`✓ ${what}`)
+                return
+              }
               const save = await wire.one(mark, what)
               expect(save.status, `${what}: HTTP ${save.status} ${JSON.stringify(save.answer)}`).toBe(200)
               expect(save.body.units, `${what}: units`).toHaveLength(1)
@@ -219,6 +253,7 @@ for (const [scopeIndex, scopeName] of SCOPES.entries()) {
                 if (pick.shows) await expect(cell, `${what}: the cell shows it`).toContainText(pick.shows)
                 // Read every gesture before a later gesture overwrites it. End-of-chunk checks alone only proved paste.
                 const persisted = await readSheet(page, scope, seed.workspace)
+                remember(persisted)
                 expect(stripped(persisted.rows.find((savedRow) => savedRow.id === row.id)?.values[column.key]?.value), `${what}: persisted value`).toEqual(stripped(pick.stored ?? pick.wire))
                 current = pick.stored ?? pick.wire
                 expected.set(`${row.id}|${column.key}`, { row: row.id, key: column.key, value: pick.stored ?? pick.wire, editor })
@@ -233,6 +268,7 @@ for (const [scopeIndex, scopeName] of SCOPES.entries()) {
                 const cancel = page.getByRole('button', { name: 'Cancel', exact: true })
                 if (await cancel.isVisible().catch(() => false)) await cancel.click().catch(() => {})
                 const fresh = await readSheet(page, scope, seed.workspace)
+                remember(fresh)
                 const now = fresh.rows.find((r) => r.id === row.id)
                 if (now) { versions.set(row.id, versionOf(now, scopeName)); current = now.values[column.key]?.value ?? null }
                 expected.delete(`${row.id}|${column.key}`)

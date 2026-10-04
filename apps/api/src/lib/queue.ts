@@ -207,6 +207,18 @@ export const bulkJobQueue: Queue = new Queue('bulk-job', {
   },
 })
 
+// Sheet publish parity, step 5 — publication batches: one family's reviews for several destinations, sent in the
+// background (services/pim/publication-batch.processor.ts). attempts 1: the processor claims the batch header and only
+// sends reviews still in PREVIEW, so a retry is the resume job's (it re-queues a batch whose heartbeat went stale).
+export const publicationBatchQueue: Queue = new Queue('publication-batch', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 7 * 86400 },
+  },
+})
+
 // AD.2 — Trading Desk mutation queue. Separate from outbound-sync
 // because Campaign/AdGroup/AdTarget rows aren't tied to a Product
 // or ChannelListing FK; the worker reads OutboundSyncQueue row by id
@@ -402,6 +414,7 @@ export async function closeQueue() {
     await readinessQueue.close()
     await searchIndexQueue.close()
     await bulkJobQueue.close()
+    await publicationBatchQueue.close()
     await adsSyncQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()

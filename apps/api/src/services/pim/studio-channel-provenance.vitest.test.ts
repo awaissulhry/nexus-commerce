@@ -13,6 +13,8 @@ vi.mock('../../db.js', () => ({ default: {
   // LX.F R-LX-13 — the LX reach read (`studio-sheet.service.ts:1058`).
   marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: async () => [{ channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' }] },
 } }))
+// The stock cells are one Matrix read (proven on PostgreSQL in studio-stock / studio-sheet-stock-columns); this mocked database has no Matrix.
+vi.mock('./studio-stock.js', async (importOriginal) => ({ ...await importOriginal<typeof import('./studio-stock.js')>(), attachStudioStock: async () => ({ ms: 0 }) }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: mocks.columns }))
 vi.mock('./product-category-context.js', () => ({ productCategoryContext: async () => ({
   categories: ['OUTERWEAR'], defaults: { p: { channelCategoryId: 'OUTERWEAR' } }, connectionId: 'account',

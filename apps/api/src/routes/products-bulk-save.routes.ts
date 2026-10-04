@@ -44,7 +44,7 @@ const productsBulkSaveRoutes: FastifyPluginAsync = async (fastify) => {
         userId: (request as { authUser?: { id?: string } }).authUser?.id,
         ip: request.ip,
         logger: request.log,
-        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission
+        can: permissionCheckerFor(request), // S1 (F4, F5) — a price or a cost needs its own permission; also holds the Amazon offer price columns
       })
     } catch (error) {
       // Nothing of the operation is stored. Say whether sending it again can work: a lost race or a busy pool can.

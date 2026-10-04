@@ -69,6 +69,8 @@ export interface SheetCoordinate {
  * why it is a kind rather than a key - a key-keyed branch is the two-builders drift trap in another vocabulary.
  */
 export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
+  /** Amazon sheet gaps — a studio-only column that IS one of the Matrix's cells (`matrixCell`), written through its door (`studio-stock.ts`). */
+  | 'stockControl'
 
 /**
  * Where the cell's value actually lives — decides how a write is addressed.
@@ -202,6 +204,8 @@ export interface SheetColumn {
   hidden?: boolean
   /** AM.1 — each coordinate's own facts, by coordinate label. Absent on master-only columns. */
   channels?: Record<string, SheetColumnChannelFacts>
+  /** `stockControl` only: the Matrix cell this column shows and writes (`syncMode` · `syncQty` · `syncBuffer`). */
+  matrixCell?: import('@nexus/shared/matrix-contract').MatrixCellKind
 }
 
 export interface SheetGroup {

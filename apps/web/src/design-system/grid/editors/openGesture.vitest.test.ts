@@ -69,8 +69,14 @@ describe('EDITOR_MODE_BY_KIND', () => {
      pass at 0/0. The live contract read 2026-09-03 (`/studio/sheet`, master·DE, 96 columns) returns
      exactly text 46, select 23, number 18, longtext 9, boolean 0. */
   it('declares a mode for every kind the sheet can build', () => {
-    expect(Object.keys(EDITOR_MODE_BY_KIND).sort()).toEqual(['boolean', 'longtext', 'number', 'select', 'text'])
+    expect(Object.keys(EDITOR_MODE_BY_KIND).sort()).toEqual(['boolean', 'longtext', 'number', 'select', 'stockControl', 'text'])
     for (const mode of Object.values(EDITOR_MODE_BY_KIND)) expect(['inline', 'popup']).toContain(mode)
+  })
+
+  /* The stock kind is the Matrix's cells: Qty and Buffer edit IN the cell (AG's number editor, `matrixColumnDef`); its Mode
+     list is a popup like `select` — the Matrix contract table holds that per cell. */
+  it('records the stock kind by its number cells (inline)', () => {
+    expect(EDITOR_MODE_BY_KIND.stockControl).toBe('inline')
   })
 
   /* R-63 (A-42 step 1, 2026-09-24): text and number open the ONE value popup on every surface — it has been `pop:value`

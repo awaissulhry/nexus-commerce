@@ -43,7 +43,7 @@
 import { Fragment, memo, useCallback, type ComponentType, type ReactNode } from 'react'
 import type { ICellRendererParams } from 'ag-grid-community'
 
-import { SelectChevron } from '../editors/SelectCellEditor'
+import { openCellEditor, SelectChevron } from '../editors/SelectCellEditor'
 import type { FulfilmentMethod, MatrixCellKind, MatrixCells, MatrixCoordinate, MatrixCopy } from '../matrix/contract'
 import {
   MATRIX_CELL_COPY,
@@ -80,6 +80,10 @@ export interface MatrixCellParams {
 }
 
 export type MatrixCellProps = ICellRendererParams & MatrixCellParams
+
+/** One click on a writable cell's chevron opens its list — a chevron that only selects the cell is a picture
+ * (the 2026-09-29 sheet rule, measured again on the product sheet's Mode cell). */
+const chevronOpen = (p: MatrixCellProps) => (p.column ? openCellEditor(p.api, p.node, p.column.getColId()) : undefined)
 
 /* ── the shared frame: word + trailing marks ────────────────────────────────────────────── */
 
@@ -149,7 +153,7 @@ export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
         />,
         guard && <Warn title={copy.guardFba} />,
         reported && f.reported && <Reported title={copy.reported(f.reported)} />,
-        cells.writable.fulfilment === true && <SelectChevron />,
+        cells.writable.fulfilment === true && <SelectChevron onOpen={chevronOpen(p)} />,
       ]}
     >
       {f.method}
@@ -174,7 +178,7 @@ export const SyncModeCell = memo(function SyncModeCell(p: MatrixCellProps) {
       marks={[
         showsMode && !paused && s.mode === 'FOLLOW' && <ProvenanceMark provenance="inherited" tooltip="Follows the pool" />,
         showsMode && !paused && s.mode === 'PINNED' && <ProvenanceMark provenance="pinned" tooltip="Pinned" />,
-        cells.writable.syncMode === true && <SelectChevron />,
+        cells.writable.syncMode === true && <SelectChevron onOpen={chevronOpen(p)} />,
       ]}
     >
       {paused && <PauseGlyph via={s.via} />}
@@ -295,6 +299,28 @@ export const SaleCell = memo(function SaleCell(p: MatrixCellProps) {
   const text = matrixSaleText(cells.sale, cells.price?.currency ?? p.coordinate.currency)
   return <Value muted={text === MATRIX_DASH}>{text}</Value>
 })
+
+/**
+ * The one tooltip line of a Price or Sale cell whose product sheet change waits for Publish — `Product sheet change
+ * waits for Publish: €44.90`. The cell keeps drawing the live value; `matrixColumnDef` appends this line to the
+ * cell's tooltip (a `title` here would be a second tooltip over AG's). A price going back to the base price says so
+ * in the copy table's own words; a removed sale reads as the dash the Sale cell draws for none.
+ */
+export function matrixWaitingLine(kind: MatrixCellKind, cells: MatrixCells | null | undefined, currency: string, copy: MatrixCopy = MATRIX_CELL_COPY): string | null {
+  const say = copy.waitingForPublish
+  if (!say || !cells) return null
+  if (kind === 'price') {
+    const waiting = cells.price?.waiting
+    if (!waiting) return null
+    const cur = cells.price?.currency || currency
+    return say(waiting.value == null ? copy.followsBase('').trim() : matrixMoney(waiting.value, cur))
+  }
+  if (kind === 'salePrice') {
+    const waiting = cells.sale?.waiting
+    return waiting ? say(matrixSaleText(waiting, cells.price?.currency || currency)) : null
+  }
+  return null
+}
 
 /** ONE renderer per kind — the table `matrixColumnDef` reads. */
 export const MATRIX_CELL_RENDERERS: Readonly<Record<MatrixCellKind, ComponentType<MatrixCellProps>>> = {

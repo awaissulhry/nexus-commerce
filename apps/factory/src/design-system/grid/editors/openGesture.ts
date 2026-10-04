@@ -179,6 +179,11 @@ export const EDITOR_MODE_BY_KIND = {
   select: 'popup',
   boolean: 'popup',
   longtext: 'popup',
+  /* Amazon sheet gaps — the studio's Mode / Qty / Buffer columns are the Matrix's own cells (`matrixColumnDef`), and the
+     one MIXED kind: Qty and Buffer (`matrixCell` syncQty / syncBuffer) open AG's number editor IN the cell, the mode
+     recorded here; Mode (syncMode) opens the DS list in a popup, as `select` does. The table holds one mode per kind; the
+     per-cell truth is the MATRIX-CONTRACT-TABLE in `docs/2026-09-03-cell-editing-contract.md` (pop:list / inline). */
+  stockControl: 'inline',
 } as const satisfies Record<string, 'inline' | 'popup'>
 
 /**

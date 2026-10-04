@@ -1,3 +1,57 @@
+## Matrix cells: a coordinate per row, and a "waits for Publish" tooltip line — 2026-10-02
+
+Amazon sheet gaps (`docs/amazon-sheet-gaps/PLAN.md`), mirrored in Factory:
+
+- **`matrixColumnDef` `coordinateOf?(row)`** (`grid/editors/matrixColumn.ts`): the coordinate a row's tooltip, classes and text read, when it differs per row — the product sheet draws Matrix cells where an EU row carries "Shared by IT DE …" and an alias row on the same column does not. Absent (the Matrix page) = the column's coordinate, so the Matrix looks and behaves exactly as before. Header, editors and renderer params stay column-level.
+- **`PriceCell.waiting` / `SaleCell.waiting`** (`grid/matrix/contract.ts`, equal to the shared wire contract) and **`matrixWaitingLine`** (`grid/renderers/MatrixCellViews.tsx`): a product sheet offer change that goes to Amazon only on Publish adds ONE line to the cell's tooltip — "Product sheet change waits for Publish: €44.90" (a removed sale: "—"; back to the base price: the copy table's "Follows the base price"). The cell keeps drawing the live value. Words from the copy table (`MatrixCopy.waitingForPublish`).
+- **`MatrixWriteCell.expectedListingId`**: the listing the caller saw on the coordinate; another listing there now answers `conflict`.
+- **`SourceIndicator` kind `pending`** (`components/SourceIndicator.tsx`, Clock icon, full text colour — not a routine source): a value saved in Nexus that reaches the channel only on Publish. Before, a waiting Amazon price on a pinned listing drew the Pin of a live "Listing override". Catalog: "Value sources".
+- `MatrixCopy.waitingForPublish` is now required: the engine default `MATRIX_CELL_COPY` carries it.
+- **Matrix Mode / Fulfilment chevrons open the list** (`renderers/MatrixCellViews.tsx`, mirrored): one click on a writable cell's chevron starts editing (`openCellEditor`), on the Matrix tab and the product sheet alike — before, it only selected the cell (the 2026-09-29 rule).
+- **`matrixCoerceValue`** (`renderers/matrixCells.ts`, mirrored): a pasted or typed word is its code — "Pinned" → `PINNED`, "follow" → `FOLLOW`, "fbm" → `FBM`. Copying a Mode cell gives the word it shows, so pasting it now writes.
+- **`EDITOR_MODE_BY_KIND.stockControl = 'inline'`** (`editors/openGesture.ts`, mirrored): the product sheet's Mode / Qty / Buffer columns; Qty and Buffer edit inline, Mode opens its list as a popup (per-cell modes: `MATRIX-CONTRACT-TABLE`).
+
+## Publish status: "Waiting its turn" and "Cancelled" — 2026-10-02
+
+Sheet publish parity T1 (`docs/sheet-publish-parity/PLAN.md`). The publication table (`grid/renderers/publishStatus.ts`, mirrored in Factory) gains two batch words, so a publish batch's rows never name a status outside the one table:
+
+- **`QUEUED` → "Waiting its turn"** (neutral, not final): a destination of a publish batch that has not had its turn yet. Nothing has left Nexus.
+- **`CANCELLED` → "Cancelled"** (neutral, final): the person cancelled the batch before this destination's turn. Nothing was sent to it.
+
+Both are neutral because nothing happened on a channel. The Publish window's batch rows (`_publication/dialog/destinations.ts` `batchChildMeta`) now read these words from the table instead of naming them locally.
+
+## Drawer questions get a card; a DataGrid column can start hidden — 2026-10-02
+
+Sheet publish parity, history follow-ups.
+
+- **`DrawerOverlayCard`** (`components/`, mirrored in Factory): the surface for a question in `Drawer`'s `overlay` slot (the slot is only a scrim). `dialog` or `alertdialog`, named by its heading (`labelledBy`) or `label`; while up it owns the keyboard in the capture phase — Esc cancels the card only (swallowed while busy, so it never closes the drawer behind a pending question), Tab and Shift+Tab cycle inside, also when focus starts outside the card. Styles `.nds-drawer-ovcard`: surface, subtle border, `--nds-radius-xl`, `--nds-shadow-modal`, at most 460px wide. The publish history's "Mark as checked…" uses it (its local copy is gone).
+- **`Column.defaultHidden`** (`grid/datagrid`, type shared with the retiring `components/DataGrid`, mirrored in Factory): in a `customizable` grid the column starts hidden, stays listed in Customise, is left out by Reset, and is not switched on in a saved layout that never knew it; a layout where the operator switched it on keeps it. The publish history list offers "Channel reference" this way.
+- **`Drawer` docs**: the dock is described as it is built — fixed to the viewport's right edge under the top bar (`.nds-drawer-dock`, layout-v2 §5), covering what is under it; the old text said it sat in the normal flow and should be laid out in a flex row, which reserves nothing.
+
+## Last publish: a family total on the main row, and "Go to field" moves keyboard focus — 2026-10-02
+
+Sheet publish parity, step 3 design review (measured on :3660, light and dark, 1280 and 390 px).
+
+- **`publishFamilyMeta` / `PublishStatusValue.family`** (`grid/renderers/publishStatus.ts`, mirrored in Factory): a family's main row shows "2 of 11 failed" ("All 11 failed" when none went through) in the publication's tone, instead of its own row result — a collapsed family no longer reads "Accepted" over sizes that failed. Spoken name: "2 of 11 products in this family failed". The card keeps the publication word, uses the count as its sentence and still shows "This row: …". Given only when more than one product was sent.
+- **`landOnCell`** (`grid/landOnCell.ts`, web only — Factory has no grid): AG focuses only a drawn cell, and the scroll draws the target a frame or more later, so keyboard focus stayed on `<body>`. It now waits up to 10 frames for the cell, then focuses it — never taking focus the user moved elsewhere (only nothing, `<body>` or a grid cell counts as free). A cell never drawn keeps the grid cursor only. The progress card's "Go to field" benefits too.
+
+## Sheet status marks: a danger mark never folds — 2026-10-02
+
+`SheetStatuses` (grid/toolbars/SheetStatus.tsx, mirrored in Factory) now orders by severity: a `danger` mark never folds into "+N" — not under the three-mark cap and not on the host's compact tier (`useToolbarStatusCompaction`). Only the other tones fold, original order kept (`partitionSheetStatuses`). Measured on the studio sheet at 1280px (step 2 design review, sheet publish parity): the compact tier latched while "Amazon · IT is processing 21 products" was on the bar (18px over) and the "2 rejected on Amazon · IT" that replaced it sat in a neutral "+2" — visible to a screen reader only. Kept on the bar it costs ≈170px; at 1280 the bar still fits (scrollWidth 1212 = clientWidth, nothing clipped), and 1440, 1600 and 390 (wrapping) were measured the same. With no danger mark the behaviour is unchanged. The hidden `role="alert"` for folded danger marks is gone because none fold; each kept danger mark still carries its own `role="alert"`.
+
+## Publish status: one vocabulary, a "Last publish" cell, a toolbar mark that filters, and a Timeline — 2026-10-02
+
+Sheet publish parity, step 0 (`docs/sheet-publish-parity/PLAN.md`). Four additions, each in the catalog at `/design-system#publish-status-example`, mirrored in Factory:
+
+- **`grid/renderers/publishStatus.ts`** — the ONE table of publish statuses: publication level (`PUBLISHING` Sending · `SUBMITTED` Waiting for channel · `ACCEPTED` Accepted · `VERIFIED` Verified · `PARTIAL` Partly failed · `FAILED` Failed · `NOT_SENT` Not sent · `UNVERIFIED` Result unknown) and per-SKU level (Accepted, Verified, Failed, Waiting, Not sent, Skipped, Result unknown). Only Verified uses the success tone (the DS success pill is blue, so Verified also carries a check glyph — see the design review below). `publishCellModel` / `publishCardModel` are the pure rules the cell and its card draw.
+- **`PublishStatusCell`** (+ `PublishStatusView`, `PublishStatusCard`) — Pill with dot, status word and short time; the card opens like the progress card (hover, click, Enter, Space; Esc back to the cell) and lists the facts, what was sent, the channel message and each refused field with "Go to field". The cell is never painted red.
+- **`SheetStatus.onSelect` / `actionLabel` / `selected`** — a toolbar mark can be a filter toggle (real button, `aria-pressed`). Unchanged without `onSelect`.
+- **`Timeline`** (`components/`) — a read-only `<ol>` of steps with tone dots in the tone's text colour, `AsOf` times and "not yet" for a step that has not happened. Not a Stepper.
+
+Styles: `styles/components.css` (`.nds-publish-*`, `.nds-timeline*`), tokens only; text in `--nds-text` / `--nds-text-strong` and the tone text tokens (7:1, light and dark).
+
+Design review (same day, measured on :3660, light and dark, 1280 and 390 px): **`PublishStatusPill`** is now the only way to draw a publish status — Verified carries a check glyph instead of the dot, because the DS success and info pills are both blue and the shade alone did not tell Verified from Accepted; both shapes are centred on the text line (`.nds-publish-pill`, the glyph had lifted the pill 2 px). One time shape across cell, card and aria name (`publishFullTime`: "1 Oct, 22:19"; "1 Oct 2025" in another year) plus the relative words `AsOf` uses; the card's `When` no longer follows the browser locale ("Oct 01, 10:07 PM"). The card says `detailHint` ("The channel refused this publish.") instead of "Open the details to see why"; its head and foot are vertically centred (10/10, 8/8) and issue rows line up with their heading whether clickable or not; sent fields read as one wrapped line. A filter mark that is ON shows an inset ring without focus. A Timeline success dot uses the success pill's ink so a Verified step and a Verified pill are one colour.
+
 ## Product journey, step 4: one wording, a quiet page behind dialogs, the header fold in the DS — 2026-10-01
 
 - **`readinessMeta('unlisted', 'row')`** and presence **`NONE`** read **"Not listed yet"** (was "No listing here"), with the hint "Nexus has no listing here yet, so nothing has been checked against the channel." The studio's sheet notice, media tabs and scope chip say the same fact as "Not listed on eBay · IT yet". Mirrored in Factory.

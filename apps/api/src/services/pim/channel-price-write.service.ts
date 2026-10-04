@@ -21,6 +21,11 @@
  *   - NCF D2 A — Shopify's compare-at price (`compareAt`), kept at `platformAttributes.compareAtPrice`
  *     (`compare-at-price.ts`), through the same CAS and audit. Record-only: it comes from Shopify's own file, and no
  *     PRICE_UPDATE carries it, so a sending write refuses it by name.
+ *   - Amazon sheet gaps — Amazon's own offer settings (`offer`: minimum / maximum seller price, MAP price, offer window,
+ *     Automate Pricing rule), kept at EXACTLY `amazonOfferLivePath(leaf)` (`platformAttributes.amazonOffer.*`) through the
+ *     same CAS and audit, sent by the PRICE_UPDATE row (the price job re-reads the listing's live facts). The price sent is
+ *     checked against Amazon's minimum and maximum after the change. Every write announces `listing.values_changed`
+ *     after COMMIT, so open sheets and Matrix tabs re-read the row.
  *
  * `channel-pricing` PATCH, `pricing/bulk-override` and the Matrix door delegate here. No snapshot refresh: the
  * pricing engine's chain is in no publish path (M8) and its hourly cron re-materialises the snapshot.
@@ -59,6 +64,13 @@ import {
 import { masterCurrency } from '../fx-rate.service.js'
 import { boundsApply, priceBoundsOf, storedPriceReason, zeroPriceReason } from '../price-bounds.service.js'
 import type { MarketCurrencyRow } from './market-currency.js'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
+import { announceListingValues, type ListingValueField } from '../listing-values-events.js'
+import { readAmazonOfferFacts } from '../amazon/offer-facts.js'
+import { amazonSellerBoundsRefusal } from '../amazon/offer-attributes.js'
+import { amazonOfferKeysOf, amazonOfferLeafRefusal, amazonOfferLivePath, type AmazonOfferLeaf } from '../amazon/offer-fields.js'
+import { amazonOfferValuesEqual } from '../amazon/offer-draft.js'
+import { storedAmazonLiveLeaf, withAmazonLiveLeaves } from './amazon-fulfilment-settings.service.js'
 
 // ETSY since 2026-09-30: `syncToEtsy` sends a PRICE_UPDATE (P4.6e). It was left off while Etsy was read-only (D6,
 // overridden 2026-09-21), so an Etsy price was saved here and never queued.
@@ -102,6 +114,12 @@ export type PriceWriteUnguardedReason =
   | 'promotion'
   /** `sendHeldPrices`: a price change kept in Nexus while the listing was paused or a draft, sent on resume or publish. */
   | 'held-price'
+  /**
+   * Publish's promotion (Amazon sheet gaps): Amazon ACCEPTED the published price / sale / offer, so Nexus records it as
+   * live with no bounds re-check (Amazon took it), cancels the price rows waiting for the listing (a follower price
+   * queued meanwhile would overwrite it) and queues ONE re-send of the live values.
+   */
+  | 'publish-accepted'
 
 /**
  * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like
@@ -145,7 +163,31 @@ interface PriceWriteFields {
    * market's own currency, never a converted master), and a paused listing or a still-draft keeps it in Nexus.
    */
   machinePrice?: number
+  /**
+   * Amazon sheet gaps — Amazon's own offer settings, kept at `platformAttributes.amazonOffer.*` (`amazonOfferLivePath`).
+   * `undefined` = untouched; `null` = removed on Amazon. Amazon only (refused by name elsewhere).
+   */
+  offer?: AmazonOfferWrite
 }
+
+/** The offer leaves the price door writes, in the shapes Amazon's schema takes (prices in the market currency, incl. tax). */
+export interface AmazonOfferWrite {
+  minimum_seller_allowed_price?: number | null
+  maximum_seller_allowed_price?: number | null
+  map_price?: number | null
+  /** YYYY-MM-DD or a date-time. */
+  offer_start_at?: string | null
+  offer_end_at?: string | null
+  /** The Seller Central Automate Pricing rule id (at most 100 characters). */
+  automated_pricing_rule_id?: string | null
+}
+const OFFER_LEAVES = ['minimum_seller_allowed_price', 'maximum_seller_allowed_price', 'map_price', 'offer_start_at', 'offer_end_at', 'automated_pricing_rule_id'] as const
+type OfferDoorLeaf = typeof OFFER_LEAVES[number]
+const OFFER_WORDS: Readonly<Record<OfferDoorLeaf, string>> = {
+  minimum_seller_allowed_price: 'minimum price', maximum_seller_allowed_price: 'maximum price', map_price: 'MAP price',
+  offer_start_at: 'offer start', offer_end_at: 'offer end', automated_pricing_rule_id: 'Automate Pricing rule',
+}
+const ONLY_AMAZON_OFFER = 'Only an Amazon listing has a minimum, maximum or MAP price, an offer window or an Automate Pricing rule'
 
 /**
  * 🔴 R5 — make the wrong thing impossible to compile. One of the two is required, never neither
@@ -216,14 +258,16 @@ const LISTING_SELECT = {
 function legacyPriceKeys(channel: string): string[] {
   return [...new Set(['price', ...Object.keys(CHANNEL_FIELD_MAP)
     .filter(field => CHANNEL_FIELD_MAP[field] === 'price' && field.startsWith(`${channel.toLowerCase()}_`))
-    .flatMap(channelOverrideKeys)])]
+    .flatMap(channelOverrideKeys),
+    // Amazon sheet gaps — the product sheet's old price cell saved here, and nothing ever sent it.
+    ...(channel === 'AMAZON' ? amazonOfferKeysOf('our_price') : [])])]
 }
 
 /** A-17 — is the stored own price exactly the one the caller saw? Anything ambiguous answers no. */
 function priceAsSeen(t: PriceWriteTarget, row: { channel: string; price: unknown; priceOverride: unknown; followMasterPrice: boolean | null; overrideData: unknown }): boolean {
   // A compare-at write is never retried: its value lives in the platform bag another writer may have changed in the gap.
   // A rule or follow change is never retried either: it is not a price-only write.
-  if (t.expectedPrice === undefined || t.sale !== undefined || t.compareAt !== undefined || t.rule !== undefined || t.follow !== undefined) return false
+  if (t.expectedPrice === undefined || t.sale !== undefined || t.compareAt !== undefined || t.offer !== undefined || t.rule !== undefined || t.follow !== undefined) return false
   const bag = row.overrideData && typeof row.overrideData === 'object' ? row.overrideData : {}
   // A legacy key is a price the columns do not show; the caller cannot have seen it.
   if (legacyPriceKeys(row.channel).some(key => Object.prototype.hasOwnProperty.call(bag, key))) return false
@@ -282,6 +326,8 @@ export async function writeChannelPrices(input: {
   const master = masterCurrency()
   const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
   const refusals: Array<{ productId: string | null; masterPrice: number; refusal: MasterCurrencyRefusal }> = []
+  /** What each applied write changed that a person sees (`listing.values_changed`, after commit). */
+  const announced: Array<{ listingId: string; fields: ListingValueField[] }> = []
 
   targets: for (const t of input.targets) {
     const found = byId.get(t.listingId)
@@ -296,7 +342,7 @@ export async function writeChannelPrices(input: {
     // 🔴 The compare-and-set. `undefined` here is only reachable when the caller NAMED an
     // `unguardedReason` — the type refuses it otherwise — and that write is reported `guarded:false`.
     if (t.expectedVersion !== undefined && t.expectedVersion !== found.version) {
-      if (!priceAsSeen(t, found)) { push({ productId: found.productId, channel: found.channel, marketplace: found.marketplace, queueId: null, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: found.version }); continue }
+      if (!priceAsSeen(t, found)) { push({ productId: found.productId, channel: found.channel, marketplace: found.marketplace, queueId: null, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: found.version }); continue }
       retried = true
     }
     let current = found
@@ -307,12 +353,14 @@ export async function writeChannelPrices(input: {
       const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
       const refuse = (reason: string) => push({ ...base, outcome: 'refused', reason, version: l.version })
       const machine = t.machinePrice !== undefined
-      if (t.price === undefined && t.sale === undefined && t.compareAt === undefined && t.rule === undefined && t.follow === undefined && !t.resend && !machine) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
-      if ((t.resend || machine) && (t.price !== undefined || t.sale !== undefined || t.compareAt !== undefined || t.rule !== undefined || t.follow !== undefined || (t.resend && machine) || input.recordOnly)) {
+      const publishAccepted = t.unguardedReason === 'publish-accepted'
+      if (t.price === undefined && t.sale === undefined && t.compareAt === undefined && t.offer === undefined && t.rule === undefined && t.follow === undefined && !t.resend && !machine && !publishAccepted) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      if ((t.resend || machine) && (t.price !== undefined || t.sale !== undefined || t.compareAt !== undefined || t.offer !== undefined || t.rule !== undefined || t.follow !== undefined || (t.resend && machine) || input.recordOnly)) {
         refuse('A send or a machine price changes nothing else: send it on its own.')
         continue targets
       }
       if (t.compareAt !== undefined && l.channel !== 'SHOPIFY') { refuse('Only a Shopify listing has a compare-at price'); continue targets }
+      if (t.offer !== undefined && l.channel !== 'AMAZON') { refuse(ONLY_AMAZON_OFFER); continue targets }
       if (t.compareAt !== undefined && !input.recordOnly) { refuse('A compare-at price is recorded from Shopify’s own file only; change it in the Shopify tab.'); continue targets }
       if (input.recordOnly && (t.rule !== undefined || t.follow !== undefined)) { refuse('A price recorded from the channel’s own file carries no pricing rule or follow-master change.'); continue targets }
       if ((t.follow === true && typeof t.price === 'number') || (t.follow === false && t.price === null)) {
@@ -341,6 +389,36 @@ export async function writeChannelPrices(input: {
         const problem = validateSaleWindow(nextSale.value, nextSale)
         if (problem) { refuse(problem); continue targets }
         if (nextSale.value != null && !hasWindow) { refuse('This database has no sale-window columns yet — the sale cannot be scheduled'); continue targets }
+      }
+
+      // ── Amazon sheet gaps: Amazon's own offer settings (`offer`), checked one by one, and what they change ────────────
+      // The live facts as the price job sends them (`offer-facts.ts`, job lane): Nexus's store, else Amazon's report.
+      const offerFacts = l.channel === 'AMAZON' ? readAmazonOfferFacts({ ...l, saleWindow: windows.get(l.id) ?? null }, 'job') : null
+      const offerWrites: Array<{ leaf: OfferDoorLeaf; value: number | string | null; previous: unknown }> = []
+      if (t.offer !== undefined && offerFacts) {
+        for (const [key, raw] of Object.entries(t.offer)) {
+          if (!(OFFER_LEAVES as readonly string[]).includes(key)) { refuse(`${key} is not an Amazon offer setting (minimum, maximum or MAP price, offer start or end, Automate Pricing rule)`); continue targets }
+          if (raw === undefined) continue
+          const leaf = key as OfferDoorLeaf
+          const value = typeof raw === 'number' ? round2(raw) : typeof raw === 'string' ? raw.trim() : raw
+          const problem = amazonOfferLeafRefusal(leaf, value)
+            ?? (leaf === 'automated_pricing_rule_id' && typeof value === 'string' && value.length > 100 ? 'An Automate Pricing rule id is at most 100 characters' : null)
+          if (problem) { refuse(`${who}: ${problem}. Nothing was changed.`); continue targets }
+          const stored = storedAmazonLiveLeaf(l.platformAttributes, leaf)
+          // Nexus already holds exactly this value, or there is nothing to remove: no change.
+          if (stored !== undefined ? amazonOfferValuesEqual(leaf, stored, value) : value === null && offerFacts.values[leaf] == null) continue
+          offerWrites.push({ leaf, value: value as number | string | null, previous: stored !== undefined ? stored : offerFacts.values[leaf] })
+        }
+      }
+      const offerChanges = offerWrites.length > 0
+      /** A leaf's value after this change: the one written, else the live one. */
+      const offerAfter = (leaf: OfferDoorLeaf): unknown => {
+        const w = offerWrites.find((x) => x.leaf === leaf)
+        return w ? w.value : offerFacts?.values[leaf] ?? null
+      }
+      if (offerWrites.some((w) => w.leaf === 'offer_start_at' || w.leaf === 'offer_end_at')) {
+        const start = offerAfter('offer_start_at'), end = offerAfter('offer_end_at')
+        if (typeof start === 'string' && typeof end === 'string' && Date.parse(end) < Date.parse(start)) { refuse(`${who}: the offer ends on or after the day it starts. Nothing was changed.`); continue targets }
       }
 
       // ── Follower mode: the rule columns, the follow flag, and the price they give ──────────────────────────────
@@ -415,7 +493,7 @@ export async function writeChannelPrices(input: {
             // Here the market sells in the master currency, so the floor and ceiling apply (`boundsSpeak` is true). The
             // same verdict the cascade, the master-price write and the bulk PRICING_UPDATE ask (`storedPriceReason`).
             const outside = storedPriceReason(next, priceBoundsOf(l.product ?? {}))
-            if (outside) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}, but ${outside}. Change the rule, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
+            if (outside && !publishAccepted) { refuse(`${who} would follow ${pricingRuleLabel(ruleAfter, adjAfter)} at ${next.toFixed(2)}, but ${outside}. Change the rule, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
             const held = holdsCascadedPrice(l)
             const moves = next !== currentPrice
             follower = { next, store: moves, send: !held && (moves || !wasFollowing) }
@@ -449,7 +527,7 @@ export async function writeChannelPrices(input: {
       const priceChanges = pin && (dirtyPrice || !(currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
       // A typed price outside the product's own floor or ceiling is refused at the edit, as a follower price is: the push
       // would refuse it anyway, and by then Nexus would hold a price the channel never gets. Master currency only.
-      if (priceChanges && !input.recordOnly && boundsSpeak) {
+      if (priceChanges && !input.recordOnly && boundsSpeak && !publishAccepted) {
         const outside = storedPriceReason(nextPrice!, priceBoundsOf(l.product ?? {}))
         if (outside) { refuse(`${who} cannot be pinned at ${nextPrice!.toFixed(2)}: ${outside}. Change the price, or the floor or ceiling on the product. Nothing was changed.`); continue targets }
       }
@@ -459,13 +537,14 @@ export async function writeChannelPrices(input: {
       const followerWrites = !!follower?.store || !!follower?.send || followChanges || ruleChanges || (handBack && clearLegacy) || t.resend === true
       // Nothing to write — but a follower whose price cannot be sent (another currency, Match Amazon, no master price) still
       // says why: "nothing to send" alone would read as "already in step".
-      if (!priceChanges && !saleChanges && !compareChanges && !followerWrites) { push({ ...base, outcome: 'noop', version: l.version, ...(notSent ? { notSent } : {}) }); continue targets }
+      if (!priceChanges && !saleChanges && !compareChanges && !offerChanges && !followerWrites && !publishAccepted) { push({ ...base, outcome: 'noop', version: l.version, ...(notSent ? { notSent } : {}) }); continue targets }
 
       // A typed price or a sale on a paused listing or a still-draft is kept in Nexus and not queued, as a follower price
       // is (`holdsCascadedPrice`): nothing is sent to a listing that is paused or not yet published.
-      const held = !input.recordOnly && holdsCascadedPrice(l) && (priceChanges || saleChanges)
+      const held = !input.recordOnly && holdsCascadedPrice(l) && (priceChanges || saleChanges || offerChanges || publishAccepted)
       if (held && priceChanges) notSent = heldSentence(l, `The price ${nextPrice!.toFixed(2)}`)
       else if (held && saleChanges && !notSent) notSent = heldSentence(l, nextSale!.value == null ? 'The removal of the sale' : `The sale ${nextSale!.value.toFixed(2)}`)
+      else if (held && offerChanges && !notSent) notSent = heldSentence(l, 'The offer change')
       // Push price on a pinned listing whose stored price is not its own pinned price (rows from older writers): the
       // pinned price is what is sent, so it is what Nexus stores, in the same write.
       const resendStores = t.resend === true && !follower && !wasFollowing && currentOverride != null && currentOverride !== currentPrice
@@ -478,14 +557,30 @@ export async function writeChannelPrices(input: {
         : (currentPrice ?? (wasFollowing && basePrice != null && marketIsMaster ? computeListingPrice(basePrice, currentRule, true, currentAdj) : currentOverride))
       const effectiveSale = saleChanges ? nextSale! : currentSale
       // A change that queues nothing (recorded from the channel's file, or held) sends nothing; one that queues needs a price.
-      const queues = !input.recordOnly && (sendsPrice || saleChanges) && !held
+      const queues = !input.recordOnly && (sendsPrice || saleChanges || offerChanges || publishAccepted) && !held
       // Round 5 — a change kept in Nexus by the hold is written as a held row, sent once on resume or publish.
       const heldCode = input.recordOnly || queues || t.resend ? null
-        : heldPriceCode(l, { pin: priceChanges, sale: saleChanges, followerPrice: follower?.store ? follower.next : null })
+        : heldPriceCode(l, { pin: priceChanges, sale: saleChanges || offerChanges, followerPrice: follower?.store ? follower.next : null })
       if (queues && saleChanges && effectivePrice == null) {
         // Amazon replaces the offer with what the row carries: a sale sent with no price would drop the sale (and the price).
         refuse(`${who}: the sale was not set — a sale is sent with the listing's price, and this listing holds none${marketIsMaster ? '' : ` in ${listingMarketCurrency(l, currencyRows) ?? 'its market currency'} (the master price is in ${master}; Nexus does not convert it)`}. Set the listing's own price first. Nothing was changed.`)
         continue targets
+      }
+      if (queues && offerChanges && effectivePrice == null && !publishAccepted) {
+        // The offer settings ride the price push, and Amazon's builder never sends an offer without a price.
+        refuse(`${who}: the offer was not set — Amazon's offer settings are sent with the listing's price, and this listing holds none. Set the listing's own price first. Nothing was changed.`)
+        continue targets
+      }
+      // Amazon deactivates an offer priced outside the seller's own minimum and maximum, and the price job refuses it: the
+      // price this change sends (or keeps sending) is checked against the bounds after the change. Publish's promotion is
+      // not re-checked — Amazon took those values.
+      if (offerFacts && !publishAccepted && !input.recordOnly && (priceChanges || saleChanges || offerChanges || sendsPrice)) {
+        const saleSent = effectiveSale.value != null && effectiveSale.start && effectiveSale.end ? effectiveSale.value : null
+        const outside = amazonSellerBoundsRefusal({
+          price: effectivePrice ?? null, salePrice: saleSent,
+          min: offerAfter('minimum_seller_allowed_price') as number | null, max: offerAfter('maximum_seller_allowed_price') as number | null,
+        })
+        if (outside) { refuse(`${who}: ${outside} Nothing was changed.`); continue targets }
       }
       const sentences: string[] = []
       if (priceChanges) sentences.push(`price ${money(currentPrice, currency)} → ${money(nextPrice!, currency)}`)
@@ -501,6 +596,9 @@ export async function writeChannelPrices(input: {
       if (unfollow && followChanges) sentences.push(`stops following the master (keeps ${money(currentPrice, currency)})`)
       if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
       if (compareChanges) sentences.push(`compare-at ${money(currentCompare.value, currency)} → ${money(nextCompare!, currency)}`)
+      const offerWord = (v: unknown) => (typeof v === 'number' ? money(v, currency) : v == null ? '—' : String(v))
+      for (const w of offerWrites) sentences.push(`${OFFER_WORDS[w.leaf]} ${offerWord(w.previous)} → ${offerWord(w.value)}`)
+      if (publishAccepted) sentences.push('accepted by Amazon (Publish)')
       if (notSent) sentences.push(`not sent: ${notSent}`)
       const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
       // Round 5 — a change held while the listing is paused is an unsent change too: never silently overtaken.
@@ -530,11 +628,25 @@ export async function writeChannelPrices(input: {
         if (followChanges || ruleChanges) Object.assign(data, followColumns, ruleColumns, { lastOverrideAt: new Date(), lastOverrideBy: input.actor })
         if (saleChanges) data.salePrice = effectiveSale.value
         // The bag as read with this version: the compare-and-set below proves nobody changed it since.
-        if (compareChanges) data.platformAttributes = withCompareAt(l.platformAttributes, nextCompare!) as Prisma.InputJsonValue
+        if (compareChanges || offerChanges) {
+          let bag: unknown = l.platformAttributes
+          if (compareChanges) bag = withCompareAt(bag, nextCompare!)
+          // EXACTLY `amazonOfferLivePath(leaf)`: the price job reads Nexus's offer settings there.
+          if (offerChanges) bag = withAmazonLiveLeaves(bag, offerWrites)
+          data.platformAttributes = bag as Prisma.InputJsonValue
+        }
         const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
         if (guarded.count !== 1) return null
         if (clearLegacy) await tx.$executeRaw`
           UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${priceKeys}::text[]
+          WHERE id = ${l.id}
+        `
+        // The product sheet's old values of the offer leaves written here (in `overrideData`, never sent) go too.
+        const oldBag = l.overrideData && typeof l.overrideData === 'object' ? l.overrideData as Record<string, unknown> : {}
+        const staleOfferKeys = l.channel !== 'AMAZON' ? [] : [...offerWrites.map((w) => w.leaf as AmazonOfferLeaf), ...(saleChanges ? ['sale' as const] : [])]
+          .flatMap(amazonOfferKeysOf).filter((key) => Object.prototype.hasOwnProperty.call(oldBag, key))
+        if (staleOfferKeys.length) await tx.$executeRaw`
+          UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${staleOfferKeys}::text[]
           WHERE id = ${l.id}
         `
         if (saleChanges) await writeSaleWindow(tx, l.id, { start: effectiveSale.start, end: effectiveSale.end })
@@ -558,6 +670,9 @@ export async function writeChannelPrices(input: {
         }
         if (compareChanges) {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'compareAtPrice', previousValue: currentCompare.value == null ? null : String(currentCompare.value), newValue: nextCompare == null ? null : String(nextCompare), reason, changedBy: input.actor } })
+        }
+        for (const w of offerWrites) {
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: amazonOfferLivePath(w.leaf)!.join('.'), previousValue: w.previous == null ? null : String(w.previous), newValue: w.value == null ? null : String(w.value), reason, changedBy: input.actor } })
         }
         if (saleChanges) {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
@@ -638,11 +753,16 @@ export async function writeChannelPrices(input: {
           retried = true
           continue
         }
-        push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: fresh?.version ?? l.version })
+        push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: fresh?.version ?? l.version })
         continue targets
       }
       if (currencyRefusal) refusals.push({ productId: l.productId, masterPrice: basePrice!, refusal: currencyRefusal })
       push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId, ...(written.queueId ? { sentPrice: effectivePrice ?? undefined, sentCurrency: listingMarketCurrency(l, currencyRows) } : {}), ...(notSent ? { notSent } : {}) })
+      const fields: ListingValueField[] = []
+      if (priceChanges || follower?.store || resendStores || followChanges || ruleChanges) fields.push('price')
+      if (saleChanges) fields.push('salePrice')
+      if (offerChanges) fields.push('offer')
+      if (fields.length) announced.push({ listingId: l.id, fields })
       continue targets
     }
   }
@@ -652,6 +772,14 @@ export async function writeChannelPrices(input: {
   // The cascade's currency refusals, recorded the same way once the change is committed. Best effort.
   if (refusals.length) await afterDatabaseCommit(`channel-price-currency:${refusals.map(r => r.refusal.listingId).join(',')}`,
     async () => { for (const r of refusals) await logMasterCurrencyRefusals(r.productId, r.masterPrice, [r.refusal]) })
+  // Open sheets and Matrix tabs re-read these rows. Each listing's own transaction has committed here; inside a caller's
+  // transaction the hint waits for ITS commit (`announceListingValues`).
+  const byFields = new Map<string, { fields: ListingValueField[]; ids: string[] }>()
+  for (const a of announced) {
+    const key = a.fields.join(',')
+    byFields.set(key, { fields: a.fields, ids: [...(byFields.get(key)?.ids ?? []), a.listingId] })
+  }
+  for (const { fields, ids: changed } of byFields.values()) announceListingValues(changed, fields, 'price')
   logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, ...(input.recordOnly ? { recordOnly: input.recordOnly } : {}), applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
   return result
 }

@@ -7236,6 +7236,32 @@ model BulkOperation {
    */
   expectedVersion Int?
 
+  /**
+   * Sheet publish parity (2026-10-02, docs/sheet-publish-parity/PLAN.md) — the facts a publish history lists,
+   * filters and sorts by, as columns: until now they lived only inside `changes` JSON, which a list cannot index
+   * and must not load (it holds the whole change plan). All nullable: a null means "this operation is not a
+   * publication" or "it predates these columns" (the migration fills them for earlier studio publications).
+   * - `kind`: 'studio-publication' today; null for a bulk edit or an import.
+   * - `productId`: the FAMILY (parent) product of a studio publication, whichever family member opened the studio.
+   * - `channel` / `marketplace` / `channelConnectionId` / `aliasKey`: the destination.
+   * - `batchId`: the one click that made this publication with others (many markets or many families).
+   * - `summary`: the result in counts, so a list never reads `changes`.
+   * - `submittedAt`: when the send was claimed.
+   * - `nextCheckAt` / `checkCount`: when the result sweep should look again and how often it has; null = never
+   *   swept (every publication made before the sweep shipped stays null, so the sweep never settles it unwatched).
+   */
+  kind                String?
+  productId           String?
+  channel             String?
+  marketplace         String?
+  channelConnectionId String?
+  aliasKey            String?
+  batchId             String?
+  summary             Json?
+  submittedAt         DateTime?
+  nextCheckAt         DateTime?
+  checkCount          Int?
+
   createdAt DateTime @default(now())
 
   @@index([createdAt])
@@ -7243,6 +7269,10 @@ model BulkOperation {
   @@index([status])
   @@index([status, expiresAt])
   @@index([workspaceId])
+  @@index([workspaceId, kind, createdAt])
+  @@index([workspaceId, kind, productId, createdAt])
+  @@index([workspaceId, batchId])
+  @@index([kind, status, nextCheckAt])
 }
 
 // ── T.6: Bulk-ops templates ──────────────────────────────────────────

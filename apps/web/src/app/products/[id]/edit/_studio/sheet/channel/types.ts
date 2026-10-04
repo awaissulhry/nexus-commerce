@@ -2,6 +2,7 @@ import type { ListingPresenceFields } from '../../presence/fields'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { SheetTone } from '@nexus/shared/sheet-groups'
 import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared/content-language'
+import type { CoordinateKey, MatrixCells, MatrixCoordinate, PriceCell } from '../../matrix/contract'
 /**
  * PES.3 — the wire contract of a CHANNEL SCOPE of the Product Edit Studio sheet.
  *
@@ -60,6 +61,11 @@ export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending'
  * consumer that cannot name what the server sends cannot consume it.
  */
 export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
+  /** Amazon sheet gaps — Mode / Qty / Buffer: the Matrix's own cells (`row.stock`), written through the Matrix door. */
+  | 'stockControl'
+
+/** The Matrix cell a `stockControl` column shows and writes. */
+export type StockControlCell = 'syncMode' | 'syncQty' | 'syncBuffer'
 
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
@@ -171,6 +177,8 @@ export interface SheetColumn {
     editableOnExisting: boolean
     categories: string[]
   }>
+  /** `stockControl` only: the Matrix cell this column shows and writes (API `SheetColumn.matrixCell`). */
+  matrixCell?: StockControlCell
 }
 
 /** The channels that can carry an alias group. Mirrors `SheetChannel` on the master sheet. */
@@ -264,8 +272,37 @@ export interface MappedCell {
   listingLevel?: { productId: string; sku: string; variation?: true; ownValue?: unknown }
 }
 
+/** Amazon sheet gaps (D4=B, D7=A) — an offer cell's saved change waiting for Publish (API `AmazonOfferPending`). */
+export interface AmazonOfferPending {
+  /** The saved value as the cell shows it (`null` = removed on Amazon when you publish). */
+  value: unknown
+  /** The live value: what Amazon keeps until Publish. */
+  live: unknown
+  savedAt: string
+  savedBy: string
+  /** The server's words: "Saved — sent when you publish", "Saved — pins at 44.90 when you publish", … */
+  note: string
+  /** False: the saved value is not sent (a restock date that has passed). */
+  sent: boolean
+  /** D7=A — live moved after the save; Publish still sends the saved value. */
+  liveChangedSince?: { from: unknown; to: unknown; note: string }
+}
+
+/** What an Amazon offer cell adds to a sheet cell (API `AmazonOfferCellExtras`, `amazon-offer-cells.ts`). Absent = nothing. */
+export interface AmazonOfferCellExtras {
+  pendingPublish?: AmazonOfferPending | null
+  /** D9 = A: Amazon's last report on an Amazon Fulfillment method cell, sent only when it differs from what Nexus sends. */
+  fulfilmentReported?: 'AFN'
+  /** The price column: the Matrix's own price cell for this listing. */
+  priceCell?: PriceCell
+  /** D5 warnings (Always available, the Automate Pricing rule) and a passed restock date, in the server's words. */
+  offerWarning?: string
+  /** The Fulfillment method cell of a code Nexus does not set (Remote Fulfilment, VCS): its words. */
+  fulfilmentLabel?: string
+}
+
 /** PES.5 §3.2 — `SheetCellValue` plus the studio's provenance and write routing. */
-export interface StudioCellValue extends importContentWriteFacts {
+export interface StudioCellValue extends importContentWriteFacts, AmazonOfferCellExtras {
   nexusDraft?: boolean
   tier?: importResolvedContent['tier']
   language?: importResolvedContent['language']
@@ -383,6 +420,8 @@ export interface StudioRow {
   basePrice: number | null
   /** This row's listing on this coordinate, or null when it has none. */
   listing: SheetListing | null
+  /** Amazon sheet gaps — the Matrix cells the stock columns show and write (API `StudioRowStock`); absent off the Matrix's channels. */
+  stock?: StudioRowStock
   /** Filled ÷ applicable master attributes — what the drawer's completeness footer reads. */
   completeness: MasterCompleteness
   /**
@@ -408,6 +447,17 @@ export interface StudioRow {
    * vocabulary and not a fixed pair.
    */
   axisValues?: Record<string, string> | null
+}
+
+/** What a sheet row carries for its stock cells (API `StudioRowStock`, `studio-stock.ts`). */
+export interface StudioRowStock {
+  /** The coordinate whose inventory cells this row shows and writes: `AMAZON:EU` (every EU market), `AMAZON:UK`, `EBAY:IT`, `EBAY:IT#<aliasId>`. */
+  key: CoordinateKey
+  /** The row's own market coordinate. */
+  marketKey: CoordinateKey
+  /** The Matrix's cells for `key`, unchanged; null when the row is held (no listing there, or another account's). */
+  cells: MatrixCells | null
+  coordinate: MatrixCoordinate | null
 }
 
 /** PES.5's `SheetListing` — the row's own listing state on this coordinate. */

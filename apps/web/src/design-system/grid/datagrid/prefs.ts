@@ -29,9 +29,9 @@ export interface StoredDataGridPrefs extends Partial<DataGridPrefs> {
 export type SortSpec = { key: string; dir: 'asc' | 'desc' }
 
 /** DataGrid.tsx:318-329 — the state before anything is loaded. */
-export function defaultPrefs(togglableKeys: readonly string[], defaultLockedKeys: readonly string[]): DataGridPrefs {
+export function defaultPrefs(togglableKeys: readonly string[], defaultLockedKeys: readonly string[], defaultVisibleKeys: readonly string[] = togglableKeys): DataGridPrefs {
   return {
-    visibleColumns: [...togglableKeys],
+    visibleColumns: [...defaultVisibleKeys],
     lockedColumns: [...defaultLockedKeys],
     stickyFirstColumn: true,
     stickyLastColumn: true,
@@ -57,6 +57,8 @@ export function parseStoredPrefs(raw: string | null | undefined): StoredDataGrid
 export interface ReconcileInput {
   togglableKeys: readonly string[]
   defaultLockedKeys: readonly string[]
+  /** Columns that start hidden (`Column.defaultHidden`): a new one is not appended to a saved layout. */
+  defaultHiddenKeys?: readonly string[]
   prefsSortFields?: ReadonlyArray<{ value: string; label: string }>
 }
 
@@ -70,6 +72,7 @@ export interface Reconciled {
 /** DataGrid.tsx:354-418, verbatim. */
 export function reconcileStoredPrefs(saved: StoredDataGridPrefs, input: ReconcileInput): Reconciled {
   const { togglableKeys, defaultLockedKeys, prefsSortFields } = input
+  const hiddenByDefault = new Set(input.defaultHiddenKeys ?? [])
   const known = new Set(togglableKeys)
   const kept = (Array.isArray(saved.visibleColumns) ? saved.visibleColumns : []).filter((k) => known.has(k))
   // A column shipped after this operator last opened the dialog must appear — dropping it would
@@ -83,7 +86,7 @@ export function reconcileStoredPrefs(saved: StoredDataGridPrefs, input: Reconcil
   // field) ⇒ fall back to append-everything.
   const savedKnown = Array.isArray(saved.knownColumns) ? new Set(saved.knownColumns) : null
   const seen = new Set(kept)
-  const appended = togglableKeys.filter((k) => !seen.has(k) && (savedKnown ? !savedKnown.has(k) : true))
+  const appended = togglableKeys.filter((k) => !seen.has(k) && !hiddenByDefault.has(k) && (savedKnown ? !savedKnown.has(k) : true))
   // Placed at its CANONICAL index, not at the end.
   const merged = [...kept]
   for (const k of appended) {

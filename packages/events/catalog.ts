@@ -167,6 +167,26 @@ export const EVENTS = {
     }),
     subject: (p) => p.listingId,
   }),
+  'listing.values_changed': defineEvent({
+    type: 'listing.values_changed',
+    context: 'catalog',
+    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN) changed in one family; the sheet and the Matrix re-read those rows.",
+    schema: z.strictObject({
+      /** The family root. */
+      productId: z.string().min(1),
+      listings: z.array(z.strictObject({
+        listingId: z.string().min(1),
+        productId: z.string().min(1),
+        version: z.number().int().nonnegative(),
+      })).min(1).max(500),
+      fields: z.array(z.enum([
+        'quantityMode', 'quantity', 'stockBuffer', 'syncState', 'fulfilment', 'price', 'salePrice',
+        'externalListingId', 'offer', 'fulfilmentSettings', 'offerDraft',
+      ])).min(1),
+      reason: z.string().optional(),
+    }),
+    subject: (p) => p.productId,
+  }),
   'wizard.submitted': defineEvent({
     type: 'wizard.submitted',
     context: 'catalog',
@@ -737,6 +757,23 @@ export const EVENTS = {
       terminal: z.boolean(),
     }),
     subject: (p) => p.feedId,
+  }),
+  'publication.status_changed': defineEvent({
+    type: 'publication.status_changed',
+    context: 'channel',
+    description: 'A product sheet publication changed status (sent, waiting for the channel, settled); open sheets and the publish history refetch.',
+    schema: z.strictObject({
+      publicationId: z.string().min(1),
+      batchId: z.string().nullable().optional(),
+      productId: z.string().min(1),
+      channel: z.string().min(1),
+      marketplace: z.string().min(1),
+      accountId: z.string().min(1),
+      aliasKey: z.string(),
+      status: z.string().min(1),
+      terminal: z.boolean(),
+    }),
+    subject: (p) => p.publicationId,
   }),
   'ebay_push.status_changed': defineEvent({
     type: 'ebay_push.status_changed',

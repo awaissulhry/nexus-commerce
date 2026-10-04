@@ -48,6 +48,19 @@ const LISTING_IDENTITY_KEYS = new Set([
 ])
 const isListingIdentityKey = (key: string) => LISTING_IDENTITY_KEYS.has(key) || isManagedShopifyAttribute(key)
 
+/**
+ * Amazon offer facts (amazon/offer-fields.ts) travel with their copy group: the offer's price bounds, MAP, window and
+ * pricing rule with "pricing", handling time / restock / always available with "attributes". A saved-but-unpublished
+ * offer draft belongs to the sibling's live listing and is never copied: the new variant's listing is a draft itself.
+ */
+const COPY_GROUP_OF_KEY: Readonly<Record<string, CopyGroup | null>> = {
+  amazonOffer: 'pricing',
+  amazonFulfillment: 'attributes',
+  amazonOfferDraft: null,
+}
+const copiesKey = (key: string, groups: Set<string>) =>
+  !isListingIdentityKey(key) && (!(key in COPY_GROUP_OF_KEY) || (COPY_GROUP_OF_KEY[key] != null && groups.has(COPY_GROUP_OF_KEY[key]!)))
+
 /** Copy the sibling's listings onto `productId` as drafts. Returns the coordinates that were skipped. */
 export async function copySiblingListings(tx: Prisma.TransactionClient, input: { sourceProductId: string; productId: string; groups: Set<string> }): Promise<SkippedListingCopy[]> {
   const { sourceProductId, productId, groups } = input
@@ -75,7 +88,7 @@ export async function copySiblingListings(tx: Prisma.TransactionClient, input: {
       continue
     }
     const stored = sib.platformAttributes && typeof sib.platformAttributes === 'object' && !Array.isArray(sib.platformAttributes) ? sib.platformAttributes as Record<string, any> : {}
-    const platAttrs = Object.fromEntries(Object.entries(stored).filter(([key]) => !isListingIdentityKey(key)))
+    const platAttrs = Object.fromEntries(Object.entries(stored).filter(([key]) => copiesKey(key, groups)))
     const sibAttrs = (platAttrs.attributes ?? {}) as Record<string, any>
     const cleanedAttrs: Record<string, any> = {}
     if (groups.has('attributes')) {

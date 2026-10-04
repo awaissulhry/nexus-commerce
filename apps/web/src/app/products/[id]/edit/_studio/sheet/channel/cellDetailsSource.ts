@@ -2,6 +2,8 @@
 import type { ValueSourceKind } from '@/design-system/components/SourceIndicator'
 import type { CellProvenance } from '@/design-system/grid/renderers/provenance'
 import type { StudioCellValue } from './types'
+import { offerDraftCellWords, pendingPublishOf } from './offerDrafts'
+import { MATRIX_CELL_COPY } from '@/design-system/grid/renderers/matrixCells'
 
 export interface ValueSourceDescription {
   kind: ValueSourceKind
@@ -36,6 +38,16 @@ export function sourceHoverText(source: ValueSourceDescription, description: str
 export function describeValueSource(cell: StudioCellValue | undefined, provenance: CellProvenance, refusedReason?: string | null): ValueSourceDescription {
   const source = (kind: ValueSourceKind, label: string, description: string): ValueSourceDescription => ({ kind, label, description })
   if (provenance === 'refused') return source('warning', 'Formula needs attention', refusedReason ?? 'The formula could not produce a value')
+  /* Amazon sheet gaps (D4=B, D7=A) — an offer change saved in Nexus that Publish sends: never drawn as a live value. The
+     Shopify draft's mark (below), with the saved and live values, when, and a live change since; not sent = a warning. */
+  const waiting = pendingPublishOf(cell)
+  if (waiting) {
+    const words = offerDraftCellWords(waiting)
+    return source(words.notSent ? 'warning' : 'pending', words.label, words.description)
+  }
+  /* D9 = A — Amazon's last report says FBA while Nexus sends FBM: the Matrix's own words, as a warning (never hidden). */
+  if (cell?.fulfilmentReported) return source('warning', MATRIX_CELL_COPY.reported(cell.fulfilmentReported),
+    'Nexus sends FBM and keeps sending this listing\'s stock. Check the listing in Seller Central; the next pull from Amazon updates the report.')
   if (provenance === 'formula') return source('formula', 'Cell formula', 'Calculated by this cell’s formula; edit the formula to change how it works')
   if (provenance === 'ai' || provenance === 'aiStale') return source('ai', provenance === 'aiStale' ? 'Outdated AI draft' : 'AI draft', 'Review this suggestion before accepting it')
   if (!cell) return source('missing', 'No value', 'No source information is available')

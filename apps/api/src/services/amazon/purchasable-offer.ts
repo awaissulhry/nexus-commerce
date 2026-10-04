@@ -22,6 +22,9 @@
  * (`pricing-outbound.service.ts`).
  */
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
+import { amazonOfferMergeLeaves } from './offer-attributes.js'
+import type { AmazonOfferFacts } from './offer-facts.js'
+import { AMAZON_SUB_ATTRIBUTE, type AmazonOfferLeaf } from './offer-fields.js'
 
 /**
  * 🔴 The switch: `NEXUS_AMAZON_OFFER_MERGE=1` turns the read + merge on; unset or anything else keeps today's
@@ -126,6 +129,9 @@ export type AmazonPriceOfferPlan =
  *   - a person removed Nexus's own sale (`saleRemoved`, set by `writeChannelPrices`) and Amazon still shows a sale →
  *     `discounted_price: null`, the documented delete;
  *   - otherwise nothing: the sale Amazon holds (Seller Central, or none) is left as it is.
+ * Amazon sheet gaps — the offer leaves Nexus HOLDS live (`held`: the min/max seller price, MAP price, offer window and
+ * Automate Pricing rule its own store carries, `offer-facts.ts`) ride the same merge, so the job sends what Nexus holds;
+ * a leaf Nexus cleared goes as `null` (the documented delete) only when Amazon's live offer still has it.
  * Every other sub-attribute and every other instance is left out of the patch, so Amazon keeps it.
  *
  * Instances in this market, but none that is the default audience in Nexus's currency → refused: a merge would name an
@@ -138,6 +144,8 @@ export function amazonPriceOfferPlan(input: {
   /** The Amazon marketplace id the push goes to. */
   marketplaceId: string
   saleRemoved: boolean
+  /** The live offer leaves Nexus holds (never the price or the sale: `built` carries those). */
+  held?: { facts: Pick<AmazonOfferFacts, 'values' | 'source'>; leaves: readonly AmazonOfferLeaf[] }
 }): AmazonPriceOfferPlan {
   const { built, marketplaceId } = input
   const currency = String(built.currency ?? '').toUpperCase()
@@ -158,5 +166,14 @@ export function amazonPriceOfferPlan(input: {
   }
   if (built.discounted_price != null) value.discounted_price = built.discounted_price
   else if (input.saleRemoved && target.discounted_price != null) value.discounted_price = null
+  const heldLeaves = (input.held?.leaves ?? []).filter((leaf) => leaf !== 'our_price' && leaf !== 'sale')
+  if (heldLeaves.length) {
+    const leaves = amazonOfferMergeLeaves({ marketplaceId, currency: String(value.currency), facts: input.held!.facts, leaves: heldLeaves })
+    for (const leaf of heldLeaves) {
+      const sub = AMAZON_SUB_ATTRIBUTE[leaf]
+      if (leaves[sub] != null) value[sub] = leaves[sub]
+      else if (target[sub] != null) value[sub] = null
+    }
+  }
   return { kind: 'merge', patch: { op: 'merge', path: '/attributes/purchasable_offer', value: [value] } }
 }

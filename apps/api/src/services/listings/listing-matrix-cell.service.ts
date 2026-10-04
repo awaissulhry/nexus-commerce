@@ -18,8 +18,8 @@
  * as a bare column: no dates, no audit, nothing queued.
  */
 import prisma from '../../db.js'
-import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
-import { channelShape, isAmazonEuMarket, PARENT_PRICE_REASON, PARENT_REASON, PRICE_PERMISSION_REASON } from '../pim/matrix-cells.js'
+import { channelShape, PARENT_PRICE_REASON, PARENT_REASON, PRICE_PERMISSION_REASON } from '../pim/matrix-cells.js'
+import { loadSharedInventoryTargets } from '../pim/shared-inventory-targets.js'
 import { Conflict, pinTypedQuantity, writeQuantityMode, type Target } from '../pim/matrix-write.service.js'
 import { writeChannelPrices, type PriceWriteTarget } from '../pim/channel-price-write.service.js'
 import { ListingPricingError } from './listing-pricing-edit.service.js'
@@ -44,21 +44,13 @@ type QuantityListing = { id: string; productId: string; channel: string; marketp
 /**
  * The rows a quantity change on this listing lands on, as the matrix's EU inventory group: the listing itself, or — on
  * an Amazon EU market — every open EU row of the SKU on the same account (Amazon keeps ONE merchant quantity per SKU
- * across the EU markets), `expandedTo` naming those markets. The listing keeps the version the caller saw.
+ * across the EU markets), `expandedTo` naming those markets — the one EU rule (`loadSharedInventoryTargets`). The listing
+ * keeps the version the caller saw, and stays a target even when its own offer is closed (an explicit edit of it).
  */
-async function quantityTargetsOf(listing: QuantityListing): Promise<{ targets: Target[]; expandedTo?: string[]; following: boolean[] }> {
-  const own: Target = { id: listing.id, marketplace: listing.marketplace, version: listing.version }
-  const ownFollows = listing.followMasterQuantity !== false
-  if (!isAmazonEuMarket(listing.channel.toUpperCase(), listing.marketplace) || (listing.aliasKey ?? '') !== '') return { targets: [own], following: [ownFollows] }
-  const group = await prisma.channelListing.findMany({
-    where: { productId: listing.productId, channel: 'AMAZON', marketplace: { in: [...AMAZON_EU_SHARED_MARKETS] }, aliasKey: '',
-      channelConnectionId: listing.channelConnectionId, offerClosedAt: null },
-    select: { id: true, marketplace: true, version: true, followMasterQuantity: true },
-  })
-  const targets = group.map((g) => (g.id === listing.id ? own : { id: g.id, marketplace: g.marketplace, version: g.version }))
-  const following = group.map((g) => (g.id === listing.id ? ownFollows : g.followMasterQuantity !== false))
-  if (!targets.some((t) => t.id === listing.id)) { targets.push(own); following.push(ownFollows) }
-  return { targets, expandedTo: targets.map((t) => t.marketplace), following }
+async function quantityTargetsOf(listing: QuantityListing): Promise<{ targets: Target[]; expandedTo?: string[] }> {
+  const resolved = await loadSharedInventoryTargets(prisma, listing, { primary: 'always' })
+  if ('conflict' in resolved) throw conflict(resolved.conflict)
+  return resolved
 }
 const coordinatesOf = (listing: QuantityListing, targets: readonly Target[]) =>
   targets.map((t) => ({ productId: listing.productId, channel: listing.channel.toUpperCase(), marketplace: t.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey ?? '' }))
@@ -90,7 +82,10 @@ export async function setListingQuantityFollow(input: {
     if (input.onFba === 'skip') return { outcome: 'skipped', skipped: PARENT_REASON }
     throw new ListingPricingError(400, PARENT_REASON)
   }
-  const { targets, expandedTo, following } = await quantityTargetsOf(listing)
+  const { targets, expandedTo } = await quantityTargetsOf(listing)
+  const following = expandedTo
+    ? (await prisma.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { followMasterQuantity: true } })).map((g) => g.followMasterQuantity !== false)
+    : [listing.followMasterQuantity !== false]
   // Already so — on every market of an Amazon EU group too — is a no-op, as the matrix's Mode cell answers: no write,
   // no version spent (a version bump would cost the other markets' open editors a needless conflict).
   if (following.every((f) => f === input.follow)) return { outcome: 'noop' }

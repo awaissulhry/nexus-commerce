@@ -118,6 +118,12 @@ describe('sync, price, fulfilment and coordinate helpers', () => {
     expect(reportedFulfilment({ fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] })).toBe('AFN')
     expect(reportedFulfilment({ fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT' }] })).toBe('MFN')
     expect(reportedFulfilment({ fulfillmentChannel: 'AFN' })).toBeNull() // the flat key is the operator's own mirror, never Amazon's report
+    // Amazon sheet gaps (D3): every code, both places, fail-closed — Amazon's pull writes `attributes.fulfillment_availability`.
+    expect(reportedFulfilment({ attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] } })).toBe('AFN')
+    expect(reportedFulfilment({ fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 2 }, { fulfillment_channel_code: 'AMAZON_EU_RAFN' }] })).toBe('AFN')
+    expect(reportedFulfilment({ fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT' }], attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU_VCS' }] } })).toBe('AFN')
+    expect(reportedFulfilment({ attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'GESTITO DAL VENDITORE (DEFAULT)' }] } })).toBe('MFN')
+    expect(reportedFulfilment({ attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'SOMETHING' }] } })).toBeNull()
   })
   it('coordinate shape: eBay has no sale, the global channels have no fulfilment, an EU market carries no inventory kinds', () => {
     expect(channelShape('EBAY').absent).toEqual([{ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEbay }])
@@ -168,9 +174,17 @@ describe('effectiveFulfilment — ONE rule for the sheet cell, the Matrix and th
 
   it('precedence: active offer → typed → reported → flat mirror → product', () => {
     expect(effectiveFulfilment({ activeOfferMethod: 'FBA', typed: 'FBM', platformAttributes: nested('DEFAULT'), productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'offer' })
-    expect(effectiveFulfilment({ typed: 'FBM', platformAttributes: nested('AMAZON_EU'), productMethod: 'FBA' })).toEqual({ method: 'FBM', source: 'set' })
+    expect(effectiveFulfilment({ typed: 'FBM', platformAttributes: nested('DEFAULT'), productMethod: 'FBA' })).toEqual({ method: 'FBM', source: 'set' })
     expect(effectiveFulfilment({ platformAttributes: { fulfillmentChannel: 'AFN' }, productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'mirror' })
     expect(effectiveFulfilment({ platformAttributes: {}, productMethod: 'FBA' })).toEqual({ method: 'FBA', source: 'product' })
+  })
+
+  it('D9 = A: the offer and the typed method rank above Amazon\'s report, which shows as "differs"; the report still decides when nothing else says', () => {
+    expect(effectiveFulfilment({ typed: 'FBM', platformAttributes: { attributes: nested('AMAZON_EU') } })).toEqual({ method: 'FBM', source: 'set' })
+    expect(reportedFulfilment({ attributes: nested('AMAZON_EU') })).toBe('AFN')
+    expect(effectiveFulfilment({ activeOfferMethod: 'FBM', typed: 'FBA', platformAttributes: { attributes: nested('AMAZON_EU_RAFN') } })).toEqual({ method: 'FBM', source: 'offer' })
+    expect(effectiveFulfilment({ typed: 'FBA', platformAttributes: nested('AMAZON_EU_RAFN') })).toEqual({ method: 'FBA', source: 'set' })
+    expect(effectiveFulfilment({ platformAttributes: { attributes: nested('AMAZON_EU') }, productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'reported' })
   })
 
   it('nothing says anything → null, so a new listing must still choose', () => {

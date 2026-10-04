@@ -36,6 +36,8 @@ beforeAll(() => scoped(async () => {
   await row('skippedNoCode', { syncType: 'PRICE_UPDATE', syncStatus: 'SKIPPED', errorCode: null })
   await row('skippedOther', { syncType: 'PRICE_UPDATE', syncStatus: 'SKIPPED', errorCode: 'OUTBOUND_NOT_SENT' })
   await row('pausedQuantity', { syncType: 'QUANTITY_UPDATE', syncStatus: 'SKIPPED', errorCode: 'PUSH_SYNC_PAUSED' })
+  // A held Amazon handling-time/restock change of a paused listing (amazon-fulfilment-settings): kept, like a held price.
+  await row('heldFulfilment', { syncType: 'QUANTITY_UPDATE', syncStatus: 'SKIPPED', errorCode: 'FULFILMENT_HELD_PAUSED', payload: { source: 'AMAZON_FULFILMENT_SETTINGS' } })
   await row('success', { syncType: 'PRICE_UPDATE', syncStatus: 'SUCCESS' })
   await row('cancelled', { syncType: 'PRICE_UPDATE', syncStatus: 'CANCELLED' })
   // A recent settled row is inside the window: kept.
@@ -44,7 +46,7 @@ beforeAll(() => scoped(async () => {
 afterAll(async () => { await state.db?.close() }, 60_000)
 
 describe('🔴 retention keeps held price changes, prunes the rest', () => {
-  it('the dry run counts the 5 prunable rows, not the 2 held ones', () => scoped(async () => {
+  it('the dry run counts the 5 prunable rows, not the 3 held ones', () => scoped(async () => {
     const r = await runAdsRetentionOnce({ dryRun: true })
     expect(r.deleted['outboundSyncQueue.settled']).toBe(5)
   }))
@@ -53,7 +55,7 @@ describe('🔴 retention keeps held price changes, prunes the rest', () => {
     const r = await runAdsRetentionOnce({ dryRun: false })
     expect(r.deleted['outboundSyncQueue.settled']).toBe(5)
     const left = await prisma.outboundSyncQueue.findMany({ select: { id: true } })
-    expect(left.map((row) => row.id).sort()).toEqual([ids.heldPaused, ids.heldDraft, ids.recent].sort())
+    expect(left.map((row) => row.id).sort()).toEqual([ids.heldPaused, ids.heldDraft, ids.heldFulfilment, ids.recent].sort())
     // Run again: nothing more is prunable, and the held rows are still there.
     expect((await runAdsRetentionOnce({ dryRun: false })).deleted['outboundSyncQueue.settled']).toBe(0)
     expect(await prisma.outboundSyncQueue.count({ where: { id: { in: [ids.heldPaused, ids.heldDraft] } } })).toBe(2)

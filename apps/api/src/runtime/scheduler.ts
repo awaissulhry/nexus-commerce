@@ -38,6 +38,8 @@ import { startSchemaRefreshCron } from "../jobs/schema-refresh.job.js";
 import { startEbayReturnsPollCron } from "../jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "../jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "../jobs/amazon-flat-file-feed-poll.job.js";
+import { startPublicationSettleCron } from "../jobs/studio-publication-settle.job.js";
+import { startPublicationBatchResumeCron } from "../jobs/publication-batch-resume.job.js";
 import { startSuppressionIssueCron } from '../jobs/listing-issue-suppression.job.js'
 import { startChannelAlertsCron } from '../jobs/channel-alerts.job.js'
 import { startEbayFeedPollCron } from "../jobs/ebay-feed-poll.job.js";
@@ -63,7 +65,6 @@ import { startOutboundQueueJanitorCron } from "../jobs/outbound-queue-janitor.jo
 import { startEbayItemStatusReconcileCron } from "../jobs/ebay-item-status-reconcile.job.js";
 import { startAmazonQtyReadbackCron } from "../jobs/amazon-qty-readback.job.js";
 import { startAmazonAsinFillCron } from "../jobs/amazon-asin-fill.job.js";
-import { startStudioPublicationSettleCron } from "../jobs/studio-publication-settle.job.js";
 import { startIdentityChannelSweepCron } from "../jobs/identity-channel-sweep.job.js";
 import { startEbayReadbackCron } from "../jobs/ebay-readback.job.js";
 import { startShopifyQtyReadbackCron } from "../jobs/shopify-qty-readback.job.js";
@@ -324,6 +325,12 @@ export async function startScheduler(): Promise<void> {
   // overridable via NEXUS_FLAT_FILE_FEED_POLL_SCHEDULE.
   startFlatFileFeedPollCron();
 
+  // Sheet publish parity, step 2 — product sheet publications settle by themselves (Amazon feed report, eBay
+  // read-back, the 30-minute receipt deadline), so a destination is never left blocked by a result nobody read.
+  // Only publications sent after this step are swept. Off with NEXUS_PUBLICATION_SETTLE=0.
+  startPublicationSettleCron();
+  startPublicationBatchResumeCron();
+
   // P3.2 — mirror Amazon suppression onto each listing's issue list, and RESOLVE
   // the listings that came off suppression. Hourly; self-guards on Amazon creds.
   // Without it a suppressed listing reads as healthy on the flat-file grid, whose
@@ -549,9 +556,6 @@ export async function startScheduler(): Promise<void> {
   // Published Amazon listings read their ASIN once Amazon makes them visible (Publish reads it once, at promotion).
   // Default-ON; opt out via NEXUS_AMAZON_ASIN_FILL=0.
   startAmazonAsinFillCron();
-  // MCP full control L4 — publications left SUBMITTED (Amazon) / UNVERIFIED (eBay) settle without a reader (a publish
-  // Claude asked for). Default-OFF: it reads Amazon and eBay results; NEXUS_STUDIO_PUBLICATION_SETTLE=1 turns it on.
-  startStudioPublicationSettleCron();
   // MCP full control I6 — what each channel account holds (identity audit #3, #4, #12).
   // Default-OFF; NEXUS_IDENTITY_SWEEP=1 turns it on.
   startIdentityChannelSweepCron();

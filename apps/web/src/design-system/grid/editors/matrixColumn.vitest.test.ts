@@ -18,8 +18,8 @@ vi.mock('ag-grid-react', () => ({
 }))
 
 import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, MATRIX_CELL_WIDTHS, type MatrixCellKind, type MatrixCells, type MatrixCoordinate } from '../matrix/contract'
-import { MATRIX_CELL_CLASSES, MATRIX_FILLABLE_KINDS } from '../renderers/matrixCells'
-import { MATRIX_CELL_RENDERERS } from '../renderers/MatrixCellViews'
+import { MATRIX_CELL_CLASSES, MATRIX_CELL_COPY, MATRIX_FILLABLE_KINDS } from '../renderers/matrixCells'
+import { MATRIX_CELL_RENDERERS, matrixWaitingLine } from '../renderers/MatrixCellViews'
 import { FormulaCellEditor, type FormulaWiring } from './FormulaCellEditor'
 import { matrixColumnDef, type MatrixColumnOptions } from './matrixColumn'
 import { CellSaveTracker } from './roundTrip'
@@ -235,5 +235,74 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
     expect(rp.onJump).toBe(onJump)
     expect(rp.facts({ data: row() })).toEqual(cellsOf())
     expect(d.cellRendererParams).toBe(d.cellRendererParams)
+  })
+})
+
+describe('matrixColumnDef — coordinateOf: a coordinate per row (the product sheet), the Matrix unchanged', () => {
+  const EU: MatrixCoordinate = { ...COORD, key: 'AMAZON:EU', kind: 'region-inventory', label: 'Amazon EU · Inventory · IT DE', sharedInventoryWith: ['IT', 'DE'] }
+  const ALIAS: MatrixCoordinate = { ...COORD, key: 'AMAZON:IT#a1', alias: { id: 'a1', label: '①', position: 1 }, currency: 'GBP' }
+  const SHARED_LINE = 'Shared by IT DE — one quantity per SKU on Amazon EU'
+  type CoordRow = Row & { coord?: MatrixCoordinate | null }
+
+  it('🔴 coordinateOf drives the tooltip: an EU row carries the Shared line, an alias row on the same column does not', () => {
+    const d = matrixColumnDef<CoordRow>('syncQty', { ...opts({ colId: 'stock_qty' }), coordinateOf: (r) => r?.coord } as MatrixColumnOptions<CoordRow>) as Required<ColDef<CoordRow>>
+    const tip = (coord: MatrixCoordinate | null | undefined) => call(d.tooltipValueGetter, { data: { ...row(), coord } })
+    expect(tip(EU)).toBe(`Follows the pool · 403 available at IT-MAIN − 0 buffer · ${SHARED_LINE}`)
+    expect(tip(ALIAS)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
+    /* No coordinate for the row → the column's own. */
+    expect(tip(null)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
+  })
+
+  it('coordinateOf drives the text too (the currency a price falls back to)', () => {
+    const d = matrixColumnDef<CoordRow>('price', { ...opts({ colId: 'price' }), coordinateOf: (r) => r?.coord } as MatrixColumnOptions<CoordRow>) as Required<ColDef<CoordRow>>
+    const r: CoordRow = { ...row(), coord: ALIAS }
+    r.cells['AMAZON:IT']!.price!.currency = ''
+    expect(fn(d.valueFormatter)({ data: r, value: 105 } as never)).toBe('£105.00')
+    expect(fn(d.valueFormatter)({ data: { ...r, coord: null }, value: 105 } as never)).toBe('€105.00')
+  })
+
+  it('without coordinateOf every row reads the column coordinate — the Matrix page looks exactly as before', () => {
+    const d = def('syncQty', { coordinate: EU })
+    const tip = call(d.tooltipValueGetter, { data: row() })
+    expect(tip).toBe(`Follows the pool · 403 available at IT-MAIN − 0 buffer · ${SHARED_LINE}`)
+    /* The column-level pieces still read the column coordinate. */
+    expect(d.headerTooltip).toBe('Qty — Amazon EU · Inventory · IT DE')
+    expect((d.cellRendererParams as { coordinate: MatrixCoordinate }).coordinate).toBe(EU)
+  })
+})
+
+describe('matrixColumnDef — a product sheet change waiting for Publish (tooltip only)', () => {
+  const copy = { ...MATRIX_CELL_COPY, waitingForPublish: (value: string) => `Product sheet change waits for Publish: ${value}` }
+
+  it('a waiting price adds ONE tooltip line; the cell keeps its live value and text', () => {
+    const r = row()
+    r.cells['AMAZON:IT']!.price!.waiting = { value: 44.9 }
+    const d = def('price', { copy })
+    expect(call(d.tooltipValueGetter, { data: r })).toBe('Follows the base price €105.00 · Product sheet change waits for Publish: €44.90')
+    expect(fn(d.valueGetter)({ data: r } as never)).toBe(105)
+    expect(fn(d.valueFormatter)({ data: r, value: 105 } as never)).toBe('€105.00')
+  })
+
+  it('a price going back to the base price says so in the copy table\'s words', () => {
+    const r = row()
+    r.cells['AMAZON:IT']!.price!.waiting = { value: null }
+    expect(call(def('price', { copy }).tooltipValueGetter, { data: r })).toBe('Follows the base price €105.00 · Product sheet change waits for Publish: Follows the base price')
+  })
+
+  it('a waiting sale shows the saved sale; a removed sale reads as the dash; no waiting → no line', () => {
+    const r = row()
+    r.cells['AMAZON:IT']!.sale!.waiting = { value: 39.9, start: '2026-10-10', end: '2026-10-20' }
+    expect(call(def('salePrice', { copy }).tooltipValueGetter, { data: r })).toBe('Product sheet change waits for Publish: €39.90 · 10 Oct → 20 Oct')
+    r.cells['AMAZON:IT']!.sale!.waiting = { value: null, start: null, end: null }
+    expect(call(def('salePrice', { copy }).tooltipValueGetter, { data: r })).toBe('Product sheet change waits for Publish: —')
+    r.cells['AMAZON:IT']!.sale!.waiting = null
+    expect(call(def('salePrice', { copy }).tooltipValueGetter, { data: r })).toBeUndefined()
+  })
+
+  it('the engine default copy carries the words, and a cell kind without a waiting value draws no line', () => {
+    const r = row()
+    r.cells['AMAZON:IT']!.price!.waiting = { value: 44.9 }
+    expect(call(def('price').tooltipValueGetter, { data: r })).toBe('Follows the base price €105.00 · Product sheet change waits for Publish: €44.90')
+    expect(matrixWaitingLine('syncQty', r.cells['AMAZON:IT'], 'EUR', copy)).toBeNull()
   })
 })

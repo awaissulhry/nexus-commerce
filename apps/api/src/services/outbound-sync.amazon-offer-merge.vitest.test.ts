@@ -298,3 +298,55 @@ describe('amazonPriceOfferPlan — the instance it names', () => {
     expect(plan).toMatchObject({ kind: 'merge', patch: { value: [{ currency: 'eur', audience: 'all', marketplace_id: IT }] } })
   })
 })
+
+describe('Amazon sheet gaps — the merge carries the offer leaves Nexus holds live', () => {
+  const scheduled = (n: number) => [{ schedule: [{ value_with_tax: n }] }]
+  const held = (platformAttributes: Record<string, unknown>) =>
+    m.read.mockResolvedValue({ id: 'l', marketplace: 'IT', platformAttributes, syncPaused: false, productType: 'OUTERWEAR', fulfillmentMethod: 'FBM', salePrice: null })
+
+  it('min/max/MAP, the offer window and the rule from Nexus\'s own store replace Amazon\'s; the sale, B2B and DE stay', async () => {
+    held({ amazonOffer: { minimum_seller_allowed_price: 95, maximum_seller_allowed_price: 140, map_price: 100, start_at: '2026-02-01', end_at: '2027-06-30', automated_pricing_rule_id: 'R1' } })
+    await service.syncToAmazon(masterPrice(115))
+    const patch = onlyPatch()
+    expect(patch).toEqual({ op: 'merge', path: '/attributes/purchasable_offer', value: [{
+      currency: 'EUR', audience: 'ALL', marketplace_id: IT, our_price: scheduled(115),
+      minimum_seller_allowed_price: scheduled(95), maximum_seller_allowed_price: scheduled(140), map_price: scheduled(100),
+      start_at: { value: '2026-02-01' }, end_at: { value: '2027-06-30' },
+      automated_pricing_merchandising_rule_plan: [{ merchandising_rule: { rule_id: 'R1' } }],
+    }] })
+    const before = liveOffer()
+    const after = applyToOffer(before, patch)
+    expect(after[0].discounted_price).toEqual(sellerCentralSale)
+    expect(after.slice(1)).toEqual(before.slice(1))
+  })
+
+  it('a leaf Nexus cleared (null) is deleted — only because Amazon\'s live offer still has it', async () => {
+    held({ amazonOffer: { map_price: null, automated_pricing_rule_id: null } })
+    await service.syncToAmazon(masterPrice(115))
+    const value = onlyPatch().value[0]
+    // The live fixture carries map_price but no Automate Pricing rule: one delete, no null for what is not there.
+    expect(value).toEqual({ currency: 'EUR', audience: 'ALL', marketplace_id: IT, our_price: scheduled(115), map_price: null })
+    expect('map_price' in applyToOffer(liveOffer(), onlyPatch())[0]).toBe(false)
+  })
+
+  it('a value Amazon reported (the pull\'s mirror) is not Nexus\'s: it is not sent, Amazon\'s live value stays', async () => {
+    held({ attributes: { purchasable_offer: [{ marketplace_id: IT, currency: 'EUR', map_price: scheduled(70), minimum_seller_allowed_price: scheduled(60) }] } })
+    await service.syncToAmazon(masterPrice(115))
+    expect(onlyPatch().value[0]).toEqual({ currency: 'EUR', audience: 'ALL', marketplace_id: IT, our_price: scheduled(115) })
+    expect(applyToOffer(liveOffer(), onlyPatch())[0].map_price).toEqual(scheduled(110))
+  })
+
+  it('a draft waiting for Publish is never sent by the job', async () => {
+    held({ amazonOffer: { map_price: 100 }, amazonOfferDraft: { v: 1, leaves: { map_price: { value: 105, base: 100, savedAt: '', savedBy: '' }, minimum_seller_allowed_price: { value: 99, base: null, savedAt: '', savedBy: '' } } } })
+    await service.syncToAmazon(masterPrice(115))
+    expect(onlyPatch().value[0]).toEqual({ currency: 'EUR', audience: 'ALL', marketplace_id: IT, our_price: scheduled(115), map_price: scheduled(100) })
+  })
+
+  it('amazonPriceOfferPlan: price and sale never come from `held` (the built instance carries them)', async () => {
+    const { readAmazonOfferFacts } = await import('./amazon/offer-facts.js')
+    const facts = readAmazonOfferFacts({ marketplace: 'IT', price: 1, salePrice: 2, saleWindow: { start: '2026-10-01', end: '2026-10-02' }, platformAttributes: { amazonOffer: { map_price: 3 } } }, 'job')
+    const built = { currency: 'EUR', our_price: scheduled(10), marketplace_id: IT }
+    const plan = amazonPriceOfferPlan({ built, live: liveOffer(), marketplaceId: IT, saleRemoved: false, held: { facts, leaves: ['our_price', 'sale', 'map_price'] } })
+    expect(plan).toEqual({ kind: 'merge', patch: { op: 'merge', path: '/attributes/purchasable_offer', value: [{ currency: 'EUR', audience: 'ALL', marketplace_id: IT, our_price: scheduled(10), map_price: scheduled(3) }] } })
+  })
+})

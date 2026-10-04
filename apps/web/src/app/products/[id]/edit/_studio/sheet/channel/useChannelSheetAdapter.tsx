@@ -50,6 +50,11 @@ import { AliasBandCell, BandExpander } from './AliasBandCell';
 import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
 import { resetActionWords } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
+import { usePublicationStatus } from '@/app/products/_publication/dialog/usePublicationStatus';
+import { destinationLabel as publishDestinationLabel, rejectedFilterMenuLabel, withRejectedFilter } from '@/app/products/_publication/dialog/outcome';
+import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishSheetColumn, rejectedRowCount, rowPublishValue, type PublishCellValue } from './publishColumn';
+import { OFFER_DRAFT_COPY, discardOfferDrafts, offerDraftControls, pendingPublishOf } from './offerDrafts';
+import { useLiveStockCells } from './useLiveStockCells';
 import { useCellFormulas } from '../../useCellFormulas';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
@@ -121,6 +126,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         accountId,
     });
     const selectedAlias = destination.status === 'ready' ? destination.data.aliasKey : null;
+    /* Sheet publish parity, step 2 — a publication's result arrives without a click: the toolbar mark below and one toast. */
+    const publication = usePublicationStatus({ channel, marketplace, accountId, aliasKey: destination.status === 'ready' ? destination.data.aliasKey ?? '' : null });
     const selectedData = useMemo(() => !loadedData || selectedAlias === null ? loadedData : {
         ...loadedData, rows: loadedData.rows.filter(row => (row.aliasId ?? '') === selectedAlias),
         aliases: loadedData.aliases.filter(alias => (alias.id ?? '') === selectedAlias),
@@ -208,6 +215,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     dataRef.current = data;
     const rowsRef = useRef(rows);
     rowsRef.current = rows;
+    /* Sheet publish parity, step 3 — the "Last publish" column reads the destination's publication status through a
+       ref, so a new answer refreshes its cells without rebuilding the column (`refreshCells` below). */
+    const publishLookup = useMemo(() => publishColumnLookup(data?.columns ?? [], data?.scope.label ?? ''), [data?.columns, data?.scope.label]);
+    const publishValueRef = useRef<(row: ChannelSheetRow) => PublishCellValue>(() => undefined);
+    publishValueRef.current = (row) => rowPublishValue(row, publication.read, publishLookup, publishDestinationLabel(channel, marketplace));
+    const [showRejectedOnly, setShowRejectedOnly] = useState(false);
+    const rejectedCount = useMemo(() => rejectedRowCount(rows, publication.status), [rows, publication.status]);
+    useEffect(() => { if (!rejectedCount) setShowRejectedOnly(false); }, [rejectedCount]);
     /* Create path, step 6 — a save that STARTED this coordinate's draft (parent + variants) has its listings adopted
        into the rows in place (`commitChannelRow` → `adoptCreatedListings`), so the next save on any row of the family
        carries the real version. The epoch makes the header and chip read those rows again at once, and the toast
@@ -303,6 +318,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         schedule: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
     }));
     useEffect(() => () => followUp.dispose(), [followUp]);
+    useLiveStockCells({ familyId: data?.family?.id ?? null, accountId: data?.scope.connectionId ?? accountId, rowsRef, getGridApi, tracker, owe: () => { followUp.owe(); followUp.settle(); } });
     /** Repaint the cells a save settled in place: the saved columns of the saved row, its progress, the theme token. */
     const repaintSettled = (patched: Set<ChannelSheetRow>, columns: Set<string>, request: SheetWriteRequest<ChannelSheetRow>) => {
         const api = getGridApi();
@@ -506,6 +522,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         },
         say: message => toast(message, 'danger'),
     });
+    /* Amazon sheet gaps (D4=B) — offer changes waiting for Publish: toolbar mark, its filter, the ⋯ items (`offerDrafts.ts`). */
+    const [showWaitingOnly, setShowWaitingOnly] = useState(false);
+    const offerDrafts = useMemo(() => offerDraftControls(rows, { filterOn: showWaitingOnly, toggle: () => setShowWaitingOnly(v => !v), destination: publishDestinationLabel(channel, marketplace), labelOf: colId => dataRef.current?.columns.find(c => c.key === colId)?.label ?? colId,
+        discard: (impact, targets) => void Promise.resolve(listResetConfirm.ask(impact)).then(ok => { if (ok) discardOfferDrafts(writer, targets, rowId => rowsRef.current.find(r => r.rowId === rowId)); }) }), [rows, showWaitingOnly, channel, marketplace, listResetConfirm.ask, writer]);
+    useEffect(() => { if (!offerDrafts.count.changes) setShowWaitingOnly(false); }, [offerDrafts.count.changes]);
     type PendingContentEdit = {
         rowId: string;
         colId: string;
@@ -667,7 +688,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             title: `${column.label}: ${row.sku}`,
             rowId: row.rowId,
             colKey: column.key,
-            action: intent && cell ? {
+            action: reset && pendingPublishOf(cell) ? { label: reset.label, description: OFFER_DRAFT_COPY.resetDetail(publishDestinationLabel(channel, marketplace)), run: () => void control.reset([{ rowId: row.rowId, colId: column.key, intent: 'reset', formula: reset.formula }]) } : intent && cell ? {
                 label: intent.action === 'pin' ? 'Keep as listing override' : reset?.formula ? reset.label : resetActionWords(cell, { sku: row.sku, listing: aliasLabel(row.aliasId) }).label,
                 description: intent.action === 'pin'
                     ? `Keep the current value for ${row.sku} · ${aliasLabel(row.aliasId)} on this channel and market.`
@@ -789,7 +810,20 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             },
         })];
     }, [scopePage, marketplace, getGridApi, revealCell, refreshProgress]);
-    const allColumnDefs = useMemo(() => [...progressColumns, ...columnDefs], [progressColumns, columnDefs]);
+    /** Step 3 — the "Last publish" column, right after progress. Channel scopes only (this adapter); master has none. */
+    const publishColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => scopePage ? [publishColumn<ChannelSheetRow>({
+        value: (row) => publishValueRef.current(row),
+        cell: {
+            onGoToField: (columnKey, p) => {
+                const row = p.data as ChannelSheetRow | undefined;
+                const api = getGridApi();
+                if (row && api) landOnCell(api, { rowId: rowIdOf(row), colId: columnKey, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
+            },
+            // "See publish history" arrives with the history (step 4); until then the card offers no link.
+        },
+    })] : [], [scopePage, getGridApi, revealCell]);
+    useEffect(() => { getGridApi()?.refreshCells({ columns: [PUBLISH_COLUMN] }); }, [publication.read, publishLookup, getGridApi]);
+    const allColumnDefs = useMemo(() => [...progressColumns, ...publishColumns, ...columnDefs], [progressColumns, publishColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
     const matchesSearch = useCallback((r: ChannelSheetRow) => {
@@ -801,8 +835,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }, [searchTerm, searchColumnLabels]);
     const scopeRows = useMemo(() => {
         const afterRefused = showRefusedOnly && refusedRowIds.size ? filterProductSheetRows(rows, row => refusedRowIds.has(productSheetRowKey(row))) : rows;
-        return searchTerm ? filterProductSheetRows(afterRefused, matchesSearch) : afterRefused;
-    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds]);
+        // Step 3 — the channel's rejections in the latest publish (the toolbar mark's filter), not the save refusals above.
+        const afterRejected = showRejectedOnly && rejectedCount ? filterProductSheetRows(afterRefused, row => isRejectedRow(row, publication.status)) : afterRefused;
+        const afterWaiting = offerDrafts.filterOn ? filterProductSheetRows(afterRejected, offerDrafts.keep) : afterRejected;
+        return searchTerm ? filterProductSheetRows(afterWaiting, matchesSearch) : afterWaiting;
+    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, publication.status, offerDrafts]);
     useLanguageChips(data ? scopeRows : null, gridColumns);
     useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
@@ -816,7 +853,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const crossChannelCols = useMemo(() => crossChannelColumnCount(rows.find((r) => r.rowKind === 'variant')), [rows]);
     /* Progress column (2026-09-26) — a member of the column model (Customise, views, locks), built above by the shared
        builder; the channel builder never sees it. */
-    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns]) : gridColumns, [data, gridColumns]);
+    const modelColumns = useMemo(() => data ? withSheetGroups([progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), publishSheetColumn<typeof gridColumns[number]>(), ...gridColumns]) : gridColumns, [data, gridColumns]);
     const schemaColumns = useMemo(() => modelColumns as never as StudioSheetColumn[], [modelColumns]);
     const prefsBridge = useMemo<PrefsBridgeOptions>(() => ({
         columns: [{ key: '__identity', locked: true }, ...modelColumns.map((c) => ({ key: c.key }))],
@@ -1043,7 +1080,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [liveRead.menuItem, ...(rejectedCount ? [{ id: 'show-rejected', label: rejectedFilterMenuLabel(rejectedCount, showRejectedOnly, channel, marketplace), description: 'The rows the channel rejected in the last publish', onSelect: () => setShowRejectedOnly(v => !v) }] : []), ...offerDrafts.menu, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             /* Step 4 (D2, 2026-10-01) — one message per fact: a missing field list or category is said ONCE, by its banner
                above the grid (`useMissingFieldsBanner`, the Shopify notice). The chip, the ⋯ item and an empty-grid notice
                no longer repeat it; the chip stays only as the neutral Requirements note while nothing is missing. */
@@ -1054,6 +1091,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 ...(asinPending ? [{ tone: 'info' as const, label: ASIN_PENDING_CHIP_LABEL, detail: asinPendingChipDetail(asinPending, marketplace) }] : []),
                 ...(data.meta.schemaMissing.length ? [] : [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))]),
             ] : []),
+                ...(publication.mark ? [withRejectedFilter(publication.mark, rejectedCount, showRejectedOnly, () => setShowRejectedOnly(v => !v))!] : []),
+                ...(offerDrafts.mark ? [offerDrafts.mark] : []),
             ],
         },
         toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
