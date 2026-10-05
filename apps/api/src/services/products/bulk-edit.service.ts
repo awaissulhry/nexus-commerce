@@ -47,7 +47,7 @@ import { AMAZON_FULFILMENT_CHOICES, describeAmazonFulfilmentCode } from '../../l
 import { OFFER_VERSION_REQUIRED, isAmazonOfferSheetField, writeSheetOfferChanges } from '../pim/amazon-offer-writes.js'
 import { applySheetQuantityChanges, isSheetQuantityChange, type SheetQuantityOutcome } from '../pim/sheet-quantity-door.js'
 import { STUDIO_STOCK_KEYS } from '../pim/studio-stock.js'
-import { UnsupportedPlatformBatch, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
+import { UnsupportedPlatformBatch, settleWrittenPhotos, setsImageUrls, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
 import type { EbayFamilyClearOperation, EbayFamilyScope, EbayListingVersion } from './ebay-family-clear.js'
 
 export interface ProductBulkInput {
@@ -3124,6 +3124,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
 
     // ── AM.1 — platformAttributes path writes (eBay item specifics, listing settings) ──
+    /** Owner 2026-10-05 — the eBay listings whose Image URLs list this write sets: moved into Product media after it. */
+    const photoListingIds: string[] = []
     if (platformPatchByCoord.size > 0) {
       const entries = [...platformPatchByCoord.values()]
       const entryKeyOf = (e: (typeof entries)[number]) => `${e.productId}|${e.channel}|${e.marketplace}|${e.aliasKey}`
@@ -3167,6 +3169,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         )
         // The answer's version is the edited row's own listing, never the parent a listing-level value moved to.
         if (!e.familyWrite) channelListingIdsTouched.push(row.id)
+        if (setsImageUrls(e.channel, e.sets)) photoListingIds.push(row.id)
       }
     }
 
@@ -3292,6 +3295,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
       throw txErr
     }
+    // Owner 2026-10-05 — Product media is the one photo source: an Image URLs list written above becomes the listing's
+    // Product media in this same transaction, before readiness, the cache and the answer's version read it.
+    await settleWrittenPhotos(photoListingIds)
 
     // Phase 13d — process master-data cascades after the bulk
     // transaction commits. Each call is its own transaction

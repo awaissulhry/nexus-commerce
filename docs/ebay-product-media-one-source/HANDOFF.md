@@ -13,11 +13,17 @@ Owner chose "A" (build it). Worktree /private/tmp/feat-ebay-publish-adds-variati
   editor bridge below before a PR.
 - Checks: typecheck api pass; vitest ebay-variation-photos + studio-publication-ebay* + studio-sheet* pass (288).
 
-## Waiting for the Owner (decision on old Image URLs lists)
-A (recommended): one list at a time, last save wins. Editor GET bridges the old list (library file ids by URL, others as
-`url:<hash>` ids); PUT adopts `url:` ids into ProductImage rows (pin product `und` first, like copyProductMedia) and deletes
-`imageUrls`; any write of `imageUrls` (sheet/MCP via applyPlatformMutations, import) clears `_productMediaLocales`.
-B: one-time move of every old list into Product media at deploy (data change on prod).
+## Owner decision (10-05 15:45): A + "import with image links: Product media takes the library photos and follows the
+file's order; super smart and dynamic; deploy multiple sub-agents, AAA quality".
+- Core (committed 347d92c4b + uncommitted): images/listing-photos.pure.ts (cloudinaryPhotoKey, matchLibraryPhoto,
+  legacyImageUrls, legacyPhotoItems/legacyPhotoId) + listing-photos.service.ts (addLibraryPhotos → family ROOT library,
+  pins root 'und' unless empty; settleListingPhotos/settleListingsPhotos). Tests 14 pass.
+- eBay spec imageUrls: channelStore.replaces [['_productMediaLocales']] → any Image URLs write removes Product media.
+- Builders running: W1 product-media.service.ts (editor bridge, adopt url: ids on save, delete imageUrls on save, copy);
+  W2 writers (bulk-edit, import applyTransferTarget → settle in tx, live event); W3 sheet Image URLs column = Product
+  media, row note, eBay export from Product media, live-read check.
+- Then: 2 reviewers (correctness/data safety; tests + full area runs), then PR.
+- Open for PR 2: `_mediaGalleryDraft` (old eBay Images tab) still overrides at publish; live drift mark in the cell.
 
 ## Writers of imageUrls (subagent map)
 - sheet + MCP set-listing-fields: bulk-edit.service.ts applyProductBulkEdits (:2807 row, :2056 batch) → applyPlatformMutations

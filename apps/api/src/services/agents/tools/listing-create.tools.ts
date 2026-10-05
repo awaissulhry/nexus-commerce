@@ -505,6 +505,8 @@ async function planSetFields(args: Record<string, unknown>, userId: string | nul
       c, kind, version: null,
       before: { coordinate: c, kind, listingId, values: plan.before },
       preview: { action: 'set-listing-fields', sku: c.sku, destination, changes,
+        // Owner 2026-10-05 — Product media is the one photo source of an eBay listing; the save moves the list into it.
+        ...(c.channel === 'EBAY' && Array.isArray(plan.values.attr_imageUrls) ? { note: 'The Image URLs become this listing\'s Product media when the change runs: a photo of the media library is used from the library, any other address is added to it.' } : {}),
         ...(plan.warnings.length ? {
           warnings: plan.warnings.map((w) => `${w.field}: ${w.warning}`),
           warning: `Saved in Nexus, but ${new Set(plan.warnings.map((w) => w.field)).size === 1 ? 'this value is' : 'these values are'} likely `

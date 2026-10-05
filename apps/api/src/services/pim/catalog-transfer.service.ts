@@ -15,6 +15,7 @@ import { productRoleOf } from '@nexus/shared/master-sheet'
 import { relationshipAliasConflicts } from './relationship-alias-guard.js'
 import { DraftListingError, draftListingFields, ensureDraftListings } from './draft-listing.service.js'
 import { channelSkuHoldings } from '../listings/channel-sku-rename.js'
+import { settleAndAnnounce } from '../images/listing-photos.service.js'
 
 type Payload = { kind: 'catalog-transfer-v1'; market: string; mode: TransferMode; rows?: TransferRow[]; plan: TransferPlan; previewExpiresAt: string }
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -335,6 +336,14 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       const outcome = written.results[0]
       if (!outcome || !['applied', 'noop'].includes(outcome.outcome)) throw new TransferConflict(outcome?.reason ?? 'The channel price could not be recorded')
       channelFacts.price = { outcome: outcome.outcome, version: outcome.version }
+    }
+    // Owner 2026-10-05 — Product media is the one photo source: an eBay Image URLs list this file set (the field's write
+    // removed the listing's Product media) becomes its Product media in this transaction, after the channel facts above
+    // used the reviewed version. Library photos by address; other addresses are added to the library. Every caller of this
+    // writer gets it (file import, product sheet import, assortment copies).
+    if (id.channel === 'EBAY' && target.cells.some(c => c.verdict === 'changed' && c.action === 'SET' && Array.isArray(c.after) && c.field.replace(/^attr_/, '') === 'imageUrls')) {
+      // Open sheets hear it after the commit; an event that cannot be sent never fails the import.
+      await settleAndAnnounce(tx, [entityId])
     }
   }
   for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed',

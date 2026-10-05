@@ -15,6 +15,7 @@ import { uploadPhoto } from '../images/plan-page/uploadApi'
 import { sendPlanOps, type PlanAddress } from './planCellTransfer'
 import * as model from './mediaPopupModel'
 import { useMediaPopupData } from './useMediaPopupData'
+import { IMAGE_URLS_NOTE } from './useMediaCellActions'
 import * as gallery from './galleryPopupModel'
 import { uploadGalleryFile, useGalleryPopupData } from './useGalleryPopupData'
 import { ChecksList, MediaPageLink, PhotoLibrary, PhotoViewer, PopupHead, UPLOAD_RUNNING, photoKeys, useFirstPhotoFocus, usePopupGuards, type AppliedCells, type LibraryShow, type Upload } from './popupParts'
@@ -293,6 +294,8 @@ export interface GalleryMediaPopupProps {
   onLibraryChanged?(): void
   /** The family's root product: another screen's save of it is heard live. */
   familyId: string | null
+  /** Owner 2026-10-05 — eBay: the list is the listing's old Image URLs list; a save here moves it into Product media. */
+  fromImageUrls?: boolean
 }
 
 /**
@@ -301,7 +304,7 @@ export interface GalleryMediaPopupProps {
  * (`PUT /product-media` bound to the revision read when it opened).
  */
 export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
-  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId } = props
+  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId, fromImageUrls } = props
   const data = useGalleryPopupData(productId, context, familyId)
   // The list and its revision from the read the pop-up opened with; the library from the latest read.
   const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
@@ -428,6 +431,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     </>}>
     <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={contextLabel} title={title} />
+      {fromImageUrls && <p className={styles.muted} role="note"><Tag tone="info">Image URLs</Tag> {IMAGE_URLS_NOTE}</p>}
       {error && <Banner tone="danger">{error}</Banner>}
       {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
       {data.state.status === 'error' && <Banner tone="danger" action={<Button size="xs" onClick={() => void data.reload()}>Try again</Button>}>{data.state.message}</Banner>}

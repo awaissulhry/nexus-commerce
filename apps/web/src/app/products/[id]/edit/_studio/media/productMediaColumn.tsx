@@ -12,7 +12,7 @@ import { CHANNEL_LABEL, type MediaChannel, type MediaRead } from '../images/plan
 import { planAddress } from './planCellTransfer'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import styles from './media.module.css'
-import { useMediaCellActions, type MediaCellActions, type MediaRow } from './useMediaCellActions'
+import { mediaSourceNote, useMediaCellActions, type MediaCellActions, type MediaRow } from './useMediaCellActions'
 
 export const PRODUCT_MEDIA_COLUMN = 'productMedia'
 const mediaColumn: SheetColumn = { key: PRODUCT_MEDIA_COLUMN, writeField: '', label: 'Product media', group: 'Media', groupKey: 'media', kind: 'text', storage: 'localizedContent', scope: 'global', requiredBy: [], editable: false, formulaWritable: false, width: 280, defaultVisible: true, helpText: 'Images, videos and media descriptions for the selected destination and language.' }
@@ -123,7 +123,8 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const galleryElement = selected && !selected.row.productMediaSet
     ? <GalleryMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'}
         context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
-        onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} familyId={familyRoot} />
+        onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} familyId={familyRoot}
+        fromImageUrls={selected.row.productMediaSource === 'image-urls'} />
     : null
   return { open, actions, element: planElement ?? galleryElement }
 }
@@ -168,8 +169,8 @@ export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor
           limit={Math.max(1, Math.min(5, Math.floor(((p.column?.getActualWidth() ?? 280) - 80) / 36)))}
           onReorder={actions?.canEdit() && !row.productMediaSaving && !row.productMediaSet ? ids => actions.reorder(row, ids, refresh) : undefined}
           onFocusCell={focus} onOpen={() => open(row, p.eGridCell, p.api as GridApi)} /> : <span>Manage media</span>}
-        <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : !actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.'
-          : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.')} onFocusCell={focus} onActivate={anchor => open(row, anchor, p.api as GridApi)} />
+        <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : `${mediaSourceNote(row)} ${!actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.'
+          : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.'}`.trim())} onFocusCell={focus} onActivate={anchor => open(row, anchor, p.api as GridApi)} />
       </div>
     },
   }

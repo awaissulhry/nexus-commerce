@@ -2,6 +2,7 @@ import type { ChannelListing } from '@prisma/client'
 import prisma from '../../db.js'
 import { afterDatabaseCommitBatch } from '../../lib/database-context.js'
 import { applyPlatformMutations, type ChannelValueMutation } from '../pim/channel-value-mutation.js'
+import { settleAndAnnounce } from '../images/listing-photos.service.js'
 import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { writeBulkEditReceipts, type BulkReceiptChange } from './bulk-edit-receipts.js'
@@ -21,6 +22,19 @@ export interface PlatformBulkPlan {
   mutations: Map<string, ChannelValueMutation[]>
   coordinate: NonNullable<ProductBulkInput['marketplaceContexts']>[number]
   accountId: string | null
+}
+
+/** Owner 2026-10-05 — a write that SETS an eBay listing's Image URLs list (a clear or reset leaves nothing to move). */
+export const setsImageUrls = (channel: string, sets: ChannelValueMutation['platform']) =>
+  channel === 'EBAY' && sets.some(set => !set.remove && Array.isArray(set.value) && set.path.length === 1 && set.path[0] === 'imageUrls')
+
+/**
+ * Owner 2026-10-05 — Product media is the one photo source: the eBay listings whose write set an Image URLs list move it
+ * into their Product media in the SAME transaction (`settleListingsPhotos`: library photos by address, other addresses
+ * added to the library). Open sheets hear it after the commit (`settleAndAnnounce`).
+ */
+export async function settleWrittenPhotos(listingIds: string[]) {
+  if (listingIds.length) await settleAndAnnounce(prisma, listingIds)
 }
 
 /** Eligibility only. The row writer still owns every value, reference, scope and editability check. */
@@ -73,6 +87,13 @@ export async function writePlatformBatch(units: BulkSaveUnit[], plan: PlatformBu
   // A partial match is undone before the row path identifies each stale owner with its exact current-version receipt.
   if (written.length !== patches.length) throw new UnsupportedPlatformBatch('An original listing token no longer matches.')
   const versions = new Map(written.map(row => [row.id, row.version]))
+  // Owner 2026-10-05 — an Image URLs list becomes the listing's Product media here; the token each row answers is read
+  // back after it (the move bumps the listing's version).
+  const photoIds = changed.filter(row => setsImageUrls(plan.coordinate.channel, (plan.mutations.get(row.id) ?? []).flatMap(mutation => mutation.platform))).map(row => row.listing!.id)
+  if (photoIds.length) {
+    await settleWrittenPhotos(photoIds)
+    for (const row of await prisma.channelListing.findMany({ where: { id: { in: photoIds } }, select: { id: true, version: true } })) versions.set(row.id, row.version)
+  }
   const operations = changed.length ? await prisma.bulkOperation.createManyAndReturn({ data: changed.map(row => ({
     changeCount: row.unit.changes.length, productCount: 1, changes: row.changes as never,
     status: row.errors.length ? 'PARTIAL' : 'SUCCESS', expectedVersion: row.unit.expectedVersion,

@@ -386,6 +386,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
   const stats = { alreadyEmpty: 0, clearUnchecked: 0 }
   /** B2 — per channel · market, the file values that equal what Nexus already sends (they keep following Shared). */
   const followsShared = new Map<string, number>()
+  /** Owner 2026-10-05 — per channel · market, the eBay Image URLs lists this file sets: they become Product media. */
+  const photoLists = new Map<string, number>()
   const familyFor = (sku: string, visiting = new Set<string>()): string | null => {
     if (visiting.has(sku)) throw new Error('Parent relationships contain a cycle')
     visiting.add(sku)
@@ -780,6 +782,10 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (changed.verdict === 'changed') {
             if (textField && address) planContentWrite(target.contentWrites ??= [], address, textField, row.action, value)
             else {
+              if (first.channel === 'EBAY' && row.action === 'SET' && field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'imageUrls') {
+                const market = `${first.channel} ${first.marketplace}`
+                photoLists.set(market, (photoLists.get(market) ?? 0) + 1)
+              }
               const patch = channelValuePatch(working, field.channelStore, keys, row.action, value)
               Object.assign(target.patch, patch); Object.assign(working, patch)
             }
@@ -801,6 +807,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     }
     if (issues.length === groupIssueStart) targets.push(target)
   }
+  for (const [market, n] of photoLists) warnings.add(`${market}: ${n === 1 ? 'the Image URLs list becomes its listing\'s' : `${n} Image URLs lists become their listings'`} Product media. A photo of the media library is used from the library; any other address is added to it.`)
   for (const [market, n] of followsShared) warnings.add(`${market}: ${n} ${n === 1 ? 'value equals' : 'values equal'} what Nexus already sends; ${n === 1 ? 'it keeps' : 'they keep'} following Shared.`)
   return { targets, issues, warnings: [...warnings], ...(policy || exclusions.length ? { exclusions } : {}), stats }
 }

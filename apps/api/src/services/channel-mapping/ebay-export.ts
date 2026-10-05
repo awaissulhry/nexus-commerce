@@ -13,7 +13,11 @@ export interface EbayExportRecord {
   /** The file's parent SKU for this listing (an adopted listing keeps its own parent SKU, e.g. `GALE-JACKET-ALT1`). */
   parentSku: string
   itemId: string | null
-  /** fieldKey → the value as the reader stores it (`title`, `packageWeight` = { value, unit }, `imageUrls` = [...], `itemSpecifics.<name>`). */
+  /**
+   * fieldKey → the value as the reader stores it (`title`, `packageWeight` = { value, unit }, `itemSpecifics.<name>`).
+   * `imageUrls` = the photos Publish sends, the sheet's Product media list (`catalogRows`, Owner 2026-10-05), never only the
+   * listing's old Image URLs store, which a save in Product media removes.
+   */
   values: Map<string, unknown>
   price: number | null
 }

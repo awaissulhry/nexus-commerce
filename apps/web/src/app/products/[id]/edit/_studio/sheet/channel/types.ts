@@ -406,6 +406,8 @@ export interface StudioRow {
   /** Photo plan families only (images P3c): the set this row's cell edits. */
   productMediaSet?: { ref: string; label: string; sharedBy: number }
   productMediaError?: string
+  /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
+  productMediaSource?: 'image-urls'
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null
   familyId?: string | null

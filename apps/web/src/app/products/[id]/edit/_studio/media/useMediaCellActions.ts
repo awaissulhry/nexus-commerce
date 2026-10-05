@@ -10,7 +10,14 @@ export type MediaRow = { id: string; name?: string | null; sku?: string; product
   /** Photo plan families (images P3c): the set the cell edits — Common, the value's set or the SKU's own set. */
   productMediaSet?: { ref: string; label: string; sharedBy: number }
   /** Shopify channel sheet: the row is already on Shopify (`ChannelSheetRow.shopify`), so Review and synchronize… sends it. */
-  shopify?: { productId: string; listingId: string } | null }
+  shopify?: { productId: string; listingId: string } | null
+  /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
+  productMediaSource?: 'image-urls' }
+
+/** Owner 2026-10-05 — one list at a time, the last save wins: what an old eBay Image URLs list in the cell means. */
+export const IMAGE_URLS_NOTE = 'From the old Image URLs list. A save in Product media moves it into Product media.'
+/** The cell's source note, or '' when its list is Product media. */
+export const mediaSourceNote = (row: Pick<MediaRow, 'productMediaSource'>): string => row.productMediaSource === 'image-urls' ? IMAGE_URLS_NOTE : ''
 export interface MediaCellActions {
   canEdit(): boolean
   error(row: MediaRow): string | undefined
