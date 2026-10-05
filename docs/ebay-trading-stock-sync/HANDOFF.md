@@ -44,3 +44,24 @@ Worktree /private/tmp/fix-ebay-trading-stock-sync (branch fix/ebay-trading-stock
   channel-sku fixtures now name an Inventory item.
 - Not done (out of scope): offer-id cache scoping by account+market, `retryQueueItem` not clearing isDead, failing-listing
   retry rows with no listing, a price read-back for Trading listings.
+
+## Session hand-over (2026-10-06, context full) — NEXT SESSION STARTS HERE
+- PR 1 build DONE: commits 9c2c9c72a (fix), ecea8d81b + 8c9011b68 (tests), d6093d079 (handoff). 28 new tests in
+  `apps/api/src/services/outbound-sync.ebay-trading-listing.vitest.test.ts`. api + web typecheck pass; sweep 55 files /
+  978 tests pass; profiles ON pass; gateway ratchet 0. Not pushed, no PR.
+- Step 3 (review) was RUNNING when the old session ended. Two read-only reviewers write their reports to:
+  - `~/nexus-archive/2026-10-06-stock-realtime/PR1-adversarial-review.md` (guards, SKU, errors, tests)
+  - `~/nexus-archive/2026-10-06-stock-realtime/PR1-premise-check.md` (KEY: is every real Inventory-API listing marked
+    with an offer id? If not, this PR re-routes working Inventory listings to Trading → they break. Fix = fallback.)
+  If a file is missing, the reviewer did not finish: run that review again.
+- Builder decisions to keep in mind: content rows + membership-owned SKUs end SKIPPED (not FAILED); no Trading price
+  read-back; single-SKU items whose item SKU differs → terminal EBAY_VALIDATION.
+- Next: fix findings → scan EVERY commit for real ids/business names → push `--no-verify` → PR with the check table →
+  merge only on the Owner's "merge #N" (PR 1 before PR 2) → watch the deploy (a newer merge can cancel it; check a run
+  exists for the merge SHA) → step 5: re-push red + yellow × 3 ItemIDs of the second business (Matrix "Push now" or MCP
+  set-listing-stock push-now / retry-sync = approval request) → verify with listing-live-content: red 0, yellow 1.
+- Tell the Owner: business A Trading listings with no membership will START getting real stock after PR 1.
+- Ask the Owner (gap 2): eBay orders arrive by a 5-minute poll. Option: faster cron or eBay notifications (cost: calls).
+- PR 2 (gaps 3, 6, 7): `/private/tmp/fix-stock-heal-and-pool-triggers`, own HANDOFF at
+  `docs/stock-heal-and-pool-triggers/HANDOFF.md`; builder report → `~/nexus-archive/2026-10-06-stock-realtime/PR2-builder-report.md`.
+  At hand-over it had 2 commits (e9fdf8fc0 pool triggers, 63a5eee83 pool-task retry) + an uncommitted heal job.
