@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { PlanStep } from '../planWords'
+import type { PlanStep } from './planWords'
 import { PlanStepsList } from './PlanSteps'
 
 const step = (n: number, over: Partial<PlanStep> = {}): PlanStep => ({

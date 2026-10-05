@@ -9,7 +9,7 @@ import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { QueueDetail, QueueRow } from '@nexus/shared/approval-queue'
-import type { PlanDetail } from '../planWords'
+import type { PlanDetail } from './planWords'
 import type { ApprovalActions } from './contracts'
 
 const fixture: { detail: QueueDetail | null; plan: PlanDetail | null } = { detail: null, plan: null }

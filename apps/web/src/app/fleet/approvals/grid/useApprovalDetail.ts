@@ -4,7 +4,7 @@
  * Approvals grid — one request's detail for the drawer (build agent D2, 2026-10-05).
  *
  *   useApprovalDetail   GET /api/agent/fleet/approvals/queue/:id → QueueDetail (apps/api routes/approval-queue.routes.ts)
- *   usePlanDetail       GET /api/agent/fleet/approvals/:id/plan  → the plan's steps (the old PlanCard's response shape)
+ *   usePlanDetail       GET /api/agent/fleet/approvals/:id/plan  → the plan's steps (`planWords.ts` PlanDetail)
  *
  * Re-read whenever `refreshKey` changes (the page re-read the queue). The last good detail stays on screen while a
  * re-read is in flight, and when a re-read fails (the drawer says so); a 404 is plainly "This request no longer exists."
@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { QueueDetail } from '@nexus/shared/approval-queue'
 import { getBackendUrl } from '@/lib/backend-url'
-import type { PlanDetail } from '../planWords'
+import type { PlanDetail } from './planWords'
 
 export type ApprovalDetailState =
   | { kind: 'idle' }

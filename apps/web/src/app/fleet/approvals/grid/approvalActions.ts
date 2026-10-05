@@ -20,7 +20,7 @@
  *   bulk                      POST …/bulk-preview, then …/bulk-decide { ids, decision, reason? }
  *
  * 🔴 A `content-type: application/json` header goes out ONLY with a body: Fastify answers an empty JSON body with a flat
- * 400 before the handler runs (FST_ERR_CTP_EMPTY_JSON_BODY), which is how Undo once did nothing (ApprovalsClient.tsx).
+ * 400 before the handler runs (FST_ERR_CTP_EMPTY_JSON_BODY), which is how Undo once did nothing on the old page.
  * The CSRF and business headers are added by the app's fetch (`lib/auth/install-fetch.ts`), never here.
  */
 import { createElement, useCallback, useMemo, useRef, useState } from 'react'
@@ -56,8 +56,8 @@ interface Answer {
 }
 
 const FLEET = '/api/agent/fleet'
-/** The stop window the API applies (`UNDO_WINDOW_MS`); the Undo toast stays up as long. */
-const STOP_WINDOW_MS = 20_000
+/** The stop window the API applies (`UNDO_WINDOW_MS`); the Undo toast stays up as long, and How it works says it. */
+export const STOP_WINDOW_MS = 20_000
 
 async function post<T extends Answer>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${getBackendUrl()}${FLEET}/${path}`, {

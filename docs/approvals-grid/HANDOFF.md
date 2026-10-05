@@ -20,12 +20,15 @@
     22 API test files 343/343 pass with profiles off AND on; web tsc pass; DS tests 145 files 1975/1975 pass.
     Known pre-existing (not ours): mcp-coverage test misses 4 rows from main; static gates 4 failures on main
     (shell pin freshness, dark⇄pin parity, token resolution, DS api guard); factory tsc 446 errors on main.
-  - Wave 2 RUNNING (same worktree, no commits): D1 page (grid/ApprovalsGrid, useApprovalQueue, approvalActions,
-    queueColumns, HealthStrip, QueueToolbar, queueWords, page.tsx) · D2 drawer (grid/ApprovalDrawer,
-    useApprovalDetail, drawerWords) · E modal (grid/AutomateModal, automateWords). Seams: lead-written
-    `apps/web/src/app/fleet/approvals/grid/contracts.ts` (uncommitted until wave 2 commit).
-  - Wave 3 next: F clean-up (old cards, fleet-era words, How it works + gate state, nav badge, tests) + lead's
-    local browser check (local API + private DB, seeded inert requests, desktop + phone, keyboard).
+  - Wave 2 DONE + COMMITTED: 67c7e3e8d reports (docs/approvals-grid/reports/, renamed from git-ignored build/) ·
+    cc5ef2700 the grid page (grid/ApprovalsGrid, drawer, Automate modal, QueueDetail.editArgs). Lead checks: web tsc
+    pass; web tests 192 files 2551/2551; api tsc pass; queue route test 29/29; static gates 61/65 (the 4 on main).
+  - Wave 3 RUNNING: F clean-up (delete old cards, How it works + FleetGateState, nav badge, one state map, drawer
+    onFollow) in the worktree, no commits · G private stack + Playwright check OUTSIDE the repo:
+    ~/nexus-archive/2026-10-05-approvals-grid-stack/ (pg :55730 copy of nexus-sheet-publish-pg, redis :6730,
+    API :4730, web :3730, seed-approvals.mts seed|clean, approvals-check.mjs, STACK.md).
+  - After wave 3: lead reviews F, re-runs the check, READS the screenshots, fixes, commits; then the check table and
+    ask the Owner about push / PRs.
 - Test env: `source ~/nexus-archive/2026-10-05-approvals-grid-stack/env.sh` (loopback guard, PGlite tests);
   `apps/api/.env` (git-ignored) holds a loopback test DATABASE_URL. Run API vitest only from apps/api.
 - PRs: nothing pushed yet; push/merge only on the Owner's word.

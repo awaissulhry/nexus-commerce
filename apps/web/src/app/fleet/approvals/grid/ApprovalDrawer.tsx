@@ -45,15 +45,20 @@ const clock = (iso: string) => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function ApprovalDrawer({ id: openId, row, actions, refreshKey, onClose }: ApprovalDrawerProps) {
+export function ApprovalDrawer({ id: openId, row, actions, refreshKey, onClose, onFollow }: ApprovalDrawerProps) {
   /**
    * The request the drawer shows when it is not the one the page opened: the new request after an edit or a smaller
-   * plan replaced it, or the undo this drawer asked for. Dropped as soon as the page opens another row or closes.
+   * plan replaced it, or the undo this drawer asked for. It shows at once; the page is told (`onFollow`) and, when it
+   * makes that id the open one, this is dropped, as it is when the page opens another row or closes.
    */
   const [followed, setFollowed] = useState<{ from: string; to: string } | null>(null)
   useEffect(() => { setFollowed(null) }, [openId])
   const id = openId && followed?.from === openId ? followed.to : openId
-  const follow = useCallback((to: string) => { if (openId) setFollowed({ from: openId, to }) }, [openId])
+  const follow = useCallback((to: string) => {
+    if (!openId || to === openId) return
+    setFollowed({ from: openId, to })
+    onFollow?.(to)
+  }, [openId, onFollow])
 
   const { state, detail, reload } = useApprovalDetail(id, refreshKey)
   /** The freshest row: the detail once read (it IS a QueueRow), else the grid's row while it loads. */

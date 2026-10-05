@@ -13,31 +13,14 @@
  */
 import type { QueueAsker, QueueChange, QueueDetail, QueueEvent, QueueRow, QueueState, QueueTarget } from '@nexus/shared/approval-queue'
 import type { Tone } from '@/design-system/primitives'
+import { isPending, stateMeta } from './queueWords'
 
 const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
 
 /* ── status (PLAN §3) ─────────────────────────────────────────────────────────────────────────── */
 
-/**
- * The state → words and tone map: the SAME words and tones as the grid's `queueWords.ts` STATE_META (D1), copied, not
- * imported (the two were built side by side); the lead merges them into one module.
- */
-export const STATE_WORDS: Record<QueueState, { label: string; tone: Tone }> = {
-  waiting: { label: 'Waiting', tone: 'info' },
-  starting: { label: 'Starting', tone: 'warning' },
-  on_hold: { label: 'On hold', tone: 'neutral' },
-  running: { label: 'Running', tone: 'info' },
-  done: { label: 'Done', tone: 'success' },
-  failed: { label: 'Failed', tone: 'danger' },
-  back_to_you: { label: 'Back to you', tone: 'warning' },
-  rejected: { label: 'Rejected', tone: 'neutral' },
-  expired: { label: 'Expired', tone: 'neutral' },
-  replaced: { label: 'Replaced by an edit', tone: 'neutral' },
-  recorded: { label: 'Recorded', tone: 'neutral' },
-}
-
-/** States in which nobody has decided yet (rawStatus `pending`): the request can still be approved, edited or rejected. */
-export const PENDING_STATES: ReadonlySet<QueueState> = new Set<QueueState>(['waiting', 'failed', 'back_to_you'])
+/* One status vocabulary for the whole page: the words and tones are the grid's (`queueWords.ts` STATE_META), and so is
+   which states still wait for a person (`isPending`). The drawer only adds how far a finished run got. */
 
 const CHANNEL_NAME: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy' }
 
@@ -55,7 +38,7 @@ export function whereLine(row: Pick<QueueRow, 'channel' | 'market' | 'reachesOut
 
 /** The pill: the state's words, and for a run that is over, how far it got (only what Nexus knows). */
 export function statusWords(row: Pick<QueueRow, 'state' | 'plan' | 'channel' | 'market'>, channelResult?: QueueDetail['channelResult']): { label: string; tone: Tone } {
-  const base = STATE_WORDS[row.state] ?? { label: row.state, tone: 'neutral' as Tone }
+  const base = stateMeta(row.state)
   if (row.state === 'running' && row.plan) {
     const progress = planProgress(row.plan)
     return { label: `Running · ${progress.done} of ${progress.max}`, tone: base.tone }
@@ -415,7 +398,7 @@ const typed = (value: number, spec: EditSpec): string => {
 }
 
 export function editPlan(detail: Pick<QueueDetail, 'toolName' | 'canEdit' | 'state' | 'allChanges' | 'asker'>, args: Args | null): EditPlan | null {
-  if (!detail.canEdit || !PENDING_STATES.has(detail.state)) return null
+  if (!detail.canEdit || !isPending(detail.state)) return null
   const entry = EDIT_SPECS[detail.toolName]
   const spec = !entry ? null : 'needsArgs' in entry ? (args ? entry.pick(args) : null) : entry
   if (!spec) return { kind: 'ask', hint: askAgainHint(detail.asker) }

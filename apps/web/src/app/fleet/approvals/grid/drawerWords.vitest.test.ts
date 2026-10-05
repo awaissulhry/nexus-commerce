@@ -5,10 +5,12 @@
 import { describe, expect, it } from 'vitest'
 import { QUEUE_STATES, type QueueDetail, type QueueRow } from '@nexus/shared/approval-queue'
 import {
-  EDIT_SPECS, STATE_WORDS, askAgainHint, askerSaysLabel, changesView, channelResultView, consequenceWords, drawerVerbs, editPatch, editPlan,
+  EDIT_SPECS, askAgainHint, askerSaysLabel, changesView, channelResultView, consequenceWords, drawerVerbs, editPatch, editPlan,
   eventWords, parseEditInput, parseMoneyText, planProgress, requestArgsOf, shortId, statusWords, targetWords, timelineSteps, whereLine, whyView,
   type EditField,
 } from './drawerWords'
+import * as drawerWords from './drawerWords'
+import { STATE_META } from './queueWords'
 
 const row = (over: Partial<QueueRow> = {}): QueueRow => ({
   id: 'appr_0123456789abcdef',
@@ -63,13 +65,17 @@ const formOf = (d: QueueDetail, args: Record<string, unknown> | null = null): Ed
 }
 
 describe('status: one set of words for the whole life of a request', () => {
-  it('names every state the API can send, with a tone', () => {
+  it('names every state the API can send in the grid’s own words and tones (queueWords STATE_META), with no copy', () => {
     for (const state of QUEUE_STATES) {
-      expect(STATE_WORDS[state]?.label, state).toBeTruthy()
-      expect(['neutral', 'info', 'success', 'warning', 'danger']).toContain(STATE_WORDS[state].tone)
+      expect(STATE_META[state]?.label, state).toBeTruthy()
+      expect(['neutral', 'info', 'success', 'warning', 'danger']).toContain(STATE_META[state].tone)
+      // A single request that has not finished: the drawer's pill is exactly the grid's.
+      if (state !== 'done') expect(statusWords(row({ state })), state).toEqual(STATE_META[state])
     }
-    expect(STATE_WORDS.failed.tone).toBe('danger')
-    expect(STATE_WORDS.back_to_you.tone).toBe('warning')
+    expect(statusWords(row({ state: 'failed' })).tone).toBe('danger')
+    expect(statusWords(row({ state: 'back_to_you' })).tone).toBe('warning')
+    expect(drawerWords).not.toHaveProperty('STATE_WORDS')
+    expect(drawerWords).not.toHaveProperty('PENDING_STATES')
   })
 
   it('a running plan says how far it got', () => {

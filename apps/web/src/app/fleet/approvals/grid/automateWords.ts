@@ -101,9 +101,9 @@ export function alwaysNeedsYouWords(row: Pick<QueueRow, 'toolName' | 'reversibil
   return 'This kind always needs you.'
 }
 
-/** The kind is not a tool Claude is offered (a fleet agent's kind): there is no Claude rule to set. */
+/** Claude is not offered this kind (a fleet worker's kind): there is no Claude rule to set. */
 export const notOfferedWords = (row: Pick<QueueRow, 'title'>) =>
-  `${kindName(row)} is not a tool Claude is offered, so there is no rule to set for it: a person approves each request.`
+  `Claude cannot ask for ${kindName(row)}, so there is no rule to set for it: a person approves each request.`
 
 /** "Also approve this one" is offered only for a request that waits for a person this viewer may approve. */
 export function mayAlsoApprove(row: Pick<QueueRow, 'state' | 'canApprove'>): boolean {

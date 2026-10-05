@@ -40,7 +40,7 @@
 }
 .aqg-ctl-lbl {
   font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
+  color: var(--nds-text-3);
 }
 
 /* ── cells ─────────────────────────────────────────────────────────────── */
@@ -72,7 +72,7 @@
 }
 .aqg-sub {
   font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
+  color: var(--nds-text-3);
 }
 .aqg-link {
   color: var(--nds-text-link);
@@ -101,7 +101,7 @@
   flex-wrap: wrap;
   gap: var(--nds-space-6) var(--nds-space-14);
   font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
+  color: var(--nds-text-3);
 }
 
 /* ── the Undo toast and the bulk confirm ───────────────────────────────── */
@@ -123,5 +123,5 @@
 .aqg-note {
   margin: 0;
   font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
+  color: var(--nds-text-3);
 }

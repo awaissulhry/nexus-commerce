@@ -1,5 +1,5 @@
 /**
- * NAF.AQ — Approvals. The blocking queue, and the only fleet page that earns a permanent count badge in the rail.
+ * NAF.AQ — Approvals. The blocking queue: every change that waits for a person's yes.
  *
  * Approvals grid (docs/approvals-grid/PLAN.md, 2026-10-05): ONE grid for every request — from Claude, the fleet
  * agents or a rule — with a health strip, bulk approve of one kind, a side drawer and "Automate this kind…". The
@@ -12,9 +12,9 @@
  *
  * Styling, in order: the four DS stylesheets (a DS component without its sheet renders unstyled); control-room.css for
  * the shell's acr-* header; fleet-pages.css for `.fleet-surface` and its DS light pin (and `.fleet-portal` for the
- * drawer and modals, which portal out of it); approvals.css for the header and the "How it works" drawer; then the
- * grid's own layout. `fleet-sections.css` (the old card lists' `ap-*` rules) is no longer loaded here: nothing on this
- * page uses it.
+ * drawer and modals, which portal out of it); approvals.css for the header and this page's light pin; then the grid's
+ * own layout (the drawers carry CSS modules). `fleet-sections.css` (the old card lists' `ap-*` rules) is no longer
+ * loaded here: nothing on this page uses it.
  */
 import { ApprovalsGrid } from './grid/ApprovalsGrid'
 import '@/design-system/styles/tokens.css'

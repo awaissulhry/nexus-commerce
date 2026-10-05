@@ -7,7 +7,7 @@
 .aq-auto-lead { margin: 0; color: var(--nds-text); font-weight: var(--nds-font-weight-medium); }
 .aq-auto-choices { display: grid; gap: var(--nds-space-8); min-width: 0; }
 .aq-auto-note { margin: 0; color: var(--nds-text-2); }
-.aq-auto-sub { margin: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.aq-auto-sub { margin: 0; color: var(--nds-text-3); font-size: var(--nds-font-size-sm); }
 .aq-auto-section { display: grid; gap: var(--nds-space-10); padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); min-width: 0; }
 .aq-auto-h { margin: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); }
 .aq-auto-busy { display: flex; align-items: center; gap: var(--nds-space-6); color: var(--nds-text-2); }

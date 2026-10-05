@@ -42,12 +42,12 @@ import {
 } from '@/design-system/grid'
 
 import { FleetPageShell } from '../../_shell/FleetPageShell'
-import { HowApprovalsWork } from '../HowApprovalsWork'
 import { ApprovalDrawer } from './ApprovalDrawer'
 import { AutomateModal } from './AutomateModal'
 import type { AutomateResult } from './contracts'
 import { rowName, useApprovalActions, type BulkPreview } from './approvalActions'
 import { HealthStrip } from './HealthStrip'
+import { HowItWorks } from './HowItWorks'
 import { GROUP_COLUMN, PREFERENCE_COLUMNS, queueColumns, type QueueGridHandlers } from './queueColumns'
 import { QueueToolbar, type QueuePageState } from './QueueToolbar'
 import { useApprovalQueue } from './useApprovalQueue'
@@ -108,26 +108,6 @@ function usePhone(): boolean {
   return phone
 }
 
-/** The expiry numbers the "How it works" drawer prints, read once (the gate state is not polled here). */
-function useExpiryWords(): { hours: number | null; maintenanceSeconds: number | null } {
-  const [expiry, setExpiry] = useState<{ hours: number | null; maintenanceSeconds: number | null }>({ hours: null, maintenanceSeconds: null })
-  useEffect(() => {
-    let live = true
-    fetch(`${getBackendUrl()}/api/agent/fleet/approvals/gate-state`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((g: { expiry?: { hours?: number; maintenanceSeconds?: number } } | null) => {
-        if (live && g?.expiry) setExpiry({ hours: g.expiry.hours ?? null, maintenanceSeconds: g.expiry.maintenanceSeconds ?? null })
-      })
-      .catch(() => {
-        /* the drawer has honest words for "not known" */
-      })
-    return () => {
-      live = false
-    }
-  }, [])
-  return expiry
-}
-
 export function ApprovalsGrid() {
   return (
     <ToastProvider>
@@ -147,7 +127,6 @@ interface BulkState {
 
 function ApprovalsGridPage() {
   const phone = usePhone()
-  const expiry = useExpiryWords()
   const [show, setShow] = useState<QueueShow>('open')
   const [group, setGroup] = useState<QueueGroup>('none')
   const [tile, setTile] = useState<QueueTile | null>(null)
@@ -176,14 +155,31 @@ function ApprovalsGridPage() {
   }, [itemParam])
 
   const openRow = useCallback((row: QueueRow) => setOpenId(row.id), [])
+  /** `?item=` set to `id`, or taken out (null); other parameters are kept. Only when the address carries one. */
+  const replaceItem = useCallback(
+    (id: string | null) => {
+      if (!params?.get('item')) return
+      const rest = new URLSearchParams(params.toString())
+      if (id) rest.set('item', id)
+      else rest.delete('item')
+      const query = rest.toString()
+      router.replace(`${pathname ?? '/fleet/approvals'}${query ? `?${query}` : ''}`, { scroll: false })
+    },
+    [params, pathname, router],
+  )
   const closeDrawer = useCallback(() => {
     setOpenId(null)
-    if (!params?.get('item')) return
-    const rest = new URLSearchParams(params.toString())
-    rest.delete('item')
-    const query = rest.toString()
-    router.replace(`${pathname ?? '/fleet/approvals'}${query ? `?${query}` : ''}`, { scroll: false })
-  }, [params, pathname, router])
+    replaceItem(null)
+  }, [replaceItem])
+  // The drawer moved to the request it caused (an edit, a smaller plan, an undo): that one is now the open one, so the
+  // address and the row the drawer is handed follow it.
+  const followDrawer = useCallback(
+    (id: string) => {
+      setOpenId(id)
+      replaceItem(id)
+    },
+    [replaceItem],
+  )
 
   /* ── the grid ──────────────────────────────────────────────────────────────────────────── */
 
@@ -417,8 +413,8 @@ function ApprovalsGridPage() {
   return (
     <FleetPageShell
       title="Approvals"
-      sub="Requests from Claude, the fleet and your rules. Approve or reject them here, or let a kind of change run by itself."
-      aside={<HowApprovalsWork expiryHours={expiry.hours} maintenanceSeconds={expiry.maintenanceSeconds} />}
+      sub="Changes Claude and other parts of Nexus ask to make. Approve or reject them here, or let a kind of change run by itself."
+      aside={<HowItWorks keys={hints} />}
     >
       <div className="aqg-page">
         <HealthStrip counts={queue.counts} active={tile} onTile={onTile} narrow={phone} now={now} />
@@ -528,7 +524,14 @@ function ApprovalsGridPage() {
         )}
       </div>
 
-      <ApprovalDrawer id={openId} row={openId ? rowsById.get(openId) ?? null : null} actions={actions} refreshKey={queue.readKey} onClose={closeDrawer} />
+      <ApprovalDrawer
+        id={openId}
+        row={openId ? rowsById.get(openId) ?? null : null}
+        actions={actions}
+        refreshKey={queue.readKey}
+        onClose={closeDrawer}
+        onFollow={followDrawer}
+      />
       <AutomateModal row={automateRow} onClose={() => setAutomateRow(null)} onSaved={onAutomateSaved} />
 
       <Modal

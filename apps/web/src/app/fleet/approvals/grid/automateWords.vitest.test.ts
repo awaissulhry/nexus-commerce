@@ -19,6 +19,7 @@ import {
   mayAlsoApprove,
   modalTitle,
   leadSentence,
+  notOfferedWords,
   numberLimits,
   PLAN_TOOL,
   requestHint,
@@ -118,6 +119,11 @@ describe('the levels a kind may take', () => {
   it('the title and the lead name the kind as a name, so a verb title never runs into the sentence', () => {
     expect(modalTitle(row())).toBe('Automate “Set price”')
     expect(leadSentence(row())).toBe('From now on, “Set price” requests from Claude:')
+  })
+
+  it('a kind Claude cannot ask for says so in plain words, never "tool"', () => {
+    expect(notOfferedWords(row())).toBe('Claude cannot ask for “Set price”, so there is no rule to set for it: a person approves each request.')
+    expect(notOfferedWords(row())).not.toMatch(/\btool\b/)
   })
 })
 

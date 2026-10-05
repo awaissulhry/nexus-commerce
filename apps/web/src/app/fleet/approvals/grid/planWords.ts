@@ -1,11 +1,14 @@
 /**
- * MCP full control C9 — the change-plan card's words and its one counted button (section 05 §3.1): one summary
- * sentence (Nexus wrote it), one tick per KIND of consequence, a table of steps a person may filter and untick, and
- * ONE button — "Approve N changes" when every kind is ticked and every step kept; "Make a plan of the N ticked
- * changes" when steps were unticked (the API re-checks the smaller plan, which is then approved the same way).
- * Pure: PlanCard.tsx renders it; the API (change-plan.service.ts) decides.
+ * Approvals grid — a change plan's words in the request drawer (PlanSteps.tsx renders them; the API's
+ * change-plan.service.ts decides). Moved here from the old card's `planWords.ts` and `approval-words.ts` (clean-up F,
+ * 2026-10-05): only what the drawer uses.
+ *
+ *   kindSentence  one line per KIND of change: how many, what, where it lands, whether it can be put back
+ *   stepWhat      one step in one line, from the preview the reader may see; never raw JSON
+ *   stepMatches   the step filter
+ *   rovingTarget  the step list is ONE tab stop; the arrow keys move between its Keep ticks
+ *   STEP_STATUS   a step's fate in words
  */
-import { plainValue } from './approval-words'
 
 /** One kind of consequence: every step of one tool (the API's PlanKind). */
 export interface PlanKind {
@@ -30,6 +33,7 @@ export interface PlanStep {
   previewHidden?: string
 }
 
+/** GET /api/agent/fleet/approvals/:id/plan. */
 export interface PlanDetail {
   approvalId: string
   status: string
@@ -44,7 +48,7 @@ export interface PlanDetail {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** The sentence beside a kind's tick: how many, what, where it lands, whether it can be put back. */
+/** The sentence for one kind of change: how many, what, where it lands, whether it can be put back. */
 export function kindSentence(kind: PlanKind): string {
   const one = kind.count === 1
   const where = kind.outbound ? `${one ? 'reaches' : 'reach'} a marketplace or a buyer` : `${one ? 'stays' : 'stay'} in Nexus`
@@ -52,33 +56,34 @@ export function kindSentence(kind: PlanKind): string {
   return `${kind.count} × ${kind.title} — ${where}; ${back}`
 }
 
-export interface PlanButton {
-  label: string
-  /** approve: the plan as it is; amend: a smaller plan of the ticked steps first. */
-  action: 'approve' | 'amend'
-  disabled: boolean
-  /** Why it waits, when it does. */
-  waiting: string | null
+/**
+ * A value in words, never raw JSON: a short list reads as itself, a flat object as "key: value", anything deeper is
+ * counted. Nothing at all is "—".
+ */
+export function plainValue(value: unknown, depth = 0): string {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '—'
+    // A short list of plain values reads as itself, inside an object too; a list of objects is counted.
+    const flat = value.every((item) => item == null || ['string', 'number', 'boolean'].includes(typeof item))
+    if (depth > 1 || (depth > 0 && !flat)) return plural(value.length, 'item')
+    const shown = value.slice(0, 3).map((item) => plainValue(item, depth + 1))
+    return `${shown.join(', ')}${value.length > 3 ? ` and ${value.length - 3} more` : ''}`
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length === 0) return '—'
+    if (depth > 0) return plural(entries.length, 'field')
+    const shown = entries.slice(0, 4).map(([key, item]) => `${key}: ${plainValue(item, depth + 1)}`)
+    return `${shown.join(', ')}${entries.length > 4 ? ` and ${entries.length - 4} more` : ''}`
+  }
+  return '—'
 }
 
-/** The one counted button, from what the person ticked. */
-export function planButton(input: { total: number; kept: number; kinds: PlanKind[]; ticked: ReadonlySet<string>; busy: boolean }): PlanButton {
-  if (input.kept < input.total) {
-    if (input.kept === 0) {
-      return { label: 'Make a plan of the 0 ticked changes', action: 'amend', disabled: true, waiting: 'Keep at least one change, or reject the plan.' }
-    }
-    return { label: `Make a plan of the ${plural(input.kept, 'ticked change')}`, action: 'amend', disabled: input.busy, waiting: null }
-  }
-  const missing = input.kinds.filter((kind) => !input.ticked.has(kind.tool)).length
-  return {
-    label: `Approve ${plural(input.total, 'change')}`,
-    action: 'approve',
-    disabled: input.busy || missing > 0,
-    waiting: missing > 0 ? `Tick each kind of change above to approve: ${missing} not ticked yet.` : null,
-  }
-}
-
-/** A value in words (the generic card's plainValue), never raw JSON; an empty list is "(none)". */
+/** A value in a step line: an empty list is "(none)". */
 const shown = (value: unknown) => (Array.isArray(value) && value.length === 0 ? '(none)' : plainValue(value))
 
 /** One step in one line: what it touches and what it changes, from the preview the reader may see. */
@@ -95,7 +100,7 @@ export function stepWhat(step: PlanStep): string {
   return step.title
 }
 
-/** The table's filter: the step number, the change, what it touches; any case. */
+/** The step filter: the step number, the change, what it touches; any case. */
 export function stepMatches(step: PlanStep, filter: string): boolean {
   const needle = filter.trim().toLowerCase()
   if (!needle) return true
@@ -103,9 +108,9 @@ export function stepMatches(step: PlanStep, filter: string): boolean {
 }
 
 /**
- * The step list is ONE tab stop (the 2026-10-02 browser check: a grid of steps took Tab through every cell, and the
- * counted button was out of reach). The arrow keys move between the steps' Keep ticks, Home and End to the ends; no
- * wrap. Null: not a key the list moves on (Tab, Space and the rest keep their own meaning).
+ * The step list is ONE tab stop (the 2026-10-02 browser check: a grid of steps took Tab through every cell). The arrow
+ * keys move between the steps' Keep ticks, Home and End to the ends; no wrap. Null: not a key the list moves on (Tab,
+ * Space and the rest keep their own meaning).
  */
 export function rovingTarget(key: string, index: number, count: number): number | null {
   if (count <= 0) return null
@@ -120,7 +125,7 @@ export function rovingTarget(key: string, index: number, count: number): number 
   }
 }
 
-/** A step's fate, in words (after it ran). */
+/** A step's fate, in words. */
 export const STEP_STATUS: Record<string, string> = {
   pending: 'To run',
   executing: 'Running',

@@ -218,7 +218,7 @@ describe('the API’s command receipts', () => {
     expect(routes.sort()).toEqual([
       // R16 — an engine's switch in the Control Room lever drawer.
       '/api/advertising/automation/engine-switch/:key',
-      // MCP full control C6 — "Make a plan of the N ticked changes" on a plan card.
+      // MCP full control C6 — "Keep only these N steps" on a plan, in the approvals drawer (grid/PlanSteps.tsx).
       '/api/agent/fleet/approvals/:id/plan-amend',
       '/api/categories/schema/download',
       // C8 / C5 — Undo on Claude's activity page; Claude's Pause and Resume.
@@ -245,10 +245,10 @@ describe('the API’s command receipts', () => {
     })
     // A positive control: the walk found the callers this change keys.
     expect(callers.length).toBeGreaterThanOrEqual(8)
-    // Claude's brakes, its Undo and the plan card write the route in full, so the walk sees them too.
+    // Claude's brakes, its Undo and a plan's "Keep only these N steps" write the route in full, so the walk sees them too.
     expect(callers).toEqual(expect.arrayContaining([
       path.join('app', 'settings', 'ai', 'claude', 'claudeApi.ts'),
-      path.join('app', 'fleet', 'approvals', 'PlanCard.tsx'),
+      path.join('app', 'fleet', 'approvals', 'grid', 'PlanSteps.tsx'),
     ]))
     for (const file of callers) {
       expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\bsendCommand\b/)

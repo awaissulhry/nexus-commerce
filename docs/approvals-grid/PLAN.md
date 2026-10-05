@@ -48,8 +48,9 @@ Click a row or press Enter → side drawer: full change list, plan steps, timeli
 ```
 - **Show** filter: Open (waiting, starting, on hold, running, failed) · Done · Everything. Each filter reads its own
   page of rows from the server, so nothing is silently capped.
-- **Group** options: none · Claude plan · kind · product. Each group header has a counted "Approve all 12" button,
-  same kind only.
+- **Group** options: none · kind · product · asked by. A group's checkbox ticks its rows; the toolbar then offers the
+  counted "Approve 12 …" button, same kind only. (Built 10-05: "Claude plan" grouping was dropped, because Nexus stores
+  no conversation id for Claude's requests. A change plan is already one row with its steps in the drawer.)
 - **Phone width:** status, what + product, and the actions only (the `PublishRuns` phone-column pattern).
 - **Theme:** stays light like the other fleet pages, with the existing `fleet-portal` pin on the drawer and modals.
 - **Gate state** (the "can the fleet agents ask?" readout) moves from the top of the page into the How it works

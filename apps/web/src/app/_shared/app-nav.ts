@@ -47,6 +47,8 @@ export interface SidebarCounts {
   monitoring?: { syncIssues?: number }
   system?: { connectedChannels?: number }
   inbox?: { critical?: number; warn?: number; total?: number }
+  /** Approvals grid: requests that need a person (waiting + back to you). */
+  approvals?: { needsYou?: number }
 }
 
 export interface Connections {
@@ -246,6 +248,9 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       label: 'Agent Fleet',
       href: '/fleet',
       Icon: Bot,
+      // Approvals grid — the requests that need a person. The rail shows count badges on top-level items only, so the
+      // number sits here; Approvals is the page it counts.
+      badge: n(counts.approvals?.needsYou),
       children: [
         {
           label: 'Operate',

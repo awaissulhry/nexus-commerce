@@ -91,7 +91,8 @@ function adMoney(cents: unknown, currency: unknown): string | null {
 
 /**
  * A value in words, never raw JSON: a short list joins its first three items, a flat object reads "key: value", anything
- * deeper is counted (the web's approval-words.ts `plainValue`, so the grid and the old card read the same).
+ * deeper is counted (as the web's `plainValue` in apps/web/src/app/fleet/approvals/grid/planWords.ts, so the grid's rows and a
+ * plan's steps read the same).
  */
 export function plainValue(value: unknown, depth = 0): string {
   if (value == null || value === '') return EMPTY

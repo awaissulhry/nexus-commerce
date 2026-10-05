@@ -3,7 +3,7 @@
 /**
  * Approvals grid — a change plan in the drawer (build agent D2, 2026-10-05; PLAN §6).
  *
- * Reads GET /api/agent/fleet/approvals/:id/plan (the old PlanCard's response shape, `planWords.ts`), built on the design
+ * Reads GET /api/agent/fleet/approvals/:id/plan (its shape and words: `planWords.ts`), built on the design
  * system only:
  *   - one sentence per KIND of change ("120 × Set master price — reach a marketplace or a buyer; can be undone");
  *   - while it runs, "34 of 120 steps done" (DS JobProgress), re-read whenever the plan's counts move;
@@ -19,7 +19,7 @@ import { Banner, EmptyState, Field, JobProgress, ProgressBar } from '@/design-sy
 import { Button, Checkbox, Input, Pill } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
-import { STEP_STATUS, kindSentence, rovingTarget, stepMatches, stepWhat, type PlanStep } from '../planWords'
+import { STEP_STATUS, kindSentence, rovingTarget, stepMatches, stepWhat, type PlanStep } from './planWords'
 import { planProgress } from './drawerWords'
 import { usePlanDetail } from './useApprovalDetail'
 import styles from './ApprovalDrawer.module.css'

@@ -42,6 +42,11 @@ export interface ApprovalDrawerProps {
   /** Changes whenever the queue was re-read, so the drawer re-reads its detail too (plans show live step counts). */
   refreshKey: number
   onClose(): void
+  /**
+   * The drawer moved to another request it caused: the new request after an edit or a smaller plan replaced this one,
+   * or the undo it asked for. The page makes that id the open one (its `?item=` and the row it hands back follow).
+   */
+  onFollow?(id: string): void
 }
 
 /** What the person chose in the Automate modal. */
