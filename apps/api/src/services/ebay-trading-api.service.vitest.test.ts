@@ -342,3 +342,23 @@ describe('RT.2 — buildReviseInventoryStatusBatchXml', () => {
     ).toThrow()
   })
 })
+
+// 2026-10-06 (Trading stock sync) — eBay's "this is an Inventory item" answer to a Trading revise (21919474).
+import { isEbayInventoryManagedRefusal, tradingErrorBlocks } from './ebay-trading-api.service.js'
+describe('isEbayInventoryManagedRefusal', () => {
+  it('the code decides; eBay\'s English and Italian words are recognised without it', () => {
+    expect(isEbayInventoryManagedRefusal(['21919474'], '')).toBe(true)
+    expect(isEbayInventoryManagedRefusal([], 'This operation is not allowed for inventory items.')).toBe(true)
+    expect(isEbayInventoryManagedRefusal([], 'operazione non consentita per gli oggetti del magazzino')).toBe(true)
+  })
+  it('another ReviseInventoryStatus refusal that names InventoryStatus is not one', () => {
+    expect(isEbayInventoryManagedRefusal(['21916585'], 'The SKU in InventoryStatus is not in this listing.')).toBe(false)
+  })
+})
+describe('tradingErrorBlocks', () => {
+  it('reads each error block\'s code, classification and words, and leaves warnings out', () => {
+    const raw = '<Errors><ShortMessage>Note</ShortMessage><ErrorCode>21917091</ErrorCode><SeverityCode>Warning</SeverityCode></Errors>'
+      + '<Errors><LongMessage>Internal error.</LongMessage><ErrorCode>10007</ErrorCode><SeverityCode>Error</SeverityCode><ErrorClassification>SystemError</ErrorClassification></Errors>'
+    expect(tradingErrorBlocks(raw)).toEqual([{ code: '10007', classification: 'SystemError', message: 'Internal error' }])
+  })
+})
