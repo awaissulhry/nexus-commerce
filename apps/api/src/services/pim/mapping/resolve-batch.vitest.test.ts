@@ -559,3 +559,38 @@ describe('eBay gets a colour or size as the market word', () => {
     expect(await cell()).toMatchObject({ value: 'Fucsia acceso' })
   })
 })
+
+// Wave 2 (Owner decisions 1 and 6, 2026-10-05) — every Trading publish sends GTC, and no handling time (eBay takes it from
+// the shipping policy). The cells show exactly that: never a stored or mapped value. Stored values are left as they are.
+describe('eBay duration and handling time show what publish sends', () => {
+  const setup = (platformAttributes: Record<string, unknown>) => {
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', platformAttributes }])
+    // An operator rule must not reach them either.
+    db.mapping.mockResolvedValue({ fields: { listingDuration: { source: 'name' }, handlingTime: { source: 'name' } } })
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [
+      field('listingDuration', { kind: 'select', options: ['GTC'], selectionOnly: true, rule: null as never, channelStore: { kind: 'platformAttributes', path: ['listingDuration'] } }),
+      field('handlingTime', { kind: 'number', rule: null as never, channelStore: { kind: 'platformAttributes', path: ['handlingTime'] } }),
+      field('vatRate', { kind: 'number', rule: null as never, channelStore: { kind: 'platformAttributes', path: ['vatRate'] } }),
+    ] })
+  }
+  it('a stored DAYS_7 and a stored handling time: the cells show GTC and blank, with no error', async () => {
+    setup({ listingDuration: 'DAYS_7', handlingTime: 3, vatRate: 22 })
+    const { cells } = (await resolveBatch(input)).products[0]
+    expect(cells.listingDuration).toMatchObject({ value: 'GTC', status: 'mapped', errors: [] })
+    expect(cells.handlingTime).toMatchObject({ value: null, status: 'mapped', errors: [] })
+    // Control: another listing setting still shows its stored value.
+    expect(cells.vatRate).toMatchObject({ value: 22, provenance: 'override' })
+  })
+  it('nothing stored: GTC and blank all the same', async () => {
+    setup({})
+    const { cells } = (await resolveBatch(input)).products[0]
+    expect(cells.listingDuration.value).toBe('GTC')
+    expect(cells.handlingTime.value ?? null).toBeNull()
+  })
+  it('only on eBay: an Amazon field of the same name is untouched', async () => {
+    setup({})
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'AMAZON', marketplace: 'IT', overrideData: { handlingTime: 4 } }])
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('handlingTime', { kind: 'number', rule: null as never })] })
+    expect((await resolveBatch({ ...input, channel: 'AMAZON' })).products[0].cells.handlingTime.value).toBe(4)
+  })
+})

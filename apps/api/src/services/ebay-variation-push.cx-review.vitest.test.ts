@@ -346,3 +346,58 @@ describe('D — the publish-failure diagnostics read the FIXED_PRICE offer, neve
     expect(deletes()).toEqual(['fp-SKU-A-de'])
   })
 })
+
+// Wave 2 (Owner decision 5, 2026-10-05) — eBay's updateOffer replaces the WHOLE offer, so a limit left out is a limit
+// removed. Max per buyer is sent when the main row holds one; when it is blank (or a value eBay cannot take) the body
+// carries the limit eBay holds now, read once per SKU; a new offer gets none. Nexus never invents 10.
+describe('Max per buyer — blank keeps eBay\'s limit (wave 2)', () => {
+  const offerPosts = () => h.send.mock.calls.filter(([url, init]) => init?.method === 'POST' && new URL(url).pathname === '/sell/inventory/v1/offer')
+    .map(([, init]) => JSON.parse(init.body))
+  const offerReads = () => h.send.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === 'GET' && /^\/sell\/inventory\/v1\/offer\/[^/]+$/.test(new URL(url).pathname))
+  const withLimit = (limit: unknown) => { const [main, other] = rows(); return [{ ...main, quantity_limit_per_buyer: limit }, other] }
+  const held = (sku: string, quantityLimitPerBuyer: number) => [offer(sku, 'AUCTION', '999999999999'), { ...offer(sku), quantityLimitPerBuyer }]
+
+  it.each(['group', 'offers'] as const)('%s: the main row\'s whole number is sent on every offer', async (mode) => {
+    await call(mode, withLimit('3'))
+    expect(offerPuts().map((p) => p.body.quantityLimitPerBuyer)).toEqual([3, 3])
+  })
+  it.each(['group', 'offers'] as const)('%s: blank — each offer carries the limit eBay holds (from the offer search, no extra read); none held → no key', async (mode) => {
+    h.offerLists = { 'SKU-A': held('SKU-A', 5), 'SKU-B': h.offerLists['SKU-B'] }
+    await call(mode, withLimit(''))
+    const [a, b] = offerPuts()
+    expect(a.body.quantityLimitPerBuyer).toBe(5)
+    expect('quantityLimitPerBuyer' in b.body).toBe(false)
+    expect(offerReads()).toEqual([])
+  })
+  it('a cached offer id: eBay\'s offer is read ONCE per SKU and its limit carried', async () => {
+    h.listings = h.listings.map((l) => ({ ...l, platformAttributes: { __offerIds: { EBAY_IT: `fp-${l.product.sku}` } } }))
+    h.full['fp-SKU-A'] = { ...h.full['fp-SKU-A'], quantityLimitPerBuyer: 4 }
+    await call('group', withLimit(null))
+    expect(offerPuts().map((p) => p.body.quantityLimitPerBuyer ?? null)).toEqual([4, null])
+    expect(offerReads().map(([url]) => new URL(url).pathname.split('/').pop())).toEqual(['fp-SKU-A', 'fp-SKU-B'])
+  })
+  it('a new offer (none on eBay) gets no limit', async () => {
+    h.offerLists = {}
+    await call('group', withLimit(''))
+    expect(offerPosts().map((body) => 'quantityLimitPerBuyer' in body)).toEqual([false, false])
+  })
+  it('a value eBay cannot take is named once in the warnings and not sent; eBay\'s limit is kept', async () => {
+    h.offerLists = { 'SKU-A': held('SKU-A', 6), 'SKU-B': held('SKU-B', 6) }
+    const warnings: string[] = []
+    await pushVariationGroup('group', withLimit('abc'), 'IT', 'synthetic-token', 'account-a', {}, 'https://fixture.invalid', 'EBAY_IT', (_pid, _sku, qty) => qty,
+      undefined, undefined, undefined, undefined, { parentContent: { title: 'Fixture family', subtitle: '', description: '<p>Fixture</p>' }, warningsSink: warnings })
+    expect(warnings).toContain('Max per buyer: eBay takes a whole number, 1 or more (this row has "abc"). Not sent.')
+    expect(offerPuts().map((p) => p.body.quantityLimitPerBuyer)).toEqual([6, 6])
+  })
+  it('eBay\'s offer cannot be read: that offer is not changed (a body without the limit would remove it), it is named, and nothing is published', async () => {
+    h.listings = h.listings.map((l) => ({ ...l, platformAttributes: { __offerIds: { EBAY_IT: `fp-${l.product.sku}` } } }))
+    const base = h.send.getMockImplementation()!
+    h.send.mockImplementation(async (url: string, init: RequestInit = {}) =>
+      (init.method ?? 'GET') === 'GET' && new URL(url).pathname.endsWith('/offer/fp-SKU-A') ? response({}, 500) : base(url, init))
+    const result = await call('group', withLimit(''))
+    expect(result.find((r) => r.sku === 'SKU-A')).toMatchObject({ status: 'ERROR',
+      message: 'Max per buyer is blank here, so Nexus keeps the limit eBay holds, but eBay\'s offer could not be read (500). This offer was not changed; publish again.' })
+    expect(offerPuts().map((p) => p.id)).toEqual(['fp-SKU-B'])
+    expect(h.send.mock.calls.some(([url]) => String(url).endsWith('/publish_by_inventory_item_group'))).toBe(false)
+  })
+})

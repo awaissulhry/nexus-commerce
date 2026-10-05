@@ -3,6 +3,7 @@ import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
 import { ebayFixedPriceOfferOf } from '../services/ebay-price-readback.service.js';
+import { offerQuantityLimit } from '../services/ebay-quantity-limit.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -2801,8 +2802,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 bestOfferTerms: buildBestOfferTerms(row, currency),
               },
               merchantLocationKey: sMlk,
-              // EFX P9f — operator override for max qty per buyer (blank → 10).
-              quantityLimitPerBuyer: resolveQuantityLimitPerBuyer(row),
+              // EFX P9f — max qty per buyer: added below once the offer is known (wave 2: blank keeps eBay's limit).
             };
 
             // Check if offer exists
@@ -2810,11 +2810,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             const getOfferRes = await ebaySend(connection.id, getOfferUrl, { headers: singleHeaders });
 
             let offerId: string | null = null;
+            let liveOffer: Record<string, unknown> | null = null;
             if (getOfferRes.ok) {
               // CX — the FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
               const offerData = (await getOfferRes.json()) as { offers?: unknown };
-              offerId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.offerId ?? null;
+              liveOffer = ebayFixedPriceOfferOf(offerData.offers, marketplaceId);
+              offerId = (liveOffer?.offerId as string | undefined) ?? null;
             }
+            // Wave 2 — updateOffer replaces the whole offer: a blank (or invalid) Max per buyer carries eBay's current limit.
+            Object.assign(offerBody, offerQuantityLimit(resolveQuantityLimitPerBuyer(row), liveOffer));
 
             if (offerId) {
               const updateOfferRes = await ebaySend(connection.id,

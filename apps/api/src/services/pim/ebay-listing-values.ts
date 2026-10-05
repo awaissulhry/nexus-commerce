@@ -14,3 +14,12 @@ export function normalizeEbayListingValue(key: string, value: unknown): unknown 
   if (key === 'listingDuration' && /^(?:Days_\d+|GTC)$/i.test(value)) return value.toUpperCase()
   return value
 }
+
+/**
+ * Wave 2 (Owner decisions 1 and 6, 2026-10-05) — eBay listing settings whose value Publish fixes, whatever the listing
+ * stores: the cell shows this value (`mapping/resolve-batch.service.ts`, like the Amazon family facts), read-only with the
+ * column's reason (`EBAY_HELD_REASONS`). Duration: every Trading publish sends GTC. Handling time: never sent (eBay takes
+ * it from the listing's shipping policy), so the cell is blank. Stored values are kept as they are.
+ */
+export const EBAY_FIXED_VALUES: Readonly<Record<string, string | null>> = { listingDuration: 'GTC', handlingTime: null }
+export const isEbayFixedValue = (key: string) => Object.prototype.hasOwnProperty.call(EBAY_FIXED_VALUES, key)

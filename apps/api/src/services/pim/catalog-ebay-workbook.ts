@@ -389,6 +389,9 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
         continue
       }
       const field = fields[0]
+      // Wave 2 (2026-10-05) — a column Publish fixes or does not use (duration, handling time, the Shared-SKU switch) is
+      // read-only on the sheet; a file cannot set it either. Its reason says why.
+      if (field.editHeldReason) { exclude(header, `${field.editHeldReason} Not imported. File value: ${raw.trim()}`); continue }
       // Like an Item ID, a business policy belongs to one eBay account: another account's policy ID is never imported.
       if (POLICY_FIELDS.has(field.key) && !ownPolicies.has(raw.trim())) { exclude(header, `This policy is not one this eBay account uses (the file may come from another business). The listing keeps its own policy. File value: ${raw.trim()}`); continue }
       try {
