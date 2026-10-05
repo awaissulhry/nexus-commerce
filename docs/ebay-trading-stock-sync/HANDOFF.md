@@ -34,3 +34,13 @@ Worktree /private/tmp/fix-ebay-trading-stock-sync (branch fix/ebay-trading-stock
   2 min; (8) claims rollback (conditional); (9) lender 30 s hold by design.
 - PR 2 building in /private/tmp/fix-stock-heal-and-pool-triggers (branch fix/stock-heal-and-pool-triggers): gaps 3, 6, 7
   (+5 if small). Merge PR 1 first.
+
+## Build status (step 2 done, 2026-10-06)
+- `syncToEbay` decides the item's API once (`ebayTradingItemOf`: `usesEbayInventory` over this listing + every listing of
+  its ItemID on the same account; no ItemID → Inventory as before) and, at step 4b (after every guard), sends a Trading
+  item's row through `syncTradingListingRow` → `callTradingApi('ReviseInventoryStatus')` with its own ItemID + SKU
+  (+ `<StartPrice currencyID>` for a price). Content rows / SKUs held by an ACTIVE shared membership → SKIPPED.
+- Tests: `apps/api/src/services/outbound-sync.ebay-trading-listing.vitest.test.ts` (28), builder StartPrice tests,
+  channel-sku fixtures now name an Inventory item.
+- Not done (out of scope): offer-id cache scoping by account+market, `retryQueueItem` not clearing isDead, failing-listing
+  retry rows with no listing, a price read-back for Trading listings.
