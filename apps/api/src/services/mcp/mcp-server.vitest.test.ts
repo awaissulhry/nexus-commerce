@@ -113,8 +113,10 @@ describe('C3 — the server and every change tool name the business', () => {
     for (const tool of listTools()) {
       const schema = mcpInputSchema(tool, business) as { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }
       const own = inputJsonSchema(tool) as { properties?: Record<string, unknown>; required?: string[] }
+      // N1 — every schema says no other argument is taken (the door refuses one by name).
+      expect((schema as { additionalProperties?: unknown }).additionalProperties, tool.name).toBe(false)
       if (tool.readOnly) {
-        expect(schema, tool.name).toEqual(own)
+        expect(schema, tool.name).toEqual({ ...own, additionalProperties: false })
         continue
       }
       expect(schema.properties?.business, tool.name).toMatchObject({ type: 'string', description: expect.stringContaining('"Xavia Racing"') })

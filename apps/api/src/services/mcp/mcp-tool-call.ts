@@ -45,6 +45,8 @@ import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { runOrQueueTool, type GateOutcome, type GateRule, type RuleVerdict } from '../agents/approval-gate.service.js'
 import { runOrigin } from '../agents/call-tool.js'
 import type { AgentTool } from '../agents/tool-types.js'
+import { argumentsRefusal } from '../agents/tool-arguments.js'
+import { getTool } from '../agents/tool-registry.js'
 import { autoRefusal, claudeRuleOf, CONFIRM_IN_CLAUDE, overDailyCap, planRuleRefusal, withdrawRuleSchedule } from '../agents/claude-trust.service.js'
 import { confirmByCode, prepareConfirm } from '../agents/claude-confirm.service.js'
 import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
@@ -279,6 +281,12 @@ export async function runToolForClaude(
       if (wrongBusiness) {
         await finish({ status: 'failed', ok: false, errorMessage: wrongBusiness })
         return refused(principal, wrongBusiness)
+      }
+      // N1 — an argument name the tool does not take is refused with the name it likely meant, never dropped.
+      const wrongArguments = argumentsRefusal(tool, toolArgs, getTool)
+      if (wrongArguments) {
+        await finish({ status: 'failed', ok: false, errorMessage: wrongArguments })
+        return refused(principal, wrongArguments)
       }
       try {
         // Every change from Claude is stored as a request, even when the tool's policy needs no approval (forceAsk

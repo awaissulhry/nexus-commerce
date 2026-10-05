@@ -3,6 +3,7 @@
  * says: runToolForClaude tightens the gate for every tool that is not read-only.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 const gate = vi.hoisted(() => ({ runOrQueueTool: vi.fn() }))
 vi.mock('../agents/approval-gate.service.js', () => gate)
@@ -120,6 +121,15 @@ describe('C3 — a change names its business: a check, never a choice', () => {
     expect(answerOf(result).error).toBe('This connection works in Xavia Racing; you named Motovento. Nothing was queued.')
     expect(gate.runOrQueueTool).not.toHaveBeenCalled()
     // The refusal is a run of its own, recorded as failed.
+    expect(db.agentRun.update.mock.calls.at(-1)![0].data).toMatchObject({ status: 'failed', ok: false })
+  })
+
+  it('N1 — an argument the tool does not take is refused by name, with the one it likely meant; nothing is queued', async () => {
+    const publish = { name: 'publish-listing', readOnly: false, input: z.object({ productId: z.string(), marketplace: z.string() }) } as unknown as AgentTool
+    const result = await runToolForClaude(principal, publish, { productId: 'p-1', market: 'IT', business: 'Xavia Racing' })
+    expect(result.isError).toBe(true)
+    expect(answerOf(result).error).toBe('publish-listing does not take the argument market (did you mean marketplace?). It takes: productId, marketplace. Nothing was queued.')
+    expect(gate.runOrQueueTool).not.toHaveBeenCalled()
     expect(db.agentRun.update.mock.calls.at(-1)![0].data).toMatchObject({ status: 'failed', ok: false })
   })
 
