@@ -33,6 +33,9 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
 import './single.css'
+import { HeldLaunchReceipt } from '../LaunchReceipt'
+import { useLaunchReceipt } from '../useLaunchReceipt'
+import '../launch-receipt.css'
 
 // SB.2 — Campaign Bidding Strategy options (verbatim Amazon copy from the recording).
 type BiddingStrategy = 'down' | 'updown' | 'fixed'
@@ -152,6 +155,9 @@ export function SingleCampaignBuilder() {
   // SB.7 — Review & Launch
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
+  // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
+  const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
+  const receipt = useLaunchReceipt(toCampaigns)
   const launch = useCallback(async () => {
     if (launching) return
     if (!name.trim()) { setLaunchErr('Enter a campaign name (Campaign Details) before launching.'); return }
@@ -179,10 +185,13 @@ export function SingleCampaignBuilder() {
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/single/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why); only a launch
+      // that did not run at all is an error here. Anything not live, or not read back as asked, stays on this screen.
+      if (!j?.launch && (!r.ok || j?.ok === false)) throw new Error(j?.error || 'Launch failed')
+      if (receipt.hold(j)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router])
+  }, [launching, market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router, receipt.hold])
   const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
   const boostChips = [bidMult.videoBoost && 'Video', bidMult.abBoost && 'Amazon Business', bidMult.audienceMod && 'Audience'].filter(Boolean) as string[]
@@ -260,6 +269,7 @@ export function SingleCampaignBuilder() {
       </nav>
 
       <div className="h10-spw-body">
+        <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {step === 1 && (
           <div className="h10-spw-s1">
             <aside className="cb-subnav" aria-label="Campaign Setup sections">
@@ -543,8 +553,8 @@ export function SingleCampaignBuilder() {
       <footer className="h10-spw-foot">
         {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
-        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
-          {step < 2 ? 'Continue' : launching ? 'Launching…' : 'Launch Campaign'}
+        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching || (step === 2 && !!receipt.held)}>
+          {step < 2 ? 'Continue' : launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaign'}
         </Button>
       </footer>
 

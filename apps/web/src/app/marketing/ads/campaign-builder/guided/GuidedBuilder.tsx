@@ -45,6 +45,9 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
 import './guided.css'
+import { HeldLaunchReceipt } from '../LaunchReceipt'
+import { useLaunchReceipt } from '../useLaunchReceipt'
+import '../launch-receipt.css'
 
 type StepN = 1 | 2 | 3 | 4
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -109,6 +112,9 @@ export function GuidedBuilder() {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
+  // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
+  const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
+  const receipt = useLaunchReceipt(toCampaigns)
 
   const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
 
@@ -231,10 +237,13 @@ export function GuidedBuilder() {
       }
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why); only a launch
+      // that did not run at all is an error here. Anything not live, or not read back as asked, stays on this screen.
+      if (!j?.launch && (!r.ok || j?.ok === false)) throw new Error(j?.error || 'Launch failed')
+      if (receipt.hold(j)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget, router])
+  }, [launching, market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget, router, receipt.hold])
 
   const typeCampaigns = (t: AdProduct) => campaigns.filter((c) => c.adProduct === t)
 
@@ -273,6 +282,7 @@ export function GuidedBuilder() {
       </nav>
 
       <div className="h10-spw-body">
+        <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {/* Step 1 — Product Selection (= Quick's step 1) */}
         {step === 1 && (
           <div className="h10-gcb-col">
@@ -456,7 +466,7 @@ export function GuidedBuilder() {
         {step < 4 ? (
           <Button variant="primary" size="lg" onClick={goNext} disabled={nextDisabled}>Next</Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
+          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>
