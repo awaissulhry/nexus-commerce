@@ -55,10 +55,10 @@ describe('kickStoredEbayOrderNotice', () => {
     await kickStoredEbayOrderNotice(accepted('receipt-2', 'business-b', true), ORDER)
     const ids = state.add.mock.calls.map(call => call[3].jobId)
     expect(ids).toEqual(['ebay-order-notice-receipt-2', 'ebay-order-notice-receipt-2'])
-    expect(ebayOrderNoticeJobId('cmuq0qwvo0033n7s4gs9klmj5')).toBe('ebay-order-notice-cmuq0qwvo0033n7s4gs9klmj5')
-    expect(bullmqRefusal(ebayOrderNoticeJobId('cmuq0qwvo0033n7s4gs9klmj5'))).toBeNull()
+    expect(ebayOrderNoticeJobId('cmsyntheticreceipt0000001')).toBe('ebay-order-notice-cmsyntheticreceipt0000001')
+    expect(bullmqRefusal(ebayOrderNoticeJobId('cmsyntheticreceipt0000001'))).toBeNull()
     // WorkspaceQueue prefixes "w_<business>_" (lib/workspace-jobs.ts): still valid.
-    expect(bullmqRefusal(`w_business-b_${ebayOrderNoticeJobId('cmuq0qwvo0033n7s4gs9klmj5')}`)).toBeNull()
+    expect(bullmqRefusal(`w_business-b_${ebayOrderNoticeJobId('cmsyntheticreceipt0000001')}`)).toBeNull()
   })
 
   it.each([
