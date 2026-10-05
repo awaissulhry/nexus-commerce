@@ -23,6 +23,7 @@ import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { CHANNEL_LABELS } from '@nexus/shared/channel-label'
+import { formerNamesOf } from '@nexus/shared/sheet-names'
 import prisma from '../../../db.js'
 import type { AgentTool } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
@@ -345,6 +346,8 @@ const productContent: AgentTool = {
         const key = raw.trim().toLowerCase()
         const hit = all.find((field) => field.name.toLowerCase() === key
           || field.columns.some((column) => [column.key, column.writeField, column.label, column.slot?.label].some((name) => name?.toLowerCase() === key)))
+          // W3-6 — then a column's former names ("Name" → Title, "Quantity" → eBay's Unit quantity); a current name wins.
+          ?? all.find((field) => field.columns.some((column) => formerNamesOf(column.key).some((name) => name.toLowerCase() === key)))
         if (hit) wanted.set(hit.name, hit)
         else unknownFields.push(raw)
       }

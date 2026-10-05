@@ -81,6 +81,26 @@ describe('planHeaderPaste — where a block with a header row lands', () => {
     const byId = planHeaderPaste([['title@en', 'Size'], ['Jacket', 'M']], langs, ['title@it', 'title@en', 'size'])!
     expect(byId.rows).toEqual([['', 'Jacket', 'M']])
   })
+
+  // W3-6 — the sheet's naming table renamed columns ("Name" is "Title"); a file exported before still lands.
+  it('a header a column had before lands on it: an old "Name" header on Title', () => {
+    const sheet: HeaderPasteColumn[] = [{ colId: 'name', headerName: 'Title *' }, { colId: 'size', headerName: 'Size' }, { colId: 'basePrice', headerName: 'Price' }]
+    const plan = planHeaderPaste([['Name', 'Size', 'Base price'], ['Giacca', 'M', '99']], sheet, ['name', 'size', 'basePrice'])!
+    expect(plan.rows).toEqual([['Giacca', 'M', '99']])
+    expect([...plan.named]).toEqual(['name', 'size', 'basePrice'])
+    expect(plan.notPasted).toEqual([])
+  })
+
+  it('a current name wins over a former one, and a former name two columns had lands on neither', () => {
+    // eBay: "Quantity" was the old name of Unit quantity (`quantita`) — and is another column's current name here.
+    const current: HeaderPasteColumn[] = [{ colId: 'quantita', headerName: 'Unit quantity' }, { colId: 'other', headerName: 'Quantity' }, { colId: 'size', headerName: 'Size' }]
+    expect([...planHeaderPaste([['Quantity', 'Size'], ['2', 'M']], current, ['quantita', 'other', 'size'])!.named]).toEqual(['other', 'size'])
+    // Shopify's stock and eBay's/Etsy's were both "Available quantity" once (`availableQuantity`, `quantity`): neither is guessed.
+    const both: HeaderPasteColumn[] = [{ colId: 'availableQuantity', headerName: 'Available' }, { colId: 'quantity', headerName: 'Qty' }, { colId: 'size', headerName: 'Size' }]
+    const plan = planHeaderPaste([['Available quantity', 'Size', 'Qty'], ['2', 'M', '3']], both, ['availableQuantity', 'quantity', 'size'])!
+    expect([...plan.named]).toEqual(['quantity', 'size'])
+    expect(plan.notPasted).toEqual(['Available quantity'])
+  })
 })
 
 describe('the note after a header paste', () => {

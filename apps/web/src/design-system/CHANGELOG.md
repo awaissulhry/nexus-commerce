@@ -24,6 +24,12 @@ Product sheet consistency wave 3, E3 (`docs/product-sheet-consistency/wave3/plan
 - **`offListSentence`** (`grid/editors/sheet.ts`, new): THE off-list sentence, the same words as `@nexus/shared/off-list-message` (the server's readiness, publish checks, formula warnings and AI drafts say it too; `sheet.vitest.test.ts` pins the two equal). Channel list: `Season: "Tutte le stagioni" is not on eBay's list. eBay may refuse it. Allowed: Estate, Inverno, … (12 in all)`; the column's own list: `Season: "X" is not one of this column's options. Allowed: …`. At most 8 allowed values, then how many in all. No final full stop (the DS punctuation rule).
 - **`selectValidation`**: new optional fourth argument `words` (`OffListWords`: `field`, `channel`, `optionLabels`). Its off-list warning was `"X" is not in the channel's list — it may be rejected at publish`, on Shared lists too.
 - **`sheetValidationFor`**: a select column's warning names the column (`label`) and its options in the cell's words (`optionLabels`); new optional third argument `{ channelList: true }` says the options are a channel's list, named from the column's coordinates (`listChannelOf`, new: the one channel every key of `channels` shares). Without it (the Shared scope, Cell details) the sentence speaks of the column's own options. `SheetColumnLike` gains optional `label`, `optionLabels`, `channels`.
+## Words: unit symbols in the measure picker; a list header may carry the required mark — 2026-10-05
+
+Product sheet consistency wave 3, "One name for one thing" (W3-6). Mirrored in Factory (`shapeFormat.ts`, `MeasureEditor.tsx`, `slotListColumn.ts`).
+
+- **`unitChoiceLabels(units)`** (`grid/renderers/shapeFormat.ts`, new): a channel's unit codes as people choose them — `KILOGRAM` reads "kg", `CENTIMETER` "cm"; the value stays the code, stored and sent unchanged. Two codes with one symbol keep their code beside it ("kg (KILOGRAM)"). **`MeasureEditor`**'s unit list, **`shapeTooltipLine`** ("1.2 kg · units: kg, g, lb, oz") and **`shapeValidation`**'s unit warning ("\"lbs\" is not one of the channel's units (kg, g)") show the symbols; they showed the codes.
+- **`slotListColumnDef`**: optional `headerName` — the header when it says more than the list's name (the sheets' required mark, "Bullet points *"). Absent = `label`, as before; the editor and the tooltip keep `label`.
 
 ## Words: Partial update says when Publish sends no field — 2026-10-05
 

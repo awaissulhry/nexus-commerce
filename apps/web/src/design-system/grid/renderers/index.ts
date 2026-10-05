@@ -77,7 +77,7 @@ export {
 export { composeCellTooltip, longTextTooltipLine } from './cellTooltip'
 export { CellSaveReason } from './cells'
 // AM.1 (2026-09-05) — the list and measure shapes, as pure rules both builders and both renderers call.
-export { asList, asMeasure, isMeasure, isEmptyShape, isShaped, formatList, formatMeasure, listSummary, unitSymbol, shapeTooltipLine, shapeValidation, LIST_SEPARATOR, type CellShape, type MeasureValue, type ShapeColumnLike } from './shapeFormat'
+export { asList, asMeasure, isMeasure, isEmptyShape, isShaped, formatList, formatMeasure, listSummary, unitSymbol, unitChoiceLabels, shapeTooltipLine, shapeValidation, LIST_SEPARATOR, type CellShape, type MeasureValue, type ShapeColumnLike } from './shapeFormat'
 export { ListChipValue, MeasureCellValue, ShapeValue } from './shapeCells'
 // 2026-09-24 — a store field drawn by its type (Shopify's metafield type vocabulary): the rules and the renderer.
 export { metafieldDisplay, referenceKindOf, isReferenceType, METAFIELD_INVALID_TEXT, type MetafieldDisplay, type MetafieldDisplayOptions, type MetafieldReference, type MetafieldReferenceKind } from './metafieldDisplay'

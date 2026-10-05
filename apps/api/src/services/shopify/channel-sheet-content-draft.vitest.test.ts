@@ -103,7 +103,7 @@ describe('blank Shopify title through its actual common content path', () => {
       } else {
         expect(actual).toEqual({ state: 'stored', value })
         if (value === 'New rain jacket') expect(() => validateListingInformationOverrides(saved.listings, accountId, currentSchema, false)).not.toThrow()
-        else expect(() => validateListingInformationOverrides(saved.listings, accountId, currentSchema, false)).toThrow(/Name: (Product title is required\.|Enter a value for this field\.)/)
+        else expect(() => validateListingInformationOverrides(saved.listings, accountId, currentSchema, false)).toThrow(/Title: (Product title is required\.|Enter a value for this field\.)/)
       }
       // The full publication fact path checks required mapped fields even when no explicit override exists.
       const resolved = await resolveBatch({ channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: accountId,

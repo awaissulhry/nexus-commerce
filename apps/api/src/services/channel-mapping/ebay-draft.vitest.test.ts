@@ -2,6 +2,7 @@
  * CHMAP M2 — our eBay workbook's mapping version: one column key whatever the header's name order, the rules'
  * draft, and the reader following the Owner's decisions. Fixtures are built here (never the Owner's files).
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
 import type { MappingFieldRow } from '@nexus/shared/channel-mapping'
@@ -85,5 +86,31 @@ describe('CHMAP — our eBay workbook becomes a mapping version', () => {
     expect(out.rows.some(r => r.field === 'itemSpecifics.team name')).toBe(false)
     expect(out.exclusions.find(e => e.field === 'team name ⚠')?.message).toBe('Ignored by eBay IT · 177104 · v2 (draft): Amazon workaround field')
     expect(out.rows.filter(r => r.field !== 'itemSpecifics.team name')).toEqual(plain.rows.filter(r => r.field !== 'itemSpecifics.team name'))
+  })
+})
+
+// W3-6 (2026-10-05) — the product sheet now heads eBay's "Quantità" / "Unità di misura" columns "Unit quantity" /
+// "Unit type" (the sheet's naming table, display only). A workbook header is matched by eBay's own names (the Italian
+// one, and the English one the cache carries), so the old export's headers, the draft rows and their aliases are pinned.
+describe('the sheet\'s names change no workbook match (W3-6)', () => {
+  const cached = JSON.parse(readFileSync(new URL('../pim/channel-specs/__tests__/fixtures/ebay-it-177104.json', import.meta.url), 'utf8'))
+  const full = ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: cached.aspects, conditions: cached.conditions })
+  const fullSpecs = new Map([['177104', full]])
+
+  it('matches the unit-price aspects by eBay\'s names, in either order', () => {
+    expect(matchAspect('Quantità (Quantity)', full)?.key).toBe('quantita')
+    expect(matchAspect('Quantity (Quantità)', full)?.key).toBe('quantita')
+    expect(matchAspect('Unità di misura (Unit of measure)', full)?.key).toBe('unita_di_misura')
+    expect(matchAspect('Unit of measure', full)?.key).toBe('unita_di_misura')
+  })
+
+  it('keeps the same channel keys and aliases for those columns', () => {
+    expect(ebayChannelKeyOf('Quantità (Quantity)', fullSpecs)).toEqual({ channelKey: 'aspect:Quantità', aliases: ['Quantity (Quantità)'] })
+    expect(ebayChannelKeyOf('Unità di misura (Unit of measure)', fullSpecs)).toEqual({ channelKey: 'aspect:Unità di misura', aliases: ['Unit of measure (Unità di misura)'] })
+  })
+
+  it('never matches a sheet header: the display name is not a matching name', () => {
+    expect(matchAspect('Unit quantity', full)).toBeNull()
+    expect(matchAspect('Unit type', full)).toBeNull()
   })
 })

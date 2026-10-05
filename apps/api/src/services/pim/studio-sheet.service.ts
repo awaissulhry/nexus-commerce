@@ -62,7 +62,7 @@ import { relationshipColumns, relationshipValues } from './studio-relationships.
 import { groupSheetColumns } from '@nexus/shared/sheet-groups'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
-import { UnknownMarketError, VARIATION_THEME_KEY, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
+import { UnknownMarketError, VARIATION_THEME_KEY, issueFieldLabel, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
 import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
@@ -1688,7 +1688,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       for (const [k, cell] of Object.entries(values)) flat[k] = cell.mapped?.status === 'mapped' ? cell.mapped.value : cell.value
       const issues: ReadinessIssue[] = evaluateRow(flat, validatorsFor(rowShape), { requested: locale, fields: Object.fromEntries(Object.entries(values).filter(([, cell]) => cell.language).map(([key, cell]) => [key, { language: cell.language }])) }).map((i) => ({
         key: i.field,
-        label: columns.find((c) => c.key === i.field)?.label ?? i.field,
+        label: issueFieldLabel(columns, i.field, coordinate && coordinate.channel !== 'WOOCOMMERCE' ? coordinate.channel : 'shared'),
         message: i.message,
         severity: i.severity === 'error' ? 'error' : 'warn',
       }))

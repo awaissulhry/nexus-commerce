@@ -40,6 +40,7 @@ import {
 export { normaliseKey, SLOT_COLUMNS_MAX }
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import type { SheetTone } from '@nexus/shared/sheet-groups'
+import { fieldNameFromKey, sheetName, type SheetNameScope } from '@nexus/shared/sheet-names'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -485,16 +486,38 @@ function mergeAliases(current: Record<string, string[]> | undefined, next: Recor
   return out
 }
 
-/** `fulfillment_availability` + `quantity` → "Fulfillment availability · Quantity". */
+/**
+ * `fulfillment_availability` + `quantity` → "Fulfillment availability · Quantity". W3-6 — with no English name anywhere,
+ * the key reads through the sheet's naming table, then in words with acronyms in capitals (`uvp_list_price` →
+ * "List price (UVP)", was "Uvp list price").
+ */
 export function englishLeafLabel(f: ChannelFieldSpec, englishLabels?: Map<string, string>): string {
   if (f.englishLabel) return f.englishLabel
   const exact = englishLabels?.get(normaliseKey(f.key))
   if (exact) return exact
   if (f.path.length > 0 && f.key !== f.attribute) {
-    const parent = englishLabels?.get(normaliseKey(f.attribute)) ?? humanizeKey(f.attribute)
+    const parent = englishLabels?.get(normaliseKey(f.attribute)) ?? fieldNameFromKey(f.attribute)
     return `${parent} · ${humanizeKey(f.path[f.path.length - 1])}`
   }
-  return humanizeKey(f.key)
+  return fieldNameFromKey(f.key)
+}
+
+/**
+ * W3-6 — the name a readiness issue gives its field, never a raw key: the column's header; else the headers of the
+ * columns that carry that channel attribute (Amazon validates `child_parent_sku_relationship`, the sheet shows its
+ * "Parent SKU" and "Relationship type"); else the key in words through the sheet's naming table.
+ */
+export function issueFieldLabel(columns: ReadonlyArray<Pick<SheetColumn, 'key' | 'label' | 'channels'>>, field: string, scope?: SheetNameScope): string {
+  const own = columns.find((c) => c.key === field)
+  if (own) return own.label
+  const carriers = [...new Set(columns.filter((c) => Object.values(c.channels ?? {}).some((f) => f.attribute === field)).map((c) => c.label))]
+  return carriers.length > 0 ? carriers.join(', ') : fieldNameFromKey(field, scope)
+}
+
+/** W3-6 — the naming table's scope for a sheet: the Shared product, or the one channel a channel scope shows. */
+function nameScopeOf(scopeKind: 'master' | 'channel', coordinates: SheetCoordinate[]): SheetNameScope {
+  const channel = coordinates[0]?.channel
+  return scopeKind === 'channel' && channel && channel !== 'WOOCOMMERCE' ? channel : 'shared'
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -595,6 +618,7 @@ export function variationThemeColumn(scopeKind: 'master' | 'channel'): SheetColu
 
 export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: SheetColumn[]; droppedKeys: string[]; groups: SheetGroup[] } {
   const { fields, specs = [], coordinates, variationAxes = [], englishLabels, scopeKind = 'master' } = input
+  const nameScope = nameScopeOf(scopeKind, coordinates)
   const axes = new Set(variationAxes.map(canonicalVariantAxis).filter(Boolean))
   const coordinateLabels = new Set(coordinates.map((c) => c.label))
 
@@ -647,7 +671,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
     const d: Draft = {
       key,
       writeField: field.id,
-      label: key === 'productType' ? 'Amazon product type (default)' : field.label,
+      label: sheetName(key, nameScope) ?? field.label,
       group: group.label,
       groupKey: group.key,
       kind: kindFor(field),
@@ -878,20 +902,25 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
   const FAMILY_FACT_HELP = 'Publish takes it from the product family: the parent sends Parent, each variation sends Child, a single product sends none. To change it, change the family; this cell cannot be edited.'
   for (const column of columns) {
     if (column.key === 'parentage_level') {
-      column.label = scopeKind === 'master' ? 'Saved Amazon parentage level' : 'Amazon listing role'
       column.helpText = `Amazon listing role. ${FAMILY_FACT_HELP}`
       column.optionLabels = { parent: 'Parent', child: 'Child' }
     } else if (column.key === 'child_parent_sku_relationship__parent_sku') {
-      column.label = 'Amazon parent SKU'
       column.helpText = 'Parent SKU of this Amazon variation. Publish takes it from the product family (the parent\'s SKU); a parent or a single product sends none. To change it, change the family; this cell cannot be edited.'
     } else if (column.key === 'child_parent_sku_relationship__child_relationship_type') {
-      column.label = 'Amazon relationship type'
       column.helpText = 'Amazon accepts one relationship type, Variation, and publish sends it on every family row. A single product sends none. This cell cannot be edited.'
       column.optionLabels = { variation: 'Variation' }
       column.defaultVisible = false
     } else continue
     column.editable = false
     column.formulaWritable = false
+  }
+
+  // W3-6 — one name for one thing: a column the sheet's naming table names carries that name on this scope ("Title",
+  // "Price" on a channel, "Vendor" on Shopify, "Listing role" inside the Amazon scope). Display only — the key, the
+  // write field and every channel's own label (`channels[…].label`, which paste and import match) are unchanged.
+  for (const column of columns) {
+    const named = column.slot ? undefined : sheetName(column.key, nameScope)
+    if (named) column.label = named
   }
 
   // Repeated schema titles describe distinct slots/paths. Keep every attribute and qualify its
@@ -905,7 +934,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
     /* Qualified by its key only when the key READS differently: a column keyed `fit` and labelled "Fit" became
        "Fit · Fit", which told nothing apart (found by Lane B on the Shared sheet, 2026-09-28) — the other "Fit" column,
        whose key reads differently, is still qualified. */
-    const qualifier = humanizeKey(c.key)
+    const qualifier = fieldNameFromKey(c.key)
     if (!position && qualifier.toLocaleLowerCase() === c.label.toLocaleLowerCase()) continue
     c.label = position ? `${c.label} ${position}` : `${c.label} · ${qualifier}`
   }
@@ -1032,7 +1061,7 @@ function mergeSpecField(
     d.helpText = [f.helpText, f.readOnlyReason && !f.helpText?.includes(f.readOnlyReason) ? f.readOnlyReason : ''].filter(Boolean).join(' ') || undefined
     if (f.readOnlyReason) d.editable = false
   }
-  if (scopeKind === 'channel' && f.masterKey === 'name' && !f.shopifyField) d.label = 'Title'
+  if (scopeKind === 'channel' && f.masterKey === 'name' && !f.shopifyField) d.label = sheetName('name', spec.channel as SheetNameScope)!
   if (scopeKind === 'channel' && f.readOnlyReason) {
     d.editable = false
     d.formulaWritable = false
@@ -1048,7 +1077,7 @@ function mergeSpecField(
     d.helpText = f.helpText ?? f.editHeldReason
   }
   if (scopeKind === 'channel' && f.managedBy) d.managedBy = f.managedBy
-  if (scopeKind === 'channel' && f.key === 'productType') d.label = 'Product type'
+  if (scopeKind === 'channel' && f.key === 'productType') d.label = sheetName('productType', spec.channel as SheetNameScope)!
   if (scopeKind === 'channel' && f.group && d.isMaster) {
     d.group = f.group.label
     d.groupKey = `${spec.channel}:${f.group.key}`
@@ -1102,7 +1131,9 @@ function mergeSpecField(
       d.cardinality.max = d.cardinality.max === null || f.cardinality.max === null ? null : Math.max(d.cardinality.max, f.cardinality.max)
     }
     if (d.kind === 'text' && f.kind !== 'text') d.kind = f.kind
-    if (d.label === humanizeKey(d.key)) {
+    // A label that is only the key in words (either spelling: `humanizeKey`'s, or `fieldNameFromKey`'s for a key the
+    // naming table does not name) yields to the channel's English name. A name from the table is a decision, not a fallback.
+    if (d.label === humanizeKey(d.key) || (sheetName(d.key) === undefined && d.label === fieldNameFromKey(d.key))) {
       const better = englishLeafLabel(f, englishLabels)
       if (better !== d.label) d.label = better
     }
@@ -1572,7 +1603,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
         const spec = await loadAmazonSpec(other, cov.category)
         if (!spec.absent) others.push({ market: other, keys: Object.keys(spec.coverage) })
       }
-      const diff = marketDifference(Object.keys(own.coverage), others, (key) => englishLabels.get(normaliseKey(key)) ?? humanizeKey(key))
+      const diff = marketDifference(Object.keys(own.coverage), others, (key) => englishLabels.get(normaliseKey(key)) ?? fieldNameFromKey(key, 'AMAZON'))
       if (diff) cov.marketDifference = diff
     }
   }

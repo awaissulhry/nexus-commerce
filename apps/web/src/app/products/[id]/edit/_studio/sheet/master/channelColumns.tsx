@@ -23,6 +23,7 @@ import { shopifyDraftColumn, type useShopifyDraftCell } from '../../shopify/Shop
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelSheetRow, SheetColumn, ChannelScopePage } from '../channel/types'
 import { createOwnAxisAttribute, loadOwnAxisSources } from './ownAxisSourcesLoader'
+import { sheetColumnHeader } from '../columnHeader'
 
 /* Sheet pop-up P3 A2 — the channel variation pop-up reads "Values from" through this host loader (a STABLE object: AG re-runs
    its column model on a new params object, reference_ag_react_inline_options_rerun_column_model). A3 — and makes a new
@@ -92,8 +93,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
   const fields: ColDef<ChannelSheetRow>[] = gridColumns.map((col) => ({
     colId: col.key,
     cellClass: 'nds-ag-cell',
-    headerName: col.label,
-    headerTooltip: col.helpText ?? `${col.label} — ${col.group}`,
+    // W3-6 — the header the Shared scope draws too (`columnHeader.ts`): " *" when required, who requires it, the cap, the help.
+    ...sheetColumnHeader(col, { fallbackTooltip: `${col.label} — ${col.group}` }),
     width: col.width ?? 180,
     suppressKeyboardEvent: suppressFormulaKeys,
     ...(col.kind === 'longtext'
@@ -239,7 +240,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     if (definition && slotGroup) {
       const first = gridColumns.find(c => c.key === slotGroup.keys[0])
       return slotListColumnDef<ChannelSheetRow>(slotGroup, {
-        label: definition.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: definition.width, headerTooltip: definition.helpText,
+        label: definition.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: definition.width,
+        ...(first ? sheetColumnHeader({ ...first, label: definition.label, helpText: definition.helpText, maxLength: null, maxBytes: null }) : { headerTooltip: definition.helpText }),
         cellOf: (row, key) => row.values?.[key],
         setSlot: (row, key, value) => {
           const setter = byId.get(key)?.valueSetter

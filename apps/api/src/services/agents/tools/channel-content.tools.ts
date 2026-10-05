@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
+import { formerNamesOf } from '@nexus/shared/sheet-names'
 import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import type { InformationField } from '@nexus/shared/shopify-information'
 import prisma from '../../../db.js'
@@ -71,6 +72,9 @@ const fieldMatch = (field: Field & { info: InformationField }, raw: string) => {
   const key = raw.trim().toLowerCase()
   return [field.name, field.columns[0].key, field.columns[0].label, field.info.label, field.info.channelLabel].some((name) => name?.toLowerCase() === key)
 }
+/** W3-6 — a field by a name its column had before ("Brand" → Vendor, "Name" → Title); asked only after every current name. */
+const formerMatch = (field: Field & { info: InformationField }, raw: string) =>
+  formerNamesOf(field.columns[0].key).some((name) => name.toLowerCase() === raw.trim().toLowerCase())
 
 /** The product sheet's Shopify scope for a product, read live from the store (the sheet's own enrichment). */
 async function readShopifySheet(productId: string, accountId: string | undefined, language: string | undefined): Promise<StudioSheet | { error: string }> {
@@ -160,7 +164,7 @@ const shopifyContent: AgentTool = {
     if (a.fields) {
       fields = []
       for (const raw of a.fields) {
-        const hit = all.find((field) => fieldMatch(field, raw))
+        const hit = all.find((field) => fieldMatch(field, raw)) ?? all.find((field) => formerMatch(field, raw))
         if (hit && !fields.includes(hit)) fields.push(hit)
         else if (!hit) unknownFields.push(raw)
       }
@@ -279,9 +283,9 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
   const unchanged: string[] = []
   const refusals: string[] = []
   for (const name of names) {
-    const field = all.find((f) => fieldMatch(f, name))
+    const field = all.find((f) => fieldMatch(f, name)) ?? all.find((f) => formerMatch(f, name))
     if (!field) {
-      const other = sheet.columns.find((c) => c.shopifyField && [c.shopifyField.id, c.shopifyField.label, c.key].some((n) => n.toLowerCase() === name.toLowerCase()))
+      const other = sheet.columns.find((c) => c.shopifyField && [c.shopifyField.id, c.shopifyField.label, c.key, c.label, ...formerNamesOf(c.key)].some((n) => n.toLowerCase() === name.toLowerCase()))
       refusals.push(other ? `${name}: a listing setting (price, stock, status, sales channels, media), not text or an attribute` : `${name}: not a field of this store's Shopify listings`)
       continue
     }
@@ -310,6 +314,7 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
   const language = sheet.scope.locale
   const meaning = (args.englishMeaning && typeof args.englishMeaning === 'object' ? args.englishMeaning : {}) as Record<string, string>
   const meaningOf = (f: ShopifyFieldPlan) => meaning[f.name] ?? Object.entries(meaning).find(([key]) => fieldMatch(all.find((x) => x.name === f.name)!, key))?.[1]
+    ?? Object.entries(meaning).find(([key]) => formerMatch(all.find((x) => x.name === f.name)!, key))?.[1]
   if (language !== 'en') {
     const without = fields.filter((f) => !f.reset && hasText(f.to) && !meaningOf(f)?.trim()).map((f) => f.name)
     if (without.length) return { error: `englishMeaning is required for ${listed(without)}: what the new ${language} text says in English, for the person who approves it. ${nothing}` }

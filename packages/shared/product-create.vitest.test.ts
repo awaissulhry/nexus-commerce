@@ -12,7 +12,7 @@ describe('a new product’s fields', () => {
 
   it('names each missing or wrong field in a sentence', () => {
     expect(newProductProblems({ sku: '  ', name: '', kind: 'bundle' })).toEqual({
-      sku: 'Enter a SKU.', name: 'Enter a name.', kind: 'Choose Single product or Product with variations.',
+      sku: 'Enter a SKU.', name: 'Enter a title.', kind: 'Choose Single product or Product with variations.',
     })
     expect(newProductProblems({ ...valid, sku: 'GALE JACKET' }).sku).toMatch(/No spaces/)
     expect(newProductProblems({ ...valid, sku: 'GALE/JACKET' }).sku).toMatch(/Use only letters/)

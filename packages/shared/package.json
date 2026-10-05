@@ -178,6 +178,10 @@
       "types": "./dist/sheet-groups.d.ts",
       "default": "./dist/sheet-groups.js"
     },
+    "./sheet-names": {
+      "types": "./dist/sheet-names.d.ts",
+      "default": "./dist/sheet-names.js"
+    },
     "./amazon-media": {
       "types": "./dist/amazon-media.d.ts",
       "default": "./dist/amazon-media.js"

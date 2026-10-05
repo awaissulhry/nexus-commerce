@@ -11,7 +11,7 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ListboxPanel } from '../../components'
 import { Input } from '../../primitives'
-import { asMeasure, type MeasureValue } from '../renderers/shapeFormat'
+import { asMeasure, unitChoiceLabels, type MeasureValue } from '../renderers/shapeFormat'
 import { editorBox, roomToRightOf } from './editorBox'
 import { typedStart } from './selectPanelModel'
 
@@ -79,7 +79,7 @@ export const MeasureEditor = forwardRef<unknown, MeasureEditorParams>(function M
       <Input type="text" inputMode="decimal" value={text} onChange={(e) => onText(e.target.value)} aria-label="Value" className="nds-measure-editor-value" />
       {unitOptions.length > 0 && (
         <ListboxPanel
-          options={unitOptions.map((u) => ({ value: u, label: u }))}
+          options={unitChoiceLabels(unitOptions)}
           value={m.unit ?? undefined}
           onCommit={(u) => report({ value: m.value, unit: u })}
           onKeyChoice={(u) => { if (u !== null && u !== m.unit) report({ value: m.value, unit: u }) }}
