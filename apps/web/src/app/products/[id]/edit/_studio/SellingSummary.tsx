@@ -73,8 +73,10 @@ export interface SellingSummary {
   onChannel: number
   /** New listings: markets where the product is not on the channel yet (its Status chooses what Publish creates). */
   fresh: number
-  /** Markets Nexus deleted (not on the channel; their Status lists them again). */
+  /** Markets Nexus deleted (not on the channel; their Status lists them again). Unlinked ones are counted apart. */
   deleted: number
+  /** Markets Nexus unlinked (Item ID control): the listing may still be live there; never listed as new. */
+  unlinked?: number
   /** Every listing in the same state, or null (none, or they differ). */
   uniform: SellingState | null
   /** "Active" · "Active in 5 of 7" · "Mixed" · "Not listed". */
@@ -90,18 +92,20 @@ export function sellingSummaryOf(cells: readonly PublishActionCell[]): SellingSu
   const inactive = cells.filter(c => c.state === 'paused' || c.state === 'mixed').length
   const onChannel = cells.filter(c => !READ_ONLY.includes(c.state)).length
   const fresh = cells.filter(c => !!c.create && !c.deleted).length
-  const deleted = cells.filter(c => !!c.deleted).length
+  const deleted = cells.filter(c => !!c.deleted && !c.deleted.unlinked).length
+  const unlinked = cells.filter(c => !!c.deleted?.unlinked).length
   const uniform = states.size === 1 ? [...states][0] : null
   const word = !total ? SELLING_STATE_WORD.not_listed
     : uniform ? SELLING_STATE_WORD[uniform] ?? SELLING_STATE_WORD.unknown
       : active ? `Active in ${n(active)} of ${n(total)}` : 'Mixed'
   const tone: Tone = !total ? 'neutral' : uniform ? SELLING_STATE_TONE[uniform] ?? 'neutral' : inactive ? 'warning' : active ? 'success' : 'neutral'
-  return { total, active, inactive, onChannel, fresh, deleted, uniform, word, tone }
+  return { total, active, inactive, onChannel, fresh, deleted, unlinked, uniform, word, tone }
 }
 
-/** "2 new · 1 deleted" — the markets not on the channel (Publish creates the product there, or leaves it out), or null. */
-export const freshWords = (summary: Pick<SellingSummary, 'fresh'> & Partial<Pick<SellingSummary, 'deleted'>>): string | null =>
-  [summary.fresh ? `${n(summary.fresh)} new` : null, summary.deleted ? `${n(summary.deleted)} deleted` : null].filter(Boolean).join(' · ') || null
+/** "2 new · 1 deleted · 1 unlinked" — the markets not on the channel (Publish creates the product there, or leaves it out), or null. */
+export const freshWords = (summary: Pick<SellingSummary, 'fresh'> & Partial<Pick<SellingSummary, 'deleted' | 'unlinked'>>): string | null =>
+  [summary.fresh ? `${n(summary.fresh)} new` : null, summary.deleted ? `${n(summary.deleted)} deleted` : null,
+    summary.unlinked ? `${n(summary.unlinked)} unlinked` : null].filter(Boolean).join(' · ') || null
 
 /** One value that waits for Publish on some of a product's markets. `value` null = the markets wait for different values. */
 export interface WaitingSpread<V extends string> {
@@ -146,7 +150,8 @@ export function marketLine(cell: PublishActionCell, now: number = Date.now()): s
   if (cell.create) {
     // A row not on the channel (new, or deleted by Nexus): what Publish does there, and who chose it.
     const by = cell.create.source === 'own' && cell.status.setAt ? waitingSetPhrase(cell.status, now) : ''
-    const head = cell.create.target === 'not_listed' ? STATUS_TARGET_WORD.not_listed : cell.deleted ? 'Lists again' : 'New listing'
+    // An unlinked row is never listed again from here: its words say why (the unlink's own).
+    const head = cell.create.target === 'not_listed' ? STATUS_TARGET_WORD.not_listed : cell.deleted?.unlinked ? STATUS_TARGET_WORD[cell.create.target] : cell.deleted ? 'Lists again' : 'New listing'
     return `${marketLabel(cell)}: ${head}. ${sentence(cell.create.sentence)}${by ? ` ${by[0].toUpperCase()}${by.slice(1)}.` : ''}`
   }
   const parts = [`${marketLabel(cell)}: ${SELLING_STATE_WORD[cell.state] ?? SELLING_STATE_WORD.unknown}`]

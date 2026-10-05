@@ -204,7 +204,7 @@ export const IDENTITY_CHECKS: readonly IdentityCheck[] = [
     title: 'Channel SKU differs from the SKU Nexus sends',
     explanation: 'The channel shows another seller SKU for this listing than the one Nexus would send. A live listing\'s '
       + 'SKU is never renamed on the channel (decided): record the channel\'s SKU in Nexus, or leave it as a known difference.',
-    fix: { tool: 'set-listing-sku', how: 'record the channel\'s SKU on the listing (an extra listing), or leave it' },
+    fix: { tool: 'set-listing-sku', how: 'set the listing\'s own SKU to the channel\'s (by listingId, or extraListingId for an extra listing), or leave it' },
   },
   {
     kind: 'shopify-variant-on-two-products',

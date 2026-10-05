@@ -1,6 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const fixture = vi.hoisted(() => ({ parent: null as any, children: [] as any[], lateChildren: null as any[] | null, created: [] as any[], transaction: vi.fn() }))
+const fixture = vi.hoisted(() => ({ parent: null as any, children: [] as any[], lateChildren: null as any[] | null, created: [] as any[], transaction: vi.fn(),
+  /** S9 — the SKUs another product's listing holds or sends as its channel SKU (`channelSkuHoldings`). */
+  held: [] as Array<{ sku: string; productId: string; sentence: string }> }))
+vi.mock('../listings/channel-sku-rename.js', () => ({ channelSkuHoldings: vi.fn(async (_db: unknown, skus: string[]) => fixture.held.filter(h => skus.includes(h.sku))) }))
 vi.mock('../../db.js', () => {
   const product = {
     findFirst: vi.fn(async () => structuredClone(fixture.parent)),
@@ -23,7 +26,7 @@ import { generateCombinations, type GenerateDryRun } from './family-generate.ser
 beforeEach(() => {
   fixture.parent = { id: 'parent', parentId: null, sku: 'P', name: 'Parent', version: 4, isParent: true, variationAxes: ['Colore', 'Taglia'] }
   fixture.children = [{ id: 'child', sku: 'P-NERO-M', name: 'Child', version: 1, categoryAttributes: { color: 'Nero', size: 'M', variations: { Color: 'Nero', Size: 'M' } }, variantAttributes: { Color: 'Nero', Size: 'M' } }]
-  fixture.lateChildren = null; fixture.created = []; fixture.transaction.mockClear()
+  fixture.lateChildren = null; fixture.created = []; fixture.transaction.mockClear(); fixture.held = []
 })
 const input = () => ({ productId: 'parent', version: 4, axisValues: { Colore: ['Nero'], Taglia: ['M', 'L'] }, skuPattern: '{parent}-{Colore.code}-{Taglia.code}', dryRun: true })
 
@@ -65,4 +68,20 @@ it('a new variation starts at stock 0, whatever its nearest sibling holds', asyn
   expect(preview.plan[0].copiesFrom).toMatchObject({ sku: 'P-NERO-M' })
   await generateCombinations({ ...input(), dryRun: false, previewToken: preview.previewToken })
   expect(fixture.created).toEqual([expect.objectContaining({ sku: 'P-NERO-L', totalStock: 0, basePrice: 12 })])
+})
+
+// S9 — a generated variation never takes a SKU another product's listing holds or sends as its channel SKU.
+it('S9: a SKU another product\'s listing holds is skipped in the preview and refused at create, with the sentence', async () => {
+  const sentence = 'P-NERO-L is the SKU of OTHER on Amazon · DE. One SKU names one product: choose another SKU.'
+  fixture.held = [{ sku: 'P-NERO-L', productId: 'other', sentence }]
+  const preview = await generateCombinations(input()) as GenerateDryRun
+  expect(preview.counts.willCreate).toBe(0)
+  expect(preview.skipped).toContainEqual(expect.objectContaining({ sku: 'P-NERO-L', reason: 'sku_collision' }))
+  await expect(generateCombinations({ ...input(), dryRun: false, previewToken: preview.previewToken })).rejects.toThrow(`${sentence} Change the pattern`)
+  // Held between the preview and the create: the transaction refuses it too, before anything is created.
+  fixture.held = []
+  const clean = await generateCombinations(input()) as GenerateDryRun
+  fixture.held = [{ sku: 'P-NERO-L', productId: 'other', sentence }]
+  await expect(generateCombinations({ ...input(), dryRun: false, previewToken: clean.previewToken })).rejects.toThrow(sentence)
+  expect(fixture.created).toEqual([])
 })

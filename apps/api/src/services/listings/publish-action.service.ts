@@ -35,7 +35,7 @@
  */
 import { Prisma } from '@prisma/client'
 import {
-  ALL_STATUS_TARGETS, AMAZON_NO_END, deletedOn, deletedShort, ETSY_NO_END, ETSY_PUBLISHING_OFF, holdStatusChanges, isNewListingRow, newListingSentence,
+  ALL_STATUS_TARGETS, AMAZON_NO_END, deletedShort, ETSY_NO_END, ETSY_PUBLISHING_OFF, holdStatusChanges, isNewListingRow, newListingSentence, setBeforeRemoval, sharedRemovedRefusal,
   STATUS_TARGET_LABEL, statusOptionsFor, type CapabilityFacts, type ListingModel, type SellingState, type StatusOption, type StatusTarget,
 } from '@nexus/shared/listing-actions'
 import {
@@ -294,7 +294,7 @@ function outgrown(r: RowRead, column: PublishActionColumn): string | null {
   if (column === 'status' && r.create) {
     const target = statusTargetOf(r.row.sellingTarget)
     if (!target) return null
-    if (r.deleted && setBeforeDelete(r.row.sellingTargetAt, r.deleted)) return `Set before the delete on ${deletedOn(r.deleted.at)}. To list it again, set Status to Active.`
+    if (r.deleted && setBeforeDelete(r.row.sellingTargetAt, r.deleted)) return setBeforeRemoval(r.deleted)
     const option = statusOptionsOf(r).find(o => o.target === target)
     return !option ? NOT_FOR_NEW_ROW : option.offered ? null : option.reason
   }
@@ -302,7 +302,7 @@ function outgrown(r: RowRead, column: PublishActionColumn): string | null {
   // A deleted row: a Delete or Full update set before the delete belongs to the listing that was deleted. (One set since
   // the delete is an older relist choice: it reads as Status Active.)
   if (column === 'send' && r.deleted && r.row.publishAction && !r.deleted.relistChosenAt)
-    return `Set before the delete on ${deletedOn(r.deleted.at)}. To list it again, set Status to Active.`
+    return setBeforeRemoval(r.deleted)
   const basis = basisOf(r.row)[column]
   if (basis?.externalListingId && r.row.externalListingId && basis.externalListingId !== r.row.externalListingId)
     return `The listing on ${r.channelLabel} changed since this was set (it was ${basis.externalListingId}, it is ${r.row.externalListingId} now).`
@@ -378,15 +378,19 @@ const changeLabel = (change: PublishActionChange) =>
   change.column === 'send' ? SEND_MODE_LABEL[change.mode] : change.target ? STATUS_TARGET_LABEL[change.target] : 'No status change'
 const changeValue = (change: PublishActionChange): SendMode | StatusTarget | null => change.column === 'send' ? change.mode : change.target
 
-/** The Shared scope never lists a deleted market again: that choice is made in the market's own sheet. */
-export const SHARED_DELETED = (where: string) => `Deleted on ${where}. To list it again, set its Status in the ${where} sheet.`
+/**
+ * The Shared scope never lists a deleted market again: that choice is made in the market's own sheet. An UNLINKED market
+ * says the unlink's truth instead (the listing may still be live; its id is linked again in that sheet):
+ * `sharedRemovedRefusal` (@nexus/shared/listing-actions), which the web's Shared Status column reads too.
+ */
+export const SHARED_DELETED = (where: string) => sharedRemovedRefusal({ where })
 
 /** What the row's column would store for this change (null = the default: Partial update / nothing waiting), or a refusal. */
 function decide(r: RowRead, change: PublishActionChange, fanOut = false): { stored: string | null } | { refused: string } {
   // The Shared scope never starts a listing.
   if (r.noRecord && fanOut) return { refused: SHARED_NO_LISTING }
   // Nor lists a deleted market again (Status), or sends anything to it (Action).
-  if (r.deleted && fanOut) return { refused: SHARED_DELETED(r.deleted.where) }
+  if (r.deleted && fanOut) return { refused: sharedRemovedRefusal(r.deleted) }
   // A row not on the channel (new, or deleted): its Action reads Full update — choosing it stores nothing (it clears a
   // stored value), Partial update and Delete are refused with the reason; the Status is the create choice, stored as
   // chosen (even the default: a variation's own choice stands apart from its main row's).

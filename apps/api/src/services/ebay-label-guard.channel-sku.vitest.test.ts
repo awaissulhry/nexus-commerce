@@ -64,7 +64,7 @@ describe('🔴 a listing with its own SKU is never put back to Product.sku', () 
     expect(confirmed()).toEqual([['cl-root', 'OWN']])
   })
 
-  it('TODO(S10): a wanted SKU eBay does not hold yet — eBay\'s product-SKU label is kept, not moved here', async () => {
+  it('S10: a wanted SKU eBay does not hold yet — eBay\'s product-SKU label is kept here (Publish moves it, never this guard)', async () => {
     s.controls = [root({ channelSku: 'WANT' })]
     s.trading.mockResolvedValue(label('PARENT'))
     expect(await ensureListingLabels(scope)).toMatchObject({ set: 0, kept: 1 })

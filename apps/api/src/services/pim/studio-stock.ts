@@ -26,11 +26,13 @@ import type { SheetListing } from './sheet-rows.service.js'
 import { getMatrixRead } from './matrix.service.js'
 import { regionKeyFor } from './matrix-cells.js'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
+import prisma from '../../db.js'
+import { suggestedAsinOf, takesSuggestedAsin } from '../identity/channel-id-proofs/amazon-suggested.js'
 
 export const STUDIO_STOCK_KEYS = ['stock_mode', 'stock_qty', 'stock_buffer'] as const
 export type StudioStockKey = (typeof STUDIO_STOCK_KEYS)[number]
 export const LISTING_ASIN_KEY = 'listing_asin'
-/** The channel's own id of a listing other than Amazon's ASIN: eBay's Item ID (Etsy and Shopify follow in later steps). */
+/** The channel's own id of a listing other than Amazon's ASIN: eBay's Item ID, Etsy's Listing ID, Shopify's Product ID. */
 export const LISTING_ITEM_ID_KEY = 'listing_item_id'
 /** Amazon's schema-walked quantity leaf — the raw column the Qty column replaces on the Amazon sheet. */
 export const AMAZON_QUANTITY_KEY = 'fulfillment_availability__quantity'
@@ -82,21 +84,32 @@ export function studioStockColumns(channel: string): SheetColumn[] {
   }))
 }
 
-/** The market's ASIN (per market `externalListingId`; the parent row shows the parent ASIN). Read-only; Amazon only. */
+/**
+ * The market's ASIN (per market `externalListingId`; the parent row shows the parent ASIN). Amazon only. Not a bulk or
+ * formula column: on a row not on Amazon its own control (Item ID control, step I4) sets the ASIN it lists on at Publish.
+ */
 export function listingAsinColumn(): SheetColumn {
   return {
     key: LISTING_ASIN_KEY, writeField: LISTING_ASIN_KEY, label: 'ASIN', width: 168,
     group: STUDIO_IDENTIFIERS_GROUP.label, groupKey: STUDIO_IDENTIFIERS_GROUP.key, kind: 'text', storage: 'listing', scope: 'per_variant',
     requiredBy: [], editable: false, defaultVisible: true, formulaWritable: false,
-    helpText: 'The ASIN Amazon gave this listing on this market. Amazon assigns it; Nexus shows it.',
+    helpText: 'The ASIN Amazon gave this listing on this market. On a row not on Amazon yet, Enter or a double-click sets the ASIN it lists on at Publish (checked in Amazon\'s catalog first).',
   }
 }
 
-/** The Item ID column per channel (eBay in this step). */
+/** The Item ID column per channel: eBay's Item ID (I1), Etsy's Listing ID (I2), Shopify's Product ID (I3). */
 const ITEM_ID_COLUMNS: Readonly<Record<string, { label: string; help: string }>> = {
   EBAY: {
     label: 'Item ID',
     help: 'The eBay Item ID of this listing on this market, shared by the whole variation family. On the main row, Enter or a double-click links another item (checked on eBay first) or clears it.',
+  },
+  ETSY: {
+    label: 'Listing ID',
+    help: 'The Etsy Listing ID of this family, one listing for the whole family. On the main row, Enter or a double-click links another listing (checked on Etsy first) or clears it.',
+  },
+  SHOPIFY: {
+    label: 'Product ID',
+    help: 'The Shopify product of this listing. It counts only when Shopify returned it as the sheet opened. On the main row, Enter or a double-click links another product (checked on Shopify first) or clears it.',
   },
 }
 
@@ -165,16 +178,30 @@ function stockValue(key: string, value: unknown, writable: boolean, reason: stri
 
 const PARENT_ASIN = 'Parent ASIN — not buyable'
 const ASIN_READ_ONLY = 'Amazon assigns the ASIN; Nexus shows it.'
+const ASIN_LISTS_ON = (asin: string) => `Lists on ${asin} at Publish: the ASIN this row lists on when Publish sends it (not on Amazon yet). Enter or a double-click changes or clears it.`
 
-/** The ASIN cell of one row: the listing's `externalListingId` on this market (a parent row: the parent ASIN). */
-export function listingAsinValue(row: Pick<StudioRow, 'isParent' | 'aliasId'> & { listing: Pick<SheetListing, 'externalListingId'> | null }): StudioCellValue {
+/**
+ * A channel id cell with what it does not hold yet: Amazon's draft row carries the ASIN it lists on at Publish
+ * (`pendingId`, never its value — the value is the id that counts). The web reads it to say "Lists on B0X at Publish".
+ */
+export type ListingIdCellValue = StudioCellValue & { pendingId?: { id: string; sentence: string } }
+
+/**
+ * The ASIN cell of one row: the listing's `externalListingId` on this market (a parent row: the parent ASIN). A row with
+ * a listing is its control's door (`writable`, so Enter opens the control without a refusal); the control decides what
+ * may change (a live offer's ASIN is Amazon's). `suggested`: the ASIN a row not on Amazon lists on at Publish.
+ */
+export function listingAsinValue(row: Pick<StudioRow, 'isParent' | 'aliasId'> & { listing: Pick<SheetListing, 'externalListingId'> | null }, suggested: string | null = null): ListingIdCellValue {
+  const asin = row.listing?.externalListingId ?? null
   const reason = !row.listing ? MATRIX_COPY.noListingYet : row.isParent ? PARENT_ASIN : ASIN_READ_ONLY
-  return stockValue(LISTING_ASIN_KEY, row.listing?.externalListingId ?? null, false, reason, !!row.aliasId)
+  const value: ListingIdCellValue = stockValue(LISTING_ASIN_KEY, asin, !!row.listing, !asin && suggested ? ASIN_LISTS_ON(suggested) : reason, !!row.aliasId)
+  if (!asin && suggested && row.listing) value.pendingId = { id: suggested, sentence: `Lists on ${suggested} at Publish` }
+  return value
 }
 
 /* ── the eBay Item ID cell (Item ID control, step I1) ───────────────────────────────────────── */
 
-type ItemIdListing = Pick<SheetListing, 'externalListingId' | 'listingStatus' | 'isPublished'>
+type ItemIdListing = Pick<SheetListing, 'externalListingId' | 'listingStatus' | 'isPublished'> & Partial<Pick<SheetListing, 'lastSyncStatus'>>
 type ItemIdRow = Pick<StudioRow, 'id' | 'parentId' | 'aliasId'> & { listing: ItemIdListing | null }
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
@@ -192,25 +219,58 @@ export const ITEM_ID_COPY = {
   variation: 'Set on the main row: one eBay Item ID carries the whole variation family.',
 } as const
 
+/** Etsy's Listing ID cell (step I2): one listing per family; Etsy is read every 4 hours (`etsy-content-refresh.job.ts`). */
+export const ETSY_LISTING_ID_COPY = {
+  live: 'Etsy Listing ID of this family. On the main row, Enter or a double-click links another listing or clears it.',
+  ended: 'This listing ended on Etsy (expired or removed).',
+  draft: 'Draft · not published: Etsy gives the Listing ID when Nexus publishes it.',
+  notConfirmed: (id: string, status: string) => `Not confirmed: Nexus holds Listing ID ${id}, but this listing reads ${status ? status.toLowerCase() : 'no status'} in Nexus, so it is not known to sell on Etsy. On the main row, Check asks Etsy.`,
+  missing: (id: string) => `Not confirmed: Nexus holds Listing ID ${id}, but Etsy did not return it on its last read of this shop. On the main row, Check asks Etsy.`,
+  otherItem: (id: string, main: string | null) => `Not confirmed: this row holds Listing ID ${id}, ${main ? `but the main row holds ${main}` : 'but the main row holds none'}. One Etsy listing carries the whole family: check it on the main row.`,
+  noNumber: 'No number recorded: this listing reads live in Nexus, but Nexus holds no Etsy Listing ID for it. On the main row, type the Listing ID to link it.',
+  none: 'No Etsy Listing ID here.',
+  variation: 'Set on the main row: one Etsy listing carries the whole family.',
+} as const
+
+/** Shopify's Product ID cell (step I3): it counts only when the open sheet's Shopify read returned the row. */
+export const SHOPIFY_PRODUCT_ID_COPY = {
+  live: 'Shopify Product ID of this listing, as Shopify returned it when the sheet opened. On the main row, Enter or a double-click links another product or clears it.',
+  notConfirmed: (id: string) => `Not confirmed: Nexus holds Shopify product ${id}, but Shopify did not return it when the sheet opened. On the main row, Check asks Shopify.`,
+  draft: 'Draft · not published: Shopify gives the product its id when Nexus publishes it.',
+  noNumber: 'No number recorded: this listing reads live in Nexus, but Nexus holds no Shopify product for it. On the main row, type the Product ID to link it.',
+  none: 'No Shopify product here.',
+  variation: 'Set on the main row: the family\'s Shopify product (in a colour store, each colour\'s product) is linked there.',
+} as const
+
 /** What one row's Item ID reads as (A-item-ids.md, "States"). */
 export type ItemIdState = 'noListing' | 'draft' | 'live' | 'ended' | 'notConfirmed' | 'otherItem' | 'noNumber' | 'none'
 
-/** The state of one row's Item ID and its sentence (the hover); `value` is the id only when it counts (live, ended). */
-export function listingItemIdState(row: ItemIdRow, main: ItemIdRow | null): { state: ItemIdState; value: string | null; sentence: string } {
+/**
+ * The state of one row's channel id and its sentence (the hover); `value` is the id only when it counts (live, ended).
+ * eBay and Etsy: the Nexus record (Active / Inactive / Ended), a variation holding the main row's id; Etsy also "Not
+ * confirmed" when its last read did not find the listing (MISSING). Shopify: never confirmed here — only the open
+ * sheet's Shopify read confirms a row (`confirmShopifyItemIds`); a held id reads "Not confirmed" until then.
+ */
+export function listingItemIdState(row: ItemIdRow, main: ItemIdRow | null, channel = 'EBAY'): { state: ItemIdState; value: string | null; sentence: string } {
   const listing = row.listing
   if (!listing) return { state: 'noListing', value: null, sentence: MATRIX_COPY.noListingYet }
+  const ch = upper(channel)
+  const copy = ch === 'ETSY' ? ETSY_LISTING_ID_COPY : ch === 'SHOPIFY' ? null : ITEM_ID_COPY
   const id = text(listing.externalListingId)
   const status = statusOf(listing)
   if (id) {
+    if (!copy) return { state: 'notConfirmed', value: null, sentence: SHOPIFY_PRODUCT_ID_COPY.notConfirmed(id) }
     const mainId = main?.listing ? text(main.listing.externalListingId) || null : null
-    if (row.parentId && main && mainId !== id) return { state: 'otherItem', value: null, sentence: ITEM_ID_COPY.otherItem(id, mainId) }
-    if (status === 'ACTIVE' || status === 'INACTIVE') return { state: 'live', value: id, sentence: ITEM_ID_COPY.live }
-    if (status === 'ENDED') return { state: 'ended', value: id, sentence: ITEM_ID_COPY.ended }
-    return { state: 'notConfirmed', value: null, sentence: ITEM_ID_COPY.notConfirmed(id, status) }
+    if (row.parentId && main && mainId !== id) return { state: 'otherItem', value: null, sentence: copy.otherItem(id, mainId) }
+    if (ch === 'ETSY' && upper(listing.lastSyncStatus) === 'MISSING') return { state: 'notConfirmed', value: null, sentence: ETSY_LISTING_ID_COPY.missing(id) }
+    if (status === 'ACTIVE' || status === 'INACTIVE') return { state: 'live', value: id, sentence: copy.live }
+    if (status === 'ENDED') return { state: 'ended', value: id, sentence: copy.ended }
+    return { state: 'notConfirmed', value: null, sentence: copy.notConfirmed(id, status) }
   }
-  if (status === 'DRAFT' && listing.isPublished === false) return { state: 'draft', value: null, sentence: ITEM_ID_COPY.draft }
-  if (status === 'ACTIVE' || listing.isPublished) return { state: 'noNumber', value: null, sentence: ITEM_ID_COPY.noNumber }
-  return { state: 'none', value: null, sentence: ITEM_ID_COPY.none }
+  const words = copy ?? SHOPIFY_PRODUCT_ID_COPY
+  if (status === 'DRAFT' && listing.isPublished === false) return { state: 'draft', value: null, sentence: words.draft }
+  if (status === 'ACTIVE' || listing.isPublished) return { state: 'noNumber', value: null, sentence: words.noNumber }
+  return { state: 'none', value: null, sentence: words.none }
 }
 
 /**
@@ -220,15 +280,35 @@ export function listingItemIdState(row: ItemIdRow, main: ItemIdRow | null): { st
  * or clears it (never the bulk or formula paths: the column is not editable) — so the sheet does not announce a refusal
  * when Enter opens that control; a variation row is read-only and says why ("Set on the main row").
  */
-export function listingItemIdValue(row: ItemIdRow, main: ItemIdRow | null): StudioCellValue {
-  const { state, value, sentence } = listingItemIdState(row, main)
+export function listingItemIdValue(row: ItemIdRow, main: ItemIdRow | null, channel = 'EBAY'): StudioCellValue {
+  const { state, value, sentence } = listingItemIdState(row, main, channel)
   const isMain = !row.parentId
   const writable = isMain && !!row.listing
+  const variation = upper(channel) === 'ETSY' ? ETSY_LISTING_ID_COPY.variation : upper(channel) === 'SHOPIFY' ? SHOPIFY_PRODUCT_ID_COPY.variation : ITEM_ID_COPY.variation
   const reason = isMain ? sentence
-    : state === 'live' || state === 'ended' ? ITEM_ID_COPY.variation
+    : state === 'live' || state === 'ended' ? variation
     : state === 'otherItem' ? sentence
-    : `${sentence} ${ITEM_ID_COPY.variation}`
+    : `${sentence} ${variation}`
   return stockValue(LISTING_ITEM_ID_KEY, value, writable, reason, !!row.aliasId)
+}
+
+/**
+ * Shopify (step I3): a row counts as live only when the open sheet's Shopify read returned it (`row.shopify`, set by
+ * `projectShopifyChannelSheet`). Runs after `enrichShopifyChannelSheet` (information-sheet.ts): a returned row's Product
+ * ID is its value (with the status Shopify reported on the row's listing); every other row keeps "Not confirmed".
+ */
+export function confirmShopifyItemIds<R extends StudioRow>(rows: R[]): R[] {
+  let changed = false
+  const out = rows.map((row) => {
+    const cell = row.values?.[LISTING_ITEM_ID_KEY]
+    const id = text(row.listing?.externalListingId)
+    if (!cell || !row.shopify || !id) return row
+    changed = true
+    // The main row is its control's door (writable, no refusal to announce); a variation row says where it is set.
+    return { ...row, values: { ...row.values, [LISTING_ITEM_ID_KEY]: { ...cell, value: id, writeBlockedReason: cell.writable ? null : SHOPIFY_PRODUCT_ID_COPY.variation } } }
+  })
+  // Nothing returned by Shopify: the same rows (callers may compare by identity).
+  return changed ? out : rows
 }
 
 /**
@@ -254,6 +334,8 @@ export async function attachStudioStock(input: {
   const read = await getMatrixRead({ productId: input.rootId, accountId: input.accountId, canEditPrice: false, only })
   const matrixRow = new Map(read.rows.map((r) => [r.id, r]))
   const coordinate = new Map(read.coordinates.map((c) => [c.key, c]))
+  // Amazon (step I4): the ASIN each row not on Amazon lists on at Publish — one read of those rows' own store.
+  const suggested = ch === 'AMAZON' ? await suggestedAsins(input.rows) : new Map<string, string>()
 
   for (const row of input.rows) {
     const { key, marketKey } = keys.get(row)!
@@ -275,14 +357,22 @@ export async function attachStudioStock(input: {
       const writable = !!own && own.writable[kind] === true
       row.values[k] = stockValue(k, valueOf[k], writable, held ?? own?.writeBlockedReason[kind] ?? 'This cell cannot be changed here', !!row.aliasId)
     }
-    if (ch === 'AMAZON') row.values[LISTING_ASIN_KEY] = listingAsinValue(row)
-    if (ch === 'EBAY') {
+    if (ch === 'AMAZON') row.values[LISTING_ASIN_KEY] = listingAsinValue(row, row.listing ? suggested.get(row.listing.id) ?? null : null)
+    if (ITEM_ID_COLUMNS[ch]) {
       // A variation's main row is its parent's row in the same group (the primary listing, or the same alias).
       const main = row.parentId ? input.rows.find((r) => r.id === row.parentId && (r.aliasId ?? null) === (row.aliasId ?? null)) ?? null : null
-      row.values[LISTING_ITEM_ID_KEY] = listingItemIdValue(row, main)
+      row.values[LISTING_ITEM_ID_KEY] = listingItemIdValue(row, main, ch)
     }
   }
   return { ms: Date.now() - t0 }
+}
+
+/** listing id → the ASIN it lists on at Publish, for the Amazon rows not on Amazon (no ASIN; DRAFT or unpublished). */
+async function suggestedAsins(rows: readonly StockRow[]): Promise<Map<string, string>> {
+  const ids = rows.flatMap((row) => row.listing && takesSuggestedAsin(row.listing) ? [row.listing.id] : [])
+  if (!ids.length) return new Map()
+  const listings = await prisma.channelListing.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, overrideData: true } })
+  return new Map(listings.flatMap((l) => { const asin = suggestedAsinOf(l.overrideData); return asin ? [[l.id, asin] as [string, string]] : [] }))
 }
 
 /** The Matrix write cell for one stock column edit on a sheet row — exactly what the Matrix tab sends for that cell. */

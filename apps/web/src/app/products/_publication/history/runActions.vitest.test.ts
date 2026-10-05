@@ -139,6 +139,17 @@ describe('runActionVisibility — source × state × permission', () => {
     expect(runActionVisibility(run(), can, failed).copyFailed).toBe(true)
     expect(runActionVisibility(run(), can, [product('B', 'ACCEPTED')]).copyFailed).toBe(false)
   })
+  it('S10 "Delete the old SKU again": a settled studio run with an old SKU Amazon did not confirm deleting, for someone who may delete', () => {
+    const failedMove = { productId: 'p', from: 'OLD', to: 'NEW', state: 'failed' as const, message: 'm', canDeleteAgain: true }
+    const deleted = { ...failedMove, state: 'deleted' as const, canDeleteAgain: false }
+    const accepted = run({ state: 'succeeded', status: 'ACCEPTED' })
+    expect(runActionVisibility(accepted, { ...can, canDelete: true }, [], [failedMove]).deleteOldAgain).toBe(true)
+    expect(runActionVisibility(accepted, { ...can, canDelete: false }, [], [failedMove]).deleteOldAgain).toBe(false)
+    expect(runActionVisibility(accepted, { ...can, canDelete: true }, [], [deleted]).deleteOldAgain).toBe(false)
+    expect(runActionVisibility(accepted, { ...can, canDelete: true }).deleteOldAgain).toBe(false)
+    expect(runActionVisibility(run({ state: 'in_progress', status: 'SUBMITTED' }), { ...can, canDelete: true }, [], [failedMove]).deleteOldAgain).toBe(false)
+    expect(runActionVisibility(run({ source: 'amazon-flat-file', state: 'succeeded', status: 'DONE' }), { ...can, canDelete: true }, [], [failedMove]).deleteOldAgain).toBe(false)
+  })
 })
 
 describe('products', () => {

@@ -8,6 +8,7 @@ import { amazonCatalogService } from "../services/amazon-catalog.service.js";
 import outboundSyncService from "../services/outbound-sync.service.js";
 import prisma from "../db.js";
 import { listingSkuRefusal, skusUsedByListings } from "../services/identity/identity-write-guards.js";
+import { channelSkuCreateRefusal } from "../services/listings/channel-sku-rename.js";
 import { assertCanDeleteRelationshipProduct, ProductRelationshipError, relationshipParent, relationshipProduct, relationshipTransaction } from '../services/pim/product-relationship.service.js'
 import { copySiblingListings, type SkippedListingCopy } from '../services/pim/variant-listing-copy.service.js'
 
@@ -310,6 +311,11 @@ export async function catalogRoutes(app: FastifyInstance) {
             error: { code: "SKU_ALREADY_EXISTS", message: listingSkuRefusal(listingSku) },
           });
         }
+        // S9 — nor a SKU another product's listing holds or sends as its channel SKU (one SKU names one product).
+        const heldSku = await channelSkuCreateRefusal([sku]);
+        if (heldSku) {
+          return reply.status(409).send({ success: false, error: { code: "SKU_ALREADY_EXISTS", message: heldSku } });
+        }
 
         // P0/B1 — basePrice validation matches MasterPriceService's
         // contract so we fail fast before the create rather than
@@ -535,6 +541,12 @@ export async function catalogRoutes(app: FastifyInstance) {
               },
             });
           }
+        }
+
+        // S9 — no new SKU may be one another product's listing holds or sends as its channel SKU.
+        const heldBulkSku = await channelSkuCreateRefusal([master.sku, ...childSkus]);
+        if (heldBulkSku) {
+          return reply.status(409).send({ success: false, error: { code: "SKU_ALREADY_EXISTS", message: heldBulkSku } });
         }
 
         // Validate attributes against schema
@@ -1270,6 +1282,11 @@ export async function catalogRoutes(app: FastifyInstance) {
           },
         });
       }
+      // S9 — nor a SKU another product's listing holds or sends as its channel SKU (one SKU names one product).
+      const heldChildSku = await channelSkuCreateRefusal([sku]);
+      if (heldChildSku) {
+        return reply.status(409).send({ success: false, error: { code: "DUPLICATE_SKU", message: heldChildSku } });
+      }
 
       // XX — sanitise variant attributes. Drop empty keys/values so
       // the JSON store doesn't carry stub entries; lower-case keys
@@ -1461,6 +1478,11 @@ export async function catalogRoutes(app: FastifyInstance) {
             message: `SKUs already exist: ${existingSkus.map((s) => s.sku).join(", ")}`,
           },
         });
+      }
+      // S9 — nor a SKU another product's listing holds or sends as its channel SKU (one SKU names one product).
+      const heldVariationSku = await channelSkuCreateRefusal(skus);
+      if (heldVariationSku) {
+        return reply.status(409).send({ success: false, error: { code: "SKU_ALREADY_EXISTS", message: heldVariationSku } });
       }
 
       // Create all variations in a transaction

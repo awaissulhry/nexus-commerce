@@ -402,13 +402,30 @@ async function detail(localId: string, now: Date): Promise<HistoryRunDetail | nu
   const names = await userNames([row.userId, checkedByUserId])
   const { sortAt: _sortAt, localId: _localId, checkedByUserId: _checker, ...rest } = base
   const run: HistoryRun = { ...rest, userName: row.userId ? names.get(row.userId) ?? null : null, checkedBy: checkedByUserId ? names.get(checkedByUserId) ?? null : null }
+  // S10 — a publish that moved live Amazon listings to new SKUs: what became of each old SKU, as its own step, and whether
+  // the drawer offers "Delete the old SKU again".
+  // Loaded only for such a publish: the move module brings the settle core with it.
+  const skuMoves = Array.isArray(changes.skuMoves) && changes.skuMoves.length
+    ? (await import('../studio-publication-amazon-move.js')).historySkuMoves(changes) : []
   return {
     run,
-    steps: stepsOf(rest, { createdAt: operation.createdAt, result, checkedByName: run.checkedBy, checkedNote: typeof summary.checkedNote === 'string' ? summary.checkedNote : null }),
+    steps: [...stepsOf(rest, { createdAt: operation.createdAt, result, checkedByName: run.checkedBy, checkedNote: typeof summary.checkedNote === 'string' ? summary.checkedNote : null }),
+      ...skuMoves.map(oldSkuStep)],
     products: ordered,
     hasRequest: journals.length > 0,
     rawResponse: result,
+    ...(skuMoves.length ? { skuMoves } : {}),
   }
+}
+
+/** S10 — one moved listing's old SKU as a step of the run ("GALE-M deleted on Amazon", "GALE-M not deleted yet"…). */
+function oldSkuStep(move: NonNullable<HistoryRunDetail['skuMoves']>[number]): HistoryStep {
+  const label = move.state === 'deleted' ? `${move.from} deleted on Amazon (moved to ${move.to})`
+    : move.state === 'failed' ? `${move.from} not deleted yet (moving to ${move.to})`
+      : move.state === 'pending' ? `${move.from} is deleted once Amazon accepts ${move.to}`
+        : `${move.from} kept on Amazon`
+  const tone: HistoryStep['tone'] = move.state === 'deleted' ? 'success' : move.state === 'failed' ? 'warning' : move.state === 'pending' ? 'info' : 'neutral'
+  return { key: 'old_sku', label, at: null, tone, detail: move.message }
 }
 
 async function request(localId: string, listingId: string): Promise<{ sku: string; requests: unknown[] } | null> {

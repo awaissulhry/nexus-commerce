@@ -26,8 +26,12 @@ import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
-  SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
-import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
+  SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted } from '@nexus/shared/publish-actions'
+import { deletedOn, deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
+import type { StudioPublishSkuMove } from '@nexus/shared/studio-publication'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
+import { amazonMoveReview, claimMoveCoordinates } from './studio-publication-amazon-move.js'
 import type { PublishCreateRow, StartAsTarget } from '@nexus/shared/publish-plan'
 import { verifyNewEbayListing } from './studio-publication-ebay-verify.js'
 import { readFbaUnits } from '../listings/listing-deletions.js'
@@ -122,6 +126,9 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
   }
   // A deleted row left Not listed sends nothing (every Publish skips it until its Status lists it again).
   for (const product of products) if (!held.has(product.id) && deletions.has(product.id) && effective(product.id) === 'not_listed') held.set(product.id, heldWords(product.id, NOT_LISTED_LEFT_OUT))
+  // S10 / I1 — an UNLINKED row (Nexus forgot its channel id; the item may still be live there) is never listed as new,
+  // whatever its Status says: that would make a second item beside the live one. Its own words say how to link it again.
+  for (const product of products) if (deletions.get(product.id)?.unlinked) held.set(product.id, deletedPublishSkip(deletions.get(product.id)!))
   const relist = new Map<string, ListingDeletion>()
   for (const product of products) {
     const deletion = deletions.get(product.id)
@@ -237,7 +244,19 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   // New listings — a Shopify product is one listing with no field ticks: held by Not listed (a deleted product left Not
   // listed included), nothing of it is sent.
   if (scope.channel === 'SHOPIFY' && creates.held.size) issues.push({ severity: 'error', message: [...creates.held.values()][0] })
-  const relist = await relistRows(facts, prepared, creates.relist)
+  // S10 (per-channel SKU) — the SKU each row sends, and what this review does about a row the channel holds under another
+  // SKU (Amazon: create NEW, then delete OLD, typed like Delete; eBay Trading: rename in place; Etsy: cannot yet). A SKU
+  // longer than the channel takes is refused here by name (only where the repo shows the channel's limit).
+  const sentSkuOf = (productId: string) => sentSku(prepared, productId) ?? facts.products.find(p => p.id === productId)?.sku ?? ''
+  const moves = await skuMoveRows(facts, prepared, changePlan)
+  issues.push(...moves.issues)
+  if (prepared) for (const product of facts.products) {
+    if (creates.held.has(product.id) || modes.blocked.has(product.id)) continue
+    const problem = channelSkuLengthProblem(scope.channel, sentSkuOf(product.id))
+    if (problem) issues.push({ productId: product.id, sku: product.sku, severity: 'error', message: problem })
+  }
+  for (const row of creates.startsAs) row.sku = sentSkuOf(row.productId) || row.sku
+  const relist = await relistRows(facts, prepared, creates.relist, sentSkuOf)
   const startsAsOf = new Map(creates.startsAs.map(row => [row.productId, row.startsAs]))
   const overwrite = await readPublicationOverwrite(facts)
   const removals = changePlan && changePlan.kind !== 'ebay-inventory-changes' ? changePlan.removals : undefined
@@ -247,13 +266,19 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
     changes: changePlan?.changes, skipped: facts.skipped,
     rows: facts.products.map(p => ({ productId: p.id, sku: p.sku,
       title: String(facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.title?.value ?? facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.item_name?.value ?? p.name ?? p.sku),
-      existing: existingProducts.has(p.id), mode: modes.full.has(p.id) || modes.blocked.has(p.id) ? 'full' as const : 'partial' as const,
+      // S10 — a moved Amazon row is neither a Partial nor a Full update: it is sent as the create of NEW, then the delete of
+      // OLD ("Move to NEW", `moveModeLabel`).
+      existing: existingProducts.has(p.id), mode: moves.rows.get(p.id)?.kind === 'create-delete' ? 'move' as const
+        : modes.full.has(p.id) || modes.blocked.has(p.id) ? 'full' as const : 'partial' as const,
       ...(modes.blocked.has(p.id) ? { blocked: modes.blocked.get(p.id) } : {}),
       ...(creates.held.has(p.id) ? { blocked: creates.held.get(p.id)!, ...(creates.deleted(p.id) ? { deleted: true as const } : { notListed: true as const }) } : {}),
       ...(startsAsOf.has(p.id) ? { startsAs: startsAsOf.get(p.id)! } : {}),
-      ...(relist.rows.has(p.id) ? { relist: relist.rows.get(p.id)! } : {}) })),
+      ...(relist.rows.has(p.id) ? { relist: relist.rows.get(p.id)! } : {}),
+      ...(prepared && sentSkuOf(p.id) && sentSkuOf(p.id) !== p.sku ? { sendsSku: sentSkuOf(p.id) } : {}),
+      ...(moves.rows.has(p.id) ? { skuMove: moves.rows.get(p.id)! } : {}) })),
     issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility, overwrite,
     ...(removals?.length ? { removals } : {}),
+    ...(moves.confirm ? { confirm: moves.confirm } : {}),
   }
   return { facts, review, prepared, changePlan, relist: relist.kept, creates: createsRecord(creates, prepared),
     // New listings — only a review that holds, creates Inactive or starts rows a certain way adds them (others keep their digest).
@@ -280,17 +305,59 @@ function createsRecord(creates: ReturnType<typeof newRowsOf>, prepared: Prepared
   return { inactiveProductIds: inactive, createInactive, createChoiceProductIds: creates.choiceIds, creates: creates.startsAs, createStatus: creates.createStatus }
 }
 
+/** S10 — the SKU the prepared publication sends for a row, or null when it names none (no publication, a row it leaves out). */
+function sentSku(prepared: Prepared | null, productId: string): string | null {
+  if (!prepared) return null
+  if (prepared.kind === 'ebay-inventory') return prepared.ours.variants.find(v => v.productId === productId)?.sku ?? (prepared.owner.productId === productId ? prepared.owner.sku : null)
+  return (prepared.products as Array<{ productId: string; sku: string }>).find(p => p.productId === productId)?.sku ?? null
+}
+
+/**
+ * S10 (per-channel SKU) — the rows the channel holds under another SKU than the one this review sends (only rows with
+ * their own SKU, `channelSku`: a row without one publishes as before), and what the review does about each: Amazon creates
+ * NEW and deletes OLD after Amazon accepts it (typed confirmation); eBay Trading renames in place; Etsy cannot yet (said,
+ * never sent: studio Publish does not send to Etsy). eBay Inventory refuses in its builder; Shopify renames in place
+ * through its own synchronisation (content-sync), which studio Publish leaves to it for a product Shopify holds.
+ */
+async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | null, changePlan: PublicationChangePlan | null) {
+  const rows = new Map<string, StudioPublishSkuMove>()
+  const issues: StudioPublishReview['issues'] = []
+  let confirm: StudioPublishReview['confirm'] | null = null
+  if (prepared?.kind === 'amazon') {
+    const review = await amazonMoveReview(facts, prepared)
+    for (const [productId, move] of review.rows) rows.set(productId, move)
+    confirm = review.confirm
+  } else if (changePlan?.kind === 'ebay-changes') {
+    // Only a rename this review matched on eBay (`renames`); a move eBay holds no trace of is a warning, never this line.
+    for (const rename of changePlan.renames ?? []) rows.set(rename.productId, { from: rename.from, to: rename.to, kind: 'rename', sentence: ebayRenameSentence(rename.from, rename.to), warning: null })
+  } else if (facts.scope.channel === 'ETSY') {
+    for (const product of facts.products) {
+      const listing = facts.listings.find(l => l.productId === product.id)
+      if (!listing || isStillDraftListing(listing) || !listing.channelSku?.trim()) continue
+      const row = { ...listing, channel: 'ETSY' }
+      const live = liveChannelSku(row, product.sku)?.sku, wanted = wantedChannelSku(row, product.sku).sku
+      if (!live || !wanted || live === wanted) continue
+      const sentence = etsySkuMoveSentence(live, wanted)
+      rows.set(product.id, { from: live, to: wanted, kind: 'none', sentence, warning: null })
+      issues.push({ productId: product.id, sku: product.sku, severity: 'warning', message: `${product.sku}: ${sentence}` })
+    }
+  }
+  return { rows, issues, confirm }
+}
+
 /**
  * S4 — what the review says about each row it lists again: "Lists GALE-M on ASIN B0NEW (was B0OLD).", and, when Amazon
  * still holds FBA units labelled for the old ASIN, a warning (never a refusal). The ASIN is the one the create names
  * (`merchant_suggested_asin`: the product ID cell, editable on a deleted row). `kept` is what the publication stores.
  */
-async function relistRows(facts: PublicationFacts, prepared: Prepared | null, deletions: ReadonlyMap<string, ListingDeletion>) {
+async function relistRows(facts: PublicationFacts, prepared: Prepared | null, deletions: ReadonlyMap<string, ListingDeletion>,
+  sentSkuOf: (productId: string) => string = productId => facts.products.find(p => p.id === productId)?.sku ?? '') {
   const rows = new Map<string, NonNullable<StudioPublishReview['rows'][number]['relist']>>()
   const kept: PublicationRelist[] = []
   if (!deletions.size) return { rows, kept }
   const amazon = prepared?.kind === 'amazon' ? prepared : null
-  const sellerSku = (productId: string) => amazon?.products.find(p => p.productId === productId)?.sku ?? facts.products.find(p => p.id === productId)?.sku ?? ''
+  // S10 — the SKU the relist sends (the listing's own SKU when it has one), named in its sentence.
+  const sellerSku = sentSkuOf
   const asinOf = (productId: string) => {
     const message = amazon?.feed.messages.find(m => m.sku === sellerSku(productId))
     const value = (message?.attributes?.merchant_suggested_asin as Array<{ value?: unknown }> | undefined)?.[0]?.value
@@ -305,7 +372,11 @@ async function relistRows(facts: PublicationFacts, prepared: Prepared | null, de
       const units = (await readFbaUnits(amazon.marketplaceId, [{ productId: product.id, sku: sellerSku(product.id) }], { asin: deletion.oldReference })).get(product.id)
       warning = units ? fbaNewAsinWarning(units, deletion.oldReference) : null
     }
-    rows.set(product.id, { deletedAt: deletion.at, oldReference: deletion.oldReference, asin, sentence: relistSentence(product.sku, asin, deletion.oldReference, facts.scope.channel), warning })
+    // S10 — listed again under another SKU than the one deleted: the old one stays deleted, and the line says so.
+    const sent = sellerSku(product.id) || product.sku
+    const oldSku = deletion.sku?.trim() || null
+    const sentence = [relistSentence(sent, asin, deletion.oldReference, facts.scope.channel), oldSku && oldSku !== sent ? oldSkuStaysDeleted(oldSku, deletedOn(deletion.at)) : null].filter(Boolean).join(' ')
+    rows.set(product.id, { deletedAt: deletion.at, oldReference: deletion.oldReference, asin, sentence, warning })
     kept.push({ productId: product.id, sku: sellerSku(product.id), deletedAt: deletion.at, oldReference: deletion.oldReference, asin })
   }
   return { rows, kept }
@@ -519,8 +590,14 @@ export interface ClaimedPublication {
 }
 export interface DeliveredPublication { result: StudioPublishResult; receipt?: StudioPublishResult }
 
+/**
+ * What the caller may do besides publishing (the route's permission check). `canDelete` false: a selection that deletes
+ * an old SKU (an Amazon move) is refused. Absent: not checked here (a batch checked it when the plan was submitted).
+ */
+export interface ClaimOptions { canDelete?: boolean }
+
 /** Check the review and claim its send. Returns the stored result instead when it was already started or claimed. */
-export async function claimPublication(productId: string, id: string, body: unknown, userId: string | null): Promise<{ result: StudioPublishResult } | { claim: ClaimedPublication }> {
+export async function claimPublication(productId: string, id: string, body: unknown, userId: string | null, options: ClaimOptions = {}): Promise<{ result: StudioPublishResult } | { claim: ClaimedPublication }> {
   const operation = await prisma.bulkOperation.findFirst({ where: { id, userId } })
   const data = object(operation?.changes)
   if (!operation || data.kind !== KIND || data.productId !== productId) throw new WorkspaceScopeError('Publication review not found.', 404)
@@ -548,6 +625,17 @@ export async function claimPublication(productId: string, id: string, body: unkn
     plan.prepared = compiled.prepared
   }
   if (!sparse && plan.review.overwrite?.requiresConfirmation && input.confirmOverwrite !== true) throw new WorkspaceScopeError('Confirm the overwrite warning for this review before publishing.', 400)
+  // S10 (Owner D2 = A) — a selection that moves a live Amazon listing to a new SKU deletes the old SKU once Amazon accepts
+  // the new one: typed like Delete (`confirm: 'DELETE'`), by someone who may delete. On a shared account the new SKU's
+  // coordinate is claimed for this business first; another business holding it refuses the send. Nothing is sent otherwise.
+  const moves = plan.prepared.kind === 'amazon' ? plan.prepared.moves ?? [] : []
+  if (moves.length) {
+    if (input.confirm !== 'DELETE') throw new WorkspaceScopeError(AMAZON_MOVE_NEEDS_CONFIRM, 400)
+    if (options.canDelete === false) throw new WorkspaceScopeError(AMAZON_MOVE_ROLE_CANNOT_DELETE, 403)
+    try { await claimMoveCoordinates(data.scope, moves) }
+    catch (error) { throw new WorkspaceScopeError(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`, 409) }
+    data.skuMoves = moves.map(move => ({ ...move, marketplaceId: (plan.prepared as { marketplaceId: string }).marketplaceId }))
+  } else delete data.skuMoves
   if (plan.prepared.kind === 'shopify' && !plan.review.locations?.some(l => l.id === input.locationId)) throw new WorkspaceScopeError('Choose an inventory location from this Shopify store.', 400)
   data.confirmOverwrite = !sparse && plan.review.overwrite?.requiresConfirmation === true && input.confirmOverwrite === true
   data.startedAt = new Date().toISOString()
@@ -715,8 +803,8 @@ export async function finishPublication(claim: ClaimedPublication, delivered: De
   }
 }
 
-export async function submitStudioPublication(productId: string, id: string, body: unknown, userId: string | null): Promise<StudioPublishResult> {
-  const claimed = await claimPublication(productId, id, body, userId)
+export async function submitStudioPublication(productId: string, id: string, body: unknown, userId: string | null, options: ClaimOptions = {}): Promise<StudioPublishResult> {
+  const claimed = await claimPublication(productId, id, body, userId, options)
   if ('result' in claimed) return claimed.result
   return finishPublication(claimed.claim, await deliverPublication(claimed.claim))
 }

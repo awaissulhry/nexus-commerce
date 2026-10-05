@@ -11,6 +11,7 @@ import { categoryMappingMarkets, type MappingRow } from './category-mapping.serv
 import { languageForMarketplace } from '../../products/translation-resolver.service.js'
 import { mappingToken, MappingConflict } from './revision-token.js'
 import { isPresent } from '../resolve-channel-field.js'
+import { shopifySkuRuleRefusal } from '../../listings/shopify-sku-cell.js'
 
 const KIND = 'mapping-impact-v1'
 const CHUNK = 100
@@ -200,6 +201,10 @@ export async function draftMappingImpact(input: MappingImpactInput): Promise<{ p
     input.changes = [{ fieldKey: 'descriptionThemeId', rule: null }]
   }
   validateReviewMapping(after)
+  // S9 — the Shopify SKU column takes no rule: Publish sends the listing's own SKU or the product SKU, so a rule there
+  // would be saved and never read. Removing a saved one passes; giving it one, by any kind of change, is refused.
+  const skuRuleRefusal = shopifySkuRuleRefusal(input.channel, before, after)
+  if (skuRuleRefusal) throw new InvalidMappingError([skuRuleRefusal])
   const shopifySchemaRevisions: Record<string, string> = {}
   if (input.channel === 'SHOPIFY') {
     const keys = [...new Set([...input.changes.filter(c => c.rule).map(c => c.fieldKey), ...(specialized ? Object.keys(after.fields) : [])])]
@@ -423,6 +428,9 @@ export async function activateMappingImpact(jobId: string, userId: string | null
   const current = await getMappingForMarketplace(payload.channel, payload.market)
   if (payload.presentationChange?.rule?.order || payload.before.presentationRules?.some(r => r.id === payload.presentationChange?.id && r.order)) throw new MappingConflict('Variation-order activation requires the coordinator’s publisher/domain integration patch. The review is saved; no rule or listing was changed.')
   if (payload.counts.introducedInvalid > 0) throw new MappingConflict('This rule introduces invalid outputs. Correct the draft and preview it again before activating.')
+  // S9 — a review drafted before the Shopify SKU column refused rules activates none either.
+  const skuRuleRefusal = shopifySkuRuleRefusal(payload.channel, current, payload.after)
+  if (skuRuleRefusal) throw new InvalidMappingError([skuRuleRefusal])
   for (const [accountId, revision] of Object.entries(payload.shopifySchemaRevisions ?? {})) {
     const { readShopifyMappingSchema } = await import('../channel-specs/shopify.js')
     if ((await readShopifyMappingSchema(accountId, true)).revision !== revision) throw new MappingConflict('The Shopify store schema changed after this review. Preview the metafield mappings again before activating.')

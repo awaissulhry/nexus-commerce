@@ -40,7 +40,7 @@ let app: FastifyInstance
 
 beforeAll(async () => {
   database = await formulaDatabase()
-  await database.db.query(`ALTER TABLE "ProductListingAlias" ADD COLUMN "sku" TEXT`)
+  await database.db.query(`ALTER TABLE "ProductListingAlias" ADD COLUMN IF NOT EXISTS "sku" TEXT`)
   await inside(async () => {
     const root = await database.client.product.create({ data: { sku: 'G4-ROOT', name: 'Root jacket', basePrice: '10.00' } })
     const alias = await database.client.productListingAlias.create({ data: { productId: root.id, channel: 'EBAY', marketplace: 'IT', label: 'second listing', position: 2 } })

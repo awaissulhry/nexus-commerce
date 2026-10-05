@@ -144,6 +144,8 @@ export function optimisticValue(cell: PublishActionCell, change: PublishActionCh
  * deleted row speaks of listing it again, and its default (Not listed) in the delete's own words.
  */
 function createAfter(create: NonNullable<PublishActionCell['create']>, status: PublishActionCell['status'], deleted: PublishActionCell['deleted']): NonNullable<PublishActionCell['create']> {
+  // An unlinked row (Item ID control) is never listed as new: it holds Not listed, in the unlink's own words.
+  if (deleted?.unlinked) return { ...create, target: 'not_listed', source: 'default', sentence: deletedStatusReason(deleted) }
   const words = deleted ? RELIST_SENTENCE : NEW_LISTING_SENTENCE
   const target = status.target && isNewListingTarget(status.target) ? status.target : null
   if (target) return { ...create, target, source: 'own', sentence: words[target] }
@@ -329,8 +331,11 @@ export function newChoiceOf(cell: PublishActionCell | null | undefined): 'active
   return isNewListingTarget(cell.status.target) ? cell.status.target : null
 }
 
-/** A row Nexus deleted that the next Publish lists again: its Status (its own, or its main row's) is Active or Inactive. */
-export const isRelistCell = (cell: PublishActionCell | null | undefined): boolean => !!cell?.deleted && !!cell.create && cell.create.target !== 'not_listed'
+/**
+ * A row Nexus deleted that the next Publish lists again: its Status (its own, or its main row's) is Active or Inactive.
+ * Never an unlinked row: Publish leaves it out whatever it holds.
+ */
+export const isRelistCell = (cell: PublishActionCell | null | undefined): boolean => !!cell?.deleted && !cell.deleted.unlinked && !!cell.create && cell.create.target !== 'not_listed'
 export const isWaitingCell = (cell: PublishActionCell | null | undefined): boolean => waitingValuesOf(cell).length > 0 || isRelistCell(cell) || newChoiceOf(cell) !== null
 export const isInactiveCell = (cell: PublishActionCell | null | undefined): boolean => isInactiveSellingState(cell?.state)
 

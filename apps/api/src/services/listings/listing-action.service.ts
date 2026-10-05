@@ -20,7 +20,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import {
-  ACTIONS_FROM_STATE, actionsFor, AMAZON_PAN_EU_DELETE_WARNING, deletedPublishSkip, deletedStatusReason, deleteOffered, familySellingState,
+  ACTIONS_FROM_STATE, actionsFor, alreadyRemoved, AMAZON_PAN_EU_DELETE_WARNING, deletedPublishSkip, deletedStatusReason, deleteOffered, familySellingState,
   fbaDeleteWarning, LISTING_ACTION_LABEL, LISTING_ACTIONS, listingActionCapability, SELLING_STATE_LABEL, sellingStateOf,
   type ActionReach, type CapabilityFacts, type ListingAction, type ListingActionConfirm, type ListingActionDestination,
   type ListingActionPlanRow, type ListingActionPreview, type ListingActionRowResult, type ListingActionRunResult,
@@ -413,9 +413,13 @@ function planFor(action: ListingAction, family: FamilyRead, destination: Listing
     const parentCarries = destination.channel === 'SHOPIFY' ? reach !== 'row' : action === 'delete' && !!listing?.externalListingId
     if (product.isParent && !parentCarries) { row('skip', 'The main product follows its variations.'); continue }
     // Delete and relist: a row Nexus deleted takes no selling change (refused, with the way to list it again: its Status
-    // column, Active); a Delete has nothing left to do there.
+    // column, Active); a Delete has nothing left to do there. An UNLINKED row (Item ID control) neither: Nexus no longer
+    // holds its channel id, so it says the unlink's truth (link it again), never "list it again".
     const deleted = states.get(product.id)!.deleted
-    if (deleted) { row(action === 'delete' ? 'skip' : 'refused', deletedPublishSkip(deleted)); continue }
+    if (deleted) {
+      row(action === 'delete' ? 'skip' : 'refused', !deleted.unlinked ? deletedPublishSkip(deleted) : action === 'delete' ? alreadyRemoved(deleted) : deletedStatusReason(deleted))
+      continue
+    }
     if (!listing || state === 'not_listed') { row('skip', `Not on ${destinationLabel(destination)} yet. Publish creates it.`); continue }
     // S3 — a row with no single SKU on record is never sent: a guess could change another listing's offer. S5 — only where
     // the action names the SKU on the channel; a Shopify product status or an Etsy listing state names none.

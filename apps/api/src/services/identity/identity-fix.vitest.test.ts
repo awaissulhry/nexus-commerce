@@ -38,7 +38,7 @@ vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: un
 
 import { checkChannelId, runLink, runUnlink, planLink, IdentityFixRefusal, PUSHES_STAY_PAUSED } from './identity-fix.service.js'
 import { readListingDeletions } from '../listings/listing-deletions.js'
-import { EBAY_ONLY, MAIN_ROW_ONLY, checkSheetChannelId, linkSheetChannelId, unlinkSheetChannelId, unlinkSentence } from './channel-id.service.js'
+import { MAIN_ROW_ONLY, checkSheetChannelId, linkSheetChannelId, unlinkSheetChannelId, unlinkSentence } from './channel-id.service.js'
 import { newListingChoice } from '@nexus/shared/listing-actions'
 
 const A = LEGACY_WORKSPACE_ID
@@ -185,6 +185,11 @@ describe('link: only the rows the item carries, with eBay\'s status; paused; a s
     expect(shape(await one('s'))).toEqual(['520000000001', 'ACTIVE', true, true])
     expect(shape(await one('l'))).toEqual([null, 'DRAFT', false, true])
     expect(shape(await one('sDe'))).toEqual([null, 'DRAFT', false, true])
+    // The SKU eBay proved for each written row is recorded as the one it holds (coordinator, 2026-10-05); the main row of
+    // a variation item names none.
+    expect(await one('s')).toMatchObject({ liveChannelSku: 'OWN-JKT-S-IT', channelSku: 'OWN-JKT-S-IT' })
+    expect((await one('root')).liveChannelSku).toBeNull()
+    expect(record.liveSkus).toEqual([{ id: ids.s, sku: 'OWN-JKT-S-IT' }])
     const snaps = await inside(() => db().channelListingSnapshot.findMany({ where: { channelListingId: { in: [ids.root, ids.s] }, reason: 'manual' } }))
     expect(snaps.map((s) => [s.label, s.capturedBy])).toEqual([
       ['before link-channel-id (520000000001)', ids.user], ['before link-channel-id (520000000001)', ids.user],
@@ -232,6 +237,7 @@ describe('link: only the rows the item carries, with eBay\'s status; paused; a s
     const record = await inside(() => runLink(ids.root, { externalId: '520000000031', expectedExternalId: '520000000031', expectedVersion: before.version, actor: ids.user, sheet: true }))
     expect(record.moved?.map((m) => [m.id, m.fromItemId])).toEqual([[ids.l, '520000000030']])
     expect(shape(await one('l'))).toEqual(['520000000031', 'ACTIVE', true, true])
+    expect((await one('l')).liveChannelSku).toBe('IDC-JKT-L')
     const snap = await inside(() => db().channelListingSnapshot.findFirst({ where: { channelListingId: ids.l, reason: 'manual', label: 'before link-channel-id (520000000031)' } }))
     expect(snap).toMatchObject({ capturedBy: ids.user })
     expect(snap!.payload).toMatchObject({ state: { id: ids.l } })
@@ -262,6 +268,8 @@ describe('unlink: recorded as accepted, read like an accepted Delete — never o
     const record = await inside(() => runUnlink(ids.root, '520000000001', ids.user, { expectedVersion: before.version }))
     expect(record.rows.map((r) => r.id).sort()).toEqual([ids.root, ids.s].sort())
     for (const key of ['root', 's']) expect(shape(await one(key))).toEqual([null, 'DRAFT', false, true])
+    // The SKU eBay held is forgotten; the SKU Nexus sends stays.
+    expect(await one('s')).toMatchObject({ liveChannelSku: null, channelSku: 'OWN-JKT-S-IT' })
     const snaps = await inside(() => db().channelListingSnapshot.findMany({ where: { channelListingId: { in: [ids.root, ids.s] }, reason: 'unlink' } }))
     expect(snaps).toHaveLength(2)
     for (const snap of snaps) {
@@ -308,14 +316,14 @@ describe('channel ids never cross businesses', () => {
 })
 
 describe('the sheet\'s door (channel-id.service): main row only, fenced, as the signed-in person', () => {
-  it('a variation row is refused ("Set on the main row"); eBay only', async () => {
+  it('a variation row is refused ("Set on the main row"); an Amazon row is its own (a live ASIN is refused with Amazon\'s reason)', async () => {
     await expect(inside(() => checkSheetChannelId(ids.s, { externalId: '520000000001' }))).rejects.toThrow(MAIN_ROW_ONLY)
     await expect(inside(() => unlinkSheetChannelId(ids.s, { expectedExternalId: '520000000001', expectedVersion: 1 }, ids.user))).rejects.toThrow(MAIN_ROW_ONLY)
     const amazon = await inside(async () => {
       const connection = await db().channelConnection.create({ data: { channelType: 'AMAZON', isActive: true, externalAccountId: 'amz' } })
       return (await db().channelListing.create({ data: { productId: ids['IDC-SOLO'], channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: connection.id, listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0SOLO' } })).id
     })
-    await expect(inside(() => checkSheetChannelId(amazon, {}))).rejects.toThrow(EBAY_ONLY)
+    expect(await inside(() => checkSheetChannelId(amazon, {}))).toMatchObject({ channel: 'AMAZON', ok: false, refusal: expect.stringContaining('Amazon ties seller SKU IDC-SOLO to ASIN B0SOLO on Amazon · IT.') })
   }, TIMEOUT)
 
   it('an item Nexus cannot prove is this account\'s: the sheet\'s Link refuses in its own words (no "link it anyway")', async () => {

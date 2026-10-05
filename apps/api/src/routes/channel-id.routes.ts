@@ -1,11 +1,13 @@
 /**
- * Item ID control (docs/sheet-ids-sku-rows/A2-item-id-control.md, step I1) — the product sheet's eBay Item ID cell.
+ * Item ID control (docs/sheet-ids-sku-rows/A2-item-id-control.md, steps I1–I4) — the product sheet's channel id cells:
+ * eBay Item ID, Etsy Listing ID, Shopify Product ID, Amazon ASIN.
  *
- *   POST /api/listings/:id/channel-id/check   { externalId? }                                  → what eBay says (writes nothing)
- *   POST /api/listings/:id/channel-id/link    { externalId, expectedExternalId, expectedVersion } → link it (or Keep it)
+ *   POST /api/listings/:id/channel-id/check   { externalId? }                                  → what the channel says (writes nothing)
+ *   POST /api/listings/:id/channel-id/link    { externalId, expectedExternalId, expectedVersion } → link it (or Keep it; Amazon: Set)
  *   POST /api/listings/:id/channel-id/unlink  { expectedExternalId, expectedVersion }             → Nexus forgets it
  *
- * `:id` is the family's MAIN row listing (eBay: one item per family). The signed-in person acts (`request.authUser`),
+ * `:id` is the family's MAIN row listing for a shared id (eBay, Etsy, Shopify: one per family), or the row's own listing
+ * for an Amazon ASIN (`channel-id.service.ts`). The signed-in person acts (`request.authUser`),
  * not Claude's approval queue; the rules are the ones Claude's link-channel-id / unlink-channel-id use. Permission:
  * `listings.recover` (permissions-manifest.ts). Link and unlink honour an Idempotency-Key (`COMMAND_SCOPES`), so a
  * double press runs once. A refusal is a status with one plain sentence: 404 not found, 409 changed meanwhile (the
@@ -57,7 +59,7 @@ function sendError(reply: FastifyReply, request: FastifyRequest, err: unknown) {
   if (err instanceof BadRequest) return reply.code(400).send({ error: 'invalid_request', message: err.message })
   if (err instanceof IdentityFixRefusal) return reply.code(STATUS[err.code] ?? 422).send({ error: err.code, message: err.message })
   request.log.error({ err }, 'channel id request failed')
-  return reply.code(500).send({ error: 'channel_id_failed', message: 'The Item ID could not be checked or changed. Nothing was assumed; read the sheet again to see what Nexus holds.' })
+  return reply.code(500).send({ error: 'channel_id_failed', message: 'The id could not be checked or changed. Nothing was assumed; read the sheet again to see what Nexus holds.' })
 }
 
 const userOf = (request: FastifyRequest) => request.authUser?.id ?? null

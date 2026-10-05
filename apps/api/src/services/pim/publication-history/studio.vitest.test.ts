@@ -369,3 +369,31 @@ describe('counts', () => {
     expect(countsOf('FAILED', { failed: 0 }, 2)).toMatchObject({ notSent: 2 })
   })
 })
+
+// Last on purpose: it adds a run, and the list and count cases above read the fixture as it was.
+describe('S10 — a publish that moved a live Amazon listing to a new SKU', () => {
+  it('shows what became of each old SKU as a step, and offers "Delete the old SKU again" only where Amazon did not confirm the delete', async () => {
+    await scoped(async () => {
+      await publication('p-move', { status: 'ACCEPTED', minute: 50, completedAt: at(52), results: [{ sku: 'COAT-M-IT', status: 'ACCEPTED', message: 'ok' }, { sku: 'COAT-S-IT', status: 'ACCEPTED', message: 'ok' }] })
+      const row = await prisma.bulkOperation.findUniqueOrThrow({ where: { id: 'p-move' } })
+      await prisma.bulkOperation.update({ where: { id: 'p-move' }, data: { changes: { ...(row.changes as object), skuMoves: [
+        { productId: ids.m, listingId: listing.m, from: 'COAT-M', to: 'COAT-M-IT', asin: 'ASIN-M', fba: false, marketplaceId: 'IT-MARKET', state: 'deleted', message: 'COAT-M-IT is live on Amazon · IT; COAT-M was deleted there.' },
+        { productId: ids.s, listingId: listing.s, from: 'COAT-S', to: 'COAT-S-IT', asin: 'ASIN-S', fba: false, marketplaceId: 'IT-MARKET', state: 'failed', message: 'not yet' },
+      ] } as never } })
+    })
+    const detail = await scoped(() => publicationRunDetail('p-move', { now: NOW }))
+    expect(detail.skuMoves).toEqual([
+      { productId: ids.m, from: 'COAT-M', to: 'COAT-M-IT', state: 'deleted', message: 'COAT-M-IT is live on Amazon · IT; COAT-M was deleted there.', canDeleteAgain: false },
+      { productId: ids.s, from: 'COAT-S', to: 'COAT-S-IT', state: 'failed', message: 'not yet', canDeleteAgain: true },
+    ])
+    expect(detail.steps.filter(step => step.key === 'old_sku')).toEqual([
+      { key: 'old_sku', label: 'COAT-M deleted on Amazon (moved to COAT-M-IT)', at: null, tone: 'success', detail: 'COAT-M-IT is live on Amazon · IT; COAT-M was deleted there.' },
+      { key: 'old_sku', label: 'COAT-S not deleted yet (moving to COAT-S-IT)', at: null, tone: 'warning', detail: 'not yet' },
+    ])
+    // A run without moves says nothing about them.
+    expect(await scoped(() => publicationRunDetail('p-partial', { now: NOW }))).not.toHaveProperty('skuMoves')
+    // "Delete the old SKU again" deletes a listing on Amazon: products.delete, as Delete.
+    expect(permissionForRoute('POST', `/api/products/${ids.root}/studio-publication/p-move/delete-old-sku`)).toBe('products.delete')
+    expect(permissionForRoute('POST', `/api/products/${ids.root}/studio-publication/p-move/mark-checked`)).toBe('products.publish')
+  })
+})

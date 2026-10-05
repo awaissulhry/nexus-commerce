@@ -227,6 +227,7 @@ import { renderInboundDiscrepancyPdf } from '../services/inbound-discrepancy-pdf
 import { isSharedStockAddress, OWN_WAREHOUSES, SHARED_ADDRESS_REFUSED } from '../services/stock-pool/shared-warehouses.js'
 import { lenderBorrowers, lenderPoolDemand, poolCoverStock, POOL_DEMAND_CHANNEL, pooledProductIds } from '../services/stock-pool/pool-demand.js'
 import { assertRequestPermission } from '../lib/auth/request-permission.js'
+import { channelSkuCreateRefusal } from '../services/listings/channel-sku-rename.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -5096,6 +5097,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         ? Number(body.basePrice)
         : project.targetCostCents != null ? project.targetCostCents / 100 : 0
 
+      // S9 — a new product may not take a SKU another product's listing holds or sends as its channel SKU.
+      const heldSku = await channelSkuCreateRefusal([sku])
+      if (heldSku) return reply.code(409).send({ error: heldSku })
       let product
       try {
         product = await prisma.product.create({

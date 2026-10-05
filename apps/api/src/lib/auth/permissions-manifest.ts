@@ -236,6 +236,8 @@ export const ENTRIES: Entry[] = [
   // The Products page's "New product" dialog creates one DRAFT product: `products.create`, not the `/api/products`
   // prefix rule's products.edit below (GET /api/products, the list, stays products.view there).
   P(F.productsCreate, (m, p) => m === 'POST' && p === '/api/products'),
+  // S10 — "Delete the old SKU again" deletes a listing on Amazon: products.delete, as Delete (before the publish rule).
+  P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio-publication\/[^/]+\/delete-old-sku$/.test(p)),
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
   // Sheet publish parity, step 4 — the publish history. Reading runs is a view for anyone in the business; the exact request a
   // listing received shows raw seller and item identifiers, so it needs products.publish. /api/products/:id/publications is a

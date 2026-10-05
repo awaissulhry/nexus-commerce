@@ -19,6 +19,9 @@
  * endpoints receive (`amazon_title` → `title`). Both name the same listing
  * columns.
  */
+/** S9 — the wire field of a listing's own SKU in a channel scope (`PATCH /api/products/bulk`, `target: 'channel'`). */
+export const CHANNEL_SKU_FIELD = 'channel_sku'
+
 export const CHANNEL_FIELD_MAP: Record<string, string> = {
   amazon_title: 'title',
   amazon_description: 'description',
@@ -41,6 +44,10 @@ export const CHANNEL_FIELD_MAP: Record<string, string> = {
   // `followMasterBulletPoints = false`, because an override the listing still "follows master" past
   // is one the resolver and the feed ignore — see `FOLLOW_FLAG_FOR_COLUMN`.
   amazon_bulletPoints: 'bulletPointsOverride',
+  // S9 (per-channel SKU) — a listing's OWN SKU, in any channel scope (`ChannelListing.channelSku`). Written only through
+  // its one writer (`setChannelSku`: validation, uniqueness, the live-move rule, version and history), never as a
+  // plain column; `bulk-edit.service.ts` routes it to that door. Null or a reset = follow the product SKU.
+  [CHANNEL_SKU_FIELD]: 'channelSku',
 }
 
 /**

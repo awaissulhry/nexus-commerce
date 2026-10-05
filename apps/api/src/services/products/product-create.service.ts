@@ -23,6 +23,7 @@ import prisma from '../../db.js'
 import { auditLogService } from '../audit-log.service.js'
 import { productEventService } from '../product-event.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
+import { channelSkuCreateRefusal } from '../listings/channel-sku-rename.js'
 
 export class ProductCreateError extends Error {
   constructor(message: string, readonly statusCode: 400 | 409, readonly field?: NewProductField,
@@ -65,6 +66,9 @@ export async function createDraftProduct(body: unknown, actor: { userId: string 
       if (await tx.productListingAlias.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true } })) {
         throw new ProductCreateError(`${sku} is already the SKU of a channel listing in this business. Choose another SKU for the product.`, 409, 'sku')
       }
+      // S9 — nor a SKU another product's listing holds or sends as its channel SKU (one SKU names one product).
+      const held = await channelSkuCreateRefusal([sku], tx)
+      if (held) throw new ProductCreateError(held, 409, 'sku')
       if (familyId && !(await tx.productFamily.findFirst({ where: { id: familyId }, select: { id: true } }))) {
         throw new ProductCreateError('This product family is not in this business. Choose another family, or none.', 400, 'familyId')
       }

@@ -680,8 +680,11 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>At most {MAX_BATCH_DESTINATIONS} markets can be published at once.</p>}
       {waitingHint && <p className={styles.muted}>{waitingHint}</p>}
 
-      {/* Ended and Delete: the publisher's own typed confirmation (the family SKU), last, right above the button. */}
+      {/* Ended and Delete (and an Amazon SKU move, S10): the publisher's own typed confirmation (the family SKU), last, right above the button. */}
       {action.confirm && !locked && <div className={styles.confirm}>
+        {/* S10 — what a move deletes, and that a refused new SKU deletes nothing (the server's own words). */}
+        {action.confirm.moved ? [...new Set(action.content.map(key => entryOf(key).review?.confirm?.sentence).filter((line): line is string => !!line))]
+          .map(line => <p key={line}>{line}</p>) : null}
         <ConfirmPhraseField phrase={action.confirm.expected} value={confirmText} onChange={setConfirmText} disabled={!!busy}
           label={<>Type <strong className="nds-confirm-h">{action.confirm.expected}</strong> {confirmWhat(action.confirm)}</>} />
       </div>}

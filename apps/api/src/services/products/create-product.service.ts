@@ -10,6 +10,7 @@ import prisma from '../../db.js'
 import { activeDatabaseTransaction, afterDatabaseCommit } from '../../lib/database-context.js'
 import { auditLogService } from '../audit-log.service.js'
 import { listingSkuRefusal, skusUsedByListings } from '../identity/identity-write-guards.js'
+import { channelSkuCreateRefusal } from '../listings/channel-sku-rename.js'
 
 export interface CreateProductInput {
   sku: string
@@ -77,6 +78,10 @@ export async function assertCreatable(body: CreateProductInput): Promise<void> {
   // the route's guards into this service).
   const [listingSku] = await skusUsedByListings(allSkus)
   if (listingSku) throw new CreateProductError(409, 'DUPLICATE_SKU', listingSkuRefusal(listingSku))
+  // S9 — nor a SKU another product's listing holds or sends as its channel SKU (a listing that kept its old SKU after a
+  // rename, a listing's own SKU): an order or a channel file would name two products by it.
+  const held = await channelSkuCreateRefusal(allSkus)
+  if (held) throw new CreateProductError(409, 'DUPLICATE_SKU', held)
 }
 
 /**

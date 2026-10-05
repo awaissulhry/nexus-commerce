@@ -13,8 +13,8 @@
  * the group key by construction.
  * S4 (per-channel SKU) — a listing whose main row has its own SKU (wanted or
  * confirmed) is labelled with its WANTED SKU, never put back to Product.sku:
- * eBay holding the wanted or the confirmed SKU is kept (moving a live SKU is
- * step S10); a missing or other label gets the wanted SKU, and that SKU is
+ * eBay holding the wanted or the confirmed SKU is kept (a live SKU is moved by
+ * Publish, S10, never by this guard); a missing or other label gets the wanted SKU, and that SKU is
  * then recorded as the one eBay holds (`ebayItemLabel`). A listing with no own
  * SKU is labelled exactly as before. Called from:
  *   1. listing creation (inline, incident #35);
@@ -217,7 +217,7 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
     if (locked) { refuse(locked.code, locked.sentence); continue }
     if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
     // S4 — the label this item carries: its main row's wanted SKU when that row has its own SKU, else the parent SKU as
-    // before. The labels that may stay: the wanted SKU and the one eBay holds (TODO(S10): moving a live SKU is S10's).
+    // before. The labels that may stay: the wanted SKU and the one eBay holds (a Publish renames a live SKU in place: S10).
     const label = ebayItemLabel(controls as unknown as EbayItemRow[], t.parentSku)
     if (label.refusal) { refuse(CHANNEL_SKU_UNRESOLVED, label.refusal); continue }
     try {

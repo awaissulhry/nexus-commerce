@@ -12,5 +12,9 @@ export async function getInformationSheet(input: GetStudioSheetInput): Promise<S
   const sheet = await getStudioSheet(input)
   if (sheet.scope.channel !== 'SHOPIFY') return sheet
   const { enrichShopifyChannelSheet } = await import('../shopify/channel-sheet.service.js')
-  return enrichShopifyChannelSheet(sheet)
+  const enriched = await enrichShopifyChannelSheet(sheet)
+  // Item ID control (I3): a Product ID counts only when this read of Shopify returned its row.
+  const { confirmShopifyItemIds } = await import('./studio-stock.js')
+  const rows = confirmShopifyItemIds(enriched.rows)
+  return rows === enriched.rows ? enriched : { ...enriched, rows }
 }

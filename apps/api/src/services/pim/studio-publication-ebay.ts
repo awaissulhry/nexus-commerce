@@ -21,6 +21,7 @@ import type { EbayMediaLayout } from '@nexus/shared/media-plan-channels'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { FULL_EBAY_SHAPE_DIFFERS, type StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN } from '@nexus/shared/listing-actions'
+import { ebayInventoryMoveRefusal } from '../listings/channel-sku-live-move.js'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlList, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
@@ -49,7 +50,15 @@ export interface EbayPublication {
   notices?: string[]
   /** Build shape v2 — the listing is reviewed as Full update: the whole Revise it sends (prepared from the live read). */
   full?: EbayFullRevision
+  /**
+   * S10 (per-channel SKU) — rows eBay holds under another SKU (`from`) than their own (`to`): this Trading Publish renames
+   * them in place (`ReviseFixedPriceItem`; a variation is matched by its values, never added again). Absent when none.
+   */
+  moves?: EbaySkuMove[]
 }
+
+/** S10 — one live eBay row renamed in place, from the SKU eBay holds to the listing's own SKU. */
+export interface EbaySkuMove { productId: string; listingId: string; from: string; to: string }
 
 /** One eBay variation Nexus does not hold: a Full update deletes it, or keeps it at quantity 0 when it has sales. */
 export interface EbayFullExtra { sku: string; action: 'delete' | 'zero'; specifics: Record<string, string>; content: unknown }
@@ -119,13 +128,18 @@ const blank = (value: unknown) => value == null || (typeof value === 'string' &&
  * (`live`: the GetItem's Item; `stock`: its quantities). Nothing here reads or sends.
  */
 export function ebayFullRevision(input: { shared: AddFixedPriceItemInput; settings: Record<string, any>; itemId: string; single: boolean
-  live: Record<string, unknown>; stock: EbayLiveStock }): EbayFullRevision {
+  live: Record<string, unknown>; stock: EbayLiveStock
+  /** S10 — rows renamed in place (`from` = the SKU eBay holds, `to` = the SKU sent). */
+  moves?: ReadonlyArray<Pick<EbaySkuMove, 'from' | 'to'>> }): EbayFullRevision {
   const shared: AddFixedPriceItemInput = JSON.parse(JSON.stringify(input.shared))
   const settings = { ...input.settings }
   const blockers: string[] = [], added: string[] = [], extras: EbayFullExtra[] = [], deletedFields: string[] = []
   const liveVariations = ebayXmlList(ebayXmlObject(input.live.Variations).Variation).map(ebayXmlObject)
   const specificsOf = (variation: Record<string, unknown>): Record<string, string> => Object.fromEntries(ebayXmlList(ebayXmlObject(variation.VariationSpecifics).NameValueList)
     .map(ebayXmlObject).map((nv): [string, string] => [ebayXmlText(nv.Name) ?? '', ebayXmlText(ebayXmlList(nv.Value)[0]) ?? '']).filter(([name]) => name))
+  // S10 — a renamed row: the SKU it is sent under (`to`) → the SKU eBay holds (`from`), and back.
+  const renamedFrom = new Map((input.moves ?? []).map(move => [move.to, move.from]))
+  const renamedLive = new Set((input.moves ?? []).map(move => move.from))
   if (input.single !== !liveVariations.length) blockers.push(FULL_EBAY_SHAPE_DIFFERS)
   else if (input.single) {
     if (!input.stock.item) blockers.push('eBay did not return this listing\'s quantity, so a Full update cannot keep it. Review again.')
@@ -136,16 +150,30 @@ export function ebayFullRevision(input: { shared: AddFixedPriceItemInput; settin
     const ours = new Set(shared.variationSpecificNames.map(aspectCanonicalName))
     const theirs = new Set(liveVariations.flatMap(variation => Object.keys(specificsOf(variation))).map(aspectCanonicalName))
     if (ours.size !== theirs.size || [...theirs].some(name => !ours.has(name))) blockers.push(FULL_EBAY_SHAPE_DIFFERS)
-    for (const variation of shared.variations) {
-      const held = input.stock.variations.find(v => v.sku === variation.sku)
-      if (held) variation.quantity = availableOf(held)
-      else if (liveVariations.some(v => ebayXmlText(v.SKU)?.trim() === variation.sku)) blockers.push(`eBay did not return the quantity of ${variation.sku}, so a Full update cannot keep it. Review again.`)
-      else { variation.quantity = 0; added.push(variation.sku) }
-    }
     const nameOf = (name: string) => shared.variationSpecificNames.find(ours => aspectCanonicalName(ours) === aspectCanonicalName(name)) ?? name
+    // S10 — eBay matches a renamed variation by its values (its SKU is new to eBay): the values sent must be the values eBay
+    // holds for the old SKU, else eBay would add the new SKU as another variation.
+    const sameValues = (ours: Record<string, string>, theirs: Record<string, string>) => {
+      const fold = (values: Record<string, string>) => Object.entries(values).map(([name, value]) => [aspectCanonicalName(name), String(value).trim()]).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      return JSON.stringify(fold(ours)) === JSON.stringify(fold(theirs))
+    }
+    for (const variation of shared.variations) {
+      const from = renamedFrom.get(variation.sku)
+      const liveSku = from ?? variation.sku
+      const held = input.stock.variations.find(v => v.sku === liveSku)
+      if (from) {
+        const old = liveVariations.find(v => ebayXmlText(v.SKU)?.trim() === from)
+        if (!old) blockers.push(`eBay does not hold ${from} on this listing any more, so Nexus cannot rename it to ${variation.sku}. Review again.`)
+        else if (!sameValues(variation.specifics ?? {}, specificsOf(old)))
+          blockers.push(`eBay finds a renamed variation by its values: ${from} has ${Object.entries(specificsOf(old)).map(([name, value]) => `${name} ${value}`).join(', ')} on eBay, and Nexus sends ${Object.entries(variation.specifics ?? {}).map(([name, value]) => `${name} ${value}`).join(', ')} for ${variation.sku}. Publish the SKU change and the value change one at a time.`)
+      }
+      if (held) variation.quantity = availableOf(held)
+      else if (liveVariations.some(v => ebayXmlText(v.SKU)?.trim() === liveSku)) blockers.push(`eBay did not return the quantity of ${liveSku}, so a Full update cannot keep it. Review again.`)
+      else if (!from) { variation.quantity = 0; added.push(variation.sku) }
+    }
     for (const variation of liveVariations) {
       const sku = ebayXmlText(variation.SKU)?.trim()
-      if (!sku || shared.variations.some(v => v.sku === sku)) continue
+      if (!sku || shared.variations.some(v => v.sku === sku) || renamedLive.has(sku)) continue
       const sold = input.stock.variations.find(v => v.sku === sku)?.sold ?? 0
       extras.push({ sku, action: sold > 0 ? 'zero' : 'delete', specifics: Object.fromEntries(Object.entries(specificsOf(variation)).map(([name, value]) => [nameOf(name), value])),
         content: variation })
@@ -159,9 +187,11 @@ export function ebayFullRevision(input: { shared: AddFixedPriceItemInput; settin
       shared.variationSpecificsSet = set
     }
   }
-  // A Full update never changes a live listing's seller SKU (Custom label): it sends eBay's own, or none.
+  // A Full update never changes a live listing's seller SKU (Custom label): it sends eBay's own, or none — unless this
+  // Publish renames it (S10: the main row's own SKU, eBay holding the SKU Nexus knows it holds).
   const liveSku = ebayXmlText(input.live.SKU)?.trim()
-  shared.sku = liveSku || undefined
+  const renamedItem = (input.moves ?? []).find(move => !!liveSku && move.from === liveSku && move.to === input.shared.sku)
+  shared.sku = renamedItem ? renamedItem.to : liveSku || undefined
   if (blank(settings.subtitle)) {
     delete settings.subtitle
     if (input.live.SubTitle !== undefined) deletedFields.push(FULL_DELETABLE.SubTitle)
@@ -408,6 +438,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   let channelValues: MediaChannelValues | undefined
   const rows = []
   const identities: Array<{ productId: string; sku: string }> = []
+  const moves: EbaySkuMove[] = []
   const packages = new Map<string, string>()
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
@@ -498,10 +529,16 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     // row eBay holds sends the SKU eBay holds (the product SKU unless it has its own confirmed one), so Partial and Full
     // update keep addressing eBay's variations by the SKU eBay has. `buildFlatRow` (shared with the old Flat File pages)
     // stays on Product.sku; the studio sets the row's SKU here.
-    // TODO(S10): a live row whose wanted SKU differs from eBay's (`waitsForMove`) keeps eBay's SKU here; moving it
-    // (Trading: revise in place, renamed variations matched by their values; Inventory: "cannot move yet") is step S10.
+    // S10 — a live row with its own SKU that eBay holds under another (`moves`): a Trading Publish renames it in place
+    // (sends its own SKU; a renamed variation is matched by its values); an Inventory listing cannot move yet (refused by
+    // name: Delete, then list again). A row without its own SKU keeps eBay's, as before.
     const aliasId = (listing as { aliasId?: string | null } | undefined)?.aliasId
-    row.sku = ebayPublishSku(listing ? { ...listing, alias: (aliasId && aliases.get(aliasId)) || null } : null, product.sku).sku
+    const publishSku = ebayPublishSku(listing ? { ...listing, alias: (aliasId && aliases.get(aliasId)) || null } : null, product.sku)
+    row.sku = publishSku.sku
+    if (publishSku.moves && listing) {
+      if (options.inventory) problems.add(ebayInventoryMoveRefusal(publishSku.live!, publishSku.wanted!), { ...at, field: 'sellerSku' })
+      else { row.sku = publishSku.wanted; moves.push({ productId: product.id, listingId: listing.id, from: publishSku.live!, to: publishSku.wanted! }) }
+    }
     if (typeof row.sku !== 'string' || !row.sku.trim()) { problems.add(`${ebayFieldLabel('sellerSku')} is empty. Set this row's SKU.`, { ...at, field: 'sellerSku' }); continue }
     identities.push({ productId: product.id, sku: row.sku })
     row[`${scope.marketplace.toLowerCase()}_price`] = price
@@ -549,7 +586,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   // Wave 2 (C6) — a note, not a refusal: a variation's own package is never sent (eBay takes the main row's, above).
   if (differing.length) problems.note(`${ebayFieldLabel('package')}: eBay takes one package for the whole listing, from the main row. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds a different package; it is' : 'hold a different package; they are'} not sent, and eBay takes the main row's package.`)
   if (!options.problems || !shared) problems.throwIfAny()
-  return { shared: shared!, itemId, parentListing, settings, galleries, variants, identities, media: onPlan ? { channelValues } : null }
+  return { shared: shared!, itemId, parentListing, settings, galleries, variants, identities, moves, media: onPlan ? { channelValues } : null }
 }
 
 /** Images rebuild P2c — the plan's eBay layout, checked, as the Trading/Inventory input's pictures (screen order = payload order). */
@@ -827,15 +864,17 @@ export async function prepareEbayPublication(facts: PublicationFacts, options: {
     try {
       const read = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = read.revision; liveContent = read.content
       if (options.full) {
-        try { full = ebayFullRevision({ shared: shared as AddFixedPriceItemInput, settings, itemId, single: products.length === 1, live: read.content, stock: read.stock }) }
+        try { full = ebayFullRevision({ shared: shared as AddFixedPriceItemInput, settings, itemId, single: products.length === 1, live: read.content, stock: read.stock, moves: built.moves }) }
         catch (error) { full = { xml: '', stockRevision: '', extras: [], added: [], deletedFields: [], keptRoots: [], blockers: [error instanceof Error ? error.message : String(error)] } }
       }
     }
     catch (error) { liveReadError = error instanceof Error ? error.message : String(error) }
   }
   const notices = problems.notes
+  // S10 — only a live item has rows to rename (a new item is created under the SKUs it is sent).
+  const moves = itemId ? built.moves : []
   return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), ...(notices.length ? { notices } : {}), products: identities,
-    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings), ...(full ? { full } : {}) }
+    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings), ...(full ? { full } : {}), ...(moves.length ? { moves } : {}) }
 }
 
 /** The live variation values this Revise renames; none when its XML cannot be read (eBay's own text then stands). */

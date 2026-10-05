@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Copy } from 'lucide-react'
 import type { HistoryProduct, HistoryRun, HistoryRunDetail } from '@nexus/shared/publication-history'
 import type { StudioPublishChange, StudioRetrySelection } from '@nexus/shared/studio-publication'
+import { DELETE_OLD_SKU_AGAIN } from '@nexus/shared/publish-actions'
 import { Button, FilterChip, Textarea } from '@/design-system/primitives'
 import {
   Banner, ChangeReview, Disclosure, Drawer, DrawerOverlayCard, EmptyState, Field, JobProgress, KeyValue, ProgressBar, Timeline, useToast,
@@ -98,13 +99,14 @@ function useNarrow(): boolean {
 }
 
 export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPart, onBack }: PublishRunDrawerProps) {
-  const { state, detail, reload, checkNow, markChecked, retrySelection, loadRequest } = usePublishRunDetail(runId)
+  const { state, detail, reload, checkNow, markChecked, retrySelection, deleteOldAgain, loadRequest } = usePublishRunDetail(runId)
   const host = useContext(PublishHistoryHostContext)
   const canPublish = usePermission('products.publish')
+  const canDelete = usePermission('products.delete')
   const { toast } = useToast()
   const [filter, setFilter] = useState<ProductFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [busy, setBusy] = useState<null | 'check' | 'mark' | 'again' | 'undo'>(null)
+  const [busy, setBusy] = useState<null | 'check' | 'mark' | 'again' | 'undo' | 'old-sku'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [note, setNote] = useState('')
@@ -142,14 +144,20 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPar
     if (before.state === 'in_progress' && run.state !== 'in_progress') setAnnouncement(`${runDestination(run)} publish finished. ${runHeadline(run)}`)
   }, [run, onRunChanged])
 
-  const visibility = run ? runActionVisibility(run, { canPublish, canOpenReview: !!host.publishAgain }, products) : null
+  const visibility = run ? runActionVisibility(run, { canPublish, canOpenReview: !!host.publishAgain, canDelete }, products, detail?.skuMoves ?? []) : null
 
-  const act = useCallback(async (kind: 'check' | 'mark' | 'again' | 'undo', work: () => Promise<void>) => {
+  const act = useCallback(async (kind: 'check' | 'mark' | 'again' | 'undo' | 'old-sku', work: () => Promise<void>) => {
     setBusy(kind); setActionError(null)
     try { await work() } catch (error) { setActionError(error instanceof Error ? error.message : 'That did not work. Try again.') } finally { setBusy(null) }
   }, [])
 
   const onCheckNow = () => act('check', async () => { await checkNow(); toast('Nexus asked the channel again.', 'info') })
+  // S10 — the old SKU of a moved Amazon listing: Nexus tries its delete again now; the run shows Amazon's answer.
+  const onDeleteOldAgain = () => act('old-sku', async () => {
+    const { moves } = await deleteOldAgain()
+    const left = moves.filter(move => move.state === 'failed').length
+    toast(left ? 'Amazon did not confirm the delete yet. The publish says why; Nexus keeps trying.' : 'Amazon took the delete of the old SKU.', left ? 'warning' : 'success')
+  })
   const onMarkChecked = () => act('mark', async () => {
     await markChecked(note)
     setConfirming(false); setNote('')
@@ -194,6 +202,7 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPar
       {visibility.checkNow && <Button size="md" onClick={onCheckNow} disabled={busy !== null}>{busy === 'check' ? 'Checking…' : 'Check now'}</Button>}
       {visibility.markChecked && <Button size="md" onClick={() => { setConfirming(true); setActionError(null) }} disabled={busy !== null}>Mark as checked…</Button>}
       {visibility.publishAgain && <Button size="md" variant="primary" onClick={onPublishAgain} disabled={busy !== null}>{busy === 'again' ? 'Preparing…' : 'Publish failed products again…'}</Button>}
+      {visibility.deleteOldAgain && <Button size="md" variant="danger" onClick={onDeleteOldAgain} disabled={busy !== null}>{busy === 'old-sku' ? 'Deleting…' : DELETE_OLD_SKU_AGAIN}</Button>}
       {visibility.download && <Button size="md" onClick={onDownload}>Download results</Button>}
       {visibility.copyFailed && <Button size="md" onClick={() => void onCopyFailed()}>Copy failed SKUs</Button>}
     </div>

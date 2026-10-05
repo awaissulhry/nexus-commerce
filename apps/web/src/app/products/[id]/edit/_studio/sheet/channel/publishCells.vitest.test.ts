@@ -15,6 +15,7 @@ import { ACTION_COLUMN, ACTION_NOT_LISTED, DELETE_NEEDS_DELETE, actionCellText, 
 import { publishHistorySearch } from './publishColumn'
 import { CellSaveTracker, publishActionModel, sellingStatusModel } from '@/design-system/grid'
 import { actionMenuEntries } from './channelActions'
+import { isRelistCell } from '../usePublishActions'
 
 const T0 = '2026-10-04T08:00:00.000Z'
 const read = { loaded: true, failed: false, lockedReason: null }
@@ -230,6 +231,50 @@ describe('delete and relist (simplify) — a row Nexus deleted is a row not on t
     expect(parseSendInput('delete', gone())).toEqual({ change: { column: 'send', mode: 'delete' } })
     // "Deleted" and "Keep deleted" are no Action words any more.
     expect(parseSendInput('Deleted', gone())).toEqual({ refused: '"Deleted" is not an Action. Choose Partial update, Full update or Delete' })
+  })
+})
+
+describe('an UNLINKED row (Item ID control) — never "set Status to Active and Publish" (that made a second eBay item)', () => {
+  const words = 'Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates it. Link its Item ID again on the main row; listing it as new makes a second item.'
+  const unlinked = () => cell({
+    channel: 'EBAY', state: 'not_listed', stateReason: words,
+    deleted: { at: '2026-10-05T06:00:00.000Z', where: 'eBay · IT', oldReference: '520000000001', relistChosenAt: null, sku: null, unlinked: true, sentence: 'Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates it.' },
+    create: { target: 'not_listed', source: 'default', defaultTarget: 'not_listed', noRecord: false, sentence: words },
+    send: { mode: 'full', setAt: null, setById: null, setByName: null, noLongerApplies: null },
+    sendOptions: [
+      { mode: 'partial', offered: false, reason: 'A new listing is always sent whole.', warning: null },
+      { mode: 'full', offered: true, reason: null, warning: 'A new listing is always sent whole.' },
+      { mode: 'delete', offered: false, reason: 'Unlinked from eBay · IT: Nexus no longer holds its Item ID, so it cannot delete it.', warning: null },
+    ],
+    statusOptions: [
+      { target: 'active', offered: false, action: null, reason: words, warning: null, checkedAtSend: null, sentence: null },
+      { target: 'inactive', offered: false, action: null, reason: words, warning: null, checkedAtSend: null, sentence: null },
+      { target: 'not_listed', offered: true, action: null, reason: null, warning: null, checkedAtSend: null, sentence: 'Publish leaves it out. Nexus no longer updates it on the channel.' },
+    ],
+  })
+
+  it('Status reads Not listed with "unlinked 5 Oct" and the unlink\'s words; Active and Inactive are held', () => {
+    const value = statusCellValue(unlinked(), read)!
+    expect(value.create).toMatchObject({ target: 'not_listed', deleted: { on: '5 Oct', unlinked: true } })
+    const model = sellingStatusModel(value)
+    expect(model).toMatchObject({ kind: 'new', aside: 'unlinked 5 Oct', tooltip: words })
+    expect(model.tooltip).not.toMatch(/set Status to Active/)
+    expect(statusEditorChoices(unlinked(), true).map(o => [o.value, o.heldReason ?? null])).toEqual([['active', words], ['inactive', words], ['not_listed', null]])
+  })
+
+  it('it never counts as a row the next Publish lists again, even holding an older Active', () => {
+    const stale = unlinked()
+    expect(isRelistCell({ ...stale, create: { ...stale.create!, target: 'active', source: 'own' } })).toBe(false)
+    expect(isRelistCell(cell({ ...stale, deleted: { ...stale.deleted!, unlinked: undefined }, create: { ...stale.create!, target: 'active', source: 'own' } }))).toBe(true)
+  })
+
+  it('Action is quiet: Publish leaves it out whatever it holds, never "list it again"', () => {
+    const value = actionCellValue(unlinked(), read)!
+    expect(value).toMatchObject({ newRow: true, deleted: true, unlinked: true })
+    const model = publishActionModel(value)
+    expect(model.pill).toBeNull()
+    expect(model.tooltip).not.toMatch(/list it again/)
+    expect(model.tooltip).toMatch(/may still be live on the channel/)
   })
 })
 

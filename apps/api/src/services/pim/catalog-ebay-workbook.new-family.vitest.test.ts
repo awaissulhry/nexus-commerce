@@ -135,6 +135,16 @@ describe('a new family from the file — what it never does', () => {
     expect(groups[0].family!.children.map(c => c.sku)).toEqual(['GALE-BLACK-L', 'GALE-YELLOW-M'])
     expect(new Set(out.issues.map(i => i.sku))).toEqual(new Set(['GALE-BLACK-M', 'GALE-BLACK-M2']))
   })
+  it('S9: a new variation or family root is refused when another product\'s listing holds or sends its SKU as a channel SKU', async () => {
+    const held = (skus: string[]) => Promise.resolve(skus.filter(sku => ['GALE-BLACK-L', 'NEWROOT'].includes(sku))
+      .map(sku => ({ sku, sentence: `${sku} is the SKU of OTHER on Amazon · DE. One SKU names one product: choose another SKU.` })))
+    const kid = await plan(galeTable(['GALE']), [], { dictionary, heldChannelSkus: held })
+    expect(kid.groups[0].family!.children.map(c => c.sku)).toEqual(['GALE-BLACK-M', 'GALE-YELLOW-M'])
+    expect(kid.out.issues.map(i => [i.sku, i.message])).toEqual([['GALE-BLACK-L', 'GALE-BLACK-L is the SKU of OTHER on Amazon · DE. One SKU names one product: choose another SKU.']])
+    const root = await plan(galeTable(['NEWROOT']), [], { dictionary, heldChannelSkus: held })
+    expect(root.groups).toEqual([])
+    expect(new Set(root.out.issues.map(i => i.message))).toEqual(new Set(['NEWROOT is the SKU of OTHER on Amazon · DE. One SKU names one product: choose another SKU.']))
+  })
   it('a product in the recycle bin comes back only when an import made it; any other is the Owner’s to decide', async () => {
     const gone = new Date()
     const products: P[] = [{ id: 'b1', sku: 'GALE-BLACK-M', parentId: null, productType: null, deletedAt: gone, importSource: 'SHEET_IMPORT' },

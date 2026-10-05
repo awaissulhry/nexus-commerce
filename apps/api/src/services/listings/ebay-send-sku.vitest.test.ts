@@ -22,9 +22,9 @@ const DRAFT = { listingStatus: 'DRAFT', isPublished: false, externalListingId: n
 
 describe('ebayPublishSku — what Publish sends for one row', () => {
   it('parity: no own SKU → the product SKU, for a live row, a draft row and no row', () => {
-    expect(ebayPublishSku({ ...LIVE }, 'P')).toEqual({ sku: 'P', wanted: 'P', live: 'P', waitsForMove: false })
-    expect(ebayPublishSku({ ...DRAFT }, 'P')).toEqual({ sku: 'P', wanted: 'P', live: null, waitsForMove: false })
-    expect(ebayPublishSku(null, 'P')).toEqual({ sku: 'P', wanted: 'P', live: null, waitsForMove: false })
+    expect(ebayPublishSku({ ...LIVE }, 'P')).toEqual({ sku: 'P', wanted: 'P', live: 'P', moves: false })
+    expect(ebayPublishSku({ ...DRAFT }, 'P')).toEqual({ sku: 'P', wanted: 'P', live: null, moves: false })
+    expect(ebayPublishSku(null, 'P')).toEqual({ sku: 'P', wanted: 'P', live: null, moves: false })
   })
 
   it('a row eBay does not hold yet sends its wanted SKU (own, else an extra listing\'s own on its main row)', () => {
@@ -35,13 +35,14 @@ describe('ebayPublishSku — what Publish sends for one row', () => {
   })
 
   it('a row eBay holds sends what eBay holds: its confirmed SKU, else the product SKU', () => {
-    expect(ebayPublishSku({ ...LIVE, liveChannelSku: 'HELD', channelSku: 'HELD' }, 'P')).toEqual({ sku: 'HELD', wanted: 'HELD', live: 'HELD', waitsForMove: false })
+    expect(ebayPublishSku({ ...LIVE, liveChannelSku: 'HELD', channelSku: 'HELD' }, 'P')).toEqual({ sku: 'HELD', wanted: 'HELD', live: 'HELD', moves: false })
   })
 
-  it('TODO(S10): a live row wanting another SKU keeps eBay\'s and says it waits for a move', () => {
-    expect(ebayPublishSku({ ...LIVE, channelSku: 'WANT' }, 'P')).toEqual({ sku: 'P', wanted: 'WANT', live: 'P', waitsForMove: true })
-    expect(ebayPublishSku({ ...LIVE, channelSku: 'WANT', liveChannelSku: 'HELD' }, 'P')).toEqual({ sku: 'HELD', wanted: 'WANT', live: 'HELD', waitsForMove: true })
-    expect(ebayPublishSku({ ...LIVE, productId: 'r', aliasKey: 'a', alias: { sku: 'ALT', productId: 'r' } }, 'P')).toEqual({ sku: 'P', wanted: 'ALT', live: 'P', waitsForMove: true })
+  it('S10: a live row with its own SKU that eBay holds under another MOVES (the SKU eBay holds stays `sku`; Trading sends `wanted`)', () => {
+    expect(ebayPublishSku({ ...LIVE, channelSku: 'WANT' }, 'P')).toEqual({ sku: 'P', wanted: 'WANT', live: 'P', moves: true })
+    expect(ebayPublishSku({ ...LIVE, channelSku: 'WANT', liveChannelSku: 'HELD' }, 'P')).toEqual({ sku: 'HELD', wanted: 'WANT', live: 'HELD', moves: true })
+    // Parity: an extra listing's SKU with no own SKU (`channelSku`) never moves a live eBay row: eBay's SKU stays.
+    expect(ebayPublishSku({ ...LIVE, productId: 'r', aliasKey: 'a', alias: { sku: 'ALT', productId: 'r' } }, 'P')).toEqual({ sku: 'P', wanted: 'ALT', live: 'P', moves: false })
   })
 
   it('no SKU at all sends nothing (the review names an empty SKU)', () => {

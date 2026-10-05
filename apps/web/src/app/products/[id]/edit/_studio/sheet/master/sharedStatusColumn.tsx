@@ -31,7 +31,7 @@
  */
 import { Clock, Lock } from 'lucide-react'
 import { memo } from 'react'
-import { type NewListingTarget, type StatusTarget } from '@nexus/shared/listing-actions'
+import { sharedRemovedRefusal, type NewListingTarget, type StatusTarget } from '@nexus/shared/listing-actions'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import {
   SelectPanelEditor, SellingStatePill, composeCellTooltip, newListingPill, roundTripClassRules, saveNote, waitingSetPhrase,
@@ -55,15 +55,17 @@ export const SHARED_ONLY_DRAFTS = 'Not on any channel yet: Publish creates these
 export const SHARED_MIXED_REFUSED = 'These markets differ, so there is no one Status to copy. Choose Active, Inactive or Ended'
 /** A product Nexus deleted on every market it was listed on. */
 export const SHARED_ALL_DELETED = 'Deleted on every market. To list them again, set their Status to Active in each market\'s sheet and Publish.'
+/** The same when Nexus unlinked some (or all) of them: an unlinked one may still be live, and is linked again instead. */
+export const SHARED_ALL_REMOVED = 'Deleted or unlinked on every market. Open each market\'s sheet: a deleted one lists again with Status Active and Publish; an unlinked one may still be live there and needs its channel ID linked again.'
+export const SHARED_ALL_UNLINKED = 'Unlinked on every market: the listings may still be live there, and Nexus no longer updates them. Link their channel IDs again in each market\'s sheet.'
 
 /**
  * Why the shared scope sets no Status or Action on a market Nexus deleted — the server's own words for a refused fan-out
  * (publish-action.service.ts `SHARED_DELETED`): listing it again is a choice made in that market's own sheet.
  */
-export const sharedDeletedRefusal = (cell: Pick<PublishActionCell, 'deleted' | 'channel' | 'marketplace' | 'aliasKey'>) => {
-  const where = cell.deleted?.where ?? marketLabel(cell)
-  return `Deleted on ${where}. To list it again, set its Status in the ${where} sheet.`
-}
+export const sharedDeletedRefusal = (cell: Pick<PublishActionCell, 'deleted' | 'channel' | 'marketplace' | 'aliasKey'>) =>
+  // An unlinked market says the unlink's truth (its id is linked again in that sheet), never "list it again".
+  sharedRemovedRefusal({ where: cell.deleted?.where ?? marketLabel(cell), unlinked: cell.deleted?.unlinked })
 
 /** A market as the shared scope may change it: on a deleted market every Status and Action is refused (`sharedDeletedRefusal`). */
 export function sharedCell(cell: PublishActionCell): PublishActionCell {
@@ -125,8 +127,9 @@ export function sharedStatusValue(cells: readonly PublishActionCell[], read: Pub
   // New listings: markets not on the channel yet choose what Publish creates — the product stays editable.
   const lockedReason = read.failed && !cells.length ? 'The selling state could not be read. Reload the sheet to try again.'
     : read.lockedReason ?? (!cells.length ? SHARED_NOT_LISTED
-      : allDeleted ? (cells.length === 1 ? sharedDeletedRefusal(cells[0]) : SHARED_ALL_DELETED)
-        : !live.onChannel && !live.fresh && !live.deleted ? SHARED_ONLY_DRAFTS : null)
+      : allDeleted ? (cells.length === 1 ? sharedDeletedRefusal(cells[0]) : cells.every(cell => cell.deleted?.unlinked) ? SHARED_ALL_UNLINKED
+        : cells.some(cell => cell.deleted?.unlinked) ? SHARED_ALL_REMOVED : SHARED_ALL_DELETED)
+        : !live.onChannel && !live.fresh && !live.deleted && !live.unlinked ? SHARED_ONLY_DRAFTS : null)
   const livePill: SellingPillMeta = { label: live.word, tone: live.tone, glyph: 'dot' }
   const common = commonStatusTarget(cells)
   const many = live.total > 1 ? ` on ${n(live.total)} markets` : ''

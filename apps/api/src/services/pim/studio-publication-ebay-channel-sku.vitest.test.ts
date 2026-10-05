@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * its main row, else the product SKU); a row eBay holds sends the SKU eBay holds (its confirmed `liveChannelSku`, else the
  * product SKU). Parity: with no own SKU anywhere, every row sends its product SKU, exactly as before.
  *
- * TODO(S10): a live row whose wanted SKU differs from eBay's keeps eBay's SKU here — moving a live eBay SKU (Trading revise
- * in place, renamed variations matched by their values) is step S10; the "S10" cases below pin today's behaviour.
+ * S10: a live row with its own SKU (`channelSku`) that eBay holds under another is RENAMED in place by a Trading Publish:
+ * it sends its own SKU, the builder lists the move (`moves`), and a Full update matches the renamed variation by its values
+ * (eBay's quantity kept; never added again, never deleted). An Inventory listing refuses the move by name.
  *
  * The real builder and variation rules; only the loaders, the description renderer and eBay are stood in. Nothing reaches
  * eBay. SKUs are fake.
@@ -137,13 +138,67 @@ describe('a live eBay listing (rows eBay holds) sends the SKU eBay holds', () =>
     expect(sent(await buildEbayListingInput(facts({ c2: { ...DRAFT, channelSku: 'NEW-L' } }), { currency: 'EUR' })).variations).toEqual(['FAM-M', 'NEW-L'])
   })
 
-  it('TODO(S10): a live row whose wanted SKU differs from eBay\'s keeps eBay\'s SKU (moving it is step S10)', async () => {
+  it('S10: a live row with its own SKU that eBay holds under another sends its own SKU and is listed as a move', async () => {
     const built = await buildEbayListingInput(facts({ c1: { channelSku: 'WANT-M' }, c2: { channelSku: 'WANT-L', liveChannelSku: 'HELD-L' } }), { currency: 'EUR' })
-    expect(sent(built).variations).toEqual(['FAM-M', 'HELD-L'])
-    // An extra listing's alias SKU (never sent to eBay) is not moved onto a live item either.
+    expect(sent(built).variations).toEqual(['WANT-M', 'WANT-L'])
+    expect(built.moves).toEqual([{ productId: 'c1', listingId: 'l-c1', from: 'FAM-M', to: 'WANT-M' }, { productId: 'c2', listingId: 'l-c2', from: 'HELD-L', to: 'WANT-L' }])
+    // Parity: an extra listing's alias SKU (never sent to eBay) is not moved onto a live item — no own SKU, no move.
     m.aliases = [{ id: 'alias-1', sku: 'FAM-ALT', productId: 'p' }]
     const alias = await buildEbayListingInput(facts({ p: { aliasKey: 'alias-1', aliasId: 'alias-1' } }, { aliasKey: 'alias-1' }), { currency: 'EUR' })
     expect(sent(alias).item).toBe('FAM')
+    expect(alias.moves).toEqual([])
+  })
+
+  it('S10: the main row\'s own SKU renames the item\'s Custom label in place', async () => {
+    const built = await buildEbayListingInput(facts({ p: { channelSku: 'FAM-EB' } }), { currency: 'EUR' })
+    expect(sent(built).item).toBe('FAM-EB')
+    expect(built.moves).toEqual([{ productId: 'p', listingId: 'l-p', from: 'FAM', to: 'FAM-EB' }])
+  })
+
+  const liveItem = (label: string, rows: Array<[string, string, number, number]>) => {
+    const variation = ([sku, size, quantity, sold]: [string, string, number, number]) => `<Variation><SKU>${sku}</SKU><StartPrice currencyID="EUR">99</StartPrice><Quantity>${quantity}</Quantity><VariationSpecifics><NameValueList><Name>Taglia</Name><Value>${size}</Value></NameValueList></VariationSpecifics><SellingStatus><QuantitySold>${sold}</QuantitySold></SellingStatus></Variation>`
+    return `<GetItemResponse><Ack>Success</Ack><Item><ItemID>111</ItemID><SKU>${label}</SKU><Variations>${rows.map(variation).join('')}</Variations></Item></GetItemResponse>`
+  }
+
+  it('S10: a Full update renames a variation in place — matched by its values, eBay\'s own quantity kept, never added or deleted', async () => {
+    const built = await buildEbayListingInput(facts({ p: { channelSku: 'FAM-EB' }, c1: { channelSku: 'WANT-M' } }), { currency: 'EUR' })
+    const raw = liveItem('FAM', [['FAM-M', 'M', 4, 1], ['FAM-L', 'L', 2, 0]])
+    const full = ebayFullRevision({ shared: built.shared as any, settings: built.settings, itemId: '111', single: false,
+      live: parseEbayPublicationItem(raw), stock: ebayLiveStock(parseEbayItemDocument(raw)), moves: built.moves })
+    expect(full).toMatchObject({ blockers: [], added: [], extras: [] })
+    const sentItem = parseEbayItemDocument(full.xml)
+    expect(sentItem.SKU).toBe('FAM-EB')
+    expect(full.xml).toContain('<SKU>WANT-M</SKU>')
+    expect(full.xml).not.toContain('<SKU>FAM-M</SKU>')
+    expect(full.xml).not.toContain('<Delete>true</Delete>')
+    // eBay's own available number (4 listed − 1 sold) goes with the renamed variation, under the values eBay holds (Taglia M).
+    expect(full.xml).toMatch(/<SKU>WANT-M<\/SKU>[\s\S]*?<Quantity>3<\/Quantity>[\s\S]*?<Value>M<\/Value>/)
+  })
+
+  it('S10: control — without the move, today\'s Full update would add WANT-M at 0 and delete FAM-M', async () => {
+    const built = await buildEbayListingInput(facts({ c1: { channelSku: 'WANT-M' } }), { currency: 'EUR' })
+    const raw = liveItem('FAM', [['FAM-M', 'M', 4, 0], ['FAM-L', 'L', 2, 0]])
+    const full = ebayFullRevision({ shared: built.shared as any, settings: built.settings, itemId: '111', single: false,
+      live: parseEbayPublicationItem(raw), stock: ebayLiveStock(parseEbayItemDocument(raw)) })
+    expect(full.added).toEqual(['WANT-M'])
+    expect(full.extras.map(extra => [extra.sku, extra.action])).toEqual([['FAM-M', 'delete']])
+  })
+
+  it('S10: a renamed variation whose values differ on eBay is refused (eBay could not find it by its values)', async () => {
+    const built = await buildEbayListingInput(facts({ c1: { channelSku: 'WANT-M' } }), { currency: 'EUR' })
+    const raw = liveItem('FAM', [['FAM-M', 'XL', 4, 0], ['FAM-L', 'L', 2, 0]])
+    const full = ebayFullRevision({ shared: built.shared as any, settings: built.settings, itemId: '111', single: false,
+      live: parseEbayPublicationItem(raw), stock: ebayLiveStock(parseEbayItemDocument(raw)), moves: built.moves })
+    expect(full.blockers).toEqual([expect.stringMatching(/^eBay finds a renamed variation by its values: FAM-M has Taglia XL on eBay, and Nexus sends Taglia M for WANT-M\./)])
+  })
+
+  it('S10: a renamed variation eBay no longer holds is refused, never added as new', async () => {
+    const built = await buildEbayListingInput(facts({ c1: { channelSku: 'WANT-M' } }), { currency: 'EUR' })
+    const raw = liveItem('FAM', [['FAM-L', 'L', 2, 0]])
+    const full = ebayFullRevision({ shared: built.shared as any, settings: built.settings, itemId: '111', single: false,
+      live: parseEbayPublicationItem(raw), stock: ebayLiveStock(parseEbayItemDocument(raw)), moves: built.moves })
+    expect(full.added).toEqual([])
+    expect(full.blockers).toContain('eBay does not hold FAM-M on this listing any more, so Nexus cannot rename it to WANT-M. Review again.')
   })
 
   it('Full update still matches eBay\'s variations by the SKU eBay holds: an own SKU is neither added nor deleted', async () => {
@@ -169,5 +224,12 @@ describe('an eBay Inventory listing is read under the SKUs eBay holds', () => {
   it('the main row\'s own confirmed SKU is the group key; a variation\'s own confirmed SKU is expected', async () => {
     await prepareEbayInventoryPublication(facts({ p: { liveChannelSku: 'GRP-EB' }, c2: { liveChannelSku: 'OWN-L' } }))
     expect(m.inventoryDestination).toMatchObject({ parentSku: 'GRP-EB', expectedSkus: ['FAM-M', 'OWN-L'] })
+  })
+
+  it('S10: a row with its own SKU that eBay holds under another is refused by name — Nexus cannot move an Inventory listing yet', async () => {
+    const refusal = await prepareEbayInventoryPublication(facts({ c1: { channelSku: 'WANT-M' } })).then(() => null, (error: any) => error)
+    expect(refusal?.issues).toEqual([expect.objectContaining({ productId: 'c1', field: 'sellerSku', severity: 'error',
+      message: 'eBay holds FAM-M, Nexus holds WANT-M. Nexus cannot move an eBay Inventory listing to a new SKU yet: Delete it, then list it again.' })])
+    expect(m.inventoryDestination).toBeNull()
   })
 })

@@ -13,6 +13,10 @@
  * first build's way (Partial or Full update in the Action column after the delete, `ListingDeletion.relistChosenAt`) is
  * read as the row's own choice Active until a Status choice replaces it.
  *
+ * A row Nexus UNLINKED (Item ID control, 2026-10-05; `ListingDeletion.unlinked`) is not a deleted one: the listing may
+ * still be live on the channel. It always reads Not listed — no own, main or older choice lists it as new (that made a
+ * second eBay item) — until its id is linked again.
+ *
  * PURE. The sheet's read (`publish-action.service.ts`) and Publish (`studio-publication-plan.ts`,
  * `studio-publication.service.ts`) read the choices from the same facts with this one function, so the Status a cell
  * shows is what Publish does.
@@ -76,6 +80,9 @@ export const setBeforeDelete = (at: Date | string | null | undefined, deletion: 
  * was deleted); with none, an older relist choice (Action Partial or Full update after the delete) reads Active.
  */
 const ownChoice = (listing: ChoiceListing | undefined, deletion: ListingDeletion | null): NewListingTarget | null => {
+  // An UNLINKED row (Item ID control, 2026-10-05) is never listed as new — the listing may still be live there, and a
+  // create would make a second one: no stored value is a create choice on it (nor a main row's choice for its variations).
+  if (deletion?.unlinked) return null
   const target = statusTargetOf(listing?.sellingTarget)
   if (isNewListingTarget(target) && !setBeforeDelete(listing?.sellingTargetAt, deletion)) return target
   return deletion?.relistChosenAt ? 'active' : null
@@ -105,7 +112,9 @@ export function newListingChoices(input: NewListingChoicesInput): Map<string, Ne
     const includedByDefault = !isVariation ? true
       : listing ? !input.excludedListingIds?.has(listing.id) : ebayUnstarted
     const own = ownChoice(listing, deletion)
-    const choice = newListingChoice({ channel, own, main, isVariation, includedByDefault, shopifyActive: input.shopifyActive, deleted: !!deletion })
+    // An unlinked row reads Not listed whatever its main row chose: Publish leaves it out (`deletedPublishSkip` says why).
+    const choice = deletion?.unlinked ? { target: 'not_listed' as const, source: 'default' as const }
+      : newListingChoice({ channel, own, main, isVariation, includedByDefault, shopifyActive: input.shopifyActive, deleted: !!deletion })
     out.set(product.id, {
       productId: product.id, listingId: listing?.id ?? null, target: choice.target, source: choice.source, own,
       defaultTarget: includedByDefault && !deletion ? newListingDefault(channel, { shopifyActive: input.shopifyActive }) : 'not_listed',

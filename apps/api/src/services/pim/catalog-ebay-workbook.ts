@@ -99,6 +99,12 @@ export const SHEET_IMPORT_SOURCE = 'SHEET_IMPORT'
 export interface EbayFamilyContext {
   open?: { id: string; sku: string; children: number }
   dictionary?: readonly DictionaryAttribute[]
+  /**
+   * S9 — the SKUs (of those asked) another product's listing holds or sends as its channel SKU, each with its sentence.
+   * Default: `channelSkuHoldings` on the given client (loaded on demand: this module stays free of Prisma for the parse
+   * worker), when that client can read raw SQL.
+   */
+  heldChannelSkus?: (skus: string[]) => Promise<Array<{ sku: string; sentence: string }>>
 }
 export interface EbayWorkbookResult {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions: SourceExclusion[]
@@ -671,6 +677,12 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
   const familyAliases = roots.length ? await prisma.productListingAlias.findMany({ where: { productId: { in: roots.map(r => r.id) }, channel: 'EBAY', marketplace: table.marketplace, status: 'ACTIVE' },
     select: { id: true, productId: true, sku: true, label: true, adoptedFromProductId: true } }) : []
   const rootById = new Map(roots.map(r => [r.id, r.sku]))
+  // S9 — a SKU no product holds yet but another product's listing holds or sends as its channel SKU: a new product
+  // (a family's root or a variation) may not take it — one SKU names one product.
+  const unheld = [...new Set([...parentSkus, ...childSkus])].filter(sku => !live.has(sku))
+  const heldChannelSkus = context.heldChannelSkus ?? (typeof (prisma as { $queryRaw?: unknown }).$queryRaw === 'function'
+    ? async (skus: string[]) => (await import('../listings/channel-sku-rename.js')).channelSkuHoldings(prisma as never, skus) : null)
+  const heldSentence = new Map((unheld.length && heldChannelSkus ? await heldChannelSkus(unheld) : []).map(h => [h.sku, h.sentence]))
   const decision = new Map<string, { rootId: string; rootSku: string } | { refuse: string } | { skip: string }>()
   /** Phase 2: file parents Nexus does not hold (or the open product without variations), planned as new families below. */
   const fresh: string[] = []
@@ -770,7 +782,7 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
       return `${sku} is in the recycle bin. Restore it, or delete it for good, then import again.`
     }
     const own = live.get(rootSku)
-    const rootProblem = adopt ? twice(rootSku) : own ? `${rootSku} is a variation of ${rootById.get(own.parentId ?? '') ?? 'another product'} in this business. A new product family cannot take its SKU.` : twice(rootSku) || binned(rootSku)
+    const rootProblem = adopt ? twice(rootSku) : own ? `${rootSku} is a variation of ${rootById.get(own.parentId ?? '') ?? 'another product'} in this business. A new product family cannot take its SKU.` : twice(rootSku) || binned(rootSku) || heldSentence.get(rootSku) || ''
     if (rootProblem) { refuseRows(records, 'SKU', rootProblem); continue }
     // Its other listings get their own SKUs: never a product's SKU, never another listing's.
     const listings = parents.filter(p => p !== rootSku).filter(p => {
@@ -796,7 +808,7 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
       const problem = parentSkus.includes(sku) ? `${sku} is both a listing and a variation in this file. Keep one of them, then import again.`
         : existing?.parentId ? `${sku} is already a variation of ${rootById.get(existing.parentId) ?? 'another product'}. Nexus never moves a product to another family; nothing is imported for it.`
         : existing ? `${sku} is already a product in this business. Nexus does not make it a variation of ${rootSku}; nothing is imported for it.`
-        : binned(sku)
+        : binned(sku) || heldSentence.get(sku) || ''
       if (problem) { childProblems.set(sku, problem); continue }
       const row = rowOf(sku)
       const values = Object.fromEntries(axes.map(a => [a.code, v(row, a.column)]))

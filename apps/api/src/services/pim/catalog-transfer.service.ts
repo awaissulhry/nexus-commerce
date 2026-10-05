@@ -14,6 +14,7 @@ import { clearFieldCatalogueCache } from './mapping/field-catalogue.service.js'
 import { productRoleOf } from '@nexus/shared/master-sheet'
 import { relationshipAliasConflicts } from './relationship-alias-guard.js'
 import { DraftListingError, draftListingFields, ensureDraftListings } from './draft-listing.service.js'
+import { channelSkuHoldings } from '../listings/channel-sku-rename.js'
 
 type Payload = { kind: 'catalog-transfer-v1'; market: string; mode: TransferMode; rows?: TransferRow[]; plan: TransferPlan; previewExpiresAt: string }
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -131,7 +132,11 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
   ])
   const offerSkus = new Map<string, string[]>()
   for (const offer of offers) offerSkus.set(offer.channelListingId, [...offerSkus.get(offer.channelListingId) ?? [], offer.sku])
+  // S9 — the product SKUs this file would CREATE that another product's listing holds or sends as its channel SKU.
+  const newSkus = [...new Set(rows.filter(r => r.entity === 'Products' && !productMap.has(r.sku)).map(r => r.sku))]
+  const heldChannelSkus = new Map((newSkus.length ? await channelSkuHoldings(db as unknown as Prisma.TransactionClient, newSkus) : []).map(h => [h.sku, h.sentence]))
   return { products: productMap, listings: listingMap, families, categories, accounts, markets, aliases, categoryDefaults, formulas, relationshipBlockedProducts, parentsWithChildren: new Set(products.filter(p => p._count?.children > 0).map(p => p.id)),
+    ...(heldChannelSkus.size ? { heldChannelSkus } : {}),
     ...(pricing ? { pendingPriceListings: new Set(pendingPrices.map(p => p.channelListingId).filter((id): id is string => !!id)), saleWindows } : {}),
     ...(identity ? { offerSkus } : {}) }
 }

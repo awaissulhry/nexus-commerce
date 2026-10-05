@@ -184,3 +184,36 @@ it('refuses activation when the connected store changed its metafield definition
   expect(schemaRead).toHaveBeenCalledWith('store-a', true)
   expect(db.$transaction).not.toHaveBeenCalled()
 })
+
+// S9 — the Shopify SKU column takes no mapping rule: Publish sends the listing's own SKU or the product SKU, so a rule
+// there would be saved and never read. Refused when a review is drafted and when an older review is activated; removing a
+// rule saved before is allowed; any other channel's `listing_sku` key is not this column.
+describe('S9 — the Shopify SKU column takes no mapping rule', () => {
+  const line = "The SKU column always sends the listing's own SKU, or the product SKU; edit it in the product sheet."
+  it('a review that gives it a rule (market or category) is refused with the one line; nothing is created', async () => {
+    for (const category of [null, 'jackets']) {
+      await expect(createMappingImpact({ channel: 'SHOPIFY', market: 'GLOBAL', category, userId: 'operator', expectedToken: mappingToken(original),
+        changes: [{ fieldKey: 'listing_sku', rule: { source: 'name' } }] })).rejects.toMatchObject({ errors: [line] })
+    }
+    expect(db.bulkOperation.create).not.toHaveBeenCalled()
+  })
+
+  it('removing a rule saved before is allowed; another channel is not concerned', async () => {
+    const saved = { ...original, fields: { listing_sku: { source: 'name' } } }
+    db.marketplace.findUnique.mockResolvedValue({ schemaMapping: saved })
+    db.product.count.mockResolvedValue(0)
+    await expect(createMappingImpact({ channel: 'SHOPIFY', market: 'GLOBAL', userId: 'operator', expectedToken: mappingToken(saved),
+      changes: [{ fieldKey: 'listing_sku', rule: null }] })).resolves.toMatchObject({ state: 'MAPPING_SCANNING' })
+    db.marketplace.findUnique.mockResolvedValue({ schemaMapping: original })
+    await expect(createMappingImpact({ channel: 'EBAY', market: 'IT', userId: 'operator', expectedToken: mappingToken(original),
+      changes: [{ fieldKey: 'listing_sku', rule: { source: 'name' } }] })).resolves.toMatchObject({ state: 'MAPPING_SCANNING' })
+  })
+
+  it('an older review that would give it a rule is not activated', async () => {
+    job.status = 'MAPPING_REVIEW'; job.expiresAt = new Date(Date.now() + 60_000)
+    job.changes.channel = 'SHOPIFY'; job.changes.market = 'GLOBAL'
+    job.changes.after = { ...original, fields: { listing_sku: { source: 'name' } } }
+    await expect(activateMappingImpact(job.id, 'operator')).rejects.toMatchObject({ errors: [line] })
+    expect(db.$transaction).not.toHaveBeenCalled()
+  })
+})

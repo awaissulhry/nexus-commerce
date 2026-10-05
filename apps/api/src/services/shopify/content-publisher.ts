@@ -5,6 +5,8 @@ import { readInformationMedia, advanceMediaOrder } from './information-gateway.j
 import { verifyMediaMembership } from './information-media-membership.js'
 import { SHOPIFY_NEXUS_TEMPLATE, shopifyTemplateSuffixInput, type MediaOrderEdit } from '@nexus/shared/shopify-information'
 import type { InheritedInformationField, InheritedInformationValues } from './inherited-information.js'
+import { remoteVariantMatches } from './variant-match.js'
+export { remoteVariantMatches, shopifySkuRenames, type ShopifySkuRename } from './variant-match.js'
 
 export type ContentGalleryOperation = { edit: MediaOrderEdit; state?: { submitted?: boolean; jobId?: string }; verified?: boolean }
 export async function resumeContentGallery(gql: ShopifyGraphql, operation: ContentGalleryOperation, productId: string | undefined, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
@@ -195,14 +197,22 @@ export async function publishMetaobjects(gql: ShopifyGraphql, content: ShopifyCo
   return ids
 }
 
-/** Native variant IDs are stable. Refuse implicit removals and ambiguous SKU matches. */
-export function mapRemoteVariants(variants: ContentVariant[], remote: ShopifyRemoteProduct | null) {
+/**
+ * Native variant IDs are stable. Refuse implicit removals and ambiguous SKU matches. S10 — `liveSkus` (Nexus variant id →
+ * the SKU Shopify holds for it): a variant renamed in Nexus is matched by the SKU Shopify still holds, so the productSet
+ * renames that variant in place (its id, the new SKU) instead of creating a new one and removing the old.
+ */
+export function mapRemoteVariants(variants: ContentVariant[], remote: ShopifyRemoteProduct | null, liveSkus: Readonly<Record<string, string>> = {}) {
   const ids: Record<string, string> = {}
   for (const v of variants) {
-    const matches = remote?.variants.nodes.filter(r => v.shopifyVariantId ? r.id === toGid('ProductVariant', v.shopifyVariantId) : r.sku === v.sku) ?? []
-    if (matches.length > 1) throw new Error(`Shopify has multiple variants with SKU ${v.sku}. Resolve the duplicate before syncing.`)
+    const { matches, matchedBy } = remoteVariantMatches(v, remote, liveSkus)
+    if (matches.length > 1) throw new Error(`Shopify has multiple variants with SKU ${matchedBy}. Resolve the duplicate before syncing.`)
     if (v.shopifyVariantId && !matches.length) throw new Error(`The mapped Shopify variant for ${v.sku} was removed. Reconcile its identity before syncing.`)
-    if (matches.length) ids[v.id] = matches[0].id
+    if (matches.length) {
+      const taken = Object.entries(ids).find(([, id]) => id === matches[0].id)
+      if (taken) throw new Error(`Shopify variant ${matches[0].sku} matches two Nexus variants (${variants.find(other => other.id === taken[0])?.sku ?? taken[0]} and ${v.sku}). Reconcile their identities before syncing.`)
+      ids[v.id] = matches[0].id
+    }
   }
   if (remote?.variants.nodes.some(v => !Object.values(ids).includes(v.id))) throw new Error('Shopify has variants outside this Nexus family. Import or reconcile them before syncing; no variants were removed.')
   return ids
@@ -286,7 +296,12 @@ export interface PublishContentInput { identity: string; title: string; descript
    * Wave 2 D3 — the theme template a NEW product is created with (`product-facts.ts`: the listing's value, else the default
    * rule's "nexus"); '' = the store's default template, sent as null. Absent = "nexus", as every create sent before.
    */
-  templateSuffix?: string }
+  templateSuffix?: string
+  /**
+   * S10 (per-channel SKU) — by Nexus variant id, the SKU Shopify holds for that variant (its listing's live SKU): a
+   * variant with no stored Shopify id is matched by it first, so a rename is sent in place (`mapRemoteVariants`).
+   */
+  liveSkus?: Record<string, string> }
 export async function publishContent(gql: ShopifyGraphql, input: PublishContentInput, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
   const { content, variants, remote } = input
   const problems = [...inspectShopifyContent(content, variants), ...shopifyOptionValueProblems(content, variants)]
@@ -297,7 +312,7 @@ export async function publishContent(gql: ShopifyGraphql, input: PublishContentI
   if (!/^gid:\/\/shopify\/Location\/\d+$/.test(input.locationId)) throw new Error('Choose a Shopify inventory location before publishing.')
   const { location } = await gql(`query NexusInventoryLocation($id:ID!) { location(id:$id) { id isActive } }`, { id: input.locationId })
   if (!location?.isActive) throw new Error('The selected Shopify inventory location is unavailable.')
-  const variantIds = mapRemoteVariants(variants, remote)
+  const variantIds = mapRemoteVariants(variants, remote, input.liveSkus)
   const observedStock: Record<string, number> = {}
   for (const variant of variants.filter(v => variantIds[v.id])) {
     const result = await gql(`query NexusInventoryBefore($id:ID!,$location:ID!) { productVariant(id:$id) { inventoryItem { inventoryLevel(locationId:$location) { quantities(names:["available"]) { name quantity } } } } }`, { id: variantIds[variant.id], location: input.locationId })

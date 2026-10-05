@@ -8,8 +8,10 @@
  * runs announce events; an older source's run is read once and on "Try again".
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { HistoryRunDetail } from '@nexus/shared/publication-history'
+import type { HistoryRunDetail, HistorySkuMove } from '@nexus/shared/publication-history'
 import type { StudioPublicationCheck, StudioRetrySelection } from '@nexus/shared/studio-publication'
+import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { HistoryRequestError, historyRequest } from './runActions'
 
@@ -81,6 +83,30 @@ export function usePublishRunDetail(runId: string | null) {
     return result
   }, [detail, reload])
 
+  /**
+   * S10 — "Delete the old SKU again": the publish moved a live Amazon listing to a new SKU and Amazon did not confirm the
+   * delete of the old one. Nexus tries that delete again now (products.delete), then the run is read again.
+   */
+  const deleteOldAgain = useCallback(async () => {
+    if (!detail?.run.productId) throw new Error('This publish is not tied to a product.')
+    // A keyed command (`sendCommand`): a double press deletes once; a retry after a lost answer reuses the key.
+    const sent = await sendCommand<{ moves?: HistorySkuMove[]; message?: string; error?: string }>(
+      commandKeyFor(`delete-old-sku:${detail.run.id}`),
+      `${getBackendUrl()}/api/products/${enc(detail.run.productId)}/studio-publication/${enc(detail.run.id)}/delete-old-sku`,
+      { method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+    )
+    if (sent.conflict) throw new HistoryRequestError(commandConflictMessage(sent.conflict, 'delete of the old SKU'), sent.response.status)
+    const data = sent.body
+    if (!sent.response.ok) {
+      const words = typeof data?.message === 'string' && data.message ? data.message
+        : typeof data?.error === 'string' && !/^[A-Z_]+$/.test(data.error) ? data.error : null
+      throw new HistoryRequestError(words ?? `The request failed (${sent.response.status}).`, sent.response.status)
+    }
+    if (data == null) throw new HistoryRequestError('The server answered with nothing.', sent.response.status)
+    reload()
+    return data as { moves: HistorySkuMove[] }
+  }, [detail, reload])
+
   /** What a NEW review should tick: the failed products and their fields. Reads only. */
   const retrySelection = useCallback(async () => {
     if (!detail?.run.productId) throw new Error('This publish is not tied to a product.')
@@ -93,5 +119,5 @@ export function usePublishRunDetail(runId: string | null) {
     return historyRequest<ListingRequest>(`/api/publications/${enc(runId)}/listings/${enc(listingId)}/request`)
   }, [runId])
 
-  return { state, detail, reload, checkNow, markChecked, retrySelection, loadRequest }
+  return { state, detail, reload, checkNow, markChecked, retrySelection, deleteOldAgain, loadRequest }
 }

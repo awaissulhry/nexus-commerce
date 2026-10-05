@@ -43,6 +43,12 @@ export function listingUrl(
   externalListingId: string | null | undefined,
 ): string | null {
   if (!channel || !marketplace || !externalListingId) return null
+  // Etsy (Item ID control, I2): one site for every market — a listing's page is etsy.com/listing/<id>, whatever the
+  // scope's market (GLOBAL). Only a number is a listing id; anything else gets no link.
+  if (channel.trim().toUpperCase() === 'ETSY') {
+    const listing = externalListingId.trim()
+    return /^[1-9]\d{0,19}$/.test(listing) ? `https://www.etsy.com/listing/${listing}` : null
+  }
   const market = marketplace.trim().toUpperCase()
   const tld = UK.has(market) ? 'co.uk' : TLD[market]
   if (!tld) return null
@@ -56,8 +62,8 @@ export function listingUrl(
     case 'AMAZON':
       return `https://www.amazon.${tld}/dp/${id}`
     default:
-      // Shopify, WooCommerce and Etsy listings are not addressable from a marketplace code alone —
-      // they need the shop's own domain, which this scope does not carry.
+      // Shopify and WooCommerce listings are not addressable from a marketplace code alone — they need the
+      // shop's own domain, which this scope does not carry (a guessed store could be another business's).
       return null
   }
 }

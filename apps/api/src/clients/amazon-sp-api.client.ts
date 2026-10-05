@@ -1436,6 +1436,39 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * Catalog Items API — whether an ASIN exists in one marketplace, with its title and brand (summaries). Read-only; the
+   * product sheet's ASIN control proves a typed ASIN with it before a draft row lists on it (Item ID control, step I4).
+   * Amazon answers 404 for an ASIN it does not have in that marketplace.
+   */
+  async getCatalogItemSummary(asin: string, marketplaceId: string): Promise<{
+    success: boolean
+    httpStatus: number
+    title?: string | null
+    brand?: string | null
+    error?: string
+  }> {
+    try {
+      const accessToken = await this.getAccessToken()
+      const url = new URL(`https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(this.boundAccount?.id)}.amazon.com/catalog/2022-04-01/items/${encodeURIComponent(asin)}`)
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      url.searchParams.set('includedData', 'summaries')
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, 'x-amz-access-token': accessToken } },
+        `getCatalogItem(${asin})`,
+      )
+      const data = (await response.json().catch(() => ({}))) as { summaries?: Array<{ itemName?: string; brand?: string }> }
+      if (response.status >= 400) {
+        return { success: false, httpStatus: response.status, error: this.parseErrors(data as never) ?? JSON.stringify(data).slice(0, 300) }
+      }
+      const summary = Array.isArray(data.summaries) ? data.summaries[0] : undefined
+      return { success: true, httpStatus: response.status, title: summary?.itemName ?? null, brand: summary?.brand ?? null }
+    } catch (error) {
+      return { success: false, httpStatus: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
    * Batch submit multiple listings
    * Respects rate limiting for each request
    */

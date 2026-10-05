@@ -4,9 +4,11 @@
  * and undo-change asks for the old value through the same gate. Real product bulk writer, real PostgreSQL with the
  * production schema and policies (PGlite); nothing reaches a channel.
  *
- * d12 (decided): a live listing's channel SKU is recorded, never renamed — a live product's SKU is refused, and an extra
- * listing's recorded SKU is not changed while it is live. set-listing-sku needs ProductListingAlias.sku: refused with
- * its reason without the column, working once the column exists (added here as the eBay import's migration adds it).
+ * S9 (per-channel SKU, replacing d12's refusals): a product SKU rename keeps every listing a channel holds on its old SKU
+ * and drafts follow the new one; set-listing-sku sets ONE listing's own SKU through `setChannelSku` (by listingId, or an
+ * extra listing by extraListingId, its recorded SKU kept in step) and refuses to move a listing the channel holds to a
+ * new SKU until Publish's move step. An extra listing needs ProductListingAlias.sku: refused with its reason without the
+ * column, working once the column exists (added here as the eBay import's migration adds it).
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -103,13 +105,23 @@ beforeAll(async () => {
       await client.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: `I10_${channel}_${code}` } as never })
     }
     const make = async (sku: string, extra: Data = {}) => { ids[sku] = (await client.product.create({ data: { sku, name: `${sku} jacket`, basePrice: '10.00', ...extra } })).id }
+    ids.ebayAccount = (await client.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'I10 eBay', externalAccountId: 'i10-ebay', isActive: true, isPrimary: true } as never })).id
     const list = (sku: string, channel: string, market: string, extra: Data = {}) => client.channelListing.create({
-      data: { productId: ids[sku], channel, marketplace: market, region: market, channelMarket: `${channel}_${market}`, listingStatus: 'ACTIVE', isPublished: true, externalListingId: `${sku}-ITEM`, ...extra },
+      data: { productId: ids[sku], channel, marketplace: market, region: market, channelMarket: `${channel}_${market}`, channelConnectionId: channel === 'EBAY' ? ids.ebayAccount : null,
+        listingStatus: 'ACTIVE', isPublished: true, externalListingId: `${sku}-ITEM`, ...extra },
     })
+    const DRAFT = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null }
     await make('FIX-OLD')
-    await list('FIX-OLD', 'EBAY', 'IT', { listingStatus: 'DRAFT', externalListingId: null })
+    ids.oldDraft = (await list('FIX-OLD', 'EBAY', 'IT', DRAFT)).id
     await make('FIX-LIVE')
-    await list('FIX-LIVE', 'EBAY', 'IT')
+    ids.liveListing = (await list('FIX-LIVE', 'EBAY', 'IT')).id
+    await make('FIX-HELD')
+    ids.heldListing = (await list('FIX-HELD', 'EBAY', 'IT')).id
+    // S10 — held listings Publish cannot move yet: an eBay Inventory item, an Etsy listing.
+    await make('FIX-INV')
+    ids.invListing = (await list('FIX-INV', 'EBAY', 'IT', { platformAttributes: { offerId: 'OFFER-9' } })).id
+    await make('FIX-ETSY')
+    ids.etsyListing = (await list('FIX-ETSY', 'ETSY', 'GLOBAL')).id
     await make('FIX-GTIN')
     await make('FIX-HOLDER', { ean: G2 })
     await make('FIX-AMZ', { gtin: G3 })
@@ -123,7 +135,7 @@ beforeAll(async () => {
     await list('FIX-ROOT', 'EBAY', 'IT', { aliasId: live.id, aliasKey: live.id, externalListingId: '110000000777' })
     const quiet = await client.productListingAlias.create({ data: { productId: ids['FIX-ROOT'], channel: 'EBAY', marketplace: 'DE', label: 'draft listing', position: 2 } })
     ids.quietAlias = quiet.id
-    await list('FIX-ROOT', 'EBAY', 'DE', { aliasId: quiet.id, aliasKey: quiet.id, listingStatus: 'DRAFT', externalListingId: null })
+    ids.quietRow = (await list('FIX-ROOT', 'EBAY', 'DE', { aliasId: quiet.id, aliasKey: quiet.id, ...DRAFT })).id
   })
   await inside(async () => { ids.bravo = (await client.product.create({ data: { sku: 'FIX-OLD', name: 'Bravo jacket', basePrice: '10.00' } })).id }, B)
   // Integration (ids × eBay import by SKU): this schema already has ProductListingAlias.sku (20261001c). The tests below
@@ -140,7 +152,7 @@ describe('I10 — set-product-sku', () => {
   it('previews the rename with the writer\'s verdict, runs only after a person approves, and undo puts the old SKU back', async () => {
     const out = await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-NEW' })
     expect(out.ok, out.error).toBe(true)
-    expect(out.preview).toMatchObject({ action: 'set-product-sku', changes: { SKU: { from: 'FIX-OLD', to: 'FIX-NEW' } }, effect: expect.stringContaining('1 draft listing will be published under the new SKU') })
+    expect(out.preview).toMatchObject({ action: 'set-product-sku', changes: { SKU: { from: 'FIX-OLD', to: 'FIX-NEW' } }, effect: 'Renames FIX-OLD to FIX-NEW in Nexus. No channel holds FIX-OLD: the draft follows FIX-NEW.' })
     expect((await product('FIX-OLD')).id).toBe(ids['FIX-OLD'])
     const approvalId = await askAndRun('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-NEW' })
     expect((await inside(() => db().product.findUniqueOrThrow({ where: { id: ids['FIX-OLD'] } }))).sku).toBe('FIX-NEW')
@@ -152,10 +164,19 @@ describe('I10 — set-product-sku', () => {
     expect((await inside(() => db().product.findUniqueOrThrow({ where: { id: ids['FIX-OLD'] } }))).sku).toBe('FIX-OLD')
   }, TIMEOUT)
 
-  it('refuses a live product (d12: a channel seller SKU is never renamed), a SKU in use, and the SKU it already has', async () => {
-    expect(await preview('set-product-sku', { productId: ids['FIX-LIVE'], sku: 'FIX-LIVE-2' })).toMatchObject({ ok: false, error: expect.stringContaining("Can't change the SKU while this product is live on EBAY") })
+  it('S9: a live product is renamed and its live listing keeps the old SKU; a SKU in use, and the SKU it already has, are refused', async () => {
+    expect((await preview('set-product-sku', { productId: ids['FIX-LIVE'], sku: 'FIX-LIVE-2' })).preview)
+      .toMatchObject({ effect: 'Renames FIX-LIVE to FIX-LIVE-2 in Nexus. eBay · IT keeps FIX-LIVE.' })
     expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-LIVE' })).toMatchObject({ ok: false, error: expect.stringContaining('already used by another product') })
     expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-OLD' })).toMatchObject({ ok: false, error: expect.stringContaining('already has this SKU') })
+  }, TIMEOUT)
+
+  it('S9: the rename runs after approval — the held eBay listing keeps the old SKU, and no other product may take it then', async () => {
+    await askAndRun('set-product-sku', { productId: ids['FIX-HELD'], sku: 'FIX-HELD-2' })
+    expect((await inside(() => db().product.findUniqueOrThrow({ where: { id: ids['FIX-HELD'] } }))).sku).toBe('FIX-HELD-2')
+    expect(await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: ids.heldListing }, select: { channelSku: true, liveChannelSku: true } })))
+      .toEqual({ channelSku: 'FIX-HELD', liveChannelSku: 'FIX-HELD' })
+    expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'fix-held' })).toMatchObject({ ok: false, error: expect.stringContaining('fix-held is the SKU of FIX-HELD-2 on eBay · IT') })
   }, TIMEOUT)
 
   it('another business\'s product is not found, and Claude\'s request is only ever queued', async () => {
@@ -224,22 +245,45 @@ describe('I10 — set-listing-sku', () => {
     expect(await preview('set-listing-sku', { extraListingId: 'no-such-alias', sku: 'X' })).toEqual({ ok: false, error: 'Extra listing not found' })
   }, TIMEOUT)
 
-  it('with the column: records a live listing\'s SKU, will not rename it while live (d12), and undo clears the record', async () => {
+  const stored = async (id: string) => (await database.db.query<{ sku: string | null }>(`SELECT sku FROM "ProductListingAlias" WHERE id = $1`, [id])).rows[0].sku
+  const ownSku = async (id: string) => (await inside(() => db().channelListing.findUniqueOrThrow({ where: { id }, select: { channelSku: true } }))).channelSku
+
+  it('with the column: a draft extra listing gets its own SKU (its recorded SKU kept in step), and undo lets it follow again', async () => {
     await database.db.query(`ALTER TABLE "ProductListingAlias" ADD COLUMN "sku" TEXT`)
-    const out = await preview('set-listing-sku', { extraListingId: ids.liveAlias, sku: 'FIX-ROOT-IT2' })
-    expect(out.preview).toMatchObject({ changes: { 'listing SKU': { from: null, to: 'FIX-ROOT-IT2' } }, effect: expect.stringContaining('It is live') })
-    const approvalId = await askAndRun('set-listing-sku', { extraListingId: ids.liveAlias, sku: 'FIX-ROOT-IT2' })
-    const stored = async (id: string) => (await database.db.query<{ sku: string | null }>(`SELECT sku FROM "ProductListingAlias" WHERE id = $1`, [id])).rows[0].sku
-    expect(await stored(ids.liveAlias)).toBe('FIX-ROOT-IT2')
-    expect(await preview('set-listing-sku', { extraListingId: ids.liveAlias, sku: 'FIX-ROOT-IT3' })).toMatchObject({ ok: false, error: expect.stringContaining('is live with the SKU FIX-ROOT-IT2') })
+    const out = await preview('set-listing-sku', { extraListingId: ids.quietAlias, sku: 'FIX-ROOT-DE' })
+    expect(out.preview).toMatchObject({ changes: { 'listing SKU': { from: null, to: 'FIX-ROOT-DE' } },
+      effect: 'The eBay · DE (extra listing) listing of FIX-ROOT (the extra listing "draft listing") uses FIX-ROOT-DE in Nexus. Publish lists it under FIX-ROOT-DE.' })
+    const approvalId = await askAndRun('set-listing-sku', { extraListingId: ids.quietAlias, sku: 'FIX-ROOT-DE' })
+    expect([await stored(ids.quietAlias), await ownSku(ids.quietRow)]).toEqual(['FIX-ROOT-DE', 'FIX-ROOT-DE'])
     const { ran } = await undo(approvalId)
     expect(ran).toMatchObject({ ok: true, status: 'executed' })
-    expect(await stored(ids.liveAlias)).toBeNull()
+    expect([await stored(ids.quietAlias), await ownSku(ids.quietRow)]).toEqual([null, null])
   }, TIMEOUT)
 
-  it('with the column: refuses a SKU a product or another extra listing uses', async () => {
-    expect(await preview('set-listing-sku', { extraListingId: ids.quietAlias, sku: 'fix-live' })).toMatchObject({ ok: false, error: expect.stringContaining('already the SKU of a product (FIX-LIVE)') })
+  it('S10: a held listing moves where Publish moves it (eBay Trading), not where it cannot (eBay Inventory, Etsy); a draft takes any', async () => {
+    expect((await preview('set-listing-sku', { extraListingId: ids.liveAlias, sku: 'FIX-ROOT-IT2' })).preview).toMatchObject({
+      effect: 'The eBay · IT (extra listing) listing of FIX-ROOT (the extra listing "second listing") uses FIX-ROOT-IT2 in Nexus. eBay · IT (extra listing) holds FIX-ROOT: the next Publish moves it to FIX-ROOT-IT2.' })
+    const moved = await askAndRun('set-listing-sku', { listingId: ids.liveListing, sku: 'FIX-LIVE-X' })
+    expect(await ownSku(ids.liveListing)).toBe('FIX-LIVE-X')
+    expect((await undo(moved)).ran).toMatchObject({ ok: true, status: 'executed' })
+    expect(await ownSku(ids.liveListing)).toBeNull()
+    expect(await preview('set-listing-sku', { listingId: ids.invListing, sku: 'FIX-INV-X' })).toMatchObject({ ok: false,
+      error: expect.stringContaining('eBay holds FIX-INV, Nexus holds FIX-INV-X. Nexus cannot move an eBay Inventory listing to a new SKU yet: Delete it, then list it again.') })
+    expect(await preview('set-listing-sku', { listingId: ids.etsyListing, sku: 'FIX-ETSY-X' })).toMatchObject({ ok: false,
+      error: expect.stringContaining('Nexus cannot send Etsy SKU changes yet: Etsy keeps FIX-ETSY for this listing (Nexus holds FIX-ETSY-X).') })
+    expect(await preview('set-listing-sku', { listingId: ids.liveListing, extraListingId: ids.liveAlias, sku: 'X' })).toMatchObject({ ok: false, error: expect.stringContaining('listingId names another listing (eBay · IT of FIX-LIVE). Name one listing.') })
+    expect(await preview('set-listing-sku', { sku: 'X' })).toMatchObject({ ok: false, error: expect.stringContaining('Name the listing') })
+    const approvalId = await askAndRun('set-listing-sku', { listingId: ids.oldDraft, sku: 'FIX-OLD-EBAY' })
+    expect(await ownSku(ids.oldDraft)).toBe('FIX-OLD-EBAY')
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } }))
+    expect(change).toMatchObject({ before: { listingId: ids.oldDraft, sku: null }, after: { listingId: ids.oldDraft, sku: 'FIX-OLD-EBAY' } })
+    expect((await undo(approvalId)).ran).toMatchObject({ ok: true, status: 'executed' })
+    expect(await ownSku(ids.oldDraft)).toBeNull()
+  }, TIMEOUT)
+
+  it('with the column: refuses a SKU a product, an extra listing or another listing on the account uses', async () => {
+    expect(await preview('set-listing-sku', { extraListingId: ids.quietAlias, sku: 'fix-live' })).toMatchObject({ ok: false, error: expect.stringContaining('is the SKU of another product (FIX-LIVE)') })
     await askAndRun('set-listing-sku', { extraListingId: ids.quietAlias, sku: 'FIX-ROOT-DE' })
-    expect(await preview('set-listing-sku', { extraListingId: ids.liveAlias, sku: 'FIX-ROOT-DE' })).toMatchObject({ ok: false, error: expect.stringContaining('another extra listing') })
+    expect(await preview('set-listing-sku', { listingId: ids.oldDraft, sku: 'FIX-ROOT-DE' })).toMatchObject({ ok: false, error: expect.stringContaining('already the SKU of an extra listing') })
   }, TIMEOUT)
 })

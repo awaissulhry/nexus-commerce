@@ -763,7 +763,8 @@ function MappingWorkspace({ viewTabs }: { viewTabs: ReactNode }) {
       </div>
 
       {/* ── panels ── */}
-      {template && editingField && catalogue && (
+      {/* A column that takes no mapping rule (the Shopify SKU column) never opens the rule editor: it is read-only. */}
+      {template && editingField && catalogue && !allRows.find(r => r.field.fieldKey === editingField)?.field.ruleNotUsed && (
         <RuleDrawer
           key={`${templateKey}:${category}:${editingField}`}
           open

@@ -19,7 +19,7 @@ import { memo } from 'react'
 import Link from '@/lib/workspaces/Link'
 import type { ICellRendererParams } from '@/design-system/grid'
 import { Button, Pill } from '@/design-system/primitives'
-import { isCategoryField, mappingOriginLabel, PRIORITY_META, RULE_KIND_META, emptyReason, type CatalogueField, type ResolvedCell } from './contracts'
+import { isCategoryField, mappingOriginLabel, PRIORITY_META, RULE_KIND_META, emptyReason, ruleNotUsedView, type CatalogueField, type ResolvedCell } from './contracts'
 import styles from '../mapping.module.css'
 
 export interface MappingRow {
@@ -42,9 +42,11 @@ export interface MappingRow {
 export const FieldNameCell = memo(function FieldNameCell(p: ICellRendererParams<MappingRow>) {
   const f = p.data?.field
   if (!f) return null
+  // A column that takes no mapping rule is read-only here: its name opens no rule editor.
+  const notUsed = ruleNotUsedView(f)
   return (
     <span className={styles.fieldName}>
-      <Button
+      {notUsed ? <span className={styles.ellipsisText} title={notUsed.line}>{f.label}</span> : <Button
         variant="link"
         inline size="xs"
         className={`${styles.inCellBtn} ${styles.fieldNameBtn}`}
@@ -54,14 +56,14 @@ export const FieldNameCell = memo(function FieldNameCell(p: ICellRendererParams<
         {/* The ellipsis lives on this span, not the Button: a DS Button is inline-flex, and
             `text-overflow` does not apply to a flex container. */}
         <span className={styles.ellipsisText}>{f.label}</span>
-      </Button>
+      </Button>}
       {f.helpText && (
         <span className={styles.infoDot} title={f.helpText} role="img" aria-label="Field help">
           i
         </span>
       )}
-      {(f.readOnlyReason || !f.editable) && (
-        <span className={styles.lockDot} title={f.readOnlyReason ?? 'The channel does not allow this to change on an existing listing.'} role="img" aria-label={f.readOnlyReason ? 'Read-only in this editor' : 'Not editable after listing'}>
+      {(notUsed || f.readOnlyReason || !f.editable) && (
+        <span className={styles.lockDot} title={notUsed?.line ?? f.readOnlyReason ?? 'The channel does not allow this to change on an existing listing.'} role="img" aria-label={notUsed || f.readOnlyReason ? 'Read-only in this editor' : 'Not editable after listing'}>
           🔒
         </span>
       )}
@@ -109,6 +111,9 @@ export const MappingCell = memo(function MappingCell(p: ICellRendererParams<Mapp
   const f = p.data?.field
   if (!f) return null
   if (isCategoryField(f.fieldKey, p.context?.channel)) return <Button variant="link" inline size="xs" onClick={() => (p.context as any)?.onEditField?.(f.fieldKey)}>Category assignments</Button>
+  // A column that takes no rule: its one line, read-only (no rule editor opens from here).
+  const notUsed = ruleNotUsedView(f)
+  if (notUsed) return <span className={styles.mappingText} title={notUsed.line}>{notUsed.line}</span>
   if (!f.rule && f.sourceOwner) return <Button variant="quiet" inline size="xs" title={`Supplied by ${f.sourceOwner.label.toLowerCase()}. ${f.sourceOwner.path}. Open to add a shared rule.`} onClick={() => (p.context as any)?.onEditField?.(f.fieldKey)}>{f.sourceOwner.label}</Button>
   if (f.ruleKind === 'unmapped') {
     return (
@@ -218,6 +223,8 @@ export const StatusCell = memo(function StatusCell(p: ICellRendererParams<Mappin
   const f = p.data?.field
   if (!f) return null
   if (isCategoryField(f.fieldKey, p.context?.channel) && !f.rule) return <Pill tone="neutral" size="sm">Category routing</Pill>
+  const notUsed = ruleNotUsedView(f)
+  if (notUsed) return <Pill tone={notUsed.pill.tone} size="sm" title={notUsed.line}>{notUsed.pill.label}</Pill>
   if (!f.rule && f.sourceOwner) return <Pill tone="neutral" size="sm">Listing source</Pill>
   return f.status === 'mapped'
     ? <Pill tone={f.ruleOrigin === 'master' ? 'info' : 'success'} size="sm">{mappingOriginLabel(f)}</Pill>

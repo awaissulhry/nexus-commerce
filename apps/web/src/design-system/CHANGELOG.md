@@ -37,6 +37,13 @@ Product sheet consistency wave 3, "One name for one thing" (W3-6). Mirrored in F
 - **`unitChoiceLabels(units)`** (`grid/renderers/shapeFormat.ts`, new): a channel's unit codes as people choose them — `KILOGRAM` reads "kg", `CENTIMETER` "cm"; the value stays the code, stored and sent unchanged. Two codes with one symbol keep their code beside it ("kg (KILOGRAM)"). **`MeasureEditor`**'s unit list, **`shapeTooltipLine`** ("1.2 kg · units: kg, g, lb, oz") and **`shapeValidation`**'s unit warning ("\"lbs\" is not one of the channel's units (kg, g)") show the symbols; they showed the codes.
 - **`slotListColumnDef`**: optional `headerName` — the header when it says more than the list's name (the sheets' required mark, "Bullet points *"). Absent = `label`, as before; the editor and the tooltip keep `label`.
 
+## Words: an unlinked row is never listed as new — 2026-10-05
+
+Sheet Item IDs + per-channel SKU, step S10 item 6 (`docs/sheet-ids-sku-rows/PLAN.md`, I1's unlink trap). Mirrored in Factory (`sellingStatus.ts`, `publishAction.ts`, `renderers/index.ts` and their tests), except `sellingStatus.shared.vitest.test.ts`.
+
+- **`sellingStatus.ts`**: `NewListingCellFacts.deleted.unlinked` (optional) — a row Nexus UNLINKED (the listing may still be live on the channel; Nexus no longer updates it) reads "unlinked 5 Oct" (`UNLINKED_MARK`) beside whatever it holds, never "lists again"; its screen-reader head is the word alone (never "Lists again: Active"); its editor's current choice notes `NEW_CHOICE_UNLINKED`. Absent = unchanged.
+- **`publishAction.ts`**: `PublishActionValue.unlinked` (optional) — such a row is drawn quiet (left out whatever its Status says) with `UNLINKED_ROW_LEFT_OUT_HINT`, never "Set Status to Active to list it again". Absent = unchanged.
+
 ## Words: Partial update says when Publish sends no field — 2026-10-05
 
 Product sheet consistency wave 2, "Shopify + Etsy honest words" (D5, D13). Mirrored in Factory (`publishAction.ts` and its test).

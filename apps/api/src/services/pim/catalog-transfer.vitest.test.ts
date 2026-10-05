@@ -514,3 +514,15 @@ describe('AE.3 — a copy where a variation inherits an attribute its business h
     expect(result.issues.map(i => [i.sku, i.message])).toEqual([[VARIATION, 'This attribute is not declared by the selected family']])
   })
 })
+
+describe('S9 — an import never creates a product under a SKU another product\'s listing holds or sends', () => {
+  it('a new product row is refused with the sentence; an existing product and a free SKU are not', async () => {
+    const sentence = 'NEW-HELD is the SKU of OTHER-P on Amazon · DE. One SKU names one product: choose another SKU.'
+    const held = context({ heldChannelSkus: new Map([['NEW-HELD', sentence]]) })
+    const refused = await buildTransferPlan([row({ sku: 'NEW-HELD', field: 'family', value: 'jackets' })], 'create', held, contracts)
+    expect(refused.issues).toEqual([expect.objectContaining({ sku: 'NEW-HELD', message: sentence })])
+    expect(refused.targets).toEqual([])
+    const existing = await buildTransferPlan([row()], 'update', context({ heldChannelSkus: new Map([['00123', sentence]]) }), contracts)
+    expect(existing.issues).toEqual([])
+  })
+})

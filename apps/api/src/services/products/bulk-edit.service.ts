@@ -9,7 +9,10 @@ import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import type { FastifyBaseLogger } from 'fastify'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, insideSavepoint, inSavepoint, transactionMustRestart } from '../../lib/database-context.js'
+import { ChannelSkuError, setChannelSku } from '../listings/channel-sku.js'
+import { SHOPIFY_SKU_STORES } from '../listings/channel-sku.pure.js'
+import { SkuRenameConflict, applySkuRenamePlan, planSkuRenames, skuRenameClashes, skuRenameRefusal, type SkuRenamePlan } from '../listings/channel-sku-rename.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, nativeWriteValue, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -22,7 +25,7 @@ import prisma from '../../db.js'
 import { getFieldDefinition } from '../pim/field-registry.service.js'
 import { readStoredChannelValue } from '../pim/channel-inheritance.js'
 import { applyPlatformMutations, channelValueMutation, type ChannelValueMutation } from '../pim/channel-value-mutation.js'
-import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
+import { CHANNEL_FIELD_MAP, CHANNEL_SKU_FIELD, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '../pim/channel-field-map.js'
 import { checkForStorage, coerceForShape, isBlankValue, parseSlotField, readListValue, readPath, withSlotValue, type ShapeWriteFacts } from '../pim/sheet-values.js'
 import { isEbayListingLevel, loadEbayListingAxes } from '../pim/ebay-listing-level.js'
 import { OTHER_SPECIFIC_PREFIX } from '../pim/channel-specs/ebay-other-specifics.js'
@@ -779,6 +782,20 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const col = rowContract.get(id)?.get(key)
     return col ? Object.values(col.channels ?? {})[0]?.store : channelStoreByKey.get(key)
   }
+  /**
+   * S9 (per-channel SKU) — a write of a listing's OWN SKU: the `channel_sku` field in any channel scope, or the Shopify
+   * sheet's SKU column (`listing_sku`: Shopify's native SKU, whose old store is `platformAttributes.sku`). Both go
+   * through the one writer (`setChannelSku`, the channel-SKU door below), never a generic store, so validation,
+   * uniqueness per account, the live-move rule, the version and the history are the same for both.
+   */
+  const isShopifySkuColumn = (v: { id: string; field: string; target?: string }) => {
+    if (v.target !== 'channel' || primaryContext?.channel !== 'SHOPIFY' || !v.field.startsWith('attr_')) return false
+    const key = v.field.slice(5)
+    if (!SHOPIFY_SKU_STORES.overrideKeys.includes(key)) return false
+    const store = storeFor(v.id, key)
+    return store?.kind === 'platformAttributes' && store.path.length === 1 && store.path[0] === 'sku'
+  }
+  const isChannelSkuChange = (v: { id: string; field: string; target?: string }) => v.field === CHANNEL_SKU_FIELD || isShopifySkuColumn(v)
 
   /**
    * P6 (docs/attributes/PLAN.md §4.4) — the save rule for an attribute cell. The column's `mode` says how the sheet
@@ -924,7 +941,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   }
   // A batch preparation is read-only until its explicit callback below. Content keeps its own ordered writer.
   if (prepareBatch && (contentEdits.length || errors.length || changes.some(change =>
-    storeFor(change.id, change.field.replace(/^attr_/, ''))?.kind !== 'platformAttributes'))) throw new UnsupportedPlatformBatch('This edit needs the row writer.')
+    storeFor(change.id, change.field.replace(/^attr_/, ''))?.kind !== 'platformAttributes' || isChannelSkuChange(change)))) throw new UnsupportedPlatformBatch('This edit needs the row writer.')
   if (contentEdits.length && !primaryContext) {
     // P1 — a master bullet over a listed channel's cap is stored and flagged; that channel's publish blocks it.
     for (const warning of await masterBulletCapWarnings(contentEdits)) warnings.push(warning)
@@ -1017,6 +1034,12 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
       continue
     }
+    // S9 (the Owner's rule 2026-10-05) — a SKU edit in a channel scope belongs to that listing only (`channel_sku`); the
+    // product SKU is the Shared scope's. A product SKU sent as a channel write is refused, never applied to the product.
+    if (c.field === 'sku' && c.target === 'channel') {
+      errors.push({ id: c.id, field: c.field, error: 'In a channel view a SKU belongs to that listing only (its own SKU there). Change the product SKU in the Shared view.' })
+      continue
+    }
     // For attr_* fields, the registry must have it AND be editable.
     // D.3g: getFieldDefinition is now async and falls back to the
     // cached Amazon schemas when the id isn't in the static
@@ -1107,6 +1130,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           error: `Field belongs to ${expectedChannel} but no ${expectedChannel} target was selected`,
         })
         continue
+      }
+      // S9 — a listing's own SKU belongs to ONE listing (that channel, that market, that account and listing).
+      if (c.field === CHANNEL_SKU_FIELD) {
+        if (effectiveContexts.length !== 1 || c.cascade) {
+          errors.push({ id: c.id, field: c.field, error: 'Edit a listing\'s own SKU in one channel, marketplace and listing at a time. A SKU never cascades to variations.' })
+          continue
+        }
+        // Always a channel write, whatever the caller sent: its history, version and answer belong to the listing.
+        c.target = 'channel'
       }
     }
 
@@ -1539,6 +1571,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           errors.push({ id: c.id, field: c.field, error: 'SKU cannot be empty' })
           continue
         }
+        // One SKU names one product: copying it onto every variation could only fail (unique per business).
+        if (c.cascade) {
+          errors.push({ id: c.id, field: c.field, error: 'A SKU names one product, so it never cascades to the variations. Rename each product on its own row.' })
+          continue
+        }
         value = trimmed
       } else if (c.field === 'name') {
         if (!value || (typeof value === 'string' && value.trim().length === 0)) {
@@ -1606,64 +1643,35 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     for (const duplicate of duplicates) warnings.push({ id: duplicate.id, field: duplicate.field, warning: barcodeDuplicateWarning(duplicate) })
   }
 
-  // Phase 1 — SKU rename safety guard. Product.sku doubles as the
-  // channel seller-SKU, which Amazon/eBay treat as permanent: renaming
-  // a product that's live on a channel would silently desync the live
-  // listing (the channel keeps the old seller-SKU forever). Block only
-  // the sku change — other fields in the same PATCH still apply — until
-  // the channel-safe rename path ships. Drafts/unpublished products
-  // rename freely. "Live" matches the app's own definition:
-  // listingStatus ACTIVE && isPublished (see coverage rollup above).
-  const skuRenameIds = validated
-    .filter((v) => v.field === 'sku' && typeof v.value === 'string')
-    .map((v) => v.id)
-  if (skuRenameIds.length > 0) {
-    const liveListings = await prisma.channelListing.findMany({
-      where: {
-        listingStatus: 'ACTIVE',
-        isPublished: true,
-        OR: [
-          { productId: { in: skuRenameIds } },
-          { product: { parentId: { in: skuRenameIds } } },
-        ],
-      },
-      select: {
-        channel: true,
-        productId: true,
-        product: { select: { parentId: true } },
-      },
-    })
-    const renameIdSet = new Set(skuRenameIds)
-    const liveChannelsByOwner = new Map<string, Set<string>>()
-    for (const l of liveListings) {
-      // A listing blocks the rename of its own product (productId in the
-      // set) or, for a child listing, of the parent being renamed.
-      const owner = renameIdSet.has(l.productId)
-        ? l.productId
-        : l.product?.parentId
-      if (!owner || !renameIdSet.has(owner)) continue
-      const set = liveChannelsByOwner.get(owner) ?? new Set<string>()
-      set.add(l.channel)
-      liveChannelsByOwner.set(owner, set)
-    }
-    for (const [owner, channels] of liveChannelsByOwner) {
-      const idx = validated.findIndex(
-        (v) => v.field === 'sku' && v.id === owner,
-      )
+  // S9 (per-channel SKU) — a SHARED SKU rename keeps every channel in step instead of being refused while a channel
+  // holds the product (the old "Can't change the SKU while this product is live", Phase 1): in the same transaction the
+  // listings a channel holds keep OLD and drafts follow NEW (`listings/channel-sku-rename.ts`). Planned here, before
+  // the dry run, so a preview says which listings keep OLD; written below, beside the rename. The checks a channel SKU
+  // adds: NEW is no other product's SKU (case ignored), no channel SKU another product's listing holds or wants, and no
+  // clash with another rename of this save.
+  let skuRenamePlans: SkuRenamePlan[] = []
+  const masterSkuChanges = validated.filter((v) => v.field === 'sku' && typeof v.value === 'string' && !isChannelChange(v))
+  if (masterSkuChanges.length > 0) {
+    const tx = activeDatabaseTransaction()!
+    const current = await prisma.product.findMany({ where: { id: { in: masterSkuChanges.map((v) => v.id) } }, select: { id: true, sku: true } })
+    skuRenamePlans = await planSkuRenames(tx, masterSkuChanges.flatMap((v) => {
+      const from = current.find((p) => p.id === v.id)?.sku
+      return from ? [{ productId: v.id, from, to: String(v.value) }] : []
+    }))
+    for (const clash of await skuRenameClashes(tx, skuRenamePlans)) {
+      const idx = validated.findIndex((v) => v.field === 'sku' && v.id === clash.productId && !isChannelChange(v))
       if (idx !== -1) {
-        errors.push({
-          id: owner,
-          field: 'sku',
-          error: `Can't change the SKU while this product is live on ${Array.from(
-            channels,
-          ).join(
-            ', ',
-          )} — the channel seller-SKU can't be renamed in place. Unpublish it first, or use the channel-safe rename (coming soon).`,
-        })
+        errors.push({ id: clash.productId, field: 'sku', error: clash.error })
         validated.splice(idx, 1)
       }
     }
+    skuRenamePlans = skuRenamePlans.filter((plan) => validated.some((v) => v.field === 'sku' && v.id === plan.productId && !isChannelChange(v)))
   }
+  /** What a rename does on the channels, for the answer (the sheet's notice and the set-product-sku preview). */
+  const skuRenameReport = () => skuRenamePlans.length ? {
+    skuRenames: skuRenamePlans.map((plan) => ({ productId: plan.productId, from: plan.from, to: plan.to, summary: plan.summary,
+      listings: plan.listings.map((l) => ({ listingId: l.listingId, channel: l.channel, marketplace: l.marketplace, aliasKey: l.aliasKey, outcome: l.outcome, sku: l.sku })) })),
+  } : {}
 
   const aliasTargets = effectiveContexts.flatMap(ctx => {
     const aliasKey = (ctx as { aliasKey?: string }).aliasKey
@@ -1874,7 +1882,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
       for (const v of validated) {
         // Price equality includes inheritance and legacy keys; its owner decides below. So does an offer column's (a draft).
-        if (isPriceChange(v) || isAmazonOfferChange(v) || isQuantityChange(v)) continue
+        // S9 — so does a listing's own SKU: its writer compares the stored value (and a draft's "follow" may still write).
+        if (isPriceChange(v) || isAmazonOfferChange(v) || isQuantityChange(v) || isChannelSkuChange(v)) continue
         if (currentFormulaWrite(context.formulaWriteToken)?.operations) continue
         // Pin/reset changes provenance even when the displayed value stays the same. Comparing
         // one listing also cannot establish a no-op across several requested coordinates.
@@ -1999,7 +2008,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (familyGuardVersion !== undefined && validated.every(isChannelChange)) expectedVersion = familyGuardVersion
 
   if (primaryContext && ['AMAZON', 'EBAY', 'ETSY'].includes(primaryContext.channel)) {
-    const candidates = validated.filter(isChannelChange)
+    // A listing's own SKU is judged by its own writer (`setChannelSku`), not by the channel's information rules.
+    const candidates = validated.filter(v => isChannelChange(v) && !isChannelSkuChange(v))
     if (candidates.length) {
       try {
         const { informationChangeErrors } = await import('../pim/information-validation.js')
@@ -2045,12 +2055,32 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // Placed ABOVE the empty-validation branch deliberately: that branch writes
   // a `BulkOperation` row, and a preview must not leave a job record behind.
   if (input?.dryRun === true) {
+    // S9 — a listing's own SKU asks its writer the same questions in a preview, writing nothing (`dryRun`). A coordinate
+    // with no listing yet would start a draft, which takes any SKU its account allows: that is checked when it is saved.
+    const skuChecks = validated.filter(isChannelSkuChange)
+    if (skuChecks.length) {
+      const ctx = effectiveContexts[0]
+      const rows = await prisma.channelListing.findMany({ where: { productId: { in: [...new Set(skuChecks.map(v => v.id))] }, channel: ctx.channel,
+        marketplace: ctx.marketplace, channelConnectionId: connFor.get(ctx.channel) ?? null, aliasKey: ctx.aliasKey ?? '' }, select: { id: true, productId: true } })
+      for (const change of skuChecks) {
+        const row = rows.find(r => r.productId === change.id)
+        if (!row) continue
+        try {
+          await setChannelSku(activeDatabaseTransaction()!, { listingId: row.id, sku: change.reset ? null : (change.value as string | null), actorId: null, dryRun: true })
+        } catch (error) {
+          if (!(error instanceof ChannelSkuError)) throw error
+          errors.push({ id: change.id, field: change.field, error: error.message })
+          validated.splice(validated.indexOf(change), 1)
+        }
+      }
+    }
     return {
       dryRun: true,
       wouldUpdate: validated.length,
       errors,
       ...(warnings.length ? { warnings } : {}),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
+      ...skuRenameReport(),
     }
   }
 
@@ -2256,6 +2286,78 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
 
+  // S9 (per-channel SKU) — a listing's OWN SKU, through its one writer (`setChannelSku`): the `channel_sku` field of any
+  // channel scope, and the Shopify sheet's SKU column. One listing per change (validation allows one context): that
+  // channel, market, account and listing. CAS on the listing's version like every channel cell (a 409 hands back its
+  // version); a refusal (characters, a SKU another product or account listing uses, a live listing that would move to
+  // another SKU before Publish's move step) is that cell's own error, and the product's other changes are stored.
+  const channelSkuEdits = validated.filter(isChannelSkuChange)
+  if (channelSkuEdits.length) {
+    const ctx = effectiveContexts[0]
+    const rows = await prisma.channelListing.findMany({ where: { productId: { in: [...new Set(channelSkuEdits.map(v => v.id))] }, channel: ctx.channel,
+      marketplace: ctx.marketplace, channelConnectionId: connFor.get(ctx.channel) ?? null, aliasKey: ctx.aliasKey ?? '' }, select: { id: true, productId: true } })
+    const results: Array<{ listingId: string; version: number }> = []
+    for (const change of channelSkuEdits) {
+      const row = rows.find(r => r.productId === change.id)
+      if (!row) {
+        // Only a non-primary alias can get here (the draft step above starts every missing primary listing).
+        errors.push({ id: change.id, field: change.field, error: `This listing alias has no ${channelLabel(ctx.channel)} listing on ${ctx.marketplace} for this product. An edit never creates an alias listing, so its SKU cannot be set here.` })
+        validated.splice(validated.indexOf(change), 1)
+        continue
+      }
+      try {
+        const out = await setChannelSku(activeDatabaseTransaction()!, { listingId: row.id, sku: change.reset ? null : (change.value as string | null), actorId: context.userId ?? null,
+          expectedVersion: priceWrittenIds.get(row.id) ?? (listingToken ? expectedVersion : undefined), reason: 'Product sheet' })
+        results.push({ listingId: row.id, version: out.version })
+        if (out.changed) priceWrittenIds.set(row.id, out.version)
+        else if (!currentFormulaWrite(context.formulaWriteToken)?.operations) {
+          noOpKeys.add(`${change.id}:${change.field}`)
+          validated.splice(validated.indexOf(change), 1)
+        }
+      } catch (error) {
+        if (!(error instanceof ChannelSkuError)) throw error
+        if (error.code === 'VERSION_CONFLICT') throw new ProductBulkError(409, {
+          code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
+          expectedVersion: originalExpectedVersion, currentVersion: error.currentVersion ?? null, listingId: row.id, versionOf: 'channelListing',
+        })
+        errors.push({ id: change.id, field: change.field, error: error.message })
+        validated.splice(validated.indexOf(change), 1)
+      }
+    }
+    if (new Set(results.map(r => r.listingId)).size === 1) {
+      noOpCurrentVersion = results[results.length - 1].version
+      noOpVersionOf = 'channelListing'
+    }
+  }
+
+  // S9 — the SHARED SKU renames planned above: each product's rename and its listings' columns in one SAVEPOINT, so a
+  // rename the shared-stock guard refuses (a product connected to another business's stock) is undone alone and
+  // answered with one plain sentence, and the save's other changes are stored. Inside a savepoint already (a sheet
+  // operation's row, `bulk-save.service.ts`) Prisma cannot open another: the rename runs directly, and a refusal is
+  // that row's 409 with the same sentence — its own savepoint undoes the row.
+  const renamedSkus = new Set<string>()
+  for (const plan of skuRenamePlans) {
+    const change = validated.find(v => v.field === 'sku' && v.id === plan.productId && !isChannelChange(v))
+    if (!change) continue
+    const rename = async () => {
+      await prisma.product.update({ where: { id: plan.productId }, data: { sku: plan.to } })
+      await applySkuRenamePlan(activeDatabaseTransaction()!, plan, context.userId ?? null)
+    }
+    const contained = !insideSavepoint()
+    const done = contained ? await inSavepoint(rename) : await rename().then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }))
+    if (done.ok) { renamedSkus.add(plan.productId); continue }
+    // (`strictNullChecks` is off here, so the union does not narrow by itself.)
+    const failure = (done as { error: unknown }).error
+    if (failure instanceof SkuRenameConflict) throw new ProductBulkError(409, { code: 'VERSION_CONFLICT', error: failure.message })
+    const refusal = skuRenameRefusal(failure)
+      ?? ((failure as { code?: string } | null)?.code === 'P2002' ? `SKU "${plan.to}" is already used by another product` : null)
+    if (!refusal) throw failure
+    if (!contained) throw new ProductBulkError(409, { code: 'SKU_RENAME_REFUSED', error: refusal, errors: [{ id: plan.productId, field: 'sku', error: refusal }] })
+    errors.push({ id: plan.productId, field: 'sku', error: refusal })
+    validated.splice(validated.indexOf(change), 1)
+  }
+  skuRenamePlans = skuRenamePlans.filter(plan => renamedSkus.has(plan.productId))
+
   // #675 — everything was a no-op. This is a SUCCESS with nothing to do, not
   // a validation failure: the branch below returns 400 and writes a FAILED
   // BulkOperation row, which would tell an operator their save failed because
@@ -2337,10 +2439,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const targetProducts = await prisma.product.findMany({
       where: { id: { in: targetIds } },
       select: capturePrevious
-        ? { id: true, parentId: true, isParent: true, categoryAttributes: true, localizedContent: true, name: true, description: true, brand: true, manufacturer: true, basePrice: true, bulletPoints: true, keywords: true }
+        ? { id: true, parentId: true, isParent: true, categoryAttributes: true, localizedContent: true, name: true, description: true, brand: true, manufacturer: true, basePrice: true, bulletPoints: true, keywords: true,
+            sku: true }
         : { id: true, parentId: true, isParent: true },
     })
     const priorById = new Map(targetProducts.map((p) => [p.id, p as Record<string, unknown>]))
+    // S9 — a rename ran above (its savepoint), so the row now reads NEW: the history names the SKU it replaced.
+    if (capturePrevious) for (const plan of skuRenamePlans) { const prior = priorById.get(plan.productId); if (prior) prior.sku = plan.from }
     const childIdSet = new Set(
       targetProducts.filter((p) => p.parentId).map((p) => p.id)
     )
@@ -2531,6 +2636,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (!stripped) return []
       if (stripped === 'price') return [] // already persisted by writeChannelPrices, never a generic mutation
       if (stripped === 'quantity') return [] // already persisted by the quantity door (`applySheetQuantityChanges`)
+      if (stripped === 'channelSku') return [] // already persisted by the channel-SKU door (`setChannelSku`, S9)
       const expected = channelOf(field)
       const targets = expected
         ? effectiveContexts.filter((ctx) => ctx.channel === expected)
@@ -2662,8 +2768,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
 
     for (const v of validated) {
       if (!isCategoryAttrField(v.field)) continue
-      // Written through the fulfilment door / the offer router / the quantity door above — never a second time as a raw path.
-      if (isFulfilmentChange(v) || isAmazonOfferChange(v) || isQuantityChange(v)) continue
+      // Written through the fulfilment door / the offer router / the quantity door / the channel-SKU door above — never a
+      // second time as a raw path (S9: the Shopify SKU column is the listing's own SKU, not `platformAttributes.sku`).
+      if (isFulfilmentChange(v) || isAmazonOfferChange(v) || isQuantityChange(v) || isChannelSkuChange(v)) continue
       if (v.target === 'channel') {
         const stripped = v.field.replace(/^attr_/, '')
         const store = storeFor(v.id, stripped)
@@ -2803,6 +2910,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // Skip individual attr_* loop iterations — handled in batched
       // writes below the main loop.
       if (isAttr) continue
+      // S9 — renamed above, with its listings, in its own savepoint.
+      if (!isCh && v.field === 'sku' && renamedSkus.has(v.id)) continue
 
       // Phase 13d — master-data fields (basePrice, totalStock) get
       // collected for post-commit service dispatch instead of being
@@ -3484,6 +3593,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // P2 — present only when readiness was NOT rebuilt in this request: the number of families whose readiness is
       // being rebuilt in the background. Their readiness rows read "pending" until then.
       ...(readiness.pending ? { readinessPendingFamilies: readiness.pending } : {}),
+      // S9 — each SHARED SKU rename and what it did on the channels (which listings keep OLD, which drafts follow NEW).
+      ...skuRenameReport(),
       // Product-sheet create path — the drafts this save started (`{ productId, listingId, version }`), so the sheet
       // adopts each listing at once instead of waiting for its next read.
       ...(await createdListingsReadBack()),

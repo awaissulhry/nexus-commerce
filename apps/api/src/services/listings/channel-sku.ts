@@ -22,6 +22,9 @@ import {
   SHOPIFY_SKU_STORES, legacyChannelSkus, liveChannelSku, wantedChannelSku,
   type ChannelSkuListing, type ChannelSkuSource,
 } from './channel-sku.pure.js'
+import { liveChannelSkuMoveRefusal, type ChannelSkuMoveFacts } from './channel-sku-live-move.js'
+import { usesEbayInventory } from '../pim/ebay-listing-model.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 
 type Db = Prisma.TransactionClient
 
@@ -55,7 +58,7 @@ export interface ChannelSkuAmbiguousMatch {
 
 export type ChannelSkuMatch = ChannelSkuProductMatch | ChannelSkuAmbiguousMatch
 
-export type ChannelSkuErrorCode = 'LISTING_NOT_FOUND' | 'INVALID_SKU' | 'SKU_TAKEN' | 'VERSION_CONFLICT' | 'NO_ACCOUNT'
+export type ChannelSkuErrorCode = 'LISTING_NOT_FOUND' | 'INVALID_SKU' | 'SKU_TAKEN' | 'VERSION_CONFLICT' | 'NO_ACCOUNT' | 'LIVE_SKU_HELD'
 
 /** A refused channel-SKU write: a status for the route, a code, and one plain sentence. */
 export class ChannelSkuError extends Error {
@@ -79,6 +82,15 @@ function matchAt(listing: ChannelSkuListing, level: Level, equal: (value: unknow
 const equalTo = (sku: string, ignoreCase: boolean) => {
   const want = ignoreCase ? sku.trim().toLowerCase() : sku.trim()
   return (value: unknown) => typeof value === 'string' && (ignoreCase ? value.trim().toLowerCase() : value.trim()) === want
+}
+
+/**
+ * S9 — does this listing hold `sku` as a channel SKU, in any store (confirmed, wanted, or an old store; case and
+ * surrounding spaces ignored)? The test `setChannelSku` runs against other products' listings, for a product SKU rename.
+ */
+export function listingHoldsChannelSku(listing: ChannelSkuListing, sku: string): boolean {
+  const equal = equalTo(sku, true)
+  return LEVELS.some(level => matchAt(listing, level, equal) !== null)
 }
 
 /** One listing that may hold one of the asked SKUs (`listingsThatMayHoldSkus`). */
@@ -109,6 +121,8 @@ export async function listingsThatMayHoldSkus(tx: Db, args: {
   marketplace?: string | null
   exceptProductId?: string | null
   limit?: number
+  /** False on a database without `ProductListingAlias.sku` (`availableRequirements`): the alias store is not read. */
+  aliasSku?: boolean
 }): Promise<ChannelSkuHolder[]> {
   const keys = [...new Set(args.skus
     .filter((s): s is string => typeof s === 'string' && !!s.trim())
@@ -126,7 +140,7 @@ export async function listingsThatMayHoldSkus(tx: Db, args: {
     ...AMAZON_LISTING_SKU_KEYS.flatFileSnapshot.map(k => same(Prisma.sql`cl."flatFileSnapshot" ->> ${k}::text`)),
     ...SHOPIFY_SKU_STORES.attributePaths.map(path => same(Prisma.sql`cl."platformAttributes" #>> ${path}::text[]`)),
     ...SHOPIFY_SKU_STORES.overrideKeys.map(k => same(Prisma.sql`cl."overrideData" ->> ${k}::text`)),
-    same(Prisma.sql`a.sku`),
+    ...(args.aliasSku === false ? [] : [same(Prisma.sql`a.sku`)]),
   ]
   const rows = await tx.$queryRaw<Array<{ sku: string; listing_id: string; product_id: string; connection_id: string | null; marketplace: string }>>`
     SELECT DISTINCT s.key AS sku, cl.id AS listing_id, cl."productId" AS product_id, cl."channelConnectionId" AS connection_id, cl.marketplace
@@ -137,7 +151,7 @@ export async function listingsThatMayHoldSkus(tx: Db, args: {
       ${args.marketplace ? Prisma.sql`AND cl.marketplace = ${args.marketplace}` : Prisma.empty}
       ${args.exceptProductId ? Prisma.sql`AND cl."productId" <> ${args.exceptProductId}` : Prisma.empty}
     JOIN "Product" p ON p.id = cl."productId" AND p."deletedAt" IS NULL
-    LEFT JOIN "ProductListingAlias" a ON a.id = cl."aliasId"
+    ${args.aliasSku === false ? Prisma.empty : Prisma.sql`LEFT JOIN "ProductListingAlias" a ON a.id = cl."aliasId"`}
     WHERE (${Prisma.join(holds, ' OR ')})
     ORDER BY listing_id, sku
     LIMIT ${args.limit ?? 500}`
@@ -206,6 +220,26 @@ export function channelSkuProblem(sku: string): string | null {
 
 const VERSION_CONFLICT = 'Version conflict — another tab edited this listing. Refresh and retry.'
 
+/**
+ * S10 — what decides whether Publish can move this held listing to another SKU (`channelSkuMoveRefusal`): on Amazon,
+ * whether it is a family's main row (a parent, or a product with variations: S10 refuses to move it); on eBay, whether
+ * its item is on eBay's Inventory API — `usesEbayInventory` over the item's rows (this market, account and listing), the
+ * test the eBay publisher itself makes. Other channels need no facts. Read only for a listing about to move.
+ */
+export async function channelSkuMoveFacts(tx: Db, listing: {
+  productId: string; channel: string; marketplace: string; channelConnectionId: string | null; aliasKey?: string | null
+}): Promise<ChannelSkuMoveFacts> {
+  const channel = String(listing.channel ?? '').toUpperCase()
+  if (channel !== 'AMAZON' && channel !== 'EBAY') return {}
+  const product = await tx.product.findUnique({ where: { id: listing.productId },
+    select: { isParent: true, parentId: true, _count: { select: { children: { where: { deletedAt: null } } } } } })
+  if (channel === 'AMAZON') return { mainRow: !!product && !product.parentId && (product.isParent || product._count.children > 0) }
+  const root = product?.parentId ?? listing.productId
+  const rows = await tx.channelListing.findMany({ where: { channel: 'EBAY', marketplace: listing.marketplace, channelConnectionId: listing.channelConnectionId,
+    aliasKey: listing.aliasKey ?? '', OR: [{ productId: root }, { product: { parentId: root } }] }, select: { platformAttributes: true } })
+  return { ebayInventory: usesEbayInventory({ listings: rows }) }
+}
+
 export interface SetChannelSkuResult {
   listingId: string
   /** What is stored now; null = the listing follows the product SKU. */
@@ -217,15 +251,22 @@ export interface SetChannelSkuResult {
 
 /**
  * The one writer of a listing's own SKU (this channel, this market). `sku` is trimmed; null or empty = follow the
- * product SKU again. A SKU is stored as typed, even when it equals the product SKU (it then stays put if the product
- * SKU is renamed later); send null to follow.
+ * product SKU again. A SKU is stored as typed, even when it equals the product SKU; on a listing the channel holds it
+ * then stays put if the product SKU is renamed later. S9: on a still-draft, a stored SKU equal to the product SKU
+ * follows a rename like no SKU at all (`channel-sku-rename.ts`), and "follow" really follows: when an old store still
+ * names another SKU for the draft (a flat-file or offer copy left by a Delete), the product SKU itself is stored, so
+ * Publish lists the product SKU and not the old copy.
  *
  * Refused, each with one plain sentence: more than 100 characters, or a character the product-SKU rule does not allow;
- * another product's SKU in this business (G4, the other direction); another product's extra-listing SKU (G4); a SKU
- * another product holds on the same connected account (channel, confirmed or old stores). The same product may reuse
- * its SKU across its markets and aliases. The checks and the write run under a transaction-scoped advisory lock on
- * (business, account, SKU), so two writers cannot both pass. The write bumps the listing's `version` (a stale
- * `expectedVersion` is refused) and leaves a `ChannelListingOverride` history row.
+ * a listing the channel holds that would then MOVE to another SKU where Publish cannot move it (`liveChannelSkuMoveRefusal`,
+ * per channel: an Amazon family's main row, an eBay Inventory item, Etsy — the sentence Publish's review gives; Amazon,
+ * eBay Trading and Shopify moves are allowed, Publish carries them. `liveMove: 'allow'` only for a caller that removed the
+ * listing from the channel itself, as listing recovery does); another product's SKU in this business (G4, the other direction); another product's
+ * extra-listing SKU (G4); a SKU another product holds on the same connected account (channel, confirmed or old stores).
+ * The same product may reuse its SKU across its markets and aliases. The checks and the write run under a
+ * transaction-scoped advisory lock on (business, account, SKU), so two writers cannot both pass. The write bumps the
+ * listing's `version` (a stale `expectedVersion` is refused) and leaves a `ChannelListingOverride` history row.
+ * `dryRun`: every check, no write (a preview); the answer is what the write would store.
  */
 export async function setChannelSku(tx: Db, input: {
   listingId: string
@@ -233,18 +274,37 @@ export async function setChannelSku(tx: Db, input: {
   actorId: string | null
   expectedVersion?: number
   reason?: string
+  liveMove?: 'refuse' | 'allow'
+  dryRun?: boolean
 }): Promise<SetChannelSkuResult> {
-  const value = typeof input.sku === 'string' && input.sku.trim() ? input.sku.trim() : null
+  const typed = typeof input.sku === 'string' && input.sku.trim() ? input.sku.trim() : null
   const listing = await tx.channelListing.findUnique({ where: { id: input.listingId }, select: CHANNEL_SKU_LISTING_SELECT })
   if (!listing || listing.product?.deletedAt) throw new ChannelSkuError(404, 'Listing not found.', 'LISTING_NOT_FOUND')
   if (input.expectedVersion != null && input.expectedVersion !== listing.version) {
     throw new ChannelSkuError(409, VERSION_CONFLICT, 'VERSION_CONFLICT', listing.version)
   }
+  const productSku = listing.product?.sku?.trim() || null
+  const draft = isStillDraftListing(listing)
+  const held = draft ? null : liveChannelSku(listing, productSku)
+  const follows = wantedChannelSku({ ...listing, channelSku: null }, productSku).sku
+  // "Follow" (null). On a draft an old store still names another SKU for: store the product SKU itself. On a listing the
+  // channel holds under another SKU than the one it would then send: that is a MOVE, stored explicitly — Publish moves a
+  // held listing only to a SKU of its own (S10), so a bare "follow" would send the new SKU without moving the old one.
+  const value = typed ?? (draft ? (productSku && follows !== productSku ? productSku : null)
+    : held?.sku && follows && follows !== held.sku ? follows : null)
   const previous = listing.channelSku?.trim() || null
   if (value === previous) return { listingId: listing.id, channelSku: previous, previous, version: listing.version, changed: false }
   if (value) {
     const problem = channelSkuProblem(value)
     if (problem) throw new ChannelSkuError(400, problem, 'INVALID_SKU')
+  }
+  if (input.liveMove !== 'allow' && held) {
+    const moving = held.sku === null || wantedChannelSku({ ...listing, channelSku: value }, productSku).sku !== held.sku
+    const refusal = moving ? liveChannelSkuMoveRefusal(listing, productSku, value, await channelSkuMoveFacts(tx, listing)) : null
+    if (refusal) throw new ChannelSkuError(409, refusal, 'LIVE_SKU_HELD')
+  }
+  // Following the product SKU (stored only because an old store says otherwise) needs no check: it is this product's.
+  if (value && (typed || value !== productSku)) {
     if (!listing.channelConnectionId) {
       throw new ChannelSkuError(409, 'This listing is not linked to a channel account, so its own SKU cannot be checked. Link the listing to its account first.', 'NO_ACCOUNT')
     }
@@ -266,10 +326,11 @@ export async function setChannelSku(tx: Db, input: {
         + 'Within one channel account a SKU names one product: choose another SKU.', 'SKU_TAKEN')
     }
   }
+  if (input.dryRun) return { listingId: listing.id, channelSku: value, previous, version: listing.version, changed: true }
   const written = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: { channelSku: value, version: { increment: 1 } } })
   if (written.count !== 1) throw new ChannelSkuError(409, VERSION_CONFLICT, 'VERSION_CONFLICT')
   await tx.channelListingOverride.create({ data: { channelListingId: listing.id, fieldName: 'channelSku', previousValue: previous, newValue: value,
-    changedBy: input.actorId, reason: input.reason ?? (value ? 'Own SKU for this listing' : 'Follows the product SKU again') } })
+    changedBy: input.actorId, reason: input.reason ?? (typed ? 'Own SKU for this listing' : 'Follows the product SKU again') } })
   return { listingId: listing.id, channelSku: value, previous, version: listing.version + 1, changed: true }
 }
 

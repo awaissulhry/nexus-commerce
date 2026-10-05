@@ -152,7 +152,10 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/submit', async (request, reply) => {
     try {
       const { submitStudioPublication } = await import('../services/pim/studio-publication.service.js')
-      return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
+      // S10 — a review that moves a live Amazon listing to a new SKU deletes the old one: products.delete, as Delete.
+      const { permissionCheckerFor } = await import('./studio-matrix.routes.js')
+      return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null,
+        { canDelete: permissionCheckerFor(request)('products.delete') })
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/selection', async (request, reply) => {
@@ -185,6 +188,16 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       const { markPublicationChecked } = await import('../services/pim/studio-publication-check.service.js')
       reply.header('Cache-Control', 'no-store')
       return await markPublicationChecked(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
+  // S10 — "Delete the old SKU again": a publish that moved a live Amazon listing to a new SKU, whose old SKU Amazon did
+  // not confirm deleting, tries that delete again now (the move finisher, through the Delete path's channel half).
+  // products.delete (permissions manifest), as Delete.
+  fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/delete-old-sku', async (request, reply) => {
+    try {
+      const { deleteOldSkuAgain } = await import('../services/pim/studio-publication-amazon-move.js')
+      reply.header('Cache-Control', 'no-store')
+      return await deleteOldSkuAgain(request.params.id, request.params.reviewId, request.authUser?.id ?? null)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
   // "Publish failed products again…" — what a NEW review pre-ticks. Reads only; never sends or replays a request.
