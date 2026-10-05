@@ -176,6 +176,8 @@ function withRichShape(aspects: EbayCachedAspect[], older: Array<{ schemaDefinit
     if (!aspect || typeof aspect !== 'object' || aspect.cardinality) return aspect
     const keys = identity(aspect)
     const rich = keys.length ? richer.find(other => identity(other).some(key => keys.includes(key))) : undefined
-    return rich ? { ...aspect, cardinality: rich.cardinality, maxLength: aspect.maxLength ?? rich.maxLength, dataType: aspect.dataType ?? rich.dataType } : aspect
+    return rich ? { ...aspect, cardinality: rich.cardinality, maxLength: aspect.maxLength ?? rich.maxLength, dataType: aspect.dataType ?? rich.dataType,
+      // W3-5 — the thin row never carries eBay's "required from" date; the full row's must not be hidden by it.
+      expectedRequiredByDate: aspect.expectedRequiredByDate ?? rich.expectedRequiredByDate } : aspect
   })
 }

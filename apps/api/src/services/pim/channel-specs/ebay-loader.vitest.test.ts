@@ -40,6 +40,15 @@ it('takes single or multiple values from the newest full row when the newest row
   expect(spec.fields.find(f => f.label === 'Caratteristiche')).toMatchObject({ shape: 'list', cardinality: { min: 1, max: null } })
   expect(spec.fetchedAt).toEqual(thin.fetchedAt)
 })
+// W3-5 — the thin row never carries eBay's "required from" date; the newest full row's date still reaches the column.
+it('a thin newest row does not hide the date from which eBay plans to require an aspect', async () => {
+  db.channelSchema.findMany.mockResolvedValue([])
+  const dated = { ...rich, schemaDefinition: { aspects: [{ ...rich.schemaDefinition.aspects[0], expectedRequiredByDate: '2027-01-15T00:00:00.000Z' }, rich.schemaDefinition.aspects[1]] } }
+  db.categorySchema.findMany.mockResolvedValue([thin, dated])
+  const spec = await loadEbaySpec('IT', ['177101'])
+  expect(spec.fields.find(f => f.label === 'Chiusura')).toMatchObject({ requirement: 'bestPractice', helpText: 'eBay plans to require this item specific from about 15 January 2027.' })
+  expect(spec.fields.find(f => f.label === 'Caratteristiche')).toMatchObject({ requirement: 'optional' })
+})
 it('control: with no full row, the thin row keeps the old fallback (the marketplace notes)', async () => {
   db.channelSchema.findMany.mockResolvedValue([{ fieldKey: 'aspect_Closure / Fastening', label: 'Closure', required: false, notes: 'multi-value' }])
   db.categorySchema.findMany.mockResolvedValue([thin])

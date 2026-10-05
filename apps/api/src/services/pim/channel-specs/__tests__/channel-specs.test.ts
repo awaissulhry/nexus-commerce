@@ -265,6 +265,31 @@ describe('eBay adapter — conformance', () => {
     })
   })
 
+  // W3-5 — eBay's expectedRequiredByDate: a not-yet-required aspect with a real date is a recommendation that says when.
+  it('an aspect eBay plans to require is a recommendation with the date; a required one stays required; a bad date is ignored', () => {
+    const aspect = (id: string, over: Record<string, unknown>) => ({ id: `aspect_${id}`, label: id, localizedName: id, englishName: id, cardinality: 'SINGLE', ...over })
+    const spec = ebaySpecFromCache({
+      marketplace: 'IT', categoryId: '177104',
+      aspects: [
+        aspect('Soon', { required: false, expectedRequiredByDate: '2027-01-15T00:00:00.000Z' }),
+        aspect('SoonRecommended', { required: false, recommended: true, expectedRequiredByDate: '2026-12-01' }),
+        aspect('Required', { required: true, expectedRequiredByDate: '2027-01-15T00:00:00.000Z' }),
+        aspect('BadDate', { required: false, expectedRequiredByDate: 'soon' }),
+        aspect('NoSuchDay', { required: false, expectedRequiredByDate: '2027-02-30T00:00:00.000Z' }),
+        aspect('Plain', { required: false }),
+      ],
+    })
+    const field = (label: string) => spec.fields.find((f) => f.label === label)!
+    expect(field('Soon')).toMatchObject({ requirement: 'bestPractice', helpText: 'eBay plans to require this item specific from about 15 January 2027.' })
+    expect(field('SoonRecommended')).toMatchObject({ requirement: 'bestPractice', helpText: 'eBay plans to require this item specific from about 1 December 2026.' })
+    expect(field('Required').requirement).toBe('required')
+    expect(field('Required').helpText).toBeUndefined()
+    for (const label of ['BadDate', 'NoSuchDay', 'Plain']) {
+      expect(field(label).requirement).toBe('optional')
+      expect(field(label).helpText).toBeUndefined()
+    }
+  })
+
   it('reads the English name out of a `Marca (Brand)` label on the older cache shape', () => {
     expect(aspectNames({ id: 'aspect_Marca', label: 'Marca (Brand)' })).toEqual({ localized: 'Marca', english: 'Brand' })
     expect(aspectNames({ id: 'aspect_Scollatura', label: 'Scollatura' })).toEqual({ localized: 'Scollatura', english: 'Scollatura' })

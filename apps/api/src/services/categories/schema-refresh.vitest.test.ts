@@ -24,6 +24,19 @@ it('refreshes an exact category and stores normalized conditions with a content 
   expect(row.schemaDefinition.conditions[0].value).toBe('PRE_OWNED_EXCELLENT')
   expect(row.schemaDefinition.aspects[0]).toMatchObject({ enumMode: 'strict', required: false, recommended: true, localizedName: 'Taglia' })
 })
+// W3-5 — the date is stored only when eBay sends one, so a category without it keeps the fingerprint it had before.
+it('stores eBay\'s "required from" date when present and leaves an aspect without one, and its fingerprint, unchanged', async () => {
+  const before = { aspects: [{ id: 'aspect_Size', label: 'Taglia', localizedName: 'Taglia', englishName: 'Size', dataType: 'STRING', kind: 'enum', options: ['S'], enumMode: 'strict',
+    required: false, recommended: true, cardinality: 'SINGLE', variantEligible: true, maxLength: 50 }], conditions: [{ value: 'PRE_OWNED_EXCELLENT', label: 'Pre-owned - Excellent' }] }
+  const plain = await service.getSchema({ channel: 'EBAY', marketplace: 'IT', productType: '177104' }, { force: true })
+  expect(plain.schemaVersion).toBe(createHash('sha256').update(JSON.stringify(before)).digest('hex'))
+  expect('expectedRequiredByDate' in plain.schemaDefinition.aspects[0]).toBe(false)
+  const [size] = await aspects()
+  aspects.mockResolvedValue([{ ...size, expectedRequiredByDate: '2027-01-15T00:00:00.000Z' }])
+  const dated = await service.getSchema({ channel: 'EBAY', marketplace: 'IT', productType: '177104' }, { force: true })
+  expect(dated.schemaDefinition.aspects[0].expectedRequiredByDate).toBe('2027-01-15T00:00:00.000Z')
+  expect(dated.schemaVersion).not.toBe(plain.schemaVersion)
+})
 it('preserves the usable cache when either provider request fails', async () => {
   conditions.mockRejectedValue(new Error('Authentication expired'))
   await expect(service.getSchema({ channel: 'EBAY', marketplace: 'IT', productType: '177104' }, { force: true })).rejects.toThrow('Authentication expired')
