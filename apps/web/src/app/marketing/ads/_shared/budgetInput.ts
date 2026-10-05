@@ -15,7 +15,12 @@
  * · €1.00 is Amazon's own smallest daily budget. A typed amount below it is refused with that
  *   sentence; only a percentage cut can land below it, and then the campaign stops at €1.00 and
  *   the screen says, before anything is sent, how many campaigns will.
- * · A blank Target ACoS means "unset" (`null`): the optimiser then uses its own fallback.
+ * · A blank Target ACoS means "unset" (`null`): the optimiser then uses its own fallback. A box
+ *   that must hold a value (the Bulk Actions row) refuses blank instead, like a budget box.
+ * · A Budget Manager MONTHLY budget is Nexus's own cap, not an Amazon field. €0 there means "no
+ *   cap": the pacer and Stop Over Spend only act when `monthlyBudgetCents > 0`
+ *   (`ads-budget-enforce.service.ts`), and the grid shows "No budget". So an empty box is €0 and
+ *   says "Empty = no monthly cap"; text or a negative amount is refused.
  *
  * PURE: no React, no fetch. `budgetInput.vitest.test.ts` pins every case above.
  */
@@ -35,6 +40,10 @@ export const BUDGET_MESSAGES = {
   percentNotAboveZero: 'Enter a percentage above 0.',
   decreaseOver100: 'A decrease can be at most 100%.',
   acosNotNumber: 'Enter a number, or leave the box blank to unset the target.',
+  acosNotNumberRequired: 'Enter the Target ACoS as a number, for example 30.',
+  acosEmpty: 'Enter a Target ACoS. An empty box changes nothing.',
+  monthlyNotNumber: 'Enter the monthly budget as a number, for example 1500. Empty = no monthly cap.',
+  monthlyNegative: 'A monthly budget cannot be below €0. Empty = no monthly cap.',
   acosOutOfRange: `Enter a Target ACoS from 0% to ${MAX_TARGET_ACOS_PCT}%.`,
 } as const
 
@@ -113,11 +122,28 @@ export function atMinimumNote(count: number): string | null {
 
 export type TargetAcosRead = { ok: true; fraction: number | null } | { ok: false; message: string }
 
-/** A typed Target ACoS in percent → the fraction to send. Blank is `null`: the target is unset. */
-export function readTargetAcosPercent(raw: string): TargetAcosRead {
-  if (raw.trim() === '') return { ok: true, fraction: null }
+/**
+ * A typed Target ACoS in percent → the fraction to send. Blank is `null` (the target is unset),
+ * unless `blank: 'refuse'` — a box that must hold a value, where blank sends nothing.
+ */
+export function readTargetAcosPercent(raw: string, opts: { blank?: 'unset' | 'refuse' } = {}): TargetAcosRead {
+  const refuseBlank = opts.blank === 'refuse'
+  if (raw.trim() === '') return refuseBlank ? { ok: false, message: BUDGET_MESSAGES.acosEmpty } : { ok: true, fraction: null }
   const n = readAmount(raw)
-  if (n == null) return { ok: false, message: BUDGET_MESSAGES.acosNotNumber }
+  if (n == null) return { ok: false, message: refuseBlank ? BUDGET_MESSAGES.acosNotNumberRequired : BUDGET_MESSAGES.acosNotNumber }
   if (n < 0 || n > MAX_TARGET_ACOS_PCT) return { ok: false, message: BUDGET_MESSAGES.acosOutOfRange }
   return { ok: true, fraction: n / 100 }
+}
+
+/** What the Budget Manager's monthly-budget boxes say about an empty box. */
+export const NO_MONTHLY_CAP = 'Empty = no monthly cap.'
+
+/** A typed monthly budget → cents. Empty is 0, which the engine reads as "no cap" (see the top). */
+export function readMonthlyBudgetCents(raw: string): { ok: true; cents: number } | { ok: false; message: string } {
+  if (raw.trim() === '') return { ok: true, cents: 0 }
+  const n = readAmount(raw)
+  if (n == null) return { ok: false, message: BUDGET_MESSAGES.monthlyNotNumber }
+  const cents = Math.round(roundToCents(n) * 100)
+  if (cents < 0) return { ok: false, message: BUDGET_MESSAGES.monthlyNegative }
+  return { ok: true, cents }
 }

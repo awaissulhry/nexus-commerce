@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AMAZON_MIN_DAILY_BUDGET, BUDGET_MESSAGES, atMinimumNote, nextDailyBudget, readAmount, readBudgetChange,
-  readBudgetPercent, readDailyBudget, readTargetAcosPercent, roundToCents, summariseBudgetChange,
+  readBudgetPercent, readDailyBudget, readMonthlyBudgetCents, readTargetAcosPercent, roundToCents, summariseBudgetChange,
 } from './budgetInput'
 
 /**
@@ -108,6 +108,32 @@ describe('readTargetAcosPercent', () => {
     expect(readTargetAcosPercent('-1')).toEqual({ ok: false, message: BUDGET_MESSAGES.acosOutOfRange })
     expect(readTargetAcosPercent('501')).toEqual({ ok: false, message: BUDGET_MESSAGES.acosOutOfRange })
     expect(readTargetAcosPercent('500')).toEqual({ ok: true, fraction: 5 })
+  })
+})
+
+describe('readTargetAcosPercent with blank: refuse (Bulk Actions)', () => {
+  it('a ticked, empty box sends nothing, like a budget box', () => {
+    expect(readTargetAcosPercent('', { blank: 'refuse' })).toEqual({ ok: false, message: BUDGET_MESSAGES.acosEmpty })
+    expect(readTargetAcosPercent('abc', { blank: 'refuse' })).toEqual({ ok: false, message: BUDGET_MESSAGES.acosNotNumberRequired })
+    expect(readTargetAcosPercent('25', { blank: 'refuse' })).toEqual({ ok: true, fraction: 0.25 })
+    expect(readTargetAcosPercent('600', { blank: 'refuse' })).toEqual({ ok: false, message: BUDGET_MESSAGES.acosOutOfRange })
+  })
+})
+
+describe('readMonthlyBudgetCents (Budget Manager monthly cap)', () => {
+  it('empty is 0 cents: the engine reads 0 as "no cap"', () => {
+    expect(readMonthlyBudgetCents('')).toEqual({ ok: true, cents: 0 })
+    expect(readMonthlyBudgetCents('  ')).toEqual({ ok: true, cents: 0 })
+  })
+  it('keeps the cents', () => {
+    expect(readMonthlyBudgetCents('1500')).toEqual({ ok: true, cents: 150000 })
+    expect(readMonthlyBudgetCents('1234,56')).toEqual({ ok: true, cents: 123456 })
+    expect(readMonthlyBudgetCents('12.345')).toEqual({ ok: true, cents: 1235 })
+  })
+  it('refuses text and a negative amount (text used to save €0 = no cap)', () => {
+    expect(readMonthlyBudgetCents('abc')).toEqual({ ok: false, message: BUDGET_MESSAGES.monthlyNotNumber })
+    expect(readMonthlyBudgetCents('1.500,00')).toEqual({ ok: false, message: BUDGET_MESSAGES.monthlyNotNumber })
+    expect(readMonthlyBudgetCents('-5')).toEqual({ ok: false, message: BUDGET_MESSAGES.monthlyNegative })
   })
 })
 

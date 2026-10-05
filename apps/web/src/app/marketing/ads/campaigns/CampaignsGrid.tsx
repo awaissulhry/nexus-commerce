@@ -819,8 +819,8 @@ export type BulkChanges = {
   status?: { value: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; label: string }
   budget?: { mode: 'set' | 'incPct' | 'decPct'; value: number; label: string }
   automation?: boolean
-  /** Target ACoS as a fraction (0.3 = 30 %); `null` = unset (a blank box), never 0 %. */
-  acos?: number | null
+  /** Target ACoS as a fraction (0.3 = 30 %), as typed. A blank box sends nothing (CM-13). */
+  acos?: number
   multiplier?: { placement: string; placementLabel: string; value: number }
   strategy?: { value: string; label: string }
 }
@@ -829,17 +829,17 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
   const [enStatus, setEnStatus] = useState(false); const [statusVal, setStatusVal] = useState<'ENABLED' | 'PAUSED' | 'ARCHIVED'>('ENABLED')
   const [enBudget, setEnBudget] = useState(false); const [budgetMode, setBudgetMode] = useState<'set' | 'incPct' | 'decPct'>('set'); const [budgetVal, setBudgetVal] = useState('')
   const [enAuto, setEnAuto] = useState(false); const [autoOn, setAutoOn] = useState(false)
-  const [enAcos, setEnAcos] = useState(false); const [acosVal, setAcosVal] = useState('30')
+  const [enAcos, setEnAcos] = useState(false); const [acosVal, setAcosVal] = useState('')
   const [enMult, setEnMult] = useState(false); const [placement, setPlacement] = useState('TOS'); const [multVal, setMultVal] = useState('')
   const [enStrat, setEnStrat] = useState(false); const [stratVal, setStratVal] = useState('LEGACY_FOR_SALES')
 
   const any = enStatus || enBudget || enAuto || enAcos || enMult || enStrat
-  // PR 1c (CM-7, CM-13) — `budgetInput.ts` reads both boxes. A ticked budget row whose box is empty,
-  // not a number or below €1.00 keeps Apply off and says why (a blank "Set" used to review as €0.00
-  // and write €1.00). A blank Target ACoS is "unset", never 0 %.
+  // PR 1c (CM-7, CM-13) — `budgetInput.ts` reads both boxes. A ticked row whose box is empty, not a
+  // number or out of range keeps Apply off and says why: a blank "Set" used to review as €0.00 and
+  // write €1.00, and a cleared Target ACoS wrote 0 %. Both boxes start empty (ACoS was pre-filled 30).
   const budgetRead = readBudgetChange(budgetMode, budgetVal)
   const budgetProblem = enBudget && !budgetRead.ok ? budgetRead.message : null
-  const acosRead = readTargetAcosPercent(acosVal)
+  const acosRead = readTargetAcosPercent(acosVal, { blank: 'refuse' })
   const acosProblem = enAcos && !acosRead.ok ? acosRead.message : null
   const allOn = enStatus && enBudget && enAuto && enAcos && enMult && enStrat
   const setAll = (v: boolean) => { setEnStatus(v); setEnBudget(v); setEnAuto(v); setEnAcos(v); setEnMult(v); setEnStrat(v) }
@@ -847,7 +847,7 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
   if (enStatus) changes.status = { value: statusVal, label: STATUS_ACTIONS.find((s) => s.value === statusVal)!.label }
   if (enBudget && budgetRead.ok) changes.budget = { mode: budgetMode, value: budgetRead.value, label: BUDGET_MODES.find((b) => b.value === budgetMode)!.label }
   if (enAuto) changes.automation = autoOn
-  if (enAcos && acosRead.ok) changes.acos = acosRead.fraction
+  if (enAcos && acosRead.ok && acosRead.fraction != null) changes.acos = acosRead.fraction
   if (enMult) changes.multiplier = { placement, placementLabel: PLACEMENT_OPTS.find((p) => p.value === placement)!.label, value: Number(multVal) || 0 }
   if (enStrat) changes.strategy = { value: stratVal, label: STRAT_LABEL[stratVal] ?? stratVal }
   const budgetUnit = budgetMode === 'set' ? '€' : '%'
@@ -882,7 +882,7 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
               <span className="it">Campaign Budget</span>
               <div className="ac">
                 <Listbox width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
-                <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="any" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" aria-invalid={budgetProblem != null} /></span>
+                <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="any" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" aria-invalid={budgetProblem != null && budgetVal.trim() !== ''} /></span>
               </div>
               {budgetProblem && (budgetVal.trim() === '' ? <p className="n">{budgetProblem}</p> : <p className="e" role="alert">{budgetProblem}</p>)}
             </div>
@@ -896,8 +896,8 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
             <div className="h10-bulk-row">
               <label className="ck"><Checkbox checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
               <span className="it">Target ACoS</span>
-              <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="1" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} placeholder="unset" aria-label="Target ACoS value" aria-invalid={acosProblem != null} /></span></div>
-              {acosProblem && <p className="e" role="alert">{acosProblem}</p>}
+              <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="any" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" aria-invalid={acosProblem != null && acosVal.trim() !== ''} /></span></div>
+              {acosProblem && (acosVal.trim() === '' ? <p className="n">{acosProblem}</p> : <p className="e" role="alert">{acosProblem}</p>)}
             </div>
 
             <div className="h10-bulk-row">
@@ -922,7 +922,7 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
             {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><Pill tone={pillTone(STATUS_RESULT[changes.status.value].cls)}>{STATUS_RESULT[changes.status.value].label}</Pill></span></div>}
             {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}{changes.budget.mode !== 'set' && budgetSummary && ` · new budgets ${budgetSummary.lowest === budgetSummary.highest ? eur(budgetSummary.lowest) : `${eur(budgetSummary.lowest)} to ${eur(budgetSummary.highest)}`}`}{budgetFloorNote && <span className="n">{budgetFloorNote}</span>}</span></div>}
             {changes.automation != null && <div className="rr"><span className="f">Bid Automation</span><span className="v"><span className="h10-rv-pill">{changes.automation ? 'On' : 'Off'}</span></span></div>}
-            {changes.acos !== undefined && <div className="rr"><span className="f">Target ACoS</span><span className="v">{changes.acos == null ? 'Unset (blank box)' : `${(changes.acos * 100).toFixed(2)}%`}</span></div>}
+            {changes.acos !== undefined && <div className="rr"><span className="f">Target ACoS</span><span className="v">{(changes.acos * 100).toFixed(2)}%</span></div>}
             {changes.multiplier && <div className="rr"><span className="f">Bid Multiplier</span><span className="v">{changes.multiplier.placementLabel} {changes.multiplier.value}%</span></div>}
             {changes.strategy && <div className="rr"><span className="f">Bidding Strategy</span><span className="v">{changes.strategy.label}</span></div>}
           </div>
@@ -1234,7 +1234,6 @@ export function CampaignsGrid() {
       if (ch.automation != null || ch.acos !== undefined) {
         const body: Record<string, unknown> = {}
         if (ch.automation != null) { body.bidAutomation = ch.automation; opt.bidAutomation = ch.automation }
-        // `null` unsets the target (CM-13); the endpoint deletes the stored value for it.
         if (ch.acos !== undefined) { body.targetAcos = ch.acos; opt.targetAcos = ch.acos }
         calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
       }

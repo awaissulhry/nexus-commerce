@@ -28,6 +28,7 @@ import { Modal, Drawer, Menu } from '@/design-system/components'
 import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
 import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
+import { NO_MONTHLY_CAP, readMonthlyBudgetCents } from '../_shared/budgetInput'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -114,26 +115,32 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
   const [cal, setCal] = useState<number[]>(() => { const a = Array(dim).fill(evenPct); for (const c of row.calendar) if (c.day >= 1 && c.day <= dim) a[c.day - 1] = c.pct; return a })
   const [saving, setSaving] = useState(false)
   const sum = cal.reduce((s, v) => s + (Number(v) || 0), 0)
-  const budgetCents = parseEur(budget)
+  // PR 1c — the monthly cap is read by `_shared/budgetInput.ts`. €0 means "no cap" to the engine
+  // (pacing and Stop Over Spend only act when the cap is > 0), so an empty box saves €0 and says
+  // so; text or a negative amount is refused (text used to save €0 and silently remove the cap).
+  const budgetRead = readMonthlyBudgetCents(budget)
+  const budgetCents = budgetRead.ok ? budgetRead.cents : 0
   const perDay = budgetCents > 0 ? budgetCents / dim : 0
 
   const save = async () => {
+    if (!budgetRead.ok) return // Save is off while the field says why
     setSaving(true)
     const calendar = custom ? cal.map((pct, i) => ({ day: i + 1, pct: Number(pct) || 0 })) : []
-    const ok = await postJson('/api/advertising/budget-manager/plans', { ...(row.id ? { id: row.id } : {}), marketplace: row.marketplace, month, monthlyBudgetCents: budgetCents, autoPacing, stopOverSpend, calendar })
+    const ok = await postJson('/api/advertising/budget-manager/plans', { ...(row.id ? { id: row.id } : {}), marketplace: row.marketplace, month, monthlyBudgetCents: budgetRead.cents, autoPacing, stopOverSpend, calendar })
     setSaving(false)
     if (ok) { toast('Budget saved.'); onSaved(); onClose() } else toast('Save failed.')
   }
 
   return (
     <Modal open onClose={onClose} title={`${FLAG[row.marketplace] ?? '🏳️'} ${mktName(row.marketplace)} — ${monthLabel(month)}`} subtitle="Set the monthly budget and how it is distributed across the month." size="lg"
-      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</Button></>}>
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || !budgetRead.ok || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</Button></>}>
       <div className="bm-set">
         <Field
           label="Monthly budget"
-          hint={budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days` : 'Set a monthly cap for this market.'}
+          hint={budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days. ${NO_MONTHLY_CAP}` : `${NO_MONTHLY_CAP} Set one to pace this market or stop over spend.`}
+          error={budgetRead.ok ? undefined : budgetRead.message}
         >
-          <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
+          <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="No cap" />
         </Field>
 
         <div className="bm-set-controls">
@@ -314,8 +321,12 @@ export function BudgetManagerClient() {
     if (ok) { toast('Status updated successfully.'); load(month) } else toast('Update failed.')
   }
   const saveNext = async (row: Row) => {
-    const cents = parseEur(nextDraft)
+    // PR 1c — same reader as the settings modal: empty saves €0 ("no cap", as the box says), text or
+    // a negative amount saves nothing and the toast says why (text used to save €0 = no cap).
+    const read = readMonthlyBudgetCents(nextDraft)
     setEditingNext(null)
+    if (!read.ok) { toast(`Next month budget not saved. ${read.message}`); return }
+    const cents = read.cents
     const ok = await postJson('/api/advertising/budget-manager/plans', { marketplace: row.marketplace, month: result!.nextMonth, monthlyBudgetCents: cents })
     if (ok) { toast('Next month budget saved.'); load(month) } else toast('Save failed.')
   }
@@ -337,8 +348,8 @@ export function BudgetManagerClient() {
     { key: 'thisMonth', label: 'This Month', metric: false, sortable: true, sortValue: (r) => r.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.daily} color={STATUS_COLOR[r.status]} /><span className="bm-cellv">{eur(r.spendCents)}<i className={`st st-${r.status}`} title={STATUS_LABEL[r.status]}>{pctTxt(r.pct)}</i></span></span>) },
     { key: 'nextMonthBudget', label: 'Next Month Budget', metric: false, sortable: true, sortValue: (r) => r.nextMonthBudgetCents ?? -1, render: (r) => (
       editingNext === r.marketplace
-        ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
-        : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null ? eur(r.nextMonthBudgetCents) : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
+        ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} placeholder="Empty = no cap" title={NO_MONTHLY_CAP} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
+        : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? eur(r.nextMonthBudgetCents) : r.nextMonthBudgetCents === 0 ? <span className="ph">No cap</span> : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
     ) },
   ], [editingNext, nextDraft, month, result]) // eslint-disable-line react-hooks/exhaustive-deps
   /**

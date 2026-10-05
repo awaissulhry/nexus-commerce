@@ -18,7 +18,7 @@ import { Lock, History as HistoryIcon, X } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
-import { readDailyBudget } from '../_shared/budgetInput'
+import { readDailyBudget, readTargetAcosPercent } from '../_shared/budgetInput'
 import './control-plane.css'
 
 interface EnfCampaign { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
@@ -102,7 +102,10 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
   const STRAT: Array<[string, string]> = [['LEGACY_FOR_SALES', 'Down only'], ['AUTO_FOR_SALES', 'Up & Down'], ['MANUAL', 'Fixed']]
   const effStrat = staged?.biddingStrategy ?? settings?.biddingStrategy
   const stageStrat = (s: string) => onStage({ entityType: 'campaign', biddingStrategy: s === settings?.biddingStrategy ? undefined : s })
-  const stageAcos = (v: string) => { setAcos(v); onStage({ entityType: 'campaign', targetAcos: v.trim() === '' ? undefined : (parseFloat(v) || 0) / 100 }) }
+  // PR 1c (CM-13) — read by `_shared/budgetInput.ts`. A blank box stays "no change" here (it stages
+  // nothing); text or a value outside 0–500 % is refused with a message (text used to stage 0 %).
+  const acosRead = readTargetAcosPercent(acos)
+  const stageAcos = (v: string) => { setAcos(v); const t = readTargetAcosPercent(v); onStage({ entityType: 'campaign', targetAcos: t.ok && t.fraction != null ? t.fraction : undefined }) }
   const stagePl = (key: 'tos' | 'pdp' | 'ros', v: string) => { const next = { ...pl, [key]: v }; setPl(next); onStage({ entityType: 'campaign', placements: { tos: next.tos === '' ? null : Number(next.tos), pdp: next.pdp === '' ? null : Number(next.pdp), ros: next.ros === '' ? null : Number(next.ros) } }) }
 
   // campaign actions
@@ -163,7 +166,7 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
               selected `value`: with none matching, every segment gets `tabIndex={-1}` and the
               whole group drops out of the tab order. These three buttons are reachable today. */}
           <div className="cp-fld"><span>Strategy</span><div className="cp-statusbtns">{STRAT.map(([v, l]) => (<button type="button" key={v} className={effStrat === v ? 'on' : ''} onClick={() => stageStrat(v)}>{l}</button>))}</div></div>
-          <label className="cp-fld"><span>Target ACoS</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /></label>
+          <label className="cp-fld"><span>Target ACoS</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" aria-invalid={!acosRead.ok} />{!acosRead.ok && <span className="cp-fld-e" role="alert">{acosRead.message}</span>}</label>
           <div className="cp-fld"><span>Placement multipliers</span><div className="cp-pl3">
             {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><Input size="sm" fieldClassName="cp-plin" suffix="%" inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /></label>))}
           </div></div>
