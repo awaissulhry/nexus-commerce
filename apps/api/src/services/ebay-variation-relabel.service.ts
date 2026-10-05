@@ -17,10 +17,23 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Safety: one ReviseFixedPriceItem per listing; nothing is written to our DB
  * unless eBay acked; unmapped variations (no pool link) are left untouched
  * and reported.
+ *
+ * S4 (per-channel SKU) — "the pool product's SKU" is the SKU that product's row
+ * on THIS item wants (`ebayRowsOnItem`: its own SKU, else its product SKU as
+ * before), so a variation with its own SKU is never relabelled back to
+ * Product.sku. Once eBay takes it, it is recorded as the SKU eBay holds.
  */
 
 import prisma from '../db.js'
 import { callTradingApi, siteIdForMarket, escapeXml, parseStartPrice } from './ebay-trading-api.service.js'
+import { confirmLiveChannelSku } from './listings/channel-sku.js'
+import { ebayRowsOnItem } from './listings/ebay-send-sku.js'
+
+/** S4 — eBay really took a relabel (not a dry run): record each relabelled row's SKU as the one eBay holds. */
+async function confirmRelabelled(res: { ack: string; raw?: string }, rows: Array<{ listingId: string | null; sku: string }>) {
+  if (!res.raw || !['Success', 'Warning'].includes(res.ack)) return
+  for (const row of rows) if (row.listingId) await confirmLiveChannelSku(prisma as never, row.listingId, row.sku)
+}
 
 export interface RelabelPlanEntry {
   fromSku: string
@@ -83,7 +96,9 @@ export async function relabelListingToPoolSkus(
     where: { id: { in: productIds } },
     select: { id: true, sku: true },
   })
-  const poolSkuByProductId = new Map(products.map((p) => [p.id, p.sku]))
+  // S4 — each product's SKU on this item: its row's wanted SKU (its own, else Product.sku as before).
+  const onItem = await ebayRowsOnItem(prisma as never, { itemId, marketplace: market, accountId: ctx.connectionId, products })
+  const poolSkuByProductId = new Map(products.map((p) => [p.id, onItem.get(p.id)?.wanted ?? p.sku]))
 
   const entries: RelabelPlanEntry[] = []
   const unmapped: string[] = []
@@ -115,6 +130,10 @@ export async function relabelListingToPoolSkus(
       connectionId: ctx.connectionId,
     })
     ebayAck = res.ack
+    await confirmRelabelled(res, entries.map((e) => {
+      const productId = memberships.find((m) => m.sku === e.fromSku)?.productId
+      return { listingId: productId ? onItem.get(productId)?.listingId ?? null : null, sku: e.toSku }
+    }))
     // eBay acked — rewrite our memberships to the new SKUs (per-listing price,
     // snapshot, qty state all preserved; only the natural key's sku changes).
     for (const e of entries) {
@@ -320,7 +339,9 @@ export async function adoptSkulessVariations(
     where: { id: { in: plan.entries.map((e) => e.productId) } },
     select: { id: true, sku: true, parentId: true },
   })
-  const skuById = new Map(products.map((p) => [p.id, p.sku]))
+  // S4 — the SKU each adopted variation gets: its row's wanted SKU on this item (its own, else Product.sku as before).
+  const onItem = await ebayRowsOnItem(prisma as never, { itemId, marketplace: market, accountId: ctx.connectionId, products })
+  const skuById = new Map(products.map((p) => [p.id, onItem.get(p.id)?.wanted ?? p.sku]))
   const entries: RelabelPlanEntry[] = plan.entries
     .map((e) => ({ fromSku: '', toSku: skuById.get(e.productId) ?? '', specifics: e.specifics }))
     .filter((e) => Boolean(e.toSku))
@@ -333,6 +354,7 @@ export async function adoptSkulessVariations(
   })
   base.ebayAck = res.ack
   base.adopted = entries.length
+  await confirmRelabelled(res, plan.entries.map((e) => ({ listingId: onItem.get(e.productId)?.listingId ?? null, sku: skuById.get(e.productId) ?? '' })).filter((r) => r.sku))
 
   // parent SKU for the new memberships: caller's (the shell) > pool family parent > itemId
   let parentSku = preferredParentSku && !/^\d+$/.test(preferredParentSku) ? preferredParentSku : ''

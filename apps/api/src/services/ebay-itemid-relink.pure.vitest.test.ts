@@ -15,6 +15,8 @@ import {
   parseSellerUserId,
   checkSellerOwnership,
   combineOwnership,
+  isEndedEbayStatus,
+  nexusStatusForEbayItem,
 } from './ebay-itemid-relink.pure.js'
 
 const FAMILY = ['VENTRA-JACKET-ALT1', 'ventra-alt1-s', 'ventra-alt1-m', 'ventra-alt1-l']
@@ -91,6 +93,27 @@ describe('checkItemIdOwnership', () => {
       liveSkus: ['  VENTRA-ALT1-S  '], familySkus: FAMILY, listingStatus: 'active',
     })
     expect(out.verdict).toBe('verified')
+  })
+
+  it('Item ID control: an ENDED item is accepted only when the caller records it as Ended (acceptEnded), and says so', () => {
+    for (const listingStatus of ['Completed', 'Ended', 'ended']) {
+      const out = checkItemIdOwnership({ liveSkus: ['ventra-alt1-s'], familySkus: FAMILY, listingStatus, acceptEnded: true })
+      expect(out.verdict).toBe('verified')
+      expect(out.reason).toContain('it has ended')
+    }
+    // Still the repair's refusal without the flag (the old re-link never writes onto a dead item).
+    expect(checkItemIdOwnership({ liveSkus: ['ventra-alt1-s'], familySkus: FAMILY, listingStatus: 'Ended' }).verdict).toBe('rejected')
+    // Any other status is never accepted, flag or not; the SKU rules still apply to an ended item.
+    expect(checkItemIdOwnership({ liveSkus: ['ventra-alt1-s'], familySkus: FAMILY, listingStatus: 'Custom', acceptEnded: true }).verdict).toBe('rejected')
+    expect(checkItemIdOwnership({ liveSkus: ['gale-jacket-s'], familySkus: FAMILY, listingStatus: 'Ended', acceptEnded: true }).verdict).toBe('rejected')
+  })
+
+  it('the Nexus status an eBay item reads as: Active → ACTIVE, Ended or Completed → ENDED, anything else (or nothing) unknown', () => {
+    expect(nexusStatusForEbayItem('Active')).toBe('ACTIVE')
+    expect(nexusStatusForEbayItem(' completed ')).toBe('ENDED')
+    expect(nexusStatusForEbayItem('Ended')).toBe('ENDED')
+    for (const s of ['Custom', 'CustomCode', '', null, undefined]) expect(nexusStatusForEbayItem(s)).toBeNull()
+    expect(isEndedEbayStatus('Active')).toBe(false)
   })
 
   it('does not reject when eBay omits the status (absent != ended)', () => {

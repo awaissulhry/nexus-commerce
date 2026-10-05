@@ -30,6 +30,7 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
+import { listingSendSku } from './listings/listing-send-sku.js'
 
 /** eBay item_promotion SKU ceiling — same constant the push service guards on. */
 export const MAX_SKUS = 500
@@ -157,7 +158,8 @@ export async function resolveSkusByRule(
       weightedAvgCostCents: true,
       channelListings: {
         where: { channel: 'EBAY', marketplace, listingStatus: 'ACTIVE' },
-        select: { price: true },
+        // S4 — plus the channel-SKU facts: the promotion names the SKU eBay holds for this listing.
+        select: { price: true, productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true },
         orderBy: { updatedAt: 'desc' },
         take: 1,
       },
@@ -173,8 +175,12 @@ export async function resolveSkusByRule(
           ? p.weightedAvgCostCents / 100
           : null
     const listing = p.channelListings[0]
+    // S4 (per-channel SKU) — eBay's item_promotion names inventory by the SKU eBay holds (`listingSendSku`): the product
+    // SKU unless this listing has its own confirmed one (`ebay-volume-pricing-push.service.ts` sends the stored list).
+    const held = listing ? listingSendSku({ ...listing, channel: 'EBAY' }, p.sku, p.sku).sku : p.sku
+    if (!held) continue
     const candidate: ResolveCandidate = {
-      sku: p.sku,
+      sku: held,
       basePrice: Number(p.basePrice),
       brand: p.brand,
       cost,

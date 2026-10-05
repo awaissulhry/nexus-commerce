@@ -89,6 +89,12 @@ export interface AmazonBatchSubmission {
   sellerId: string
   operations: AmazonBatchOperation[]
   /**
+   * S3 (per-channel SKU) — the products the operations belong to. An operation may name a listing's own seller SKU,
+   * which the push-lock read cannot find by product SKU; with these, every listing of those products is still checked
+   * (the same rows a product SKU finds).
+   */
+  productIds?: string[]
+  /**
    * 🔴 A caller's explicit request NOT to submit. One-way: `true` forces a rehearsal, `false` and
    * `undefined` defer to the publish gate. It can never cause a submission that the gate would
    * otherwise have prevented.
@@ -274,7 +280,8 @@ export async function submitAmazonListingsBatch(
     }
   }
 
-  const pushControls = await readPushControls({ channel: 'AMAZON', skus: input.operations.map(operation => operation.sku), allowAbsent: true })
+  const pushControls = await readPushControls({ channel: 'AMAZON', skus: input.operations.map(operation => operation.sku),
+    ...(input.productIds?.length ? { productIds: input.productIds } : {}), allowAbsent: true })
   const closed = await closedMarketSet(pushControls.map(row => row.productId))
   for (const row of pushControls) {
     const refusal = assertPushAllowed(row)

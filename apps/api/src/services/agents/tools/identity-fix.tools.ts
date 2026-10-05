@@ -655,11 +655,13 @@ const linkChannelId: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: LINK_UNDO,
   description:
-    'Link a listing to the channel item it sells, after checking it on the channel: eBay — the Item ID must be Active, '
-    + 'listed by this account\'s seller and carry the family\'s SKUs (no other family may hold it); Amazon — the ASIN is '
-    + 'read from Amazon by the listing\'s seller SKU. Always waits for a person to approve it in Nexus, and checks again '
-    + 'before it writes. The listing is live in Nexus again but stays paused until a person resumes its pushes. Shopify '
-    + 'links through colour products in Nexus; Etsy is not built yet.',
+    'Link a listing to the channel item it sells, after checking it on the channel: eBay — the Item ID must be listed by '
+    + 'this account\'s seller and carry this family\'s SKUs on this market and account (no other family may hold it); it is '
+    + 'written only on the rows the item carries, with the status eBay reports (an ended item reads Ended, and Relist is '
+    + 'offered); a variation that holds another item moves to this one only when eBay shows its own SKU on it (the preview '
+    + 'lists each such row, and the rows left alone); Amazon — the ASIN is read from Amazon by the listing\'s seller SKU. Always waits for a person to approve it '
+    + 'in Nexus, and checks again before it writes. The rows stay paused until a person resumes their pushes. The product '
+    + 'sheet\'s Item ID cell uses the same rules. Shopify links through colour products in Nexus; Etsy is not built yet.',
   async handler(args): Promise<ToolResult> {
     try {
       const plan = await planLink(String(args.listingId), { externalId: (args.externalId as string | undefined) ?? null, acknowledgeUnverifiable: args.acknowledgeUnverifiable === true })
@@ -677,7 +679,15 @@ const linkChannelId: AgentTool = {
           ...(plan.seller ? { seller: plan.seller } : {}),
           ...(plan.matchedSkus.length ? { matchedSkus: plan.matchedSkus.slice(0, LINE_CAP) } : {}),
           changes: { 'channel id': { from: c.externalId, to: plan.externalId } },
-          effect: `Links ${c.channel} ${plan.externalId} to ${c.root.sku} (${c.market}); its rows become live in Nexus and stay paused until a person resumes their pushes.`,
+          ...(plan.proof ? {
+            listings: plan.proof.rows.slice(0, LINE_CAP).map((r) => r.sku),
+            // Owner option A (2026-10-05): rows that hold another item and that eBay shows on this one move with the link.
+            ...(plan.proof.moved.length ? { movesFromOtherItem: plan.proof.moved.slice(0, LINE_CAP).map((m) => m.sentence) } : {}),
+            ...(plan.proof.kept.length ? { keptOtherItem: plan.proof.kept.slice(0, LINE_CAP).map((k) => k.sentence) } : {}),
+          } : {}),
+          effect: plan.proof
+            ? `Links ${c.channel} ${plan.externalId} to ${plan.proof.rows.length} row(s) of ${c.root.sku} (${c.market})${plan.proof.moved.length ? `, moving ${plan.proof.moved.length} of them from another item` : ''}; they read ${plan.proof.status === 'ENDED' ? 'Ended (Relist is offered)' : 'Active'} in Nexus and stay paused until a person resumes their pushes.`
+            : `Links ${c.channel} ${plan.externalId} to ${c.root.sku} (${c.market}); its rows become live in Nexus and stay paused until a person resumes their pushes.`,
           note: 'Nothing is sent to the channel. Nothing changes until a person approves this in Nexus.',
         },
       }
@@ -690,10 +700,10 @@ const linkChannelId: AgentTool = {
       const approved = (ctx.approvedPreview as { externalId?: string } | undefined)?.externalId
       const expected = approved ?? (args.externalId as string | undefined) ?? ''
       const before = await coordinateOf(String(args.listingId))
-      const record = await runLink(String(args.listingId), { externalId: (args.externalId as string | undefined) ?? null, acknowledgeUnverifiable: args.acknowledgeUnverifiable === true, expectedExternalId: expected })
+      const record = await runLink(String(args.listingId), { externalId: (args.externalId as string | undefined) ?? null, acknowledgeUnverifiable: args.acknowledgeUnverifiable === true, expectedExternalId: expected, actor: ctx.userId ?? null })
       return {
         ok: true,
-        data: { linked: record.externalId, rows: record.rows.length, sharedVariationsLive: record.membershipsReactivated.length, note: 'Pushes stay paused until a person resumes them.' },
+        data: { linked: record.externalId, rows: record.rows.length, ...(record.status ? { status: record.status } : {}), sharedVariationsLive: record.membershipsReactivated.length, note: 'Pushes stay paused until a person resumes them.' },
         change: { before: { listingId: record.listingId, externalId: before?.externalId ?? null, rows: record.rows }, after: { listingId: record.listingId, externalId: record.externalId } },
       }
     } catch (error) {

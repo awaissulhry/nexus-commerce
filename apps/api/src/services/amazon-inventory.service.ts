@@ -24,6 +24,7 @@ import prisma from '../db.js'
 import { AmazonService, FBAInventoryRow } from './marketplaces/amazon.service.js'
 import { applyStockMovement } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
+import { amazonAccountIdFor, productByOwnSku } from './listings/reported-sku.js'
 
 const FBA_LOCATION_CODE = 'AMAZON-EU-FBA'
 
@@ -168,8 +169,17 @@ export class AmazonInventoryService {
    *  StockLevel rows for missing SKUs are untouched), preserving the
    *  pre-H.1 safety contract.
    *
-   *  Lookup remains SKU-first with ASIN fallback for the case where
-   *  Amazon's SKU drifted from ours but the ASIN matches. Delta=0
+   *  Lookup: a listing's OWN seller SKU on this Amazon account first (S7:
+   *  `productByOwnSku` — confirmed, wanted or an old store; two products on
+   *  one SKU = skipped and reported, never picked), then SKU-first with ASIN
+   *  fallback exactly as before (a listing without its own SKU lands here and
+   *  is matched as it always was). Which product the number belongs to is
+   *  the only thing that changed; how the FBA number is written did not.
+   *  The FBA mirror holds ONE number per product, so a row matched by an own
+   *  SKU is written only when no other row of the same sweep lands on that
+   *  product (else it is reported, not written): an own SKU never makes one
+   *  product's number overwrite another's. Rows matched the old way behave
+   *  exactly as before. Delta=0
    *  short-circuit avoids no-op writes (saves a transaction + an
    *  updatedAt bump that would invalidate the 30s grid poll cache for
    *  nothing). */
@@ -188,9 +198,21 @@ export class AmazonInventoryService {
       return
     }
 
+    // S7 — the account the report came from (the fetch used the same default chooser). None resolves → no own-SKU
+    // match, so every row is matched exactly as before.
+    const accountId = await amazonAccountIdFor()
+
+    // Pass 1 — which product each row belongs to (no write yet).
+    const matched: Array<{ row: FBAInventoryRow; productId: string; byOwnSku: boolean }> = []
     for (const row of rows) {
       try {
-        let product = await prisma.product.findUnique({
+        const own = await productByOwnSku(prisma, { channel: 'AMAZON', channelConnectionId: accountId, sku: row.sku })
+        if (own && own.ambiguous === true) {
+          summary.errors.push({ sku: row.sku, error: own.sentence })
+          logger.warn('amazon-inventory: seller SKU names more than one product — skipped', { sku: row.sku, productIds: own.productIds })
+          continue
+        }
+        let product: { id: string } | null = own && own.ambiguous === false ? { id: own.productId } : await prisma.product.findUnique({
           where: { workspace_sku: workspaceKey({ sku: row.sku }) },
           select: { id: true },
         })
@@ -210,11 +232,36 @@ export class AmazonInventoryService {
           }
           continue
         }
+        matched.push({ row, productId: product.id, byOwnSku: !!own })
+      } catch (err) {
+        summary.errors.push({
+          sku: row.sku,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        logger.warn('amazon-inventory: per-SKU update failed', {
+          sku: row.sku,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // Pass 2 — write, in the report's order, as before.
+    const rowsPerProduct = new Map<string, string[]>()
+    for (const m of matched) rowsPerProduct.set(m.productId, [...(rowsPerProduct.get(m.productId) ?? []), m.row.sku])
+    for (const { row, productId, byOwnSku } of matched) {
+      try {
+        const skus = rowsPerProduct.get(productId) ?? []
+        if (byOwnSku && skus.length > 1) {
+          const error = `FBA units for one product come under ${skus.length} seller SKUs (${skus.join(', ')}). Nexus keeps one FBA number per product, so the number under ${row.sku} was not written.`
+          summary.errors.push({ sku: row.sku, error })
+          logger.warn('amazon-inventory: own seller SKU shares its product with another row — not written', { sku: row.sku, productId, skus })
+          continue
+        }
 
         // Read current FBA quantity for delta calculation.
         const existing = await prisma.stockLevel.findFirst({
           where: {
-            productId: product.id,
+            productId,
             locationId: fbaLocation.id,
             variationId: null,
           },
@@ -230,7 +277,7 @@ export class AmazonInventoryService {
         }
 
         await applyStockMovement({
-          productId: product.id,
+          productId,
           locationId: fbaLocation.id,
           change: delta,
           reason: 'SYNC_RECONCILIATION',

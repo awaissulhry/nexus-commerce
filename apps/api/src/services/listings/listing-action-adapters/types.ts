@@ -10,7 +10,13 @@ import type { ListingAction, ListingActionDestination, ListingActionRowOutcome }
 export interface ActionListing {
   id: string
   productId: string
+  /**
+   * Amazon (S3), eBay (S4), Shopify and Etsy (S5): the SKU the channel holds for this row (`listingSendSku`), the product
+   * SKU unless it has its own.
+   */
   sku: string
+  /** S3/S4/S5 — the row has no single SKU on record (two different ones): the plan refuses it with this sentence where the action names the SKU. */
+  skuRefusal?: string
   isParent: boolean
   externalListingId: string | null
   listingStatus: string

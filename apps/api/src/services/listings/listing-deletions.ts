@@ -9,6 +9,12 @@
  * publish lists it again (Amazon promotes the accepted draft, eBay writes the item number, Shopify its product), it is
  * no longer deleted and its Status reads Active again by itself.
  *
+ * An accepted UNLINK reads the same (Item ID control, 2026-10-05): `runUnlink` (identity-fix.service.ts — the sheet's
+ * Clear and Claude's unlink-channel-id) leaves the same draft shape and records `ChannelListingSnapshot` reason 'unlink',
+ * accepted with it. Without this, the still-draft shape made Status offer the row as a NEW listing and a Publish created
+ * a second item while the old one was still live. Such a removal carries `unlinked: true`: the item may still be live on
+ * the channel and Nexus no longer updates it (the wording of the Status cell is `@nexus/shared/listing-actions`'s).
+ *
  * An OLDER relist choice (the first build, before the simplify): a Partial update or Full update set on the row's
  * Action column AFTER the delete — Full update stored as `FULL_UPDATE`, Partial update as no value WITH a time
  * (`publishActionAt`). It is kept as `relistChosenAt` and read as the row's Status choice Active
@@ -18,6 +24,12 @@ import type { FbaUnits, ListingDeletion } from '@nexus/shared/listing-actions'
 import { isRelistChoice, PAN_EU_MARKETS } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+
+/** A removal Nexus recorded: a Delete the channel accepted, or an unlink (`unlinked`: nothing was removed on the channel). */
+export type ListingRemoval = ListingDeletion & { unlinked?: true }
+
+/** The snapshot reasons that leave a row not on the channel as far as Nexus knows: an accepted Delete, an accepted unlink. */
+export const REMOVAL_REASONS = ['delete', 'unlink'] as const
 
 /** The listing facts a deletion is read from (every field is on `ChannelListing`). */
 export interface DeletionCandidate {
@@ -44,17 +56,17 @@ export const hasDeletedShape = (row: Pick<DeletionCandidate, 'externalListingId'
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
 /** listing id → its deletion, for the rows Nexus deleted and that are not listed again. Two reads at most. */
-export async function readListingDeletions(rows: readonly DeletionCandidate[]): Promise<Map<string, ListingDeletion>> {
-  const out = new Map<string, ListingDeletion>()
+export async function readListingDeletions(rows: readonly DeletionCandidate[]): Promise<Map<string, ListingRemoval>> {
+  const out = new Map<string, ListingRemoval>()
   const candidates = new Map(rows.filter(hasDeletedShape).map(row => [row.id, row]))
   if (!candidates.size) return out
   const deletes = await prisma.channelListingSnapshot.findMany({
-    where: { channelListingId: { in: [...candidates.keys()] }, reason: 'delete', outcome: 'ACCEPTED', acceptedAt: { not: null } },
-    select: { channelListingId: true, acceptedAt: true, payload: true },
+    where: { channelListingId: { in: [...candidates.keys()] }, reason: { in: [...REMOVAL_REASONS] }, outcome: 'ACCEPTED', acceptedAt: { not: null } },
+    select: { channelListingId: true, acceptedAt: true, payload: true, reason: true },
     orderBy: [{ acceptedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
   })
-  const latest = new Map<string, { at: Date; payload: unknown }>()
-  for (const row of deletes) if (row.acceptedAt && !latest.has(row.channelListingId)) latest.set(row.channelListingId, { at: row.acceptedAt, payload: row.payload })
+  const latest = new Map<string, { at: Date; payload: unknown; unlinked: boolean }>()
+  for (const row of deletes) if (row.acceptedAt && !latest.has(row.channelListingId)) latest.set(row.channelListingId, { at: row.acceptedAt, payload: row.payload, unlinked: row.reason === 'unlink' })
   if (!latest.size) return out
   // A publish accepted after the delete listed it again (whatever the row still says).
   const earliest = new Date(Math.min(...[...latest.values()].map(entry => entry.at.getTime())))
@@ -69,8 +81,9 @@ export async function readListingDeletions(rows: readonly DeletionCandidate[]): 
     const evidence = object(object(entry.payload).evidence)
     const old = evidence.oldExternalListingId
     const chosen = isRelistChoice({ value: row.publishAction ?? null, at: row.publishActionAt ?? null }, at)
-    out.set(id, { at, where: deletionWhere(row.channel, row.marketplace), oldReference: typeof old === 'string' && old ? old : null,
-      relistChosenAt: chosen && row.publishActionAt ? row.publishActionAt.toISOString() : null })
+    const removal: ListingRemoval = { at, where: deletionWhere(row.channel, row.marketplace), oldReference: typeof old === 'string' && old ? old : null,
+      relistChosenAt: chosen && row.publishActionAt ? row.publishActionAt.toISOString() : null }
+    out.set(id, entry.unlinked ? { ...removal, unlinked: true } : removal)
   }
   return out
 }

@@ -22,6 +22,9 @@ import { ebaySend } from './gateway/ebay.js'
 import type { PrismaClient } from '@prisma/client'
 import { resolvePerMarketContent } from './ebay-variation-push.service.js'
 import { ebayListingLanguage } from './gateway/channels.js';
+import { CHANNEL_SKU_LISTING_SELECT } from './listings/channel-sku.js'
+import { wantedChannelSku } from './listings/channel-sku.pure.js'
+import { onAccount } from './listings/reported-sku.js'
 
 export interface DriftField {
   field: string
@@ -116,7 +119,7 @@ export async function collectInventoryDrift(
   for (const root of roots) {
     const kids = await prisma.product.findMany({
       where: { parentId: root.id, deletedAt: null },
-      select: { sku: true },
+      select: { id: true, sku: true },
     })
     const famIds = [root.id]
     const kidRows = await prisma.product.findMany({ where: { parentId: root.id, deletedAt: null }, select: { id: true } })
@@ -144,6 +147,28 @@ export async function collectInventoryDrift(
       drift: false,
     }
 
+    // S7 — the variant SKUs a Full Publish would send: each variant's own SKU on its main eBay listing of this market and
+    // account (`wantedChannelSku`), else its product SKU exactly as before. No single SKU: reported, not compared.
+    const kidListings = kids.length ? await prisma.channelListing.findMany({
+      where: { productId: { in: kids.map((k) => k.id) }, channel: 'EBAY', region, aliasKey: '', ...onAccount(opts.connectionId) },
+      select: CHANNEL_SKU_LISTING_SELECT,
+    }) : []
+    const variantSkus: string[] = []
+    const skuProblems: string[] = []
+    for (const kid of kids) {
+      const answers = kidListings.filter((l) => l.productId === kid.id).map((l) => wantedChannelSku(l, kid.sku))
+      const problem = answers.find((a) => a.sku === null)
+      const skus = [...new Set(answers.map((a) => a.sku).filter((v): v is string => !!v))]
+      if (problem?.conflict) skuProblems.push(problem.conflict.sentence)
+      else if (skus.length > 1) skuProblems.push(`${kid.sku} has eBay ${marketplace} listings with different SKUs (${skus.join(', ')}).`)
+      else variantSkus.push(skus[0] ?? kid.sku)
+    }
+    if (skuProblems.length) {
+      entry.error = `Not compared: ${skuProblems.join(' ')}`
+      families.push(entry)
+      continue
+    }
+
     try {
       const res = await ebaySend(opts.connectionId,
         `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`,
@@ -158,7 +183,7 @@ export async function collectInventoryDrift(
       const content = resolvePerMarketContent(parentCl as never, {})
       const { fields, drift } = diffLiveGroup(live, {
         title: content.title ?? '',
-        variantSkus: kids.map((k) => k.sku),
+        variantSkus,
       })
       entry.ok = true
       entry.fields = fields

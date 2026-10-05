@@ -12,7 +12,8 @@ const h = vi.hoisted(() => ({
   listingQuantity: 7 as number | null,
   listingStatus: 'ACTIVE' as string,
   warehouse: 50,
-  sent: [] as Array<{ accountId: string; work: any }>,
+  sent: [] as Array<{ accountId: string; work: any; row?: any }>,
+  alias: null as null | { sku: string | null; productId: string },
   fail: null as string | null,
   queueFindUnique: vi.fn(async (_args: any) => null),
   queueFindMany: vi.fn(async (_args: any) => []),
@@ -35,6 +36,8 @@ vi.mock('../db.js', () => ({
     stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: h.warehouse, available: h.warehouse, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))) },
     stockPoolLink: { findMany: vi.fn(async () => []) },
     channelPublishAttempt: { create: vi.fn(async () => ({})) },
+    // S5 — an extra listing's own SKU (read only for a row with an alias).
+    productListingAlias: { findUnique: vi.fn(async () => h.alias) },
     outboundApiCallLog: { create: vi.fn(async () => ({})) },
   },
 }))
@@ -45,8 +48,8 @@ vi.mock('./connection-resolver.service.js', async (importOriginal) => ({
   listActiveConnections: vi.fn(async () => [{ id: 'conn-A', channelType: 'SHOPIFY', isActive: true, isPrimary: true }, { id: 'conn-B', channelType: 'SHOPIFY', isActive: true, isPrimary: false }]),
 }))
 vi.mock('./shopify/listing-write.service.js', () => ({
-  syncShopifyLinkedListing: vi.fn(async (_row: unknown, accountId: string, work: unknown) => {
-    h.sent.push({ accountId, work })
+  syncShopifyLinkedListing: vi.fn(async (row: unknown, accountId: string, work: unknown) => {
+    h.sent.push({ accountId, work, row })
     if (h.fail) throw new Error(h.fail)
     return 'Shopify stock set and read back.'
   }),
@@ -70,7 +73,7 @@ beforeEach(() => {
   // The old path's env credentials are set: they must not be used.
   vi.stubEnv('SHOPIFY_SHOP_NAME', 'env-shop')
   vi.stubEnv('SHOPIFY_ACCESS_TOKEN', 'env-token')
-  h.listingAccount = 'conn-B'; h.listingQuantity = 7; h.warehouse = 50; h.sent = []; h.fail = null; h.listingStatus = 'ACTIVE'
+  h.listingAccount = 'conn-B'; h.listingQuantity = 7; h.warehouse = 50; h.sent = []; h.fail = null; h.listingStatus = 'ACTIVE'; h.alias = null
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
@@ -162,5 +165,48 @@ describe('P1.4 — both queue loaders load the listing', () => {
   it('processPendingSyncs', async () => {
     await new OutboundSyncService().processPendingSyncs()
     expect(h.queueFindMany.mock.calls[0][0].include).toMatchObject({ product: true, channelListing: true })
+  })
+})
+
+/**
+ * S5 (per-channel SKU) — a linked listing's change names the SKU Shopify holds for THAT listing (`listingSendSku`), passed
+ * to the writer as `row.sku`: its confirmed `liveChannelSku`, else the product SKU (as before). A Shopify sheet SKU not
+ * yet sent — the native SKU column or an edit in the override bag — is never named; nor is an extra listing's own SKU.
+ */
+describe('S5 — the SKU Shopify holds for the listing', () => {
+  const withListing = (facts: Record<string, unknown>, extra: Record<string, unknown> = {}) => row({ channelConnectionId: 'conn-B', channelListing: { ...listing(), ...facts }, ...extra })
+
+  it('parity: a listing with no SKU of its own is written under its product SKU', async () => {
+    expect(await service.syncToShopify(withListing({}))).toMatchObject({ status: 'SUCCESS' })
+    expect(h.sent[0].row).toMatchObject({ sku: 'SKU-1', product: { sku: 'SKU-1' } })
+  })
+  it('parity: an edit only in the override bag (never sent) — still the product SKU', async () => {
+    await service.syncToShopify(withListing({ overrideData: { listing_sku: 'SKU-1-NEXT' } }))
+    expect(h.sent[0].row.sku).toBe('SKU-1')
+  })
+  it('🔴 an unsent sheet SKU (the native SKU column) does not block stock or price: both go under the product SKU', async () => {
+    const pending = { platformAttributes: { ...listing().platformAttributes, sku: 'SKU-1-NEXT' } }
+    expect(await service.syncToShopify(withListing(pending))).toMatchObject({ status: 'SUCCESS' })
+    expect(await service.syncToShopify(withListing(pending, { syncType: 'PRICE_UPDATE', payload: { price: 19.5 } }))).toMatchObject({ status: 'SUCCESS' })
+    expect(h.sent.map(s => [s.row.sku, s.work])).toEqual([['SKU-1', { quantity: 7 }], ['SKU-1', { price: 19.5 }]])
+  })
+  it('🔴 a row with no stored Shopify ids is handed the live SKU (the product SKU) to look up, never an unsent sheet SKU', async () => {
+    await service.syncToShopify(withListing({ platformAttributes: { sku: 'SKU-1-NEXT' } }))
+    expect(h.sent[0].row).toMatchObject({ sku: 'SKU-1', channelListing: { platformAttributes: { sku: 'SKU-1-NEXT' } } })
+  })
+  it('own SKU confirmed (liveChannelSku): that SKU, for stock and price alike; the wanted channelSku is not named', async () => {
+    await service.syncToShopify(withListing({ liveChannelSku: 'SKU-1-LIVE', channelSku: 'SKU-1-WANT' }))
+    await service.syncToShopify(withListing({ liveChannelSku: 'SKU-1-LIVE', channelSku: 'SKU-1-WANT' }, { syncType: 'PRICE_UPDATE', payload: { price: 19.5 } }))
+    expect(h.sent.map(s => [s.row.sku, s.work])).toEqual([['SKU-1-LIVE', { quantity: 7 }], ['SKU-1-LIVE', { price: 19.5 }]])
+  })
+  it('a still-draft listing names what it named before (the product SKU), never its wanted SKU', async () => {
+    await service.syncToShopify(withListing({ listingStatus: 'DRAFT', isPublished: false, externalListingId: null, channelSku: 'SKU-1-WANT' }))
+    expect(h.sent[0].row.sku).toBe('SKU-1')
+  })
+  it('an extra listing\'s own SKU (with or without a native SKU) is not what Shopify holds: the product SKU, no extra read', async () => {
+    h.alias = { sku: 'SKU-1-ALIAS', productId: 'p1' }
+    await service.syncToShopify(withListing({ productId: 'p1', aliasKey: 'alias-1', aliasId: 'alias-1', platformAttributes: { ...listing().platformAttributes, sku: 'SKU-1-SHOP' } }))
+    await service.syncToShopify(withListing({ productId: 'p1', aliasKey: 'alias-1', aliasId: 'alias-1' }))
+    expect(h.sent.map(s => s.row.sku)).toEqual(['SKU-1', 'SKU-1'])
   })
 })

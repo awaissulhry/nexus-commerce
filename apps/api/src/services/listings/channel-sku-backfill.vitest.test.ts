@@ -2,6 +2,7 @@
  * S2 — the channel-SKU backfill core (channel-sku-backfill.ts) on real PostgreSQL (PGlite, production schema and
  * policies): a dry run writes nothing, `apply` writes exactly the rows it counted, a second run writes nothing,
  * conflicts stay empty and are listed, a value already set is never overwritten, and another business is untouched.
+ * S4 — an eBay extra listing's own SKU (never sent to eBay) goes into `channelSku` only, never `liveChannelSku`.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -41,7 +42,7 @@ const connection = (channelType: string, label: string) => prisma.channelConnect
 const columns = (names: string[], run = scoped) => run(() => prisma.channelListing.findMany({ where: { id: { in: names.map(n => lid[n]) } }, select: { id: true, channelSku: true, liveChannelSku: true, version: true } }))
   .then(rows => Object.fromEntries(names.map(n => { const r = rows.find(x => x.id === lid[n]); return [n, r ? { channelSku: r.channelSku, liveChannelSku: r.liveChannelSku, version: r.version } : null] })))
 
-const ALL = ['liveOffer', 'draftAttr', 'same', 'none', 'conflict', 'twoOffers', 'aliasNone', 'preset', 'deleted', 'shopify', 'ebayAlias']
+const ALL = ['liveOffer', 'draftAttr', 'same', 'none', 'conflict', 'twoOffers', 'aliasNone', 'preset', 'deleted', 'shopify', 'ebayAlias', 'shopifyEdit', 'shopifyBoth']
 
 beforeAll(async () => {
   await scoped(async () => {
@@ -59,6 +60,9 @@ beforeAll(async () => {
     await seed('deleted', 'B-9', { account: amazon, offers: [{ sku: 'B-9-OFF' }], product: { deletedAt: new Date() } })
     await seed('shopify', 'B-10', { channel: 'SHOPIFY', account: shopify, facts: { platformAttributes: { sku: 'B-10-SH' } } })
     await seed('ebayAlias', 'B-11', { channel: 'EBAY', account: ebay, alias: { sku: 'B-11-ALIAS' }, product: { isParent: true } })
+    // S5 — a Shopify sheet edit in the override bag, and the native SKU (the sheet's SKU column): wanted values only.
+    await seed('shopifyEdit', 'B-12', { channel: 'SHOPIFY', account: shopify, facts: { overrideData: { listing_sku: 'B-12-EDIT' } } })
+    await seed('shopifyBoth', 'B-13', { channel: 'SHOPIFY', account: shopify, facts: { platformAttributes: { sku: 'B-13-SH' }, overrideData: { listing_sku: 'B-13-EDIT' } } })
   })
   await prisma.workspace.create({ data: { id: OTHER_BUSINESS, name: 'Other business', createdByUserId: 'skurows', creationKey: 'skurows-backfill-other' } as never })
   await other(async () => {
@@ -70,8 +74,10 @@ afterAll(async () => { await state.db?.close() })
 const counts = (overrides: Record<string, number>) => ({ listings: 0, followsProduct: 0, channelSkuSet: 0, liveChannelSkuSet: 0, alreadySet: 0, conflicts: 0, needsOwnSku: 0, changedMeanwhile: 0, ...overrides })
 const FIRST_RUN = {
   AMAZON: counts({ listings: 8, followsProduct: 2, channelSkuSet: 2, liveChannelSkuSet: 2, conflicts: 2, needsOwnSku: 1 }),
-  SHOPIFY: counts({ listings: 1, channelSkuSet: 1, liveChannelSkuSet: 1 }),
-  EBAY: counts({ listings: 1, channelSkuSet: 1, liveChannelSkuSet: 1 }),
+  // S5 — Shopify's old stores (the sheet's SKU column, older sheet edits) are wanted values only: never the live one.
+  SHOPIFY: counts({ listings: 3, channelSkuSet: 3 }),
+  // S4 — an eBay extra listing's own SKU was never sent to eBay: it is the wanted SKU only, never the live one.
+  EBAY: counts({ listings: 1, channelSkuSet: 1 }),
 }
 
 describe('backfillChannelSkus', () => {
@@ -105,8 +111,12 @@ describe('backfillChannelSkus', () => {
       aliasNone: { channelSku: null, liveChannelSku: null, version: v('aliasNone') },
       preset: { channelSku: 'USER-SET', liveChannelSku: 'B-8-OFF', version: v('preset') },
       deleted: { channelSku: null, liveChannelSku: null, version: v('deleted') },
-      shopify: { channelSku: 'B-10-SH', liveChannelSku: 'B-10-SH', version: v('shopify') },
-      ebayAlias: { channelSku: 'B-11-ALIAS', liveChannelSku: 'B-11-ALIAS', version: v('ebayAlias') },
+      // S5 — every Shopify old store fills only the wanted column (the edit before the native SKU); nothing claims what
+      // Shopify holds.
+      shopify: { channelSku: 'B-10-SH', liveChannelSku: null, version: v('shopify') },
+      ebayAlias: { channelSku: 'B-11-ALIAS', liveChannelSku: null, version: v('ebayAlias') },
+      shopifyEdit: { channelSku: 'B-12-EDIT', liveChannelSku: null, version: v('shopifyEdit') },
+      shopifyBoth: { channelSku: 'B-13-EDIT', liveChannelSku: null, version: v('shopifyBoth') },
     })
     // 🔴 Another business is untouched by this business's run.
     expect(await columns(['foreign'], other)).toEqual({ foreign: { channelSku: null, liveChannelSku: null, version: expect.any(Number) } })
@@ -117,7 +127,7 @@ describe('backfillChannelSkus', () => {
     const report = await scoped(() => backfillChannelSkus(prisma as never, { apply: true }))
     expect(report.byChannel).toEqual({
       AMAZON: counts({ listings: 8, followsProduct: 2, alreadySet: 3, conflicts: 2, needsOwnSku: 1 }),
-      SHOPIFY: counts({ listings: 1, alreadySet: 1 }),
+      SHOPIFY: counts({ listings: 3, alreadySet: 3 }),
       EBAY: counts({ listings: 1, alreadySet: 1 }),
     })
     expect(await columns(ALL)).toEqual(before)

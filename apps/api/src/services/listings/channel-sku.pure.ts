@@ -10,7 +10,9 @@
  * Until every writer moves to those columns, a listing's own SKU may still sit in the OLD stores, read here in today's
  * order: Amazon's active offers, then the Amazon mirror keys of `platformAttributes`, then `flatFileSnapshot`
  * (`AMAZON_LISTING_SKU_KEYS`, the same places Publish and the import read); Shopify's native `sku`
- * (`nativeListingValue`); an extra listing's own SKU (`ProductListingAlias.sku`, on the alias's main row).
+ * (`nativeListingValue`); an extra listing's own SKU (`ProductListingAlias.sku`, on the alias's main row). Shopify's
+ * wanted rule reads its override bag before its native path (S5, `shopifyEditSku` below); eBay's and Shopify's old
+ * stores are wanted values only (`legacySkuIsLive`).
  *
  * For an Amazon row with no `channelSku`, `wantedChannelSku` gives exactly the answer Amazon Publish gives today
  * (`studio-publication-amazon.ts`, the seller-SKU map): the one active offer or stored identity, else the product SKU;
@@ -88,6 +90,22 @@ const isAmazon = (listing: ChannelSkuListing) => String(listing.channel ?? '').t
 const isShopify = (listing: ChannelSkuListing) => String(listing.channel ?? '').toUpperCase() === 'SHOPIFY'
 
 /**
+ * S4 (eBay) — do the old stores hold a SKU the channel HOLDS, or only one Nexus WANTS? eBay's only old store is an extra
+ * listing's own SKU (`ProductListingAlias.sku`), and eBay publish never sent it: every eBay publisher built its rows from
+ * `Product.sku`. So on eBay that value is wanted, never live: `liveChannelSku` skips it, and the backfill copies it into
+ * `channelSku` only.
+ *
+ * S5 (Shopify) — the same. Its native SKU (`platformAttributes.sku`) is what the Shopify sheet's SKU column saves
+ * (`listing_sku`) and what the next Publish sends; nothing writes Shopify's answer there. The override bag
+ * (`overrideData.listing_sku`) holds older sheet edits. Neither proves what Shopify holds, so Shopify's live SKU is the
+ * confirmed `liveChannelSku`, else the product SKU. Every other channel's old stores hold what the channel was sent.
+ */
+const WANTED_ONLY_LEGACY = new Set(['EBAY', 'SHOPIFY'])
+export function legacySkuIsLive(listing: Pick<ChannelSkuListing, 'channel'>): boolean {
+  return !WANTED_ONLY_LEGACY.has(String(listing.channel ?? '').toUpperCase())
+}
+
+/**
  * The SKUs the old stores hold for this listing, in today's reading order, trimmed and de-duplicated (the first store
  * that holds a value names its source). Amazon: offers (active only unless `offers: 'all'`), then `platformAttributes`,
  * then `flatFileSnapshot`. Shopify: the native `sku`. Any channel but Amazon: the alias's own SKU, on the alias's main
@@ -157,21 +175,61 @@ export function legacyChannelSku(listing: ChannelSkuListing, productSku: string 
   return product ? { sku: product, source: 'product' } : refused('NO_SKU', listing, product, [])
 }
 
+/**
+ * S5 — Shopify's wanted SKU reads its old stores in this order: the edit in the override bag
+ * (`overrideData.listing_sku`), then the native path (`platformAttributes.sku`) and an extra listing's own SKU (two
+ * different values there are a conflict), then the product SKU. All of them are wanted values (`legacySkuIsLive`).
+ */
+function shopifyEditSku(listing: ChannelSkuListing): string | null {
+  const bag = record(listing.overrideData)
+  for (const key of SHOPIFY_SKU_STORES.overrideKeys) {
+    const sku = text(bag[key])
+    if (sku) return sku
+  }
+  return null
+}
+
+/** S5 — Shopify: the SKU its other stores give (the native path, then an extra listing's own SKU). */
+function shopifyStoredSku(listing: ChannelSkuListing, productSku: string | null | undefined): ChannelSkuAnswer {
+  const product = text(productSku) ?? ''
+  const found: LegacyChannelSku[] = []
+  const add = (value: unknown, source: LegacyChannelSku['source'], key?: string) => {
+    const sku = text(value)
+    if (sku && !found.some(f => f.sku === sku)) found.push({ sku, source, ...(key ? { key } : {}) })
+  }
+  for (const path of SHOPIFY_SKU_STORES.attributePaths) add(path.reduce<unknown>((bag, key) => record(bag)[key], listing.platformAttributes), 'shopify', 'sku')
+  const alias = listing.alias
+  if (listing.aliasKey && alias?.productId && listing.productId && alias.productId === listing.productId) add(alias.sku, 'alias')
+  if (found.length > 1) return refused('CONFLICTING_SKUS', listing, product, found)
+  if (found.length === 1) return { sku: found[0].sku, source: found[0].source }
+  return product ? { sku: product, source: 'product' } : refused('NO_SKU', listing, product, [])
+}
+
 /** The SKU Nexus sends for this listing: its own `channelSku` when set; else the old stores' one value; else the product SKU. */
 export function wantedChannelSku(listing: ChannelSkuListing, productSku: string | null | undefined): ChannelSkuAnswer {
   const own = text(listing.channelSku)
   if (own) return { sku: own, source: 'channel' }
+  if (isShopify(listing)) {
+    const edit = shopifyEditSku(listing)
+    return edit ? { sku: edit, source: 'shopify' } : shopifyStoredSku(listing, productSku)
+  }
   return legacyChannelSku(listing, productSku)
 }
 
 /**
  * The SKU the channel holds for this listing: null while the listing is still a Nexus draft (never on the channel);
- * else the confirmed `liveChannelSku` when set; else the old stores' one value; else the product SKU.
+ * else the confirmed `liveChannelSku` when set; else the old stores' one value; else the product SKU. eBay and Shopify
+ * (`legacySkuIsLive`): the confirmed `liveChannelSku`, else the product SKU — their old stores hold values Nexus wants,
+ * not values the channel is known to hold.
  */
 export function liveChannelSku(listing: ChannelSkuListing, productSku: string | null | undefined): ChannelSkuAnswer | null {
   if (isStillDraftListing(listing)) return null
   const live = text(listing.liveChannelSku)
   if (live) return { sku: live, source: 'live' }
+  if (!legacySkuIsLive(listing)) {
+    const product = text(productSku)
+    return product ? { sku: product, source: 'product' } : refused('NO_SKU', listing, '', [])
+  }
   return legacyChannelSku(listing, productSku)
 }
 

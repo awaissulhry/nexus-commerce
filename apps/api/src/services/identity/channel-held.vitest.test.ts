@@ -170,3 +170,56 @@ describe('I6 — the job and the business boundary', () => {
     await expect(inside(() => sweepAccount(ids.conn, stub(FULL)), B)).rejects.toThrow(/not one of this business/)
   })
 })
+
+/**
+ * S8 — a listing may carry its own channel SKU (per market). The sweep links a held variation by the listing's own SKU
+ * first (identitySellerSku), and #12 compares the held SKU with the same value: the confirmed SKU, else the own SKU, else
+ * the old rule — so a renamed listing is not flagged for holding the SKU it should hold.
+ */
+describe('S8 — the listing\'s own channel SKU, in the sweep\'s link and in #12', () => {
+  const S8: HeldItem[] = [
+    { marketplace: null, externalId: '320000000001', sellerSku: 'S8-OWN-S', parentExternalId: '320000000001', title: 'Renamed S' },
+    { marketplace: null, externalId: '320000000001', sellerSku: 'S8-FAM-M', parentExternalId: '320000000001', title: 'Plain M' },
+    { marketplace: null, externalId: '320000000002', sellerSku: 'S8-SINGLE-IT', title: 'Own SKU, not yet confirmed' },
+    { marketplace: null, externalId: '320000000003', sellerSku: 'S8-LIVE-OLD', title: 'Confirmed old, new one waiting' },
+    { marketplace: null, externalId: '320000000004', sellerSku: 'S8-DIFF-HELD', title: 'Differs from its own SKU' },
+  ]
+  beforeAll(async () => {
+    await inside(async () => {
+      const db = database.client
+      ids.conn3 = (await db.channelConnection.create({ data: { channelType: 'EBAY', isActive: true, externalAccountId: 'test-seller-s8' } })).id
+      const product = async (sku: string, extra: Record<string, unknown> = {}) => { ids[sku] = (await db.product.create({ data: { sku, name: sku, basePrice: '10.00', ...extra } })).id }
+      const listing = async (sku: string, external: string, extra: Record<string, unknown> = {}) => {
+        ids[`L:${sku}`] = (await db.channelListing.create({
+          data: { productId: ids[sku], channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', listingStatus: 'ACTIVE', externalListingId: external, channelConnectionId: ids.conn3, ...extra },
+        })).id
+      }
+      await product('S8-FAM', { isParent: true })
+      await product('S8-FAM-S', { parentId: ids['S8-FAM'] })
+      await product('S8-FAM-M', { parentId: ids['S8-FAM'] })
+      await listing('S8-FAM', '320000000001')
+      await listing('S8-FAM-S', '320000000001', { channelSku: 'S8-OWN-S', liveChannelSku: 'S8-OWN-S' })
+      await listing('S8-FAM-M', '320000000001')
+      await product('S8-SINGLE'); await listing('S8-SINGLE', '320000000002', { channelSku: 'S8-SINGLE-IT' })
+      await product('S8-LIVE'); await listing('S8-LIVE', '320000000003', { channelSku: 'S8-LIVE-NEW', liveChannelSku: 'S8-LIVE-OLD' })
+      await product('S8-DIFF'); await listing('S8-DIFF', '320000000004', { channelSku: 'S8-DIFF-OWN' })
+    })
+  })
+
+  it('a renamed variation is linked to its own listing by its own SKU (not to the family)', async () => {
+    expect(await inside(() => sweepAccount(ids.conn3, stub(S8)))).toMatchObject({ complete: true, seen: 5, linked: 5, unlinked: 0 })
+    const rows = await inside(() => database.client.channelHeldId.findMany({ where: { channelConnectionId: ids.conn3 }, orderBy: [{ externalId: 'asc' }, { sellerSku: 'asc' }] }))
+    expect(rows.map((r) => [r.sellerSku, r.listingId])).toEqual([
+      ['S8-FAM-M', ids['L:S8-FAM-M']],
+      ['S8-OWN-S', ids['L:S8-FAM-S']],
+      ['S8-SINGLE-IT', ids['L:S8-SINGLE']],
+      ['S8-LIVE-OLD', ids['L:S8-LIVE']],
+      ['S8-DIFF-HELD', ids['L:S8-DIFF']],
+    ])
+  })
+
+  it('#12: no flag for the own SKU (wanted or confirmed); a real difference names the listing\'s own SKU', async () => {
+    const s8 = (await found('channel-sku-differs')).filter((f) => f.sku.startsWith('S8-'))
+    expect(s8.map((f) => [f.sku, f.details?.channelSku, f.details?.nexusSku])).toEqual([['S8-DIFF', 'S8-DIFF-HELD', 'S8-DIFF-OWN']])
+  })
+})

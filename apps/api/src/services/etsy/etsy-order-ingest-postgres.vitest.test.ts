@@ -479,6 +479,62 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(await notices('channel-order-stock-unlinked', order.id)).toHaveLength(1)
     })
 
+    // S6 — one inbound match (services/listings/channel-sku-inbound.ts): a listing may carry its own SKU on its account.
+    it('S6: master SKU as before; the listing\'s own SKU and the SKU Etsy still holds after a rename hold THAT product; another account\'s or business\'s SKU and a SKU two products hold stay unlinked, the latter told with the reason', async () => {
+      const tag = randomUUID().slice(0, 8)
+      const listingOf = (workspace: string, productId: string, account: string, data: { channelSku?: string; liveChannelSku?: string }) =>
+        q(`INSERT INTO "ChannelListing" (id,"workspaceId","productId","channelMarket",channel,region,marketplace,"channelConnectionId","listingStatus","isPublished","channelSku","liveChannelSku","updatedAt")
+           VALUES ($1,$2,$3,'ETSY_IT','ETSY','IT','IT',$4,'ACTIVE',true,$5,$6,now())`, [randomUUID(), workspace, productId, account, data.channelSku ?? null, data.liveChannelSku ?? null])
+      const plain = await product(`S6-PLAIN-${tag}`, 5), own = await product(`S6-OWN-P-${tag}`, 5), renamed = await product(`S6-NEW-${tag}`, 5)
+      const onOther = await product(`S6-ONB-${tag}`, 5), ambA = await product(`S6-AMB-A-${tag}`, 5), ambB = await product(`S6-AMB-B-${tag}`, 5)
+      const otherShop = await connection(`6${String(nextSeller)}`, { activate: false })
+      await listingOf(B, own, id.shop, { channelSku: `S6-OWN-${tag}` })
+      await listingOf(B, renamed, id.shop, { channelSku: `S6-OLD-${tag}`, liveChannelSku: `S6-OLD-${tag}` })
+      await listingOf(B, onOther, otherShop, { channelSku: `S6-B-${tag}` })
+      await listingOf(B, ambA, id.shop, { channelSku: `S6-AMB-${tag}` })
+      await listingOf(B, ambB, id.shop, { channelSku: `S6-AMB-${tag}` })
+      // Another business, with its own Etsy account and a listing SKU of its own.
+      const foreign = `ws_s6_${tag}`, foreignProduct = randomUUID(), foreignAccount = randomUUID()
+      await q(`INSERT INTO "Workspace" (id,name,status,"createdByUserId","creationKey","updatedAt") VALUES ($1,$1,'active','test',$1,now())`, [foreign])
+      await q(`INSERT INTO "Product" (id,"workspaceId",sku,name,"basePrice","totalStock","updatedAt") VALUES ($1,$2,$3,$3,10,5,now())`, [foreignProduct, foreign, `S6-FOREIGN-P-${tag}`])
+      await q(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","isActive","externalAccountId","updatedAt") VALUES ($1,$2,'ETSY',true,$3,now())`, [foreignAccount, foreign, `s6-${tag}`])
+      await listingOf(foreign, foreignProduct, foreignAccount, { channelSku: `S6-FOREIGN-${tag}` })
+      const skus = [`S6-PLAIN-${tag}`, `S6-OWN-${tag}`, `S6-OLD-${tag}`, `S6-B-${tag}`, `S6-AMB-${tag}`, `S6-FOREIGN-${tag}`, `S6-FOREIGN-P-${tag}`]
+      const r = receipt(skus.map((sku) => line({ sku, quantity: 1 })))
+      const outcome = await write(id.shop, r) as { kind: string; warnings: Array<{ code: string; lineKey?: string; detail: string }> }
+      expect(outcome.kind).toBe('written')
+      const [order] = await orderOf(r.receipt_id)
+      const items = new Map((await itemsOf(order.id)).map((item) => [item.externalLineItemId, item.productId]))
+      expect(r.transactions.map((t: Json) => items.get(String(t.transaction_id)))).toEqual([plain, own, renamed, null, null, null, null])
+      // The order line keeps Etsy's own SKU text.
+      expect((await q<{ sku: string }>(`SELECT sku FROM "OrderItem" WHERE "orderId" = $1 ORDER BY "externalLineItemId"`, [order.id])).map((row) => row.sku).sort()).toEqual([...skus].sort())
+      for (const p of [plain, own, renamed]) expect(await level(p)).toEqual([5, 1, 4])
+      for (const p of [onOther, ambA, ambB]) expect(await level(p)).toEqual([5, 0, 5])
+      const ambSkus = (await q<{ sku: string }>(`SELECT sku FROM "Product" WHERE id = ANY($1::text[]) ORDER BY id`, [[ambA, ambB]])).map((row) => row.sku).join(', ')
+      const reason = `The Etsy SKU S6-AMB-${tag} matches more than one product (${ambSkus}). Nexus did not pick one, so this line is not linked to a product. Give each product its own SKU on this Etsy account.`
+      const ambLine = r.transactions[4].transaction_id
+      expect(outcome.warnings.filter((w) => w.code === 'unmapped_line').map((w) => w.detail)).toEqual([
+        `Etsy line ${r.transactions[3].transaction_id} (S6-B-${tag}) matches no product: no stock was held or taken for it.`,
+        `Etsy line ${ambLine} (S6-AMB-${tag}): ${reason} No stock was held or taken for it.`,
+        `Etsy line ${r.transactions[5].transaction_id} (S6-FOREIGN-${tag}) matches no product: no stock was held or taken for it.`,
+        `Etsy line ${r.transactions[6].transaction_id} (S6-FOREIGN-P-${tag}) matches no product: no stock was held or taken for it.`,
+      ])
+      const [told] = await q<{ body: string }>(`SELECT body FROM "Notification" WHERE "workspaceId" = $1 AND type = 'channel-order-stock-unlinked' AND "entityId" = $2`, [B, order.id])
+      expect(told.body).toContain(reason)
+    })
+
+    it('S6 parity: a receipt for a trashed product\'s master SKU links to it and holds its stock, exactly as before', async () => {
+      const sku = `S6-TRASHED-${randomUUID().slice(0, 8)}`
+      const trashed = await product(sku, 5)
+      await q(`UPDATE "Product" SET "deletedAt" = now() WHERE id = $1`, [trashed])
+      const r = receipt([line({ sku, quantity: 1 })])
+      expect(await write(id.shop, r)).toMatchObject({ kind: 'written', warnings: [] })
+      const [order] = await orderOf(r.receipt_id)
+      expect((await itemsOf(order.id)).map((item) => item.productId)).toEqual([trashed])
+      expect(await stockOf(r.receipt_id)).toEqual({ [r.transactions[0].transaction_id]: 'held' })
+      expect(await level(trashed)).toEqual([5, 1, 4])
+    })
+
     // R5: a product with no stock level is a stock problem on its line now, not a failure (see below);
     // this arm injects a real failure after the first hold to keep proving the write is atomic.
     it('a failure inside the write rolls ALL of it back: no order, no item, no hold', async () => {

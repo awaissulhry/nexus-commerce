@@ -25,6 +25,8 @@ import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 import { axisSynonymKey, axisValueSynonymKey } from './ebay-theme-axes.js'
+import { confirmLiveChannelSku } from './listings/channel-sku.js'
+import { ebayItemLabel, readEbayItemRows } from './listings/ebay-send-sku.js'
 
 export interface LiveVariation {
   sku: string
@@ -318,17 +320,24 @@ export async function reconcileMembershipsFromEbay(
   // Incident #33 — BACKFILL the listing-level custom label (Item.SKU) with
   // the parent SKU on listings created before the #30 fix. Metadata-only
   // revise; Inventory-managed listings reject Trading revises → 'unsupported'.
+  // S4 (per-channel SKU) — a listing whose main row has its own SKU is labelled
+  // with that row's WANTED SKU, never put back to Product.sku (`ebayItemLabel`):
+  // eBay holding the wanted or the confirmed SKU is kept (moving a live SKU is
+  // step S10). The memberships keep `parentSku` (Nexus's family grouping key).
   let customLabel: ReconcileResult['customLabel']
   try {
     const liveItemSku = /<Item>[\s\S]*?<SKU>([^<]*)<\/SKU>/.exec(res.raw)?.[1] ?? ''
-    const isRealParent = Boolean(parentSku) && parentSku !== itemId
-    if (!isRealParent) {
+    const label = ebayItemLabel(await readEbayItemRows(prisma as never, { itemId, marketplace: market, accountId: ctx.connectionId }), parentSku)
+    const isRealParent = label.listingId !== null || (Boolean(label.target) && label.target !== itemId)
+    if (label.refusal || !isRealParent) {
       customLabel = undefined
-    } else if (liveItemSku === parentSku) {
+    } else if (label.keep.includes(liveItemSku)) {
       customLabel = 'kept'
     } else {
-      const reviseXml = `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`
+      const reviseXml = `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${label.target}</SKU></Item></ReviseFixedPriceItemRequest>`
       await callTradingApi('ReviseFixedPriceItem', reviseXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market: market })
+      // S4 — eBay took the main row's own SKU as the label: the SKU eBay holds for that row now.
+      if (label.listingId) await confirmLiveChannelSku(prisma as never, label.listingId, label.target)
       customLabel = 'set'
     }
   } catch (err) {

@@ -8,6 +8,7 @@
  * advertised; undo links it again only after eBay confirms the seller, the status and the SKUs, and the confirmed shared
  * variations live again while pushes stay paused; link refuses another seller's item, an item another family holds, an
  * unverifiable account without an explicit yes, a typed ASIN and a Shopify listing; Amazon's ASIN is read, never typed.
+ * Item ID control (2026-10-05, the sheet's rule too): an item eBay reports as ended links as ENDED (Relist is offered).
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -187,14 +188,48 @@ describe('I9 — unlink-channel-id, then undo (link again, verified on eBay)', (
 })
 
 describe('I9 — link-channel-id refuses what the channel does not prove', () => {
-  it('another seller’s item, an item another family holds, an ended item', async () => {
+  it('another seller’s item, an item another family holds, an item neither Active nor Ended', async () => {
     channel.getItem = () => getItem('Active', 'test-seller-b', ['LNK-S'])
     await askAndRun('unlink-channel-id', { listingId: ids.rootIt })
     expect(await preview('link-channel-id', { listingId: ids.rootIt, externalId: ITEM })).toMatchObject({ ok: false, error: expect.stringContaining('listed by eBay seller "test-seller-b"') })
     channel.getItem = () => getItem('Active', 'test-seller-a', ['LNK-S'])
     expect(await preview('link-channel-id', { listingId: ids.rootIt, externalId: '510000000098' })).toMatchObject({ ok: false, error: expect.stringContaining('already linked to another product') })
-    channel.getItem = () => getItem('Completed', 'test-seller-a', ['LNK-S'])
+    channel.getItem = () => getItem('Custom', 'test-seller-a', ['LNK-S'])
     expect(await preview('link-channel-id', { listingId: ids.rootIt, externalId: ITEM })).toMatchObject({ ok: false, error: expect.stringContaining('not Active') })
+  }, TIMEOUT)
+
+  it('an ended item (the sheet\'s rule too): previewed as Ended with Relist offered, on the rows the item carries', async () => {
+    channel.getItem = () => getItem('Completed', 'test-seller-a', ['LNK-S'])
+    const out = await preview('link-channel-id', { listingId: ids.rootIt, externalId: ITEM })
+    expect(out.preview).toMatchObject({ verdict: 'verified', listings: ['LNK-ROOT', 'LNK-S'], effect: expect.stringContaining('they read Ended (Relist is offered) in Nexus and stay paused') })
+  }, TIMEOUT)
+
+  it('Owner option A, one rule with the sheet: a variation holding another item moves only when eBay shows its SKU on the item — the preview lists it', async () => {
+    const NEW = '510000000088'
+    const mv = await inside(async () => {
+      const client = db()
+      const root = await client.product.create({ data: { sku: 'LNK-MV', name: 'LNK-MV', basePrice: '10.00', isParent: true } })
+      const s = await client.product.create({ data: { sku: 'LNK-MV-S', name: 'LNK-MV-S', basePrice: '10.00', parentId: root.id } })
+      const m = await client.product.create({ data: { sku: 'LNK-MV-M', name: 'LNK-MV-M', basePrice: '10.00', parentId: root.id } })
+      const list = async (productId: string, external: string | null, status: string) => (await client.channelListing.create({ data: {
+        productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', listingStatus: status, isPublished: status !== 'DRAFT',
+        externalListingId: external, channelConnectionId: ids.ebay, quantity: 1 } })).id
+      return { root: await list(root.id, null, 'DRAFT'), s: await list(s.id, null, 'DRAFT'), m: await list(m.id, '510000000077', 'ACTIVE') }
+    })
+    const moves = 'LNK-MV-M holds item 510000000077; eBay shows its SKU LNK-MV-M on item 510000000088; Link moves it to 510000000088.'
+    channel.getItem = () => getItem('Active', 'test-seller-a', ['LNK-MV-S'])
+    const kept = await preview('link-channel-id', { listingId: mv.root, externalId: NEW })
+    expect(kept.preview).toMatchObject({ keptOtherItem: ['LNK-MV-M holds item 510000000077; eBay does not show its SKU on item 510000000088, so Link leaves it as it is.'] })
+    expect(kept.preview.movesFromOtherItem).toBeUndefined()
+    expect([...kept.preview.listings].sort()).toEqual(['LNK-MV', 'LNK-MV-S'])
+    channel.getItem = () => getItem('Active', 'test-seller-a', ['LNK-MV-S', 'LNK-MV-M'])
+    const moved = await preview('link-channel-id', { listingId: mv.root, externalId: NEW })
+    expect(moved.preview).toMatchObject({ movesFromOtherItem: [moves], effect: expect.stringContaining('moving 1 of them from another item') })
+    expect([...moved.preview.listings].sort()).toEqual(['LNK-MV', 'LNK-MV-M', 'LNK-MV-S'])
+    await askAndRun('link-channel-id', { listingId: mv.root, externalId: NEW })
+    const m = await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: mv.m } }))
+    expect([m.externalListingId, m.listingStatus, m.syncPaused]).toEqual([NEW, 'ACTIVE', true])
+    expect(await inside(() => db().channelListingSnapshot.count({ where: { channelListingId: mv.m, label: `before link-channel-id (${NEW})` } }))).toBe(1)
   }, TIMEOUT)
 
   it('an account with no recorded seller: refused unless the person says yes explicitly', async () => {

@@ -29,6 +29,8 @@ import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { recordChannelReadback, type DriftField } from './channel-drift.service.js'
 import { emptyTradingPriceCounts, runTradingPriceArm, type TradingPriceCounts, type TradingPriceRead } from './ebay-price-readback.service.js'
+import { CHANNEL_SKU_LISTING_SELECT } from './listings/channel-sku.js'
+import { reportedSkuOf } from './listings/reported-sku.js'
 
 const DEFAULT_MAX_SKUS = 200
 const DEFAULT_MAX_TRADING_ITEMS = 50
@@ -93,12 +95,19 @@ export async function readBackEbayInventory(
   // Inventory-API item. Asking for one logged a false error every sweep (6 on production, 2026-09-24).
   const listings = await prisma.channelListing.findMany({
     where: { channel: 'EBAY', listingStatus: 'ACTIVE', product: { isParent: false } },
-    select: {
-      id: true,
-      productId: true,
-      product: { select: { sku: true } },
-    },
+    select: CHANNEL_SKU_LISTING_SELECT,
   })
+  // S7 — each listing is read under the SKU eBay knows it by: its own (or its extra listing's own) SKU, else the
+  // product SKU exactly as before. A listing with no single SKU is not read (reported), never read under a guess.
+  const skuOf = new Map<string, string>()
+  const noSingleSku: Array<{ listingId: string; reason: string }> = []
+  for (const listing of listings) {
+    if (!listing.product?.sku) continue
+    const answer = reportedSkuOf(listing, listing.product.sku)
+    if (answer.sku === null) noSingleSku.push({ listingId: listing.id, reason: answer.conflict.sentence })
+    else skuOf.set(listing.id, answer.sku)
+  }
+  if (noSingleSku.length) logger.warn('ebay-readback: listings without one SKU were not read', { count: noSingleSku.length, sample: noSingleSku.slice(0, 10) })
 
   // AS.4a — Trading-lane (shared-membership) SKUs have NO Inventory-API item;
   // GETting them 404s by construction. Before this skip, the current all-
@@ -111,8 +120,9 @@ export async function readBackEbayInventory(
   const sharedSkus = new Set(sharedSkuRows.map((m) => m.sku))
   // A-54 — the shared skip runs BEFORE the cap, so the cap counts only rows this pass may read (it used to fill with
   // shared rows: 194 of a 200 batch on production, while the rest of the 302 were never looked at).
-  const eligible = listings.filter((listing) => !(listing.product?.sku && sharedSkus.has(listing.product.sku)))
-  const skippedShared = listings.length - eligible.length
+  const readable = listings.filter((listing) => !listing.product?.sku || skuOf.has(listing.id))
+  const eligible = readable.filter((listing) => !(skuOf.has(listing.id) && sharedSkus.has(skuOf.get(listing.id)!)))
+  const skippedShared = readable.length - eligible.length
 
   const capped = eligible.length > cap
   if (capped) {
@@ -130,7 +140,7 @@ export async function readBackEbayInventory(
   const now = new Date()
 
   for (const listing of batch) {
-    const sku = listing.product?.sku
+    const sku = skuOf.get(listing.id)
     if (!sku) {
       logger.warn('ebay-readback: listing has no SKU, skipping', {
         listingId: listing.id,
@@ -158,9 +168,11 @@ export async function readBackEbayInventory(
         continue
       }
 
+      // S7 — the listing names its product: an own SKU is not a product SKU, so the event is not looked up by it.
       await recordChannelStockEvent({
         channel: 'EBAY',
         sku,
+        productId: listing.productId,
         channelReportedQty: qty,
         channelEventId: ebayReadbackEventId(sku, now),
         rawPayload: item,

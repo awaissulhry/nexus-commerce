@@ -78,7 +78,7 @@ vi.mock('../channel-issue-attributes.js', () => ({ resolveIssueAttributes: (name
 vi.mock('../../lib/cron/clustered.js', () => ({ default: { schedule: vi.fn(), validate: () => true } }))
 vi.mock('../../utils/cron-observability.js', () => ({ recordCronRun: async (_name: string, run: () => Promise<unknown>) => run() }))
 
-import { nextPublicationCheck, settleStudioPublication, AMAZON_CHECK_WINDOW_MS } from './studio-publication-settle.js'
+import { nextPublicationCheck, settleStudioPublication, storeResult, AMAZON_CHECK_WINDOW_MS } from './studio-publication-settle.js'
 import { runPublicationSettleTick } from '../../jobs/studio-publication-settle.job.js'
 
 const MINUTE = 60_000
@@ -337,5 +337,110 @@ describe('the status event', () => {
     await flush()
     expect(m.published).toEqual([{ type: 'publication.status_changed', publicationId: 'pub-amazon', batchId: 'batch-1', productId: 'family',
       channel: 'AMAZON', marketplace: 'IT', accountId: 'acct-a', aliasKey: '', status: 'PARTIAL', terminal: true, ts: expect.any(Number) }])
+  })
+})
+
+/**
+ * S3 (per-channel SKU) — an accepted Amazon publication records the seller SKU each journal names (the SKU that was
+ * sent) as the SKU Amazon holds now (`liveChannelSku`), for every accepted row, live or draft. Nothing else is written
+ * for it, and a publication on another channel records nothing here.
+ */
+describe('S3 — the accepted Amazon seller SKU is recorded as the live one', () => {
+  const liveSkuWrites = () => m.updateListings.mock.calls.map(([args]) => args).filter((args: any) => 'liveChannelSku' in (args.data ?? {}))
+
+  it('every accepted row of the publication: liveChannelSku = the journaled SKU (only when it differs)', async () => {
+    amazonSubmitted()
+    m.amazonStatus.mockResolvedValue(report([{ sku: 'SELLER-PARENT', failed: false }, { sku: 'SELLER-CHILD-IT', failed: false }]))
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-parent', payload: { channelConnectionId: 'acct-a', sku: 'SELLER-PARENT', requests: [] } },
+      { channelListingId: 'listing-child', payload: { channelConnectionId: 'acct-a', sku: 'SELLER-CHILD-IT', requests: [] } },
+    ])
+    await tickAt(at(2))
+    expect(liveSkuWrites()).toEqual([
+      { where: { id: 'listing-parent', OR: [{ liveChannelSku: null }, { liveChannelSku: { not: 'SELLER-PARENT' } }] }, data: { liveChannelSku: 'SELLER-PARENT' } },
+      { where: { id: 'listing-child', OR: [{ liveChannelSku: null }, { liveChannelSku: { not: 'SELLER-CHILD-IT' } }] }, data: { liveChannelSku: 'SELLER-CHILD-IT' } },
+    ])
+    // It reads only the ACCEPTED rows of this publication, on its own account.
+    expect(m.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ publishEventId: 'pub-amazon', outcome: 'ACCEPTED', channel: 'AMAZON',
+      payload: { path: ['channelConnectionId'], equals: 'acct-a' } }) }))
+  })
+
+  it('a journal with no SKU records nothing', async () => {
+    amazonSubmitted()
+    m.amazonStatus.mockResolvedValue(report([{ sku: 'SELLER-PARENT', failed: false }, { sku: 'SELLER-CHILD', failed: false }]))
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-parent', payload: { channelConnectionId: 'acct-a', requests: [] } }])
+    await tickAt(at(2))
+    expect(liveSkuWrites()).toEqual([])
+  })
+})
+
+/**
+ * S4 (per-channel SKU) — an accepted eBay publication records the SKU each journal names (the SKU the row was sent under)
+ * as the SKU eBay holds now, read only from this publication's ACCEPTED rows on its own account.
+ */
+describe('S4 — the accepted eBay SKU is recorded as the live one', () => {
+  const liveSkuWrites = () => m.updateListings.mock.calls.map(([args]) => args).filter((args: any) => 'liveChannelSku' in (args.data ?? {}))
+
+  it('every accepted row: liveChannelSku = the journaled SKU; a journal with no SKU records nothing', async () => {
+    ebayUnverified()
+    m.ebayStatus.mockResolvedValue({ reference: 'item-123', warnings: [], verified: true })
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-ebay-parent', payload: { channelConnectionId: 'ebay-a', sku: 'OWN-PARENT', requests: [] } },
+      { channelListingId: 'listing-ebay-child', payload: { channelConnectionId: 'ebay-a', sku: 'CHILD', requests: [] } },
+      { channelListingId: 'listing-ebay-blank', payload: { channelConnectionId: 'ebay-a', sku: '  ', requests: [] } },
+    ])
+    await tickAt(at(2))
+    expect(m.rows.get('pub-ebay').status).toBe('ACCEPTED')
+    expect(liveSkuWrites()).toEqual([
+      { where: { id: 'listing-ebay-parent', OR: [{ liveChannelSku: null }, { liveChannelSku: { not: 'OWN-PARENT' } }] }, data: { liveChannelSku: 'OWN-PARENT' } },
+      { where: { id: 'listing-ebay-child', OR: [{ liveChannelSku: null }, { liveChannelSku: { not: 'CHILD' } }] }, data: { liveChannelSku: 'CHILD' } },
+    ])
+    expect(m.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ outcome: 'ACCEPTED', channel: 'EBAY',
+      payload: { path: ['channelConnectionId'], equals: 'ebay-a' } }) }))
+  })
+})
+
+/**
+ * S5 (per-channel SKU) — a Shopify studio publication is stored VERIFIED only after Shopify read every variant back with
+ * the SKU the native publisher sent, and each journal names that SKU. So an accepted Shopify row records it as the SKU
+ * Shopify holds (`liveChannelSku`) — only a row Shopify maps to a variant: a grouped family's main row holds no SKU there.
+ */
+describe('S5 — the accepted Shopify variant SKU is recorded as the live one', () => {
+  const liveSkuWrites = () => m.updateListings.mock.calls.map(([args]) => args).filter((args: any) => 'liveChannelSku' in (args.data ?? {}))
+  function shopifyPublishing() {
+    const row = { id: 'pub-shopify', userId: 'submitter', kind: 'studio-publication', status: 'PUBLISHING', productId: 'family', channel: 'SHOPIFY', marketplace: 'GLOBAL',
+      channelConnectionId: 'shop-a', aliasKey: '', batchId: null, checkCount: null, submittedAt: T0, nextCheckAt: null, createdAt: T0, summary: null, changes: {} }
+    m.rows.set(row.id, row)
+    const data = { kind: 'studio-publication', productId: 'family', captureVersion: 1, startedAt: T0.toISOString(),
+      scope: { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop-a' }, delivery: { productIds: ['family', 'child'], aliasKey: '' } }
+    const result = { id: row.id, status: 'VERIFIED', message: 'Verified', results: [
+      { sku: 'FAMILY', status: 'VERIFIED', message: 'Verified by Shopify', reference: 'gid://shopify/Product/1' },
+      { sku: 'CHILD-OWN', status: 'VERIFIED', message: 'Verified by Shopify', reference: 'gid://shopify/Product/1' }] }
+    return { data, result }
+  }
+
+  it('the variant rows: liveChannelSku = the journaled (sent and read back) SKU; the family\'s main row records nothing', async () => {
+    const { data, result } = shopifyPublishing()
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-family', payload: { channelConnectionId: 'shop-a', sku: 'FAMILY', requests: [] } },
+      { channelListingId: 'listing-child', payload: { channelConnectionId: 'shop-a', sku: 'CHILD-OWN', requests: [] } },
+    ])
+    m.findListings.mockResolvedValue([{ id: 'listing-family', platformAttributes: { nexusFamilyId: 'family' } }, { id: 'listing-child', platformAttributes: { nexusFamilyId: 'family', variantId: '41' } }])
+    await storeResult('pub-shopify', data, 'submitter', result as never, ['PUBLISHING'])
+    expect(m.rows.get('pub-shopify').status).toBe('VERIFIED')
+    expect(liveSkuWrites()).toEqual([
+      { where: { id: 'listing-child', OR: [{ liveChannelSku: null }, { liveChannelSku: { not: 'CHILD-OWN' } }] }, data: { liveChannelSku: 'CHILD-OWN' } },
+    ])
+    expect(m.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ publishEventId: 'pub-shopify', outcome: 'ACCEPTED', channel: 'SHOPIFY',
+      payload: { path: ['channelConnectionId'], equals: 'shop-a' } }) }))
+    // It asks only for the accepted rows' mapping.
+    expect(m.findListings).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['listing-family', 'listing-child'] } } }))
+  })
+
+  it('nothing accepted: no read, no write', async () => {
+    const { data, result } = shopifyPublishing()
+    await storeResult('pub-shopify', data, 'submitter', result as never, ['PUBLISHING'])
+    expect(m.findListings).not.toHaveBeenCalled()
+    expect(liveSkuWrites()).toEqual([])
   })
 })

@@ -23,6 +23,9 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import type { CatalogItem } from '../services/marketplaces/amazon.service.js'
 import { restoreFbaListings } from '../services/fba-restore.service.js'
+import { CHANNEL_SKU_LISTING_SELECT } from '../services/listings/channel-sku.js'
+import type { ChannelSkuListing } from '../services/listings/channel-sku.pure.js'
+import { amazonAccountIdFor, onAccount, reportedSkuOf } from '../services/listings/reported-sku.js'
 
 const JOB = 'fba-drift-detector'
 const SCHEDULE = process.env.NEXUS_FBA_DRIFT_CRON_SCHEDULE ?? '0 5 * * *'
@@ -40,6 +43,29 @@ function isFbmChannel(ch: string | null | undefined): boolean {
   return c === '' || c === 'DEFAULT' || c === 'MFN'
 }
 
+/**
+ * S7 — the seller SKUs we expect to be FBA, per market: each listing's own seller SKU (`reportedSkuOf`), else its
+ * product SKU exactly as before. Each SKU keeps the product SKU it belongs to, because the restore is asked by product
+ * SKU (`restoreFbaListings`). A listing with no single seller SKU is not checked (reported), never checked under a guess.
+ */
+export function expectedFbaSkusByMarket(listings: Array<ChannelSkuListing & { id: string; marketplace: string; product?: { sku: string | null } | null }>): {
+  byMarket: Map<string, Map<string, string>>
+  skipped: Array<{ listingId: string; reason: string }>
+} {
+  const byMarket = new Map<string, Map<string, string>>()
+  const skipped: Array<{ listingId: string; reason: string }> = []
+  for (const cl of listings) {
+    const productSku = cl.product?.sku
+    if (!productSku) continue
+    const answer = reportedSkuOf(cl, productSku)
+    if (answer.sku === null) { skipped.push({ listingId: cl.id, reason: answer.conflict.sentence }); continue }
+    let skus = byMarket.get(cl.marketplace)
+    if (!skus) { skus = new Map(); byMarket.set(cl.marketplace, skus) }
+    skus.set(answer.sku, productSku)
+  }
+  return { byMarket, skipped }
+}
+
 export async function runFbaDriftDetector(): Promise<void> {
   try {
     if (!(await amazonService.isConfigured())) {
@@ -55,22 +81,20 @@ export async function runFbaDriftDetector(): Promise<void> {
       const fbaProductIds = [...new Set(fbaStock.map((s) => s.productId))]
       if (fbaProductIds.length === 0) return 'no FBA-stock products'
 
+      // S7 — the report is this account's (the default chooser the SP-API client runs): only its listings, and
+      // unattributed older ones, are checked against it. No account resolves → every listing, as before.
+      const accountId = await amazonAccountIdFor()
       const listings = await prisma.channelListing.findMany({
-        where: { channel: 'AMAZON', productId: { in: fbaProductIds } },
-        select: { marketplace: true, product: { select: { sku: true } } },
+        where: { channel: 'AMAZON', productId: { in: fbaProductIds }, ...onAccount(accountId) },
+        select: CHANNEL_SKU_LISTING_SELECT,
       })
-      // Group expected-FBA SKUs by market.
-      const byMarket = new Map<string, Set<string>>()
-      for (const cl of listings) {
-        const sku = cl.product?.sku
-        if (!sku) continue
-        let set = byMarket.get(cl.marketplace)
-        if (!set) { set = new Set(); byMarket.set(cl.marketplace, set) }
-        set.add(sku)
-      }
+      // Group expected-FBA SKUs by market: each listing's own seller SKU, else its product SKU.
+      const { byMarket, skipped } = expectedFbaSkusByMarket(listings)
+      if (skipped.length) logger.warn('fba-drift-detector: listings without one seller SKU were not checked', { count: skipped.length, sample: skipped.slice(0, 10) })
       if (byMarket.size === 0) return 'no expected-FBA Amazon listings'
 
-      const drift: Array<{ sku: string; market: string; channel: string }> = []
+      const notChecked = skipped.length ? `; ${skipped.length} listing(s) without one seller SKU not checked` : ''
+      const drift: Array<{ sku: string; productSku: string; market: string; channel: string }> = []
       let checked = 0, marketsPulled = 0, marketsFailed = 0
       for (const [market, skus] of byMarket) {
         const mpId = MP_ID[market]
@@ -86,17 +110,22 @@ export async function runFbaDriftDetector(): Promise<void> {
         if (!catalog) continue
         marketsPulled++
         const channelBySku = new Map(catalog.map((i) => [i.sku, i.fulfillmentChannel ?? null]))
-        for (const sku of skus) {
+        for (const [sku, productSku] of skus) {
           if (!channelBySku.has(sku)) continue // SKU absent from report — can't judge
           checked++
           const ch = channelBySku.get(sku) ?? null
-          if (isFbmChannel(ch)) drift.push({ sku, market, channel: String(ch ?? '(empty)') })
+          if (isFbmChannel(ch)) drift.push({ sku, productSku, market, channel: String(ch ?? '(empty)') })
         }
       }
 
       if (drift.length > 0) {
-        const driftSkus = [...new Set(drift.map((d) => d.sku))]
-        const driftMarkets = [...new Set(drift.map((d) => d.market))]
+        // The restore is asked by PRODUCT SKU and sends the PRODUCT SKU (`fba-restore.service.ts`). A drift found under a
+        // listing's own seller SKU would make it PATCH another SKU (another offer), so that one is not auto-restored: it
+        // is logged for a person until the restore sends a listing's own SKU (plan S3).
+        const restorable = drift.filter((d) => d.sku === d.productSku)
+        const byHand = drift.filter((d) => d.sku !== d.productSku)
+        const driftSkus = [...new Set(restorable.map((d) => d.productSku))]
+        const driftMarkets = [...new Set(restorable.map((d) => d.market))]
 
         logger.error(
           '🔴 FBA→FBM DRIFT DETECTED — Amazon reports FBM for SKU(s) we expect to be FBA',
@@ -107,7 +136,16 @@ export async function runFbaDriftDetector(): Promise<void> {
           },
         )
 
-        if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
+        if (byHand.length > 0) {
+          logger.error('fba-drift-detector: drift under a listing\'s own seller SKU — NOT auto-restored (the restore sends the product SKU); restore these by hand in Seller Central', {
+            critical: true,
+            count: byHand.length,
+            sample: byHand.slice(0, 25),
+          })
+        }
+        if (restorable.length === 0) {
+          // Nothing the restore can send correctly.
+        } else if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
           try {
             const summary = await restoreFbaListings({
               skus: driftSkus,
@@ -130,9 +168,9 @@ export async function runFbaDriftDetector(): Promise<void> {
           logger.error('fba-drift-detector: auto-restore disabled (NEXUS_FBA_AUTO_RESTORE=0) — run POST /admin/amazon/restore-fba {"dryRun":false} manually')
         }
 
-        return `DRIFT: ${drift.length} FBA→FBM across ${marketsPulled} market(s); checked ${checked}; ${marketsFailed} pull(s) failed`
+        return `DRIFT: ${drift.length} FBA→FBM across ${marketsPulled} market(s); checked ${checked}; ${marketsFailed} pull(s) failed${notChecked}`
       }
-      return `ok — no drift (checked ${checked} sku(s) across ${marketsPulled} market(s); ${marketsFailed} pull(s) failed)`
+      return `ok — no drift (checked ${checked} sku(s) across ${marketsPulled} market(s); ${marketsFailed} pull(s) failed${notChecked})`
     })
   } catch (err) {
     logger.error('fba-drift-detector: failure', { error: err instanceof Error ? err.message : String(err) })

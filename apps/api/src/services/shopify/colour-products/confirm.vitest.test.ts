@@ -263,3 +263,21 @@ describe('Confirm refuses before any Shopify write', () => {
     await expect(confirm([{ valueKey: 'color:black', shopifyProductId: 'not-a-gid' }])).rejects.toThrow('Choose a Shopify product.')
   })
 })
+
+/**
+ * S5 (per-channel SKU) — Confirm matches and writes each size under the SKU Shopify will know it by: its listing's own SKU
+ * on this store (for a still-draft, the one Publish would send), else its product SKU (every case above). What Shopify
+ * read back under a listing's own SKU is recorded as the SKU it holds; a size under its product SKU records nothing.
+ */
+describe('S5 — Confirm writes and records the listing\'s own SKU', () => {
+  it('a draft size listing with its own SKU: Shopify\'s SKU-less variant gets that SKU (never the product SKU), recorded as live', async () => {
+    await scoped(() => prisma.channelListing.create({ data: { productId: ids[skuOf('BLACK', 'S')], channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL',
+      channelConnectionId: ids.account, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, channelSku: 'BLACK-S-OWN' } as never }))
+    await find()
+    expect((await rowOf('color:black')).proposal).toMatchObject({ skusToWrite: [{ shopifyVariantId: variantGid(BLACK, 'S'), sku: 'BLACK-S-OWN' }, { shopifyVariantId: variantGid(BLACK, '3XL'), sku: skuOf('BLACK', '3XL') }] })
+    await confirm([BOTH[0]])
+    expect(productOf(BLACK).variants.find((v: any) => v.id === variantGid(BLACK, 'S')).sku).toBe('BLACK-S-OWN')
+    expect(await listingOf(skuOf('BLACK', 'S'))).toMatchObject({ channelSku: 'BLACK-S-OWN', liveChannelSku: 'BLACK-S-OWN', isPublished: true, externalListingId: '101' })
+    expect(await listingOf(skuOf('BLACK', '3XL'))).toMatchObject({ channelSku: null, liveChannelSku: null, isPublished: true })
+  })
+})

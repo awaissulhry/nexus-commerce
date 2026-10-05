@@ -105,6 +105,7 @@ export async function pushVolumePromotion(
   }
 
   // Inventory size guard.
+  // S4 (per-channel SKU) — the stored SKUs are the ones eBay holds (resolveSkusByRule names a listing's own confirmed SKU).
   const skus = (Array.isArray(promo.skus) ? promo.skus : []) as string[]
   if (skus.length > MAX_SKUS) {
     return {

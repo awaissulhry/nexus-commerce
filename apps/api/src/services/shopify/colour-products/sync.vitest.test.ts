@@ -248,3 +248,41 @@ it('syncs status and stock for a colour with only a Default Title variant', asyn
   expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
   expect((await rows())[0]).toMatchObject({ isPublished: true, platformAttributes: { variantId: '1' } })
 })
+
+/**
+ * S5 (per-channel SKU) — a size is matched and created under the SKU Shopify knows it by: its listing's own SKU on this
+ * store (the live one, or — for a still-draft — the one Publish would send), else its product SKU, as every case above.
+ */
+it('S5 — a size whose listing has its own SKU Shopify holds is matched by its id under that SKU, not refused', async () => {
+  const first = (await rows()).find(r => r.product.sku.endsWith('-S'))!
+  await scoped(() => prisma.channelListing.update({ where: { id: first.id }, data: { liveChannelSku: `OWN-${seq}-S` } }))
+  state.remote.variants.nodes[0].sku = `OWN-${seq}-S`
+  await run()
+  expect(state.stock).toHaveLength(2)
+  expect((await rows()).every(r => r.isPublished)).toBe(true)
+  expect(state.calls.filter(c => c === 'NexusColourSizes')).toEqual([])
+})
+it('S5 — parity: a size whose variant carries another SKU than its listing\'s is still refused (the identity changed)', async () => {
+  state.remote.variants.nodes[0].sku = `OTHER-${seq}-S`
+  await expect(run()).rejects.toThrow(/changed the size identity/)
+  expect(state.stock).toEqual([])
+})
+it('S5 — a new size whose draft listing has its own SKU is created under it, and Shopify\'s read-back is recorded as the live SKU', async () => {
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']
+  const xs = state.family.variants.find((v: any) => v.optionsSize === 'XS')
+  await scoped(() => prisma.channelListing.create({ data: { productId: xs.productId, channel: 'SHOPIFY', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', marketplace: 'GLOBAL',
+    channelConnectionId: state.d.accountId, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, channelSku: `OWN-${seq}-XS` } as never }))
+  // Another Shopify account's own SKU for the same size is never read here.
+  await scoped(async () => {
+    const other = await prisma.channelConnection.create({ data: { channelType: 'SHOPIFY', accountLabel: `other-${seq}`, externalAccountId: `other-${seq}`, authStatus: 'connected', managedBy: 'oauth', isActive: true } as never })
+    await prisma.channelListing.create({ data: { productId: xs.productId, channel: 'SHOPIFY', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', marketplace: 'GLOBAL',
+      channelConnectionId: other.id, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true, externalListingId: '9', liveChannelSku: `ELSEWHERE-${seq}-XS` } as never })
+  })
+  await run()
+  expect(state.remote.variants.nodes.map((v: any) => v.sku)).toEqual([state.family.variants[0].sku, state.family.variants[1].sku, `OWN-${seq}-XS`])
+  const created = (await rows()).find(r => r.product.sku.endsWith('-XS') && r.channelConnectionId === state.d.accountId)!
+  expect(created).toMatchObject({ isPublished: true, liveChannelSku: `OWN-${seq}-XS`, platformAttributes: { variantId: '30' } })
+  // A size under its product SKU records nothing.
+  expect((await rows()).filter(r => !r.product.sku.endsWith('-XS')).map(r => r.liveChannelSku)).toEqual([null, null])
+  state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+})

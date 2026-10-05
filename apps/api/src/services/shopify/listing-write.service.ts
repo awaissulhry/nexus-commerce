@@ -5,7 +5,8 @@
  * variant for a SKU and "the first" shop location.
  *
  *   - identity: the variant / inventory item / product ids stored on the listing, else EXACTLY ONE
- *     variant with the SKU; the variant read back must carry the SKU and the product;
+ *     variant with the SKU; the variant read back must carry the SKU and the product. The SKU is the one
+ *     Shopify holds for the listing (`row.sku`, S5), else the product SKU;
  *   - content: `productUpdate` (title, description) + `metafieldsSet` (compliance fields);
  *   - price: `productVariantsBulkUpdate`, read back;
  *   - stock: the reviewed location on the listing (`inventoryLocationId`), else — Owner decision
@@ -27,6 +28,12 @@ export interface LinkedListingRow {
   syncType: string
   payload?: Record<string, any> | null
   product?: { id: string; sku: string } | null
+  /**
+   * S5 (per-channel SKU) — the SKU Shopify holds for this listing (`listingSendSku`), when the caller resolved it: the
+   * variant's SKU the identity read-back expects, and the SKU a variant is looked up by when the listing stores no ids.
+   * Absent: the product SKU, exactly as before.
+   */
+  sku?: string | null
   /** The listing row as loaded (it carries the push-lock fields too). */
   channelListing?: (PushLockListing & { id: string; platformAttributes?: unknown }) | null
 }
@@ -62,15 +69,18 @@ async function stockLocation(gql: ShopifyGraphql, row: LinkedListingRow, sku: st
     : `No reviewed Shopify stock location for ${sku}, and the shop has ${active.length} active locations. Choose the location for this listing; none was chosen automatically.`)
 }
 
+/** S5 — the SKU this row names on Shopify: the listing's live SKU when the caller gave one, else the product SKU (as before). */
+const skuOf = (row: LinkedListingRow): string | undefined => (typeof row.sku === 'string' && row.sku ? row.sku : undefined) ?? row.product?.sku
+
 function mapping(row: LinkedListingRow): Record<string, string | undefined> {
   const attrs = row.channelListing?.platformAttributes
   return attrs && typeof attrs === 'object' ? (attrs as Record<string, string | undefined>) : {}
 }
 
-/** The variant this row is for: its stored ids, else exactly one variant with the SKU. */
+/** The variant this row is for: its stored ids, else exactly one variant with the SKU Shopify holds for the listing. */
 async function identify(gql: ShopifyGraphql, row: LinkedListingRow) {
   const m = mapping(row)
-  const sku = row.product?.sku ?? ''
+  const sku = skuOf(row) ?? ''
   if (m.variantId && m.inventoryItemId && m.shopifyProductId) {
     return { variantId: toGid('ProductVariant', m.variantId), inventoryItemId: toGid('InventoryItem', m.inventoryItemId), productId: toGid('Product', m.shopifyProductId) }
   }
@@ -103,7 +113,7 @@ export async function readShopifyAvailable(
   gql: ShopifyGraphql,
   row: LinkedListingRow,
 ): Promise<{ available: number | null; price: number | null; locationId: string; variantId: string }> {
-  const sku = row.product?.sku ?? '(no SKU)'
+  const sku = skuOf(row) ?? '(no SKU)'
   const ids = await identify(gql, row)
   const locationId = await stockLocation(gql, row, sku)
   const variant = (await gql(VARIANT_QUERY, { id: ids.variantId, location: locationId })).productVariant
@@ -176,12 +186,14 @@ async function syncShopifyLinkedListingInner(row: LinkedListingRow, accountId: s
       throw error
     }
   }
-  const sku = row.product?.sku ?? '(no SKU)'
+  const expected = skuOf(row)
+  const sku = expected ?? '(no SKU)'
   const ids = await identify(gql, row)
 
-  // Identity read-back: the variant must still carry this SKU and belong to this product.
+  // Identity read-back: the variant must still carry this SKU (S5: the SKU Shopify holds for the listing) and belong to
+  // this product.
   const current = (await gql(VARIANT_PRICE_QUERY, { id: ids.variantId })).productVariant
-  if (!current || current.sku !== row.product?.sku || current.product?.id !== ids.productId || current.inventoryItem?.id !== ids.inventoryItemId) {
+  if (!current || current.sku !== expected || current.product?.id !== ids.productId || current.inventoryItem?.id !== ids.inventoryItemId) {
     throw new Error(`The Shopify variant for ${sku} changed (SKU, product or inventory item). Reconcile the listing before syncing.`)
   }
 

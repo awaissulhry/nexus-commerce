@@ -23,6 +23,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import { gunzipSync } from 'zlib'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
+import { listingAccounts, productForChannelSkuOnAccounts } from '../listings/listing-sku-holders.js'
 import { liveCall, type AdsRegion } from './ads-api-client.js'
 
 // ── Resource configuration ────────────────────────────────────────────
@@ -423,7 +425,7 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
       rowsIngested = tr.upserted
       breakdown = tr.breakdown
     } else if (resource === 'ads') {
-      rowsIngested = await ingestAds(records as V1Ad[])
+      rowsIngested = await ingestAds(job.profileId, records as V1Ad[])
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -673,7 +675,7 @@ async function ingestTargets(records: V1Target[]): Promise<{ upserted: number; b
   return { upserted, breakdown: { ...bd, upserted } }
 }
 
-async function ingestAds(records: V1Ad[]): Promise<number> {
+async function ingestAds(profileId: string, records: V1Ad[]): Promise<number> {
   // adGroupId → local AdGroup.id
   const extAdGroupIds = [...new Set(records.map((r) => r.adGroupId))]
   const adGroups = await prisma.adGroup.findMany({
@@ -704,6 +706,13 @@ async function ingestAds(records: V1Ad[]): Promise<number> {
     : []
   const asinToId = new Map(products.filter((p) => p.amazonAsin).map((p) => [p.amazonAsin!, p.id]))
   const skuToId  = new Map(products.map((p) => [p.sku, p.id]))
+  // S8 — an ad names the seller SKU Amazon holds, which may be a listing's own channel SKU (per market), not the
+  // product's: match it back through the resolver on this business's Amazon accounts in the profile's market first.
+  // A failed lookup costs only the own-SKU match: the product-SKU match below still runs, as before.
+  const channelSkuToId = await productsForAdSkus(profileId, [...skus]).catch((err) => {
+    logger.warn('[ads-v1-sync] channel-SKU match unavailable; matching ads by product SKU only', { profileId, error: err instanceof Error ? err.message : String(err) })
+    return new Map<string, string | null>()
+  })
 
   let upserted = 0
   for (const r of records) {
@@ -715,8 +724,10 @@ async function ingestAds(records: V1Ad[]): Promise<number> {
     const firstProduct = r.creative?.products?.[0]
     const primaryAsin = firstProduct?.productIdType === 'ASIN' ? firstProduct.productId : undefined
     const primarySku  = firstProduct?.productIdType === 'SKU'  ? firstProduct.productId : undefined
+    const bySku = primarySku ? channelSkuToId.get(primarySku) : undefined
     const productId = (primaryAsin && asinToId.get(primaryAsin))
-      ?? (primarySku && skuToId.get(primarySku))
+      // S8 — the resolver's answer first; null = two products answer to it (never guessed); none = the product SKU, as before.
+      ?? (bySku !== undefined ? bySku : (primarySku && skuToId.get(primarySku)))
       ?? null
     const data = {
       adGroupId: localAdGroupId,
@@ -751,6 +762,34 @@ async function ingestAds(records: V1Ad[]): Promise<number> {
     }
   }
   return upserted
+}
+
+/**
+ * S8 — ad SKUs matched back to products through the channel-SKU resolver (`productForChannelSku`: confirmed SKU → own
+ * SKU → old stores → product SKU) on each Amazon account this business lists on in the profile's market. A SKU two
+ * products answer to maps to null (counted, never guessed); a SKU no account answers to is left out (the caller falls
+ * back to the product SKU). Nothing when the profile names no market. Exported for its test.
+ */
+export async function productsForAdSkus(profileId: string, skus: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  if (!skus.length) return out
+  const conn = await prisma.amazonAdsConnection.findUnique({
+    where: { workspace_profileId: workspaceKey({ profileId }) },
+    select: { marketplace: true },
+  })
+  const market = conn?.marketplace ? normalizeMarketplaceCode(conn.marketplace, '') : ''
+  if (!market) return out
+  const connectionIds = await listingAccounts(prisma, { channel: 'AMAZON', marketplace: market })
+  if (!connectionIds.length) return out
+  let ambiguous = 0
+  for (const sku of skus) {
+    const match = await productForChannelSkuOnAccounts(prisma, { channel: 'AMAZON', sku, marketplace: market, connectionIds })
+    if (!match) continue
+    if ('productIds' in match) { ambiguous++; out.set(sku, null); continue }
+    out.set(sku, match.productId)
+  }
+  if (ambiguous) logger.warn('[ads-v1-sync] ad SKUs that name more than one product were left unlinked', { profileId, market, ambiguous })
+  return out
 }
 
 // ── 4. Orchestrate the full cycle ─────────────────────────────────────

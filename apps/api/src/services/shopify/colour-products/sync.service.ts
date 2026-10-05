@@ -18,6 +18,9 @@ import { assertColourSyncCurrent, commitColourSyncChange, guardedColourGraphql, 
 import { colourIsPublished, readOnlineStorePublication, readColourRemote, planColourVariants, COLOUR_SIZE_CREATE, COLOUR_SIZE_ORDER, type ColourRemoteProduct } from './variants.js'
 import { NO_LISTING_PRICE_FACTS, listingMarketCurrency, listingSendPrice } from '../../pim/follower-price.js'
 import { marketCurrencyRows } from '../../pim/market-currency.js'
+import { confirmLiveChannelSku } from '../../listings/channel-sku.js'
+import { reportedSkuOf } from '../../listings/reported-sku.js'
+import { listingSkuRefusal } from './listing-skus.js'
 
 const listingWhere = (d: Destination) => ({ channel: 'SHOPIFY', marketplace: d.marketplace, channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' })
 const ownedListings = (d: Destination, row: ShopifyColourProduct) => prisma.channelListing.findMany({ where: { ...listingWhere(d), platformAttributes: { path: ['shopifyColourProductId'], equals: row.id } }, include: { product: true }, orderBy: { id: 'asc' } })
@@ -27,11 +30,13 @@ export async function syncColourProducts(productId: string, scope: ContentScope)
   if (getShopifyPublishMode() !== 'live') throw new WorkspaceScopeError('Shopify writes are switched off on this server.', 409)
   const d = await contentDestination(productId, scope, true)
   return withColourSyncLock(d, async () => {
-    const { plan, settings } = await planFor(d)
+    const { plan, settings, skuProblems } = await planFor(d)
     if (!settings.enabled) return { checked: 0, waiting: [] as string[] }
     const retiredRoot = !!(await prisma.product.findUniqueOrThrow({ where: { id: d.familyId }, select: { deletedAt: true } })).deletedAt
     if (!retiredRoot && (plan.mode !== 'colour-products' || !plan.splitAxis || plan.issues.some(i => i.severity === 'error')))
       throw new WorkspaceScopeError(plan.issues.filter(i => i.severity === 'error').map(i => i.message).join(' ') || 'The colour axes changed. Review the family before syncing sizes.')
+    // S5 — a size whose listing has no single SKU on record cannot be matched or created under one: nothing is sent.
+    if (!retiredRoot && skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems))
     const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(d), orderBy: { id: 'asc' } })
     if (!rows.some(r => r.shopifyProductId && ['LINKED', 'NOT_FOUND'].includes(r.state))) return { checked: 0, waiting: retiredRoot ? [] : plan.products.map(p => p.key) }
     const gql = guardedColourGraphql((await shopifyAdmin(d.accountId)).graphql)
@@ -83,12 +88,16 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
     const location = (await gql(`query NexusColourLocation($id:ID!) { location(id:$id) { id isActive } }`, { id: locations[0] })).location
     if (!location?.isActive) throw new WorkspaceScopeError('The reviewed Shopify stock location is no longer active.')
     const products = await prisma.product.findMany({ where: { id: { in: planned.missing.map(v => v.productId) }, parentId: d.familyId, deletedAt: null } })
-    const drafts = await prisma.channelListing.findMany({ where: { ...listingWhere(d), productId: { in: planned.missing.map(v => v.productId) } } })
+    // S5 — with the extra listing's own SKU: the channel-SKU facts a new size is created under (`reportedSkuOf`).
+    const drafts = await prisma.channelListing.findMany({ where: { ...listingWhere(d), productId: { in: planned.missing.map(v => v.productId) } },
+      include: { alias: { select: { sku: true, productId: true } } } })
     // Round 6 — the market's currency, read as the price door reads it (`listingSendPrice` below).
     const marketCur = listingMarketCurrency({ channel: 'SHOPIFY', marketplace: d.marketplace }, await marketCurrencyRows('SHOPIFY'))
     const variants = planned.missing.map(v => {
       const child = products.find(p => p.id === v.productId), draft = drafts.find(l => l.productId === v.productId)
-      if (!child || child.sku !== v.sku) throw new WorkspaceScopeError('The new size changed. Sync the current family again.')
+      // S5 — the plan names the size under its listing's SKU (the one Publish would send while it is a draft), else the
+      // product SKU; the size is created under exactly that SKU.
+      if (!child || (draft ? reportedSkuOf({ ...draft, channel: 'SHOPIFY' }, child.sku).sku : child.sku) !== v.sku) throw new WorkspaceScopeError('The new size changed. Sync the current family again.')
       const pa = object(draft?.platformAttributes)
       if (draft && (draft.externalListingId || pa.variantId || pa.shopifyColourProductId && pa.shopifyColourProductId !== row.id))
         throw new WorkspaceScopeError(`${v.sku} already has a Shopify mapping. Review it before creating a size.`)
@@ -115,8 +124,9 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
   const locations = [...new Set(old.map(l => object(l.platformAttributes).inventoryLocationId).filter(Boolean))]
   await prisma.$transaction(async tx => {
     await assertColourSyncCurrent(tx)
-    const listings = await tx.channelListing.findMany({ where: { ...listingWhere(d), id: { in: old.map(l => l.id) } } })
-    const current = match.size ? await tx.channelListing.findMany({ where: { ...listingWhere(d), productId: { in: [...match.keys()] } } }) : []
+    const withProductSku = { include: { product: { select: { sku: true } } } } as const
+    const listings = await tx.channelListing.findMany({ where: { ...listingWhere(d), id: { in: old.map(l => l.id) } }, ...withProductSku })
+    const current = match.size ? await tx.channelListing.findMany({ where: { ...listingWhere(d), productId: { in: [...match.keys()] } }, ...withProductSku }) : []
     for (const listing of new Map([...listings, ...current].map(l => [l.id, l])).values()) {
       const pa = object(listing.platformAttributes), variant = match.get(listing.productId), retired = !variant
       if (variant && (pa.shopifyColourProductId && pa.shopifyColourProductId !== row.id
@@ -131,6 +141,9 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
         ...(variant ? { externalListingId: shortId(remote.id), platformProductId: shortId(remote.id) } : {}),
         ...(variant && isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
       } })
+      // S5 — Shopify read this size back under its SKU (matched by its id or by that SKU): when it is the listing's own
+      // SKU (or one was recorded before), that is the SKU Shopify holds now. A size under its product SKU writes nothing.
+      if (variant?.sku && (variant.sku !== listing.product?.sku || listing.liveChannelSku)) await confirmLiveChannelSku(tx, listing.id, variant.sku)
     }
     await tx.shopifyColourProduct.update({ where: { id: row.id }, data: { remoteStatus: remote.status, checkedAt: new Date() } })
   })

@@ -36,6 +36,7 @@ import { EbaySendingOff, ebayFieldLabel, ebayProblems, ebayRenameRefusal, ebayVa
 import { ebaySendsLive } from './studio-publication-ebay-verify.js'
 import { ebayTradingPackage } from './ebay-packages.js'
 import { ebayQuantityLimitInvalid, parseEbayQuantityLimit } from '../ebay-quantity-limit.js'
+import { ebayPublishSku, readListingAliases } from '../listings/ebay-send-sku.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -399,6 +400,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   }
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
+  // S4 — an extra listing's own SKU (its main row's wanted SKU), read for the rows that are one.
+  const aliases = await readListingAliases(prisma as never, listings as Array<{ aliasId?: string | null }>)
   // Images rebuild P2c — a family on the media plan takes its photos from the plan (finishEbayListingInput). Its older
   // per-product galleries are not read, so a stale one can neither block the send nor leak into it.
   const onPlan = await isOnMediaPlan(parent.id)
@@ -490,6 +493,15 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     effective.description = String(resolved.cells.description?.value ?? effective.description ?? '')
     effective.updatedAt = listing?.updatedAt ?? product.updatedAt
     const row = buildFlatRow({ ...product, channelListings: [effective] } as any, { marketplace: scope.marketplace, parentImages: parent.images })
+    // S4 (per-channel SKU) — the SKU this row sends (`ebayPublishSku`, listings/ebay-send-sku.ts): a row eBay does not hold
+    // yet (a new listing, a new variation) sends its WANTED SKU — its own, an extra listing's own, else the product SKU; a
+    // row eBay holds sends the SKU eBay holds (the product SKU unless it has its own confirmed one), so Partial and Full
+    // update keep addressing eBay's variations by the SKU eBay has. `buildFlatRow` (shared with the old Flat File pages)
+    // stays on Product.sku; the studio sets the row's SKU here.
+    // TODO(S10): a live row whose wanted SKU differs from eBay's (`waitsForMove`) keeps eBay's SKU here; moving it
+    // (Trading: revise in place, renamed variations matched by their values; Inventory: "cannot move yet") is step S10.
+    const aliasId = (listing as { aliasId?: string | null } | undefined)?.aliasId
+    row.sku = ebayPublishSku(listing ? { ...listing, alias: (aliasId && aliases.get(aliasId)) || null } : null, product.sku).sku
     if (typeof row.sku !== 'string' || !row.sku.trim()) { problems.add(`${ebayFieldLabel('sellerSku')} is empty. Set this row's SKU.`, { ...at, field: 'sellerSku' }); continue }
     identities.push({ productId: product.id, sku: row.sku })
     row[`${scope.marketplace.toLowerCase()}_price`] = price
@@ -525,7 +537,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
       for (const row of variants) for (const axis of axes) {
         const value = input.family.variants?.find(v => v.id === row._productId)?.axisValues[axis.familyKey]
         // The structure check above already names a missing value; this one names it only when that check did not.
-        if (!value) { if (!structure.length) problems.add(`${axis.label || axis.channelName} is empty. Fill it in on this row.`, { productId: String(row._productId), sku: String(row.sku), field: axis.familyKey }); continue }
+        if (!value) { if (!structure.length) problems.add(`${axis.label || axis.channelName} is empty. Fill it in on this row.`, { productId: String(row._productId), sku: products.find(p => p.id === row._productId)?.sku ?? String(row.sku), field: axis.familyKey }); continue }
         if (axis.channelName) row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value ?? ''
       }
       // The values this listing receives, per variant — the media plan names its photo sets with them.
@@ -597,8 +609,11 @@ export async function prepareEbayInventoryPublication(facts: PublicationFacts): 
   const owner = built.identities.find(i => i.productId === parent.id) ?? built.identities[0]
   if (!owner) throw new Error('No included eBay product can own this listing publication.')
   const children = built.identities.filter(i => i.productId !== owner.productId)
+  // S4 — the group is read under the SKUs this publication sends: eBay's own for the rows it holds (the group key is the
+  // main row's), the wanted SKU of a variation not on eBay yet (`ebayPublishSku`). As before, the product SKUs otherwise.
   const destination: EbayInventoryDestination = { productId: parent.id, channel: 'EBAY', marketplace: scope.marketplace, accountId: scope.accountId,
-    aliasKey: facts.destination.aliasKey ?? '', expectedSkus: children.map(c => c.sku), itemId: built.itemId, parentSku: parent.sku }
+    aliasKey: facts.destination.aliasKey ?? '', expectedSkus: children.map(c => c.sku), itemId: built.itemId,
+    parentSku: built.identities.find(i => i.productId === parent.id)?.sku ?? parent.sku }
   const liveGroup = await readEbayInventoryListing(destination, ebayInventoryReads(scope.accountId, scope.marketplace, built.itemId))
   const bySku = new Map(built.identities.map(i => [i.sku, i.productId]))
   const ours: EbayInventoryOurs = { title: shared.title, description: shared.description, pictures: shared.pictureUrls ?? [],
@@ -750,9 +765,11 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
     if (!shared.pictureUrls?.length && !problems.issues.some(issue => issue.field === 'pictures')) problems.add(`${ebayFieldLabel('pictures')}: eBay needs at least one photo. Add photos on the Media page.`, { ...main, field: 'pictures' })
     const productOf = new Map(built.identities.map(identity => [identity.sku, identity.productId]))
     for (const variation of shared.variations) {
-      const at = { productId: productOf.get(variation.sku), sku: variation.sku }
+      // S4 — a problem names the row by its product SKU (the sheet's row), whatever SKU the row sends.
+      const productId = productOf.get(variation.sku)
+      const at = { productId, sku: products.find(p => p.id === productId)?.sku ?? variation.sku }
       // A price the send-price rule already named (no price of its own) is not named twice.
-      if ((variation.price == null || !Number.isFinite(variation.price) || variation.price <= 0) && !problems.issues.some(issue => issue.sku === variation.sku && issue.field === 'price'))
+      if ((variation.price == null || !Number.isFinite(variation.price) || variation.price <= 0) && !problems.issues.some(issue => issue.sku === at.sku && issue.field === 'price'))
         problems.add(`${ebayFieldLabel('price')}: set a price above 0.`, { ...at, field: 'price' })
       if (!Number.isSafeInteger(variation.quantity)) problems.add(`${ebayFieldLabel('quantity')} is not a whole number.`, { ...at, field: 'quantity' })
     }

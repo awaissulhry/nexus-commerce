@@ -1,7 +1,7 @@
 /**
  * Amazon sheet gaps (gaps 4–5, D1 = A, D2 = A) — the product sheet's stock columns ARE the Matrix's own cells: Mode,
- * Qty and Buffer (`stock_mode`, `stock_qty`, `stock_buffer`) on every channel the Matrix covers, and the market's ASIN
- * (`listing_asin`) on Amazon. Studio-only, like the relationship columns (`studio-relationships.ts`): never in
+ * Qty and Buffer (`stock_mode`, `stock_qty`, `stock_buffer`) on every channel the Matrix covers, the market's ASIN
+ * (`listing_asin`) on Amazon, and the eBay Item ID (`listing_item_id`, Item ID control step I1: docs/sheet-ids-sku-rows). Studio-only, like the relationship columns (`studio-relationships.ts`): never in
  * `buildSheetColumns`, so export, import and the bulk row contract never see them.
  *
  *   read  — ONE `getMatrixRead` per channel sheet; each row carries its coordinate's `MatrixCells` unchanged
@@ -30,6 +30,8 @@ import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
 export const STUDIO_STOCK_KEYS = ['stock_mode', 'stock_qty', 'stock_buffer'] as const
 export type StudioStockKey = (typeof STUDIO_STOCK_KEYS)[number]
 export const LISTING_ASIN_KEY = 'listing_asin'
+/** The channel's own id of a listing other than Amazon's ASIN: eBay's Item ID (Etsy and Shopify follow in later steps). */
+export const LISTING_ITEM_ID_KEY = 'listing_item_id'
 /** Amazon's schema-walked quantity leaf — the raw column the Qty column replaces on the Amazon sheet. */
 export const AMAZON_QUANTITY_KEY = 'fulfillment_availability__quantity'
 
@@ -90,6 +92,28 @@ export function listingAsinColumn(): SheetColumn {
   }
 }
 
+/** The Item ID column per channel (eBay in this step). */
+const ITEM_ID_COLUMNS: Readonly<Record<string, { label: string; help: string }>> = {
+  EBAY: {
+    label: 'Item ID',
+    help: 'The eBay Item ID of this listing on this market, shared by the whole variation family. On the main row, Enter or a double-click links another item (checked on eBay first) or clears it.',
+  },
+}
+
+/**
+ * The listing's own channel id column (eBay: "Item ID"), or null on a channel that has none here yet. Not a bulk or
+ * formula column: the cell changes only through its own control (link / clear, `routes/channel-id.routes.ts`).
+ */
+export function listingItemIdColumn(channel: string): SheetColumn | null {
+  const spec = ITEM_ID_COLUMNS[upper(channel)]
+  if (!spec) return null
+  return {
+    key: LISTING_ITEM_ID_KEY, writeField: LISTING_ITEM_ID_KEY, label: spec.label, width: 168,
+    group: STUDIO_IDENTIFIERS_GROUP.label, groupKey: STUDIO_IDENTIFIERS_GROUP.key, kind: 'text', storage: 'listing', scope: 'per_variant',
+    requiredBy: [], editable: false, defaultVisible: true, formulaWritable: false, helpText: spec.help,
+  }
+}
+
 /**
  * Where a stock column's edit lands: the listing, through the Matrix door — never the bulk PATCH. Its write field is
  * not a channel field (`isChannelWritable` refuses it) and not a master field, so no bulk caller can write it.
@@ -101,14 +125,15 @@ export function stockControlRouting(col: Pick<SheetColumn, 'key' | 'editable' | 
 
 /** The studio columns this unit adds to a channel sheet, with their routing: the stock columns, then the ASIN on Amazon. */
 export function studioStockSheetColumns(channel: string): Array<SheetColumn & WriteRouting & { localizable: boolean; axis: boolean }> {
-  const cols = [...studioStockColumns(channel), ...(upper(channel) === 'AMAZON' ? [listingAsinColumn()] : [])]
+  const itemId = listingItemIdColumn(channel)
+  const cols = [...studioStockColumns(channel), ...(upper(channel) === 'AMAZON' ? [listingAsinColumn()] : []), ...(itemId ? [itemId] : [])]
   return cols.map((col) => ({ ...col, localizable: false, axis: false, formulaWritable: false, ...stockControlRouting(col) }))
 }
 
 /** The groups those columns sit in, appended to the sheet's groups when absent. */
 export function withStudioStockGroups(groups: readonly SheetGroup[], channel: string): SheetGroup[] {
   if (!STOCK_CHANNELS.has(upper(channel))) return [...groups]
-  const wanted = [STUDIO_STOCK_GROUP, ...(upper(channel) === 'AMAZON' ? [STUDIO_IDENTIFIERS_GROUP] : [])]
+  const wanted = [STUDIO_STOCK_GROUP, ...(upper(channel) === 'AMAZON' || listingItemIdColumn(channel) ? [STUDIO_IDENTIFIERS_GROUP] : [])]
   let order = groups.reduce((max, g) => Math.max(max, g.order), 0)
   return [...groups, ...wanted.filter((g) => !groups.some((h) => h.key === g.key)).map((g) => ({ ...g, order: ++order }))]
 }
@@ -145,6 +170,65 @@ const ASIN_READ_ONLY = 'Amazon assigns the ASIN; Nexus shows it.'
 export function listingAsinValue(row: Pick<StudioRow, 'isParent' | 'aliasId'> & { listing: Pick<SheetListing, 'externalListingId'> | null }): StudioCellValue {
   const reason = !row.listing ? MATRIX_COPY.noListingYet : row.isParent ? PARENT_ASIN : ASIN_READ_ONLY
   return stockValue(LISTING_ASIN_KEY, row.listing?.externalListingId ?? null, false, reason, !!row.aliasId)
+}
+
+/* ── the eBay Item ID cell (Item ID control, step I1) ───────────────────────────────────────── */
+
+type ItemIdListing = Pick<SheetListing, 'externalListingId' | 'listingStatus' | 'isPublished'>
+type ItemIdRow = Pick<StudioRow, 'id' | 'parentId' | 'aliasId'> & { listing: ItemIdListing | null }
+
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+const statusOf = (listing: ItemIdListing) => upper(listing.listingStatus).trim()
+
+/** The sentences of the Item ID cell, one per state (A-item-ids.md, "States"). Exported for the tests and the web's mirror. */
+export const ITEM_ID_COPY = {
+  live: 'eBay Item ID of this listing. On the main row, Enter or a double-click links another item or clears it.',
+  ended: 'This item ended on eBay. Relist makes a new Item ID.',
+  draft: 'Draft · not published: eBay gives the Item ID when Nexus publishes it.',
+  notConfirmed: (id: string, status: string) => `Not confirmed: Nexus holds Item ID ${id}, but this listing reads ${status ? status.toLowerCase() : 'no status'} in Nexus, so it is not known to sell on eBay. On the main row, Check asks eBay.`,
+  otherItem: (id: string, main: string | null) => `Not confirmed: this row holds Item ID ${id}, ${main ? `but the main row holds ${main}` : 'but the main row holds none'}. One eBay item carries the whole variation family: check it on the main row.`,
+  noNumber: 'No number recorded: this listing reads live in Nexus, but Nexus holds no eBay Item ID for it. On the main row, type the Item ID to link it.',
+  none: 'No eBay Item ID here.',
+  variation: 'Set on the main row: one eBay Item ID carries the whole variation family.',
+} as const
+
+/** What one row's Item ID reads as (A-item-ids.md, "States"). */
+export type ItemIdState = 'noListing' | 'draft' | 'live' | 'ended' | 'notConfirmed' | 'otherItem' | 'noNumber' | 'none'
+
+/** The state of one row's Item ID and its sentence (the hover); `value` is the id only when it counts (live, ended). */
+export function listingItemIdState(row: ItemIdRow, main: ItemIdRow | null): { state: ItemIdState; value: string | null; sentence: string } {
+  const listing = row.listing
+  if (!listing) return { state: 'noListing', value: null, sentence: MATRIX_COPY.noListingYet }
+  const id = text(listing.externalListingId)
+  const status = statusOf(listing)
+  if (id) {
+    const mainId = main?.listing ? text(main.listing.externalListingId) || null : null
+    if (row.parentId && main && mainId !== id) return { state: 'otherItem', value: null, sentence: ITEM_ID_COPY.otherItem(id, mainId) }
+    if (status === 'ACTIVE' || status === 'INACTIVE') return { state: 'live', value: id, sentence: ITEM_ID_COPY.live }
+    if (status === 'ENDED') return { state: 'ended', value: id, sentence: ITEM_ID_COPY.ended }
+    return { state: 'notConfirmed', value: null, sentence: ITEM_ID_COPY.notConfirmed(id, status) }
+  }
+  if (status === 'DRAFT' && listing.isPublished === false) return { state: 'draft', value: null, sentence: ITEM_ID_COPY.draft }
+  if (status === 'ACTIVE' || listing.isPublished) return { state: 'noNumber', value: null, sentence: ITEM_ID_COPY.noNumber }
+  return { state: 'none', value: null, sentence: ITEM_ID_COPY.none }
+}
+
+/**
+ * The eBay Item ID cell of one row: the id only when it counts (the listing reads live or ended in Nexus, and a
+ * variation holds the same item as its main row); otherwise null. Nothing here asks eBay: a held id Nexus cannot vouch
+ * for is "Not confirmed", and the main row's Check asks eBay. The main row's cell is writable — its own control links
+ * or clears it (never the bulk or formula paths: the column is not editable) — so the sheet does not announce a refusal
+ * when Enter opens that control; a variation row is read-only and says why ("Set on the main row").
+ */
+export function listingItemIdValue(row: ItemIdRow, main: ItemIdRow | null): StudioCellValue {
+  const { state, value, sentence } = listingItemIdState(row, main)
+  const isMain = !row.parentId
+  const writable = isMain && !!row.listing
+  const reason = isMain ? sentence
+    : state === 'live' || state === 'ended' ? ITEM_ID_COPY.variation
+    : state === 'otherItem' ? sentence
+    : `${sentence} ${ITEM_ID_COPY.variation}`
+  return stockValue(LISTING_ITEM_ID_KEY, value, writable, reason, !!row.aliasId)
 }
 
 /**
@@ -192,6 +276,11 @@ export async function attachStudioStock(input: {
       row.values[k] = stockValue(k, valueOf[k], writable, held ?? own?.writeBlockedReason[kind] ?? 'This cell cannot be changed here', !!row.aliasId)
     }
     if (ch === 'AMAZON') row.values[LISTING_ASIN_KEY] = listingAsinValue(row)
+    if (ch === 'EBAY') {
+      // A variation's main row is its parent's row in the same group (the primary listing, or the same alias).
+      const main = row.parentId ? input.rows.find((r) => r.id === row.parentId && (r.aliasId ?? null) === (row.aliasId ?? null)) ?? null : null
+      row.values[LISTING_ITEM_ID_KEY] = listingItemIdValue(row, main)
+    }
   }
   return { ms: Date.now() - t0 }
 }

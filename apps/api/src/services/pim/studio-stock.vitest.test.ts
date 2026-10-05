@@ -44,8 +44,9 @@ import { etsyProductSpec } from './channel-specs/etsy.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import type { StudioRow } from './studio-sheet.service.js'
 import {
-  AMAZON_QUANTITY_KEY, LISTING_ASIN_KEY, STUDIO_STOCK_KEYS, attachStudioStock, isRawQuantityColumn, isShopifyInventoryColumn, listingAsinColumn,
-  shopifyInventoryHeldReason, studioStockColumns, studioStockKeys, studioStockSheetColumns, withoutRawQuantityColumns, type StudioRowStock,
+  AMAZON_QUANTITY_KEY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, STUDIO_STOCK_KEYS, attachStudioStock, isRawQuantityColumn, isShopifyInventoryColumn,
+  listingAsinColumn, listingItemIdColumn, listingItemIdValue, shopifyInventoryHeldReason, studioStockColumns, studioStockKeys, studioStockSheetColumns,
+  withStudioStockGroups, withoutRawQuantityColumns, type StudioRowStock,
 } from './studio-stock.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -256,7 +257,69 @@ describe('the ASIN column', () => {
     expect(eb.values[LISTING_ASIN_KEY]).toBeUndefined()
     expect(listingAsinColumn()).toMatchObject({ key: LISTING_ASIN_KEY, kind: 'text', editable: false, groupKey: 'master:identifiers' })
     expect(studioStockSheetColumns('AMAZON').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, LISTING_ASIN_KEY])
-    expect(studioStockSheetColumns('EBAY').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS])
+    expect(studioStockSheetColumns('EBAY').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, LISTING_ITEM_ID_KEY])
+  })
+})
+
+describe('the eBay Item ID column (Item ID control, step I1)', () => {
+  type ItemRow = Parameters<typeof listingItemIdValue>[0]
+  const r = (id: string, listing: ItemRow['listing'], o: { parentId?: string | null; aliasId?: string | null } = {}): ItemRow =>
+    ({ id, parentId: o.parentId ?? null, aliasId: o.aliasId ?? null, listing })
+  const live = (externalListingId: string | null, listingStatus = 'ACTIVE', isPublished = true) => ({ externalListingId, listingStatus, isPublished })
+
+  it('a column on eBay only, beside the ASIN\'s group; never a bulk, formula or grid edit (its own control writes it)', () => {
+    expect(listingItemIdColumn('EBAY')).toMatchObject({ key: LISTING_ITEM_ID_KEY, label: 'Item ID', kind: 'text', editable: false, formulaWritable: false, defaultVisible: true, groupKey: 'master:identifiers', width: 168 })
+    for (const ch of ['AMAZON', 'SHOPIFY', 'ETSY']) expect(listingItemIdColumn(ch)).toBeNull()
+    const col = studioStockSheetColumns('EBAY').find((c) => c.key === LISTING_ITEM_ID_KEY)!
+    expect(col).toMatchObject({ writable: false, formulaWritable: false })
+    expect(isChannelWritable(col.writeField)).toBe(false)
+    expect(writerAcceptsField(col.writeField)).toBe(false)
+    expect(withStudioStockGroups([], 'EBAY').map((g) => g.key)).toEqual(['master:inventory', 'master:identifiers'])
+  })
+
+  it('the id only when it counts: live (Active, Inactive) and Ended; the main row is writable, its hover the state', () => {
+    expect(listingItemIdValue(r('p', live('520000000001')), null)).toMatchObject({ value: '520000000001', writable: true, editable: true, writeBlockedReason: null })
+    expect(listingItemIdValue(r('p', live('520000000001', 'INACTIVE')), null)).toMatchObject({ value: '520000000001' })
+    expect(listingItemIdValue(r('p', live('520000000001', 'ENDED')), null)).toMatchObject({ value: '520000000001', writable: true })
+  })
+
+  it('held but not confirmed (a Draft, an Error with an id): no value; Nexus cannot vouch for it', () => {
+    for (const status of ['DRAFT', 'ERROR', 'REMOVED']) {
+      expect(listingItemIdValue(r('p', live('520000000001', status, false)), null)).toMatchObject({ value: null, writable: true })
+    }
+    const child = r('c', live('520000000001', 'DRAFT', false), { parentId: 'p' })
+    expect(listingItemIdValue(child, r('p', live('520000000001')))).toMatchObject({ value: null, writable: false,
+      writeBlockedReason: `${ITEM_ID_COPY.notConfirmed('520000000001', 'DRAFT')} ${ITEM_ID_COPY.variation}` })
+  })
+
+  it('a variation: the main row\'s item, read-only "Set on the main row"; another item than the main row\'s is "Not confirmed"', () => {
+    const main = r('p', live('520000000001'))
+    expect(listingItemIdValue(r('c', live('520000000001'), { parentId: 'p' }), main)).toMatchObject({ value: '520000000001', writable: false, editable: false, writeBlockedReason: ITEM_ID_COPY.variation })
+    expect(listingItemIdValue(r('c', live('520000000002'), { parentId: 'p' }), main)).toMatchObject({ value: null, writable: false, writeBlockedReason: ITEM_ID_COPY.otherItem('520000000002', '520000000001') })
+    expect(listingItemIdValue(r('c', live('520000000002'), { parentId: 'p' }), r('p', live(null, 'DRAFT', false)))).toMatchObject({ value: null, writeBlockedReason: ITEM_ID_COPY.otherItem('520000000002', null) })
+  })
+
+  it('a draft, live without a number, no listing', () => {
+    expect(listingItemIdValue(r('p', live(null, 'DRAFT', false)), null)).toMatchObject({ value: null, writable: true })
+    expect(listingItemIdValue(r('c', live(null, 'DRAFT', false), { parentId: 'p' }), null)).toMatchObject({ value: null, writable: false, writeBlockedReason: `${ITEM_ID_COPY.draft} ${ITEM_ID_COPY.variation}` })
+    expect(listingItemIdValue(r('c', live(null), { parentId: 'p' }), null)).toMatchObject({ value: null, writeBlockedReason: `${ITEM_ID_COPY.noNumber} ${ITEM_ID_COPY.variation}` })
+    expect(listingItemIdValue(r('p', null), null)).toMatchObject({ value: null, writable: false, writeBlockedReason: MATRIX_COPY.noListingYet })
+  })
+
+  it('the sheet pass fills it on eBay rows, each variation compared with ITS group\'s main row (an alias is its own group)', async () => {
+    const parent = { ...row('ss-p', { id: 'l-p', version: 1, externalListingId: '520000000001' }, { isParent: true }), id: 'ss-p' } as Row
+    const child = { ...row('ss-c1', L.c1Eb!), parentId: 'ss-p' } as Row
+    const aliased = { ...row('ss-c1', L.c1EbA!, { aliasId }), parentId: 'ss-p' } as Row
+    for (const x of [parent, child, aliased]) Object.assign(x.listing!, { listingStatus: 'ACTIVE', isPublished: true })
+    Object.assign(child.listing!, { externalListingId: '520000000001' })
+    await attach([parent, child, aliased], 'EBAY', 'IT')
+    expect(parent.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: '520000000001', writable: true })
+    expect(child.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: '520000000001', writable: false, writeBlockedReason: ITEM_ID_COPY.variation })
+    // The alias row has no main row in ITS group here: nothing to compare with, so its own state stands.
+    expect(aliased.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: L.c1EbA!.externalListingId, writable: false })
+    const amazon = row('ss-c1', L.c1It!)
+    await attach([amazon], 'AMAZON', 'IT')
+    expect(amazon.values[LISTING_ITEM_ID_KEY]).toBeUndefined()
   })
 })
 

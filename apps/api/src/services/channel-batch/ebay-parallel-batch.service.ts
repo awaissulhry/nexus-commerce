@@ -45,10 +45,14 @@ const UNSAFE_BULK_OPS: Partial<Record<EbayBatchOperation['type'], string>> = {
   price: 'EBAY_BULK_UNSAFE: This bulk path would replace the whole eBay offer. Nothing was sent to eBay. Change the price in Nexus; the normal eBay sync sends it.',
 }
 
+/**
+ * S4 (per-channel SKU) — `sku` is the SKU eBay holds for the listing (the caller's `listingSendSku`: the product SKU
+ * unless the listing has its own confirmed one); `listingId`, when given, is the listing its push controls are read by.
+ */
 export type EbayBatchOperation =
-  | { type: 'price'; sku: string; offerId: string; currency: string; value: string }
-  | { type: 'stock'; sku: string; quantity: number }
-  | { type: 'withdraw'; sku: string; offerId: string }
+  | { type: 'price'; sku: string; listingId?: string; offerId: string; currency: string; value: string }
+  | { type: 'stock'; sku: string; listingId?: string; quantity: number }
+  | { type: 'withdraw'; sku: string; listingId?: string; offerId: string }
 
 export interface EbayBatchSubmission {
   /** ChannelConnection id holding the eBay OAuth token. */
@@ -138,7 +142,8 @@ async function runOne(
   // Withdraw is a lifecycle operation. Price and stock are ordinary pushes.
   if (op.type !== 'withdraw') {
     try {
-      const controls = await readPushControls({ channel: 'EBAY', skus: [op.sku] })
+      // S4 — by the listing when the caller names it (an own SKU is not a product SKU); else by SKU, as before.
+      const controls = await readPushControls({ channel: 'EBAY', ...(op.listingId ? { listingIds: [op.listingId] } : { skus: [op.sku] }) })
       for (const listing of controls) {
         const refusal = assertPushAllowed(listing)
         if (refusal) return { sku: op.sku, status: 'failed', attempts: 0, errorMessage: `${refusal.code}: ${refusal.sentence}`, httpStatus: null }

@@ -81,3 +81,29 @@ describe('P1.4b — bulk price / stock on Shopify', () => {
     expect(h.linked).toHaveLength(0)
   })
 })
+
+/**
+ * S5 (per-channel SKU) — a linked listing is written under the SKU Shopify holds for IT (`row.sku` to the writer): its
+ * confirmed `liveChannelSku`, else the product SKU (as before). A Shopify sheet SKU not yet sent (the native SKU column, an
+ * edit in the override bag) and an extra listing's own SKU are never named.
+ */
+describe('S5 — bulk price / stock names the listing\'s own Shopify SKU', () => {
+  const pa = { variantId: '11', inventoryItemId: '22', shopifyProductId: '33', inventoryLocationId: 'gid://shopify/Location/9' }
+  it('parity: no SKU of its own, an unsent edit, or an unsent native SKU → the product SKU', async () => {
+    h.listings = [listing({ overrideData: { listing_sku: 'SKU-1-NEXT' } })]
+    await run('stock')
+    h.listings = [listing({ platformAttributes: { ...pa, sku: 'SKU-1-NEXT' } })]
+    await run('price')
+    expect(h.linked.map(l => [l.row.sku, l.work])).toEqual([['SKU-1', { quantity: 7 }], ['SKU-1', { price: 12.5 }]])
+  })
+  it('own SKU confirmed (liveChannelSku) → that SKU', async () => {
+    h.listings = [listing({ liveChannelSku: 'SKU-1-LIVE', channelSku: 'SKU-1-WANT' })]
+    await run('price')
+    expect(h.linked.map(l => [l.row.sku, l.work])).toEqual([['SKU-1-LIVE', { price: 12.5 }]])
+  })
+  it('an extra listing whose own SKU disagrees with the native one is no conflict: the product SKU', async () => {
+    h.listings = [listing({ aliasKey: 'alias-1', aliasId: 'alias-1', platformAttributes: { ...pa, sku: 'SKU-1-SHOP' } })]
+    expect(await run('stock')).toEqual({ status: 'processed' })
+    expect(h.linked[0].row.sku).toBe('SKU-1')
+  })
+})

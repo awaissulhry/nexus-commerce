@@ -1,4 +1,3 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R4.2 — eBay returns ingest.
  *
@@ -34,6 +33,7 @@ import { logger } from '../../utils/logger.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
 import { recordApiCall } from '../outbound-api-call-log.service.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
+import { matchInboundSku } from '../listings/channel-sku-inbound.js'
 
 // Subset of fields we read from eBay's Post Order Return payload.
 // Documented at developer.ebay.com/devzone/post-order/post-order_v2_return-search.html.
@@ -106,7 +106,7 @@ function generateRmaNumber(): string {
  * with no writes). Designed to be unit-testable without a real
  * eBay session.
  */
-export async function ingestEbayReturn(raw: EbayReturnPayload): Promise<IngestResult> {
+export async function ingestEbayReturn(raw: EbayReturnPayload, opts: { connectionId?: string | null } = {}): Promise<IngestResult> {
   const channelReturnId = raw.returnId?.toString().trim()
   if (!channelReturnId) {
     return { outcome: 'no_lines' }
@@ -121,35 +121,6 @@ export async function ingestEbayReturn(raw: EbayReturnPayload): Promise<IngestRe
     return { outcome: 'duplicate', returnId: existing.id, channelReturnId }
   }
 
-  // Resolve line items. eBay returns either a single creationInfo.item
-  // or a returnLineItems[] depending on case type; normalize to one
-  // path. Skip items without a SKU — those are non-mappable
-  // adjustments.
-  const lines = Array.isArray(raw.returnLineItems) && raw.returnLineItems.length > 0
-    ? raw.returnLineItems
-    : raw.creationInfo?.item
-      ? [raw.creationInfo.item]
-      : []
-  const itemCreates: Array<{ sku: string; quantity: number; productId: string | null }> = []
-  let amountCents = 0
-  let currencyCode: string | null = null
-  for (const li of lines) {
-    const sku = li.sku?.trim()
-    const qty = Number(li.quantity ?? 0)
-    if (!sku || qty <= 0) continue
-    const amount = li.amount?.value
-    if (amount != null) amountCents += Math.round(Number(amount) * 100)
-    if (!currencyCode && li.amount?.currency) currencyCode = li.amount.currency
-    const product = await prisma.product.findUnique({
-      where: { workspace_sku: workspaceKey({ sku: sku }) },
-      select: { id: true },
-    })
-    itemCreates.push({ sku, quantity: qty, productId: product?.id ?? null })
-  }
-  if (itemCreates.length === 0) {
-    return { outcome: 'no_lines' }
-  }
-
   // Resolve the originating Order. Prefer matching the eBay
   // transactionId on Order.channelOrderId; fall back to itemId.
   // Orphan creates with orderId=null are fine — a later sync can
@@ -161,12 +132,47 @@ export async function ingestEbayReturn(raw: EbayReturnPayload): Promise<IngestRe
     ?? raw.returnLineItems?.[0]?.itemId
     ?? null
   let orderId: string | null = null
+  let orderConnectionId: string | null = null
   for (const candidate of [txId, itemId].filter(Boolean) as string[]) {
     const order = await prisma.order.findFirst({
       where: { channel: 'EBAY', channelOrderId: candidate },
-      select: { id: true },
+      select: { id: true, channelConnectionId: true },
     })
-    if (order) { orderId = order.id; break }
+    if (order) { orderId = order.id; orderConnectionId = order.channelConnectionId; break }
+  }
+
+  // Resolve line items. eBay returns either a single creationInfo.item
+  // or a returnLineItems[] depending on case type; normalize to one
+  // path. Skip items without a SKU — those are non-mappable
+  // adjustments.
+  const lines = Array.isArray(raw.returnLineItems) && raw.returnLineItems.length > 0
+    ? raw.returnLineItems
+    : raw.creationInfo?.item
+      ? [raw.creationInfo.item]
+      : []
+  const itemCreates: Array<{ sku: string; quantity: number; productId: string | null }> = []
+  const unlinked: Array<{ sku: string; reason: string }> = []
+  let amountCents = 0
+  let currencyCode: string | null = null
+  for (const li of lines) {
+    const sku = li.sku?.trim()
+    const qty = Number(li.quantity ?? 0)
+    if (!sku || qty <= 0) continue
+    const amount = li.amount?.value
+    if (amount != null) amountCents += Math.round(Number(amount) * 100)
+    if (!currencyCode && li.amount?.currency) currencyCode = li.amount.currency
+    // S6 — the SKU through the one inbound match, on the eBay account the return came from (else its order's):
+    // a listing's own SKU, also one renamed in Nexus that eBay still holds; then the master SKU. Several products:
+    // not linked, with the reason.
+    const match = await matchInboundSku(prisma, { channel: 'EBAY', channelConnectionId: opts.connectionId ?? orderConnectionId, sku })
+    if (match.problem) {
+      unlinked.push({ sku, reason: match.problem.sentence })
+      logger.warn('ebay-returns: return line not linked to a product', { channelReturnId, sku, reason: match.problem.sentence })
+    }
+    itemCreates.push({ sku, quantity: qty, productId: match.productId })
+  }
+  if (itemCreates.length === 0) {
+    return { outcome: 'no_lines' }
   }
 
   const status = mapEbayState(raw.state)
@@ -226,6 +232,7 @@ export async function ingestEbayReturn(raw: EbayReturnPayload): Promise<IngestRe
           itemCount: itemCreates.length,
           amountCents,
           mirroredOrder: !!orderId,
+          ...(unlinked.length ? { unlinked } : {}),
         } as any,
       },
     })
@@ -335,7 +342,7 @@ export async function pollEbayReturns(opts?: {
 
     for (const member of members) {
       try {
-        const r = await ingestEbayReturn(member)
+        const r = await ingestEbayReturn(member, { connectionId: conn.id })
         if (r.outcome === 'created') counters.created++
         else if (r.outcome === 'duplicate') counters.duplicate++
         else counters.noLines++

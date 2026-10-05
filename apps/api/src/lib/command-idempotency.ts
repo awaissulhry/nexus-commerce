@@ -51,6 +51,9 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/agent/fleet/approvals/:id/plan-amend': 'plan-amend',
   // R16 — one press of an engine's switch in the Control Room, one move (a double press never flips it twice).
   '/api/advertising/automation/engine-switch/:key': 'engine-switch',
+  // Item ID control (step I1) — one Link or Clear press on the sheet's eBay Item ID cell, one write.
+  '/api/listings/:id/channel-id/link': 'channel-id-link',
+  '/api/listings/:id/channel-id/unlink': 'channel-id-unlink',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

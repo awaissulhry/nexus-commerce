@@ -10,7 +10,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({
-  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(), levels: vi.fn(), ingest: vi.fn(),
+  read: vi.fn(), market: vi.fn(), audit: vi.fn(), alerts: vi.fn(), levels: vi.fn(), ingest: vi.fn(), alias: vi.fn(),
   requests: [] as Array<{ url: string; method: string; body: string | null; contentType: string | null }>,
   answers: [] as Array<{ status: number; body: unknown }>,
 }))
@@ -24,6 +24,8 @@ vi.mock('../db.js', () => ({ default: {
   stockPoolLink: { findMany: vi.fn(async () => []) },
   // The account's Etsy order-import activation (EtsyReceiptIngest), which a stock row needs.
   etsyReceiptIngest: { findUnique: m.ingest },
+  // S5 — an extra listing's own SKU (read only for a row with an alias).
+  productListingAlias: { findUnique: m.alias },
 } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
@@ -533,4 +535,41 @@ describe.skipIf(!REAL_REDIS_URL)('the listing lease on a real Redis: an Etsy pri
     expect(etsy.log).toEqual([`GET ${id}`, `PUT ${id}`, `GET ${id}`, `GET ${id}`, `PUT ${id}`, `GET ${id}`])
     expect(await real!.exists(etsyListingLockKey('etsy-acct', id))).toBe(0)
   }, 20_000)
+})
+
+/**
+ * S5 (per-channel SKU) — the offering is found by the SKU Etsy holds for THIS listing (`listingSendSku`). Before, the lane
+ * read `channelListing.sku`, a field the listing does not have, so it always named the product SKU; a listing with no SKU
+ * of its own still does (every case above). A listing with its own SKU names it — and only its offering changes.
+ */
+describe('S5 — the offering of the listing\'s own SKU', () => {
+  it('own SKU confirmed (liveChannelSku): only that offering\'s price moves; the product SKU\'s offering stays', async () => {
+    live()
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterPut('TEST-RED', 2600) })
+    const result = await service.syncToEtsy(row({ channelListing: { ...listing, liveChannelSku: 'TEST-RED' } }))
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS' })
+    const sent = JSON.parse(puts()[0].body!)
+    const asRead = toInventoryWrite(etsyInventory())
+    expect(sent.products[0]).toEqual({ ...asRead.products[0], offerings: [{ ...asRead.products[0].offerings[0], price: 26 }] })
+    expect(JSON.stringify(sent.products[2])).toBe(JSON.stringify(asRead.products[2]))
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ channel: 'ETSY', sku: 'TEST-RED', outcome: 'success' }))
+    expect(m.alias).not.toHaveBeenCalled()
+  }, 15_000)
+
+  it('an extra listing\'s own SKU is the offering it names', async () => {
+    live()
+    m.alias.mockResolvedValue({ sku: 'TEST-BLU', productId: 'p-1' })
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterPut('TEST-BLU', 2600) })
+    await service.syncToEtsy(row({ channelListing: { ...listing, aliasKey: 'alias-1', aliasId: 'alias-1' } }))
+    const sent = JSON.parse(puts()[0].body!)
+    expect(sent.products.map((p: { offerings: Array<{ price: number }> }) => p.offerings[0].price)).toEqual([19.99, 26, 21])
+  }, 15_000)
+
+  it('a wanted SKU not yet on Etsy (channelSku only) is not named: the product SKU\'s offering, as before', async () => {
+    live()
+    m.answers.push({ status: 200, body: etsyInventory() }, { status: 200, body: {} }, { status: 200, body: afterPut('TEST-GRN', 2600) })
+    await service.syncToEtsy(row({ channelListing: { ...listing, channelSku: 'TEST-NEW' } }))
+    const sent = JSON.parse(puts()[0].body!)
+    expect(sent.products.map((p: { offerings: Array<{ price: number }> }) => p.offerings[0].price)).toEqual([19.99, 24.5, 26])
+  }, 15_000)
 })

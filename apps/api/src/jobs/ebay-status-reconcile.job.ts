@@ -7,7 +7,8 @@
  * finds out, leaving the cockpit and listing views showing stale state.
  *
  * This cron fetches all active eBay ChannelListing rows (listingStatus
- * not in REMOVED/CANCELLED/DRAFT), groups them by product SKU so each
+ * not in REMOVED/CANCELLED/DRAFT), groups them by the SKU eBay knows each
+ * listing by (S7: its own SKU, else its product SKU) so each
  * SKU is checked once via GET /sell/inventory/v1/offer?sku={sku}, and
  * maps the eBay offer status back to our listingStatus:
  *
@@ -36,6 +37,9 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { resolveConnection } from '../services/connection-resolver.service.js'
 import { ebayFixedPriceOfferOf, ebayMarketplaceIdOf } from '../services/ebay-price-readback.service.js'
+import { CHANNEL_SKU_LISTING_SELECT } from '../services/listings/channel-sku.js'
+import type { ChannelSkuListing } from '../services/listings/channel-sku.pure.js'
+import { onAccount, reportedSkuOf } from '../services/listings/reported-sku.js'
 
 const JOB_NAME = 'ebay-status-reconcile'
 const BATCH_SIZE = 20
@@ -67,6 +71,29 @@ interface EbayOffer {
 interface EbayOffersResponse {
   offers?: EbayOffer[]
   total?: number
+}
+
+// ── S7 — which SKU each listing is asked under ───────────────────────────────
+
+/**
+ * Listing ids grouped by the SKU eBay knows each listing by (`reportedSkuOf`: its own SKU, an extra listing's own SKU,
+ * else the product SKU — so a listing without its own SKU is grouped exactly as before). A listing with no single SKU
+ * is left out with a sentence, never asked under a guessed one.
+ */
+export function groupListingsBySku(listings: Array<ChannelSkuListing & { id: string; product?: { sku: string | null } | null }>): {
+  bySku: Map<string, string[]>
+  skipped: Array<{ listingId: string; reason: string }>
+} {
+  const bySku = new Map<string, string[]>()
+  const skipped: Array<{ listingId: string; reason: string }> = []
+  for (const listing of listings) {
+    const productSku = listing.product?.sku
+    if (!productSku) continue // orphaned listing without a SKU — skip
+    const answer = reportedSkuOf(listing, productSku)
+    if (answer.sku === null) { skipped.push({ listingId: listing.id, reason: answer.conflict.sentence }); continue }
+    bySku.set(answer.sku, [...(bySku.get(answer.sku) ?? []), listing.id])
+  }
+  return { bySku, skipped }
 }
 
 // ── Core tick ────────────────────────────────────────────────────────────────
@@ -114,6 +141,8 @@ export async function runEbayStatusReconcile(): Promise<void> {
 
   // Fetch all eBay ChannelListings that are not already in a terminal
   // removed/cancelled state — those are the ones that can drift.
+  // S7 — only this account's listings (and unattributed older ones) are asked through this account: another
+  // account's listing that happens to share a SKU never takes this account's offer status.
   const listings = await prisma.channelListing.findMany({
     where: {
       channel: 'EBAY',
@@ -121,38 +150,25 @@ export async function runEbayStatusReconcile(): Promise<void> {
       product: {
         deletedAt: null,
       },
+      ...onAccount(connection.id),
     },
-    select: {
-      id: true,
-      listingStatus: true,
-      externalListingId: true,
-      marketplace: true,
-      product: { select: { sku: true } },
-    },
+    select: { ...CHANNEL_SKU_LISTING_SELECT, marketplace: true },
   })
 
   // Build a deduplicated map of sku → [listingIds] so we call the API
   // once per SKU even if there are multiple ChannelListing rows for it
-  // (e.g. different marketplaces sharing the same eBay item).
-  const skuToListingIds = new Map<string, string[]>()
+  // (e.g. different marketplaces sharing the same eBay item). S7: the SKU is the listing's own (else the product's).
+  const { bySku: skuToListingIds, skipped } = groupListingsBySku(listings)
+  if (skipped.length) {
+    logger.warn(`${JOB_NAME}: listings without one SKU were not checked`, { count: skipped.length, sample: skipped.slice(0, 10) })
+  }
   const listingById = new Map<string, { listingStatus: string; externalListingId: string | null; marketplace: string | null }>()
-
   for (const listing of listings) {
-    const sku = listing.product?.sku
-    if (!sku) continue // orphaned listing without a SKU — skip
-
     listingById.set(listing.id, {
       listingStatus: listing.listingStatus,
       externalListingId: listing.externalListingId,
       marketplace: listing.marketplace ?? null,
     })
-
-    const existing = skuToListingIds.get(sku)
-    if (existing) {
-      existing.push(listing.id)
-    } else {
-      skuToListingIds.set(sku, [listing.id])
-    }
   }
 
   const skus = Array.from(skuToListingIds.keys())

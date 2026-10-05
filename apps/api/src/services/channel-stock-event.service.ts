@@ -43,6 +43,7 @@ import prisma from '../db.js'
 import { applyStockMovement, ProtectedLocationError } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
 import { loadSyncLedgers } from './stock-pool/sync-ledgers.js'
+import { productByOwnSku } from './listings/reported-sku.js'
 
 const DEFAULT_AUTO_APPLY_THRESHOLD = 1
 
@@ -114,6 +115,10 @@ export interface RecordChannelStockEventInput {
    *  pass it directly to skip the redundant SKU lookup. */
   sku?: string
   productId?: string
+  /** S7 — the connected account that reported `sku`. When set, a listing's OWN SKU on that account is matched first
+   *  (`productByOwnSku`); otherwise, and for a SKU no listing holds as its own, the product SKU lookup below runs as
+   *  before. Two products on one SKU: the event is recorded unmatched, never on a guessed product. */
+  channelConnectionId?: string | null
   /** When set, the local-stock lookup AND the resulting movement
    *  are scoped to this specific ProductVariation. Used by eBay
    *  variation-listings + Shopify variant inventory items. */
@@ -184,10 +189,17 @@ export async function recordChannelStockEvent(
       select: { id: true, sku: true },
     })
   } else if (input.sku?.trim()) {
-    product = await prisma.product.findFirst({
-      where: { sku: input.sku.trim() },
-      select: { id: true, sku: true },
-    })
+    const own = await productByOwnSku(prisma, { channel: input.channel, channelConnectionId: input.channelConnectionId, sku: input.sku })
+    if (own && own.ambiguous === true) {
+      logger.warn('channel-stock-event: the reported SKU names more than one product — recorded unmatched', { channel: input.channel, sku: input.sku.trim(), productIds: own.productIds, reason: own.sentence })
+    } else if (own && own.ambiguous === false) {
+      product = await prisma.product.findUnique({ where: { id: own.productId }, select: { id: true, sku: true } })
+    } else {
+      product = await prisma.product.findFirst({
+        where: { sku: input.sku.trim() },
+        select: { id: true, sku: true },
+      })
+    }
   }
   // Materialise the SKU we'll persist on the row. Prefer the
   // resolved product's sku (canonical); fall back to caller-supplied

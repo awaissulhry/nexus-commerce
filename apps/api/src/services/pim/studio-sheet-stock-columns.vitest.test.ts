@@ -51,7 +51,7 @@ import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
 import { PARENT_REASON } from './matrix-cells.js'
 import { getSheetColumns } from './sheet-columns.service.js'
 import { getStudioSheet, resolveWriteRouting, type StudioSheet } from './studio-sheet.service.js'
-import { AMAZON_QUANTITY_KEY, LISTING_ASIN_KEY, STUDIO_STOCK_KEYS, isRawQuantityColumn, isShopifyInventoryColumn, stockControlRouting } from './studio-stock.js'
+import { AMAZON_QUANTITY_KEY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, STUDIO_STOCK_KEYS, isRawQuantityColumn, isShopifyInventoryColumn, stockControlRouting } from './studio-stock.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const acc: Record<string, string> = {}
@@ -109,6 +109,7 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
     expect(child.values.stock_buffer.value).toBe(2)
     expect(child.values[LISTING_ASIN_KEY]).toMatchObject({ value: `EXT-AMAZON-${ids.child}`, writable: false })
     expect(child.values[AMAZON_QUANTITY_KEY]).toBeUndefined()
+    expect(keys(sheet)).not.toContain(LISTING_ITEM_ID_KEY)
   })
 
   it('a stock column routes through `stockControlRouting` in `resolveWriteRouting` too — never as a bulk field', async () => {
@@ -127,6 +128,11 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
     const child = row(sheet, ids.child)
     expect(child.stock).toMatchObject({ key: 'EBAY:IT', marketKey: 'EBAY:IT' })
     expect(child.values.stock_qty.value).toBe(STOCK - 2)
+    // Item ID control (I1): the eBay Item ID sits where the ASIN sits on Amazon. The main row's item is shown and is the
+    // row's control; this variation holds ANOTHER item than its main row, so it reads "Not confirmed" (100% honest).
+    expect(sheet.columns.find((c) => c.key === LISTING_ITEM_ID_KEY)).toMatchObject({ label: 'Item ID', groupKey: 'sheet:offer-identity', editable: false, formulaWritable: false })
+    expect(row(sheet, ids.parent).values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: `EXT-EBAY-${ids.parent}`, writable: true })
+    expect(child.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: null, writable: false, writeBlockedReason: expect.stringContaining(`Not confirmed: this row holds Item ID EXT-EBAY-${ids.child}`) })
   })
 
   it('D2 — Shopify\'s inventory cells are held while Nexus sends the quantity, and not once sync is paused', async () => {

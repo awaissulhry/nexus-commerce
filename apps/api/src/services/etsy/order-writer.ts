@@ -44,6 +44,7 @@ import { InsufficientStockError } from '../stock-movement.service.js'
 import { PooledProductError } from '../stock-pool/pool-guard.js'
 import { raiseChannelAlertInTx } from '../cx/channel-alerts.service.js'
 import { noticeCancelledAfterShipment, settleCancelledOrderHoldsInTx } from '../order-cancellation/index.js'
+import { matchInboundSku, type InboundSkuMatch } from '../listings/channel-sku-inbound.js'
 
 export const etsyLineKey = (transactionId: string): string => `etsy:transaction:${transactionId}`
 
@@ -134,7 +135,7 @@ interface WriteResult { outcome: EtsyWriteOutcome; after: OrderHoldsAfterCommit 
  */
 async function noticeStockProblems(tx: Prisma.TransactionClient, args: {
   orderId: string; workspaceId: string; receiptId: string; stock: Record<string, EtsyLineStock>
-  lines: Array<{ line: { transactionId: string; sku: string | null }; quantity: number }>; warnings: EtsyOrderWarning[]
+  lines: Array<{ line: { transactionId: string; sku: string | null }; quantity: number; unlinkedReason?: string | null }>; warnings: EtsyOrderWarning[]
 }): Promise<void> {
   const of = (effect: EtsyLineStock) => args.lines.filter(({ line }) => args.stock[line.transactionId] === effect)
   const what = (rows: ReturnType<typeof of>) => rows.map(({ line, quantity }) => `${quantity} × ${line.sku ?? `Etsy line ${line.transactionId}`}`).join(', ')
@@ -143,8 +144,12 @@ async function noticeStockProblems(tx: Prisma.TransactionClient, args: {
     raiseChannelAlertInTx(tx, { kind, severity, title, body, entityType: 'Order', entityId: args.orderId, href: `/orders/${args.orderId}`, meta: { channel: 'ETSY', receiptId: args.receiptId } },
       { workspaceId: args.workspaceId, actorUserId: null, occurrenceId: `etsy:${occurrence}:${args.orderId}` })
   const unlinked = of('unlinked'), short = of('shortfall'), blocked = of('no_stock_location')
+  // S6 — a SKU that names several products says so, with their SKUs, instead of "matches no product".
+  const reasons = [...new Set(unlinked.flatMap(({ unlinkedReason }) => (unlinkedReason ? [unlinkedReason] : [])))]
   if (unlinked.length) await raise('channel-order-stock-unlinked', 'warn', `An Etsy sale was recorded without a product: ${what(unlinked)}`,
-    `Etsy receipt ${args.receiptId} is saved, but ${what(unlinked)} matches no product, so no stock was held or taken for it. Link the SKU to its product; the next read of the receipt holds it.`, `unlinked:${unlinked.map(({ line }) => line.transactionId).join(',')}`)
+    reasons.length
+      ? `Etsy receipt ${args.receiptId} is saved, but no stock was held or taken for ${what(unlinked)}. ${reasons.join(' ')} The next read of the receipt holds it once the SKU names one product.`
+      : `Etsy receipt ${args.receiptId} is saved, but ${what(unlinked)} matches no product, so no stock was held or taken for it. Link the SKU to its product; the next read of the receipt holds it.`, `unlinked:${unlinked.map(({ line }) => line.transactionId).join(',')}`)
   if (short.length) await raise('channel-order-stock-shortfall', 'danger', `An Etsy sale of ${what(short)} was recorded without stock`,
     `Etsy receipt ${args.receiptId} is saved. ${detail('hold_shortfall')} Check the stock before it ships.`, `shortfall:${short.map(({ line }) => line.transactionId).join(',')}`)
   if (blocked.length) await raise('channel-order-stock-blocked', 'danger', `An Etsy sale of ${what(blocked)} was recorded, but its stock was not held`,
@@ -240,17 +245,23 @@ export async function writeEtsyReceipt(input: EtsyReceiptWrite): Promise<EtsyWri
     })
 
     // 6. A linked purchase line keeps its product identity, even if the catalog renames/reuses its SKU.
-    const skus = [...new Set(receipt.lines.map((line) => line.sku?.trim() ?? '').filter((sku) => sku.length > 0))]
-    const products = skus.length > 0 ? await tx.product.findMany({ where: { sku: { in: skus } }, select: { id: true, sku: true } }) : []
-    const productBySku = new Map(products.map((p) => [p.sku, p.id]))
     const storedItems = await tx.orderItem.findMany({ where: { orderId: order.id }, select: { externalLineItemId: true, productId: true, quantity: true } })
     const productByLine = new Map(storedItems.map((item) => [item.externalLineItemId, item.productId]))
     const quantityByLine = new Map(storedItems.map((item) => [item.externalLineItemId, item.quantity]))
+    // S6 — an unlinked line's SKU through the one inbound match (this Etsy account's listings, also a SKU renamed in
+    // Nexus that Etsy still holds; then the master SKU), once per SKU. Several products: not linked, with the reason.
+    const matchBySku = new Map<string, InboundSkuMatch>()
+    for (const line of receipt.lines) {
+      const sku = line.sku?.trim() ?? ''
+      if (!sku || productByLine.get(line.transactionId) || matchBySku.has(sku)) continue
+      matchBySku.set(sku, await matchInboundSku(tx, { channel: 'ETSY', channelConnectionId: input.connectionId, sku }))
+    }
     const lines = receipt.lines.map((line) => ({
       line, key: etsyLineKey(line.transactionId),
       // The purchase quantity as first written: what the stock guards count per product.
       quantity: quantityByLine.get(line.transactionId) ?? line.quantity,
-      productId: productByLine.get(line.transactionId) ?? (line.sku ? productBySku.get(line.sku.trim()) ?? null : null),
+      productId: productByLine.get(line.transactionId) ?? (line.sku ? matchBySku.get(line.sku.trim())?.productId ?? null : null),
+      unlinkedReason: line.sku ? matchBySku.get(line.sku.trim())?.problem?.sentence ?? null : null,
     }))
     for (const { line, productId } of lines) {
       await tx.orderItem.upsert({
@@ -272,9 +283,11 @@ export async function writeEtsyReceipt(input: EtsyReceiptWrite): Promise<EtsyWri
     const eligible = lines.filter(({ quantity }) => quantity > 0)
     for (const { line, quantity } of lines) if (!(quantity > 0)) stock[line.transactionId] = 'not_stocked'
     const unlinked = eligible.filter(({ productId }) => !productId)
-    for (const { line, key } of unlinked) {
+    for (const { line, key, unlinkedReason } of unlinked) {
       stock[line.transactionId] = 'unlinked'
-      warnings.push({ code: 'unmapped_line', lineKey: key, detail: `Etsy line ${line.transactionId} (${line.sku ?? 'no SKU'}) matches no product: no stock was held or taken for it.` })
+      warnings.push({ code: 'unmapped_line', lineKey: key, detail: unlinkedReason
+        ? `Etsy line ${line.transactionId} (${line.sku}): ${unlinkedReason} No stock was held or taken for it.`
+        : `Etsy line ${line.transactionId} (${line.sku ?? 'no SKU'}) matches no product: no stock was held or taken for it.` })
     }
     const perProduct = unitsPerProduct(eligible.map(({ line, key, productId, quantity }) => ({ productId, quantity, transactionId: line.transactionId, key })))
       .sort((a, b) => (a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : 0))

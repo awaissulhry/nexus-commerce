@@ -15,6 +15,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
+import { CHANNEL_SKU_LISTING_SELECT } from '../listings/channel-sku.js'
+import { liveChannelSku } from '../listings/channel-sku.pure.js'
+import { listingAccounts, productForChannelSkuOnAccounts } from '../listings/listing-sku-holders.js'
 import { SB_AD_TYPE_KEYS, sbAdTypeNotice } from '../ads-core/sb-ad-types.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
@@ -438,29 +442,120 @@ export interface NewProductAd { adGroupId: string; sku?: string; asin?: string; 
  * in the ASIN field. Both are resolved here rather than at each call site.
  */
 export async function resolveSellerSku(
-  input: { sku?: string | null; asin?: string | null },
+  input: {
+    sku?: string | null; asin?: string | null
+    /** S8 — the product the ad is for, when the caller knows it. */
+    productId?: string | null
+    /** S8 — the campaign's market: the ad SKU is the SKU Amazon holds for this product THERE. */
+    marketplace?: string | null
+  },
 ): Promise<{ sku: string; asin: string | null } | null> {
-  if (input.sku) return { sku: input.sku, asin: input.asin ?? null }
-  const value = input.asin
-  if (!value) return null
-  // Prefer FBA when one ASIN has several offers — that is the offer these
-  // campaigns advertise.
-  const byAsin = await prisma.product.findFirst({
-    where: { amazonAsin: value, fulfillmentMethod: 'FBA' }, select: { sku: true, amazonAsin: true }, orderBy: { sku: 'asc' },
-  }) ?? await prisma.product.findFirst({
-    where: { amazonAsin: value }, select: { sku: true, amazonAsin: true }, orderBy: { sku: 'asc' },
+  type AdProduct = { id: string; sku: string; amazonAsin: string | null }
+  const select = { id: true, sku: true, amazonAsin: true } as const
+  let product: AdProduct | null = null
+  let answer: { sku: string; asin: string | null } | null = null
+  if (input.sku) {
+    answer = { sku: input.sku, asin: input.asin ?? null }
+  } else {
+    const value = input.asin
+    if (!value) return null
+    // Prefer FBA when one ASIN has several offers — that is the offer these
+    // campaigns advertise.
+    const byAsin = await prisma.product.findFirst({
+      where: { amazonAsin: value, fulfillmentMethod: 'FBA' }, select, orderBy: { sku: 'asc' },
+    }) ?? await prisma.product.findFirst({
+      where: { amazonAsin: value }, select, orderBy: { sku: 'asc' },
+    })
+    // Else the value is already a seller SKU (a product with no ASIN of its own).
+    product = byAsin ?? await prisma.product.findFirst({ where: { sku: value }, select })
+    if (product) answer = { sku: product.sku, asin: product.amazonAsin ?? (byAsin ? value : null) }
+  }
+
+  /*
+   * S8 — a listing may carry its own channel SKU, per channel AND market. The product SKU is not necessarily what Amazon
+   * holds in the campaign's market, and an ad on a SKU Amazon does not hold advertises nothing. So: which product the
+   * ad is for (named; else the SKU matched back through the resolver on this business's Amazon accounts there; else
+   * the product whose own SKU it is), then the SKU its Amazon listing in that market holds.
+   */
+  const market = input.marketplace ? normalizeMarketplaceCode(input.marketplace, '') : ''
+  if (!market) return answer
+  const skuGiven = input.sku ?? (product ? null : input.asin) ?? null
+  if (input.productId) product = await prisma.product.findFirst({ where: { id: input.productId, deletedAt: null }, select })
+  else if (!product && skuGiven) product = await productForAdSku(skuGiven, market)
+  if (!product) return answer
+  const live = await amazonSkuInMarket(product, market)
+  if (live.problem) throw new AdSkuConflictError(live.problem)
+  // No live Amazon listing there, or it holds the SKU we already had: as before.
+  if (!live.sku || live.sku === answer?.sku) return answer
+  return { sku: live.sku, asin: answer?.asin ?? product.amazonAsin ?? null }
+}
+
+/** S8 — the ad SKU cannot be named without a guess (two SKUs, or two products): one plain sentence, nothing sent. */
+export class AdSkuConflictError extends Error {
+  readonly code = 'AD_SKU_CONFLICT'
+  constructor(message: string) {
+    super(message)
+    this.name = 'AdSkuConflictError'
+  }
+}
+
+/** S8 — the product a seller SKU names on this business's Amazon accounts in one market: the resolver, then `Product.sku`. */
+async function productForAdSku(sku: string, market: string): Promise<{ id: string; sku: string; amazonAsin: string | null } | null> {
+  const select = { id: true, sku: true, amazonAsin: true } as const
+  const connectionIds = await listingAccounts(prisma, { channel: 'AMAZON', marketplace: market })
+  const match = await productForChannelSkuOnAccounts(prisma, { channel: 'AMAZON', sku, marketplace: market, connectionIds })
+  if (!match) return prisma.product.findFirst({ where: { sku, deletedAt: null }, select })
+  if ('productIds' in match) {
+    throw new AdSkuConflictError(`${sku} names more than one product on Amazon ${market}. Nothing was sent: give each listing its own SKU first.`)
+  }
+  return prisma.product.findFirst({ where: { id: match.productId, deletedAt: null }, select })
+}
+
+/**
+ * S8 — the seller SKU Amazon holds for a product in one market (`liveChannelSku`, listings/channel-sku.pure.ts): its
+ * primary Amazon listing there (else its extra listings) — the confirmed `liveChannelSku`, else the old stores (active
+ * offers, mirror keys, flat-file snapshot), else the product SKU. When the listing has more than one SKU on record (two
+ * active offers), the one named like the product SKU — what an ad was created from before S8; when none is, the ad is
+ * refused: an ad on a guessed SKU would not work. Still-draft listings are not on Amazon and count for nothing.
+ * `sku: null` = no live listing there.
+ */
+async function amazonSkuInMarket(product: { id: string; sku: string }, market: string): Promise<{ sku: string | null; problem?: string }> {
+  const rows = await prisma.channelListing.findMany({
+    where: { productId: product.id, channel: 'AMAZON', marketplace: market },
+    select: CHANNEL_SKU_LISTING_SELECT,
+    orderBy: { id: 'asc' },
   })
-  if (byAsin) return { sku: byAsin.sku, asin: byAsin.amazonAsin ?? value }
-  // The value is already a seller SKU (a product with no ASIN of its own).
-  const bySku = await prisma.product.findFirst({ where: { sku: value }, select: { sku: true, amazonAsin: true } })
-  if (bySku) return { sku: bySku.sku, asin: bySku.amazonAsin ?? null }
-  return null
+  const primary = rows.filter(row => !row.aliasKey)
+  const skus = new Set<string>()
+  for (const row of primary.length ? primary : rows) {
+    const live = liveChannelSku(row, product.sku)
+    if (!live) continue
+    if (live.sku) { skus.add(live.sku); continue }
+    if (live.conflict.candidates.some(c => c.sku === product.sku)) { skus.add(product.sku); continue }
+    const onRecord = live.conflict.candidates.map(c => c.sku)
+    return {
+      sku: null,
+      problem: onRecord.length
+        ? `${product.sku} has more than one seller SKU on Amazon ${market} (${onRecord.join(', ')}) and none of them is ${product.sku}. `
+          + 'Nothing was sent to Amazon Ads: an ad on a guessed SKU would not work. Choose the offer to advertise first.'
+        : `${live.conflict.sentence} Nothing was sent to Amazon Ads (${market}).`,
+    }
+  }
+  if (skus.size > 1) {
+    return { sku: null, problem: `${product.sku} has more than one Amazon SKU in ${market} (${[...skus].join(', ')}). Nothing was sent: choose the listing to advertise first.` }
+  }
+  return { sku: [...skus][0] ?? null }
 }
 
 export async function createProductAdLocal(input: NewProductAd): Promise<{ id: string; externalAdId: string | null }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
-  const resolved = await resolveSellerSku(input)
+  // S8 — the SKU Amazon holds in the campaign's market. A conflict is held back and refuses only an SP push below.
+  let skuConflict: AdSkuConflictError | null = null
+  const resolved = await resolveSellerSku({ ...input, marketplace: ag.campaign?.marketplace ?? null }).catch((error: unknown) => {
+    if (error instanceof AdSkuConflictError) { skuConflict = error; return null }
+    throw error
+  })
   let externalId: string | null = null
   // ACR Stage 5 — third instance of the endpoint-family split. `/sp/productAds` returns nothing
   // useful for an SD ad group, so an SD ad pushed there attaches to nothing and reports success.
@@ -480,7 +575,7 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
       if (gate.allowed) {
         // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
-        if (!resolved && !isSd) throw new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
+        if (!resolved && !isSd) throw skuConflict ?? new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
         const r = isSd
           // ENABLED like the SP path: the campaign is the delivery gate, not the ad. See the
           // `state` docblock in createAdGroupLocal.
@@ -561,7 +656,7 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
         // Sponsored Products ads require a seller SKU (merchantSku), not just an ASIN. Shared with
         // the launch path so a repair can fix exactly what a launch should have created — including
         // rows whose "asin" is really a SKU, which the builders' flat `asin || sku` list produces.
-        const resolved = await resolveSellerSku(pa)
+        const resolved = await resolveSellerSku({ ...pa, marketplace: campaign.marketplace })
         if (!resolved) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": no seller SKU in the catalog for this product'); continue }
         const sku = resolved.sku
         const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })

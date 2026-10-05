@@ -81,7 +81,7 @@ describe('🔴 the bulk channel batch sends the listing\'s send price, in its ma
   it('🔴 eBay UK: the batch carries the market\'s GBP (it said EUR), with the pinned price', async () => {
     h.listings = [listing('EBAY', 'UK', { followMasterPrice: false, priceOverride: 24, price: 24 })]
     expect(await run('EBAY', 'UK')).toEqual({ status: 'processed' })
-    expect(h.ebay[0].operations).toEqual([{ type: 'price', sku: 'TEST-SKU-1', offerId: 'TEST-OFFER-1', currency: 'GBP', value: '24.00' }])
+    expect(h.ebay[0].operations).toEqual([{ type: 'price', sku: 'TEST-SKU-1', listingId: 'L1', offerId: 'TEST-OFFER-1', currency: 'GBP', value: '24.00' }])
   })
 
   it('eBay IT: a "master +10%" follower sends 11.00 EUR', async () => {
@@ -107,5 +107,96 @@ describe('🔴 the bulk channel batch sends the listing\'s send price, in its ma
     h.listings = [listing('EBAY', 'DE', { followMasterPrice: false, priceOverride: 20, price: 20 })]
     expect(await run('EBAY', 'DE')).toEqual({ status: 'skipped', reason: 'TEST-SKU-1: no currency is configured for eBay DE. Set the market\'s currency. Nothing was sent.' })
     expect(h.ebay).toEqual([])
+  })
+})
+
+/**
+ * S3 (per-channel SKU) — the Amazon batch names the seller SKU Amazon holds for the listing (the product SKU for a
+ * listing with none of its own, as above), and tells the feed's push-lock read which product it belongs to.
+ */
+describe('S3 — the Amazon batch names the listing\'s own seller SKU', () => {
+  const LIVE = { listingStatus: 'ACTIVE', isPublished: true }
+  const stockRun = (marketplace: string) => service.processChannelBatch(product, { channel: 'AMAZON', operation: 'stock', marketplace }, null)
+  // The stock op reads the product's FBA stock: none here.
+  Object.assign(db, { stockLevel: { aggregate: vi.fn(async () => ({ _sum: { quantity: null } })) } })
+
+  it('parity: no SKU of its own → the product SKU, with the product named for the push lock', async () => {
+    h.listings = [listing('AMAZON', 'IT', { ...LIVE, followMasterPrice: false, priceOverride: 15 })]
+    await run('AMAZON', 'IT')
+    expect(h.amazon[0]).toMatchObject({ operations: [{ type: 'price', sku: 'TEST-SKU-1' }], productIds: ['p1'] })
+  })
+
+  it('price and stock under the listing\'s own SKU', async () => {
+    h.listings = [listing('AMAZON', 'DE', { ...LIVE, followMasterPrice: false, priceOverride: 15, liveChannelSku: 'TEST-SKU-1-DE' })]
+    h.markets.push({ channel: 'AMAZON', code: 'DE', currency: 'EUR' })
+    await run('AMAZON', 'DE')
+    await stockRun('DE')
+    expect(h.amazon.map((s: any) => s.operations[0])).toEqual([
+      { type: 'price', sku: 'TEST-SKU-1-DE', currency: 'EUR', value: 15 },
+      { type: 'stock', sku: 'TEST-SKU-1-DE', quantity: 3 },
+    ])
+  })
+
+  it('a still-draft listing keeps the product SKU', async () => {
+    h.listings = [listing('AMAZON', 'IT', { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, channelSku: 'WANT-IT', followMasterPrice: false, priceOverride: 15 })]
+    await run('AMAZON', 'IT')
+    expect(h.amazon[0].operations[0].sku).toBe('TEST-SKU-1')
+  })
+
+  it('two seller SKUs on record → skipped with the reason, nothing sent', async () => {
+    h.listings = [listing('AMAZON', 'IT', { ...LIVE, followMasterPrice: false, priceOverride: 15, platformAttributes: { sellerSku: 'A-1' }, flatFileSnapshot: { item_sku: 'A-2' } })]
+    expect(await run('AMAZON', 'IT')).toEqual({ status: 'skipped', reason: 'TEST-SKU-1: conflicting Amazon seller SKUs. Reconcile this listing\'s identity before publishing. Nothing was sent.' })
+    expect(h.amazon).toEqual([])
+  })
+
+  it('FBA: a listing with its own SKU still gets no merchant quantity', async () => {
+    h.listings = [listing('AMAZON', 'IT', { ...LIVE, fulfillmentMethod: 'FBA', liveChannelSku: 'TEST-SKU-1-FBA' })]
+    expect(await stockRun('IT')).toEqual({ status: 'skipped' })
+    expect(h.amazon).toEqual([])
+  })
+
+  it('the read asks Amazon listings for their offers (the seller-SKU store); other channels\' reads are unchanged', async () => {
+    h.listings = [listing('AMAZON', 'IT', { ...LIVE, followMasterPrice: false, priceOverride: 15 })]
+    db.channelListing.findFirst.mockClear()
+    await run('AMAZON', 'IT')
+    expect((db.channelListing.findFirst.mock.calls[0] as any[])[0]).toMatchObject({ include: { offers: expect.any(Object) } })
+    h.listings = [listing('EBAY', 'IT', { followMasterPrice: false, priceOverride: 15 })]
+    db.channelListing.findFirst.mockClear()
+    await run('EBAY', 'IT')
+    expect((db.channelListing.findFirst.mock.calls[0] as any[])[0]).not.toHaveProperty('include')
+  })
+})
+
+/**
+ * S4 (per-channel SKU) — the eBay batch names the SKU eBay holds for THIS listing, and the listing its push controls are
+ * read by: the product SKU unless the listing has its own confirmed SKU. An extra listing's alias SKU (never sent to eBay)
+ * and a still-draft row's wanted SKU are not named.
+ */
+describe('S4 — the eBay batch names the SKU eBay holds for the listing', () => {
+  const LIVE_EBAY = { listingStatus: 'ACTIVE', isPublished: true }
+  const stockRun = (marketplace: string) => service.processChannelBatch(product, { channel: 'EBAY', operation: 'stock', marketplace }, null)
+
+  it('parity: no SKU of its own → the product SKU (price and stock)', async () => {
+    h.listings = [listing('EBAY', 'IT', { ...LIVE_EBAY, followMasterPrice: false, priceOverride: 15 })]
+    await run('EBAY', 'IT')
+    await stockRun('IT')
+    expect(h.ebay.map((s: any) => s.operations[0])).toEqual([
+      { type: 'price', sku: 'TEST-SKU-1', listingId: 'L1', offerId: 'TEST-OFFER-1', currency: 'EUR', value: '15.00' },
+      { type: 'stock', sku: 'TEST-SKU-1', listingId: 'L1', quantity: 3 },
+    ])
+  })
+
+  it('the listing\'s own confirmed SKU', async () => {
+    h.listings = [listing('EBAY', 'IT', { ...LIVE_EBAY, followMasterPrice: false, priceOverride: 15, liveChannelSku: 'TEST-SKU-1-EB', channelSku: 'TEST-SKU-1-EB' })]
+    await run('EBAY', 'IT')
+    expect(h.ebay[0].operations[0]).toMatchObject({ sku: 'TEST-SKU-1-EB', listingId: 'L1' })
+  })
+
+  it('a wanted SKU eBay has not confirmed, and a still-draft row, keep the product SKU', async () => {
+    h.listings = [listing('EBAY', 'IT', { ...LIVE_EBAY, followMasterPrice: false, priceOverride: 15, channelSku: 'WANT-IT' })]
+    await run('EBAY', 'IT')
+    h.listings = [listing('EBAY', 'IT', { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, channelSku: 'WANT-IT' })]
+    await stockRun('IT')
+    expect(h.ebay.map((s: any) => s.operations[0].sku)).toEqual(['TEST-SKU-1', 'TEST-SKU-1'])
   })
 })

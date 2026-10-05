@@ -208,6 +208,14 @@ async function seedA() {
     await db.offer.create({ data: { channelListingId: oa.id, fulfillmentMethod: 'FBA', sku: 'ID11-OB' } })
     await db.offer.create({ data: { channelListingId: oc.id, fulfillmentMethod: 'FBA', sku: 'ID11-OC-FBA' } })
     await db.offer.create({ data: { channelListingId: od.id, fulfillmentMethod: 'FBA', sku: 'ID11-OB' } })
+    // S8 — a listing with its own channel SKU: its seller SKU is that SKU, no longer its product's. An offer named like
+    // its product SKU is no collision (control: flagged before S8); an offer named like its own SKU is (positive).
+    for (const sku of ['ID11-S8-RENAMED', 'ID11-S8-OFF', 'ID11-S8-OFF2']) await product(sku)
+    await listing('ID11-S8-RENAMED', 'AMAZON', 'DE', 'B0S8000001', { channelSku: 'ID11-S8-OWN', liveChannelSku: 'ID11-S8-OWN' })
+    const s8off = await listing('ID11-S8-OFF', 'AMAZON', 'DE', 'B0S8000002')
+    const s8off2 = await listing('ID11-S8-OFF2', 'AMAZON', 'DE', 'B0S8000003')
+    await db.offer.create({ data: { channelListingId: s8off.id, fulfillmentMethod: 'FBA', sku: 'ID11-S8-RENAMED' } })
+    await db.offer.create({ data: { channelListingId: s8off2.id, fulfillmentMethod: 'FBA', sku: 'ID11-S8-OWN' } })
     await db.skuAlias.create({ data: { productId: ids['ID11-SA'], alias: 'id11-other', raw: 'ID11-OTHER' } })
     await db.skuAlias.create({ data: { productId: ids['ID11-SA'], alias: 'id11-nobody', raw: 'ID11-NOBODY' } })
     const taken = await alias('ID11-ALIASROOT', 'DE', 'listing named like a product')
@@ -238,7 +246,7 @@ async function seedA() {
     await listing('ID13-COLOK', 'SHOPIFY', 'GLOBAL', '960', { platformAttributes: { shopifyColourProductId: blue.id, shopifyProductId: '960' } })
 
     // #14 / #15 — products whose listings sit on another business's accounts (written below as the database owner).
-    for (const sku of ['ID14-NOCLAIM', 'ID14-CLAIMED', 'ID15-REVOKED', 'ID15-READ']) await product(sku)
+    for (const sku of ['ID14-NOCLAIM', 'ID14-CLAIMED', 'ID15-REVOKED', 'ID15-READ', 'ID14-S8-OWNCLAIM', 'ID14-S8-PSKUCLAIM']) await product(sku)
 
     // #16 — a listing with no account.
     await product('ID16-NOACC')
@@ -298,12 +306,16 @@ async function seedShared() {
   const shared = randomUUID()
   const readOnly = randomUUID()
   const revoked = randomUUID()
-  const listingRow = (sku: string, account: string, status: string, external: string) => ({ id: randomUUID(), sku, account, status, external })
+  const listingRow = (sku: string, account: string, status: string, external: string, channelSku: string | null = null) => ({ id: randomUUID(), sku, account, status, external, channelSku })
   const rows = [
     listingRow('ID14-NOCLAIM', shared, 'ACTIVE', '880000000001'),
     listingRow('ID14-CLAIMED', shared, 'ACTIVE', '880000000002'),
     listingRow('ID15-REVOKED', revoked, 'DRAFT', '880000000003'),
     listingRow('ID15-READ', readOnly, 'DRAFT', '880000000004'),
+    // S8 — listings with their own channel SKU: the claim on that SKU covers one (control); a claim on the product SKU
+    // no longer covers the other (positive). Both claims point at another live listing, so only the SKU can match.
+    listingRow('ID14-S8-OWNCLAIM', shared, 'ACTIVE', '880000000005', 'ID14-S8-OWN-IT'),
+    listingRow('ID14-S8-PSKUCLAIM', shared, 'ACTIVE', '880000000006', 'ID14-S8-PSKU-IT'),
   ]
   await database.db.transaction(async (tx) => {
     await tx.query(`SET LOCAL session_replication_role = replica`)
@@ -319,9 +331,9 @@ async function seedShared() {
     await grant(revoked, 'publish', new Date().toISOString())
     for (const row of rows) {
       await tx.query(
-        `INSERT INTO "ChannelListing" (id, "workspaceId", "productId", "channelMarket", channel, region, marketplace, "listingStatus", "externalListingId", "channelConnectionId", "updatedAt")
-         VALUES ($1, $2, $3, 'EBAY_IT', 'EBAY', 'IT', 'IT', $4, $5, $6, CURRENT_TIMESTAMP)`,
-        [row.id, A, ids[row.sku], row.status, row.external, row.account],
+        `INSERT INTO "ChannelListing" (id, "workspaceId", "productId", "channelMarket", channel, region, marketplace, "listingStatus", "externalListingId", "channelConnectionId", "channelSku", "updatedAt")
+         VALUES ($1, $2, $3, 'EBAY_IT', 'EBAY', 'IT', 'IT', $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
+        [row.id, A, ids[row.sku], row.status, row.external, row.account, row.channelSku],
       )
     }
     const claim = (sellerSku: string, listingId: string | null) => tx.query(
@@ -330,6 +342,8 @@ async function seedShared() {
     )
     await claim('ID14-CLAIMED', rows[1].id)
     await claim('ID14-GONE', null)
+    await claim('ID14-S8-OWN-IT', rows[1].id)
+    await claim('ID14-S8-PSKUCLAIM', rows[1].id)
   })
 }
 
@@ -415,11 +429,11 @@ const EXPECTED: Record<string, { label: (f: IdentityFinding) => unknown; found: 
   'listing-alias-on-a-variation': { label: sku, found: ['ID9-AC'] },
   'unadopted-ebay-shell': { label: sku, found: ['ID10-SHELL'] },
   'sku-differs-only-in-case': { label: (f) => [...(f.details?.skus as string[])].sort(), found: [['ID10-Dup', 'id10-dup'].sort()] },
-  'offer-sku-equals-other-listing-sku': { label: (f) => `${f.sku} ${f.details?.offerSku} ${f.details?.otherProductSku}`, found: ['ID11-OA ID11-OB ID11-OB'] },
+  'offer-sku-equals-other-listing-sku': { label: (f) => `${f.sku} ${f.details?.offerSku} ${f.details?.otherProductSku}`, found: ['ID11-OA ID11-OB ID11-OB', 'ID11-S8-OFF2 ID11-S8-OWN ID11-S8-RENAMED'] },
   'name-alias-equals-other-product-sku': { label: (f) => `${f.sku} ${f.details?.otherProductSku}`, found: ['ID11-SA ID11-OTHER'] },
   'shopify-variant-on-two-products': { label: (f) => f.details?.skus, found: [['ID13-V1', 'ID13-V2']] },
   'shopify-variant-of-other-product': { label: (f) => `${f.sku} ${f.details?.against}`, found: ['ID13-C1 parent listing', 'ID13-COL colour product', 'ID13-OWN own ids'] },
-  'shared-account-listing-without-claim': { label: sku, found: ['ID14-NOCLAIM'] },
+  'shared-account-listing-without-claim': { label: sku, found: ['ID14-NOCLAIM', 'ID14-S8-PSKUCLAIM'] },
   'claim-without-listing': { label: sku, found: ['ID14-GONE'] },
   'listing-on-account-not-usable': { label: (f) => `${f.sku} ${f.details?.access}`, found: ['ID15-READ read only', 'ID15-REVOKED revoked'] },
   'listing-without-account': { label: sku, found: ['ID16-NOACC'] },

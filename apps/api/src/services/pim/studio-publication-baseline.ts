@@ -3,6 +3,7 @@ import type { StudioPublishValue } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { publicationChangeId } from './studio-publication-changes.js'
+import { REMOVAL_REASONS } from '../listings/listing-deletions.js'
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const canonical = (value: unknown) => JSON.stringify(value, (_key, entry) => entry && typeof entry === 'object' && !Array.isArray(entry)
@@ -15,6 +16,10 @@ const PAGE_SIZE = 250
  * Delete and relist (Owner 2026-10-04): a listing's accepted Delete (the listing-action engine's audit record, reason
  * 'delete') ends its history on the channel — only publishes accepted AFTER its last accepted delete count. Before, the
  * old publishes still counted after a Delete, so the review took the listing for an existing one and nothing created it.
+ *
+ * Item ID control (2026-10-05): an accepted UNLINK (reason 'unlink', `runUnlink`) ends it the same way — Nexus forgot
+ * that item, so a relist is a new listing and never compares against the old item's publishes. One rule with the
+ * Status column's read (`REMOVAL_REASONS`, listing-deletions.ts).
  */
 export async function readPublicationBaseline(facts: PublicationFacts, identities: Array<{ productId: string; sku: string }>): Promise<{ values: Map<string, StudioPublishValue>; revision: string }> {
   const included = new Set(facts.products.map(product => product.id))
@@ -33,10 +38,10 @@ export async function readPublicationBaseline(facts: PublicationFacts, identitie
     identities: [...identity].sort(([a], [b]) => a.localeCompare(b)), listings: [...byListing].sort(([a], [b]) => a.localeCompare(b)) }))
 
   if (listings.length) await prisma.$transaction(async tx => {
-    // Each listing's last delete the channel accepted: its earlier publishes belong to the listing that was deleted.
+    // Each listing's last accepted delete or unlink: its earlier publishes belong to the listing that was removed.
     const deletes = await tx.channelListingSnapshot.findMany({
       where: { channelListingId: { in: listings.map(listing => listing.id) }, channel: scope.channel, marketplace: scope.marketplace, aliasKey,
-        reason: 'delete', outcome: 'ACCEPTED', acceptedAt: { not: null } },
+        reason: { in: [...REMOVAL_REASONS] }, outcome: 'ACCEPTED', acceptedAt: { not: null } },
       select: { channelListingId: true, acceptedAt: true }, orderBy: [{ acceptedAt: 'desc' }, { id: 'asc' }],
     })
     const deletedAt = new Map<string, Date>()

@@ -27,6 +27,8 @@ import prisma from '../db.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { logger } from '../utils/logger.js'
 import { keptAmazonFulfilmentCodes } from '../lib/amazon-fulfilment-programme.js'
+import { listingSendSku } from './listings/listing-send-sku.js'
+import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
 
 const AMZ_MP_ID: Record<string, string> = {
   IT: 'APJ6JRA9NG5V4',
@@ -78,10 +80,15 @@ export async function restoreFbaListings(options?: {
   const listings = await prisma.channelListing.findMany({
     where: {
       channel: 'AMAZON',
-      ...(skus?.length ? { product: { sku: { in: skus } } } : {}),
+      // S3 — a SKU names a listing by its product SKU (as before) or by the listing's own seller SKU.
+      ...(skus?.length ? { OR: [{ product: { sku: { in: skus } } }, { liveChannelSku: { in: skus } }, { channelSku: { in: skus } }] } : {}),
       ...(marketplaces?.length ? { marketplace: { in: marketplaces } } : {}),
     },
-    include: { product: { select: { id: true, sku: true, productType: true } } },
+    include: {
+      product: { select: { id: true, sku: true, productType: true } },
+      // S3 — the seller-SKU facts (`listingSendSku`) read the offers too.
+      offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    },
     orderBy: { id: 'asc' },
   })
 
@@ -91,8 +98,13 @@ export async function restoreFbaListings(options?: {
 
   for (const cl of listings) {
     if (limit !== undefined && processed >= limit) break
-    const sku = cl.product?.sku
-    if (!sku || !cl.product?.id) continue
+    if (!cl.product?.sku || !cl.product?.id) continue
+    // S3 (per-channel SKU) — the PATCH names the seller SKU Amazon holds for this listing: the product SKU unless it has
+    // its own (a draft: the product SKU, as before). Two SKUs on record: reported, nothing sent.
+    const held = listingSendSku({ ...cl, channel: 'AMAZON' }, cl.product.sku, cl.product.sku)
+    const sku = held.sku ?? cl.product.sku
+    // A caller that names SKUs (a drift or flip report) restores those seller SKUs only, never another one of the product.
+    if (skus?.length && !skus.includes(sku)) continue
 
     // Only restore listings backed by live FBA stock — the at-risk set.
     const agg = await prisma.stockLevel
@@ -103,6 +115,15 @@ export async function restoreFbaListings(options?: {
       .catch(() => null)
 
     if (!(agg?._sum.quantity && agg._sum.quantity > 0)) {
+      skippedNoFba++
+      continue
+    }
+    // S3 — the FBA stock above is the PRODUCT's. A listing selling under its own seller SKU may be merchant-fulfilled
+    // while another SKU holds those units, so it is restored only on its own FBA evidence (an FBA method or code on the
+    // listing, or an active FBA offer): never flipped to FBA on another SKU's stock.
+    if (held.sku !== null && held.sku !== cl.product.sku
+      && !isFbaCoordinate({ fulfillmentMethod: cl.fulfillmentMethod, platformAttributes: cl.platformAttributes }, null)
+      && !(cl.offers ?? []).some(o => o.isActive && o.fulfillmentMethod === 'FBA')) {
       skippedNoFba++
       continue
     }
@@ -135,6 +156,10 @@ export async function restoreFbaListings(options?: {
     const refusal = assertPushAllowed({ ...cl, offerClosedAt: cl.offerClosedAt ?? (closed.has(`${cl.product.id}|${cl.marketplace}`) ? 'closed' : null) })
     if (refusal) {
       results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun, ok: false, error: `${refusal.code}: ${refusal.sentence}` })
+      continue
+    }
+    if (held.sku === null) {
+      results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun, ok: false, error: `${held.code}: ${held.refusal}` })
       continue
     }
     if (dryRun) {

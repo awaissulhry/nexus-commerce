@@ -185,6 +185,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
             const result = await recordNotificationIssues({
               sellerSku: note.sku,
               marketplaceId: note.marketplaceId,
+              sellerId: note.sellerId || null,
               issues: note.issues,
               occurredAt: note.eventTime ? new Date(note.eventTime) : null,
             })
@@ -376,6 +377,9 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
             const { recordChannelStockEvent } = await import(
               '../services/channel-stock-event.service.js'
             )
+            // S7 — the seller account the notification names: a listing's own seller SKU there is matched first.
+            const { amazonAccountIdFor } = await import('../services/listings/reported-sku.js')
+            const channelConnectionId = await amazonAccountIdFor(amazonNotificationSeller(msg.rawPayload))
             for (const change of msg.inventoryNotification.changes) {
               if (!change.sku) continue
               try {
@@ -386,6 +390,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
                   channel: 'AMAZON',
                   channelEventId,
                   sku: change.sku,
+                  channelConnectionId,
                   channelReportedQty: Math.max(0, change.fulfillableQty),
                   rawPayload: change,
                 })

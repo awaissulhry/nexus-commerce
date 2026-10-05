@@ -10,7 +10,13 @@
  * memberships, reads the live Item.SKU (cheap OutputSelector GetItem), and
  * revises it to the family's parent SKU when absent/different. Listings that
  * reject Trading revises (Inventory-API-managed) are skipped — their label is
- * the group key by construction. Called from:
+ * the group key by construction.
+ * S4 (per-channel SKU) — a listing whose main row has its own SKU (wanted or
+ * confirmed) is labelled with its WANTED SKU, never put back to Product.sku:
+ * eBay holding the wanted or the confirmed SKU is kept (moving a live SKU is
+ * step S10); a missing or other label gets the wanted SKU, and that SKU is
+ * then recorded as the one eBay holds (`ebayItemLabel`). A listing with no own
+ * SKU is labelled exactly as before. Called from:
  *   1. listing creation (inline, incident #35);
  *   2. membership adoption (upsert hook — new listings adopted via save);
  *   3. the periodic guard cron (self-heal for anything else, forever).
@@ -22,6 +28,9 @@ import { ebayAuthService } from './ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 import { logger } from '../utils/logger.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { confirmLiveChannelSku } from './listings/channel-sku.js'
+import { ebayItemLabel, type EbayItemRow } from './listings/ebay-send-sku.js'
+import { CHANNEL_SKU_UNRESOLVED } from './listings/listing-send-sku.js'
 
 /** Full reads let the terminal-intent check take effect when PR.5 adds the
  * column; today's schema has no endedAt. Conservatively skip every ENDED row. */
@@ -189,10 +198,11 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
     try {
       // An ItemID can be shared by several product coordinates. Every owning
       // row must allow this push; no primary-account fallback or empty control.
+      // S4 — with the facts the label rule reads: each row's product (its SKU, and whether it is a main row) and alias.
       controls = await prisma.channelListing.findMany({ where: {
         channel: 'EBAY', externalListingId: t.itemId,
         channelConnectionId: t.channelConnectionId, marketplace: t.marketplace.toUpperCase(),
-      } })
+      }, include: { product: { select: { sku: true, parentId: true } }, alias: { select: { sku: true, productId: true } } } })
       controls.forEach(whereCoordinate)
     } catch {
       refuse('PUSH_CONTROL_UNAVAILABLE', 'Listing controls could not be read; label repair was not sent.')
@@ -206,6 +216,10 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
     const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null && refusal.code !== 'PUSH_LISTING_ENDED')
     if (locked) { refuse(locked.code, locked.sentence); continue }
     if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
+    // S4 — the label this item carries: its main row's wanted SKU when that row has its own SKU, else the parent SKU as
+    // before. The labels that may stay: the wanted SKU and the one eBay holds (TODO(S10): moving a live SKU is S10's).
+    const label = ebayItemLabel(controls as unknown as EbayItemRow[], t.parentSku)
+    if (label.refusal) { refuse(CHANNEL_SKU_UNRESOLVED, label.refusal); continue }
     try {
       const token = await ebayAuthService.getValidToken(t.channelConnectionId)
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
@@ -213,15 +227,17 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
         { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       if (!got.raw) continue // dry-run/neutralized — indeterminate, never touch
       const liveSku = /<SKU>([^<]*)<\/SKU>/.exec(got.raw)?.[1] ?? ''
-      if (liveSku === t.parentSku) {
+      if (label.keep.includes(liveSku)) {
         summary.kept++
         continue
       }
       await callTradingApi('ReviseFixedPriceItem', `<?xml version="1.0" encoding="utf-8"?>
-<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${t.itemId}</ItemID><SKU>${t.parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`,
+<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${t.itemId}</ItemID><SKU>${label.target}</SKU></Item></ReviseFixedPriceItemRequest>`,
         { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       summary.set++
-      logger.info('ebay-label-guard: custom label set', { itemId: t.itemId, parentSku: t.parentSku })
+      // S4 — eBay took the main row's own SKU as the item's label: that is the SKU eBay holds for that row now.
+      if (label.listingId) await confirmLiveChannelSku(prisma as never, label.listingId, label.target)
+      logger.info('ebay-label-guard: custom label set', { itemId: t.itemId, parentSku: label.target })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (/magazzino|inventory/i.test(msg)) summary.unsupported++

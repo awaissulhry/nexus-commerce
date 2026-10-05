@@ -42,6 +42,7 @@ import { AMAZON_EU_SHARED_MARKETS } from './amazon-eu-quantity-guard.js';
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js';
 // Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
 import { sellableQuantity } from './stock-pool/sync-ledgers.js';
+import { listingSendSku } from './listings/listing-send-sku.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
 // functions, no `this.`, no Prisma. Adding a new attribute path
 // (variantAttributes, channelMetadata, …) is one diff to that file
@@ -2712,6 +2713,8 @@ export class BulkActionService {
         channel,
         ...(marketplace ? { marketplace } : {}),
       },
+      // S3 — Amazon reads the listing's seller SKU from its offers too (`listingSendSku`).
+      ...(channel === 'AMAZON' ? { include: { offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] } } } : {}),
     });
     if (!listing) return { status: 'skipped' };
 
@@ -2747,6 +2750,11 @@ export class BulkActionService {
     };
 
     if (channel === 'AMAZON') {
+      // S3 (per-channel SKU) — the operation names the seller SKU Amazon holds for THIS listing: the product SKU unless
+      // the listing has its own. Two SKUs on record: skipped with the reason (never a guess).
+      const held = listingSendSku({ ...listing, channel: 'AMAZON' }, item.sku, item.sku);
+      if (held.sku === null) return { status: 'skipped', reason: held.refusal ?? undefined };
+      const sellerSku = held.sku;
       const { submitAmazonListingsBatch } = await import(
         './channel-batch/amazon-batch-feed.service.js'
       );
@@ -2769,7 +2777,8 @@ export class BulkActionService {
         await submitAmazonListingsBatch({
           marketplaceIds,
           sellerId,
-          operations: [{ type: 'price', sku, currency: sent.currency, value: sent.value }],
+          operations: [{ type: 'price', sku: sellerSku, currency: sent.currency, value: sent.value }],
+          productIds: [item.id],
         });
       } else {
         // FBA-flip fix — a batch stock op emits fulfillment_channel_code:DEFAULT,
@@ -2788,7 +2797,8 @@ export class BulkActionService {
         await submitAmazonListingsBatch({
           marketplaceIds,
           sellerId,
-          operations: [{ type: 'stock', sku, quantity: qty }],
+          operations: [{ type: 'stock', sku: sellerSku, quantity: qty }],
+          productIds: [item.id],
         });
       }
       return { status: 'processed' };
@@ -2806,6 +2816,11 @@ export class BulkActionService {
       }
       // P0.7 — this batch can only use the primary account: the listing must belong to it.
       await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] });
+      // S4 (per-channel SKU) — the operation names the SKU eBay holds for THIS listing: the product SKU unless the
+      // listing has its own confirmed one (an extra listing's alias SKU was never sent to eBay, so it is not named).
+      const held = listingSendSku({ ...listing, channel: 'EBAY' }, item.sku, item.sku);
+      if (held.sku === null) return { status: 'skipped', reason: held.refusal ?? undefined };
+      const ebaySku = held.sku;
       const offerId = listing.externalListingId;
       let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {
@@ -2814,13 +2829,13 @@ export class BulkActionService {
         if ('skip' in sent) return { status: 'skipped', reason: sent.skip };
         batch = await submitEbayParallelBatch({
           connectionId: connection.id,
-          operations: [{ type: 'price', sku, offerId, currency: sent.currency, value: sent.value.toFixed(2) }],
+          operations: [{ type: 'price', sku: ebaySku, listingId: listing.id, offerId, currency: sent.currency, value: sent.value.toFixed(2) }],
         });
       } else {
         const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
         batch = await submitEbayParallelBatch({
           connectionId: connection.id,
-          operations: [{ type: 'stock', sku, quantity: qty }],
+          operations: [{ type: 'stock', sku: ebaySku, listingId: listing.id, quantity: qty }],
         });
       }
       // P0.1 — a failed or refused operation must not read as "processed".
@@ -2852,13 +2867,19 @@ export class BulkActionService {
       accountId = active[0].id;
     }
     const syncType = operation === 'price' ? 'PRICE_UPDATE' : 'QUANTITY_UPDATE';
-    const shopifyRow = { id: `bulk-${shopifyListing.id}-${operation}`, syncType, product: item, channelListing: shopifyListing, payload: {} as Record<string, unknown> };
+    const shopifyRow = { id: `bulk-${shopifyListing.id}-${operation}`, syncType, product: item, channelListing: shopifyListing, payload: {} as Record<string, unknown>, sku: undefined as string | undefined };
     const platform = (shopifyListing.platformAttributes ?? {}) as Record<string, unknown>;
     if (platform.nexusFamilyId) {
       const { syncNativeShopifyOffer } = await import('./shopify/offer-sync.service.js');
       await syncNativeShopifyOffer(shopifyRow);
       return { status: 'processed' };
     }
+    // S5 (per-channel SKU) — a linked listing's variant must carry (and, with no stored ids, is found by) the SKU Shopify
+    // holds for THIS listing: its confirmed `liveChannelSku`, else the product SKU (as before); a Shopify sheet SKU not
+    // yet sent is never named. No SKU at all: skipped with the reason. A native family's offer-sync above reads it itself.
+    const held = listingSendSku({ ...shopifyListing, channel: 'SHOPIFY' }, item.sku, item.sku);
+    if (held.sku === null) return { status: 'skipped', reason: held.refusal ?? undefined };
+    shopifyRow.sku = held.sku;
     const { syncShopifyLinkedListing } = await import('./shopify/listing-write.service.js');
     if (operation === 'price') {
       const sent = await sendable(shopifyListing);
