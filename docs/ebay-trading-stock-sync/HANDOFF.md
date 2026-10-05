@@ -65,3 +65,15 @@ Worktree /private/tmp/fix-ebay-trading-stock-sync (branch fix/ebay-trading-stock
 - PR 2 (gaps 3, 6, 7): `/private/tmp/fix-stock-heal-and-pool-triggers`, own HANDOFF at
   `docs/stock-heal-and-pool-triggers/HANDOFF.md`; builder report → `~/nexus-archive/2026-10-06-stock-realtime/PR2-builder-report.md`.
   At hand-over it had 2 commits (e9fdf8fc0 pool triggers, 63a5eee83 pool-task retry) + an uncommitted heal job.
+
+## All 3 reports in (old session, end) — VERDICT FOR THE NEXT SESSION
+- Premise check: the premise does NOT hold. Some paths store an ItemID for an Inventory-API item with no offer id
+  (flat-file single push, link/relink/Item ID control, Inventory relist, snapshot restore). Today such a listing works
+  (the Inventory path finds the offer by SKU); under PR 1 as built it goes to Trading → eBay refuses → terminal. MUST change.
+- Required redesign of the routing: Inventory stays the default for an unmarked family. Go to Trading only when there is
+  no marker AND eBay `GET /offer?sku=&marketplace_id=` has no offer whose listing id = this row's ItemID. When the lookup
+  finds this ItemID's offer, merge it into `__offerIds` (marker heals itself). Do not switch on 25604 alone.
+- Plus the review's should-fix items 1–5 (PR1-adversarial-review.md): classify eBay Failure codes (system/10007/518 →
+  transient, 931/932 → auth); price rows on membership SKUs must not be skipped; content+quantity rows send the quantity;
+  skipped rows must not leave the listing Pending forever.
+- PR 2: see the "Lead notes" at the end of PR2-builder-report.md (2 red marks may be this branch's).
