@@ -1,6 +1,7 @@
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { isLocalizableContent, contentField } from '../content-resolver.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { offListMessage } from '@nexus/shared/off-list-message'
 import { translationMissing } from '../content-resolver.js'
 import { contentListing } from '../content-read.js'
 import { normalizeLanguage, languageEntry } from '../content-language.js'
@@ -175,7 +176,7 @@ type OptionSource = {
 type OptionVerdict = { ok: true; value: unknown; warning?: string; allowedOptions?: string[]; actualValue?: unknown }
   | { ok: false; error: string; allowedOptions: string[]; actualValue: unknown }
 
-function checkOptions(source: OptionSource, value: unknown): OptionVerdict {
+function checkOptions(source: OptionSource, value: unknown, channel?: string | null): OptionVerdict {
   const options = source?.options
   if (!options || options.length === 0) return { ok: true, value }
   if (value === null || value === undefined || value === '') return { ok: true, value }
@@ -197,17 +198,14 @@ function checkOptions(source: OptionSource, value: unknown): OptionVerdict {
   const normalised = Array.isArray(value) ? value.map(matchOne) : matchOne(value)
   if (!off.length) return { ok: true, value: normalised }
 
-  const labelled = options.map((o) => source?.optionLabels?.[o] ?? o)
-  // A cell tooltip cannot hold 268 country codes, and a truncated list that
-  // pretends to be complete is worse than one that says how many there are.
-  const shown = labelled.length > 8
-    ? `${labelled.slice(0, 8).join(', ')} … (${labelled.length} in all)`
-    : labelled.join(', ')
-  const named = off.map(member => JSON.stringify(String(member))).join(', ')
+  // E3 — the one off-list sentence (`@nexus/shared/off-list-message`), with "Saved as it is.". A cell tooltip cannot
+  // hold 268 country codes, and a truncated list that pretends to be complete is worse than one that says how many
+  // there are — the sentence names the first few and the count. Only a CLOSED channel list says the channel may refuse.
   return {
     ok: true,
     value: normalised,
-    warning: `${named} ${off.length === 1 ? 'is' : 'are'} not in the list for ${source?.label ?? 'this column'} (${shown}). Saved as it is${source?.selectionOnly ? '; the channel may refuse it at publish' : ''}.`,
+    warning: offListMessage({ field: source?.label, values: off, channel, mayRefuse: !!source?.selectionOnly, saved: true,
+      allowed: options.map((o) => source?.optionLabels?.[o] ?? o) }),
     allowedOptions: options,
     actualValue: value,
   }
@@ -236,12 +234,15 @@ export function optionVerdict(input: {
   /** The channel catalogue entry, when the scope has one. Supplies the option list. */
   catalogueField: OptionSource
   value: unknown
+  /** E3 — the channel scope's channel (`EBAY`): the warning names whose list it is. Absent/null on Shared. */
+  channel?: string | null
 }): OptionVerdict {
   const optionSource = input.catalogueField ?? input.column
   if (!optionSource) return { ok: true, value: input.value }
   return checkOptions(
     { ...optionSource, label: input.column?.label ?? optionSource.label },
     input.value,
+    input.channel,
   )
 }
 
@@ -691,7 +692,7 @@ async function prepareCellFormula(input: CellCoordinate & { expr: string; expect
   // but exists only on a channel scope; the sheet column carries the options on
   // every scope. Preferring one and falling back to the other is what stops the
   // two scopes accepting different values.
-  const checked = outcome.error ? null : optionVerdict({ column: col, catalogueField: field, value: outcome.value })
+  const checked = outcome.error ? null : optionVerdict({ column: col, catalogueField: field, value: outcome.value, channel: input.scope === 'channel' ? input.channel : null })
   const refusal = checked && checked.ok === false ? checked : null
   /** The value as the store should hold it — `TRUE` resolved to `true`. */
   const normalisedValue = checked && checked.ok ? checked.value : outcome.value
@@ -945,7 +946,7 @@ export async function setCellLiteral(input: CellCoordinate & {
   // refused `basePrice needs a ContentAddress before it can be saved.` The same
   // predicate this file already uses at :575 decides it.
   if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
-  const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value })
+  const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value, channel: input.scope === 'channel' ? input.channel : null })
   if (verdict.ok === false) throw new Error(verdict.error)
   const literalWarning = verdict.warning
   const atomic = () => [
@@ -1136,7 +1137,7 @@ export async function reevaluateDependents(input: {
       // the routed name, and the same option check. A dependent cell that
       // recomputes to a value outside its list must not be written either.
       const depCol = await columnFor(coord as never, ctx.columnSet)
-      const depChecked = outcome.error ? null : optionVerdict({ column: depCol, catalogueField: field, value: outcome.value })
+      const depChecked = outcome.error ? null : optionVerdict({ column: depCol, catalogueField: field, value: outcome.value, channel: coord.scope === 'channel' ? coord.channel : null })
       const depRefusal = depChecked && depChecked.ok === false ? depChecked : null
       const competingLocale = depCol && depCol.storage !== 'localizedContent' && all.some(other => other.id !== row.id && other.fieldKey === row.fieldKey && other.scope === row.scope && other.channel === row.channel && other.marketplace === row.marketplace && other.channelConnectionId === row.channelConnectionId && other.aliasKey === row.aliasKey)
       const canonicalChannelFormula = row.scope === 'channel' && depCol?.writeTarget === 'master'

@@ -405,12 +405,13 @@ describe('eBay channel-file requests (L3-1, L3-2)', () => {
     try {
       const kept = await plan([ebay({ field: 'season', value: 'Tutte le stagioni' })])
       expect(kept.issues).toEqual([])
-      expect(kept.warnings.join(' ')).toContain('Stagione contains an unaccepted value')
+      // E3 — the one off-list sentence, naming the value and whose list it is not on.
+      expect(kept.warnings.join(' ')).toContain('Stagione: "Tutte le stagioni" is not on eBay\'s list. eBay may refuse it. Allowed: Tutte le stagione, Estate.')
       expect(kept.warnings.join(' ')).toContain('Imported as written')
       expect(kept.targets[0].patch.platformAttributes).toMatchObject({ itemSpecifics: { Stagione: 'Tutte le stagioni' } })
       const amazon = await plan([cf({ field: 'season', value: 'Tutte le stagioni' })])
       expect(amazon.issues).toEqual([])
-      expect(amazon.warnings.join(' ')).toContain('contains an unaccepted value')
+      expect(amazon.warnings.join(' ')).toContain('"Tutte le stagioni" is not on Amazon\'s list. Amazon may refuse it.')
     } finally { fields.pop() }
   })
 })

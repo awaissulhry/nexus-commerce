@@ -19,6 +19,7 @@ import { readListingDeletions } from '../listings/listing-deletions.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
+import { withFieldName } from '@nexus/shared/off-list-message'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -142,7 +143,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       }
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
       for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
-        severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: `${cell.label ?? field}: ${found.message}` })
+        severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: withFieldName(cell.label ?? field, found.message) })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
     resolved.push(result)

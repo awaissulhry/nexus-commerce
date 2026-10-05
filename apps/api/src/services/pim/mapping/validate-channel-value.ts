@@ -4,23 +4,26 @@ import { checkForStorage, isBlankValue } from '../sheet-values.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import type { CatalogueField } from './field-catalogue.service.js'
+import { isOffListMessage, offListMessage } from '@nexus/shared/off-list-message'
 
 /**
  * P6 (docs/attributes/PLAN.md §4.4) — "this value is not on the channel's closed list", whichever validator said it:
- * `validateChannelValue` below, Ajv's `enum` keyword (schema-requirements.ts), or a Shopify `choices` rule
+ * `validateChannelValue` below, the schema's `enum` (schema-requirements.ts), or a Shopify `choices` rule
  * (`validateShopifyField`). Such a finding is a FLAG (readiness, preview, a held publish), never a refusal to save.
- * Pinned against each validator's real output in `off-list-error.vitest.test.ts`.
+ * E3 (2026-10-05) — the sentence is `offListMessage` (`@nexus/shared/off-list-message`); `isOffListMessage` reads it and
+ * every wording stored before it. Pinned against each validator's real output in `off-list-error.vitest.test.ts`.
  */
-const OFF_LIST_ERROR = /contains an unaccepted value\. Allowed values:|must be equal to one of the allowed values|Choose one of these values: /
 export function isOffListError(message: string): boolean {
-  return OFF_LIST_ERROR.test(message)
+  return isOffListMessage(message)
 }
 
 /**
  * Validate the effective value, including each member of a multivalued field. Every problem is a FINDING with its rule
  * (`value-verdict.ts`); `errors` keeps the sentences, in the same order, for every reader of the old shape.
+ * `channel` (the catalogue's, e.g. `EBAY`) names whose list an off-list value is not on; absent, the sentence speaks of
+ * the column's own options.
  */
-export function validateChannelValue(field: CatalogueField, input: unknown) {
+export function validateChannelValue(field: CatalogueField, input: unknown, channel?: string | null) {
   let value = input
   const findings: ValueFinding[] = []
   let autoCorrected: { from: string; to: string } | null = null
@@ -44,8 +47,9 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
       return undefined
     })
     if (fixed.some(member => member === undefined)) {
-      const shown = field.options.slice(0, 6).map(option => field.optionLabels?.[option] ?? option).join(' · ')
-      findings.push(finding('offList', `${field.label} contains an unaccepted value. Allowed values: ${shown}${field.options.length > 6 ? ' …' : ''}.`))
+      const off = members.filter((_, i) => fixed[i] === undefined)
+      findings.push(finding('offList', offListMessage({ field: field.label, values: off, channel,
+        allowed: options.map(option => field.optionLabels?.[option] ?? option) })))
     } else {
       const corrected = members.map((member, i) => typeof member === 'string' ? fixed[i]! : member)
       if (corrected.some((member, i) => member !== members[i])) {

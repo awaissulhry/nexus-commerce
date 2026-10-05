@@ -36,7 +36,7 @@ import {
   suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef, type CellProvenance,
 } from '@/design-system/grid'
 
-export const channelValidation = (col: SheetColumn) => sheetValidationFor<ChannelSheetRow>(col, row => columnApplies(col, row))
+export const channelValidation = (col: SheetColumn) => sheetValidationFor<ChannelSheetRow>(col, row => columnApplies(col, row), { channelList: true })
 
 export interface BuildChannelColumnsOptions {
   /** Only the scope is read (P2: the column model must not depend on a read's rows). */

@@ -78,7 +78,8 @@ describe('formula writes follow the ordinary field contract', () => {
   it('keeps option validation for text formulas as a warning, and stores the value', async () => {
     const result = await save('skip_offer', '"maybe"')
     expect(result.error).toBeNull()
-    expect(result.warnings.join(' ')).toContain('"maybe" is not in the list')
+    // E3 — the one off-list sentence, with "Saved as it is." (Shared scope: the column's own options).
+    expect(result.warnings.join(' ')).toContain('"maybe" is not one of this column\'s options. Saved as it is.')
     expect(writer.mock.calls[0][0].value).toBe('maybe')
   })
 

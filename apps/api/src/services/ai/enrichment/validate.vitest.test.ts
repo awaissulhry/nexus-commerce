@@ -61,6 +61,14 @@ describe('validateDraftValue', () => {
     expect(isOfferable(v)).toBe(true)
   })
 
+  it('E3 — names the off-list value in the one sentence the sheet uses: the channel on a channel run, the column on Shared', () => {
+    const material = { kind: 'select' as const, label: 'Material', options: ['leather', 'textile'], optionLabels: { leather: 'Leather', textile: 'Textile' }, mode: 'strict' as const }
+    expect(validateDraftValue('Cordura', col({ ...material, channel: 'AMAZON' }))[0].message)
+      .toBe('Material: "Cordura" is not on Amazon\'s list. Amazon may refuse it. Allowed: Leather, Textile.')
+    expect(validateDraftValue('Cordura', col(material))[0].message)
+      .toBe('Material: "Cordura" is not one of this column\'s options. Allowed: Leather, Textile.')
+  })
+
   it('says nothing about an off-list value on an open column', () => {
     const c = col({ kind: 'select', options: ['Leather'], mode: 'open' })
     expect(validateDraftValue('Cordura', c)).toEqual([])

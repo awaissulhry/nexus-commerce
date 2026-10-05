@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { lengthValidation, longTextEditor, matchPasteToHeaders, NO_TEXT_LIMIT, selectValidation, textLimitFor } from './sheet'
+import { offListMessage } from '@nexus/shared/off-list-message'
+
+import { lengthValidation, longTextEditor, matchPasteToHeaders, NO_TEXT_LIMIT, offListSentence, selectValidation, textLimitFor } from './sheet'
 
 const COLS = [
   { colId: 'sku', headerName: 'SKU' },
@@ -55,6 +57,12 @@ describe('validations — warn, never block, on an off-list value', () => {
   it('open select never warns', () => {
     expect(selectValidation(['Black'], 'open').validate('Anything', {}, 'c').level).toBeNull()
   })
+  it('E3 — the warning is the one off-list sentence: the column, the value, whose list, the allowed words', () => {
+    expect(strict.validate('Blue', {}, 'c').message).toBe('"Blue" is not one of this column\'s options. Allowed: Black, Red')
+    const words = { field: 'Colour', channel: 'eBay', optionLabels: { Black: 'Nero', Red: 'Rosso' } }
+    expect(selectValidation(['Black', 'Red'], 'strict', false, words).validate(' Blue ', {}, 'c').message)
+      .toBe('Colour: "Blue" is not on eBay\'s list. eBay may refuse it. Allowed: Nero, Rosso')
+  })
   it('length: over the cap is an error; bytes when the cap is IN bytes', () => {
     const chars = (cap: number) => ({ characters: cap, bytes: null })
     const bytes = (cap: number) => ({ characters: null, bytes: cap })
@@ -72,5 +80,30 @@ describe('the long-text editor never cuts text (P1, 2026-09-30)', () => {
     expect(limitOf()).toBeGreaterThanOrEqual(NO_TEXT_LIMIT)
     expect(limitOf(80)).toBeGreaterThanOrEqual(NO_TEXT_LIMIT)
     expect(textLimitFor(2_000_000)).toBe(2_000_000)
+  })
+})
+
+/* E3 (2026-10-05) — the DS keeps a copy of the off-list sentence because the factory cannot import packages. This pins it
+   to the server's (`@nexus/shared/off-list-message`) word for word; the only difference is the DS rule that no sentence
+   ends with a full stop. */
+describe('offListSentence — the same words as the server', () => {
+  const SEASONS = ['Estate', 'Inverno', 'Primavera', 'Autunno', 'Tutte le stagioni', 'Primavera/Estate', 'Autunno/Inverno', 'Mezza stagione', 'Pioggia', 'Neve', 'Caldo', 'Freddo']
+  const cases: Array<{ value: string; options: string[]; field?: string; channel?: string; optionLabels?: Record<string, string> }> = [
+    { value: 'Tutte le stagioni!', options: SEASONS, field: 'Season', channel: 'eBay' },
+    { value: 'X', options: SEASONS, field: 'Season' },
+    { value: 'X', options: ['a', 'b', 'a'], field: 'Colour', channel: 'Amazon', optionLabels: { a: 'Nero', b: 'Rosso' } },
+    { value: 'X', options: ['A'] },
+    { value: 'Say "hi".', options: ['A', 'B'], channel: 'Shopify' },
+    { value: 'X', options: [], field: 'Fits', channel: 'Etsy' },
+  ]
+  it('matches offListMessage on every case, minus the final full stop', () => {
+    for (const c of cases) {
+      const server = offListMessage({ field: c.field, values: [c.value], channel: c.channel, allowed: c.options.map((o) => c.optionLabels?.[o] ?? o) })
+      expect(offListSentence(c.value, c.options, { field: c.field, channel: c.channel, optionLabels: c.optionLabels })).toBe(server.replace(/\.$/, ''))
+    }
+  })
+  it('names the first eight allowed values and how many in all', () => {
+    expect(offListSentence('X', SEASONS, { field: 'Season', channel: 'eBay' }))
+      .toBe('Season: "X" is not on eBay\'s list. eBay may refuse it. Allowed: Estate, Inverno, Primavera, Autunno, Tutte le stagioni, Primavera/Estate, Autunno/Inverno, Mezza stagione, … (12 in all)')
   })
 })
