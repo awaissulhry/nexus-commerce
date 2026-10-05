@@ -32,7 +32,7 @@ Ask which channel (`amazon`, the default, or `ebay`) and markets, or take every 
 5. `ad-recommendations` (`channel`, `market`, `category`): Amazon — what the engines and the rules suggest, with the ids each change tool takes and `suggestedTool`. eBay — only the eBay rules' pending proposals (`category` absent or `"rule"`), with no `suggestedTool`. A pause suggestion is information only.
 6. `ad-changes` (`channel`, `days: 14`) when the person asks "what changed" or a number moved for no clear reason.
 
-`ad-search-terms` and `ad-targets` read Amazon data only: they take no `channel`, and a call with one is refused. No tool reads eBay search terms, keywords, ad groups, per-listing rates or break-even. For eBay rate changes, take the eBay Item IDs from `product-identity` or `find-by-id`; never call a change tool just to look (it queues a request).
+`ad-search-terms` and `ad-targets` read Amazon data only: they take no `channel`, and a call with one is refused. eBay: `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `campaignId`, `market`, `adGroupId`, `search`, `days`, `limit`, `cursor`) reads each promoted listing's ad rate and break-even rate (`rateNote` says why `set-ebay-ad-rates` cannot change a campaign's rates), a Priority campaign's ad groups, and its keywords with bids and metrics, under the ids `set-ebay-ad-rates` and `ebay-keywords-change` take (`ebayCampaignId`, `ebayItemId`, `ebayAdGroupId`, `ebayKeywordId`). No tool reads eBay search terms. Never call a change tool just to look (it queues a request).
 
 ## 2. Explain
 
@@ -49,7 +49,7 @@ Per market, a few lines: spend and sales against last week, ACoS against the tar
 | Placement adjustments (Amazon) | `set-placement-multipliers` |
 | Stop a campaign spending, no pause (Amazon only) | `suppress-campaign`; `restore-campaign` puts the bids back |
 | Apply or dismiss what PROPOSE rules suggested | `decide-automation-suggestions` (`kind`: `amazon-ads` or `ebay-ads`; a pause suggestion is refused: dismiss it) |
-| eBay: rates, keywords, budgets, promote listings | `set-ebay-ad-rates` (General, fixed-rate campaigns; a rate above a listing's known break-even is refused, an unknown one only warns), `ebay-keywords-change` (manual Priority, keyword ids from a proposal), `set-ebay-campaign-budget` (Priority; 15 changes per campaign per day), `promote-ebay-listings` |
+| eBay: rates, keywords, budgets, promote listings | `set-ebay-ad-rates` (General, fixed-rate campaigns; a rate above a listing's known break-even is refused, an unknown one only warns), `ebay-keywords-change` (manual Priority, keyword ids from `ebay-ad-details` or a proposal), `set-ebay-campaign-budget` (Priority; 15 changes per campaign per day), `promote-ebay-listings` |
 
 - Give `why` on every change: the approver reads it, and it stays in the ads audit.
 - Put the review's changes in ONE `submit-change-plan` (a bulk bid change is one step). Show the table first: campaign, what, from → to, currency, live or sandbox.

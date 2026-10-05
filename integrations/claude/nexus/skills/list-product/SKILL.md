@@ -17,7 +17,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 - Read the channel's file in this skill's folder first: `amazon.md`, `ebay.md` or `shopify.md` (Etsy: at the end of `shopify.md` — no publisher yet). It names the markets, what must be set before a first publish, and the refusals you will meet.
 - `business-overview`: the business's markets (the exact `code` tools take), its accounts per channel (the `id` for `accountId`) and how many listings each account holds per market.
-- `product-page.md`: what each status and action of the product page means, and which ones only a person can do there (End, Delete, Relist, Full update).
+- `product-page.md`: what each status and action of the product page means, which Claude tool does the same, and which ones only a person can do there (Full update, and the Status and Action values that wait for Publish).
 
 ## 1. The product
 
@@ -35,7 +35,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Required values: `listing-issues` (`productId`) and `content-gaps`.
 - Listing fields: `product-content` with a `coordinate` lists each field's key and allowed values; `set-listing-fields` sets them. Its preview has a `warning` when a value is likely to be refused by the channel at the next publish — fix it before you publish.
 - Text: the `listing-content` skill. Photos: `media-plan`, `add-photo-from-url`, `arrange-photos`.
-- A FIRST publish creates the listing with its price, quantity and (Amazon) fulfilment from what Nexus holds: set them first — `set-listing-price`, and for stock the `listing-stock` skill. A re-publish never sends stock, price or fulfilment.
+- A FIRST publish creates the listing with its price, quantity and (Amazon) fulfilment from what Nexus holds: set them first — `set-listing-price`, and for stock and Amazon fulfilment (`set-listing-stock` `set-fulfilment`) the `listing-stock` skill. A re-publish never sends stock, price or fulfilment.
 - Put the stage's changes in ONE plan; publish only after it ran.
 
 ## 4. Review, then publish
@@ -50,4 +50,4 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 `approval-status` names the `publication`; `publication-status` (`publicationId`) reads it. A pending Amazon or eBay publication is checked again by Nexus every 2 minutes, or when someone opens its result in the product studio; a Shopify result is final at once, or UNVERIFIED for a person to check (`shopify.md`). Then `listing-issues` for anything the channel reported.
 
-To take a listing down for a while: `close-listing` (reversible; `reopen-listing` opens it again). End, Delete and Relist are a person's actions on the product page (`product-page.md`).
+To take a listing down for a while: `close-listing` (reversible; `reopen-listing` opens it again). To end, relist or delete it: `end-listing` and `relist-listing` (eBay and Shopify), `delete-listing` (Amazon, eBay, Shopify; cannot be undone). Each takes `listingIds` of ONE family on one channel, market, account and alias, `confirmSku` (the family SKU the person typed) and `reason`, and always waits for a person's approval (`product-page.md` §2). Full update and listing a deleted row again stay a person's actions on the product page.
