@@ -163,3 +163,16 @@ describe('the vocabulary itself', () => {
     expect(classifyChannelAnswer('AMAZON_ADS', 400, '{"code":"400","detail":"nope"}').attribute).toBeNull()
   })
 })
+
+// 2026-10-06 — the Trading code table read by code, for a caller that holds eBay's codes already.
+import { ebayTradingCodeClass } from './vocabulary.js'
+describe('ebayTradingCodeClass', () => {
+  it('names the class the Trading table gives a code, and nothing for a code it does not list', () => {
+    expect(ebayTradingCodeClass('931')).toBe('auth_revoked')
+    expect(ebayTradingCodeClass('932')).toBe('auth_expired')
+    expect(ebayTradingCodeClass('518')).toBe('rate_limited')
+    expect(ebayTradingCodeClass(' 10007 ')).toBe('transient')
+    expect(ebayTradingCodeClass('21916585')).toBeUndefined()
+    expect(ebayTradingCodeClass('constructor')).toBeUndefined()
+  })
+})
