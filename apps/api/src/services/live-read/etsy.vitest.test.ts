@@ -71,7 +71,8 @@ describe('readEtsyLive', () => {
       products: [
         { sku: '', values: [{ property_id: 513, values: ['S'] }, { property_id: 514, values: ['Nero'] }], readiness_state_id: 80000001 },
         { sku: 'FAKE-SKU-1', values: [{ property_id: 513, values: ['M'] }, { property_id: 514, values: ['Nero'] }], readiness_state_id: 80000001 },
-        { sku: 'FAKE-SKU-2', values: [{ property_id: 513, values: ['L'] }, { property_id: 514, values: ['Nero'] }], readiness_state_id: 80000001 }] })
+        { sku: 'FAKE-SKU-2', values: [{ property_id: 513, values: ['L'] }, { property_id: 514, values: ['Nero'] }], readiness_state_id: 80000001 }],
+      price_on_property: [513, 514], quantity_on_property: [513, 514], sku_on_property: [513, 514], readiness_state_on_property: [] })
     expect(live.properties.map(p => p.property_id)).toEqual([200, 513, 514])
     expect(live.properties[0]).toEqual({ property_id: 200, property_name: 'Primary color', value_ids: [1], values: ['Black'], scale_id: null })
     expect(live.translations).toEqual([{ language: 'de', title: 'Handschuhe', description: 'Leder', tags: [] },
@@ -137,11 +138,45 @@ describe('normaliseEtsyListing', () => {
     expect(normaliseEtsyListing(LISTING, raw({ inventory: inventory([product('FAKE-SKU-1', 'M', 5)]) })).revision).not.toBe(base.revision)
   })
 
+  it('E2: Etsy\'s sharing rule (*_on_property) is read into the structure, ids ascending and once each', () => {
+    const shared = { ...inventory(), price_on_property: [514, 513], quantity_on_property: [], sku_on_property: [514, 513, 514], readiness_state_on_property: [513] }
+    const live = normaliseEtsyListing(LISTING, raw({ inventory: shared }))
+    expect(live.inventory).toMatchObject({ price_on_property: [513, 514], quantity_on_property: [], sku_on_property: [513, 514], readiness_state_on_property: [513] })
+    // Etsy's order is not a change: the same rule in another order gives the same revision.
+    expect(normaliseEtsyListing(LISTING, raw({ inventory: { ...shared, price_on_property: [513, 514] } })).revision).toBe(live.revision)
+  })
+
+  it('E2: the revision changes when Etsy\'s sharing rule changes (shared stock ↔ stock per variation), never when a quantity does', () => {
+    const base = normaliseEtsyListing(LISTING, raw())
+    const sharedStock = normaliseEtsyListing(LISTING, raw({ inventory: { ...inventory(), quantity_on_property: [] } }))
+    expect(sharedStock.inventory.quantity_on_property).toEqual([])
+    expect(sharedStock.revision).not.toBe(base.revision)
+    for (const key of ['price_on_property', 'sku_on_property', 'readiness_state_on_property'] as const) {
+      expect(normaliseEtsyListing(LISTING, raw({ inventory: { ...inventory(), [key]: [513] } })).revision).not.toBe(base.revision)
+    }
+    const restocked = normaliseEtsyListing(LISTING, raw({ inventory: inventory([product('FAKE-SKU-2', 'L', 40, 1990), product('FAKE-SKU-1', 'M', 0), product(null, 'S', 9)]) }))
+    expect(restocked.offerings['FAKE-SKU-2'].quantity).toBe(40)
+    expect(restocked.revision).toBe(base.revision)
+  })
+
+  it('E2: sold_out and active give one revision (a sale must not refuse a send); inactive gives another; the state stays raw', () => {
+    const active = normaliseEtsyListing(LISTING, raw())
+    const soldOut = normaliseEtsyListing(LISTING, raw({ listing: listing({ state: 'sold_out' }) }))
+    const inactive = normaliseEtsyListing(LISTING, raw({ listing: listing({ state: 'inactive' }) }))
+    expect(soldOut.state).toBe('sold_out')
+    expect(soldOut.revision).toBe(active.revision)
+    expect(inactive.state).toBe('inactive')
+    expect(inactive.revision).not.toBe(active.revision)
+    expect(inactive.revision).not.toBe(soldOut.revision)
+  })
+
   it('a single product: no variation property, one product without values; a unit without its value is null', () => {
     const single = { products: [{ product_id: 1, sku: 'FAKE-SKU-1', is_deleted: false, property_values: [],
       offerings: [{ offering_id: 1, quantity: 3, is_enabled: true, is_deleted: false, price: money(4500), readiness_state_id: null }] }] }
     const live = normaliseEtsyListing(LISTING, raw({ inventory: single, listing: listing({ item_weight: null, item_weight_unit: 'kg', item_length: 30 }) }))
-    expect(live.inventory).toEqual({ properties: [], products: [{ sku: 'FAKE-SKU-1', values: [], readiness_state_id: null }] })
+    // An inventory with no `*_on_property` arrays reads them as [] (one price, stock, SKU and profile for all).
+    expect(live.inventory).toEqual({ properties: [], products: [{ sku: 'FAKE-SKU-1', values: [], readiness_state_id: null }],
+      price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] })
     expect(live.offerings).toEqual({ 'FAKE-SKU-1': { price: 45, quantity: 3, is_enabled: true, readiness_state_id: null } })
     expect(live.values.item_weight).toEqual({ value: null, unit: null })
     expect(live.values.item_dimensions).toEqual({ length: 30, width: null, height: null, unit: 'cm' })

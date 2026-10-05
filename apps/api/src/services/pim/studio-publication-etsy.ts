@@ -8,9 +8,15 @@
  * selection, every problem named at once by SKU and column label. One difference on purpose (lead amendment A1): the
  * review is built in every mode, so the change plan and the exact request show even while sending is off; only the
  * live READ waits for live mode (eBay's rule, audit P9: Nexus reads a channel only when it really sends to it).
+ *
+ * E2 — a listing Etsy already holds is sent (`studio-publication-etsy-send.ts`), so the review also says what that send
+ * would do on Etsy: a new variation carries Nexus's stock, which needs Etsy order import (Owner 2026-10-01), a category
+ * change can make Etsy drop attributes, and automatic renewal turned on costs a fee on each renewal.
  */
+import { ETSY_VARIATION_HIDDEN_REASON } from '@nexus/shared/listing-actions'
 import prisma from '../../db.js'
 import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
+import { etsyStockWriteRefusal } from '../etsy/order-ingest-switch.js'
 import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
@@ -18,7 +24,8 @@ import type { PublicationFacts } from './studio-publication-plan.js'
 import { channelAxisValues, loadStoredVariationProjection } from './stored-variation-projection.js'
 import { variationCollisionGroups } from './variation-collisions.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
-import { andList, buildEtsyListing, etsyAxisValues, etsyNewRowChecks, etsyVariationsNexusLacks, ETSY_NEEDS_READINESS, type EtsyBuildAxis, type EtsyBuildRow } from './studio-publication-etsy-build.js'
+import { andList, buildEtsyListing, etsyAxisValues, etsyFitReadiness, etsyKeptRules, etsyNewRowChecks, etsyOwnRules, etsySameRule, etsyVariationsNexusLacks, ETSY_AUTO_RENEW_NOTE,
+  ETSY_NEEDS_READINESS, type EtsyBuildAxis, type EtsyBuildRow } from './studio-publication-etsy-build.js'
 import { etsyProblems, stripNothingSent } from './studio-publication-etsy-problems.js'
 import type { EtsyCreateState, EtsyLiveListing, EtsyLiveReader, EtsyPublication, ProductIdentity } from './studio-publication-etsy-types.js'
 
@@ -38,6 +45,8 @@ export interface PrepareEtsyOptions {
 export const ETSY_LIVE_SKIPPED = 'The review reads the live Etsy listing only when sending to Etsy is on.'
 export const ETSY_PHOTOS_LATER = 'Photos are not sent to Etsy yet; they come in a later Nexus update.'
 export const ETSY_NO_SHIPPING_PROFILE = 'Shipping profile is not set. Etsy needs one before the listing can go live.'
+/** E2 — a listing that exists, whose Etsy category Publish would change (R1 §4: properties belong to a category). */
+export const ETSY_CATEGORY_CHANGE = 'Changing the Etsy category can make Etsy drop attributes and variation properties the new category does not have. Check the listing on Etsy after the publish.'
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const textOf = (error: unknown) => error instanceof Error ? error.message : String(error)
@@ -123,7 +132,10 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
     const quantity = Number.isFinite(requested) ? Math.min(Math.max(0, Math.trunc(requested)), available) : 0
     const onEtsy = !!listing?.externalListingId
     // M2 — Inactive is honoured only for a variation new on a listing already on Etsy (a new listing is a draft as a whole).
-    const inactive = !!listingId && !onEtsy && !!options.inactiveProductIds?.has(product.id)
+    // E2 review m7 — so is a row Nexus holds hidden on Etsy (`ETSY_VARIATION_HIDDEN_REASON`): should Etsy no longer hold
+    // it, Publish adds it back hidden, never for sale while Nexus holds its stock pushes.
+    const hidden = onEtsy && !!listing?.offerClosedAt && listing.offerCloseReason === ETSY_VARIATION_HIDDEN_REASON
+    const inactive = !!listingId && (hidden || !!options.inactiveProductIds?.has(product.id))
     rows.push({ productId: product.id, sku: skus.get(product.id) ?? product.sku, sheetSku: product.sku, cells, price: send.price,
       ...(send.price === null ? { priceReason: stripSku(send.reason, product.sku) } : {}), quantity, axisValues: {}, onEtsy, ...(inactive ? { inactive } : {}) })
   }
@@ -176,7 +188,7 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
 
   // 7–8 — the live listing, read only when sending to Etsy is live (A1: the review is built in every mode; without the
   // read every change of an existing listing is refused, and a new listing needs no read).
-  let live: EtsyLiveListing | null = null, liveReadError: string | undefined, liveSkipped: string | undefined
+  let live: EtsyLiveListing | null = null, liveReadError: string | undefined, liveSkipped: string | undefined, newVariationStockRefusal: string | undefined
   if (listingId) {
     if (getEtsyPublishMode() !== 'live') liveSkipped = ETSY_LIVE_SKIPPED
     else {
@@ -205,6 +217,27 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
       etsyNewRowChecks(row, problems)
     }
     if (unheld.length && rows.every(row => row.onEtsy)) currencyCheck(live.shop.currencyCode)
+    // E2 — a variation Etsy does not hold is sent with Nexus's stock, and a stock number sent while Etsy's own sales do
+    // not reach Nexus puts back units Etsy already sold (Owner 2026-10-01, D3): its order import must be on and activated.
+    // One sent hidden (Inactive, §10.6) cannot sell, so it needs neither; showing it later asks (listing actions). The
+    // switch is asked only when there is such a variation; a failed read throws (the review fails, never "on").
+    const adds = rows.filter(row => !live!.offerings[row.sku] && !row.inactive)
+    // E2 review R2-n4 — so is a send that changes which variations share a stock number (Etsy's "every property" rule
+    // mapped onto Nexus's other properties): the inventory writer counts it as stock, and the review says so first.
+    const ids = structure.properties.map(property => property.property_id)
+    const keptStock = etsyKeptRules(live.inventory, live.inventory.properties.map(property => property.property_id), ids, etsyOwnRules(ids, []))
+    const stockRuleChanges = 'rules' in keptStock && !etsySameRule(keptStock.rules.quantity_on_property, live.inventory.quantity_on_property)
+    if (adds.length || stockRuleChanges) {
+      const refusal = await etsyStockWriteRefusal(scope.accountId)
+      if (refusal) {
+        newVariationStockRefusal = [...(adds.length ? [`${andList(adds.map(row => row.sheetSku ?? row.sku))}: new on Etsy, so Publish would send ${adds.length === 1 ? 'its' : 'their'} stock.`] : []),
+          ...(stockRuleChanges ? ['Publish would change which variations share a stock number on Etsy, which counts as sending stock.'] : []), refusal.sentence].join(' ')
+        problems.note(newVariationStockRefusal)
+      }
+    }
+    // E2 — what this send would do on Etsy beyond the fields themselves.
+    if (built.values.should_auto_renew === true && live.values.should_auto_renew !== true) problems.note(ETSY_AUTO_RENEW_NOTE)
+    if (built.values.taxonomy_id !== null && built.values.taxonomy_id !== live.values.taxonomy_id) problems.note(ETSY_CATEGORY_CHANGE)
     // A send replaces Etsy's whole inventory: what Etsy holds and Nexus does not would be deleted. The `inventory` line is
     // refused with the same sentences (studio-publication-etsy-changes.ts).
     for (const sentence of etsyVariationsNexusLacks(live, structure)) problems.note(sentence)
@@ -224,6 +257,15 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
     for (const row of rows) if (!row.onEtsy && structure.products.find(product => product.sku === row.sku)?.readiness_state_id === null)
       problems.note(ETSY_NEEDS_READINESS, { sku: row.sheetSku ?? row.sku })
   }
+  // E2 review B1 — the listing's `*_on_property` rules, always stated (ids ascending, `[]` = one shared value), as the
+  // live read states Etsy's: a listing that exists keeps Etsy's own (Nexus never changes them; a variation that would
+  // break one is refused, studio-publication-etsy-changes.ts); a new listing, or one Etsy was not read for, Nexus's own.
+  const nexusIds = structure.properties.map(property => property.property_id)
+  const own = etsyOwnRules(nexusIds, structure.products.map(product => product.readiness_state_id))
+  const keptRules = live ? etsyKeptRules(live.inventory, live.inventory.properties.map(property => property.property_id), nexusIds, own) : null
+  // R2-n3 — processing profiles that differ widen that one rule (as the send does), never price, stock or SKU.
+  Object.assign(structure, keptRules && 'rules' in keptRules
+    ? etsyFitReadiness(keptRules.rules, structure.products.map(product => ({ values: product.values, readiness: product.readiness_state_id })), nexusIds).rules : own)
   // W4 — a new listing, or a live one whose shipping profile Etsy does not hold either.
   if (built.values.shipping_profile_id === null && (!listingId || (live && live.values.shipping_profile_id === null))) problems.note(ETSY_NO_SHIPPING_PROFILE)
 
@@ -233,7 +275,8 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
     kind: 'etsy', marketplace: scope.marketplace, listingId, products: identities,
     inventoryProducts: rows.map(row => ({ productId: row.productId, sku: row.sku })), ownerProductId: parent.id,
     values: built.values, form: built.form, inventory: built.inventory, structure, properties: built.properties, translations,
-    create: listingId ? null : built.create, live, liveRevision: live?.revision ?? null,
+    create: listingId ? null : built.create, live, liveRevision: live?.revision ?? null, currency: marketCurrency,
     ...(liveReadError ? { liveReadError } : {}), ...(liveSkipped ? { liveSkipped } : {}), ...(notices.length ? { notices } : {}),
+    ...(newVariationStockRefusal ? { newVariationStockRefusal } : {}),
   }
 }

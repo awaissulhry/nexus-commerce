@@ -25,15 +25,20 @@ const coordinate = (ctx: ActionContext) => ({
   channelConnectionId: ctx.destination.accountId, aliasKey: ctx.destination.aliasKey,
 })
 
-/** Hold the rows the channel confirmed paused, and cancel the stock pushes already waiting for them. */
-export async function holdRows(ctx: ActionContext, rows: Array<{ id: string; evidence?: Record<string, unknown> }>) {
+/**
+ * Hold the rows the channel confirmed paused, and cancel the stock pushes already waiting for them. `reason` is the
+ * hold's reason (default `sheet-pause`, Pause offer); E2 (D6) writes ETSY_VARIATION_HIDDEN_REASON for ONE hidden Etsy
+ * variation, so the listing-level Pause/Resume never overwrites or lifts it.
+ */
+export async function holdRows(ctx: ActionContext, rows: Array<{ id: string; evidence?: Record<string, unknown> }>, options: { reason?: string } = {}) {
   if (!rows.length) return
   const now = new Date()
+  const reason = options.reason ?? SHEET_PAUSE_REASON
   for (const row of rows) {
     await prisma.channelListing.updateMany({
       where: { id: row.id, ...coordinate(ctx) },
       data: {
-        offerClosedAt: now, offerClosedBy: ctx.actor, offerCloseReason: SHEET_PAUSE_REASON, offerActive: false,
+        offerClosedAt: now, offerClosedBy: ctx.actor, offerCloseReason: reason, offerActive: false,
         offerCloseSnapshot: { channel: ctx.destination.channel, source: 'product-sheet', previewId: ctx.previewId, ...(row.evidence ?? {}) } as never,
       },
     })
@@ -50,12 +55,16 @@ export const heldElsewhere = (row: Pick<ActionListing, 'offerClosedAt' | 'offerC
 export const heldElsewhereSentence = (row: Pick<ActionListing, 'offerCloseReason'>) =>
   `Held by "${row.offerCloseReason ?? 'an earlier action'}", not by Pause offer. Change it where it was set.`
 
-/** Lift the sheet's own hold on exactly these rows (compare-and-set on the reason). Returns the ids it lifted. */
-export async function liftHoldOn(ctx: ActionContext, rows: Array<Pick<ActionListing, 'id'>>): Promise<string[]> {
+/**
+ * Lift the sheet's own hold on exactly these rows (compare-and-set on the reason: `options.reason`, default
+ * `sheet-pause`). Returns the ids it lifted.
+ */
+export async function liftHoldOn(ctx: ActionContext, rows: Array<Pick<ActionListing, 'id'>>, options: { reason?: string } = {}): Promise<string[]> {
   const lifted: string[] = []
+  const reason = options.reason ?? SHEET_PAUSE_REASON
   for (const row of rows) {
     const saved = await prisma.channelListing.updateMany({
-      where: { id: row.id, ...coordinate(ctx), offerCloseReason: SHEET_PAUSE_REASON },
+      where: { id: row.id, ...coordinate(ctx), offerCloseReason: reason },
       data: { offerClosedAt: null, offerClosedBy: null, offerCloseReason: null, offerActive: true },
     })
     if (saved.count) lifted.push(row.id)
@@ -92,6 +101,31 @@ export async function sendCurrentStock(listingIds: string[]): Promise<void> {
   } catch (err) {
     logger.warn('[listing-action] pinned quantity after resume was not queued', { error: messageOf(err), listingIds: listingIds.slice(0, 10) })
   }
+}
+
+/**
+ * E2 (D6, review m9) — a hidden Etsy variation shown again: its price pushes were refused while it was hidden (the push
+ * lock), so the price it carries NOW is sent through the channel price door's SEND mode (`resend`, the `/pricing` Push
+ * price path: a following listing's rule price recomputed, a pinned price as it is; refused when paused, a draft, 0 or
+ * outside the floor/ceiling). One PRICE_UPDATE per listing; the writer sends nothing when Etsy already holds it. Loaded
+ * here, not at the top: the door's module loads the outbound queue. Never throws. The answer per listing: null = queued,
+ * else why it was not.
+ */
+export async function sendCurrentPrice(listingIds: string[], actor: string): Promise<Map<string, string | null>> {
+  const answers = new Map<string, string | null>()
+  if (!listingIds.length) return answers
+  try {
+    const { writeChannelPrices } = await import('../../pim/channel-price-write.service.js')
+    const written = await writeChannelPrices({
+      targets: listingIds.map(listingId => ({ listingId, resend: true as const, unguardedReason: 'pricing-push' as const })),
+      actor, source: 'MANUAL_OVERRIDE', reason: 'Etsy variation shown again: its current price sent',
+    })
+    for (const result of written.results) answers.set(result.listingId, result.outcome === 'applied' ? null : (result.reason ?? 'The price was not sent.'))
+  } catch (err) {
+    logger.warn('[listing-action] current price after an Etsy show was not queued', { error: messageOf(err), listingIds: listingIds.slice(0, 10) })
+  }
+  for (const id of listingIds) if (!answers.has(id)) answers.set(id, 'Nexus could not queue it.')
+  return answers
 }
 
 /**

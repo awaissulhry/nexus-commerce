@@ -20,9 +20,9 @@ vi.mock('../channel-delist.service.js', async original => ({ ...(await original<
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_PUBLISHING_OFF, ETSY_VARIATION_CANNOT_HIDE, NEW_LISTING_ALIAS,
+import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_NEW_VARIATION_INACTIVE, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
   RELIST_SENTENCE, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
-import { DELETE_EBAY_VARIATION, ETSY_FIELDS_NOT_SENT, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
+import { DELETE_EBAY_VARIATION, FULL_ETSY_VARIATION, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
 import { clearWaitingValues, parsePublishActionBody, readPublishActions, SHARED_DELETED, writePublishActions, type PublishActionActor } from './publish-action.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -246,31 +246,48 @@ describe('No longer applies, and the runners\' clear', () => {
   }))
 })
 
-/* Wave 2 D13 (decision 12) — while Etsy publishing is off, Publish cannot send an Etsy Status change: it is held. */
-describe('Etsy: Status changes are held while Etsy publishing is off', () => {
-  it('holds Inactive with the reason, says Partial update sends no field, and a value set while it was on no longer applies', () => scoped(async () => {
-    const before = process.env.NEXUS_ENABLE_ETSY_PUBLISH
+/* Wave 2 D13 (decision 12) — while sending to Etsy is not live (off, or dry-run), Publish cannot send an Etsy Status change: it is held. */
+describe('Etsy: Status changes are held while sending to Etsy is not live', () => {
+  it('holds Inactive with the reason (off and dry-run), Partial update carries no warning, and a value set while it was live no longer applies', () => scoped(async () => {
+    const before = { flag: process.env.NEXUS_ENABLE_ETSY_PUBLISH, mode: process.env.ETSY_PUBLISH_MODE }
     try {
       delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      delete process.env.ETSY_PUBLISH_MODE
       const f = await family('PA-ETSY', ['S'])
       const s = await listing(f.children.S, 'ETSY', 'IT', ids.etsy)
       const read = async () => (await readPublishActions(f.root)).find(c => c.listingId === s)!
       const off = await read()
       expect(off.state).toBe('active')
       expect(off.statusOptions.map(o => [o.target, o.offered, o.reason])).toEqual([['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
-      expect(off.sendOptions.find(o => o.mode === 'partial')).toMatchObject({ offered: true, warning: ETSY_FIELDS_NOT_SENT })
+      expect(off.sendOptions.find(o => o.mode === 'partial')).toMatchObject({ offered: true, warning: null })
       expect((await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())).refused)
         .toEqual([{ listingId: s, sku: 'PA-ETSY-S', reason: ETSY_PUBLISHING_OFF }])
-      // With Etsy publishing on, Inactive is a choice again; once it is off, the stored value says why Publish skips it.
+      // The switch on but the mode dry-run: Etsy still gets nothing, so the change is still held.
       process.env.NEXUS_ENABLE_ETSY_PUBLISH = 'true'
+      expect((await read()).statusOptions.map(o => [o.target, o.offered, o.reason])).toEqual([['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
+      // Live, Inactive is a choice again; once it is not live, the stored value says why Publish skips it.
+      process.env.ETSY_PUBLISH_MODE = 'live'
       expect((await read()).statusOptions.find(o => o.target === 'inactive')).toMatchObject({ offered: true, reason: null, action: 'pause' })
       expect(await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())).toMatchObject({ applied: [s], refused: [] })
-      delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      process.env.ETSY_PUBLISH_MODE = 'dry-run'
       expect((await read()).status).toMatchObject({ target: 'inactive', noLongerApplies: ETSY_PUBLISHING_OFF })
     } finally {
-      if (before === undefined) delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
-      else process.env.NEXUS_ENABLE_ETSY_PUBLISH = before
+      if (before.flag === undefined) delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      else process.env.NEXUS_ENABLE_ETSY_PUBLISH = before.flag
+      if (before.mode === undefined) delete process.env.ETSY_PUBLISH_MODE
+      else process.env.ETSY_PUBLISH_MODE = before.mode
     }
+  }))
+
+  it('E2: Full update on the main row (the whole listing); a variation\'s Full update is held with why', () => scoped(async () => {
+    const f = await family('PA-ETSY-FULL', ['S'])
+    const main = await listing(f.root, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
+    const s = await listing(f.children.S, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
+    const cells = await readPublishActions(f.root)
+    const full = (listingId: string) => cells.find(c => c.listingId === listingId)!.sendOptions.find(o => o.mode === 'full')
+    expect(full(main)).toMatchObject({ offered: true, reason: null })
+    expect(full(s)).toMatchObject({ offered: false, reason: FULL_ETSY_VARIATION })
+    expect(cells.find(c => c.listingId === s)!.sendOptions.find(o => o.mode === 'partial')).toMatchObject({ offered: true, warning: null })
   }))
 })
 
@@ -346,18 +363,23 @@ describe('New listings: control before the first publish', () => {
     expect(await readPublishActions(f.root, { channel: 'AMAZON' }, { newRows: true })).toEqual([])
   }))
 
-  it('Etsy: a new variation of a listing already on Etsy joins it for sale by default; Inactive is refused (one variation cannot be hidden); no photo refusal', () => scoped(async () => {
+  it('Etsy: a new variation of a listing already on Etsy joins it for sale by default, or hidden when set Inactive (D6); no photo refusal', () => scoped(async () => {
     const f = await family('NL-ETSY', ['S', 'M', 'L'])
     await listing(f.root, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
     await listing(f.children.S, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
-    await listing(f.children.M, 'ETSY', 'IT', ids.etsy, { externalListingId: null, listingStatus: 'DRAFT', isPublished: false })
+    const mRow = await listing(f.children.M, 'ETSY', 'IT', ids.etsy, { externalListingId: null, listingStatus: 'DRAFT', isPublished: false })
     const cells = await readPublishActions(f.root, at('ETSY', 'IT', ids.etsy), { newRows: true })
     const m = cells.find(c => c.sku === 'NL-ETSY-M')!
-    expect(m.create).toMatchObject({ target: 'active', source: 'default', defaultTarget: 'active', sentence: ETSY_NEW_ROW_SENTENCE })
+    expect(m.create).toMatchObject({ target: 'active', source: 'default', defaultTarget: 'active', sentence: ETSY_NEW_VARIATION_ACTIVE })
     // A variation with no row here is left out until someone chooses for it, as on every channel.
     expect(cells.find(c => c.sku === 'NL-ETSY-L')!.create).toMatchObject({ target: 'not_listed', source: 'default', noRecord: true })
-    expect(m.statusOptions.map(o => [o.target, o.offered ? 'ok' : o.reason])).toEqual([['active', 'ok'], ['inactive', ETSY_VARIATION_CANNOT_HIDE], ['not_listed', 'ok']])
+    expect(m.statusOptions.map(o => [o.target, o.offered ? 'ok' : o.reason])).toEqual([['active', 'ok'], ['inactive', 'ok'], ['not_listed', 'ok']])
     expect(m.statusOptions.find(o => o.target === 'active')).toMatchObject({ sentence: ETSY_NEW_VARIATION_ACTIVE })
+    expect(m.statusOptions.find(o => o.target === 'inactive')).toMatchObject({ sentence: ETSY_NEW_VARIATION_INACTIVE })
+    // Its own Inactive: it joins the listing hidden, and its cell says so.
+    await prisma.channelListing.update({ where: { id: mRow }, data: { sellingTarget: 'INACTIVE', sellingTargetAt: new Date() } as never })
+    const hidden = (await readPublishActions(f.root, at('ETSY', 'IT', ids.etsy), { newRows: true })).find(c => c.sku === 'NL-ETSY-M')!
+    expect(hidden.create).toMatchObject({ target: 'inactive', source: 'own', sentence: ETSY_NEW_VARIATION_INACTIVE })
   }))
 
   it('a Status choice on a row with no listing starts the whole family on the sheet\'s own account, with the choice stored', () => scoped(async () => {

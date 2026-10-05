@@ -22,7 +22,6 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { blockingIssues, isPhotoChangeId, PUBLICATION_PHOTO_FIELDS, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
-import { ETSY_SEND_NOT_YET } from '@nexus/shared/publish-actions'
 import prisma from '../../../db.js'
 import { connectionLabel } from '../../connection-label.js'
 import { etsyShopLabel } from '../../etsy/shop-label.js'
@@ -35,6 +34,8 @@ import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 const studio = () => import('../../pim/studio-publication.service.js')
 
 const PUBLISH_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
+/** publish-listing sends nothing to Etsy yet (the product studio can): an Etsy review here is never ready, and says why. */
+const ETSY_MCP_NOT_YET = 'Claude cannot send to Etsy yet: publish this listing from the product studio in Nexus.'
 const ISSUE_CAP = 30
 const CHANGE_CAP = 60
 const ROW_CAP = 60
@@ -113,8 +114,8 @@ function trimmedReview(review: StudioPublishReview) {
   const rank: Record<string, number> = { SEND: 0, DIFFERS: 1, CANNOT_COMPARE: 2, SAME: 3 }
   const shownChanges = [...changes].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9)).slice(0, CHANGE_CAP)
   const issues = [...review.issues].sort((a, b) => Number(a.severity !== 'error') - Number(b.severity !== 'error')).slice(0, ISSUE_CAP)
-  // E1 — Nexus sends nothing to Etsy yet (publish-listing refuses it): an Etsy review is never ready, and says why.
-  const notSendable = review.scope.channel === 'ETSY' ? ETSY_SEND_NOT_YET : null
+  // publish-listing refuses Etsy (the product studio sends it): an Etsy review here is never ready, and says why.
+  const notSendable = review.scope.channel === 'ETSY' ? ETSY_MCP_NOT_YET : null
   return {
     mode: review.mode,
     action: review.action,
@@ -474,7 +475,7 @@ async function publishDestination(args: Record<string, unknown>) {
   const product = await prisma.product.findFirst({ where: liveProduct(productId), select: { id: true, sku: true, parentId: true } })
   if (!product) return { error: PRODUCT_NOT_FOUND }
   const name = channelLabel(channel)
-  if (channel === 'ETSY') return { error: `${product.sku}: publishing to Etsy from Nexus is not available yet; nothing can be sent there.` }
+  if (channel === 'ETSY') return { error: `${product.sku}: Claude cannot publish to Etsy yet; publish it from the product studio in Nexus. Nothing was sent.` }
   const rootId = product.parentId ?? product.id
   const family = await prisma.channelListing.findMany({
     where: { channel, product: { deletedAt: null, OR: [{ id: rootId }, { parentId: rootId }] } },
@@ -567,7 +568,8 @@ const publishListing: AgentTool = {
     + 'its price, quantity and (Amazon) fulfilment method from what Nexus holds: set them first. A re-publish never sends '
     + 'stock, price or fulfilment (set-listing-stock, set-listing-price). Amazon: a live listing\'s photos usually go through '
     + 'the photo review in Nexus (Images or Media page). Its preview is the studio\'s review: what is sent, what it replaces on the channel, what is not '
-    + 'sent and why. Refused: Etsy (no publisher yet), an existing Shopify product (its store fields go through set-shopify-content, '
+    + 'sent and why. Refused: Etsy (Claude cannot send to Etsy yet; the product studio can), an existing Shopify product '
+    + '(its store fields go through set-shopify-content, '
     + 'and a person sends them with Review and synchronize in Nexus), anything the review blocks, an FBA '
     + 'quantity, and an Amazon EU first publish whose quantity differs from the SKU\'s other live EU markets (Amazon '
     + 'keeps one EU quantity). Waits for a person to approve it in Nexus; if the review changed since, nothing is sent.',

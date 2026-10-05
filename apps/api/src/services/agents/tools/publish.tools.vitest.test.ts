@@ -75,6 +75,8 @@ vi.mock('../../pim/studio-publication-etsy-changes.js', () => ({
   prepareEtsyChanges: (_facts: any, publication: any) => ({ kind: 'etsy-changes', publication, remoteRevision: 'new', products: publication.products,
     ownerProductId: publication.ownerProductId, createWrites: {}, changes: [{ ...change(publication.products[0], '__create__', 'SEND'), channel: { state: 'absent' } }] }),
   compileEtsyChanges: vi.fn(),
+  // The review's digest view of the plan: nothing live to leave out here (Etsy is never read).
+  etsyRevisionView: (plan: unknown) => plan,
 }))
 // The ASIN read after an Amazon promotion calls Amazon; here it reads nothing.
 vi.mock('../../amazon/listing-asin-fill.service.js', () => ({ fillAmazonListingAsins: async () => ({ dryRun: false, rows: [], counts: {} }) }))
@@ -210,7 +212,7 @@ describe('publish-review', () => {
     expect((await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })).error).toBe('TEST-SKU-L3 on Etsy GLOBAL: This business has no active Etsy account. Connect one in Nexus first.')
   })
 
-  it('E1: an Etsy review is never ready (Nexus sends nothing to Etsy yet) and names the shop, never its login code', async () => {
+  it('an Etsy review is never ready here (Claude cannot send to Etsy yet; the product studio can) and names the shop, never its login code', async () => {
     const identity = { username: 'a1b2c3d4e5f6g7h8', storeName: 'Test Etsy shop', extra: { shopName: 'Test Etsy shop' } }
     const etsy = await inside(A, () => fixture.database.client.channelConnection.create({ data: { channelType: 'ETSY', isActive: true, displayName: 'a1b2c3d4e5f6g7h8',
       externalAccountId: '90000001', identity } }))
@@ -220,7 +222,8 @@ describe('publish-review', () => {
       const answer = await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })
       expect(answer.ok, answer.error).toBe(true)
       expect(answer.data).toMatchObject({ destination: { channel: 'ETSY', market: 'GLOBAL', accountId: etsy.id, accountLabel: 'Test Etsy shop' }, accountLabel: 'Test Etsy shop',
-        mode: 'live', action: 'create', ready: false, notReadyBecause: 'Sending to Etsy comes in the next Nexus update.', issueCounts: { errors: 0 }, changeCounts: { SEND: 1 } })
+        mode: 'live', action: 'create', ready: false, notReadyBecause: 'Claude cannot send to Etsy yet: publish this listing from the product studio in Nexus.',
+        issueCounts: { errors: 0 }, changeCounts: { SEND: 1 } })
       expect(JSON.stringify(answer.data)).not.toContain('a1b2c3d4e5f6g7h8')
       expect(await counts()).toEqual(before)
     } finally {

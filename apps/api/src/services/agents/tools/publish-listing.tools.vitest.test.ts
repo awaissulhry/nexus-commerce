@@ -320,8 +320,8 @@ describe('FBA quantity is untouchable', () => {
 })
 
 describe('refusals', () => {
-  it('Etsy has no publisher; an existing Shopify product is change-only, which Shopify does not have; a blocked review', async () => {
-    expect(await dryRun({ productId: ids.ebayProduct, channel: 'ETSY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('Etsy from Nexus is not available yet') })
+  it('Etsy: Claude cannot publish there yet (the product studio can); an existing Shopify product is change-only, which Shopify does not have; a blocked review', async () => {
+    expect(await dryRun({ productId: ids.ebayProduct, channel: 'ETSY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('TEST-SKU-L5-EBAY: Claude cannot publish to Etsy yet; publish it from the product studio in Nexus. Nothing was sent.') })
     fixture.shopPreview.mockResolvedValue({ errors: [], remote: { id: 'gid://shopify/Product/1' }, revision: 'r', remoteRevision: 'rr', initialized: true, draft: {},
       variants: [{ id: ids.ebayProduct, sku: 'TEST-SKU-L5-EBAY' }], changes: { newProductStatus: 'ACTIVE' }, locations: [{ id: 'gid://shopify/Location/1', name: 'Warehouse', isActive: true }] })
     expect(await dryRun({ productId: ids.ebayProduct, channel: 'SHOPIFY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('Publish cannot update a product already on Shopify yet.') })

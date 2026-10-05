@@ -62,6 +62,7 @@ import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amaz
 import { PURCHASABLE_OFFER_LEAVES } from './amazon/offer-fields.js'
 import { amazonSendQuantity, readEuIntentRows, routedSendCeiling } from './amazon/send-quantity.js'
 import { CHANNEL_SKU_UNRESOLVED, listingSendSku } from './listings/listing-send-sku.js'
+import type { OfferingChange } from './etsy/inventory.js'
 import { AD_SYNC_TYPES as AD_SYNC_TYPE_LIST } from './ads-core/ad-mutation-state.js'
 
 // Phase 3 — test seam for the Trading-API network call.
@@ -549,6 +550,73 @@ export function completedSyncQueueData(result: Pick<SyncResult, 'status' | 'dryR
     errorMessage: skipped ? result.message || DELIST_OPERATOR_COPY.OUTBOUND_NOT_SENT : null,
     nextRetryAt: null,
   };
+}
+
+// ── E2 (D5) — the Etsy lane's one inventory write per listing ────────────
+
+/** One Etsy row after the lane's checks (`etsyRowFacts`): what its change and its answer need. */
+interface EtsyRowFacts {
+  queueId: string;
+  product: any;
+  payload: any;
+  channelListing: any;
+  connectionId: string;
+  listingId: string;
+  /** The SKU the row names (attempt log, floor and ceiling, dispatch quantity). */
+  sku: string;
+  /** The SKU of the Etsy offering the change is for. */
+  offeringSku: string | null;
+  isContent: boolean;
+  isPrice: boolean;
+  t0: number;
+  /** The row's FAILED answer, with its attempt log: the lane's one failure shape. */
+  failed: (message: string, errorCode?: string, retryable?: boolean) => SyncResult;
+}
+
+/** A stock or price row ready to join its listing's one inventory write (`etsyRowChange`). */
+interface EtsyReadyRow {
+  ok: true;
+  row: any;
+  facts: EtsyRowFacts;
+  change: OfferingChange;
+  kind: "price" | "quantity";
+  listingId: string;
+  connectionId: string;
+  sku: string;
+  priceCurrency?: string;
+  listing: any;
+}
+type EtsyRowChange = EtsyReadyRow | { ok: false; result: SyncResult };
+
+/**
+ * E2 review n2 — at most this many waiting rows join one lead. The lead's whole run (every sibling's checks, the listing
+ * lock wait, one write and its read-back, and — after a pre-PUT refusal — one write per row) shares the lead's dispatch
+ * timeout (DISPATCH_TIMEOUT_MS). Rows past the cap stay PENDING for the next write. Should the timeout still fire, nothing
+ * is lost: every claimed sibling is finished by this run (compare-and-swap), and the lead's retry re-sends values Etsy
+ * already holds, which the writer does not send again.
+ */
+const ETSY_MAX_SIBLINGS = 20;
+
+/** When a queue row was written (ms); a row without one sorts first. */
+function etsyRowTime(row: any): number {
+  const time = new Date(row?.createdAt ?? 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+/**
+ * E2 (D5) — may this waiting row join another row's Etsy write? Not when a shared dispatch check would treat it
+ * differently than the Etsy lane alone does: a mapping cascade (rebuilt at dispatch), text that needs its review,
+ * no named listing, a listing the worker skips as unpublished, or one suppressed under NEXUS_RESPECT_OFFER_ACTIVE.
+ * Such a row is not claimed: its own dispatch answers it, with every check.
+ */
+function etsyJoinable(row: any): boolean {
+  const payload = row?.payload ?? {};
+  if (payload.source === "FM_CATALOG_CASCADE") return false;
+  if (PUBLISH_CONTENT_FIELDS.some((field) => payload[field] !== undefined)) return false;
+  if (quantityRowTarget(row) === "UNNAMED") return false;
+  if (row?.channelListing?.isPublished === false) return false;
+  if (process.env.NEXUS_RESPECT_OFFER_ACTIVE === "1" && row?.channelListing?.offerActive === false) return false;
+  return true;
 }
 
 // ── Outbound Sync Service ────────────────────────────────────────────────
@@ -2472,13 +2540,108 @@ export class OutboundSyncService {
    * `routedCeiling`, the same routed ceiling as Amazon and eBay. Etsy never gets a raw payload
    * number: P4.3a is the reason (`syncInventoryFromEtsy` wrote Etsy's quantities straight into
    * `ProductVariation.stock`, past the resolver and the pool), and the same rule binds the other way.
+   *
+   * E2 (D5, Owner 2026-10-05) — ONE inventory write per Etsy listing. Every stock or price change is the same full
+   * replace of the listing's inventory, so a stock row that names its listing takes the listing's other waiting stock
+   * and price rows with it (`claimEtsySiblings`) and sends them all in one locked read → PUT → read-back. Each row
+   * still passes every check of its own (`etsyRowChange`) and gets its own answer, recorded exactly once: the lead's
+   * is returned to the caller (the worker or the cron loop writes it, as for every row), each sibling's is written
+   * here. A content row keeps its own call.
    */
   private async syncToEtsy(queueItem: any): Promise<SyncResult> {
+    // (`=== false`: this tsconfig is not strict, and only an equality check narrows these unions.)
+    const checked = await this.etsyRowFacts(queueItem);
+    if (checked.ok === false) return checked.result;
+    const facts = checked.facts;
+    if (facts.isContent) return this.etsyContentWrite(facts);
+
+    const lead = await this.etsyRowChange(queueItem, facts);
+    if (lead.ok === false) return lead.result;
+
+    // E2 (D5) — only a stock or price row that names its listing gathers the others. Reached only once the lead passed
+    // every check, the publish gate first: nothing is claimed while sending to Etsy is off.
+    const gathers = (queueItem.syncType === "QUANTITY_UPDATE" || queueItem.syncType === "PRICE_UPDATE") && !!queueItem.channelListingId;
+    const siblings = gathers ? await this.claimEtsySiblings(queueItem, lead) : [];
+    if (!siblings.length) return (await this.etsyInventoryWrite([lead], lead))[0];
+
+    // From here every claimed sibling is ours until it is finished. Anything unexpected puts the unfinished ones
+    // back to PENDING before it is rethrown, so no row is left IN_PROGRESS by this run.
+    const unfinished = new Set<string>(siblings.map((row) => row.id));
+    const finish = async (row: any, result: SyncResult) => {
+      await this.finishEtsySibling(row, result);
+      unfinished.delete(row.id);
+    };
+    try {
+      const ready: EtsyReadyRow[] = [lead];
+      for (const sibling of siblings) {
+        const change = await this.etsyRowChange(sibling);
+        // A sibling with a refusal of its own (its push lock — a hidden variation —, its floor, no SKU…) is answered
+        // at once, exactly as it would have been on its own; the others join.
+        if (change.ok === false) await finish(sibling, change.result);
+        else ready.push(change);
+      }
+
+      // One change per SKU and kind: the newest row (createdAt) wins; an older one sends nothing (answered below).
+      const keyOf = (row: EtsyReadyRow) => `${row.change.sku ?? ""}|${row.kind}`;
+      const newest = new Map<string, EtsyReadyRow>();
+      const superseded: EtsyReadyRow[] = [];
+      for (const row of ready) {
+        const held = newest.get(keyOf(row));
+        if (!held) newest.set(keyOf(row), row);
+        else if (etsyRowTime(row.row) > etsyRowTime(held.row)) { superseded.push(held); newest.set(keyOf(row), row); }
+        else superseded.push(row);
+      }
+
+      // Each row's answer, by queue row id; recorded once, below.
+      const answers = new Map<string, SyncResult>();
+      // Prices in two currencies cannot share one write, and Nexus never guesses which one Etsy's prices are in.
+      let joined = [...newest.values()];
+      const prices = joined.filter((row) => row.kind === "price");
+      const currencies = [...new Set(prices.map((row) => row.priceCurrency ?? ""))];
+      if (currencies.length > 1) {
+        const named = currencies.map((code) => code || "none").join(", ");
+        for (const row of prices) {
+          answers.set(row.row.id, row.facts.failed(`The price changes waiting for this Etsy listing are in different currencies (${named}); Nexus does not guess which one Etsy's prices are in, so no price was sent.`, "ETSY_PRICE_CURRENCY_CONFLICT", false));
+        }
+        joined = joined.filter((row) => row.kind !== "price");
+      }
+
+      const results = joined.length ? await this.etsyInventoryWrite(joined, lead) : [];
+      joined.forEach((row, index) => answers.set(row.row.id, results[index]));
+      // An older duplicate is never sent (a retry would put an older value over the newer one); its sentence says
+      // what happened to the newer change, which is known only now.
+      for (const row of superseded) {
+        const newer = answers.get(newest.get(keyOf(row))!.row.id);
+        // E2 review m5 — the newer change refused for good means nothing is sent for this SKU: said, with its reason.
+        const message = newer?.success === true ? "A newer change to this SKU went to Etsy in the same write."
+          : newer && newer.retryable === false ? `A newer change to this SKU replaced this one, and that newer change was not sent: ${newer.message.replace(/\.?\s*$/, ".")}`
+            : "A newer change to this SKU replaces this one; Nexus sends only the newer one.";
+        answers.set(row.row.id, { success: true, queueId: row.facts.queueId, channel: "ETSY", status: "SKIPPED", errorCode: "ETSY_SUPERSEDED", message });
+      }
+
+      for (const row of ready) {
+        if (row.row.id !== queueItem.id) await finish(row.row, answers.get(row.row.id)!);
+      }
+      const leadResult = answers.get(queueItem.id);
+      if (!leadResult) throw new Error(`The Etsy write gave no answer for queue row ${queueItem.id}.`);
+      return leadResult;
+    } catch (error) {
+      await this.releaseEtsySiblings([...unfinished]);
+      throw error;
+    }
+  }
+
+  /**
+   * The checks every Etsy row passes before anything is sent, in the lane's order: push lock, publish gate,
+   * destination account, wrong-account guard, listing id, the SKU Etsy holds, Etsy order import for a stock row, the
+   * Sync Control pause. A refusal comes back as the row's result; each sentence and code is the lane's own.
+   */
+  private async etsyRowFacts(queueItem: any): Promise<{ ok: true; facts: EtsyRowFacts } | { ok: false; result: SyncResult }> {
     const pushRefusal = (await this.pushLockListings(queueItem, 'ETSY'))
       .map(listing => assertPushAllowed(listing)).find(Boolean);
-    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'ETSY',
+    if (pushRefusal) return { ok: false, result: { success: false, queueId: queueItem.id, channel: 'ETSY',
       status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
-      errorCode: pushRefusal.code, retryable: false };
+      errorCode: pushRefusal.code, retryable: false } };
 
     const { product, payload, channelListing, id: queueId, syncType } = queueItem;
     // S5 (per-channel SKU) — what this lane named before (it read `channelListing.sku`, a field the listing does not
@@ -2490,9 +2653,9 @@ export class OutboundSyncService {
     // does and what an operator reading the queue needs.
     const etsyMode = getEtsyPublishMode();
     if (etsyMode !== "live") {
-      return { success: true, queueId, channel: "ETSY", status: "SKIPPED",
+      return { ok: false, result: { success: true, queueId, channel: "ETSY", status: "SKIPPED",
         message: `Etsy ${etsyMode} — not published (set NEXUS_ENABLE_ETSY_PUBLISH=true + ETSY_PUBLISH_MODE=live)`,
-        dryRun: true };
+        dryRun: true } };
     }
 
     // What this row writes, decided once: the branch below follows the same three answers.
@@ -2502,20 +2665,21 @@ export class OutboundSyncService {
     const destination = await this.destinationOf(queueItem);
     if (!destination.connectionId) {
       const error = noDestinationSentence("Etsy", destination.reason);
-      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+      return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false } };
     }
+    const connectionId: string = destination.connectionId;
     // As P0.7 for eBay / Amazon and P1.4 for Shopify: a row may not name one shop for a listing of
     // another. Etsy listing ids are per shop, so the same number is a different listing elsewhere.
     const listingAccount: string | null = channelListing?.channelConnectionId ?? null;
-    if (listingAccount && listingAccount !== destination.connectionId) {
+    if (listingAccount && listingAccount !== connectionId) {
       const error = `This Etsy listing belongs to another Etsy account than the one this change was queued for. Nothing was sent.`;
-      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
+      return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false } };
     }
 
     const listingId = channelListing?.externalListingId ?? this.getExternalListingId(product ?? {}, "ETSY");
     if (!listingId) {
       const error = "This product has no Etsy listing id, so there is nothing on Etsy to change. Nothing was sent.";
-      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false };
+      return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false } };
     }
 
     // S5 (per-channel SKU) — the Etsy offering is found by SKU: the one Etsy holds for THIS listing (`listingSendSku`),
@@ -2525,7 +2689,7 @@ export class OutboundSyncService {
     if (channelListing) {
       const held = listingSendSku({ ...await this.channelSkuFacts(channelListing), channel: "ETSY" }, product?.sku, sku);
       if (held.sku === null) {
-        if (!isContent) return { success: false, queueId, channel: "ETSY", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false };
+        if (!isContent) return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false } };
       } else if (held.source !== "product" && held.source !== "fallback") {
         sku = held.sku;
         offeringSku = held.sku;
@@ -2539,100 +2703,246 @@ export class OutboundSyncService {
       const { etsyStockWriteRefusal } = await import("./etsy/order-ingest-switch.js");
       let refusal: Awaited<ReturnType<typeof etsyStockWriteRefusal>>;
       try {
-        refusal = await etsyStockWriteRefusal(destination.connectionId);
+        refusal = await etsyStockWriteRefusal(connectionId);
       } catch (error) {
         const message = `Nexus could not read whether Etsy order import is activated for this account, so nothing was sent. (${error instanceof Error ? error.message : String(error)})`;
-        return { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, errorCode: "ETSY_ORDER_IMPORT_UNKNOWN", retryable: true };
+        return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, errorCode: "ETSY_ORDER_IMPORT_UNKNOWN", retryable: true } };
       }
-      if (refusal) return { success: true, queueId, channel: "ETSY", status: "SKIPPED", message: refusal.sentence, errorCode: refusal.code, retryable: false };
+      if (refusal) return { ok: false, result: { success: true, queueId, channel: "ETSY", status: "SKIPPED", message: refusal.sentence, errorCode: refusal.code, retryable: false } };
     }
 
     // SC.1 — the channel policy pause, re-checked at send time as the Amazon and eBay lanes do: a policy set after
     // the row was queued still holds it. Etsy's market is GLOBAL, so a policy for '*' or GLOBAL applies.
     try {
-      const scp = policyFor(await loadChannelPolicies(), 'ETSY', String(channelListing?.marketplace ?? 'GLOBAL'), destination.connectionId);
+      const scp = policyFor(await loadChannelPolicies(), 'ETSY', String(channelListing?.marketplace ?? 'GLOBAL'), connectionId);
       if (scp?.pushesPaused) {
         // Not retried, as the listing pause above: a pause is the operator's state, not a passing fault.
-        return { success: false, queueId, channel: "ETSY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy", errorCode: "SYNC_PAUSED_POLICY", retryable: false };
+        return { ok: false, result: { success: false, queueId, channel: "ETSY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy", errorCode: "SYNC_PAUSED_POLICY", retryable: false } };
       }
     } catch { /* fail-open: policy unreadable = not paused, as the other lanes */ }
 
     const t0 = Date.now();
     const failed = (message: string, errorCode?: string, retryable = true): SyncResult => {
-      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId!, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
+      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
       return { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, ...(errorCode ? { errorCode } : {}), retryable };
     };
+    return { ok: true, facts: { queueId, product, payload, channelListing, connectionId, listingId: String(listingId), sku, offeringSku, isContent, isPrice, t0, failed } };
+  }
 
+  /** A content row: its own form-encoded call (not the inventory), exactly as before E2. */
+  private async etsyContentWrite(facts: EtsyRowFacts): Promise<SyncResult> {
+    const { queueId, product, payload, channelListing, connectionId, listingId, sku, t0, failed } = facts;
     try {
-      let message: string;
-      if (isContent) {
-        const { updateEtsyListingContent } = await import("./etsy/listing-write.service.js");
-        await updateEtsyListingContent({
-          accountId: destination.connectionId, listingId, pushLock: channelListing ? [channelListing] : undefined,
-          ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
-          content: {
-            title: payload?.title,
-            ...(payload && "description" in payload ? { description: payload.description } : {}),
-          },
-        });
-        message = `Etsy listing ${listingId} content updated.`;
-      } else {
-        const { writeEtsyInventory } = await import("./etsy/inventory-write.service.js");
-        const changes: Array<{ sku?: string | null; quantity?: number; price?: number }> = [];
-        let priceCurrency: string | undefined;
-        if (isPrice) {
-          // 2026-09-30 — a price row with no usable price is refused by name. It used to reach the writer as "no
-          // change" and come back SUCCESS: "Etsy already holds these values".
-          const price = payload?.price == null || payload.price === "" ? Number.NaN : Number(payload.price);
-          if (!Number.isFinite(price) || price <= 0) return failed("This price change carries no usable price, so nothing was sent to Etsy.", "NO_PRICE", false);
-          // P4.4c — the operator's own floor and ceiling, and it REFUSES rather than clamping,
-          // because a price is a number a person typed.
-          // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
-          const refusal = await priceRefusalFor({ price, productId: product?.id, channel: 'Etsy', sku, market: { channel: 'ETSY', marketplace: channelListing?.marketplace ?? 'GLOBAL' } });
-          if (refusal) return failed(refusal, "PRICE_OUT_OF_BOUNDS", false);
-          // P4.4a, as the Amazon and eBay lanes: the currency is the listing market's Marketplace row, never guessed.
-          // The writer compares it with the currency Etsy states for the listing, and a mismatch sends nothing.
-          try {
-            priceCurrency = await marketCurrency("ETSY", String(channelListing?.marketplace ?? "GLOBAL"));
-          } catch (err) {
-            return failed(`${err instanceof Error ? err.message : String(err)} The price was not written.`, "MARKET_CURRENCY_UNCONFIGURED", false);
-          }
-          // Only the price: the writer sends every quantity back exactly as Etsy stated it in the read before the PUT.
-          changes.push({ sku: offeringSku, price });
-        } else {
-          const dispatchQuantity = await this.linkedDispatchQuantity(queueItem, sku, 'ETSY', 'Etsy');
-          if (dispatchQuantity.refusal) return failed(dispatchQuantity.refusal, "NO_ROUTED_LOCATION", false);
-          changes.push({ sku: offeringSku, quantity: dispatchQuantity.quantity });
-        }
-        const result = await writeEtsyInventory({
-          accountId: destination.connectionId, listingId, changes,
-          ...(priceCurrency ? { priceCurrency } : {}),
-          pushLock: channelListing ? [channelListing] : undefined,
-          ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
-        });
-        // A read-back that did not match is NOT a failed write — the change was accepted. It is a
-        // success with a warning the operator has already been alerted about (P4.6c), and saying
-        // "FAILED" here would invite a retry, which on a full-replace endpoint is the one thing
-        // that would make it worse.
-        message = !result.sent
-          ? (result.reason ?? "Etsy already holds these values; nothing was sent.")
-          : result.confirmed
-            ? `Etsy listing ${listingId} updated and confirmed.`
-            : `Etsy listing ${listingId} updated, but the read-back did not match. ${result.drift === null ? "Etsy could not be re-read." : `${result.drift.length} field(s) differ.`} An alert has been raised.`;
-        // 2026-10-01 — Etsy holds at most 999 of an item per offering; a higher stock number was sent as 999.
-        for (const clamp of result.clamped ?? []) message += ` Etsy holds at most ${clamp.sent} of an item, so ${clamp.requested} was sent as ${clamp.sent}.`;
-        // Etsy has no sale price on a listing (its sales are shop promotions), so a Nexus sale is not in this write.
-        if (isPrice && payload?.salePrice != null) message += " Etsy has no per-listing sale price, so the sale price stays in Nexus only.";
-      }
-      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
+      const { updateEtsyListingContent } = await import("./etsy/listing-write.service.js");
+      await updateEtsyListingContent({
+        accountId: connectionId, listingId, pushLock: channelListing ? [channelListing] : undefined,
+        ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
+        content: {
+          title: payload?.title,
+          ...(payload && "description" in payload ? { description: payload.description } : {}),
+        },
+      });
+      const message = `Etsy listing ${listingId} content updated.`;
+      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
       return { success: true, queueId, channel: "ETSY", status: "SUCCESS", message };
     } catch (error) {
-      // Etsy's inventory refusing the change (a SKU it does not have, a price it cannot take alone, another currency)
-      // gives the same answer on a retry, so it is not retried. A failed read is not one of those: it stays retryable.
       const { isEtsyInventoryRefusal } = await import("./etsy/inventory.js");
       return failed(error instanceof Error ? error.message : String(error),
         typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
         !isEtsyInventoryRefusal(error));
+    }
+  }
+
+  /**
+   * E2 (D5) — one stock or price row, made ready to join an inventory write: every check of `etsyRowFacts`, then its
+   * own price (usable, inside the operator's floor and ceiling, in the listing market's currency) or its own stock
+   * number (re-read at dispatch, routed ceiling, clamp). A refusal is the row's result, with the lane's own words.
+   * Never called for a content row.
+   */
+  private async etsyRowChange(queueItem: any, known?: EtsyRowFacts): Promise<EtsyRowChange> {
+    let facts = known;
+    if (!facts) {
+      const checked = await this.etsyRowFacts(queueItem);
+      if (checked.ok === false) return checked;
+      facts = checked.facts;
+    }
+    const { product, payload, channelListing, connectionId, listingId, sku, offeringSku, isPrice, failed } = facts;
+    const ready = { ok: true as const, row: queueItem, facts, listingId, connectionId, sku, listing: channelListing ?? null };
+    try {
+      if (isPrice) {
+        // 2026-09-30 — a price row with no usable price is refused by name. It used to reach the writer as "no
+        // change" and come back SUCCESS: "Etsy already holds these values".
+        const price = payload?.price == null || payload.price === "" ? Number.NaN : Number(payload.price);
+        if (!Number.isFinite(price) || price <= 0) return { ok: false, result: failed("This price change carries no usable price, so nothing was sent to Etsy.", "NO_PRICE", false) };
+        // P4.4c — the operator's own floor and ceiling, and it REFUSES rather than clamping,
+        // because a price is a number a person typed.
+        // Only a price in the master currency is held to the master-currency floor and ceiling (refuse, don't convert).
+        const refusal = await priceRefusalFor({ price, productId: product?.id, channel: 'Etsy', sku, market: { channel: 'ETSY', marketplace: channelListing?.marketplace ?? 'GLOBAL' } });
+        if (refusal) return { ok: false, result: failed(refusal, "PRICE_OUT_OF_BOUNDS", false) };
+        // P4.4a, as the Amazon and eBay lanes: the currency is the listing market's Marketplace row, never guessed.
+        // The writer compares it with the currency Etsy states for the listing, and a mismatch sends nothing.
+        let priceCurrency: string;
+        try {
+          priceCurrency = await marketCurrency("ETSY", String(channelListing?.marketplace ?? "GLOBAL"));
+        } catch (err) {
+          return { ok: false, result: failed(`${err instanceof Error ? err.message : String(err)} The price was not written.`, "MARKET_CURRENCY_UNCONFIGURED", false) };
+        }
+        // Only the price: the writer sends every quantity back exactly as Etsy stated it in the read before the PUT.
+        return { ...ready, kind: "price", change: { sku: offeringSku, price }, priceCurrency };
+      }
+      const dispatchQuantity = await this.linkedDispatchQuantity(queueItem, sku, 'ETSY', 'Etsy');
+      if (dispatchQuantity.refusal) return { ok: false, result: failed(dispatchQuantity.refusal, "NO_ROUTED_LOCATION", false) };
+      return { ...ready, kind: "quantity", change: { sku: offeringSku, quantity: dispatchQuantity.quantity } };
+    } catch (error) {
+      // As the write itself: a refusal Etsy's inventory rules give again on a retry is not retried; anything else is.
+      const { isEtsyInventoryRefusal } = await import("./etsy/inventory.js");
+      return { ok: false, result: failed(error instanceof Error ? error.message : String(error),
+        typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
+        !isEtsyInventoryRefusal(error)) };
+    }
+  }
+
+  /**
+   * E2 (D5) — the ONE inventory write for these rows of one listing, and each row's answer (in the same order). The
+   * writer's own guards still run on the whole set: Etsy order import for any quantity, the currency Etsy states for
+   * any price, Etsy's price and quantity groups. The outcome is the same for every row, honestly: one write either
+   * landed or did not. Alone, a row is sent exactly as before E2.
+   */
+  private async etsyInventoryWrite(joined: EtsyReadyRow[], lead: EtsyReadyRow): Promise<SyncResult[]> {
+    const priceCurrency = joined.find((row) => row.kind === "price")?.priceCurrency;
+    const locks = joined.map((row) => row.listing).filter(Boolean);
+    try {
+      const { writeEtsyInventory } = await import("./etsy/inventory-write.service.js");
+      const result = await writeEtsyInventory({
+        accountId: lead.connectionId, listingId: lead.listingId, changes: joined.map((row) => row.change),
+        ...(priceCurrency ? { priceCurrency } : {}),
+        pushLock: locks.length ? locks : undefined,
+        ledger: { productId: lead.facts.product?.id ?? null, listingId: lead.listing?.id ?? null, triggeredBy: "api" },
+      });
+      // A read-back that did not match is NOT a failed write — the change was accepted. It is a
+      // success with a warning the operator has already been alerted about (P4.6c), and saying
+      // "FAILED" here would invite a retry, which on a full-replace endpoint is the one thing
+      // that would make it worse.
+      const sentence = !result.sent
+        ? (result.reason ?? "Etsy already holds these values; nothing was sent.")
+        : result.confirmed
+          ? `Etsy listing ${lead.listingId} updated and confirmed.`
+          : `Etsy listing ${lead.listingId} updated, but the read-back did not match. ${result.drift === null ? "Etsy could not be re-read." : `${result.drift.length} field(s) differ.`} An alert has been raised.`;
+      // E2 review m6 — in a combined write each row reads back its OWN SKU: its drift, else confirmed; drift on a product
+      // no joined row named (a price Etsy blanked, trap 3) is named on every row. Alone, the sentence is the one above.
+      const named = new Set(joined.map((row) => row.change.sku).filter((sku): sku is string => sku != null));
+      const sentenceOf = (row: EtsyReadyRow): string => {
+        if (joined.length === 1 || !result.sent || result.confirmed || result.drift === null || row.change.sku == null) return sentence;
+        const own = result.drift.filter((d) => d.product === row.change.sku);
+        const others = result.drift.filter((d) => !named.has(d.product));
+        if (own.length) return `Etsy listing ${lead.listingId} updated, but the read-back did not match. ${own.length} field(s) differ. An alert has been raised.`;
+        if (others.length) return `Etsy listing ${lead.listingId} updated and this change confirmed, but the read-back shows ${others.length} other field(s) differ. An alert has been raised.`;
+        return `Etsy listing ${lead.listingId} updated and confirmed.`;
+      };
+      return joined.map((row) => {
+        const { queueId, product, payload, connectionId, sku, t0 } = row.facts;
+        let message = sentenceOf(row);
+        // 2026-10-01 — Etsy holds at most 999 of an item per offering; a higher stock number was sent as 999. Each
+        // stock row names only its own SKU's.
+        for (const clamp of result.clamped ?? []) {
+          if (row.kind === "quantity" && (row.change.sku == null || clamp.sku === row.change.sku)) message += ` Etsy holds at most ${clamp.sent} of an item, so ${clamp.requested} was sent as ${clamp.sent}.`;
+        }
+        // Etsy has no sale price on a listing (its sales are shop promotions), so a Nexus sale is not in this write.
+        if (row.kind === "price" && payload?.salePrice != null) message += " Etsy has no per-listing sale price, so the sale price stays in Nexus only.";
+        writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
+        return { success: true, queueId, channel: "ETSY", status: "SUCCESS", message };
+      });
+    } catch (error) {
+      // Etsy's inventory refusing the change (a SKU it does not have, a price it cannot take alone, another currency)
+      // gives the same answer on a retry, so it is not retried. A failed read is not one of those: it stays retryable.
+      // `EtsyListingBusy` keeps its code, so every row waits its turn without spending a retry.
+      const { isEtsyInventoryRefusal } = await import("./etsy/inventory.js");
+      // E2 review M1 — a COMBINED write refused before its PUT (each of these refusals is raised before it: nothing
+      // reached Etsy) must not fail the other rows for one row's problem. Each row is sent alone instead — its own
+      // write, every guard again — the lead first, so a valid stock row still goes and only the row at fault fails, with
+      // its own reason. A failure at or after the PUT, or no answer, keeps one outcome for all: the write may have landed.
+      if (joined.length > 1 && isEtsyInventoryRefusal(error)) {
+        const order = [...joined.filter((row) => row === lead), ...joined.filter((row) => row !== lead)];
+        const alone = new Map<EtsyReadyRow, SyncResult>();
+        for (const row of order) alone.set(row, (await this.etsyInventoryWrite([row], row))[0]);
+        return joined.map((row) => alone.get(row)!);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      const code = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined;
+      const retryable = !isEtsyInventoryRefusal(error);
+      return joined.map((row) => row.facts.failed(message, code, retryable));
+    }
+  }
+
+  /**
+   * E2 (D5) — claim the listing's other waiting stock and price rows: same Etsy account, same Etsy listing, PENDING,
+   * past their grace window, oldest first, at most ETSY_MAX_SIBLINGS. Each is claimed with the same compare-and-swap as a dispatch
+   * (AS.5): a row someone else claimed first is not ours and is left alone. A row a shared dispatch check would treat
+   * differently (a mapping cascade, text to review, no listing, an unpublished or suppressed listing) is not claimed;
+   * it goes through its own dispatch. When the waiting rows cannot be read, the lead goes alone, as before E2.
+   */
+  private async claimEtsySiblings(queueItem: any, lead: EtsyReadyRow): Promise<any[]> {
+    let candidates: any[];
+    try {
+      const now = new Date();
+      candidates = await prisma.outboundSyncQueue.findMany({
+        where: {
+          id: { not: queueItem.id },
+          targetChannel: "ETSY",
+          syncStatus: "PENDING",
+          syncType: { in: ["QUANTITY_UPDATE", "PRICE_UPDATE"] },
+          channelConnectionId: lead.connectionId,
+          channelListing: { externalListingId: lead.listingId, channelConnectionId: lead.connectionId },
+          OR: [{ holdUntil: null }, { holdUntil: { lte: now } }],
+        },
+        include: { product: true, channelListing: true },
+        orderBy: { createdAt: "asc" },
+        take: ETSY_MAX_SIBLINGS,
+      });
+    } catch (error) {
+      logger.warn("[etsy] the listing's other waiting changes could not be read; this change goes alone", { queueId: queueItem.id, listingId: lead.listingId, error: error instanceof Error ? error.message : String(error) });
+      return [];
+    }
+    const claimed: any[] = [];
+    try {
+      for (const candidate of candidates ?? []) {
+        if (!etsyJoinable(candidate)) continue;
+        const won = await prisma.outboundSyncQueue.updateMany({
+          where: { id: candidate.id, syncStatus: "PENDING" },
+          data: { syncStatus: "IN_PROGRESS" },
+        });
+        if (won.count) claimed.push(candidate);
+      }
+    } catch (error) {
+      await this.releaseEtsySiblings(claimed.map((row) => row.id));
+      throw error;
+    }
+    return claimed;
+  }
+
+  /**
+   * E2 (D5) — record a sibling's answer exactly once, as the cron loop records a row: a completion only on the row
+   * this run still holds (compare-and-swap on IN_PROGRESS) and the listing's status after a real send; a failure
+   * through the lane's own disposition (retry, deferral or dead letter).
+   */
+  private async finishEtsySibling(row: any, result: SyncResult): Promise<void> {
+    if (result.success) {
+      const completion = completedSyncQueueData(result);
+      const saved = await prisma.outboundSyncQueue.updateMany({ where: { id: row.id, syncStatus: "IN_PROGRESS" }, data: completion });
+      if (saved.count && completion.syncStatus === "SUCCESS") await recordListingSyncOutcome(prisma, { channelListingId: row.channelListingId, productId: row.productId, outcome: "sent" });
+      return;
+    }
+    await this.handleSyncFailure(row, result.error || "Unknown error", { errorCode: result.errorCode, retryable: result.retryable });
+  }
+
+  /** E2 (D5) — put claimed siblings this run did not finish back to PENDING (only rows it still holds). */
+  private async releaseEtsySiblings(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    try {
+      await prisma.outboundSyncQueue.updateMany({ where: { id: { in: ids }, syncStatus: "IN_PROGRESS" }, data: { syncStatus: "PENDING" } });
+    } catch (error) {
+      // The janitor reclaims a row left IN_PROGRESS (jobs/outbound-queue-janitor.job.ts); the original error is what the caller sees.
+      logger.warn("[etsy] claimed queue rows could not be put back to PENDING", { ids: ids.slice(0, 10), error: error instanceof Error ? error.message : String(error) });
     }
   }
 

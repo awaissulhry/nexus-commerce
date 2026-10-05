@@ -1,16 +1,39 @@
 # Etsy publisher — HANDOFF
 
-Updated: 2026-10-05, E1 PR #367 open. Lane: ETSY-PUBLISHER (memory: project_etsy_publisher_2026_10_05.md).
+Updated: 2026-10-05 23:05 local, E2 rebuilding after a restart. Lane: ETSY-PUBLISHER (memory: project_etsy_publisher_2026_10_05.md).
 
 ## Where we are
-- **E1 = PR #367 (open, waits for the Owner's "merge #367").** Branch `feat/etsy-e1-review`, one commit on main
-  bd00d21f8. Worktree `/private/tmp/feat-etsy-e1-review`. Local backup branch `backup/etsy-e1-before-squash` (delete
-  after the merge).
-- E1 sends nothing to Etsy. Checks: typechecks pass; API area 1896 pass + 3 old delete-and-relist (MAIN); profiles ON
-  286 pass; shared 1255; web 4027; static gates 61/65 (4 MAIN); gateway ratchet ETSY 0; real-id scan clean.
-- Reports: `~/nexus-archive/2026-10-05-etsy-publisher/` — E1-BUILD-SPEC.md, E1-REVIEW.md (3 rounds), E1-TEST-SWEEP.md (2 rounds).
-- After the merge: check that a Deploy API run exists for the merge SHA and watch it (memory: deploy push event can be missed).
-- Next PR: E2 (send updates to listings that exist). Its must-dos are in PLAN.md "E1 notes for the next PRs".
+- E1 = PR #367 MERGED + LIVE (f5b61c159, deploy 37357596952 OK): review only, nothing sent. Live read-only check OK.
+- **E2 in build** (Owner 2026-10-05: E2 yes, D5 = B, D6 = B). Worktree `/private/tmp/feat-etsy-e2-update` (branch
+  `feat/etsy-e2-update` from origin/main f5b61c159). Spec: `~/nexus-archive/2026-10-05-etsy-publisher/E2-BUILD-SPEC.md` (§10 = D5 + D6).
+- **2026-10-05 ~23:00 local: the Mac restarted and macOS emptied /private/tmp.** The 4 builders' uncommitted E2 edits
+  were lost; the worktree was re-created on the same branch and the builders were resumed to redo them.
+  Rule from now on: the lead makes a local WIP commit after every builder report (commits live in the main repo's .git,
+  which survives a restart); they are squashed into one commit before the push.
+- 4 builders, disjoint files: B1 adapter + send, B2 writers/live read/settle, B3 wiring + words, B4 queue coalescing
+  (D5) + variation Status (D6).
+- Builders DONE (B1 157 tests, B2 578, B3 1291 + web 373, B4 1045; api typecheck clean). Lead: close/reopen-listing pass
+  `wholeListing` (keeps the whole-listing pause), many.ts comment. All saved in local WIP commits (latest 64d3c4371).
+- Test sweep DONE: no branch failures (api 3376 pass + 3 old MAIN; shared 1258; web 4691; profiles ON 138; static
+  61/65 MAIN; 6 ratchets pass); web typecheck pass; real-PG batch suites 3/3 + 2/2 pass; id pre-scan clean.
+- Review DONE (E2-REVIEW.md): BLOCKER shared-stock doubling via *_on_property; MAJOR combined write dead-letters good
+  rows; 9 minor, 6 nit. Fix round DONE (HEAD f60beef0e): Etsy's own sharing rules kept + refusals; combined write
+  falls back to one write per row; minors fixed.
+- 2026-10-06 00:02 local, RUNNING (7 agents): E2 review round 2 + test sweep round 2 (on f60beef0e); E3 builders
+  B1/B2/B3 in /private/tmp/feat-etsy-e3-create; E5a builders B1/B2 in /private/tmp/feat-etsy-e5a-drift (both on f60beef0e).
+  The lead WIP-commits each worktree after every builder report.
+- E2 round 2 DONE: review — no blocker/major/minor, all round-1 findings fixed, 4 nits (R2-n1..n4; n3 decided by the
+  Owner's rule: a per-variation processing profile is allowed); tests — no branch failures (api 3411, web 4691 + web
+  typecheck pass, real-PG 3/3 + 2/2). RUNNING: B1 (R2-n1, n3, n4) + B4 (R2-n2). Then squash, rebase on main, scan, PR.
+- Next: fixes → check table → squash → commit scan → PR → wait for "merge #N".
+- Owner chose A (parallel). E3 spec DONE (E3-BUILD-SPEC.md: marker in platformAttributes._etsyCreate, recovery via
+  Mark as checked, allowDraftStock, Etsy DRAFT reads Inactive). E5 spec DONE (E5-BUILD-SPEC.md: E5a drift on the
+  4-hourly sweep + a "Differs on Etsy" mark; E5b Claude tools after E2 merges).
+- E3 worktree `/private/tmp/feat-etsy-e3-create` (branch feat/etsy-e3-create) and E5a worktree
+  `/private/tmp/feat-etsy-e5a-drift` (branch feat/etsy-e5a-drift) created on E2's tip 45446b4db, npm ci running;
+  both get reset to E2's final tip once E2's fix round lands, then their builders start.
+- E2 cannot be tested live until E3 makes a draft or the Owner links an existing Etsy listing; a live test needs his yes.
+- Nothing pushed for E2. No Etsy call made.
 
 ## Research results (one line each)
 - R1 Etsy API: no idempotency key; inventory PUT is a full replace; price/qty/SKU/processing only via inventory;
@@ -31,6 +54,6 @@ Updated: 2026-10-05, E1 PR #367 open. Lane: ETSY-PUBLISHER (memory: project_etsy
 - E1: builders → adversarial reviewer + test sweep → fixes → check table → commit scan → PR → wait for "merge #N".
 
 ## Rules for the next session
-- Read this file, then `git -C /private/tmp/feat-etsy-e1-review status` (builders' uncommitted work lives there).
+- Read this file, then `git -C /private/tmp/feat-etsy-e2-update status` and `git log origin/main..` (WIP commits).
 - Do not edit `apps/api/src/services/images/listing-photos.*` (PHOTO-CORE lane). E4 waits for that PR.
 - No build before the Owner's yes. No merge before "merge #N". No live Etsy call before his yes. Never set Railway vars.

@@ -176,10 +176,17 @@ export function normaliseEtsyListing(listingId: string, raw: EtsyLiveRaw): EtsyL
     if (id !== null && !axes.some(axis => axis.property_id === id)) axes.push({ property_id: id, property_name: words(pv.property_name) ?? '', scale_id: num(pv.scale_id) })
   }
   // Every live product, a SKU-less one included (sku ''): a full replace removes it, so the structure must show it.
+  // E2 — and Etsy's sharing rule, the four `*_on_property` arrays (which properties price, stock, SKU and processing
+  // profile vary by; empty = one for every variation, R1 §3), ids ascending, an absent array read as []. They are part of
+  // the structure, so of the revision: a change of what the variations share is a change of the listing.
+  const onProperty = (key: 'price_on_property' | 'quantity_on_property' | 'sku_on_property' | 'readiness_state_on_property') =>
+    [...new Set(numbers(raw.inventory[key]))].sort((a, b) => a - b)
   const inventory: EtsyInventoryStructure = { properties: axes, products: products
     .map(product => ({ sku: product.sku, values: axes.map(({ property_id }) => ({ property_id, values: valuesOf(product, property_id) })),
       readiness_state_id: product.offering.readiness_state_id ?? null }))
-    .sort((a, b) => byText(a.sku, b.sku) || byText(JSON.stringify(a.values), JSON.stringify(b.values))) }
+    .sort((a, b) => byText(a.sku, b.sku) || byText(JSON.stringify(a.values), JSON.stringify(b.values))),
+    price_on_property: onProperty('price_on_property'), quantity_on_property: onProperty('quantity_on_property'),
+    sku_on_property: onProperty('sku_on_property'), readiness_state_on_property: onProperty('readiness_state_on_property') }
   const firstBySku = new Map<string, EtsyWriteOffering>()
   for (const product of products) if (product.sku && !firstBySku.has(product.sku)) firstBySku.set(product.sku, product.offering)
 
@@ -201,7 +208,9 @@ export function normaliseEtsyListing(listingId: string, raw: EtsyLiveRaw): EtsyL
     translations,
     shop: { languages: codes(shop.languages), currencyCode: text(shop.currency_code)?.toUpperCase() ?? null },
     priceCurrencies: [...new Set(products.flatMap(product => product.currencies))].sort(byText),
-    revision: digest({ state, values, properties, inventory, translations }),
+    // E2 — an active listing that sells its last unit turns `sold_out` (and back on a restock): a sale must not refuse a
+    // send, so the revision reads the two as one. `inactive` (someone paused it) still changes it. `state` stays raw.
+    revision: digest({ state: state === 'sold_out' ? 'active' : state, values, properties, inventory, translations }),
   }
 }
 

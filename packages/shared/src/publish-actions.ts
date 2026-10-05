@@ -58,6 +58,7 @@ export const NEW_LISTING_SENT_WHOLE = 'A new listing is always sent whole.'
 /** New listings: Delete on a row not on the channel. */
 export const NOTHING_TO_DELETE_YET = 'Nothing to delete yet. To leave it out, set Status to Not listed.'
 export const FULL_EBAY_VARIATION = 'eBay changes a whole listing. Choose Full update on the main row.'
+export const FULL_ETSY_VARIATION = 'Etsy changes a whole listing. Choose Full update on the main row.'
 export const DELETE_EBAY_VARIATION = 'eBay changes a whole listing. Choose Delete on the main row.'
 export const FULL_EBAY_INVENTORY_LATER = 'Full update for eBay Inventory listings comes later. Partial update works.'
 /**
@@ -65,11 +66,13 @@ export const FULL_EBAY_INVENTORY_LATER = 'Full update for eBay Inventory listing
  * carries the same sentence as a warning — Review and synchronize… sends its fields.
  */
 export const SHOPIFY_EXISTING_NOT_YET = 'Publish cannot update a product already on Shopify yet. Use Review and synchronize… for its fields; its status changes in the Status column.'
-/** Etsy (D13): Publish refuses Etsy, so its listing fields stay in Nexus — the Partial update note and the photo pop-up's line. */
-export const ETSY_FIELDS_NOT_SENT = 'Publish does not send Etsy listing fields yet. They stay in Nexus.'
+/** Etsy (E2): Publish sends an Etsy listing's fields but not its photos — the photo pop-up's line. */
+export const ETSY_PHOTOS_NOT_SENT = 'Photos are not sent to Etsy yet; they come in a later Nexus update.'
 export const SHOPIFY_VARIATION_PRODUCT = 'Shopify changes the whole product. Choose it on the main row.'
 export const ENDED_FIRST = 'Ended on the channel. Set Active to relist it first.'
 export const FULL_WARNING = 'Every field Nexus manages is sent again. The review lists what the channel holds that Nexus does not; those values are removed.'
+/** Etsy's Full update: an unchanged variations line is not sent again (every inventory send replaces Etsy's whole inventory). */
+export const FULL_ETSY_WARNING = 'Every field Nexus manages is sent again, except unchanged variations (each send replaces Etsy\'s whole inventory). The review lists what Etsy holds that Nexus does not; those values are removed.'
 
 /**
  * The Action column's options for one row: Partial is always there (it is the default); Full and Delete by rule. A row
@@ -77,8 +80,8 @@ export const FULL_WARNING = 'Every field Nexus manages is sent again. The review
  * Partial update and Delete held with their reasons (its Status says whether Publish creates it).
  *
  * Partial update stays offered everywhere (it is the default and stores nothing), but where Publish sends no fields it
- * carries a warning that says so (D5, D13): a product already on Shopify (`SHOPIFY_EXISTING_NOT_YET`) and Etsy
- * (`ETSY_FIELDS_NOT_SENT`).
+ * carries a warning that says so (D5): a product already on Shopify (`SHOPIFY_EXISTING_NOT_YET`). Etsy, like eBay
+ * Trading, changes a whole listing: Full update on the main row only (`FULL_ETSY_VARIATION`).
  */
 export function sendModeOptions(model: ListingModel, state: SellingState, facts: SendModeFacts, channelLabel?: string): SendModeOption[] {
   const option = (mode: SendMode, reason: string | null, warning: string | null = null): SendModeOption => ({ mode, offered: !reason, reason, warning })
@@ -99,6 +102,7 @@ export function sendModeOptions(model: ListingModel, state: SellingState, facts:
       case 'ebay-trading': return facts.isVariation ? FULL_EBAY_VARIATION : null
       case 'ebay-inventory': return FULL_EBAY_INVENTORY_LATER
       case 'shopify': return SHOPIFY_EXISTING_NOT_YET
+      case 'etsy': return facts.isVariation ? FULL_ETSY_VARIATION : null
       default: return `Publishing to ${channelLabel ?? 'this channel'} from the product sheet is not available yet.`
     }
   }
@@ -110,8 +114,8 @@ export function sendModeOptions(model: ListingModel, state: SellingState, facts:
     return capability.offered ? option('delete', null, capability.warning) : option('delete', capability.reason ?? 'Not available here.')
   }
   const fullReason = full()
-  const partialWarning = model === 'shopify' ? SHOPIFY_EXISTING_NOT_YET : model === 'etsy' ? ETSY_FIELDS_NOT_SENT : null
-  return [option('partial', null, partialWarning), option('full', fullReason, fullReason ? null : FULL_WARNING), remove()]
+  const partialWarning = model === 'shopify' ? SHOPIFY_EXISTING_NOT_YET : null
+  return [option('partial', null, partialWarning), option('full', fullReason, fullReason ? null : model === 'etsy' ? FULL_ETSY_WARNING : FULL_WARNING), remove()]
 }
 
 // ── Paste and fill ────────────────────────────────────────────────────────────────────────────────
@@ -551,18 +555,19 @@ export const shopifyRenameSentence = (from: string, to: string) => `Shopify rena
 /** eBay Inventory API listings: a named Nexus gap (not an eBay refusal). */
 export const EBAY_INVENTORY_SKU_MOVE = 'Nexus cannot move an eBay Inventory listing to a new SKU yet: Delete it, then list it again.'
 
-/** Etsy: studio Publish does not send to Etsy, and nothing else sends an Etsy SKU change. */
+/** Etsy: studio Publish keeps the SKU Etsy holds, and nothing else sends an Etsy SKU change. */
 export const etsySkuMoveSentence = (from: string, to: string) =>
   `Nexus cannot send Etsy SKU changes yet: Etsy keeps ${from} for this listing (Nexus holds ${to}).`
 
 /**
- * Etsy (E1): studio Publish reviews an Etsy listing but sends nothing yet. `ETSY_SEND_NOT_YET` is why a submit sends
- * nothing (each refusal says "Nothing was sent." once, in its own words); `ETSY_REVIEW_ONLY` is the live review's warning;
- * `ETSY_REVIEW_SENDS_NOTHING` is a review's one error off live (in place of the gate sentence: in E1 live sends nothing either).
+ * Etsy (E2): studio Publish updates a listing Etsy already holds; creating a new one waits for E3. `ETSY_CREATE_NOT_YET` is
+ * why a create's submit sends nothing (each refusal says "Nothing was sent." once, in its own words);
+ * `ETSY_CREATE_REVIEW_ONLY` is a live create review's warning; `ETSY_CREATE_SENDS_NOTHING` is a create review's one error
+ * off live (in place of the gate sentence: live sends no create either).
  */
-export const ETSY_SEND_NOT_YET = 'Sending to Etsy comes in the next Nexus update.'
-export const ETSY_REVIEW_ONLY = 'Sending to Etsy comes in the next Nexus update: this review shows what Nexus would send, and Publish sends nothing to Etsy yet.'
-export const ETSY_REVIEW_SENDS_NOTHING = 'Sending to Etsy comes in the next Nexus update. This review shows what Nexus would send; nothing is sent.'
+export const ETSY_CREATE_NOT_YET = 'Creating a new Etsy listing from Nexus comes in the next Nexus update.'
+export const ETSY_CREATE_REVIEW_ONLY = 'Creating a new Etsy listing from Nexus comes in the next Nexus update: this review shows what Nexus would send, and Publish sends nothing to Etsy yet.'
+export const ETSY_CREATE_SENDS_NOTHING = 'Creating a new Etsy listing from Nexus comes in the next Nexus update. This review shows what Nexus would send; nothing is sent.'
 
 /**
  * The longest SKU each channel takes, where the repo can show it. Amazon: 40 characters (the seller-SKU limit; its
