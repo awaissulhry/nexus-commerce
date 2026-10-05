@@ -17,7 +17,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import type { StudioPublishResult } from '@nexus/shared/studio-publication'
 import { STILL_DRAFT_LISTING } from '@nexus/shared/push-lock'
-import { SHEET_PAUSE_REASON } from '@nexus/shared/listing-actions'
+import { ETSY_VARIATION_HIDDEN_REASON, SHEET_PAUSE_REASON } from '@nexus/shared/listing-actions'
 import { explainAmazonRelist } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -165,7 +165,8 @@ function scheduleAfter(row: PublicationRow | null, data: Record<string, any>, re
  * Channels whose accepted SKU turns its still-draft row into a live listing here: Amazon only. eBay
  * Trading does it in `reconcileEbayReceipt` with the ItemID. Shopify's synchronisation writes every
  * delivered row itself, with the Shopify ids and the status Shopify verified (ACTIVE, or INACTIVE for a
- * Shopify draft), so promoting here could only overrule an honest INACTIVE.
+ * Shopify draft), so promoting here could only overrule an honest INACTIVE. Etsy has its own step
+ * (`promoteEtsyVariations`): a new variation joins the family's one Etsy listing, and Etsy has no closed offer.
  */
 const PROMOTE_ON_ACCEPTANCE = new Set(['AMAZON'])
 
@@ -203,6 +204,74 @@ async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: Publ
 }
 
 /**
+ * E2 — a variation that is new on Etsy joins the family's ONE Etsy listing when the send added it: Etsy holds a whole
+ * family as one listing, so the row takes the listing id the family's live rows already carry, and the owner row's
+ * status and sync pause (a paused listing stays paused; nothing here lifts an operator's hold). The row's SKU is the one
+ * its journal names (what Nexus sent). Only rows that are still drafts at this destination, only under a VERIFIED
+ * result (the records accept a journal only then, studio-publication-records.ts; checked here as well), and only when
+ * the family's live rows name exactly one Etsy listing — two would be a family split across listings, which Nexus
+ * does not guess about.
+ *
+ * There is no Amazon-style closed offer for Etsy (no `purchasableOffer`, no `productType`). Two holds, written in the
+ * same update (hidden wins):
+ * - a row the publication created Inactive (D6, `inactiveProductIds`) joined the listing hidden (`is_enabled: false`):
+ *   it gets the Etsy variation hold (`ETSY_VARIATION_HIDDEN_REASON`), so its Status reads Inactive and no stock push
+ *   reaches it until it is shown again;
+ * - a row that joins a listing paused as a whole (a family row INACTIVE, or held with `sheet-pause` — the rule of the
+ *   Etsy action adapter's `etsyListingPaused`) gets that listing-level hold (`SHEET_PAUSE_REASON`), so its price and
+ *   stock pushes stay held with the rest of the listing, and the listing's Resume lifts it and sends its stock.
+ *
+ * Returns the promoted rows that SELL — the ones whose held prices go now; a row promoted held is not among them.
+ */
+async function promoteEtsyVariations(tx: Prisma.TransactionClient, context: PublicationRecordContext, data: Record<string, any>,
+  result: StudioPublishResult): Promise<string[]> {
+  if (context.channel !== 'ETSY' || result.status !== 'VERIFIED') return []
+  const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
+    channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
+  select: { channelListingId: true, payload: true } })
+  if (!accepted?.length) return []
+  const destination = { channel: context.channel, marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey }
+  const drafts = await tx.channelListing.findMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, ...destination, ...STILL_DRAFT_LISTING },
+    select: { id: true, productId: true } })
+  if (!drafts.length) return []
+  const productIds: string[] = Array.isArray(data.delivery?.productIds) ? data.delivery.productIds.filter((id: unknown): id is string => typeof id === 'string') : []
+  const live = await tx.channelListing.findMany({ where: { ...destination, productId: { in: productIds }, externalListingId: { not: null } },
+    select: { productId: true, externalListingId: true, listingStatus: true, syncPaused: true, offerClosedAt: true, offerCloseReason: true } })
+  const listingIds = [...new Set(live.map(row => row.externalListingId).filter((id): id is string => typeof id === 'string' && id !== ''))]
+  if (listingIds.length !== 1) {
+    logger.warn('studio publication: Etsy variations not promoted — the family\'s live rows do not name exactly one Etsy listing', {
+      publicationId: context.reviewId, listings: listingIds.length, drafts: drafts.length })
+    return []
+  }
+  const [etsyListingId] = listingIds
+  const owner = live.find(row => row.productId === data.productId)
+  const skuOf = new Map(accepted.map(row => { const sku = object(row.payload).sku; return [row.channelListingId, typeof sku === 'string' && sku.trim() ? sku.trim() : null] }))
+  const inactive = createdInactive(data)
+  // The listing is paused as a whole: the same rule as the Etsy action adapter (`etsyListingPaused`).
+  const listingPaused = live.some(row => row.listingStatus === 'INACTIVE' || (!!row.offerClosedAt && row.offerCloseReason === SHEET_PAUSE_REASON))
+  const shown: string[] = []
+  for (const draft of drafts) {
+    const hidden = inactive.has(draft.productId)
+    const held = hidden || listingPaused
+    const sku = skuOf.get(draft.id) ?? null
+    const promoted = await tx.channelListing.updateMany({ where: { id: draft.id, ...destination, ...STILL_DRAFT_LISTING }, data: {
+      externalListingId: etsyListingId, isPublished: true, listingStatus: owner?.listingStatus ?? 'ACTIVE',
+      // The owner row's pause, or — with no owner row to follow — the pause the draft already had kept (never lifted on a guess).
+      ...(owner ? { syncPaused: owner.syncPaused } : {}),
+      ...(sku ? { liveChannelSku: sku } : {}),
+      lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', version: { increment: 1 },
+      ...(held ? { offerClosedAt: new Date(), offerClosedBy: context.userId ?? 'publish', offerActive: false,
+        offerCloseReason: hidden ? ETSY_VARIATION_HIDDEN_REASON : SHEET_PAUSE_REASON,
+        offerCloseSnapshot: (hidden
+          ? { channel: 'ETSY', source: 'publish', createdInactive: true, publicationId: context.reviewId, etsyListingId }
+          : { channel: 'ETSY', source: 'publish', listingPaused: true, publicationId: context.reviewId, etsyListingId }) as never } : {}),
+    } })
+    if (promoted.count && !held) shown.push(draft.id)
+  }
+  return shown
+}
+
+/**
  * S3 (per-channel SKU) — Amazon accepted these rows under the seller SKU each one's journal names (the SKU that was
  * sent), so that is the SKU Amazon holds for them now (`ChannelListing.liveChannelSku`, `confirmLiveChannelSku`). Every
  * row this publication got accepted, live or draft; idempotent. S4 — eBay the same: an accepted eBay publication (Trading
@@ -212,7 +281,8 @@ async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: Publ
  * S5 — Shopify too: its studio publication journals each variant under the SKU the native publisher sent, and its
  * result is VERIFIED only after Shopify read every variant back with that SKU (shopify/content-publisher.ts), so an
  * ACCEPTED row's journal SKU is the SKU Shopify holds. Only rows Shopify now maps to a variant (`variantId`): a grouped
- * family's main row is the product's content owner and holds no SKU on Shopify. Etsy has no studio publication.
+ * family's main row is the product's content owner and holds no SKU on Shopify. Etsy: E2 moves no SKU (a new variation's
+ * journal SKU is recorded when it is promoted, `promoteEtsyVariations`).
  */
 const CONFIRMS_SENT_SKU: ReadonlySet<string> = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 /** The results under which `settlePublicationRecords` accepts a row (a refused or unknown result accepts none). */
@@ -292,6 +362,7 @@ async function heldPricesAfterGoLive(listingIds: string[], userId: string | null
  */
 export async function storeResult(id: string, data: Record<string, any>, userId: string | null, result: StudioPublishResult, statuses: string[]) {
   let promoted: string[] = []
+  let etsyShown: string[] = []
   let before: PublicationRow | null = null
   const stored = await prisma.$transaction(async tx => {
     before = await tx.bulkOperation.findFirst({ where: { id }, select: { status: true, productId: true, channel: true, marketplace: true,
@@ -311,6 +382,7 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
       await settlePublicationRecords(tx, context, result)
       await confirmAcceptedSellerSkus(tx, context, result)
       promoted = await promoteAcceptedDrafts(tx, context, data)
+      etsyShown = await promoteEtsyVariations(tx, context, data, result)
     }
     return stored
   })
@@ -326,6 +398,9 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
     // while the row was a draft, is sent once now that it is live. Never throws.
     await heldPricesAfterGoLive(promoted, userId)
   }
+  // E2 — the Etsy variations that joined their listing and sell: their held prices go once now (never an ASIN read:
+  // that is Amazon's). A variation that joined hidden keeps its prices held until it is shown. Never throws.
+  if (etsyShown.length) await heldPricesAfterGoLive(etsyShown, userId)
   // Amazon sheet gaps — the offer drafts Amazon accepted become live, once, in their own transaction; the result sweep
   // recovers a run that never committed. Loaded here: the doors load the outbound queue. Never throws.
   if (stored.count && data.captureVersion === 1) await import('./studio-publication-offer-promotion.js')

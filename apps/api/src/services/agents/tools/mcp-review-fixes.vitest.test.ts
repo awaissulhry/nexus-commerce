@@ -312,9 +312,9 @@ describe('publish-listing names exactly one destination', { timeout: DB_TEST_TIM
     expect(out).toMatchObject({ ok: false, error: 'REV-MULTI has Amazon listings in DE, IT, UK: name the market (marketplace).' })
   })
 
-  it('Etsy has no publisher: refused before anything is read', async () => {
+  it('Etsy: Claude cannot publish there yet (the product studio can): refused before anything is read', async () => {
     const out = await dryRun('publish-listing', { productId: ids.multi, channel: 'ETSY', marketplace: 'GLOBAL' })
-    expect(out).toMatchObject({ ok: false, error: 'REV-MULTI: publishing to Etsy from Nexus is not available yet; nothing can be sent there.' })
+    expect(out).toMatchObject({ ok: false, error: 'REV-MULTI: Claude cannot publish to Etsy yet; publish it from the product studio in Nexus. Nothing was sent.' })
   })
 })
 

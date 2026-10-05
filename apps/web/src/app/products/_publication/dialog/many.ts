@@ -44,8 +44,8 @@ export const MAX_BATCH_REVIEWS = 1_000
 
 /**
  * Channels a many-product publish can reach. Amazon and eBay are reviewed field by field and sent without a question
- * per product; Shopify needs a stock location and an overwrite confirmation for each product, and Etsy cannot be
- * published from Nexus yet — both stay in each product's own Publish window.
+ * per product; Shopify needs a stock location and an overwrite confirmation for each product, and Etsy publishes
+ * from each product's own Publish window only (a many-product Etsy publish is not built) — both stay there.
  */
 export const MANY_CHANNELS = ['AMAZON', 'EBAY'] as const
 /**

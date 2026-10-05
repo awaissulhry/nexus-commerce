@@ -1,4 +1,4 @@
-/** E1 — the Etsy studio publication contract (types only + one constant). B1 owns it; B2 and B3 import it. */
+/** E1/E2 — the Etsy studio publication contract (types and two constants). B1 owns it; B2 and B3 import it. */
 import type { StudioPublishChange, StudioPublishFieldWrite, StudioPublishIssue, StudioPublishRemoval } from '@nexus/shared/studio-publication'
 import type { EtsyInventoryWrite, EtsyWriteOffering } from '../etsy/inventory.js'
 
@@ -35,6 +35,15 @@ export interface EtsyInventoryStructure {
   properties: Array<{ property_id: number; property_name: string; scale_id: number | null }>
   /** One per Etsy product, sorted by sku; `values` in `properties` order. */
   products: Array<{ sku: string; values: Array<{ property_id: number; values: string[] }>; readiness_state_id: number | null }>
+  /**
+   * E2 — Etsy's `*_on_property` rules (R1 §3): the variation properties the price, the stock, the SKU and the processing
+   * profile vary by (ids sorted ascending); `[]` = one value shared by every variation. Absent = not read. A listing that
+   * exists keeps Etsy's own rules (Nexus never changes them); only a new listing takes Nexus's.
+   */
+  price_on_property?: number[]
+  quantity_on_property?: number[]
+  sku_on_property?: number[]
+  readiness_state_on_property?: number[]
 }
 
 export interface EtsyTranslation { language: string; title: string | null; description: string | null; tags: string[] }
@@ -100,6 +109,11 @@ export interface EtsyPublication {
   liveSkipped?: string
   notices?: string[]
   fieldWrites?: Record<string, StudioPublishFieldWrite[]>
+  /** The market currency Nexus holds Etsy prices in (`currencyCode(facts.destination.currency)`); new variations are priced in it. */
+  currency: string | null
+  /** Why variations Etsy does not hold cannot be sent now (they carry Nexus stock; Etsy order import off/not activated), or a
+   * send that changes Etsy's stock-sharing rule (it counts as stock too). */
+  newVariationStockRefusal?: string
 }
 
 export interface EtsyChangePlan {
@@ -113,9 +127,24 @@ export interface EtsyChangePlan {
   createWrites: Record<string, StudioPublishFieldWrite[]>
   removals?: StudioPublishRemoval[]
   fullIssues?: StudioPublishIssue[]
+  full?: true
 }
 
-export interface EtsyCall { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; encoding: 'form' | 'json' | 'none'; body: Record<string, unknown> | null; note?: string }
+export interface EtsyCall { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; encoding: 'form' | 'json' | 'none'; body: Record<string, unknown> | null; note?: string
+  /** the change fields this call writes (journal `writes`, read-back) */
+  fields?: string[] }
 /** The calls a send would make, in order. Paths use the literal `{shop_id}` (and `{listing_id}` for a new listing). */
 export interface EtsyWireRequest { operation: 'createDraftListing' | 'updateListing'; listingId: string | null; calls: EtsyCall[] }
-export type EtsyCompiled = EtsyPublication & { products: ProductIdentity[]; fieldWrites: Record<string, StudioPublishFieldWrite[]>; request: EtsyWireRequest | null }
+export type EtsyCompiled = EtsyPublication & { products: ProductIdentity[]; fieldWrites: Record<string, StudioPublishFieldWrite[]>; request: EtsyWireRequest | null
+  /** Full update: live SKUs the inventory PUT may drop (each listed in `removals`), and whether SKU-less live products may go. */
+  removeSkus: string[]; removeUnnamed: boolean
+  /** SKUs the inventory PUT adds (Etsy did not hold them at the review). */
+  addedSkus: string[] }
+/** What the review's request shows for a variation Etsy holds: its price, stock and on/off are read from Etsy at send and kept. */
+export const ETSY_KEPT_AT_SEND = "(Etsy's, read at send)"
+/** One journalled call, exactly as sent (paths keep the literal `{shop_id}`; the listing id is real). */
+export interface EtsyJournalRequest { operation: 'updateListing'; method: EtsyCall['method']; path: string; encoding: EtsyCall['encoding']
+  body: Record<string, unknown> | null; fields: string[] }
+export type EtsyBeforeSend = (request: EtsyJournalRequest) => Promise<void>
+export interface EtsySendStep { label: string; fields: string[]; outcome: 'applied' | 'unchanged' | 'refused' | 'unknown' | 'not-sent'; message?: string }
+export interface EtsySendReceipt { reference: string; verified: boolean; steps: EtsySendStep[]; mismatches: string[]; readBackError?: string }

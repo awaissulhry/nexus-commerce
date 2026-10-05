@@ -307,6 +307,12 @@ async function processOutboundSyncJobInner(job: Job) {
     // ─────────────────────────────────────────────────────────────────────
     // UPDATE QUEUE RECORD
     // ─────────────────────────────────────────────────────────────────────
+    // E2 (D5, 2026-10-05) — a row this job did not get (another run claimed it first, or already moved it on: the
+    // cron backstop, or the Etsy lane sending it in one write with its listing's other rows) belongs to that run,
+    // which records its answer. Writing PENDING/FAILED here would overwrite the winner's row, so nothing is written.
+    if (!syncResult.success && (syncResult.error === 'claim-lost' || syncResult.error === 'not-pending')) {
+      return { status: 'SKIPPED', queueId, reason: syncResult.message }
+    }
     if (syncResult.success) {
       const completion = completedSyncQueueData(syncResult)
       await prisma.outboundSyncQueue.update({

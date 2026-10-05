@@ -14,7 +14,7 @@ import {
   SHARED_ACTION_MIXED_REFUSED, commonSendMode, listingWords, parseSharedSendInput, sharedActionEditorOptions, sharedActionMenuEntries,
   sharedActionValue, sharedDeleteImpact, sharedDeletedRefusal, sharedOperationToast, sharedPartialHint,
 } from './sharedActionColumn'
-import { ETSY_FIELDS_NOT_SENT, SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
+import { SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
 import { ENDED_NEEDS_DELETE } from '../channel/statusColumn'
 import {
   cellsByProduct, headerSellingOf, marketLabel, marketLine, publishButtonWords, publishWaitingCount, sellingSummaryOf, statusWaitingOf,
@@ -189,29 +189,31 @@ describe('the shared Action cell', () => {
     expect(parseSharedSendInput(value)).toEqual({ refused: SHARED_ACTION_MIXED_REFUSED })
   })
 
-  // Wave 2 D5 / D13 — a product already on Shopify, and Etsy: the quiet hint never says "only the fields you changed" there.
-  it('Partial update names what Publish does not send on Shopify (already on it) and Etsy markets', () => {
+  // Wave 2 D5 — a product already on Shopify: the quiet hint never says "only the fields you changed" there. Etsy (E2):
+  // Publish sends its listing fields, so an Etsy market carries no note and reads like the others.
+  it('Partial update names what Publish does not send on Shopify (already on it); an Etsy market reads like the others', () => {
     const partial = (warning: string | null) => [
       { mode: 'partial' as const, offered: true, reason: null, warning },
       { mode: 'full' as const, offered: !warning, reason: warning, warning: null },
       { mode: 'delete' as const, offered: true, reason: null, warning: null },
     ]
     const shopify = cell({ channel: 'SHOPIFY', marketplace: 'GLOBAL', sendOptions: partial(SHOPIFY_EXISTING_NOT_YET) })
-    const etsy = cell({ channel: 'ETSY', marketplace: 'GLOBAL', sendOptions: partial(ETSY_FIELDS_NOT_SENT) })
+    const etsy = cell({ channel: 'ETSY', marketplace: 'GLOBAL', sendOptions: partial(null) })
     // One Shopify market: the channel scope's sentence, alone.
     const only = sharedActionValue([shopify], read)!
     expect(only.ariaLabel).toBe(`Action: Partial update. ${SHOPIFY_EXISTING_NOT_YET}`)
     expect(only.tooltip).not.toContain('only the fields you changed')
-    // Amazon, Shopify and Etsy: each sentence after its market, then the other markets.
-    const hint = `Shopify · GLOBAL: ${SHOPIFY_EXISTING_NOT_YET} Etsy · GLOBAL: ${ETSY_FIELDS_NOT_SENT} Other markets: Publish sends only the fields you changed.`
+    // Amazon, Shopify and Etsy: the Shopify sentence after its market, then the other markets (Etsy among them).
+    const hint = `Shopify · GLOBAL: ${SHOPIFY_EXISTING_NOT_YET} Other markets: Publish sends only the fields you changed.`
     expect(sharedPartialHint([cell(), shopify, etsy])).toBe(hint)
     expect(sharedActionValue([cell(), shopify, etsy], read)!.ariaLabel).toBe(`Action: Partial update on every market (3). ${hint}`)
-    // No note anywhere: the usual hint.
+    // No note anywhere (an Etsy market included): the usual hint.
     expect(sharedPartialHint([cell(), cell({ marketplace: 'DE' })])).toBeNull()
+    expect(sharedPartialHint([cell(), etsy])).toBeNull()
     expect(sharedActionValue([cell(), cell({ marketplace: 'DE' })], read)!.ariaLabel).toBe('Action: Partial update on every market (2). Publish sends only the fields you changed.')
     // The editor's Partial update says the same.
     expect(sharedActionEditorOptions([shopify, etsy], true).find(o => o.value === 'partial')!.note)
-      .toBe(`The default. Shopify · GLOBAL: ${SHOPIFY_EXISTING_NOT_YET} Etsy · GLOBAL: ${ETSY_FIELDS_NOT_SENT}`)
+      .toBe(`The default. Shopify · GLOBAL: ${SHOPIFY_EXISTING_NOT_YET} Other markets: Publish sends only the fields you changed.`)
     expect(sharedActionEditorOptions([cell(), cell()], true).find(o => o.value === 'partial')!.note).toBe('The default. Only the fields you changed.')
   })
 

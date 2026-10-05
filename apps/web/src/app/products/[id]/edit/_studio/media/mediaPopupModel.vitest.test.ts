@@ -189,11 +189,11 @@ describe('what the pop-up shows', () => {
     expect(checks(r, base, initialDraft(r, base))).toEqual([])
     expect(saveLine(base, initialDraft(r, base))).toBe('Saves in Nexus · Publish sends it to eBay')
   })
-  it('Etsy (wave 2 D13): Publish sends no Etsy listing field yet, so the line says they stay in Nexus', () => {
+  it('Etsy (E2): Publish sends an Etsy listing\'s fields but not its photos yet, so the line says so', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
     const base = planBase(r, { rowProductId: 'y-s', address: onEbay })
     const etsy = { ...base, destination: dest('LISTING:ETSY:GLOBAL:etsy:', { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy', api: undefined }) }
-    expect(saveLine(etsy, initialDraft(r, base))).toBe('Saves in Nexus · Publish does not send Etsy listing fields yet. They stay in Nexus.')
+    expect(saveLine(etsy, initialDraft(r, base))).toBe('Saves in Nexus · Photos are not sent to Etsy yet; they come in a later Nexus update.')
   })
   it('Shopify (wave 2 D5): a row already on Shopify names Review and synchronize…; a row not on Shopify keeps Publish', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
