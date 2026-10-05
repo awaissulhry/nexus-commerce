@@ -644,6 +644,8 @@ CREATE TABLE "ChannelListing" (
     "marketplace" TEXT NOT NULL DEFAULT 'DEFAULT',
     "externalListingId" TEXT,
     "externalParentId" TEXT,
+    "channelSku" TEXT,
+    "liveChannelSku" TEXT,
     "platformProductId" TEXT,
     "title" TEXT,
     "description" TEXT,
@@ -10208,6 +10210,12 @@ CREATE INDEX "ChannelListing_channel_marketplace_listingStatus_idx" ON "ChannelL
 
 -- CreateIndex
 CREATE INDEX "ChannelListing_workspaceId_idx" ON "ChannelListing"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ChannelListing_channelSku_idx" ON "ChannelListing"("channelSku");
+
+-- CreateIndex
+CREATE INDEX "ChannelListing_liveChannelSku_idx" ON "ChannelListing"("liveChannelSku");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ChannelListing_productId_channelMarket_akey_key" ON "ChannelListing"("workspaceId", "productId", "channelMarket", "channelConnectionId", "aliasKey");
