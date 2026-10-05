@@ -104,7 +104,9 @@ const saveAdRule: AgentTool = {
     '(marketing). Waits for a person to approve it in Nexus. A new rule is born OBSERVE (it runs and records, proposes ' +
     'and writes nothing; an eBay rule is saved OFF) and climbs with turn-up-automation. Refused, in words: any pause ' +
     '(never pause — use lower_bid_to_floor), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
-    'the whole account), a cap missing or 0, a percent where a fraction belongs (0.3, not 30), a condition on a field ' +
+    'the whole account), a cap missing or 0, a percent where a fraction belongs (condition ratios such as acos are fractions: 0.3, not 30; ' +
+    'action values carry their own unit — bid_apply\'s targetAcos and every …Pct value are percents, and eBay rule values are ' +
+    'percents), a condition on a field ' +
     "the trigger never hands the rule, no conditions. Editing an AUTO rule drops it to PROPOSE. Amazon and marketing " +
     'rules: trigger, conditions [{ field, op, value }], actions [{ type, … }], caps. eBay: trigger { scope, all }, action, ' +
     'guardrails { maxActionsPerRun }. Give ruleId to edit: fields left out keep the rule\'s own.',

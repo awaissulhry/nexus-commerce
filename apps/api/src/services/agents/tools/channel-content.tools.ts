@@ -379,7 +379,8 @@ const setShopifyContent: AgentTool = {
   description:
     "Change a Shopify listing's store fields — metafields, vendor, tags, product type, category, SEO title and "
     + 'description — in the listing\'s Nexus draft, through the Shopify sheet\'s own writer; reset drops a field\'s draft '
-    + 'value. Shopify changes when the draft is synchronized from Nexus. The listing\'s title and description follow the '
+    + 'value. Shopify changes only when a person reviews and sends the draft in the Nexus product studio (Review and '
+    + 'synchronize): no Claude tool and no sync sends a draft with unreviewed changes. The listing\'s title and description follow the '
     + 'shared text (set-content). Refused when Nexus has no copy of the store\'s field list (the metafields would be '
     + 'invisible), when the product has no Shopify listing yet, and for a field that cannot be edited (the reason is '
     + 'given). Give englishMeaning for every text set unless the store language is en. A person approves it in Nexus.',
