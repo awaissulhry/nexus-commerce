@@ -189,6 +189,21 @@ describe('what the pop-up shows', () => {
     expect(checks(r, base, initialDraft(r, base))).toEqual([])
     expect(saveLine(base, initialDraft(r, base))).toBe('Saves in Nexus · Publish sends it to eBay')
   })
+  it('Etsy (wave 2 D13): Publish sends no Etsy listing field yet, so the line says they stay in Nexus', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }])
+    const base = planBase(r, { rowProductId: 'y-s', address: onEbay })
+    const etsy = { ...base, destination: dest('LISTING:ETSY:GLOBAL:etsy:', { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy', api: undefined }) }
+    expect(saveLine(etsy, initialDraft(r, base))).toBe('Saves in Nexus · Publish does not send Etsy listing fields yet. They stay in Nexus.')
+  })
+  it('Shopify (wave 2 D5): a row already on Shopify names Review and synchronize…; a row not on Shopify keeps Publish', () => {
+    const r = read([{ key: 'SHARED', plan: SHARED }])
+    const base = planBase(r, { rowProductId: 'y-s', address: onEbay })
+    const shopify = { ...base, destination: dest('LISTING:SHOPIFY:GLOBAL:shop:', { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop', api: undefined }) }
+    expect(saveLine(shopify, initialDraft(r, base), { onShopify: true })).toBe('Saves in Nexus · Review and synchronize… sends it to Shopify')
+    expect(saveLine(shopify, initialDraft(r, base))).toBe('Saves in Nexus · Publish sends it to Shopify')
+    // The fact only speaks for Shopify: eBay keeps its Publish line.
+    expect(saveLine(base, initialDraft(r, base), { onShopify: true })).toBe('Saves in Nexus · Publish sends it to eBay')
+  })
   it('a check tied to a photo and not to a set (Amazon\'s size rule) is shown for this set\'s photos only', () => {
     const r = read([{ key: 'SHARED', plan: SHARED }])
     const amazon = { layer: 'LISTING' as const, channel: 'AMAZON', marketplace: 'IT', accountId: 'amz', aliasKey: '' }

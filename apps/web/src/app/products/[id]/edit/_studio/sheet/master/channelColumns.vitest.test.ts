@@ -102,7 +102,7 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
     ['a mapping expression', { mapped: { ...plain, usesExpression: true } }, 'mapped', 'Derived by a mapping rule from the Shared product'],
     ['a rule that appended text', { mapped: { ...plain, appliedTransforms: ['append'] } }, 'mapped', 'Derived by a mapping rule from the Shared product'],
     ['a Shopify edit Shopify does not have yet', { source: 'channelExplicit', layer: 'channel', pinned: true, inherited: false, nexusDraft: true, unsentDraft: true },
-      'pending', 'Saved in Nexus — not sent to Shopify yet. Review synchronization to send it'],
+      'pending', 'Saved in Nexus — not sent to Shopify yet. Use Review and synchronize… to send it'],
     ['an AI translation not reviewed', { translation: { source: 'ai', reviewedAt: null, outdated: false } }, 'ai',
       'Translated by machine and not reviewed yet'],
     ['an out-of-date translation', { translation: { source: 'manual', reviewedAt: null, outdated: true } }, 'outdated',

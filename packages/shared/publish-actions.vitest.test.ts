@@ -4,7 +4,7 @@ import {
   fillResultSentence, isRelistChoice, isStaleWaiting, needsTypedConfirm, parseSendMode, parseStatusTarget, publishPlanSummary,
   relistSentence, SEND_ORDER, sendModeOf, sendModeOptions, statusTargetOf, storedSendMode, storedStatusTarget,
   waitingMark, NEW_LISTING_SENT_WHOLE, SEND_MODE_LABEL, SEND_MODES, newRowId, parseNewRowId, isNewRowId, startedSentence, leftOutSentence,
-  SHARED_NO_LISTING,
+  SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, ETSY_FIELDS_NOT_SENT,
 } from './publish-actions.js'
 import { AMAZON_FBA_DELETE_WARNING, type ListingDeletion } from './listing-actions.js'
 
@@ -44,6 +44,24 @@ describe('Action column options', () => {
   it('Shopify: no content update of an existing product yet; Delete on the main row', () => {
     expect(offered(sendModeOptions('shopify', 'active', { isParent: true, isVariation: false }))).toEqual(['partial', 'delete'])
     expect(offered(sendModeOptions('shopify', 'active', { isParent: false, isVariation: true }))).toEqual(['partial'])
+  })
+  // Wave 2 D5 / D13 — Partial update stays the offered default, but says so where Publish sends no field.
+  it('a product already on Shopify: Partial update warns that Review and synchronize… sends its fields', () => {
+    expect(SHOPIFY_EXISTING_NOT_YET).toBe('Publish cannot update a product already on Shopify yet. Use Review and synchronize… for its fields; its status changes in the Status column.')
+    for (const state of ['active', 'paused', 'ended'] as const) {
+      const options = sendModeOptions('shopify', state, { isParent: true, isVariation: false })
+      expect(options.find(o => o.mode === 'partial')).toEqual({ mode: 'partial', offered: true, reason: null, warning: SHOPIFY_EXISTING_NOT_YET })
+    }
+    // A Shopify row not on the channel is created whole: no such warning.
+    expect(sendModeOptions('shopify', 'not_listed', row).find(o => o.mode === 'partial')!.warning).toBeNull()
+  })
+  it('Etsy: Partial update warns that Publish sends no Etsy listing field yet', () => {
+    expect(ETSY_FIELDS_NOT_SENT).toBe('Publish does not send Etsy listing fields yet. They stay in Nexus.')
+    expect(sendModeOptions('etsy', 'active', row, 'Etsy').find(o => o.mode === 'partial')).toEqual({ mode: 'partial', offered: true, reason: null, warning: ETSY_FIELDS_NOT_SENT })
+  })
+  it('Amazon and eBay: Partial update carries no warning', () => {
+    for (const model of ['amazon', 'ebay-trading', 'ebay-inventory'] as const)
+      expect(sendModeOptions(model, 'active', row).find(o => o.mode === 'partial')!.warning).toBeNull()
   })
 })
 

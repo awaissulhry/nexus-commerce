@@ -20,9 +20,9 @@ vi.mock('../channel-delist.service.js', async original => ({ ...(await original<
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, NEW_LISTING_ALIAS, RELIST_SENTENCE,
-  SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
-import { DELETE_EBAY_VARIATION, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
+import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
+  RELIST_SENTENCE, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
+import { DELETE_EBAY_VARIATION, ETSY_FIELDS_NOT_SENT, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
 import { clearWaitingValues, parsePublishActionBody, readPublishActions, SHARED_DELETED, writePublishActions, type PublishActionActor } from './publish-action.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -243,6 +243,34 @@ describe('No longer applies, and the runners\' clear', () => {
     expect(await stored(m)).toMatchObject({ sellingTarget: 'INACTIVE', sellingTargetById: ids.bruno })
     expect(await stored(l)).toMatchObject({ sellingTarget: 'INACTIVE' })
     expect(fixture.events).toEqual([expect.objectContaining({ productId: f.root, listingIds: [s], column: 'status', value: null })])
+  }))
+})
+
+/* Wave 2 D13 (decision 12) — while Etsy publishing is off, Publish cannot send an Etsy Status change: it is held. */
+describe('Etsy: Status changes are held while Etsy publishing is off', () => {
+  it('holds Inactive with the reason, says Partial update sends no field, and a value set while it was on no longer applies', () => scoped(async () => {
+    const before = process.env.NEXUS_ENABLE_ETSY_PUBLISH
+    try {
+      delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      const f = await family('PA-ETSY', ['S'])
+      const s = await listing(f.children.S, 'ETSY', 'IT', ids.etsy)
+      const read = async () => (await readPublishActions(f.root)).find(c => c.listingId === s)!
+      const off = await read()
+      expect(off.state).toBe('active')
+      expect(off.statusOptions.map(o => [o.target, o.offered, o.reason])).toEqual([['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
+      expect(off.sendOptions.find(o => o.mode === 'partial')).toMatchObject({ offered: true, warning: ETSY_FIELDS_NOT_SENT })
+      expect((await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())).refused)
+        .toEqual([{ listingId: s, sku: 'PA-ETSY-S', reason: ETSY_PUBLISHING_OFF }])
+      // With Etsy publishing on, Inactive is a choice again; once it is off, the stored value says why Publish skips it.
+      process.env.NEXUS_ENABLE_ETSY_PUBLISH = 'true'
+      expect((await read()).statusOptions.find(o => o.target === 'inactive')).toMatchObject({ offered: true, reason: null, action: 'pause' })
+      expect(await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())).toMatchObject({ applied: [s], refused: [] })
+      delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      expect((await read()).status).toMatchObject({ target: 'inactive', noLongerApplies: ETSY_PUBLISHING_OFF })
+    } finally {
+      if (before === undefined) delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      else process.env.NEXUS_ENABLE_ETSY_PUBLISH = before
+    }
   }))
 })
 

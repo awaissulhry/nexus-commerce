@@ -86,6 +86,23 @@ describe('what the cells show', () => {
       .toEqual({ mode: 'delete', setAt: T0, setByName: 'Awais', lockedReason: 'No role.' })
   })
 
+  // Wave 2 D5 / D13 — where Publish sends no field, the Partial update cell and its editor say so (the server's warning).
+  it('a product already on Shopify, and Etsy: Partial update says Publish sends none of its fields', () => {
+    const existing = 'Publish cannot update a product already on Shopify yet. Use Review and synchronize… for its fields; its status changes in the Status column.'
+    const shopify = cell({ channel: 'SHOPIFY', marketplace: 'GLOBAL', sendOptions: [
+      { mode: 'partial', offered: true, reason: null, warning: existing },
+      { mode: 'full', offered: false, reason: existing, warning: null },
+      { mode: 'delete', offered: true, reason: null, warning: null },
+    ] })
+    const value = actionCellValue(shopify, read)
+    expect(value).toEqual({ mode: 'partial', setAt: null, setByName: null, lockedReason: null, partialNote: existing })
+    expect(publishActionModel(value).tooltip).toBe(`Partial update: ${existing}`)
+    expect(actionEditorChoices(shopify, true)[0]).toMatchObject({ value: 'partial', note: `The default. ${existing}` })
+    // Amazon and eBay: no note, the usual hint.
+    expect(actionCellValue(cell(), read)).not.toHaveProperty('partialNote')
+    expect(publishActionModel(actionCellValue(cell(), read)).tooltip).toBe('Partial update: Publish sends only the fields you changed.')
+  })
+
   it('a waiting value the listing outgrew says so in the cell\'s reason', () => {
     const value = statusCellValue(cell({ state: 'ended', status: { target: 'inactive', setAt: T0, setById: 'u', setByName: 'A', noLongerApplies: 'Ended on eBay' } }), read)
     expect(value?.reason).toBe('The waiting change to Inactive no longer applies: Ended on eBay. Publish skips it.')

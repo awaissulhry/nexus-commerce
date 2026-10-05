@@ -265,7 +265,7 @@ describe('the mark’s one text (its hover and its accessible name), as the cell
     expect(channelCellFrom(own, 'listingLevel', { row: { ...ROW, sku: 'GALE-JACKET' } })).toBeNull()
   })
   it('a Shopify edit Shopify does not have yet says so, in plain words', () => {
-    expect(hover(byName('a Shopify edit Shopify does not have yet'))).toBe('Saved in Nexus — not sent to Shopify yet. Review synchronization to send it')
+    expect(hover(byName('a Shopify edit Shopify does not have yet'))).toBe('Saved in Nexus — not sent to Shopify yet. Use Review and synchronize… to send it')
   })
   it('a language fallback names the language, never its code', () => {
     expect(hover(byName('a language fallback (an eBay DE title'))).toBe('Inherited from the Italian text — edit to give this row its own value')

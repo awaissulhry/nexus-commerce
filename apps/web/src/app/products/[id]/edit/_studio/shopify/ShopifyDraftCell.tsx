@@ -21,6 +21,7 @@ import { linkedEndpoint, linkedRequest } from './api'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { isShopifyHistoryValue, noteShopifyEdit, noteShopifyReplay, replayShopifyHistory } from './draftHistory'
 import { optimisticCell } from '../sheet/channel/savedCellPatch'
+import { shopifyKeepsOwnValue } from '../sheet/channel/channelCellProvenance'
 import styles from './information.module.css'
 
 export const shopifyRawValue = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -157,13 +158,22 @@ export function ShopifyDivergenceBanner({ type, kept, divergence, follows = fals
     ]} />
     <p>{divergence.note}</p>
   </Banner>
-  return <Banner tone="warning" title="Publishing uses the shared value">
+  return <Banner tone="warning" title="Shopify receives the shared value">
     <KeyValue dense items={[
       { label: 'Saved draft, kept here', value: informationValueLabel(type, kept) },
       { label: 'Shopify receives', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs)) },
     ]} />
     <p>{divergence.note}</p>
   </Banner>
+}
+
+/**
+ * The pop-up's footer line: where Enter saves and what sends it on (D5). A row already on Shopify (`row.shopify`: a
+ * persisted Shopify product or variant) is sent by Review and synchronize…; Publish cannot update a product already on
+ * Shopify (`SHOPIFY_EXISTING_NOT_YET`). A row not on Shopify yet is created by Publish. Pure, so it is tested without a grid.
+ */
+export function shopifyPanelFooter(row: Pick<ChannelSheetRow, 'shopify'>): string {
+  return row.shopify ? 'Saves in Nexus · Review and synchronize… sends it to Shopify' : 'Saves in Nexus · Publish to send it to Shopify'
 }
 
 export type ShopifyPanelSave = { kind: 'close' } | { kind: 'refuse'; message: string } | { kind: 'commit'; value: string | null }
@@ -255,12 +265,12 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   const warning = !locked && field && !(translated && value === null) && !informationDraftCellError(field, value, selected?.baseline ?? null, contentWrite)
     ? field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected?.baseline ?? null) : null
   return { open, closed, historyRefused, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
-    footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>{template ? 'Switching on changes the Shopify store at once' : 'Saves in Nexus · Publish to send it to Shopify'}</span></>}>
+    footer={<><span className="nds-editor-keyhint">{EDITOR_KEY_HINT_PANEL}</span><span className={styles.hint}>{template ? 'Switching on changes the Shopify store at once' : shopifyPanelFooter(selected.row)}</span></>}>
     <div className={styles.stack}>
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
       {warning && <Banner tone="warning" title="Can save as a Nexus draft">Fix this before publishing: {warning}</Banner>}
-      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} follows={selected.row.values[selected.column.key]?.pinned === false && selected.row.values[selected.column.key]?.inherited === true} />
+      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} follows={shopifyKeepsOwnValue(selected.row.values[selected.column.key])} />
       {template ? <Banner tone={switchOn === 'done' ? 'success' : 'info'} title={switchOn === 'done' ? `${field.label} is switched on in Shopify` : `${field.label} is not switched on in this Shopify store`}
           action={switchOn === 'done' ? undefined : <Button size="sm" variant="primary" disabled={!canPublish || switchOn === 'busy'} onClick={() => void switchOnField()}>{switchOn === 'busy' ? 'Switching on…' : 'Switch on in Shopify'}</Button>}>
           {switchOn === 'done' ? 'The sheet reloads this field. Open the cell again to choose its values.'

@@ -184,7 +184,7 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       const { previewContentSync } = await import('../shopify/content-sync.service.js')
       const preview = await previewContentSync(productId, { accountId: scope.accountId, listingId: scope.listingId, market: scope.marketplace }, true)
       if (preview.remote || facts.listings.some(listing => listing.externalListingId))
-        issues.push({ severity: 'error', message: 'Change-only publishing for existing Shopify products is not available yet. Shopify remains gated while its linked products are prepared.' })
+        issues.push({ severity: 'error', message: SHOPIFY_EXISTING_NOT_YET })
       for (const message of preview.errors) issues.push({ severity: 'error', message })
       locations = preview.locations.filter(l => l.isActive).map(({ id, name }) => ({ id, name }))
       if (!locations.length) issues.push({ severity: 'error', message: 'This Shopify store has no active inventory location.' })

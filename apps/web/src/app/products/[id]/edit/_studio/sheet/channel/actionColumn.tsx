@@ -37,7 +37,7 @@ export const ACTION_COLUMN = 'publish:action'
 export const ACTION_COLUMN_LABEL = 'Action'
 /** "[clock Partial update]" plus the lock glyph — the widest content, plus padding. */
 export const ACTION_COLUMN_WIDTH = 170
-export const ACTION_COLUMN_TIP = 'What Publish sends for each row: Partial update (the default: only the fields you changed), Full update (every field Nexus manages again) or Delete (removes the listing from the channel). A row not on the channel reads Full update: a new listing is always sent whole, and its Status says whether Publish creates it. Nothing is sent until you press Publish.'
+export const ACTION_COLUMN_TIP = 'What Publish sends for each row: Partial update (the default: only the fields you changed), Full update (every field Nexus manages again) or Delete (removes the listing from the channel). A row not on the channel reads Full update: a new listing is always sent whole, and its Status says whether Publish creates it. A choice a channel cannot take is held, with the reason. Nothing is sent until you press Publish.'
 
 export const DELETE_NEEDS_DELETE = 'Your role cannot end or delete listings.'
 export const ACTION_NOT_LISTED = 'Not on this channel and market yet: Publish creates it with every field.'
@@ -50,6 +50,12 @@ export function actionSheetColumn<T>(): T {
   } as unknown as T
 }
 
+/**
+ * Partial update's own note on this row, when Publish sends none of its fields (D5, D13): the server's warning on the
+ * Partial update option (a product already on Shopify, Etsy), or null.
+ */
+export const actionPartialNote = (cell: PublishActionCell) => cell.sendOptions.find(option => option.mode === 'partial')?.warning?.trim() || null
+
 /** One Action cell's facts. A row with no listing here is locked: Publish creates it (a Partial update does that). */
 export function actionCellValue(cell: PublishActionCell | null | undefined, read: PublishCellReadState): PublishActionValue | undefined {
   if (!read.loaded) return undefined
@@ -57,7 +63,8 @@ export function actionCellValue(cell: PublishActionCell | null | undefined, read
   // A row not on the channel: Full update, sent whole (quiet when its Status leaves it out).
   if (cell.create) return { mode: cell.send.mode === 'delete' ? 'delete' : 'full', newRow: true, leftOut: cell.create.target === 'not_listed',
     deleted: !!cell.deleted, setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason }
-  return { mode: cell.send.mode, setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason }
+  const partialNote = actionPartialNote(cell)
+  return { mode: cell.send.mode, setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason, ...(partialNote ? { partialNote } : {}) }
 }
 
 /** The value the Action editor opens on: the stored mode (a row not on the channel: Full update). */
