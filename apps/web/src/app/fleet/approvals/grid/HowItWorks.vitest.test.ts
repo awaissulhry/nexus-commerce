@@ -19,7 +19,7 @@ vi.mock('@/lib/workspaces/Link', () => ({
 }))
 
 const { HowItWorksContent, LIFE_ORDER, stateHelp } = await import('./HowItWorks')
-const { FleetGateState, conditionState, conditionsMetText, expiryHoursOf, gateHeadline, whenNext } = await import('./FleetGateState')
+const { FleetGateState, conditionState, conditionsMetText, expiryHoursOf, fleetToolAsk, gateHeadline, whenNext } = await import('./FleetGateState')
 const { STATE_META } = await import('./queueWords')
 type GateRead = import('./FleetGateState').GateRead
 type GateState = import('./FleetGateState').GateState
@@ -138,6 +138,8 @@ describe('the fleet’s readiness, in the drawer', () => {
     expect(words).toContain("Can run Change a keyword's bid")
     expect(words).toContain('Describes only Stop ads showing for a search term')
     expect(words).not.toMatch(/set price/i)
+    expect(fleetToolAsk('graduate-keyword')).toBe('promote a search term to its own keyword')
+    expect(fleetToolAsk('pause_campaign-now')).toBe('pause campaign now')
   })
 
   it('a halt is the one fault: a danger banner with the reason, above the conditions', () => {

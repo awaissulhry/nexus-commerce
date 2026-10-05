@@ -32,7 +32,7 @@ export default function Page() {
           <h1>Agent Fleet</h1>
           <p className="acr-sub">
             The LLM analyst fleet over the deterministic engines — findings, plans, the critic&apos;s
-            verdicts, and every approval it is waiting on.
+            verdicts, and how many approvals wait for you.
           </p>
         </div>
       </header>
