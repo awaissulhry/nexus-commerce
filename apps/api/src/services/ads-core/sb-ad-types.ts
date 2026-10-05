@@ -105,6 +105,57 @@ export const SB_AD_TYPES: Record<SbAdType, SbAdTypeSpec> = {
 
 export const SB_AD_TYPE_KEYS = Object.keys(SB_AD_TYPES) as SbAdType[]
 
+/**
+ * CC-11 — the limits Amazon's Sponsored Brands 4.0 document puts on each creative Nexus can send (read 2026-10-05):
+ * `CreateManualCollectionCreative` (asins 3–10, required; brandName 1–30, required; title ≤ 32, optional) and
+ * `CreateProductCollectionCreative` (asins ≤ 3; headline 1–50). A creative outside them is refused by Amazon, so Nexus
+ * refuses it first — before the campaign, ad group or keywords exist on Amazon.
+ *
+ * Store spotlight and video are not listed: store spotlight needs store pages (`subpages`) and video needs a video
+ * asset (`videoAssetIds`), and Nexus has neither, so no builder offers them.
+ */
+export const SB_CREATIVE_LIMITS: Partial<Record<SbAdType, { asinsMin: number; asinsMax: number; headlineMax: number; headlineRequired: boolean }>> = {
+  manualCollection: { asinsMin: 3, asinsMax: 10, headlineMax: 32, headlineRequired: false },
+  // Amazon's schema allows 0 ASINs here; Nexus has always required one (`createSbAdLocal`).
+  productCollection: { asinsMin: 1, asinsMax: 3, headlineMax: 50, headlineRequired: true },
+}
+
+/** BRAND_NAME max length, both creatives (`brandName.maxLength`). */
+const SB_BRAND_NAME_MAX = 30
+
+/**
+ * Why Amazon would refuse this Sponsored Brands creative, as plain sentences — empty when it can be sent. Pure: the
+ * builder's preview, the pre-launch check and the create itself all ask this one function.
+ */
+export function sbCreativeProblems(c: { creativeType?: string | null; headline?: string | null; asins: readonly string[]; brandName?: string | null }): string[] {
+  const out: string[] = []
+  if (!c.creativeType) {
+    out.push(`Choose a creative type (${(Object.keys(SB_CREATIVE_LIMITS) as SbAdType[]).map((k) => SB_AD_TYPES[k].label).join(' or ')}).`)
+    return out
+  }
+  const spec = SB_AD_TYPES[c.creativeType as SbAdType]
+  if (!spec) {
+    out.push(`"${c.creativeType}" is not a Sponsored Brands creative type (${SB_AD_TYPE_KEYS.join(', ')}).`)
+    return out
+  }
+  const limits = SB_CREATIVE_LIMITS[c.creativeType as SbAdType]
+  if (!limits) {
+    out.push(`A ${spec.label} creative cannot be made in Nexus yet: it needs ${c.creativeType === 'video' ? 'a video' : 'store pages'}, which Nexus cannot send.`)
+    return out
+  }
+  const asins = c.asins.map((a) => a.trim()).filter(Boolean)
+  if (asins.length < limits.asinsMin) out.push(`A ${spec.label} creative needs at least ${limits.asinsMin} product${limits.asinsMin === 1 ? '' : 's'}; it has ${asins.length}.`)
+  if (asins.length > limits.asinsMax) out.push(`A ${spec.label} creative takes at most ${limits.asinsMax} products; it has ${asins.length}.`)
+  const headline = (c.headline ?? '').trim()
+  const field = spec.headlineField === 'title' ? 'title' : 'headline'
+  if (limits.headlineRequired && !headline) out.push(`A ${spec.label} creative needs a ${field}.`)
+  if (headline.length > limits.headlineMax) out.push(`Amazon allows ${limits.headlineMax} characters in a ${spec.label} ${field}; it has ${headline.length}.`)
+  const brand = (c.brandName ?? '').trim()
+  if (!brand) out.push('A Sponsored Brands creative needs a brand name.')
+  else if (brand.length > SB_BRAND_NAME_MAX) out.push(`Amazon allows ${SB_BRAND_NAME_MAX} characters in a brand name; "${brand}" has ${brand.length}.`)
+  return out
+}
+
 /** The ad types an operator should be offered for a NEW creative: the undeprecated ones. */
 export const SB_AD_TYPES_CURRENT = SB_AD_TYPE_KEYS.filter((k) => SB_AD_TYPES[k].deprecated === null)
 

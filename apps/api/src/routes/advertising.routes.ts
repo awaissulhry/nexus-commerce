@@ -1202,6 +1202,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
     const campaigns = (b.campaigns ?? []).filter((c) => c && c.name)
     if (!campaigns.length) { reply.status(400); return { error: 'no campaigns to create' } }
+    // CC-10 — this launch cannot send a Sponsored Brands creative or Sponsored Display targets, so an SB/SD campaign made
+    // here would be created on Amazon and could never serve. Refused before anything is created.
+    if (campaigns.some((c) => c.adProduct === 'SB' || c.adProduct === 'SD')) {
+      reply.status(400)
+      return { error: 'Sponsored Brands and Sponsored Display campaigns are not created here: this launch cannot send their creative or targets, so Amazon could not serve them. Use the Sponsored Brands / Display builder.' }
+    }
     if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length } }
 
     const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
@@ -6907,8 +6913,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
+    const { SdTargetRefused } = await import('../services/advertising/sd-target-expression.js')
     // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
-    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CC-12 — a Sponsored Display target Amazon would refuse is a 400 with the reason; nothing was sent or stored.
+    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(e instanceof SdTargetRefused ? 400 : 500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/negative-targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
@@ -7049,11 +7057,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AX2.9: Sponsored Brands creative ────────────────────────────────
+  // CC-11 — `dryRun: true` (with `marketplace`, no ad group yet) only checks the creative and shows what would be sent:
+  // the SB builder asks it before it creates anything on Amazon. A creative Amazon would refuse is a 400 with the reason.
   fastify.post('/advertising/sb-creatives/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
-    if (!b?.adGroupId || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: 'adGroupId, brandName, headline, asins[] required' } }
-    const { createSbAdLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return await createSbAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    const dry = b?.dryRun === true
+    if ((dry ? !b?.marketplace : !b?.adGroupId) || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: `${dry ? 'marketplace' : 'adGroupId'}, brandName, headline, asins[] required` } }
+    const { createSbAdLocal, SbCreativeRefused } = await import('../services/advertising/ads-create.service.js')
+    // 1e — a person's own add from the builder (isPersonCreate).
+    try { return await createSbAdLocal({ ...(b as object), manual: true } as never) } catch (e) { reply.status(e instanceof SbCreativeRefused ? 400 : 500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
