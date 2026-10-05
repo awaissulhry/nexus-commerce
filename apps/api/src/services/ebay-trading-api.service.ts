@@ -42,17 +42,36 @@ export function escapeXml(s: string): string {
     .replace(/'/g, '&apos;')
 }
 
+/**
+ * One InventoryStatus: the quantity and/or the price (`StartPrice`) of one SKU of one item. A quantity-only request is
+ * byte-for-byte what it was before the price was added; the price goes in `currency` (the market's own, the caller's job)
+ * with two decimals. Neither a quantity nor a price, a price that is not a positive number, or a price with no currency
+ * → refused here, before anything is sent.
+ */
 export function buildReviseInventoryStatusXml(input: {
   itemId: string
   sku: string
-  quantity: number
+  quantity?: number
+  price?: number
+  currency?: string
 }): string {
+  const hasQuantity = input.quantity !== undefined && input.quantity !== null
+  const hasPrice = input.price !== undefined && input.price !== null
+  if (!hasQuantity && !hasPrice) throw new Error('buildReviseInventoryStatusXml: a quantity or a price is required')
+  if (hasPrice && !(Number.isFinite(input.price) && (input.price as number) > 0)) {
+    throw new Error(`buildReviseInventoryStatusXml: the price must be a positive number, got ${input.price}`)
+  }
+  if (hasPrice && !input.currency) throw new Error('buildReviseInventoryStatusXml: a price needs its currency')
+  const fields = [
+    `    <ItemID>${escapeXml(input.itemId)}</ItemID>`,
+    `    <SKU>${escapeXml(input.sku)}</SKU>`,
+    ...(hasQuantity ? [`    <Quantity>${Math.max(0, Math.trunc(input.quantity as number))}</Quantity>`] : []),
+    ...(hasPrice ? [`    <StartPrice currencyID="${escapeXml(input.currency as string)}">${(input.price as number).toFixed(2)}</StartPrice>`] : []),
+  ]
   return `<?xml version="1.0" encoding="UTF-8"?>
 <ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <InventoryStatus>
-    <ItemID>${escapeXml(input.itemId)}</ItemID>
-    <SKU>${escapeXml(input.sku)}</SKU>
-    <Quantity>${Math.max(0, Math.trunc(input.quantity))}</Quantity>
+${fields.join('\n')}
   </InventoryStatus>
 </ReviseInventoryStatusRequest>`
 }

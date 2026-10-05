@@ -49,10 +49,17 @@ import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
 import { recordListingSyncOutcome } from "./listing-sync-outcome.js";
 import {
+  buildReviseInventoryStatusXml,
+  callTradingApi,
+  ebaySiteMarket,
   reviseInventoryStatus as ebayReviseInventoryStatus,
   reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
+  siteIdForMarket,
+  type TradingCallContext,
+  type TradingCallResult,
 } from "./ebay-trading-api.service.js";
+import { usesEbayInventory } from './pim/ebay-listing-model.js'
 import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
@@ -70,6 +77,10 @@ import { AD_SYNC_TYPES as AD_SYNC_TYPE_LIST } from './ads-core/ad-mutation-state
 export const __ebayTrading = {
   reviseInventoryStatus: ebayReviseInventoryStatus,
   reviseInventoryStatusBatch: ebayReviseInventoryStatusBatch,
+  // 2026-10-06 — a Trading listing's own quantity/price row (`syncTradingListingRow`): the gateway-backed call itself, so
+  // the row reads eBay's Ack (Success / Warning / PartialFailure) instead of a wrapper that drops it. Bound at call time:
+  // a test that replaces the Trading module without this function still loads this service.
+  callTradingApi: (callName: string, xml: string, ctx: TradingCallContext): Promise<TradingCallResult> => callTradingApi(callName, xml, ctx),
 }
 
 // RT.2 — per-item revise pacing. eBay hard-caps ~250 revises per listing per
@@ -1554,10 +1565,19 @@ export class OutboundSyncService {
             where: { id: queueItem.channelListingId },
             // S4 — plus the channel-SKU facts (`listingSendSku`): the two SKU columns and the draft facts.
             select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true, channelConnectionId: true,
-              productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true },
+              productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
+              // 2026-10-06 — the Inventory offer ids (`__offerIds` / `offerId`): which eBay API holds this listing's item.
+              platformAttributes: true },
           })
           .catch(() => null)
       : null;
+    // 2026-10-06 (Trading stock sync) — the eBay API that holds this listing's item, decided ONCE here and acted on at
+    // step 5 (after every guard below). An item the studio created with AddFixedPriceItem is a Trading item: it has no
+    // Inventory offer, and eBay answered every Inventory quantity/price call for its SKU with 25604 "SKU not found" (a
+    // 400, so terminal) — the listing never received a stock or price change. The ONE model rule (`usesEbayInventory`)
+    // over the item's whole family (every listing of this ItemID on this account); no listing or no ItemID → the
+    // Inventory path, exactly as before.
+    const tradingItemId = await this.ebayTradingItemOf(cl);
     // CX (review 2026-09-26) — ONE market per row, resolved once. eBay's Inventory API offers a SKU on one
     // marketplace ("the same SKU value can not be offered across multiple eBay marketplaces" — getOffers), so the
     // row's quantity, content and price all go to the same market. This defaulted to EBAY_IT, so a DE listing's
@@ -1750,6 +1770,16 @@ export class OutboundSyncService {
         acquired.error ?? "Rate limited",
         Date.now() - t0,
       );
+    }
+
+    // 4b. 2026-10-06 — a Trading item: its quantity/price goes out with ReviseInventoryStatus (its own ItemID + SKU),
+    // never through the Inventory calls below. Every guard above has run (push lock, market, SKU, pause policy, pool
+    // clamp, price bounds, publish mode, account, circuit, rate token).
+    if (tradingItemId) {
+      return this.syncTradingListingRow({
+        queueItem, itemId: tradingItemId, sku, marketplaceId, productId: product?.id ?? null,
+        connectionId: connection.id, mode, digest, t0,
+      });
     }
 
     // 5. Dry-run short-circuit
@@ -2044,6 +2074,198 @@ export class OutboundSyncService {
       status: "SUCCESS",
       message: `Product ${sku} synced to eBay`,
       ...(priceReadback ? { afterAnswer: priceReadback } : {}),
+    };
+  }
+
+  /**
+   * 2026-10-06 (Trading stock sync) — the ItemID of this listing when eBay holds its item through the Trading API, else
+   * null (the Inventory path). The ONE model rule (`usesEbayInventory`): an Inventory offer id (`__offerIds` / `offerId`)
+   * on this listing or on any listing of the same ItemID on the same account means Inventory; none means Trading. A
+   * listing with no ItemID (a draft, a row with no listing) is not decided here: it keeps the Inventory path.
+   */
+  private async ebayTradingItemOf(cl: { externalListingId?: string | null; channelConnectionId?: string | null; platformAttributes?: unknown } | null): Promise<string | null> {
+    const itemId = cl?.externalListingId?.trim();
+    if (!cl || !itemId || !/^\d+$/.test(itemId)) return null;
+    if (usesEbayInventory({ listings: [{ platformAttributes: cl.platformAttributes }] })) return null;
+    const family = await prisma.channelListing.findMany({
+      where: { channel: "EBAY", externalListingId: itemId, channelConnectionId: cl.channelConnectionId ?? null },
+      select: { platformAttributes: true },
+    });
+    return usesEbayInventory({ listings: family }) ? null : itemId;
+  }
+
+  /**
+   * 2026-10-06 (Trading stock sync) — one quantity/price row of a listing whose eBay item is a Trading item.
+   *
+   * Reached from `syncToEbay` step 4b, after every guard of the Inventory path has run: push lock, market and SKU
+   * (`listingSendSku`), pause policy, the dispatch quantity and its routed pool ceiling, price bounds, publish mode, the
+   * row's own account (`assertWriteAccount`), circuit and rate token. One ReviseInventoryStatus, through the channel
+   * gateway (`callTradingApi`), naming THIS listing's ItemID and the SKU eBay holds for it: a main listing and each of its
+   * aliases (one ItemID each, the same SKUs) are each revised on their own row. No ItemID debounce: every variant of an
+   * item has its own row, and deferring one would leave its stock behind.
+   *
+   * Not sent: content (title, description, photos, aspects) — a Trading listing's content goes through Publish, as for a
+   * linked Shopify product (D2); a SKU an ACTIVE shared listing membership holds on this item — the shared fan-out
+   * (`syncSharedTradingQuantity`) revises it, and two senders would revise it twice. Dry-run and sandbox are dry runs (as
+   * the shared lane: `callTradingApi` has its own switch and would answer a fake success); a `DRYRUN-` answer is one too.
+   * eBay's Ack decides: Success or Warning is sent; PartialFailure / Failure is eBay's refusal (terminal, the marketplace
+   * circuit untouched), an ended item is EBAY_LISTING_ENDED; no answer is transient (retried, counts toward the circuit).
+   */
+  private async syncTradingListingRow(args: {
+    queueItem: any;
+    itemId: string;
+    sku: string;
+    marketplaceId: string;
+    productId: string | null;
+    connectionId: string;
+    mode: "gated" | "dry-run" | "sandbox" | "live";
+    digest: string;
+    t0: number;
+  }): Promise<SyncResult> {
+    const { queueItem, itemId, sku, marketplaceId, productId, connectionId, mode, digest, t0 } = args;
+    const queueId = queueItem.id;
+    const payload = queueItem.payload ?? {};
+    const log = (outcome: "success" | "failed" | "timeout" | "gated", logMode: "dry-run" | "sandbox" | "live", errorMessage?: string) =>
+      writeAttemptLog({
+        channel: "EBAY", marketplace: marketplaceId, sellerId: connectionId, sku, productId, mode: logMode, outcome,
+        payloadDigest: digest, ...(errorMessage ? { errorMessage: errorMessage.slice(0, 500) } : {}), durationMs: Date.now() - t0,
+      });
+    // Nothing to do on this lane — recorded as SKIPPED with the reason, never green and never a dead letter.
+    const skip = (message: string, errorCode: string): SyncResult => ({
+      success: true, queueId, channel: "EBAY", status: "SKIPPED", message, error: message, errorCode, retryable: false,
+    });
+    // Refused before anything was sent: terminal, the circuit untouched.
+    const refuse = (message: string, errorCode: string, retryable = false): SyncResult => ({
+      success: false, queueId, channel: "EBAY", status: "FAILED", message, error: message, errorCode, retryable,
+    });
+
+    // a. Content goes through Publish (D2, as for a linked Shopify product).
+    const contentTouched = !!payload.mappingAspects || !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
+    if (contentTouched) {
+      return skip("Content for an eBay Trading listing goes through Publish; nothing was sent.", "EBAY_TRADING_CONTENT_VIA_PUBLISH");
+    }
+    const quantity = payload.quantity === undefined || payload.quantity === null ? undefined : Math.max(0, Math.trunc(Number(payload.quantity)));
+    const price = payload.price === undefined || payload.price === null ? undefined : Number(payload.price);
+    if (quantity !== undefined && !Number.isFinite(quantity)) {
+      return refuse(`The quantity of this eBay row is not a number (${payload.quantity}), so nothing was sent.`, "EBAY_VALIDATION");
+    }
+    if (quantity === undefined && price === undefined) {
+      return skip("This eBay row carries no quantity and no price, so nothing was sent.", "OUTBOUND_NOT_SENT");
+    }
+    if (price !== undefined && !(Number.isFinite(price) && price > 0)) {
+      return refuse(`The price of this eBay row is not a positive number (${payload.price}), so nothing was sent.`, "EBAY_VALIDATION");
+    }
+
+    // b. The market's eBay site, and the price's currency (the market's own; an unconfigured market is refused).
+    const marketCode = marketplaceId.replace(/^EBAY_/, "");
+    let siteId: string;
+    try {
+      siteId = siteIdForMarket(marketCode);
+    } catch {
+      return refuse(`eBay has no Trading site for ${marketplaceId}, so nothing was sent.`, "EBAY_MARKET_UNRESOLVED");
+    }
+    let currency: string | undefined;
+    if (price !== undefined) {
+      try {
+        currency = await ebayCurrencyForMarket(marketplaceId);
+      } catch (err) {
+        return refuse(`${err instanceof Error ? err.message : String(err)} Nothing was sent.`, "EBAY_VALIDATION");
+      }
+    }
+
+    // c. A SKU an active shared listing holds on this item is the shared fan-out's to revise.
+    const member = await prisma.sharedListingMembership.findFirst({
+      where: { marketplace: { in: [...new Set([marketCode, ebaySiteMarket(marketCode)])] }, itemId, sku, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (member) {
+      return skip(`eBay item ${itemId} is a shared listing: its shared stock sends ${sku}. Nothing was sent from this row.`, "EBAY_SHARED_LISTING_OWNS_SKU");
+    }
+
+    // d. Dry-run and sandbox: nothing is sent (see the doc comment).
+    const dryRun = (logMode: "dry-run" | "sandbox"): SyncResult => {
+      recordEbayOutcome(connectionId, marketplaceId, true);
+      log("success", logMode);
+      return {
+        success: true, queueId, channel: "EBAY", status: "SUCCESS", dryRun: true,
+        message: `${sku}@${itemId} ${logMode} (ReviseInventoryStatus): nothing was sent`,
+      };
+    };
+    if (mode === "dry-run" || mode === "sandbox") return dryRun(mode);
+
+    // e. Auth (after the dry-run, as in the Inventory path: the token read has a side effect).
+    let token: string;
+    try {
+      token = await ebayAuthService.getValidToken(connectionId);
+    } catch (err) {
+      const message = `Could not obtain eBay token: ${err instanceof Error ? err.message : String(err)}`;
+      recordEbayOutcome(connectionId, marketplaceId, false);
+      log("failed", "live", message);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay", error: message };
+    }
+
+    // f. The call.
+    const xml = buildReviseInventoryStatusXml({ itemId, sku, ...(quantity !== undefined ? { quantity } : {}), ...(price !== undefined ? { price, currency } : {}) });
+    const ended = (message: string): SyncResult => {
+      // A dead item: per-listing and terminal; never a circuit outcome (the 2026-07-19 lane freeze).
+      log("failed", "live", message);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay listing ended — nothing more is sent to it", error: message, errorCode: "EBAY_LISTING_ENDED", retryable: false };
+    };
+    const refused = (message: string): SyncResult => {
+      // eBay's own refusal of this item or SKU: terminal, and it says nothing about the marketplace.
+      log("failed", "live", message);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay refused the change", error: message, errorCode: "EBAY_VALIDATION", retryable: false };
+    };
+    let answer: TradingCallResult;
+    try {
+      answer = await __ebayTrading.callTradingApi("ReviseInventoryStatus", xml, {
+        oauthToken: token, siteId, connectionId, market: marketCode, listingId: queueItem.channelListingId ?? null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const name = (err as { name?: string } | null)?.name;
+      if (matchEbayEndedListingCode(message)) return ended(message);
+      if (name === "TradingApiFailure") return refused(message);
+      if (name === "EbayWriteRefusedError") {
+        log("gated", "live", message);
+        return refuse(message, "EBAY_WRITE_REFUSED");
+      }
+      if (name === "GatewayRefusal") {
+        // The gateway held it (account sign-in, local rate limit, market lookup): nothing was sent, no circuit outcome.
+        const status = Number((err as { statusCode?: number }).statusCode ?? 0);
+        log("failed", "live", message);
+        return refuse(message, String((err as { code?: string }).code ?? "GATEWAY_REFUSED"), (err as { outcome?: string }).outcome === "held" || status === 429 || status >= 500);
+      }
+      // No answer (network, timeout, an HTTP error): the change may or may not have landed. ReviseInventoryStatus sets
+      // absolute values, so a retry is safe.
+      recordEbayOutcome(connectionId, marketplaceId, false);
+      log(name === "GatewayNoAnswer" && /timeout/i.test(message) ? "timeout" : "failed", "live", message);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay (Trading)", error: message, errorCode: "EBAY_TRANSIENT", retryable: true };
+    }
+    if (answer.itemId?.startsWith("DRYRUN-")) return dryRun("dry-run");
+    if (answer.ack !== "Success" && answer.ack !== "Warning") {
+      const codes = [...(answer.raw ?? "").matchAll(/<ErrorCode>([^<]+)<\/ErrorCode>/g)].map((m) => m[1]);
+      const message = `eBay ReviseInventoryStatus ${answer.ack}: ${answer.errors.slice(0, 2).join(" | ") || "no message"}${codes.length ? ` (code ${codes[0]})` : ""}`;
+      if (matchEbayEndedListingCode(message)) return ended(message);
+      if (answer.ack === "PartialFailure" || answer.ack === "Failure") return refused(message);
+      // An answer with no readable Ack: unknown, retried like a lost answer.
+      recordEbayOutcome(connectionId, marketplaceId, false);
+      log("failed", "live", message);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay (Trading)", error: message, errorCode: "EBAY_TRANSIENT", retryable: true };
+    }
+
+    // g. Sent. Each CALL counts toward eBay's ~250 revises per item per day.
+    const dayCount = countEbayReviseCall(itemId);
+    if (dayCount === EBAY_REVISE_DAILY_WARN) {
+      logger.warn("syncTradingListingRow: item nearing eBay's ~250 revises/day cap", { itemId, marketplaceId, revisesToday: dayCount });
+    }
+    recordEbayOutcome(connectionId, marketplaceId, true);
+    log("success", "live");
+    const sent = [quantity !== undefined ? `quantity ${quantity}` : null, price !== undefined ? `price ${price.toFixed(2)} ${currency}` : null].filter(Boolean).join(", ");
+    const warning = answer.ack === "Warning" && answer.errors.length ? ` eBay warned: ${answer.errors.slice(0, 2).join(" | ")}` : "";
+    return {
+      success: true, queueId, channel: "EBAY", status: "SUCCESS",
+      message: `Product ${sku} synced to eBay item ${itemId} (ReviseInventoryStatus: ${sent}).${warning}`,
     };
   }
 
