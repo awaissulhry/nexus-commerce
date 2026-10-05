@@ -284,13 +284,22 @@ export function builderDraftCampaignIds(actions: unknown, slug: string): string[
  *     (`campaignAllowed`, `bid_apply`), so a rule without picks stays account-wide as before.
  *   · anything else — `null`. Negative Targeting and Keyword Harvesting are bound by the ad-group
  *     mappings their handlers enforce, not by a campaign picker.
+ *   · CC-15 — except a Negative Targeting / Keyword Harvesting rule that stores a `campaignIds`
+ *     LIST. Only the autopilot's provisioned rules do (`autopilot/coordination.ts`; the builder
+ *     stores `mappings`, never this key). That list binds the rule, and an EMPTY list matches no
+ *     campaign. It used to be ignored, so an SP Super Wizard "AI Control" plan (which reached the
+ *     rule with an empty list) proposed harvests and negatives for every campaign in its market.
  */
 const PICKER_SCOPED_SLUGS = new Set(['bid', 'sov', 'keyword-tracker', 'placement'])
+const LIST_BOUND_SEARCH_TERM_SLUGS = new Set(['negative-targeting', 'keyword-harvesting'])
 export function builderScopeCampaignIds(actions: unknown): string[] | null {
   const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
   if (!a0) return null
   const slug = String(a0.type ?? '')
   if (slug === 'budget') return builderBudgetCampaignIds(actions)
+  if (LIST_BOUND_SEARCH_TERM_SLUGS.has(slug)) {
+    return Array.isArray(a0.campaignIds) ? (a0.campaignIds as unknown[]).map((c) => String(c ?? '')).filter(Boolean) : null
+  }
   if (!PICKER_SCOPED_SLUGS.has(slug)) return null
   const ids = builderCampaignIds(a0)
   return ids.length > 0 ? ids : null

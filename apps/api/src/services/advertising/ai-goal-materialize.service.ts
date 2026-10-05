@@ -107,8 +107,11 @@ export function planGoalScaffold(goal: GoalLike, bidOpts?: ScaffoldBidOpts): Goa
   const products = Array.isArray(goal.products) ? goal.products : []
   if (!products.length) throw new MaterializeError('goal has no products', 400)
   const warnings: string[] = []
-  const marketplace = (goal.marketplace ?? '').trim() || 'IT'
-  if (!(goal.marketplace ?? '').trim()) warnings.push('No marketplace on the goal — defaulting to IT.')
+  // CC-29 — refused, never guessed: a goal with no marketplace used to launch in Italy with a warning.
+  const marketplace = (goal.marketplace ?? '').trim()
+  if (!marketplace) throw new MaterializeError('This goal has no Amazon marketplace. Nexus does not guess one: set the marketplace on the goal first.', 400)
+  // CC-5 — a Nexus-only portfolio (created while Amazon writes were closed) would make Amazon refuse every campaign.
+  if ((goal.portfolioId ?? '').startsWith('local-pf-')) throw new MaterializeError('This goal\'s portfolio exists only in Nexus, so Amazon would refuse the campaigns. Pick a portfolio that exists on Amazon, or no portfolio.', 400)
   const seeds = (goal.seedKeywords ?? []).filter(Boolean)
   const excludeKw = (goal.excludeKeywords ?? []).filter(Boolean)
   const productTargets = (goal.productTargets ?? []).filter(Boolean)

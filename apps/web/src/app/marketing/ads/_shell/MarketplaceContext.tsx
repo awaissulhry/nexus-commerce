@@ -32,6 +32,7 @@ import {
   type ReactNode,
 } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { launchability } from './launchability'
 
 const STORAGE_KEY = 'nexus.ads.marketplace'
 /**
@@ -52,10 +53,19 @@ export const ALL_MARKETS = 'all'
 export interface AdsMarket {
   code: string
   label: string
-  /** active + production. Anything else cannot receive a real campaign. */
+  /**
+   * CC-19 — a campaign launched here can reach Amazon: active + production + writes enabled + Amazon's limits known
+   * (`launchability.ts`, the write gate's own four checks). It used to be active + production only.
+   */
   launchable: boolean
   mode: string
   writesEnabled: boolean
+  /** Why this market is not launchable, in a sentence (absent when it is). */
+  whyNot?: string | null
+  /** The same in two or three words, for a menu row. */
+  whyNotShort?: string | null
+  /** active + production: an analytics scope may still read it, whatever the launch checks say. */
+  readable?: boolean
 }
 
 interface Ctx {
@@ -129,13 +139,17 @@ export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
         if (!alive) return
         const list: AdsMarket[] = (j.items ?? [])
           .filter((c) => c.marketplace)
-          .map((c) => ({
-            code: String(c.marketplace).toUpperCase(),
-            label: c.accountLabel ?? '',
-            mode: c.mode ?? 'sandbox',
-            writesEnabled: !!c.writesEnabledAt,
-            launchable: !!c.isActive && c.mode === 'production',
-          }))
+          .map((c) => {
+            const code = String(c.marketplace).toUpperCase()
+            const mode = c.mode ?? 'sandbox'
+            const writesEnabled = !!c.writesEnabledAt
+            const l = launchability({ code, isActive: !!c.isActive, mode, writesEnabled })
+            return {
+              code, label: c.accountLabel ?? '', mode, writesEnabled,
+              launchable: l.launchable, whyNot: l.whyNot, whyNotShort: l.short,
+              readable: !!c.isActive && mode === 'production',
+            }
+          })
           // Launchable first, then alphabetical — the operator's real choices
           // sit at the top of the menu rather than interleaved with sandboxes.
           .sort((a, b) =>
@@ -161,7 +175,9 @@ export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
         // a launch target it would be a fabrication.
         let storedScope: string | null = null
         try { storedScope = window.localStorage.getItem(SCOPE_STORAGE_KEY) } catch { /* private mode */ }
-        setScopeMarketState(storedScope === ALL_MARKETS || (storedScope && ok.includes(storedScope)) ? storedScope : ALL_MARKETS)
+        // CC-19 — the scope keeps its old test (active + production): reading a market's numbers needs no write access.
+        const readable = list.filter((m) => m.readable).map((m) => m.code)
+        setScopeMarketState(storedScope === ALL_MARKETS || (storedScope && readable.includes(storedScope)) ? storedScope : ALL_MARKETS)
 
         setReady(true)
       })
