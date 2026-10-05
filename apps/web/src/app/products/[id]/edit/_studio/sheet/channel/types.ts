@@ -408,6 +408,8 @@ export interface StudioRow {
   productMediaError?: string
   /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
   productMediaSource?: 'image-urls'
+  /** Owner 2026-10-05 — an Amazon alias: the cell shows the main listing's photos, read-only (one photo set per product). */
+  productMediaFollows?: 'main-listing'
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null
   familyId?: string | null

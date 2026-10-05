@@ -37,7 +37,17 @@ export interface ProductMediaWorkspace {
   assets: ProductMediaAsset[]; collection: ProductMediaCollection; hasOverride: boolean
   source: 'locale' | 'all-languages' | 'shared' | 'parent' | 'library'
   missingAssetIds: string[]
+  /** Set when this list cannot be changed here, with the reason (an Amazon alias shows its main listing's photos). */
+  readOnly?: string
 }
+
+/**
+ * Owner 2026-10-05 — Amazon keeps ONE photo set per product (its ASIN, every market): a listing alias is another seller
+ * SKU of the same product page, so it shows, and Publish sends, the main listing's photos and never has its own.
+ */
+export const AMAZON_ALIAS_PHOTOS = 'Amazon shows one photo set per product. These are the main listing\'s photos; change them on the main listing.'
+/** The listing's photos are the main listing's (an Amazon alias). `aliasKey` '' / null = the main listing. */
+export const followsMainListingPhotos = (channel: string | null | undefined, aliasKey: string | null | undefined) => channel === 'AMAZON' && !!aliasKey
 
 export function mediaObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}

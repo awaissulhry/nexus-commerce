@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useRef } from 'react'
 import { useToast, type MediaStripItem } from '@/design-system/components'
-import type { ProductMediaQuery } from '@nexus/shared/product-media'
+import { AMAZON_ALIAS_PHOTOS, type ProductMediaQuery } from '@nexus/shared/product-media'
 import type { SaveReporter } from '../types'
 import { mediaClipboardValue, mediaSummary, readMediaClipboard, reorderMediaCell, transferMediaCell, type MediaCellSnapshot } from './mediaCellTransfer'
 import { pasteOps, planAddress, planCellSnapshot, planClipboardValue, readPlanClipboard, sendPlanOps } from './planCellTransfer'
@@ -12,7 +12,9 @@ export type MediaRow = { id: string; name?: string | null; sku?: string; product
   /** Shopify channel sheet: the row is already on Shopify (`ChannelSheetRow.shopify`), so Review and synchronize… sends it. */
   shopify?: { productId: string; listingId: string } | null
   /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
-  productMediaSource?: 'image-urls' }
+  productMediaSource?: 'image-urls'
+  /** Owner 2026-10-05 — an Amazon alias: the cell shows the main listing's photos, read-only (`mediaReadOnlyReason`). */
+  productMediaFollows?: 'main-listing' }
 
 /** Owner 2026-10-05 — one list at a time, the last save wins: what an eBay Image URLs list in the cell means. */
 export const IMAGE_URLS_NOTE = 'From the Image URLs list. A save in Product media moves it into Product media.'
@@ -27,6 +29,13 @@ export function mediaSourceNote(row: Pick<MediaRow, 'productMediaSource' | 'prod
   const outside = (row.productMedia ?? []).filter(item => item.id.startsWith(OUTSIDE_PHOTO_PREFIX)).length
   if (!outside) return IMAGE_URLS_NOTE
   return `From the Image URLs list. ${outside === 1 ? '1 photo is' : `${outside} photos are`} not in the media library. Save the list in Product media to add ${outside === 1 ? 'it' : 'them'}.`
+}
+/**
+ * Why the cell's list cannot be changed from this row, or ''. Owner 2026-10-05 — Amazon keeps one photo set per product: an
+ * Amazon alias shows the main listing's photos (the server's sentence, `AMAZON_ALIAS_PHOTOS`).
+ */
+export function mediaReadOnlyReason(row: Pick<MediaRow, 'productMediaFollows'>): string {
+  return row.productMediaFollows === 'main-listing' ? AMAZON_ALIAS_PHOTOS : ''
 }
 export interface MediaCellActions {
   canEdit(): boolean
@@ -73,6 +82,8 @@ export function useMediaCellActions(input: { contextFor(row: MediaRow): ProductM
       clearError: row => { const key = keyOf(row); errors.current.delete(key); row.productMediaWriteError = undefined; live.current.reporter?.cleared([`product-media:${key}`]) },
       value: row => { const plan = planCellSnapshot(row); return plan ? planClipboardValue(plan) : mediaClipboardValue(snapshot(row)) },
       copy: (row, value, refresh) => {
+        // A paste or fill onto a row that shows another listing's photos changes nothing: the toast says where they change.
+        if (mediaReadOnlyReason(row)) { live.current.toast(`${row.sku || row.name || 'Product'}: ${mediaReadOnlyReason(row)}`, 'warning'); return }
         const target = planCellSnapshot(row)
         if (target) {
           // A photo plan row: the target row's set gets the copied set's photos, on the layer this sheet edits.
@@ -91,7 +102,10 @@ export function useMediaCellActions(input: { contextFor(row: MediaRow): ProductM
         if (JSON.stringify([source.productId, source.context]) === JSON.stringify([snap.productId, snap.context])) return
         run(row, keyOf(row), () => transferMediaCell(source, snap).then(mediaSummary), refresh)
       },
-      reorder: (row, ids, refresh) => { const target = snapshot(row); run(row, keyOf(row), () => reorderMediaCell(target, ids).then(mediaSummary), refresh) },
+      reorder: (row, ids, refresh) => {
+        if (mediaReadOnlyReason(row)) return
+        const target = snapshot(row); run(row, keyOf(row), () => reorderMediaCell(target, ids).then(mediaSummary), refresh)
+      },
     }
   }, [input.canEdit])
 }

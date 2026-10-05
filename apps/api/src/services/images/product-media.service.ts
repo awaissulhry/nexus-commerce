@@ -3,7 +3,7 @@ import { resolveContent } from '../pim/content-resolver.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import { mediaObject, readMediaCollection, productMediaSaveSchema, productMediaCopySchema, resolveMediaCollection, writeMediaCollection,
+import { AMAZON_ALIAS_PHOTOS, followsMainListingPhotos, mediaObject, readMediaCollection, productMediaSaveSchema, productMediaCopySchema, resolveMediaCollection, writeMediaCollection,
   type ProductMediaAsset, type ProductMediaCollection, type ProductMediaQuery, type ProductMediaWorkspace } from '@nexus/shared/product-media'
 import prisma from '../../db.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspace-destination.js'
@@ -18,10 +18,19 @@ type Input = ProductMediaQuery & { productId: string }
 type Tx = Prisma.TransactionClient
 const productSelect = { workspaceId: true, translations: true, id: true, parentId: true, name: true, sku: true, version: true, localizedContent: true } as const
 
-export async function validateProductMediaDestination(input: Input) {
-  if (input.scope === 'MASTER') return
+/** The checked address: `input` names its listing by the listing row's id from here on. */
+export async function validateProductMediaDestination(input: Input): Promise<Input> {
+  if (input.scope === 'MASTER') return input
   const destination = await resolveWorkspaceDestination({ productId: input.productId, channel: input.scope, marketplace: input.market, accountId: input.accountId, listingId: input.listingId, aliasKey: input.aliasKey })
-  if ((input.listingId && !destination.listing) || (destination.listing && destination.listing.productId !== input.productId)) throw new WorkspaceScopeError('Choose the listing for this product to edit its media.', 422)
+  let listing: { id: string; productId: string; aliasKey: string } | null = destination.listing
+  // Owner 2026-10-05 — an alias is named by its ALIAS ID. An older address sends it as `listingId`: the resolver links it to
+  // the family root's listing of that alias, so a variant's address names the variant's own listing of the same alias.
+  if (listing && input.listingId && listing.productId !== input.productId && listing.aliasKey && listing.aliasKey === input.listingId)
+    listing = await prisma.channelListing.findFirst({ where: { productId: input.productId, channel: input.scope, marketplace: input.market, channelConnectionId: destination.accountId, aliasKey: listing.aliasKey },
+      select: { id: true, productId: true, aliasKey: true } })
+  if ((input.listingId && !listing) || (listing && listing.productId !== input.productId)) throw new WorkspaceScopeError('Choose the listing for this product to edit its media.', 422)
+  // The snapshot reads the listing row by its id, never the raw alias id no listing has.
+  return listing?.id && input.listingId && listing.id !== input.listingId ? { ...input, listingId: listing.id } : input
 }
 
 async function snapshot(input: Input, tx: Tx) {
@@ -32,9 +41,14 @@ async function snapshot(input: Input, tx: Tx) {
     product.parentId ? tx.product.findFirst({ where: { id: product.parentId, deletedAt: null }, select: productSelect }) : null,
     tx.productImage.findMany({ where: { productId: { in: [product.id, ...(product.parentId ? [product.parentId] : [])] } }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
     input.scope === 'MASTER' ? null : tx.channelListing.findFirst({ where: { id: input.listingId, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId,
-      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, platformAttributes: true } }),
+      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, aliasKey: true, platformAttributes: true } }),
   ])
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing destination is no longer available.')
+  // Owner 2026-10-05 — an Amazon alias shows the main listing's photos (one photo set per product): its list is read from this
+  // product's main listing on the same account and market, read-only (saves and copies onto it are refused).
+  const followsMain = followsMainListingPhotos(input.scope, listing ? listing.aliasKey : input.aliasKey)
+  const main = followsMain ? await tx.channelListing.findFirst({ where: { productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId, aliasKey: '' },
+    select: { id: true, version: true, channel: true, aliasKey: true, platformAttributes: true } }) : null
   const assets: ProductMediaAsset[] = files.map(file => ({ id: file.id, type: file.mediaType || 'IMAGE', url: file.url,
     preview: file.mediaType === 'IMAGE' ? file.url : file.posterUrl, alt: file.alt ?? '', mimeType: file.mimeType,
     width: file.width, height: file.height, durationSec: file.durationSec, fileSize: file.fileSize }))
@@ -45,7 +59,7 @@ async function snapshot(input: Input, tx: Tx) {
   const old = legacy && legacyPhotoItems(legacy, files, product.id)
   if (old) assets.push(...old.outside.map(photo => ({ id: photo.id, type: 'IMAGE', url: photo.url, preview: photo.url, alt: '' })))
   const isChannel = input.scope !== 'MASTER'
-  const content = isChannel ? mediaObject(listing?.platformAttributes)._productMediaLocales : product.localizedContent
+  const content = isChannel ? mediaObject((followsMain ? main : listing)?.platformAttributes)._productMediaLocales : product.localizedContent
   const resolved = old ? { collection: { version: 1 as const, items: old.items }, source: 'locale' as const, hasOverride: true } : resolveMediaCollection({ locale: input.locale, own: content,
     shared: isChannel ? product.localizedContent : undefined, parent: parent?.localizedContent,
     ownIds: files.filter(file => file.productId === product.id).map(file => file.id),
@@ -53,13 +67,13 @@ async function snapshot(input: Input, tx: Tx) {
   const { productId, ...context } = input
   const workspace: ProductMediaWorkspace = { ...resolved, productId, context, title: String(resolveContent({ product: product as any, parent: parent as any, field: 'title', address: { requested: input.locale === 'und' ? PRIMARY_CONTENT_LOCALE : input.locale } }).value ?? product.sku), assets,
     missingAssetIds: resolved.collection.items.filter(item => !assets.some(asset => asset.id === item.assetId)).map(item => item.assetId),
-    revision: hash([[input.productId, input.scope, input.market, input.locale, input.accountId ?? null, input.listingId ?? null, input.aliasKey ?? null], product, parent, listing, files.map(file => [file.id, file.updatedAt, file.url, file.alt, file.sortOrder])]) }
+    revision: hash([[input.productId, input.scope, input.market, input.locale, input.accountId ?? null, input.listingId ?? null, input.aliasKey ?? null], product, parent, listing, files.map(file => [file.id, file.updatedAt, file.url, file.alt, file.sortOrder]),
+      ...(followsMain ? [main] : [])]), ...(followsMain ? { readOnly: AMAZON_ALIAS_PHOTOS } : {}) }
   return { workspace, product, parent, listing, files }
 }
 
 export async function readProductMedia(input: Input) {
-  await validateProductMediaDestination(input)
-  return (await snapshot(input, prisma)).workspace
+  return (await snapshot(await validateProductMediaDestination(input), prisma)).workspace
 }
 
 /**
@@ -79,13 +93,14 @@ function announce(rootId: string | null) {
 export async function saveProductMedia(input: Input, body: unknown) {
   if (await isOnMediaPlan(input.productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const { expectedRevision, collection } = productMediaSaveSchema.parse(body)
-  await validateProductMediaDestination(input)
+  input = await validateProductMediaDestination(input)
   let rootId: string | null = null
   try {
     const saved = await prisma.$transaction(async tx => {
       const state = await snapshot(input, tx)
       rootId = state.product.parentId ?? state.product.id
       const { workspace } = state
+      if (workspace.readOnly) throw new WorkspaceScopeError(workspace.readOnly, 422)
       if (workspace.revision !== expectedRevision) throw new WorkspaceScopeError('Media changed since this editor opened. Reload the gallery before applying your changes.')
       const known = new Set(workspace.assets.map(asset => asset.id))
       if (collection?.items.some(item => !known.has(item.assetId))) throw new WorkspaceScopeError('A selected file is no longer in this product’s media library. Reload the gallery.', 422)
@@ -145,14 +160,14 @@ function mediaConflict(error: unknown) {
 export async function copyProductMedia(input: Input, body: unknown) {
   if (await isOnMediaPlan(input.productId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
   const command = productMediaCopySchema.parse(body)
-  const sourceInput = { productId: command.source.productId, ...command.source.context }
-  await validateProductMediaDestination(input)
-  await validateProductMediaDestination(sourceInput)
+  input = await validateProductMediaDestination(input)
+  const sourceInput = await validateProductMediaDestination({ productId: command.source.productId, ...command.source.context })
   let rootId: string | null = null
   try {
     const copied = await prisma.$transaction(async tx => {
       const source = await snapshot(sourceInput, tx), target = await snapshot(input, tx)
       rootId = target.product.parentId ?? target.product.id
+      if (target.workspace.readOnly) throw new WorkspaceScopeError(target.workspace.readOnly, 422)
       if (source.workspace.revision !== command.source.expectedRevision || target.workspace.revision !== command.expectedRevision) {
         throw new WorkspaceScopeError('A source or destination gallery changed. Refresh the sheet before copying again.')
       }

@@ -295,6 +295,8 @@ export interface GalleryMediaPopupProps {
   familyId: string | null
   /** Owner 2026-10-05 — eBay: the list is the listing's Image URLs list; what a save here does (`mediaSourceNote`). */
   imageUrlsNote?: string
+  /** Owner 2026-10-05 — the list is shown, never changed, here, and why (an Amazon alias shows the main listing's photos). */
+  readOnlyReason?: string
 }
 
 /**
@@ -303,8 +305,11 @@ export interface GalleryMediaPopupProps {
  * (`PUT /product-media` bound to the revision read when it opened).
  */
 export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
-  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId, imageUrlsNote } = props
+  const { productId, title, context, contextLabel, channelLabel, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId, imageUrlsNote } = props
   const data = useGalleryPopupData(productId, context, familyId)
+  // The row's reason, else the server's (`ProductMediaWorkspace.readOnly`): a read-only list is shown, never saved.
+  const readOnlyReason = props.readOnlyReason ?? data.baseline?.readOnly
+  const canEdit = props.canEdit && !readOnlyReason
   // The list and its revision from the read the pop-up opened with; the library from the latest read.
   const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
   const [draft, setDraft] = useState<gallery.GalleryDraft | null>(null)
@@ -413,7 +418,8 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     ? tiles.map(t => ({ id: t.id, src: t.src, label: t.label, mediaType: t.mediaType, tone: t.missing ? 'danger' : t.problem ? 'warning' : undefined,
       badges: t.problem ? <Tag tone={t.missing ? 'danger' : 'warning'}>{t.problem}</Tag> : undefined }))
     : initial.map(i => ({ id: i.id, src: i.preview ?? null, label: i.alt || mediaTypeLabel(i.type), mediaType: i.type }))
-  const source = working && draft ? gallery.gallerySource(working, draft) : null
+  // A read-only list is another listing's (an Amazon alias shows the main listing's): never "Own list for this listing".
+  const source = working && draft ? readOnlyReason ? { label: 'The main listing\'s list', own: false, note: null } : gallery.gallerySource(working, draft) : null
   const count = draft?.items.length ?? boardItems.length
   const found = working && draft ? gallery.galleryChecks(working, draft) : []
   const listed = useMemo(() => adding && working && draftNow.current ? gallery.galleryCards(working, draftNow.current, show, search).map(a => a.id) : [], [adding, working, show, search])
@@ -426,7 +432,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
   return <CellPanel anchor={anchor} label={`Product media: ${title}`} onSave={save} onCancel={() => { if (!busy) close() }}
     footer={<>
       <span className="nds-editor-keyhint">{busy ? <><Spinner size={12} /> Saving…</> : EDITOR_KEY_HINT_PANEL}</span>
-      <span className={styles.muted}>{gallery.gallerySaveLine(context, channelLabel)}</span>
+      <span className={styles.muted}>{readOnlyReason ? 'Shown only · nothing is saved here' : gallery.gallerySaveLine(context, channelLabel)}</span>
     </>}>
     <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={contextLabel} title={title} />
@@ -434,7 +440,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
       {error && <Banner tone="danger">{error}</Banner>}
       {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
       {data.state.status === 'error' && <Banner tone="danger" action={<Button size="xs" onClick={() => void data.reload()}>Try again</Button>}>{data.state.message}</Banner>}
-      {!canEdit && <Banner tone="neutral">{model.POPUP_TEXT.readOnly}</Banner>}
+      {!canEdit && <Banner tone="neutral">{readOnlyReason ?? model.POPUP_TEXT.readOnly}</Banner>}
 
       {draft?.reset
         ? <p className={styles.muted} role="status">{source?.note}</p>
