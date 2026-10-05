@@ -68,6 +68,8 @@ const mockMutations = (res: { ok: boolean; error: string | null }) => {
     updatePortfolioWithSync: async () => res,
     updateProductAdWithSync: async () => res,
     writeAdvertisingActionLog: async () => 'log1',
+    // 1e — pure; the real one (a person's own upload is recognised by the route's mark and a `user:` actor).
+    isPersonEdit: (manual: unknown, actor: string | null | undefined) => manual === true && typeof actor === 'string' && actor.startsWith('user:'),
   }))
 }
 

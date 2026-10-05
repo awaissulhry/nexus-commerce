@@ -175,7 +175,9 @@ export async function refloorCampaignBids(
 export async function restoreCampaignBids(
   campaignId: string,
   // MCP full control A8 — `changeSetId` as in suppressCampaignBids: optional, additive.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null },
+  // 1e — `manual`: a person clicked Restore (the Budget Manager control plane): it passes the halt and autonomy OFF
+  // like his other edits (isPersonEdit). Engines never set it, so their restores still wait for Resume (S1).
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
   if (!camp || !camp.bidsSuppressedAt) return 0 // not suppressed → no-op
@@ -191,7 +193,7 @@ export async function restoreCampaignBids(
   const groups = await prisma.adGroup.findMany({ where: { campaignId, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true } })
   for (const g of groups) {
     try {
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore group not accepted — keeping prior for retry', { adGroupId: g.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore group threw — keeping prior for retry', { adGroupId: g.id, error: (e as Error).message }) }
@@ -200,7 +202,7 @@ export async function restoreCampaignBids(
   const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true } })
   for (const t of targets) {
     try {
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore target threw — keeping prior for retry', { adTargetId: t.id, error: (e as Error).message }) }

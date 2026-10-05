@@ -105,10 +105,11 @@ export function isAutomatedPause(actor: string, status: string | null | undefine
 /**
  * 1e (CM-9, CM-10, CM-19) — a person's own edit from a campaign-manager screen.
  *
- * `manual` is set only by the routes a person's click reaches (PATCH /advertising/{campaigns,ad-groups,ad-targets,
- * product-ads}/:id, POST /advertising/ad-targets/bulk-bid and the two placement routes). It is never derived from the
- * actor string, which is free text (`user:budget-manager` and `user:cron-budget-pool` were machines), and it counts
- * only with a `user:` actor, so an engine that passed it by mistake is still an engine. Such an edit:
+ * `manual` is set only by the routes a person's click reaches: the campaign-manager PATCH routes, bulk-bid, the two
+ * placement routes, the bulk sheet upload, the Undo buttons (rollback.service.ts), the add routes (ads-create.service.ts,
+ * via isPersonCreate), the negative add routes (ads-negative-kw.service.ts) and the Budget Manager control plane. It is
+ * never derived from the actor string, which is free text (`user:cron-budget-pool` was a machine), and it counts only
+ * with a `user:` actor, so an engine that passed it by mistake is still an engine. Such an edit:
  *   · passes the account halt and autonomy OFF at the write gate (`GateContext.manual`; every other check binds);
  *   · may set a bid down to Amazon's own minimum in the market rather than Nexus's 5¢ engine floor;
  *   · is not rewritten by the campaign's `maxBidChangePct` step clamp, which exists so a runaway rule cannot 10× a bid;
@@ -116,6 +117,15 @@ export function isAutomatedPause(actor: string, status: string | null | undefine
  */
 export function isPersonEdit(manual: unknown, actor: string | null | undefined): boolean {
   return manual === true && typeof actor === 'string' && actor.startsWith('user:')
+}
+
+/**
+ * The same test for the create and negative services, which carry a bare person id in `userId` — or an engine's whole
+ * actor (`automation:<ruleId>`, the rule handlers and blueprints pass theirs there), which is never a person.
+ */
+export function isPersonCreate(manual: unknown, userId: string | null | undefined): boolean {
+  const u = (userId ?? '').trim()
+  return isPersonEdit(manual, u.startsWith('user:') || u.startsWith('automation:') ? u : `user:${u || 'anonymous'}`)
 }
 
 /** NP — the lowest bid an ordinary (not forced) engine write may set. Nexus's own floor, not Amazon's. */
@@ -1107,6 +1117,11 @@ export async function updateAdGroupWithSync(args: {
   changeSetId?: string | null
   /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
   manual?: boolean
+  /**
+   * 1e — an Undo (rollback.service.ts): a person's click, but it puts an old value back rather than choosing a new
+   * bid, so it does not replace the no-pause floor's memory; reverseOne puts the memory back from the action log.
+   */
+  reversal?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adGroup.findUnique({
@@ -1159,7 +1174,7 @@ export async function updateAdGroupWithSync(args: {
   }
   if (changes.length === 0) {
     // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
-    await keepPersonBidThroughRestore('AD_GROUP', args.adGroupId, person, args.patch.defaultBidCents, existing.suppressedFromBidCents)
+    await keepPersonBidThroughRestore('AD_GROUP', args.adGroupId, person && !args.reversal, args.patch.defaultBidCents, existing.suppressedFromBidCents)
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
 
@@ -1187,18 +1202,20 @@ export async function updateAdGroupWithSync(args: {
     if (refused) return refused
   }
 
+  // 1e (CM-9) — a person's bid on an ad group the no-pause floor holds is the bid the restore puts back. The memory it
+  // replaces is kept in the action log (both payloads), so an Undo of this edit puts the memory back too.
+  const replacesMemory = person && !args.reversal && !args.force && args.patch.defaultBidCents != null
+    && existing.suppressedFromBidCents != null && existing.suppressedFromBidCents !== args.patch.defaultBidCents
   const payloadBefore = {
     defaultBidCents: existing.defaultBidCents,
     status: existing.status,
+    ...(replacesMemory ? { suppressedFromBidCents: existing.suppressedFromBidCents } : {}),
   }
 
   const data: Record<string, unknown> = {}
   if (args.patch.defaultBidCents != null) data.defaultBidCents = args.patch.defaultBidCents
   if (args.patch.status) data.status = args.patch.status
-  // 1e (CM-9) — a person's bid on an ad group the no-pause floor holds is the bid the restore puts back.
-  if (person && !args.force && args.patch.defaultBidCents != null && existing.suppressedFromBidCents != null) {
-    data.suppressedFromBidCents = args.patch.defaultBidCents
-  }
+  if (replacesMemory) data.suppressedFromBidCents = args.patch.defaultBidCents
   await prisma.adGroup.update({ where: { id: args.adGroupId }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -1228,6 +1245,7 @@ export async function updateAdGroupWithSync(args: {
     ...payloadBefore,
     ...(args.patch.defaultBidCents != null ? { defaultBidCents: args.patch.defaultBidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
+    ...(replacesMemory ? { suppressedFromBidCents: args.patch.defaultBidCents } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1324,6 +1342,11 @@ export async function updateAdTargetWithSync(args: {
   actionType?: string | null
   /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
   manual?: boolean
+  /**
+   * 1e — an Undo (rollback.service.ts): a person's click, but it puts an old value back rather than choosing a new
+   * bid, so it does not replace the no-pause floor's memory; reverseOne puts the memory back from the action log.
+   */
+  reversal?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1415,7 +1438,7 @@ export async function updateAdTargetWithSync(args: {
   }
   if (changes.length === 0) {
     // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
-    await keepPersonBidThroughRestore('AD_TARGET', args.adTargetId, person, args.patch.bidCents, existing.suppressedFromBidCents)
+    await keepPersonBidThroughRestore('AD_TARGET', args.adTargetId, person && !args.reversal, args.patch.bidCents, existing.suppressedFromBidCents)
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
   // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal); an engine's stays 5¢.
@@ -1440,18 +1463,20 @@ export async function updateAdTargetWithSync(args: {
     if (refused) return refused
   }
 
+  // 1e (CM-9) — a person's bid on a target the no-pause floor holds is the bid the restore puts back. The memory it
+  // replaces is kept in the action log (both payloads), so an Undo of this edit puts the memory back too.
+  const replacesMemory = person && !args.reversal && !args.force && args.patch.bidCents != null
+    && existing.suppressedFromBidCents != null && existing.suppressedFromBidCents !== args.patch.bidCents
   const payloadBefore = {
     bidCents: existing.bidCents,
     status: existing.status,
+    ...(replacesMemory ? { suppressedFromBidCents: existing.suppressedFromBidCents } : {}),
   }
 
   const data: Record<string, unknown> = {}
   if (args.patch.bidCents != null) data.bidCents = args.patch.bidCents
   if (args.patch.status) data.status = args.patch.status
-  // 1e (CM-9) — a person's bid on a target the no-pause floor holds is the bid the restore puts back.
-  if (person && !args.force && args.patch.bidCents != null && existing.suppressedFromBidCents != null) {
-    data.suppressedFromBidCents = args.patch.bidCents
-  }
+  if (replacesMemory) data.suppressedFromBidCents = args.patch.bidCents
   await prisma.adTarget.update({ where: { id: args.adTargetId }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -1481,6 +1506,7 @@ export async function updateAdTargetWithSync(args: {
     ...payloadBefore,
     ...(args.patch.bidCents != null ? { bidCents: args.patch.bidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
+    ...(replacesMemory ? { suppressedFromBidCents: args.patch.bidCents } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,

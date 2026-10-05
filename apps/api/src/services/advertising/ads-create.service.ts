@@ -33,7 +33,7 @@ import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
-import { isPersonEdit } from './ads-mutation.service.js'
+import { isPersonCreate, isPersonEdit } from './ads-mutation.service.js'
 import { AD_PRODUCT_UNSUPPORTED, adProductRefusal } from '@nexus/shared/ads-ad-product'
 // 5b — every negative this file writes goes through the one negative write service.
 import { mirrorNegativeKeyword, pushLocalNegative, writeNegativeKeyword, writeNegativeProductTarget, type NegativeWriteResult } from './ads-negative-kw.service.js'
@@ -181,7 +181,11 @@ export async function createCampaignLocal(input: NewCampaign): Promise<{ id: str
   return { id: campaign.id, externalCampaignId: externalId, mode }
 }
 
-export interface NewAdGroup { campaignId: string; name: string; defaultBidEur: number; userId?: string; startEnabled?: boolean }
+export interface NewAdGroup {
+  campaignId: string; name: string; defaultBidEur: number; userId?: string; startEnabled?: boolean
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
+}
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string; externalAdGroupId: string | null }> {
   const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
   if (!campaign) throw new Error('campaign not found')
@@ -202,7 +206,7 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
   if (campaign.externalCampaignId && campaign.marketplace) {
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: Math.round(input.defaultBidEur * 100) })
+      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: Math.round(input.defaultBidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
       if (gate.allowed) {
         const r = isSd
           ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state })
@@ -221,6 +225,8 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
 
 export interface NewKeyword {
   adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidEur: number; userId?: string
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
   /**
    * HV.4 (C9) — WHY this keyword was created. `audit()` has always accepted evidence and this
    * caller has always passed none, so every one of the 218 keywords the harvest engine wrote
@@ -265,7 +271,7 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
       if (gate.allowed) {
         const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
         // HP1 — a throw used to abort the whole call with the local row unwritten and the reason
@@ -426,7 +432,11 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
   }
 }
 
-export interface NewProductAd { adGroupId: string; sku?: string; asin?: string; productId?: string; userId?: string }
+export interface NewProductAd {
+  adGroupId: string; sku?: string; asin?: string; productId?: string; userId?: string
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
+}
 
 /**
  * Find the seller SKU an SP product ad actually needs.
@@ -573,7 +583,7 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0 })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId) })
       if (gate.allowed) {
         // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
         if (!resolved && !isSd) throw skuConflict ?? new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
@@ -980,6 +990,8 @@ export interface NewTarget {
   value: string
   audienceType?: 'VIEWS_REMARKETING' | 'PURCHASES_REMARKETING' | 'AUDIENCE'
   bidEur: number; state?: 'enabled' | 'paused'; userId?: string
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
   /**
    * Write the local row but do NOT create it on Amazon.
    *
@@ -1010,7 +1022,7 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string;
   if (!input.skipAmazon && ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
       if (gate.allowed) {
         const r = isAudience || ag.campaign.adProduct === 'SPONSORED_DISPLAY'
           ? await createSdTarget(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, expression, bid: input.bidEur, state: input.state ?? 'enabled' })
@@ -1409,13 +1421,13 @@ const asLocal = (r: NegativeWriteResult): LocalNegative => ({
   ...(r.refusal ? { refusal: r.refusal } : {}), ...(r.error ? { error: r.error } : {}),
 })
 
-export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string; creationFlow?: boolean }
+export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean }
 export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<LocalNegative> {
-  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow }))
+  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual }))
 }
 
 // NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.
-export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string; creationFlow?: boolean }
+export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean }
 /**
  * 🔴 HV.9a — mirror an AD_GROUP negative that has ALREADY been created at Amazon.
  *
@@ -1432,7 +1444,7 @@ export async function mirrorNegativeKeywordLocal(input: {
 }
 
 export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<LocalNegative> {
-  return asLocal(await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: input.adGroupId, keywordText: input.keywordText, matchType: input.matchType, userId: input.userId, creationFlow: input.creationFlow }))
+  return asLocal(await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: input.adGroupId, keywordText: input.keywordText, matchType: input.matchType, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual }))
 }
 
 // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation). Idempotent: skips a negative

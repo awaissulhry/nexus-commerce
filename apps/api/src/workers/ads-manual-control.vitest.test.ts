@@ -63,7 +63,9 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
   // The placement path reads Amazon's current array before its PUT (G.4).
   const listCampaignsV3 = async (_ctx: unknown, q: { campaignIds: string[] }) =>
     q.campaignIds.map((campaignId) => ({ campaignId, dynamicBidding: { strategy: 'LEGACY_FOR_SALES', placementBidding: [] } }))
-  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record, listCampaignsV3 }
+  // The bulk sheet's creates.
+  const create = async () => ({ ok: true, mode: 'live', externalId: 'EXT-NEW-KW', rawResponse: {} })
+  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record, listCampaignsV3, createKeyword: create }
 })
 
 const { drainAdsSyncOnce } = await import('./ads-sync.worker.js')
@@ -71,6 +73,9 @@ const { suppressCampaignBids, restoreCampaignBids } = await import('../services/
 const { updateAdTargetWithSync, updateAdGroupWithSync, updateCampaignWithSync, bulkUpdateAdTargetBids, isPersonEdit, amazonMinBidCents } =
   await import('../services/advertising/ads-mutation.service.js')
 const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+const { applyPlan } = await import('../services/advertising/bulksheet/apply.js')
+const { rollbackByActionLogId } = await import('../services/advertising/rollback.service.js')
+const { default: contextualDb } = await import('../db.js')
 
 const inside = <T>(work: () => Promise<T>) =>
   withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -124,6 +129,9 @@ beforeAll(async () => {
   await seedCampaign('own-min-c', { minBidCents: 10 })
   await seedCampaign('clamp-c', { dynamicBidding: { maxBidChangePct: 20 } })
   await seedCampaign('floor-c')
+  await seedCampaign('bulk-c')
+  await seedCampaign('bulk2-c')
+  await seedCampaign('undo-c')
   // The placement path resolves the market's Ads profile before it asks the gate.
   await inside(() => database.client.amazonAdsConnection.create({
     data: { profileId: 'P-IT-TEST', marketplace: 'IT', region: 'EU', mode: 'production', isActive: true, writesEnabledAt: new Date() } as never,
@@ -136,7 +144,7 @@ describe('isPersonEdit — what counts as the Owner\'s own edit', () => {
   it('only the routes\' flag together with a person\'s actor', () => {
     expect(isPersonEdit(true, OWNER)).toBe(true)
     expect(isPersonEdit(true, ENGINE)).toBe(false) // an engine that passed the flag by mistake is still an engine
-    expect(isPersonEdit(undefined, OWNER)).toBe(false) // the actor string alone proves nothing (`user:budget-manager` was a machine)
+    expect(isPersonEdit(undefined, OWNER)).toBe(false) // the actor string alone proves nothing (`user:cron-budget-pool` was a machine)
     expect(isPersonEdit('true', OWNER)).toBe(false)
   })
 })
@@ -293,5 +301,54 @@ describe('CM-9 — a bid he sets while the no-pause floor holds survives the res
     expect((await bidOf('floor-c-t2')).suppressedFromBidCents).toBe(60)
     await inside(() => restoreCampaignBids('floor-c', { actor: ENGINE, reason: 'test: morning restore 3' }))
     expect((await bidOf('floor-c-t2')).bidCents).toBe(60)
+  })
+})
+
+describe('1e — his bulk sheet upload, while the account is halted', () => {
+  /** One edited keyword bid and one new keyword, as the preview hands them to apply. */
+  const rows = (c: string) => [
+    { rowIndex: 1, entity: 'Keyword', operation: 'Update', rowKey: `${c}-t1`, targetId: `${c}-t1`, parentId: null, label: 'kw', status: 'UPDATE' as const, diffs: [{ field: 'Bid', current: '0.35', next: '0.45' }] },
+    {
+      rowIndex: 2, entity: 'Keyword', operation: 'Create', rowKey: `${c}-new`, targetId: null, parentId: `${c}-g`, label: 'new kw', status: 'CREATE' as const,
+      diffs: [{ field: 'Keyword text', current: '', next: `new kw ${c}` }, { field: 'Match type', current: '', next: 'Exact' }, { field: 'Bid', current: '', next: '0.30' }],
+    },
+  ]
+  const opts = { applyImmediately: true, strict: false, conflicts: 'skip' as const }
+
+  it('his upload\'s edit and his new keyword reach Amazon', async () => {
+    await drain()
+    gate.seen = []
+    const r = await inside(() => applyPlan(contextualDb as never, 'job-person', rows('bulk-c') as never, { ...opts, actor: OWNER, manual: true }))
+    expect(r.applied).toBe(2)
+    expect(gate.seen.map((c) => c.manual === true)).toEqual([true]) // the create asks the gate inline
+    expect(r.results.find((x) => x.rowIndex === 2)!.message).toContain('Created on Amazon (EXT-NEW-KW)')
+    const { manual, rows: queued } = await drain()
+    expect(manual).toEqual([true])
+    expect(queued[0]!.syncStatus).toBe('SUCCESS')
+  })
+
+  it('the same file run by an engine is refused by the halt, edit and create alike', async () => {
+    gate.seen = []
+    const r = await inside(() => applyPlan(contextualDb as never, 'job-engine', rows('bulk2-c') as never, { ...opts, actor: ENGINE, manual: true }))
+    expect(gate.seen.map((c) => c.manual === true)).toEqual([false])
+    expect(r.results.find((x) => x.rowIndex === 2)!.message).toContain('Created locally')
+    const { manual, rows: queued } = await drain()
+    expect(manual).toEqual([false])
+    expect(queued[0]!.syncStatus).toBe('SKIPPED')
+  })
+})
+
+describe('1e (CM-9) — undoing a bid he set during the floor puts the floor\'s memory back too', () => {
+  it('Undo returns the bid to the floor AND the restore again restores the bid from before the floor', async () => {
+    await inside(() => suppressCampaignBids('undo-c', { actor: ENGINE, reason: 'test: night floor' }))
+    const edit = await inside(() => updateAdTargetWithSync({ adTargetId: 'undo-c-t1', patch: { bidCents: 50 }, actor: OWNER, manual: true }))
+    expect(await bidOf('undo-c-t1')).toEqual({ bidCents: 50, suppressedFromBidCents: 50 })
+
+    const undo = await inside(() => rollbackByActionLogId({ actionLogId: edit.actionLogId!, actor: OWNER, reason: 'test undo', manual: true }))
+    expect(undo.reversed).toBe(1)
+    expect(await bidOf('undo-c-t1')).toEqual({ bidCents: 2, suppressedFromBidCents: 35 })
+
+    await inside(() => restoreCampaignBids('undo-c', { actor: ENGINE, reason: 'test: morning restore' }))
+    expect(await bidOf('undo-c-t1')).toEqual({ bidCents: 35, suppressedFromBidCents: null })
   })
 })
