@@ -41,6 +41,12 @@ const inOwner = <T>(work: () => Promise<T>, actor: string | null = null) => inPr
 const payload = (userId = randomUUID(), notificationId = randomUUID()) => ({ metadata: { topic: 'AUTHORIZATION_REVOCATION', schemaVersion: '1.0' },
   notification: { notificationId, publishDate: '2026-09-23T01:02:05Z', publishAttemptCount: 1,
     data: { userId, username: 'synthetic-private-name', revocationDate: '2026-09-23T01:02:03Z' } } })
+/** eBay's ORDER_CONFIRMATION shape (OrderConfirmationData): the seller is data.user.userId. */
+const orderPayload = (userId = randomUUID(), notificationId = randomUUID(), orderId = `00-${randomUUID().slice(0, 5)}-00001`) => ({
+  metadata: { topic: 'ORDER_CONFIRMATION', schemaVersion: '1.0', deprecated: false },
+  notification: { notificationId, eventDate: '2026-10-06T09:15:00Z', publishDate: '2026-10-06T09:15:02Z', publishAttemptCount: 1,
+    data: { user: { userId, username: 'synthetic-private-name' }, order: { orderId, orderLineItems: [{ orderLineItemId: '1', listingId: '101', quantity: 1 }] } } } })
+const receiptsOf = (notificationId: string) => database.pool.query('SELECT "workspaceId", "connectionId", "eventType", status, "nextAttemptAt" FROM "WebhookEvent" WHERE "externalId"=$1', [admission.ebayReceiptExternalId('production', notificationId)]).then(r => r.rows)
 const receive = (body: unknown, environment: 'production' | 'sandbox' = 'production') => admission.receiveEbayNotice({ rawBody: Buffer.from(JSON.stringify(body)), header: 'synthetic-signature', environment })
 async function seed(userId: string, workspaceId = OWNER, isActive = true, environment = 'production') {
   const id = randomUUID()
@@ -499,6 +505,56 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     expect(await inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, first), 'a-owner')).toEqual(assigned)
     expect(await quarantine(retained.quarantineId)).toEqual(before)
     expect(await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: assigned.receiptId } }))).toMatchObject({ connectionId: first })
+  })
+
+  it('routes a signed order notice for seller X to X\'s business and X\'s account, whatever the ambient profile', async () => {
+    const x = orderPayload(), y = orderPayload()
+    const xAccount = await seed(x.notification.data.user.userId, OTHER), yAccount = await seed(y.notification.data.user.userId, OWNER)
+    const first = await inProfile(OWNER, () => receive(x), 'a-owner')
+    expect(first).toMatchObject({ kind: 'accepted', workspaceId: OTHER, duplicate: false })
+    expect(await receiptsOf(x.notification.notificationId)).toEqual([{ workspaceId: OTHER, connectionId: xAccount, eventType: 'ORDER_CONFIRMATION', status: 'pending', nextAttemptAt: null }])
+    const second = await inProfile(OTHER, () => receive(y), 'b-owner')
+    expect(second).toMatchObject({ kind: 'accepted', workspaceId: OWNER })
+    expect(await receiptsOf(y.notification.notificationId)).toEqual([{ workspaceId: OWNER, connectionId: yAccount, eventType: 'ORDER_CONFIRMATION', status: 'pending', nextAttemptAt: null }])
+    // eBay's retry of the same notice is the same receipt, counted as a second delivery.
+    expect(await receive({ ...x, notification: { ...x.notification, publishAttemptCount: 2 } })).toMatchObject({ kind: 'accepted', receiptId: (first as any).receiptId, duplicate: true })
+    expect((await database.pool.query('SELECT count(*)::int AS n FROM "EbayNoticeQuarantine" WHERE "externalId"=ANY($1)', [[x.notification.notificationId, y.notification.notificationId]])).rows[0].n).toBe(0)
+  })
+
+  it('quarantines an order notice for an unknown seller, encrypted, and never matches it by username', async () => {
+    const body = orderPayload(), username = `name-${randomUUID()}`
+    body.notification.data.user.username = username
+    // An account whose seller id equals the notice's USERNAME must not be chosen.
+    await seed(username, OTHER)
+    const result = await receive(body)
+    expect(result).toMatchObject({ kind: 'quarantined', reason: 'owner_unknown' })
+    if (result.kind !== 'quarantined') throw new Error('Expected quarantine')
+    const row = await quarantine(result.quarantineId)
+    expect(row).toMatchObject({ topic: 'ORDER_CONFIRMATION', signatureOk: true, firstOwnerWorkspaceId: null, resolvedReceiptId: null })
+    expect(row.subjectHash).not.toBeNull()
+    expect(crypto.isCredentialsBlob(row.payloadEnc)).toBe(true)
+    for (const secret of [username, body.notification.data.user.userId, body.notification.data.order.orderId]) expect(JSON.stringify(row)).not.toContain(secret)
+    expect(await receiptsOf(body.notification.notificationId)).toEqual([])
+  })
+
+  it('quarantines an order notice whose seller belongs to an inactive business', async () => {
+    const inactive = randomUUID(), body = orderPayload()
+    await database.pool.query('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Admission inactive business\',\'test\',$1,now())', [inactive])
+    await seed(body.notification.data.user.userId, inactive)
+    await database.pool.query('UPDATE "Workspace" SET status=\'suspended\' WHERE id=$1', [inactive])
+    const result = await receive(body)
+    expect(result).toMatchObject({ kind: 'quarantined', reason: 'workspace_inactive' })
+    if (result.kind !== 'quarantined') throw new Error('Expected quarantine')
+    expect(await quarantine(result.quarantineId)).toMatchObject({ topic: 'ORDER_CONFIRMATION', firstOwnerWorkspaceId: inactive, resolvedReceiptId: null })
+    expect(await receiptsOf(body.notification.notificationId)).toEqual([])
+  })
+
+  it('quarantines an order notice that names its seller only in the account topics\' flat field', async () => {
+    const body = orderPayload(), userId = body.notification.data.user.userId
+    await seed(userId)
+    const flat = { ...body, notification: { ...body.notification, data: { userId, order: body.notification.data.order } } }
+    expect(await receive(flat)).toMatchObject({ kind: 'quarantined', reason: 'subject_or_topic_unresolved' })
+    expect(await receiptsOf(body.notification.notificationId)).toEqual([])
   })
 
   it('gives concurrent adoption requests for different accounts exactly one truthful success', async () => {
