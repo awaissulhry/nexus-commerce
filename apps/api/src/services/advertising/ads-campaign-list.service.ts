@@ -9,10 +9,10 @@
  */
 import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
-import { AMS_DAILY_MARKER } from '../ads-core/ams-daily.js'
 import { ntbIsPublishedFor } from '../ads-core/metrics-math.js'
 // ADM-P6/DC — THE definition of ad-attributed sales (see ads-core/ad-sales.ts).
 import { adSalesCents } from '../ads-core/ad-sales.js'
+import { campaignDailyWhere } from './ads-campaign-window.js'
 
 /** The query `GET /advertising/campaigns` accepts. All strings, as Fastify parses a query. */
 export interface AmazonCampaignListQuery {
@@ -179,9 +179,12 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
     // weightedIS above; this one Amazon publishes per day, so a mean over the reported days is
     // the faithful reading.
     const _avg = { ntbOrdersRate14d: true } as const
+    // AM-6 — the two buckets are defined once (`campaignDailyWhere`), and the Portfolios overview
+    // sums the same rows for the same window, so a portfolio's spend is its campaigns' spend here.
+    const dailyWhere = campaignDailyWhere(ids, extIds, dateFilter)
     const [byLocal, byExt] = await Promise.all([
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count, _avg }),
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count, _avg }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: dailyWhere.byLocal, _sum, _count, _avg }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: dailyWhere.byExt, _sum, _count, _avg }),
     ])
     const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
     const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))

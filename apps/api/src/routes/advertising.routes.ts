@@ -9992,11 +9992,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // Portfolios P1 — synced rows enriched with campaign counts + spend/sales rollup (from our data).
+  // AM-6 — spend/sales cover a date window, taken exactly as GET /advertising/campaigns takes it
+  // (startDate + endDate, or preset, or windowDays; default the last 7 days); the answer names it.
   fastify.get('/advertising/portfolios/overview', async (request, reply) => {
-    const q = request.query as { marketplace?: string }
+    const q = request.query as { marketplace?: string; preset?: string; startDate?: string; endDate?: string; windowDays?: string }
     const { getPortfolioOverview } = await import('../services/advertising/ads-portfolio.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null }) }
+    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null, preset: q.preset, startDate: q.startDate, endDate: q.endDate, windowDays: q.windowDays }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 
