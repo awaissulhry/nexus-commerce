@@ -40,7 +40,12 @@
     (4 on main) · route-Prisma ratchet pass · id scan: one real SKU in reports/H-fixes.md, already public on main.
   - Known small leftovers: plan Change cell "+5 more" overstates; old rows "by Someone"; Automate in the drawer on
     an always-ask kind opens the modal that explains; Settings › AI and Fleet overview keep their old lists (§9).
-  - WAITING for the Owner: push + PR shape (one PR recommended). Nothing pushed.
+  - Owner said "A" (one PR). Merged origin/main 1d1f1ebfd (CHANGELOG conflict, kept both; pinned --nds-text-strong/-muted
+    light in fleet-pages.css). Re-checked: tsc both pass, API 732/732 off+on, web 2644/2644, gates 61/65 (4 on main).
+    PUSHED + PR #329 opened (no auto-merge). Main moved again (#326–#328): merged a69e8f553 (CHANGELOG only), both tsc
+    pass, PR MERGEABLE.
+  - Owner said "merge #329" (10-05). Merged main #322 in (963072010; MCP tests 115/117, the 2 failures = the 4
+    coverage rows already missing on main), squash-merged #329 → main 188cb971d. Deploy API run 37266065599 started.
 - Test env: `source ~/nexus-archive/2026-10-05-approvals-grid-stack/env.sh` (loopback guard, PGlite tests);
   `apps/api/.env` (git-ignored) holds a loopback test DATABASE_URL. Run API vitest only from apps/api.
 - PRs: nothing pushed yet; push/merge only on the Owner's word.

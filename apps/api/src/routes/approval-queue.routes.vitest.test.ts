@@ -139,7 +139,7 @@ beforeAll(async () => {
     ids.rejected = (await raw({ agentRunId: claude.id, toolName: 'apply-content', status: 'rejected', args: { productId: p2.id, title: 'y' }, preview: null, decidedBy: 'Ana Plan', decidedByUserId: people.all.id, decidedAt: now, reason: 'too long', operatorNote: 'too long' })).id
     ids.expired = (await raw({ agentRunId: claude.id, toolName: 'set-price', status: 'expired', args: { productId: p1.id, price: 49 }, preview: pricePreview(p1.id, p1.sku, 50, 49), expiresAt: new Date(Date.now() - 60_000) })).id
     ids.replaced = (await raw({ agentRunId: claude.id, toolName: 'set-price', status: 'superseded', args: { productId: p1.id, price: 48 }, preview: pricePreview(p1.id, p1.sku, 50, 48), decidedBy: 'Ana Plan', decidedAt: now, reason: 'superseded — you edited this before approving' })).id
-    ids.recorded = (await raw({ agentRunId: claude.id, toolName: 'set-price', status: 'approved', args: { productId: p1.id, price: 47 }, preview: pricePreview(p1.id, p1.sku, 50, 47), decidedBy: 'Ana Plan', decidedAt: now, reason: 'approved; this tool is preview-only (no execute)' })).id
+    ids.recorded = (await raw({ agentRunId: claude.id, toolName: 'set-price', status: 'approved', args: { productId: p1.id, price: 47 }, preview: pricePreview(p1.id, p1.sku, 50, 47), decidedBy: null, decidedAt: now, reason: 'approved; this tool is preview-only (no execute)' })).id
     await db.agentChange.create({ data: { approvalId: ids.done, toolName: 'set-price', via: 'claude', reversibility: 'full', before: { productId: p1.id, price: 50 }, after: { productId: p1.id, price: 51 }, executedAt: now } })
 
     // A fixed order: each request asked one second after the one before, in the order above.
@@ -278,7 +278,8 @@ describe('GET /agent/fleet/approvals/queue', { timeout: 30_000 }, () => {
       toolName: 'submit-change-plan',
       target: { kind: 'product', id: ids.p1, sku: 'AQ-GLOVE-M', count: 3 },
       plan: { steps: 3, byStatus: { pending: 3 } },
-      changeCount: 3,
+      // One change line per kind (2), so the grid's "+N more" never counts steps; the steps are plan.steps.
+      changeCount: 2,
       bulkApprovable: false,
       bulkBlockedWhy: 'A plan is approved on its own',
       automation: { level: 'ask', whyWaits: 'A plan runs by itself only when every step may: your rule for Apply product content is Ask me' },
@@ -301,6 +302,8 @@ describe('GET /agent/fleet/approvals/queue', { timeout: 30_000 }, () => {
     expect(await rowOf('all', 'done', 'done')).toMatchObject({ note: 'Ran by your rule', decider: { kind: 'rule' } })
     expect(await rowOf('all', 'rejected', 'done')).toMatchObject({ note: 'Rejected: too long', decider: { kind: 'person', label: 'Ana Plan' } })
     expect(await rowOf('all', 'expired', 'done')).toMatchObject({ note: 'Nobody decided in time. Nothing changed.', decider: { kind: 'expiry', label: 'Expired' } })
+    // An older row decided without the decider's name: the API says so and never invents a person.
+    expect((await rowOf('all', 'recorded', 'done')).decider).toEqual({ kind: 'system', label: 'Name not recorded' })
     expect((await rowOf('all', 'replaced', 'done')).note).toBe('Replaced by an edit')
     expect((await rowOf('all', 'recorded', 'done')).note).toBe('Approved; this kind only previews, so nothing ran')
   })

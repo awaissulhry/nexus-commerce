@@ -780,12 +780,12 @@ const READERS: Record<string, Reader> = {
   /* A change plan: one line per kind of change (its steps are read by the caller). */
   [PLAN_TOOL]: (p) => {
     const kinds = recs(p.kinds)
-    const steps = num(rec(p.totals)?.steps) ?? kinds.reduce((n, k) => n + (num(k.count) ?? 0), 0)
     const title = text(p.title)
     const summary = text(p.summary)
     return {
       changes: kinds.map((k) => ({ label: text(k.title) ?? text(k.tool) ?? 'Change', from: null, to: plural(num(k.count) ?? 0, 'change') })),
-      changeCount: steps,
+      // One line per kind, so the grid's "+N more" counts kinds, never steps (the step count is QueueRow.plan.steps).
+      changeCount: kinds.length,
       summary: title && summary ? `${title} — ${summary}` : (title ?? summary),
       target: null,
       channel: null,
