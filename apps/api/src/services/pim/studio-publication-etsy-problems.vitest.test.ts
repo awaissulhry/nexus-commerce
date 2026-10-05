@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
  * E18–E20, E22, E24, W3–W5, W7–W9) are named by `prepareEtsyPublication` and tested in studio-publication-etsy.vitest.test.ts.
  */
 import { EtsyPublicationProblems, etsyFieldLabel, etsyProblems, stripNothingSent } from './studio-publication-etsy-problems.js'
-import { buildEtsyListing, etsyListingChecks, etsyListingValues, type EtsyBuildAxis, type EtsyBuildInput, type EtsyBuildRow } from './studio-publication-etsy-build.js'
+import { buildEtsyListing, ETSY_ZERO_STOCK_NOTE, etsyListingChecks, etsyListingValues, type EtsyBuildAxis, type EtsyBuildInput, type EtsyBuildRow } from './studio-publication-etsy-build.js'
 
 const cells = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value, status: 'mapped' }]))
 const MAIN = { title: 'Leather knee slider', description: 'A hand-stitched knee slider.', taxonomy_id: '1234', who_made: 'i_did', when_made: '2020_2026', is_supply: 'false',
@@ -202,7 +202,7 @@ describe('the variations (E14–E17, E21, W1, W2) and translations (W6)', () => 
   })
 
   it('W1 / W2 — stock 0 waits as a draft; above 999 is sent as 999', () => {
-    expect(built({ axes: [COLOR], rows: rows.map(r => ({ ...r, quantity: 0 })) }).notes).toContain('Etsy cannot sell at stock 0: the listing stays a draft; it can go live when you Publish with stock.')
+    expect(built({ axes: [COLOR], rows: rows.map(r => ({ ...r, quantity: 0 })) }).notes).toContain(ETSY_ZERO_STOCK_NOTE)
     expect(built({ axes: [COLOR], rows: [{ ...rows[0], quantity: 1000 }] }).notes).toContain('FAKE-SKU-2: stock 1000 is sent as 999, the most Etsy takes for one variation.')
   })
 

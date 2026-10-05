@@ -132,34 +132,32 @@ function textField(key: TextKey, value: unknown, fields: EtsyListingFormFields):
 }
 
 /**
- * E2 — the studio's `updateListing` fields (`listing`), each against Etsy's own rule. A key Etsy's update does not take
- * here — `state` (its own function, below), `image_ids`, price, quantity, `readiness_state_id`, styles, a SKU — is a
- * refusal, never a quiet drop: a field the review showed and the send left out is a change the person did not get.
+ * One listing key against Etsy's own rule, written into `fields` (E2's `updateListing` keys; E3's create calls it for every
+ * key the two share, so the two can never drift). The caller has already refused a key it does not take.
  */
-function listingFields(listing: EtsyListingPatch, acceptAutoRenewCharge: boolean | undefined, fields: EtsyListingFormFields): void {
-  if (!listing || typeof listing !== 'object' || Array.isArray(listing)) refuse('Etsy listing fields must be a set of named values; nothing was sent.')
-  const entries = Object.entries(listing).filter(([, value]) => value !== undefined)
-  for (const [key, value] of entries) {
-    if (!PATCH_KEYS.has(key)) refuse(`Etsy's listing update does not take «${key}» from a content change; nothing was sent.`)
-    if ((TEXT_KEYS as readonly string[]).includes(key)) { textField(key as TextKey, value, fields); continue }
-    if ((ID_KEYS as readonly string[]).includes(key)) {
-      if (!isPositiveWhole(value)) refuse(`Etsy ${key} must be a positive whole number; nothing was sent.`)
-    } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
-      if (typeof value !== 'boolean') refuse(`Etsy ${key} must be true or false; nothing was sent.`)
-    } else if ((MEASURE_KEYS as readonly string[]).includes(key)) {
-      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) refuse(`Etsy ${key} must be a number above 0; nothing was sent.`)
-    } else if (key in ENUMS) {
-      const allowed = ENUMS[key as keyof typeof ENUMS]
-      if (typeof value !== 'string' || !allowed.includes(value)) {
-        refuse(`Etsy does not take "${String(value)}" for ${key} (it takes ${allowed.filter(Boolean).join(', ')}${allowed.includes('') ? ', or nothing to clear it' : ''}); nothing was sent.`)
-      }
-    } else if (key === 'type') {
-      if (value !== 'physical') refuse(`Nexus sends physical Etsy listings only, not "${String(value)}"; nothing was sent.`)
-    } else if (key === 'production_partner_ids') {
-      if (!Array.isArray(value) || !value.every(isPositiveWhole)) refuse('Etsy production partner ids must be positive whole numbers; nothing was sent.')
+function listingKey(key: string, value: unknown, fields: EtsyListingFormFields): void {
+  if ((TEXT_KEYS as readonly string[]).includes(key)) { textField(key as TextKey, value, fields); return }
+  if ((ID_KEYS as readonly string[]).includes(key)) {
+    if (!isPositiveWhole(value)) refuse(`Etsy ${key} must be a positive whole number; nothing was sent.`)
+  } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
+    if (typeof value !== 'boolean') refuse(`Etsy ${key} must be true or false; nothing was sent.`)
+  } else if ((MEASURE_KEYS as readonly string[]).includes(key)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) refuse(`Etsy ${key} must be a number above 0; nothing was sent.`)
+  } else if (key in ENUMS) {
+    const allowed = ENUMS[key as keyof typeof ENUMS]
+    if (typeof value !== 'string' || !allowed.includes(value)) {
+      refuse(`Etsy does not take "${String(value)}" for ${key} (it takes ${allowed.filter(Boolean).join(', ')}${allowed.includes('') ? ', or nothing to clear it' : ''}); nothing was sent.`)
     }
-    fields[key] = Array.isArray(value) ? [...value] : value
+  } else if (key === 'type') {
+    if (value !== 'physical') refuse(`Nexus sends physical Etsy listings only, not "${String(value)}"; nothing was sent.`)
+  } else if (key === 'production_partner_ids') {
+    if (!Array.isArray(value) || !value.every(isPositiveWhole)) refuse('Etsy production partner ids must be positive whole numbers; nothing was sent.')
   }
+  fields[key] = Array.isArray(value) ? [...value] : value as EtsyListingFormFields[string]
+}
+
+/** The rules across keys, for an update and a create alike: classification together, and auto-renew only with a yes. */
+function listingRules(fields: EtsyListingFormFields, acceptAutoRenewCharge: boolean | undefined): void {
   const classification = CLASSIFICATION_KEYS.filter((key) => key in fields)
   if (classification.length && classification.length < CLASSIFICATION_KEYS.length) {
     refuse('Etsy takes who_made, when_made and is_supply together, and this change has only ' + classification.join(', ') + '; nothing was sent.')
@@ -169,6 +167,80 @@ function listingFields(listing: EtsyListingPatch, acceptAutoRenewCharge: boolean
   if (fields.should_auto_renew === true && acceptAutoRenewCharge !== true) {
     refuse('Turning on auto-renew commits the shop to a recurring Etsy charge, so it needs an explicit yes; nothing was sent.')
   }
+}
+
+/**
+ * E2 — the studio's `updateListing` fields (`listing`), each against Etsy's own rule. A key Etsy's update does not take
+ * here — `state` (its own function, below), `image_ids`, price, quantity, `readiness_state_id`, styles, a SKU — is a
+ * refusal, never a quiet drop: a field the review showed and the send left out is a change the person did not get.
+ */
+function listingFields(listing: EtsyListingPatch, acceptAutoRenewCharge: boolean | undefined, fields: EtsyListingFormFields): void {
+  if (!listing || typeof listing !== 'object' || Array.isArray(listing)) refuse('Etsy listing fields must be a set of named values; nothing was sent.')
+  const entries = Object.entries(listing).filter(([, value]) => value !== undefined)
+  for (const [key, value] of entries) {
+    if (!PATCH_KEYS.has(key)) refuse(`Etsy's listing update does not take «${key}» from a content change; nothing was sent.`)
+    listingKey(key, value, fields)
+  }
+  listingRules(fields, acceptAutoRenewCharge)
+}
+
+// ── E3 — createDraftListing (R1 §1) ──────────────────────────────────────────────────────────────────────────────
+
+/** Etsy's seven required keys of a create (its OpenAPI document's `required`, R1 §1). */
+const DRAFT_REQUIRED = ['quantity', 'title', 'description', 'price', 'who_made', 'when_made', 'taxonomy_id'] as const
+/** Keys only a create takes: price and stock (an update sends them through the inventory), the processing profile, styles. */
+const DRAFT_ONLY_KEYS = ['quantity', 'price', 'readiness_state_id', 'styles'] as const
+const DRAFT_KEYS: ReadonlySet<string> = new Set<string>([...PATCH_KEYS, ...DRAFT_ONLY_KEYS])
+/** Etsy's cap per offering (BELIEVED, R1 §3) — the POST's quantity is the draft's first product's. */
+export const ETSY_MAX_QUANTITY = 999
+/** Etsy: styles are at most 2, each at most 45 characters of letters, numbers and whitespace (R1 §1). */
+const STYLES_MAX = 2
+const STYLE_MAX = 45
+const STYLE_DISALLOWED = /[^\p{L}\p{Nd}\p{Zs}]/u
+
+/**
+ * E3 — check a createDraftListing form against Etsy's published rules, and return the form fields to send (form-encoded).
+ * Etsy's seven required keys must be there (`quantity` a whole number 1–999, `price` above 0, a non-empty title and
+ * description); `readiness_state_id` and `styles` are a create's own; every key an update also takes goes through the
+ * same per-key checks as an update (`listingKey`), with classification together and auto-renew only with a yes. Any
+ * other key — `state` (a draft is what this makes; going live is its own step), `image_ids`, `sku`, `processing_min`… —
+ * is refused, never dropped. A `null` value is absent (a new listing has nothing to clear). Every throw is an
+ * `EtsyListingContentError` ending "nothing was sent."
+ */
+export function etsyDraftListingFields(form: Record<string, unknown>, acceptAutoRenewCharge?: boolean): EtsyListingFormFields {
+  if (!form || typeof form !== 'object' || Array.isArray(form)) refuse('An Etsy listing to create must be a set of named values; nothing was sent.')
+  const entries = Object.entries(form).filter(([, value]) => value !== undefined && value !== null)
+  for (const key of DRAFT_REQUIRED) if (!entries.some(([name]) => name === key)) refuse(`Etsy needs ${key} to create a listing; nothing was sent.`)
+  const fields: EtsyListingFormFields = {}
+  for (const [key, value] of entries) {
+    if (!DRAFT_KEYS.has(key)) refuse(`Etsy's create does not take «${key}» from Nexus; nothing was sent.`)
+    if (key === 'quantity') {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > ETSY_MAX_QUANTITY) {
+        refuse(`Etsy creates a listing with a quantity from 1 to ${ETSY_MAX_QUANTITY}, not ${String(value)}; nothing was sent.`)
+      }
+      fields.quantity = value
+    } else if (key === 'price') {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) refuse(`Etsy needs a price above 0 to create a listing, not ${String(value)}; nothing was sent.`)
+      fields.price = value
+    } else if (key === 'readiness_state_id') {
+      if (!isPositiveWhole(value)) refuse('Etsy readiness_state_id (the processing profile) must be a positive whole number; nothing was sent.')
+      fields.readiness_state_id = value
+    } else if (key === 'styles') {
+      const styles = stringList('styles', value)
+      if (styles.length > STYLES_MAX) refuse(`Etsy takes at most ${STYLES_MAX} styles, and this listing has ${styles.length}; nothing was sent.`)
+      for (const style of styles) {
+        if ([...style].length > STYLE_MAX) refuse(`Etsy takes a style of at most ${STYLE_MAX} characters, and "${style}" is longer; nothing was sent.`)
+        named('style', style, STYLE_DISALLOWED)
+      }
+      fields.styles = [...styles]
+    } else {
+      listingKey(key, value, fields)
+    }
+  }
+  // A create needs words in both: an update may leave a description empty, a new listing may not (Etsy's `required`).
+  if (typeof fields.description !== 'string' || !fields.description.trim()) refuse('Etsy needs description to create a listing; nothing was sent.')
+  listingRules(fields, acceptAutoRenewCharge)
+  return fields
 }
 
 /**

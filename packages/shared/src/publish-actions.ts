@@ -560,16 +560,6 @@ export const etsySkuMoveSentence = (from: string, to: string) =>
   `Nexus cannot send Etsy SKU changes yet: Etsy keeps ${from} for this listing (Nexus holds ${to}).`
 
 /**
- * Etsy (E2): studio Publish updates a listing Etsy already holds; creating a new one waits for E3. `ETSY_CREATE_NOT_YET` is
- * why a create's submit sends nothing (each refusal says "Nothing was sent." once, in its own words);
- * `ETSY_CREATE_REVIEW_ONLY` is a live create review's warning; `ETSY_CREATE_SENDS_NOTHING` is a create review's one error
- * off live (in place of the gate sentence: live sends no create either).
- */
-export const ETSY_CREATE_NOT_YET = 'Creating a new Etsy listing from Nexus comes in the next Nexus update.'
-export const ETSY_CREATE_REVIEW_ONLY = 'Creating a new Etsy listing from Nexus comes in the next Nexus update: this review shows what Nexus would send, and Publish sends nothing to Etsy yet.'
-export const ETSY_CREATE_SENDS_NOTHING = 'Creating a new Etsy listing from Nexus comes in the next Nexus update. This review shows what Nexus would send; nothing is sent.'
-
-/**
  * The longest SKU each channel takes, where the repo can show it. Amazon: 40 characters (the seller-SKU limit; its
  * product type schema caps `child_parent_sku_relationship.parent_sku`, a seller SKU, at `maxLength: 40` —
  * apps/api/src/services/channel-mapping/__fixtures__/golden/specs/amazon-IT-COAT.json.gz). eBay, Etsy and Shopify are NOT

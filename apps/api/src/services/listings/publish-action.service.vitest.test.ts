@@ -20,7 +20,7 @@ vi.mock('../channel-delist.service.js', async original => ({ ...(await original<
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_NEW_VARIATION_INACTIVE, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
+import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE, ETSY_DRAFT_STATE, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_NEW_VARIATION_INACTIVE, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
   RELIST_SENTENCE, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
 import { DELETE_EBAY_VARIATION, FULL_ETSY_VARIATION, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
 import { clearWaitingValues, parsePublishActionBody, readPublishActions, SHARED_DELETED, writePublishActions, type PublishActionActor } from './publish-action.service.js'
@@ -271,6 +271,39 @@ describe('Etsy: Status changes are held while sending to Etsy is not live', () =
       expect(await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())).toMatchObject({ applied: [s], refused: [] })
       process.env.ETSY_PUBLISH_MODE = 'dry-run'
       expect((await read()).status).toMatchObject({ target: 'inactive', noLongerApplies: ETSY_PUBLISHING_OFF })
+    } finally {
+      if (before.flag === undefined) delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
+      else process.env.NEXUS_ENABLE_ETSY_PUBLISH = before.flag
+      if (before.mode === undefined) delete process.env.ETSY_PUBLISH_MODE
+      else process.env.ETSY_PUBLISH_MODE = before.mode
+    }
+  }))
+
+  it('E3: a listing that is a draft on Etsy reads Inactive with the draft sentence; Active is refused (Nexus cannot set a draft live yet), on the main row and the variation', () => scoped(async () => {
+    const before = { flag: process.env.NEXUS_ENABLE_ETSY_PUBLISH, mode: process.env.ETSY_PUBLISH_MODE }
+    try {
+      process.env.NEXUS_ENABLE_ETSY_PUBLISH = 'true'
+      process.env.ETSY_PUBLISH_MODE = 'live'
+      const f = await family('PA-ETSY-DRAFT', ['S'])
+      const draft = { externalListingId: '9000000001', listingStatus: 'DRAFT', isPublished: false, syncPaused: true }
+      const main = await listing(f.root, 'ETSY', 'IT', ids.etsy, draft)
+      const s = await listing(f.children.S, 'ETSY', 'IT', ids.etsy, draft)
+      const cells = await readPublishActions(f.root)
+      for (const id of [main, s]) {
+        const cell = cells.find(c => c.listingId === id)!
+        expect(cell.state).toBe('paused')
+        expect(cell.create).toBeNull()
+        expect(cell.statusOptions.map(o => [o.target, o.offered, o.reason])).toEqual([['active', false, ETSY_DRAFT_NO_LIVE], ['inactive', true, null]])
+      }
+      expect(cells.find(c => c.listingId === s)!.stateReason).toBe(ETSY_DRAFT_STATE)
+      expect((await writePublishActions(f.root, { listingIds: [s, main], change: { column: 'status', target: 'active' } }, publisher())).refused)
+        .toEqual([{ listingId: s, sku: 'PA-ETSY-DRAFT-S', reason: ETSY_DRAFT_NO_LIVE }, { listingId: main, sku: 'PA-ETSY-DRAFT', reason: ETSY_DRAFT_NO_LIVE }])
+      expect((await stored(s))!.sellingTarget).toBeNull()
+      // The control: the same rows once Etsy reports the listing active read Active, and Inactive is offered again.
+      await prisma.channelListing.updateMany({ where: { id: { in: [main, s] } }, data: { listingStatus: 'ACTIVE', isPublished: true } })
+      expect((await readPublishActions(f.root)).find(c => c.listingId === s)!.statusOptions.find(o => o.target === 'inactive'))
+        .toMatchObject({ offered: true, action: 'pause', reason: null })
+      expect(ETSY_DRAFT_NO_PAUSE).toMatch(/nothing to pause/)
     } finally {
       if (before.flag === undefined) delete process.env.NEXUS_ENABLE_ETSY_PUBLISH
       else process.env.NEXUS_ENABLE_ETSY_PUBLISH = before.flag

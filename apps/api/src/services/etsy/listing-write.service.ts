@@ -12,6 +12,7 @@
  * | an image | `DELETE /shops/{shop}/listings/{id}/images/{image}` | none |
  * | an attribute (E2) | `PUT` / `DELETE /shops/{shop}/listings/{id}/properties/{property}` | **form-encoded** / none |
  * | a translation (E2) | `POST` / `PUT /shops/{shop}/listings/{id}/translations/{language}` | **form-encoded** |
+ * | a new listing, as a draft (E3) | `POST /shops/{shop}/listings` | **form-encoded**, never repeated |
  *
  * A content write is **partial**, so unlike the inventory PUT it does not carry the
  * regional-pricing risk and does not need a read-back to be safe. It still refuses to send a
@@ -21,7 +22,7 @@
 import { etsyWriter } from './write-client.js'
 import { EtsyReadError, etsyReader } from './read-client.js'
 import {
-  etsyListingContentFields, etsyListingStateFields,
+  etsyDraftListingFields, etsyListingContentFields, etsyListingStateFields,
   type EtsyListingContent, type EtsyListingStateChange,
 } from './listing-content.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
@@ -261,4 +262,46 @@ export async function writeEtsyTranslation(input: EtsyListingWriteInput & { tran
     operation: `${method} /shops/:id/listings/:id/translations/:language`,
   })
   return { sent: true, method }
+}
+
+// ── E3 — create a new listing as an Etsy draft (R1 §1) ───────────────────────────────────────────────────────────
+
+/**
+ * Etsy's listing id from its answer, as text: a safe whole number or a digit string, else null. Never a number JavaScript
+ * would round (ids are 64-bit since 2025-04-21, R1 §14): a rounded id names another listing.
+ */
+function etsyIdOf(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? String(value) : null
+  if (typeof value === 'string') return /^[1-9]\d*$/.test(value.trim()) ? value.trim() : null
+  return null
+}
+
+/**
+ * E3 — create a NEW listing on Etsy as a draft: `POST /shops/{shop}/listings` (createDraftListing), **form-encoded**, as
+ * this account (the shop id comes from the account's identity, never from a caller). The form is checked first
+ * (`etsyDraftListingFields`): a throw there sends nothing.
+ *
+ * 🔴 Never repeated. A POST has no idempotency key on Etsy, and a second one makes a second draft: the write client never
+ * retries a POST (`maxTransientRetries: 0`), and no caller may either — no answer (`GatewayNoAnswer`) is an UNKNOWN
+ * outcome, which the studio's "creating" marker holds until a person's Mark as checked finds the draft or finds none.
+ * No push lock: there is no listing to lock yet.
+ *
+ * Returns Etsy's listing id (null when the answer carried no usable one: the caller must treat that as unknown, never
+ * as "nothing made") and the state Etsy answered (`draft`), or null.
+ */
+export async function createEtsyDraftListing(input: { accountId: string; form: Record<string, unknown>; acceptAutoRenewCharge?: boolean
+  ledger?: GatewayRequest['ledger'] }): Promise<{ listingId: string | null; state: string | null }> {
+  const form = etsyDraftListingFields(input.form, input.acceptAutoRenewCharge)
+  const writer = await etsyWriter(input.accountId)
+  const answer = await writer.send<Record<string, unknown> | null>({
+    path: `/shops/${writer.shopId}/listings`,
+    method: 'POST',
+    form,
+    kind: 'write',
+    ledger: input.ledger,
+    operation: 'POST /shops/:id/listings',
+  })
+  const body = answer && typeof answer === 'object' && !Array.isArray(answer) ? answer : {}
+  const state = typeof body.state === 'string' && body.state.trim() ? body.state.trim() : null
+  return { listingId: etsyIdOf(body.listing_id), state }
 }

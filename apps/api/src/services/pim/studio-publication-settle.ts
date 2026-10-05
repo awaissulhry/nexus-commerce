@@ -236,7 +236,7 @@ async function promoteEtsyVariations(tx: Prisma.TransactionClient, context: Publ
   if (!drafts.length) return []
   const productIds: string[] = Array.isArray(data.delivery?.productIds) ? data.delivery.productIds.filter((id: unknown): id is string => typeof id === 'string') : []
   const live = await tx.channelListing.findMany({ where: { ...destination, productId: { in: productIds }, externalListingId: { not: null } },
-    select: { productId: true, externalListingId: true, listingStatus: true, syncPaused: true, offerClosedAt: true, offerCloseReason: true } })
+    select: { productId: true, externalListingId: true, listingStatus: true, isPublished: true, syncPaused: true, offerClosedAt: true, offerCloseReason: true } })
   const listingIds = [...new Set(live.map(row => row.externalListingId).filter((id): id is string => typeof id === 'string' && id !== ''))]
   if (listingIds.length !== 1) {
     logger.warn('studio publication: Etsy variations not promoted — the family\'s live rows do not name exactly one Etsy listing', {
@@ -255,7 +255,9 @@ async function promoteEtsyVariations(tx: Prisma.TransactionClient, context: Publ
     const held = hidden || listingPaused
     const sku = skuOf.get(draft.id) ?? null
     const promoted = await tx.channelListing.updateMany({ where: { id: draft.id, ...destination, ...STILL_DRAFT_LISTING }, data: {
-      externalListingId: etsyListingId, isPublished: true, listingStatus: owner?.listingStatus ?? 'ACTIVE',
+      // E3 — and the owner row's `isPublished`: a variation joining an Etsy DRAFT (created by Nexus: unpublished and paused)
+      // stays inert like its draft; E4's go-live lifts them together.
+      externalListingId: etsyListingId, isPublished: owner?.isPublished ?? true, listingStatus: owner?.listingStatus ?? 'ACTIVE',
       // The owner row's pause, or — with no owner row to follow — the pause the draft already had kept (never lifted on a guess).
       ...(owner ? { syncPaused: owner.syncPaused } : {}),
       ...(sku ? { liveChannelSku: sku } : {}),
@@ -269,6 +271,41 @@ async function promoteEtsyVariations(tx: Prisma.TransactionClient, context: Publ
     if (promoted.count && !held) shown.push(draft.id)
   }
   return shown
+}
+
+/**
+ * E3 — a VERIFIED create of a new Etsy listing. The id itself was stored the moment Etsy answered the POST
+ * (`storeEtsyCreatedListing`, the go-live write of a create: DRAFT, unpublished, paused); what only a verified result
+ * may add is here, in the settle's transaction:
+ * - each inventory row whose journal this publication accepted records the SKU it was sent under as the SKU Etsy holds
+ *   (`liveChannelSku`): only the family's inventory products (`changePlan.publication.inventoryProducts`; a family's
+ *   main row is the listing, not a variation, and holds no SKU on Etsy);
+ * - every delivered row now on that listing (`externalListingId` = the result's reference) records the successful sync.
+ * Only the rows of this destination (account and alias). Nothing under UNVERIFIED: a create Nexus could not confirm keeps
+ * only its id, and the next Publish (an E2 update of the draft) sends what still differs.
+ */
+async function settleEtsyCreate(tx: Prisma.TransactionClient, context: PublicationRecordContext, data: Record<string, any>, result: StudioPublishResult): Promise<void> {
+  if (context.channel !== 'ETSY' || data?.etsyCreate !== true || result.status !== 'VERIFIED') return
+  const reference = result.results.map(row => row.reference).find((value): value is string => typeof value === 'string' && /^[1-9]\d*$/.test(value))
+  if (!reference) {
+    logger.warn('studio publication: a verified Etsy create names no listing id; nothing settled', { publicationId: context.reviewId })
+    return
+  }
+  const destination = { channel: context.channel, marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey }
+  const inventory = object(object(data.changePlan).publication).inventoryProducts
+  const inventoryIds = new Set((Array.isArray(inventory) ? inventory : []).map(entry => object(entry).productId).filter((id): id is string => typeof id === 'string'))
+  const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
+    channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
+  select: { channelListingId: true, payload: true } })
+  for (const row of accepted ?? []) {
+    const journal = object(row.payload)
+    const sku = typeof journal.sku === 'string' ? journal.sku.trim() : ''
+    if (!sku || typeof journal.productId !== 'string' || !inventoryIds.has(journal.productId)) continue
+    await tx.channelListing.updateMany({ where: { id: row.channelListingId, ...destination, externalListingId: reference }, data: { liveChannelSku: sku } })
+  }
+  const productIds: string[] = Array.isArray(data.delivery?.productIds) ? data.delivery.productIds.filter((id: unknown): id is string => typeof id === 'string') : []
+  if (productIds.length) await tx.channelListing.updateMany({ where: { ...destination, productId: { in: productIds }, externalListingId: reference },
+    data: { lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', version: { increment: 1 } } })
 }
 
 /**
@@ -383,6 +420,7 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
       await confirmAcceptedSellerSkus(tx, context, result)
       promoted = await promoteAcceptedDrafts(tx, context, data)
       etsyShown = await promoteEtsyVariations(tx, context, data, result)
+      await settleEtsyCreate(tx, context, data, result)
     }
     return stored
   })

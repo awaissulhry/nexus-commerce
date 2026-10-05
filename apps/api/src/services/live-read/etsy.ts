@@ -21,7 +21,7 @@ import { markLiveVariants, type LiveReadDestination, type LiveReadError, type Li
 import { EtsyReadError, etsyReader } from '../etsy/read-client.js'
 import { toInventoryWrite, type EtsyReadInventory, type EtsyWriteOffering } from '../etsy/inventory.js'
 import { ETSY_LISTING_FIELDS, type EtsyInventoryStructure, type EtsyListingValues, type EtsyLiveListing, type EtsyLiveReader,
-  type EtsyPropertyValue, type EtsyTranslation } from '../pim/studio-publication-etsy-types.js'
+  type EtsyPropertyValue, type EtsyShopRead, type EtsyTranslation } from '../pim/studio-publication-etsy-types.js'
 import type { ServerLiveRead } from './types.js'
 
 type Json = Record<string, any>
@@ -41,6 +41,18 @@ export interface EtsyListingReads {
   /** GET /shops/{shop_id}/listings/{id}/properties */
   properties(listingId: string): Promise<unknown>
   shop(): Promise<unknown>
+}
+/**
+ * E3 — the shop-wide reads of a create (kept out of `EtsyListingReads`, whose shape other readers implement): the shop,
+ * one page of its drafts, and a batch of listing inventories. `etsyListingReads` gives both sets.
+ */
+export interface EtsyShopReads {
+  /** GET /shops/{shop_id} */
+  shop(): Promise<unknown>
+  /** GET /shops/{shop_id}/listings?state=draft&limit=100&offset=<offset> (getListingsByShop) — this shop's drafts only. */
+  drafts(offset: number): Promise<unknown>
+  /** GET /listings/batch/inventory?listing_ids=<ids> (getListingsInventoryByListingIds, at most 100 ids). */
+  inventories(listingIds: string[]): Promise<unknown>
 }
 export type EtsyLiveDestination = LiveReadDestination & { listingId: string }
 
@@ -90,7 +102,7 @@ function listingPath(listingId: string): string {
 }
 
 /** The reads of one account, each through the gateway (state, rate bucket, call ledger). The account is resolved once, on first use. */
-export function etsyListingReads(accountId: string): EtsyListingReads {
+export function etsyListingReads(accountId: string): EtsyListingReads & EtsyShopReads {
   let reader: ReturnType<typeof etsyReader> | null = null
   const get = async (path: (shopId: string) => string) => {
     const account = await (reader ??= etsyReader(accountId))
@@ -102,6 +114,16 @@ export function etsyListingReads(accountId: string): EtsyListingReads {
     inventory: listingId => get(() => `${listingPath(listingId)}/inventory`),
     properties: listingId => get(shopId => `/shops/${shopId}${listingPath(listingId)}/properties`),
     shop: () => get(shopId => `/shops/${shopId}`),
+    drafts: offset => {
+      if (!Number.isInteger(offset) || offset < 0) throw new Error('That is not a page of Etsy drafts; nothing was read.')
+      return get(shopId => `/shops/${shopId}/listings?state=draft&limit=${DRAFT_PAGE}&offset=${offset}`)
+    },
+    inventories: listingIds => {
+      if (!listingIds.length || listingIds.length > DRAFT_PAGE) throw new Error(`Etsy reads the inventories of 1 to ${DRAFT_PAGE} listings at once; nothing was read.`)
+      for (const id of listingIds) listingPath(id)
+      // Comma form, as Etsy's own examples for its batch reads (BELIEVED: the document names no array style).
+      return get(() => `/listings/batch/inventory?listing_ids=${listingIds.join(',')}`)
+    },
   }
 }
 
@@ -262,4 +284,126 @@ export async function readEtsyServerLive(destination: EtsyLiveDestination, reads
   }
   return { readAt: now().toISOString(), source: 'etsy-listing', destination: where, revision: live.revision, content, variations, errors,
     raw: { ownShop: ownShopOf(raw.listing, raw.shop), state: live.state, documents: raw } }
+}
+
+// ── E3 — the shop read of a create review, and the draft search of a create's recovery ─────────────────────────────
+
+/** getListingsByShop's largest page (R1 §14), and the batch inventory's cap (R1 §3). */
+const DRAFT_PAGE = 100
+/**
+ * At most 5,000 drafts are searched (50 pages, one call each, about a minute's quota at worst): a shop with more cannot be
+ * searched whole, and a partial "none" would be a lie, so it is refused by name.
+ */
+const DRAFT_PAGES = 50
+/** A draft's creation time may come a little before Nexus's marker (clocks differ): 10 minutes of slack. */
+const DRAFT_CLOCK_SLACK_MS = 10 * 60_000
+/** A draft the search listed whose existence Etsy could not then confirm or deny: the search cannot answer "none". */
+export class EtsyDraftUnconfirmed extends Error {
+  constructor(listingId: string, reason: string) {
+    super(`Nexus could not tell whether Etsy still holds draft ${listingId} (${reason}); check again later.`)
+    this.name = 'EtsyDraftUnconfirmed'
+  }
+}
+export const ETSY_TOO_MANY_DRAFTS = 'This shop has more than 5,000 Etsy drafts; Nexus cannot search them all. Delete drafts you do not need on Etsy, then try again.'
+
+/** Etsy's listing id as text: a safe whole number or a digit string, else null (never a rounded 64-bit id, R1 §14). */
+const listingIdOf = (v: unknown): string | null => typeof v === 'number' ? (Number.isSafeInteger(v) && v > 0 ? String(v) : null)
+  : typeof v === 'string' && /^[1-9]\d*$/.test(v.trim()) ? v.trim() : null
+/** A title as the search compares it: whitespace collapsed, case ignored. */
+const titleKey = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * E3 — what a create review needs of the shop (GET /shops/{shop_id}, this account's own shop): its languages (the first is
+ * the listing language) and its currency, by the same rules as the live read (codes trimmed, the currency upper-cased).
+ */
+export async function readEtsyShop(accountId: string, reads: Pick<EtsyShopReads, 'shop'> = etsyListingReads(accountId)): Promise<EtsyShopRead> {
+  const shop = obj(await reads.shop())
+  return { languages: codes(shop.languages), currencyCode: text(shop.currency_code)?.toUpperCase() ?? null }
+}
+
+/**
+ * E3 — the drafts in THIS shop (the account's own; never another shop's) that a create whose answer was lost may have
+ * made: the same title (whitespace collapsed, case ignored, Etsy's HTML escapes decoded), created no earlier than 10
+ * minutes before the marker (when Etsy gives a creation time: `created_timestamp`, seconds, BELIEVED), and whose live
+ * SKUs are all empty (Etsy's first product, before Nexus's inventory step) or all among the create's SKUs. Pages the
+ * drafts (100 per page, at most 50 pages: more throws, a partial search is never "none"), then ONE batch inventory read
+ * of the candidates (getListingsInventoryByListingIds; more than 100 candidates are read 100 at a time). Etsy answers the
+ * whole batch 404 when one id no longer exists (R1 §3, §16): the batch is then split in halves until that id is alone,
+ * and the id is proven with its own `GET /listings/{id}`: only a 404 there means Etsy no longer holds it (not a
+ * candidate); a 200 means it exists (its own inventory GET then judges its SKUs); any other answer throws
+ * `EtsyDraftUnconfirmed` (never "gone" on a guess: a real draft dropped here would let the next Publish make a second).
+ * Any other failed read, or an answer that is not the shape Etsy documents, throws: the caller cannot tell then whether
+ * a draft exists.
+ */
+export async function findEtsyDrafts(accountId: string, input: { title: string; since: string; skus: string[] },
+  reads: Pick<EtsyShopReads, 'drafts' | 'inventories'> & Pick<EtsyListingReads, 'listingPlain' | 'inventory'> = etsyListingReads(accountId))
+  : Promise<Array<{ listingId: string; title: string; createdAt: string | null }>> {
+  const wanted = titleKey(typeof input.title === 'string' ? input.title : '')
+  if (!wanted) throw new Error('The create left no title to look for.')
+  const since = Date.parse(input.since)
+  if (!Number.isFinite(since)) throw new Error('The create left no start time to look from.')
+  const skus = new Set((input.skus ?? []).filter((sku): sku is string => typeof sku === 'string' && sku !== ''))
+
+  const candidates: Array<{ listingId: string; title: string; createdAt: string | null }> = []
+  for (let page = 0; ; page++) {
+    if (page === DRAFT_PAGES) throw new Error(ETSY_TOO_MANY_DRAFTS)
+    const answer = obj(await reads.drafts(page * DRAFT_PAGE))
+    if (!Array.isArray(answer.results)) throw new Error('Etsy answered the list of drafts without its listings.')
+    const results = (answer.results as unknown[]).map(obj)
+    for (const listing of results) {
+      const listingId = listingIdOf(listing.listing_id)
+      const title = words(listing.title)
+      const state = text(listing.state)
+      if (!listingId || !title || (state !== null && state !== 'draft') || titleKey(title) !== wanted) continue
+      const seconds = num(listing.created_timestamp) ?? num(listing.creation_timestamp) ?? num(listing.original_creation_timestamp)
+      if (seconds !== null && seconds * 1000 < since - DRAFT_CLOCK_SLACK_MS) continue
+      if (!candidates.some(candidate => candidate.listingId === listingId))
+        candidates.push({ listingId, title, createdAt: seconds === null ? null : new Date(seconds * 1000).toISOString() })
+    }
+    const count = num(answer.count)
+    if (results.length < DRAFT_PAGE || (count !== null && (page + 1) * DRAFT_PAGE >= count)) break
+  }
+  if (!candidates.length) return []
+
+  /** One batch read; on Etsy's whole-batch 404, each half on its own, down to the one id the 404 is about (`confirmAlone`). */
+  const gone = new Set<string>()
+  /** The id a batch 404 is about, proven one way or the other: gone only on its own 404; present → its own inventory. */
+  const confirmAlone = async (id: string): Promise<Json[]> => {
+    try {
+      await reads.listingPlain(id)
+    } catch (error) {
+      if (error instanceof EtsyReadError && error.status === 404) { gone.add(id); return [] }
+      throw new EtsyDraftUnconfirmed(id, message(error))
+    }
+    let inventory: Json
+    try { inventory = obj(await reads.inventory(id)) } catch (error) { throw new EtsyDraftUnconfirmed(id, message(error)) }
+    return [{ listing_id: id, inventory }]
+  }
+  const readBatch = async (ids: string[]): Promise<Json[]> => {
+    let answer: Json
+    try {
+      answer = obj(await reads.inventories(ids))
+    } catch (error) {
+      if (!(error instanceof EtsyReadError && error.status === 404)) throw error
+      if (ids.length === 1) return confirmAlone(ids[0])
+      const half = Math.ceil(ids.length / 2)
+      return [...await readBatch(ids.slice(0, half)), ...await readBatch(ids.slice(half))]
+    }
+    if (!Array.isArray(answer.results)) throw new Error('Etsy answered the drafts\' inventories without its listings.')
+    return (answer.results as unknown[]).map(obj)
+  }
+  const kept: typeof candidates = []
+  for (let at = 0; at < candidates.length; at += DRAFT_PAGE) {
+    const chunk = candidates.slice(at, at + DRAFT_PAGE)
+    const results = await readBatch(chunk.map(candidate => candidate.listingId))
+    for (const candidate of chunk) {
+      if (gone.has(candidate.listingId)) continue
+      const found = results.find(result => listingIdOf(result.listing_id) === candidate.listingId)
+      const products = found ? obj(found.inventory).products : undefined
+      if (!Array.isArray(products)) throw new Error(`Etsy did not return the inventory of draft ${candidate.listingId}.`)
+      const live = (products as unknown[]).map(obj).filter(product => product.is_deleted !== true).map(product => text(product.sku) ?? '')
+      if (live.every(sku => sku === '') || live.every(sku => skus.has(sku))) kept.push(candidate)
+    }
+  }
+  return kept.sort((a, b) => byText(a.listingId, b.listingId))
 }
