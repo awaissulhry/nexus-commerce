@@ -371,6 +371,23 @@ describe('Shared stock step 1 — permission, links, queue and doors', () => {
     await clearTasks()
   })
 
+  it('the lender switching its lent warehouse off in its own session (runtime role, row security on) queues the borrower', async () => {
+    const borrowers = [product.b_boots, product.b_helmet, product.b_jacket].map((p) => [p, 'location']).sort()
+    const queued = async () => (await tasks(B)).map((t) => [t.productId, t.reason]).sort()
+    const switchAsLender = (isActive: boolean) =>
+      as(A, user.ownerA, () => database.client.stockLocation.update({ where: { id: loc.second }, data: { isActive }, select: { id: true } }))
+    await clearTasks()
+    // A's session cannot read B's rows, so the trigger (SECURITY DEFINER) is what writes B's tasks across the line.
+    await switchAsLender(false)
+    expect(await queued()).toEqual(borrowers)
+    expect(await as(A, user.ownerA, () => database.client.stockPoolTask.count())).toBe(0)
+    await clearTasks()
+    await switchAsLender(true)
+    expect(await queued()).toEqual(borrowers)
+    expect(await tasks(A)).toEqual([])
+    await clearTasks()
+  })
+
   it('a lending business that stops being active, or comes back, queues every borrower of a grant that is on; a borrower that stops, nothing', async () => {
     const borrowers = [product.b_boots, product.b_helmet, product.b_jacket].map((p) => [p, 'lender']).sort()
     const queued = async () => (await tasks(B)).map((t) => [t.productId, t.reason]).sort()
