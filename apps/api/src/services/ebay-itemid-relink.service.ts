@@ -23,6 +23,8 @@ import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.s
 import { parseLiveVariations } from './ebay-membership-reconcile.service.js'
 import { skuBeforeTombstone } from './identity/tombstone-sku.js'
 import {
+  accountSellerFor,
+  accountSellerNames,
   normalizeItemId,
   checkItemIdOwnership,
   checkSellerOwnership,
@@ -211,8 +213,9 @@ export async function relinkEbayItemId(
 
   // I4 / G2 — the SKUs alone do not prove ownership (two businesses can carry the same SKUs): the item must also be
   // listed by the seller behind the account this re-link drives it through.
-  const account = await prisma.channelConnection.findFirst({ where: { id: ctx.connectionId }, select: { externalAccountId: true } })
-  const seller = { item: parseSellerUserId(raw), account: account?.externalAccountId ?? null }
+  const account = await prisma.channelConnection.findFirst({ where: { id: ctx.connectionId }, select: { externalAccountId: true, ebaySignInName: true } })
+  const itemSeller = parseSellerUserId(raw)
+  const seller = { item: itemSeller, account: accountSellerFor(itemSeller, accountSellerNames(account)) }
   const check = combineOwnership(
     checkItemIdOwnership({ liveSkus, familySkus, listingStatus: liveStatus, acceptEnded: input.acceptEnded === true }),
     checkSellerOwnership({ itemSeller: seller.item, accountSeller: seller.account }),
