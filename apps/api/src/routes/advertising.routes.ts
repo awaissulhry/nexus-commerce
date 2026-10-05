@@ -3434,12 +3434,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       rows.reduce((s, r) => s + r.orders, 0),
     )
     let previous: ReturnType<typeof summarize> | null = null
-    if (query.compare === 'true' || query.compare === '1') {
-      const prevSince = new Date(since)
-      prevSince.setUTCDate(prevSince.getUTCDate() - windowDays)
+    // AM-16 — complete days only (ads-core/date-range.ts `comparisonRanges`). The prior window used to be N full
+    // days against a current window that ran into today, which has no daily report yet: every change read ~1/N low.
+    // A window ending today is now compared on its complete days with the same number of days before them; the
+    // daily rows hold nothing for today, so `summary` is already that complete-days figure. `compare` names both.
+    let compareWindows: { current: { startDate: string; endDate: string }; previous: { startDate: string; endDate: string }; todayLeftOut: boolean } | null = null
+    const { comparisonRanges } = await import('../services/ads-core/date-range.js')
+    const cmp = query.compare === 'true' || query.compare === '1' ? comparisonRanges(range) : null
+    if (cmp) {
+      compareWindows = {
+        current: { startDate: cmp.current.sinceStr, endDate: cmp.current.untilStr },
+        previous: { startDate: cmp.prior.sinceStr, endDate: cmp.prior.untilStr },
+        todayLeftOut: cmp.todayLeftOut,
+      }
       const prev = await prisma.amazonAdsDailyPerformance.aggregate({
         where: {
-          date: { gte: prevSince, lt: since },
+          date: { gte: cmp.prior.since, lte: cmp.prior.until },
           entityType: 'CAMPAIGN',
           ...campaignWhere,
           ...(query.marketplace ? { marketplace: query.marketplace } : {}),
@@ -3457,7 +3467,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
 
-    return { windowDays, count: rows.length, rows, summary: curSummary, previous, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
+    return { windowDays, count: rows.length, rows, summary: curSummary, previous, compare: compareWindows, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return result

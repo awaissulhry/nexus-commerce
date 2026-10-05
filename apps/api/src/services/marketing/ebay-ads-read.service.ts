@@ -20,7 +20,7 @@
  * Read-only: stored rows only. No eBay call, no token, no gateway.
  */
 import prisma from '../../db.js'
-import { resolveRange, priorRange, bucketFor, type ResolvedRange } from '../ads-core/date-range.js'
+import { resolveRange, priorRange, bucketFor, comparisonRanges, type ResolvedRange } from '../ads-core/date-range.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
 
@@ -75,9 +75,13 @@ export async function freshness() {
 /** GET /ebay-ads/summary — summary KPIs (+ vs-previous-period deltas). */
 export async function ebayAdsSummary(q: WindowQuery) {
   const r = resolveRange(q)
-  const p = priorRange(r)
-  const [cur, prev, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
+  // AM-16 — the deltas compare COMPLETE days on both sides (ads-core/date-range.ts). A window that runs into today is
+  // compared on its days through yesterday; `current` still shows the whole window.
+  const cmp = comparisonRanges(r)
+  const p = cmp?.prior ?? priorRange(r)
+  const [cur, curCompared, prev, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
     prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(q, r, 'CAMPAIGN'), _sum: sumFields }),
+    cmp?.todayLeftOut ? prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(q, cmp.current, 'CAMPAIGN'), _sum: sumFields }) : Promise.resolve(null),
     prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(q, p, 'CAMPAIGN'), _sum: sumFields }),
     prisma.ebayCampaign.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
@@ -86,18 +90,22 @@ export async function ebayAdsSummary(q: WindowQuery) {
     prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } }, select: { listingId: true }, distinct: ['listingId'] }),
   ])
   const current = derive(toSums(cur))
+  const compared = curCompared ? derive(toSums(curCompared)) : current
   const prior = derive(toSums(prev))
-  const deltaPct = (c: number, pr: number) => (pr > 0 ? ((c - pr) / pr) * 100 : null)
+  // A window of today alone has no complete day to compare: no delta, never a made-up one.
+  const deltaPct = (c: number, pr: number) => (cmp && pr > 0 ? ((c - pr) / pr) * 100 : null)
   return {
     window: { preset: r.preset, since: r.sinceStr, until: r.untilStr, days: r.days, includesToday: r.includesToday },
+    // AM-16 — what the deltas compare: `current` = the window's complete days, `prior` = the same number before them.
+    comparison: cmp ? { current: { since: cmp.current.sinceStr, until: cmp.current.untilStr }, prior: { since: cmp.prior.sinceStr, until: cmp.prior.untilStr }, todayLeftOut: cmp.todayLeftOut } : null,
     currency: 'EUR',
     current,
     prior,
     deltas: {
-      adFeesPct: deltaPct(current.adFeesCents, prior.adFeesCents),
-      salesPct: deltaPct(current.salesCents, prior.salesCents),
-      clicksPct: deltaPct(current.clicks, prior.clicks),
-      impressionsPct: deltaPct(current.impressions, prior.impressions),
+      adFeesPct: deltaPct(compared.adFeesCents, prior.adFeesCents),
+      salesPct: deltaPct(compared.salesCents, prior.salesCents),
+      clicksPct: deltaPct(compared.clicks, prior.clicks),
+      impressionsPct: deltaPct(compared.impressions, prior.impressions),
     },
     campaignCounts: Object.fromEntries(campaigns.map((c) => [c.status, c._count._all])),
     // Net margin after ads is only shown when economics has real inputs —

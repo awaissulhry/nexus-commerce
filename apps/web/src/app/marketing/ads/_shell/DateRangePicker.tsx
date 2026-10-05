@@ -5,6 +5,12 @@
  * a dual-month range calendar (Sunday-first) with ‹ › navigation on the left and a
  * scrollable preset rail on the right. Selecting a start then an end commits the
  * range; presets commit immediately. Label renders MM/DD/YYYY - MM/DD/YYYY.
+ *
+ * AM-16 — the window rule, the same as the API's (`apps/api/src/services/ads-core/date-range.ts`): every rolling
+ * window ("Latest N days", "Last N months") is complete days ENDING YESTERDAY. Amazon's daily report for a day arrives
+ * the next morning, so a window ending today held one day fewer of data than the period it was compared with.
+ * Today, This Week/Month/Quarter still include today. `latest7`/`latest30` map to the server's `last7`/`last30`
+ * (`rules-automation/_shared/adsScope.ts`), so both sides move together.
  */
 import { useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -25,6 +31,16 @@ export const DATE_PRESETS: Array<{ key: string; label: string }> = [
   { key: 'latest7', label: 'Latest 7 days' }, { key: 'latest30', label: 'Latest 30 days' },
   { key: 'latest60', label: 'Latest 60 days' },
 ]
+/** The last `n` complete days, ending yesterday (local midnights) — the default window of every ads page (AM-16). */
+export function lastCompleteDays(n: number): { start: Date; end: Date } {
+  const end = sod(new Date()); end.setDate(end.getDate() - 1)
+  const start = new Date(end); start.setDate(start.getDate() - (n - 1))
+  return { start, end }
+}
+
+/** The rule in one sentence, for the picker and any page that states its window. */
+export const COMPLETE_DAYS_NOTE = 'Last N days and months end yesterday: Amazon reports a day the next morning. Today has its own preset.'
+
 export function presetRange(key: string): { start: Date; end: Date } {
   const today = sod(new Date())
   const s = new Date(today); const e = new Date(today)
@@ -35,15 +51,16 @@ export function presetRange(key: string): { start: Date; end: Date } {
     case 'lastWeek': s.setDate(s.getDate() - s.getDay() - 7); e.setDate(e.getDate() - e.getDay() - 1); break
     case 'thisMonth': s.setDate(1); break
     case 'lastMonth': s.setMonth(s.getMonth() - 1, 1); e.setDate(0); break
-    case 'last3m': s.setMonth(s.getMonth() - 3); break
-    case 'last12m': s.setMonth(s.getMonth() - 12); break
-    case 'last18m': s.setMonth(s.getMonth() - 18); break
-    case 'last24m': s.setMonth(s.getMonth() - 24); break
+    // AM-16 — rolling windows end yesterday (complete days).
+    case 'last3m': s.setMonth(s.getMonth() - 3); e.setDate(e.getDate() - 1); break
+    case 'last12m': s.setMonth(s.getMonth() - 12); e.setDate(e.getDate() - 1); break
+    case 'last18m': s.setMonth(s.getMonth() - 18); e.setDate(e.getDate() - 1); break
+    case 'last24m': s.setMonth(s.getMonth() - 24); e.setDate(e.getDate() - 1); break
     case 'thisQuarter': s.setMonth(Math.floor(s.getMonth() / 3) * 3, 1); break
     case 'lastQuarter': { const q = Math.floor(s.getMonth() / 3); s.setMonth(q * 3 - 3, 1); e.setMonth(q * 3, 0); break }
-    case 'latest7': s.setDate(s.getDate() - 6); break
-    case 'latest30': s.setDate(s.getDate() - 29); break
-    case 'latest60': s.setDate(s.getDate() - 59); break
+    case 'latest7': return lastCompleteDays(7)
+    case 'latest30': return lastCompleteDays(30)
+    case 'latest60': return lastCompleteDays(60)
   }
   return { start: s, end: e }
 }
@@ -107,6 +124,7 @@ export function DateRangePicker({ value, onChange }: { value: { start: Date; end
           <div className="h10-dp-presets">
             <div className="ph">Preset</div>
             {DATE_PRESETS.map((p) => <button type="button" key={p.key} onClick={() => pick(p.key)}>{p.label}</button>)}
+            <p className="h10-dp-note">{COMPLETE_DAYS_NOTE}</p>
           </div>
         </div>
       </>}

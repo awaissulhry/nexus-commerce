@@ -19,6 +19,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../../../_shell/CampaignDetailHeader'
+import { lastCompleteDays } from '../../../../_shell/DateRangePicker'
 import { TargetsTab } from './tabs/TargetsTab'
 import { AgSearchTermsTab } from './tabs/AgSearchTermsTab'
 import { AgNegativesTab } from './tabs/AgNegativesTab'
@@ -64,11 +65,7 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
   const [ag, setAg] = useState<AdGroupDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState(() => {
-    const e = new Date(); e.setHours(0, 0, 0, 0)
-    const s = new Date(e); s.setDate(s.getDate() - 29)
-    return { start: s, end: e }
-  })
+  const [dateRange, setDateRange] = useState(() => lastCompleteDays(30)) // AM-16 — complete days, ending yesterday
   const [market, setMarket] = useState('all')
 
   const load = useCallback(async () => {

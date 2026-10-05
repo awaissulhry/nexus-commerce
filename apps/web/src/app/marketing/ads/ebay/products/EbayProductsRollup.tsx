@@ -13,7 +13,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
 import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { DateRangePicker } from '../../_shell/DateRangePicker'
+import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { eur, int, pct, latestReportLabel } from '../../campaigns/_grid/format'
 import '../ebay.css'
@@ -34,7 +34,7 @@ interface Row extends ProductListingRow {
   costPriceCents: number | null
 }
 
-const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s0 = new Date(e); s0.setDate(s0.getDate() - 29); return { start: s0, end: e } }
+const defaultRange = () => lastCompleteDays(30) // AM-16 — complete days, ending yesterday
 
 export function EbayProductsRollup() {
   const router = useRouter()

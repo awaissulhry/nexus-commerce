@@ -14,7 +14,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { ExternalLink, ChevronDown, Plus, Upload, Cog } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { DateRangePicker } from '../../_shell/DateRangePicker'
+import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { int, pct, money, latestReportLabel, METRIC_TIPS } from '../../campaigns/_grid/format'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -40,7 +40,7 @@ type CampaignsPayload = {
 const strategyBadge = (c: CampaignRow) => (c.channels.includes('OFF_SITE') ? 'OFF' : c.fundingModel === 'COST_PER_CLICK' ? 'PRI' : 'GEN')
 const strategyLabel = (c: CampaignRow) => (c.channels.includes('OFF_SITE') ? 'Offsite' : c.fundingModel === 'COST_PER_CLICK' ? (c.targetingType === 'SMART' ? 'Priority · Smart' : 'Priority') : 'General')
 
-const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
+const defaultRange = () => lastCompleteDays(30) // AM-16 — complete days, ending yesterday
 
 function StatusCell({ c, onAction, onMenu }: {
   c: CampaignRow

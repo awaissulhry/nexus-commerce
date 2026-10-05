@@ -23,6 +23,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
 import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
+import { reportFreshnessText, type IntradayInfo, type MarketFreshness } from './reportFreshness'
+import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
@@ -1079,8 +1081,10 @@ export function CampaignsGrid() {
   const [colWidths, setColWidths] = useState<Record<string, number>>({})
   // CBN.2d — header controls
   const [market, setMarket] = useState('all')
-  const [rangePreset, setRangePreset] = useState('last7')
-  const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+  // AM-16 — the 7 complete days ending yesterday, as the header shows. AM-10 — the graph reads this range too.
+  const [dateRange, setDateRange] = useState(() => lastCompleteDays(7))
+  // AM-14 — when the performance numbers arrived (per market), and how far today's hourly figures reach (AM-5).
+  const [freshness, setFreshness] = useState<{ markets: MarketFreshness[]; intraday: IntradayInfo | null }>({ markets: [], intraday: null })
   const [syncing, setSyncing] = useState(false)
   const [showGraph, setShowGraph] = useState(false)
   const [page, setPage] = useState(1)
@@ -1153,6 +1157,7 @@ export function CampaignsGrid() {
       // state, toasted "Amazon field pending", and threw the value away on refresh. The cells
       // read `minBidCents`/`maxBidCents` straight off the payload now, so nothing is derived here.
       setRows((d.items ?? []) as Camp[])
+      setFreshness({ markets: Array.isArray(d.freshness) ? d.freshness : [], intraday: d.intraday ?? null })
     } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
   }, [])
 
@@ -1835,11 +1840,8 @@ export function CampaignsGrid() {
   const paged = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
   const viewStart = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
   const viewEnd = Math.min(safePage * rowsPerPage, filtered.length)
-  const latestReport = (() => {
-    let max = 0
-    for (const r of rows) { const t = r.lastSyncedAt ? Date.parse(r.lastSyncedAt) : 0; if (t > max) max = t }
-    return max ? new Date(max).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-  })()
+  // AM-14 — the report's own day and arrival, never `lastSyncedAt` (a settings sync or write push stamps that).
+  const latestReport = reportFreshnessText(freshness.markets, freshness.intraday)
 
   // AX-ZD.5 — say out loud that these numbers are not finished yet.
   //
@@ -1861,11 +1863,8 @@ export function CampaignsGrid() {
   // it trained the eye to skip the header. The sentence now rides the "Latest
   // Report" footer, which already talks about data freshness, and only appends
   // itself when the selected window actually contains unsettled days.
-  // Keyed on `dateRange`, NOT `rangePreset`. The header's picker writes
-  // dateRange and that is what drives `load()`; rangePreset is legacy and now
-  // only feeds AdManagerGraph. Reading the preset here would have described a
-  // different window than the one the numbers below actually cover — silently,
-  // and only once an operator touched the date picker.
+  // Keyed on `dateRange`: the header's picker writes it, it drives `load()`, and
+  // (AM-10) the graph reads it too — the old `rangePreset` path is gone.
   //
   // The dates are pinned to UTC midnight of their LOCAL calendar day first.
   // dateRange is built with setHours(0,0,0,0) — local midnight — while
@@ -1890,7 +1889,7 @@ export function CampaignsGrid() {
       <AdsPageHeader
         title="Ad Manager" subtitle="Create and manage your campaigns"
         markets={markets} market={market} onMarketChange={setMarket}
-        rangePreset={rangePreset} onRangePreset={setRangePreset}
+        dateRange={dateRange}
         onDateRange={(s, e) => { const r = { start: s, end: e }; setDateRange(r); void load({ range: r }) }}
         onDataSync={() => void load({ sync: true, range: dateRange })} syncing={syncing}
         actions={[
@@ -1900,7 +1899,7 @@ export function CampaignsGrid() {
         ]}
       />
 
-      {showGraph && <AdManagerGraph market={market} rangePreset={rangePreset} />}
+      {showGraph && <AdManagerGraph market={market} start={dateRange.start} end={dateRange.end} />}
 
       {/* filter bar — Helium 10 Ad Manager match */}
       <div className={`h10-am-fpanel${filtersOpen ? '' : ' is-collapsed'}`}>
@@ -2091,7 +2090,7 @@ export function CampaignsGrid() {
           <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
-      <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
+      <div className="h10-am-latest"><b>Performance data:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
       {mode === 'edit' && (diffs.length > 0 || budgetEditProblems.length > 0) && (
