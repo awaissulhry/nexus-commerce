@@ -37,6 +37,9 @@ export { Banner, type BannerProps } from './Banner'
 export { Stepper, type StepperProps, type StepperStep } from './Stepper'
 export { FileDropzone, type FileDropzoneProps } from './FileDropzone'
 export { useClickAway } from './useClickAway'
+// A strip that scrolls sideways is marked `data-overflows` so its CSS keeps the scrollbar off its labels (2026-10-05).
+export { useHorizontalOverflow, type HorizontalOverflowOptions } from './useHorizontalOverflow'
+export type { HorizontalOverflow } from '../lib/horizontal-overflow'
 export { ColumnGroupModal, type ColumnGroupModalProps, type ColumnGroupProps, type ColumnGroup } from './ColumnGroupModal'
 // MAP.1 — top-right account identity. Replaces the hard-coded marketplace
 // chips in the app's dead components/layout/TopBar.tsx (deleted in TB.2) with real state.

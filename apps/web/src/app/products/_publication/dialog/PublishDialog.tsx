@@ -596,7 +596,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     const said = sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))
     const { name, words } = marketTabParts(o, stateOf(key), said)
     return [{ id: key, label: <span className={styles.tabLabel} title={marketTabLabel(o, stateOf(key), said)}>
-      <span className={styles.tabName}>{name}</span><span>{` · ${words}`}</span></span> }]
+      <span className={styles.tabName}>{name}</span><span className={styles.tabWords}>{` · ${words}`}</span></span> }]
   })
   const renderPanel = (key: string) => {
     const option = optionOf(key)
