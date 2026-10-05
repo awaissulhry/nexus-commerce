@@ -825,17 +825,40 @@ export async function listCampaignsV3(ctx: ClientContext, opts?: { campaignIds?:
 // LAUNCH-REPAIR reconcile reads — list negatives (backfill ids + audit dupes), and serving status
 // (real Amazon delivery state) for campaigns and ad groups. All read-only (no write-gate).
 export interface NegKwDTO { keywordId?: string; negativeKeywordId?: string; campaignId?: string; adGroupId?: string; keywordText?: string; matchType?: string; state?: string }
-export async function listNegativeKeywords(ctx: ClientContext, opts: { campaignIds?: string[] }): Promise<NegKwDTO[]> {
+export async function listNegativeKeywords(ctx: ClientContext, opts: { campaignIds?: string[]; /** W2-A — verification reads every state. */ states?: readonly string[] }): Promise<NegKwDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: NegKwDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ negativeKeywords?: NegKwDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/negativeKeywords/list', body,
       contentType: 'application/vnd.spNegativeKeyword.v3+json', acceptHeader: 'application/vnd.spNegativeKeyword.v3+json',
     })
     for (const k of res.negativeKeywords ?? []) out.push(k)
+    nextToken = res.nextToken; pages++
+  } while (nextToken && pages < 50)
+  return out
+}
+
+/**
+ * W2-A (CC-17) — the ad-group negative product targets of some campaigns (`/sp/negativeTargets/list`), so a launch can
+ * read back the negative ASINs it created. Same pagination and mime as the create (`createNegativeProductTarget`).
+ */
+export interface NegTargetDTO { targetId?: string; campaignId?: string; adGroupId?: string; state?: string; expression?: Array<{ type?: string; value?: string }> }
+export async function listNegativeTargets(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<NegTargetDTO[]> {
+  if (adsMode() === 'sandbox') return []
+  const out: NegTargetDTO[] = []; let nextToken: string | undefined; let pages = 0
+  do {
+    const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
+    if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
+    const res = await liveCall<{ negativeTargetingClauses?: NegTargetDTO[]; nextToken?: string }>({
+      profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/negativeTargets/list', body,
+      contentType: 'application/vnd.spNegativeTargetingClause.v3+json', acceptHeader: 'application/vnd.spNegativeTargetingClause.v3+json',
+    })
+    for (const t of res.negativeTargetingClauses ?? []) out.push(t)
     nextToken = res.nextToken; pages++
   } while (nextToken && pages < 50)
   return out
@@ -901,12 +924,14 @@ export async function listKeywords(ctx: ClientContext, opts: { campaignIds?: str
 }
 
 export interface TargetDTO { targetId?: string; campaignId?: string; adGroupId?: string; expressionType?: string; state?: string; bid?: number; expression?: Array<{ type?: string; value?: string }> }
-export async function listTargets(ctx: ClientContext, opts: { campaignIds?: string[]; states?: readonly string[] }): Promise<TargetDTO[]> {
+/** W2-A (CC-1) — `adGroupIds` reads one ad group's clauses (`adGroupIdFilter`), e.g. the four auto groups Amazon made. */
+export async function listTargets(ctx: ClientContext, opts: { campaignIds?: string[]; adGroupIds?: string[]; states?: readonly string[] }): Promise<TargetDTO[]> {
   if (adsMode() === 'sandbox') return []
   const out: TargetDTO[] = []; let nextToken: string | undefined; let pages = 0
   do {
     const body: Record<string, unknown> = { maxResults: 500, ...(nextToken ? { nextToken } : {}) }
     if (opts.campaignIds?.length) body.campaignIdFilter = { include: opts.campaignIds }
+    if (opts.adGroupIds?.length) body.adGroupIdFilter = { include: opts.adGroupIds }
     if (opts.states?.length) body.stateFilter = { include: [...opts.states] }
     const res = await liveCall<{ targetingClauses?: TargetDTO[]; nextToken?: string }>({
       profileId: ctx.profileId, region: ctx.region, method: 'POST', path: '/sp/targets/list', body,
@@ -1628,7 +1653,7 @@ export interface CreateCampaignInput {
    */
   dryRun?: boolean
 }
-export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createCampaign(ctx: ClientContext, input: CreateCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const v3: Record<string, unknown> = {
     name: input.name, targetingType: input.targetingType, state: (input.state ?? 'enabled').toUpperCase(),
     budget: { budget: input.dailyBudget, budgetType: 'DAILY' },
@@ -1643,7 +1668,10 @@ export async function createCampaign(ctx: ClientContext, input: CreateCampaignIn
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
   const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.campaigns?.success?.[0]?.campaignId ?? null, rawResponse: response }
+  // W2-A (CC-3) — ok only with Amazon's id; a 207 per-item error is Amazon's refusal, in its own words (it was `ok: true`
+  // with no id and the reason thrown away, so a refused campaign was stored as a live one).
+  const made = v3CreateResult(response, 'campaigns', 'campaignId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 export interface CreateAdGroupInput { externalCampaignId: string; name: string; defaultBid: number; state?: 'enabled' | 'paused' }

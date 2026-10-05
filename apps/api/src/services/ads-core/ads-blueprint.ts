@@ -46,6 +46,19 @@ const AUTO_CLAUSE_ALIASES: Record<string, AutoClause> = {
   SEARCH_LOOSE_MATCH: 'LOOSE_MATCH', LOOSE_MATCH: 'LOOSE_MATCH', LOOSE: 'LOOSE_MATCH', QUERYBROADRELMATCHES: 'LOOSE_MATCH',
   PRODUCT_SUBSTITUTES: 'SUBSTITUTES', SUBSTITUTES: 'SUBSTITUTES', ASINSUBSTITUTERELATED: 'SUBSTITUTES',
   PRODUCT_COMPLEMENTS: 'COMPLEMENTS', COMPLEMENTS: 'COMPLEMENTS', ASINACCESSORYRELATED: 'COMPLEMENTS',
+  // W2-A (CC-1) — the spelling Amazon's v3 `/sp/targets/list` returns in `expression[0].type` for its own four clauses.
+  QUERY_HIGH_REL_MATCHES: 'CLOSE_MATCH', QUERY_BROAD_REL_MATCHES: 'LOOSE_MATCH',
+  ASIN_SUBSTITUTE_RELATED: 'SUBSTITUTES', ASIN_ACCESSORY_RELATED: 'COMPLEMENTS',
+}
+
+/** W2-A — the words Amazon's console uses for each auto group, for receipts. */
+export const AUTO_CLAUSE_LABEL: Record<AutoClause, string> = {
+  CLOSE_MATCH: 'Close match', LOOSE_MATCH: 'Loose match', SUBSTITUTES: 'Substitutes', COMPLEMENTS: 'Complements',
+}
+
+/** W2-A — the auto group one spelling names (Amazon's v3 expression type, the synced type or the builder key), or null. */
+export function autoClauseFromSpelling(spelling: string | null | undefined): AutoClause | null {
+  return AUTO_CLAUSE_ALIASES[(spelling ?? '').trim().toUpperCase()] ?? null
 }
 
 /**

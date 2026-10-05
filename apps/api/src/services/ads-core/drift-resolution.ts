@@ -23,6 +23,8 @@ import { NEVER_SENT } from './drift.js'
 export const DRIFT_ENTITY_TYPE: Record<LaunchEntityResult['entityType'], string> = {
   CAMPAIGN: 'CAMPAIGN', AD_GROUP: 'AD_GROUP',
   KEYWORD: 'AD_TARGET', TARGET: 'AD_TARGET', PRODUCT_AD: 'PRODUCT_AD',
+  // W2-A — launch-only kinds (the reconcile never verifies them); named so the map stays total.
+  NEGATIVE_KEYWORD: 'AD_TARGET', NEGATIVE_TARGET: 'AD_TARGET', PLACEMENT: 'CAMPAIGN',
 }
 
 /** Bid fields are compared and counted but never recorded: the bid path owns them (see the reconcile service). */

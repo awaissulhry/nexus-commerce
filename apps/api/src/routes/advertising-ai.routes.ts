@@ -62,9 +62,11 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
     const { materializeProductGoal, MaterializeError } = await import('../services/advertising/ai-goal-materialize.service.js')
     try {
       const result = await materializeProductGoal(id, userId)
-      return { ok: true, ...result }
+      // W2-A (CC-2) — `ok` only when every campaign of the scaffold is live on Amazon; `launch` says what each one did.
+      const { describeLaunch } = await import('../services/advertising/launch-outcome.js')
+      return { ...result, ok: result.launch.ok, ...(result.launch.ok ? {} : { error: describeLaunch(result.launch) }) }
     } catch (e) {
-      if (e instanceof MaterializeError) { reply.status(e.statusCode); return { ok: false, error: e.message } }
+      if (e instanceof MaterializeError) { reply.status(e.statusCode); return { ok: false, error: e.message, ...(e.launch ? { launch: e.launch } : {}) } }
       reply.status(500); return { ok: false, error: (e as Error)?.message }
     }
   })

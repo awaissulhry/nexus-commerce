@@ -19,7 +19,11 @@
  */
 import { normaliseForCompare } from './drift.js'
 
-export type LaunchEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'KEYWORD' | 'TARGET' | 'PRODUCT_AD'
+/**
+ * W2-A (CC-17) — a launch also reads back its negatives and its placement bid adjustments (they were only logged).
+ * Those three kinds are checked for a LAUNCH only; the structural reconcile never produces them.
+ */
+export type LaunchEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'KEYWORD' | 'TARGET' | 'PRODUCT_AD' | 'NEGATIVE_KEYWORD' | 'NEGATIVE_TARGET' | 'PLACEMENT'
 
 /**
  * NOT_PUSHED and MISSING_ON_AMAZON are different failures with different fixes, and collapsing
@@ -138,7 +142,7 @@ export function summarise(results: LaunchEntityResult[]): LaunchVerificationSumm
  * says what is wrong and whether it will fix itself.
  */
 export function describeVerdict(r: LaunchEntityResult): string {
-  const what = `${r.entityType.toLowerCase().replace('_', ' ')} "${r.label}"`
+  const what = `${r.entityType.toLowerCase().replace(/_/g, ' ')} "${r.label}"`
   switch (r.verdict) {
     case 'VERIFIED':
       return `${what} matches what was requested.`
