@@ -416,7 +416,7 @@ describe('every registered change tool', () => {
       const args = Object.fromEntries(keys.map((k) => [k, /Ids$|^products$/.test(k) ? ['id-1'] : /^(items|prices|costs|shipments)$/.test(k) ? [{ productId: 'id-1', product: 'id-1', listingId: 'id-1', shipmentId: 'id-1' }] : 'id-1']))
       return resolveRequest(tool.name, args, null, ctx).target !== null
     })
-    // Recorded for the report (docs/approvals-grid/build/A-api-read.md): how far the arguments alone name a target.
+    // Recorded for the report (docs/approvals-grid/reports/A-api-read.md): how far the arguments alone name a target.
     expect(named.length).toBeGreaterThanOrEqual(60)
   })
 })

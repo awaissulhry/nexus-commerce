@@ -13,14 +13,22 @@
   03-design-system-grid · 04-industry-patterns.
 - Step 2 (plan) DONE: `docs/approvals-grid/PLAN.md`. APPROVED by the Owner 10-05: Decision 1 = A (bulk approve, same
   kind, never irreversible kinds), Decision 2 = A (per-kind rules with limits, no schema change).
-- Step 3 (build) STARTED 10-05. Contract written by lead: `packages/shared/approval-queue.ts` (+ export in
-  packages/shared/package.json). Wave 1 RUNNING (3 agents, same worktree, disjoint files, no commits):
-  A API read (approval-queue.service/approval-target/approval-queue.routes, sidebar count) · B API decide (bulk rule,
-  optional reject reason, simulate endpoint, ?item= deep link) · C DS parts (ChangeCell, 2-verb actionsColumn,
-  live countdown, grid shortcuts). Reports land in `docs/approvals-grid/build/{A,B,C}-*.md`.
+- Step 3 (build) STARTED 10-05.
+  - Wave 1 DONE + COMMITTED on feat/approvals-grid (not pushed): d83191e4c docs · 9500ea038 API (queue read
+    endpoints, bulk approve of one kind, optional reject reason, simulate, ?item= link) · 58c0269fd DS parts
+    (ChangeValue/changeColumn, 2-verb actionsColumn, Countdown, useGridShortcuts). Lead checks: api tsc pass;
+    22 API test files 343/343 pass with profiles off AND on; web tsc pass; DS tests 145 files 1975/1975 pass.
+    Known pre-existing (not ours): mcp-coverage test misses 4 rows from main; static gates 4 failures on main
+    (shell pin freshness, dark⇄pin parity, token resolution, DS api guard); factory tsc 446 errors on main.
+  - Wave 2 RUNNING (same worktree, no commits): D1 page (grid/ApprovalsGrid, useApprovalQueue, approvalActions,
+    queueColumns, HealthStrip, QueueToolbar, queueWords, page.tsx) · D2 drawer (grid/ApprovalDrawer,
+    useApprovalDetail, drawerWords) · E modal (grid/AutomateModal, automateWords). Seams: lead-written
+    `apps/web/src/app/fleet/approvals/grid/contracts.ts` (uncommitted until wave 2 commit).
+  - Wave 3 next: F clean-up (old cards, fleet-era words, How it works + gate state, nav badge, tests) + lead's
+    local browser check (local API + private DB, seeded inert requests, desktop + phone, keyboard).
 - Test env: `source ~/nexus-archive/2026-10-05-approvals-grid-stack/env.sh` (loopback guard, PGlite tests);
   `apps/api/.env` (git-ignored) holds a loopback test DATABASE_URL. Run API vitest only from apps/api.
-- Remaining build order: wave 1 (above) → lead reviews + commits → wave 2 (D grid page, E automate modal) → wave 3 (F clean-up + local browser check). 4 PRs, merge only on the Owner's word.
+- PRs: nothing pushed yet; push/merge only on the Owner's word.
 - Chrome extension was not connected (10-05) — live page not looked at yet.
 
 ## Next session: do this first
