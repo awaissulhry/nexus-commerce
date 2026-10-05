@@ -21,6 +21,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
 import { parseLiveVariations } from './ebay-membership-reconcile.service.js'
+import { skuBeforeTombstone } from './identity/tombstone-sku.js'
 import {
   normalizeItemId,
   checkItemIdOwnership,
@@ -158,8 +159,14 @@ export async function relinkEbayItemId(
     where: { channel: 'EBAY', externalListingId: itemId, productId: { notIn: familyProductIds } },
     select: { productId: true },
   })
+  // The family's own extra eBay listings: an adopted shell's shared variation rows still name the shell's old SKU (or the
+  // listing's own SKU), and they are this family's, not another's (2026-10-05, normal-knee-slider ALT1/ALT2).
+  const extraListings = await prisma.productListingAlias.findMany({ where: { productId: root.id, channel: 'EBAY' }, select: { sku: true, adoptedFromProductId: true } })
+  const shellIds = extraListings.map((a) => a.adoptedFromProductId).filter((id): id is string => !!id)
+  const shells = shellIds.length ? await prisma.product.findMany({ where: { id: { in: shellIds } }, select: { sku: true } }) : []
+  const ownParentSkus = [...new Set([root.sku, ...extraListings.map((a) => a.sku).filter((sku): sku is string => !!sku), ...shells.map((s) => skuBeforeTombstone(s.sku))])]
   const memsElsewhere = await prisma.sharedListingMembership.findMany({
-    where: { itemId, marketplace, parentSku: { not: root.sku } },
+    where: { itemId, marketplace, parentSku: { notIn: ownParentSkus } },
     select: { parentSku: true },
     take: 5,
   })

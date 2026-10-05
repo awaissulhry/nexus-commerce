@@ -46,7 +46,7 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     const value = row[key]
     if (expected && typeof expected === 'object' && !(expected instanceof Date) && !Array.isArray(expected)) {
       if ('path' in expected) return eq(expected.path.reduce((v: any, k: string) => v?.[k], value), expected.equals)
-      return Object.entries(expected).every(([op, v]) => op === 'in' ? (v as any[]).some(x => eq(value, x)) : op === 'not' ? !eq(value, v) : op === 'gt' ? value > (v as any) : op === 'gte' ? value >= (v as any) : op === 'lt' ? value < (v as any) : op === 'lte' ? value <= (v as any) : eq(value?.[op], v))
+      return Object.entries(expected).every(([op, v]) => op === 'in' ? (v as any[]).some(x => eq(value, x)) : op === 'not' ? !eq(value, v) : op === 'startsWith' ? typeof value === 'string' && value.startsWith(v as string) : op === 'gt' ? value > (v as any) : op === 'gte' ? value >= (v as any) : op === 'lt' ? value < (v as any) : op === 'lte' ? value <= (v as any) : eq(value?.[op], v))
     }
     return eq(value, expected)
   })

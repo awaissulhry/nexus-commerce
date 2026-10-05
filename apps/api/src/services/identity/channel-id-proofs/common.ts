@@ -100,6 +100,18 @@ export interface CarriedRow {
   platformAttributes?: Record<string, unknown>
 }
 
+/**
+ * eBay — a variation the item sells that this extra listing has no row for yet: an adopted shell's listing starts with its
+ * main row only (2026-10-05, normal-knee-slider ALT1/ALT2), so the link adds the row, linked like the rows it carries.
+ */
+export interface AddedRow {
+  productId: string
+  /** The product's SKU (what a person reads in the sheet). */
+  sku: string
+  /** The SKU eBay shows for it on the item. */
+  channelSku: string
+}
+
 /** A row that holds another item and that the link MOVES to this one: the channel shows its channel SKU on this item. */
 export interface MovedRow {
   id: string
@@ -147,6 +159,8 @@ export interface ChannelItemProof {
   rows: CarriedRow[]
   moved: MovedRow[]
   kept: KeptRow[]
+  /** eBay: the rows the link adds to an extra listing that has no variation rows yet (`AddedRow`). */
+  adds?: AddedRow[]
   /** The id is the one the rows hold, and every row it carries already reads what the channel says: nothing to write. */
   unchanged: boolean
   /** Why a link cannot be written, or null. Unverifiable is a refusal unless the caller's person said yes explicitly. */

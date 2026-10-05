@@ -258,7 +258,7 @@ describe('product groups — a Nexus root, an adopted shell, a confirmed link, o
   type P = { id: string; sku: string; parentId: string | null; productType: string | null; deletedAt: Date | null }
   type A = { id?: string; productId: string; adoptedFromProductId?: string | null; status: string; sku?: string | null; label?: string; channel?: string; marketplace?: string }
   const fakeDb = (products: P[], aliases: A[] = []) => ({
-    product: { findMany: async ({ where }: any) => products.filter(p => (where.sku ? where.sku.in.includes(p.sku) : where.id.in.includes(p.id)) && (where.deletedAt === null ? !p.deletedAt : true)) },
+    product: { findMany: async ({ where }: any) => products.filter(p => (where.OR ? !!p.deletedAt && where.OR.some((o: any) => p.sku.startsWith(o.sku.startsWith)) : where.sku ? where.sku.in.includes(p.sku) : where.id.in.includes(p.id)) && (where.deletedAt === null ? !p.deletedAt : true)) },
     productListingAlias: { findMany: async ({ where }: any) => aliases.map(a => ({ channel: 'EBAY', marketplace: 'IT', sku: null, label: '', adoptedFromProductId: null, ...a }))
       .filter(a => a.status === where.status
         && (!where.adoptedFromProductId || where.adoptedFromProductId.in.includes(a.adoptedFromProductId))
@@ -296,6 +296,17 @@ describe('product groups — a Nexus root, an adopted shell, a confirmed link, o
     const out = empty(), t = table('LEGACY-ALT1', ['KID-M'])
     const groups = await planEbayGroups(fakeDb(soft, [{ productId: 'r1', adoptedFromProductId: 's2', status: 'ACTIVE' }]), t, out, {})
     expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
+    expect(out.links).toEqual([])
+    expect(out.issues).toEqual([])
+  })
+  it('matches an adopted shell trashed with a tombstone SKU by its old SKU — no proposal, no new listing (2026-10-05)', async () => {
+    // merge-duplicate-products trashes the shell as `<sku>~merged-<id>`; the old file still names the listing `<sku>`.
+    const merged: P[] = [...nexus.filter(p => p.id !== 's1'), { id: 's1', sku: 'NEXUS-ROOT-ALT1~merged-0000abcd', parentId: null, productType: 'EBAY_LISTING_SHELL', deletedAt: new Date() }]
+    const out = empty(), t = table('NEXUS-ROOT-ALT1', ['KID-M'])
+    const proposals = new Map()
+    const groups = await planEbayGroups(fakeDb(merged, [{ productId: 'r1', adoptedFromProductId: 's1', status: 'ACTIVE' }]), t, out, { listingPlan: true } as never, undefined, proposals)
+    expect(groups.map(g => [g.rootSku, g.records.length])).toEqual([['NEXUS-ROOT', 2]])
+    expect(proposals.size).toBe(0)
     expect(out.links).toEqual([])
     expect(out.issues).toEqual([])
   })

@@ -114,13 +114,15 @@ export async function linkSheetChannelId(listingId: string, input: ChannelIdFenc
   const words = wordsOf(coordinate.channel)
   const externalId = coordinate.channel === 'AMAZON' ? input.externalId.replace(/\s+/g, '').toUpperCase() : input.externalId.trim()
   const record = await runLink(listingId, { externalId, expectedExternalId: externalId, expectedVersion: input.expectedVersion, actor, sheet: true }, deps)
-  const rows = await versionsOf(record.rows.map((r) => r.id))
+  // The rows it added (an extra listing that had none for those variations) are rows it linked too.
+  const rows = await versionsOf([...record.rows, ...record.added ?? []].map((r) => r.id))
   if (rows.length) {
     await auditLogService.write({
       userId: actor, entityType: 'ChannelListing', entityId: listingId, action: record.suggestedAsin ? 'listing.channel-id.suggest' : 'listing.channel-id.link',
       before: { externalListingId: input.expectedExternalId }, after: record.suggestedAsin ? { suggestedAsin: record.externalId } : { externalListingId: record.externalId, listingStatus: record.status ?? null },
       metadata: { channel: coordinate.channel, marketplace: coordinate.market, accountId: coordinate.accountId, rows: rows.map((r) => r.listingId), snapshots: record.snapshotIds ?? [],
         ...(record.moved?.length ? { moved: record.moved.map((m) => ({ listingId: m.id, from: m.fromItemId })) } : {}),
+        ...(record.added?.length ? { added: record.added.map((a) => a.id) } : {}),
         ...(record.liveSkus?.length ? { liveChannelSkus: record.liveSkus } : {}),
         ...(record.colour ? { colour: record.colour.name } : {}) },
     })
@@ -132,13 +134,15 @@ export async function linkSheetChannelId(listingId: string, input: ChannelIdFenc
   }
   const status = record.status ?? null
   const moved = (record.moved ?? []).map((m) => ({ id: m.id, sku: m.sku, fromItemId: m.fromItemId, sentence: m.sentence }))
-  const movedWords = moved.length ? ` ${moved.length} of them moved from another ${words.noun} (${moved.map((m) => m.sku).join(', ')}).` : ''
+  const added = record.added ?? []
+  const rowWords = (moved.length ? ` ${moved.length} of them moved from another ${words.noun} (${moved.map((m) => m.sku).join(', ')}).` : '')
+    + (added.length ? ` ${added.length} of them ${added.length === 1 ? 'is' : 'are'} new: this listing had no row for ${added.map((a) => a.sku).join(', ')}.` : '')
   const label = `${words.noun} ${record.externalId}`
   const sentence = !rows.length ? `${words.name} confirms ${label}; Nexus already holds it. Nothing changed.`
     : record.colour ? `Linked "${record.colour.name}" to Shopify product ${record.externalId} on ${plural(rows.length, 'row')}.`
-    : status === 'ENDED' ? `Linked ${label} on ${plural(rows.length, 'row')}.${movedWords} It has ended on ${words.name}: the rows read Ended${coordinate.channel === 'EBAY' ? ', and Relist is offered' : ''}.`
-    : status === 'INACTIVE' ? `Linked ${label} on ${plural(rows.length, 'row')}.${movedWords} It does not sell on ${words.name} now: the rows read Inactive.`
-    : `Linked ${label} on ${plural(rows.length, 'row')}.${movedWords}`
+    : status === 'ENDED' ? `Linked ${label} on ${plural(rows.length, 'row')}.${rowWords} It has ended on ${words.name}: the rows read Ended${coordinate.channel === 'EBAY' ? ', and Relist is offered' : ''}.`
+    : status === 'INACTIVE' ? `Linked ${label} on ${plural(rows.length, 'row')}.${rowWords} It does not sell on ${words.name} now: the rows read Inactive.`
+    : `Linked ${label} on ${plural(rows.length, 'row')}.${rowWords}`
   return { ok: true, listingId, externalId: record.externalId, status, rows, moved, kept: record.kept ?? [], sentence, pushes: pushesStayPaused(words.noun) }
 }
 

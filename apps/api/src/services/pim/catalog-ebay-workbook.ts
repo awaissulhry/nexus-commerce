@@ -13,6 +13,7 @@ import { attributeForAxis, valueIdentity, type AxisAttribute, type DictionaryAtt
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { variationBag } from './shared-variation-values.js'
 import { variationAxisValue } from './variation-collisions.js'
+import { skuBeforeTombstone } from '../identity/tombstone-sku.js'
 
 /**
  * CFI-5 (R-CFI-1) — our eBay listing workbooks, every family and both shapes the Owner holds:
@@ -664,7 +665,11 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
   const childSkus = [...new Set(table.records.filter(rec => isChildRow(rec.values)).map(rec => v(rec.values, 'SKU')).filter(Boolean))]
   const childrenOf = (parent: string) => [...new Set(table.records.filter(rec => isChildRow(rec.values) && v(rec.values, 'Parent SKU') === parent).map(rec => v(rec.values, 'SKU')).filter(Boolean))]
   const linkTargets = Object.values(options.links ?? {})
-  const products = await prisma.product.findMany({ where: { sku: { in: [...new Set([...parentSkus, ...childSkus, ...linkTargets])] } }, select: { id: true, sku: true, parentId: true, productType: true, deletedAt: true, importSource: true } })
+  const productSelect = { id: true, sku: true, parentId: true, productType: true, deletedAt: true, importSource: true } as const
+  const found = await prisma.product.findMany({ where: { sku: { in: [...new Set([...parentSkus, ...childSkus, ...linkTargets])] } }, select: productSelect })
+  // An adopted shell is trashed with a tombstone SKU (identity-merge 0(a)), yet an old file names its listing by the old SKU.
+  const trashed = parentSkus.length ? await prisma.product.findMany({ where: { deletedAt: { not: null }, OR: parentSkus.map(sku => ({ sku: { startsWith: `${sku}~merged-` } })) }, select: productSelect }) : []
+  const products = [...found, ...trashed.map(p => ({ ...p, sku: skuBeforeTombstone(p.sku) }))]
   const live = new Map(products.filter(p => !p.deletedAt).map(p => [p.sku, p]))
   // An adopted listing shell is found by its alias whatever the shell product looks like now (adoption soft-deletes it).
   const shells = products.filter(p => p.productType === 'EBAY_LISTING_SHELL')
@@ -876,7 +881,7 @@ export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId:
     // adopted shell's. An extra listing with neither has no name in a file — the export may write its label, which the
     // import then offers to make its SKU.
     const sourceParentSku = !coordinate.aliasKey ? rootSku
-      : alias?.sku || options.pendingNames?.get(alias?.id ?? '') || (alias?.adoptedFromProductId ? shells.find(s => s.id === alias.adoptedFromProductId)?.sku : undefined)
+      : alias?.sku || options.pendingNames?.get(alias?.id ?? '') || (alias?.adoptedFromProductId ? skuBeforeTombstone(shells.find(s => s.id === alias.adoptedFromProductId)?.sku ?? '') || undefined : undefined)
         || (options.unnamedByLabel ? alias?.label.trim() : undefined)
     if (!sourceParentSku) return []
     const attributes = (l.platformAttributes ?? {}) as { itemSpecifics?: Record<string, unknown> } & Record<string, unknown>

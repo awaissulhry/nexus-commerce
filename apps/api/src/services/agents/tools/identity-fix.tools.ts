@@ -826,12 +826,14 @@ const linkChannelId: AgentTool = {
             // Owner option A (2026-10-05): rows that hold another item and that eBay shows on this one move with the link.
             ...(plan.proof.moved.length ? { movesFromOtherItem: plan.proof.moved.slice(0, LINE_CAP).map((m) => m.sentence) } : {}),
             ...(plan.proof.kept.length ? { keptOtherItem: plan.proof.kept.slice(0, LINE_CAP).map((k) => k.sentence) } : {}),
+            // An extra listing with its main row only (an adopted shell): the variations eBay sells on the item get rows.
+            ...(plan.proof.adds?.length ? { addsRows: plan.proof.adds.slice(0, LINE_CAP).map((a) => a.sku) } : {}),
           } : {}),
           changes: { 'channel id': { from: plan.suggestedAsin ? plan.suggestedAsin.current : c.externalId, to: plan.externalId } },
           effect: plan.suggestedAsin
             ? `Sets ASIN ${plan.externalId} as the ASIN seller SKU ${plan.suggestedAsin.sellerSku} lists on at Publish (Amazon ${c.market}); nothing is sent to Amazon now.`
             : plan.proof
-            ? `Links ${c.channel} ${plan.externalId} to ${plan.proof.rows.length} row(s) of ${c.root.sku} (${c.market})${plan.proof.moved.length ? `, moving ${plan.proof.moved.length} of them from another item` : ''}; they read ${plan.proof.status === 'ENDED' ? `Ended${c.channel === 'EBAY' ? ' (Relist is offered)' : ''}` : plan.proof.status === 'INACTIVE' ? 'Inactive' : 'Active'} in Nexus and stay paused until a person resumes their pushes.`
+            ? `Links ${c.channel} ${plan.externalId} to ${plan.proof.rows.length} row(s) of ${c.root.sku} (${c.market})${plan.proof.moved.length ? `, moving ${plan.proof.moved.length} of them from another item` : ''}${plan.proof.adds?.length ? `, and adds ${plan.proof.adds.length} row(s) this listing has none for yet` : ''}; they read ${plan.proof.status === 'ENDED' ? `Ended${c.channel === 'EBAY' ? ' (Relist is offered)' : ''}` : plan.proof.status === 'INACTIVE' ? 'Inactive' : 'Active'} in Nexus and stay paused until a person resumes their pushes.`
             : `Links ${c.channel} ${plan.externalId} to ${c.root.sku} (${c.market}); its rows become live in Nexus and stay paused until a person resumes their pushes.`,
           note: plan.proof?.colour ? `${plan.proof.colour.writes} Nothing changes until a person approves this in Nexus.` : 'Nothing is sent to the channel. Nothing changes until a person approves this in Nexus.',
         },
@@ -850,7 +852,7 @@ const linkChannelId: AgentTool = {
         ok: true,
         data: record.suggestedAsin
           ? { listsOnAtPublish: record.externalId, changed: record.suggestedAsin.changed, note: 'Nothing is sent to Amazon now: Publish lists the row on this ASIN.' }
-          : { linked: record.externalId, rows: record.rows.length, ...(record.status ? { status: record.status } : {}), sharedVariationsLive: record.membershipsReactivated.length,
+          : { linked: record.externalId, rows: record.rows.length, ...(record.added?.length ? { rowsAdded: record.added.length } : {}), ...(record.status ? { status: record.status } : {}), sharedVariationsLive: record.membershipsReactivated.length,
             ...(record.liveSkus?.length ? { channelSkusRecorded: record.liveSkus.length } : {}), note: 'Pushes stay paused until a person resumes them.' },
         change: { before: { listingId: record.listingId, externalId: record.suggestedAsin ? record.suggestedAsin.previous : before?.externalId ?? null, rows: record.rows },
           after: { listingId: record.listingId, externalId: record.externalId, ...(record.suggestedAsin ? { suggestedAsin: true } : {}) } },

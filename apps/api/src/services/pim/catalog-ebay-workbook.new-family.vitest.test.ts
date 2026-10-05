@@ -17,7 +17,7 @@ vi.mock('../connection-resolver.service.js', async () => {
 
 type P = { id: string; sku: string; parentId: string | null; productType: string | null; deletedAt: Date | null; importSource?: string | null }
 const fakeDb = (products: P[] = []) => ({
-  product: { findMany: async ({ where }: any) => products.filter(p => (where.sku ? where.sku.in.includes(p.sku) : where.id.in.includes(p.id)) && (where.deletedAt === null ? !p.deletedAt : true)) },
+  product: { findMany: async ({ where }: any) => products.filter(p => (where.OR ? !!p.deletedAt && where.OR.some((o: any) => p.sku.startsWith(o.sku.startsWith)) : where.sku ? where.sku.in.includes(p.sku) : where.id.in.includes(p.id)) && (where.deletedAt === null ? !p.deletedAt : true)) },
   productListingAlias: { findMany: async () => [] },
 }) as any
 const empty = (): EbayWorkbookResult => ({ rows: [], issues: [], exclusions: [], ledger: [], links: [], warnings: [] })

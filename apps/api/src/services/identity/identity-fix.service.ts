@@ -97,6 +97,15 @@ export async function coordinateOf(listingId: string): Promise<Coordinate | null
   }
 }
 
+/**
+ * The shared eBay variation rows (the old flat file's records) of one item of a coordinate. The main listing's carry the
+ * family's SKU. An extra listing's (an adopted shell's) carry the shell's old SKU, so they are found by the item alone:
+ * the family's SKU would reach the main listing's rows (2026-10-05, normal-knee-slider ALT1/ALT2).
+ */
+function membershipsOfItem(coordinate: Coordinate, itemId: string) {
+  return coordinate.aliasKey ? { marketplace: coordinate.market, itemId } : { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId }
+}
+
 /** The fence of a run from the product sheet: the asked listing's version must still be the one the sheet read. */
 function fenceVersion(coordinate: Coordinate, expectedVersion: number | undefined): void {
   if (expectedVersion !== undefined && coordinate.asked.version !== expectedVersion) throw new IdentityFixRefusal(LISTING_CHANGED, 'conflict')
@@ -136,7 +145,7 @@ export async function planUnlink(listingId: string): Promise<UnlinkPlan> {
   if (!coordinate.externalId) throw new IdentityFixRefusal(`${where(coordinate)} carries no channel id: nothing to unlink.`)
   if (coordinate.channel === 'SHOPIFY' && holdsColourProduct(coordinate.rows)) throw new IdentityFixRefusal(COLOUR_CLEAR_REFUSED)
   const sharedVariations = coordinate.channel === 'EBAY'
-    ? await prisma.sharedListingMembership.count({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: coordinate.externalId, status: 'ACTIVE' } })
+    ? await prisma.sharedListingMembership.count({ where: { ...membershipsOfItem(coordinate, coordinate.externalId), status: 'ACTIVE' } })
     : 0
   const rows = coordinate.rows.map((r) => ({ id: r.id, sku: r.sku, status: r.listingStatus, quantity: r.quantity }))
   return {
@@ -201,7 +210,7 @@ export async function runUnlink(listingId: string, expectedExternalId: string, a
       record.rows.push({ id: row.id, externalListingId: row.externalListingId, externalParentId: row.externalParentId, listingStatus: row.listingStatus, isPublished: row.isPublished, syncPaused: row.syncPaused, shopifyIds })
     }
     if (coordinate.channel === 'EBAY') {
-      const memberships = await tx.sharedListingMembership.findMany({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: plan.externalId, status: 'ACTIVE' }, select: { id: true } })
+      const memberships = await tx.sharedListingMembership.findMany({ where: { ...membershipsOfItem(coordinate, plan.externalId), status: 'ACTIVE' }, select: { id: true } })
       if (memberships.length) await tx.sharedListingMembership.updateMany({ where: { id: { in: memberships.map((m) => m.id) } }, data: { status: 'ENDED' } })
       record.membershipIds = memberships.map((m) => m.id)
     }
@@ -262,7 +271,7 @@ async function proveEbayItem(coordinate: Coordinate, rawItemId: string, input: {
 
   // This family's rows on THIS coordinate, and the SKUs each stands for here (channel-sku.ts, never Product.sku alone).
   const family = await familyRowsOf(coordinate)
-  const products = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ id: coordinate.root.id }, { parentId: coordinate.root.id }] }, select: { id: true, sku: true } })
+  const products = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ id: coordinate.root.id }, { parentId: coordinate.root.id }] }, select: { id: true, sku: true }, orderBy: { sku: 'asc' } })
   const skusByRow = new Map(family.map((row) => [row.id, channelSkusOf(row)]))
   const familySkus = [...skusByRow.values()].flat()
   // A family product with no listing here: the SKU a new listing of it would send.
@@ -301,7 +310,17 @@ async function proveEbayItem(coordinate: Coordinate, rawItemId: string, input: {
   if (!proof.rows.length) {
     return { ...proof, refusal: `${where(coordinate)}: eBay item ${proof.itemId} carries none of this listing's rows here. Nothing changed.` }
   }
-  proof.unchanged = proof.rows.every((row) => heldIdKey('EBAY', row.externalListingId) === proof.itemId && row.listingStatus === proof.status && row.isPublished)
+  // An extra listing with its main row only (an adopted shell): the variations eBay sells on the item get their rows. A
+  // listing that has variation rows keeps the rule that a variation with no row is left out on purpose.
+  if (coordinate.aliasKey && !family.some((row) => row.productId !== coordinate.root.id)) {
+    const onItem = new Set(proof.liveSkus.map(lower))
+    proof.adds = products.flatMap((product) => {
+      const sku = product.id === coordinate.root.id ? null : wantedChannelSku({ channel: 'EBAY' }, product.sku).sku?.trim()
+      return sku && onItem.has(lower(sku)) ? [{ productId: product.id, sku: product.sku, channelSku: sku }] : []
+    })
+  }
+  proof.unchanged = !proof.adds?.length
+    && proof.rows.every((row) => heldIdKey('EBAY', row.externalListingId) === proof.itemId && row.listingStatus === proof.status && row.isPublished)
   return proof
 }
 
@@ -325,6 +344,10 @@ export function proofSentences(proof: ChannelItemProof): string[] {
   if (proof.rows.length && !proof.refusal) {
     out.push(proof.unchanged ? `Nexus already holds it on ${proof.rows.length} row${proof.rows.length === 1 ? '' : 's'}: nothing to change.`
       : `Linking writes it on ${proof.rows.length} row${proof.rows.length === 1 ? '' : 's'} (${proof.rows.slice(0, 8).map((r) => r.sku).join(', ')}${proof.rows.length > 8 ? ', …' : ''}).`)
+  }
+  const adds = proof.refusal ? [] : proof.adds ?? []
+  if (adds.length) {
+    out.push(`This listing has no row yet for ${adds.length} variation${adds.length === 1 ? '' : 's'} eBay sells on this item (${adds.slice(0, 8).map((a) => a.sku).join(', ')}${adds.length > 8 ? ', …' : ''}): Linking adds ${adds.length === 1 ? 'its row' : 'their rows'}.`)
   }
   // The moved rows are said apart (`moved`), so the sheet and Claude's preview list them before Link.
   for (const kept of proof.kept.slice(0, 8)) out.push(kept.sentence)
@@ -489,6 +512,8 @@ export interface LinkRecord {
   /** Rows moved from another item to this one (their SKU is on it), and rows that hold another item and were left alone. */
   moved?: MovedRow[]
   kept?: KeptRow[]
+  /** eBay: the rows the link added to an extra listing that had none for those variations (`ChannelItemProof.adds`). */
+  added?: Array<{ id: string; sku: string }>
   /** Rows whose `liveChannelSku` the link recorded (the SKU the channel proved for each). */
   liveSkus?: Array<{ id: string; sku: string }>
   /** Amazon: the ASIN set (or kept) as the one the row lists on at Publish. */
@@ -567,13 +592,40 @@ export async function runLink(listingId: string, input: { externalId?: string | 
       }
       record.rows.push({ id: row.id, externalListingId: row.externalListingId, listingStatus: row.listingStatus, isPublished: row.isPublished })
     }
+    // The rows an extra listing lacks (`adds`): born as the draft rule's rows, then linked like the rows above.
+    if (proof.adds?.length) {
+      const { draftListingFields } = await import('../pim/draft-listing.service.js')
+      const created = await tx.channelListing.createManyAndReturn({
+        data: proof.adds.map((add) => ({
+          ...draftListingFields({ productId: add.productId, channel: coordinate.channel, market: coordinate.market, accountId: coordinate.accountId!, aliasKey: coordinate.aliasKey }),
+          externalListingId: proof.itemId, listingStatus: status, isPublished: true, syncPaused: true,
+        })),
+        skipDuplicates: true,
+        select: { id: true, productId: true },
+      })
+      if (created.length !== proof.adds.length) throw new IdentityFixRefusal('A listing of this family changed meanwhile. Nothing changed.', 'conflict')
+      for (const add of proof.adds) {
+        const id = created.find((row) => row.productId === add.productId)!.id
+        await confirmLiveChannelSku(tx, id, add.channelSku)
+        record.liveSkus!.push({ id, sku: add.channelSku })
+      }
+      record.added = created.map((row) => ({ id: row.id, sku: proof.adds!.find((add) => add.productId === row.productId)!.sku }))
+      const { productReadCacheService } = await import('../product-read-cache.service.js')
+      await productReadCacheService.refreshInTransaction(tx, created.map((row) => row.productId))
+    }
     if (coordinate.channel === 'EBAY') {
       const account = { OR: [{ channelConnectionId: coordinate.accountId }, { channelConnectionId: null }] }
-      await tx.sharedListingMembership.updateMany({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: { not: plan.externalId }, ...account }, data: { itemId: plan.externalId } })
+      // This listing's shared variations follow the item: the main listing's all of the family's; an extra listing's only
+      // the ones of the item it held (`membershipsOfItem`).
+      if (!coordinate.aliasKey) {
+        await tx.sharedListingMembership.updateMany({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: { not: plan.externalId }, ...account }, data: { itemId: plan.externalId } })
+      } else if (coordinate.externalId && coordinate.externalId !== plan.externalId) {
+        await tx.sharedListingMembership.updateMany({ where: { ...membershipsOfItem(coordinate, coordinate.externalId), ...account }, data: { itemId: plan.externalId } })
+      }
       // The shared variations eBay confirms on a live item are live again (an unlink ended them). An ended item revives none.
       if (status === 'ACTIVE') {
         const matched = new Set(plan.matchedSkus.map(lower))
-        const ended = await tx.sharedListingMembership.findMany({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: plan.externalId, status: 'ENDED', ...account }, select: { id: true, sku: true } })
+        const ended = await tx.sharedListingMembership.findMany({ where: { ...membershipsOfItem(coordinate, plan.externalId), status: 'ENDED', ...account }, select: { id: true, sku: true } })
         const revive = ended.filter((m) => matched.has(lower(m.sku))).map((m) => m.id)
         if (revive.length) await tx.sharedListingMembership.updateMany({ where: { id: { in: revive } }, data: { status: 'ACTIVE' } })
         record.membershipsReactivated = revive
@@ -584,7 +636,7 @@ export async function runLink(listingId: string, input: { externalId?: string | 
     logger.warn('[identity-fix] link failed', { listingId, error: error instanceof Error ? error.message : String(error) })
     throw error
   })
-  announceListingValues(record.rows.map((r) => r.id), ['externalListingId', 'syncState'], 'channel-id-link')
+  announceListingValues([...record.rows, ...record.added ?? []].map((r) => r.id), ['externalListingId', 'syncState'], 'channel-id-link')
   return record
 }
 
