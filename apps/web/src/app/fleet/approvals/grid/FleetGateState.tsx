@@ -17,7 +17,6 @@ import Link from '@/lib/workspaces/Link'
 import { Banner } from '@/design-system/components'
 import { Button, Pill, Skeleton, type Tone } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
-import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import styles from './HowItWorks.module.css'
 
 /* ── the wire (a hand-written mirror of agent-fleet-approvals.routes.ts; only the fields read here) ─────────── */
@@ -84,6 +83,21 @@ export function expiryHoursOf(read: GateRead): number | null {
 }
 
 /* ── words ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The fleet's three actions, in plain words. They were the `shortAsk` of the Fleet overview's decision card
+ * (DecisionCard.tsx), deleted with that page's inbox on 2026-10-05; this drawer was its last reader. A name the list
+ * does not know is shown as its own words.
+ */
+const FLEET_TOOL_ASK: Record<string, string> = {
+  'create-negative-keyword': 'stop ads showing for a search term',
+  'graduate-keyword': 'promote a search term to its own keyword',
+  'set-target-bid': "change a keyword's bid",
+}
+
+export function fleetToolAsk(toolName: string): string {
+  return FLEET_TOOL_ASK[toolName] ?? toolName.replace(/[_-]+/g, ' ').trim()
+}
 
 export const OWNER_LINE: Record<GateCondition['owner'], string> = {
   operator: 'Yours to change',
@@ -185,7 +199,7 @@ export function FleetGateState({ read, onRetry, now = Date.now() }: { read: Gate
                     {tools.map((tool) => (
                       <li key={tool.name} className={styles.tool}>
                         <Pill tone={tool.canExecute ? 'success' : 'neutral'} size="sm">{tool.canExecute ? 'Can run' : 'Describes only'}</Pill>
-                        <span className={styles.text}>{sentenceCase(toolCardFor(tool.name).shortAsk)}</span>
+                        <span className={styles.text}>{sentenceCase(fleetToolAsk(tool.name))}</span>
                       </li>
                     ))}
                   </ul>

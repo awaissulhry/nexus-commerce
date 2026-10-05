@@ -28,13 +28,7 @@ import {
   YAxis,
 } from 'recharts'
 import { getBackendUrl } from '@/lib/backend-url'
-import {
-  ApprovalInbox,
-  type ApprovalRow,
-  type InboxCounts,
-  type InboxView,
-  type PrecedentRow,
-} from './ApprovalInbox'
+import { ApprovalsWaiting } from '@/app/fleet/_shared/ApprovalsWaiting'
 import {
   EntityGraphCanvas,
   RELATION_META,
@@ -155,14 +149,6 @@ export function FleetTab() {
   // parsing is one line, it is this session's data flow, and ACT.5's run
   // drawer will want the same map. Drop it if it is still unread by then.
   const [, setPlanLabels] = useState<PlanLabels>({ campaigns: {}, targets: {} })
-  const [approvals, setApprovals] = useState<ApprovalRow[]>([])
-  // NAF.AP.2 — waiting / decided / expired, with counts for the tabs.
-  const [inboxView, setInboxView] = useState<InboxView>('waiting')
-  const [inboxCounts, setInboxCounts] = useState<InboxCounts>({ waiting: 0, decided: 0, expired: 0 })
-  const [inboxLoading, setInboxLoading] = useState(false)
-  // NAF.AP.7 — the precedent those decisions created, so the card's promise
-  // can be checked rather than taken on trust.
-  const [precedents, setPrecedents] = useState<PrecedentRow[]>([])
   const [sweeps, setSweeps] = useState<SweepRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -173,7 +159,6 @@ export function FleetTab() {
   const [entityLoading, setEntityLoading] = useState(false)
   const [schedule, setSchedule] = useState<ScheduleJob[]>([])
   const [scorecards, setScorecards] = useState<ScorecardRow[]>([])
-  const [busy, setBusy] = useState(false)
   // NAF.SB.ACT.7 — the Overview keeps a five-event TEASER, not the stream.
   // /fleet/activity is the record: same endpoint, but with filters, search,
   // export and permalinks. Two complete streams over one endpoint diverge the
@@ -184,19 +169,17 @@ export function FleetTab() {
   const load = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!opts.silent) setLoading(true)
     try {
-      const [c, g, s, r, f, p, a, sw, sch, sc, tl, pr] = await Promise.all([
+      const [c, g, s, r, f, p, sw, sch, sc, tl] = await Promise.all([
         fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/graph`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/state`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/runs?limit=60`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/findings?limit=60`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/plans`, { cache: 'no-store' }),
-        fetch(`${backend}/api/agent/fleet/approvals?view=${inboxView}`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/sweeps?limit=8`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/schedule`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/scorecards?limit=40`, { cache: 'no-store' }),
         fetch(`${backend}/api/agent/fleet/timeline?limit=5`, { cache: 'no-store' }),
-        fetch(`${backend}/api/agent/fleet/precedents?limit=25`, { cache: 'no-store' }),
       ])
       if (!c.ok) throw new Error(`charters: ${c.status}`)
       setCharters(((await c.json()) as { charters: CharterRow[] }).charters)
@@ -209,25 +192,18 @@ export function FleetTab() {
         setPlans(pj.plans)
         setPlanLabels(pj.labels ?? { campaigns: {}, targets: {} })
       }
-      if (a.ok) {
-        const aj = (await a.json()) as { approvals: ApprovalRow[]; counts: InboxCounts }
-        setApprovals(aj.approvals)
-        setInboxCounts(aj.counts)
-      }
       if (sw.ok) setSweeps(((await sw.json()) as { sweeps: SweepRow[] }).sweeps)
       if (sch.ok) setSchedule(((await sch.json()) as { jobs: ScheduleJob[] }).jobs)
       if (sc.ok) setScorecards(((await sc.json()) as { scorecards: ScorecardRow[] }).scorecards)
       if (tl.ok) setTimeline((await tl.json()) as FleetTimelinePage)
-      if (pr.ok) setPrecedents(((await pr.json()) as { precedents: PrecedentRow[] }).precedents)
       setUpdatedAt(Date.now())
-      setInboxLoading(false)
       setErr(null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [backend, inboxView])
+  }, [backend])
 
   useEffect(() => {
     void load()
@@ -265,104 +241,6 @@ export function FleetTab() {
   useEffect(() => {
     if (mapView === 'entities' && !entityGraph && !entityLoading) void loadEntityGraph()
   }, [mapView, entityGraph, entityLoading, loadEntityGraph])
-
-  // NAF.AP.4 — the brake. `post` keeps these four handlers to one shape.
-  const post = useCallback(
-    async (path: string, body?: unknown) => {
-      setBusy(true)
-      try {
-        const r = await fetch(`${backend}/api/agent/fleet/${path}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: body === undefined ? undefined : JSON.stringify(body),
-        })
-        const d = (await r.json().catch(() => null)) as
-          | { error?: string; sentence?: string }
-          | null
-        if (!r.ok) setErr(d?.error ?? `${path}: ${r.status}`)
-        return d
-      } finally {
-        setBusy(false)
-      }
-    },
-    [backend],
-  )
-
-  const undoApproval = useCallback(
-    async (id: string) => {
-      await post(`approvals/${id}/undo`)
-      await load()
-    },
-    [post, load],
-  )
-
-  // The window closed while this tab was open, so commit it now rather than
-  // waiting up to 30s for the maintenance sweep to notice.
-  const commitApproval = useCallback(
-    async (id: string) => {
-      await post(`approvals/${id}/commit`)
-      await load()
-    },
-    [post, load],
-  )
-
-  const bulkPreview = useCallback(
-    async (ids: string[], decision: 'approve' | 'reject') => {
-      const d = await post('approvals/bulk-preview', { ids, decision })
-      return d?.sentence ?? `This affects ${ids.length} actions.`
-    },
-    [post],
-  )
-
-  const bulkDecide = useCallback(
-    async (ids: string[], decision: 'approve' | 'reject', reason?: string) => {
-      await post('approvals/bulk-decide', { ids, decision, reason })
-      await load()
-    },
-    [post, load],
-  )
-
-  const decide = useCallback(
-    async (id: string, decision: 'approve' | 'reject', reason?: string) => {
-      setBusy(true)
-      try {
-        const r = await fetch(`${backend}/api/agent/fleet/approvals/${id}/decide`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ decision, reason }),
-        })
-        if (!r.ok) {
-          const d = (await r.json().catch(() => null)) as { error?: string } | null
-          setErr(d?.error ?? `decide: ${r.status}`)
-        }
-        await load()
-      } finally {
-        setBusy(false)
-      }
-    },
-    [backend, load],
-  )
-
-  const rejectAll = useCallback(
-    async (charterKey: string, reason: string) => {
-      setBusy(true)
-      try {
-        const r = await fetch(`${backend}/api/agent/fleet/approvals/reject-all`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ charterKey, reason }),
-        })
-        if (!r.ok) {
-          const d = (await r.json().catch(() => null)) as { error?: string } | null
-          setErr(d?.error ?? `reject-all: ${r.status}`)
-        }
-        await load()
-      } finally {
-        setBusy(false)
-      }
-    },
-    [backend, load],
-  )
 
   /* derived */
   const openFindingsByCharter = useMemo(() => {
@@ -532,7 +410,7 @@ export function FleetTab() {
                 updated {Math.max(0, Math.round((Date.now() - updatedAt) / 1000))}s ago
               </span>
             ) : null}
-            <Button variant="quiet" size="sm" onClick={() => void load()} disabled={busy}>
+            <Button variant="quiet" size="sm" onClick={() => void load()}>
               <RefreshCw size={13} /> Refresh
             </Button>
           </div>
@@ -672,45 +550,9 @@ export function FleetTab() {
         </p>
       </section>
 
-      {/* 4 — approval inbox */}
-      <section className="acr-card">
-        <header className="acr-fl-head">
-          <h3>Approval inbox</h3>
-          <span className="acr-fl-sub">
-            {inboxCounts.waiting === 0
-              ? 'nothing waiting for you'
-              : `${inboxCounts.waiting} waiting for you`}
-          </span>
-        </header>
-        <ApprovalInbox
-          view={inboxView}
-          counts={inboxCounts}
-          approvals={approvals}
-          precedents={precedents}
-          plans={plans}
-          nameByKey={nameByKey}
-          busy={busy}
-          loading={inboxLoading}
-          onViewChange={(v) => {
-            setInboxView(v)
-            setInboxLoading(true)
-          }}
-          onDecide={(id, decision, reason) => void decide(id, decision, reason)}
-          onRejectAll={(charterKey, reason) => void rejectAll(charterKey, reason)}
-          onUndo={(id) => void undoApproval(id)}
-          onCommit={(id) => void commitApproval(id)}
-          onBulkPreview={bulkPreview}
-          onBulkDecide={(ids, decision, reason) => void bulkDecide(ids, decision, reason)}
-          onOpenPlan={(planId) => {
-            // ACT.7 — the plan's story used to be one card down this page. It
-            // is on Activity now, so this is a permalink rather than a scroll:
-            // Activity honours `#e-<event id>` and a plan's event id is
-            // `plan.<id>`. Scrolling to an element this page stopped rendering
-            // would have failed silently, which is the worse outcome.
-            router.push(`/fleet/activity#e-plan.${planId}`)
-          }}
-        />
-      </section>
+      {/* 4 — approvals: the count and a link (Owner, 2026-10-05). Requests are decided only on
+          /fleet/approvals; this page used to carry its own inbox with Approve and Reject. */}
+      <ApprovalsWaiting />
 
       {/* 5 — money & report cards (FX.7) */}
       <section className="acr-card">

@@ -162,8 +162,8 @@ export default function AiAgentsClient() {
         </button>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-        Agents work on a schedule and queue proposals into the approval inbox
-        above — they never apply anything on their own. Toggle a schedule off,
+        Agents work on a schedule and queue proposals on the Approvals page
+        — they never apply anything on their own. Toggle a schedule off,
         or run one now.
       </p>
 

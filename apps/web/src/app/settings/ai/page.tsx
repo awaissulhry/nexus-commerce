@@ -25,7 +25,7 @@ import AiModelsClient, {
   type ModelCatalog,
   type PrefsOverview,
 } from './AiModelsClient'
-import AiApprovalsClient from './AiApprovalsClient'
+import { ApprovalsWaiting } from '@/app/fleet/_shared/ApprovalsWaiting'
 import AiAgentsClient from './AiAgentsClient'
 
 interface InitialData {
@@ -187,7 +187,8 @@ export default function AiSettingsPage() {
         initialCatalog={data.modelCatalog}
         initialPrefs={data.featurePrefs}
       />
-      <AiApprovalsClient />
+      {/* Approvals are decided only on /fleet/approvals (Owner, 2026-10-05): here, the count and the link. */}
+      <ApprovalsWaiting id="agent-approvals" heading="Agent approvals" />
       <AiAgentsClient />
       <AiPromptsClient initialRows={data.prompts} />
       <AiBrandVoicesClient initialRows={data.brandVoices} />

@@ -1,0 +1,17 @@
+/* ApprovalsWaiting — layout and the optional heading only; the line is the design-system Banner, the link a DS Button.
+   Every token here is one the fleet light pin covers (fleet-pages.css), so the line stays light on fleet pages. */
+.root { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+
+/* The same look as the other section headings on Settings › AI (measured: 13 px / 18 px, 600, uppercase, 0.05em). */
+.heading {
+  margin: 0;
+  font-size: var(--nds-font-size-base);
+  line-height: 18px;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.line { overflow-wrap: anywhere; }
+.skeleton { display: block; max-width: 100%; }
