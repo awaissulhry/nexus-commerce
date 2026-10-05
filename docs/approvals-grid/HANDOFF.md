@@ -33,8 +33,14 @@
   - Browser findings (lead read the shots): duplicate React key in plan drawer; AG "No Matching Rows"; Change column
     cut; Why/result off-screen; phone columns overlap; Ask AI covers last row; plan steps raw numbers; repeated plan
     facts; Automate shown for plans; set-listing-stock SKU/label; master-data Where; bulk sentence uses tool ids.
-  - Fix agent H RUNNING on that list (uncommitted). Then: lead re-reads the new shots, commits, check table, ask the
-    Owner about push / PRs.
+  - Fix agent H DONE + COMMITTED: bf4f58137 (all 12 browser findings; browser check light 1280+390 105/105,
+    dark 1280 59/59). Lead re-read the new shots: fixed on screen.
+  - FINAL CHECKS (lead, HEAD bf4f58137): api tsc pass · web tsc pass · API approvals area 61 files 723/723 with
+    profiles off AND on · web fleet/settings-ai/_shared/lib/design-system 206 files 2642/2642 · static gates 61/65
+    (4 on main) · route-Prisma ratchet pass · id scan: one real SKU in reports/H-fixes.md, already public on main.
+  - Known small leftovers: plan Change cell "+5 more" overstates; old rows "by Someone"; Automate in the drawer on
+    an always-ask kind opens the modal that explains; Settings › AI and Fleet overview keep their old lists (§9).
+  - WAITING for the Owner: push + PR shape (one PR recommended). Nothing pushed.
 - Test env: `source ~/nexus-archive/2026-10-05-approvals-grid-stack/env.sh` (loopback guard, PGlite tests);
   `apps/api/.env` (git-ignored) holds a loopback test DATABASE_URL. Run API vitest only from apps/api.
 - PRs: nothing pushed yet; push/merge only on the Owner's word.
