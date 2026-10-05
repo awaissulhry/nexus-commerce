@@ -46,3 +46,13 @@ file's order; super smart and dynamic; deploy multiple sub-agents, AAA quality".
 - Committed 3c73b3234. Round 2 running: W1 (und on legacy save #8, photoInUse #11), W2 (tests, wording, Claude undo #6,
   import family test), W3 (plan families read-only #9, outside-count note). R2 sweep running on the older state.
 - Still open → PR 2: `_mediaGalleryDraft` override (#12); live drift mark.
+
+## 18:30 — round 2 done (all builders + 2 reviewers)
+- Commits up to 08e873ae1 (local). W1: und on legacy save, photoInUse counts listing + product saved lists. W2: tests to
+  new rules, import family blocker test (+ negative control), wording, Claude undo restores the list Publish sends,
+  LX.2 language guard. W3: plan rows' Image URLs read-only, outside-photo count note.
+- R2 sweep: only branch-caused failure was the LX.2 guard (fixed). Pre-existing on main: variation-one-writer,
+  variation-store-readers, studio-publication delete+relist mocks (×3), attribute-scope-baseline B3; 4 static gates
+  (shell pin freshness, dark⇄pin parity, token resolution, DS api guard). DB-needing suites not run (no local pg :5432).
+- Known gaps (not in this PR): sheet channel receipts keep no `before` (no rollback for any channel write);
+  set-listing-fields undo input limit 30 addresses; `_mediaGalleryDraft` override (PR 2); live drift mark (PR 3).
