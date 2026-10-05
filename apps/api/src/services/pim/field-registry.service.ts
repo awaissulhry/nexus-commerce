@@ -42,6 +42,10 @@ export interface FieldDefinition {
   unitOptions?: string[]
   cardinality?: { min: number; max: number | null }
   optionLabels?: Record<string, string>
+  /** W3-3 — other spellings a code is accepted under (the content language's label beside the English one); never shown. */
+  optionAliases?: Record<string, string[]>
+  /** W3-3 — names this field was shown under before (its content-language label); a header paste still lands by them. */
+  formerNames?: string[]
   maxLength?: number
   longText?: boolean
   localizable?: boolean

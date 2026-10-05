@@ -19,14 +19,15 @@
  *
  * W3-6 (2026-10-05) — a header a column had BEFORE still lands on it: "Name" on Title, "Base price" on Shopify's Price,
  * "Quantity" on eBay's Unit quantity (`formerNamesOf`, the sheet's naming table). A current name always wins, and a
- * former name two columns share lands on neither.
+ * former name two columns share lands on neither. W3-3 — and the former names a column carries itself (`formerNames`:
+ * a dictionary field now named in English, "Color", still takes the header its content language gave it, "Colore").
  */
 import { useMemo, useRef } from 'react'
 import { formerNamesOf } from '@nexus/shared/sheet-names'
 import { matchPasteToHeaders, type ColDef, type NexusGridProps } from '@/design-system/grid'
 
-/** A sheet column as the paste sees it: its grid id and its name. */
-export type HeaderPasteColumn = Pick<ColDef, 'colId' | 'headerName'>
+/** A sheet column as the paste sees it: its grid id, its name and the names it had before (W3-3). */
+export type HeaderPasteColumn = Pick<ColDef, 'colId' | 'headerName'> & { formerNames?: readonly string[] }
 type ProcessData<T> = NonNullable<NexusGridProps<T>['processDataFromClipboard']>
 type PasteApi<T> = Parameters<ProcessData<T>>[0]['api']
 type SuppressPaste<T> = Extract<NonNullable<ColDef<T>['suppressPaste']>, (...args: never[]) => boolean>
@@ -62,12 +63,12 @@ export function headerPasteNote(plan: Pick<HeaderPastePlan, 'named' | 'notPasted
 const cleanName = (name: unknown): string => String(name ?? '').trim().replace(/\s*\*$/, '').trim()
 
 /** Header cells as the matcher reads them: a cell that names no column now, but one column by a former name, reads as its id. */
-function byFormerNames(header: readonly string[], columns: ReadonlyArray<{ colId?: string; headerName?: string }>): string[] {
+function byFormerNames(header: readonly string[], columns: ReadonlyArray<{ colId?: string; headerName?: string; formerNames?: readonly string[] }>): string[] {
   const current = new Set(columns.flatMap((c) => [c.colId, c.headerName]).filter((n): n is string => !!n).map((n) => n.toLowerCase()))
   return header.map((name) => {
     const lower = name.toLowerCase()
     if (!lower || current.has(lower)) return name
-    const owners = columns.filter((c) => c.colId && formerNamesOf(c.colId).some((former) => former.toLowerCase() === lower))
+    const owners = columns.filter((c) => c.colId && [...formerNamesOf(c.colId), ...(c.formerNames ?? [])].some((former) => former.toLowerCase() === lower))
     return owners.length === 1 ? owners[0].colId! : name
   })
 }
@@ -80,7 +81,7 @@ function byFormerNames(header: readonly string[], columns: ReadonlyArray<{ colId
 export function planHeaderPaste(data: string[][], columns: ReadonlyArray<HeaderPasteColumn>, targets: readonly string[]): HeaderPastePlan | null {
   if (data.length < 2) return null
   const header = data[0].map(cleanName)
-  const cleaned = columns.map((c) => ({ colId: c.colId, headerName: cleanName(c.headerName) || undefined }))
+  const cleaned = columns.map((c) => ({ colId: c.colId, headerName: cleanName(c.headerName) || undefined, formerNames: c.formerNames }))
   const named = byFormerNames(header, cleaned)
   // The DS matcher decides every match. A probe row of source indexes shows where each header cell landed.
   const probe = [named, header.map((_, i) => String(i))]

@@ -347,7 +347,8 @@ const productContent: AgentTool = {
         const hit = all.find((field) => field.name.toLowerCase() === key
           || field.columns.some((column) => [column.key, column.writeField, column.label, column.slot?.label].some((name) => name?.toLowerCase() === key)))
           // W3-6 — then a column's former names ("Name" → Title, "Quantity" → eBay's Unit quantity); a current name wins.
-          ?? all.find((field) => field.columns.some((column) => formerNamesOf(column.key).some((name) => name.toLowerCase() === key)))
+          // W3-3 — and the names a dictionary field had in the content language ("Colore" → Color).
+          ?? all.find((field) => field.columns.some((column) => [...formerNamesOf(column.key), ...(column.formerNames ?? [])].some((name) => name.toLowerCase() === key)))
         if (hit) wanted.set(hit.name, hit)
         else unknownFields.push(raw)
       }
