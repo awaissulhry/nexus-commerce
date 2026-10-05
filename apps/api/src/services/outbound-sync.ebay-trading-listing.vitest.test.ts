@@ -7,7 +7,7 @@
  * once (`usesEbayInventory` over the item's family); the Trading branch runs after every Inventory-path guard (push lock,
  * pause policy, the routed pool ceiling, price bounds, publish mode, account, circuit, rate token).
  *
- * Live mode, every outside call faked: the Trading call (`__ebayTrading.callTradingApi`, the gateway-backed client) and
+ * Live mode, every outside call faked: the Trading call (`callTradingApi`, the gateway-backed client) and
  * the Inventory calls (`ebaySend`) record what would go out. Nothing reaches eBay. Ids and SKUs are fake.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => {
   const outbound = vi.fn(() => { throw new Error('Unexpected outbound fetch') }); vi.stubGlobal('fetch', outbound)
   return {
-    outbound, read: vi.fn(), family: vi.fn(), members: vi.fn(), stamp: vi.fn(), listingWrite: vi.fn(), issues: vi.fn(), send: vi.fn(), audit: vi.fn(),
+    outbound, trading: vi.fn(), read: vi.fn(), family: vi.fn(), members: vi.fn(), stamp: vi.fn(), listingWrite: vi.fn(), issues: vi.fn(), send: vi.fn(), audit: vi.fn(),
     ledger: vi.fn(), writeAccount: vi.fn(), wrongAccount: vi.fn(() => false), circuit: vi.fn(() => ({ ok: true }) as { ok: boolean; error?: string }),
     token: vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }),
     outcome: vi.fn(), mode: vi.fn(() => 'live'), policy: vi.fn(() => null), priceRefusal: vi.fn(async () => null as string | null),
@@ -48,12 +48,13 @@ vi.mock('./ebay-publish-gate.service.js', async (original) => ({ ...(await origi
   getEbayPublishMode: m.mode, checkEbayCircuit: m.circuit, acquireEbayPublishToken: m.token, recordEbayOutcome: m.outcome,
   getEbayApiBaseForMode: () => 'https://api.ebay.test' }))
 vi.mock('./gateway/ebay.js', async (original) => ({ ...(await original<object>()), ebaySend: m.send }))
+vi.mock('./ebay-trading-api.service.js', async (original) => ({ ...(await original<object>()), callTradingApi: m.trading }))
 
-const { OutboundSyncService, __ebayTrading, completedSyncQueueData, computeFailureDisposition, listingOutcomeOfCompletion, tradingRowRefusalKind } = await import('./outbound-sync.service.js')
+const { OutboundSyncService, completedSyncQueueData, computeFailureDisposition, listingOutcomeOfCompletion, tradingRowRefusalKind } = await import('./outbound-sync.service.js')
 const { TradingApiFailure } = await import('./ebay-trading-api.service.js')
 const { syncLedgerOf } = await import('./sync-control-core.js')
 const service: any = new OutboundSyncService()
-const trading = vi.spyOn(__ebayTrading, 'callTradingApi')
+const trading = m.trading
 
 const SKU = 'TEST-SKU-1'
 const ITEM = '110000000001'

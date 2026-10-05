@@ -59,7 +59,6 @@ import {
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
   siteIdForMarket,
   tradingErrorBlocks,
-  type TradingCallContext,
   type TradingCallResult,
 } from "./ebay-trading-api.service.js";
 import { ebayTradingCodeClass } from './gateway/vocabulary.js'
@@ -81,10 +80,6 @@ import { AD_SYNC_TYPES as AD_SYNC_TYPE_LIST } from './ads-core/ad-mutation-state
 export const __ebayTrading = {
   reviseInventoryStatus: ebayReviseInventoryStatus,
   reviseInventoryStatusBatch: ebayReviseInventoryStatusBatch,
-  // 2026-10-06 — a Trading listing's own quantity/price row (`syncTradingListingRow`): the gateway-backed call itself, so
-  // the row reads eBay's Ack (Success / Warning / PartialFailure) instead of a wrapper that drops it. Bound at call time:
-  // a test that replaces the Trading module without this function still loads this service.
-  callTradingApi: (callName: string, xml: string, ctx: TradingCallContext): Promise<TradingCallResult> => callTradingApi(callName, xml, ctx),
 }
 
 // RT.2 — per-item revise pacing. eBay hard-caps ~250 revises per listing per
@@ -2347,7 +2342,9 @@ export class OutboundSyncService {
     };
     let answer: TradingCallResult;
     try {
-      answer = await __ebayTrading.callTradingApi("ReviseInventoryStatus", xml, {
+      // The gateway-backed call itself, so the row reads eBay's Ack (Success / Warning / PartialFailure) — the
+      // `reviseInventoryStatus` wrapper drops it.
+      answer = await callTradingApi('ReviseInventoryStatus', xml, {
         oauthToken: token, siteId, connectionId, market: marketCode, listingId: queueItem.channelListingId ?? null,
       });
     } catch (err) {
