@@ -182,7 +182,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         const s = cells.sync
         if (f.method === 'FBA' && p.method === 'FBM' && s?.fbaAtAmazon != null && s.fbaAtAmazon > 0) { refuse(row, key, 'guard', `Refused — ${s.fbaAtAmazon} units of FBA stock on hand keep the guard closed; convert the offer in Seller Central first`); break }
         const pool = s?.poolAvailable ?? null
-        const after = p.method === 'FBA' ? 'Amazon-managed · no merchant quantity is pushed' : pool == null ? `Follow → ${MATRIX_COPY.uncounted}` : `Follow → ${Math.max(0, pool - (s?.buffer ?? 0))} pushed from IT-MAIN`
+        const after = p.method === 'FBA' ? 'Amazon-managed · no merchant quantity is pushed' : pool == null ? `Follow → ${MATRIX_COPY.uncounted}` : `Follow → ${Math.max(0, pool - (s?.buffer ?? 0))} pushed from ${s?.routedLocations.join(', ') || 'no routed location'}`
         changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'fulfilment', from: f.method, to: p.method, fromLabel: f.method ?? '—', toLabel: p.method, note: after })
         break
       }

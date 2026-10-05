@@ -429,8 +429,9 @@ async function planValues(c: Coordinate, args: Record<string, unknown>, userId: 
   if (keys.length > FIELD_CAP) return { error: `At most ${FIELD_CAP} attributes at a time.` }
   const wrong = keys.filter((key) => !isAttributeKey(key) || NOT_HERE.test(key) || isListingContentKey(key))
   if (wrong.length) {
-    return { error: `${wrong.join(', ')}: only listing attributes (attr_<attribute>) are set here. Stock and price go through set-listing-stock `
-      + 'and set-listing-price, and a listing\'s title, description, bullets and keywords through the content tools.' }
+    return { error: `${wrong.join(', ')}: only listing attributes (attr_<attribute>) are set here. Stock and fulfilment go through `
+      + 'set-listing-stock (an Amazon listing\'s FBA or FBM: action set-fulfilment), price through set-listing-price, and a listing\'s '
+      + 'title, description, bullets and keywords through the content tools.' }
   }
   if (reset.some((key) => key in values)) return { error: 'An attribute is either set or reset, not both.' }
   const now = await currentValues(c, keys)
