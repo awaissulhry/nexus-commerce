@@ -355,6 +355,34 @@ export function tradingAnswerOk(raw: string): boolean {
   return !/<ErrorCode>(488|21060)<\/ErrorCode>|<DuplicateInvocationDetails>/.test(raw)
 }
 
+/**
+ * The <Errors> blocks of a Trading answer that are errors (SeverityCode Warning is not): eBay's code, its
+ * ErrorClassification (RequestError / SystemError) and its words. (2026-10-06: moved here, unchanged, from the channel
+ * contracts, so the contract check and a Trading listing's stock row read eBay's errors one way.)
+ */
+export function tradingErrorBlocks(text: string): Array<{ code: string; classification: string; message: string }> {
+  return [...text.matchAll(/<Errors>([\s\S]*?)<\/Errors>/g)].map((m) => m[1])
+    .filter((block) => (/<SeverityCode>([^<]*)<\/SeverityCode>/.exec(block)?.[1] ?? 'Error') !== 'Warning')
+    .map((block) => ({
+      code: /<ErrorCode>([^<]*)<\/ErrorCode>/.exec(block)?.[1]?.trim() ?? '',
+      classification: /<ErrorClassification>([^<]*)<\/ErrorClassification>/.exec(block)?.[1] ?? '',
+      message: (/<LongMessage>([^<]*)<\/LongMessage>/.exec(block)?.[1] ?? /<ShortMessage>([^<]*)<\/ShortMessage>/.exec(block)?.[1] ?? '').slice(0, 160).replace(/\.\s*$/, ''),
+    }))
+}
+
+/**
+ * 2026-10-06 (Trading stock sync) — eBay's answer to a Trading revise of an item the Inventory API holds: error 21919474,
+ * "This operation is not allowed for inventory items." (seen live on IT as "operazione non consentita per gli oggetti del
+ * magazzino"). Nothing was changed on eBay. The code decides; the words are the fallback for an answer that lost it. Narrower
+ * than the description push's `/inventor|magazzino|non consentita/` on purpose: a ReviseInventoryStatus refusal names
+ * "InventoryStatus" in other errors (a SKU that is not in the item), and those must stay refusals.
+ */
+export const EBAY_INVENTORY_MANAGED_CODE = '21919474'
+const INVENTORY_MANAGED_WORDS = /not allowed for inventory items|inventory-based listing management|oggetti del magazzino/i
+export function isEbayInventoryManagedRefusal(codes: readonly string[], message: string): boolean {
+  return codes.includes(EBAY_INVENTORY_MANAGED_CODE) || INVENTORY_MANAGED_WORDS.test(message)
+}
+
 export async function callTradingApi(
   callName: string,
   xml: string,
