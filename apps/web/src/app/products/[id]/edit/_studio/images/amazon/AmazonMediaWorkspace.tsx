@@ -68,7 +68,9 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
   /* Create path, step 5/6 — no Amazon listing on this market yet: the gallery opens empty and stays editable; its first
      save starts the primary listing's draft (the family's parent and variants). Nothing is sent to Amazon. */
   const gate = workspace ? mediaDestinationGate(workspace.destination) : 'listing'
-  const disabled = locked || !canEdit || needsReload || (gate !== 'listing' && gate !== 'starts-draft')
+  /* Owner 2026-10-05 — an alias on its Main listing's product page shows the Main listing's photos (`readOnly`, its reason
+     is the first warning below): nothing is edited, reviewed or published from it. */
+  const disabled = locked || !canEdit || needsReload || !!workspace?.readOnly || (gate !== 'listing' && gate !== 'starts-draft')
   operation.current = locked
   const adopt = useCallback((next: Workspace) => {
     setWorkspace(next); setDraft(next.draft); setBulkUndo(null); setError(null); setNeedsReload(false); reporter.cleared([subject])

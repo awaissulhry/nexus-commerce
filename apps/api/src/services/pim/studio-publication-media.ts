@@ -2,9 +2,13 @@ import { resolveMediaCollection } from '@nexus/shared/product-media'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { object } from './studio-publication-plan.js'
 
-/** Same saved collection, locale inheritance and order as the studio Images cell. */
-export function publicationImages(facts: PublicationFacts, product: PublicationFacts['products'][number]) {
-  const listing = facts.listings.find(l => l.productId === product.id)
+/**
+ * Same saved collection, locale inheritance and order as the studio Images cell. `listing`: the listing whose Product media
+ * is sent — this destination's row by default, or (an Amazon alias, Owner 2026-10-05) the main listing's row of the
+ * product; `null` = no listing holds a list (the Shared product's photos are sent).
+ */
+export function publicationImages(facts: PublicationFacts, product: PublicationFacts['products'][number],
+  listing: { platformAttributes?: unknown } | null = facts.listings.find(l => l.productId === product.id) ?? null) {
   const parent = product.id === facts.parent.id ? undefined : facts.parent
   const files = [...product.images, ...(parent?.images ?? [])]
   const { collection } = resolveMediaCollection({ locale: facts.languages[0], own: object(listing?.platformAttributes)._productMediaLocales,

@@ -108,6 +108,7 @@ import { amazonMediaWorkspaceRoutes } from './amazon-media-workspace.routes'
 import { amazonMediaDestination, readAmazonMedia, saveAmazonMedia, refreshAmazonMedia, copyAmazonMarketGallery } from '../../services/images/amazon-media-workspace.service'
 import { approveAmazonMediaRun, createAmazonMediaReview, processAmazonMediaRun, readAmazonMediaRun, processPendingAmazonMediaRuns } from '../../services/images/amazon-media-publish.service'
 import { exportAmazonSafetyImages } from '../../services/images/amazon-media-safety-export.service'
+import { AMAZON_ALIAS_PHOTOS, AMAZON_ALIAS_PUBLISH } from '@nexus/shared/product-media'
 
 const headers = { authorization: 'editor' }
 const base = '/api/products/p/images-workspace/amazon'
@@ -256,7 +257,9 @@ describe('Amazon Media destination and persistence', () => {
     const { d, w } = await saved()
     const next = await saveAmazonMedia(d, w.revision, { ...w.draft, items: { 'it-blue': { PT01: null } } })
     expect(next.draft.items['it-blue'].PT01).toBeNull()
-    for (const target of [await destination('DE'), await destination('IT', 'summer-p'), await destination('IT', 'other-account', 'account-b')]) expect((await readAmazonMedia(target)).draft.common).toEqual({})
+    for (const target of [await destination('DE'), await destination('IT', 'other-account', 'account-b')]) expect((await readAmazonMedia(target)).draft.common).toEqual({})
+    // Owner 2026-10-05 — an alias is no longer isolated: it shows the main listing's photos (one photo set per product).
+    expect((await readAmazonMedia(await destination('IT', 'summer-p'))).draft.common).toEqual(next.draft.common)
     expect(fixture.state.listings[0].platformAttributes.untouched).toBe(true)
     expect(fixture.state.assets).toHaveLength(4)
   })
@@ -303,6 +306,90 @@ describe('Amazon Media destination and persistence', () => {
     const first = await refreshAmazonMedia(d, w.revision)
     const second = await refreshAmazonMedia(d, first.revision)
     expect(second.revision).toBe(first.revision)
+  })
+})
+describe('an alias shows the main listing\'s photos, read-only (Owner 2026-10-05: Amazon keeps one photo set per product)', () => {
+  const alias = () => destination('IT', 'summer-p')
+  it('reading the alias: the main listing\'s draft, each SKU\'s photos on the alias row of the same product, and the reason', async () => {
+    const { d, w } = await saved()
+    const main = await saveAmazonMedia(d, w.revision, { ...w.draft, items: { 'it-blue': { PT01: { assetId: 'product:detail', language: 'zxx' } } } })
+    const read = await readAmazonMedia(await alias())
+    expect(read.destination).toMatchObject({ listingId: 'summer-p', aliasKey: 'summer' })
+    expect(read.draft).toEqual({ common: main.draft.common, items: { 'summer-blue': main.draft.items['it-blue'] } })
+    expect(read.warnings[0]).toBe(AMAZON_ALIAS_PHOTOS)
+    // An older per-alias draft (saved before 2026-10-05) is kept on its row, never shown.
+    expect(fixture.state.listings.find(l => l.id === 'summer-p').platformAttributes._amazonMediaWorkspace).toBeUndefined()
+  })
+  it('an older per-alias draft is not shown: the main listing\'s photos are', async () => {
+    const { w } = await saved()
+    fixture.state.listings.find(l => l.id === 'summer-p').platformAttributes._amazonMediaWorkspace = { version: 1, draft: { common: { MAIN: { assetId: 'product:detail', language: 'zxx' } }, items: {} }, assets: [] }
+    expect((await readAmazonMedia(await alias())).draft.common).toEqual(w.draft.common)
+  })
+  it('a change on the main listing moves the alias\'s revision (a review bound to it is refused)', async () => {
+    const { d, w } = await saved()
+    const before = (await readAmazonMedia(await alias())).revision
+    await saveAmazonMedia(d, w.revision, { ...w.draft, common: { MAIN: { assetId: 'product:detail', language: 'zxx' } } })
+    const after = (await readAmazonMedia(await alias())).revision
+    expect(after).not.toBe(before)
+    // The Main rows' stored photos it reads count too, not only their versions.
+    fixture.state.listings.find(l => l.id === 'it-blue').platformAttributes.attributes.main_product_image_locator = [{ media_location: 'https://cdn.example/new.jpg', marketplace_id: 'IT-ID' }]
+    expect((await readAmazonMedia(await alias())).revision).not.toBe(after)
+  })
+  it('no draft on the main listing: the main listing\'s Amazon photos, not the alias\'s', async () => {
+    fixture.state.listings.find(l => l.id === 'it-blue').platformAttributes.attributes.main_product_image_locator = [{ media_location: 'https://cdn.example/main-blue.jpg', marketplace_id: 'IT-ID' }]
+    fixture.state.listings.find(l => l.id === 'summer-blue').platformAttributes.attributes = { main_product_image_locator: [{ media_location: 'https://cdn.example/alias-blue.jpg', marketplace_id: 'IT-ID' }] }
+    const read = await readAmazonMedia(await alias())
+    const shown = read.assets.find(a => a.id === read.draft.items['summer-blue']?.MAIN?.assetId)
+    expect(shown?.url).toBe('https://cdn.example/main-blue.jpg')
+  })
+  it('a save or a market copy onto the alias is refused with the reason (422); nothing is written', async () => {
+    await saved()
+    const read = await readAmazonMedia(await alias())
+    const untouched = structuredClone(fixture.state.listings.find(l => l.id === 'summer-p'))
+    await expect(saveAmazonMedia(await alias(), read.revision, { common: { MAIN: { assetId: 'product:detail', language: 'zxx' } }, items: {} }))
+      .rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PHOTOS })
+    const response = await app.inject({ method: 'PUT', url: `${base}?market=IT&accountId=account-a&listingId=summer-p`, headers, payload: { expectedRevision: read.revision, draft: read.draft } })
+    expect(response.statusCode).toBe(422)
+    expect(response.json().error).toBe(AMAZON_ALIAS_PHOTOS)
+    const de = await readAmazonMedia(await destination('DE'))
+    await expect(copyAmazonMarketGallery(await alias(), read.revision, { sourceMarket: 'DE', sourceListingId: 'de-p', sourceGalleryId: 'common', sourceRevision: de.revision, targetGalleryId: 'common' }))
+      .rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PHOTOS })
+    expect(fixture.state.listings.find(l => l.id === 'summer-p')).toEqual(untouched)
+  })
+  it('a review or a publish from the alias is refused: its photos are published from the Main listing', async () => {
+    await saved()
+    const read = await readAmazonMedia(await alias())
+    expect(read.readOnly).toBe(AMAZON_ALIAS_PHOTOS)
+    await expect(createAmazonMediaReview(await alias(), read.revision, ['summer-blue'], 'editor')).rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PUBLISH })
+    await expect(approveAmazonMediaRun(await alias(), 'run-1', read.revision)).rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PUBLISH })
+    const response = await app.inject({ method: 'POST', url: `${base}/review?market=IT&accountId=account-a&listingId=summer-p`, headers, payload: { expectedRevision: read.revision, listingIds: ['summer-blue'] } })
+    expect([response.statusCode, response.json().error]).toEqual([422, AMAZON_ALIAS_PUBLISH])
+    expect(fixture.state.runs).toEqual([])
+  })
+  it('an alias on its own ASIN (another product page) keeps its own draft, and saves and reviews it as before', async () => {
+    await saved()
+    for (const id of ['summer-p', 'summer-blue']) fixture.state.listings.find(l => l.id === id).externalListingId = `ASIN-OWN-${id}`
+    const read = await readAmazonMedia(await alias())
+    expect(read.readOnly).toBeUndefined()
+    expect(read.draft.common).toEqual({})
+    expect(read.warnings).not.toContain(AMAZON_ALIAS_PHOTOS)
+    const own = await saveAmazonMedia(await alias(), read.revision, { common: { MAIN: { assetId: 'product:detail', language: 'zxx' } }, items: {} })
+    expect(own.draft.common.MAIN?.assetId).toBe('product:detail')
+    expect(fixture.state.listings.find(l => l.id === 'summer-p').platformAttributes._amazonMediaWorkspace.draft.common.MAIN.assetId).toBe('product:detail')
+    expect((await createAmazonMediaReview(await alias(), own.revision, ['summer-blue'], 'editor')).status).toBe('REVIEW_QUEUED')
+  })
+  it('the tab follows the Main listing iff the alias ROOT row does (mixed ASINs on its rows)', async () => {
+    await saved()
+    const asin = (id: string, value: string) => { fixture.state.listings.find(l => l.id === id).externalListingId = value }
+    asin('summer-p', 'ASIN-OWN-root')
+    expect((await readAmazonMedia(await alias())).readOnly).toBeUndefined()
+    asin('summer-p', 'ASIN-p'); asin('summer-blue', 'ASIN-OWN-blue')
+    expect((await readAmazonMedia(await alias())).readOnly).toBe(AMAZON_ALIAS_PHOTOS)
+  })
+  it('NEGATIVE CONTROL: the main listing still saves its own draft', async () => {
+    const { w } = await saved()
+    expect(w.draft.common.MAIN).toEqual({ assetId: 'product:photo', language: 'zxx' })
+    expect(w.warnings).not.toContain(AMAZON_ALIAS_PHOTOS)
   })
 })
 describe('a market with no Amazon listing yet (product-sheet create path, step 5)', () => {

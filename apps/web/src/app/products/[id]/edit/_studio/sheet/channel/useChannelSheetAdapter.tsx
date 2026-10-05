@@ -37,7 +37,7 @@ import { buildCompareTargets } from '../compareTargets';
 import { sheetEmptyState } from '../sheetGridStates';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
-import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
+import { mediaListingName, useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { withSheetGroups } from '../sheetGroups';
 import { useHeaderPaste } from '../headerPaste';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
@@ -989,7 +989,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, 0);
     }, []);
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi, shopifyHistoryRefused);
-    const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
+    /* Owner 2026-10-05 — the pop-up names the row's listing as its band does (★ Main listing, ① ALT1). */
+    const mediaListingOf = useCallback((row: { aliasId?: string | null; aliasPosition?: number }) => mediaListingName(row.aliasPosition ?? 0, aliasLabelOf(row.aliasId ?? null), dataRef.current?.aliases.length ?? 1), [aliasLabelOf]);
+    const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale, mediaListingOf);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */

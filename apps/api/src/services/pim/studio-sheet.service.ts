@@ -65,7 +65,7 @@ import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-pro
 import { UnknownMarketError, VARIATION_THEME_KEY, issueFieldLabel, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
-import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
+import { AMAZON_ALIAS_PHOTOS, followsMainListingPhotos, mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
 import { legacyImageUrls, legacyPhotoItems } from '../images/listing-photos.pure.js'
 import { sheetMediaPlan } from '../images/media-plan.service.js'
 import { getStudioColumns } from './studio-columns.js'
@@ -287,6 +287,12 @@ export interface StudioRow {
    * Publish still sends that list, and a save in Product media moves it into Product media.
    */
   productMediaSource?: 'image-urls'
+  /**
+   * Owner 2026-10-05 — an Amazon alias row on its Main listing's product page (`followsMainListingPhotos`): the cell shows
+   * the Main listing's photos, read-only (`AMAZON_ALIAS_PHOTOS`) — Amazon keeps one photo set per product. Publish sends
+   * them from the alias only to a new row or while the Main listing is not live; otherwise none.
+   */
+  productMediaFollows?: 'main-listing'
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null
   familyId?: string | null
@@ -960,6 +966,9 @@ export type EbayPhotoSource = 'plan' | 'image-urls' | 'listing' | 'shared'
 
 /** Review 2026-10-05 (finding 9) — why a photo plan family's Image URLs cell takes no edit. */
 export const PHOTO_PLAN_IMAGE_URLS_REASON = 'This family uses the photo plan. Change its photos on the Media page.'
+/** Amazon's product photo roots (main, other, swatch, safety): the ASIN's, one set for every SKU of the product. An offer
+ *  image (`*_offer_image_locator*`) belongs to one seller SKU and is not one of them. */
+const AMAZON_PRODUCT_PHOTO_ROOT = /^(?!.*offer_image_locator).*image_locator/
 
 /**
  * Owner 2026-10-05 — the eBay Image URLs cell is the photo addresses of the list the Product media cell shows (what
@@ -1710,11 +1719,21 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       // Owner 2026-10-05 — the cell shows what Publish sends: an eBay listing with no Product media saved yet still sends
       // its old Image URLs list, so the cell shows that list (a library file by its id, any other photo by its address).
       const legacy = !mediaPlan && coordinate?.channel === 'EBAY' ? legacyImageUrls(listingRow?.platformAttributes) : undefined
+      // Owner 2026-10-05 — an Amazon alias row on its Main listing's product page (`followsMainListingPhotos`, the one rule)
+      // shows the Main listing's photos, read-only (one photo set per product): the cell is the Main listing's row of this
+      // product (built first: the Main listing is the first projection). An alias on its own ASIN keeps its own. On the photo
+      // plan the Amazon layer is the account's already (`sheetMediaPlan`).
+      const mainRow = !mediaPlan && followsMainListingPhotos({ channel: coordinate?.channel, aliasKey: projection.id, asin: listingRow?.externalListingId,
+        mainAsin: listingByRow.get(`${product.id}:`)?.externalListingId, aliasRootAsin: listingByRow.get(`${rootId}:${projection.id ?? ''}`)?.externalListingId,
+        mainRootAsin: listingByRow.get(`${rootId}:`)?.externalListingId }) ? rows.find(r => r.id === product.id && r.aliasId === null) : undefined
       if (mediaPlan) {
         const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
         productMedia = cell.items
         productMediaSet = cell.set
         photoSource = 'plan'
+      } else if (mainRow) {
+        productMedia = mainRow.productMedia
+        productMediaError = mainRow.productMediaError
       } else if (legacy) {
         photoSource = 'image-urls'
         // The same ids as the Product media editor (`legacyPhotoItems`), so a drag or a paste in the cell matches it: the
@@ -1742,6 +1761,11 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       if (coordinate?.channel === 'EBAY' && values.imageUrls && photoSource && !productMediaError) {
         values.imageUrls = ebayPhotoCell(values.imageUrls, photoSource === 'image-urls' ? legacy! : (productMedia ?? []).flatMap(item => item.type === 'IMAGE' && item.preview ? [item.preview] : []),
           photoSource, { hasAlias: projection.id !== null, rootId })
+      }
+      // The alias's Amazon photo columns likewise: the main listing's values, read-only, with the same reason.
+      if (mainRow && coordinate) for (const column of columns) {
+        if (!values[column.key] || !AMAZON_PRODUCT_PHOTO_ROOT.test(column.channels?.[coordinate.label]?.key ?? column.key)) continue
+        values[column.key] = { ...(mainRow.values[column.key] ?? values[column.key]), editable: false, writable: false, writeBlockedReason: AMAZON_ALIAS_PHOTOS }
       }
 
       const axisValues = axisValuesFromCells(variationBag(product as never), root.variationAxes ?? [], values)   // R-23 (Step 2.6c): the store first; it read the legacy bag only
@@ -1826,6 +1850,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         ...(productMediaError ? { productMediaError } : {}),
         ...(productMediaSet ? { productMediaSet } : {}),
         ...(photoSource === 'image-urls' ? { productMediaSource: 'image-urls' as const } : {}),
+        ...(mainRow ? { productMediaFollows: 'main-listing' as const } : {}),
         axisValues,
         aliasId: projection.id,
         values: { ...values, ...relationshipValues({ parentId: product.parentId, isParent }, product.parentId ? root.sku : null) },

@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CellAction, MediaStrip, type MediaStripItem } from '@/design-system/components'
+import { aliasMarkGlyph, aliasMarkName } from '@/design-system/primitives'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import type { ColDef, GridApi, ICellRendererParams } from '@/design-system/grid'
 import { mediaLocaleSchema, type ProductMediaQuery } from '@nexus/shared/product-media'
@@ -12,7 +13,7 @@ import { CHANNEL_LABEL, type MediaChannel, type MediaRead } from '../images/plan
 import { planAddress } from './planCellTransfer'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import styles from './media.module.css'
-import { mediaSourceNote, useMediaCellActions, type MediaCellActions, type MediaRow } from './useMediaCellActions'
+import { mediaReadOnlyReason, mediaSourceNote, useMediaCellActions, type MediaCellActions, type MediaRow } from './useMediaCellActions'
 
 export const PRODUCT_MEDIA_COLUMN = 'productMedia'
 const mediaColumn: SheetColumn = { key: PRODUCT_MEDIA_COLUMN, writeField: '', label: 'Product media', group: 'Media', groupKey: 'media', kind: 'text', storage: 'localizedContent', scope: 'global', requiredBy: [], editable: false, formulaWritable: false, width: 280, defaultVisible: true, helpText: 'Images, videos and media descriptions for the selected destination and language.' }
@@ -28,7 +29,18 @@ export function withProductMediaColumn<T extends SheetColumn>(columns: T[]): T[]
   return [...rest.slice(0, at), mediaColumn as T, ...rest.slice(at)]
 }
 
-export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string | null) {
+/**
+ * The listing a channel row's photos belong to, named as the sheet's listing band names it (DS AliasMark): "★ Main listing",
+ * "① ALT1" — the mark only when the account and market hold more than one listing of the product (`listings`, Owner
+ * 2026-09-05). `position` is the band's (0 = the main listing); an alias without a label reads "Listing alias 1".
+ */
+export function mediaListingName(position: number, label: string | null | undefined, listings: number): string {
+  const name = position === 0 ? aliasMarkName(0) : label?.trim() || aliasMarkName(position)
+  return listings > 1 ? `${aliasMarkGlyph(position)} ${name}` : name
+}
+
+/** `listingNameOf`: the row's listing as the channel sheet names it (`mediaListingName` with the alias's label). */
+export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string | null, listingNameOf?: (row: MediaRow) => string) {
   const scope = useStudioScope()
   const reporter = useSaveReporter()
   const [selected, setSelected] = useState<{ row: MediaRow; anchor: HTMLElement | null; api: GridApi | null } | null>(null)
@@ -60,7 +72,9 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   useEffect(() => () => { if (refreshTimer.current) window.clearTimeout(refreshTimer.current) }, [])
   const accountLabel = scope.accounts.find(account => account.id === scope.accountId)?.label
   const channelLabel = channel === 'MASTER' ? null : CHANNEL_LABEL[channel as MediaChannel] ?? channel
-  const contextLabel = channelLabel ? [`${channelLabel} ${context.market === 'GLOBAL' ? '' : context.market}`.trim(), accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Main listing'].filter(Boolean).join(' · ') : null
+  // Owner 2026-10-05 — the band's own name for the listing ("① ALT1"), never a count ("Listing 2" read as the second alias).
+  const listingName = selected ? listingNameOf?.(selected.row) ?? mediaListingName(selected.row.aliasPosition ?? 0, null, selected.row.aliasId ? 2 : 1) : aliasMarkName(0)
+  const contextLabel = channelLabel ? [`${channelLabel} ${context.market === 'GLOBAL' ? '' : context.market}`.trim(), accountLabel, listingName].filter(Boolean).join(' · ') : null
   const planTarget = selected?.row.productMediaSet ? planAddress(context) : null
   /** Enter in the plan pop-up: every row of this sheet's layer shows its new photos at once (all sizes of a colour). */
   const applyToCells = (next: MediaRead, base: PlanPopupBase): AppliedCells => {
@@ -122,7 +136,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
     : undefined
   const galleryElement = selected && !selected.row.productMediaSet
     ? <GalleryMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'}
-        context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
+        context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} readOnlyReason={mediaReadOnlyReason(selected.row) || undefined} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
         onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} familyId={familyRoot}
         imageUrlsNote={mediaSourceNote(selected.row) || undefined} />
     : null
@@ -147,7 +161,8 @@ function MediaEditorGateway(p: { data: MediaRow; eGridCell: HTMLElement; api: Gr
 
 export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor: HTMLElement | null, api?: GridApi | null) => void, actions?: MediaCellActions): ColDef<Row> {
   return { colId: PRODUCT_MEDIA_COLUMN, headerName: 'Product media', width: 280, minWidth: 170,
-    editable: p => !!p.data && !!actions?.canEdit() && !p.data.productMediaSaving && !p.data.productMediaError,
+    // An Amazon alias row shows the main listing's photos: Enter opens them read-only (`mediaReadOnlyReason`), never an editor.
+    editable: p => !!p.data && !!actions?.canEdit() && !p.data.productMediaSaving && !p.data.productMediaError && !mediaReadOnlyReason(p.data),
     sortable: false, filter: false, cellDataType: false,
     cellClass: 'nds-ag-cell nds-reveal-row',
     cellClassRules: { 'nds-cell-is-saving': p => !!p.data?.productMediaSaving, 'nds-cell-is-refused': p => !!p.data && !!actions?.error(p.data) },
@@ -161,15 +176,16 @@ export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor
     suppressKeyboardEvent: p => { if (p.data && ['Enter', 'F2', 'Delete', 'Backspace'].includes(p.event.key) && !p.event.ctrlKey && !p.event.metaKey && !p.event.altKey) { p.event.preventDefault(); p.event.stopPropagation(); open(p.data, p.event.target instanceof HTMLElement ? p.event.target.closest('[role="gridcell"]') : null, p.api as GridApi); return true } return false },
     cellRenderer: (p: ICellRendererParams<Row>) => {
       if (!p.data) return null
-      const row = p.data, label = row.sku || row.name || 'Product'
+      const row = p.data, label = row.sku || row.name || 'Product', locked = mediaReadOnlyReason(row), canEdit = !!actions?.canEdit() && !locked
       const refresh = () => { if (!p.api.isDestroyed()) p.api.refreshCells({ rowNodes: [p.node], columns: [PRODUCT_MEDIA_COLUMN], force: true }) }
       const focus = () => { if (p.node.rowIndex != null) { p.api.setFocusedCell(p.node.rowIndex, PRODUCT_MEDIA_COLUMN); p.api.clearCellSelection(); p.api.addCellRange({ rowStartIndex: p.node.rowIndex, rowEndIndex: p.node.rowIndex, columns: [PRODUCT_MEDIA_COLUMN] }) } }
       return <div className={styles.cell} aria-busy={row.productMediaSaving || undefined}>
         {row.productMediaError ? <span>Media needs attention</span> : row.productMedia ? <MediaStrip items={row.productMedia} label={label}
           limit={Math.max(1, Math.min(5, Math.floor(((p.column?.getActualWidth() ?? 280) - 80) / 36)))}
-          onReorder={actions?.canEdit() && !row.productMediaSaving && !row.productMediaSet ? ids => actions.reorder(row, ids, refresh) : undefined}
+          onReorder={canEdit && !row.productMediaSaving && !row.productMediaSet ? ids => actions!.reorder(row, ids, refresh) : undefined}
           onFocusCell={focus} onOpen={() => open(row, p.eGridCell, p.api as GridApi)} /> : <span>Manage media</span>}
-        <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : `${mediaSourceNote(row)} ${!actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.'
+        <CellAction label={`${canEdit ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : `${mediaSourceNote(row)} ${locked ? `${locked} Enter or F2 shows them.`
+          : !canEdit ? 'View images and videos. Media editing is unavailable with your current permissions.'
           : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.'}`.trim())} onFocusCell={focus} onActivate={anchor => open(row, anchor, p.api as GridApi)} />
       </div>
     },

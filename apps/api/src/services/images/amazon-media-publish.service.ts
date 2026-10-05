@@ -3,7 +3,8 @@ import { buildImagePatches, type AmazonMediaPlanItem, type AmazonMediaReceipt, t
 import prisma from '../../db.js'
 import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { amazonMediaClient, amazonMediaWriteRefusal } from './amazon-media-client.js'
-import { amazonMediaDestination, assertNoActiveMediaRun, desiredAmazonImages, mutateAmazonMedia, readAmazonMedia, refreshAmazonMedia } from './amazon-media-workspace.service.js'
+import { amazonMediaDestination, assertNoActiveMediaRun, assertOwnAmazonPhotos, desiredAmazonImages, mutateAmazonMedia, readAmazonMedia, refreshAmazonMedia } from './amazon-media-workspace.service.js'
+import { AMAZON_ALIAS_PUBLISH } from '@nexus/shared/product-media'
 import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 import { isOnMediaPlan } from './media-plan-switch.js'
 import { mediaLayoutFor } from './media-plan.service.js'
@@ -36,6 +37,8 @@ export async function readAmazonMediaRun(destination: WorkspaceDestination, id: 
 }
 export async function createAmazonMediaReview(destination: WorkspaceDestination, revision: string, listingIds: string[], actorId: string | null) {
   const current = await readAmazonMedia(destination)
+  // Owner 2026-10-05 — an alias on its Main listing's product page shows the Main listing's photos: they are published there.
+  if (current.readOnly) throw new WorkspaceScopeError(AMAZON_ALIAS_PUBLISH, 422)
   if (current.revision !== revision) throw new WorkspaceScopeError('The saved gallery changed. Reload before reviewing publication.')
   await assertNoActiveMediaRun(current)
   // A family on the media plan is reviewed only when its plan has no blocking problem — the reasons, not a partial send.
@@ -52,6 +55,7 @@ export async function createAmazonMediaReview(destination: WorkspaceDestination,
   return readAmazonMediaRun(destination, run.id)
 }
 export async function approveAmazonMediaRun(destination: WorkspaceDestination, id: string, revision: string) {
+  await assertOwnAmazonPhotos(destination, AMAZON_ALIAS_PUBLISH)
   const run = await readAmazonMediaRun(destination, id)
   if (run.status !== 'REVIEW' || run.revision !== revision || Date.now() - Date.parse(run.createdAt) > 15 * 60_000)
     throw new WorkspaceScopeError('This review expired or has already been submitted. Build a fresh review.')
