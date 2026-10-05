@@ -51,14 +51,18 @@ import { recordListingSyncOutcome } from "./listing-sync-outcome.js";
 import {
   buildReviseInventoryStatusXml,
   callTradingApi,
+  EBAY_INVENTORY_MANAGED_CODE,
   ebaySiteMarket,
+  isEbayInventoryManagedRefusal,
   reviseInventoryStatus as ebayReviseInventoryStatus,
   reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
   siteIdForMarket,
+  tradingErrorBlocks,
   type TradingCallContext,
   type TradingCallResult,
 } from "./ebay-trading-api.service.js";
+import { ebayTradingCodeClass } from './gateway/vocabulary.js'
 import { usesEbayInventory } from './pim/ebay-listing-model.js'
 import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
@@ -229,6 +233,37 @@ export function matchEbayEndedListingCode(message: string): string | null {
   }
   return null;
 }
+
+/**
+ * 2026-10-06 (Trading stock sync, review S2) — what eBay's refusal of a Trading listing's ReviseInventoryStatus means for
+ * its row, from eBay's own error blocks (`tradingErrorBlocks`: ErrorCode + ErrorClassification) read through the ONE
+ * Trading code table (`ebayTradingCodeClass`, the gateway's):
+ *   - 'signin'    — a token error (931 / 932 / 16110 / 17470 / 21917053): nothing helps until the account signs in again;
+ *   - 'transient' — eBay's own trouble: a code the table calls transient or rate-limited (10007 system error, 518 call
+ *     limit, …), or an answer whose every error block is classified SystemError;
+ *   - 'refused'   — anything else: eBay's refusal of this item or SKU.
+ * Before, every one of them was a terminal refusal: one expired token or one call-limit day dead-lettered every Trading
+ * stock row. An answer with no error blocks (a thrown failure that kept only its sentence) is read from `codes`.
+ */
+export function tradingRowRefusalKind(raw: string | null | undefined, codes: readonly string[]): "signin" | "transient" | "refused" {
+  const blocks = tradingErrorBlocks(String(raw ?? ""));
+  const classes = (blocks.length > 0 ? blocks.map((b) => b.code) : [...codes]).filter(Boolean).map((code) => ebayTradingCodeClass(code));
+  if (classes.some((c) => c === "auth_revoked" || c === "auth_expired")) return "signin";
+  if (classes.some((c) => c === "transient" || c === "rate_limited")) return "transient";
+  if (blocks.length > 0 && blocks.every((b) => b.classification.trim() === "SystemError")) return "transient";
+  return "refused";
+}
+
+/** 2026-10-06 — a shared listing membership of one SKU on one eBay item, as the Trading listing lane reads it. */
+type SharedMemberFacts = {
+  id: string;
+  marketplace: string;
+  productId: string | null;
+  followPool: boolean;
+  pinnedQuantity: number | null;
+  stockBuffer: number;
+  channelConnectionId: string | null;
+};
 
 // ── eBay payload helpers (Phase 0.1) ───────────────────────────────────────
 // On eBay, price lives on the OFFER and quantity on the inventory_item — two
@@ -561,6 +596,30 @@ export function completedSyncQueueData(result: Pick<SyncResult, 'status' | 'dryR
     errorMessage: skipped ? result.message || DELIST_OPERATOR_COPY.OUTBOUND_NOT_SENT : null,
     nextRetryAt: null,
   };
+}
+
+/**
+ * 2026-10-06 (Trading stock sync) — the skips that END a listing's wait (`recordListingSyncOutcome` 'skipped'): nothing
+ * will ever send the row, and what it carried is another lane's (an eBay Trading item's quantity its shared stock sends, a
+ * variant Excluded from the shared stock) or Publish's (a Trading listing's content; a family parent, which has no stock of
+ * its own). Every other skip records nothing on the listing, as before.
+ */
+export const LISTING_SETTLING_SKIP_CODES: ReadonlySet<string> = new Set([
+  "EBAY_SHARED_LISTING_OWNS_SKU",
+  "EBAY_SHARED_VARIANT_EXCLUDED",
+  "EBAY_TRADING_CONTENT_VIA_PUBLISH",
+  "EBAY_TRADING_PARENT_NO_STOCK",
+]);
+
+/** What a completed row tells its listing: a real send → 'sent'; a settling skip → 'skipped' with its reason; else nothing. */
+export function listingOutcomeOfCompletion(
+  completion: Pick<ReturnType<typeof completedSyncQueueData>, "syncStatus" | "errorCode" | "errorMessage">,
+): { outcome: "sent" } | { outcome: "skipped"; error: string } | null {
+  if (completion.syncStatus === "SUCCESS") return { outcome: "sent" };
+  if (completion.syncStatus === "SKIPPED" && completion.errorCode && LISTING_SETTLING_SKIP_CODES.has(completion.errorCode)) {
+    return { outcome: "skipped", error: `${completion.errorCode}: ${completion.errorMessage ?? "Nothing was sent."}` };
+  }
+  return null;
 }
 
 // ── E2 (D5) — the Etsy lane's one inventory write per listing ────────────
@@ -1068,7 +1127,9 @@ export class OutboundSyncService {
               data: completion,
             });
             // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
-            if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, outcome: 'sent' });
+            // 2026-10-06 — and a skip that ends its wait (`listingOutcomeOfCompletion`).
+            const settled = listingOutcomeOfCompletion(completion);
+            if (settled) await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, ...settled });
             startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
@@ -1153,7 +1214,9 @@ export class OutboundSyncService {
               data: completion,
             });
             // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
-            if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, outcome: 'sent' });
+            // 2026-10-06 — and a skip that ends its wait (`listingOutcomeOfCompletion`).
+            const settled = listingOutcomeOfCompletion(completion);
+            if (settled) await recordListingSyncOutcome(prisma, { channelListingId: item.channelListingId, productId: item.productId, ...settled });
             startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
@@ -1776,10 +1839,13 @@ export class OutboundSyncService {
     // never through the Inventory calls below. Every guard above has run (push lock, market, SKU, pause policy, pool
     // clamp, price bounds, publish mode, account, circuit, rate token).
     if (tradingItemId) {
-      return this.syncTradingListingRow({
-        queueItem, itemId: tradingItemId, sku, marketplaceId, productId: product?.id ?? null,
+      const traded = await this.syncTradingListingRow({
+        queueItem, itemId: tradingItemId, sku, marketplaceId, productId: product?.id ?? null, isParent: product?.isParent === true,
         connectionId: connection.id, mode, digest, t0,
       });
+      // null: eBay answered that its Inventory API holds this item (21919474). Nothing changed on eBay; the offer id is
+      // stored when eBay names this item's offer, and the row goes on to the Inventory calls below, as before this lane.
+      if (traded) return traded;
     }
 
     // 5. Dry-run short-circuit
@@ -2080,22 +2146,37 @@ export class OutboundSyncService {
   /**
    * 2026-10-06 (Trading stock sync) — the ItemID of this listing when eBay holds its item through the Trading API, else
    * null (the Inventory path). The ONE model rule (`usesEbayInventory`): an Inventory offer id (`__offerIds` / `offerId`)
-   * on this listing or on any listing of the same ItemID on the same account means Inventory; none means Trading. A
-   * listing with no ItemID (a draft, a row with no listing) is not decided here: it keeps the Inventory path.
+   * on this listing or on any listing of the same ItemID on the same account (or with no account recorded — a family whose
+   * rows mix the two is still one item) means Inventory; none means Trading first. Trading first is not a verdict: eBay's
+   * own "this is an Inventory item" (21919474) sends the row on to the Inventory path and stores the offer id
+   * (`learnEbayInventoryOffer`). A listing with no ItemID (a draft, a row with no listing) is not decided here: it keeps the
+   * Inventory path. The family read failing keeps it too — the path every row took before this lane existed.
    */
   private async ebayTradingItemOf(cl: { externalListingId?: string | null; channelConnectionId?: string | null; platformAttributes?: unknown } | null): Promise<string | null> {
     const itemId = cl?.externalListingId?.trim();
     if (!cl || !itemId || !/^\d+$/.test(itemId)) return null;
     if (usesEbayInventory({ listings: [{ platformAttributes: cl.platformAttributes }] })) return null;
-    const family = await prisma.channelListing.findMany({
-      where: { channel: "EBAY", externalListingId: itemId, channelConnectionId: cl.channelConnectionId ?? null },
-      select: { platformAttributes: true },
-    });
-    return usesEbayInventory({ listings: family }) ? null : itemId;
+    try {
+      const family = await prisma.channelListing.findMany({
+        where: {
+          channel: "EBAY", externalListingId: itemId,
+          ...(cl.channelConnectionId ? { OR: [{ channelConnectionId: cl.channelConnectionId }, { channelConnectionId: null }] } : {}),
+        },
+        select: { platformAttributes: true },
+      });
+      return usesEbayInventory({ listings: family }) ? null : itemId;
+    } catch (err) {
+      logger.warn("syncToEbay: the item's family could not be read — the Inventory path, as before", {
+        itemId, error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   /**
-   * 2026-10-06 (Trading stock sync) — one quantity/price row of a listing whose eBay item is a Trading item.
+   * 2026-10-06 (Trading stock sync) — one quantity/price row of a listing whose eBay item is (as far as Nexus knows) a
+   * Trading item. Returns the row's result, or null when eBay answered that the Inventory API holds the item (21919474):
+   * nothing changed on eBay, and the caller goes on to the Inventory calls for this same row.
    *
    * Reached from `syncToEbay` step 4b, after every guard of the Inventory path has run: push lock, market and SKU
    * (`listingSendSku`), pause policy, the dispatch quantity and its routed pool ceiling, price bounds, publish mode, the
@@ -2104,12 +2185,19 @@ export class OutboundSyncService {
    * aliases (one ItemID each, the same SKUs) are each revised on their own row. No ItemID debounce: every variant of an
    * item has its own row, and deferring one would leave its stock behind.
    *
-   * Not sent: content (title, description, photos, aspects) — a Trading listing's content goes through Publish, as for a
-   * linked Shopify product (D2); a SKU an ACTIVE shared listing membership holds on this item — the shared fan-out
-   * (`syncSharedTradingQuantity`) revises it, and two senders would revise it twice. Dry-run and sandbox are dry runs (as
-   * the shared lane: `callTradingApi` has its own switch and would answer a fake success); a `DRYRUN-` answer is one too.
-   * eBay's Ack decides: Success or Warning is sent; PartialFailure / Failure is eBay's refusal (terminal, the marketplace
-   * circuit untouched), an ended item is EBAY_LISTING_ENDED; no answer is transient (retried, counts toward the circuit).
+   * Not sent from here:
+   *   - a family parent's row (no stock or price of its own on a variation item; its variations' rows carry theirs);
+   *   - content (title, description, photos, aspects): a Trading listing's content goes through Publish, as for a linked
+   *     Shopify product (D2) — a row that also carries a quantity or a price sends those and says the content waits;
+   *   - the QUANTITY of a SKU an active shared listing membership holds on this item, when the shared fan-out really sends
+   *     it (`sharedLaneQuantityHold`, the fan-out's own selection) or the variant is Excluded from the shared stock. The
+   *     price is always sent. An explicit push (Matrix / MCP "Push now") is sent whatever the membership, and every quantity
+   *     this lane sends stamps the membership (lastQtyPushed / lastPushedAt), so the two lanes agree on what eBay holds.
+   * Dry-run and sandbox are dry runs (as the shared lane: `callTradingApi` has its own switch and would answer a fake
+   * success); a `DRYRUN-` answer is one too. eBay's Ack decides: Success or Warning is sent; 21919474 → the Inventory path
+   * (above); an ended item is EBAY_LISTING_ENDED; a sign-in error waits for the account (AUTH_REQUIRED); a system error or
+   * the call limit is transient (retried, counts toward the circuit); any other refusal is terminal (EBAY_VALIDATION, the
+   * marketplace circuit untouched); no answer is transient.
    */
   private async syncTradingListingRow(args: {
     queueItem: any;
@@ -2117,12 +2205,13 @@ export class OutboundSyncService {
     sku: string;
     marketplaceId: string;
     productId: string | null;
+    isParent: boolean;
     connectionId: string;
     mode: "gated" | "dry-run" | "sandbox" | "live";
     digest: string;
     t0: number;
-  }): Promise<SyncResult> {
-    const { queueItem, itemId, sku, marketplaceId, productId, connectionId, mode, digest, t0 } = args;
+  }): Promise<SyncResult | null> {
+    const { queueItem, itemId, sku, marketplaceId, productId, isParent, connectionId, mode, digest, t0 } = args;
     const queueId = queueItem.id;
     const payload = queueItem.payload ?? {};
     const log = (outcome: "success" | "failed" | "timeout" | "gated", logMode: "dry-run" | "sandbox" | "live", errorMessage?: string) =>
@@ -2134,29 +2223,34 @@ export class OutboundSyncService {
     const skip = (message: string, errorCode: string): SyncResult => ({
       success: true, queueId, channel: "EBAY", status: "SKIPPED", message, error: message, errorCode, retryable: false,
     });
-    // Refused before anything was sent: terminal, the circuit untouched.
+    // Refused before anything was sent: the circuit untouched.
     const refuse = (message: string, errorCode: string, retryable = false): SyncResult => ({
       success: false, queueId, channel: "EBAY", status: "FAILED", message, error: message, errorCode, retryable,
     });
 
-    // a. Content goes through Publish (D2, as for a linked Shopify product).
-    const contentTouched = !!payload.mappingAspects || !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
-    if (contentTouched) {
-      return skip("Content for an eBay Trading listing goes through Publish; nothing was sent.", "EBAY_TRADING_CONTENT_VIA_PUBLISH");
+    // a. A family parent: on a variation item the parent SKU has no stock or price of its own (eBay refuses it).
+    if (isParent) {
+      return skip(`${sku} is the parent of a variation family on eBay item ${itemId}: it has no stock or price of its own there, and each variation's row sends its own. Nothing was sent.`, "EBAY_TRADING_PARENT_NO_STOCK");
     }
-    const quantity = payload.quantity === undefined || payload.quantity === null ? undefined : Math.max(0, Math.trunc(Number(payload.quantity)));
+
+    // b. What the row carries. Content goes through Publish (D2, as for a linked Shopify product).
+    const contentTouched = !!payload.mappingAspects || !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
+    let quantity = payload.quantity === undefined || payload.quantity === null ? undefined : Math.max(0, Math.trunc(Number(payload.quantity)));
     const price = payload.price === undefined || payload.price === null ? undefined : Number(payload.price);
+    if (quantity === undefined && price === undefined) {
+      return contentTouched
+        ? skip("Content for an eBay Trading listing goes through Publish; nothing was sent.", "EBAY_TRADING_CONTENT_VIA_PUBLISH")
+        : skip("This eBay row carries no quantity and no price, so nothing was sent.", "OUTBOUND_NOT_SENT");
+    }
     if (quantity !== undefined && !Number.isFinite(quantity)) {
       return refuse(`The quantity of this eBay row is not a number (${payload.quantity}), so nothing was sent.`, "EBAY_VALIDATION");
-    }
-    if (quantity === undefined && price === undefined) {
-      return skip("This eBay row carries no quantity and no price, so nothing was sent.", "OUTBOUND_NOT_SENT");
     }
     if (price !== undefined && !(Number.isFinite(price) && price > 0)) {
       return refuse(`The price of this eBay row is not a positive number (${payload.price}), so nothing was sent.`, "EBAY_VALIDATION");
     }
+    const contentNote = contentTouched ? " Its content (title, description, photos, aspects) goes through Publish and was not sent." : "";
 
-    // b. The market's eBay site, and the price's currency (the market's own; an unconfigured market is refused).
+    // c. The market's eBay site, and the price's currency (the market's own; an unconfigured market is refused).
     const marketCode = marketplaceId.replace(/^EBAY_/, "");
     let siteId: string;
     try {
@@ -2173,16 +2267,34 @@ export class OutboundSyncService {
       }
     }
 
-    // c. A SKU an active shared listing holds on this item is the shared fan-out's to revise.
-    const member = await prisma.sharedListingMembership.findFirst({
-      where: { marketplace: { in: [...new Set([marketCode, ebaySiteMarket(marketCode)])] }, itemId, sku, status: "ACTIVE" },
-      select: { id: true },
-    });
-    if (member) {
-      return skip(`eBay item ${itemId} is a shared listing: its shared stock sends ${sku}. Nothing was sent from this row.`, "EBAY_SHARED_LISTING_OWNS_SKU");
+    // d. The quantity of a SKU an active shared listing holds on this item (review B1, S1, S3). The price is always sent.
+    const explicitPush = payload.source === "MATRIX_PUSH_NOW";
+    let members: SharedMemberFacts[] = [];
+    let quantityNote = "";
+    if (quantity !== undefined) {
+      try {
+        members = await prisma.sharedListingMembership.findMany({
+          where: { marketplace: { in: [...new Set([marketCode, ebaySiteMarket(marketCode)])] }, itemId, sku, status: "ACTIVE" },
+          select: { id: true, marketplace: true, productId: true, followPool: true, pinnedQuantity: true, stockBuffer: true, channelConnectionId: true },
+        });
+      } catch (err) {
+        // The database, not eBay: nothing sent, no circuit outcome, retried.
+        return refuse(`The shared listing of ${sku} on eBay item ${itemId} could not be read (${err instanceof Error ? err.message : String(err)}), so nothing was sent.`, "EBAY_TRANSIENT", true);
+      }
+      if (members.length > 0 && !explicitPush) {
+        const hold = await this.sharedLaneQuantityHold(members, { productId, connectionId, itemId, sku });
+        if (hold.kind === "unread") {
+          return refuse(`The shared stock of ${sku} on eBay item ${itemId} could not be read (${hold.error}), so nothing was sent.`, "EBAY_TRANSIENT", true);
+        }
+        if (hold.kind === "held") {
+          if (price === undefined) return skip(`${hold.sentence} Nothing was sent from this row.${contentNote}`, hold.code);
+          quantity = undefined;
+          quantityNote = ` ${hold.sentence}`;
+        }
+      }
     }
 
-    // d. Dry-run and sandbox: nothing is sent (see the doc comment).
+    // e. Dry-run and sandbox: nothing is sent (see the doc comment).
     const dryRun = (logMode: "dry-run" | "sandbox"): SyncResult => {
       recordEbayOutcome(connectionId, marketplaceId, true);
       log("success", logMode);
@@ -2193,7 +2305,7 @@ export class OutboundSyncService {
     };
     if (mode === "dry-run" || mode === "sandbox") return dryRun(mode);
 
-    // e. Auth (after the dry-run, as in the Inventory path: the token read has a side effect).
+    // f. Auth (after the dry-run, as in the Inventory path: the token read has a side effect).
     let token: string;
     try {
       token = await ebayAuthService.getValidToken(connectionId);
@@ -2204,17 +2316,34 @@ export class OutboundSyncService {
       return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay", error: message };
     }
 
-    // f. The call.
+    // g. The call, and what eBay's refusal means for this row.
     const xml = buildReviseInventoryStatusXml({ itemId, sku, ...(quantity !== undefined ? { quantity } : {}), ...(price !== undefined ? { price, currency } : {}) });
     const ended = (message: string): SyncResult => {
       // A dead item: per-listing and terminal; never a circuit outcome (the 2026-07-19 lane freeze).
       log("failed", "live", message);
       return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay listing ended — nothing more is sent to it", error: message, errorCode: "EBAY_LISTING_ENDED", retryable: false };
     };
-    const refused = (message: string): SyncResult => {
-      // eBay's own refusal of this item or SKU: terminal, and it says nothing about the marketplace.
+    const refusedByEbay = async (message: string, codes: string[], raw: string | undefined): Promise<SyncResult | null> => {
+      if (matchEbayEndedListingCode(message)) return ended(message);
+      if (isEbayInventoryManagedRefusal(codes, message)) {
+        // eBay holds this item in the Inventory API: nothing changed there, no circuit outcome and no failure logged. The
+        // offer id is learned and stored, and the row goes on to the Inventory calls (the caller).
+        await this.learnEbayInventoryOffer({ connectionId, token, mode, sku, marketplaceId, itemId, listingId: queueItem.channelListingId ?? null });
+        return null;
+      }
       log("failed", "live", message);
-      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay refused the change", error: message, errorCode: "EBAY_VALIDATION", retryable: false };
+      switch (tradingRowRefusalKind(raw, codes)) {
+        case "signin":
+          // The account's token (931 / 932 / 16110 / 17470 …): no retry helps until it signs in again — the auth hold.
+          return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay asks for the account to sign in again", error: message, errorCode: "AUTH_REQUIRED", retryable: true };
+        case "transient":
+          // eBay's own system error or the call limit (SystemError, 10007, 518): retried, and it counts toward the circuit.
+          recordEbayOutcome(connectionId, marketplaceId, false);
+          return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay (Trading)", error: message, errorCode: "EBAY_TRANSIENT", retryable: true };
+        default:
+          // eBay's own refusal of this item or SKU: terminal, and it says nothing about the marketplace.
+          return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "eBay refused the change", error: message, errorCode: "EBAY_VALIDATION", retryable: false };
+      }
     };
     let answer: TradingCallResult;
     try {
@@ -2224,8 +2353,12 @@ export class OutboundSyncService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const name = (err as { name?: string } | null)?.name;
+      if (name === "TradingApiFailure") {
+        const failure = err as { channelErrors?: Array<{ code: string }>; raw?: string };
+        const codes = (failure.channelErrors ?? []).map((e) => String(e.code));
+        return refusedByEbay(message, codes.length ? codes : [...message.matchAll(/\(code (\d+)\)/g)].map((m) => m[1]), failure.raw);
+      }
       if (matchEbayEndedListingCode(message)) return ended(message);
-      if (name === "TradingApiFailure") return refused(message);
       if (name === "EbayWriteRefusedError") {
         log("gated", "live", message);
         return refuse(message, "EBAY_WRITE_REFUSED");
@@ -2244,29 +2377,132 @@ export class OutboundSyncService {
     }
     if (answer.itemId?.startsWith("DRYRUN-")) return dryRun("dry-run");
     if (answer.ack !== "Success" && answer.ack !== "Warning") {
-      const codes = [...(answer.raw ?? "").matchAll(/<ErrorCode>([^<]+)<\/ErrorCode>/g)].map((m) => m[1]);
+      const codes = [...(answer.raw ?? "").matchAll(/<ErrorCode>([^<]+)<\/ErrorCode>/g)].map((m) => m[1].trim());
       const message = `eBay ReviseInventoryStatus ${answer.ack}: ${answer.errors.slice(0, 2).join(" | ") || "no message"}${codes.length ? ` (code ${codes[0]})` : ""}`;
+      if (answer.ack === "PartialFailure" || answer.ack === "Failure") return refusedByEbay(message, codes, answer.raw);
       if (matchEbayEndedListingCode(message)) return ended(message);
-      if (answer.ack === "PartialFailure" || answer.ack === "Failure") return refused(message);
       // An answer with no readable Ack: unknown, retried like a lost answer.
       recordEbayOutcome(connectionId, marketplaceId, false);
       log("failed", "live", message);
       return { success: false, queueId, channel: "EBAY", status: "FAILED", message: "Failed to sync to eBay (Trading)", error: message, errorCode: "EBAY_TRANSIENT", retryable: true };
     }
 
-    // g. Sent. Each CALL counts toward eBay's ~250 revises per item per day.
+    // h. Sent. Each CALL counts toward eBay's ~250 revises per item per day.
     const dayCount = countEbayReviseCall(itemId);
     if (dayCount === EBAY_REVISE_DAILY_WARN) {
       logger.warn("syncTradingListingRow: item nearing eBay's ~250 revises/day cap", { itemId, marketplaceId, revisesToday: dayCount });
     }
     recordEbayOutcome(connectionId, marketplaceId, true);
     log("success", "live");
+    if (quantity !== undefined && members.length > 0) {
+      // eBay holds this quantity now: the shared lane's stamp says so too (its no-op check and its revise debounce read it).
+      await prisma.sharedListingMembership.updateMany({
+        where: { id: { in: members.map((mem) => mem.id) } },
+        data: { lastQtyPushed: quantity, lastPushedAt: new Date(), lastError: null },
+      }).catch((err: unknown) => logger.warn("syncTradingListingRow: the shared listing stamp was not written", {
+        itemId, sku, error: err instanceof Error ? err.message : String(err),
+      }));
+    }
     const sent = [quantity !== undefined ? `quantity ${quantity}` : null, price !== undefined ? `price ${price.toFixed(2)} ${currency}` : null].filter(Boolean).join(", ");
     const warning = answer.ack === "Warning" && answer.errors.length ? ` eBay warned: ${answer.errors.slice(0, 2).join(" | ")}` : "";
     return {
       success: true, queueId, channel: "EBAY", status: "SUCCESS",
-      message: `Product ${sku} synced to eBay item ${itemId} (ReviseInventoryStatus: ${sent}).${warning}`,
+      message: `Product ${sku} synced to eBay item ${itemId} (ReviseInventoryStatus: ${sent}).${quantityNote}${contentNote}${warning}`,
     };
+  }
+
+  /**
+   * 2026-10-06 (Trading stock sync, review B1/S1) — whether this row leaves its QUANTITY to the shared stock. The shared
+   * fan-out (`enqueueSharedTradingFanout`) sends a membership only when it is ACTIVE, its product is the changed product,
+   * and `resolveMembershipIntended` says FOLLOW or a fixed number (PINNED) — the same call with the same inputs here, the
+   * ledger and the channel policy as its dispatcher reads them (`syncSharedTradingQuantity`). Such a quantity is the fan-out's
+   * ('held', EBAY_SHARED_LISTING_OWNS_SKU). A variant the operator Excluded from the shared stock (followPool off, or its
+   * channel-market paused) gets no quantity from either lane ('held', EBAY_SHARED_VARIANT_EXCLUDED). Any other membership
+   * — another product's or none, or a follow with no counted stock — is never sent by the fan-out, so this row sends it.
+   */
+  private async sharedLaneQuantityHold(
+    members: SharedMemberFacts[],
+    ctx: { productId: string | null; connectionId: string; itemId: string; sku: string },
+  ): Promise<{ kind: "send" } | { kind: "held"; code: string; sentence: string } | { kind: "unread"; error: string }> {
+    const own = members.filter((mem) => !!ctx.productId && mem.productId === ctx.productId);
+    if (own.length === 0) return { kind: "send" };
+    try {
+      const productLedger = (await loadSyncLedgers(prisma, [ctx.productId as string])).get(ctx.productId as string);
+      const ledger = ledgerInputs(productLedger).ledger;
+      const policies = await loadChannelPolicies();
+      const kinds = own.map((mem) => resolveMembershipIntended({
+        marketplace: mem.marketplace,
+        followPool: mem.followPool ?? true,
+        pinnedQuantity: mem.pinnedQuantity ?? null,
+        stockBuffer: mem.stockBuffer ?? 0,
+        channelPolicy: policyFor(policies, "EBAY", mem.marketplace, mem.channelConnectionId ?? ctx.connectionId),
+        ledger,
+        uncountedIsZero: productLedger?.uncountedIsZero ?? false,
+      }));
+      if (kinds.some((k) => k.kind === "FOLLOW" || (k.kind === "PINNED" && k.quantity != null))) {
+        return { kind: "held", code: "EBAY_SHARED_LISTING_OWNS_SKU", sentence: `eBay item ${ctx.itemId} is a shared listing: its shared stock sends the quantity of ${ctx.sku}.` };
+      }
+      if (kinds.some((k) => k.kind === "PAUSED")) {
+        return { kind: "held", code: "EBAY_SHARED_VARIANT_EXCLUDED", sentence: `${ctx.sku} on eBay item ${ctx.itemId} is excluded from the shared stock, so its quantity is not sent (Push now still sends it).` };
+      }
+      return { kind: "send" };
+    } catch (err) {
+      return { kind: "unread", error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * 2026-10-06 (Trading stock sync) — eBay answered that the Inventory API holds this item (21919474): learn its offer and
+   * store it. `GET offer?sku=&marketplace_id=` (as the Inventory quantity path reads it), keeping only the fixed-price offer
+   * whose listing IS this ItemID — an offer of another item with the same SKU (an alias's main) is not this item's. Found →
+   * merged into THIS listing's `__offerIds` (every other key kept; by listing id, version-guarded), so the next row of the
+   * item resolves Inventory by the one rule (`usesEbayInventory`) without a Trading call. Not found → nothing stored; the
+   * row still goes on to the Inventory path (eBay said Inventory). The refusal `callTradingApi` filed on the listing was
+   * Nexus's routing, not the listing's: it is closed. Every step is best effort: none of it fails the row.
+   */
+  private async learnEbayInventoryOffer(args: {
+    connectionId: string; token: string; mode: "gated" | "dry-run" | "sandbox" | "live"; sku: string; marketplaceId: string; itemId: string; listingId: string | null;
+  }): Promise<void> {
+    const { connectionId, token, mode, sku, marketplaceId, itemId, listingId } = args;
+    if (listingId) {
+      await prisma.listingIssue.updateMany({
+        where: { listingId, source: "ebay-write", code: EBAY_INVENTORY_MANAGED_CODE, resolvedAt: null },
+        data: { resolvedAt: new Date() },
+      }).catch(() => undefined);
+    }
+    let offerId: string | null = null;
+    try {
+      const res = await ebaySend(connectionId,
+        `${getEbayApiBaseForMode(mode)}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
+        { headers: await ebayInventoryHeaders(token, marketplaceId) },
+      );
+      if (res.ok) {
+        const offers = ((await res.json().catch(() => ({}))) as { offers?: unknown }).offers;
+        const ofThisItem = (Array.isArray(offers) ? offers : []).filter((o) => String((o as { listing?: { listingId?: unknown } } | null)?.listing?.listingId ?? "") === itemId);
+        offerId = ebayFixedPriceOfferOf(ofThisItem, marketplaceId)?.offerId ?? null;
+      }
+    } catch (err) {
+      logger.warn("syncToEbay: the Inventory offer of an Inventory item could not be read", { itemId, sku, marketplaceId, error: err instanceof Error ? err.message : String(err) });
+    }
+    if (!offerId || !listingId) {
+      logger.warn("syncToEbay: eBay holds this item in the Inventory API but names no offer of it for this SKU — nothing stored", { itemId, sku, marketplaceId });
+      return;
+    }
+    try {
+      const row = await prisma.channelListing.findUnique({ where: { id: listingId }, select: { version: true, platformAttributes: true } });
+      if (!row) return;
+      const attributes = row.platformAttributes && typeof row.platformAttributes === "object" && !Array.isArray(row.platformAttributes)
+        ? (row.platformAttributes as Record<string, unknown>) : {};
+      const stored = attributes.__offerIds && typeof attributes.__offerIds === "object" && !Array.isArray(attributes.__offerIds)
+        ? (attributes.__offerIds as Record<string, unknown>) : {};
+      if (stored[marketplaceId] === offerId) return;
+      await prisma.channelListing.updateMany({
+        where: { id: listingId, version: row.version },
+        data: { version: { increment: 1 }, platformAttributes: { ...attributes, __offerIds: { ...stored, [marketplaceId]: String(offerId) } } as never },
+      });
+    } catch (err) {
+      logger.warn("syncToEbay: the Inventory offer id was not stored", { itemId, listingId, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   /**
