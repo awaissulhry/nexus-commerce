@@ -114,7 +114,7 @@ describe('LX.8 addressed writes, real disposable PostgreSQL, no provider', () =>
  it('the actual bulk entry point uses the sheet label and routes German text through the same writer', async () => {
   const scope = { marketplace: 'DE', locale: 'de' }
   const missing = await applyProductBulkEdits({ changes:[{id:'lx-child',field:'name',value:'Missing'}],marketplaceContexts:[scope as any] },context)
-  expect(missing.updated).toBe(0);expect(missing.errors[0].error).toBe('Name needs a ContentAddress before it can be saved.')
+  expect(missing.updated).toBe(0);expect(missing.errors[0].error).toBe('Title needs a ContentAddress before it can be saved.')
   const before=await read()
   const saved=await applyProductBulkEdits({changes:[{id:'lx-child',field:'name',value:'Bulk German',contentAddress:shared}],expectedVersion:before.product.version,marketplaceContexts:[scope as any]},context)
   expect(saved.errors).toEqual([]);expect((await read()).product.translations.find(t=>t.language==='de')).toMatchObject({name:'Bulk German',version:expect.any(Number)})
