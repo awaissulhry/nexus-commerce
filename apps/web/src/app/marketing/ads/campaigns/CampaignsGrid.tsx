@@ -26,6 +26,7 @@ import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
+import { changedPlacementLanes } from '../_shared/placementLanes'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
 
@@ -1223,15 +1224,11 @@ export function CampaignsGrid() {
         if (ch.acos != null) { const frac = ch.acos / 100; body.targetAcos = frac; opt.targetAcos = frac }
         calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
       }
-      // 3) bid multiplier — placement bidding (merge chosen placement with current)
+      // 3) bid multiplier — placement bidding. CM-18: only the chosen placement is sent (`partial`); the server keeps
+      // the other two as they are now, not as this list's copy had them.
       if (ch.multiplier) {
         const cur = c.placements ?? { tos: null, pdp: null, ros: null }
-        const entries: Array<{ placement: string; percentage: number }> = []
-        for (const [k, v] of [['TOS', cur.tos], ['PP', cur.pdp], ['ROS', cur.ros]] as Array<['TOS' | 'PP' | 'ROS', number | null]>) {
-          const p = ch.multiplier.placement === k ? ch.multiplier.value : (v ?? 0)
-          if (p > 0) entries.push({ placement: AMZ_PLACEMENT[k], percentage: p })
-        }
-        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: entries }))
+        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }], partial: true }))
         const npl = { tos: cur.tos, pdp: cur.pdp, ros: cur.ros }
         const slot = ch.multiplier.placement === 'TOS' ? 'tos' : ch.multiplier.placement === 'PP' ? 'pdp' : 'ros'
         npl[slot] = ch.multiplier.value
@@ -1325,9 +1322,10 @@ export function CampaignsGrid() {
   }
   const setCampaignPlacements = async (c: Camp, pl: { tos: number | null; pdp: number | null; ros: number | null }) => {
     setMultiplierModal(null)
-    const adjustments: Array<{ placement: string; percentage: number }> = []
-    for (const [k, v] of [['TOS', pl.tos], ['PP', pl.pdp], ['ROS', pl.ros]] as Array<['TOS' | 'PP' | 'ROS', number | null]>) { if (v && v > 0) adjustments.push({ placement: AMZ_PLACEMENT[k], percentage: v }) }
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments })
+    // CM-18 — only the lanes changed in the dialog; a lane left alone is not re-sent from this row's copy.
+    const adjustments = changedPlacementLanes(c.placements ?? {}, pl)
+    if (adjustments.length === 0) { toast(`Bid multiplier unchanged · ${c.name}`); return }
+    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments, partial: true })
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, placements: pl } : x)))
     toast(ok ? `Bid multiplier updated · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
