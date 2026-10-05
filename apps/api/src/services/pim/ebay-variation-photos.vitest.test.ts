@@ -41,30 +41,39 @@ describe('ebayVariationPhotoSets', () => {
     const result = ebayVariationPhotoSets({ names: ['Colore'], order: { Colore: ['Nero', 'Rosso'] }, gallery,
       rows: [row('R', 'Rosso', [url('red'), url('main-1')]), row('N', 'Nero', [url('black')])] })
     expect(result.sets).toEqual({ axisName: 'Colore', order: ['Nero', 'Rosso'], byValue: { Nero: [url('black')], Rosso: [url('red'), url('main-1')] } })
-    expect(result.problems).toEqual([])
+    expect(result.notes).toEqual([])
   })
 
-  it('sends nothing when no row holds photos of its own, or a row\'s photos are the main gallery', () => {
-    expect(ebayVariationPhotoSets({ names: ['Colore'], gallery, rows: [row('R', 'Rosso', gallery, false)] })).toEqual({ problems: [] })
-    expect(ebayVariationPhotoSets({ names: ['Colore'], gallery, rows: [row('R', 'Rosso', gallery)] })).toEqual({ problems: [] })
+  it('sends nothing when every row shows the main gallery', () => {
+    expect(ebayVariationPhotoSets({ names: ['Colore'], gallery, rows: [row('R', 'Rosso', gallery, false), row('N', 'Nero', gallery)] })).toEqual({ notes: [] })
   })
 
-  it('picks the variation name under which every value\'s rows hold the same photos', () => {
-    const result = ebayVariationPhotoSets({ names: ['Taglia', 'Colore'], gallery,
-      rows: [row('RM', 'Rosso', [url('red')], true, 'M'), row('RL', 'Rosso', [url('red')], true, 'L'), row('NM', 'Nero', [url('black')], true, 'M')] })
-    expect(result.sets?.axisName).toBe('Colore')
-    expect(result.sets?.byValue).toEqual({ Rosso: [url('red')], Nero: [url('black')] })
+  it('a row without photos of its own counts as the main gallery: another value\'s photos never reach its buyers', () => {
+    // Review 2026-10-05: Rosso-S/M own [red], Nero-S/M follow the gallery. Sizes disagree, so the sets go by colour.
+    const result = ebayVariationPhotoSets({ names: ['Taglia', 'Colore'], gallery, rows: [row('RS', 'Rosso', [url('red')], true, 'S'), row('RM', 'Rosso', [url('red')], true, 'M'),
+      row('NS', 'Nero', [], false, 'S'), row('NM', 'Nero', [], false, 'M')] })
+    expect(result.sets).toEqual({ axisName: 'Colore', order: ['Rosso'], byValue: { Rosso: [url('red')] } })
   })
 
-  it('sends nothing, with a note, when rows of one value hold different photos under every name', () => {
+  it('uses the photo axis the person chose, in any language', () => {
+    const rows = [row('RS', 'Rosso', [url('red')], true, 'S'), row('RM', 'Rosso', [url('red')], true, 'M')]
+    expect(ebayVariationPhotoSets({ names: ['Taglia', 'Colore'], gallery, rows, chosen: 'color' }).sets?.axisName).toBe('Colore')
+    // The chosen axis does not fit: nothing is sent, and the note names it.
+    const result = ebayVariationPhotoSets({ names: ['Taglia', 'Colore'], gallery, rows: [row('RS', 'Rosso', [url('red')], true, 'S'), row('NS', 'Nero', [url('black')], true, 'S')], chosen: 'Taglia' })
+    expect(result.sets).toBeUndefined()
+    expect(result.notes[0]).toMatch(/same Taglia show different photos/)
+  })
+
+  it('sends nothing, with a note, when rows of one value show different photos under every name', () => {
     const result = ebayVariationPhotoSets({ names: ['Colore'], gallery, rows: [row('R1', 'Rosso', [url('red')]), row('R2', 'Rosso', [url('other')])] })
     expect(result.sets).toBeUndefined()
-    expect(result.note).toMatch(/not sent/)
+    expect(result.notes[0]).toMatch(/not sent/)
   })
 
-  it('names a value with more than 12 photos', () => {
+  it('sends the first 12 photos of a value with more, and says so — a publish is never stopped', () => {
     const many = Array.from({ length: 13 }, (_, i) => url(`red-${i}`))
     const result = ebayVariationPhotoSets({ names: ['Colore'], gallery, rows: [row('R', 'Rosso', many)] })
-    expect(result.problems).toEqual(['The Rosso photos: eBay takes at most 12 per variation; this one has 13. Remove some in Product media.'])
+    expect(result.sets?.byValue.Rosso).toEqual(many.slice(0, 12))
+    expect(result.notes).toEqual(['The Rosso photos: eBay shows at most 12 per variation; the first 12 of 13 are sent.'])
   })
 })

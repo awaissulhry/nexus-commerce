@@ -1,5 +1,6 @@
 import { mediaObject, readMediaCollection } from '@nexus/shared/product-media'
 import { legacyImageUrls } from '../images/listing-photos.pure.js'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
 
 export { legacyImageUrls }
 
@@ -25,29 +26,34 @@ export const EBAY_PHOTOS_PER_VALUE = 12
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((url, i) => url === b[i])
 
 /**
- * The photo sets eBay shows per variation value. eBay groups photos by ONE variation name, so the sets use the first
- * name (in the listing's order) under which every value's rows hold the same photos. A row whose photos are the main
- * gallery adds nothing. When no name fits, nothing is sent and `note` says why (eBay keeps showing the main gallery).
+ * The photo sets eBay shows per variation value. eBay groups photos by ONE variation name: the one the person chose for
+ * this listing (`_imageAxis`, else the product's choice — readImageAxisPreference's order), else the first name (in the
+ * listing's order) under which every value's rows show the same photos. A row without photos of its own shows the main
+ * gallery and counts as it (review 2026-10-05: dropping those rows let another value's photos reach their buyers). A
+ * value that shows the main gallery gets no set. eBay shows 12 photos per value: the first 12 are sent, and a note says so
+ * — it never stops a publish. When no name fits, nothing is sent and a note says why (eBay keeps the main gallery).
  */
-export function ebayVariationPhotoSets(input: { names: string[]; order?: Record<string, string[]>; gallery: string[]; rows: VariationPhotoRow[] }):
-  { sets?: VariationPhotoSets; problems: string[]; note?: string } {
-  const rows = input.rows.filter(row => row.own && row.urls.length && !same(row.urls, input.gallery))
-  if (!rows.length) return { problems: [] }
-  for (const axisName of input.names) {
+export function ebayVariationPhotoSets(input: { names: string[]; order?: Record<string, string[]>; gallery: string[]; rows: VariationPhotoRow[]; chosen?: string | null }):
+  { sets?: VariationPhotoSets; notes: string[] } {
+  const shown = (row: VariationPhotoRow) => row.own && row.urls.length ? row.urls : input.gallery
+  if (input.rows.every(row => same(shown(row), input.gallery))) return { notes: [] }
+  const chosen = input.chosen ? input.names.find(name => aspectCanonicalName(name) === aspectCanonicalName(input.chosen!)) : undefined
+  for (const axisName of chosen ? [chosen] : input.names) {
     const byValue = new Map<string, string[]>()
-    const fits = rows.every(row => {
+    const fits = input.rows.every(row => {
       const value = row.specifics[axisName]
       if (!value) return false
       const held = byValue.get(value)
-      if (!held) { byValue.set(value, row.urls); return true }
-      return same(held, row.urls)
+      if (!held) { byValue.set(value, shown(row)); return true }
+      return same(held, shown(row))
     })
     if (!fits) continue
     const order = [...(input.order?.[axisName] ?? []).filter(value => byValue.has(value)), ...[...byValue.keys()].filter(value => !input.order?.[axisName]?.includes(value))]
-    const problems = order.filter(value => byValue.get(value)!.length > EBAY_PHOTOS_PER_VALUE)
-      .map(value => `The ${value} photos: eBay takes at most ${EBAY_PHOTOS_PER_VALUE} per variation; this one has ${byValue.get(value)!.length}. Remove some in Product media.`)
-    return { sets: { axisName, byValue: Object.fromEntries(order.map(value => [value, byValue.get(value)!])), order }, problems }
+      .filter(value => !same(byValue.get(value)!, input.gallery))
+    const notes = order.filter(value => byValue.get(value)!.length > EBAY_PHOTOS_PER_VALUE)
+      .map(value => `The ${value} photos: eBay shows at most ${EBAY_PHOTOS_PER_VALUE} per variation; the first ${EBAY_PHOTOS_PER_VALUE} of ${byValue.get(value)!.length} are sent.`)
+    return { sets: { axisName, byValue: Object.fromEntries(order.map(value => [value, byValue.get(value)!.slice(0, EBAY_PHOTOS_PER_VALUE)])), order }, notes }
   }
-  const names = input.names.join(' or ')
-  return { problems: [], note: `Photos by variation are not sent: variations with the same ${names || 'value'} hold different photos in Product media. eBay keeps showing the main gallery for every variation. Give every variation of one ${input.names[0] ?? 'value'} the same photos to send them.` }
+  const name = chosen ?? input.names.join(' or ')
+  return { notes: [`Photos by variation are not sent: variations with the same ${name || 'value'} show different photos in Product media. eBay keeps showing the main gallery for every variation. Give every variation of one ${chosen ?? input.names[0] ?? 'value'} the same photos to send them.`] }
 }

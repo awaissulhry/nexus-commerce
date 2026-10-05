@@ -4,16 +4,21 @@ import { cloudinaryPhotoKey, ebayListingPhotos, isLegacyPhotoId, legacyImageUrls
 const cdn = (path: string) => `https://res.cloudinary.com/demo-cloud/image/upload/${path}`
 
 describe('cloudinaryPhotoKey', () => {
-  it('names the same Cloudinary photo whatever size, version or format the address asks for', () => {
+  it('names the same photo whatever version marker or file ending the address has', () => {
     const key = 'demo-cloud/product-images/fam-1/abc123'
     expect(cloudinaryPhotoKey(cdn('v1791190924/product-images/fam-1/abc123.jpg'))).toBe(key)
-    expect(cloudinaryPhotoKey(cdn('w_800,c_fill/v1791190924/product-images/fam-1/abc123.webp'))).toBe(key)
-    expect(cloudinaryPhotoKey(cdn('f_auto,q_auto/product-images/fam-1/abc123.png'))).toBe(key)
+    expect(cloudinaryPhotoKey(cdn('v1/product-images/fam-1/abc123.webp'))).toBe(key)
     expect(cloudinaryPhotoKey(cdn('product-images/fam-1/abc123'))).toBe(key)
   })
 
-  it('keeps a folder that looks like a step when a version marks where the photo id starts', () => {
-    expect(cloudinaryPhotoKey(cdn('v1/my_folder/photo.jpg'))).toBe('demo-cloud/my_folder/photo')
+  it('keeps a transformation step: another rendering is another photo for eBay', () => {
+    expect(cloudinaryPhotoKey(cdn('w_800,c_fill/v1/product-images/fam-1/abc123.jpg'))).not.toBe(cloudinaryPhotoKey(cdn('v1/product-images/fam-1/abc123.jpg')))
+    expect(cloudinaryPhotoKey(cdn('c_pad,b_white,w_1600/v1/x.jpg'))).toBe('demo-cloud/c_pad,b_white,w_1600/v1/x')
+  })
+
+  it('keeps every folder: two folders that look like steps are two photos', () => {
+    expect(cloudinaryPhotoKey(cdn('xr_photos/helmet.jpg'))).toBe('demo-cloud/xr_photos/helmet')
+    expect(cloudinaryPhotoKey(cdn('mv_photos/helmet.jpg'))).toBe('demo-cloud/mv_photos/helmet')
   })
 
   it('is null for any other address', () => {
@@ -33,7 +38,8 @@ describe('matchLibraryPhoto', () => {
   it('takes the same address first, then the same Cloudinary photo, the row\'s own files first', () => {
     expect(matchLibraryPhoto('https://cdn.example/b.jpg', files, 'row')?.id).toBe('parent-b')
     expect(matchLibraryPhoto(cdn('v2/product-images/fam-1/a.jpg'), files, 'row')?.id).toBe('parent-a')
-    expect(matchLibraryPhoto(cdn('w_500/v9/product-images/fam-1/a.jpg'), files, 'row')?.id).toBe('own-a')
+    expect(matchLibraryPhoto(cdn('v9/product-images/fam-1/a.jpg'), files, 'row')?.id).toBe('own-a')
+    expect(matchLibraryPhoto(cdn('w_500/v9/product-images/fam-1/a.jpg'), files, 'row')).toBeUndefined()
   })
 
   it('never matches a video, and is undefined for a photo outside the library', () => {
@@ -57,7 +63,7 @@ describe('the old Image URLs list', () => {
   it('becomes Product media items: library photos by their id, others by a stable address id, each photo once', () => {
     const files = [{ id: 'lib-1', productId: 'row', url: cdn('v1/p/one.jpg') }]
     const outside = 'https://i.ebayimg.com/images/g/x/s-l1600.jpg'
-    const result = legacyPhotoItems([outside, cdn('v1/p/one.jpg'), cdn('w_300/v1/p/one.jpg')], files, 'row')
+    const result = legacyPhotoItems([outside, cdn('v1/p/one.jpg'), cdn('v2/p/one.jpg')], files, 'row')
     expect(result.items).toEqual([{ assetId: legacyPhotoId(outside) }, { assetId: 'lib-1' }])
     expect(result.outside).toEqual([{ id: legacyPhotoId(outside), url: outside }])
     expect(isLegacyPhotoId(legacyPhotoId(outside))).toBe(true)

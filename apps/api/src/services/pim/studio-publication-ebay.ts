@@ -757,13 +757,15 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
     // shows for its value. Off the photo plan these sets were never sent before.
     if (products.length > 1) {
       const productOf = new Map(built.identities.map(identity => [identity.sku, identity.productId]))
-      const photos = ebayVariationPhotoSets({ names: shared.variationSpecificNames, order: shared.variationSpecificsSet, gallery: shared.pictureUrls,
+      // The photo axis the person chose: this listing's own pick, else the product's (readImageAxisPreference's order).
+      const chosen = [object(parentListing?.platformAttributes)._imageAxis, (parent as { imageAxisPreference?: unknown }).imageAxisPreference]
+        .find((axis): axis is string => typeof axis === 'string' && !!axis.trim())?.trim() ?? null
+      const photos = ebayVariationPhotoSets({ names: shared.variationSpecificNames, order: shared.variationSpecificsSet, gallery: shared.pictureUrls, chosen,
         rows: shared.variations.flatMap(variation => {
           const productId = productOf.get(variation.sku)
           return productId ? [{ sku: variation.sku, specifics: variation.specifics, urls: galleries.get(productId) ?? [], own: built.ownPhotos.has(productId) }] : []
         }) })
-      for (const problem of photos.problems) problems.add(problem, { field: 'variationPictures' })
-      if (photos.note) problems.note(photos.note)
+      for (const note of photos.notes) problems.note(note)
       shared.variationPictures = photos.sets
     }
   }

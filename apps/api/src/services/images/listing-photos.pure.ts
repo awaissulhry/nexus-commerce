@@ -6,25 +6,23 @@ import { mediaObject, resolveMediaCollection, type ProductMediaCollection } from
  * in listing-photos.service.ts; this file holds no database access, so the sheet, the editor and Publish share it.
  */
 
-/** A photo of an old Image URLs list that is not in the library yet: the editor shows it by this id until a save adds it. */
+/** A photo of an old Image URLs list that is not in the library: the editor shows it by this id until a save adds it. */
 export const LEGACY_PHOTO_PREFIX = 'url:'
 export const legacyPhotoId = (url: string) => `${LEGACY_PHOTO_PREFIX}${createHash('sha256').update(url).digest('hex').slice(0, 40)}`
 export const isLegacyPhotoId = (id: string) => id.startsWith(LEGACY_PHOTO_PREFIX)
 
-const TRANSFORMATION = /^(?:[a-z]{1,3}_[^/]*(?:,[a-z]{1,3}_[^/]*)*)$/
 /**
- * The Cloudinary photo an address shows, whatever size or format it asks for:
- * `https://res.cloudinary.com/<cloud>/image/upload/[<transformations>/][v<version>/]<public id>.<format>` → `<cloud>/<public id>`.
+ * The Cloudinary photo an address shows, the same rendering only: `https://res.cloudinary.com/<cloud>/image/upload/
+ * [v<version>/]<path>.<format>` → `<cloud>/<path>`. The version marker only refreshes caches, so two addresses that differ
+ * only by it (or by the file ending) show the same photo. Any transformation step (`w_800,c_fill/…`) is a different
+ * rendering and stays part of the key: matching it to the plain photo would change what eBay shows (review 2026-10-05).
  * Null for any other address.
  */
 export function cloudinaryPhotoKey(url: string): string | null {
   const match = /^https?:\/\/res\.cloudinary\.com\/([^/]+)\/image\/upload\/([^?#]+)/i.exec(url.trim())
   if (!match) return null
   const parts = match[2].split('/').filter(Boolean)
-  const version = parts.findIndex(part => /^v\d+$/.test(part))
-  let rest = version >= 0 ? parts.slice(version + 1) : parts
-  // Without a version, leading transformation steps (`w_800,c_fill`, `f_auto`) are not part of the public id.
-  if (version < 0) while (rest.length > 1 && TRANSFORMATION.test(rest[0])) rest = rest.slice(1)
+  const rest = /^v\d+$/.test(parts[0] ?? '') ? parts.slice(1) : parts
   if (!rest.length) return null
   const last = rest[rest.length - 1].replace(/\.[a-z0-9]{2,5}$/i, '')
   return `${match[1]}/${[...rest.slice(0, -1), last].join('/')}`
@@ -32,7 +30,7 @@ export function cloudinaryPhotoKey(url: string): string | null {
 
 export interface LibraryPhoto { id: string; productId: string; url: string; publicId?: string | null; mediaType?: string | null; contentHash?: string | null }
 
-/** The library photo an address names: the same address first, else the same Cloudinary photo; the row's own files first. */
+/** The library photo an address names: the same address first, else the same Cloudinary photo (`cloudinaryPhotoKey`); the row's own files first. */
 export function matchLibraryPhoto<T extends LibraryPhoto>(url: string, files: T[], ownProductId?: string): T | undefined {
   const images = files.filter(file => (file.mediaType ?? 'IMAGE') === 'IMAGE')
   const ordered = ownProductId ? [...images.filter(file => file.productId === ownProductId), ...images.filter(file => file.productId !== ownProductId)] : images
