@@ -59,6 +59,32 @@ export function derive(s: Sums) {
   }
 }
 
+/**
+ * AM-21 — never add two currencies. eBay reports each market in its own currency (EBAY_GB in GBP, the rest in EUR), and
+ * the rows say which (`EbayAdsDailyPerformance.currency`). Counts (impressions, clicks, sold) add across markets; money
+ * does not. When a window's rows hold more than one currency, the money fields of the one total are null and
+ * `byCurrency` carries one total per currency instead. Nothing is converted: no rate is applied anywhere here.
+ */
+export function withoutMixedMoney<T extends ReturnType<typeof derive>>(d: T, mixed: boolean): T {
+  return mixed ? { ...d, adFeesCents: null, salesCents: null, acosPct: null, avgCpcCents: null } : d
+}
+
+export function addSums(a: Sums, b: Sums): Sums {
+  return {
+    impressions: a.impressions + b.impressions,
+    clicks: a.clicks + b.clicks,
+    adFeesCents: a.adFeesCents + b.adFeesCents,
+    salesCents: a.salesCents + b.salesCents,
+    soldQty: a.soldQty + b.soldQty,
+  }
+}
+
+/** The one currency of a set of rows; null when they hold more than one; `fallback` when there are none. */
+export function oneCurrency(currencies: Iterable<string>, fallback: string | null = null): string | null {
+  const set = [...new Set(currencies)]
+  return set.length === 1 ? set[0] : set.length === 0 ? fallback : null
+}
+
 export async function freshness() {
   const [facts, entity, discovery] = await Promise.all([
     prisma.ebayAdsDailyPerformance.aggregate({ _max: { reportedAt: true } }),
@@ -76,23 +102,39 @@ export async function freshness() {
 export async function ebayAdsSummary(q: WindowQuery) {
   const r = resolveRange(q)
   const p = priorRange(r)
-  const [cur, prev, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
-    prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(q, r, 'CAMPAIGN'), _sum: sumFields }),
-    prisma.ebayAdsDailyPerformance.aggregate({ where: factWhere(q, p, 'CAMPAIGN'), _sum: sumFields }),
-    prisma.ebayCampaign.groupBy({ by: ['status'], _count: { _all: true } }),
+  // AM-21 — one sum per reporting currency (see withoutMixedMoney).
+  const [curByCcy, prevByCcy, campaigns, economics, fr, liveCount, promotedRows] = await Promise.all([
+    prisma.ebayAdsDailyPerformance.groupBy({ by: ['currency'], where: factWhere(q, r, 'CAMPAIGN'), _sum: sumFields }),
+    prisma.ebayAdsDailyPerformance.groupBy({ by: ['currency'], where: factWhere(q, p, 'CAMPAIGN'), _sum: sumFields }),
+    // AM-15 — the campaign count follows the market picker like the money beside it.
+    prisma.ebayCampaign.groupBy({ by: ['status'], where: q.marketplace && q.marketplace !== 'all' ? { marketplace: q.marketplace } : {}, _count: { _all: true } }),
     prisma.ebayListingEconomics.groupBy({ by: ['dataStatus'], _count: { _all: true } }),
     freshness(),
     prisma.ebayListingIndex.count({ where: { endedAt: null } }),
     prisma.ebayAd.findMany({ where: { listingId: { not: null }, status: { notIn: ['STALE'] }, campaign: { fundingModel: 'COST_PER_SALE', status: { in: [...EBAY_MANAGED_STATUSES] } } }, select: { listingId: true }, distinct: ['listingId'] }),
   ])
-  const current = derive(toSums(cur))
-  const prior = derive(toSums(prev))
-  const deltaPct = (c: number, pr: number) => (pr > 0 ? ((c - pr) / pr) * 100 : null)
+  const sumOf = (groups: typeof curByCcy) => groups.reduce((acc, g) => addSums(acc, toSums(g)), zeroSums)
+  const curOf = new Map(curByCcy.map((g) => [g.currency, toSums(g)]))
+  const prevOf = new Map(prevByCcy.map((g) => [g.currency, toSums(g)]))
+  const seen = [...new Set([...curOf.keys(), ...prevOf.keys()])].sort()
+  const mixed = seen.length > 1
+  // No row in either window: the market's own currency from older rows, else EUR (every amount is then 0).
+  const fallback = seen.length === 0 && q.marketplace && q.marketplace !== 'all'
+    ? (await ebayMarketCurrencies()).get(q.marketplace) ?? 'EUR'
+    : 'EUR'
+  const current = withoutMixedMoney(derive(sumOf(curByCcy)), mixed)
+  const prior = withoutMixedMoney(derive(sumOf(prevByCcy)), mixed)
+  const deltaPct = (c: number | null, pr: number | null) => (c != null && pr != null && pr > 0 ? ((c - pr) / pr) * 100 : null)
   return {
     window: { preset: r.preset, since: r.sinceStr, until: r.untilStr, days: r.days, includesToday: r.includesToday },
-    currency: 'EUR',
+    /** The one currency of the window's money; null when the rows hold more than one (read `byCurrency`). */
+    currency: oneCurrency(seen, fallback),
     current,
     prior,
+    /** One total per currency, never added together (largest ad fees first). */
+    byCurrency: seen
+      .map((currency) => ({ currency, current: derive(curOf.get(currency) ?? zeroSums), prior: derive(prevOf.get(currency) ?? zeroSums) }))
+      .sort((a, b) => b.current.adFeesCents - a.current.adFeesCents || a.currency.localeCompare(b.currency)),
     deltas: {
       adFeesPct: deltaPct(current.adFeesCents, prior.adFeesCents),
       salesPct: deltaPct(current.salesCents, prior.salesCents),
@@ -114,18 +156,26 @@ export async function ebayAdsSummary(q: WindowQuery) {
 /** GET /ebay-ads/trend — daily trend (account level = derived campaign grain summed). */
 export async function ebayAdsTrend(q: WindowQuery) {
   const r = resolveRange(q)
+  // AM-21 — grouped by currency too: a day's money is only summed when the whole window is in one currency.
   const rows = await prisma.ebayAdsDailyPerformance.groupBy({
-    by: ['date'],
+    by: ['date', 'currency'],
     where: factWhere(q, r, 'CAMPAIGN'),
     _sum: sumFields,
     orderBy: { date: 'asc' },
   })
+  const currency = oneCurrency(rows.map((row) => row.currency), 'EUR')
+  const byDay = new Map<string, Sums>()
+  for (const row of rows) {
+    const day = row.date.toISOString().slice(0, 10)
+    byDay.set(day, addSums(byDay.get(day) ?? zeroSums, toSums(row)))
+  }
   return {
     window: { since: r.sinceStr, until: r.untilStr, bucket: bucketFor(r.days) },
-    currency: 'EUR',
-    points: rows.map((row) => ({
-      date: row.date.toISOString().slice(0, 10),
-      ...derive(toSums(row)),
+    /** null when the window holds more than one currency: the points then carry counts only (money is null). */
+    currency,
+    points: [...byDay].map(([date, sums]) => ({
+      date,
+      ...withoutMixedMoney(derive(sums), currency == null),
     })),
     freshness: await freshness(),
   }
@@ -171,7 +221,8 @@ export async function ebayAdsCampaigns(q: WindowQuery) {
     }).length
   return {
     window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
-    currency: 'EUR',
+    // AM-21 — each row carries its own `budgetCurrency`; this is the one they share, or null when they differ.
+    currency: oneCurrency(camps.map((c) => c.budgetCurrency ?? 'EUR'), 'EUR'),
     campaigns: camps.map((c) => ({
       id: c.id,
       externalCampaignId: c.externalCampaignId,

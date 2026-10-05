@@ -25,6 +25,7 @@ import * as writes from './ebay-ads-write.service.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 import { marketplaceShort } from '../ads-core/ebay-marketplace.js'
 import { parseGuardrails, capActions } from '../ads-core/ebay-rule-guardrails.js'
+import { weeklyDigestMoney } from './ebay-ads-digest-money.js'
 
 const AUTOMATION_ACTOR = 'automation:ebay-ads'
 
@@ -1007,14 +1008,16 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
   const weekEnd = new Date(weekStart); weekEnd.setUTCDate(weekStart.getUTCDate() + 6)
   const priorStart = new Date(weekStart); priorStart.setUTCDate(priorStart.getUTCDate() - 7)
 
-  const sum = (from: Date, to: Date) => prisma.ebayAdsDailyPerformance.aggregate({
+  // AM-21 — every sum is per currency (eBay GB reports GBP); `weeklyDigestMoney` never adds two currencies.
+  const sum = (from: Date, to: Date) => prisma.ebayAdsDailyPerformance.groupBy({
+    by: ['currency'],
     where: { entityType: 'CAMPAIGN', date: { gte: from, lte: to } },
     _sum: { adFeesCents: true, salesCents: true, clicks: true, impressions: true, soldQty: true },
   })
   const [cur, prev, byCampaign, pending, applied, anomalies, economics] = await Promise.all([
     sum(weekStart, weekEnd),
     sum(priorStart, new Date(weekStart.getTime() - 86_400_000)),
-    prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', date: { gte: weekStart, lte: weekEnd } }, _sum: { adFeesCents: true, salesCents: true, soldQty: true } }),
+    prisma.ebayAdsDailyPerformance.groupBy({ by: ['entityId', 'currency'], where: { entityType: 'CAMPAIGN', date: { gte: weekStart, lte: weekEnd } }, _sum: { adFeesCents: true, salesCents: true, soldQty: true } }),
     prisma.ebayAdsProposal.findMany({ where: { status: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 50 }),
     prisma.ebayAdsProposal.findMany({ where: { status: 'APPLIED', decidedAt: { gte: weekStart, lte: new Date(weekEnd.getTime() + 86_400_000) } }, take: 50 }),
     detectAnomalies(),
@@ -1023,34 +1026,26 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
   const campRows = await prisma.ebayCampaign.findMany({ select: { externalCampaignId: true, name: true, marketplace: true } })
   const names = new Map(campRows.map((c) => [c.externalCampaignId, c.name]))
   const mktOf = new Map(campRows.map((c) => [c.externalCampaignId, c.marketplace]))
-  const movers = byCampaign
-    .map((c) => ({ campaign: names.get(c.entityId) ?? c.entityId, feesCents: c._sum.adFeesCents ?? 0, salesCents: c._sum.salesCents ?? 0, sold: c._sum.soldQty ?? 0 }))
-    .sort((a, b) => b.feesCents - a.feesCents)
-  // ER4 E2 — per-marketplace split (campaign-grain facts rolled up by the
-  // campaign's marketplace; campaigns deleted since the week keep their fees
-  // under "unknown" rather than being silently dropped)
-  const byMarketplace = new Map<string, { adFeesCents: number; salesCents: number; soldQty: number }>()
-  for (const c of byCampaign) {
-    const mkt = mktOf.get(c.entityId) ?? 'unknown'
-    const agg = byMarketplace.get(mkt) ?? { adFeesCents: 0, salesCents: 0, soldQty: 0 }
-    agg.adFeesCents += c._sum.adFeesCents ?? 0
-    agg.salesCents += c._sum.salesCents ?? 0
-    agg.soldQty += c._sum.soldQty ?? 0
-    byMarketplace.set(mkt, agg)
-  }
+  const perCurrency = (rows: typeof cur) => rows.map((g) => ({
+    currency: g.currency, adFeesCents: g._sum.adFeesCents ?? 0, salesCents: g._sum.salesCents ?? 0,
+    clicks: g._sum.clicks ?? 0, impressions: g._sum.impressions ?? 0, soldQty: g._sum.soldQty ?? 0,
+  }))
+  const money = weeklyDigestMoney({
+    current: perCurrency(cur),
+    prior: perCurrency(prev),
+    campaigns: byCampaign.map((c) => ({ entityId: c.entityId, currency: c.currency, adFeesCents: c._sum.adFeesCents ?? 0, salesCents: c._sum.salesCents ?? 0, soldQty: c._sum.soldQty ?? 0 })),
+    nameOf: (id) => names.get(id),
+    marketOf: (id) => mktOf.get(id),
+  })
 
   const payload = {
     week: { start: weekStart.toISOString().slice(0, 10), end: weekEnd.toISOString().slice(0, 10) },
-    totals: {
-      adFeesCents: cur._sum.adFeesCents ?? 0, salesCents: cur._sum.salesCents ?? 0,
-      clicks: cur._sum.clicks ?? 0, impressions: cur._sum.impressions ?? 0, soldQty: cur._sum.soldQty ?? 0,
-      acosPct: (cur._sum.salesCents ?? 0) > 0 ? Math.round(((cur._sum.adFeesCents ?? 0) / (cur._sum.salesCents ?? 1)) * 1000) / 10 : null,
-    },
-    prior: { adFeesCents: prev._sum.adFeesCents ?? 0, salesCents: prev._sum.salesCents ?? 0, soldQty: prev._sum.soldQty ?? 0 },
-    byMarketplace: [...byMarketplace.entries()]
-      .map(([marketplace, v]) => ({ marketplace, ...v, acosPct: v.salesCents > 0 ? Math.round((v.adFeesCents / v.salesCents) * 1000) / 10 : null }))
-      .sort((a, b) => b.adFeesCents - a.adFeesCents),
-    movers: movers.slice(0, 8),
+    currency: money.currency,
+    totals: money.totals,
+    prior: money.prior,
+    byCurrency: money.byCurrency,
+    byMarketplace: money.byMarketplace,
+    movers: money.movers.slice(0, 8),
     autopilotApplied: applied.map((p) => ({ kind: p.kind, entityRef: p.entityRef, result: p.appliedResult })),
     pendingProposals: pending.map((p) => ({ id: p.id, kind: p.kind, entityRef: p.entityRef, action: p.proposedAction, createdAt: p.createdAt })),
     anomalies,
@@ -1062,7 +1057,7 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
   await prisma.ebayAdsDigest.upsert({ where: { workspace_weekStart: workspaceKey({ weekStart: weekStart }) }, create: { weekStart, payload: payload as object }, update: { payload: payload as object } })
   try {
     const { notifyAutomation } = await import('../advertising/ads-automation-notify.service.js')
-    await notifyAutomation({ type: 'ebay-ads-digest', severity: 'info', title: `eBay ads weekly digest ready (${payload.week.start})`, body: `€${(payload.totals.adFeesCents / 100).toFixed(2)} fees · €${(payload.totals.salesCents / 100).toFixed(2)} sales · ${pending.length} proposal(s) awaiting review`, href: '/marketing/ads/ebay/digest' })
+    await notifyAutomation({ type: 'ebay-ads-digest', severity: 'info', title: `eBay ads weekly digest ready (${payload.week.start})`, body: `${money.moneyLine} · ${pending.length} proposal(s) awaiting review`, href: '/marketing/ads/ebay/digest' })
   } catch { /* notify optional */ }
   return { weekStart: payload.week.start, created: !existing }
 }

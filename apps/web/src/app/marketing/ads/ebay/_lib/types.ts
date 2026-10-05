@@ -22,11 +22,22 @@ export const mapMetrics = (d: Derived): UiMetrics => ({
 
 export interface Freshness { factsReportedAt: string | null; entitySyncAt: string | null; listingSeenAt: string | null }
 
+/**
+ * AM-21 — a total over several markets may span currencies. Then `currency` is null, the money fields of the one total
+ * are null (counts stay), and `byCurrency` carries one total per currency. The API never adds two currencies.
+ */
+export type MixedDerived = Omit<Derived, 'adFeesCents' | 'salesCents' | 'acosPct' | 'avgCpcCents'> & {
+  adFeesCents: number | null; salesCents: number | null; acosPct: number | null; avgCpcCents: number | null
+}
+
 export interface SummaryPayload {
   window: { preset: string; since: string; until: string; days: number; includesToday: boolean }
-  currency: string
-  current: Derived
-  prior: Derived
+  /** The one currency of the window's money; null when it holds more than one (read `byCurrency`). */
+  currency: string | null
+  current: MixedDerived
+  prior: MixedDerived
+  /** One total per currency, never added together (absent on an API older than AM-21). */
+  byCurrency?: Array<{ currency: string; current: Derived; prior: Derived }>
   deltas: { adFeesPct: number | null; salesPct: number | null; clicksPct: number | null; impressionsPct: number | null }
   campaignCounts: Record<string, number>
   economicsStatus: Record<string, number>
@@ -36,7 +47,9 @@ export interface SummaryPayload {
 }
 export interface TrendPayload {
   window: { since: string; until: string; bucket: string }
-  points: Array<Derived & { date: string }>
+  /** null when the window spans currencies: the points then carry counts only (money is null). */
+  currency?: string | null
+  points: Array<MixedDerived & { date: string }>
   freshness: Freshness
 }
 

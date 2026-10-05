@@ -17,6 +17,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { int, pct, money, latestReportLabel, METRIC_TIPS } from '../../campaigns/_grid/format'
+import { currencyTotals, moneyPerCurrency, ratioPerCurrency } from '../_lib/currencyTotals'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../ebay.css'
 import {
@@ -115,9 +116,9 @@ export function EbayCampaignsGrid() {
   }, [reload, say])
 
   const um = (c: CampaignRow) => mapMetrics(c.metrics)
-  // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
-  const totSpendOf = (vr: CampaignRow[]) => vr.reduce((a, c) => a + um(c).spendCents, 0)
-  const totSalesOf = (vr: CampaignRow[]) => vr.reduce((a, c) => a + um(c).salesCents, 0)
+  // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total).
+  // AM-21 — one total per currency (a UK row is GBP): money and the ratios over it are never added across currencies.
+  const totOf = (vr: CampaignRow[]) => currencyTotals(vr, (c) => c.budgetCurrency, (c) => um(c).spendCents, (c) => um(c).salesCents)
   const columns: GridColumn<CampaignRow>[] = useMemo(() => [
     { key: 'status', label: 'Status', metric: false, sortValue: (c) => (c.limitedByBudget ? 'LIMITED' : c.status), render: (c) => <StatusCell c={c} onAction={onAction} onMenu={(cc, kind) => setModal({ kind, c: cc })} /> },
     {
@@ -153,17 +154,17 @@ export function EbayCampaignsGrid() {
     { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (c) => int(um(c).impressions), sortValue: (c) => um(c).impressions, filterValue: (c) => um(c).impressions, total: (vr) => int(vr.reduce((a, c) => a + um(c).impressions, 0)) },
     { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (c) => int(um(c).clicks), sortValue: (c) => um(c).clicks, filterValue: (c) => um(c).clicks, total: (vr) => int(vr.reduce((a, c) => a + um(c).clicks, 0)) },
     { key: 'ctr', label: 'CTR', tip: METRIC_TIPS.ctr, render: (c) => (um(c).ctr != null ? pct(um(c).ctr! / 100) : '—'), sortValue: (c) => um(c).ctr ?? -1 },
-    { key: 'spend', label: 'Ad Fees', tip: 'Attributed eBay ad fees (any-click) in the selected window.', render: (c) => money(um(c).spendCents, c.budgetCurrency), sortValue: (c) => um(c).spendCents, filterValue: (c) => um(c).spendCents / 100, total: (vr) => money(totSpendOf(vr)) },
-    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales: any buyer purchase within 30 days of any click on the ad.', render: (c) => money(um(c).salesCents, c.budgetCurrency), sortValue: (c) => um(c).salesCents, filterValue: (c) => um(c).salesCents / 100, total: (vr) => money(totSalesOf(vr)) },
+    { key: 'spend', label: 'Ad Fees', tip: 'Attributed eBay ad fees (any-click) in the selected window.', render: (c) => money(um(c).spendCents, c.budgetCurrency), sortValue: (c) => um(c).spendCents, filterValue: (c) => um(c).spendCents / 100, total: (vr) => moneyPerCurrency(totOf(vr), (t) => t.feesCents) },
+    { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales: any buyer purchase within 30 days of any click on the ad.', render: (c) => money(um(c).salesCents, c.budgetCurrency), sortValue: (c) => um(c).salesCents, filterValue: (c) => um(c).salesCents / 100, total: (vr) => moneyPerCurrency(totOf(vr), (t) => t.salesCents) },
     {
       key: 'acos', label: 'ACOS', tip: 'Ad fees ÷ any-click attributed sales. Post-any-click this trends high by construction — judge vs break-even.',
       render: (c) => (um(c).acos != null ? pct(um(c).acos! / 100) : '—'), sortValue: (c) => um(c).acos ?? -1, filterValue: (c) => um(c).acos ?? 0,
-      total: (vr) => { const f = totSpendOf(vr), sl = totSalesOf(vr); return sl > 0 ? pct(f / sl) : '—' },
+      total: (vr) => ratioPerCurrency(totOf(vr), (t) => (t.salesCents > 0 ? t.feesCents / t.salesCents : null), pct),
     },
     {
       key: 'roas', label: 'ROAS', tip: 'Attributed sales ÷ ad fees.',
       render: (c) => (um(c).roas != null ? um(c).roas!.toFixed(2) : '—'), sortValue: (c) => um(c).roas ?? -1,
-      total: (vr) => { const f = totSpendOf(vr), sl = totSalesOf(vr); return f > 0 ? (sl / f).toFixed(2) : '—' },
+      total: (vr) => ratioPerCurrency(totOf(vr), (t) => (t.feesCents > 0 ? t.salesCents / t.feesCents : null), (v) => v.toFixed(2)),
     },
     { key: 'sold', label: 'Sold', render: (c) => int(um(c).sold), sortValue: (c) => um(c).sold, total: (vr) => int(vr.reduce((a, c) => a + um(c).sold, 0)) },
   ], [onAction, router])
