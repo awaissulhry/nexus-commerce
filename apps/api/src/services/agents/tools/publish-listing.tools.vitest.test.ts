@@ -308,7 +308,7 @@ describe('refusals', () => {
     expect(await dryRun({ productId: ids.ebayProduct, channel: 'ETSY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('Etsy from Nexus is not available yet') })
     fixture.shopPreview.mockResolvedValue({ errors: [], remote: { id: 'gid://shopify/Product/1' }, revision: 'r', remoteRevision: 'rr', initialized: true, draft: {},
       variants: [{ id: ids.ebayProduct, sku: 'TEST-SKU-L5-EBAY' }], changes: { newProductStatus: 'ACTIVE' }, locations: [{ id: 'gid://shopify/Location/1', name: 'Warehouse', isActive: true }] })
-    expect(await dryRun({ productId: ids.ebayProduct, channel: 'SHOPIFY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('existing Shopify products is not available yet') })
+    expect(await dryRun({ productId: ids.ebayProduct, channel: 'SHOPIFY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('Publish cannot update a product already on Shopify yet.') })
     fixture.facts.mockImplementation(async (productId: string, scope: Json) => ({ ...(await factsFor(productId)(productId, scope)), issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }))
     expect(await dryRun({ productId: ids.ebayProduct, channel: 'EBAY', marketplace: 'IT' })).toMatchObject({ ok: false, error: expect.stringContaining('Reconnect this account before publishing.') })
   })
