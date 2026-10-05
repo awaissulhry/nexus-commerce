@@ -13,6 +13,13 @@
  *
  * It writes **three** columns: `listingStatus`, `lastSyncedAt`, `lastSyncStatus`.
  *
+ * E5a — and, for every Etsy listing Nexus knows, a `ChannelDrift` record (source `etsy-content`): what Etsy holds for the
+ * listing's content against what Studio Publish would send, written through the one drift writer
+ * (`services/channel-drift/etsy-content-pass.ts`). That is a record ABOUT the listing, never one of Nexus's own columns:
+ * nothing Etsy holds crosses into the listing, its attributes, its price or its stock. It rides on these pages
+ * (`includes=Inventory,Images,Translations`) and adds only the calls that pass names; a shop with no listing Nexus knows
+ * gets no extra call and no includes. `NEXUS_ETSY_CONTENT_DRIFT=0` turns it off (the pages are then exactly as before).
+ *
  * It does **not** write quantity, price, stock or title. That is P4.3a's ruling and it is the
  * whole reason this job is shaped the way it is: `syncInventoryFromEtsy` wrote Etsy's quantities
  * straight into `ProductVariation.stock` and `Product.totalStock`, past the resolver, past the
@@ -35,7 +42,10 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { etsyReader } from '../services/etsy/read-client.js'
+import { EtsyReadError, etsyReader } from '../services/etsy/read-client.js'
+// Types only: the pass (and the publisher it compares with) is loaded when the content pass runs, not with this job.
+import type { EtsyContentDeps, EtsyContentPass, EtsyPageCause } from '../services/channel-drift/etsy-content-pass.js'
+import type { EtsyContentTally } from '../services/channel-drift/etsy-content-compare.js'
 
 const JOB = 'etsy-content-refresh'
 
@@ -78,11 +88,25 @@ export interface EtsyContentRefreshReport {
   /** F1 — Etsy listings whose account is missing or inactive: nothing can read them; stamped NO_ACCOUNT. */
   unreachable: number
   errors: Array<{ accountId: string; state?: string; error: string }>
+  /** E5a — the content comparison of every account (ChannelDrift `etsy-content`), summed. */
+  content: EtsyContentTally
+  /**
+   * E5a review R2-2 — accounts whose content pass did not run (another pass holds the account's lease, no Redis, the shop
+   * could not be read, the pass could not start), with why: never the same line as an account with nothing to compare.
+   */
+  contentSkipped: Array<{ accountId: string; reason: string }>
+}
+
+const emptyContentTally = (): EtsyContentTally => ({ listings: 0, compared: 0, drifted: 0, notCompared: 0, reasons: {}, extraCalls: 0, errors: 0 })
+function addContent(into: EtsyContentTally, from: EtsyContentTally): void {
+  for (const key of ['listings', 'compared', 'drifted', 'notCompared', 'extraCalls', 'errors'] as const) into[key] += from[key]
+  for (const [reason, n] of Object.entries(from.reasons)) into.reasons[reason] = (into.reasons[reason] ?? 0) + n
 }
 
 const emptyReport = (): EtsyContentRefreshReport => ({
   accounts: 0, listingsSeen: 0, matched: 0, statusChanged: 0, freshened: 0, unmatched: 0,
-  truncated: [], missingAtEtsy: 0, failedStamped: 0, unreachable: 0, errors: [],
+  truncated: [], missingAtEtsy: 0, failedStamped: 0, unreachable: 0, errors: [], content: emptyContentTally(),
+  contentSkipped: [],
 })
 
 /** F5 — every stamp is the DATABASE's time, the clock the freshness census is read against. */
@@ -91,9 +115,26 @@ async function databaseNow(): Promise<Date> {
   return row.now
 }
 
-interface EtsyListingRow { listing_id?: unknown; state?: unknown }
+type EtsyListingRow = Record<string, unknown> & { listing_id?: unknown; state?: unknown }
 
-export async function refreshEtsyContent(options: { maxPages?: number } = {}): Promise<EtsyContentRefreshReport> {
+/**
+ * E5a — why a page that failed WITH the includes is read again without them. Every failure is: the statuses must never be
+ * lost to the content read (the page carried no includes before E5a). Etsy refusing the request (400, 422) stops the
+ * includes for the rest of the run (the pass remembers it); a timeout or any other failure (5xx, a network drop, 429)
+ * only skips that page's content. Only the plain read's own failure is handled as it always was (the state fails).
+ */
+function withoutContentCause(err: unknown): EtsyPageCause {
+  if (err instanceof EtsyReadError && (err.status === 400 || err.status === 422)) return 'refused'
+  // The gateway's no-answer error (gateway.ts `GatewayNoAnswer`), by name: this job does not load the gateway itself.
+  if (err instanceof Error && err.name === 'GatewayNoAnswer' && (err as Error & { errorClass?: unknown }).errorClass === 'timeout') return 'timeout'
+  return 'failed'
+}
+
+/**
+ * `content` (E5a): also compare each known listing's content into ChannelDrift. Off for a direct call; the cron turns it
+ * on (`runEtsyContentRefresh`). `contentDeps` are test seams only.
+ */
+export async function refreshEtsyContent(options: { maxPages?: number; content?: boolean; contentDeps?: EtsyContentDeps } = {}): Promise<EtsyContentRefreshReport> {
   const report = emptyReport()
   const maxPages = options.maxPages ?? MAX_PAGES
 
@@ -128,15 +169,42 @@ export async function refreshEtsyContent(options: { maxPages?: number } = {}): P
       failed = true
     }
 
+    // E5a — the content pass of this account (inert when Nexus knows none of its listings: no call, no includes). It can
+    // never take the status sweep down: a pass that cannot even load is counted in the content tally and the sweep goes on.
+    let pass: EtsyContentPass | null = null
+    if (options.content && reader) {
+      try {
+        const { startEtsyContentPass } = await import('../services/channel-drift/etsy-content-pass.js')
+        pass = await startEtsyContentPass({ accountId: connection.id, reader, at: await databaseNow(), deps: options.contentDeps })
+      } catch (err) {
+        report.content.errors++
+        const reason = `the content pass could not start: ${err instanceof Error ? err.message : String(err)}`.split(/ — |: /)[0]
+        report.content.reasons[reason] = (report.content.reasons[reason] ?? 0) + 1
+        report.contentSkipped.push({ accountId: connection.id, reason })
+      }
+    }
+
     for (const state of reader ? ETSY_LISTING_STATES : []) {
       const status = ETSY_STATE_TO_LISTING_STATUS[state]
       try {
         let finished = false
         for (let page = 0; page < maxPages; page++) {
-          const answer = await reader!.get<{ results?: EtsyListingRow[]; count?: number }>(
-            `/shops/${reader!.shopId}/listings?state=${state}&limit=${PAGE}&offset=${page * PAGE}`,
-          )
+          const path = `/shops/${reader!.shopId}/listings?state=${state}&limit=${PAGE}&offset=${page * PAGE}`
+          const includes = pass?.includes(state) ?? ''
+          let answer: { results?: EtsyListingRow[]; count?: number }
+          let cause: EtsyPageCause | null = null
+          try {
+            answer = await reader!.get<{ results?: EtsyListingRow[]; count?: number }>(path + includes)
+          } catch (err) {
+            // E5a — the includes are the content pass's, never a reason to lose this page's statuses: on ANY failure the
+            // page is read once more as before (the pass is told, and compares those listings without the page's
+            // details). A page without includes fails as it always did, and so does the plain re-read.
+            if (!includes) throw err
+            cause = withoutContentCause(err)
+            answer = await reader!.get<{ results?: EtsyListingRow[]; count?: number }>(path)
+          }
           const rows = Array.isArray(answer?.results) ? answer.results : []
+          if (cause) pass!.pageWithoutContent(state, rows.map((row) => String(row.listing_id ?? '')), cause)
           if (rows.length === 0) { finished = true; break }
           const now = await databaseNow()
 
@@ -152,6 +220,7 @@ export async function refreshEtsyContent(options: { maxPages?: number } = {}): P
               select: { id: true, listingStatus: true },
             })
             if (listings.length === 0) { report.unmatched++; continue }
+            pass?.collect(row, state)
 
             for (const listing of listings) {
               report.matched++
@@ -177,6 +246,14 @@ export async function refreshEtsyContent(options: { maxPages?: number } = {}): P
       }
     }
 
+    // E5a — compare what the pages brought (never throws; a failed state above leaves its listings out, nothing else).
+    if (pass) {
+      const tally = await pass.finish()
+      addContent(report.content, tally)
+      // A pass that looked at no listing but says why did not run (an inert pass of a shop Nexus knows nothing of says nothing).
+      if (!tally.listings && Object.keys(tally.reasons).length) report.contentSkipped.push({ accountId: connection.id, reason: Object.keys(tally.reasons).join(' · ') })
+    }
+
     if (failed) {
       // F4 — the read failed: every listing it did not freshen says so. Its date is left alone, so
       // it stays exactly as stale as it is (a FAILED read is never a fresh one).
@@ -199,14 +276,19 @@ export async function refreshEtsyContent(options: { maxPages?: number } = {}): P
 export async function runEtsyContentRefresh(): Promise<EtsyContentRefreshReport> {
   let report: EtsyContentRefreshReport | null = null
   await recordCronRun(JOB, async () => {
-    report = await refreshEtsyContent()
+    // E5a — the content comparison ships on; NEXUS_ETSY_CONTENT_DRIFT=0 is its kill switch (the pages are then as before).
+    report = await refreshEtsyContent({ content: process.env.NEXUS_ETSY_CONTENT_DRIFT !== '0' })
     logger.info(`${JOB}: swept`, report)
     // The run's own summary line, so the Health tab shows the numbers and not just "ok".
     // Errors are named in it: a sweep that freshened nothing because every call failed must not
     // read the same as a sweep that found nothing to do (P3.6 — no_data is never a pass).
     const r = report as EtsyContentRefreshReport
+    const c = r.content
+    const skipped = [...new Set(r.contentSkipped.map((s) => s.reason))]
     return {
-      summary: `${r.accounts} account(s), ${r.listingsSeen} listing(s) seen, ${r.freshened} freshened, ${r.statusChanged} status change(s), ${r.unmatched} not in Nexus, ${r.missingAtEtsy} missing at Etsy, ${r.failedStamped} failed, ${r.unreachable} without an account, ${r.truncated.length} state(s) cut at the page cap, ${r.errors.length} error(s)`,
+      summary: `${r.accounts} account(s), ${r.listingsSeen} listing(s) seen, ${r.freshened} freshened, ${r.statusChanged} status change(s), ${r.unmatched} not in Nexus, ${r.missingAtEtsy} missing at Etsy, ${r.failedStamped} failed, ${r.unreachable} without an account, ${r.truncated.length} state(s) cut at the page cap, ${r.errors.length} error(s)`
+        + ` · content: ${c.compared} compared, ${c.drifted} differ, ${c.notCompared} not compared, ${c.extraCalls} extra Etsy call(s), ${c.errors} content error(s)`
+        + (skipped.length ? ` · content pass skipped (${r.contentSkipped.length} account(s)): ${skipped.join(' · ')}` : ''),
     }
   })
   return report ?? emptyReport()

@@ -137,3 +137,58 @@ describe('contentRows — Amazon fields', () => {
     ])
   })
 })
+
+describe('contentRows — Etsy (E5): the review\'s own comparison', () => {
+  const etsy = (content: LiveRead['content']) => read({ source: 'etsy-listing', revision: 'r-etsy',
+    destination: { productId: 'p', channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'acc', aliasKey: '' }, content })
+
+  it('Etsy\'s Tags, Materials and Styles are compared with the sheet\'s Search keywords, Material and Style, as sets (order and case ignored)', () => {
+    const rows = contentRows(etsy({
+      tags: { state: 'value', value: ['Giacca', 'moto', 'Pelle'] },
+      materials: { state: 'value', value: ['Wool', 'cotton'] },
+      styles: { state: 'value', value: ['Boho'] },
+    }), { keywords: ['pelle', 'GIACCA', 'Moto'], material: ['Cotton', 'wool'], style: ['Minimal'] })
+    expect(rows.map(r => [r.field, r.nexus, r.state])).toEqual([
+      ['materials', 'Cotton, wool', 'same'],
+      ['styles', 'Minimal', 'differs'],
+      ['tags', 'pelle, GIACCA, Moto', 'same'],
+    ])
+    // The live list is shown as Etsy holds it; only the comparison folds it.
+    expect(rows.find(r => r.field === 'tags')?.live).toBe('Giacca, moto, Pelle')
+  })
+
+  it('a tag the sheet lacks differs; a description that differs only by Windows line ends or trailing space is the same', () => {
+    const rows = contentRows(etsy({
+      tags: { state: 'value', value: ['giacca', 'moto'] },
+      description: { state: 'value', value: 'Riga uno\r\nRiga due\r\n  ' },
+    }), { keywords: ['giacca'], description: 'Riga uno\nRiga due' })
+    expect(rows.map(r => [r.field, r.state])).toEqual([['description', 'same'], ['tags', 'differs']])
+  })
+
+  it('Item weight and Item size (value + unit objects) are not compared: the sheet holds the number and the unit apart', () => {
+    const rows = contentRows(etsy({
+      item_weight: { state: 'value', value: { value: 1.2, unit: 'kg' } },
+      item_dimensions: { state: 'value', value: { length: 30, width: 20, height: 5, unit: 'cm' } },
+    }), { item_weight: 1.2, item_dimensions: '30 × 20 × 5 cm' })
+    expect(rows.map(r => [r.field, r.state])).toEqual([['item_dimensions', 'not-compared'], ['item_weight', 'not-compared']])
+  })
+
+  it('the title still reads the sheet\'s name; attributes, translations and the variations stay "not compared"', () => {
+    const rows = contentRows(etsy({
+      title: { state: 'value', value: 'Fake jacket' },
+      'property:513': { state: 'value', value: { property_id: 513, property_name: 'Fake material', values: ['Wool'] } },
+      'translation:de': { state: 'value', value: { language: 'de', title: 'Fake Jacke', description: null, tags: [] } },
+      inventory: { state: 'value', value: { products: [] } },
+    }), { name: 'Fake jacket', keywords: ['x'] })
+    expect(rows.map(r => [r.field, r.state])).toEqual([['inventory', 'not-compared'], ['property:513', 'not-compared'], ['title', 'same'], ['translation:de', 'not-compared']])
+  })
+
+  it('other channels keep their rules: an eBay read never maps Tags to Search keywords, and compares lists in order', () => {
+    const rows = contentRows(read({ content: {
+      tags: { state: 'value', value: ['a', 'b'] },
+      materials: { state: 'value', value: ['B', 'a'] },
+      description: { state: 'value', value: 'x\r\ny' },
+    } }), { keywords: ['a', 'b'], materials: ['a', 'B'], description: 'x\ny' })
+    expect(rows.map(r => [r.field, r.state])).toEqual([['description', 'differs'], ['materials', 'differs'], ['tags', 'not-compared']])
+  })
+})

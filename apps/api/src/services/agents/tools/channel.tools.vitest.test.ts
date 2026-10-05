@@ -3,8 +3,8 @@
  * production schema, business-isolation policies and shared-stock doors (PGlite). No mocked query.
  *
  * Proven here: every page is walked with no listing twice and none missed; each filter narrows to exactly the seeded
- * listings it names; a pooled product shows the pool's stock, named as the pool's; eBay price and everything on Etsy
- * say "not checked" and never read as matching; a page that is not the last asks for a filter; a call that has checked
+ * listings it names; a pooled product shows the pool's stock, named as the pool's; eBay price and Etsy price and quantity
+ * say "not checked" and never read as matching (Etsy content is read every 4 hours, E5a); a page that is not the last asks for a filter; a call that has checked
  * its budget of listings hands back a cursor to go on; and a cursor that was changed, or made for other filters,
  * another tool or another business, is refused.
  */
@@ -26,11 +26,14 @@ import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { MAX_RESULT_BYTES } from '../../../lib/pagination/cursor.js'
 import { AMAZON_CONTENT_SOURCE } from '../../channel-drift/amazon-content-compare.js'
 import { EBAY_CONTENT_SOURCE } from '../../channel-drift/ebay-content-compare.js'
+import { ETSY_CONTENT_SOURCE } from '../../channel-drift/etsy-content-compare.js'
 import { READ_BACKS, SYNC_SCAN_BUDGET, coveredAspects, emptySyncSummary, readinessIssue } from './channel.tools.js'
 
 const A = LEGACY_WORKSPACE_ID
 const LENDER = 'ws_mcp9_lender'
 const SCAN = 'ws_mcp9_scan'
+/** E5a NIT-13 — its own business, so no list or total of business A changes: an Etsy family, main row and one variation. */
+const ETSY_FAMILY = 'ws_mcp9_etsy_family'
 
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const inside = <T>(workspaceId: string, work: () => Promise<T>) => withWorkspace(business(workspaceId), work)
@@ -272,11 +275,32 @@ async function seedScan() {
   })
 }
 
+/**
+ * E5a NIT-13 — one Etsy listing for a family (its main row and a variation's row hold the same Listing ID), and the
+ * variation's eBay listing; every push failed, so each is out of sync and listed.
+ */
+async function seedEtsyFamily() {
+  await database.db.query(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, 'Etsy family business', 'active', 'mcp9', $1, CURRENT_TIMESTAMP)`, [ETSY_FAMILY])
+  await inside(ETSY_FAMILY, async () => {
+    const db = database.client
+    const main = await db.product.create({ data: { sku: 'EF-MAIN', name: 'Etsy family', basePrice: '25.00', isParent: true } })
+    const red = await db.product.create({ data: { sku: 'EF-RED', name: 'Etsy family red', basePrice: '25.00', parentId: main.id } })
+    const failed = (productId: string, channel: string, market: string, external: string) => ({
+      productId, channel, marketplace: market, region: market, channelMarket: `${channel}_${market}`, listingStatus: 'ACTIVE',
+      externalListingId: external, quantity: 1, followMasterQuantity: false, lastSyncStatus: 'FAILED', lastSyncError: 'refused',
+    })
+    await db.channelListing.create({ data: failed(main.id, 'ETSY', 'GLOBAL', '9000000001') })
+    await db.channelListing.create({ data: failed(red.id, 'ETSY', 'GLOBAL', '9000000001') })
+    await db.channelListing.create({ data: failed(red.id, 'EBAY', 'IT', 'EXT-EF-RED-EBAY-IT') })
+  })
+}
+
 beforeAll(async () => {
   database = await formulaDatabase()
   await seedA()
   await seedPool()
   await seedScan()
+  await seedEtsyFamily()
 }, 180_000)
 
 afterAll(async () => {
@@ -493,7 +517,7 @@ describe('MCP.9 — out-of-sync-listings', () => {
     expect(pooled.quantity).toEqual({ listed: 3, intended: 9, mode: 'follow' })
   })
 
-  it('eBay price and everything on Etsy say "not checked", never that they match', async () => {
+  it('eBay price and Etsy price, quantity and unread content say "not checked", never that they match', async () => {
     const answer = await call('out-of-sync-listings', { limit: 100 })
     const at = (sku: string, channel: string, market: string) => answer.data!.items.find((item) => key(item) === k(sku, channel, market))!
     const eBay = at('MCP9-P01', 'EBAY', 'IT')
@@ -505,7 +529,9 @@ describe('MCP.9 — out-of-sync-listings', () => {
 
     const etsy = at('MCP9-P03', 'ETSY', 'GLOBAL')
     expect(Object.keys(etsy.notChecked).sort()).toEqual(['content', 'price', 'quantity'])
-    for (const reason of Object.values(etsy.notChecked)) expect(reason).toMatch(/^not checked: Etsy (quantity|price|content) is not read back into Nexus$/)
+    for (const aspect of ['quantity', 'price']) expect(etsy.notChecked[aspect]).toMatch(/^not checked: Etsy (quantity|price) is not read back into Nexus$/)
+    // E5a — Etsy content IS read back now (etsy-content, every 4 hours); this listing has not been read yet.
+    expect(etsy.notChecked.content).toBe('not checked yet: no read-back has looked at this listing')
     expect(etsy.readBack).toEqual([])
     expect(etsy.push).toMatchObject({ status: 'FAILED', error: 'Etsy refused the update' })
 
@@ -522,11 +548,12 @@ describe('MCP.9 — out-of-sync-listings', () => {
     expect(fba.differs).toEqual([expect.objectContaining({ field: 'price', aspect: 'price', nexus: 30, channel: 28 })])
 
     expect(answer.data!.neverChecked).toMatchObject({
-      ETSY: { quantity: expect.stringMatching(/^not checked/), price: expect.stringMatching(/^not checked/), content: expect.stringMatching(/^not checked/) },
+      ETSY: { quantity: expect.stringMatching(/^not checked/), price: expect.stringMatching(/^not checked/) },
       EBAY: { price: expect.stringMatching(/^not checked/) },
       SHOPIFY: { content: expect.stringMatching(/^not checked/) },
     })
     expect(answer.data!.neverChecked).not.toHaveProperty('AMAZON')
+    expect(answer.data!.neverChecked).not.toHaveProperty('ETSY.content')
     expect(JSON.stringify(answer)).not.toMatch(/in sync|in-sync|matches/i)
   })
 
@@ -542,9 +569,21 @@ describe('MCP.9 — out-of-sync-listings', () => {
     expect(second.data!).not.toHaveProperty('more')
   })
 
+  it('E5a NIT-13 — an Etsy variation row points to its main row (never claiming a check); the main row and eBay say "not checked yet"', async () => {
+    const answer = await call('out-of-sync-listings', { limit: 100 }, everything(ETSY_FAMILY))
+    expect(answer.ok, answer.error).toBe(true)
+    const at = (sku: string, channel: string) => answer.data!.items.find((item) => item.sku === sku && item.channel === channel)!
+    expect(at('EF-RED', 'ETSY').notChecked.content)
+      .toBe('not checked on this row: one Etsy listing carries the whole family, so its content is read and compared on its main row (see that row)')
+    expect(at('EF-MAIN', 'ETSY').notChecked.content).toBe('not checked yet: no read-back has looked at this listing')
+    expect(at('EF-RED', 'EBAY').notChecked.content).toBe('not checked yet: no read-back has looked at this listing')
+    // Price and quantity of the Etsy variation are still "not read back".
+    expect(at('EF-RED', 'ETSY').notChecked.price).toMatch(/^not checked: Etsy price is not read back into Nexus$/)
+  })
+
   it('names every read-back that writes ChannelDrift, so no covered aspect is reported "not read back"', () => {
     const SRC = fileURLToPath(new URL('../../../', import.meta.url))
-    const constants: Record<string, string> = { AMAZON_CONTENT_SOURCE, EBAY_CONTENT_SOURCE }
+    const constants: Record<string, string> = { AMAZON_CONTENT_SOURCE, EBAY_CONTENT_SOURCE, ETSY_CONTENT_SOURCE }
     const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
       entry.isDirectory() ? files(join(dir, entry.name)) : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [join(dir, entry.name)] : [])
     const written = new Set<string>()
@@ -557,7 +596,7 @@ describe('MCP.9 — out-of-sync-listings', () => {
     }
     expect(calls).toBeGreaterThanOrEqual(5)
     expect([...written].sort()).toEqual(Object.keys(READ_BACKS).sort())
-    expect(coveredAspects('ETSY')).toEqual([])
+    expect(coveredAspects('ETSY')).toEqual(['content'])
     expect(coveredAspects('EBAY')).toEqual(['quantity', 'content'])
   })
 })
