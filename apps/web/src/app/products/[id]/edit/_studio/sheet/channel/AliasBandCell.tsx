@@ -27,7 +27,7 @@
  * would read as a loading bug. The band names the condition instead, because "this live listing has
  * nothing under it" is the single most useful fact this page can tell an operator about it.
  */
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 
 import { ExpandButton, ExpandSlot, IdentityBand, ProvenanceMark, readinessMeta, useExpanded, type ICellRendererParams, type IRowNode } from '@/design-system/grid'
 import { ProductRoleChip } from '../ProductRoleChip'
@@ -60,6 +60,16 @@ export interface AliasBandCellParams {
    *  verbs today (`channelActions`: HIDDEN off a variant), so the ⋯ does not render; if a verb is
    *  ever declared it appears here without touching this file. */
   menuItems?: MenuItemDef[]
+  /**
+   * S11 — the band's SKU as the first column draws it (`identitySkuColumn.tsx`): the listing's own SKU, its "differs
+   * from Shared" mark and its save marks. Absent = the product SKU, as before.
+   */
+  skuNode?: ReactNode
+  /**
+   * F3 (browser check 2026-10-05) — the band's hover from its own sentence: the first column's last refusal FIRST, then
+   * the sentence (`useIdentitySkuColumn().hover`). Absent = the sentence alone.
+   */
+  titleOf?: (own: string) => string | undefined
 }
 
 /** Everything the 240px band cannot show, in one sentence the whole band carries as its title. */
@@ -166,7 +176,7 @@ export const AliasBandCell = memo(function AliasBandCell(
           <ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this listing has none of its own" />
         ) : null
       }
-      sku={sku}
+      sku={p.skuNode ?? sku}
       secondary={multi ? label : null}
       secondaryTitle={multi ? title : undefined}
       menuItems={p.menuItems}
@@ -174,7 +184,7 @@ export const AliasBandCell = memo(function AliasBandCell(
       /* The readiness pill left the band for the sheet's progress column (2026-09-26). Its tooltip was the band's
          whole sentence (label · listing status · variants · readiness · blocked), so the sentence moves onto the
          band itself — nothing the band used to say is out of reach. */
-      title={title}
+      title={p.titleOf ? p.titleOf(title) ?? title : title}
     />
   )
 })

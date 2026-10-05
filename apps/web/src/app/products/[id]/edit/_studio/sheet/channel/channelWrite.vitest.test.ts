@@ -880,3 +880,46 @@ describe('the next content edit on a row chains on the version the last save ans
     expect(r.values.bulletPoints_1.contentVersion).toBe(6)
   })
 })
+
+/* S11 — a channel scope's first column (the tree column, `ag-Grid-AutoColumn`) is THIS listing's own SKU: `channel_sku`,
+   a channel write on the row's one listing context (channel, market, account, listing alias), CAS on the LISTING's version.
+   Never the product SKU (`sku` as a channel write is refused by the server). */
+describe('the first column — this listing\'s own SKU (S11)', () => {
+  const FIRST = 'ag-Grid-AutoColumn'
+  it('sends channel_sku as a channel write, on the listing context and the listing\'s version', async () => {
+    const seen = captureBody({ updated: 1, currentVersion: 83, versionOf: 'channelListing' })
+    const r = row()
+    const result = await commitChannelRow({ rowId: r.rowId, row: r, expectedVersion: 7, cells: [{ colId: FIRST, value: 'GALE-M-IT', intent: 'set' }] }, { ...coord, accountId: 'acc-1' })
+    expect(seen.body.changes).toEqual([{ id: 'p1', field: 'channel_sku', value: 'GALE-M-IT', target: 'channel', intent: 'set' }])
+    expect(seen.body.marketplaceContexts).toEqual([{ channel: 'EBAY', marketplace: 'IT', accountId: 'acc-1', aliasKey: '' }])
+    expect(seen.body.expectedVersion).toBe(82)
+    expect(result.ok).toBe(true)
+    expect(r.listing!.version).toBe(83)
+    // Never the product SKU.
+    expect(JSON.stringify(seen.body)).not.toContain('"field":"sku"')
+  })
+
+  it('an extra listing\'s row names its alias; emptying the cell follows the Shared SKU again (a reset, no value)', async () => {
+    const seen = captureBody()
+    const r = row({ aliasId: 'al_2', rowId: 'al_2:p1' })
+    await commitChannelRow({ rowId: r.rowId, row: r, cells: [{ colId: FIRST, value: null, intent: 'reset' }] }, coord)
+    expect(seen.body.changes).toEqual([{ id: 'p1', field: 'channel_sku', value: null, target: 'channel', intent: 'reset' }])
+    expect(seen.body.marketplaceContexts[0].aliasKey).toBe(wireAliasKey('al_2'))
+  })
+
+  it('the server\'s refusal is the first column\'s, with its sentence', async () => {
+    const sentence = 'eBay · IT holds GALE-JACKET-BLACK-MEN-M. Moving a live listing to a new SKU comes with Publish\'s move step; Delete it there first, or wait for that step.'
+    captureBody({ updated: 0, errors: [{ id: 'p1', field: 'channel_sku', error: sentence }] })
+    const r = row()
+    const result = await commitChannelRow({ rowId: r.rowId, row: r, cells: [{ colId: FIRST, value: 'NEW-SKU', intent: 'set' }] }, coord)
+    expect(result.ok).toBe(false)
+    expect(result.cells?.[FIRST]).toEqual({ ok: false, reason: sentence })
+  })
+
+  it('beside an ordinary listing cell: one request, each cell its own field', async () => {
+    const seen = captureBody({ updated: 2 })
+    const r = row()
+    await commitChannelRow({ rowId: r.rowId, row: r, cells: [{ colId: FIRST, value: 'GALE-M-IT', intent: 'set' }, { colId: 'material', value: 'Leather', intent: 'set' }] }, coord)
+    expect(seen.body.changes.map((c: { field: string }) => c.field)).toEqual(['channel_sku', 'material'])
+  })
+})

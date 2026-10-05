@@ -485,8 +485,13 @@ export function operationSentence(change: PublishActionChange, result: Pick<Publ
  * before any write folded into their column's first sentence, and the tone of the worst result. `quiet` = a single
  * cell that simply took its value: the cell says so itself, no toast.
  */
-export function operationToast(outcomes: readonly PublishActionWriteOutcome[], refusedEarly: ReadonlyArray<{ column: Column; sku: string; reason: string }>):
+export function operationToast(outcomes: readonly PublishActionWriteOutcome[], refusedEarly: ReadonlyArray<{ column: Column; sku: string; reason: string }>,
+  /** S11 follow-up — how the sheet names a listing (a channel scope: the SKU it holds or sends); absent = the answer's SKU. */
+  labelOf?: (listingId: string) => string | null):
   { message: string; tone: 'success' | 'warning' | 'danger'; quiet: boolean } | null {
+  if (labelOf) outcomes = outcomes.map(outcome => outcome.ok ? { ...outcome,
+    refused: outcome.refused.map(r => ({ ...r, sku: labelOf(r.listingId) ?? r.sku })),
+    conflicts: outcome.conflicts.map(c => ({ ...c, sku: labelOf(c.listingId) ?? c.sku })) } : outcome)
   const sentences: string[] = []
   let tone: 'success' | 'warning' | 'danger' = 'success'
   const early = new Map<Column, Array<{ listingId: string; sku: string; reason: string }>>()

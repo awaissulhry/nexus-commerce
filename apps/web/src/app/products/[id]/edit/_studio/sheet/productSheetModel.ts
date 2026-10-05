@@ -33,6 +33,8 @@ export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = Sheet
   status: Omit<GridSheetStatusProps, 'pending' | 'saving' | 'refused' | 'warned' | 'lastSavedAt' | 'source'>
   footerNote: Omit<SheetFooterNoteProps, 'offline' | 'refused' | 'retryable' | 'lastSavedAt' | 'source'>
   footerBefore?: ReactNode
+  /** The status strip's START slot, bottom left before the row count: Add rows (`newRows/NewRowsControl`). */
+  footerStart?: ReactNode
   /** Rendered inside the status strip BEFORE the note slot — the channel scope's cross-channel notice sat there. */
   footerLead?: ReactNode
   footerExtra?: ReactNode

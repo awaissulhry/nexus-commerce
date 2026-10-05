@@ -194,7 +194,7 @@ describe('setChannelSku — the one writer', () => {
 
   it('🔴 another product holds it on the same account (its own SKU, any case; or an old offer): refused, naming that product', async () => {
     expect(await refusal(write('me', 'held-1'))).toEqual({ code: 'SKU_TAKEN',
-      message: 'held-1 is already the SKU of W-HOLDER on this Amazon account (Amazon IT). Within one channel account a SKU names one product: choose another SKU.' })
+      message: 'held-1 is already the SKU of W-HOLDER on this Amazon account (Amazon · IT). Within one channel account a SKU names one product: choose another SKU.' })
     expect(await refusal(write('me', 'HELD-BY-OFFER'))).toMatchObject({ code: 'SKU_TAKEN', message: expect.stringContaining('the SKU of W-HOLDER on this Amazon account') })
     expect((await readListing('me'))!.channelSku).toBeNull()
   })

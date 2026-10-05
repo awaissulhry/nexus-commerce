@@ -1218,17 +1218,22 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Alias CRUD ────────────────────────────────────────────────────
   fastify.post('/products/:id/aliases', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = (request.body ?? {}) as { channel?: unknown; marketplace?: unknown; label?: unknown; accountId?: unknown }
+    const body = (request.body ?? {}) as { channel?: unknown; marketplace?: unknown; label?: unknown; accountId?: unknown; sku?: unknown }
     const channel = String(body.channel ?? '').trim().toUpperCase()
     const marketplace = String(body.marketplace ?? '').trim().toUpperCase()
     if (body.accountId !== undefined && (typeof body.accountId !== 'string' || !body.accountId.trim()))
       return reply.code(400).send({ error: 'accountId must identify a connected account when supplied' })
+    // Add rows (R3, 2026-10-05) — the sheet's empty "Listing (alias)" row sends the SKU typed into it.
+    if (body.sku !== undefined && typeof body.sku !== 'string') return reply.code(400).send({ error: 'sku must be text when supplied' })
     if (!channel || !marketplace) {
       return reply.code(400).send({ error: 'channel and marketplace are required', hint: 'e.g. { channel: "EBAY", marketplace: "IT" }' })
     }
     try {
       const actor = (request as { authUser?: { id?: string } }).authUser?.id ?? null
-      const alias = await createAlias({ productId: id, channel, marketplace, accountId: body.accountId ? String(body.accountId) : undefined, label: body.label ? String(body.label) : undefined, createdBy: actor })
+      // A SKU sent here is the new listing's channel SKU too (one SKU, one place: `createAlias` → `setChannelSku`).
+      const sku = typeof body.sku === 'string' ? body.sku : undefined
+      const alias = await createAlias({ productId: id, channel, marketplace, accountId: body.accountId ? String(body.accountId) : undefined, label: body.label ? String(body.label) : undefined,
+        createdBy: actor, ...(sku !== undefined ? { sku, channelSku: true } : {}) })
       return reply.code(201).send(alias)
     } catch (err) {
       return sendError(reply, err, request.log, { id, channel, marketplace })

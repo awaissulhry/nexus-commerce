@@ -204,7 +204,7 @@ export function notListedHeld(channel: string, familyId: string, cells: readonly
 // ── The review ───────────────────────────────────────────────────────────────────────────────────
 
 type ContentPreview = (productId: string, scope: StudioPublishScope, userId: string | null, options: { fullProductIds?: string[] }) => Promise<StudioPublishReview>
-type ActionPlan = (productId: string, action: ListingAction, body: unknown) => Promise<{ rows: Array<{ productId: string; plan: string; sentence: string; warning?: string | null }>;
+type ActionPlan = (productId: string, action: ListingAction, body: unknown) => Promise<{ rows: Array<{ productId: string; plan: string; sentence: string; warning?: string | null; heldSku?: string }>;
   consequence: string; checkedAtSend: string | null; sendCount: number; reach: string }>
 
 export interface PublishPlanDeps {
@@ -289,7 +289,9 @@ async function lifecycleRowsOf(family: { familyId: string; hasVariations: boolea
       const stale = isStaleWaiting({ setAt: value.setAt, setById: value.setById }, actor.userId, now)
       rows.push({
         id: planRowId(value.column, value.cell.listingId, value.setAt, action), listingId: value.cell.listingId, productId: value.cell.productId,
-        sku: value.cell.sku, isParent: value.cell.productId === familyId && family.hasVariations,
+        // S11 follow-up — the SKU this End, Delete, Pause or Resume acts on: the one the channel holds for the listing (the
+        // listing action's own row), not the product SKU in its place.
+        sku: own?.heldSku ?? value.cell.sku, isParent: value.cell.productId === familyId && family.hasVariations,
         column: value.column, value: value.value, action, step: lifecycleStep(action), state: value.cell.state,
         sentence: own?.plan === 'send' ? own.sentence : read && read.sendCount > 0 ? consequence : own?.sentence ?? consequence,
         consequence, warning: own?.warning ?? option?.warning ?? null, checkedAtSend: read?.checkedAtSend ?? option?.checkedAtSend ?? null,

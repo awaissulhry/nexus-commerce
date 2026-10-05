@@ -116,7 +116,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
       />{model.toolbarExtra}</>}
       footer={!model.loading && !model.unavailable && <>
         {model.footerBefore}
-        <GridSheetStatus {...model.status} source={model.saveStatus}>
+        <GridSheetStatus {...model.status} source={model.saveStatus} start={model.footerStart}>
           {model.footerLead}
           <SheetFooterNote {...model.footerNote} source={model.saveStatus} />
           {model.footerExtra}

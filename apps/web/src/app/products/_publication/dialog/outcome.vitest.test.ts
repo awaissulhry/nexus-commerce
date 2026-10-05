@@ -104,6 +104,9 @@ describe('counts and labels', () => {
   })
   it('names a destination the way every message does', () => {
     expect(destinationLabel('EBAY', 'DE')).toBe('eBay · DE')
+    // F4 (browser check 2026-10-05): a GLOBAL market reads as the channel's name alone.
+    expect(destinationLabel('SHOPIFY', 'GLOBAL')).toBe('Shopify')
+    expect(destinationLabel('ETSY', 'GLOBAL')).toBe('Etsy')
   })
   it('settles on a final status only', () => {
     expect(isSettled('PARTIAL')).toBe(true)

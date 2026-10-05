@@ -2,6 +2,7 @@
 
 import { useState, useCallback, memo } from 'react'
 import { logger } from '@/lib/logger'
+import { commandKeyFor, sendCommand } from '@/lib/command-key'
 import ChannelListingImageUploader from '@/components/catalog/ChannelListingImageUploader'
 import VariationMatrixTable from './VariationMatrixTable'
 import VariationGenerator from '@/components/catalog/VariationGenerator'
@@ -178,7 +179,9 @@ function MasterCatalogTabComponent({
       }
 
       // Call the API to create the variant
-      const response = await fetch(
+      // One Idempotency-Key per new variant (the API keeps receipts for this route).
+      const sent = await sendCommand<any>(
+        commandKeyFor(`variation-create:${product.id}`),
         `http://localhost:3001/api/catalog/products/${product.id}/children`,
         {
           method: 'POST',
@@ -192,12 +195,12 @@ function MasterCatalogTabComponent({
         }
       )
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error?.message || 'Failed to create variant')
+      if (!sent.response.ok) {
+        const error = sent.body ?? {}
+        throw new Error(error.error?.message || (typeof error.error === 'string' ? error.error : '') || 'Failed to create variant')
       }
 
-      const result = await response.json()
+      const result = sent.body
       
       // Add the new variant to the list
       setChildProducts((prev) => [...prev, result.data])

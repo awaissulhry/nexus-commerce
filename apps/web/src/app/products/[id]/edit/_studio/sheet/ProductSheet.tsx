@@ -5,6 +5,7 @@ import { ThemeChangePlanHost } from '../variants/channel/ThemeChangePlanHost'
 import { ProductSheetSurface } from './ProductSheetSurface'
 import { useMasterSheetAdapter, type MasterSheetProps } from './master/useMasterSheetAdapter'
 import { useChannelSheetAdapter, type ChannelSheetProps } from './channel/useChannelSheetAdapter'
+import { ChannelIdControlProvider } from './channel/channelIdControl'
 
 export type ProductSheetProps =
   | ({ scope: 'master' } & MasterSheetProps)
@@ -16,7 +17,13 @@ function SharedProductAdapter(props: MasterSheetProps) {
 
 function ListingAdapter(props: ChannelSheetProps) {
   return (
-    <>
+    /**
+      * The Item ID / Listing ID / Product ID / ASIN control (docs/sheet-ids-sku-rows A2, steps I1–I4) wraps the CHANNEL
+      * sheet here, for the same reason as the plan host below: the studio renders `<ProductSheet scope="channel">`
+      * from `ProductSheetTab`, never `ChannelSheet.tsx`. Mounted there first, every id cell found no control and showed
+      * only Copy and Open (browser check 2026-10-05). The Shared scope has no channel id cell, so it gets none.
+      */
+    <ChannelIdControlProvider channel={props.channel} marketplace={props.marketplace}>
       <ProductSheetSurface {...useChannelSheetAdapter(props)} />
       {/**
         * VT.2c — the host for VT.4's dry-run theme-change plan (design §3.5's locked-commit rule): a
@@ -33,7 +40,7 @@ function ListingAdapter(props: ChannelSheetProps) {
         * returns `locked: null` there), and two hosts would open two modals for one commit.
         */}
       <ThemeChangePlanHost />
-    </>
+    </ChannelIdControlProvider>
   )
 }
 

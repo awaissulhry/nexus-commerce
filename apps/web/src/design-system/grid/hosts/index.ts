@@ -1,5 +1,6 @@
 export { GridCard, GridPanel, type GridCardProps } from './GridCard'
-export { GridSheet, GridSheetStatus, SHEET_GRID_OPTIONS, type GridSheetProps, type GridSheetStatusProps } from './GridSheet'
+export { GridSheet, GridSheetStatus, SHEET_GRID_OPTIONS, GRID_SHEET_STATUS_WIDE, type GridSheetProps, type GridSheetStatusProps } from './GridSheet'
+export { UNSAVED_ROW_CLASS, isUnsavedRowData } from './unsavedRow'
 export { GridToastBoundary } from './GridToastBoundary'
 // AG.1 (#286) — horizontal scroll BY POSITION. AG 36.1 has no horizontal-scroll setter, and
 // `ensureColumnVisible`'s target is column-derived, so it cannot express "clear of an overlay".

@@ -435,6 +435,11 @@ export interface StudioRow {
   listing: SheetListing | null
   /** Amazon sheet gaps — the Matrix cells the stock columns show and write (API `StudioRowStock`); absent off the Matrix's channels. */
   stock?: StudioRowStock
+  /**
+   * S11 — the first column's SKU on this channel scope (API `StudioRow.skuFacts`): the SKU Publish sends for this row's
+   * listing, whether it differs from the Shared SKU (`sku`), and whether it can be edited here. `../identitySkuEdit.ts`.
+   */
+  skuFacts?: import('../identitySkuEdit').IdentitySkuFacts
   /** Filled ÷ applicable master attributes — what the drawer's completeness footer reads. */
   completeness: MasterCompleteness
   /**

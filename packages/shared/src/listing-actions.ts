@@ -559,6 +559,11 @@ export interface ListingActionPlanRow {
   productId: string
   listingId: string | null
   sku: string
+  /**
+   * S11 follow-up (per-channel SKU) — the SKU this action names on the channel for the row's listing when it is not the
+   * product SKU (`sku`): the one the channel holds (its own SKU there). The Publish window names an End or a Delete by it.
+   */
+  heldSku?: string
   plan: ListingActionRowPlan
   /** What happens to this row, or why nothing does (plain English). */
   sentence: string

@@ -18,6 +18,7 @@ import { DetailPopoverExample } from './DetailPopoverExample'
 import { ProgressExample } from './ProgressExample'
 import { PublishStatusExample } from './PublishStatusExample'
 import { SellingStatusExample } from './SellingStatusExample'
+import { SheetFooterStartExample } from './SheetFooterStartExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
@@ -863,6 +864,9 @@ export function TokenCatalog() {
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Status and Action columns</div>
           <SellingStatusExample />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Sheet footer start slot · unsaved rows</div>
+          <SheetFooterStartExample />
           <div style={{ marginTop: 18, color: 'var(--nds-text)', fontWeight: 600 }}>Value sources · compact container</div>
           <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 16px', maxWidth: 320 }} aria-label="Value source indicators">
             <SourceIndicator showLabel kind="master" label="Follows Shared" description="Uses the resolved Shared value through the channel mapping" />

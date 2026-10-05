@@ -404,6 +404,11 @@ export interface PlanConfirm {
   moved?: number
   /** The destinations with a ticked Ended or Delete row ("eBay · IT"). */
   places: string[]
+  /**
+   * S11 follow-up — the SKUs the ticked End and Delete rows act on: the ones the channel holds for those listings (the
+   * plan's lifecycle rows name them), so the confirmation says what is ended or deleted, not the product SKU in its place.
+   */
+  skus?: { ended: string[]; deleted: string[] }
 }
 
 export interface ActionPlanSend {
@@ -473,7 +478,9 @@ export function actionPlanSend(keys: readonly string[], stateOf: (key: string) =
     const expected = keys.map(key => entryOf(key).familySku).find((sku): sku is string => !!sku)
       ?? moving.map(key => entryOf(key).review?.confirm?.expected).find((sku): sku is string => !!sku) ?? ''
     const moved = moving.reduce((n, key) => n + movedRowsTicked(entryOf(key)), 0)
-    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(moved ? { moved } : {}) }
+    const skusOf = (action: 'end' | 'delete') => [...new Set(rows.filter(row => row.action === action).map(row => row.sku))]
+    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(moved ? { moved } : {}),
+      ...(rows.length ? { skus: { ended: skusOf('end'), deleted: skusOf('delete') } } : {}) }
   }
   const locked = plans.flatMap(plan => plan.lifecycle).filter(row => row.refused === ROLE_CANNOT_END_OR_DELETE)
   const roleLocked = { ended: locked.filter(row => row.action === 'end').length, deleted: locked.filter(row => row.action === 'delete').length }
@@ -545,11 +552,20 @@ export function planStateLabel(state: DestinationState, entry: Pick<DestinationE
   return label
 }
 
-/** "to end 1 listing and delete 1 on eBay · IT" — the words after "Type GALE-JACKET". */
-export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved'>): string {
+const listed = (names: readonly string[]) => names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+
+/**
+ * "to end GALE-M-IT and delete GALE-L on eBay · IT" — the words after "Type GALE-JACKET". Up to three listings are named by
+ * the SKU each End or Delete acts on (`skus`, one per listing); more, or one SKU on several markets, are counted ("to end 1
+ * listing and delete 4 on 3 markets").
+ */
+export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved' | 'skus'>): string {
+  const skus = confirm.skus
+  const named = !!skus && skus.ended.length === confirm.ended && skus.deleted.length === confirm.deleted && confirm.ended + confirm.deleted <= 3
   const parts = [
-    confirm.ended ? `end ${plural(confirm.ended, 'listing', 'listings')}` : null,
-    confirm.deleted ? (confirm.ended ? `delete ${confirm.deleted.toLocaleString('en')}` : `delete ${plural(confirm.deleted, 'listing', 'listings')}`) : null,
+    confirm.ended ? named ? `end ${listed(skus!.ended)}` : `end ${plural(confirm.ended, 'listing', 'listings')}` : null,
+    confirm.deleted ? named ? `delete ${listed(skus!.deleted)}`
+      : (confirm.ended ? `delete ${confirm.deleted.toLocaleString('en')}` : `delete ${plural(confirm.deleted, 'listing', 'listings')}`) : null,
     // S10 — "move 1 listing to its new SKU (its old SKU is deleted)".
     confirm.moved ? `move ${plural(confirm.moved, 'listing', 'listings')} to ${confirm.moved === 1 ? 'its new SKU (its old SKU is deleted)' : 'their new SKUs (their old SKUs are deleted)'}` : null,
   ].filter(Boolean).join(' and ')

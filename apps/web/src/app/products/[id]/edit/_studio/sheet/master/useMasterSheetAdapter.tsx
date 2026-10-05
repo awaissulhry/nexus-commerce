@@ -63,7 +63,7 @@ import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
 import { useSheetControl } from '../useSheetControl';
 import { controlColumnFacts, isClearKey, masterResetOffer, selectedCells } from '../sheetReset';
 import type { PublishActionCell, PublishActionChange } from '@nexus/shared/publish-actions';
-import { CellSaveTracker, SELLING_ROW_MARK_CLASS, rowCarriesInactiveMark, waitingWhen } from '@/design-system/grid';
+import { CellSaveTracker, SELLING_ROW_MARK_CLASS, UNSAVED_ROW_CLASS, isUnsavedRowData, rowCarriesInactiveMark, waitingWhen } from '@/design-system/grid';
 import { PublishActionFence, SKIP_CELL, groupStaged, isInactiveCell, isWaitingCell, usePublishActions, waitingStatusMark, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type PublishWriteGroup, type StagedPublishCell } from '../usePublishActions';
 import { STATUS_COLUMN, type PublishCellReadState } from '../channel/statusColumn';
 import { ACTION_COLUMN, PublishActionMenu } from '../channel/actionColumn';
@@ -73,6 +73,14 @@ import { sharedStatusColumn, sharedStatusSheetColumn } from './sharedStatusColum
 import { listingLabel, sharedActionColumn, sharedActionMenuEntries, sharedActionSheetColumn, sharedDeleteImpact, sharedDeletedRefusal, sharedOperationToast } from './sharedActionColumn';
 import { useToast } from '@/design-system/components';
 import type { SheetExportMode } from '../sheetExport';
+import { useIdentitySkuColumn } from '../identitySkuColumn';
+import { skuRenameMessage, type IdentitySkuScope, type SkuRename } from '../identitySkuEdit';
+import { useStudioSkuRenamed } from '../../contracts';
+import { NewRowCell } from '../newRows/NewRowCell';
+import { NewRowsControl } from '../newRows/NewRowsControl';
+import { newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget, type NewRowsStore } from '../newRows/useNewRows';
+import { lockedOnNewRows, newRowRefusal, sharedNewRow, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
+import type { NewRowKind } from '../newRows/newRows';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 /* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
    layout that hides or pins it keeps doing so in every language. */
@@ -93,8 +101,17 @@ function ProductCell(p: ICellRendererParams<StudioRow> & {
     rowMenuRef?: {
         current: (row: StudioRow) => MenuItemDef[];
     };
+    /** S11 — the SKU as the editable first column draws it (save marks). */
+    identityRef?: {
+        current: (row: StudioRow) => React.ReactNode;
+    };
+    /** Add rows — an empty row draws its own cell (SKU so far, state, remove). */
+    newRows?: NewRowsStore;
 }) {
     const expanded = useExpanded(p.node);
+    const fresh = unsavedOf(p.data);
+    if (fresh)
+        return <NewRowCell row={fresh} expand={<ExpandSlot />} onRemove={(id) => p.newRows?.remove(id)}/>;
     const d = p.data;
     if (!d)
         return null;
@@ -102,7 +119,7 @@ function ProductCell(p: ICellRendererParams<StudioRow> & {
     const expander = parent && d.childCount > 0 ? (<ExpandButton expanded={expanded} onToggle={() => p.node.setExpanded(!expanded)} labels={['Expand children', 'Collapse children']}/>) : (<ExpandSlot />);
     const role = <ProductRoleChip product={d}/>;
     const line = p.secondaryRef ? identitySecondary(d, p.secondaryRef.current) : d.name;
-    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`}/>);
+    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={p.identityRef ? p.identityRef.current(d) : d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`}/>);
 }
 interface SheetPageState {
     search: string;
@@ -114,6 +131,10 @@ const SHARED_SCOPE_LABEL = 'Shared product';
 /** Build shape v2, P9 — the shared scope reads the waiting Status and Action values of every market of the family. */
 const SHARED_DESTINATION = {};
 const NO_CELLS: readonly PublishActionCell[] = [];
+/** S11 — the Shared scope's first column renames the product SKU. */
+const SHARED_SKU_SCOPE: IdentitySkuScope = { kind: 'shared' };
+/** Add rows — the Shared scope adds variations. */
+const SHARED_ROW_KINDS: readonly NewRowKind[] = ['variation'];
 export function useMasterSheetAdapter({ productId, market, locale, variationAxes = NO_VARIATION_AXES as string[] }: MasterSheetProps): ProductSheetModel<StudioRow, SheetPageState, DrawerSheetRow> {
     const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, clearSelection, rowSelection, selectedRows, setSelectedRows, announceRefusals } = useProductSheetInteraction<StudioRow>('master');
     const savedAtRef = useRef<(at: string) => void>(() => undefined);
@@ -150,6 +171,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* The family read (`useFamily`, below) is refreshed after an accepted theme save — the family bar and "Add child" read
        the axes from it. A ref, because that read is created after this hook. */
     const reloadFamilyRef = useRef<() => void>(() => undefined);
+    /* S11 — a Shared rename the server made: its sentence about the channels, and the studio's header shows the new SKU. */
+    const skuRenamedRef = useRef<(renames: SkuRename[]) => void>(() => undefined);
+    const studioSkuRenamed = useStudioSkuRenamed();
     const { sheet: loadedSheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
         onVariationThemeSaved: () => reloadFamilyRef.current(),
@@ -159,6 +183,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
            implementation in `useProductSheetInteraction`, so both scopes and both moments (fresh
            refusal, and returning to a marked cell) say it one way. */
         onRefused: announceRefusals,
+        onSkuRenames: (renames) => skuRenamedRef.current(renames),
     });
     const sheet = useReferenceNames(loadedSheet, 'MASTER', market);
     useSheetPublicationGuard(writer, tracker, getGridApi);
@@ -268,6 +293,24 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
     const { toast } = useToast();
+    /* Add rows (R2) — empty rows in page memory; the SKU typed into one creates a draft variation (`../newRows/`). */
+    const familyRoot = rows.find((row) => !row.parentId);
+    const newRows = useNewRows({ kinds: SHARED_ROW_KINDS, registerScopeChangeGuard: languageScope.registerScopeChangeGuard, say: toast, getGridApi,
+        target: () => variationTarget(familyRoot, canEdit), skuContext: () => ({ family: familyQuery.family, takenSkus: rows.map((row) => row.sku) }),
+        onCreated: () => { refresh(); familyQuery.reload(); refreshReadinessSoon(); } });
+    useEffect(() => newRows.store.landed(new Set(rows.map((row) => row.id))), [rows, newRows.store]);
+    /* S11 — the first column renames the product SKU (`../identitySkuColumn.tsx`, rules in `../identitySkuEdit.ts`). */
+    const identitySku = useIdentitySkuColumn<StudioRow>({ scope: SHARED_SKU_SCOPE, tracker, writer, getGridApi, rowIdOf: (row) => row.id, recordUndo: undo.record, announce: announceRefusals,
+        onCreate: (row, sku) => { newRows.store.type(row.id, sku); } });
+    const identityRef = useRef(identitySku.node);
+    skuRenamedRef.current = (renames) => {
+        const message = skuRenameMessage(renames);
+        if (message)
+            toast(message, 'success', { duration: 10000 });
+        // What shows the SKU outside the grid: the studio header and Publish window, and the family bar's own read.
+        studioSkuRenamed(renames);
+        reloadFamilyRef.current();
+    };
     /* Cell details (2026-10-04) — how the Shared scope describes a cell; the window, its cell-menu item (right-click,
        Shift+F10) and its ⋯ item are the shared control's. Read through refs when it opens: the columns, the rows, the AI
        drafts and the formulas all arrive after this point. */
@@ -287,6 +330,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     });
     cellMenuRef.current = control.cellMenuItems;
     refusalReason.current = (key, row) => {
+        const fresh = newRowRefusal(key, row);
+        if (fresh !== undefined)
+            return fresh;
         if (key === PRODUCT_MEDIA_COLUMN || key === STATUS_COLUMN || key === ACTION_COLUMN)
             return null;
         const column = columnByKeyRef.current.get(key);
@@ -462,7 +508,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* A new read (or a permission answer) repaints only the cells whose value changed (`equals`). */
     useEffect(() => { getGridApi()?.refreshCells({ columns: [STATUS_COLUMN, ACTION_COLUMN] }); }, [publishActions.version, publishRead, getGridApi]);
     /* The inactive row-start mark — when ANY market of the product is inactive; a row whose mark changed is redrawn. */
-    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: StudioRow }) => !!p.data && rowCarriesInactiveMark(publishCellsOf(p.data).map((cell) => cell.state)) }), [publishCellsOf]);
+    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: StudioRow }) => !!p.data && rowCarriesInactiveMark(publishCellsOf(p.data).map((cell) => cell.state)),
+        [UNSAVED_ROW_CLASS]: (p: { data?: StudioRow }) => isUnsavedRowData(p.data) }), [publishCellsOf]);
     const inactiveRowIds = useRef(new Set<string>());
     useEffect(() => {
         const next = new Set(rows.filter((row) => publishCellsOf(row).some(isInactiveCell)).map((row) => row.id));
@@ -498,6 +545,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const onReload = useCallback(async () => {
         const impact = reloadImpact({ pending: writer.pending, refused, unknown: writer.unknownCount });
         if (!impact) {
+            newRows.store.clear();
             reload();
             refreshReadiness();
             return;
@@ -506,9 +554,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             return;
         reporter.cleared(sheet?.rows.map(row => row.id) ?? [...refusedRowIds]);
         writer.discard();
+        newRows.store.clear();
         reload();
         refreshReadiness();
-    }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm, refreshReadiness]);
+    }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm, refreshReadiness, newRows.store]);
     /** "Refresh progress": the rows' own bars (a quiet re-read — edits in flight stay) and the channel · market bars. */
     const refreshProgress = useCallback(() => { refresh(); refreshReadiness(); }, [refresh, refreshReadiness]);
     const progressMenu = useCallback(() => {
@@ -595,6 +644,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             api.refreshCells({ force: true });
     }, [activeChip]);
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
+    /* Add rows — the empty rows after the rows on screen (no search or filter hides them; the row count leaves them out). */
+    const gridRows = useMemo(() => withNewRows<StudioRow>(visibleRows, newRows.rows, (row) => sharedNewRow(row, familyRoot?.id ?? productId)), [visibleRows, newRows.rows, familyRoot?.id, productId]);
     const attributeColumns = useMemo(() => (sheet ? control.decorate(buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef)) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring, control.decorate]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
     /* Progress columns (2026-09-26) — what the card's actions call. Read through refs: the column set is built before
@@ -664,7 +715,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             .map((c, i) => ({ c, r: rankOfColumn(c, rank), i }))
             .sort((a, b) => a.r - b.r || a.i - b.i)
             .map((x) => x.c);
-        return [...identityColumns, ...progressColumns, ...statusActionColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered];
+        // Add rows — on an empty row every cell but the SKU is locked and blank (`lockedOnNewRows`).
+        return lockedOnNewRows([...identityColumns, ...progressColumns, ...statusActionColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered]);
     }, [identityColumns, attributeColumns, progressColumns, statusActionColumns, schemaColumns, viewCtx, mediaEditor.open, mediaEditor.actions]);
     const getRowId = useCallback((p: {
         data: StudioRow;
@@ -678,12 +730,18 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         pinned: 'left',
         lockPinned: true,
         lockPosition: 'left',
-        cellRenderer: ProductCell, cellClass: 'nds-ag-cell', suppressHeaderMenuButton: true,
-        cellRendererParams: { secondaryRef, rowMenuRef },
+        cellRenderer: ProductCell, cellClass: (p: { data?: StudioRow }) => (unsavedOf(p.data) ? 'nds-ag-cell nds-cell-full-strength' : 'nds-ag-cell'), suppressHeaderMenuButton: true,
+        cellRendererParams: { secondaryRef, rowMenuRef, identityRef, newRows: newRows.store },
         headerTooltip: 'Family — a parent and its children',
-    }), [bandWidth]);
+        // S11 — editable: the product SKU (its editor, keys, save marks and refusals; Enter still opens the record).
+        ...identitySku.columnDef,
+    }), [bandWidth, identitySku.columnDef, newRows.store]);
     // Wave 2 E14 — paste with a header row: the same module as the channel scopes (`../headerPaste`).
     const headerPaste = useHeaderPaste<StudioRow>(customisableColumns.map((c) => ({ colId: c.key, headerName: c.label, formerNames: c.formerNames })), (message, tone) => toast(message, tone));
+    // Add rows — a paste on an empty row's SKU fills the empty rows; any other paste is the header-aware one.
+    const pasteIntoNewRows = useMemo(() => newRowsPaste(newRows.store, headerPaste.processDataFromClipboard), [newRows.store, headerPaste.processDataFromClipboard]);
+    // Add rows — an empty row's cell menu holds only "Remove this row".
+    const menuWithNewRows = useMemo(() => newRowsContextMenu(newRows.store, stableContextMenu), [newRows.store, stableContextMenu]);
     const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true, ...headerPaste.defaultColDef }), [headerPaste.defaultColDef]);
     const onCellValueChanged = useCallback((e: {
         data: StudioRow;
@@ -695,6 +753,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         source?: string;
     }) => {
         const colId = e.colDef.colId;
+        if (identitySku.onValueChanged(e))
+            return;
         if (!writeGate({ colId, source: e.source, selfInflicted: false, oldValue: e.oldValue, newValue: e.newValue }).write)
             return;
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
@@ -743,7 +803,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         }
         undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
         writer.set(e.data.id, colId!, e.newValue, { row: e.data });
-    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record]);
+    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;
@@ -897,6 +957,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             ],
         },
         toolbarExtra: <></>,
+        footerStart: <NewRowsControl {...newRows.control}/>,
         status: {
             rows: visibleRows.length,
             /* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */
@@ -922,11 +983,11 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         grid: {
             noRowsOverlayComponentParams: emptyState,
             ...mediaClipboard,
-            getContextMenuItems: stableContextMenu,
+            getContextMenuItems: menuWithNewRows,
             flatTree: true,
             groupDefaultExpanded: -1,
             tooltipShowDelay: 300,
-            rowData: loading ? [] : visibleRows,
+            rowData: loading ? [] : gridRows,
             onFirstDataRendered: remeasureSoon,
             onRowDataUpdated: remeasureSoon,
             onDisplayedColumnsChanged: replayReveal,
@@ -945,12 +1006,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             // The same events open and close the Status and Action fence (P9).
             ...publishFenceProps,
             rowClassRules: rowClassRules,
-            processDataFromClipboard: headerPaste.processDataFromClipboard,
+            processDataFromClipboard: pasteIntoNewRows,
             loading: loading,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (newRowsGridKey(newRows.store, event as never)) return; if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             onCellFocused: onCellFocused,
         },
         gridOverlay: null,

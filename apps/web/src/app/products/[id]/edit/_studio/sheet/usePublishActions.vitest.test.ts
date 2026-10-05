@@ -186,6 +186,16 @@ describe('the ONE toast of an operation', () => {
     expect(operationToast([failed], [])).toMatchObject({ tone: 'danger', message: 'Delete was not saved: Your role cannot end or delete listings.' })
   })
 
+  it('S11 follow-up — a channel scope names each refused or conflicting listing by its own SKU (the sheet\'s label); unknown ids keep the answer\'s', () => {
+    const outcome = { ...ok({ column: 'send', mode: 'delete' }, 1, [['GALE-M', 'Already deleted on Amazon · IT.'], ['GALE-L', 'Nothing to delete yet.']]),
+      conflicts: [{ listingId: 'c0', sku: 'GALE-S', setAt: null, setByName: 'Ana' }] }
+    const labels: Record<string, string> = { r0: 'GALE-M-IT', c0: 'GALE-S-IT' }
+    expect(operationToast([outcome], [], id => labels[id] ?? null)!.message)
+      .toBe(operationToast([{ ...outcome, refused: [{ listingId: 'r0', sku: 'GALE-M-IT', reason: 'Already deleted on Amazon · IT.' }, { listingId: 'r1', sku: 'GALE-L', reason: 'Nothing to delete yet.' }],
+        conflicts: [{ listingId: 'c0', sku: 'GALE-S-IT', setAt: null, setByName: 'Ana' }] }], [])!.message)
+    expect(operationToast([outcome], [], id => labels[id] ?? null)!.message).toContain('GALE-M-IT (Already deleted on Amazon · IT.)')
+  })
+
   it('a paste refused before any write still says so', () => {
     expect(operationToast([], [{ column: 'send', sku: 'GALE-S', reason: 'Pause is a Status: use the Status column' }])).toEqual({
       tone: 'warning', quiet: false, message: 'Action: nothing set. 1 not allowed: GALE-S (Pause is a Status: use the Status column).',

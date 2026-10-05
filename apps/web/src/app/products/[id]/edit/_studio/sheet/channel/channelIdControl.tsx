@@ -22,7 +22,8 @@
  * pushes paused. Link and Clear are keyed commands (`sendCommand`): a double press runs once. After a write the sheet
  * re-reads (`listing.values_changed`, emitted here for this tab as the API emits it for the others).
  *
- * The provider is mounted once by `ChannelSheet`; the cell (`ListingIdCell.tsx`) asks it to open. DS parts only.
+ * The provider is mounted once by the CHANNEL adapter in `ProductSheet.tsx` (the path the studio renders; `ChannelSheet.tsx`
+ * is a wrapper nothing renders); the cell (`ListingIdCell.tsx`) asks it to open. DS parts only.
  */
 import { createContext, useContext, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 
@@ -30,6 +31,7 @@ import { Banner, Field, Modal, useToast } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { channelPlace } from '@nexus/shared/channel-label'
 import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
@@ -40,7 +42,7 @@ export const CHANNEL_ID_PERMISSION = 'listings.recover'
 
 export const CHANNEL_ID_COPY = {
   title: 'eBay Item ID',
-  subtitle: (sku: string, market: string) => `${sku} · eBay ${market}. One Item ID carries the whole variation family.`,
+  subtitle: (sku: string, market: string) => `${sku} on ${channelPlace('EBAY', market)}. One Item ID carries the whole variation family.`,
   field: 'Item ID',
   hint: 'The number on the eBay item page (9 to 15 digits). Check asks eBay, as this business\'s account, before anything is written.',
   check: 'Check',
@@ -96,7 +98,7 @@ export const CHANNEL_ID_WORDS: Readonly<Record<'EBAY' | 'ETSY' | 'SHOPIFY' | 'AM
   EBAY: { ...CHANNEL_ID_COPY },
   ETSY: {
     title: 'Etsy Listing ID',
-    subtitle: (sku, _market) => `${sku} · Etsy. One Etsy listing carries the whole family.`,
+    subtitle: (sku, _market) => `${sku} on ${channelPlace('ETSY')}. One Etsy listing carries the whole family.`,
     field: 'Listing ID',
     hint: 'The number in the listing\'s web address (etsy.com/listing/…). Check asks Etsy, as this business\'s shop, before anything is written.',
     clearTitle: 'Clear the Listing ID',
@@ -116,7 +118,7 @@ export const CHANNEL_ID_WORDS: Readonly<Record<'EBAY' | 'ETSY' | 'SHOPIFY' | 'AM
   },
   SHOPIFY: {
     title: 'Shopify Product ID',
-    subtitle: (sku, _market) => `${sku} · Shopify. The family's product (in a colour store, each colour's) is linked on this row.`,
+    subtitle: (sku, _market) => `${sku} on ${channelPlace('SHOPIFY')}. The family's product (in a colour store, each colour's) is linked on this row.`,
     field: 'Product ID',
     hint: 'The number at the end of the product\'s Shopify admin address (…/products/<number>). Check asks this business\'s store before anything is written.',
     clearTitle: 'Clear the Product ID',
@@ -136,7 +138,7 @@ export const CHANNEL_ID_WORDS: Readonly<Record<'EBAY' | 'ETSY' | 'SHOPIFY' | 'AM
   },
   AMAZON: {
     title: 'Amazon ASIN',
-    subtitle: (sku, market) => `${sku} · Amazon ${market}. This row's own ASIN on this market.`,
+    subtitle: (sku, market) => `${sku} on ${channelPlace('AMAZON', market)}. This row's own ASIN on this market.`,
     field: 'ASIN',
     hint: 'Ten letters or digits (B0…). On a row not on Amazon, Check reads Amazon\'s catalog for this market; Set makes it the ASIN this row lists on at Publish.',
     clearTitle: 'Clear the ASIN',

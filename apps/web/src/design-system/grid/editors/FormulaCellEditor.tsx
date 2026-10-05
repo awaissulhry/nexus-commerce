@@ -6,7 +6,7 @@ import { createElement, forwardRef, useCallback, useEffect, useId, useLayoutEffe
 import { flushSync } from 'react-dom'
 import type { ICellEditorParams, SuppressKeyboardEventParams } from 'ag-grid-community'
 import { useGridCellEditor } from 'ag-grid-react'
-import { History, Link2, Sparkles } from 'lucide-react'
+import { AlertTriangle, History, Info, Link2, Sparkles } from 'lucide-react'
 import { Button, Input, Textarea, ToolbarButton, TooltipPortalProvider } from '../../primitives'
 import { ListboxPanel, type ListboxOption } from '../../components'
 import { editorBox, roomToRightOf } from './editorBox'
@@ -34,6 +34,12 @@ export interface CellEditorContext {
   inherited?: { from: string; value: string } | null
   /** The channel's length cap. The counter turns red past it; nothing is ever truncated. */
   maxLength?: number | null
+  /**
+   * A host's sentence about what this edit REACHES, shown under the field while typing (2026-10-05, the product sheet's
+   * SKU column: "This SKU is for Amazon · DE only…"). `warning` when the edit reaches less than the person may expect.
+   * Read as part of the field's description, so a screen reader hears it with the field. Absent = no line.
+   */
+  notice?: { text: string; tone?: 'info' | 'warning' } | null
 }
 
 export interface CellHistoryEntry { value: string; when: string; who?: string | null }
@@ -406,7 +412,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   const inputProps = {
     value: text, spellCheck: !formula, 'aria-label': formula ? 'Formula' : 'Cell value',
     'aria-invalid': refused || over || undefined,
-    'aria-describedby': `${id}-keys ${id}-preview`,
+    'aria-describedby': `${context.notice ? `${id}-notice ` : ''}${id}-keys ${id}-preview`,
     placeholder: formulasOn ? 'Type a value, or = for a formula' : 'Type a value',
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change({ text: e.target.value, caret: e.target.selectionStart ?? e.target.value.length }),
     onSelect: (e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0),
@@ -438,6 +444,11 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
           </div></TooltipPortalProvider>}
         </div>
 
+        {/* A host's sentence about what the edit reaches: the icon carries the tone too, never the colour alone. */}
+        {context.notice && <p id={`${id}-notice`} className={`nds-formula-notice${context.notice.tone === 'warning' ? ' warn' : ''}`}>
+          {context.notice.tone === 'warning' ? <AlertTriangle size={12} aria-hidden /> : <Info size={12} aria-hidden />}
+          <span>{context.notice.text}</span>
+        </p>}
         {panel === 'ai' && context.aiDraft && <div className="nds-formula-contextpanel">
           <span className="nds-formula-contextpanel-label"><Sparkles size={12} aria-hidden /> AI suggests</span>
           <span className="nds-formula-contextpanel-value">{context.aiDraft.value}</span>

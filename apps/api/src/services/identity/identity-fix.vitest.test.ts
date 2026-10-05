@@ -163,6 +163,8 @@ describe('verify mode (the sheet\'s Check): the proof compares THIS listing\'s c
     channel.token = async () => { throw new Error('no credentials') }
     const out = await inside(() => checkChannelId(ids.root, { externalId: '520000000001' }))
     expect(out).toMatchObject({ ok: false, refusal: expect.stringContaining('has no working sign-in in Nexus') })
+    // F4 (browser check 2026-10-05): the sentence starts with a capital and names the place in the sheet's words.
+    expect(out.refusal).toBe('The eBay · IT listing of IDC-JKT: its eBay account has no working sign-in in Nexus, so the Item ID cannot be checked on eBay. Reconnect the account in Nexus (Settings, Channels), then ask again.')
     expect(channel.calls).toEqual([])
   }, TIMEOUT)
 

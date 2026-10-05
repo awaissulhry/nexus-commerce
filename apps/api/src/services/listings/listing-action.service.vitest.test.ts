@@ -240,6 +240,8 @@ describe('S3 (per-channel SKU) — every Amazon row is acted on under the SKU Am
     const preview = await previewListingAction(f.root, 'delete', amazonScope(), USER)
     // The plan rows still name the products (the sheet's rows).
     expect(preview.rows.map(r => [r.sku, r.plan])).toEqual([['AMZ-OWN', 'skip'], ['AMZ-OWN-M', 'send'], ['AMZ-OWN-S', 'send']])
+    // S11 follow-up — and say which SKU the action names on Amazon when it is another one (the Publish window names it).
+    expect(preview.rows.map(r => r.heldSku ?? null)).toEqual([null, null, 'OWN-S-IT'])
     fixture.amazonLive.mockReset().mockResolvedValue({ read: 'ok', offers: [], fulfillmentChannels: ['DEFAULT'], instances: [], productType: 'COAT' })
     fixture.amazonDelete.mockReset().mockResolvedValue({ success: true, outcome: 'SUCCESS', submissionId: 'sub-own' })
     const result = await runListingAction(f.root, 'delete', { previewId: preview.previewId, confirm: 'DELETE' }, USER)

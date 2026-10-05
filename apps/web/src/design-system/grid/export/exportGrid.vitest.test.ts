@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { GridExportRefused, gridCsvRows, type GridCsvSource } from './exportGrid'
+import { GridExportRefused, gridCsvRows, isExportedRow, type GridCsvSource } from './exportGrid'
 import { AG_AUTO_COL, AG_SELECTION_COL } from '../columns/columnPrefs'
 
 const source = (over: Partial<GridCsvSource> = {}): GridCsvSource => ({
@@ -112,5 +112,18 @@ describe('gridCsvRows', () => {
   it('writes an empty field for a null, never the string "null"', () => {
     const r = gridCsvRows(source({ cell: () => null }), 'master')
     expect(lines(r.csv)[1]).toBe(',')
+  })
+})
+
+// Add rows (2026-10-05) — an empty row the person added holds nothing but an unsaved SKU: it is not a record.
+describe('which rows the file holds', () => {
+  it('a row with data, but never a pinned row, a footer or an UNSAVED row', () => {
+    expect(isExportedRow({ rowPinned: undefined, footer: undefined, data: { id: 'p1' } })).toBe(true)
+    expect(isExportedRow({ rowPinned: 'top', footer: undefined, data: { id: 'p1' } })).toBe(false)
+    expect(isExportedRow({ rowPinned: undefined, footer: true, data: { id: 'p1' } })).toBe(false)
+    expect(isExportedRow({ rowPinned: undefined, footer: undefined, data: undefined })).toBe(false)
+    expect(isExportedRow({ rowPinned: undefined, footer: undefined, data: { id: 'new-row:1', unsaved: true } })).toBe(false)
+    // Only `true` marks it: a product field that happens to be named so is not a flag of this rule.
+    expect(isExportedRow({ rowPinned: undefined, footer: undefined, data: { id: 'p2', unsaved: 'no' } })).toBe(true)
   })
 })

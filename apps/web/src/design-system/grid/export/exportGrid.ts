@@ -30,6 +30,7 @@ import type { GridApi, IRowNode } from 'ag-grid-community'
 
 import { AG_AUTO_COL, AG_SELECTION_COL } from '../columns/columnPrefs'
 import { csvFileName, downloadCsv, toCsv, type CsvColumn } from './gridCsv'
+import { isUnsavedRowData } from '../hosts/unsavedRow'
 
 /**
  * AG's own columns, which carry no data an operator would want in a file.
@@ -213,7 +214,7 @@ export function gridCsvSourceFromApi<T>(api: GridApi<T>, opts: GridCsvSourceOpti
        * 21-row family, with the row an operator most wanted missing and nothing saying so.
        * A real aggregation group row has no `data`, so this tells them apart honestly.
        */
-      isData: !n.rowPinned && !n.footer && n.data != null,
+      isData: isExportedRow(n),
     })),
     cell: (rowKey, colId) => {
       const node = byKey.get(rowKey)
@@ -231,6 +232,14 @@ export function gridCsvSourceFromApi<T>(api: GridApi<T>, opts: GridCsvSourceOpti
     narrowed: api.isAnyFilterPresent(),
     ...(opts.suffix ? { suffix: opts.suffix } : {}),
   }
+}
+
+/**
+ * Whether a row node is a record the file holds: it has data (see `isData` above), it is not pinned or a footer, and it
+ * is not an UNSAVED row (2026-10-05, Add rows: an empty row the person added holds nothing but a SKU it has not saved).
+ */
+export function isExportedRow(node: Pick<IRowNode, 'rowPinned' | 'footer' | 'data'>): boolean {
+  return !node.rowPinned && !node.footer && node.data != null && !isUnsavedRowData(node.data)
 }
 
 export interface ExportGridCsvOptions<T> extends GridCsvSourceOptions<T> {

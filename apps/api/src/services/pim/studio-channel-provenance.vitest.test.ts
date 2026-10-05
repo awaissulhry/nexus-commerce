@@ -8,6 +8,8 @@ vi.mock('../../db.js', () => ({ default: {
   $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
   product: { findFirst: async () => ({ id: 'p', parentId: null }), findMany: async () => [product] },
   channelListing: { findMany: mocks.listings }, productListingAlias: { findMany: async () => [] },
+  // S11 — the first column's flat-file SKU read (`studio-sheet-sku.ts`, one statement): no snapshot here.
+  $queryRaw: async () => [],
   productMediaPlan: { findMany: async () => [] },
   fieldLinkGroup: { findMany: async () => [] }, cellFormula: { findMany: async () => [] },
   // LX.F R-LX-13 — the LX reach read (`studio-sheet.service.ts:1058`).

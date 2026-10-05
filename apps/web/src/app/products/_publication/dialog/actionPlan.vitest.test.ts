@@ -7,7 +7,7 @@ import { EMPTY_ENTRY, destinationState, initialTicks, type DestinationEntry } fr
 import { matchesPublishPlan } from './model'
 import { NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
 import {
-  CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText, confirmReason, confirmSentence,
+  CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText, confirmReason, confirmSentence, confirmWhat,
   createdCounts, createdWords, createsLine, planFamilySummary, reviewRowListingWord, shopifyVisibilityWords,
   lifecycleChildMeta, planButtonText, planResultRows, planResultWord, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence,
   setByText, toggleRowTicks, undoButtonText, undoSentence, withProductTicks, marketsSendingNothing, replacesCountWords,
@@ -176,9 +176,10 @@ describe('what one click sends', () => {
   it('asks for the typed family SKU only while an End or Delete row is ticked', () => {
     const plan = destination(IT, { lifecycle: [lifecycle('e1', 'end'), lifecycle('d1', 'delete'), lifecycle('p1', 'pause')] })
     const send = sendOf({ it: entryOf(plan) })
-    expect(send.confirm).toEqual({ expected: 'GALE-JACKET', ended: 1, deleted: 1, places: ['eBay · IT'] })
-    expect(confirmSentence(send.confirm!)).toBe('Type GALE-JACKET to end 1 listing and delete 1 on eBay · IT')
-    expect(confirmReason(send.confirm!)).toBe('Type GALE-JACKET below to end 1 listing and delete 1.')
+    expect(send.confirm).toEqual({ expected: 'GALE-JACKET', ended: 1, deleted: 1, places: ['eBay · IT'], skus: { ended: ['GALE-E1'], deleted: ['GALE-D1'] } })
+    // S11 follow-up — the confirmation names the SKU each End and Delete acts on (the one the channel holds).
+    expect(confirmSentence(send.confirm!)).toBe('Type GALE-JACKET to end GALE-E1 and delete GALE-D1 on eBay · IT')
+    expect(confirmReason(send.confirm!)).toBe('Type GALE-JACKET below to end GALE-E1 and delete GALE-D1.')
     expect(confirmMatches(send.confirm!.expected, 'GALE-JACKE')).toBe(false)
     expect(confirmMatches(send.confirm!.expected, 'GALE-JACKET')).toBe(true)
     const withoutDanger = sendOf({ it: entryOf(plan, { lifecycleIds: ['p1'] }) })
@@ -469,6 +470,16 @@ describe('S10 — a SKU move in the Publish window', () => {
     expect(row.expandable).toBe(false)
     expect(rows.map(r => r.key)).toEqual(['content:gale-s', 'content:gale-m'])
     expect(rows.find(r => r.key === 'content:gale-m')!.what).toMatchObject({ column: 'send', mode: 'partial' })
+  })
+
+  it('S11 follow-up — the typed confirmation names each listing by the SKU it holds; more than three, or one SKU twice, are counted', () => {
+    // The plan names an End or Delete row by the SKU the channel holds for that listing (its own, not the product SKU).
+    const held = destination(IT, { lifecycle: [lifecycle('d1', 'delete', { sku: 'GALE-M-OLD' }), lifecycle('d2', 'delete', { sku: 'GALE-L' })] })
+    expect(confirmSentence(sendOf({ it: entryOf(held) }).confirm!)).toBe('Type GALE-JACKET to delete GALE-M-OLD and GALE-L on eBay · IT')
+    const many = destination(IT, { lifecycle: ['a', 'b', 'c', 'd'].map(id => lifecycle(id, 'delete')) })
+    expect(confirmSentence(sendOf({ it: entryOf(many) }).confirm!)).toBe('Type GALE-JACKET to delete 4 listings on eBay · IT')
+    expect(confirmWhat({ ended: 0, deleted: 2, places: [], skus: { ended: [], deleted: ['GALE-M'] } })).toBe('to delete 2 listings')
+    expect(confirmWhat({ ended: 1, deleted: 0, places: ['eBay · IT'] })).toBe('to end 1 listing on eBay · IT')
   })
 
   it('the summary and the button count a move as a move, not a partial update', () => {

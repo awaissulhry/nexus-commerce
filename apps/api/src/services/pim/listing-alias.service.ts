@@ -75,6 +75,13 @@ export interface CreateAliasInput {
   label?: string
   /** The listing's own seller SKU (2026-10-01), unique in the business and never a product's SKU. */
   sku?: string
+  /**
+   * Add rows (R3, 2026-10-05): `sku` is also the new listing's channel SKU — written on its main row (the family root's
+   * listing) by the one writer, `setChannelSku`, with every channel-SKU check (the product-SKU characters, another
+   * product's SKU, another product's listing on this account). A refusal creates nothing. The eBay import, which names
+   * an alias by its file's SKU, leaves this off and keeps the alias-only record it had.
+   */
+  channelSku?: boolean
   createdBy?: string | null
 }
 
@@ -104,6 +111,13 @@ export async function createAlias(input: CreateAliasInput) {
   const label = channelLabel(channel)
   if (!connectionId) throw new ProductRelationshipError(`Connect ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label} account before adding a listing on ${marketplace}.`)
   if (await legacyAliasIndexesPresent()) throw new AliasCreationBlockedError()
+  // Call-time, like the database client: the channel-SKU module reaches the identity guards and the channel specs.
+  const channelSkus = input.channelSku && input.sku !== undefined ? await import('../listings/channel-sku.js') : null
+  if (channelSkus && input.sku?.trim()) {
+    // The channel-SKU rule first, so a typo is named before anything is read or written.
+    const problem = channelSkus.channelSkuProblem(input.sku.trim())
+    if (problem) throw new channelSkus.ChannelSkuError(400, problem, 'INVALID_SKU')
+  }
   const sku = input.sku === undefined ? undefined : await checkListingSku(input.sku)
   return relationshipTransaction(async tx => {
     const seed = await tx.product.findFirst({
@@ -147,6 +161,13 @@ export async function createAlias(input: CreateAliasInput) {
     await tx.channelListing.createMany({
       data: family.map((p) => draftListingFields({ productId: p.id, channel, market: marketplace, accountId: connectionId, aliasKey: alias.id })),
     })
+
+    // R3 — the alias's SKU is its main row's own channel SKU (S9 keeps `ProductListingAlias.sku` in step with it).
+    if (channelSkus && sku) {
+      const main = await tx.channelListing.findFirst({ where: { aliasId: alias.id, productId: rootId }, select: { id: true } })
+      if (!main) throw new ProductRelationshipError('This family changed. Reload it before adding a listing alias.')
+      await channelSkus.setChannelSku(tx, { listingId: main.id, sku, actorId: input.createdBy ?? null, reason: 'New listing alias' })
+    }
 
     await productReadCacheService.refreshInTransaction(tx, family.map(member => member.id))
     return alias

@@ -1551,6 +1551,14 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-formula-historyrow:hover .nds-formula-contextpanel-value { text-decoration: underline; }
 .nds-formula-note { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
 .nds-formula-note.bad, .nds-formula-count.bad { color: var(--nds-danger-text); }
+/* A host's line about what the edit reaches (`CellEditorContext.notice`, 2026-10-05): the icon names the tone, the text
+   wraps in full. Warning ink = the sheet's warning text token, both themes. */
+.nds-formula-notice {
+  display: flex; align-items: flex-start; gap: var(--nds-space-4); margin: 0;
+  font-size: var(--nds-font-size-xs); line-height: 1.4; color: var(--nds-text-2); white-space: normal; overflow-wrap: anywhere;
+}
+.nds-formula-notice > svg { flex: none; margin-top: 2px; }
+.nds-formula-notice.warn { color: var(--nds-warning-text); }
 .nds-formula-foot {
   display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--nds-space-8);
   padding: var(--nds-space-4) var(--nds-space-6) var(--nds-space-6);
@@ -2035,3 +2043,37 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   pointer-events: none;
 }
 .nds-ag-flat-tree .ag-row.nds-row-inactive:not(.ag-row-level-0):not(.ag-full-width-row)::before { left: 3px; }
+
+/* ── Add rows (2026-10-05, plan docs/sheet-ids-sku-rows/PLAN.md R1) ──────────────────────────────────────────────────────
+   The status strip's START slot (`GridSheetStatus start`): bottom left, before the row count — the product sheet's
+   "Rows to add" count and its "Add rows" button or menu. It never shrinks (the tallies and the note after it do), and a
+   hairline sets it apart from the tallies. In the 36 px footer at phone width the part marked `GRID_SHEET_STATUS_WIDE`
+   (the count) leaves, so only the action shows. */
+.nds-grid-sheet-status-start { display: inline-flex; align-items: center; gap: var(--nds-space-6); flex: none; padding-right: var(--nds-space-8); border-right: 1px solid var(--nds-border); }
+.nds-grid-sheet-status-wide { display: inline-flex; align-items: center; gap: var(--nds-space-4); white-space: nowrap; }
+/* With a start slot the strip's tallies and note sit in their own live region (`role="status"`) BESIDE it, so a screen
+   reader never announces the controls as status text (browser check 2026-10-05, F12). It lays them out as the strip
+   does: the same row, the strip's own gap, and it takes the rest of the width. */
+.nds-grid-sheet-status-live { display: flex; align-items: center; gap: inherit; flex: 1 1 0; min-width: 0; align-self: stretch; }
+@media (max-width: 760px) {
+  .nds-grid-sheet-status-start .nds-grid-sheet-status-wide { display: none; }
+}
+/* A row the person ADDED and has not saved (`UNSAVED_ROW_CLASS`; apply with `rowClassRules`): a DASHED warning bar at the
+   row's start edge — the same ink and place as the inactive row's solid bar (`nds-row-inactive`, ≥ 3:1 on every row
+   ground in both themes), dashed so "not stored yet" never reads as "does not sell". `::before`, because the child rail
+   owns `::after`; on a child row it stands just inside the rail. The row's other cells are muted (a cell opts out with
+   `nds-cell-full-strength`, as on a quiet row). Never a whole-row tint (Owner, 2026-10-04); the words ("Not saved") are in
+   the row's identity cell. */
+.nds-ag-wrap .ag-row.nds-row-unsaved:not(.ag-full-width-row)::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 3px;
+  background-image: repeating-linear-gradient(to bottom, var(--nds-warning-strong) 0 4px, transparent 4px 7px);
+  z-index: 2;
+  pointer-events: none;
+}
+.nds-ag-flat-tree .ag-row.nds-row-unsaved:not(.ag-row-level-0):not(.ag-full-width-row)::before { left: 3px; }
+.nds-ag-wrap .ag-row.nds-row-unsaved .ag-cell { color: var(--nds-grid-muted-fg); }
+.nds-ag-wrap .ag-row.nds-row-unsaved .ag-cell.nds-cell-full-strength { color: var(--nds-grid-cell-fg); }

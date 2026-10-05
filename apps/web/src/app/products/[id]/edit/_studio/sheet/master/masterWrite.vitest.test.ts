@@ -430,3 +430,37 @@ describe('commitMasterRow — a value stored with a warning', () => {
     expect(cellsOf(result).name).not.toHaveProperty('warning')
   })
 })
+
+/* S11 — the Shared scope's first column (the tree column, `ag-Grid-AutoColumn`) renames the PRODUCT SKU: field `sku`, no
+   target (the product), on the row's product version; the answer's `skuRenames[]` reach the host. */
+describe('commitMasterRow — the first column renames the product SKU (S11)', () => {
+  const FIRST = 'ag-Grid-AutoColumn'
+  it('sends `sku` to the product (no channel target), with the sheet\'s market and the row\'s version', async () => {
+    fetchMock.mockResolvedValue(json(200, { updated: 1, currentVersion: 8, versionOf: 'product' }))
+    const result = await commitMasterRow(req([{ colId: FIRST, value: 'GALE-M2', intent: 'set' }] as never, { expectedVersion: 7 }), ctx())
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.changes).toEqual([{ id: 'p1', field: 'sku', value: 'GALE-M2' }])
+    expect(body.changes[0]).not.toHaveProperty('target')
+    expect(body).toMatchObject({ expectedVersion: 7, marketplaceContexts: [{ marketplace: 'DE', locale: 'it' }] })
+    expect(cellsOf(result)[FIRST]).toEqual({ ok: true })
+    expect(result.version).toBe(8)
+  })
+
+  it('a refusal of `sku` is the first column\'s, with the server\'s sentence', async () => {
+    fetchMock.mockResolvedValue(json(200, { updated: 0, errors: [{ id: 'p1', field: 'sku', error: 'SKU "GALE-M2" is already used by another product' }] }))
+    const result = await commitMasterRow(req([{ colId: FIRST, value: 'GALE-M2', intent: 'set' }] as never), ctx())
+    expect(cellsOf(result)[FIRST]).toEqual({ ok: false, reason: 'SKU "GALE-M2" is already used by another product' })
+  })
+
+  it('the answer\'s renames reach the host (its notice and the studio header); none, no call', async () => {
+    const onSkuRenames = vi.fn()
+    fetchMock.mockResolvedValue(json(200, { updated: 1, skuRenames: [{ productId: 'p1', from: 'GALE-M', to: 'GALE-M2',
+      summary: 'Amazon · DE keeps GALE-M; drafts follow GALE-M2.', listings: [] }] }))
+    await commitMasterRow(req([{ colId: FIRST, value: 'GALE-M2', intent: 'set' }] as never), ctx({ opts: { onSkuRenames } }))
+    expect(onSkuRenames).toHaveBeenCalledWith([{ productId: 'p1', from: 'GALE-M', to: 'GALE-M2', summary: 'Amazon · DE keeps GALE-M; drafts follow GALE-M2.' }])
+    onSkuRenames.mockClear()
+    fetchMock.mockResolvedValue(json(200, { updated: 1 }))
+    await commitMasterRow(req([{ colId: 'name', value: 'Giacca', intent: 'set' }] as never), ctx({ opts: { onSkuRenames } }))
+    expect(onSkuRenames).not.toHaveBeenCalled()
+  })
+})

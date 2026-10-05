@@ -46,6 +46,8 @@ vi.mock('../../db.js', () => ({
       findMany: (...a: unknown[]) => productFindMany(...a),
     },
     channelListing: { findMany: (...a: unknown[]) => channelListingFindMany(...a) },
+    // S11 — the first column's flat-file SKU read (`studio-sheet-sku.ts`, one statement): no snapshot here.
+    $queryRaw: async () => [],
     // No family here is on the photo plan (images P3c reads it for the Product media cell).
     productMediaPlan: { findMany: async () => [] },
     productListingAlias: { findMany: (...a: unknown[]) => aliasFindMany(...a) },

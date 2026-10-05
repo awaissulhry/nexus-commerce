@@ -42,8 +42,7 @@ import { withSheetGroups } from '../sheetGroups';
 import { useHeaderPaste } from '../headerPaste';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
-import { SkuTag } from '@/design-system/grid';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, exprOf, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
@@ -67,7 +66,7 @@ import { FollowUpRead, rowSettle } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
-import { addListingAlias, commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
+import { commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
 import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount, connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, draftStartSentence, noAccountTitle, notListedTitle } from '../../draftListing';
 import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
@@ -97,12 +96,21 @@ import { STATUS_COLUMN, statusCellValue, statusColumn, statusSheetColumn, type P
 import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, actionSheetColumn } from './actionColumn';
 import { isClearKey, selectedCells } from '../sheetReset';
 import type { PublishActionChange } from '@nexus/shared/publish-actions';
-import { SELLING_ROW_MARK_CLASS, publishActionModel, rowCarriesInactiveMark, sellingStatusModel, waitingWhen } from '@/design-system/grid';
+import { ExpandSlot, SELLING_ROW_MARK_CLASS, UNSAVED_ROW_CLASS, isUnsavedRowData, publishActionModel, rowCarriesInactiveMark, sellingStatusModel, waitingWhen } from '@/design-system/grid';
 import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue } from './types';
 import './channel-sheet.css';
 import { buildSheetColumns } from '../buildSheetColumns';
 import { useSheetControl } from '../useSheetControl';
 import { channelResetOffer, controlColumnFacts } from '../sheetReset';
+import { useIdentitySkuColumn } from '../identitySkuColumn';
+import { IDENTITY_SKU_COLUMN, identitySkuEditability, listingSkuLabel } from '../identitySkuEdit';
+import { NewRowCell } from '../newRows/NewRowCell';
+import { NewRowsControl } from '../newRows/NewRowsControl';
+import { aliasTarget, newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget } from '../newRows/useNewRows';
+import { channelNewRow, lockedOnNewRows, newRowRefusal, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
+import type { NewRowKind } from '../newRows/newRows';
+/** Add rows — a channel scope adds variations or listings (aliases). */
+const CHANNEL_ROW_KINDS: readonly NewRowKind[] = ['variation', 'alias'];
 export interface ChannelSheetProps {
     shopifySchema?: import('@nexus/shared/shopify-linked-products').ShopifyStoreSchema | null;
     accountId?: string;
@@ -199,6 +207,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
+        if (key === IDENTITY_SKU_COLUMN)
+            return identitySkuEditability({ kind: 'channel', channel, marketplace }, row).reason;
         const col = data?.columns.find(column => column.key === key);
         if (!col)
             return null;
@@ -208,7 +218,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         return cell?.writeBlockedReason || refusalWords(col.label || col.key, { kind: cell?.writable === false ? 'channel-not-writable' : col.editable === false ? 'column-read-only' : 'cell-locked' });
     };
     /* Step 4.3 #3 — a locked bullets cell says why: the first locked position's own reason. */
-    refusalReason.current = (key, row) => isSlotListKey(key) ? slotListRefusal(key, row, data?.columns ?? [], channelRefusal) : channelRefusal(key, row);
+    refusalReason.current = (key, row) => {
+        const fresh = newRowRefusal(key, row);
+        return fresh !== undefined ? fresh : isSlotListKey(key) ? slotListRefusal(key, row, data?.columns ?? [], channelRefusal) : channelRefusal(key, row);
+    };
     const { bandWidthRef, bandDerivedRef, revealCell } = useSheetGeometry({ scope: 'channel', rows, getGridApi, gridReady, recordId: record.rowId });
     const dataRef = useRef(data);
     dataRef.current = data;
@@ -448,6 +461,20 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi);
+    /* S11 — the first column's SKU is THIS listing's own (`../identitySkuColumn.tsx`, rules in `../identitySkuEdit.ts`). */
+    /* Add rows (R2, R3) — empty rows in page memory; the SKU typed into one creates a draft variation, or a new listing
+       of this product here whose SKU is that listing's own (`../newRows/`). */
+    const canAddRows = useAuth().has('products.edit');
+    const newRows = useNewRows({ kinds: CHANNEL_ROW_KINDS, registerScopeChangeGuard, say: toast, getGridApi,
+        target: (kind) => kind === 'variation' ? variationTarget(rows.find((row) => row.rowKind === 'parent'), canAddRows)
+            : aliasTarget({ productId, channel, marketplace, accountId, noAccount: !accountId && !data?.scope.connectionId && accounts.length === 0, canEdit: canAddRows }),
+        skuContext: () => ({ family: null, takenSkus: rows.flatMap((row) => [row.sku, row.skuFacts?.wanted ?? '']) }),
+        onCreated: (kinds) => { followUp.owe(); followUp.settle(); refreshReadiness(); if (kinds.has('alias') && selectedAlias !== null) setListing(undefined); } });
+    useEffect(() => newRows.store.landed(new Set([...rows.map((row) => row.id), ...(data?.aliases ?? []).flatMap((alias) => (alias.id ? [alias.id] : []))])), [rows, data, newRows.store]);
+    const identitySku = useIdentitySkuColumn<ChannelSheetRow>({ scope: { kind: 'channel', channel, marketplace }, tracker, writer, getGridApi, rowIdOf, recordUndo: undo.record, announce: announceRefusals,
+        onCreate: (row, sku) => { newRows.store.type(row.rowId, sku); } });
+    const identityNodeRef = useRef(identitySku.node);
+    const identityHoverRef = useRef(identitySku.hover);
     useEffect(() => {
         writer.arm();
         return () => writer.destroy();
@@ -466,9 +493,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         reporterRef.current.cleared(rows.map(row => channelWriteIdentity(row.rowId, 0, { channel, marketplace, accountId, locale, instanceId: writeInstanceId }).subject));
         writer.discard();
+        newRows.store.clear();
         reload();
         refreshReadiness();
-    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask, refreshReadiness]);
+    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask, refreshReadiness, newRows.store]);
     /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
     const refreshProgress = useCallback(() => {
         refreshReadiness();
@@ -569,6 +597,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         const colId = e.colDef.colId;
         if (!e.data || !colId)
             return;
+        if (identitySku.onValueChanged(e))
+            return;
         /* Step 4.3 #3 (A-52, R-55) — the one bullets cell is not a field: its change leaves as one dispatch per CHANGED
            position, each through THIS handler under that slot's own column id (gate, acknowledgement, formula check,
            `writer.set`) — exactly the path a typed slot takes. The writer coalesces them into the row's one request. */
@@ -653,7 +683,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         undo.record({ rowId: e.data.rowId, colId, before: history ? history.before : e.oldValue, after: history ? history.after : e.newValue }, e.source);
         const replay = shopifyValue ? takeShopifyReplayIntent(e.data.values?.[colId]) : undefined;
         writer.set(e.data.rowId, colId, replay === 'reset' ? null : e.newValue, { row: e.data, intent: replay ?? 'set' });
-    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record]);
+    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;
@@ -725,7 +755,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             for (const c of outcome.conflicts) mark(c.listingId, `${c.setByName ?? 'Someone else'} changed this first${c.setAt ? ` ${waitingWhen(c.setAt)}` : ''}. Nexus kept their value.`);
         }
         repaintPublishCells(touched);
-        const summary = operationToast(outcomes, refused);
+        // S11 follow-up — each listing named by the SKU it holds or sends here, never the product SKU in its place.
+        const summary = operationToast(outcomes, refused, (listingId) => { const row = rowsRef.current.find((r) => r.rowId === rowIdOfListing.get(listingId)); return row ? listingSkuLabel(row) : null; });
         if (summary && !summary.quiet)
             toastRef.current(summary.message, summary.tone, { duration: summary.tone === 'success' ? 5000 : 10000 });
         // New listings: a choice started the family's drafts — the sheet reads its rows again, quietly (their listing ids).
@@ -748,7 +779,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         // Only a listing this read knows can be written; any other row is refused with the reason (the server would
         // refuse the whole write for one unknown id).
         const cell = publishCellOf(row);
-        publishFence.stage({ column, listingId: cell?.listingId ?? null, sku: row.sku, input });
+        publishFence.stage({ column, listingId: cell?.listingId ?? null, sku: listingSkuLabel(row), input });
     }, [publishCellOf, publishFence, publishTracker, repaintPublishCells]);
     /** Fill the ticked rows' cells of one column (Action ▾): one operation, so one write and one toast. */
     const fillPublishCells = useCallback((change: PublishActionChange, targets: readonly ChannelSheetRow[]) => {
@@ -789,7 +820,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* A new read (or a permission answer) repaints only the cells whose value changed (`equals`). */
     useEffect(() => { getGridApi()?.refreshCells({ columns: [STATUS_COLUMN, ACTION_COLUMN] }); }, [publishActions.version, publishRead, getGridApi]);
     /* The inactive row-start mark: AG applies row classes when it draws a row, so a row whose state changed is redrawn. */
-    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: ChannelSheetRow }) => !!p.data && rowCarriesInactiveMark([publishCellOf(p.data)?.state]) }), [publishCellOf]);
+    const rowClassRules = useMemo(() => ({ [SELLING_ROW_MARK_CLASS]: (p: { data?: ChannelSheetRow }) => !!p.data && rowCarriesInactiveMark([publishCellOf(p.data)?.state]),
+        [UNSAVED_ROW_CLASS]: (p: { data?: ChannelSheetRow }) => isUnsavedRowData(p.data) }), [publishCellOf]);
     const inactiveRowIds = useRef(new Set<string>());
     useEffect(() => {
         const next = new Set(rows.filter((row) => isInactiveCell(publishCellOf(row))).map((row) => row.rowId));
@@ -965,6 +997,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
        group's colour (`../sheetGroups`). */
     const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
     const headerPaste = useHeaderPaste<ChannelSheetRow>(gridColumns.map(column => ({ colId: column.key, headerName: column.label })), (message, tone) => toast(message, tone));
+    // Add rows — a paste on an empty row's SKU fills the empty rows; any other paste is the header-aware one.
+    const pasteIntoNewRows = useMemo(() => newRowsPaste(newRows.store, headerPaste.processDataFromClipboard), [newRows.store, headerPaste.processDataFromClipboard]);
+    // Add rows — an empty row's cell menu holds only "Remove this row".
+    const menuWithNewRows = useMemo(() => newRowsContextMenu(newRows.store, contextMenu), [newRows.store, contextMenu]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
         data: scopePage, gridColumns, formulaWiring, accountId, productLevelOnly, aliasLabelOf,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
@@ -1045,7 +1081,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             actionColumn<ChannelSheetRow>({ ...shared, onInput: (row, input) => stagePublishCell('send', row, input) }),
         ];
     }, [scopePage, publishCellOf, publishTracker, stagePublishCell]);
-    const allColumnDefs = useMemo(() => [...progressColumns, ...publishColumns, ...statusActionColumns, ...columnDefs], [progressColumns, publishColumns, statusActionColumns, columnDefs]);
+    // Add rows — on an empty row every cell but the SKU is locked and blank (`lockedOnNewRows`).
+    const allColumnDefs = useMemo(() => lockedOnNewRows([...progressColumns, ...publishColumns, ...statusActionColumns, ...columnDefs]), [progressColumns, publishColumns, statusActionColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
     const matchesSearch = useCallback((r: ChannelSheetRow) => {
@@ -1070,6 +1107,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
     const visibleRows = useMemo(() => active ? filterProductSheetRows(scopeRows, row => (active.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, active]);
+    /* Add rows — the empty rows after the rows on screen: a variation under the listing shown, a listing as a band of its own. */
+    const gridRows = useMemo(() => withNewRows<ChannelSheetRow>(visibleRows, newRows.rows, (row) => channelNewRow(row, data?.family.id ?? productId, selectedAlias || null)), [visibleRows, newRows.rows, data?.family.id, productId, selectedAlias]);
     activeCellsRef.current = (active?.cells as {
         byRow: Record<string, string[]>;
     } | undefined) ?? null;
@@ -1168,20 +1207,22 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<ChannelSheetRow>>(() => ({
         colSpan: bandSpan,
-        valueGetter: (p: ValueGetterParams<ChannelSheetRow>) => p.data?.sku ?? null,
         cellRenderer: (p: ICellRendererParams<ChannelSheetRow>) => {
             const row = p.data;
             if (!row)
                 return null;
+            const fresh = unsavedOf(row);
+            if (fresh)
+                return <NewRowCell row={fresh} expand={fresh.kind === 'alias' ? undefined : <ExpandSlot />} noImage={fresh.kind === 'alias'} onRemove={(id) => newRows.store.remove(id)}/>;
             if (row.rowKind === 'parent') {
                 const alias = (dataRef.current?.aliases ?? []).find((a) => aliasKeyOf(a.id) === aliasKeyOf(row.aliasId));
                 if (!alias)
                     return null;
-                return <AliasBandCell {...p} summary={summariseAlias(rowsRef.current, alias)} aliasCount={(dataRef.current?.aliases ?? []).length} menuItems={menuItemsRef.current(row)}/>;
+                return <AliasBandCell {...p} summary={summariseAlias(rowsRef.current, alias)} aliasCount={(dataRef.current?.aliases ?? []).length} menuItems={menuItemsRef.current(row)} skuNode={identityNodeRef.current(row)} titleOf={(own) => identityHoverRef.current(row, own)}/>;
             }
             const axes = familyShowsAxesRef.current ? Object.values(row.axisValues ?? {}).filter(Boolean) : [];
             const axisTitle = Object.entries(row.axisValues ?? {}).map(([axis, value]) => `${axis}: ${value}`).join(' · ');
-            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? <SkuTag>{row.sku}</SkuTag> : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
+            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? identityNodeRef.current(row) : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
         },
         headerTooltip: 'One group per listing alias; the child SKUs beneath it are shared by every alias',
         headerName: 'Product',
@@ -1191,35 +1232,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         lockPosition: 'left',
         width: bandWidthRef.current,
         suppressHeaderMenuButton: true,
-        cellClass: 'nds-ag-cell',
+        cellClass: (p: { data?: ChannelSheetRow }) => (unsavedOf(p.data) ? 'nds-ag-cell nds-cell-full-strength' : 'nds-ag-cell'),
+        // S11 — editable: this listing's own SKU (its editor, keys, marks, save marks and refusals).
+        ...identitySku.columnDef,
     }), []);
     const shopifyClipboard = useMemo(() => shopifyGridTransfer(mediaClipboard, data?.columns ?? [], accountId ?? '', message => toast(message, 'info')), [mediaClipboard, data?.columns, accountId, toast]);
-    const [adding, setAdding] = useState(false);
-    const aliasCreationPending = useRef(false);
-    useEffect(() => registerScopeChangeGuard(() => !aliasCreationPending.current), [registerScopeChangeGuard]);
     const [preflightAlias, setPreflightAlias] = useState<PreflightAlias | null>(null);
     const [reviewBusy, setReviewBusy] = useState(false);
     const nativeReviewRow = preflightAlias ? rows.find(row => row.aliasId === preflightAlias.id && row.shopify) : null;
     const reviewPath = nativeReviewRow?.shopify && accountId ? `/api/products/${encodeURIComponent(nativeReviewRow.shopify.productId)}/shopify-linked?${new URLSearchParams({ accountId, listingId: nativeReviewRow.shopify.listingId, market: 'GLOBAL', ...(locale ? { locale } : {}) })}` : null;
-    const [addError, setAddError] = useState<string | null>(null);
-    const onAddAlias = useCallback(async () => {
-        if (aliasCreationPending.current)
-            return;
-        aliasCreationPending.current = true;
-        setAdding(true);
-        setAddError(null);
-        const res = await addListingAlias({ productId, channel, marketplace, accountId });
-        aliasCreationPending.current = false;
-        setAdding(false);
-        if (!res.ok) {
-            setAddError(res.reason ?? 'Could not add a listing alias');
-            return;
-        }
-        reload();
-        if (selectedAlias !== null)
-            setListing(undefined);
-        toast('Listing alias created as a Nexus draft.', 'success');
-    }, [productId, channel, marketplace, accountId, reload, selectedAlias, setListing, toast]);
     const overflowItems = useMemo<MenuItemDef[]>(() => {
         const items: MenuItemDef[] = (data?.aliases ?? []).map((a) => {
             const synchronize = !!accountId && rows.some(row => row.aliasId === a.id && row.shopify);
@@ -1236,16 +1257,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 onSelect: () => setPreflightAlias(a),
             };
         });
-        items.push({
-            id: 'add-alias',
-            label: adding ? 'Adding…' : '+ Add listing alias',
-            disabled: adding || refused > 0 || !auth.has('products.edit'),
-            ...(addError ? { description: addError } : {}),
-            onSelect: () => void onAddAlias(),
-        });
+        // Add rows (R3, 2026-10-05) — a new listing (alias) is added from the footer's "Add rows ▾ → Listing (alias)", with
+        // its SKU; the ⋯ item that made a SKU-less one is gone (one way in).
         items.unshift(control.cellDetails.overflowItem);
         return items;
-    }, [data, rows, adding, addError, onAddAlias, alternateAccount, channel, refused, control.cellDetails.overflowItem, auth.has]);
+    }, [data, rows, alternateAccount, channel, refused, control.cellDetails.overflowItem]);
     const unavailable = !loading && (backendMissing || !!error || !data);
     const emptyState = sheetEmptyState(rows.length, () => {
         setSearch('');
@@ -1380,7 +1396,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
             onRetry: () => { writer.retryFailed(); },
-        }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the Shared product — every channel sees those edits`}>
+        }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerStart: <NewRowsControl {...newRows.control}/>, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the Shared product — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the Shared product — every channel sees those edits
             </span>)}</>,
         notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
@@ -1395,9 +1411,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             loading: loading,
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
-            processDataFromClipboard: headerPaste.processDataFromClipboard,
+            processDataFromClipboard: pasteIntoNewRows,
             defaultColDef: headerPaste.defaultColDef,
-            rowData: visibleRows,
+            rowData: gridRows,
             columnDefs: allColumnDefs,
             getDataPath: getDataPath,
             getRowId: getRowId,
@@ -1416,8 +1432,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onSelectionChanged: onSelectionChanged,
             onCellFocused: onCellFocused,
             onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
-            getContextMenuItems: contextMenu,
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (newRowsGridKey(newRows.store, event as never)) return; if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            getContextMenuItems: menuWithNewRows,
             columnDialog: columnDialog,
         },
         gridOverlay: null,

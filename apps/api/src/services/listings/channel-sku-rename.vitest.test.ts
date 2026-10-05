@@ -4,7 +4,7 @@
  * Shopify SKU column's read view (`withWantedShopifySku`); the shared-stock refusal as one plain sentence. No database.
  */
 import { describe, expect, it } from 'vitest'
-import { planListingRename, skuRenameRefusal, skuRenameSummary, type SkuRenameListingFacts } from './channel-sku-rename.js'
+import { planListingRename, productSkuRuleRefusal, skuRenameRefusal, skuRenameSummary, type SkuRenameListingFacts } from './channel-sku-rename.js'
 import { channelSkuMoveRefusal, ebayInventoryMoveRefusal, liveChannelSkuMoveRefusal } from './channel-sku-live-move.js'
 import { amazonMainRowMove, EBAY_INVENTORY_SKU_MOVE, etsySkuMoveSentence } from '@nexus/shared/publish-actions'
 import { withWantedShopifySku } from './shopify-sku-cell.js'
@@ -46,11 +46,30 @@ describe('S9 — a product SKU rename, per listing', () => {
       .toMatchObject({ outcome: 'unclear', sku: null, write: {} })
   })
 
+  it('F2 — its own SKU is NEW and following would send exactly NEW: it follows again (own SKU cleared, the held SKU kept)', () => {
+    // After OLD → NEW, a held listing keeps OLD as its own SKU; the undo NEW → OLD puts it back to following.
+    expect(planListingRename(row('AMAZON', 'DE', { channelSku: 'OLD', liveChannelSku: 'OLD' }), 'NEW', 'OLD'))
+      .toMatchObject({ outcome: 'rejoins', sku: 'OLD', write: { channelSku: null } })
+    // Nothing recorded of what the channel holds yet: it is recorded (what it holds today), the own SKU still cleared.
+    expect(planListingRename(row('EBAY', 'IT', { channelSku: 'NEW' }), 'OLD', 'NEW')).toMatchObject({ outcome: 'rejoins', sku: 'NEW', write: { channelSku: null, liveChannelSku: 'OLD' } })
+    // A still-draft too.
+    expect(planListingRename(row('AMAZON', 'FR', { ...draft, channelSku: 'NEW' }), 'OLD', 'NEW')).toMatchObject({ outcome: 'rejoins', sku: 'NEW', write: { channelSku: null } })
+    // Its old store would send something else: it keeps its own SKU.
+    expect(planListingRename(row('AMAZON', 'ES', { channelSku: 'NEW', liveChannelSku: 'X', offers: [{ sku: 'OFFER-ES', isActive: true }] }), 'OLD', 'NEW'))
+      .toMatchObject({ outcome: 'keeps', sku: 'NEW', write: {} })
+    expect(planListingRename(row('EBAY', 'IT', { ...draft, channelSku: 'NEW', aliasKey: 'a1', alias: { sku: 'EB-ALIAS', productId: 'p1' } }), 'OLD', 'NEW'))
+      .toMatchObject({ outcome: 'own', sku: 'NEW', write: {} })
+    const listings = [row('AMAZON', 'DE', { channelSku: 'OLD', liveChannelSku: 'OLD' }), row('EBAY', 'IT', { channelSku: 'OLD', liveChannelSku: 'OLD' })]
+      .map(r => planListingRename(r, 'NEW', 'OLD'))
+    expect(skuRenameSummary({ from: 'NEW', to: 'OLD', listings, parentGaps: [] })).toBe('Amazon · DE and eBay · IT follow the Shared SKU OLD again.')
+    expect(skuRenameSummary({ from: 'NEW', to: 'OLD', listings: listings.slice(0, 1), parentGaps: [] })).toBe('Amazon · DE follows the Shared SKU OLD again.')
+  })
+
   it('the sentence: which listings keep OLD (Amazon EU markets each named), drafts follow NEW, own SKUs named', () => {
     const listings = [row('AMAZON', 'DE'), row('AMAZON', 'IT'), row('EBAY', 'IT'), row('AMAZON', 'FR', draft), row('SHOPIFY', 'GLOBAL', { ...draft, channelSku: 'SH-OWN' })]
       .map(r => planListingRename(r, 'OLD', 'NEW'))
     expect(skuRenameSummary({ from: 'OLD', to: 'NEW', listings, parentGaps: [] }))
-      .toBe('Amazon · DE, Amazon · IT and eBay · IT keep OLD; the draft follows NEW. Shopify · GLOBAL keeps its own SKU SH-OWN.')
+      .toBe('Amazon · DE, Amazon · IT and eBay · IT keep OLD; the draft follows NEW. Shopify keeps its own SKU SH-OWN.')
     const drafts = [row('AMAZON', 'FR', draft), row('EBAY', 'IT', draft)].map(r => planListingRename(r, 'OLD', 'NEW'))
     expect(skuRenameSummary({ from: 'OLD', to: 'NEW', listings: drafts, parentGaps: [] })).toBe('No channel holds OLD: drafts follow NEW.')
     expect(skuRenameSummary({ from: 'OLD', to: 'NEW', listings: [planListingRename(row('AMAZON', 'DE'), 'OLD', 'NEW')], parentGaps: [] })).toBe('Amazon · DE keeps OLD.')
@@ -130,5 +149,22 @@ describe('S9 — the shared-stock guard refuses a rename in one plain sentence',
     expect(skuRenameRefusal(dbError('JACKET-M shares its stock with Motovento. Disconnect it there first, then change it.')))
       .toBe('JACKET-M shares its stock with Motovento, and the SKU is what connects them: disconnect it in Motovento first, then rename it.')
     expect(skuRenameRefusal(new Error('unique constraint failed'))).toBeNull()
+  })
+})
+
+describe('S11 follow-up — the product-SKU rule on a Shared rename (the sheet\'s own check, on the server)', () => {
+  it('a NEW SKU follows the rule: trimmed, at most 100 characters, letters, numbers, dots, hyphens and underscores', () => {
+    expect(productSkuRuleRefusal('OLD-1', 'NEW_1.a-b')).toBeNull()
+    expect(productSkuRuleRefusal('OLD-1', '  NEW-1  ')).toBeNull()
+    expect(productSkuRuleRefusal('OLD-1', 'NEW 1')).toBe('Use only letters, numbers, dots (.), hyphens (-) and underscores (_). No spaces.')
+    expect(productSkuRuleRefusal('OLD-1', 'NEW/1')).toBe('Use only letters, numbers, dots (.), hyphens (-) and underscores (_). No spaces.')
+    expect(productSkuRuleRefusal('OLD-1', 'A'.repeat(101))).toBe('A SKU can have up to 100 characters. This one has 101.')
+    expect(productSkuRuleRefusal('OLD-1', 'A'.repeat(100))).toBeNull()
+  })
+  it('a SKU the product already has is never refused, even one that breaks the rule', () => {
+    expect(productSkuRuleRefusal('OLD SKU/1', 'OLD SKU/1')).toBeNull()
+    expect(productSkuRuleRefusal('OLD SKU/1', ' OLD SKU/1 ')).toBeNull()
+    // Leaving it for a valid SKU is a rename like any other.
+    expect(productSkuRuleRefusal('OLD SKU/1', 'OLD-SKU-1')).toBeNull()
   })
 })

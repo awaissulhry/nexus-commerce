@@ -11,7 +11,7 @@ import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object, type PublicationFacts } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { ensureDraftListings } from './draft-listing.service.js'
-import { prepareAmazonPublication, sendAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
+import { amazonMovesWithoutPublication, prepareAmazonPublication, sendAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { withSendQuantities } from './studio-publication-amazon-offer.js'
 import { prepareEbayPublication, sendEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
 import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
@@ -318,8 +318,10 @@ function sentSku(prepared: Prepared | null, productId: string): string | null {
  * NEW and deletes OLD after Amazon accepts it (typed confirmation); eBay Trading renames in place; Etsy cannot yet (said,
  * never sent: studio Publish does not send to Etsy). eBay Inventory refuses in its builder; Shopify renames in place
  * through its own synchronisation (content-sync), which studio Publish leaves to it for a product Shopify holds.
+ * F5 (browser check 2026-10-05): an Amazon publication that could not be prepared still names its moves and asks for the
+ * typed confirmation (`amazonMovesWithoutPublication`); its problems say why nothing is sent yet. Exported for its test.
  */
-async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | null, changePlan: PublicationChangePlan | null) {
+export async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | null, changePlan: PublicationChangePlan | null) {
   const rows = new Map<string, StudioPublishSkuMove>()
   const issues: StudioPublishReview['issues'] = []
   let confirm: StudioPublishReview['confirm'] | null = null
@@ -327,6 +329,14 @@ async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | null, c
     const review = await amazonMoveReview(facts, prepared)
     for (const [productId, move] of review.rows) rows.set(productId, move)
     confirm = review.confirm
+  } else if (!prepared && facts.scope.channel === 'AMAZON') {
+    // F5 (browser check 2026-10-05) — the publication could not be prepared (its problem is listed already, so nothing is
+    // sent). The rows it would move still read "Move to NEW", and the review still asks for the typed confirmation.
+    const found = await amazonMovesWithoutPublication(facts)
+    const review = await amazonMoveReview(facts, found)
+    for (const [productId, move] of review.rows) rows.set(productId, move)
+    confirm = review.confirm
+    if (found.refusal) issues.push({ severity: 'error', message: found.refusal })
   } else if (changePlan?.kind === 'ebay-changes') {
     // Only a rename this review matched on eBay (`renames`); a move eBay holds no trace of is a warning, never this line.
     for (const rename of changePlan.renames ?? []) rows.set(rename.productId, { from: rename.from, to: rename.to, kind: 'rename', sentence: ebayRenameSentence(rename.from, rename.to), warning: null })

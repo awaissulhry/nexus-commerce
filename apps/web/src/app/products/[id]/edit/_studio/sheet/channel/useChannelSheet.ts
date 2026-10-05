@@ -24,6 +24,7 @@ import { commitLanguageGroups } from '../languageWrites'
 import { commitVariationTheme } from '../master/masterWrite'
 import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, commandKeyFor, keepsKey, sendCommand } from '@/lib/command-key'
 import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
@@ -37,6 +38,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
+import { IDENTITY_SKU_COLUMN, identitySkuChannelChange } from '../identitySkuEdit'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
@@ -439,6 +441,8 @@ async function commitChannelLanguage(
   }
 
   const changes = req.cells.map(({ colId, value, intent }) => {
+    // S11 — the first column is THIS listing's own SKU (`channel_sku`, a channel write on the row's listing context).
+    if (colId === IDENTITY_SKU_COLUMN) return { colId, change: { id: row.id, ...identitySkuChannelChange(value, intent) } }
     const cell = row.values?.[colId]
     const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
     const isReset = intent === 'reset' || intent === 'reset-list'
@@ -684,23 +688,33 @@ export async function addListingAlias(input: {
   marketplace: string
   accountId?: string
   label?: string
-}): Promise<{ ok: boolean; alias?: AliasGroup; reason?: string }> {
-  const { productId, channel, marketplace, label, accountId } = input
+  /** Add rows (R3): the SKU typed into an empty "Listing (alias)" row — the new listing's channel SKU too. */
+  sku?: string
+  /** The Idempotency-Key slot of this intent (`commandKeyFor`); default: one per channel · market · account. */
+  slot?: string
+}): Promise<{ ok: boolean; alias?: AliasGroup; reason?: string; unknown?: boolean }> {
+  const { productId, channel, marketplace, label, accountId, sku, slot } = input
   try {
-    const res = await fetch(`${getBackendUrl()}/api/products/${productId}/aliases`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, marketplace, label, accountId }),
-    })
-    const body = await res.json().catch(() => null)
+    // Keyed (the API keeps receipts for this route): a resend after a lost answer never makes a second listing.
+    const sent = await sendCommand<any>(commandKeyFor(slot ?? `alias-create:${productId}:${channel}:${marketplace}:${accountId ?? ''}`),
+      `${getBackendUrl()}/api/products/${productId}/aliases`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, marketplace, label, accountId, ...(sku !== undefined ? { sku } : {}) }),
+      })
+    // `unknown`: the outcome is not known yet (still running, or a proxy answered for the API) — the key is kept.
+    if (sent.conflict) return { ok: false, reason: commandConflictMessage(sent.conflict, 'new listing request'), ...(sent.conflict === 'running' ? { unknown: true } : {}) }
+    const res = sent.response
+    const body = sent.body
     if (res.status === 404 || res.status === 501) {
       return { ok: false, reason: 'The alias route is not deployed yet (PES.5 §3.4)' }
     }
-    if (!res.ok) return { ok: false, reason: body?.message || body?.error || `Refused (HTTP ${res.status})` }
+    if (!res.ok) return { ok: false, reason: body?.message || body?.error || `Refused (HTTP ${res.status})`, ...(keepsKey(res.status, body) ? { unknown: true } : {}) }
     return { ok: true, alias: body as AliasGroup }
   } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+    // No answer arrived: the listing may exist. The key is kept, so sending the same request again never makes a second.
+    return { ok: false, reason: err instanceof Error ? err.message : String(err), unknown: true }
   }
 }
 

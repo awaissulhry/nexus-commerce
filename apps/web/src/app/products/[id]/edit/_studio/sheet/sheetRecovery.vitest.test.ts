@@ -98,3 +98,28 @@ describe('Shopify draft read-back confirms own and follow only from reported sha
     expect((await recovered(shopifyCell('Provider', false, null), 'reset')).match).toBe(true)
   })
 })
+
+/* S11 — the first column is not a value cell: a lost answer is read back from the row's SKU facts (channel) or its SKU. */
+describe('the first column read back (S11)', () => {
+  const FIRST = 'ag-Grid-AutoColumn'
+  const facts = (wanted: string, source = 'channel') => ({ wanted, source, live: null, liveConfirmed: false, differs: true, editable: true, reason: null })
+  it('a channel row: the listing\'s SKU decides; a reset landed when the listing follows the Shared SKU again', async () => {
+    const page = body() as ReturnType<typeof body> & { rows: Array<Record<string, unknown>> }
+    page.rows[0].skuFacts = facts('GALE-M-IT')
+    const sent = { ...request(), cells: [{ colId: FIRST, value: 'GALE-M-IT', intent: 'set' as const }] }
+    expect((await recoverSheetRow(page, sent, scope))?.matches[FIRST]).toBe(true)
+    page.rows[0].skuFacts = facts('OTHER')
+    expect((await recoverSheetRow(page, sent, scope))?.matches[FIRST]).toBe(false)
+    page.rows[0].skuFacts = facts('GALE-M', 'product')
+    expect((await recoverSheetRow(page, { ...sent, cells: [{ colId: FIRST, value: null, intent: 'reset' as const }] }, scope))?.matches[FIRST]).toBe(true)
+    delete page.rows[0].skuFacts
+    expect((await recoverSheetRow(page, sent, scope))?.matches[FIRST]).toBeNull()
+  })
+  it('the Shared scope: the product SKU decides', async () => {
+    const shared = { scope: { kind: 'master', locale: 'it' }, rows: [{ id: 'p1', version: 4, sku: 'GALE-M2', values: {} }] }
+    const sent = { rowId: 'p1', row: { id: 'p1', version: 3, values: {} }, cells: [{ colId: FIRST, value: 'GALE-M2', intent: 'set' as const }] }
+    expect((await recoverSheetRow(shared, sent as never, { channel: 'MASTER', market: 'IT', locale: 'it' }))?.matches[FIRST]).toBe(true)
+    shared.rows[0].sku = 'GALE-M'
+    expect((await recoverSheetRow(shared, sent as never, { channel: 'MASTER', market: 'IT', locale: 'it' }))?.matches[FIRST]).toBe(false)
+  })
+})

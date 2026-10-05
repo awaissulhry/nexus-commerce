@@ -406,7 +406,10 @@ function planFor(action: ListingAction, family: FamilyRead, destination: Listing
     if (!chosen.has(product.id)) continue
     const listing = family.listings.get(product.id)
     const { state } = states.get(product.id)!
-    const row = (plan: ListingActionPlanRow['plan'], sentence: string) => rows.push({ productId: product.id, listingId: listing?.id ?? null, sku: product.sku, plan, sentence })
+    // S11 follow-up — the row keeps the product's name (the sheet's rows) and says which SKU the action names on the
+    // channel when that is another one (`heldSku`): what an End or a Delete acts on, for the Publish window to name.
+    const heldSku = listing?.sku && listing.sku !== product.sku ? { heldSku: listing.sku } : {}
+    const row = (plan: ListingActionPlanRow['plan'], sentence: string) => rows.push({ productId: product.id, listingId: listing?.id ?? null, sku: product.sku, ...heldSku, plan, sentence })
     // A main product of a family has no offer or stock of its own: its variations carry the change. Two exceptions: on
     // Shopify it IS the product, so a product-level change (End, Relist, Delete) reaches it; and Delete reaches a main
     // product's own channel listing everywhere (on Amazon after its variations), so its old channel id is audited too.
