@@ -10,8 +10,9 @@
  * the real `setBidAutomation` / `setCpcCeiling`. Both edits must survive. On a real PostgreSQL (PGlite, production
  * schema), so the JSON merge itself runs; the queue and the Amazon client are mocked.
  *
- * And the other direction: `setBidAutomation`, `setCpcCeiling` and `PATCH /campaigns/:id/guardrails` each read the JSON
- * first too. A placement saved between that read and their write (`race.afterCampaignRead`) must survive them.
+ * And the other direction: `setBidAutomation`, `setCpcCeiling`, `PATCH /campaigns/:id/guardrails`, the rule action
+ * `set_campaign_target_acos` and `PUT /campaigns/:id/goal` each read the JSON first too. A placement saved between that
+ * read and their write (`race.afterCampaignRead`) must survive them.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,9 +96,12 @@ beforeAll(async () => {
   database = await formulaDatabase()
   await inside(() => seedAdsFixture(database.client))
   const { default: advertisingRoutes } = await import('../../routes/advertising.routes.js')
+  const { default: advertisingIntelRoutes } = await import('../../routes/advertising-intel.routes.js')
+  await import('./automation-action-handlers.js')
   app = Fastify()
   app.addHook('preHandler', (_request, _reply, done) => withWorkspace(business, done))
   await app.register(advertisingRoutes, { prefix: '/api' })
+  await app.register(advertisingIntelRoutes, { prefix: '/api' })
   await app.ready()
 }, 180_000)
 afterAll(async () => { await app?.close(); await database?.close() }, 30_000)
@@ -218,5 +222,29 @@ describe('the settings writers write only their own keys, so a placement saved m
     expect((await stored('c-it')).dynamicBidding).toEqual({ targetAcos: 0.3, maxWritesPerDay: 12, placementBidding: PLACEMENT_SAVED_MEANWHILE })
     const bounds = await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: 'c-it' }, select: { minBidCents: true, maxBidCents: true } }))
     expect(bounds).toEqual({ minBidCents: 10, maxBidCents: 300 })
+  })
+
+  it('rule action set_campaign_target_acos: only targetAcos changes, the placement is kept', async () => {
+    savePlacementAfterNextRead()
+    const { ACTION_HANDLERS } = await import('../automation-rule.service.js')
+
+    const r = await inside(() => ACTION_HANDLERS.set_campaign_target_acos({ type: 'set_campaign_target_acos', campaignId: 'c-it', targetAcos: 0.22 }, {}, { dryRun: false, ruleId: 'tstrule-cm6' } as never))
+
+    expect(r).toMatchObject({ ok: true, output: { campaignId: 'c-it', targetAcos: 0.22 } })
+    expect(race.afterCampaignRead).toBeNull()
+    expect((await stored('c-it')).dynamicBidding).toEqual({ strategy: 'LEGACY_FOR_SALES', targetAcos: 0.22, bidAutomation: false, placementBidding: PLACEMENT_SAVED_MEANWHILE })
+  })
+
+  it('PUT /campaigns/:id/goal: targetAcos is set, then cleared; the placement is kept both times', async () => {
+    savePlacementAfterNextRead()
+    const set = await app.inject({ method: 'PUT', url: '/api/advertising/campaigns/c-it/goal', payload: { targetAcos: 0.18 }, headers: { 'x-actor-id': 'goal-person' } })
+    expect(set.statusCode).toBe(200)
+    expect(race.afterCampaignRead).toBeNull()
+    expect((await stored('c-it')).dynamicBidding).toEqual({ strategy: 'LEGACY_FOR_SALES', targetAcos: 0.18, bidAutomation: false, placementBidding: PLACEMENT_SAVED_MEANWHILE })
+
+    race.afterCampaignRead = async () => { await inside(() => database.client.campaign.update({ where: { id: 'c-it' }, data: { dynamicBidding: { strategy: 'LEGACY_FOR_SALES', targetAcos: 0.18, bidAutomation: false, placementBidding: [{ placement: PP, percentage: 60 }] } } })) }
+    const clear = await app.inject({ method: 'PUT', url: '/api/advertising/campaigns/c-it/goal', payload: { targetAcos: null }, headers: { 'x-actor-id': 'goal-person' } })
+    expect(clear.json()).toMatchObject({ ok: true, targetAcos: null })
+    expect((await stored('c-it')).dynamicBidding).toEqual({ strategy: 'LEGACY_FOR_SALES', bidAutomation: false, placementBidding: [{ placement: PP, percentage: 60 }] })
   })
 })
