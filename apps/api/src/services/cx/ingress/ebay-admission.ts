@@ -48,8 +48,11 @@ async function lockDelivery(tx: Tx, notice: Pick<Notice, 'environment' | 'signat
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`
 }
 
+/** Topics routed to a business by their verified seller id. Every other topic stays in encrypted quarantine. */
+const ROUTED_TOPICS: ReadonlySet<string> = new Set(['AUTHORIZATION_REVOCATION', 'ORDER_CONFIRMATION'])
+
 async function ownerFor(tx: Pick<Tx, '$queryRaw'>, notice: Pick<Notice, 'signatureOk' | 'topic' | 'userId' | 'environment'>, lock: boolean) {
-  if (!notice.signatureOk || notice.topic !== 'AUTHORIZATION_REVOCATION' || !notice.userId) return null
+  if (!notice.signatureOk || !ROUTED_TOPICS.has(notice.topic) || !notice.userId) return null
   const rows = lock
     ? await tx.$queryRaw<Array<{ workspaceId: string; status: string }>>`
       SELECT * FROM nexus_lock_ebay_notice_owner(${notice.environment}, ${notice.userId})`
@@ -139,7 +142,7 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
   let identity: EbayNoticeIdentity | null = null
   if (verification.ok) { try { identity = readEbayNoticeIdentity(payload) } catch { /* encrypted quarantine */ } }
   const payloadDigest = digest(rawBody)
-  const routeable = identity?.topic === 'AUTHORIZATION_REVOCATION' && !!identity.userId
+  const routeable = !!identity && ROUTED_TOPICS.has(identity.topic) && !!identity.userId
   const notice: Notice = { environment, rawBody, payload, signatureOk: verification.ok, keyId: verification.kid,
     externalId: identity?.notificationId ?? `sha256:${payloadDigest}`, topic: identity?.topic ?? 'unclassified',
     userId: routeable ? identity!.userId : null, subjectHash: routeable ? subjectHash(environment, identity!.userId!) : null, payloadDigest,

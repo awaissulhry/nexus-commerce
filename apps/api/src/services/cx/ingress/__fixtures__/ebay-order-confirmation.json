@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "topic": "ORDER_CONFIRMATION",
+    "schemaVersion": "1.0",
+    "deprecated": false
+  },
+  "notification": {
+    "notificationId": "00000000-fake-0000-notice-000000000001",
+    "eventDate": "2026-10-06T09:15:00.000Z",
+    "publishDate": "2026-10-06T09:15:02.000Z",
+    "publishAttemptCount": 1,
+    "data": {
+      "user": {
+        "userId": "fake-seller-user-id-A",
+        "username": "fake_seller_name_a"
+      },
+      "order": {
+        "orderId": "00-00000-00001",
+        "orderLineItems": [
+          {
+            "orderLineItemId": "000000000001",
+            "listingId": "000000000101",
+            "quantity": 1
+          }
+        ]
+      }
+    }
+  }
+}

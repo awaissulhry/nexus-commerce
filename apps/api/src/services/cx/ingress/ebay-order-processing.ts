@@ -1,9 +1,10 @@
 /**
- * Stored ORDER_CONFIRMATION execution — DORMANT. Admission still quarantines this topic and its
- * subscription stays `handlerMissing`, so production cannot deliver a receipt here; this is the
- * executor that activation will need, proved locally first.
+ * Stored ORDER_CONFIRMATION execution. Admission routes a verified order notice to the business that
+ * owns its seller id and stores it on that seller's account; this runs it only when
+ * NEXUS_ENABLE_EBAY_ORDER_NOTICES=1 (ebay-processing-policy.ts), otherwise the receipt stays held.
  *
- * One receipt names one order on one account. The order is read back with THAT account's own
+ * One receipt names one seller and one order on one account. A notice whose seller is not the
+ * account's seller is refused before any read. The order is read back with THAT account's own
  * token, once, before any lock or transaction (never a list, never a sweep of other accounts);
  * then the shared order writer and the receipt completion commit in one transaction.
  */
@@ -20,6 +21,9 @@ import type { EbayProcessingOutcome } from './ebay-processing.js'
 
 /** Static, owner-safe reasons: provider bodies and exception text never become the public error. */
 export function ebayOrderFailureOf(error: unknown): EbayInboundFailure {
+  if (error instanceof EbayOrderNoticeInvalid && error.reason === 'seller_mismatch') {
+    return { kind: 'dead_letter', reason: 'This eBay order notice is for a different eBay seller than its account. Nothing was changed.' }
+  }
   if (error instanceof EbayOrderNoticeInvalid || error instanceof EbayOrderInvalid) {
     return { kind: 'dead_letter', reason: 'The stored eBay order notice cannot be reconciled with its verified account and supported contract.' }
   }
@@ -52,11 +56,18 @@ export async function processEbayOrderClaim(claim: EbayInboundClaim): Promise<Eb
     if (!account) throw new EbayOrderNoticeInvalid('account_missing')
     const identity = ebaySellerIdentity(account)
     if (claim.externalId !== `ebay:${identity.environment}:${notice.notificationId}`) throw new EbayOrderNoticeInvalid('envelope_invalid')
+    // As revocation does: the notice's seller must be this account's seller. Refused before any read.
+    if (identity.userId !== notice.userId) throw new EbayOrderNoticeInvalid('seller_mismatch')
     const order = normalizeEbayOrder(await fetchEbayOrderById(account.id, notice.orderId, { environment: identity.environment }))
     if (order.orderId !== notice.orderId) throw new EbayOrderNoticeInvalid('order_mismatch')
-    const completed = await commitEbayInbound(claim, (tx, stored) => {
+    const completed = await commitEbayInbound(claim, async (tx, stored) => {
       // The domain phase trusts only the receipt reloaded under its lock, not the claim handle.
-      if (stored.connectionId !== account.id || parseEbayOrderNotice(stored.payload).orderId !== order.orderId) throw new EbayOrderNoticeInvalid('envelope_invalid')
+      const reloaded = parseEbayOrderNotice(stored.payload)
+      if (stored.connectionId !== account.id || reloaded.orderId !== order.orderId || reloaded.userId !== notice.userId) throw new EbayOrderNoticeInvalid('envelope_invalid')
+      // commitEbayInbound holds this account row (lockOwnedEbayAccount): its seller cannot change before
+      // commit. A reconnect to another seller during the read is refused here, with nothing written.
+      const current = await tx.channelConnection.findUniqueOrThrow({ where: { id: account.id }, select: { externalAccountId: true, connectionMetadata: true } })
+      if (ebaySellerIdentity(current).userId !== notice.userId) throw new EbayOrderNoticeInvalid('seller_mismatch')
       return writeEbayOrderInTx(tx, { order, connectionId: account.id, actor: 'ebay-order-notice' })
     })
     if (!completed.committed) return { kind: 'not_claimed' }

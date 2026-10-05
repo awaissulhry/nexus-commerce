@@ -17,6 +17,12 @@ describe('ebayOrderFailureOf', () => {
     }
   })
 
+  it('dead-letters a notice for another seller than its account with a plain reason', () => {
+    const outcome = ebayOrderFailureOf(new EbayOrderNoticeInvalid('seller_mismatch'))
+    expect(outcome).toEqual({ kind: 'dead_letter', reason: expect.stringMatching(/different eBay seller than its account\. Nothing was changed\./) })
+    expect(ebayOrderFailureOf(new EbayOrderNoticeInvalid('seller_missing')).reason).toMatch(/supported contract/)
+  })
+
   it('names a different seller only for a different seller, and an unknown account as an account problem', () => {
     expect(ebayOrderFailureOf(new EbayOrderAttributionConflict('different_seller')).reason).toMatch(/different eBay seller/)
     const missing = ebayOrderFailureOf(new EbayOrderAttributionConflict('account_missing'))

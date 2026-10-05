@@ -1,11 +1,13 @@
 /**
  * eBay ORDER_CONFIRMATION notice — the seller-side checkout event (Notification API release 1.6.6).
- * Its OrderConfirmationData carries the order as an object: `notification.data.order.orderId`.
- * https://developer.ebay.com/develop/api/buy/notification_events
+ * Its OrderConfirmationData carries the seller as `notification.data.user.userId` and the order as an
+ * object: `notification.data.order.orderId`.
+ * https://developer.ebay.com/develop/api/buy/notification_events (spec: /develop/api/spec/events/ORDER_CONFIRMATION.yaml)
  *
- * The notice only names an order. The order itself is read back from the Fulfillment API with the
- * receipt's own account, so nothing else in the body is trusted. A flat `notification.data.orderId`
- * is not eBay's contract (the old ebay-topics.ts fallback guessed it) and is refused.
+ * The notice only names a seller and an order. Admission routes it by the seller id; the order itself
+ * is read back from the Fulfillment API with the receipt's own account, so nothing else in the body is
+ * trusted. A flat `notification.data.orderId` or `data.userId` is not eBay's contract (the old
+ * ebay-topics.ts fallback guessed the first) and is refused.
  */
 import { readEbayNoticeIdentity, EbayNoticeInvalid, type EbayNoticeIdentity } from './ebay-revocation-notice.js'
 
@@ -16,7 +18,7 @@ const identifier = (value: unknown): string | null =>
     && !/[\u0000-\u001f\u007f-\u009f]/.test(value) ? value : null
 
 export class EbayOrderNoticeInvalid extends Error {
-  constructor(readonly reason: 'envelope_invalid' | 'topic_unsupported' | 'schema_unsupported' | 'order_missing' | 'order_mismatch' | 'account_missing') {
+  constructor(readonly reason: 'envelope_invalid' | 'topic_unsupported' | 'schema_unsupported' | 'seller_missing' | 'seller_mismatch' | 'order_missing' | 'order_mismatch' | 'account_missing') {
     super('This eBay order notice does not match the supported contract.')
     this.name = 'EbayOrderNoticeInvalid'
   }
@@ -25,10 +27,12 @@ export class EbayOrderNoticeInvalid extends Error {
 export interface EbayOrderNotice extends EbayNoticeIdentity {
   readonly topic: 'ORDER_CONFIRMATION'
   readonly schemaVersion: string
+  /** The seller the notice is for (`data.user.userId`): checked against the receipt's account. */
+  readonly userId: string
   readonly orderId: string
 }
 
-/** Pure. Requires the envelope identity, the ORDER_CONFIRMATION topic and the nested order id. */
+/** Pure. Requires the envelope identity, the ORDER_CONFIRMATION topic, the seller id and the nested order id. */
 export function parseEbayOrderNotice(payload: unknown): Readonly<EbayOrderNotice> {
   let identity: Readonly<EbayNoticeIdentity>
   try { identity = readEbayNoticeIdentity(payload) } catch (error) {
@@ -40,7 +44,9 @@ export function parseEbayOrderNotice(payload: unknown): Readonly<EbayOrderNotice
   // The version is recorded, not pinned: the order body is read back from the Fulfillment API.
   const schemaVersion = object(root.metadata)?.schemaVersion
   if (typeof schemaVersion !== 'string' || !/^\d{1,4}\.\d{1,4}(?:\.\d{1,4})?$/.test(schemaVersion)) throw new EbayOrderNoticeInvalid('schema_unsupported')
+  // Like revocation's subject: without the seller id the notice cannot be tied to its account.
+  if (!identity.userId) throw new EbayOrderNoticeInvalid('seller_missing')
   const orderId = identifier(object(object(object(root.notification)?.data)?.order)?.orderId)
   if (!orderId) throw new EbayOrderNoticeInvalid('order_missing')
-  return Object.freeze({ ...identity, topic: 'ORDER_CONFIRMATION', schemaVersion, orderId })
+  return Object.freeze({ ...identity, topic: 'ORDER_CONFIRMATION', schemaVersion, userId: identity.userId, orderId })
 }
