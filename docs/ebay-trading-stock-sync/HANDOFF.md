@@ -13,3 +13,15 @@ Owner chose B: build the fix first (eBay keeps the wrong numbers until it is liv
 2. Build. 3. Review + test sweep. 4. PR, merge on "merge #N". 5. After deploy: re-push red/yellow, verify live.
 Worktree /private/tmp/fix-ebay-trading-stock-sync (branch fix/ebay-trading-stock-sync from 63ad79dbf). COMMIT WIP EARLY
 (/private/tmp is wiped on a Mac restart).
+## Research 1 (routing) done
+- Root cause: studio Trading publish writes no model marker; usesEbayInventory (pim/ebay-listing-model.ts) = Inventory iff
+  `__offerIds` non-empty or `offerId`; syncToEbay never checks it → every QUANTITY/PRICE row → Inventory API → 25604.
+  Prices to studio Trading listings never land either (pickEbayPriceOffer).
+- Trap: a recascade will NOT repair it (cl.quantity already 0/1) — re-push via Matrix Push now / MCP set-listing-stock
+  push-now or retry-sync after deploy (6 coordinates: red + yellow × 3 ItemIDs).
+- Fix (builder running): syncToEbay routes Trading families to new syncTradingListingRow (ReviseInventoryStatus via
+  callTradingApi, ItemID+SKU, StartPrice for price rows; membership-owned SKUs skipped; content refused); fixtures of
+  Inventory-path tests get __offerIds.
+- Follow-ups (not this PR): saveOfferIds lookup not scoped by account/marketplace; retryQueueItem keeps isDead; failing-
+  listings retry rows have cl=null; batching 4 per ItemID.
+- Risk to tell the Owner: business A Trading listings without membership will START receiving real stock (today they die).
