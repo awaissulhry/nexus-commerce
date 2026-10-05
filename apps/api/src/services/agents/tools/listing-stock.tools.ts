@@ -49,11 +49,29 @@ function personError(error: unknown): string | null {
 
 const doorFor = (productId: string, ctx: ToolContext, actor?: string) => ({ productId, actor: actor ?? ctx.userId ?? 'claude', can: (permission: string) => ctx.can(permission as never) })
 
+/** N4 — a hold of the stock sync also keeps price and sale changes in Nexus (follower-price `holdsCascadedPrice`). */
+export const HOLD_HOLDS_PRICES = 'Holding the stock sync also holds price and sale changes on these listings: they are kept in Nexus and sent '
+  + 'when the stock sync is released.'
+
+/**
+ * N4 — the Matrix preview in words for the Approvals card (which reads `summary` and `warning`, not a list of cells):
+ * what it changes and where, how many targets were refused, Amazon's one EU quantity, and what a hold also holds.
+ */
+export function matrixStory(sku: string, preview: Pick<VerbPreview, 'verb' | 'changes' | 'refusals' | 'notices'>) {
+  const keys = [...new Set(preview.changes.map((c) => c.coordinateKey))]
+  const summary = `${sku}: ${preview.verb} — ${preview.changes.length} change${preview.changes.length === 1 ? '' : 's'} on `
+    + `${keys.slice(0, 6).join(', ')}${keys.length > 6 ? ` and ${keys.length - 6} more` : ''}`
+    + `${preview.refusals.length ? `; ${preview.refusals.length} refused (see refused)` : ''}.`
+  const warnings = [...preview.notices, ...(preview.verb === 'pause-sync' ? [HOLD_HOLDS_PRICES] : [])]
+  return { summary, ...(warnings.length ? { warning: warnings.join(' ') } : {}) }
+}
+
 /** The Matrix preview, as a person reads it in Nexus: each change and each refusal, by SKU and coordinate. */
 function previewOf(tool: string, family: { id: string; sku: string }, preview: VerbPreview, extra: Record<string, unknown>) {
   return {
     action: tool,
     family: { productId: family.id, sku: family.sku },
+    ...matrixStory(family.sku, preview),
     ...extra,
     verb: preview.verb,
     changes: preview.changes,

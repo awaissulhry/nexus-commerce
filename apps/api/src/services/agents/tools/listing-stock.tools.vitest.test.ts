@@ -26,6 +26,7 @@ vi.mock('../../channel-delist.service.js', async (original) => ({ ...(await orig
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
+import { HOLD_HOLDS_PRICES, matrixStory } from './listing-stock.tools.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -167,5 +168,20 @@ describe('set-listing-price', () => {
 
   it('another business\'s product is not found', async () => {
     expect(await dryRun('set-listing-price', { productId: 'no-such-product', action: 'set-price', price: 5, targets: [{ rowId: 'x', coordinateKey: 'EBAY:IT' }] })).toEqual({ ok: false, error: 'Product not found' })
+  })
+})
+
+describe('N4 — the Matrix preview in words', () => {
+  const change = (sku: string, coordinateKey: string) => ({ rowId: sku, sku, coordinateKey, cell: 'syncState', from: 'FOLLOW', to: 'PAUSED' }) as any
+
+  it('says what changes where, how many were refused, and Amazon\'s one EU quantity', () => {
+    const story = matrixStory('GALE', { verb: 'pin-quantity', changes: [change('GALE-S', 'AMAZON:EU'), change('GALE-M', 'EBAY:IT')], refusals: [{ sku: 'GALE-L' } as any], notices: ['Amazon EU: this covers IT DE FR ES'] })
+    expect(story).toEqual({ summary: 'GALE: pin-quantity — 2 changes on AMAZON:EU, EBAY:IT; 1 refused (see refused).', warning: 'Amazon EU: this covers IT DE FR ES' })
+  })
+
+  it('a hold of the stock sync says it holds price and sale changes too', () => {
+    const story = matrixStory('GALE', { verb: 'pause-sync', changes: [change('GALE-S', 'EBAY:IT')], refusals: [], notices: [] })
+    expect(story.summary).toBe('GALE: pause-sync — 1 change on EBAY:IT.')
+    expect(story.warning).toBe(HOLD_HOLDS_PRICES)
   })
 })
