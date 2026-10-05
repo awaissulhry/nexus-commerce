@@ -172,10 +172,12 @@ describe('CC-11 — the Sponsored Brands creative', () => {
 
 describe('CC-12 — Sponsored Display targets and ad groups in SD\'s own dialect', () => {
   let adGroupId = ''
+  let sdCampaignId = ''
   beforeAll(async () => {
     // A describe's beforeAll runs before the file's beforeEach: the last CC-11 test left the gate refusing.
     gate.refuse = null
     const camp = await inside(() => svc.createCampaignLocal({ name: 'SD audiences test', type: 'SD', marketplace: 'IT', dailyBudgetEur: 5, sdTactic: 'T00030' }))
+    sdCampaignId = camp.id
     const row = await inside(() => database.client.campaign.findUnique({ where: { id: camp.id }, select: { tactic: true } }))
     expect(row?.tactic).toBe('T00030')
     amazon.calls = []
@@ -209,5 +211,18 @@ describe('CC-12 — Sponsored Display targets and ad groups in SD\'s own dialect
     expect(r.body.error).toMatch(/cannot target the views of one ASIN \(B0TEST0001\)/)
     expect(calls('sd target')).toEqual([])
     expect(await inside(() => database.client.adTarget.count({ where: { adGroupId } }))).toBe(before)
+  })
+
+  it('the repair push re-creates a missing SD / SB ad group on its own endpoint, never /sp/adGroups', async () => {
+    await inside(async () => {
+      await database.client.adGroup.create({ data: { id: 'g-sd-missing', campaignId: sdCampaignId, name: 'SD missing group', defaultBidCents: 40 } })
+      await database.client.adGroup.create({ data: { id: 'g-sb-missing', campaignId: 'c-sb', name: 'SB missing group', defaultBidCents: 40 } })
+    })
+    const sd = await inside(() => svc.pushCampaignStructure(sdCampaignId))
+    const sb = await inside(() => svc.pushCampaignStructure('c-sb'))
+    expect([sd.adGroups, sb.adGroups]).toEqual([1, 1])
+    expect(calls('sd ad group')[0].input).toMatchObject({ name: 'SD missing group', tactic: 'T00030' })
+    expect(calls('sb ad group')[0].input).toMatchObject({ name: 'SB missing group' })
+    expect(calls('sp ad group')).toEqual([])
   })
 })

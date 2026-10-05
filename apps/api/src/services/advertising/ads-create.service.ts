@@ -712,7 +712,7 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
 // external id and reuses the existing local rows — never duplicates. Campaign must be allowlisted.
 export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; negKeywords: number; errors: string[] }> {
   const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, negKeywords: 0, errors: [] as string[] }
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true } })
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, tactic: true } })
   if (!campaign?.externalCampaignId || !campaign.marketplace) { out.ok = false; out.errors.push('campaign missing externalCampaignId/marketplace'); return out }
   const ctx = await resolveCtx(campaign.marketplace)
   if (!ctx) { out.ok = false; out.errors.push('no connection for ' + campaign.marketplace); return out }
@@ -728,7 +728,14 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
     const safeName = ag.name.replace(/\s*·\s*/g, ' - ')
     if (!extAg) {
       try {
-        const r = await createAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: (ag.defaultBidCents ?? 75) / 100, state: 'enabled' })
+        // A missing SD / SB ad group is re-created on its own family's endpoint, as createAdGroupLocal does: the SP
+        // create attached it to nothing (an SD/SB campaign id is unknown to /sp/adGroups).
+        const bid = (ag.defaultBidCents ?? 75) / 100
+        const r = isSd
+          ? await createSdAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: bid, state: 'enabled', tactic: campaign.tactic === 'T00030' ? 'T00030' : 'T00020' })
+          : campaign.adProduct === 'SPONSORED_BRANDS'
+            ? await createSbAdGroup(ctx, { externalCampaignId: extC, name: safeName, state: 'enabled' })
+            : await createAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: bid, state: 'enabled' })
         extAg = r.externalId
         await prisma.adGroup.update({ where: { id: ag.id }, data: { externalAdGroupId: extAg, name: safeName, lastSyncStatus: extAg ? 'SUCCESS' : 'FAILED' } })
         if (extAg) out.adGroups++
