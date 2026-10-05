@@ -30,6 +30,7 @@ import { CONTENT_ROOTS, OUT_OF_SCOPE_ROOTS, STRUCTURE_ROOTS } from '../channel-d
 import { languageTag } from './market-languages.js'
 import { effectiveFulfilment } from './matrix-cells.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { followsMainListingPhotos } from '@nexus/shared/product-media'
 import { mediaLayoutFor } from '../images/media-plan.service.js'
 import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 import { NO_LISTING_PRICE_FACTS, currencyCode, listingSendPrice } from './follower-price.js'
@@ -171,18 +172,26 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     ? await mediaLayoutFor({ productId: parent.id, channel: 'AMAZON', marketplace: scope.marketplace, accountId: scope.accountId, includedIds: products.map(p => p.id) }) : null
   if (planMedia && planMedia.layout.channel !== 'AMAZON') throw new Error('This product\'s photo plan changed. Review again.')
   const planLayout = planMedia?.layout as (AmazonMediaLayout & { channel: 'AMAZON' }) | undefined
-  // Owner 2026-10-05 — Amazon keeps ONE photo set per product (images belong to the ASIN in every market, whatever SKU sends
-  // them: Listings API FAQ), so an alias never sends photos of its own. A NEW alias row is created with the main listing's
-  // photos (its Images draft or Product media, read from the main listing of each product); an alias offer Amazon already
-  // holds sends no image attribute: the product page already shows the main listing's photos, a second send of them is only
-  // a second contribution to the same page (and its ~48 h image processing), and leaving the roots out removes nothing —
-  // a Partial update sends only what it names and a Full update never manages image roots (`managedRoots`, below).
-  const alias = !planMedia && !!facts.destination.aliasKey
-  const mains = alias ? await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: 'AMAZON', marketplace: scope.marketplace,
-    channelConnectionId: scope.accountId, aliasKey: '' }, select: { id: true, productId: true, platformAttributes: true } }) : []
-  const photoListing = (productId: string) => (alias ? mains : listings).find(l => l.productId === productId)
-  // An alias's Images view is its main listing's draft, moved onto the alias's rows (`readAmazonMedia`).
-  const gallery = !planMedia && object(photoListing(parent.id)?.platformAttributes)._amazonMediaWorkspace && rootListing
+  // Owner 2026-10-05 — Amazon keeps ONE photo set per product: images belong to the ASIN in every market, whatever SKU sends
+  // them (Listings API FAQ). An alias row on its Main listing's product page (no ASIN yet, or the Main row's ASIN:
+  // `followsMainListingPhotos`) never sends photos of its own. A NEW row, or one whose Main listing is not live, is sent the
+  // Main listing's photos (its Images draft, else its Product media, else the Shared photos), so the photos its cell shows
+  // reach Amazon. A row whose Main listing is live sends no image attribute: the page already shows the Main listing's,
+  // a second send is only a second contribution to it (and its ~48 h image processing), and leaving the roots out removes
+  // nothing (a Partial update sends only what it names; a Full update never manages image roots, `managedRoots` below).
+  // An alias row on its own ASIN (another product page) keeps its own photos, as before.
+  const aliasKey = planMedia ? '' : facts.destination.aliasKey ?? ''
+  const mains = aliasKey ? await prisma.channelListing.findMany({ where: { productId: { in: [parent.id, ...products.map(p => p.id)] }, channel: 'AMAZON',
+    marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: '' }, select: { id: true, productId: true, version: true, externalListingId: true, isPublished: true, platformAttributes: true } }) : []
+  const mainOf = (productId: string) => mains.find(l => l.productId === productId)
+  const followsMain = (productId: string) => !!aliasKey && followsMainListingPhotos({ channel: 'AMAZON', aliasKey,
+    asin: listings.find(l => l.productId === productId)?.externalListingId, mainAsin: mainOf(productId)?.externalListingId })
+  const mainLive = (productId: string) => !!mainOf(productId)?.externalListingId?.trim() && mainOf(productId)!.isPublished
+  const mainRoot = mainOf(parent.id)
+  const mainGallery = mainRoot && products.some(p => followsMain(p.id)) && object(mainRoot.platformAttributes)._amazonMediaWorkspace
+    ? await readAmazonMedia({ ...facts.destination, aliasKey: '', productId: parent.id, listing: { id: mainRoot.id, productId: parent.id, aliasKey: '', version: mainRoot.version } }) : null
+  // This destination's own Images draft: the Main listing's, or an alias's on its own ASIN.
+  const gallery = !planMedia && object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing && products.some(p => !followsMain(p.id))
     ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
@@ -261,9 +270,25 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
         if (!slots?.MAIN) throw new Error(`${product.sku}: choose a main photo on the Media page before publishing.`)
         for (const slot of amazonImageSlots) { const id = slots[slot.code as keyof typeof slots]; if (id) row[slot.attribute] = planMedia.url(id) }
       }
-    } else if (alias && !row._isNew) {
-      // An alias offer Amazon already holds: no image attribute (above).
+    } else if (followsMain(product.id) && !row._isNew && mainLive(product.id)) {
+      // An alias offer Amazon holds, on the live Main listing's product page: no image attribute (above).
       for (const slot of amazonImageSlots) delete row[slot.attribute]
+    } else if (followsMain(product.id)) {
+      // The Main listing's photos (above): its Images draft for its row of this product, else its Product media.
+      for (const slot of amazonImageSlots) delete row[slot.attribute]
+      const main = mainOf(product.id)
+      if (mainGallery) {
+        const { desired, problems } = desiredAmazonImages(mainGallery, main?.id ?? '')
+        if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')} (on the Main listing)`)
+        if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images on the Main listing before publishing.`)
+        for (const slot of amazonImageSlots) if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
+      } else {
+        const images = publicationImages(facts, product, main ?? null)
+        if (!images.length) throw new Error(`${product.sku}: add a product image on the Main listing before publishing.`)
+        if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery on the Main listing.`)
+        row.main_product_image_locator = images[0]
+        for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+      }
     } else if (gallery && listing) {
       const { desired, problems } = desiredAmazonImages(gallery, listing.id)
       if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
@@ -273,7 +298,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
         if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
       }
     } else if (row._isNew || object(listing?.platformAttributes)._productMediaLocales) {
-      const images = publicationImages(facts, product, photoListing(product.id) ?? null)
+      const images = publicationImages(facts, product)
       if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
       if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
       row.main_product_image_locator = images[0]

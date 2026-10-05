@@ -42,12 +42,23 @@ export interface ProductMediaWorkspace {
 }
 
 /**
- * Owner 2026-10-05 — Amazon keeps ONE photo set per product (its ASIN, every market): a listing alias is another seller
- * SKU of the same product page, so it shows, and Publish sends, the main listing's photos and never has its own.
+ * Owner 2026-10-05 — Amazon keeps ONE photo set per product (its ASIN, every market): a listing alias on the same product
+ * page is another seller SKU of it, so it shows, and Publish sends, the Main listing's photos and never has its own.
  */
-export const AMAZON_ALIAS_PHOTOS = 'Amazon shows one photo set per product. These are the main listing\'s photos; change them on the main listing.'
-/** The listing's photos are the main listing's (an Amazon alias). `aliasKey` '' / null = the main listing. */
-export const followsMainListingPhotos = (channel: string | null | undefined, aliasKey: string | null | undefined) => channel === 'AMAZON' && !!aliasKey
+export const AMAZON_ALIAS_PHOTOS = 'Amazon shows one photo set per product. These are the Main listing\'s photos; change them on the Main listing.'
+/** The refusal of a photo review or publish started from such an alias (the older Amazon Images tab). */
+export const AMAZON_ALIAS_PUBLISH = 'Amazon shows one photo set per product: publish photos from the Main listing.'
+const asinOf = (value: string | null | undefined) => value?.trim() || null
+/**
+ * The listing's photos are the Main listing's: an Amazon alias (`aliasKey` not '') on the Main listing's product page — its
+ * row has no ASIN yet, or the Main listing's row of the product has the same ASIN (`externalListingId`). An alias on its
+ * own ASIN (an adopted listing of another product page) keeps its own photos.
+ */
+export function followsMainListingPhotos(input: { channel: string | null | undefined; aliasKey: string | null | undefined; asin?: string | null; mainAsin?: string | null }): boolean {
+  if (input.channel !== 'AMAZON' || !input.aliasKey) return false
+  const asin = asinOf(input.asin)
+  return asin === null || asin === asinOf(input.mainAsin)
+}
 
 export function mediaObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}

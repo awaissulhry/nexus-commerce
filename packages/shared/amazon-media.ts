@@ -34,6 +34,8 @@ export interface AmazonMediaWorkspace {
   /** `listingId: null` — no Amazon listing on this market yet: the gallery opens empty and its first save starts the draft. */
   destination: { accountId: string; marketplace: string; listingId: string | null; aliasKey: string; label: string; listings: Array<{ id: string; label: string }> }
   languages: string[]; markets: Array<{ code: string; label: string }>; warnings: string[]; observations: Record<string, AmazonMediaObservation>; activeRunId: string | null
+  /** Owner 2026-10-05 — set when the gallery is shown, never changed or published, here, with the reason (an Amazon alias on its Main listing's product page). */
+  readOnly?: string
 }
 export interface AmazonMediaPatch { op: 'replace' | 'delete'; path: string; value: Array<Record<string, unknown>> }
 export interface AmazonMediaPlanItem {
@@ -197,7 +199,8 @@ const observationSchema = z.object({ checkedAt: z.string(), error: z.string().nu
 export const amazonMediaWorkspaceSchema = z.object({ productId: z.string(), revision: z.string(), draft: amazonMediaDraftSchema, assets: z.array(assetSchema),
   items: z.array(z.object({ id: z.string(), productId: z.string(), sku: z.string(), asin: z.string().nullable(), label: z.string(), parent: z.boolean(), productType: z.string().nullable(), theme: z.string().nullable(), attributes: z.record(z.string(), z.string()) })),
   destination: z.object({ accountId: z.string(), marketplace: z.string(), listingId: z.string(), aliasKey: z.string(), label: z.string(), listings: z.array(z.object({ id: z.string(), label: z.string() })) }),
-  languages: z.array(z.string()), markets: z.array(z.object({ code: z.string(), label: z.string() })), warnings: z.array(z.string()), observations: z.record(z.string(), observationSchema), activeRunId: z.string().nullable() })
+  languages: z.array(z.string()), markets: z.array(z.object({ code: z.string(), label: z.string() })), warnings: z.array(z.string()), observations: z.record(z.string(), observationSchema), activeRunId: z.string().nullable(),
+  readOnly: z.string().optional() })
 export const amazonMediaRunSchema = z.object({ id: z.string(), status: z.enum(['REVIEW_QUEUED', 'REVIEWING', 'REVIEW', 'REVIEW_FAILED', 'QUEUED', 'READY', 'SUBMITTING', 'COMPLETE', 'UNKNOWN']), createdAt: z.string(), revision: z.string(),
   items: z.array(z.object({ listingId: z.string(), sku: z.string(), asin: z.string(), productType: z.string(), desired: z.record(z.string(), z.string()), before: z.record(z.string(), z.string()),
     patches: z.array(z.object({ op: z.enum(['replace', 'delete']), path: z.string(), value: z.array(z.record(z.string(), z.unknown())) })), changes: z.array(z.object({ slot: z.string(), before: z.string().nullable(), after: z.string().nullable() })), issues: z.array(z.string()) })),

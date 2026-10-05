@@ -9,7 +9,7 @@ import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestina
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { amazonMediaClient, amazonVariationAttributes, marketValue, mediaObject } from './amazon-media-client.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL, mediaPlanRevision } from './media-plan-switch.js'
-import { AMAZON_ALIAS_PHOTOS } from '@nexus/shared/product-media'
+import { AMAZON_ALIAS_PHOTOS, followsMainListingPhotos } from '@nexus/shared/product-media'
 
 export const AMAZON_MEDIA_KEY = '_amazonMediaWorkspace'
 export const mediaHash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -67,13 +67,16 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
   if (aliasKey && !aliases.some(a => a.id === aliasKey)) throw new WorkspaceScopeError('This listing alias is no longer active.')
   const rows = familyListings.filter(l => l.aliasKey === aliasKey && !l.product.deletedAt)
   const pa = mediaObject(root?.platformAttributes)
-  // Owner 2026-10-05 — an alias shows the main listing's photos (Amazon keeps one photo set per product): the draft and the
-  // stored slots are the main listing's, each SKU's override moved onto the alias row of the same product. Read-only:
-  // `saveAmazonMedia` and `copyAmazonMarketGallery` refuse an alias. Its own Amazon checks stay its own.
+  // Owner 2026-10-05 — an alias on its Main listing's product page (every row of it with no ASIN yet, or the same ASIN as the
+  // Main listing's row) shows the Main listing's photos (Amazon keeps one photo set per product): the draft and the stored
+  // slots are the Main listing's, each SKU's override moved onto the alias row of the same product. Read-only: saves,
+  // copies, reviews and publishes refuse it. Its own Amazon checks stay its own. An alias on its own ASIN keeps its own.
   const mainRows = aliasKey ? familyListings.filter(l => l.aliasKey === '' && !l.product.deletedAt) : []
-  const mainRoot = aliasKey ? mainRows.find(l => l.productId === productId) ?? null : null
-  const photoOf = (row: (typeof rows)[number]) => aliasKey ? mainRows.find(l => l.productId === row.productId) : row
-  const photos = aliasKey ? mediaObject(mainRoot?.platformAttributes) : pa
+  const mainOf = (row: (typeof rows)[number]) => mainRows.find(l => l.productId === row.productId)
+  const follows = !!aliasKey && rows.every(row => followsMainListingPhotos({ channel: 'AMAZON', aliasKey, asin: row.externalListingId, mainAsin: mainOf(row)?.externalListingId }))
+  const mainRoot = follows ? mainRows.find(l => l.productId === productId) ?? null : null
+  const photoOf = (row: (typeof rows)[number]) => follows ? mainOf(row) : row
+  const photos = follows ? mediaObject(mainRoot?.platformAttributes) : pa
   const parsed = photos[AMAZON_MEDIA_KEY] === undefined ? null : storedSchema.safeParse(photos[AMAZON_MEDIA_KEY])
   if (parsed && !parsed.success) throw new WorkspaceScopeError('This listing’s saved media could not be read. It has been preserved; editing is unavailable.', 422)
   const assets: AmazonMediaAsset[] = []
@@ -88,7 +91,7 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
   for (const m of masters) add({ id: `product:${m.id}`, url: m.url, label: m.alt || `Product image ${m.sortOrder + 1}`, width: m.width, height: m.height, origin: 'product' })
   for (const asset of parsed?.success ? parsed.data.assets : []) add({ ...asset, width: asset.width ?? null, height: asset.height ?? null, origin: 'saved-gallery' })
   const stored: AmazonMediaDraft = parsed?.success ? parsed.data.draft : { common: {}, items: {} }
-  const draft: AmazonMediaDraft = aliasKey ? { common: stored.common, items: Object.fromEntries(rows.flatMap(row => {
+  const draft: AmazonMediaDraft = follows ? { common: stored.common, items: Object.fromEntries(rows.flatMap(row => {
     const slots = stored.items[photoOf(row)?.id ?? '']
     return slots ? [[row.id, slots]] : []
   })) } : stored
@@ -105,7 +108,7 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
     for (const axis of (theme ?? '').split('/').filter(Boolean)) { const value = local[axis.toLowerCase()]; if (typeof value === 'string' && !attributes[axis.toLowerCase()]) attributes[axis.toLowerCase()] = value }
     if (!parsed) {
       const slots: AmazonMediaDraft['common'] = {}
-      const photoAttrs = aliasKey ? mediaObject(photoOf(row)?.platformAttributes) : attrs, photoValues = aliasKey ? mediaObject(photoAttrs.attributes) : values
+      const photoAttrs = follows ? mediaObject(photoOf(row)?.platformAttributes) : attrs, photoValues = follows ? mediaObject(photoAttrs.attributes) : values
       for (const slot of amazonImageSlots) {
         const url = marketValue(photoValues[slot.attribute] ?? photoAttrs[slot.attribute], market!.marketplaceId!)
         if (url) slots[slot.code] = { assetId: add({ id: `saved:${mediaHash(url)}`, url, label: `${sku || row.id} · ${slot.label}`, width: null, height: null, origin: 'saved-gallery' }), language: 'und' }
@@ -122,7 +125,7 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
     for (const [code, url] of Object.entries(observation.slots)) add({ id: `saved:${mediaHash(url)}`, url,
       label: `${items.find(i => i.id === id)?.sku || 'Amazon'} · ${code}`, width: null, height: null, origin: 'saved-gallery' })
   }
-  if (aliasKey) warnings.unshift(AMAZON_ALIAS_PHOTOS)
+  if (follows) warnings.unshift(AMAZON_ALIAS_PHOTOS)
   const label = aliasKey ? aliases.find(a => a.id === aliasKey)!.label : 'Primary listing'
   // Images rebuild P2e — a family on the media plan also binds its reviews to the plan's Amazon layers.
   const planRevision = await mediaPlanRevision(destination.familyId, 'AMAZON', destination.accountId)
@@ -132,8 +135,12 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
     const { _amazonMediaObservations: _observations, ...attributes } = mediaObject(r.platformAttributes)
     return [r.id, r.version, r.externalListingId, r.platformProductId, attributes, r.variationTheme, r.flatFileSnapshot, r.product.sku, r.product.variantAttributes]
   }), assets, market.language, aliasKey, Object.entries(observations).map(([id, o]) => [id, o.error, o.theme, o.attributes, o.productType, o.supported]),
-  ...(planRevision ? [planRevision] : []), ...(aliasKey ? [mainRows.map(r => [r.id, r.version])] : [])])
+  ...(planRevision ? [planRevision] : []), ...(follows ? [mainRows.map(r => {
+    const { _amazonMediaObservations: _observations, ...attributes } = mediaObject(r.platformAttributes)
+    return [r.id, r.version, r.externalListingId, attributes]
+  })] : [])])
   return { productId, revision, draft, assets, items, warnings, observations, markets: markets.map(m => ({ code: m.code, label: m.name })), activeRunId: typeof pa._amazonMediaActiveRun === 'string' ? pa._amazonMediaActiveRun : null,
+    ...(follows ? { readOnly: AMAZON_ALIAS_PHOTOS } : {}),
     languages: [...new Set([market.language.toLowerCase().split(/[-_]/)[0], ...(destination.marketplace === 'CA' ? ['en', 'fr'] : destination.marketplace === 'BE' ? ['fr', 'nl', 'de'] : [])])],
     destination: { accountId: destination.accountId, marketplace: destination.marketplace, listingId: root?.id ?? null, aliasKey, label,
       listings: familyListings.filter(l => l.productId === productId && (!l.aliasKey || aliases.some(a => a.id === l.aliasKey))).map(l => ({ id: l.id, label: l.aliasKey ? aliases.find(a => a.id === l.aliasKey)!.label : 'Primary listing' })) } }
@@ -164,8 +171,8 @@ export async function mutateAmazonMedia(destination: WorkspaceDestination, revis
 
 export async function saveAmazonMedia(destination: WorkspaceDestination, revision: string, input: unknown) {
   if (await isOnMediaPlan(destination.familyId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
-  // Owner 2026-10-05 — no per-alias draft: an alias shows the main listing's photos (`readAmazonMedia`).
-  if (destination.aliasKey) throw new WorkspaceScopeError(AMAZON_ALIAS_PHOTOS, 422)
+  // Owner 2026-10-05 — no per-alias draft for an alias that shows the Main listing's photos (`readAmazonMedia`).
+  await assertOwnAmazonPhotos(destination, AMAZON_ALIAS_PHOTOS)
   const parsed = amazonMediaDraftSchema.safeParse(input)
   if (!parsed.success) throw new WorkspaceScopeError('A valid Amazon gallery draft is required.', 400)
   return mutateAmazonMedia(destination, revision, async (current, pa, tx) => {
@@ -179,6 +186,10 @@ export async function saveAmazonMedia(destination: WorkspaceDestination, revisio
     const used = new Set([draft.common, ...Object.values(draft.items)].flatMap(s => Object.values(s).flatMap(a => a ? [a.assetId] : [])))
     return { ...pa, [AMAZON_MEDIA_KEY]: { version: 1, draft, assets: current.assets.filter(a => used.has(a.id)) } }
   })
+}
+/** Owner 2026-10-05 — refuses (422, with `reason`) a change to an alias that shows its Main listing's photos. */
+export async function assertOwnAmazonPhotos(destination: WorkspaceDestination, reason: string) {
+  if (destination.aliasKey && (await readAmazonMedia(destination)).readOnly) throw new WorkspaceScopeError(reason, 422)
 }
 export async function assertNoActiveMediaRun(current: AmazonMediaWorkspace, tx: Prisma.TransactionClient = prisma) {
   if (!current.activeRunId) return
@@ -213,7 +224,7 @@ export async function copyAmazonMarketGallery(destination: WorkspaceDestination,
   sourceMarket: string; sourceListingId: string; sourceGalleryId: string; sourceRevision: string; targetGalleryId: string; section?: 'gallery' | 'safety' | 'all'
 }) {
   if (await isOnMediaPlan(destination.familyId)) throw new WorkspaceScopeError(MEDIA_PLAN_REFUSAL, 409)
-  if (destination.aliasKey) throw new WorkspaceScopeError(AMAZON_ALIAS_PHOTOS, 422)
+  await assertOwnAmazonPhotos(destination, AMAZON_ALIAS_PHOTOS)
   const sourceDestination = await amazonMediaDestination({ productId: destination.productId, accountId: destination.accountId, market: input.sourceMarket, listingId: input.sourceListingId })
   if (sourceDestination.marketplace === destination.marketplace) throw new WorkspaceScopeError('Choose a different source market.', 400)
   return mutateAmazonMedia(destination, revision, async (current, pa, tx) => {

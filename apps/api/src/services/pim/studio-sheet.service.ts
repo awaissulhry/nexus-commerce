@@ -1718,10 +1718,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       // Owner 2026-10-05 — the cell shows what Publish sends: an eBay listing with no Product media saved yet still sends
       // its old Image URLs list, so the cell shows that list (a library file by its id, any other photo by its address).
       const legacy = !mediaPlan && coordinate?.channel === 'EBAY' ? legacyImageUrls(listingRow?.platformAttributes) : undefined
-      // Owner 2026-10-05 — an Amazon alias shows its main listing's photos, read-only (one photo set per product): the cell is
-      // the main listing's row of this product (built first: the main listing is the first projection). On the photo plan
-      // the Amazon layer is the account's already (`sheetMediaPlan`).
-      const mainRow = !mediaPlan && followsMainListingPhotos(coordinate?.channel, projection.id) ? rows.find(r => r.id === product.id && r.aliasId === null) : undefined
+      // Owner 2026-10-05 — an Amazon alias on its Main listing's product page (no ASIN yet, or the same ASIN) shows the Main
+      // listing's photos, read-only (one photo set per product): the cell is the Main listing's row of this product (built
+      // first: the Main listing is the first projection). An alias on its own ASIN keeps its own. On the photo plan the
+      // Amazon layer is the account's already (`sheetMediaPlan`).
+      const mainRow = !mediaPlan && followsMainListingPhotos({ channel: coordinate?.channel, aliasKey: projection.id, asin: listingRow?.externalListingId,
+        mainAsin: listingByRow.get(`${product.id}:`)?.externalListingId }) ? rows.find(r => r.id === product.id && r.aliasId === null) : undefined
       if (mediaPlan) {
         const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
         productMedia = cell.items

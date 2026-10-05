@@ -418,8 +418,8 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     ? tiles.map(t => ({ id: t.id, src: t.src, label: t.label, mediaType: t.mediaType, tone: t.missing ? 'danger' : t.problem ? 'warning' : undefined,
       badges: t.problem ? <Tag tone={t.missing ? 'danger' : 'warning'}>{t.problem}</Tag> : undefined }))
     : initial.map(i => ({ id: i.id, src: i.preview ?? null, label: i.alt || mediaTypeLabel(i.type), mediaType: i.type }))
-  // A read-only list is another listing's (an Amazon alias shows the main listing's): never "Own list for this listing".
-  const source = working && draft ? readOnlyReason ? { label: 'The main listing\'s list', own: false, note: null } : gallery.gallerySource(working, draft) : null
+  // A read-only list is another listing's (an Amazon alias shows the Main listing's): never "Own list for this listing".
+  const source = working && draft ? readOnlyReason ? { label: 'The Main listing\'s list', own: false, note: null } : gallery.gallerySource(working, draft) : null
   const count = draft?.items.length ?? boardItems.length
   const found = working && draft ? gallery.galleryChecks(working, draft) : []
   const listed = useMemo(() => adding && working && draftNow.current ? gallery.galleryCards(working, draftNow.current, show, search).map(a => a.id) : [], [adding, working, show, search])

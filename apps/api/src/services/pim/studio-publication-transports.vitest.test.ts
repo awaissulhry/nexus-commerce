@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn(), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []), hints: vi.fn() }))
+const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn(), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []), hints: vi.fn(), mainRows: [] as unknown[] }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 // Shared stock — publication reads the product's ledger (loadSyncLedgers): nothing is pooled here.
 // CHMAP M4: the builders read the ACTIVE mapping version; none here, so the push is exactly today's.
 // Images rebuild P2 — not on the media plan: the publishers keep their older photo paths here.
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
-vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, channelListing: { findMany: async () => [] }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) }, $queryRaw: async () => [] } }))
+vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, channelListing: { findMany: async () => m.mainRows }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) }, $queryRaw: async () => [] } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {
@@ -336,21 +336,18 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   // library contains more images than a single product gallery permits.
   product.images = Array.from({ length: 24 }, (_, i) => ({ id: String(i), url: `https://example.test/${i}` }))
   await expect(prepareAmazonPublication(facts)).resolves.toBeDefined()
-  // Owner 2026-10-05 — an Amazon alias never sends photos of its own (Amazon keeps one photo set per product): an older
-  // per-alias Product media list on an alias offer Amazon holds is not sent, and an empty one refuses nothing.
-  facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [{ assetId: '4' }] }) }
-  await prepareAmazonPublication(facts)
-  expect(m.row.mock.calls.at(-1)![0]).not.toHaveProperty('main_product_image_locator')
-  facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [] }) }
-  await expect(prepareAmazonPublication(facts)).resolves.toBeDefined()
-  // The main listing still sends its own saved list, and refuses an empty one.
-  facts.destination.aliasKey = ''
+  // No Main listing row is known on this ASIN: the alias is its own product page and keeps its own photos (as before).
   facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [{ assetId: '4' }] }) }
   await prepareAmazonPublication(facts)
   expect(m.row.mock.calls.at(-1)![0].main_product_image_locator).toBe('https://example.test/4')
   facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [] }) }
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('add a product image')
-  facts.destination.aliasKey = 'alias-b'
+  // Owner 2026-10-05 — on the live Main listing's ASIN the alias sends no photo of its own (Amazon keeps one set per product).
+  m.mainRows = [{ id: 'main', productId: 'p', version: 1, externalListingId: 'ASIN', isPublished: true, platformAttributes: {} }]
+  facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [{ assetId: '4' }] }) }
+  await prepareAmazonPublication(facts)
+  expect(m.row.mock.calls.at(-1)![0]).not.toHaveProperty('main_product_image_locator')
+  m.mainRows = []
   facts.listings[0].offers = []
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
 })

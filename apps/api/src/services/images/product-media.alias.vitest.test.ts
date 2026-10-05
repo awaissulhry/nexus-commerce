@@ -32,8 +32,8 @@ import { readProductMedia, saveProductMedia, copyProductMedia } from './product-
 
 const list = (...ids: string[]) => ({ version: 1 as const, items: ids.map(assetId => ({ assetId })) })
 const media = (...ids: string[]) => ({ it: { _productMedia: list(...ids) } })
-const listing = (id: string, productId: string, channel: string, aliasKey: string, platformAttributes: unknown) =>
-  ({ id, productId, version: 1, channel, marketplace: 'IT', channelConnectionId: 'acct', aliasKey, platformAttributes })
+const listing = (id: string, productId: string, channel: string, aliasKey: string, platformAttributes: unknown, externalListingId: string | null = null) =>
+  ({ id, productId, version: 1, channel, marketplace: 'IT', channelConnectionId: 'acct', aliasKey, platformAttributes, externalListingId })
 const amazon = (extra: Record<string, unknown> = {}) => ({ productId: 'root', scope: 'AMAZON', market: 'IT', locale: 'it', accountId: 'acct', ...extra })
 beforeEach(() => {
   mocks.products = [
@@ -42,9 +42,11 @@ beforeEach(() => {
   ]
   mocks.files = ['img-main', 'img-alias', 'img-other'].map((id, sortOrder) => ({ id, productId: 'root', mediaType: 'IMAGE', url: `https://cdn.test/${id}.jpg`, alt: '', sortOrder, updatedAt: '1' }))
   mocks.listings = [
-    listing('l-main', 'root', 'AMAZON', '', { _productMediaLocales: media('img-main') }),
-    // An older per-alias save (before 2026-10-05): kept, never shown or sent.
-    listing('l-alias', 'root', 'AMAZON', 'alias-1', { _productMediaLocales: media('img-alias') }),
+    listing('l-main', 'root', 'AMAZON', '', { _productMediaLocales: media('img-main') }, 'B0TESTMAIN'),
+    // An older per-alias save (before 2026-10-05): kept, never shown or sent. No ASIN yet: the Main listing's product page.
+    listing('l-alias', 'root', 'AMAZON', 'alias-1', { _productMediaLocales: media('img-alias'), other: 'kept' }),
+    // An adopted listing of another product page (its own ASIN): its own photos, as before.
+    listing('l-own', 'root', 'AMAZON', 'alias-3', { _productMediaLocales: media('img-other') }, 'B0TESTOTHER'),
     listing('e-main', 'root', 'EBAY', '', {}),
     listing('e-alias', 'root', 'EBAY', 'alias-2', { _productMediaLocales: media('img-alias') }),
     listing('e-alias-child', 'child', 'EBAY', 'alias-2', { _productMediaLocales: media('img-other') }),
@@ -90,6 +92,27 @@ describe('an Amazon alias shows the main listing\'s photos, read-only (Owner 202
     const copied = await copyProductMedia(amazon({ listingId: 'e-main', scope: 'EBAY' }), { expectedRevision: to.revision,
       source: { productId: 'root', context: { scope: 'AMAZON', market: 'IT', locale: 'it', accountId: 'acct', listingId: 'l-alias' }, expectedRevision: from.revision } })
     expect(copied.collection.items.map(item => item.assetId)).toEqual(['img-main'])
+  })
+
+  it('an alias on the Main listing\'s ASIN follows it; one on its own ASIN keeps, and saves, its own list', async () => {
+    mocks.listings.find(l => l.id === 'l-alias').externalListingId = 'B0TESTMAIN'
+    expect(await readProductMedia(amazon({ listingId: 'l-alias' }))).toMatchObject({ collection: list('img-main'), readOnly: AMAZON_ALIAS_PHOTOS })
+    const own = await readProductMedia(amazon({ listingId: 'l-own' }))
+    expect(own.collection).toEqual(list('img-other'))
+    expect(own.readOnly).toBeUndefined()
+    await saveProductMedia(amazon({ listingId: 'l-own' }), { expectedRevision: own.revision, collection: list('img-alias') })
+    expect(mocks.updates[0].where).toMatchObject({ id: 'l-own' })
+  })
+
+  it('a reset on the alias clears its own older list (every language), and it still shows the Main listing\'s', async () => {
+    mocks.listings.find(l => l.id === 'l-alias').platformAttributes._productMediaLocales.de = { _productMedia: list('img-other') }
+    const before = await readProductMedia(amazon({ listingId: 'l-alias' }))
+    const after = await saveProductMedia(amazon({ listingId: 'l-alias' }), { expectedRevision: before.revision, collection: null })
+    expect(mocks.listings.find(l => l.id === 'l-alias').platformAttributes).toEqual({ other: 'kept' })
+    expect(after).toMatchObject({ collection: list('img-main'), readOnly: AMAZON_ALIAS_PHOTOS })
+    // Nothing left to clear: a second reset writes nothing.
+    await saveProductMedia(amazon({ listingId: 'l-alias' }), { expectedRevision: after.revision, collection: null })
+    expect(mocks.updates).toHaveLength(1)
   })
 
   it('NEGATIVE CONTROL: an eBay alias keeps and saves its own list', async () => {

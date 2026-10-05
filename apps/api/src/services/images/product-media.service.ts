@@ -41,14 +41,17 @@ async function snapshot(input: Input, tx: Tx) {
     product.parentId ? tx.product.findFirst({ where: { id: product.parentId, deletedAt: null }, select: productSelect }) : null,
     tx.productImage.findMany({ where: { productId: { in: [product.id, ...(product.parentId ? [product.parentId] : [])] } }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
     input.scope === 'MASTER' ? null : tx.channelListing.findFirst({ where: { id: input.listingId, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId,
-      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, aliasKey: true, platformAttributes: true } }),
+      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, aliasKey: true, externalListingId: true, platformAttributes: true } }),
   ])
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing destination is no longer available.')
-  // Owner 2026-10-05 — an Amazon alias shows the main listing's photos (one photo set per product): its list is read from this
-  // product's main listing on the same account and market, read-only (saves and copies onto it are refused).
-  const followsMain = followsMainListingPhotos(input.scope, listing ? listing.aliasKey : input.aliasKey)
-  const main = followsMain ? await tx.channelListing.findFirst({ where: { productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId, aliasKey: '' },
-    select: { id: true, version: true, channel: true, aliasKey: true, platformAttributes: true } }) : null
+  // Owner 2026-10-05 — an Amazon alias on the Main listing's product page (no ASIN yet, or the same ASIN) shows the Main
+  // listing's photos (one photo set per product): its list is read from this product's Main listing on the same account and
+  // market, read-only (a save or a copy onto it is refused; a reset only clears its own older list). An alias on its own
+  // ASIN keeps its own list.
+  const aliasKey = listing ? listing.aliasKey : input.aliasKey
+  const main = input.scope === 'AMAZON' && aliasKey ? await tx.channelListing.findFirst({ where: { productId: product.id, channel: input.scope, marketplace: input.market,
+    channelConnectionId: input.accountId, aliasKey: '' }, select: { id: true, version: true, channel: true, aliasKey: true, externalListingId: true, platformAttributes: true } }) : null
+  const followsMain = followsMainListingPhotos({ channel: input.scope, aliasKey, asin: listing?.externalListingId, mainAsin: main?.externalListingId })
   const assets: ProductMediaAsset[] = files.map(file => ({ id: file.id, type: file.mediaType || 'IMAGE', url: file.url,
     preview: file.mediaType === 'IMAGE' ? file.url : file.posterUrl, alt: file.alt ?? '', mimeType: file.mimeType,
     width: file.width, height: file.height, durationSec: file.durationSec, fileSize: file.fileSize }))
@@ -100,8 +103,9 @@ export async function saveProductMedia(input: Input, body: unknown) {
       const state = await snapshot(input, tx)
       rootId = state.product.parentId ?? state.product.id
       const { workspace } = state
-      if (workspace.readOnly) throw new WorkspaceScopeError(workspace.readOnly, 422)
+      if (workspace.readOnly && collection) throw new WorkspaceScopeError(workspace.readOnly, 422)
       if (workspace.revision !== expectedRevision) throw new WorkspaceScopeError('Media changed since this editor opened. Reload the gallery before applying your changes.')
+      if (workspace.readOnly) return clearOwnList(input, state, tx)
       const known = new Set(workspace.assets.map(asset => asset.id))
       if (collection?.items.some(item => !known.has(item.assetId))) throw new WorkspaceScopeError('A selected file is no longer in this product’s media library. Reload the gallery.', 422)
       return persistCollection(input, state, collection, tx)
@@ -147,6 +151,19 @@ async function persistCollection(input: Input, { workspace, product, listing }: 
       _productMediaLocales: writeMediaCollection(mediaObject(listing.platformAttributes)._productMediaLocales, locale, collection) } as Prisma.InputJsonValue } })
     : await tx.product.updateMany({ where: { id: product.id, version: product.version, deletedAt: null }, data: {
       version: { increment: 1 }, localizedContent: writeMediaCollection(product.localizedContent, input.locale, collection) as Prisma.InputJsonValue } })
+  if (result.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
+  return (await snapshot(input, tx)).workspace
+}
+
+/**
+ * Owner 2026-10-05 — a reset on a listing that shows the Main listing's photos (an Amazon alias) clears its own older list,
+ * every language of it: it is never shown or sent, and it would keep its photos "in use".
+ */
+async function clearOwnList(input: Input, state: Awaited<ReturnType<typeof snapshot>>, tx: Tx) {
+  const { listing } = state
+  if (!listing || mediaObject(listing.platformAttributes)._productMediaLocales === undefined) return state.workspace
+  const { _productMediaLocales: _old, ...attributes } = mediaObject(listing.platformAttributes)
+  const result = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: { version: { increment: 1 }, platformAttributes: attributes as Prisma.InputJsonValue } })
   if (result.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
   return (await snapshot(input, tx)).workspace
 }

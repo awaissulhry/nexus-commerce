@@ -52,7 +52,7 @@ describe('an Amazon alias row shows the main listing\'s photos, read-only (Owner
     const row = { id: 'p1', aliasId: 'alias-1', productMediaFollows: 'main-listing' } as Pick<StudioRow, 'productMediaFollows'> & { id: string; aliasId: string }
     const media: MediaRow = row
     expect(mediaReadOnlyReason(media)).toBe(AMAZON_ALIAS_PHOTOS)
-    expect(AMAZON_ALIAS_PHOTOS).toBe('Amazon shows one photo set per product. These are the main listing\'s photos; change them on the main listing.')
+    expect(AMAZON_ALIAS_PHOTOS).toBe('Amazon shows one photo set per product. These are the Main listing\'s photos; change them on the Main listing.')
     expect(mediaReadOnlyReason({})).toBe('')
   })
 })

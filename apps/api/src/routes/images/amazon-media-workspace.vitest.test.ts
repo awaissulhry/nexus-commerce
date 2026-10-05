@@ -108,7 +108,7 @@ import { amazonMediaWorkspaceRoutes } from './amazon-media-workspace.routes'
 import { amazonMediaDestination, readAmazonMedia, saveAmazonMedia, refreshAmazonMedia, copyAmazonMarketGallery } from '../../services/images/amazon-media-workspace.service'
 import { approveAmazonMediaRun, createAmazonMediaReview, processAmazonMediaRun, readAmazonMediaRun, processPendingAmazonMediaRuns } from '../../services/images/amazon-media-publish.service'
 import { exportAmazonSafetyImages } from '../../services/images/amazon-media-safety-export.service'
-import { AMAZON_ALIAS_PHOTOS } from '@nexus/shared/product-media'
+import { AMAZON_ALIAS_PHOTOS, AMAZON_ALIAS_PUBLISH } from '@nexus/shared/product-media'
 
 const headers = { authorization: 'editor' }
 const base = '/api/products/p/images-workspace/amazon'
@@ -329,7 +329,11 @@ describe('an alias shows the main listing\'s photos, read-only (Owner 2026-10-05
     const { d, w } = await saved()
     const before = (await readAmazonMedia(await alias())).revision
     await saveAmazonMedia(d, w.revision, { ...w.draft, common: { MAIN: { assetId: 'product:detail', language: 'zxx' } } })
-    expect((await readAmazonMedia(await alias())).revision).not.toBe(before)
+    const after = (await readAmazonMedia(await alias())).revision
+    expect(after).not.toBe(before)
+    // The Main rows' stored photos it reads count too, not only their versions.
+    fixture.state.listings.find(l => l.id === 'it-blue').platformAttributes.attributes.main_product_image_locator = [{ media_location: 'https://cdn.example/new.jpg', marketplace_id: 'IT-ID' }]
+    expect((await readAmazonMedia(await alias())).revision).not.toBe(after)
   })
   it('no draft on the main listing: the main listing\'s Amazon photos, not the alias\'s', async () => {
     fixture.state.listings.find(l => l.id === 'it-blue').platformAttributes.attributes.main_product_image_locator = [{ media_location: 'https://cdn.example/main-blue.jpg', marketplace_id: 'IT-ID' }]
@@ -351,6 +355,28 @@ describe('an alias shows the main listing\'s photos, read-only (Owner 2026-10-05
     await expect(copyAmazonMarketGallery(await alias(), read.revision, { sourceMarket: 'DE', sourceListingId: 'de-p', sourceGalleryId: 'common', sourceRevision: de.revision, targetGalleryId: 'common' }))
       .rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PHOTOS })
     expect(fixture.state.listings.find(l => l.id === 'summer-p')).toEqual(untouched)
+  })
+  it('a review or a publish from the alias is refused: its photos are published from the Main listing', async () => {
+    await saved()
+    const read = await readAmazonMedia(await alias())
+    expect(read.readOnly).toBe(AMAZON_ALIAS_PHOTOS)
+    await expect(createAmazonMediaReview(await alias(), read.revision, ['summer-blue'], 'editor')).rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PUBLISH })
+    await expect(approveAmazonMediaRun(await alias(), 'run-1', read.revision)).rejects.toMatchObject({ statusCode: 422, message: AMAZON_ALIAS_PUBLISH })
+    const response = await app.inject({ method: 'POST', url: `${base}/review?market=IT&accountId=account-a&listingId=summer-p`, headers, payload: { expectedRevision: read.revision, listingIds: ['summer-blue'] } })
+    expect([response.statusCode, response.json().error]).toEqual([422, AMAZON_ALIAS_PUBLISH])
+    expect(fixture.state.runs).toEqual([])
+  })
+  it('an alias on its own ASIN (another product page) keeps its own draft, and saves and reviews it as before', async () => {
+    await saved()
+    for (const id of ['summer-p', 'summer-blue']) fixture.state.listings.find(l => l.id === id).externalListingId = `ASIN-OWN-${id}`
+    const read = await readAmazonMedia(await alias())
+    expect(read.readOnly).toBeUndefined()
+    expect(read.draft.common).toEqual({})
+    expect(read.warnings).not.toContain(AMAZON_ALIAS_PHOTOS)
+    const own = await saveAmazonMedia(await alias(), read.revision, { common: { MAIN: { assetId: 'product:detail', language: 'zxx' } }, items: {} })
+    expect(own.draft.common.MAIN?.assetId).toBe('product:detail')
+    expect(fixture.state.listings.find(l => l.id === 'summer-p').platformAttributes._amazonMediaWorkspace.draft.common.MAIN.assetId).toBe('product:detail')
+    expect((await createAmazonMediaReview(await alias(), own.revision, ['summer-blue'], 'editor')).status).toBe('REVIEW_QUEUED')
   })
   it('NEGATIVE CONTROL: the main listing still saves its own draft', async () => {
     const { w } = await saved()

@@ -27,8 +27,9 @@ import { mediaObject, readMediaCollection } from '@nexus/shared/product-media'
  */
 
 type Source = 'old eBay builder' | 'eBay media draft' | 'library' | 'Product media'
-/** `common` null = the layer owns no Common set (it follows). A value's `key` is its plan key when it is known already. */
-interface Curation { source: Source; axisLabel: string | null; common: string[] | null; values: Array<{ text: string; urls: string[]; key?: string }>; skus?: Record<string, string[]> }
+/** `common` null = the layer owns no Common set (it follows). A value's `key` is its plan key when it is known already.
+ *  `noAxis`: the layer shows one gallery for every variation (plan `axis: null`), as eBay does when no axis fits. */
+interface Curation { source: Source; axisLabel: string | null; common: string[] | null; values: Array<{ text: string; urls: string[]; key?: string }>; noAxis?: true }
 interface SeedLayer { address: { layer: MediaLayer; channel: string; marketplace: string; accountId: string; aliasKey: string }; plan: MediaPlan; source: Source; label: string }
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {}
 const unique = (list: string[]) => [...new Set(list)]
@@ -71,17 +72,23 @@ function draftCuration(platformAttributes: unknown): Curation | null {
     values: galleries.filter(g => axis && g.axis === axis && typeof g.value === 'string').map(g => ({ text: String(g.value), urls: urls(g) })) }
 }
 
-/** An eBay listing row's own photo list, as Product media shows and Publish sends it: its old Image URLs list while that is
- *  still the list sent, else its own Product media in the market's language (or for every language). Undefined = it follows. */
-function ownPhotoUrls(platformAttributes: unknown, language: string, urlOf: ReadonlyMap<string, string>): { urls: string[]; dropped: number } | undefined {
+/**
+ * An eBay listing row's own photo list, as Product media shows and Publish sends it: its old Image URLs list while that is
+ * still the list sent, else its own Product media in the market's language (or for every language). `urls` undefined = it
+ * has none (it shows the listing's gallery): no list, an unreadable one (`unreadable`), or one with no photo in the library
+ * (only videos or missing files). Photos only — eBay takes no video; `dropped` counts what was left out.
+ */
+function ownPhotoUrls(platformAttributes: unknown, language: string, urlOf: ReadonlyMap<string, string>): { urls?: string[]; dropped: number; unreadable?: true } {
   const legacy = legacyImageUrls(platformAttributes)
   if (legacy) return { urls: legacy, dropped: 0 }
   const own = mediaObject(platformAttributes)._productMediaLocales
-  const collection = own === undefined ? undefined : readMediaCollection(own, language) ?? readMediaCollection(own, 'und')
-  if (!collection) return undefined
-  // Photos only (eBay takes no video); a file no longer in the library is left out — Publish names both today.
+  let collection: ReturnType<typeof readMediaCollection>
+  try { collection = own === undefined ? undefined : readMediaCollection(own, language) ?? readMediaCollection(own, 'und') }
+  catch { return { dropped: 0, unreadable: true } }
+  if (!collection) return { dropped: 0 }
   const urls = collection.items.flatMap(item => urlOf.has(item.assetId) ? [urlOf.get(item.assetId)!] : [])
-  return { urls, dropped: collection.items.length - urls.length }
+  const dropped = collection.items.length - urls.length
+  return collection.items.length && !urls.length ? { dropped } : { urls, dropped }
 }
 
 export async function buildMediaSeed(productId: string) {
@@ -118,60 +125,74 @@ export async function buildMediaSeed(productId: string) {
       values[key] = unique([...(values[key] ?? []), ...value.urls.map(assetFor)])
     }
     const item = (ids: string[]) => ids.map(assetId => ({ assetId }))
-    const skus = Object.entries(curation.skus ?? {})
-    return mediaPlanSchema.parse({ version: 1, ...(axis ? { axis: axis.code } : {}), sets: { ...(curation.common ? { common: item(unique(curation.common.map(assetFor))) } : {}),
-      ...(Object.keys(values).length ? { values: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, item(v)])) } : {}),
-      ...(skus.length ? { skus: Object.fromEntries(skus.map(([productId, urls]) => [productId, item(unique(urls.map(assetFor)))])) } : {}) } })
+    return mediaPlanSchema.parse({ version: 1, ...(curation.noAxis ? { axis: null } : axis ? { axis: axis.code } : {}), sets: { ...(curation.common ? { common: item(unique(curation.common.map(assetFor))) } : {}),
+      ...(Object.keys(values).length ? { values: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, item(v)])) } : {}) } })
   }
 
   /**
-   * Owner 2026-10-05 — an eBay listing's own photos off the plan (Product media is the one photo source), for an alias or a
-   * main listing (`aliasKey` ''): its main row's own list becomes its Common set; its variations' own lists become their
-   * value's set (eBay shows photos per value) when every variation of that value with a list of its own holds the same one,
-   * else each one's SKU set — so after the switch every row of the listing shows the photos it showed before. Null when no
-   * row of the listing has photos of its own (it follows the Shared photos, before and after).
+   * Owner 2026-10-05 — an eBay listing's own photos off the plan (Product media is the one photo source, #355), for an alias
+   * or a Main listing (`aliasKey` ''), laid out the way #355's Publish lays them out (`ebayVariationPhotoSets`):
+   * - the Main row's own list is the listing's Common set (its gallery); without one, the gallery is the Shared Common;
+   * - a variation with no own list (none, an empty one, only videos) shows the gallery;
+   * - every variation showing the gallery → one gallery for all (`axis: null`), as eBay shows today;
+   * - else, under the chosen photo axis (`_imageAxis`, else the product's choice; else each axis in turn), when every
+   *   variation of a value shows the same photos: that axis, and a set for EVERY value (its photos, or the gallery);
+   * - else no axis fits: one gallery for all (`axis: null`), as #355 sends no colour photos then.
+   * Null when no row of the listing has photos of its own (it follows the Shared photos, before and after).
    */
   const urlOf = new Map(library.filter(a => (a.mediaType ?? 'IMAGE') === 'IMAGE').map(a => [a.id, a.url]))
-  const productMediaCuration = (listing: { marketplace: string; accountId: string; aliasKey: string; label: string }): Curation | null => {
-    // An alias id names one account and market; a main listing is the account's and market's row with no alias.
+  /** One photo, whatever its address: its library card, else the address (never imports anything). */
+  const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((url, i) => (byUrl.get(normalizeAmazonImageUrl(url)) ?? url) === (byUrl.get(normalizeAmazonImageUrl(b[i])) ?? b[i]))
+  const productMediaCuration = (listing: { marketplace: string; accountId: string; aliasKey: string; label: string }, sharedCommon: string[]): Curation | null => {
+    // An alias id names one account and market; a Main listing is the account's and market's row with no alias.
     const rows = ebayRows.filter(l => l.aliasKey === listing.aliasKey && (listing.aliasKey !== '' || (l.marketplace === listing.marketplace && l.channelConnectionId === listing.accountId)))
     if (!rows.length) return null
     const key = mediaLayerKey({ layer: 'LISTING', channel: 'EBAY', marketplace: listing.marketplace, accountId: listing.accountId, aliasKey: listing.aliasKey })
     const language = destinations.find(d => d.key === key)?.languages[0] ?? mainLanguage
-    let dropped = 0
+    let dropped = 0, unreadable = 0
     const own = (row: (typeof rows)[number] | undefined) => {
-      const found = row ? ownPhotoUrls(row.platformAttributes, language, urlOf) : undefined
-      dropped += found?.dropped ?? 0
-      return found?.urls
+      if (!row) return undefined
+      const found = ownPhotoUrls(row.platformAttributes, language, urlOf)
+      dropped += found.dropped; if (found.unreadable) unreadable++
+      return found.urls
     }
     const mainRow = rows.find(l => l.productId === rootId)
-    const common = own(mainRow) ?? null
-    const axisLabel = (typeof mediaObject(mainRow?.platformAttributes)._imageAxis === 'string' ? mediaObject(mainRow?.platformAttributes)._imageAxis as string : null)
-      ?? root.imageAxisPreference ?? fam.family.defaultAxis
-    const axis = axisOf(axisLabel)
-    const byValue = new Map<string, Array<{ productId: string; urls: string[] }>>()
-    const skus: Record<string, string[]> = {}
-    for (const variant of fam.family.variants) {
-      const urls = own(rows.find(l => l.productId === variant.productId))
-      if (!urls) continue
-      const value = axis ? variant.values[axis.code] : undefined
-      if (value) byValue.set(value, [...(byValue.get(value) ?? []), { productId: variant.productId, urls }])
-      else skus[variant.productId] = urls
-    }
-    const values: Curation['values'] = []
-    for (const [value, held] of byValue) {
-      if (held.every(h => h.urls.length === held[0].urls.length && h.urls.every((url, i) => url === held[0].urls[i]))) values.push({ text: fam.family.valueLabels[value] ?? value, key: value, urls: held[0].urls })
-      else for (const h of held) skus[h.productId] = h.urls
-    }
+    const mainOwn = own(mainRow)
+    const gallery = mainOwn ?? sharedCommon
+    const variants = fam.family.variants.flatMap(variant => {
+      const row = rows.find(l => l.productId === variant.productId)
+      if (!row) return []
+      const urls = own(row)
+      return [{ variant, own: !!urls?.length, shown: urls?.length ? urls : gallery }]
+    })
     if (dropped) report.push(`${listing.label}: ${dropped} saved item${dropped > 1 ? 's' : ''} of its Product media ${dropped > 1 ? 'are' : 'is'} not a photo in the library and ${dropped > 1 ? 'were' : 'was'} left out.`)
-    if (!common && !values.length && !Object.keys(skus).length) return null
-    return { source: 'Product media', axisLabel: values.length ? axis!.code : null, common, values, ...(Object.keys(skus).length ? { skus } : {}) }
+    if (unreadable) report.push(`${listing.label}: ${unreadable} saved Product media list${unreadable > 1 ? 's' : ''} could not be read and ${unreadable > 1 ? 'were' : 'was'} left out; ${unreadable > 1 ? 'those rows show' : 'that row shows'} the listing's photos.`)
+    if (mainOwn === undefined && !variants.some(v => v.own)) return null
+    const common = mainOwn ?? null
+    if (variants.every(v => sameList(v.shown, gallery))) return { source: 'Product media', axisLabel: null, common, values: [], noAxis: true }
+    const chosenText = [mediaObject(mainRow?.platformAttributes)._imageAxis, root.imageAxisPreference].find((a): a is string => typeof a === 'string' && !!a.trim())?.trim() ?? null
+    const chosen = axisOf(chosenText)
+    for (const axis of chosen ? [chosen] : fam.axes) {
+      const byValue = new Map<string, string[]>()
+      const fits = variants.every(({ variant, shown }) => {
+        const value = variant.values[axis.code]
+        if (!value) return false
+        const held = byValue.get(value)
+        if (!held) { byValue.set(value, shown); return true }
+        return sameList(held, shown)
+      })
+      if (fits) return { source: 'Product media', axisLabel: axis.code, common, values: [...byValue].map(([value, urls]) => ({ text: fam.family.valueLabels[value] ?? value, key: value, urls })) }
+    }
+    const name = chosen?.label ?? fam.axes.map(a => a.label).join(' or ')
+    report.push(`${listing.label}: variations with the same ${name || 'value'} show different photos, so it shows its gallery for every variation — as eBay does today.`)
+    return { source: 'Product media', axisLabel: null, common, values: [], noAxis: true }
   }
 
   const primary = ebayRoots.find(l => l.aliasKey === '' && draftCuration(l.platformAttributes))
   const sharedCuration = await builderCuration(rootId, root.imageAxisPreference, report, 'Shared')
     ?? (primary ? draftCuration(primary.platformAttributes) : null)
     ?? { source: 'library' as const, axisLabel: null, values: [], common: library.filter(a => a.productId === rootId && a.mediaType === 'IMAGE').map(a => a.url) }
+  const sharedCommon = sharedCuration.common ?? []
   const layers: SeedLayer[] = [{ address: { layer: 'SHARED', channel: '', marketplace: '', accountId: '', aliasKey: '' }, plan: toPlan(sharedCuration, 'Shared'), source: sharedCuration.source, label: 'Shared' }]
   const add = (listing: { channel: string; marketplace: string; accountId: string; aliasKey: string }, curation: Curation, label: string) => {
     const global = listing.channel !== 'EBAY'
@@ -180,8 +201,11 @@ export async function buildMediaSeed(productId: string) {
   }
   for (const alias of aliases) {
     const own = ebayRoots.find(l => l.aliasKey === alias.id)
-    const curation = (alias.adoptedFromProductId ? await builderCuration(alias.adoptedFromProductId, root.imageAxisPreference, report, alias.label) : null) ?? (own ? draftCuration(own.platformAttributes) : null)
-      ?? (alias.channel === 'EBAY' ? productMediaCuration({ marketplace: alias.marketplace, accountId: alias.channelConnectionId ?? '', aliasKey: alias.id, label: alias.label }) : null)
+    // What Publish sends off the plan (studio-publication-ebay.ts): the alias's eBay media draft over its Product media (or old
+    // Image URLs list); the adopted shell's old builder rows, which nothing sends any more, come last (Owner 2026-10-05).
+    const curation = (own ? draftCuration(own.platformAttributes) : null)
+      ?? (alias.channel === 'EBAY' ? productMediaCuration({ marketplace: alias.marketplace, accountId: alias.channelConnectionId ?? '', aliasKey: alias.id, label: alias.label }, sharedCommon) : null)
+      ?? (alias.adoptedFromProductId ? await builderCuration(alias.adoptedFromProductId, root.imageAxisPreference, report, alias.label) : null)
     if (!curation) continue
     if (!alias.channelConnectionId) { report.push(`${alias.label}: this alias has no account, so its photos were left out.`); continue }
     add({ channel: alias.channel, marketplace: alias.marketplace, accountId: alias.channelConnectionId, aliasKey: alias.id }, curation, alias.label)
@@ -193,7 +217,7 @@ export async function buildMediaSeed(productId: string) {
   for (const listing of ebayRoots.filter(l => l.aliasKey === '' && l !== primary)) {
     if (!listing.channelConnectionId) continue
     const label = `eBay ${listing.marketplace}`
-    const curation = draftCuration(listing.platformAttributes) ?? productMediaCuration({ marketplace: listing.marketplace, accountId: listing.channelConnectionId, aliasKey: '', label })
+    const curation = draftCuration(listing.platformAttributes) ?? productMediaCuration({ marketplace: listing.marketplace, accountId: listing.channelConnectionId, aliasKey: '', label }, sharedCommon)
     if (curation) add({ channel: 'EBAY', marketplace: listing.marketplace, accountId: listing.channelConnectionId, aliasKey: '' }, curation, label)
   }
   return { rootId, switched: switched > 0, fam, library, destinations, mainLanguage, layers, imports: [...imports].map(([url, id]) => ({ url, id })), report }
@@ -253,7 +277,8 @@ export async function switchToMediaPlan(productId: string, input: { revision: st
   const dedupe = (items?: Array<{ assetId: string }>) => items?.filter((item, i) => items.findIndex(other => other.assetId === item.assetId) === i)
   const swap = (plan: MediaPlan): MediaPlan => {
     const swapped = mediaPlanSchema.parse(JSON.parse(JSON.stringify(plan), (key, value) => key === 'assetId' && typeof value === 'string' && real.has(value) ? real.get(value) : value))
-    const sets = { ...swapped.sets, common: dedupe(swapped.sets.common), ...(swapped.sets.values ? { values: Object.fromEntries(Object.entries(swapped.sets.values).map(([k, v]) => [k, dedupe(v)!])) } : {}) }
+    const each = (sets?: Record<string, Array<{ assetId: string }>>) => sets && Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, dedupe(v)!]))
+    const sets = { ...swapped.sets, common: dedupe(swapped.sets.common), ...(swapped.sets.values ? { values: each(swapped.sets.values) } : {}), ...(swapped.sets.skus ? { skus: each(swapped.sets.skus) } : {}) }
     if (!sets.common) delete sets.common
     return { ...swapped, sets }
   }
