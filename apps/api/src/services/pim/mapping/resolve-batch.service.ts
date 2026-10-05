@@ -7,7 +7,7 @@ import { presentationContexts } from './presentation-context.js'
 import { effectivePresentationRule, resolvePresentationOrder } from './presentation-rules.js'
 import { primaryConnectionIds } from '../../connection-resolver.service.js'
 import { isBlankValue, projectCellValue } from '../sheet-values.js'
-import { normalizeEbayListingValue } from '../ebay-listing-values.js'
+import { EBAY_FIXED_VALUES, isEbayFixedValue, normalizeEbayListingValue } from '../ebay-listing-values.js'
 import { storedChannelState } from '../channel-value-mutation.js'
 import { isOffListError, validateChannelValue } from './validate-channel-value.js'
 import { finding, type ValueFinding } from '../value-verdict.js'
@@ -377,7 +377,9 @@ export async function resolveBatch(input: {
       // Item 12 (2026-10-05) — the Amazon listing role, relationship type and parent SKU are the FAMILY's facts: the cell
       // shows what publish sends (`shapeAmazonStudioAttributes`), never a typed or stale stored value, and a single
       // product shows none (nothing is sent). No rule, no content, no stored value reaches them.
-      const familyFact = channel === 'AMAZON' && AMAZON_FAMILY_FACT_KEYS.has(field.fieldKey)
+      // Wave 2 (2026-10-05) — eBay's duration (GTC) and handling time (none: the shipping policy's) are fixed the same way:
+      // the cell shows what publish sends, never a stored or mapped value (`EBAY_FIXED_VALUES`).
+      const familyFact = (channel === 'AMAZON' && AMAZON_FAMILY_FACT_KEYS.has(field.fieldKey)) || (channel === 'EBAY' && isEbayFixedValue(field.fieldKey))
       const rule: FieldMappingRule | null = familyFact ? null : rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
       }, attrsView.keys))
@@ -416,7 +418,8 @@ export async function resolveBatch(input: {
       }
       const stored = !familyFact && !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
-      const systemValue = channel === 'AMAZON' && field.fieldKey === 'parentage_level'
+      const systemValue = channel === 'EBAY' && familyFact ? EBAY_FIXED_VALUES[field.fieldKey]
+        : channel === 'AMAZON' && field.fieldKey === 'parentage_level'
         ? full.isParent ? 'parent' : full.parentId ? 'child' : undefined
         : channel === 'AMAZON' && field.fieldKey === 'child_parent_sku_relationship__parent_sku' && full.parentId
           ? parentById.get(full.parentId)?.sku

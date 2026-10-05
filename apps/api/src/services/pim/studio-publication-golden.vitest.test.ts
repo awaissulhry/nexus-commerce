@@ -212,6 +212,8 @@ it.each(modes)('eBay: a new item sends today\'s AddFixedPriceItem (%o)', async o
   expect(selection.payload.content).toMatchInlineSnapshot(`"<AddFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><UUID>REVIEWGOLDEN</UUID><ItemID>456</ItemID><SKU>PARENT</SKU><Title>New title</Title><Description><![CDATA[<p>Same description</p>]]></Description><ItemSpecifics><NameValueList><Name>Material</Name><Value>Linen</Value></NameValueList><NameValueList><Name>Brand</Name><Value>Nexus brand</Value></NameValueList></ItemSpecifics><PictureDetails><PictureURL>https://example.test/one.jpg</PictureURL></PictureDetails><PrimaryCategory><CategoryID>123</CategoryID></PrimaryCategory><SellerProfiles><SellerShippingProfile><ShippingProfileID>policy</ShippingProfileID></SellerShippingProfile></SellerProfiles><Variations><Variation><SKU>CHILD</SKU><StartPrice>20</StartPrice><Quantity>3</Quantity><VariationSpecifics><NameValueList><Name>Colour</Name><Value>Black</Value></NameValueList></VariationSpecifics><VariationProductListingDetails><EAN>123</EAN></VariationProductListingDetails></Variation><VariationSpecificsSet><NameValueList><Name>Colour</Name><Value>Black</Value></NameValueList></VariationSpecificsSet></Variations></Item></AddFixedPriceItemRequest>"`)
 })
 
+// Wave 2 (Owner decision 6, 2026-10-05) — the one intended change: a stored handling time sends no <DispatchTimeMax> (eBay
+// takes it from the shipping policy). Everything else in these XMLs is unchanged.
 it('eBay: the full builder\'s XML for a create and a revise is unchanged', () => {
   const input = { sku: 'PARENT', title: 'Jacket', description: '<p>Text</p>', categoryId: '123', conditionId: '1000', country: 'IT', currency: 'EUR', location: 'Rimini',
     postalCode: '47822', itemSpecifics: { Brand: 'Nexus', Material: ['Linen', 'Cotton'] }, variationSpecificNames: ['Colour'], variationSpecificsSet: { Colour: ['Black', 'Red'] },
@@ -262,7 +264,7 @@ it('eBay: the full builder\'s XML for a create and a revise is unchanged', () =>
             <NameValueList><Name>Colour</Name><Value>Black</Value><Value>Red</Value></NameValueList>
           </VariationSpecificsSet>
         </Variations>
-      <SubTitle>Sub</SubTitle><DispatchTimeMax>2</DispatchTimeMax><VATDetails><VATPercent>22</VATPercent></VATDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer><ShippingPackageDetails><MeasurementUnit>Metric</MeasurementUnit><ShippingPackage>PackageThickEnvelope</ShippingPackage><WeightMajor unit="kg">1</WeightMajor><WeightMinor unit="gr">200</WeightMinor></ShippingPackageDetails></Item>
+      <SubTitle>Sub</SubTitle><VATDetails><VATPercent>22</VATPercent></VATDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer><ShippingPackageDetails><MeasurementUnit>Metric</MeasurementUnit><ShippingPackage>PackageThickEnvelope</ShippingPackage><WeightMajor unit="kg">1</WeightMajor><WeightMinor unit="gr">200</WeightMinor></ShippingPackageDetails></Item>
     </AddFixedPriceItemRequest>"
   `)
   expect(ebayPublicationXml(input as any, '456', false, settings)).toMatchInlineSnapshot(`
@@ -309,7 +311,7 @@ it('eBay: the full builder\'s XML for a create and a revise is unchanged', () =>
             <NameValueList><Name>Colour</Name><Value>Black</Value><Value>Red</Value></NameValueList>
           </VariationSpecificsSet>
         </Variations>
-      <SubTitle>Sub</SubTitle><DispatchTimeMax>2</DispatchTimeMax><VATDetails><VATPercent>22</VATPercent></VATDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer></Item>
+      <SubTitle>Sub</SubTitle><VATDetails><VATPercent>22</VATPercent></VATDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer></Item>
     </ReviseFixedPriceItemRequest>"
   `)
   expect(ebayPublicationXml({ ...input, variations: [input.variations[0]] } as any, '456', true, { ...settings, bestOffer: true })).toMatchInlineSnapshot(`
@@ -338,7 +340,7 @@ it('eBay: the full builder\'s XML for a create and a revise is unchanged', () =>
           <SellerReturnProfile><ReturnProfileID>ret</ReturnProfileID></SellerReturnProfile>
         </SellerProfiles>
         <StartPrice>20</StartPrice><Quantity>3</Quantity><ProductListingDetails><EAN>123</EAN></ProductListingDetails>
-      <SubTitle>Sub</SubTitle><DispatchTimeMax>2</DispatchTimeMax><VATDetails><VATPercent>22</VATPercent></VATDetails><BestOfferDetails><BestOfferEnabled>true</BestOfferEnabled></BestOfferDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer></Item>
+      <SubTitle>Sub</SubTitle><VATDetails><VATPercent>22</VATPercent></VATDetails><BestOfferDetails><BestOfferEnabled>true</BestOfferEnabled></BestOfferDetails><QuantityRestrictionPerBuyer><MaximumQuantity>3</MaximumQuantity></QuantityRestrictionPerBuyer></Item>
     </ReviseFixedPriceItemRequest>"
   `)
 })

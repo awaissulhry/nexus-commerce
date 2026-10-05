@@ -2,7 +2,7 @@
  * EFX P9a / P9f — unit tests for the pure offer-term mappers.
  *
  *  buildBestOfferTerms → eBay Inventory API listingPolicies.bestOfferTerms
- *  resolveQuantityLimitPerBuyer → offer.quantityLimitPerBuyer (default 10)
+ *  resolveQuantityLimitPerBuyer → offer.quantityLimitPerBuyer (wave 2: null when blank or invalid, never 10)
  */
 
 import { describe, it, expect } from 'vitest'
@@ -97,11 +97,15 @@ describe('buildBestOfferTerms', () => {
   })
 })
 
+// Wave 2 (2026-10-05) — the one eBay rule (`ebay-quantity-limit.ts`): a whole number, 1 or more, is sent; blank is null and
+// an invalid value is null plus a warning. Nexus never invents 10 any more: a null limit keeps eBay's (`offerQuantityLimit`).
 describe('resolveQuantityLimitPerBuyer', () => {
-  it('blank / null / empty string → default 10', () => {
-    expect(resolveQuantityLimitPerBuyer({})).toBe(10)
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: '' })).toBe(10)
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: null })).toBe(10)
+  it('blank / null / empty string → null (nothing of ours; eBay keeps its limit), and nothing is said', () => {
+    const warnings: string[] = []
+    expect(resolveQuantityLimitPerBuyer({}, warnings)).toBeNull()
+    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: '' }, warnings)).toBeNull()
+    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: null }, warnings)).toBeNull()
+    expect(warnings).toEqual([])
   })
 
   it('valid override wins', () => {
@@ -109,13 +113,10 @@ describe('resolveQuantityLimitPerBuyer', () => {
     expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: '5' })).toBe(5)
   })
 
-  it('below 1 or non-numeric → default 10', () => {
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: 0 })).toBe(10)
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: -4 })).toBe(10)
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: 'abc' })).toBe(10)
-  })
-
-  it('fractional → floored', () => {
-    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: 2.7 })).toBe(2)
+  it.each([0, -4, 'abc', 2.7])('a value eBay cannot take (%j) → null and one warning, never a guess', (value) => {
+    const warnings: string[] = []
+    expect(resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: value }, warnings)).toBeNull()
+    resolveQuantityLimitPerBuyer({ quantity_limit_per_buyer: value }, warnings)
+    expect(warnings).toEqual([`Max per buyer: eBay takes a whole number, 1 or more (this row has ${JSON.stringify(value)}). Not sent.`])
   })
 })

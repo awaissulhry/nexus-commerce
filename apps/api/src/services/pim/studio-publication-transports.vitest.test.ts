@@ -167,7 +167,10 @@ it('creates standalone eBay XML with its saved price, quantity and EAN, and pres
   const xml = ebayPublicationXml(ebay, null, true, { subtitle: 'Subtitle & detail', handlingTime: 2, vatRate: 22, bestOffer: false })
   expect(xml).not.toContain('<Variations>'); expect(xml).toContain('<StartPrice>25</StartPrice><Quantity>3</Quantity>')
   expect(xml).toContain('<ProductListingDetails><EAN>1234567890123</EAN></ProductListingDetails>')
-  expect(xml).toContain('<SubTitle>Subtitle &amp; detail</SubTitle>'); expect(xml).toContain('<DispatchTimeMax>2</DispatchTimeMax>')
+  expect(xml).toContain('<SubTitle>Subtitle &amp; detail</SubTitle>')
+  // Wave 2 (Owner decision 6) — a stored handling time is not sent: eBay takes it from the shipping policy.
+  expect(xml).not.toContain('<DispatchTimeMax>')
+  expect(xml).toContain('<VATDetails><VATPercent>22</VATPercent></VATDetails>')
   expect(xml).toContain('<BestOfferEnabled>false</BestOfferEnabled>')
 })
 it('revises an existing eBay item instead of creating a duplicate or inventing its shipping origin', () => {

@@ -21,7 +21,8 @@ export function EbayPolicyInput({ fieldKey, market, connectionId, value, disable
   const current = value == null ? '' : String(value)
   return <div>
     <Select aria-label="eBay business policy" value={current} disabled={disabled || loading || !!error} onChange={event => onChange(event.target.value || null)}>
-      <option value="">No policy selected</option>
+      {/* Wave 2 (Owner decision 8) — blank is not "no policy": Publish uses the eBay account's default policy. */}
+      <option value="">Account default</option>
       {current && !options.some(option => option.id === current) && <option value={current}>Current policy · {current}</option>}
       {options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
     </Select>

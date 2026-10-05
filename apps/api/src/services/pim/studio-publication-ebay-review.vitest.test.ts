@@ -288,6 +288,51 @@ describe('Max per buyer (E1)', () => {
   })
 })
 
+// Wave 2 (Owner decision 7, 2026-10-05) — a blank VAT rate sent <VATPercent>0</VATPercent> while the cell looked blank.
+describe('VAT rate (wave 2)', () => {
+  beforeEach(() => { m.products = ['solo'] })
+  const vat = (xml: string) => xml.match(/<VATDetails>[\s\S]*?<\/VATDetails>/)?.[0] ?? null
+  it('a number from 0 to 100 is sent', async () => {
+    m.pa = { solo: { vatRate: '22' } }
+    expect(vat((await prepareEbayPublication(facts())).xml)).toBe('<VATDetails><VATPercent>22</VATPercent></VATDetails>')
+  })
+  it.each([null, '', '  '])('blank (%j): nothing is sent and nothing is said — new and live', async (value) => {
+    for (const isLive of [false, true]) {
+      m.listing = isLive ? { solo: { externalListingId: '456' } } : {}
+      m.pa = { solo: { vatRate: value } }
+      const plan = await prepareEbayPublication(facts())
+      expect(vat(plan.xml)).toBeNull()
+      expect((plan.notices ?? []).filter(note => /VAT/.test(note))).toEqual([])
+    }
+  })
+  it.each(['abc', -1, 150])('a new listing: %j is refused by name', async (value) => {
+    m.pa = { solo: { vatRate: value } }
+    expect(await problemsOf(prepareEbayPublication(facts()))).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'vatRate',
+      message: `VAT rate (%): eBay takes a number from 0 to 100 (this row has ${JSON.stringify(value)}). Fix it on this listing's main row, or leave it blank.` })])
+  })
+  it('a LIVE listing: a value eBay cannot take is not sent, and is a note, never a block', async () => {
+    m.listing = { solo: { externalListingId: '456' } }
+    m.pa = { solo: { vatRate: 'abc' } }
+    const plan = await prepareEbayPublication(facts())
+    expect(vat(plan.xml)).toBeNull()
+    expect(plan.notices).toContain('VAT rate (%): eBay takes a number from 0 to 100 (this row has "abc"). Fix it on this listing\'s main row, or leave it blank. Nexus does not send it; eBay keeps the VAT rate it holds.')
+  })
+})
+
+// Wave 2 (Owner decision 6) — eBay takes the handling time from the listing's shipping policy: a stored one is not sent.
+describe('Handling time (wave 2)', () => {
+  it('a stored handling time sends no <DispatchTimeMax> and says nothing — new and live', async () => {
+    m.products = ['solo']
+    for (const isLive of [false, true]) {
+      m.listing = isLive ? { solo: { externalListingId: '456' } } : {}
+      m.pa = { solo: { handlingTime: 3 } }
+      const plan = await prepareEbayPublication(facts())
+      expect(plan.xml).not.toContain('<DispatchTimeMax>')
+      expect((plan.notices ?? []).filter(note => /[Hh]andling/.test(note))).toEqual([])
+    }
+  })
+})
+
 describe('EU product safety and parts compatibility (E1, item 3)', () => {
   const SAFETY = 'Product safety information: Nexus does not send this to eBay; the saved value is not sent.'
   const PARTS = 'Parts compatibility: Nexus does not send this to eBay; the saved value is not sent.'

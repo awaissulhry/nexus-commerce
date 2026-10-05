@@ -298,7 +298,15 @@ export async function publishEbayImagesViaInventory(
   const pushWarnings: string[] = []
   for (const mp of markets) {
     const listedIds = listedByMarket.get(mp) ?? new Set<string>()
+    // Wave 2 (2026-10-05) — Max per buyer is this market's main row's (the family's main listing here, the cell the sheet
+    // shows), never the family's first eBay listing on another market. Blank, or no main row: eBay keeps its limit.
+    const mainRow = await prisma.channelListing.findFirst({
+      where: { productId: familyParentId, channel: 'EBAY', marketplace: mp, channelConnectionId: connection.id, aliasKey: '' },
+      select: { platformAttributes: true },
+    })
+    const marketLimit = (mainRow?.platformAttributes as Record<string, unknown> | null | undefined)?.quantityLimitPerBuyer
     const marketRows = rows.filter((r) => r._isParent || listedIds.has(r._productId as string))
+      .map((r) => r._isParent ? { ...r, quantity_limit_per_buyer: marketLimit ?? '' } : r)
     // ED.5a — this path used to push WITHOUT per-market parent content: an
     // image publish sent one market's title/description to every site (P9e
     // gap on this route) and, since ED.2, would have stomped a THEMED live

@@ -27,9 +27,11 @@ it.each(locks)('refuses both eBay direct publishers for %j', async lock => {
  expect((await pushVariationGroup('group', ...args))[0]).toMatchObject({ status: 'ERROR', message: expect.stringMatching(/^PUSH_/) })
  expect(s.send).not.toHaveBeenCalled(); expect(s.review).not.toHaveBeenCalled()
 })
+// Wave 2 (2026-10-05) — the row's Max per buyer is blank, so the offer's PUT (which replaces the whole offer) carries eBay's
+// current limit: the cached offer is read once first, through the same transport.
 it('lets unlocked offers reach one mocked PUT and full-publish reach the next independent review guard', async () => {
  expect((await pushOffersOnly(...args))[0].status).toBe('PUSHED')
- expect(s.send).toHaveBeenCalledTimes(1); expect(s.send.mock.calls[0][1].method).toBe('PUT')
+ expect(s.send.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${new URL(url).pathname}`)).toEqual(['GET /sell/inventory/v1/offer/offer', 'PUT /sell/inventory/v1/offer/offer'])
  await expect(pushVariationGroup('group', ...args)).rejects.toThrow('REVIEW_CONTROL_REACHED')
  expect(s.review).toHaveBeenCalledTimes(1)
 })
@@ -43,5 +45,6 @@ it('P0.1 — sandbox mode with the sandbox host still reaches the mocked transpo
  vi.stubEnv('EBAY_PUBLISH_MODE', 'sandbox')
  const sandboxArgs = [rows, 'IT', 'fixture', 'account', {}, 'https://api.sandbox.ebay.com', 'EBAY_IT', (_id: unknown, _sku: unknown, qty: number) => qty] as const
  expect((await pushOffersOnly(...sandboxArgs))[0].status).toBe('PUSHED')
- expect(s.send).toHaveBeenCalledTimes(1); expect(s.send.mock.calls[0][0]).toContain('https://api.sandbox.ebay.com/')
+ // The read of eBay's offer (blank Max per buyer, wave 2) and the PUT: both to the sandbox host.
+ expect(s.send).toHaveBeenCalledTimes(2); expect(s.send.mock.calls.every(([url]) => String(url).startsWith('https://api.sandbox.ebay.com/'))).toBe(true)
 })

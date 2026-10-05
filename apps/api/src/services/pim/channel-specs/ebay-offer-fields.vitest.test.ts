@@ -5,9 +5,10 @@
  *   · Max per buyer is a column (publish sent the stored value with no cell to see it).
  */
 import { describe, expect, it } from 'vitest'
-import { ebaySpecFromCache } from './ebay.js'
+import { EBAY_HELD_REASONS, ebaySpecFromCache } from './ebay.js'
 import { EBAY_PACKAGE_TYPES, EBAY_TRADING_PACKAGES } from '../ebay-packages.js'
-import { normalizeEbayListingValue } from '../ebay-listing-values.js'
+import { EBAY_FIXED_VALUES, normalizeEbayListingValue } from '../ebay-listing-values.js'
+import { buildSheetColumns } from '../sheet-columns.service.js'
 import { validateChannelValue } from '../mapping/validate-channel-value.js'
 import type { CatalogueField } from '../mapping/field-catalogue.service.js'
 import { publishVerdict } from '../value-verdict.js'
@@ -63,5 +64,53 @@ describe('Max per buyer', () => {
   })
   it('a blank value (null, as every live listing holds) has no finding', () => {
     expect(validateChannelValue(catalogue('quantityLimitPerBuyer'), null).findings).toEqual([])
+  })
+})
+
+// Wave 2 (2026-10-05) — the columns Publish fixes or does not use are read-only on the sheet, with the reason.
+describe('held columns (wave 2: duration, handling time, Shared-SKU switch)', () => {
+  const coordinate = { channel: 'EBAY' as const, marketplace: 'IT', label: 'eBay · IT', inMarket: true }
+  const column = (key: string) => buildSheetColumns({ fields: [], specs: [{ coordinate, spec }], coordinates: [coordinate], scopeKind: 'channel' })
+    .columns.find(c => c.channels?.[coordinate.label]?.key === key)!
+  it.each([
+    ['listingDuration', 'eBay fixed-price listings run until cancelled. Publish always sends GTC.'],
+    ['handlingTime', 'eBay takes the handling time from the listing\'s shipping policy. Change it in that policy on eBay.'],
+    ['sharedSkuListing', 'Publish here does not use this. It only steered the old eBay flat-file page. To sell the same SKUs on another eBay listing, add a listing alias.'],
+  ])('%s: read-only, and the column says why', (key, reason) => {
+    expect(field(key).editHeldReason).toBe(reason)
+    expect(column(key)).toMatchObject({ editable: false, formulaWritable: false, helpText: reason })
+  })
+  it('the duration offers GTC only; the cell shows GTC and the handling time cell is blank, whatever is stored', () => {
+    expect(field('listingDuration')).toMatchObject({ mode: 'strict', options: ['GTC'] })
+    expect(EBAY_FIXED_VALUES).toEqual({ listingDuration: 'GTC', handlingTime: null })
+    // Every fixed value belongs to a held column (an editable cell showing a fixed value would ignore the edit).
+    for (const key of Object.keys(EBAY_FIXED_VALUES)) expect(field(key).editHeldReason).toBe(EBAY_HELD_REASONS[key as keyof typeof EBAY_HELD_REASONS])
+  })
+  it('positive control: Max per buyer and VAT stay editable', () => {
+    expect(column('quantityLimitPerBuyer').editable).toBe(true)
+    expect(column('vatRate').editable).toBe(true)
+  })
+})
+
+// Wave 2 (Owner decision 8) — every listing setting kept in the listing's own bag says what a BLANK cell does at Publish.
+// Item specifics follow their own rule (blank sends none), a held column gives its reason instead, and the photos column
+// is the Media page's (not a setting).
+describe('"Blank:" sentences', () => {
+  const settings = spec.fields.filter(f => f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] !== 'itemSpecifics')
+  it('every listing setting stored in platformAttributes has one', () => {
+    const missing = settings.filter(f => !f.editHeldReason && f.key !== 'imageUrls' && !/(^| )Blank: /.test(f.helpText ?? '')).map(f => f.key)
+    expect(missing).toEqual([])
+    expect(settings.length).toBeGreaterThan(20)
+  })
+  it('a held column has none: its reason is the column\'s help', () => {
+    expect(settings.filter(f => f.editHeldReason).map(f => [f.key, f.helpText])).toEqual([['listingDuration', undefined], ['handlingTime', undefined], ['sharedSkuListing', undefined]])
+  })
+  it('the wording decided for policies, location and the other settings', () => {
+    for (const key of ['paymentPolicyId', 'returnPolicyId', 'fulfillmentPolicyId']) expect(field(key).helpText).toBe('Blank: Publish uses this eBay account\'s default policy.')
+    for (const key of ['itemLocationCountry', 'itemLocation', 'itemPostalCode']) expect(field(key).helpText).toMatch(/Blank: Publish uses the eBay account's location\. A live listing keeps eBay's, unless a Full update sends the account's\.$/)
+    for (const key of ['bestOffer', 'vatRate', 'packageType', 'packageWeight', 'videoId']) expect(field(key).helpText).toMatch(/Blank: Publish sends none\. A live listing keeps eBay's value\.$/)
+  })
+  it('Max per buyer says it is true for an Inventory listing too (its photo publish sends it)', () => {
+    expect(field('quantityLimitPerBuyer').helpText).toBe('The most units one buyer may buy from this listing: a whole number, 1 or more. Publish sends it (an eBay Inventory listing gets it when its photos are published). Blank: no limit is sent, and a live listing keeps the limit eBay holds.')
   })
 })
