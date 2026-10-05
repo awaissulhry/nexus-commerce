@@ -26,6 +26,10 @@ import {
   type StockCellParams,
 } from '../renderers/cells'
 import type { FormatOptions } from '../renderers/format'
+import { ChangeCell, type ChangeCellParams } from '../renderers/ChangeCell'
+import { asChangeValueData, changeSummaryText, changeTooltipText } from '../renderers/changeValue'
+import { actionsColumnWidth, isMultiVerb } from '../renderers/rowVerbs'
+import { rendererOwnsKeyboard } from '../rendererKeyboard'
 
 /* ── selection ────────────────────────────────────────────────────────────────────────────── */
 
@@ -113,6 +117,22 @@ export const textColumn = <T,>(field: Field<T>): ColDef<T> => ({
   cellClass: 'nds-ag-cell',
 })
 
+/**
+ * Before → after (gap G1, 2026-10-05): the cell value is `ChangeLine[]` or `{ changes, more }` — a `valueGetter`
+ * builds it from the row. One line per row with "+N more"; the full list is the column's tooltip, and the CSV, the
+ * clipboard and the quick filter read the same words (`changeValue.ts`). Not sortable: a list of changes has no order.
+ */
+export const changeColumn = <T,>(field: Field<T>, params: ChangeCellParams = {}): ColDef<T> => ({
+  field: fieldOf<T>(field),
+  cellClass: 'nds-ag-cell',
+  cellRenderer: ChangeCell,
+  cellRendererParams: params,
+  sortable: false,
+  valueFormatter: (p) => changeSummaryText(asChangeValueData(p.value)),
+  tooltipValueGetter: (p) => changeTooltipText(asChangeValueData(p.value)) || undefined,
+  getQuickFilterText: (p) => changeSummaryText(asChangeValueData(p.value)),
+})
+
 export const stockColumn = <T,>(field: Field<T>, params: StockCellParams = {}): ColDef<T> => ({
   field: fieldOf<T>(field),
   ...numericColumn,
@@ -147,7 +167,7 @@ export const holdColumn = <T,>(col: ColDef<T>, end: 'left' | 'right', pinned = f
 /* ── actions ──────────────────────────────────────────────────────────────────────────────── */
 
 export interface ActionsColumnOptions<T> extends ActionsCellParams<T> {
-  /** Overrides the shape-derived default (56 for a `⋯`-only column, 120 with a `primary` button). */
+  /** Overrides the shape-derived default (56 for a `⋯`-only column, 120 with one `primary` verb, 200 with two or a per-row function). */
   width?: number
   /**
    * Freeze at the right edge. **Defaults to `true`** — see `actionsColumn` for why the old `false`
@@ -197,14 +217,21 @@ export const actionsColumn = <T,>({ width, pinned = true, prefsLabel: _prefsLabe
        * `renderers/cells.tsx`, and `apps/web`'s vitest is node-only, so a test file here dies at
        * PARSE. The evidence is the screen pair and that enumeration — stated so nobody reads the
        * green suite as covering it.
+       *
+       * 2026-10-05 (gap G2): the rule moved to `actionsColumnWidth` (`renderers/rowVerbs.ts`), and it IS tested now —
+       * `rowVerbs.vitest.test.ts`, and this preset itself in `presets.verbs.vitest.test.ts` (it parses in node today):
+       * 56 / 120 unchanged, and 200 for two verbs or a per-row function that may return two.
        */
-      width: width ?? (params.primary ? 120 : 56),
+      width: width ?? actionsColumnWidth(params.primary),
       sortable: false,
       resizable: false,
       suppressHeaderMenuButton: true,
       cellClass: 'nds-ag-cell',
       cellRenderer: ActionsCell,
       cellRendererParams: params,
+      /* Two verbs + ⋯ are three Tab stops in one cell (gap G2, 2026-10-05): the cell's controls keep their own keys, so
+         Tab walks Approve → Reject → ⋯ instead of AG jumping to the next cell. The single-verb shape is unchanged. */
+      ...(isMultiVerb(params.primary) ? { suppressKeyboardEvent: rendererOwnsKeyboard } : {}),
     },
     'right',
     pinned,

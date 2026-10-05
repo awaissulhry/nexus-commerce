@@ -130,6 +130,9 @@ import { ShopifyOptionsExample } from './ShopifyOptionsExample'
 import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
 import { DrawerFooterExample } from './DrawerFooterExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
+import { ChangeValueExample } from './ChangeValueExample'
+import { CountdownExample } from './CountdownExample'
+import { GridRowVerbsExample } from './GridRowVerbsExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -845,6 +848,9 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Detail popover</div>
           <DetailPopoverExample />
 
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Countdown</div>
+          <CountdownExample />
+
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Progress</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
           <ProgressBar value={64} />
@@ -1025,6 +1031,8 @@ export function TokenCatalog() {
         <MetafieldValueExample />
         <EmptyCellsExample />
         <GridViewsMenuExample />
+        <ChangeValueExample />
+        <GridRowVerbsExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />
