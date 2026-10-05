@@ -138,14 +138,46 @@ export function sheetClassRules<T>(v: SheetValidation<T>, inherited?: (data: T, 
   }
 }
 
+/**
+ * What an off-list sentence names besides the value: the column, whose list it is, and the words for its options.
+ * `channel` (a name: `eBay`) = the channel's list — "is not on eBay's list. eBay may refuse it."; absent = the column's
+ * own options (the Shared scope, whichever channels supplied them) — "is not one of this column's options".
+ */
+export interface OffListWords {
+  field?: string | null
+  channel?: string | null
+  optionLabels?: Record<string, string> | null
+}
+
+/** How many allowed values the sentence names before it says how many there are in all. */
+const OFF_LIST_SHOWN = 8
+
+/**
+ * E3 (2026-10-05) — THE off-list sentence, the same words as `@nexus/shared/off-list-message` (`offListMessage`), which
+ * the server says on readiness, publish checks, formula warnings and AI drafts. The factory app cannot import packages,
+ * so the DS keeps this copy; the web app's `sheet.vitest.test.ts` pins the two equal. The one difference is the DS
+ * punctuation rule (2026-10-04): no DS sentence ends with a full stop — the full stops inside stay.
+ *
+ *   `Season: "Tutte le stagioni" is not on eBay's list. eBay may refuse it. Allowed: Estate, Inverno, … (12 in all)`
+ */
+export function offListSentence(value: string, options: readonly string[], words: OffListWords = {}): string {
+  const unique = [...new Set(options.map((o) => words.optionLabels?.[o] ?? o))]
+  const allowed = unique.length <= OFF_LIST_SHOWN ? unique.join(', ') : `${unique.slice(0, OFF_LIST_SHOWN).join(', ')}, … (${unique.length} in all)`
+  const where = words.channel ? `is not on ${words.channel}'s list` : "is not one of this column's options"
+  const sentences = [`${words.field ? `${words.field}: ` : ''}${JSON.stringify(value)} ${where}.`]
+  if (words.channel) sentences.push(`${words.channel} may refuse it.`)
+  if (allowed) sentences.push(`Allowed: ${allowed}.`)
+  return sentences.join(' ').replace(/\.$/, '')
+}
+
 /** Off-list handling the eBay flat file taught: WARN, never block — the operator can always type a value. */
-export const selectValidation = <T,>(options: readonly string[], mode: 'strict' | 'open' = 'strict', required = false): SheetValidation<T> => ({
+export const selectValidation = <T,>(options: readonly string[], mode: 'strict' | 'open' = 'strict', required = false, words?: OffListWords): SheetValidation<T> => ({
   validate: (value) => {
     const s = value == null ? '' : String(value).trim()
     if (!s) return required ? { level: 'error', message: 'Required' } : { level: null }
     if (mode === 'open') return { level: null }
     const hit = options.some((o) => o.toLowerCase() === s.toLowerCase())
-    return hit ? { level: null } : { level: 'warn', message: `"${s}" is not in the channel's list — it may be rejected at publish` }
+    return hit ? { level: null } : { level: 'warn', message: offListSentence(s, options, words) }
   },
 })
 

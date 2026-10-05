@@ -43,6 +43,8 @@ export interface EbayCachedAspect {
   cardinality?: 'SINGLE' | 'MULTI' | string
   maxLength?: number | null
   dataType?: string
+  /** eBay's approximate date from which it plans to require this aspect (aspectConstraint.expectedRequiredByDate). */
+  expectedRequiredByDate?: string | null
 }
 
 export interface EbayCachedCondition { value: string; label: string }
@@ -201,6 +203,11 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     // carries no cap, so the column declares eBay's: the sheet warns while editing and publish blocks it.
     const cached = typeof a.maxLength === 'number' && a.maxLength > 0 ? a.maxLength : typeof row?.maxLength === 'number' && row.maxLength > 0 ? row.maxLength : undefined
     const maxLength = Math.min(cached ?? EBAY_ASPECT_VALUE_MAX, EBAY_ASPECT_VALUE_MAX)
+    const required = !!(a.required ?? row?.required)
+    const recommended = !!(a.recommended || a.guidance === 'RECOMMENDED')
+    // W3-5 — eBay names a date from which it plans to require an aspect that is not required yet: shown as a
+    // recommendation with that date. An aspect already required stays required; a date that is not a real date is ignored.
+    const requiredFrom = required ? null : ebayRequiredFromDay(a.expectedRequiredByDate)
     const spec: ChannelFieldSpec = {
       key: norm,
       attribute: `aspect_${names.english}`,
@@ -215,13 +222,14 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
       options,
       mode: options ? (a.enumMode === 'strict' ? 'strict' : 'open') : undefined,
       maxLength,
-      requirement: (a.required ?? row?.required) ? 'required' : a.recommended || a.guidance === 'RECOMMENDED' ? 'bestPractice' : 'optional',
+      requirement: required ? 'required' : recommended || requiredFrom ? 'bestPractice' : 'optional',
       requiredInParent: true,
       editable: true,
       hidden: false,
       variantEligible: a.variantEligible === true,
       group: ASPECTS_GROUP,
-      helpText: a.recommended || a.guidance === 'RECOMMENDED' ? 'eBay recommends this item specific for this category.' : undefined,
+      helpText: requiredFrom ? `eBay plans to require this item specific from about ${requiredFrom}.`
+        : recommended ? 'eBay recommends this item specific for this category.' : undefined,
       channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', names.localized] },
     }
     if (norm === 'brand') spec.masterKey = 'brand'
@@ -262,6 +270,21 @@ export function aspectNames(a: EbayCachedAspect): { localized: string; english: 
   const m = label.match(/^(.+?)\s*\((.+)\)$/)
   if (m) return { localized: m[1].trim(), english: m[2].trim() }
   return { localized: label, english: label }
+}
+
+/**
+ * W3-5 — eBay's `expectedRequiredByDate` (ISO 8601, e.g. `2027-01-15T00:00:00.000Z`) as an English day, `15 January 2027`:
+ * the calendar day eBay wrote (eBay calls the date approximate). Null when it is missing or not a real date.
+ */
+function ebayRequiredFromDay(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  const m = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/)
+  if (!m || Number.isNaN(Date.parse(text))) return null
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const at = new Date(Date.UTC(year, month - 1, day))
+  if (at.getUTCFullYear() !== year || at.getUTCMonth() !== month - 1 || at.getUTCDate() !== day) return null
+  return at.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
 // ────────────────────────────────────────────────────────────────────

@@ -92,7 +92,10 @@ describe('Etsy mappings reuse Nexus data without changing its meaning', () => {
       property({ property_id: 204, selected_values: [{ value_id: 1, name: 'Black' }] })]).fields
     expect(masterDefaultRule(props[0], keys)?.source).toBe('color')
     expect(planProductSource(props[0], 'ETSY', 'it')).toMatchObject({ rule: { source: 'color' }, definitions: [] })
-    expect(validate(props[0], 'Nero')).toMatchObject({ value: 'Nero', errors: [expect.stringContaining('unaccepted')] })
+    expect(validate(props[0], 'Nero')).toMatchObject({ value: 'Nero', errors: [expect.stringContaining('"Nero" is not one of this column\'s options.')] })
+    // E3 — with the catalogue's channel the sentence names Etsy's list.
+    expect(validateChannelValue({ ...props[0], fieldKey: props[0].key, maxLength: null, selectionOnly: true } as CatalogueField, 'Nero', 'ETSY').errors)
+      .toEqual([expect.stringContaining('"Nero" is not on Etsy\'s list. Etsy may refuse it.')])
     for (const id of [201, 202, 203]) expect(masterDefaultRule(props.find(f => f.key === `property_${id}`), keys)).toBeNull()
     expect(masterDefaultRule(props.find(f => f.key === 'property_204'), keys)?.transforms).toEqual([{ type: 'default', value: '1' }])
     for (const key of ['taxonomy_id', 'who_made', 'when_made', 'is_supply', 'type', 'shipping_profile_id', 'return_policy_id'])

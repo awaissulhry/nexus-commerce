@@ -106,6 +106,11 @@ export interface ChannelFieldSpec {
   unitOptions?: string[]
   options?: string[]
   optionLabels?: Record<string, string>
+  /**
+   * W3 PR-A — Amazon's ENGLISH option names from the English copy (`amazon-english.ts`), for codes in `options` only.
+   * A code without one keeps its `optionLabels` name. Display only: the code sent never changes.
+   */
+  optionLabelsEnglish?: Record<string, string>
   /** `strict` = the channel accepts only the list. */
   mode?: OptionMode
   deprecatedOptions?: string[]
@@ -122,6 +127,8 @@ export interface ChannelFieldSpec {
   variantEligible: boolean
   group: ChannelGroup | null
   helpText?: string
+  /** W3 PR-A — Amazon's ENGLISH help text from the English copy (`amazon-english.ts`). */
+  helpTextEnglish?: string
   /** One concept, one column: the master field this channel field IS (`item_name` → `name`). */
   masterKey?: string
   channelStore?: ChannelStore
@@ -149,6 +156,11 @@ export interface ChannelSpec {
   unrecognised: string[]
   /** No cached schema for this coordinate — `fields` is empty and the caller must say so. */
   absent: boolean
+  /**
+   * W3 PR-A, Amazon only — where English names come from: the English copy's locale and date, or the market row's own
+   * when the market is English. `null` = no English names are downloaded yet. Absent on other channels.
+   */
+  english?: { locale: string; fetchedAt: Date | null } | null
 }
 
 // ────────────────────────────────────────────────────────────────────

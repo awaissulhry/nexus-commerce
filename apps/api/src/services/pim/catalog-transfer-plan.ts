@@ -20,6 +20,7 @@ import { createReferenceResolver, type ReferenceResolver } from './reference-val
 import { validateSaleWindow } from './sale-window.js'
 import { storedCompareAt } from './compare-at-price.js'
 import { SHOPIFY_CSV_IDENTITY, shopifyCsvIdentityError } from './catalog-shopify-csv.js'
+import { withFieldName } from '@nexus/shared/off-list-message'
 
 // Inventory, pricing and publication have their own transactional owners. An attribute import
 // must not bypass their ledgers, rules or outbound queues by writing their backing columns.
@@ -764,10 +765,10 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             // P1 (`value-verdict.ts`) — the verdict every edit path uses: a value the field's type cannot hold is refused;
             // every other problem (off the channel's list, over a limit) is imported as written and named in the review.
             // Publish blocks what the channel itself would reject. (CFI-5's eBay-choices exception is now the rule.)
-            const checked = validateChannelValue(field, value)
+            const checked = validateChannelValue(field, value, first.channel)
             const refused = checked.findings.filter(found => editVerdict(found) === 'refuse')
             if (refused.length) { error(row, refused.map(found => found.message).join(' ')); continue }
-            for (const found of checked.findings) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${field.label}: ${found.message} Imported as written.`)
+            for (const found of checked.findings) warnings.add(`${first.channel} ${first.marketplace}: ${row.sku} ${withFieldName(field.label, found.message)} Imported as written.`)
             value = checked.value
           }
           const changed = cell(row, old, value, state)

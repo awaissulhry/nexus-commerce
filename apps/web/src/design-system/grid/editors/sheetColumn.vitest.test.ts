@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { composeSheetCellClassRules, sheetValidationFor, SHEET_SHORTCUT_HINT } from './sheetColumn'
+import { composeSheetCellClassRules, listChannelOf, sheetValidationFor, SHEET_SHORTCUT_HINT } from './sheetColumn'
 
 type Row = { id: string; isParent: boolean }
 
@@ -19,6 +19,32 @@ describe('sheetValidationFor', () => {
     const sel = sheetValidationFor<Row>({ kind: 'select', options: ['A'], mode: 'strict', requiredBy: [] }, () => true)
     expect(sel.validate('Z', { id: 'r', isParent: false }, 'k').level).not.toBeNull()
     expect(sel.validate('A', { id: 'r', isParent: false }, 'k').level).toBeNull()
+  })
+
+  /* E3 — the one off-list sentence. The Shared scope (no option) speaks of the column's own options even when its list
+     came from one channel; a channel scope (`channelList`) names the channel its coordinates share. */
+  it('names the column, and the channel only on a channel scope', () => {
+    const row = { id: 'r', isParent: false }
+    const season = { kind: 'select', label: 'Season', options: ['estate', 'inverno'], optionLabels: { estate: 'Estate', inverno: 'Inverno' },
+      mode: 'strict' as const, requiredBy: [], channels: { 'eBay · IT': {} } }
+    expect(sheetValidationFor<Row>(season, () => true).validate('Tutte', row, 'season').message)
+      .toBe('Season: "Tutte" is not one of this column\'s options. Allowed: Estate, Inverno')
+    expect(sheetValidationFor<Row>(season, () => true, { channelList: true }).validate('Tutte', row, 'season').message)
+      .toBe('Season: "Tutte" is not on eBay\'s list. eBay may refuse it. Allowed: Estate, Inverno')
+    // No coordinate facts (a Nexus field on a channel scope): the column's own options.
+    expect(sheetValidationFor<Row>({ ...season, channels: undefined }, () => true, { channelList: true }).validate('Tutte', row, 'season').message)
+      .toBe('Season: "Tutte" is not one of this column\'s options. Allowed: Estate, Inverno')
+  })
+})
+
+describe('listChannelOf', () => {
+  it('is the one channel every coordinate shares, else null', () => {
+    expect(listChannelOf({ channels: { 'eBay · IT': {} } })).toBe('eBay')
+    expect(listChannelOf({ channels: { 'Amazon · IT': {}, 'Amazon · DE': {} } })).toBe('Amazon')
+    expect(listChannelOf({ channels: { 'Shopify · GLOBAL': {} } })).toBe('Shopify')
+    expect(listChannelOf({ channels: { 'Amazon · IT': {}, 'eBay · IT': {} } })).toBeNull()
+    expect(listChannelOf({ channels: {} })).toBeNull()
+    expect(listChannelOf({})).toBeNull()
   })
 })
 

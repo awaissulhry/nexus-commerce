@@ -26,6 +26,14 @@
  * service graph (and the vitest for it needs no database).
  */
 
+/**
+ * W3 PR-A — the pseudo-channel of Amazon's ENGLISH copy of a product-type definition: the same marketplace and
+ * product type as the `AMAZON` row, downloaded with an English locale (`CategorySchemaService.refreshEnglishCopy`).
+ * It carries display names only; every rule is read from the `AMAZON` row. A reader of `AMAZON` rows filters on
+ * `channel`, so it never sees one of these.
+ */
+export const AMAZON_ENGLISH_CHANNEL = 'AMAZON_EN'
+
 /** eBay markets whose two ISO spellings are interchangeable in this table (UK is the authority's code). */
 const UK_SPELLINGS = ['UK', 'GB'] as const
 

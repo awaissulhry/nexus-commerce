@@ -501,7 +501,7 @@ export async function resolveBatch(input: {
       // ("Ventilato, Impermeabile, …", over 65 characters) is its parts, as the publisher sends it.
       const projected = channel === 'EBAY' && field.shape === 'list' && store?.kind === 'platformAttributes' && store.path[0] === 'itemSpecifics' && Array.isArray(normalized)
         ? ebayAspectValues(normalized) : normalized
-      const { value, errors, findings, autoCorrected: spelled, overLimit } = validateChannelValue(field, projected)
+      const { value, errors, findings, autoCorrected: spelled, overLimit } = validateChannelValue(field, projected, channel)
       const one = synonymMatches.length === 1
       const autoCorrected = spelled ?? (synonymMatches.length ? {
         from: JSON.stringify(one ? synonymMatches[0].from : synonymMatches.map(m => m.from)),
@@ -586,7 +586,7 @@ export async function resolveBatch(input: {
       if (theme.rule) {
         themeCell.value = theme.value ?? null; themeCell.provenance = 'catalogRule'; themeCell.status = 'mapped'
         themeCell.raw = themeCell.value
-        const checked = validateChannelValue(fields.find(f => f.fieldKey === 'descriptionThemeId')!, themeCell.value)
+        const checked = validateChannelValue(fields.find(f => f.fieldKey === 'descriptionThemeId')!, themeCell.value, channel)
         themeCell.errors = checked.errors
         themeCell.findings = checked.findings
         themeCell.supplyingRule = { id: theme.rule.id, name: theme.rule.name, version: theme.rule.version, href: `/channels/ebay/variation-order-rules?market=${encodeURIComponent(marketplace)}&rule=${encodeURIComponent(theme.rule.id)}` }

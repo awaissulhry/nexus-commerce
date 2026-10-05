@@ -80,6 +80,9 @@ export interface EbayAspectRich {
   cardinality: 'SINGLE' | 'MULTI' | string
   variantEligible: boolean
   values: string[]
+  /** eBay's aspectConstraint.expectedRequiredByDate: the approximate date from which eBay plans to require this
+   *  aspect (ISO 8601, e.g. "2027-01-15T00:00:00.000Z"). Present only when eBay sends one. */
+  expectedRequiredByDate?: string
 }
 
 interface CachedRichAspects {
@@ -877,6 +880,7 @@ export class EbayCategoryService {
           aspectMaxLength?: number;
           itemToAspectCardinality?: string;
           aspectEnabledForVariations?: boolean;
+          expectedRequiredByDate?: string;
         };
         aspectValues?: Array<{ localizedValue?: string }>;
       }>;
@@ -893,6 +897,7 @@ export class EbayCategoryService {
             aspectMaxLength?: number;
             itemToAspectCardinality?: string;
             aspectEnabledForVariations?: boolean;
+            expectedRequiredByDate?: string;
           };
           aspectValues?: Array<{ localizedValue?: string }>;
         }>;
@@ -933,6 +938,7 @@ export class EbayCategoryService {
                 aspectMaxLength?: number;
                 itemToAspectCardinality?: string;
                 aspectEnabledForVariations?: boolean;
+                expectedRequiredByDate?: string;
               };
               aspectValues?: Array<{ localizedValue?: string }>;
             }>;
@@ -981,6 +987,10 @@ export class EbayCategoryService {
         values: (a.aspectValues ?? [])
           .map((v: any) => v.localizedValue)
           .filter((v: any): v is string => typeof v === "string" && v.length > 0),
+        // Only when eBay sends one, so an aspect without a date keeps its old shape.
+        ...(typeof c.expectedRequiredByDate === "string" && c.expectedRequiredByDate.trim()
+          ? { expectedRequiredByDate: c.expectedRequiredByDate.trim() }
+          : {}),
       });
     }
     this.richCache.set(key, {

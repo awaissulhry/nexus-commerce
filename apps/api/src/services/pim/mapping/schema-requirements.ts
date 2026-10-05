@@ -6,6 +6,7 @@ import { isPresent } from '../resolve-channel-field.js'
 import { addAmazonVocabulary } from './amazon-schema-vocabulary.js'
 import { isBlankValue } from '../sheet-values.js'
 import { selectorAutoValue } from '../channel-specs/amazon.js'
+import { offListMessage } from '@nexus/shared/off-list-message'
 
 type Node = Record<string, any>
 const serializedValue = (value: unknown) => !isBlankValue(value)
@@ -168,6 +169,23 @@ export function validateSchemaAttributes(spec: ChannelSpec, attributes: Record<s
   validate(attributes)
   return (validate.errors ?? []).map(error => `${error.instancePath || '/'} ${error.message ?? error.keyword}`)
 }
+/** The value an Ajv error points at (`/season/0/value`), read from the envelope that was validated. */
+function valueAt(root: unknown, pointer: string): unknown {
+  return pointer.split('/').slice(1).map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
+    .reduce<unknown>((node, key) => node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined, root)
+}
+
+/**
+ * E3 — the schema's `enum`, in the one off-list sentence (`offListMessage`): the value, the channel, and the allowed
+ * values as the cell's own list shows them when the enum IS that list (raw codes otherwise — a unit, a selector).
+ */
+function enumMessage(channel: string, label: string, value: unknown, allowedValues: unknown[], field?: { options?: string[] | null; optionLabels?: Record<string, string> | null }): string {
+  const allowed = allowedValues.map(String)
+  const labelled = field?.optionLabels && allowed.every(code => field.options?.includes(code))
+  return offListMessage({ field: label, values: value === undefined ? [] : [value], channel,
+    allowed: labelled ? allowed.map(code => field.optionLabels?.[code] ?? code) : allowed })
+}
+
 export function evaluateSchemaRequirements(catalogue: object, values: Record<string, unknown>): { issues: RequirementIssue[]; requiredFields?: string[]; unavailable?: string } {
   const spec = specs.get(catalogue)
   if (!spec?.validationSchema) return { issues: [] }
@@ -195,9 +213,12 @@ export function evaluateSchemaRequirements(catalogue: object, values: Record<str
         const conditional = /\/(then|else|dependentSchemas|dependencies)\//.test(error.schemaPath)
         const alternative = /\/(anyOf|oneOf)\//.test(error.schemaPath)
         const reason = alternative ? 'The category requires an allowed alternative; this option needs' : conditional ? `Required by the category's condition for this product` : 'Required by the category schema'
-        const label = (catalogue as { fields?: { fieldKey: string; label: string }[] }).fields?.find(f => f.fieldKey === field.key)?.label ?? field.englishLabel ?? field.label
+        const catalogueField = (catalogue as { fields?: { fieldKey: string; label: string; options?: string[] | null; optionLabels?: Record<string, string> | null }[] }).fields?.find(f => f.fieldKey === field.key)
+        const label = catalogueField?.label ?? field.englishLabel ?? field.label
         issues.push({ fieldKey: field.key, required: isRequirement && !alternative && !selectorOrEnvelope && !['marketplace_id', 'language_tag', 'unit'].includes(missing), schemaPath: error.schemaPath,
-          message: isRequirement ? selectorOrEnvelope ? `${reason}: the ${attribute} attribute${path.length ? ` needs ${missing}` : ''}.` : `${reason}: ${label}${missing && path.length ? ` (${missing})` : ''}.` : `${label}: ${error.message ?? error.keyword}${error.keyword === 'enum' ? ` (${(error.params.allowedValues as unknown[]).join(', ')})` : ''}.` })
+          message: isRequirement ? selectorOrEnvelope ? `${reason}: the ${attribute} attribute${path.length ? ` needs ${missing}` : ''}.` : `${reason}: ${label}${missing && path.length ? ` (${missing})` : ''}.`
+            : error.keyword === 'enum' ? enumMessage(spec.channel, label, valueAt(attributes, error.instancePath), error.params.allowedValues as unknown[], catalogueField)
+            : `${label}: ${error.message ?? error.keyword}.` })
       }
     }
     if (!issues.length && (validate.errors?.length ?? 0) > 0) unaddressable.push('The category’s alternative constraints could not be satisfied.')

@@ -198,6 +198,10 @@
       "types": "./dist/channel-label.d.ts",
       "import": "./dist/channel-label.js"
     },
+    "./off-list-message": {
+      "types": "./dist/off-list-message.d.ts",
+      "default": "./dist/off-list-message.js"
+    },
     "./content-header": {
       "types": "./dist/content-header.d.ts",
       "import": "./dist/content-header.js"

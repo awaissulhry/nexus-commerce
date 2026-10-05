@@ -17,7 +17,12 @@ describe('option verdict labels and normalization', () => {
     expect(result.warning).toContain(column.label)
     expect(result.warning).not.toContain(catalogueField.label)
     expect(result.warning).toContain('No, Sì')
-    expect(result.warning).toContain('the channel may refuse it at publish')
+    // E3 — the one off-list sentence: without a channel it speaks of the column's own options, and only a channel names
+    // itself as the one that may refuse it.
+    expect(result.warning).toBe('Are batteries included?: "maybe" is not one of this column\'s options. Saved as it is. Allowed: No, Sì.')
+    const onAmazon = optionVerdict({ column, catalogueField: catalogueField as never, value: 'maybe', channel: 'AMAZON' })
+    if (!onAmazon.ok) throw new Error('an off-list value was refused')
+    expect(onAmazon.warning).toBe('Are batteries included?: "maybe" is not on Amazon\'s list. Saved as it is. Amazon may refuse it. Allowed: No, Sì.')
     expect(result.allowedOptions).toEqual(['false', 'true'])
     expect(result.actualValue).toBe('maybe')
   })
@@ -37,8 +42,12 @@ describe('option verdict labels and normalization', () => {
     const result = optionVerdict({ column: brand, catalogueField: { ...brand, selectionOnly: false }, value: 'Xavia Racing' })
     if (!result.ok) throw new Error('an open-list value was refused')
     expect(result.value).toBe('Xavia Racing')
-    expect(result.warning).toContain('"Xavia Racing" is not in the list for Brand')
+    expect(result.warning).toContain('Brand: "Xavia Racing" is not one of this column\'s options. Saved as it is.')
     expect(result.warning).not.toContain('refuse')
+    const onEbay = optionVerdict({ column: brand, catalogueField: { ...brand, selectionOnly: false }, value: 'Xavia Racing', channel: 'EBAY' })
+    if (!onEbay.ok) throw new Error('an open-list value was refused')
+    expect(onEbay.warning).toContain('Brand: "Xavia Racing" is not on eBay\'s list. Saved as it is.')
+    expect(onEbay.warning).not.toContain('refuse')
   })
   it('report 6 I-12 — a LIST result is checked member by member (=split("Uomo,Donna",",")), each normalised', () => {
     const fits = { label: 'Suitable for', options: ['Uomo', 'Donna', 'Unisex'] }
@@ -46,7 +55,7 @@ describe('option verdict labels and normalization', () => {
     const mixed = optionVerdict({ column: fits, catalogueField: null, value: ['Uomo', 'Bambino'] })
     if (!mixed.ok) throw new Error('a list result was refused')
     expect(mixed.value).toEqual(['Uomo', 'Bambino'])
-    expect(mixed.warning).toContain('"Bambino" is not in the list for Suitable for')
+    expect(mixed.warning).toContain('Suitable for: "Bambino" is not one of this column\'s options.')
     expect(mixed.warning).not.toContain('"Uomo"')
   })
 })
