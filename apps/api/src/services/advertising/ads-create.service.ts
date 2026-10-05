@@ -33,6 +33,7 @@ import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
+import { isPersonEdit } from './ads-mutation.service.js'
 import { AD_PRODUCT_UNSUPPORTED, adProductRefusal } from '@nexus/shared/ads-ad-product'
 // 5b — every negative this file writes goes through the one negative write service.
 import { mirrorNegativeKeyword, pushLocalNegative, writeNegativeKeyword, writeNegativeProductTarget, type NegativeWriteResult } from './ads-negative-kw.service.js'
@@ -1135,6 +1136,8 @@ export interface PlacementBiddingInput {
    * undelivered values, so every placement in `adjustments` counts as set by this write, none as carried.
    */
   resend?: boolean
+  /** 1e (CM-10) — a person's own edit from a screen (isPersonEdit, with a `user:` actor): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1203,7 +1206,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       // has no fieldChanges for the gate to derive a dimension from. It names its own.
       // Without this the placement pin would be the one pin that never bound anything —
       // and placement bias is the rank engine's primary actuator, running to +900%.
-      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement' })
+      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement', manual: isPersonEdit(input.manual, input.actor) })
       if (!gate.allowed) {
         gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
         gateDeniedAt = (gate as { deniedAt?: string }).deniedAt ?? null

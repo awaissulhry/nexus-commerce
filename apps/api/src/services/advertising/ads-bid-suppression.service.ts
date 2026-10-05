@@ -169,7 +169,9 @@ export async function refloorCampaignBids(
 }
 
 /** Restore every remembered bid and clear the suppression flag. Idempotent (no-op if
- * not suppressed). Returns how many entities were restored. */
+ * not suppressed). Returns how many entities were restored.
+ * 1e (CM-9) — "remembered" includes a bid a person set while the floor held: his edit replaces the
+ * memory (ads-mutation.service.ts, keepPersonBidThroughRestore), so this puts back HIS bid. */
 export async function restoreCampaignBids(
   campaignId: string,
   // MCP full control A8 — `changeSetId` as in suppressCampaignBids: optional, additive.

@@ -542,6 +542,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         biddingStrategy: b.biddingStrategy as never,
         actor: actorFromHeaders(request.headers as Record<string, unknown>),
         reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,
+        manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       })
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
@@ -10065,6 +10066,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10147,6 +10149,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10182,6 +10185,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10217,6 +10221,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     return { ok: true, ...result, cpcClamps: clamps }
   })
@@ -10232,6 +10237,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     if (!result.ok && result.error === 'not_found') { reply.code(404); return result }
     return result
