@@ -74,7 +74,7 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-conte
 import { planPublicationChanges, type PublicationChangeInput } from '../../pim/studio-publication-changes.js'
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
-import { groupOf, planPublish } from './publish.tools.js'
+import { groupOf, planPublish, publishStory } from './publish.tools.js'
 import { getTool } from '../tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -273,6 +273,8 @@ describe('first publish of a draft', () => {
     expect((await dryRun({ productId: ids.amazonChild, channel: 'AMAZON', marketplace: 'UK', fields: 'photos' })).error).toContain('A first publish sends the complete listing')
     const { preview, ran } = await approveAndRun({ productId: ids.amazonChild, channel: 'AMAZON' })
     expect(preview).toMatchObject({ publish: 'first publish', destination: { marketplace: 'UK', accountId: ids.amazon }, sendCount: 2 })
+    expect(preview.summary).toMatch(/^TEST-SKU-L5-AMZ.*: first publish — /)
+    expect(preview).not.toHaveProperty('warning')
     expect(ran).toMatchObject({ ok: true, data: { status: 'SUBMITTED', publish: 'first publish' } })
     // Its undo closes the listings it published.
     expect(getTool('publish-listing')!.undo!.request(ran.change)).toEqual({ tool: 'close-listing', args: { listingIds: ran.change.after.listingIds, reason: 'undo of a publish' } })
@@ -287,6 +289,8 @@ describe('first publish of a draft', () => {
     fulfilment = { fulfillment_channel_code: 'DEFAULT', quantity: 3 }
     const { preview, ran } = await approveAndRun(args)
     expect(preview.euQuantity).toEqual([{ sku: 'TEST-SKU-L5-EU', sends: 3, otherMarkets: [{ market: 'IT', holds: 3 }] }])
+    // Live EU markets exist: euQuantity names them, so no second, general warning.
+    expect(preview).not.toHaveProperty('warning')
     expect(ran.ok, ran.error).toBe(true)
   })
 
@@ -379,5 +383,32 @@ describe("eBay's own check of a new listing (VerifyAddFixedPriceItem)", () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+})
+
+describe('N4 — a publish in words', () => {
+  const row = (sku: string, extra: Json = {}) => ({ productId: sku, sku, title: sku, existing: false, ...extra })
+  const create = (sku: string) => ({ id: `c-${sku}`, sku, field: '$create' }) as any
+  const plan = (selected: any[]) => ({ publish: 'first publish', selected, notSent: [], unchanged: 0, refusal: null }) as any
+
+  it('a first publish: how many listings it creates, how they start, what it holds back, and Amazon\'s one EU quantity', () => {
+    const review = { rows: [row('A-S', { startsAs: 'active' }), row('A-M', { startsAs: 'inactive' }), row('A-L', { notListed: true }), row('A-XL', { blocked: 'no price in EUR' })] } as any
+    const story = publishStory({ product: { sku: 'A' }, channel: 'AMAZON', market: 'DE' }, review, plan([create('A-S'), create('A-M')]), false)
+    expect(story.summary).toBe('A: first publish — creates 2 listings on Amazon DE (1 active, 1 inactive) with the price, quantity and fulfilment Nexus holds for them (listing-matrix shows them); leaves 2 rows out (held).')
+    expect(story.creates).toEqual([{ sku: 'A-S', startsAs: 'active' }, { sku: 'A-M', startsAs: 'inactive' }])
+    expect(story.held).toEqual([{ sku: 'A-L', why: 'its Status is Not listed' }, { sku: 'A-XL', why: 'no price in EUR' }])
+    expect(story.warning).toContain('this first publish in DE sets it for all of them')
+  })
+
+  it('no general EU warning outside the EU, or when live EU markets are already named', () => {
+    const review = { rows: [row('A-S', { startsAs: 'active' })] } as any
+    expect(publishStory({ product: { sku: 'A' }, channel: 'AMAZON', market: 'UK' }, review, plan([create('A-S')]), false).warning).toBeNull()
+    expect(publishStory({ product: { sku: 'A' }, channel: 'AMAZON', market: 'IT' }, review, plan([create('A-S')]), true).warning).toBeNull()
+  })
+
+  it('a re-publish counts the fields it sends', () => {
+    const review = { rows: [row('B', { existing: true })] } as any
+    const story = publishStory({ product: { sku: 'B' }, channel: 'EBAY', market: 'IT' }, review, { ...plan([{ sku: 'B', field: 'Title' }, { sku: 'B', field: 'Description' }]), publish: 're-publish' }, false)
+    expect(story.summary).toBe('B: re-publish — sends 2 changed fields to eBay IT.')
   })
 })
