@@ -569,6 +569,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         biddingStrategy: b.biddingStrategy as never,
         actor: actorFromHeaders(request.headers as Record<string, unknown>),
         reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,
+        manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       })
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
@@ -4486,6 +4487,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       matchType: body.matchType,
       scope: body.scope,
       marketplace: body.marketplace,
+      manual: true, // 1e — a person's own add from a screen (isPersonCreate)
     })
     if (result.denied) {
       return reply.code(403).send({
@@ -4771,8 +4773,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: b.externalAdGroupId }, select: { id: true } })
     if (!ag) { reply.status(404); return { error: 'ad_group_not_found_for_externalAdGroupId' } }
     const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    // CM-8 — a person's add (see personAddReply).
-    try { return personAddReply(reply, await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, requireAmazon: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
+    try { return personAddReply(reply, await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
@@ -5569,6 +5571,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       result = await applyPlan(prisma, id, plan.rows, {
         actor,
+        manual: true, // 1e — a person's own upload (isPersonEdit)
         // Default is NOT live: the row is queued through the gate. Going live is an
         // explicit, per-request decision, and the gate can still refuse it.
         applyImmediately: b.applyImmediately === true,
@@ -5623,6 +5626,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       changeSetId: `import:${id}`,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: b.reason ?? `rollback of bulksheet import ${id}`,
+      manual: true, // 1e — undoing an upload is a person's click (isPersonEdit)
     })
     if (outcome.reversed > 0) {
       await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
@@ -6536,19 +6540,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.campaignId || !b?.name || b?.defaultBidEur == null) { reply.status(400); return { error: 'campaignId, name, defaultBidEur required' } }
     const { createAdGroupLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return personAddReply(reply, await createAdGroupLocal({ ...(b as object), requireAmazon: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createAdGroupLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/keywords/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.keywordText || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, keywordText, matchType, bidEur required' } }
     const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return personAddReply(reply, await createKeywordLocal({ ...(b as object), requireAmazon: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createKeywordLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/product-ads/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || (!b?.sku && !b?.asin)) { reply.status(400); return { error: 'adGroupId + sku|asin required' } }
     const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // ── AME.14: autonomy & guardrails control center ────────────────────
   // Single pane: global kill state, rule posture (enabled / dry-run / off),
@@ -6900,15 +6907,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
-    // CM-8 — a person's add (see personAddReply).
-    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
+    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/negative-targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.asin) { reply.status(400); return { error: 'adGroupId, asin required' } }
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     // 5b — a refused negative writes nothing, so it is not answered 200 (the modal would say it was added).
-    try { const r = await createNegativeProductTargetLocal(b as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // 1e — a person's own add from a screen (isPersonCreate).
+    try { const r = await createNegativeProductTargetLocal({ ...b, manual: true } as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // LAUNCH-REPAIR — push a campaign's existing local structure (ad group/keywords/auto/product ads)
@@ -7467,6 +7475,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // Prefixed "Undo:" — the marker /campaigns/:id/history already uses to render a row as a
       // reversal rather than as a fresh change.
       reason: `Undo: ${b.reason ?? 'operator undo from the change log'}`,
+      manual: true, // 1e — the Undo button is a person's click (isPersonEdit)
     })
     if (!r.ok && !r.reversed) reply.status(409)
     return r
@@ -7631,6 +7640,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { suppressCampaignBids, restoreCampaignBids } = await import('../services/advertising/ads-bid-suppression.service.js')
     const month = b.month || currentMonth()
     const actor = 'user:budget-manager' as const
+    // 1e — a person's commit from the Budget Manager screen (isPersonEdit): passes the halt and autonomy OFF; every other
+    // check binds. The suppress case is a lowering write that already passes; the restore passes as his click.
+    const manual = true
     const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
     for (const c of b.changes) {
       const id = c?.entityId || c?.campaignId
@@ -7648,7 +7660,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         switch (c.kind) {
           case 'budget': {
             if (c.budgetCents == null) { error = 'budgetCents required'; break }
-            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
+            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, manual, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
             ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break
           }
           case 'limit': {
@@ -7656,15 +7668,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
             const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null }); ok = !!r.ok; break
           }
           case 'suppress': { const n = await suppressCampaignBids(id, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' }); ok = true; detail = `${n} entities floored`; break }
-          case 'restore': { const n = await restoreCampaignBids(id, { actor, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
-          case 'campaignStatus': { if (!c.status) { error = 'status required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { status: c.status }, actor, reason: `control plane: status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
-          case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
-          case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'biddingStrategy': { if (!c.biddingStrategy) { error = 'biddingStrategy required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { biddingStrategy: c.biddingStrategy }, actor, reason: `control plane: bidding strategy → ${c.biddingStrategy}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'restore': { const n = await restoreCampaignBids(id, { actor, manual, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
+          case 'campaignStatus': { if (!c.status) { error = 'status required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { status: c.status }, actor, manual, reason: `control plane: status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, manual, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, manual, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
+          case 'biddingStrategy': { if (!c.biddingStrategy) { error = 'biddingStrategy required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { biddingStrategy: c.biddingStrategy }, actor, manual, reason: `control plane: bidding strategy → ${c.biddingStrategy}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'targetAcos': { if (c.targetAcos == null) { error = 'targetAcos required'; break } const camp = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } }); const db = { ...((camp?.dynamicBidding as Record<string, unknown>) ?? {}), targetAcos: c.targetAcos }; await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } }); ok = true; detail = `targetAcos ${Math.round(c.targetAcos * 100)}%`; break }
-          case 'placement': { if (!c.placements) { error = 'placements required'; break } const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); const adj: Array<{ placement: string; percentage: number }> = []; if (c.placements.tos != null) adj.push({ placement: 'PLACEMENT_TOP', percentage: c.placements.tos }); if (c.placements.pdp != null) adj.push({ placement: 'PLACEMENT_PRODUCT_PAGE', percentage: c.placements.pdp }); if (c.placements.ros != null) adj.push({ placement: 'PLACEMENT_REST_OF_SEARCH', percentage: c.placements.ros }); const r = await updatePlacementBidding({ campaignId: id, adjustments: adj }); ok = !!r.ok; break }
+          case 'placement': { if (!c.placements) { error = 'placements required'; break } const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); const adj: Array<{ placement: string; percentage: number }> = []; if (c.placements.tos != null) adj.push({ placement: 'PLACEMENT_TOP', percentage: c.placements.tos }); if (c.placements.pdp != null) adj.push({ placement: 'PLACEMENT_PRODUCT_PAGE', percentage: c.placements.pdp }); if (c.placements.ros != null) adj.push({ placement: 'PLACEMENT_REST_OF_SEARCH', percentage: c.placements.ros }); const r = await updatePlacementBidding({ campaignId: id, adjustments: adj, actor, manual }); ok = !!r.ok; break }
           default: error = 'unknown kind'
         }
         results.push({ entityId: id, kind: c.kind, ok, error, detail })
@@ -10119,6 +10131,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10 — a refusal is answered now, not put back in silence later
     })
     if (!result.ok && result.error === 'not_found') {
@@ -10200,6 +10213,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') {
@@ -10236,6 +10250,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') {
@@ -10272,6 +10287,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
     })
     return { ok: true, ...result, cpcClamps: clamps }
   })
@@ -10287,6 +10303,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
+      manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') { reply.code(404); return result }
@@ -10904,6 +10921,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       executionId,
       actor,
       reason: body?.reason ?? `manual rollback of execution ${executionId}`,
+      manual: true, // 1e — a person's Rollback click (isPersonEdit)
     })
     return result
   })

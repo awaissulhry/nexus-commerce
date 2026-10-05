@@ -143,6 +143,18 @@ export interface GateContext {
   previousValueCents?: number | null
   /** The OutboundSyncQueue row this write is. Its own action-log row is not part of its history (nor of the spend ceiling's ledger). */
   queueId?: string | null
+
+  // ── 1e (CM-10) — a person's own edit ──────────────────────────────────────
+  /**
+   * True only for a person's own edit from a campaign-manager screen: the PATCH and placement routes set it, with a
+   * `user:` actor (`isPersonEdit` in ads-mutation.service.ts). Nothing derives it from the actor string alone, which
+   * is free text. It passes the account halt and autonomy OFF, and nothing else: those two stop the MACHINE (the
+   * anomaly breaker, the Control Room's Stop, the dial — "refuse automation writes", schema AdsAutomationState), and
+   * the Owner's rule is that a brake may stop automation but not his own clicks. The deploy kill switch, the
+   * connection's mode and writes switch, Amazon's limits, the allowlist, pins, bounds, ceilings and the value cap
+   * all still bind.
+   */
+  manual?: boolean
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -216,10 +228,16 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
    * halt would freeze bids HIGH at the moment we have most reason to want them
    * low — the halt would increase spend. A halt stops the machine from reaching
    * for more; it must never block it from letting go.
+   *
+   * 1e (CM-10) — A PERSON'S OWN EDIT IS EXEMPT TOO (`ctx.manual`): the halt and the dial
+   * stop the machine, not the Owner's clicks on his own campaigns. The deploy kill switch
+   * (NEXUS_ADS_AUTOMATION_KILL, the same test as envKill in the state service) still binds
+   * everyone: it is set in Railway, not from a screen.
    */
   const { getAutomationState } = await import('./ads-automation-state.service.js')
   const state = await getAutomationState()
-  if (state.effectivelyStopped && !ctx.isSuppression) {
+  const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
+  if (state.effectivelyStopped && !ctx.isSuppression && !personPasses) {
     const why = state.haltReason
       ? `halted: ${state.haltReason}`
       : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'

@@ -18,7 +18,7 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { AD_SYNC_TYPES, ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
@@ -492,6 +492,9 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // and counts only when every value in the write goes down: restores and base-bid deltas
     // are forced too, and those can raise bids.
     isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges),
+    // 1e (CM-10) — a person's own edit passes the account halt and autonomy OFF (nothing else). Read off the queue
+    // row's JSON like `force` (its only record), and only with a `user:` actor.
+    manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
     // 6.1 — a budget schedule's give-back is recognised from the action log: who writes, the value it
     // replaces, and which queue row is this write's own (its log row is not part of its history).
     actor: payload.actor ?? null,

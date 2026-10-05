@@ -22,7 +22,7 @@ import type { PrismaClient } from '@prisma/client'
 import { parseMoney, parseVocabulary, isAdTargetEntity } from '@nexus/shared/ads-bulksheet'
 import {
   updateCampaignWithSync, updateAdGroupWithSync, updateAdTargetWithSync, updatePortfolioWithSync,
-  updateProductAdWithSync, writeAdvertisingActionLog,
+  updateProductAdWithSync, writeAdvertisingActionLog, isPersonEdit,
   type AdsActor,
 } from '../ads-mutation.service.js'
 import type { PreviewRow } from './preview.js'
@@ -31,6 +31,11 @@ import { applyFields } from './field-map.js'
 
 export interface ApplyOptions {
   actor: AdsActor
+  /**
+   * 1e — the upload is a person's own edit (isPersonEdit): set only by the apply route. Its edits, creates and
+   * negatives pass the account halt and autonomy OFF like his screen edits; every other check binds.
+   */
+  manual?: boolean
   /** False (default) queues through the gate without a live Amazon write. */
   applyImmediately: boolean
   /** All-or-nothing: abort the whole set on the first failure. */
@@ -127,6 +132,8 @@ async function createRow(
   // AdsActor is a tagged string (`user:<id>` / `automation:<id>`); the create
   // services want the bare id for their audit rows.
   const actorId = opts.actor.startsWith('user:') ? opts.actor.slice('user:'.length) : undefined
+  // 1e — the create services see only the bare id, so the person test is made here, against the whole actor.
+  const manual = isPersonEdit(opts.manual, opts.actor)
   let created: { id: string; externalId: string | null }
 
   try {
@@ -136,7 +143,7 @@ async function createRow(
         if (!name) return { outcome: 'FAILED', message: 'Ad group name is required to create an ad group', createdId: null }
         const bid = (() => { const raw = text('Ad Group Default Bid'); if (!raw) return null; const m = parseMoney(raw); return 'error' in m ? null : m.value })()
         if (bid == null) return { outcome: 'FAILED', message: 'Ad Group Default Bid is required to create an ad group', createdId: null }
-        const r = await svc.createAdGroupLocal({ campaignId: row.parentId, name, defaultBidEur: bid, userId: actorId })
+        const r = await svc.createAdGroupLocal({ campaignId: row.parentId, name, defaultBidEur: bid, userId: actorId, manual })
         created = { id: r.id, externalId: r.externalAdGroupId }
         break
       }
@@ -145,7 +152,7 @@ async function createRow(
         if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
         if (!mt) return { outcome: 'FAILED', message: `Match type "${text('Match type')}" is not one we can create`, createdId: null }
         if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a keyword', createdId: null }
-        const r = await svc.createKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, bidEur: bid, userId: actorId })
+        const r = await svc.createKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, bidEur: bid, userId: actorId, manual })
         created = { id: r.id, externalId: r.externalTargetId }
         break
       }
@@ -153,7 +160,7 @@ async function createRow(
         const kw = text('Keyword text'); const mt = match()
         if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
         if (mt !== 'EXACT' && mt !== 'PHRASE') return { outcome: 'FAILED', message: 'A negative keyword must be Negative exact or Negative phrase', createdId: null }
-        const r = await neg.writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
+        const r = await neg.writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: row.parentId, keywordText: kw, matchType: mt, userId: actorId, manual })
         const notMade = negativeNotMade(r)
         if (notMade) return notMade
         created = { id: r.adTargetId!, externalId: r.externalTargetId }
@@ -169,7 +176,7 @@ async function createRow(
         }
         // 5b (review 7.12) — it is sent to Amazon now, through the gate. It used to be written locally only and
         // reported as applied ("the write gate declined") although no gate had run and nothing was ever pushed.
-        const r = await neg.writeNegativeKeyword({ scope: 'CAMPAIGN', campaignId: row.parentId, keywordText: kw, matchType: mt, userId: actorId })
+        const r = await neg.writeNegativeKeyword({ scope: 'CAMPAIGN', campaignId: row.parentId, keywordText: kw, matchType: mt, userId: actorId, manual })
         const notMade = negativeNotMade(r)
         if (notMade) return notMade
         created = { id: r.adTargetId!, externalId: r.externalTargetId }
@@ -179,7 +186,7 @@ async function createRow(
         const expr = text('Product targeting expression'); const bid = bidEur()
         if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
         if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a product target', createdId: null }
-        const r = await svc.createTargetLocal({ adGroupId: row.parentId, kind: 'PRODUCT', value: expr, bidEur: bid, userId: actorId })
+        const r = await svc.createTargetLocal({ adGroupId: row.parentId, kind: 'PRODUCT', value: expr, bidEur: bid, userId: actorId, manual })
         created = { id: r.id, externalId: r.externalTargetId }
         break
       }
@@ -188,7 +195,7 @@ async function createRow(
         if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
         // The sheet writes the expression as asin="B0…"; Amazon takes the ASIN alone.
         const asin = /^asin\s*=\s*"?([^"]*)"?$/i.exec(expr)?.[1]?.trim() ?? expr
-        const r = await neg.writeNegativeProductTarget({ adGroupId: row.parentId, asin, userId: actorId })
+        const r = await neg.writeNegativeProductTarget({ adGroupId: row.parentId, asin, userId: actorId, manual })
         const notMade = negativeNotMade(r)
         if (notMade) return notMade
         created = { id: r.adTargetId!, externalId: r.externalTargetId }
@@ -197,7 +204,7 @@ async function createRow(
       case 'Product ad': {
         const sku = text('SKU'); const asin = text('ASIN (Informational only)')
         if (!sku && !asin) return { outcome: 'FAILED', message: 'A product ad needs a SKU or an ASIN', createdId: null }
-        const r = await svc.createProductAdLocal({ adGroupId: row.parentId, sku: sku || undefined, asin: asin || undefined, userId: actorId })
+        const r = await svc.createProductAdLocal({ adGroupId: row.parentId, sku: sku || undefined, asin: asin || undefined, userId: actorId, manual })
         created = { id: r.id, externalId: r.externalAdId }
         break
       }
@@ -263,7 +270,7 @@ async function setCreatedState(
   jobId: string,
   changeSetId: string,
 ): Promise<boolean> {
-  const common = { actor: opts.actor, reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId }
+  const common = { actor: opts.actor, reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual }
   try {
     if (entity === 'Ad group') return (await updateAdGroupWithSync({ adGroupId: id, patch: { status }, ...common })).ok
     if (entity === 'Product ad') return (await updateProductAdWithSync({ productAdId: id, status, ...common })).ok
@@ -412,7 +419,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateCampaignWithSync({
           campaignId: row.targetId, patch: patch as Parameters<typeof updateCampaignWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
         })
       } else if (row.entity === 'Portfolio') {
         // AX-IE.2 — same rails as everything else: through the write gate and
@@ -442,7 +449,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdGroupWithSync({
           adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
         })
       } else if (row.entity === 'Product ad') {
         // State-only, so it does not go through applyFields' patch shape —
@@ -454,7 +461,7 @@ export async function applyPlan(
         if (!mapped) { await rec('FAILED', `State "${raw}" is not one we can write`); continue }
         res = await updateProductAdWithSync({
           productAdId: row.targetId, status: mapped, actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
         })
       } else if (isAdTargetEntity(row.entity)) {
         // Keyword / Product targeting / the negative variants all live on AdTarget.
@@ -465,7 +472,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdTargetWithSync({
           adTargetId: row.targetId, patch: patch as Parameters<typeof updateAdTargetWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
         })
       } else {
         // Fail closed. This used to be a bare `else` falling into the AdTarget

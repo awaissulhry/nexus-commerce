@@ -30,7 +30,9 @@ import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
-import { adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
+import { SPONSORED_PRODUCTS, adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
+import { marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, type EntityBoundsCampaign } from './ads-write-gate.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
@@ -98,6 +100,74 @@ export function isSchedulingEngineActor(actor: string): boolean {
  */
 export function isAutomatedPause(actor: string, status: string | null | undefined): boolean {
   return status === 'PAUSED' && actor.startsWith('automation:')
+}
+
+/**
+ * 1e (CM-9, CM-10, CM-19) — a person's own edit from a campaign-manager screen.
+ *
+ * `manual` is set only by the routes a person's click reaches: the campaign-manager PATCH routes, bulk-bid, the two
+ * placement routes, the bulk sheet upload, the Undo buttons (rollback.service.ts), the add routes (ads-create.service.ts,
+ * via isPersonCreate), the negative add routes (ads-negative-kw.service.ts) and the Budget Manager control plane. It is
+ * never derived from the actor string, which is free text (`user:cron-budget-pool` was a machine), and it counts only
+ * with a `user:` actor, so an engine that passed it by mistake is still an engine. Such an edit:
+ *   · passes the account halt and autonomy OFF at the write gate (`GateContext.manual`; every other check binds);
+ *   · may set a bid down to Amazon's own minimum in the market rather than Nexus's 5¢ engine floor;
+ *   · is not rewritten by the campaign's `maxBidChangePct` step clamp, which exists so a runaway rule cannot 10× a bid;
+ *   · on a bid the no-pause floor holds, becomes the bid the restore puts back (`suppressedFromBidCents`).
+ */
+export function isPersonEdit(manual: unknown, actor: string | null | undefined): boolean {
+  return manual === true && typeof actor === 'string' && actor.startsWith('user:')
+}
+
+/**
+ * The same test for the create and negative services, which carry a bare person id in `userId` — or an engine's whole
+ * actor (`automation:<ruleId>`, the rule handlers and blueprints pass theirs there), which is never a person.
+ */
+export function isPersonCreate(manual: unknown, userId: string | null | undefined): boolean {
+  const u = (userId ?? '').trim()
+  return isPersonEdit(manual, u.startsWith('user:') || u.startsWith('automation:') ? u : `user:${u || 'anonymous'}`)
+}
+
+/** NP — the lowest bid an ordinary (not forced) engine write may set. Nexus's own floor, not Amazon's. */
+const ENGINE_BID_FLOOR_CENTS = 5
+
+/**
+ * 1e (CM-19) — Amazon's own minimum Sponsored Products bid in this market, in cents (@nexus/shared/ads-market-limits:
+ * €0.02 in IT, DE, FR and ES). Null where Nexus has no checked limits row; the write gate refuses those markets at
+ * dispatch, and the 5¢ floor stays there.
+ */
+export function amazonMinBidCents(marketplace: string | null | undefined): number | null {
+  return marketLimitsOf(normalizeMarketplaceCode(marketplace, '') || marketplace)?.adProducts[SPONSORED_PRODUCTS]?.bid.min ?? null
+}
+
+/**
+ * The refusal for a bid under the floor that binds this write; null when it may be written. An engine keeps the 5¢
+ * floor (`bid_below_floor_5_cents`, which the routes answer with 400). A person may go down to Amazon's minimum, and
+ * below it is told so in Amazon's terms (marketLimitsRefusal) — Amazon would reject that bid anyway. The campaign's
+ * own min-bid setting (Campaign.minBidCents, bid policies) is judged after this, by boundsRefused, for both.
+ */
+function bidFloorRefusal(cents: number, person: boolean, marketplace: string | null | undefined, field: 'bid' | 'defaultBid'): string | null {
+  const amazonMin = person ? amazonMinBidCents(marketplace) : null
+  if (amazonMin == null) return cents < ENGINE_BID_FLOOR_CENTS ? 'bid_below_floor_5_cents' : null
+  if (cents >= amazonMin) return null
+  const market = normalizeMarketplaceCode(marketplace, '') || marketplace
+  return marketLimitsRefusal({ market, field, valueMinor: cents })
+    ?? `A bid of ${cents}¢ is below Amazon's minimum of ${amazonMin}¢ in ${market}, so nothing was sent to Amazon.`
+}
+
+/**
+ * 1e (CM-9) — the no-pause floor remembers each bid it lowered (`suppressedFromBidCents`), and `restoreCampaignBids`
+ * writes that memory back. A bid a person sets while the floor holds must survive the restore, so his bid replaces the
+ * memory: the restore then puts back HIS bid, and a re-floor never lifts a bid above it (refloorBidCents takes the
+ * lower). The update helpers write the memory together with his bid; this covers the one case that writes nothing
+ * else — a person confirming the value the floor holds ("keep it at 2¢") is no change on Amazon, but it is his bid.
+ */
+async function keepPersonBidThroughRestore(
+  entity: 'AD_GROUP' | 'AD_TARGET', id: string, person: boolean, bidCents: number | null | undefined, remembered: number | null,
+): Promise<void> {
+  if (!person || bidCents == null || remembered == null || remembered === bidCents) return
+  if (entity === 'AD_GROUP') await prisma.adGroup.update({ where: { id }, data: { suppressedFromBidCents: bidCents } })
+  else await prisma.adTarget.update({ where: { id }, data: { suppressedFromBidCents: bidCents } })
 }
 
 export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
@@ -218,6 +288,8 @@ async function gateRefusedNow(args: {
   marketplace: string | null | undefined
   changes: FieldChange[]
   force?: boolean
+  /** 1e — the route's person mark: the gate's halt / autonomy-OFF pass is decided there, the same as at dispatch. */
+  manual?: boolean
 }): Promise<MutationOutcome | null> {
   if (!args.askGate || !args.actor.startsWith('user:')) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -238,6 +310,8 @@ async function gateRefusedNow(args: {
     actor: args.actor,
     previousValueCents: budget ? cents(budget.oldValue, true) : null,
     queueId: null,
+    // 1e — what the worker hands the gate too (isPersonEdit off the queue row), so the two answers agree.
+    manual: isPersonEdit(args.manual, args.actor),
   })
   if (gate.allowed !== false) return null
   logGateDeny(
@@ -343,6 +417,8 @@ interface EnqueueArgs {
    * queue row and the gate is told "suppression" only when `isSuppressionWrite` agrees.
    */
   force?: boolean
+  /** 1e — a person's own edit (`isPersonEdit`, already checked). Kept on the queue row's JSON, like `force`; the worker hands it to the gate. */
+  manual?: boolean
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
@@ -387,6 +463,8 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         // suppression is not blocked by Campaign.minBidCents. 2.2 — the ONLY record
         // of it: the typed rows have no column for it, so the worker reads it here.
         ...(args.force ? { force: true } : {}),
+        // 1e — likewise the only record that a person made this edit (the typed rows have no column for it either).
+        ...(args.manual ? { manual: true } : {}),
       } as object,
       holdUntil,
       externalListingId: args.externalId,
@@ -990,6 +1068,8 @@ export async function updateCampaignWithSync(args: {
   applyImmediately?: boolean
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
+  manual?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
 }): Promise<MutationOutcome> {
@@ -1114,6 +1194,7 @@ export async function updateCampaignWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'CAMPAIGN', entityId: args.campaignId,
     campaignId: existing.id, marketplace: existing.marketplace, changes,
+    manual: args.manual,
   })
   if (atDispatch) return atDispatch
 
@@ -1149,6 +1230,7 @@ export async function updateCampaignWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
+    manual: isPersonEdit(args.manual, args.actor),
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1206,9 +1288,17 @@ export async function updateAdGroupWithSync(args: {
   forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
+  manual?: boolean
+  /**
+   * 1e — an Undo (rollback.service.ts): a person's click, but it puts an old value back rather than choosing a new
+   * bid, so it does not replace the no-pause floor's memory; reverseOne puts the memory back from the action log.
+   */
+  reversal?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
 }): Promise<MutationOutcome> {
+  const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adGroup.findUnique({
     where: { id: args.adGroupId },
     select: {
@@ -1216,6 +1306,7 @@ export async function updateAdGroupWithSync(args: {
       name: true,
       externalAdGroupId: true,
       defaultBidCents: true,
+      suppressedFromBidCents: true, // 1e (CM-9)
       status: true,
       orphanedAt: true,
       campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true, ...BOUNDS_SELECT } },
@@ -1267,18 +1358,24 @@ export async function updateAdGroupWithSync(args: {
     if (changes.length === 1) syncType = 'AD_ENTITY_STATE_UPDATE'
   }
   if (changes.length === 0) {
+    // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
+    await keepPersonBidThroughRestore('AD_GROUP', args.adGroupId, person && !args.reversal, args.patch.defaultBidCents, existing.suppressedFromBidCents)
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
 
-  // Floor clamp on bid — AD.3's automation handler reuses this; same
+  // Floor on bid — AD.3's automation handler reuses this; same
   // safety belongs in the user path so a slip-up can't zero impressions.
-  if (!args.force && args.patch.defaultBidCents != null && args.patch.defaultBidCents < 5) {
+  // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal).
+  const belowFloor = !args.force && args.patch.defaultBidCents != null
+    ? bidFloorRefusal(args.patch.defaultBidCents, person, existing.campaign?.marketplace, 'defaultBid')
+    : null
+  if (belowFloor) {
     return {
       ok: false,
       outboundQueueId: null,
       bidHistoryIds: [],
       actionLogId: null,
-      error: 'bid_below_floor_5_cents',
+      error: belowFloor,
     }
   }
   // 4k — see boundsRefused.
@@ -1292,18 +1389,25 @@ export async function updateAdGroupWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
     campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
+    manual: args.manual,
   })
   if (atDispatch) return atDispatch
 
+  // 1e (CM-9) — a person's bid on an ad group the no-pause floor holds is the bid the restore puts back. The memory it
+  // replaces is kept in the action log (both payloads), so an Undo of this edit puts the memory back too.
+  const replacesMemory = person && !args.reversal && !args.force && args.patch.defaultBidCents != null
+    && existing.suppressedFromBidCents != null && existing.suppressedFromBidCents !== args.patch.defaultBidCents
   const payloadBefore = {
     name: existing.name,
     defaultBidCents: existing.defaultBidCents,
     status: existing.status,
+    ...(replacesMemory ? { suppressedFromBidCents: existing.suppressedFromBidCents } : {}),
   }
 
   const data: Record<string, unknown> = {}
   if (args.patch.defaultBidCents != null) data.defaultBidCents = args.patch.defaultBidCents
   if (args.patch.status) data.status = args.patch.status
+  if (replacesMemory) data.suppressedFromBidCents = args.patch.defaultBidCents
   if (newName) data.name = newName
   await prisma.adGroup.update({ where: { id: args.adGroupId }, data })
 
@@ -1318,6 +1422,7 @@ export async function updateAdGroupWithSync(args: {
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
     force: args.force,
+    manual: person,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1333,6 +1438,7 @@ export async function updateAdGroupWithSync(args: {
     ...payloadBefore,
     ...(args.patch.defaultBidCents != null ? { defaultBidCents: args.patch.defaultBidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
+    ...(replacesMemory ? { suppressedFromBidCents: args.patch.defaultBidCents } : {}),
     ...(newName ? { name: newName } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
@@ -1360,6 +1466,8 @@ export async function updateProductAdWithSync(args: {
   applyImmediately?: boolean
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
+  manual?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
 }): Promise<MutationOutcome> {
@@ -1377,6 +1485,7 @@ export async function updateProductAdWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'PRODUCT_AD', entityId: args.productAdId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes,
+    manual: args.manual,
   })
   if (atDispatch) return atDispatch
   await prisma.adProductAd.update({ where: { id: args.productAdId }, data: { status: args.status } })
@@ -1391,6 +1500,7 @@ export async function updateProductAdWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
+    manual: isPersonEdit(args.manual, args.actor),
   })
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1432,15 +1542,24 @@ export async function updateAdTargetWithSync(args: {
    * retire path passes `retire_negative` so NEG.8 has something to filter on.
    */
   actionType?: string | null
+  /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the routes. */
+  manual?: boolean
+  /**
+   * 1e — an Undo (rollback.service.ts): a person's click, but it puts an old value back rather than choosing a new
+   * bid, so it does not replace the no-pause floor's memory; reverseOne puts the memory back from the action log.
+   */
+  reversal?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
 }): Promise<MutationOutcome> {
+  const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
     select: {
       id: true,
       externalTargetId: true,
       bidCents: true,
+      suppressedFromBidCents: true, // 1e (CM-9)
       status: true,
       orphanedAt: true,
       orphanReason: true, // WF.1 — needed to tell a real orphan from a routing artefact
@@ -1488,10 +1607,12 @@ export async function updateAdTargetWithSync(args: {
   }
 
   // Apex A.2a — clamp the requested bid to the campaign's max-change-% guardrail
-  // (when set). Caps how far a single bid move (manual, bulk, or automation) can
-  // swing from the current bid, so a runaway rule can't 10× a bid in one step.
+  // (when set). Caps how far a single bid move can swing from the current bid, so a
+  // runaway rule can't 10× a bid in one step.
   // Applied before the diff so the audit trail records the clamped value.
-  if (!args.force && args.patch.bidCents != null && existing.bidCents > 0) {
+  // 1e (CM-19) — not to a person's own edit: it rewrote his bid without a word, and a
+  // brake may stop automation, not second-guess his click. Engines and rules keep it.
+  if (!args.force && !person && args.patch.bidCents != null && existing.bidCents > 0) {
     const guards = (existing.adGroup?.campaign?.dynamicBidding ?? {}) as { maxBidChangePct?: number }
     const pct = Number(guards.maxBidChangePct)
     if (Number.isFinite(pct) && pct > 0) {
@@ -1520,15 +1641,21 @@ export async function updateAdTargetWithSync(args: {
     syncType = 'AD_ENTITY_STATE_UPDATE'
   }
   if (changes.length === 0) {
+    // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
+    await keepPersonBidThroughRestore('AD_TARGET', args.adTargetId, person && !args.reversal, args.patch.bidCents, existing.suppressedFromBidCents)
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
-  if (!args.force && args.patch.bidCents != null && args.patch.bidCents < 5) {
+  // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal); an engine's stays 5¢.
+  const belowFloor = !args.force && args.patch.bidCents != null
+    ? bidFloorRefusal(args.patch.bidCents, person, existing.adGroup?.campaign?.marketplace, 'bid')
+    : null
+  if (belowFloor) {
     return {
       ok: false,
       outboundQueueId: null,
       bidHistoryIds: [],
       actionLogId: null,
-      error: 'bid_below_floor_5_cents',
+      error: belowFloor,
     }
   }
   // 4k — see boundsRefused. After the change clamp, so the bid judged is the bid that would be written.
@@ -1542,17 +1669,24 @@ export async function updateAdTargetWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: args.force,
+    manual: args.manual,
   })
   if (atDispatch) return atDispatch
 
+  // 1e (CM-9) — a person's bid on a target the no-pause floor holds is the bid the restore puts back. The memory it
+  // replaces is kept in the action log (both payloads), so an Undo of this edit puts the memory back too.
+  const replacesMemory = person && !args.reversal && !args.force && args.patch.bidCents != null
+    && existing.suppressedFromBidCents != null && existing.suppressedFromBidCents !== args.patch.bidCents
   const payloadBefore = {
     bidCents: existing.bidCents,
     status: existing.status,
+    ...(replacesMemory ? { suppressedFromBidCents: existing.suppressedFromBidCents } : {}),
   }
 
   const data: Record<string, unknown> = {}
   if (args.patch.bidCents != null) data.bidCents = args.patch.bidCents
   if (args.patch.status) data.status = args.patch.status
+  if (replacesMemory) data.suppressedFromBidCents = args.patch.bidCents
   await prisma.adTarget.update({ where: { id: args.adTargetId }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -1566,6 +1700,7 @@ export async function updateAdTargetWithSync(args: {
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
     force: args.force,
+    manual: person,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1581,6 +1716,7 @@ export async function updateAdTargetWithSync(args: {
     ...payloadBefore,
     ...(args.patch.bidCents != null ? { bidCents: args.patch.bidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
+    ...(replacesMemory ? { suppressedFromBidCents: args.patch.bidCents } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1632,6 +1768,8 @@ export async function bulkUpdateAdTargetBids(args: {
    * Omitted ⇒ previous behaviour exactly (each write its own set).
    */
   changeSetId?: string | null
+  /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the bulk-bid route. */
+  manual?: boolean
 }): Promise<BulkBidOutcome> {
   const out: BulkBidOutcome = {
     applied: 0,
@@ -1651,6 +1789,7 @@ export async function bulkUpdateAdTargetBids(args: {
         reason: args.reason ?? null,
         applyImmediately: args.applyImmediately ?? false,
         changeSetId: args.changeSetId ?? null,
+        manual: args.manual,
       })
       out.outcomes.push(outcome)
       if (outcome.ok && outcome.outboundQueueId) out.applied += 1

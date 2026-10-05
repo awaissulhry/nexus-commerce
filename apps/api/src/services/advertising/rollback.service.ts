@@ -110,10 +110,31 @@ interface AdLog {
   amazonResponseStatus: string | null
 }
 
+/**
+ * 1e (CM-9) — an edit that replaced the no-pause floor's memory (`suppressedFromBidCents`) records both values in its
+ * payloads; undoing it puts the memory back, so the morning restore again restores the bid from before the floor.
+ * Compare-and-set: a memory something else has moved since (a restore cleared it, a later edit) is left alone.
+ */
+async function restoreFloorMemory(log: AdLog, before: Record<string, unknown>): Promise<void> {
+  if (!('suppressedFromBidCents' in before)) return
+  const after = (log.payloadAfter ?? {}) as Record<string, unknown>
+  const was = before.suppressedFromBidCents
+  const now = after.suppressedFromBidCents
+  if (typeof was !== 'number' || typeof now !== 'number') return
+  const where = { id: log.entityId, suppressedFromBidCents: now }
+  if (log.entityType === 'AD_TARGET') await prisma.adTarget.updateMany({ where, data: { suppressedFromBidCents: was } })
+  else if (log.entityType === 'AD_GROUP') await prisma.adGroup.updateMany({ where, data: { suppressedFromBidCents: was } })
+}
+
 async function reverseOne(
   log: AdLog,
   actor: AdsActor,
   reason: string,
+  /**
+   * 1e (CM-10) — the Undo was a person's click (the undo routes set it; a Claude request or an engine never does): the
+   * reversal passes the account halt and autonomy OFF like his other edits (isPersonEdit). Every other check binds.
+   */
+  manual = false,
 ): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
@@ -135,7 +156,7 @@ async function reverseOne(
       const { updatePlacementBidding } = await import('./ads-create.service.js')
       // HX.1 — the 'Undo:' reason prefix is the same marker /campaigns/:id/history already uses to
       // flag a row as an undo, so a reversal reads as one everywhere rather than as a fresh change.
-      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj, actor, reason: `Undo: ${log.actionType}${reason ? ` — ${reason}` : ''}` })
+      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj, actor, reason: `Undo: ${log.actionType}${reason ? ` — ${reason}` : ''}`, manual })
       return r.ok ? { ok: true } : { ok: false, reason: 'placement restore failed' }
     }
     // AX-IE.9 — inverting a CREATE.
@@ -151,7 +172,7 @@ async function reverseOne(
     // easiest to miss and worst to find out about later.
     if (log.actionType.startsWith('bulksheet_create_')) {
       const patch = { status: 'ARCHIVED' as const }
-      const common = { actor, reason: `rollback: ${reason}`, applyImmediately: true }
+      const common = { actor, reason: `rollback: ${reason}`, applyImmediately: true, manual, reversal: true }
       if (log.entityType === 'AD_GROUP') {
         const r = await updateAdGroupWithSync({ adGroupId: log.entityId, patch, ...common })
         return r.ok ? { ok: true } : { ok: false, reason: r.error ?? 'archive failed' }
@@ -186,6 +207,7 @@ async function reverseOne(
         actor,
         reason: `rollback: ${reason}`,
         applyImmediately: true,
+        manual,
       })
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
     }
@@ -202,7 +224,10 @@ async function reverseOne(
         actor,
         reason: `rollback: ${reason}`,
         applyImmediately: true,
+        manual,
+        reversal: true,
       })
+      if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'AD_TARGET') {
@@ -217,7 +242,10 @@ async function reverseOne(
         actor,
         reason: `rollback: ${reason}`,
         applyImmediately: true,
+        manual,
+        reversal: true,
       })
+      if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'RETAIL_EVENT') {
@@ -298,11 +326,13 @@ export async function rollbackByActionLogId(args: {
   actionLogId: string
   actor: AdsActor
   reason: string
+  /** 1e — the Undo button: a person's click (see reverseOne). Set only by the routes. */
+  manual?: boolean
 }): Promise<RollbackOutcome> {
   const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
   if (!log) return { ok: false, reversed: 0, skipped: 0, failed: 0, details: [], reason: 'That change no longer exists.' }
   // A grouped row reverses with its set, so the entity never lands in a state that never existed.
-  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason })
+  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual })
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
   if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
@@ -311,7 +341,7 @@ export async function rollbackByActionLogId(args: {
     out.reason = `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change.`
     return out
   }
-  const r = await reverseOne(log as never, args.actor, args.reason)
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true)
   if (r.ok) {
     out.reversed = 1
     await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: new Date(), rollbackReason: args.reason } }).catch(() => {})
@@ -325,6 +355,8 @@ export async function rollbackByChangeSetId(args: {
   changeSetId: string
   actor: AdsActor
   reason: string
+  /** 1e — an Undo a person clicked (see reverseOne). Set only by the routes. */
+  manual?: boolean
 }): Promise<RollbackOutcome> {
   const logs = await prisma.advertisingActionLog.findMany({
     where: {
@@ -354,7 +386,7 @@ export async function rollbackByChangeSetId(args: {
     }
   }
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason)
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true)
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
     if (r.ok && !r.skipped) {
       out.reversed += 1
@@ -385,6 +417,8 @@ export async function rollbackByExecutionId(args: {
   executionId: string
   actor: AdsActor
   reason: string
+  /** 1e — a Rollback a person clicked (see reverseOne). Set only by the routes. */
+  manual?: boolean
 }): Promise<RollbackOutcome> {
   const exec = await prisma.automationRuleExecution.findUnique({
     where: { id: args.executionId },
@@ -435,7 +469,7 @@ export async function rollbackByExecutionId(args: {
   }
 
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason)
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true)
     if (r.ok && !r.skipped) {
       out.reversed += 1
       out.details.push({

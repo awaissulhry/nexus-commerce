@@ -1412,6 +1412,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
         adjustments,
         actor: `user:${(request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'}` as never,
         reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,
+        manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       })
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })

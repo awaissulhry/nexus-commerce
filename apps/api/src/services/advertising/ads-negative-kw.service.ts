@@ -44,6 +44,7 @@ import {
   type AdsRegion, type ClientContext,
 } from './ads-api-client.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
+import { isPersonCreate } from './ads-mutation.service.js'
 import { assertNegativeWriteAllowed, isAsin, negativeKeywordTextProblem, protectedNegativeRefusal } from './ads-negation-policy.js'
 import { checkProtectConverting, normaliseNegTerm, type ProtectConvertingConfig } from './ads-protect-converting.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
@@ -68,6 +69,8 @@ export interface CreateNegativeArgs {
    * this, else from `externalCampaignId`) and handed to the write gate, so the live-write allowlist binds every negative.
    */
   nexusCampaignId?: string
+  /** 1e — a person's own add from a screen (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
+  manual?: boolean
 }
 
 export interface CreateNegativeResult {
@@ -116,6 +119,8 @@ export interface WriteNegativeKeywordArgs {
   region?: AdsRegion
   userId?: string | null
   evidence?: AdWriteEvidence | null
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate). Set only by the routes. */
+  manual?: boolean
 }
 
 export interface WriteNegativeProductTargetArgs {
@@ -124,6 +129,8 @@ export interface WriteNegativeProductTargetArgs {
   creationFlow?: boolean
   userId?: string | null
   evidence?: AdWriteEvidence | null
+  /** 1e — a person's own add from a screen or an upload (isPersonCreate). Set only by the routes. */
+  manual?: boolean
 }
 
 // ── Endpoint constants (legacy SP v3) ─────────────────────────────────
@@ -305,6 +312,8 @@ interface KeywordJob {
   region?: AdsRegion
   /** Pushing a row Nexus already holds (the launch repair): it is not a duplicate of itself. */
   pushing?: boolean
+  /** 1e — a person's own add (already checked by isPersonCreate): passes the halt and autonomy OFF at the gate. */
+  manual?: boolean
 }
 
 async function sendKeyword(job: KeywordJob): Promise<Sent> {
@@ -338,6 +347,7 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
     negativeMatchType: matchType,
     adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
+    manual: job.manual === true,
   })
   if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason } }
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null, job.profileId, job.region)
@@ -381,7 +391,7 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   }
 }
 
-interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean }
+interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean }
 
 async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, asin } = job
@@ -406,6 +416,7 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const gate = await checkAdsWriteGate({
     marketplace: campaign.marketplace, payloadValueCents: 0, isNegation: true, keywordText: asin, adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
+    manual: job.manual === true,
   })
   if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason } }
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null)
@@ -531,7 +542,7 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   if (args.scope === 'CAMPAIGN' && !placement.adGroup) {
     return done('negative keyword', failedResult(`${placement.campaign.id} has no ad group to hold Nexus's copy of a campaign negative, so nothing was sent.`, mode))
   }
-  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region })
+  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, args.userId) })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative keyword', early)
 
@@ -553,7 +564,7 @@ export async function writeNegativeProductTarget(args: WriteNegativeProductTarge
   const placement = await resolvePlacement({ scope: 'AD_GROUP', adGroupId: args.adGroupId })
   if (isRefusal(placement)) return done('negative product target', refusedResult(placement, mode))
   const asin = (args.asin ?? '').trim()
-  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow })
+  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId) })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative product target', early)
 
@@ -621,7 +632,7 @@ export async function createNegative(args: CreateNegativeArgs): Promise<CreateNe
   }
   const placement = await resolvePlacement({ scope: args.scope, campaignId: args.nexusCampaignId, externalCampaignId: args.externalCampaignId, externalAdGroupId: args.externalAdGroupId })
   if (isRefusal(placement)) return denied(placement)
-  const sent = await sendKeyword({ placement, scope: args.scope, text: (args.keywordText ?? '').trim(), matchType: toNegativeMatch(args.matchType), profileId: args.profileId, region: args.region })
+  const sent = await sendKeyword({ placement, scope: args.scope, text: (args.keywordText ?? '').trim(), matchType: toNegativeMatch(args.matchType), profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, null) })
   switch (sent.kind) {
     case 'refused': return denied(sent.refusal)
     case 'exists':

@@ -9,7 +9,7 @@
  * Keyword protection is the same idea applied to targeting. Harvest-and-negate ran
  * enabled on prod with nothing protecting a brand term from being negated by it.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const campaignFindUnique = vi.fn()
 const campaignFindMany = vi.fn(async () => [] as unknown[])
@@ -310,6 +310,54 @@ describe('ACR.0.7 — account halt', () => {
     // Both would deny; the reported reason must be the halt, or an operator resuming
     // automation would be told the campaign is the problem.
     if (r.allowed === false) expect(r.deniedAt).toBe('automation_halted')
+  })
+
+  // 1e (CM-10) — the halt and the dial stop the machine, not the Owner's own clicks.
+  describe('1e — a person\'s own edit (ctx.manual)', () => {
+    const off = { autonomy: 'OFF', halted: false, haltReason: null, effectivelyStopped: true, degraded: false }
+    afterEach(() => { delete process.env.NEXUS_ADS_AUTOMATION_KILL })
+
+    it('passes a halt — bid and budget — while the same write from an engine is still refused', async () => {
+      automationState.mockResolvedValue(halted)
+      expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })).allowed).toBe(true)
+      // €5 → €6: inside the day-move bound, which (like every check after the halt) still binds his edits.
+      expect((await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 600, manual: true })).allowed).toBe(true)
+      const engine = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+      expect(engine.allowed === false && engine.deniedAt).toBe('automation_halted')
+    })
+
+    it('passes autonomy OFF', async () => {
+      automationState.mockResolvedValue(off)
+      expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })).allowed).toBe(true)
+      expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })).allowed).toBe(false)
+    })
+
+    it('does NOT pass the deploy kill switch (NEXUS_ADS_AUTOMATION_KILL, set in Railway, not from a screen)', async () => {
+      process.env.NEXUS_ADS_AUTOMATION_KILL = '1'
+      automationState.mockResolvedValue({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: true, degraded: false })
+      const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
+      expect(r.allowed === false && r.deniedAt).toBe('automation_halted')
+    })
+
+    it('passes the halt and nothing else: the allowlist, the bounds and Amazon\'s range still bind', async () => {
+      automationState.mockResolvedValue(halted)
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false })
+      const notListed = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
+      expect(notListed.allowed === false && notListed.deniedAt).toBe('campaign_allowlist')
+
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
+      const overCeiling = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
+      expect(overCeiling.allowed === false && overCeiling.deniedAt).toBe('entity_bounds')
+
+      campaignFindUnique.mockResolvedValue(OPEN_CAMPAIGN)
+      const underAmazon = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 1, manual: true })
+      expect(underAmazon.allowed === false && underAmazon.deniedAt).toBe('market_limits')
+    })
+
+    it('a 2¢ bid, Amazon\'s own minimum in IT, passes the gate for him', async () => {
+      const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, manual: true })
+      expect(r.allowed).toBe(true)
+    })
   })
 })
 
