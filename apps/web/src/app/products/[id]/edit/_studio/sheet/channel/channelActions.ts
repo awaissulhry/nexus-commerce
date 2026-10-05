@@ -40,6 +40,7 @@ import { AMAZON_NO_END, ETSY_NO_END, STATUS_TARGET_LABEL, type StatusTarget } fr
 import { SEND_MODE_LABEL, type PublishActionCell, type PublishActionChange, type SendMode } from '@nexus/shared/publish-actions'
 
 import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelSheetRow } from './types'
+import { LISTING_NOT_RECORDED } from '../../listingScope'
 
 /**
  * 🔴 The permission a channel verb needs is NOT a channel permission (ruling #123).
@@ -261,9 +262,8 @@ export interface ListingBandDeps {
 export const SHOW_ONLY_LISTING = 'Show only this listing'
 export const SHOW_ALL_LISTINGS = 'Show all listings'
 export const PUBLISH_THIS_LISTING = 'Publish this listing…'
-/** The band's listing has no record of this page's product here (on a variation's page, the variation's own record is
- *  what keeps the page on the variation, review 2026-10-05). */
-export const LISTING_NOT_RECORDED = 'This product has no record of this listing on this account and market yet, so it cannot be shown alone.'
+/** The band's listing has no record of this page's product here — the studio's one sentence for it (`listingScope`). */
+export { LISTING_NOT_RECORDED }
 
 const isBand = (row: ChannelSheetRow | undefined): row is ChannelSheetRow => row?.rowKind === 'parent'
 /** The band verbs appear where a product holds more than one listing here, or one listing is shown alone. */

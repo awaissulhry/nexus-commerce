@@ -41,13 +41,21 @@ export interface ListingChoices {
   mainListingId: string | null
   /** Each family product's own main-listing record here, by product id — what "Main listing" writes on that product's page. */
   mainByProduct: Readonly<Record<string, string>>
+  /** Each offered alias → the family products holding a record of it here (a variation without one cannot open it). */
+  productsByAlias: Readonly<Record<string, readonly string[]>>
   /** The destination's aliases, in their position order. */
   aliases: ListingAliasChoice[]
   /** Every listing record here (any product of the family) → its listing: '' = the main listing, else the alias id. */
   aliasByRecord: Readonly<Record<string, string>>
 }
 
-export const NO_LISTING_CHOICES: ListingChoices = Object.freeze({ mainListingId: null, mainByProduct: {}, aliases: [], aliasByRecord: {} }) as ListingChoices
+export const NO_LISTING_CHOICES: ListingChoices = Object.freeze({ mainListingId: null, mainByProduct: {}, productsByAlias: {}, aliases: [], aliasByRecord: {} }) as ListingChoices
+
+/**
+ * Why a listing cannot be chosen on this page: the page's product holds no record of it here. Opening it would show and
+ * save another product's record (the family main product's) under this product's header (review 2026-10-05, M1/N3).
+ */
+export const LISTING_NOT_RECORDED = 'This product has no record of this listing on this account and market yet, so it cannot be shown alone.'
 
 /** An alias's name: its own label, else "Listing alias 2"; position 0 is the main listing. */
 export function aliasName(position: number, label: string | null | undefined): string {
@@ -102,13 +110,18 @@ export function listingChoicesFromCells(cells: readonly ChoiceCell[], familyId: 
   }
   const aliases = [...byId.values()].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
   const aliasByRecord: Record<string, string> = {}
+  const productsByAlias: Record<string, string[]> = {}
   for (const cell of cells) {
     if (cell.listingId.startsWith('new:') || (cell.aliasKey && !byId.has(cell.aliasKey))) continue
     aliasByRecord[cell.listingId] = cell.aliasKey
+    if (!cell.aliasKey) continue
+    const holders = productsByAlias[cell.aliasKey] ??= []
+    if (!holders.includes(cell.productId)) holders.push(cell.productId)
   }
   return {
     mainListingId: main?.listingId ?? null,
     mainByProduct,
+    productsByAlias,
     aliases: placed ? aliases : aliases.map((alias, index) => ({ ...alias, position: index + 1 })),
     aliasByRecord,
   }
@@ -123,9 +136,18 @@ export function mainListingOf(choices: ListingChoices | null, productId?: string
   return productId ? choices.mainByProduct[productId] ?? null : choices.mainListingId
 }
 
-/** The picker is drawn when the destination holds more than one listing, or one listing is chosen (the way back). */
-export function showListingPicker(choices: ListingChoices | null, listingId: string | null | undefined): boolean {
-  return !!listingId || (choices?.aliases.length ?? 0) > 0
+/** Whether the page's product holds a record of this alias here (no product named: any record will do). */
+export function aliasRecordedFor(choices: ListingChoices, aliasId: string, productId?: string | null): boolean {
+  const holders = choices.productsByAlias[aliasId] ?? []
+  return productId ? holders.includes(productId) : holders.length > 0
+}
+
+/**
+ * The picker is drawn when the destination holds more than one listing. A family without aliases looks as it always did
+ * (review 2026-10-05, N2): a chosen listing there keeps the bar's "Selected listing · Clear" button as its way back.
+ */
+export function showListingPicker(choices: ListingChoices | null, _listingId?: string | null): boolean {
+  return (choices?.aliases.length ?? 0) > 0
 }
 
 export interface ListingPickerOption {
@@ -145,11 +167,13 @@ export function listingPickerOptions(choices: ListingChoices, productId?: string
       ? { value: MAIN_LISTING, label: 'Main listing', position: 0, title: 'Show only the main listing' }
       : { value: MAIN_LISTING, label: 'Main listing', position: 0, disabled: true,
         // The family's main product has one, this variation has none: choosing it would move the page to the main product.
-        title: productId && choices.mainListingId
-          ? 'This product has no record on the main listing on this account and market yet.'
-          : 'The main listing has no record on this account and market yet.' },
-    ...choices.aliases.map(alias => ({ value: `${ALIAS_PREFIX}${alias.id}`, label: aliasName(alias.position, alias.label), position: alias.position,
-      title: `Show only ${aliasName(alias.position, alias.label)}` })),
+        title: productId && choices.mainListingId ? LISTING_NOT_RECORDED : 'The main listing has no record on this account and market yet.' },
+    // An alias this page's product holds no record of is shown, but cannot be chosen (review 2026-10-05, N3): the server
+    // would answer with the family main product's record, and the page would show that product's data.
+    ...choices.aliases.map(alias => aliasRecordedFor(choices, alias.id, productId)
+      ? { value: `${ALIAS_PREFIX}${alias.id}`, label: aliasName(alias.position, alias.label), position: alias.position,
+        title: `Show only ${aliasName(alias.position, alias.label)}` }
+      : { value: `${ALIAS_PREFIX}${alias.id}`, label: aliasName(alias.position, alias.label), position: alias.position, disabled: true, title: LISTING_NOT_RECORDED }),
   ]
 }
 
@@ -168,11 +192,15 @@ export function listingPickerValue(listingId: string | null | undefined, resolve
   return undefined
 }
 
-/** What the studio's `setListing` receives for a picker option; undefined = every listing. `productId`: the page's. */
+/**
+ * What the studio's `setListing` receives for a picker option; undefined = every listing (or a listing this page's
+ * product holds no record of, which the picker never offers). `productId`: the page's.
+ */
 export function listingParamOf(value: string, choices: ListingChoices, productId?: string | null): string | undefined {
   if (value === MAIN_LISTING) return mainListingOf(choices, productId) ?? undefined
-  if (value.startsWith(ALIAS_PREFIX)) return value.slice(ALIAS_PREFIX.length) || undefined
-  return undefined
+  if (!value.startsWith(ALIAS_PREFIX)) return undefined
+  const aliasId = value.slice(ALIAS_PREFIX.length)
+  return aliasId && aliasRecordedFor(choices, aliasId, productId) ? aliasId : undefined
 }
 
 /**
@@ -201,14 +229,15 @@ export interface ListingSelectionRow {
 
 /**
  * The `listing=` that shows one listing alone from a page's sheet rows (the band's "Show only this listing", the
- * Presentation tab): an alias by its alias id, when its band or the page's product holds a record of it; the main listing
- * by the PAGE PRODUCT's own main record — never the family main product's on a variation's page, which would move the
- * page to the family main product. Undefined when no record is known (the choice is then refused).
+ * Presentation tab): an alias by its alias id, the main listing by its record — and only when the PAGE PRODUCT holds its
+ * own record of that listing here. Another product's record (the family main product's band) would move the page to that
+ * product, so it is never used (review 2026-10-05, M1/N3). Undefined when this product has none (the choice is refused,
+ * `LISTING_NOT_RECORDED`).
  */
 export function pageListingSelection(aliasId: string | null | undefined, rows: readonly ListingSelectionRow[], pageProductId: string): string | undefined {
-  const of = (row: ListingSelectionRow) => row.aliasId || null
-  if (aliasId) return rows.some(row => of(row) === aliasId && !!row.listing?.id && (row.id === pageProductId || row.rowKind === 'parent')) ? aliasId : undefined
-  return rows.find(row => row.id === pageProductId && of(row) === null && !!row.listing?.id)?.listing?.id
+  const own = rows.find(row => row.id === pageProductId && (row.aliasId || null) === (aliasId || null) && !!row.listing?.id)
+  if (!own) return undefined
+  return aliasId || own.listing!.id
 }
 
 /** A Publish destination for one listing: an alias names its alias id; the main listing names none. */

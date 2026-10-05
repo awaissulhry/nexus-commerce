@@ -3,8 +3,12 @@
 import { useState } from 'react'
 import { Banner, ProgressBar } from '@/design-system/components'
 import { Button, SegmentedControl } from '@/design-system/primitives'
-import { useStudioScope } from '../contracts'
+import { useStudioProduct, useStudioScope } from '../contracts'
+import { useListingChoices } from '../useListingChoices'
+import { aliasMarkText } from '../listingScope'
+import { MASTER_SCOPE } from '../types'
 import { useWorkspaceRead } from '../useWorkspaceRead'
+import { MAIN_LISTING_LABEL } from '@/app/products/_publication/dialog/model'
 import styles from './analytics.module.css'
 
 interface Performance {
@@ -18,8 +22,16 @@ const WINDOWS = [{ value: '30', label: '30 days' }, { value: '60', label: '60 da
 
 export function ScopedPerformance() {
   const [days, setDays] = useState('30')
-  const { listingId, setListing } = useStudioScope()
+  const { listingId, setListing, scope, market, accountId } = useStudioScope()
+  const product = useStudioProduct()
   const read = useWorkspaceRead<Performance>('performance', `days=${days}`)
+  // Aliases in the sheet (Owner 2026-10-05): a listing price is named as the sheet band names its listing (★ / ① label).
+  const choices = useListingChoices(product.id, product.parentId ?? product.id, { channel: scope === MASTER_SCOPE ? null : scope, marketplace: market, accountId }).choices
+  const priceLabel = (aliasKey: string) => {
+    if (!aliasKey) return MAIN_LISTING_LABEL
+    const alias = choices?.aliases.find(a => a.id === aliasKey)
+    return alias ? aliasMarkText(alias.position, alias.label) : 'Another listing'
+  }
   return <div className={styles.page}>
     <header className={styles.head}><h2 className={styles.title}>Performance</h2><span className={styles.spacer} />
       <SegmentedControl options={WINDOWS} value={days} onChange={setDays} ariaLabel="Reporting window" /></header>
@@ -42,7 +54,7 @@ export function ScopedPerformance() {
       <section className={styles.card}><h3 className={styles.cardTitle}>Listing prices</h3>
         {read.data.prices.length === 0 && <p>No listing price is recorded in this scope.</p>}
         <dl className={styles.stats}>{read.data.prices.map(price => <div key={price.id}>
-          <dt>{price.aliasKey ? `Customization ${price.aliasKey}` : 'Primary listing'}</dt>
+          <dt>{priceLabel(price.aliasKey)}</dt>
           <dd>{price.price === null ? 'Not known' : `${price.price.toFixed(2)} ${price.currency}`}</dd>
         </div>)}</dl>
       </section>

@@ -63,3 +63,15 @@ Each listing has 4/8 colours live (black/blue/orange/pink missing) → Full upda
   its aliasKey; "Main listing" in band/picker/Presentation; picker max 32ch). F-A1 (window/status/shared read) running.
   Open naming: server strings "Primary listing" (old Media workspaces, review aliasLabel, catalog/transfer files — import may
   match the text) left as is.
+## 23:10
+- PR A fixes committed 7d44fb899 (+ invalidatePublishActions on sheet alias create). R6 verifying.
+- PR B R5: M2/M3/M4/m1–m6 verified; M1 partly: seed blocks for value sets >12 (gallery or own), variant product's own
+  files/Shared list not counted (rowHasOwnPhotos rule), axis values missing from the dictionary, excluded rows; M3 Images tab
+  per alias vs per row elsewhere → refined rule (row ASIN vs main row; no ASIN → alias root decides). B4 round 3 running.
+## 23:40
+- PR A R6: M2, m1–m7, m9, phone width verified; shared read verified (no loops/leaks/collisions). Fixed by me: N1 test
+  literal (newRows.wiring). F-A2 final round: N3 variation without its own alias record → alias offered disabled; N2 lone
+  listing shows no ★ (Presentation, buyer preview, bar keeps "Selected listing · Clear"); m3 leftover "Primary listing"
+  display labels → "Main listing" (display only).
+- Known limit (tell the Owner): a waiting End on an ARCHIVED alias cannot be sent (the resolver refuses archived aliases);
+  the web has no archive control, so this needs an import-undo/DELETE-route archive first.

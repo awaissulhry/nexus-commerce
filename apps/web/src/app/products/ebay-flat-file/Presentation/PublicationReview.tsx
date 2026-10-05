@@ -5,6 +5,7 @@ import { Banner, Drawer, ProgressBar } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePresentationNavigationGuard } from './usePresentationNavigationGuard'
+import { MAIN_LISTING_LABEL } from '@/app/products/_publication/dialog/model'
 
 interface Outcome { listingId: string; itemId: string; status: string; message?: string; stamped?: boolean }
 interface Review { jobId: string; targets: Array<{ listingId: string; itemId: string; version: number; destination: { channelConnectionId: string; marketplace: string; aliasKey: string }; preview: { before?: string; after?: string; axisOrder?: { from: string[]; to: string[] }; valueChanges?: Array<{ axis: string; from: string[]; to: string[] }> } }>; excluded: Outcome[] }
@@ -43,7 +44,7 @@ function ScopedPublicationReview({ productId, marketplace, accountId, aliasKey =
       {busy && <ProgressBar indeterminate ariaLabel={review ? 'Publishing reviewed presentation' : 'Reading current marketplace presentation'} />}
       {error && <Banner tone="danger" action={<Button disabled={busy} onClick={() => setReload(n => n + 1)}>Create fresh review</Button>}>{error}</Banner>}
       {review?.targets.map(target => <div key={target.listingId} style={{ display: 'grid', gap: 'var(--nds-space-8)' }}>
-        <p>Item {target.itemId} · Account {target.destination.channelConnectionId} · {target.destination.marketplace} · {target.destination.aliasKey ? 'Selected alternate listing' : 'Primary listing'} · Listing v{target.version}</p>
+        <p>Item {target.itemId} · Account {target.destination.channelConnectionId} · {target.destination.marketplace} · {target.destination.aliasKey ? 'Selected alternate listing' : MAIN_LISTING_LABEL} · Listing v{target.version}</p>
         {operation === 'description' ? <><p>Current buyer description</p><iframe title="Current buyer description" sandbox="" srcDoc={target.preview.before} style={{ width: '100%', height: 240 }} /><p>Reviewed buyer description</p><iframe title="Reviewed buyer description" sandbox="" srcDoc={target.preview.after} style={{ width: '100%', height: 320 }} /></> : <>
           {target.preview.axisOrder && <p>Axes: {target.preview.axisOrder.from.join(' → ')} → {target.preview.axisOrder.to.join(' → ')}</p>}
           {target.preview.valueChanges?.map(change => <p key={change.axis}>{change.axis}: {change.from.join(', ')} → {change.to.join(', ')}</p>)}

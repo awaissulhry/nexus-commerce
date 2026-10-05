@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { MAIN_LISTING_LABEL, publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
+import { MAIN_LISTING_LABEL, listingDisplayLabel, publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
 import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
@@ -94,4 +94,10 @@ it('lists the review\'s problems as table rows and its warnings as notes', () =>
     { id: '2', sku: 'Whole listing', message: 'Item location postal code: eBay says this is missing or not valid.', detail: 'Input data for tag <Item.PostalCode> is invalid. (eBay code 37)' },
   ])
   expect(notes).toEqual(['Condition is empty, so Nexus sends New.', 'FAM: Title: the Italian text is shown on DE.'])
+})
+
+// m3 (review 2026-10-05): one word for the main listing on screen; display only, other names untouched.
+it('shows the server\'s older names for the main listing as "Main listing", and every other name as it is', () => {
+  expect(['Primary listing', 'Primary', ' Primary ', 'ALT1', 'Primary edition', ''].map(listingDisplayLabel))
+    .toEqual([MAIN_LISTING_LABEL, MAIN_LISTING_LABEL, MAIN_LISTING_LABEL, 'ALT1', 'Primary edition', ''])
 })

@@ -12,6 +12,7 @@ import { channelLabel } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, publishResultMeta, publishFullTime, toCsv, type CsvColumn, type PublishStatusMeta } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { studioRowId } from '@/app/products/[id]/edit/_studio/sheet/channel/types'
+import { listingDisplayLabel, MAIN_LISTING_LABEL } from '../dialog/model'
 
 /** A state's pill for the sources whose raw status the vocabulary does not know. One existing entry per state. */
 const STATE_STATUS: Record<HistoryState, string> = {
@@ -362,10 +363,10 @@ export function sheetRowIdOf(run: Pick<HistoryRun, 'aliasKey'>, product: Pick<Hi
   return studioRowId(run.aliasKey === '' ? null : run.aliasKey, product.productId)
 }
 
-/** "Primary listing", the extra listing's name, or nothing when the source never recorded which listing it was. */
+/** "Main listing", the extra listing's name, or nothing when the source never recorded which listing it was. */
 export function runListingLabel(run: Pick<HistoryRun, 'aliasKey' | 'aliasLabel'>): string | null {
-  if (run.aliasLabel) return run.aliasLabel
-  return run.aliasKey === '' ? 'Primary listing' : null
+  if (run.aliasLabel) return listingDisplayLabel(run.aliasLabel)
+  return run.aliasKey === '' ? MAIN_LISTING_LABEL : null
 }
 
 // ── What was sent ────────────────────────────────────────────────────────────────────────────────────────────────

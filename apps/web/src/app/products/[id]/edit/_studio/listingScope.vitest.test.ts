@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import {
-  ALL_LISTINGS, MAIN_LISTING, NO_LISTING_CHOICES, aliasMarkSpoken, aliasMarkText, aliasName, listingChoicesFromCells, listingParamOf, listingPickerOptions,
+  ALL_LISTINGS, LISTING_NOT_RECORDED, MAIN_LISTING, NO_LISTING_CHOICES, aliasMarkSpoken, aliasRecordedFor, aliasMarkText, aliasName, listingChoicesFromCells, listingParamOf, listingPickerOptions,
   listingParamForRecord, listingPickerValue, listingPublishScope, listingSelection, mainListingOf, pageListingSelection, retryPublishScope, showListingPicker,
   undoPublishScope, type ListingChoices,
 } from './listingScope'
@@ -19,6 +19,7 @@ const CHOICES: ListingChoices = {
   mainByProduct: { 'child-1': 'cl-child', [FAMILY]: 'cl-main' },
   aliases: [{ id: 'alias-1', label: 'ALT1', position: 1 }, { id: 'alias-2', label: 'ALT2', position: 2 }],
   aliasByRecord: { 'cl-alt2': 'alias-2', 'cl-child-alt2': 'alias-2', 'cl-child': '', 'cl-main': '', 'cl-alt1': 'alias-1' },
+  productsByAlias: { 'alias-2': [FAMILY, 'child-1'], 'alias-1': [FAMILY] },
 }
 
 describe('the listings of one destination (listingChoicesFromCells)', () => {
@@ -73,18 +74,20 @@ describe('the studio bar\'s listing picker', () => {
   })
 
   it('an unnamed alias reads "Listing alias N"; a main listing with no record here cannot be chosen, and says why', () => {
-    const options = listingPickerOptions({ mainListingId: null, mainByProduct: {}, aliases: [{ id: 'alias-3', label: '', position: 3 }], aliasByRecord: {} })
+    const options = listingPickerOptions({ mainListingId: null, mainByProduct: {}, productsByAlias: { 'alias-3': [FAMILY] }, aliases: [{ id: 'alias-3', label: '', position: 3 }], aliasByRecord: {} })
     expect(options[1]).toMatchObject({ value: MAIN_LISTING, disabled: true })
     expect(options[1].title).toMatch(/no record/)
     expect(options[2].label).toBe('Listing alias 3')
   })
 
-  it('is drawn when the destination holds an alias, or a listing is chosen (the way back); not for one lone listing', () => {
+  it('is drawn when the destination holds an alias; a family without aliases keeps its "Selected listing · Clear" (N2)', () => {
     expect(showListingPicker(CHOICES, undefined)).toBe(true)
+    expect(showListingPicker(CHOICES, 'alias-1')).toBe(true)
     expect(showListingPicker({ ...NO_LISTING_CHOICES, mainListingId: 'cl-main' }, undefined)).toBe(false)
     expect(NO_LISTING_CHOICES.mainByProduct).toEqual({})
-    expect(showListingPicker({ ...NO_LISTING_CHOICES, mainListingId: 'cl-main' }, 'cl-main')).toBe(true)
-    expect(showListingPicker(null, undefined)).toBe(false)
+    // One lone listing, chosen: no picker — the bar's old Clear button is the way back, as on main.
+    expect(showListingPicker({ ...NO_LISTING_CHOICES, mainListingId: 'cl-main' }, 'cl-main')).toBe(false)
+    expect(showListingPicker(null, 'cl-main')).toBe(false)
   })
 
   it('shows what the studio shows: nothing chosen = All listings; the resolved listing decides; an id it knows while resolving', () => {
@@ -126,6 +129,19 @@ describe('the studio bar\'s listing picker', () => {
     expect(listingParamOf(MAIN_LISTING, CHOICES, 'child-2')).toBeUndefined()
     expect(listingPickerOptions(CHOICES, 'child-1')[1].disabled).toBeUndefined()
   })
+
+  /* Review 2026-10-05 (N3): an alias the variation holds no record of would open the family main product's record. */
+  it('on a variation\'s page, an alias the variation has no record of is shown but cannot be chosen, and says why', () => {
+    const options = listingPickerOptions(CHOICES, 'child-1')
+    expect(options.find(o => o.value === 'alias:alias-1')).toMatchObject({ disabled: true, title: LISTING_NOT_RECORDED })
+    expect(options.find(o => o.value === 'alias:alias-2')!.disabled).toBeUndefined()
+    expect(listingParamOf('alias:alias-1', CHOICES, 'child-1')).toBeUndefined()
+    expect(listingParamOf('alias:alias-2', CHOICES, 'child-1')).toBe('alias-2')
+    // The family main product's page (and a call that names no product) may choose either.
+    expect(listingPickerOptions(CHOICES, FAMILY).every(o => !o.disabled)).toBe(true)
+    expect(listingParamOf('alias:alias-1', CHOICES)).toBe('alias-1')
+    expect([aliasRecordedFor(CHOICES, 'alias-1', 'child-1'), aliasRecordedFor(CHOICES, 'alias-1', FAMILY), aliasRecordedFor(CHOICES, 'alias-1')]).toEqual([false, true, true])
+  })
 })
 
 describe('one id kind', () => {
@@ -162,8 +178,11 @@ describe('one id kind', () => {
     // A variation with no record of the main listing: none (never the family main product's record).
     expect(pageListingSelection(null, rows, 'child-2')).toBeUndefined()
     expect(pageListingSelection('alias-1', rows, 'child-1')).toBe('alias-1')
-    expect(pageListingSelection('alias-1', rows, 'child-2')).toBe('alias-1')
+    expect(pageListingSelection('alias-1', rows, FAMILY)).toBe('alias-1')
+    // N3: a variation with no record of the alias: none — never through the family main product's band.
+    expect(pageListingSelection('alias-1', rows, 'child-2')).toBeUndefined()
     expect(pageListingSelection('alias-2', rows, 'child-1')).toBeUndefined()
+    expect(pageListingSelection('alias-2', rows, FAMILY)).toBeUndefined()
   })
 
   it('a Publish destination names an alias by its alias id and the main listing by none', () => {

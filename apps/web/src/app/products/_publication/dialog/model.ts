@@ -58,6 +58,17 @@ export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify
  * studio's listing picker, the window, its tabs, the toolbar mark and the toast all say "Main listing".
  */
 export const MAIN_LISTING_LABEL = 'Main listing'
+
+/** The server's older names for the main listing: a review's or a run's `aliasLabel`, the Media pages' listing options. */
+const SERVER_MAIN_LISTING_NAMES: ReadonlySet<string> = new Set(['Primary listing', 'Primary'])
+
+/**
+ * A listing's name as the studio shows it: the server's "Primary listing" / "Primary" read "Main listing" (one word,
+ * review 2026-10-05, m3); every other name as it is. DISPLAY ONLY — never a value sent to the server or matched on import.
+ */
+export function listingDisplayLabel(label: string): string {
+  return SERVER_MAIN_LISTING_NAMES.has(label.trim()) ? MAIN_LISTING_LABEL : label
+}
 /** A listing the window was asked for (a retry) that is neither the main listing nor a known alias. */
 export const SELECTED_LISTING_LABEL = 'Selected listing'
 
