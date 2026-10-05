@@ -85,8 +85,16 @@ async function readNow(productId: string, scope: LiveReadScope): Promise<ServerL
       },
     })
   }
+  if (scope.channel === 'ETSY') {
+    // One Etsy listing per family here: the main row's listing id, else any row's. Expected SKUs: the listed children, or the single product.
+    const listingId = listings.find(l => l.productId === parent.id)?.externalListingId ?? listings.find(l => l.externalListingId)?.externalListingId
+    if (!listingId) return notReadable(destination, 'This listing is not on Etsy yet.')
+    if (unclear) return notReadable(destination, unclear.sentence)
+    const { etsyListingReads, readEtsyServerLive } = await import('./etsy.js')
+    return readEtsyServerLive({ ...destination, expectedSkus: (children.length ? children : [parent]).map(skuOf), listingId }, etsyListingReads(d.accountId))
+  }
   return notReadable(destination, scope.channel === 'SHOPIFY' ? 'Reading live from Shopify comes with the Shopify publish step (P4.2).'
-    : scope.channel === 'ETSY' ? 'Reading live from Etsy comes with the Etsy publish step (P5.1).' : `Reading live from ${scope.channel} is not available.`)
+    : `Reading live from ${scope.channel} is not available.`)
 }
 
 /** Server side (publish review): the read with its raw provider documents. */

@@ -208,6 +208,8 @@ describe('what a publish sends', () => {
     expect(['fulfillment_availability', 'purchasable_offer', 'list_price', 'quantity'].map(groupOf)).toEqual(['never', 'never', 'never', 'never'])
     expect(['pictures', 'Pictures', 'main_product_image_locator', 'title', 'item_name:["A1","it_IT"]', 'bullet_point:["A1","it_IT"]', 'aspect:Brand'].map(groupOf))
       .toEqual(['photos', 'photos', 'photos', 'title', 'title', 'bullets', 'attributes'])
+    // Etsy's tags are its search keywords (E1); its other listing fields are attributes.
+    expect(['tags', 'materials', 'classification'].map(groupOf)).toEqual(['keywords', 'attributes', 'attributes'])
     const review = { action: 'update', issues: [], rows: [], mode: 'live', changes: planPublicationChanges([
       change('p', 'TEST-SKU', 'title', 'New', 'Old', 'Old'),
       change('p', 'TEST-SKU', 'fulfillment_availability', [{ quantity: 2 }], [{ quantity: 1 }], [{ quantity: 1 }]),

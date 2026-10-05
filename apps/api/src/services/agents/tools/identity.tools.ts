@@ -239,8 +239,9 @@ const channelIdentityCheck: AgentTool = {
   openWorld: true,
   description:
     `Read one family's listings LIVE from the channel (up to ${CHECK_COORDINATES} listings a call) and say, per listing: held (the `
-    + 'account holds the item and it is live), ended, foreign (another seller lists it — eBay compares the seller with '
-    + 'the account), unverifiable (the account has no recorded seller), or not-readable (and why: no account, no channel '
+    + 'account holds the item and it is live), ended (not live; for Etsy a draft, inactive, sold-out, expired or removed '
+    + 'listing, with Etsy\'s state), foreign (another seller lists it — eBay compares the seller with the account, Etsy '
+    + 'the shop), unverifiable (the account has no recorded seller), or not-readable (and why: no account, no channel '
     + 'id yet, or a channel whose live read is not built). Also the SKUs missing on the channel or there but not in Nexus. '
     + 'Nothing is changed. Limited per business per hour; a read from the last 30 seconds is reused.',
   async handler(args) {

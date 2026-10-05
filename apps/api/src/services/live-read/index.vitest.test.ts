@@ -1,7 +1,7 @@
 /** Read live — reader choice, the 30-second window, shared in-flight reads, raw kept server-side (all stubbed). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const s = vi.hoisted(() => ({ listings: [] as any[], inventory: vi.fn(), trading: vi.fn(), amazon: vi.fn() }))
+const s = vi.hoisted(() => ({ listings: [] as any[], inventory: vi.fn(), trading: vi.fn(), amazon: vi.fn(), etsy: vi.fn(), etsyReads: vi.fn(() => ({ etsyReads: true })) }))
 vi.mock('../../db.js', () => ({ default: {
   product: { findMany: async () => [{ id: 'family', sku: 'FAM', parentId: null }, { id: 'm', sku: 'FAM-M', parentId: 'family' }, { id: 'l', sku: 'FAM-L', parentId: 'family' }] },
   channelListing: { findMany: async () => s.listings },
@@ -15,16 +15,19 @@ vi.mock('../pim/studio-publication-ebay-inventory.js', () => ({ ebayInventoryRea
 vi.mock('./ebay-inventory.js', () => ({ readEbayInventoryListing: s.inventory }))
 vi.mock('./ebay-trading.js', () => ({ readEbayTradingListing: s.trading }))
 vi.mock('./amazon.js', () => ({ readAmazonListing: s.amazon }))
+vi.mock('./etsy.js', () => ({ readEtsyServerLive: s.etsy, etsyListingReads: s.etsyReads }))
 
 import { publicLiveRead, readLiveListing, resetLiveReadWindow } from './index.js'
 
 const read = (source: string) => ({ readAt: 'now', source, destination: {}, revision: 'r', content: {}, variations: null, errors: [], raw: { secret: true } })
 const ebay = { channel: 'EBAY', marketplace: 'IT', accountId: 'account' }
+const etsy = { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'account' }
 const row = (productId: string, extra: object = {}) => ({ productId, externalListingId: '9000000003', platformAttributes: {}, offers: [], ...extra })
 
 beforeEach(() => {
   resetLiveReadWindow(); vi.clearAllMocks()
   s.inventory.mockResolvedValue(read('ebay-inventory-group')); s.trading.mockResolvedValue(read('ebay-trading-item')); s.amazon.mockResolvedValue(read('amazon-listings-item'))
+  s.etsy.mockResolvedValue(read('etsy-listing'))
   s.listings = [row('family'), row('m'), row('l')]
 })
 
@@ -72,6 +75,24 @@ describe('readLiveListing', () => {
     const shopify = await readLiveListing('family', { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'store' })
     expect(shopify).toMatchObject({ revision: null, content: {}, errors: [{ scope: 'item', reason: 'Reading live from Shopify comes with the Shopify publish step (P4.2).' }] })
     expect(s.trading).not.toHaveBeenCalled()
+  })
+
+  it('an Etsy listing is read by its listing id, under the listed children\'s SKUs (the single product\'s SKU without children)', async () => {
+    await readLiveListing('family', etsy)
+    expect(s.etsyReads).toHaveBeenCalledWith('account')
+    expect(s.etsy).toHaveBeenCalledWith(expect.objectContaining({ channel: 'ETSY', listingId: '9000000003', expectedSkus: ['FAM-M', 'FAM-L'] }), { etsyReads: true })
+    resetLiveReadWindow()
+    s.listings = [row('family')]
+    await readLiveListing('family', etsy)
+    expect(s.etsy).toHaveBeenLastCalledWith(expect.objectContaining({ listingId: '9000000003', expectedSkus: ['FAM'] }), expect.anything())
+  })
+
+  it('nothing on Etsy yet: an honest "could not read", no Etsy call', async () => {
+    s.listings = [row('family', { externalListingId: null }), row('m', { externalListingId: null })]
+    const result = await readLiveListing('family', etsy)
+    expect(result).toMatchObject({ source: 'etsy-listing', revision: null, content: {}, errors: [{ scope: 'item', reason: 'This listing is not on Etsy yet.' }] })
+    expect(s.etsy).not.toHaveBeenCalled()
+    expect(s.etsyReads).not.toHaveBeenCalled()
   })
 
   it('Amazon uses the configured marketplace, language and the single active offer SKU as the seller SKU', async () => {

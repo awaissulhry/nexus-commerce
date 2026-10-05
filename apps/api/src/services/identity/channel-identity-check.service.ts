@@ -4,10 +4,12 @@
  * account hold the item, is it still live, which seller lists it, and which SKUs are missing or extra.
  *
  * A read, never a write. It spends the channel's rate budget, so the tool limits it per business per hour; a listing
- * with no account, or on a channel whose live read is not built yet (Shopify, Etsy), says so instead of guessing.
+ * with no account, or on a channel whose live read is not built yet (Shopify), says so instead of guessing. Etsy: only
+ * an `active` listing is live (each other Etsy state says what it means), and another shop's listing is foreign.
  */
 import prisma from '../../db.js'
 import { accountSellerFor, accountSellerNames, checkSellerOwnership, parseListingStatus, parseSellerUserId } from '../ebay-itemid-relink.pure.js'
+import type { EtsyServerRaw } from '../live-read/etsy.js'
 
 /** At most this many coordinates (channel, market, account, extra listing) are read in one call. */
 export const CHECK_COORDINATES = 5
@@ -36,6 +38,18 @@ const PLAIN: Record<IdentityVerdict, string> = {
   unverifiable: 'The item was read, but it cannot be proven which seller lists it.',
   'not-readable': 'The item could not be read live.',
 }
+
+/**
+ * Etsy's listing states (ShopListing.state) other than `active`, which alone is live. Each says what it means for a
+ * buyer; the verdict is `ended` (not live), as for an eBay item whose status is not Active, and Etsy's word is quoted.
+ */
+const ETSY_NOT_LIVE = new Map<string, string>([
+  ['draft', 'The account holds this listing as an Etsy draft: it has not been live yet.'],
+  ['inactive', 'The account holds this listing, but it is deactivated on Etsy: buyers cannot buy it.'],
+  ['sold_out', 'The account holds this listing, but it is sold out on Etsy: buyers cannot buy it until it has stock and is renewed.'],
+  ['expired', 'The listing expired on Etsy (its listing period ended without a renewal): buyers cannot buy it.'],
+  ['removed', 'Etsy removed this listing: buyers cannot see it.'],
+])
 
 export async function checkFamilyIdentity(productId: string, filters: { channel?: string; market?: string } = {}) {
   const asked = await prisma.product.findFirst({ where: { id: productId, deletedAt: null }, select: { id: true, parentId: true } })
@@ -91,6 +105,12 @@ export async function checkFamilyIdentity(productId: string, filters: { channel?
     const variants = read.variations?.variants ?? []
     const skus = { live: variants.filter((v) => v.state === 'live').length, missing: variants.filter((v) => v.state === 'missing').map((v) => v.sku).slice(0, 20), extra: variants.filter((v) => v.state === 'extra').map((v) => v.sku).slice(0, 20) }
     const timing = { readAt: read.readAt, cached: read.cached }
+    // Etsy: the reader refuses another shop's listing (an item error, nothing of it used); here that is a verdict, foreign.
+    const etsy = c.channel === 'ETSY' ? read.raw as EtsyServerRaw | null : null
+    if (etsy?.ownShop === false) {
+      checks.push({ ...base, verdict: 'foreign', reason: PLAIN.foreign, ...timing })
+      continue
+    }
     if (itemError) {
       checks.push({ ...base, verdict: 'not-readable', reason: itemError.reason, ...timing })
       continue
@@ -104,6 +124,14 @@ export async function checkFamilyIdentity(productId: string, filters: { channel?
       const verdict: IdentityVerdict = status && status.toLowerCase() !== 'active' ? 'ended'
         : owner.verdict === 'rejected' ? 'foreign' : owner.verdict === 'unverifiable' ? 'unverifiable' : 'held'
       checks.push({ ...base, verdict, reason: verdict === 'held' ? PLAIN.held : verdict === 'ended' ? `${PLAIN.ended} eBay says "${status}".` : owner.reason, status, seller, skus, ...timing })
+      continue
+    }
+    if (c.channel === 'ETSY') {
+      const status = etsy?.state ?? null
+      const verdict: IdentityVerdict = !status ? 'not-readable' : status !== 'active' ? 'ended' : etsy?.ownShop === true ? 'held' : 'unverifiable'
+      const reason = verdict === 'held' ? PLAIN.held : verdict === 'ended' ? `${ETSY_NOT_LIVE.get(status!) ?? PLAIN.ended} Etsy says "${status}".`
+        : verdict === 'unverifiable' ? `${PLAIN.unverifiable} Etsy did not say which shop holds this listing.` : 'Etsy did not say whether this listing is live.'
+      checks.push({ ...base, verdict, reason, status, skus, ...timing })
       continue
     }
     checks.push({ ...base, verdict: 'held', reason: PLAIN.held, skus, ...timing })

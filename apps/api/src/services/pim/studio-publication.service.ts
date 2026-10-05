@@ -8,6 +8,7 @@ import { workspaceIdForQuery } from '@nexus/database/workspace-context'
 import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
+import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object, type PublicationFacts } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { ensureDraftListings } from './draft-listing.service.js'
@@ -16,6 +17,10 @@ import { withSendQuantities } from './studio-publication-amazon-offer.js'
 import { prepareEbayPublication, sendEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
 import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
 import { ebayInventoryReads, sendEbayInventoryGroup } from './studio-publication-ebay-inventory.js'
+import { prepareEtsyPublication } from './studio-publication-etsy.js'
+import { prepareEtsyChanges } from './studio-publication-etsy-changes.js'
+import type { EtsyPublication } from './studio-publication-etsy-types.js'
+import { etsyShopLabel } from '../etsy/shop-label.js'
 import { readPublicationOverwrite } from './studio-publication-overwrite.js'
 import { recordPublicationRequests, settlePublicationRecords } from './studio-publication-records.js'
 import { PUBLICATION_KIND as KIND, IN_FLIGHT, OPEN_PUBLICATION, json, publicationSummary, recordContext, storeResult, reconcileEbayReceipt,
@@ -26,8 +31,10 @@ import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
-  SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted } from '@nexus/shared/publish-actions'
-import { deletedOn, deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
+  SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted,
+  ETSY_SEND_NOT_YET, ETSY_REVIEW_ONLY, ETSY_REVIEW_SENDS_NOTHING } from '@nexus/shared/publish-actions'
+import { deletedOn, deletedPublishSkip, etsyCreateState, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_VARIATION_CANNOT_HIDE, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus,
+  type ListingDeletion } from '@nexus/shared/listing-actions'
 import type { StudioPublishSkuMove } from '@nexus/shared/studio-publication'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
@@ -36,8 +43,9 @@ import type { PublishCreateRow, StartAsTarget } from '@nexus/shared/publish-plan
 import { verifyNewEbayListing } from './studio-publication-ebay-verify.js'
 import { readFbaUnits } from '../listings/listing-deletions.js'
 
-const publishMode = (channel: string) => channel === 'AMAZON' ? getAmazonPublishMode() : channel === 'EBAY' ? getEbayPublishMode() : channel === 'SHOPIFY' ? getShopifyPublishMode() : 'unavailable'
-type Prepared = AmazonPublication | EbayPublication | EbayInventoryPublication | EbayInventorySend | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
+const publishMode = (channel: string) => channel === 'AMAZON' ? getAmazonPublishMode() : channel === 'EBAY' ? getEbayPublishMode() : channel === 'SHOPIFY' ? getShopifyPublishMode()
+  : channel === 'ETSY' ? getEtsyPublishMode() : 'unavailable'
+type Prepared = AmazonPublication | EbayPublication | EbayInventoryPublication | EbayInventorySend | EtsyPublication | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
 
 // Sheet publish parity (step 1) — the result counts; they live with the settle core now (step 2).
 export { publicationSummary }
@@ -89,7 +97,7 @@ function sendModes(facts: PublicationFacts, requested: readonly string[] | undef
 /**
  * New listings (Owner 2026-10-04) — what this review does with the rows it would CREATE: every row not on the channel,
  * those Nexus deleted included (simplify: a deleted row is a row not on the channel, default Not listed):
- *  - `held`: a main row whose Status is Not listed holds its family here (eBay and Shopify: the whole listing; Amazon: the
+ *  - `held`: a main row whose Status is Not listed holds its family here (eBay, Shopify and Etsy: the whole listing; Amazon: the
  *    main row and every row not on the channel — they need their main product); a standalone product set Not listed is
  *    held too, and so is a deleted row left Not listed. Nothing of a held row is sent and its create is never ticked
  *    (`blocked` says why: a deleted row in the delete's own words). A new variation set Not listed is not in this review at
@@ -97,8 +105,12 @@ function sendModes(facts: PublicationFacts, requested: readonly string[] | undef
  *  - `relist`: the deleted rows this review lists again (their Status is Active or Inactive): created whole, ticked.
  *  - `inactive`: Amazon and eBay rows created Inactive (never a family's main row: it has no offer or stock of its own) —
  *    Amazon without this market's offer, eBay at quantity 0; the settle step marks them paused once the channel accepts.
+ *  - `etsyHidden`: Etsy — new variations of a listing already on Etsy whose Status is Inactive (stored, or "New listings
+ *    start as"): one Etsy variation cannot be hidden, so the review refuses them by name (`ETSY_VARIATION_CANNOT_HIDE`).
  *  - `startsAs`: every created row and how it starts ("Creates GALE-M (inactive)").
  *  - `createStatus`: Shopify — the new product's status, from the main row's choice (Active → ACTIVE, Inactive → DRAFT).
+ *  - `etsyCreateState`: Etsy — how a listing not on Etsy yet starts, from the main row's choice (Inactive → an Etsy draft;
+ *    Active is refused until Nexus sends photos). Null once the listing is on Etsy.
  *  - `choiceIds`: rows whose own stored choice the settle clears once the channel accepted them.
  * `startAs` (the products list's "New listings start as", ND4 B) replaces every row's Active / Inactive, never a Not listed.
  */
@@ -114,15 +126,17 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
     if (!choice) return null
     return startAs && choice.target !== 'not_listed' ? startAs : choice.target
   }
-  // Shopify creates (or lists again) the whole product: its main row's choice decides for every variant.
-  const effective = (productId: string) => scope.channel === 'SHOPIFY' ? targetOf(parent.id) : targetOf(productId)
+  // Shopify, and Etsy while its listing is not on Etsy yet, create (or list again) the whole listing: its main row's choice
+  // decides for every variant. A new variation of a listing already on Etsy has its own choice.
+  const etsyListed = scope.channel === 'ETSY' && facts.listings.some(listing => listing.externalListingId)
+  const effective = (productId: string) => scope.channel === 'SHOPIFY' || (scope.channel === 'ETSY' && !etsyListed) ? targetOf(parent.id) : targetOf(productId)
   // A deleted row says why in the delete's own words ("Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active.").
   const heldWords = (productId: string, reason: string) => deletions.has(productId) ? deletedPublishSkip(deletions.get(productId)!) : reason
   const family = products.length > 1 || products.some(product => product.id !== parent.id)
   const held = new Map<string, string>()
   if (isNew(parent.id) && products.some(product => product.id === parent.id) && targetOf(parent.id) === 'not_listed') {
     const reason = family ? NOT_LISTED_MAIN_HELD : NOT_LISTED_LEFT_OUT
-    for (const product of products) if (scope.channel === 'EBAY' || scope.channel === 'SHOPIFY' || product.id === parent.id || isNew(product.id)) held.set(product.id, heldWords(product.id, reason))
+    for (const product of products) if (scope.channel === 'EBAY' || scope.channel === 'SHOPIFY' || scope.channel === 'ETSY' || product.id === parent.id || isNew(product.id)) held.set(product.id, heldWords(product.id, reason))
   }
   // A deleted row left Not listed sends nothing (every Publish skips it until its Status lists it again).
   for (const product of products) if (!held.has(product.id) && deletions.has(product.id) && effective(product.id) === 'not_listed') held.set(product.id, heldWords(product.id, NOT_LISTED_LEFT_OUT))
@@ -136,6 +150,7 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
     if (deletion && !held.has(product.id) && (target === 'active' || target === 'inactive')) relist.set(product.id, deletion)
   }
   const inactive = new Set<string>()
+  const etsyHidden: string[] = []
   const startsAs: PublishCreateRow[] = []
   const choiceIds: string[] = []
   for (const product of products) {
@@ -146,11 +161,14 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
     if (choices.get(product.id)?.own) choiceIds.push(product.id)
     const familyMain = family && product.id === parent.id
     if (target === 'inactive' && !familyMain && (scope.channel === 'AMAZON' || scope.channel === 'EBAY')) inactive.add(product.id)
+    if (target === 'inactive' && etsyListed) etsyHidden.push(product.id)
   }
   const mainTarget = isNew(parent.id) && !held.has(parent.id) ? targetOf(parent.id) : null
   // Wave 2 D4 — the one rule the sheet's "Shopify status" cell and the Media tab read too (`shopifyCreateStatus`).
   const createStatus = scope.channel === 'SHOPIFY' ? shopifyCreateStatus(mainTarget) : null
-  return { held, relist, inactive, startsAs, createStatus, choiceIds, deleted: (productId: string) => deletions.has(productId) }
+  // E1 (Owner D1 = A) — the same rule for an Etsy listing not on Etsy yet (`etsyCreateState`): Inactive is an Etsy draft.
+  const etsyCreate = scope.channel === 'ETSY' && !etsyListed ? etsyCreateState(mainTarget) : null
+  return { held, relist, inactive, etsyHidden, startsAs, createStatus, etsyCreateState: etsyCreate, choiceIds, deleted: (productId: string) => deletions.has(productId) }
 }
 
 /** One row a review lists again, as the publication keeps it (S3 explains Amazon's refusal with it; the settle clears the choice). */
@@ -211,7 +229,12 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
         return { productId: product.id, sku: variants[0]?.sku ?? product.sku }
       })
       prepared = { kind: 'shopify', revision: preview.revision, remoteRevision: preview.remoteRevision, initialized: preview.initialized, draft: preview.draft, products }
-    } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'ETSY' ? 'Etsy' : scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
+    } else if (scope.channel === 'ETSY') {
+      // E1 — every check and the whole change plan in every mode; Etsy itself is read only when sending to it is live.
+      prepared = await prepareEtsyPublication(facts, { createState: creates.etsyCreateState, ...inactiveOption,
+        readLive: async input => (await import('../live-read/etsy.js')).readEtsyLive(input) })
+      for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
+    } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
     if (prepared && prepared.kind !== 'shopify') {
       // An Inventory listing is reviewed and sent by its owner alone (`prepareEbayInventoryChanges` addresses every change
       // to it), so its baseline is the owner's. Judged against all included products, a family failed every review.
@@ -222,6 +245,7 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values, { ...(modes.full.size ? { fullProductIds: modes.full } : {}),
         ...(creates.relist.size ? { relist: new Map([...creates.relist].map(([productId, deletion]) => [productId, { deletedAt: deletion.at }])) } : {}) })
         : prepared.kind === 'ebay-inventory' ? prepareEbayInventoryChanges({ owner: prepared.owner, ours: prepared.ours, live: prepared.live, destination: prepared.destination, baselineValues: baseline.values })
+        : prepared.kind === 'etsy' ? prepareEtsyChanges(facts, prepared, baseline.values)
         : await prepareEbayChanges(facts, prepared as EbayPublication, baseline.values, modes.full.size ? { full: true } : {})
       if (changePlan.kind === 'amazon-changes') for (const product of changePlan.products) {
         if (product.newListing === false) existingProducts.add(product.productId)
@@ -240,7 +264,18 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   // Audit P1 — eBay's own check, only once Nexus's checks found nothing that blocks (else eBay would name the same gaps again).
   if (options.verify && prepared?.kind === 'ebay' && !prepared.itemId && mode === 'live' && !issues.some(issue => issue.severity === 'error'))
     issues.push(...await verifyNewEbayListing(prepared, scope.accountId))
-  if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
+  // E1 — an Etsy review shows exactly what Nexus would send, and says it sends nothing yet: live, a warning (the submit
+  // refuses); off live, its one error in place of the gate sentence (live sends nothing to Etsy either). A listing not on
+  // Etsy yet set Active is refused here (Etsy needs a photo to go live, and Nexus does not send photos yet), and so is a
+  // new variation of a listing on Etsy set Inactive (one Etsy variation cannot be hidden).
+  if (scope.channel === 'ETSY') {
+    issues.push(mode === 'live' ? { severity: 'warning', message: ETSY_REVIEW_ONLY } : { severity: 'error', message: ETSY_REVIEW_SENDS_NOTHING })
+    if (creates.etsyCreateState === 'active') issues.push({ severity: 'error', message: ETSY_NEW_ACTIVE_NEEDS_PHOTO })
+    for (const hidden of creates.etsyHidden) {
+      const sku = facts.products.find(product => product.id === hidden)?.sku
+      issues.push({ productId: hidden, sku, severity: 'error', message: `${sku}: ${ETSY_VARIATION_CANNOT_HIDE}` })
+    }
+  } else if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
   // New listings — a Shopify product is one listing with no field ticks: held by Not listed (a deleted product left Not
   // listed included), nothing of it is sent.
   if (scope.channel === 'SHOPIFY' && creates.held.size) issues.push({ severity: 'error', message: [...creates.held.values()][0] })
@@ -261,7 +296,7 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   const overwrite = await readPublicationOverwrite(facts)
   const removals = changePlan && changePlan.kind !== 'ebay-inventory-changes' ? changePlan.removals : undefined
   const review: StudioPublishReview = {
-    id: null, productId, scope, accountLabel: facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
+    id: null, productId, scope, accountLabel: scope.channel === 'ETSY' ? etsyShopLabel(facts.account) : facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
     action: existingProducts.size ? 'update' : 'create', excluded: facts.excluded,
     changes: changePlan?.changes, skipped: facts.skipped,
     rows: facts.products.map(p => ({ productId: p.id, sku: p.sku,
@@ -283,8 +318,10 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   return { facts, review, prepared, changePlan, relist: relist.kept, creates: createsRecord(creates, prepared),
     // New listings — only a review that holds, creates Inactive or starts rows a certain way adds them (others keep their digest).
     revision: publicationDigest([facts.revision, changePlan ?? prepared, baselineRevision, mode, overwrite, [...creates.held.keys()].filter(creates.deleted).sort(), relist.kept,
-      ...(creates.held.size || creates.inactive.size || creates.startsAs.length || creates.createStatus || options.startAs
-        ? [[...creates.held.keys()].sort(), [...creates.inactive].sort(), creates.startsAs, creates.createStatus, options.startAs ?? null] : [])]) }
+      ...(creates.held.size || creates.inactive.size || creates.startsAs.length || creates.createStatus || creates.etsyCreateState || options.startAs
+        ? [[...creates.held.keys()].sort(), [...creates.inactive].sort(), creates.startsAs, creates.createStatus, options.startAs ?? null,
+          // Etsy only: how its new listing starts (the other channels keep their digest).
+          ...(creates.etsyCreateState ? [creates.etsyCreateState] : [])] : [])]) }
 }
 
 /**
@@ -613,9 +650,12 @@ export async function claimPublication(productId: string, id: string, body: unkn
   if (!operation || data.kind !== KIND || data.productId !== productId) throw new WorkspaceScopeError('Publication review not found.', 404)
   if (operation.status !== 'PREVIEW') return { result: await studioPublicationResult(productId, id, userId) }
   if (!operation.expiresAt || operation.expiresAt.getTime() <= Date.now()) throw new WorkspaceScopeError('This publication review expired. Review the current saved values again.')
+  // E1 — an Etsy review is complete (its change plan and exact request), but nothing is sent to Etsy yet: refused before
+  // any rebuild, claim, draft, journal or event, so the review stays PREVIEW.
+  if (data.scope?.channel === 'ETSY') throw new WorkspaceScopeError(`${ETSY_SEND_NOT_YET} Nothing was sent.`, 422)
   const originalChanges = json(operation.changes)
   const input = object(body)
-  const sparse = ['AMAZON', 'EBAY'].includes(data.scope?.channel)
+  const sparse = ['AMAZON', 'EBAY', 'ETSY'].includes(data.scope?.channel)
   if (sparse && (data.changeVersion !== 1 || !data.changePlan)) throw new WorkspaceScopeError('Refresh this review to choose the fields to publish.')
   if (sparse && (typeof input.selectionToken !== 'string' || input.selectionToken !== data.selection?.token))
     throw new WorkspaceScopeError('Review the exact selected changes before publishing. This selection token is missing or stale.', 400)
@@ -746,6 +786,9 @@ export async function deliverPublication(claim: ClaimedPublication): Promise<Del
         })
       result = { id, status: 'VERIFIED', message: `Shopify verified the saved product and variants. Visibility: ${plan.review.visibility}.`, results: shopify.products.map(r => ({ sku: r.sku, status: 'VERIFIED', message: 'Verified by Shopify', reference: sent.productId })) }
       receipt = result
+    } else if (plan.prepared.kind === 'etsy') {
+      // E1 — the claim refuses Etsy first; should one get here, nothing is started, journalled or sent.
+      throw Object.assign(new Error(ETSY_SEND_NOT_YET), { notSent: true })
     } else {
       // Creation stores a correctly attributed draft. Only provider results can establish publication.
       await ensureDrafts()

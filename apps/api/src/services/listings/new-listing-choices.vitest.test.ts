@@ -47,4 +47,15 @@ describe('newListingChoices', () => {
     expect(newListingChoices({ channel: 'SHOPIFY', aliasKey: '', familyId: 'main', products: [products[0]], listings: [draft('main')] }).get('main')!.target).toBe('inactive')
     expect(newListingChoices({ channel: 'SHOPIFY', aliasKey: '', familyId: 'main', products: [products[0]], listings: [draft('main')], shopifyActive: true }).get('main')!.target).toBe('active')
   })
+  it('Etsy: a new listing starts as a draft (Inactive); a new variation of a listing already on Etsy joins it for sale (Active)', () => {
+    const fresh = newListingChoices({ channel: 'ETSY', aliasKey: '', familyId: 'main', products, listings: [draft('main'), draft('s'), draft('m')] })
+    expect([...fresh.values()].map(c => [c.productId, c.target, c.source, c.defaultTarget])).toEqual([
+      ['main', 'inactive', 'default', 'inactive'], ['s', 'inactive', 'default', 'inactive'], ['m', 'inactive', 'default', 'inactive']])
+    const live = { externalListingId: '9000000001', listingStatus: 'ACTIVE', isPublished: true }
+    const listed = newListingChoices({ channel: 'ETSY', aliasKey: '', familyId: 'main', products, listings: [draft('main', live), draft('s', live), draft('m')] })
+    expect([...listed.values()].map(c => [c.productId, c.target, c.source, c.defaultTarget])).toEqual([['m', 'active', 'default', 'active']])
+    // Its own choice still wins (Not listed leaves it out).
+    expect(newListingChoices({ channel: 'ETSY', aliasKey: '', familyId: 'main', products, listings: [draft('main', live), draft('s', live), draft('m', { sellingTarget: 'NOT_LISTED' })] })
+      .get('m')).toMatchObject({ target: 'not_listed', source: 'own', defaultTarget: 'active' })
+  })
 })

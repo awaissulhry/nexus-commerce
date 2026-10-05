@@ -5,8 +5,9 @@
  *   - the row's own Status choice: `sellingTarget` ACTIVE / INACTIVE / NOT_LISTED on a row not on the channel;
  *   - else, for a variation, the main row's choice (while the main row is not on the channel either);
  *   - else today's default (ND2 A, `newListingDefault`): Amazon and eBay Active, Shopify Inactive (a Draft product)
- *     unless the family's own Shopify status is ACTIVE; a variation Publish would leave out today (no listing here, or
- *     left out of the listing in Information) reads Not listed.
+ *     unless the family's own Shopify status is ACTIVE, Etsy Inactive (an Etsy draft, Owner D1 2026-10-05) but Active for
+ *     a new variation of a listing already on Etsy; a variation Publish would leave out today (no listing here, or left
+ *     out of the listing in Information) reads Not listed.
  *
  * A row Nexus deleted (Owner 2026-10-04, simplify) is such a row too: its default is Not listed (every Publish skips it),
  * and its own choice Active or Inactive lists it again (whole) on the next Publish. An older relist choice stored the
@@ -102,6 +103,8 @@ export function newListingChoices(input: NewListingChoicesInput): Map<string, Ne
   // Audit P4 (readPublicationFacts) — an eBay family never started here publishes all its variations.
   const ebayUnstarted = channel === 'EBAY' && input.aliasKey === '' && input.products.length > 1
     && !input.listings.some(listing => listing.externalListingId) && !input.listings.some(listing => listing.productId !== input.familyId)
+  // Etsy (one listing per family): a row of the listing on the channel makes every new row a new variation of it.
+  const listingOnChannel = input.listings.some(listing => !!listing.externalListingId)
   const mainListing = listingOf.get(input.familyId)
   const main = notOnChannel(mainListing) ? ownChoice(mainListing, deletionOf(mainListing)) : null
   for (const product of input.products) {
@@ -114,10 +117,10 @@ export function newListingChoices(input: NewListingChoicesInput): Map<string, Ne
     const own = ownChoice(listing, deletion)
     // An unlinked row reads Not listed whatever its main row chose: Publish leaves it out (`deletedPublishSkip` says why).
     const choice = deletion?.unlinked ? { target: 'not_listed' as const, source: 'default' as const }
-      : newListingChoice({ channel, own, main, isVariation, includedByDefault, shopifyActive: input.shopifyActive, deleted: !!deletion })
+      : newListingChoice({ channel, own, main, isVariation, includedByDefault, shopifyActive: input.shopifyActive, listingOnChannel, deleted: !!deletion })
     out.set(product.id, {
       productId: product.id, listingId: listing?.id ?? null, target: choice.target, source: choice.source, own,
-      defaultTarget: includedByDefault && !deletion ? newListingDefault(channel, { shopifyActive: input.shopifyActive }) : 'not_listed',
+      defaultTarget: includedByDefault && !deletion ? newListingDefault(channel, { shopifyActive: input.shopifyActive, listingOnChannel }) : 'not_listed',
       includedByDefault, noRecord: !listing, isVariation, deleted: deletion,
     })
   }

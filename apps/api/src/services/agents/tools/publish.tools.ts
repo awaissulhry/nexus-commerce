@@ -22,8 +22,10 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { blockingIssues, isPhotoChangeId, PUBLICATION_PHOTO_FIELDS, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
+import { ETSY_SEND_NOT_YET } from '@nexus/shared/publish-actions'
 import prisma from '../../../db.js'
 import { connectionLabel } from '../../connection-label.js'
+import { etsyShopLabel } from '../../etsy/shop-label.js'
 import { isOwnConnection } from '../../connection-resolver.service.js'
 import { AMAZON_EU_SHARED_MARKETS } from '../../amazon-eu-quantity-guard.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
@@ -63,14 +65,15 @@ function personError(error: unknown): string | null {
 
 type Account = { id: string; channelType: string; isActive: boolean; label: string }
 
-/** This business's own accounts on one channel. */
+/** This business's own accounts on one channel. An Etsy account is named by its shop: its displayName is the login name. */
 async function accountsOn(channel: string): Promise<Account[]> {
   const rows = await prisma.channelConnection.findMany({
     where: { channelType: channel },
-    select: { id: true, channelType: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true, externalAccountId: true, isActive: true, isPrimary: true, workspaceId: true, sortOrder: true },
+    select: { id: true, channelType: true, accountLabel: true, ebayStoreName: true, displayName: true, ebaySignInName: true, externalAccountId: true, isActive: true, isPrimary: true, workspaceId: true, sortOrder: true, identity: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
   })
-  return rows.filter(isOwnConnection).map((row) => ({ id: row.id, channelType: row.channelType, isActive: row.isActive, label: connectionLabel(row).label }))
+  return rows.filter(isOwnConnection).map((row) => ({ id: row.id, channelType: row.channelType, isActive: row.isActive,
+    label: row.channelType === 'ETSY' ? etsyShopLabel(row) : connectionLabel(row).label }))
 }
 
 /**
@@ -110,13 +113,16 @@ function trimmedReview(review: StudioPublishReview) {
   const rank: Record<string, number> = { SEND: 0, DIFFERS: 1, CANNOT_COMPARE: 2, SAME: 3 }
   const shownChanges = [...changes].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9)).slice(0, CHANGE_CAP)
   const issues = [...review.issues].sort((a, b) => Number(a.severity !== 'error') - Number(b.severity !== 'error')).slice(0, ISSUE_CAP)
+  // E1 — Nexus sends nothing to Etsy yet (publish-listing refuses it): an Etsy review is never ready, and says why.
+  const notSendable = review.scope.channel === 'ETSY' ? ETSY_SEND_NOT_YET : null
   return {
     mode: review.mode,
     action: review.action,
     accountLabel: review.accountLabel,
     aliasLabel: review.aliasLabel,
     // Ready: nothing blocks it. Only photos may be sent when every problem names a field other than the photos.
-    ready: errors.length === 0,
+    ready: errors.length === 0 && !notSendable,
+    ...(notSendable ? { notReadyBecause: notSendable } : {}),
     ...(review.photosOnly ? { photosOnly: true } : {}),
     ...(review.previousPublicationId ? { previousPublicationId: review.previousPublicationId } : {}),
     issueCounts: { errors: errors.length, warnings: review.issues.length - errors.length },
@@ -292,7 +298,7 @@ const NEVER_SENT = 'A re-publish never sends stock, price or fulfilment: set-lis
 const SENT_IN_CREATE = 'Sent inside the new listing: a first publish creates it with its price, quantity and (Amazon) fulfilment. '
   + 'After that, set-listing-stock and set-listing-price change them.'
 
-/** The group of one reviewed field (Amazon roots and content coordinates, eBay Trading and Inventory fields). */
+/** The group of one reviewed field (Amazon roots and content coordinates, eBay Trading and Inventory fields, Etsy listing fields). */
 export function groupOf(field: string): Group {
   if (field === '$create' || field === '__create__') return 'create'
   if (/quantity|fulfil|purchasable_offer|price/i.test(field)) return 'never'
@@ -301,7 +307,7 @@ export function groupOf(field: string): Group {
   if (root === 'item_name' || field === 'title') return 'title'
   if (root === 'product_description' || field === 'description') return 'description'
   if (root === 'bullet_point') return 'bullets'
-  if (root === 'generic_keyword') return 'keywords'
+  if (root === 'generic_keyword' || field === 'tags') return 'keywords'
   return 'attributes'
 }
 

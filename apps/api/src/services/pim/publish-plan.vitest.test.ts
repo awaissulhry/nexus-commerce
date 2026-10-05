@@ -25,7 +25,7 @@ import { deletedPublishSkip, deletedShort, deletedStatusReason, NOT_LISTED_LEFT_
 import { ROLE_CANNOT_END_OR_DELETE, publishPlanCounts, type PublishPlan } from '@nexus/shared/publish-plan'
 import type { StudioPublishChange, StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
 import { readPublishActions, writePublishActions, type PublishActionActor } from '../listings/publish-action.service.js'
-import { afterContentSettled, heldContent, parsePlanRowId, planRowId, reviewPublishPlan, settleLifecycleValues } from './publish-plan.js'
+import { afterContentSettled, heldContent, notListedHeld, parsePlanRowId, planRowId, reviewPublishPlan, settleLifecycleValues } from './publish-plan.js'
 import { createPublicationBatch, readPublicationBatch } from './publication-batch.service.js'
 import { LIFECYCLE_KIND } from './publication-batch.processor.js'
 
@@ -210,6 +210,12 @@ describe('heldContent (pure)', () => {
     expect(heldContent('EBAY', 'root', [{ productId: 'root', action: 'relist' }], products).map(r => r.productId)).toEqual(['root', 's', 'm'])
     expect(heldContent('SHOPIFY', 'root', [{ productId: 's', action: 'pause' }, { productId: 'm', action: 'resume' }], products)).toEqual([])
     expect(heldContent('EBAY', 'root', [{ productId: 'root', action: 'end' }, { productId: 'root', action: 'delete' }], products)[0].reason).toBe(CONTENT_HELD_FOR_DELETE)
+  })
+  it('a main row left Not listed holds the whole family on eBay, Shopify and Etsy (one listing per family), only rows with a choice on Amazon', () => {
+    const cells = [{ productId: 'root', create: { target: 'not_listed', source: 'own' } }, { productId: 's', create: null }, { productId: 'm', create: null }] as never
+    for (const channel of ['EBAY', 'SHOPIFY', 'ETSY']) expect(notListedHeld(channel, 'root', cells, products).map(r => r.productId)).toEqual(['root', 's', 'm'])
+    expect(notListedHeld('AMAZON', 'root', cells, products).map(r => r.productId)).toEqual(['root'])
+    expect(notListedHeld('ETSY', 'root', cells, products)[1]).toMatchObject({ reason: NOT_LISTED_MAIN_HELD, notListed: true })
   })
   it('row ids pin the value: column, listing, when it was set and the action', () => {
     const at = '2026-10-04T10:00:00.000Z'
