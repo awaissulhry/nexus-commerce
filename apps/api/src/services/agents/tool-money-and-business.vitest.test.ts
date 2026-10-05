@@ -240,6 +240,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'shopify-content': (ids) => ({ product: ids.productId }),
   'set-shopify-content': (ids) => ({ product: ids.productId, fields: { vendor: 'A vendor' } }),
   'listing-live-content': (ids) => ({ product: ids.productId, channel: 'EBAY', market: 'IT' }),
+  // Phase 3 T3 — a category the business loaded on eBay IT (seeded per business): read from Nexus, no eBay call.
+  'ebay-categories': () => ({ market: 'IT', categoryId: '177104' }),
   'set-listing-content': (ids) => ({ product: ids.productId, coordinate: { channel: 'EBAY', market: 'IT' }, language: 'it', pin: { title: 'A better title' }, englishMeaning: { title: 'A better title' } }),
   // I2 — the identity checks of the business the call runs in.
   'identity-audit': () => ({}),
@@ -475,6 +477,14 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         // MCP full control P5 — one mapping rule, so channel-mappings has one to show.
         schemaMapping: { version: 1, fields: { title: { source: 'name', notes: `${mark} title rule` } } },
       } as never,
+    })
+    // Phase 3 T3 — the business's loaded details of one eBay IT category (what "Load eBay fields" stores): ebay-categories
+    // reads them without calling eBay, and business A must never read B's.
+    await db.categorySchema.create({
+      data: {
+        channel: 'EBAY', marketplace: 'IT', productType: '177104', schemaVersion: `${mark}-ebay-177104`, expiresAt: new Date(Date.now() + 86_400_000),
+        schemaDefinition: { aspects: [{ id: 'aspect_Brand', label: `${mark} Marca`, localizedName: `${mark} Marca`, englishName: 'Brand', options: [`${mark} brand`], enumMode: 'open', required: true, cardinality: 'SINGLE' }], conditions: [{ value: 'NEW', label: 'Nuovo' }] },
+      },
     })
     // L3 — an Etsy shop and its market, so publish-review reviews a destination without reading a channel.
     await db.marketplace.create({

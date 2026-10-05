@@ -62,6 +62,7 @@ import { LISTING_STOCK_TOOLS } from './tools/listing-stock.tools.js'
 import { LISTING_CLOSE_TOOLS } from './tools/listing-close.tools.js'
 import { PHOTO_TOOLS } from './tools/photos.tools.js'
 import { DATA_TRANSFER_TOOLS } from './tools/data-transfer.tools.js'
+import { EBAY_CATEGORY_TOOLS } from './tools/ebay-category.tools.js'
 
 export type {
   RiskTier,
@@ -168,6 +169,8 @@ const ALL: AgentTool[] = [
   ...PHOTO_TOOLS,
   // MCP full control (09 §4, P-3) — catalog rows into the conversation, money filtered. The import half (P9) is on hold.
   ...DATA_TRANSFER_TOOLS,
+  // MCP phase 3 T3 — find an eBay category and read its item specifics and conditions (cached, else live, never stored).
+  ...EBAY_CATEGORY_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 

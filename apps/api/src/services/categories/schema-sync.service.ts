@@ -21,12 +21,11 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { PrismaClient } from '@prisma/client'
 import { createHash } from 'node:crypto'
-import { toInventoryCondition } from '../ebay-condition.js'
+import { ebayCategoryDefinition } from './ebay-category-definition.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import { amazonMarketplaceId, amazonLocale, amazonEnglishLocale } from './marketplace-ids.js'
 import { extractEnumLabels } from './enum-labels.js'
 import { downloadAmazonSchema, schemaFingerprint } from './schema-document.js'
-import { optionModeFrom } from '@nexus/shared/attributes'
 import type { ChannelSpec } from '../pim/channel-specs/types.js'
 import { diffChannelSpecs, READINESS_CHANGES } from '../pim/channel-specs/spec-diff.js'
 import { ebaySpecFromCache } from '../pim/channel-specs/ebay.js'
@@ -265,20 +264,8 @@ export class CategorySchemaService {
       ebay.getCategoryAspectsRich(query.productType, marketplace, { forceRefresh: true, throwOnError: true }),
       ebay.getItemConditionPolicies(query.productType, marketplace, { forceRefresh: true, throwOnError: true }),
     ])
-    const definition = {
-      aspects: aspects.map(a => ({
-        id: `aspect_${a.englishName ?? a.name}`, label: a.name, localizedName: a.name,
-        englishName: a.englishName, dataType: a.dataType,
-        kind: a.values.length ? 'enum' : a.dataType === 'NUMBER' ? 'number' : a.dataType === 'DATE' ? 'date' : 'text',
-        options: a.values, enumMode: optionModeFrom(a.mode) ?? 'open',
-        required: a.required, recommended: a.usage === 'RECOMMENDED',
-        cardinality: a.cardinality, variantEligible: a.variantEligible, maxLength: a.maxLength,
-        // W3-5 — eBay's approximate "required from" date, stored only when eBay sends one: an aspect without it keeps
-        // the old JSON, so the schema hash (and its change log / readiness rebuild) does not move for those categories.
-        ...(a.expectedRequiredByDate ? { expectedRequiredByDate: a.expectedRequiredByDate } : {}),
-      })),
-      conditions: conditions.map(c => ({ value: toInventoryCondition(c.conditionId), label: c.conditionDescription })),
-    }
+    // The one builder of this shape: the ebay-categories tool shows the same definition for a category not loaded yet.
+    const definition = ebayCategoryDefinition(aspects, conditions)
     const schemaVersion = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
     const data = {
       schemaDefinition: definition as any, isActive: true, fetchedAt: new Date(),
