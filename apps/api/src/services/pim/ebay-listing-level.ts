@@ -183,3 +183,100 @@ export function showEbayListingLevel(input: { rows: SheetRowLike[]; columns: She
     }
   }
 }
+
+/**
+ * Wave 2 (C6, Owner decision 3) — on an Inventory-model listing these stay per variation: eBay takes each variation's
+ * condition and package from that variation's own inventory item, not from the main row.
+ */
+export const EBAY_INVENTORY_PER_VARIATION_FIELDS: ReadonlySet<string> = new Set([
+  'conditionId', 'packageType', 'packageWeight', 'weightUnit', 'packageLength', 'packageWidth', 'packageHeight', 'dimensionUnit',
+])
+
+interface HeldCellLike extends SheetCellLike {
+  source?: string | null
+  follows?: boolean | null
+  editable?: boolean
+  writable?: boolean
+  writeBlockedReason?: string | null
+  formula?: string
+  formulaError?: string
+  dependsOn?: string[]
+}
+interface HeldRowLike { id: string; sku: string; parentId: string | null; aliasId?: string | null; values: Record<string, HeldCellLike> }
+
+const isMeasure = (value: unknown): value is { value?: unknown; unit?: unknown } => !!value && typeof value === 'object' && !Array.isArray(value)
+/** Two cell values say the same thing (a measure by its number and unit; anything else as `sameEbayValue`). */
+function sameHeldValue(a: unknown, b: unknown): boolean {
+  if (isBlankValue(a) && isBlankValue(b)) return true
+  if (isMeasure(a) || isMeasure(b)) {
+    const norm = (v: unknown) => isMeasure(v) ? [String(v.value ?? '').trim(), String(v.unit ?? '')] : [String(v ?? '').trim(), '']
+    return JSON.stringify(norm(a)) === JSON.stringify(norm(b))
+  }
+  return sameEbayValue(a, b)
+}
+/** A cell value in words, for the sentence that names a row's own value. */
+function heldWords(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) return value.filter(member => !isBlankValue(member)).map(heldWords).join(', ')
+  if (isMeasure(value)) return [value.value, value.unit].filter(part => !isBlankValue(part)).map(String).join(' ')
+  return String(value).trim()
+}
+
+/**
+ * Wave 2 (C6) — eBay Trading takes a variation listing's item-level fields (`EBAY_ITEM_LEVEL_FIELDS`: condition, category,
+ * policies, location, VAT, Best Offer, max per buyer, package…) ONCE, from its main row (`buildSharedListingInput` reads
+ * the parent row; `ebayPublicationXml` the parent's settings). A variation row's own value was shown and editable, and
+ * never sent. Now each variation row of a listing with a main row shows the MAIN row's value, read-only, with the reason
+ * (and the row's own different value, named, which eBay does not get). Display only: nothing stored or sent changes.
+ *
+ * The main row's cell is marked `mapped.listingLevel` (no `variation`), so the sheet repaints the variation rows after a
+ * save there (`adoptFamilyListings`). Variation cells carry no mark: they are not edited, so they need none.
+ * Title, description and the variation theme are not touched (listing columns). On an Inventory-model listing
+ * (`inventoryAliases`) condition and package stay per variation (`EBAY_INVENTORY_PER_VARIATION_FIELDS`).
+ * Each listing (primary, alias) is held to its OWN main row. A listing of one row (a single product) is left alone.
+ */
+export function holdEbayItemLevelOnVariations(input: { rows: HeldRowLike[]; columns: SheetColumnLike[]; label: string; inventoryAliases?: ReadonlySet<string> }) {
+  const fields = input.columns.flatMap(col => {
+    const store = col.channels?.[input.label]?.store as Store
+    return store?.kind === 'platformAttributes' && isEbayItemLevel(store) ? [{ key: col.key, field: store.path![0] }] : []
+  })
+  if (!fields.length) return
+  const groups = new Map<string, HeldRowLike[]>()
+  for (const row of input.rows) {
+    const key = row.aliasId ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), row])
+  }
+  for (const [aliasKey, rows] of groups) {
+    const main = rows.find(row => row.parentId === null)
+    if (!main || rows.length < 2) continue
+    const inventory = input.inventoryAliases?.has(aliasKey) ?? false
+    for (const { key, field } of fields) {
+      if (inventory && EBAY_INVENTORY_PER_VARIATION_FIELDS.has(field)) continue
+      const source = main.values[key]
+      if (!source) continue
+      const head = `eBay takes this once per listing, from the main row ${main.sku}.`
+      // A field the main row cannot change either says why there (the listing's reason), never "change it there".
+      const there = source.editable === false ? source.writeBlockedReason?.trim() ? ` ${source.writeBlockedReason.trim()}` : '' : ' Change it there.'
+      const { listingLevel: _mark, ...shown } = source.mapped ?? { warnings: [], errors: [] }
+      for (const row of rows) {
+        if (row === main) continue
+        const cell = row.values[key]
+        if (!cell) continue
+        const own = !isBlankValue(cell.value) && !sameHeldValue(cell.value, source.value) ? ` This row also has "${heldWords(cell.value)}", which eBay does not get.` : ''
+        const { formula: _formula, formulaError: _formulaError, dependsOn: _dependsOn, ...rest } = cell
+        row.values[key] = {
+          ...rest,
+          // The main row's cell as it is: its value and where that value comes from.
+          value: source.value, source: source.source, layer: source.layer, inherited: source.inherited, inheritedFrom: source.inheritedFrom,
+          pinned: source.pinned, follows: source.follows,
+          // Its problems are named once, on the main row (`judgeEbayItemLevelOnMainRow`).
+          mapped: source.mapped ? { ...shown, warnings: [...(shown.warnings ?? [])], errors: [], ...('mappingErrors' in shown ? { mappingErrors: [] } : {}),
+            ...('requiredByRule' in shown ? { requiredByRule: false } : {}) } : null,
+          editable: false, writable: false, resettable: false,
+          writeBlockedReason: `${head}${there}${own}`,
+        }
+      }
+      if (source.mapped) source.mapped.listingLevel = { productId: main.id, sku: main.sku }
+    }
+  }
+}

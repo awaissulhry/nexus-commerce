@@ -136,10 +136,26 @@ describe('the package of a new eBay listing', () => {
     expect(plan.xml.match(/<ShippingPackageDetails>/g)).toHaveLength(1)
     expect(plan.xml).toContain('<WeightMajor unit="kg">2</WeightMajor>')
   })
-  it('a row with another package than the main row is refused by name', async () => {
+  // Wave 2 (C6) — it was refused; a variation's own package is never sent, so it is a note now and blocks nothing.
+  it('a row with another package than the main row is named in a note; only the main row\'s package is sent', async () => {
     m.stock = 3
     m.pa = { p: GALE, c2: { ...GALE, packageWeight: 3 } }
-    await expect(prepareEbayPublication(facts())).rejects.toThrow('eBay takes one package type, weight and size for the whole listing. FAM-NERO-L holds a different package than the main row')
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.notices).toContain('Package type, weight and size: eBay takes one package for the whole listing, from the main row. FAM-NERO-L holds a different package; it is not sent, and eBay takes the main row\'s package.')
+    expect(plan.xml.match(/<ShippingPackageDetails>/g)).toHaveLength(1)
+    expect(plan.xml).toContain('<WeightMajor unit="kg">2</WeightMajor>')
+    expect(plan.xml).not.toContain('<WeightMajor unit="kg">3</WeightMajor>')
+  })
+  it('a variation package that cannot be read is named in the same note, and blocks nothing', async () => {
+    m.stock = 3
+    m.pa = { p: GALE, c1: { packageType: 'SHOEBOX' }, c2: { ...GALE, packageWeight: 3 } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.notices).toContain('Package type, weight and size: eBay takes one package for the whole listing, from the main row. FAM-NERO-M, FAM-NERO-L hold a different package; they are not sent, and eBay takes the main row\'s package.')
+  })
+  it('control: the MAIN row\'s package that cannot be sent is still refused', async () => {
+    m.stock = 3
+    m.pa = { p: { packageType: 'SHOEBOX' } }
+    await expect(prepareEbayPublication(facts())).rejects.toThrow('eBay does not know the package type "SHOEBOX"')
   })
 })
 
