@@ -11,6 +11,30 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
+import { pendingWriteColumnsByEntity } from './ads-mutation.service.js'
+import { holdBackPendingFields } from '../ads-core/drift.js'
+
+/**
+ * CM-16 — the targets with an undelivered write (queued, in its grace window, or being sent), keyed by their Amazon
+ * id, with the columns this sync must not overwrite. Read just before the writes, from the same record the settings
+ * sync holds back on: Amazon still reports the OLD bid or state until the write lands, and writing it back made the
+ * operator's saved value revert on screen and fed the engines the old one. Usually empty, so usually one query.
+ */
+async function heldTargetColumnsByAmazonId(): Promise<Map<string, Set<string>>> {
+  const byId = await pendingWriteColumnsByEntity('AD_TARGET')
+  const out = new Map<string, Set<string>>()
+  if (!byId.size) return out
+  const rows = await prisma.adTarget.findMany({ where: { id: { in: [...byId.keys()] } }, select: { id: true, externalTargetId: true } })
+  for (const r of rows) if (r.externalTargetId) out.set(r.externalTargetId, byId.get(r.id)!)
+  return out
+}
+
+/** A sync write without the columns an undelivered write holds; counts how many rows were held. */
+function withoutHeld<T extends Record<string, unknown>>(data: T, held: Set<string> | undefined, counter: { held: number }): T {
+  if (!held?.size) return data
+  counter.held++
+  return holdBackPendingFields(data, held) as T
+}
 
 interface V3Keyword { keywordId?: string; adGroupId?: string; keywordText?: string; matchType?: string; bid?: number; state?: string }
 
@@ -108,6 +132,8 @@ export async function syncTargetsForAdGroups(opts: { profileId: string; region: 
 
   const ags = await prisma.adGroup.findMany({ where: { externalAdGroupId: { in: externalAdGroupIds } }, select: { id: true, externalAdGroupId: true, defaultBidCents: true } })
   const agByExt = new Map(ags.map((g) => [g.externalAdGroupId ?? '', g]))
+  const held = await heldTargetColumnsByAmazonId() // CM-16
+  const holds = { held: 0 }
   let updated = 0
   for (const c of clauses) {
     if (!c.targetId || !c.adGroupId) continue
@@ -118,11 +144,12 @@ export async function syncTargetsForAdGroups(opts: { profileId: string; region: 
     try {
       const r = await prisma.adTarget.updateMany({
         where: { externalTargetId: c.targetId, adGroupId: ag.id, isNegative: false },
-        data: { bidCents, status: STATE_MAP(c.state), lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null },
+        data: withoutHeld({ bidCents, status: STATE_MAP(c.state), lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS' as const, lastSyncError: null }, held.get(c.targetId), holds),
       })
       updated += r.count
     } catch (e) { logger.warn('[target-list-sync] update failed', { targetId: c.targetId, error: String(e).slice(0, 120) }) }
   }
+  if (holds.held) logger.info('[target-list-sync] held back fields with an undelivered write', { rows: holds.held })
   // H.11 — reflect deletions: PRODUCT/AUTO/CATEGORY targets we hold locally (with an external id) that
   // /sp/targets/list no longer returns were deleted on Amazon → archive. Only on a successful fetch;
   // keywords + negatives are excluded (different lists own them).
@@ -156,6 +183,8 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
     ...pos.map((k) => ({ ext: k.keywordId, agExt: k.adGroupId, kw: k.keywordText ?? '', mt: (k.matchType ?? 'BROAD').toUpperCase(), bid: Number(k.bid), state: k.state, neg: false })),
     ...neg.map((k) => ({ ext: k.keywordId, agExt: k.adGroupId, kw: k.keywordText ?? '', mt: (k.matchType ?? '').toUpperCase().replace('NEGATIVE', '') || 'PHRASE', bid: 0, state: k.state, neg: true })),
   ]
+  const held = await heldTargetColumnsByAmazonId() // CM-16
+  const holds = { held: 0 }
   let upserted = 0
   for (const r of rows) {
     if (!r.ext || !r.agExt) continue
@@ -171,11 +200,12 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
     }
     try {
       const existing = await prisma.adTarget.findFirst({ where: { externalTargetId: r.ext, adGroupId: localAg }, select: { id: true } })
-      if (existing) await prisma.adTarget.update({ where: { id: existing.id }, data })
+      if (existing) await prisma.adTarget.update({ where: { id: existing.id }, data: withoutHeld(data, held.get(r.ext), holds) })
       else await prisma.adTarget.create({ data })
       upserted += 1
     } catch (e) { logger.warn('[kw-list-sync] upsert failed', { ext: r.ext, error: String(e).slice(0, 120) }) }
   }
+  if (holds.held) logger.info('[kw-list-sync] held back fields with an undelivered write', { rows: holds.held })
   // H.9 — reflect deletions: a positive/ad-group-negative keyword we have locally WITH an external id
   // that Amazon's current list no longer returns was deleted on Amazon → archive it. Only when BOTH
   // fetches succeeded; never touches gated-local rows (no external id) or campaign-level negatives
@@ -205,6 +235,8 @@ export async function upsertCampaignNegativeRows(rows: V3CampaignNegative[], opt
   const extIds = [...new Set(rows.map((r) => r.campaignId).filter((x): x is string => !!x))]
   const camps = await prisma.campaign.findMany({ where: { externalCampaignId: { in: extIds } }, select: { id: true, externalCampaignId: true, adGroups: { select: { id: true }, take: 1 } } })
   const campByExt = new Map(camps.map((c) => [c.externalCampaignId ?? '', c]))
+  const held = await pendingWriteColumnsByEntity('AD_TARGET') // CM-16 — by local id: the match below has it
+  const holds = { held: 0 }
   let upserted = 0
   for (const r of rows) {
     if (!r.campaignNegativeKeywordId || !r.campaignId) continue
@@ -223,11 +255,12 @@ export async function upsertCampaignNegativeRows(rows: V3CampaignNegative[], opt
       //    stamped); 3) otherwise create. Prevents a duplicate when we created the negative locally first.
       const byId = await prisma.adTarget.findFirst({ where: { externalTargetId: r.campaignNegativeKeywordId }, select: { id: true } })
       const match = byId ?? await prisma.adTarget.findFirst({ where: { adGroup: { campaignId: camp.id }, isNegative: true, negativeLevel: 'CAMPAIGN', expressionType, expressionValue: r.keywordText ?? '' }, select: { id: true } })
-      if (match) await prisma.adTarget.update({ where: { id: match.id }, data })
+      if (match) await prisma.adTarget.update({ where: { id: match.id }, data: withoutHeld(data, held.get(match.id), holds) })
       else await prisma.adTarget.create({ data })
       upserted += 1
     } catch (e) { logger.warn('[camp-neg-sync] upsert failed', { ext: r.campaignNegativeKeywordId, error: String(e).slice(0, 120) }) }
   }
+  if (holds.held) logger.info('[camp-neg-sync] held back fields with an undelivered write', { rows: holds.held })
   // H.9 — reflect deletions: campaign negatives we have locally (WITH an external id) that Amazon's
   // current list no longer returns for the SCOPED campaigns were deleted on Amazon → archive. Caller
   // passes archiveScope only on a successful fetch, so an API error can never archive the mirror.

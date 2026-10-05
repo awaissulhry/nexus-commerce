@@ -1307,6 +1307,8 @@ export function v3BatchResult(response: unknown, resourceKey: string): { ok: boo
 export interface AdGroupPatch {
   state?: 'enabled' | 'paused' | 'archived'
   defaultBid?: number
+  /** CM-15 — SP v3 `PUT /sp/adGroups` takes the name like the state and the default bid. */
+  name?: string
 }
 
 export async function updateAdGroup(
@@ -1326,6 +1328,7 @@ export async function updateAdGroup(
   const v3AdGroup: Record<string, unknown> = { adGroupId: externalAdGroupId }
   if (patch.state) v3AdGroup.state = patch.state.toUpperCase()
   if (patch.defaultBid != null) v3AdGroup.defaultBid = patch.defaultBid
+  if (patch.name) v3AdGroup.name = patch.name
   const response = await liveCall<unknown>({
     ...ctx,
     method: 'PUT',
