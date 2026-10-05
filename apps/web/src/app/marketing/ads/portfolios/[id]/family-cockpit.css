@@ -133,3 +133,5 @@
 
 /* the coverage-set grid’s two numeric editors: DS `Input size="xs"`, width only */
 .fc-numfield { width: 76px; }
+/* PR 1c (CM-7) — why a daily-budget box sends nothing (`_shared/budgetInput.ts`). */
+.fc-cell-e { display: block; margin-top: 2px; font-size: 11px; line-height: 1.35; white-space: normal; text-align: left; color: var(--nds-danger-text); }

@@ -26,6 +26,7 @@ import { Calendar, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from
 import { getBackendUrl } from '@/lib/backend-url'
 import { InfoTip } from '../../InfoTip'
 import { num } from '../../_grid/format'
+import { readDailyBudget } from '../../../_shared/budgetInput'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
 import '../../campaigns-ds.css'
@@ -136,6 +137,10 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }))
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline)
+  // PR 1c (CM-7) — the budget box follows the one rule in `_shared/budgetInput.ts`: to the cent, and
+  // an empty, non-number or below-€1.00 box sends nothing. Save stays off while the field says why.
+  const budgetRead = readDailyBudget(form.dailyBudget)
+  const budgetProblem = form.dailyBudget !== baseline.dailyBudget && !budgetRead.ok ? budgetRead.message : null
   const currency = (campaign as unknown as { dailyBudgetCurrency?: string })?.dailyBudgetCurrency === 'EUR' ? '€' : '€'
 
   // scroll-spy: highlight the section nearest the top of the scroll viewport
@@ -162,7 +167,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     const calls: Array<Promise<boolean>> = []
     if (form.name !== baseline.name && form.name.trim() !== '') calls.push(patch('', { name: form.name.trim(), applyImmediately: true, reason: 'Campaign Details name' }))
     if (form.portfolioId !== baseline.portfolioId) calls.push(patch('', { portfolioId: form.portfolioId || null, applyImmediately: true, reason: 'Campaign Details portfolio' }))
-    if (form.dailyBudget !== baseline.dailyBudget && form.dailyBudget !== '') calls.push(patch('', { dailyBudget: Number(form.dailyBudget), applyImmediately: true, reason: 'Campaign Details daily budget' }))
+    if (form.dailyBudget !== baseline.dailyBudget && budgetRead.ok && budgetRead.value !== num(baseline.dailyBudget)) calls.push(patch('', { dailyBudget: budgetRead.value, applyImmediately: true, reason: 'Campaign Details daily budget' }))
     if (form.strategy !== baseline.strategy) calls.push(patch('', { biddingStrategy: UI_TO_STRAT[form.strategy], applyImmediately: true, reason: 'Campaign Details bidding strategy' }))
     if (form.neverExpire !== baseline.neverExpire || form.endDate !== baseline.endDate) calls.push(patch('', { endDate: form.neverExpire ? null : (form.endDate || null), applyImmediately: true, reason: 'Campaign Details end date' }))
     if (form.tos !== baseline.tos || form.pdp !== baseline.pdp || form.ros !== baseline.ros) {
@@ -216,7 +221,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             <Field className="cd-field" label="Portfolio">
               <PortfolioSelect value={form.portfolioId} onChange={(v) => set('portfolioId', v)} marketplace={campaign?.marketplace ?? undefined} />
             </Field>
-            <Field className="cd-field s" label="Daily Budget" required>
+            <Field className="cd-field s" label="Daily Budget" required error={budgetProblem}>
               <Input inputMode="decimal" prefix={currency} value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} fieldClassName="cd-money-boxed" />
             </Field>
             <div className="h10-cd-daterow">
@@ -341,7 +346,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     <Button onClick={() => setForm(baseline)} disabled={!dirty || saving}>Discard Changes</Button>
         <span className="grow" />
         {toast && <span className="msg">{toast}</span>}
-    <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
+    <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving || budgetProblem != null}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
       </div>
     </div>
   )

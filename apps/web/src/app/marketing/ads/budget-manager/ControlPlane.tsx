@@ -18,6 +18,7 @@ import { Lock, History as HistoryIcon, X } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
+import { readDailyBudget } from '../_shared/budgetInput'
 import './control-plane.css'
 
 interface EnfCampaign { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
@@ -106,7 +107,10 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
 
   // campaign actions
   const effSuppress = camp ? (staged?.suppress != null ? staged.suppress : camp.currentlySuppressed) : false
-  const stageBudget = (v: string) => { setBudget(v); onStage({ entityType: 'campaign', budgetCents: v.trim() === '' ? undefined : parseEur(v) }) }
+  // PR 1c (CM-7) — the one budget rule (`_shared/budgetInput.ts`): to the cent, and an empty,
+  // non-number or below-€1.00 box stages nothing (text used to stage €0.00, which committed as €1.00).
+  const budgetRead = readDailyBudget(budget)
+  const stageBudget = (v: string) => { setBudget(v); const read = readDailyBudget(v); onStage({ entityType: 'campaign', budgetCents: read.ok ? Math.round(read.value * 100) : undefined }) }
   const stageMin = (v: string) => { setMin(v); onStage({ entityType: 'campaign', minCents: v.trim() === '' ? undefined : parseEur(v) }) }
   const stageMax = (v: string) => { setMax(v); onStage({ entityType: 'campaign', maxCents: v.trim() === '' ? undefined : parseEur(v) }) }
   const pin = () => { if (!camp) return; const v = (camp.currentDailyCents / 100).toFixed(2); setBudget(v); setMin(v); setMax(v); onStage({ entityType: 'campaign', budgetCents: camp.currentDailyCents, minCents: camp.currentDailyCents, maxCents: camp.currentDailyCents }) }
@@ -135,7 +139,7 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
 
       <div className="cp-insp-sec">
         {camp ? <>
-          <label className="cp-fld"><span>Daily budget</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => stageBudget(e.target.value)} aria-label="Daily budget" /></label>
+          <label className="cp-fld"><span>Daily budget</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => stageBudget(e.target.value)} aria-label="Daily budget" aria-invalid={!budgetRead.ok} />{!budgetRead.ok && <span className="cp-fld-e" role="alert">{budgetRead.message}</span>}</label>
           <div className="cp-fld2">
             <label className="cp-fld"><span>Min €/day</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" placeholder="—" value={min} onChange={(e) => stageMin(e.target.value)} aria-label="Min daily" /></label>
             <label className="cp-fld"><span>Max €/day</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" placeholder="—" value={max} onChange={(e) => stageMax(e.target.value)} aria-label="Max daily" /></label>

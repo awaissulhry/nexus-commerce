@@ -23,6 +23,7 @@ import { CustomiseColumns } from './CustomiseColumns'
 import { PerformancePanel } from './PerformancePanel'
 import { FilterPanel, EMPTY_FILTERS, countFilters, STATUS_LABEL, TARGETING_LABEL, METRIC_LABEL, METRIC_UNIT, opSym, type Filters } from './FilterPanel'
 import { META_BY_KEY, DEFAULT_VISIBLE, STORAGE_KEY } from './columns'
+import { readDailyBudget } from '../../ads/_shared/budgetInput'
 
 interface Placements { tos: number | null; pdp: number | null; ros: number | null }
 interface Base {
@@ -286,7 +287,10 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
   const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
-  const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const n = parseFloat(v); if (!Number.isFinite(n) || n < 0) { setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); return } setBusy(b.id); try { await patch(b.id, { dailyBudget: n }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
+  // PR 1c (CM-7) — the Ad Manager's rule (`ads/_shared/budgetInput.ts`): to the cent, and an empty,
+  // non-number or below-€1.00 box sends nothing. It used to send €0.00 or €0.50; now the box stays
+  // open with the reason beside it, and Esc closes it.
+  const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const read = readDailyBudget(v); if (!read.ok) return; setBusy(b.id); try { await patch(b.id, { dailyBudget: read.value }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
   const bulkStatus = async (s: string) => { await Promise.all([...sel].map((id) => patch(id, { status: s }))); setSel(new Set()); void refetch() }
   const bulkArchive = async () => { if (typeof window !== 'undefined' && !window.confirm(`Archive ${sel.size} campaign${sel.size === 1 ? '' : 's'}? They will stop delivering.`)) return; await Promise.all([...sel].map((id) => patch(id, { status: 'ARCHIVED' }))); setSel(new Set()); void refetch() }
   const openMenu = (e: { currentTarget: HTMLElement; stopPropagation: () => void }, id: string) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ id, x: Math.min(r.left, window.innerWidth - 232), y: r.bottom + 4 }) }
@@ -314,7 +318,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
       case 'startDate': return fdate(b.startDate) ?? '—'
       case 'endDate': return fdate(b.endDate) ?? <span className="sub">No end date</span>
       case 'budget': return edit[b.id] != null
-        ? <input autoFocus className="az-edit" type="number" step="0.01" value={edit[b.id]} onChange={(e) => setEdit((s) => ({ ...s, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBudget(b); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[b.id]; return x }) }} onBlur={() => void saveBudget(b)} disabled={busy === b.id} />
+        ? <><input autoFocus className="az-edit" type="number" step="0.01" value={edit[b.id]} onChange={(e) => setEdit((s) => ({ ...s, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBudget(b); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[b.id]; return x }) }} onBlur={() => void saveBudget(b)} disabled={busy === b.id} aria-invalid={!readDailyBudget(edit[b.id]).ok} />{(() => { const read = readDailyBudget(edit[b.id]); return read.ok ? null : <span className="az-rowstat err" role="alert">{read.message}</span> })()}</>
         : <button className="az-editbtn" onClick={() => setEdit((s) => ({ ...s, [b.id]: (r.budgetC / 100).toFixed(2) }))}>{eur(r.budgetC)}<span className="sub"> / day</span></button>
       case 'budgetType': return 'Daily'
       case 'spend': return eur(r.spendC)

@@ -34,6 +34,7 @@ import '@/design-system/styles/components.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../../_shared/AutomationDock'
+import { readDailyBudget } from '../../_shared/budgetInput'
 import './family-cockpit.css'
 
 /* ── contract (mirrors ads-family-cockpit.service.ts) ─────────────────────── */
@@ -318,19 +319,25 @@ export function FamilyCockpitClient() {
               },
               {
                 key: 'budget', label: 'Budget/day', align: 'right', numeric: true, width: 116,
-                render: (c) => (
-                  <Input
-                    size="xs" fieldClassName="fc-numfield"
-                    value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
-                    onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return
-                      const v = Number(budgetEdit[c.id])
-                      if (Number.isFinite(v) && v > 0 && v !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: v })
-                    }}
-                    aria-label={`Daily budget for ${c.name}`}
-                  />
-                ),
+                // PR 1c (CM-7) — the one budget rule (`_shared/budgetInput.ts`): to the cent, and an
+                // empty, non-number or below-€1.00 box sends nothing and says why (€0.50 went through).
+                render: (c) => {
+                  const read = budgetEdit[c.id] != null ? readDailyBudget(budgetEdit[c.id]) : null
+                  return <>
+                    <Input
+                      size="xs" fieldClassName="fc-numfield"
+                      value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
+                      onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return
+                        if (read?.ok && read.value !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: read.value })
+                      }}
+                      aria-label={`Daily budget for ${c.name}`}
+                      aria-invalid={read != null && !read.ok}
+                    />
+                    {read && !read.ok && <span className="fc-cell-e" role="alert">{read.message}</span>}
+                  </>
+                },
               },
               { key: 'spend', label: '30d spend', align: 'right', numeric: true, width: 104, render: (c) => eur(c.spend30dCents) },
               { key: 'sales', label: '30d sales', align: 'right', numeric: true, width: 104, render: (c) => eur(c.sales30dCents) },

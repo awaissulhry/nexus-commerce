@@ -34,6 +34,8 @@
    92.7), which is how these numbers were chosen. */
 .cp-fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cp-fld > span:first-child { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
+/* PR 1c (CM-7) — why a daily-budget box stages nothing (`_shared/budgetInput.ts`). */
+.cp-fld .cp-fld-e { font-size: 11.5px; line-height: 1.45; color: var(--nds-danger-text); }
 .cp-fld2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 /* The DS Input's `fieldClassName`. Width only — border, radius, padding, focus ring and
    the shaded €/% adornment belong to the primitive, and this sheet loads AFTER
