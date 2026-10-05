@@ -26,9 +26,18 @@
  *
  * Budget per listing — the queue is the record: a heal row carries payload.source = 'STOCK_PUSH_HEAL', and why
  * (healOf, healReason, healClass, healAttempt, previousStatus, previousErrorCode, previousError):
- *   REFUSED    a dead row that died before its retries ran out, i.e. the channel refused it (a validation error):
- *              at most ONE heal per 24 h, so a permanent refusal is tried once a day and never loops;
+ *   REFUSED    a dead row the channel refused: its error code says so (anything but the "kept failing" codes), or, with
+ *              no code, it died before its retries ran out: at most ONE heal per 24 h, so a permanent refusal is tried
+ *              once a day and never loops — also when the refusal came on the row's last try;
  *   RETRYABLE  everything else (retries spent, an outage, a stuck row): at most 3 heals per 24 h, at least 1 h apart.
+ *
+ * Which rows it looks at: the candidate query itself leaves out every listing a column already holds (paused, selling
+ * paused or closed, ended, still a draft, FBA by its own or its Amazon product's method, a fixed number that is empty,
+ * an account that is off or needs signing in, a deleted product, a channel or market policy that pauses it) and every
+ * listing whose budget is spent. listingGate checks all of it again on the rows it reads. What only the stock ledger
+ * can say (FBA stock on hand, uncounted, the Nexus number) is decided in code; such rows do not block newer ones: the
+ * job reads up to SCAN_PAGES pages, oldest first, until it has tried `max` heals. (A cheap gate checked only after a
+ * LIMIT let 100 held rows hide every newer row that could be healed, run after run.)
  *
  * Shared eBay variants (SharedListingMembership rows, no ChannelListing) are not covered: their pushes have no listing
  * to re-read, and the Trading read-back heals them.
@@ -44,7 +53,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { QUANTITY_PUSH_CHANNELS, resolveIntendedQuantity, type IntendedResolution } from '../services/sync-control-core.js'
-import { loadChannelPolicies, policyFor, type PolicyMap } from '../services/sync-control-policy.service.js'
+import { loadChannelPolicies, parsePolicyKey, policyFor, type PolicyMap } from '../services/sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../services/stock-pool/sync-ledgers.js'
 import { coalescePendingQuantityRows } from '../services/sync-coalesce.js'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
@@ -65,9 +74,13 @@ export const HEAL_BUDGET = {
 /** The drain's retry lane takes a FAILED row only while retryCount < 3, or for an account outage (outbound-sync). */
 const DRAIN_RETRY_LIMIT = 3
 /** Dead-letter codes that mean "it kept failing", not "the channel said no". */
-const RETRYABLE_DEATH_CODES = new Set(['MAX_RETRIES_EXCEEDED', 'CIRCUIT_OPEN_DEFERRED', 'AUTH_REQUIRED', 'ETSY_LISTING_BUSY', 'RETRY_SCHEDULED', 'JANITOR_RECLAIMED'])
+const RETRYABLE_DEATH_CODE_LIST = ['MAX_RETRIES_EXCEEDED', 'CIRCUIT_OPEN_DEFERRED', 'AUTH_REQUIRED', 'ETSY_LISTING_BUSY', 'RETRY_SCHEDULED', 'JANITOR_RECLAIMED']
+const RETRYABLE_DEATH_CODES = new Set(RETRYABLE_DEATH_CODE_LIST)
 /** An account in one of these states cannot take a push until a person signs it in again. */
-const ACCOUNT_DOWN = new Set(['needs_reauth', 'revoked', 'disconnected'])
+const ACCOUNT_DOWN_LIST = ['needs_reauth', 'revoked', 'disconnected']
+const ACCOUNT_DOWN = new Set(ACCOUNT_DOWN_LIST)
+/** Pages of `max` rows one run reads at most while rows the ledger holds back stand in front of rows it can heal. */
+export const SCAN_PAGES = 5
 
 export type HealReason = 'DEAD' | 'STUCK_FAILED' | 'STALE_PENDING'
 export type HealClass = 'REFUSED' | 'RETRYABLE'
@@ -103,15 +116,27 @@ export function healReasonOf(row: Pick<CandidateRow, 'status' | 'isDead'>): Heal
 }
 
 /**
- * REFUSED: the row died with retries left, so its failure was not retryable — the channel refused the push (both the
- * drain and the BullMQ worker dead-letter a non-retryable failure at once). Everything else may pass on its own. Pure.
+ * REFUSED: the channel refused the push. The error code decides first: a dead row is written with
+ * MAX_RETRIES_EXCEEDED (or an aged-out deferral code) when it kept failing, and with the refusal's own code
+ * (EBAY_VALIDATION, NON_RETRYABLE, …) when the failure was not retryable (outbound-sync computeFailureDisposition) —
+ * whichever try it came on, so a 400 on the third try is still a refusal. Only a dead row with no code falls back on
+ * the count: it died with retries left, so it was refused. Everything else may pass on its own. Pure; the candidate
+ * query repeats it as SQL (healClassSql) for the budget.
  */
 export function healClassOf(row: Pick<CandidateRow, 'status' | 'isDead' | 'errorCode' | 'retryCount' | 'maxRetries'>): HealClass {
   if (row.status !== 'FAILED' || !row.isDead) return 'RETRYABLE'
   if (row.errorCode && RETRYABLE_DEATH_CODES.has(row.errorCode)) return 'RETRYABLE'
-  if (row.errorCode === 'NON_RETRYABLE') return 'REFUSED'
+  if (row.errorCode) return 'REFUSED'
   return row.retryCount < Math.max(1, row.maxRetries || 3) ? 'REFUSED' : 'RETRYABLE'
 }
+
+/** healClassOf as SQL over the queue row `o`. */
+const healClassSql = Prisma.sql`CASE
+    WHEN NOT (o."syncStatus" = 'FAILED' AND o."isDead") THEN 'RETRYABLE'
+    WHEN o."errorCode" = ANY(${RETRYABLE_DEATH_CODE_LIST}::text[]) THEN 'RETRYABLE'
+    WHEN COALESCE(o."errorCode", '') <> '' THEN 'REFUSED'
+    WHEN o."retryCount" < GREATEST(1, COALESCE(NULLIF(o."maxRetries", 0), 3)) THEN 'REFUSED'
+    ELSE 'RETRYABLE' END`
 
 /** May this listing get another heal now, given the heals it had in the last 24 h? Pure. */
 export function budgetAllows(healClass: HealClass, previousHeals: Date[], now: number): boolean {
@@ -201,6 +226,98 @@ const newerQuantityRow = (listingRef: Prisma.Sql, rowRef: Prisma.Sql) => Prisma.
     AND (n."syncType" = 'QUANTITY_UPDATE' OR n.payload->'quantity' IS NOT NULL)
     AND (n."createdAt", n.id) > ${rowRef}`
 
+/** Listing coordinates (channel, market as stored, account or '') that a channel or market policy pauses. */
+export interface PausedCoordinates { channels: string[]; markets: string[]; accounts: string[] }
+
+/**
+ * Which listing coordinates the policies pause, decided by policyFor itself (its market and account precedence), so
+ * the candidate query can leave them out exactly. Reads the business's coordinates only when some policy pauses.
+ */
+async function pausedCoordinates(policies: PolicyMap): Promise<PausedCoordinates> {
+  const paused: PausedCoordinates = { channels: [], markets: [], accounts: [] }
+  const channels = [...new Set([...policies].filter(([, p]) => p.pushesPaused).map(([key]) => parsePolicyKey(key).channel))]
+  if (channels.length === 0) return paused
+  const coordinates = await prisma.$queryRaw<Array<{ channel: string; marketplace: string; account: string }>>(Prisma.sql`
+    SELECT DISTINCT l.channel, l.marketplace, COALESCE(l."channelConnectionId", '') AS account
+    FROM "ChannelListing" l WHERE upper(l.channel) = ANY(${channels}::text[])`)
+  for (const c of coordinates) {
+    if (!policyFor(policies, c.channel, c.marketplace, c.account || null)?.pushesPaused) continue
+    paused.channels.push(c.channel)
+    paused.markets.push(c.marketplace)
+    paused.accounts.push(c.account)
+  }
+  return paused
+}
+
+/** The cursor of a page: the last row's (updatedAt as the database wrote it, id). */
+interface PageCursor { at: string; id: string }
+
+/**
+ * One page of candidates, oldest first: the latest quantity row of each listing, failed for good or stale, that no
+ * column holds back and whose budget is not spent (see the header). listingGate and budgetAllows decide again.
+ */
+async function candidatePage(after: PageCursor | null, limit: number, paused: PausedCoordinates): Promise<Array<CandidateRow & { cursorAt: string }>> {
+  // The database's clock, as the queue stores its times: UTC wall time (Prisma's timestamp(3)). A bare CURRENT_TIMESTAMP
+  // would read those times in the session's time zone, and a timestamp parameter in this process's.
+  const nowUtc = Prisma.sql`(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')`
+  const ago = (ms: number) => Prisma.sql`(${nowUtc} - ${ms}::double precision * interval '1 millisecond')`
+  const channels = [...QUANTITY_PUSH_CHANNELS]
+  const perDay = Prisma.sql`(CASE x."healClass" WHEN 'REFUSED' THEN ${HEAL_BUDGET.REFUSED.perDay}::int ELSE ${HEAL_BUDGET.RETRYABLE.perDay}::int END)`
+  const spacing = Prisma.sql`(CASE x."healClass" WHEN 'REFUSED' THEN ${HEAL_BUDGET.REFUSED.spacingMs}::double precision ELSE ${HEAL_BUDGET.RETRYABLE.spacingMs}::double precision END)`
+  return prisma.$queryRaw<Array<CandidateRow & { cursorAt: string }>>(Prisma.sql`
+    SELECT x.* FROM (
+      SELECT o.id, o."channelListingId" AS "listingId", o."productId", o."syncStatus"::text AS status, o."isDead",
+             o."errorCode", o."errorMessage", o."retryCount", o."maxRetries", o."nextRetryAt",
+             o."updatedAt", o."updatedAt"::text AS "cursorAt", ${healClassSql} AS "healClass"
+      FROM "OutboundSyncQueue" o
+      JOIN "ChannelListing" l ON l.id = o."channelListingId"
+      JOIN "Product" p ON p.id = l."productId"
+      LEFT JOIN "ChannelConnection" c ON c.id = l."channelConnectionId"
+      WHERE o."syncType" = 'QUANTITY_UPDATE'
+        AND o."targetChannel"::text = ANY(${channels}::text[])
+        AND o."syncStatus" IN ('FAILED', 'PENDING')
+        AND o."createdAt" > ${ago(LOOKBACK_MS)}
+        AND (
+          (o."syncStatus" = 'FAILED' AND (
+            o."isDead"
+            OR o."nextRetryAt" IS NULL
+            OR (o."retryCount" >= ${DRAIN_RETRY_LIMIT} AND o."errorCode" IS DISTINCT FROM 'AUTH_REQUIRED')
+            OR o."nextRetryAt" < ${ago(STALE_MS)}))
+          OR (o."syncStatus" = 'PENDING'
+            AND o."updatedAt" < ${ago(STALE_MS)}
+            AND (o."holdUntil" IS NULL OR o."holdUntil" < ${ago(STALE_MS)})
+            AND (o."nextRetryAt" IS NULL OR o."nextRetryAt" < ${ago(STALE_MS)})))
+        -- What a column already says (listingGate checks each again): a push channel, a live product, not a still-draft,
+        -- not paused, selling not paused or closed, not ended, not FBA, a fixed number that is set, an account that can
+        -- take it, no policy pausing it.
+        AND l.channel = ANY(${channels}::text[])
+        AND p."deletedAt" IS NULL
+        AND NOT (l."listingStatus" = 'DRAFT' AND l."isPublished" = false AND l."externalListingId" IS NULL)
+        AND l."syncPaused" = false
+        AND l."offerClosedAt" IS NULL
+        AND upper(btrim(l."listingStatus")) <> 'ENDED'
+        AND NOT (COALESCE(l."fulfillmentMethod"::text = 'FBA', false)
+          OR (l.channel = 'AMAZON' AND COALESCE(p."fulfillmentMethod"::text = 'FBA', false)))
+        AND (l."followMasterQuantity" OR l.quantity IS NOT NULL)
+        AND (c.id IS NULL OR (c."isActive" AND c."authStatus" <> ALL(${ACCOUNT_DOWN_LIST}::text[])))
+        AND (l.channel, l.marketplace, COALESCE(l."channelConnectionId", '')) NOT IN (
+          SELECT * FROM unnest(${paused.channels}::text[], ${paused.markets}::text[], ${paused.accounts}::text[]))
+        AND NOT EXISTS (${newerQuantityRow(Prisma.sql`o."channelListingId"`, Prisma.sql`(o."createdAt", o.id)`)})
+    ) x
+    -- The budget (budgetAllows): this listing's heals in the last 24 h, by the class of the row to heal.
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS n, max(h."createdAt") AS last
+      FROM "OutboundSyncQueue" h
+      WHERE h."channelListingId" = x."listingId"
+        AND h.payload->>'source' = ${HEAL_SOURCE}
+        AND h."createdAt" > ${ago(DAY_MS)}
+    ) b
+    WHERE (b.n = 0 OR (b.n < ${perDay} AND b.last <= ${nowUtc} - ${spacing} * interval '1 millisecond'))
+      ${after ? Prisma.sql`AND (x."updatedAt", x.id) > (${after.at}::timestamp(3), ${after.id})` : Prisma.empty}
+    ORDER BY x."updatedAt", x.id
+    LIMIT ${limit}`)
+}
+
 /** Run once in the current business's context. Exported for the manual trigger and the tests. */
 export async function runStockPushHeal(options: { max?: number } = {}): Promise<StockPushHealResult> {
   const startedAt = Date.now()
@@ -210,106 +327,46 @@ export async function runStockPushHeal(options: { max?: number } = {}): Promise<
   const result: StockPushHealResult = { candidates: 0, healed: 0, skipped: {}, capped: false, durationMs: 0 }
   const skip = (reason: SkipReason) => { result.skipped[reason] = (result.skipped[reason] ?? 0) + 1 }
 
-  // The database's clock for the row ages (a timestamp parameter would be read in the session's time zone).
-  const staleBefore = Prisma.sql`(CURRENT_TIMESTAMP - ${STALE_MS}::double precision * interval '1 millisecond')`
-  const lookback = Prisma.sql`(CURRENT_TIMESTAMP - ${LOOKBACK_MS}::double precision * interval '1 millisecond')`
-  const channels = [...QUANTITY_PUSH_CHANNELS]
-  // Narrow by status first (indexed), then keep only the newest quantity row per listing.
-  const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
-    SELECT o.id, o."channelListingId" AS "listingId", o."productId", o."syncStatus"::text AS status, o."isDead",
-           o."errorCode", o."errorMessage", o."retryCount", o."maxRetries", o."nextRetryAt"
-    FROM "OutboundSyncQueue" o
-    WHERE o."channelListingId" IS NOT NULL
-      AND o."syncType" = 'QUANTITY_UPDATE'
-      AND o."targetChannel"::text = ANY(${channels}::text[])
-      AND o."syncStatus" IN ('FAILED', 'PENDING')
-      AND o."createdAt" > ${lookback}
-      AND (
-        (o."syncStatus" = 'FAILED' AND (
-          o."isDead"
-          OR o."nextRetryAt" IS NULL
-          OR (o."retryCount" >= ${DRAIN_RETRY_LIMIT} AND o."errorCode" IS DISTINCT FROM 'AUTH_REQUIRED')
-          OR o."nextRetryAt" < ${staleBefore}))
-        OR (o."syncStatus" = 'PENDING'
-          AND o."updatedAt" < ${staleBefore}
-          AND (o."holdUntil" IS NULL OR o."holdUntil" < ${staleBefore})
-          AND (o."nextRetryAt" IS NULL OR o."nextRetryAt" < ${staleBefore})))
-      AND NOT EXISTS (${newerQuantityRow(Prisma.sql`o."channelListingId"`, Prisma.sql`(o."createdAt", o.id)`)})
-    ORDER BY o."updatedAt" ASC, o.id
-    LIMIT ${max + 1}`)
-  result.capped = rows.length > max
-  const candidates = rows.slice(0, max)
-  result.candidates = candidates.length
-  if (candidates.length === 0) return finish(result, startedAt)
-
-  const listingIds = candidates.map((c) => c.listingId)
-  const listings = new Map((await prisma.channelListing.findMany({ where: { id: { in: listingIds } }, select: LISTING_SELECT }) as HealListing[]).map((l) => [l.id, l]))
-  const ledgers = await loadSyncLedgers(prisma, [...new Set([...listings.values()].map((l) => l.productId))])
   const policies = await loadChannelPolicies()
+  const paused = await pausedCoordinates(policies)
   const { resolveCascadePushMethod } = await import('../services/stock-movement.service.js')
-  const heals = await prisma.outboundSyncQueue.findMany({
-    where: { channelListingId: { in: listingIds }, createdAt: { gte: new Date(now.getTime() - DAY_MS) }, payload: { path: ['source'], equals: HEAL_SOURCE } },
-    select: { channelListingId: true, createdAt: true },
-  })
-  const healsByListing = new Map<string, Date[]>()
-  for (const h of heals) if (h.channelListingId) healsByListing.set(h.channelListingId, [...(healsByListing.get(h.channelListingId) ?? []), h.createdAt])
-
   const queued: Array<{ id: string; productId: string | null; syncType: string | null; holdUntil: Date | null }> = []
-  for (const row of candidates) {
-    const listing = listings.get(row.listingId)
-    const gate = listingGate(listing, listing ? ledgers.get(listing.productId) : undefined, policies, resolveCascadePushMethod)
-    if (gate) { skip(gate); continue }
-    const healClass = healClassOf(row)
-    const previous = healsByListing.get(row.listingId) ?? []
-    if (!budgetAllows(healClass, previous, now.getTime())) { skip('budget'); continue }
-    const l = listing!
-    const healReason = healReasonOf(row)
-    try {
-      const created = await prisma.$transaction(async (tx) => {
-        // The cascade's lock: a stock change for this product queues under it, so the check below cannot miss one.
-        await lockProductStock(tx, [l.productId])
-        const newer = await tx.$queryRaw<unknown[]>(Prisma.sql`${newerQuantityRow(Prisma.sql`${l.id}`, Prisma.sql`(SELECT c."createdAt", c.id FROM "OutboundSyncQueue" c WHERE c.id = ${row.id})`)} LIMIT 1`)
-        if (newer.length > 0) return null
-        if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') await coalescePendingQuantityRows(tx, [l.id])
-        return createOutboundRowsAndReturn(tx, {
-          data: [{
-            productId: l.productId,
-            channelListingId: l.id,
-            targetChannel: l.channel as never,
-            targetRegion: l.region,
-            syncStatus: 'PENDING' as never,
-            syncType: 'QUANTITY_UPDATE',
-            holdUntil: now,
-            externalListingId: l.externalListingId,
-            maxRetries: 3,
-            payload: {
-              source: HEAL_SOURCE,
-              productId: l.productId,
-              channel: l.channel,
-              marketplace: l.marketplace,
-              quantity: l.quantity,
-              stockBuffer: l.stockBuffer ?? 0,
-              healOf: row.id,
-              healReason,
-              healClass,
-              healAttempt: previous.length + 1,
-              previousStatus: row.status,
-              previousErrorCode: row.errorCode,
-              previousError: row.errorMessage ? row.errorMessage.slice(0, 300) : null,
-            },
-          }],
-          select: { id: true, productId: true, syncType: true, holdUntil: true },
-        })
-      })
-      if (!created) { skip('newer_row'); continue }
-      if (created.length === 0) { skip('refused_by_claim'); continue }
-      queued.push(...created)
-      result.healed++
-    } catch (error) {
-      const code = (error as { code?: string })?.code
-      skip(code === 'listing_coordinate_claimed' ? 'refused_by_claim' : 'error')
-      logger.warn(`[${JOB_NAME}] could not queue a heal`, { listingId: row.listingId, rowId: row.id, error: error instanceof Error ? error.message : String(error) })
+  let tried = 0
+  let after: PageCursor | null = null
+
+  pages: for (let page = 0; page < SCAN_PAGES; page++) {
+    const rows = await candidatePage(after, max + 1, paused)
+    const more = rows.length > max
+    const candidates = rows.slice(0, max)
+    if (candidates.length === 0) break
+    const last = candidates[candidates.length - 1]
+    after = { at: last.cursorAt, id: last.id }
+
+    const listingIds = candidates.map((c) => c.listingId)
+    const listings = new Map((await prisma.channelListing.findMany({ where: { id: { in: listingIds } }, select: LISTING_SELECT }) as HealListing[]).map((l) => [l.id, l]))
+    const ledgers = await loadSyncLedgers(prisma, [...new Set([...listings.values()].map((l) => l.productId))])
+    const heals = await prisma.outboundSyncQueue.findMany({
+      where: { channelListingId: { in: listingIds }, createdAt: { gte: new Date(now.getTime() - DAY_MS) }, payload: { path: ['source'], equals: HEAL_SOURCE } },
+      select: { channelListingId: true, createdAt: true },
+    })
+    const healsByListing = new Map<string, Date[]>()
+    for (const h of heals) if (h.channelListingId) healsByListing.set(h.channelListingId, [...(healsByListing.get(h.channelListingId) ?? []), h.createdAt])
+
+    for (const row of candidates) {
+      if (tried >= max) { result.capped = true; break pages }
+      result.candidates++
+      const listing = listings.get(row.listingId)
+      const gate = listingGate(listing, listing ? ledgers.get(listing.productId) : undefined, policies, resolveCascadePushMethod)
+      if (gate) { skip(gate); continue }
+      const healClass = healClassOf(row)
+      const previous = healsByListing.get(row.listingId) ?? []
+      if (!budgetAllows(healClass, previous, now.getTime())) { skip('budget'); continue }
+      tried++
+      const created = await queueHeal(listing!, row, healClass, previous.length + 1, now, skip)
+      if (created) { queued.push(...created); result.healed++ }
     }
+    if (!more) break
+    if (tried >= max || page === SCAN_PAGES - 1) { result.capped = true; break }
   }
 
   if (queued.length > 0) {
@@ -318,6 +375,56 @@ export async function runStockPushHeal(options: { max?: number } = {}): Promise<
     await fireOutboundJobs(queued, { source: HEAL_SOURCE })
   }
   return finish(result, startedAt)
+}
+
+/** One heal, the cascade's way, in one transaction. Null when it queued nothing (the reason is counted). */
+async function queueHeal(l: HealListing, row: CandidateRow, healClass: HealClass, healAttempt: number, now: Date, skip: (reason: SkipReason) => void) {
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      // The cascade's lock: a stock change for this product queues under it, so the check below cannot miss one.
+      await lockProductStock(tx, [l.productId])
+      const newer = await tx.$queryRaw<unknown[]>(Prisma.sql`${newerQuantityRow(Prisma.sql`${l.id}`, Prisma.sql`(SELECT c."createdAt", c.id FROM "OutboundSyncQueue" c WHERE c.id = ${row.id})`)} LIMIT 1`)
+      if (newer.length > 0) return null
+      if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') await coalescePendingQuantityRows(tx, [l.id])
+      return createOutboundRowsAndReturn(tx, {
+        data: [{
+          productId: l.productId,
+          channelListingId: l.id,
+          targetChannel: l.channel as never,
+          targetRegion: l.region,
+          syncStatus: 'PENDING' as never,
+          syncType: 'QUANTITY_UPDATE',
+          holdUntil: now,
+          externalListingId: l.externalListingId,
+          maxRetries: 3,
+          payload: {
+            source: HEAL_SOURCE,
+            productId: l.productId,
+            channel: l.channel,
+            marketplace: l.marketplace,
+            quantity: l.quantity,
+            stockBuffer: l.stockBuffer ?? 0,
+            healOf: row.id,
+            healReason: healReasonOf(row),
+            healClass,
+            healAttempt,
+            previousStatus: row.status,
+            previousErrorCode: row.errorCode,
+            previousError: row.errorMessage ? row.errorMessage.slice(0, 300) : null,
+          },
+        }],
+        select: { id: true, productId: true, syncType: true, holdUntil: true },
+      })
+    })
+    if (!created) { skip('newer_row'); return null }
+    if (created.length === 0) { skip('refused_by_claim'); return null }
+    return created
+  } catch (error) {
+    const code = (error as { code?: string })?.code
+    skip(code === 'listing_coordinate_claimed' ? 'refused_by_claim' : 'error')
+    logger.warn(`[${JOB_NAME}] could not queue a heal`, { listingId: row.listingId, rowId: row.id, error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
 }
 
 function finish(result: StockPushHealResult, startedAt: number): StockPushHealResult {

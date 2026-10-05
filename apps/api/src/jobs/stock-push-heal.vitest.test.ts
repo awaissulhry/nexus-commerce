@@ -42,7 +42,11 @@ describe('stock push heal — a failed quantity push is queued again', () => {
   const id: Record<string, string> = {}
   const sql = async (text: string, params: unknown[] = []) => (await database.db.query(text, params)).rows as Row[]
   const inB = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: B, actorUserId: null, membershipId: null, roleKeys: [] }, work)
-  const run = () => inB(() => heal.runStockPushHeal())
+  const run = (options: { max?: number } = {}) => inB(() => heal.runStockPushHeal(options))
+  /** One listing per market, so one product can carry many (the listing key is product + channel + market). */
+  const MARKETS = ['DE', 'FR', 'ES', 'GB', 'AT', 'NL', 'BE', 'PL', 'SE', 'IE', 'CH', 'DK', 'PT', 'CZ']
+  const onMarket = (market: string, extra: Record<string, unknown> = {}) =>
+    listing(id.own, { quantity: 4, marketplace: market, region: market, channelMarket: `EBAY_${market}`, ...extra })
 
   const listing = async (productId: string, extra: Record<string, unknown> = {}) => {
     const lid = randomUUID()
@@ -64,7 +68,9 @@ describe('stock push heal — a failed quantity push is queued again', () => {
       payload: JSON.stringify({ source: 'STOCK_MOVEMENT', quantity: 1 }), retryCount: 0, maxRetries: 3, createdAt: at, updatedAt: at, ...extra,
     }
     const keys = Object.keys(cols)
-    await sql(`INSERT INTO "OutboundSyncQueue" (${keys.map((k) => `"${k}"`).join(',')}) VALUES (${keys.map((k, i) => (k === 'syncStatus' ? `$${i + 1}::"OutboundSyncStatus"` : k === 'targetChannel' ? `$${i + 1}::"SyncChannel"` : k === 'payload' ? `$${i + 1}::jsonb` : `$${i + 1}`)).join(',')})`, Object.values(cols))
+    // Times as the application stores them (UTC wall time): the pg driver would send a Date in this machine's zone.
+    const values = Object.values(cols).map((v) => (v instanceof Date ? v.toISOString() : v))
+    await sql(`INSERT INTO "OutboundSyncQueue" (${keys.map((k) => `"${k}"`).join(',')}) VALUES (${keys.map((k, i) => (k === 'syncStatus' ? `$${i + 1}::"OutboundSyncStatus"` : k === 'targetChannel' ? `$${i + 1}::"SyncChannel"` : k === 'payload' ? `$${i + 1}::jsonb` : `$${i + 1}`)).join(',')})`, values)
     return rid
   }
   const dead = (listingId: string, productId: string, ageMinutes: number, extra: Record<string, unknown> = {}) =>
@@ -137,11 +143,16 @@ describe('stock push heal — a failed quantity push is queued again', () => {
     expect(heal.budgetAllows('RETRYABLE', [ago(2), ago(1)], now)).toBe(true)
     expect(heal.budgetAllows('RETRYABLE', [ago(3), ago(2), ago(1)], now)).toBe(false)
     expect(heal.budgetAllows('RETRYABLE', [ago(30), ago(2), ago(1)], now)).toBe(true)
-    // A dead row that died with retries left was refused by the channel; one that spent them was not.
+    // The error code decides first: a refusal's own code is a refusal on whichever try it came — also the third.
     expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'EBAY_VALIDATION', retryCount: 1, maxRetries: 3 })).toBe('REFUSED')
+    expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'EBAY_VALIDATION', retryCount: 3, maxRetries: 3 })).toBe('REFUSED')
     expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'NON_RETRYABLE', retryCount: 3, maxRetries: 3 })).toBe('REFUSED')
-    expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'EBAY_API_ERROR', retryCount: 3, maxRetries: 3 })).toBe('RETRYABLE')
+    // The "kept failing" codes are retryable, whatever the count.
+    expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'MAX_RETRIES_EXCEEDED', retryCount: 3, maxRetries: 3 })).toBe('RETRYABLE')
     expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: 'AUTH_REQUIRED', retryCount: 0, maxRetries: 3 })).toBe('RETRYABLE')
+    // No code: died with retries left = refused; with them spent = kept failing.
+    expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: null, retryCount: 1, maxRetries: 3 })).toBe('REFUSED')
+    expect(heal.healClassOf({ status: 'FAILED', isDead: true, errorCode: null, retryCount: 3, maxRetries: 3 })).toBe('RETRYABLE')
     expect(heal.healClassOf({ status: 'PENDING', isDead: false, errorCode: null, retryCount: 0, maxRetries: 3 })).toBe('RETRYABLE')
   })
 
@@ -189,9 +200,10 @@ describe('stock push heal — a failed quantity push is queued again', () => {
     expect(await run()).toMatchObject({ healed: 1 })
     const [first] = await heals(lid)
     expect(first.payload).toMatchObject({ healClass: 'REFUSED', previousErrorCode: 'EBAY_VALIDATION', previousError: 'Item specifics missing' })
-    // eBay refuses the heal too: it is now the newest row, dead — and today's heal is spent.
+    // eBay refuses the heal too: it is now the newest row, dead — and today's heal is spent, so the candidate query
+    // leaves it out.
     await sql(`UPDATE "OutboundSyncQueue" SET "syncStatus" = 'FAILED', "isDead" = true, "errorCode" = 'EBAY_VALIDATION', "retryCount" = 1 WHERE id = $1`, [first.id])
-    expect(await run()).toMatchObject({ candidates: 1, healed: 0, skipped: { budget: 1 } })
+    expect(await run()).toMatchObject({ candidates: 0, healed: 0 })
     // A day later it is tried once more.
     await sql(`UPDATE "OutboundSyncQueue" SET "createdAt" = "createdAt" - interval '26 hours', "updatedAt" = "updatedAt" - interval '26 hours' WHERE id = $1`, [refused])
     await sql(`UPDATE "OutboundSyncQueue" SET "createdAt" = "createdAt" - interval '25 hours', "updatedAt" = "updatedAt" - interval '25 hours' WHERE id = $1`, [first.id])
@@ -211,10 +223,13 @@ describe('stock push heal — a failed quantity push is queued again', () => {
     }
     await sql(`INSERT INTO "SyncChannelPolicy" (id, "workspaceId", channel, marketplace, "pushesPaused", "updatedAt") VALUES ($1,$2,'EBAY','DE',true,CURRENT_TIMESTAMP)`, [randomUUID(), B])
     for (const lid of Object.values(cases)) await dead(lid, id.own, 30)
+    // The candidate query leaves out what a column holds (paused, policy, closed, ended, draft); the Nexus number is
+    // the ledger's, so that one is read and skipped in code.
     const result = await run()
-    expect(result).toMatchObject({ candidates: 6, healed: 0 })
-    expect(result.skipped).toEqual({ push_locked: 3, paused: 1, still_draft: 1, nexus_number_differs: 1 })
+    expect(result).toMatchObject({ candidates: 1, healed: 0 })
+    expect(result.skipped).toEqual({ nexus_number_differs: 1 })
     expect(fake.addJobSafely).not.toHaveBeenCalled()
+    expect((await sql(`SELECT count(*)::int AS n FROM "OutboundSyncQueue" WHERE payload->>'source' = 'STOCK_PUSH_HEAL'`))[0].n).toBe(0)
 
     // Positive control: a listing with nothing holding it is skipped while its account needs signing in, and healed
     // once it is back.
@@ -222,10 +237,113 @@ describe('stock push heal — a failed quantity push is queued again', () => {
     const lid = await listing(id.own, { quantity: 4, marketplace: 'NL', region: 'NL', channelMarket: 'EBAY_NL' })
     await dead(lid, id.own, 30)
     await sql(`UPDATE "ChannelConnection" SET "authStatus" = 'needs_reauth' WHERE id = $1`, [id.store])
-    expect((await run()).skipped).toMatchObject({ account_down: 1 })
+    expect(await run()).toMatchObject({ candidates: 0, healed: 0 })
     await sql(`UPDATE "ChannelConnection" SET "authStatus" = 'connected' WHERE id = $1`, [id.store])
     expect(await run()).toMatchObject({ healed: 1 })
     expect(await heals(lid)).toHaveLength(1)
+  })
+
+  it('the code repeats every column gate: each held listing is refused by listingGate too (pure)', () => {
+    const base = {
+      id: 'l1', productId: 'p1', channel: 'EBAY', marketplace: 'IT', region: 'IT', externalListingId: 'ITEM-1', quantity: 4, stockBuffer: 0,
+      followMasterQuantity: false, fulfillmentMethod: null, syncPaused: false, offerClosedAt: null, listingStatus: 'ACTIVE', isPublished: true,
+      sourceLocationCodes: [], channelConnectionId: 'c1', product: { fulfillmentMethod: null, deletedAt: null }, channelConnection: { isActive: true, authStatus: 'connected' },
+    }
+    const gate = (extra: Record<string, unknown>) => heal.listingGate({ ...base, ...extra } as never, undefined, new Map(), () => 'FBM')
+    expect(gate({})).toBeNull()
+    expect(gate({ syncPaused: true })).toBe('push_locked')
+    expect(gate({ offerClosedAt: new Date() })).toBe('push_locked')
+    expect(gate({ listingStatus: 'ENDED' })).toBe('push_locked')
+    expect(gate({ listingStatus: 'DRAFT', isPublished: false, externalListingId: null })).toBe('still_draft')
+    expect(gate({ channelConnection: { isActive: true, authStatus: 'needs_reauth' } })).toBe('account_down')
+    expect(gate({ channelConnection: { isActive: false, authStatus: 'connected' } })).toBe('account_down')
+    expect(gate({ product: { fulfillmentMethod: null, deletedAt: new Date() } })).toBe('product_deleted')
+    expect(gate({ quantity: null })).toBe('uncounted')
+    expect(heal.listingGate({ ...base } as never, undefined, new Map(), () => 'FBA')).toBe('fba')
+    const paused = new Map([['EBAY:IT@', { pushesPaused: true, newListingDefaultMode: 'FOLLOW' }]])
+    expect(heal.listingGate({ ...base } as never, undefined, paused, () => 'FBM')).toBe('paused')
+  })
+
+  it('held listings never hide a newer one that can be healed, whatever the window (max 1)', async () => {
+    // More held rows than one run reads (SCAN_PAGES pages of max), all older than the one that can be healed.
+    const held = heal.SCAN_PAGES + 1
+    const healable = async () => {
+      const lid = await onMarket('DK')
+      await dead(lid, id.own, 30)
+      return lid
+    }
+    const reset = async () => {
+      for (const table of ['OutboundSyncQueue', 'SyncChannelPolicy', 'ChannelListing']) await sql(`DELETE FROM "${table}"`)
+    }
+
+    // 1. Held by a column: paused, selling closed, ended, an FBA listing.
+    const columns = [{ syncPaused: true }, { offerClosedAt: new Date() }, { listingStatus: 'ENDED' }, { fulfillmentMethod: 'FBA' }]
+    for (let i = 0; i < held; i++) await dead(await onMarket(MARKETS[i], columns[i % columns.length]), id.own, 90 + i)
+    let target = await healable()
+    expect(await run({ max: 1 })).toMatchObject({ candidates: 1, healed: 1 })
+    expect(await heals(target)).toHaveLength(1)
+    await reset()
+
+    // 2. Held by their budget: each listing's latest row is today's heal, refused again by the channel.
+    for (let i = 0; i < held; i++) {
+      const lid = await onMarket(MARKETS[i])
+      await dead(lid, id.own, 180 + i, { errorCode: 'EBAY_VALIDATION', retryCount: 1 })
+      await dead(lid, id.own, 90 + i, { errorCode: 'EBAY_VALIDATION', retryCount: 1, payload: JSON.stringify({ source: 'STOCK_PUSH_HEAL', quantity: 4 }) })
+    }
+    target = await healable()
+    expect(await run({ max: 1 })).toMatchObject({ candidates: 1, healed: 1 })
+    expect(await heals(target)).toHaveLength(1)
+    await reset()
+
+    // 3. Held by a policy: eBay paused channel-wide, except the healable listing's market, which a market row resumes
+    //    (the market decides first, as policyFor does).
+    await sql(`INSERT INTO "SyncChannelPolicy" (id, "workspaceId", channel, marketplace, "pushesPaused", "updatedAt") VALUES ($1,$2,'EBAY','*',true,CURRENT_TIMESTAMP), ($3,$2,'EBAY','DK',false,CURRENT_TIMESTAMP)`, [randomUUID(), B, randomUUID()])
+    for (let i = 0; i < held; i++) await dead(await onMarket(MARKETS[i]), id.own, 90 + i)
+    target = await healable()
+    expect(await run({ max: 1 })).toMatchObject({ candidates: 1, healed: 1 })
+    expect(await heals(target)).toHaveLength(1)
+    await reset()
+
+    // 4. Held by what only the ledger says (the Nexus number differs): read and skipped in code, page by page — the
+    //    healable row is still reached within SCAN_PAGES pages.
+    for (let i = 0; i < heal.SCAN_PAGES - 1; i++) await dead(await onMarket(MARKETS[i], { quantity: 9 }), id.own, 90 + i)
+    target = await healable()
+    expect(await run({ max: 1 })).toMatchObject({ candidates: heal.SCAN_PAGES, healed: 1, skipped: { nexus_number_differs: heal.SCAN_PAGES - 1 }, capped: false })
+    expect(await heals(target)).toHaveLength(1)
+  })
+
+  it('a refusal on the third try is still a refusal: one heal a day, not three', async () => {
+    const lid = await listing(id.own, { quantity: 4 })
+    await dead(lid, id.own, 30, { errorCode: 'EBAY_VALIDATION', errorMessage: 'Item specifics missing', retryCount: 3 })
+    expect(await run()).toMatchObject({ healed: 1 })
+    const [first] = await heals(lid)
+    expect(first.payload).toMatchObject({ healClass: 'REFUSED' })
+    await sql(`UPDATE "OutboundSyncQueue" SET "syncStatus" = 'FAILED', "isDead" = true, "errorCode" = 'EBAY_VALIDATION', "retryCount" = 3 WHERE id = $1`, [first.id])
+    // Two hours later a retryable failure would be healed again; a refusal waits for the next day.
+    await sql(`UPDATE "OutboundSyncQueue" SET "createdAt" = "createdAt" - interval '2 hours', "updatedAt" = "updatedAt" - interval '2 hours' WHERE "channelListingId" = $1`, [lid])
+    expect(await run()).toMatchObject({ candidates: 0, healed: 0 })
+    expect(await heals(lid)).toHaveLength(1)
+  })
+
+  it('a failure that kept failing is healed up to 3 times a day, at least an hour apart', async () => {
+    const lid = await listing(id.own, { quantity: 4 })
+    await dead(lid, id.own, 30)
+    const failAgainAndAge = async (hours: number) => {
+      const latest = (await heals(lid)).at(-1)!
+      await sql(`UPDATE "OutboundSyncQueue" SET "syncStatus" = 'FAILED', "isDead" = true, "errorCode" = 'MAX_RETRIES_EXCEEDED', "retryCount" = 3 WHERE id = $1`, [latest.id])
+      await sql(`UPDATE "OutboundSyncQueue" SET "createdAt" = "createdAt" - make_interval(hours => $2), "updatedAt" = "updatedAt" - make_interval(hours => $2) WHERE "channelListingId" = $1`, [lid, hours])
+    }
+    expect(await run()).toMatchObject({ healed: 1 })
+    await failAgainAndAge(0)
+    expect(await run()).toMatchObject({ candidates: 0, healed: 0 }) // within the hour
+    await failAgainAndAge(2)
+    expect(await run()).toMatchObject({ healed: 1 })
+    await failAgainAndAge(2)
+    expect(await run()).toMatchObject({ healed: 1 })
+    expect(await heals(lid)).toHaveLength(3)
+    await failAgainAndAge(2)
+    expect(await run()).toMatchObject({ candidates: 0, healed: 0 }) // 3 in the last 24 h
+    expect((await heals(lid)).map((h) => h.payload.healClass)).toEqual(['RETRYABLE', 'RETRYABLE', 'RETRYABLE'])
   })
 
   it('a listing that sells from another business\'s stock is healed to the pool\'s number', async () => {
