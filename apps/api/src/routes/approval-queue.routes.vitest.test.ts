@@ -350,6 +350,9 @@ describe('GET /agent/fleet/approvals/queue/:id', { timeout: 30_000 }, () => {
     const price = (await get('all', `/agent/fleet/approvals/queue/${ids.priceOk}`)).json() as QueueDetail
     expect(price).toMatchObject({ canEdit: true, allChanges: [{ label: 'Base price', from: '€50.00', to: '€52.00' }] })
     expect((await get('prices', `/agent/fleet/approvals/queue/${ids.content}`)).json()).toMatchObject({ canEdit: false })
+    // The request's arguments go only with canEdit (the drawer's edit form); never to a viewer who may not edit it.
+    expect(price.editArgs).toEqual(expect.any(Object))
+    expect(((await get('prices', `/agent/fleet/approvals/queue/${ids.content}`)).json() as QueueDetail).editArgs).toBeNull()
   })
 
   it('a plan: its steps as items', async () => {

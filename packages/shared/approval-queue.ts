@@ -194,6 +194,11 @@ export interface QueueDetail extends QueueRow {
   change: { id: string; undoable: boolean; undoneAt: string | null; whyNotUndoable: string | null } | null
   /** May the person edit the values, then approve (the server re-runs the tool's own checks on the edit)? */
   canEdit: boolean
+  /**
+   * The request's own arguments, sent only when `canEdit` (the viewer may use the tool), so the drawer can build an
+   * edit form for keys that need the rest of the request (e.g. set-listing-stock's action). Null otherwise.
+   */
+  editArgs: Record<string, unknown> | null
 }
 
 /** POST /api/agent/fleet/approvals/bulk-preview and bulk-decide keep their paths; this is the approve outcome. */

@@ -915,6 +915,8 @@ export async function queueDetail(id: string, viewer: ToolPrincipal | null): Pro
     channelResult: await channelResultOf(ap, tool, recorded?.after),
     change: recorded ? { id: recorded.id, undoable: undo === 'possible', undoneAt: iso(recorded.undoneAt), whyNotUndoable } : null,
     canEdit: mayEdit,
+    // The request's own arguments, for the drawer's edit form: only when this viewer may edit it (same gate as canEdit).
+    editArgs: mayEdit ? rec(ap.args) : null,
   }
 }
 

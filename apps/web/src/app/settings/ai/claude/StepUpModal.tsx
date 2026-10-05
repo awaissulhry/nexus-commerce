@@ -18,9 +18,11 @@ export interface StepUpModalProps {
   error: string | null
   onSubmit: (code: string) => void
   onClose: () => void
+  /** Passed to the Modal: the Approvals page's "Automate this kind…" passes `fleet-portal` to keep the fleet's light pin. */
+  className?: string
 }
 
-export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onClose }: StepUpModalProps) {
+export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onClose, className }: StepUpModalProps) {
   const [code, setCode] = useState('')
   const id = useId()
   useEffect(() => {
@@ -33,6 +35,7 @@ export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onCl
       onClose={onClose}
       title={title}
       size="sm"
+      className={className}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
