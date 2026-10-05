@@ -98,6 +98,22 @@ describe('category name lookup', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(3)
   })
 
+  // W3-5 — eBay's aspectConstraint.expectedRequiredByDate: kept when eBay sends it, absent (not undefined-valued) otherwise.
+  it('reads the date from which eBay plans to require an aspect, only when eBay sends one', async () => {
+    mocks.token.mockResolvedValue('seller-token')
+    const constraint = { aspectDataType: 'STRING', aspectMode: 'FREE_TEXT', aspectRequired: false, aspectUsage: 'RECOMMENDED', itemToAspectCardinality: 'SINGLE' }
+    mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ aspects: [
+      { localizedAspectName: 'Marca', aspectConstraint: { ...constraint, expectedRequiredByDate: '2027-01-15T00:00:00.000Z' } },
+      { localizedAspectName: 'Colore', aspectConstraint: constraint },
+      { localizedAspectName: 'Taglia', aspectConstraint: { ...constraint, expectedRequiredByDate: 20270115 } },
+    ] }) })
+    const [brand, colour, size] = await new EbayCategoryService().getCategoryAspectsRich('177104', 'IT', { throwOnError: true })
+    expect(mocks.fetch.mock.calls[0][0]).toContain('/get_item_aspects_for_category?category_id=177104')
+    expect(brand.expectedRequiredByDate).toBe('2027-01-15T00:00:00.000Z')
+    expect('expectedRequiredByDate' in colour).toBe(false)
+    expect('expectedRequiredByDate' in size).toBe(false)
+  })
+
   it('rejects placeholder application credentials without sending them to eBay', async () => {
     vi.stubEnv('EBAY_CLIENT_ID', 'your_client_id'); vi.stubEnv('EBAY_CLIENT_SECRET', 'your_client_secret')
     await expect(new EbayCategoryService().getCategoryBreadcrumbs(['177104'], 'IT', { throwOnError: true })).rejects.toThrow('Check the eBay connection')

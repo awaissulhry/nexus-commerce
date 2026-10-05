@@ -183,6 +183,9 @@ export class CategorySchemaService {
         options: a.values, enumMode: optionModeFrom(a.mode) ?? 'open',
         required: a.required, recommended: a.usage === 'RECOMMENDED',
         cardinality: a.cardinality, variantEligible: a.variantEligible, maxLength: a.maxLength,
+        // W3-5 — eBay's approximate "required from" date, stored only when eBay sends one: an aspect without it keeps
+        // the old JSON, so the schema hash (and its change log / readiness rebuild) does not move for those categories.
+        ...(a.expectedRequiredByDate ? { expectedRequiredByDate: a.expectedRequiredByDate } : {}),
       })),
       conditions: conditions.map(c => ({ value: toInventoryCondition(c.conditionId), label: c.conditionDescription })),
     }
