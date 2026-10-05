@@ -814,8 +814,8 @@ const receiveStock: AgentTool = {
     + 'check go into stock at the shipment\'s warehouse (one audited movement each), the shipment and the PO count them, '
     + 'and listings that follow stock show the new number. Never more than is still expected on a line. Also releases '
     + 'units held at the quality check into stock, or records a discrepancy (short, damaged, wrong item). Amazon FBA '
-    + 'shipments are never received here. Undo takes the units back out of stock; the shipment keeps its count. Always '
-    + 'waits for a person to approve it in Nexus.',
+    + 'shipments are never received here. Undo takes the units back out of stock; the shipment keeps its count. '
+    + 'Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planReceive(args)
     if (refused(plan)) return { ok: false, error: plan.error }

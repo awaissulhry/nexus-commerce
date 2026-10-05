@@ -107,6 +107,12 @@ describe('C3 — the server and every change tool name the business', () => {
     expect(mcpServerInfo(business)).toMatchObject({ name: 'nexus', title: 'Nexus — Xavia Racing' })
     expect(mcpInstructions(business)).toContain('This connection works in the business "Xavia Racing" only')
     expect(mcpInstructions(business)).toContain('business: "Xavia Racing"')
+    // N3 — the rules every skill used to repeat, once, here.
+    for (const rule of ['submit-change-plan, undo-change and confirm-change', 'read it before naming a market or an account',
+      'go on only after a clear yes', 'ONE submit-change-plan', 'approveAt; it expires at expiresAt', 'the approvalId, the planHash and the',
+      'Never say a change ran until approval-status says so', 'Never pause an ad', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages']) {
+      expect(mcpInstructions(business), rule).toContain(rule)
+    }
   })
 
   it('every change tool takes a required business name; a read takes none', () => {

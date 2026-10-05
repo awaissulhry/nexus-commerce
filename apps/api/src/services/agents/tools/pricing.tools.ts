@@ -528,7 +528,7 @@ const schedulePriceChange: AgentTool = {
     + 'job sets the master price (inside the product\'s price bounds), and every listing that follows the master price '
     + 'moves and is sent to its channel. A cancelled change never runs. A change whose run died while applying it '
     + '(UNKNOWN in scheduled-price-changes) is resolved after a check of the price: applied, or retry on the next sweep. '
-    + 'Always waits for a person to approve it in Nexus.',
+    + 'Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planSchedule(args)
     if (refused(plan)) return { ok: false, error: plan.error }

@@ -44,20 +44,35 @@ import { runToolForClaude } from './mcp-tool-call.js'
 
 let build: string | null = null
 
-/** C3 — what Claude is told, naming the one business this connection works in. */
+/**
+ * C3 — what Claude is told, naming the one business this connection works in. N3 — it also carries the rules every
+ * Nexus skill used to repeat (one copy here instead of 18): read first and ask, one plan for many changes, follow a
+ * change to its end, and the never-rules. What a client needs while Nexus is NOT connected stays in the skills.
+ */
 export function mcpInstructions(business: McpBusiness): string {
   return [
     'Nexus is the back office for selling on Amazon, eBay, Shopify and Etsy: catalog, listings, stock, orders and advertising.',
     `This connection works in the business "${business.name}" only: every tool reads and changes that business, and`,
-    'every result says so (business). The same SKU can exist in another business; never reuse an id or a SKU read on',
-    `another connection. Every change tool needs business: "${business.name}" — a check: any other name is refused.`,
-    'Read-only tools answer from Nexus data. A change tool changes nothing from here: it returns a preview and an approvalId,',
-    'and a person must approve it in the Nexus Approvals page (the link is in the result) — unless the business set that',
-    'change to run by its rule (status runs_by_rule): it then runs after a short window in which a person can stop it.',
-    'You cannot approve changes, and you cannot change what may run by rule. A change set to "confirm in Claude" is',
-    'approved by the person who asked: they read the 6-digit code from their authenticator app and you pass it with',
-    'confirm-change — never guess, store or reuse a code.',
-    'Use approval-status with the approvalId to see what became of one; undo-change asks to put a change back.',
+    'every result says so (business). The same SKU can exist in another business; never reuse an id, a SKU or an approvalId',
+    `read on another connection. Every change tool needs business: "${business.name}" — a check: any other name is refused —`,
+    'and so do submit-change-plan, undo-change and confirm-change.',
+    'Read-only tools answer from Nexus data. business-overview lists the business\'s markets and channel accounts with the',
+    'exact codes and ids tools take: read it before naming a market or an account.',
+    `Before any change: tell the person it is for ${business.name}, read what is there now, show the plan (what changes,`,
+    'from → to, how many, and where it lands: Nexus only, a marketplace or a buyer), and go on only after a clear yes.',
+    'Several changes go in ONE submit-change-plan (up to 200 steps; a bulk tool is one step) or one bulk tool, never a',
+    'loop of single requests.',
+    'A change tool changes nothing from here: it returns a preview and an approvalId, and a person approves it in the Nexus',
+    'Approvals page (approveAt; it expires at expiresAt) — unless the business set that change to run by its rule (status',
+    'runs_by_rule): it then runs at runsAt, after a short window in which a person can stop it (stopAt). An approved change',
+    'runs as the person who approved it, after its facts are checked again. You cannot approve changes, and you cannot',
+    'change what may run by rule. A change set to "confirm in Claude" is approved by the person who asked: they read the',
+    '6-digit code from their authenticator app and you pass it with confirm-change (the approvalId, the planHash and the',
+    'code) — never guess, store or reuse a code.',
+    'Never say a change ran until approval-status says so, and repeat its meaning; undo-change asks to put a change back.',
+    'Never pause an ad: lower its bids instead. Never change an Amazon FBA quantity (it is Amazon\'s number). Never send',
+    'anyone to the old Amazon or eBay flat-file pages: products are edited in the product sheet and published from the',
+    'product studio. When a tool is refused or turned off for Claude, pass the reason on in plain words and carry on.',
   ].join(' ')
 }
 
