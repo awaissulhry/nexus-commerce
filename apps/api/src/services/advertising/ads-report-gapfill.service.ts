@@ -1,4 +1,3 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Self-healing for the ads report pipeline.
  *
@@ -54,6 +53,7 @@ import {
   ADVERTISED_PRODUCT_REPORT_TYPE_ID,
 } from './ads-reports.service.js'
 import type { AdsRegion } from './ads-api-client.js'
+import { reportCurrencyOrSkip } from './ads-profile-facts.service.js'
 
 /**
  * What KIND of hole this is, which decides what gets re-requested.
@@ -233,10 +233,9 @@ export async function runGapFillCycle(args: {
   for (const gap of ordered) {
     if (out.jobsCreated >= maxJobs) break
     const region: AdsRegion = (gap.region === 'NA' || gap.region === 'FE') ? (gap.region as AdsRegion) : 'EU'
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: gap.profileId }) }, select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this gap waits (said so), never filled as EUR.
+    const currencyCode = await reportCurrencyOrSkip({ profileId: gap.profileId, marketplace: gap.marketplace }, 'gap fill')
+    if (!currencyCode) continue
 
     // The two reports that populate AmazonAdsDailyPerformance. Search terms and
     // placement have their own tables and their own gap semantics, so they are
