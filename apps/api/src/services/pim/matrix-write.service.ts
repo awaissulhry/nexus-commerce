@@ -83,9 +83,9 @@ const OP_KIND = 'studio-matrix-verb'
 /* ── the read, and the listing rows a coordinate stands for ─────────────────────────────────── */
 
 export interface Target { id: string; marketplace: string; version: number }
-type Located = { row: MatrixRowRead; coord: MatrixCoordinate; cells: MatrixCells }
+export type Located = { row: MatrixRowRead; coord: MatrixCoordinate; cells: MatrixCells }
 
-function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | null {
+export function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | null {
   const row = read.rows.find((r) => r.id === rowId)
   const coord = read.coordinates.find((c) => c.key === key)
   const cells = row?.cells[key]
@@ -98,7 +98,7 @@ function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Located | 
  * one EU rule (`loadSharedInventoryTargets`). The region cell's own `listingId`/`version` is the PRIMARY market's; its
  * fresh version must still match.
  */
-async function targetsOf(read: MatrixRead, hit: Located, expectedVersion: number): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
+export async function targetsOf(read: MatrixRead, hit: Located, expectedVersion: number): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
   if (!hit.coord.sharedInventoryWith) return { targets: [{ id: hit.cells.listingId!, marketplace: hit.coord.market, version: expectedVersion }] }
   // The primary's own market: the market coordinate of this row that holds the same listing (read in memory).
   const own = read.coordinates.find((c) => c.channel === hit.coord.channel && !c.alias && c.key !== hit.coord.key
@@ -341,6 +341,14 @@ async function refreshCache(read: MatrixRead, results: readonly MatrixWriteOutco
 
 /* ── the state verbs: pause · resume · push now · retry ─────────────────────────────────────── */
 
+/** Retry's row: the newest failed (or dead) quantity or price push of these listings, the one Retry sends again. */
+export function newestFailedPush(listingIds: readonly string[]) {
+  return prisma.outboundSyncQueue.findFirst({
+    where: { channelListingId: { in: [...listingIds] }, syncType: { in: ['QUANTITY_UPDATE', 'PRICE_UPDATE'] }, OR: [{ syncStatus: 'FAILED' }, { isDead: true }] },
+    orderBy: { createdAt: 'desc' }, select: { id: true, productId: true, channelListingId: true, targetChannel: true, syncType: true, errorMessage: true },
+  })
+}
+
 async function applySyncState(read: MatrixRead, change: VerbChange, verb: MatrixVerbId, ctx: DoorContext): Promise<MatrixWriteOutcome> {
   const base = { rowId: change.rowId, coordinateKey: change.coordinateKey, cell: 'syncMode' as MatrixWritableKind }
   const hit = locate(read, change.rowId, change.coordinateKey)
@@ -391,10 +399,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
       return applied()
     }
     if (verb === 'retry-sync') {
-      const failed = await prisma.outboundSyncQueue.findFirst({
-        where: { channelListingId: { in: targets.map((t) => t.id) }, syncType: { in: ['QUANTITY_UPDATE', 'PRICE_UPDATE'] }, OR: [{ syncStatus: 'FAILED' }, { isDead: true }] },
-        orderBy: { createdAt: 'desc' }, select: { id: true, productId: true, channelListingId: true, targetChannel: true, syncType: true },
-      })
+      const failed = await newestFailedPush(targets.map((t) => t.id))
       if (!failed) return { ...base, outcome: 'refused', reason: 'Nothing to retry on this coordinate', version: cells.version }
       if (await prisma.channelListing.findFirst({ where: { id: { in: targets.map((t) => t.id) }, offerClosedAt: { not: null } }, select: { id: true } })) throw new SellingPaused()
       await bumpTx(targets)

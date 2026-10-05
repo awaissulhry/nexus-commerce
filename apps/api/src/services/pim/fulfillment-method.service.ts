@@ -113,23 +113,51 @@ export function codeHeldReason(bag: unknown, method: FulfilmentWrite): string | 
   return null
 }
 
-export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[]; actor: string }): Promise<FulfilmentResult> {
-  const result: FulfilmentResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0, productConversions: [] }
-  if (input.targets.length === 0) return result
-  const ids = [...new Set(input.targets.map((t) => t.listingId))]
+/** The listings a fulfilment write reads, with the FBA evidence its guard weighs: FBA units per product, active FBA offers. */
+async function loadGuardFacts(ids: readonly string[]) {
   const listings = await prisma.channelListing.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: [...ids] } },
     select: { id: true, productId: true, channel: true, marketplace: true, fulfillmentMethod: true, platformAttributes: true, version: true, product: { select: { sku: true, fulfillmentMethod: true } } },
   })
-  const byId = new Map(listings.map((l) => [l.id, l]))
   const productIds = [...new Set(listings.map((l) => l.productId))]
   const [fbaStock, fbaOffers] = await Promise.all([
     prisma.stockLevel.findMany({ where: { productId: { in: productIds }, location: { code: FBA_LOCATION_CODE } }, select: { productId: true, quantity: true } }),
-    prisma.offer.findMany({ where: { channelListingId: { in: ids }, fulfillmentMethod: 'FBA', isActive: true }, select: { channelListingId: true } }),
+    prisma.offer.findMany({ where: { channelListingId: { in: [...ids] }, fulfillmentMethod: 'FBA', isActive: true }, select: { channelListingId: true } }),
   ])
   const fbaUnits = new Map<string, number>()
   for (const s of fbaStock) fbaUnits.set(s.productId, (fbaUnits.get(s.productId) ?? 0) + s.quantity)
-  const activeFbaOffer = new Set(fbaOffers.map((o) => o.channelListingId))
+  return { byId: new Map(listings.map((l) => [l.id, l])), fbaUnits, activeFbaOffer: new Set(fbaOffers.map((o) => o.channelListingId)) }
+}
+
+/** The write's guard on one listing: FBA → FBM while FBA evidence remains, or a code Amazon set; null = it may be written. */
+function guardRefusal(l: { channel: string; platformAttributes: unknown }, method: FulfilmentWrite, units: number, activeOffer: boolean): string | null {
+  if (l.channel === 'AMAZON' && method === 'FBM' && (units > 0 || activeOffer)) return guardHeldReason(units, activeOffer)
+  return l.channel === 'AMAZON' ? codeHeldReason(l.platformAttributes, method) : null
+}
+
+/**
+ * The dry run of `setFulfillmentMethod`: why each target would be refused (its own sentence), without writing anything.
+ * The same reads and the same guard as the write, so a preview that passes here is refused at the write only if the
+ * listing moved in between. A target missing from the answer would be written (or is already so).
+ */
+export async function fulfilmentRefusals(targets: ReadonlyArray<{ listingId: string; method: FulfilmentWrite }>): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (targets.length === 0) return out
+  const { byId, fbaUnits, activeFbaOffer } = await loadGuardFacts([...new Set(targets.map((t) => t.listingId))])
+  for (const t of targets) {
+    const l = byId.get(t.listingId)
+    const reason = !l ? 'No listing with this id'
+      : l.channel !== 'AMAZON' && l.channel !== 'EBAY' ? `${l.channel} has no fulfilment method`
+        : guardRefusal(l, t.method, fbaUnits.get(l.productId) ?? 0, activeFbaOffer.has(l.id))
+    if (reason) out.set(t.listingId, reason)
+  }
+  return out
+}
+
+export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[]; actor: string }): Promise<FulfilmentResult> {
+  const result: FulfilmentResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0, productConversions: [] }
+  if (input.targets.length === 0) return result
+  const { byId, fbaUnits, activeFbaOffer } = await loadGuardFacts([...new Set(input.targets.map((t) => t.listingId))])
 
   const recascade = new Set<string>()
   const audit: Prisma.SyncControlAuditCreateManyInput[] = []
@@ -141,11 +169,8 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     if (l.channel !== 'AMAZON' && l.channel !== 'EBAY') { push({ ...base, outcome: 'refused', reason: `${l.channel} has no fulfilment method`, version: l.version }); continue }
     if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: l.version }); continue }
     const units = fbaUnits.get(l.productId) ?? 0
-    if (l.channel === 'AMAZON' && t.method === 'FBM' && (units > 0 || activeFbaOffer.has(l.id))) {
-      push({ ...base, outcome: 'refused', reason: guardHeldReason(units, activeFbaOffer.has(l.id)), version: l.version }); continue
-    }
-    const codeHeld = l.channel === 'AMAZON' ? codeHeldReason(l.platformAttributes, t.method) : null
-    if (codeHeld) { push({ ...base, outcome: 'refused', reason: codeHeld, version: l.version }); continue }
+    const held = guardRefusal(l, t.method, units, activeFbaOffer.has(l.id))
+    if (held) { push({ ...base, outcome: 'refused', reason: held, version: l.version }); continue }
     const pa = fulfilmentAttributes(l.platformAttributes, l.channel, t.method)
     const paBefore = (l.platformAttributes as Record<string, unknown> | null) ?? {}
     const mirrorsAlreadyRight = JSON.stringify(paBefore.fulfillmentChannel ?? null) === JSON.stringify(pa.fulfillmentChannel ?? null)
