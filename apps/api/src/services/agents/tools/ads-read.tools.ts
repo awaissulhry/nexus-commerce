@@ -26,6 +26,10 @@
  * A13 — `ads-overview` and `ad-campaigns` take `channel: amazon | ebay`. eBay reads go through
  * services/marketing/ebay-ads-read.service.ts (the eBay console's own reads, moved out of its routes), and every eBay
  * campaign names its OWN account (EbayCampaign.channelConnectionId), the one a later change must go to.
+ *
+ * T4 — `ebay-ad-details` opens eBay campaigns as their page does (ebayCampaignDetail): the promoted listings with
+ * their ad rate and break-even, the ad groups, and the keywords with bid and metrics, under the ids the eBay change
+ * tools take (ebayCampaignId, ebayItemId, ebayAdGroupId, ebayKeywordId).
  */
 
 import { createHash } from 'node:crypto'
@@ -77,10 +81,13 @@ import {
   ebayAdsTrend,
   ebayCampaignAccounts,
   ebayCampaignCensus,
+  ebayCampaignDetail,
   ebayMarketCurrencies,
   ebayPerformanceAsOf,
   type EbayCampaignAccount,
+  type EbayCampaignDetail,
 } from '../../marketing/ebay-ads-read.service.js'
+import { EBAY_MANAGED_STATUSES } from '../../ads-core/campaign-status.js'
 // The eBay dashboard (its spend-ceiling check) is imported where it is used: its module graph opens the eBay account
 // services, which the tool registry must not load in every process that lists tools.
 import { checkMarketingWriteGate } from '../../marketing/marketing-write-gate.js'
@@ -1431,4 +1438,233 @@ async function ebayRecommendations(args: Record<string, unknown>, scope: string)
   }
 }
 
-export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adSearchTerms, adChanges, adRecommendations]
+// ── ebay-ad-details (T4) ───────────────────────────────────────────────────────────────────────────
+
+/*
+ * One tool with a `view`, not `channel: ebay` on ad-targets or ad-search-terms: an eBay listing's ad rate and its
+ * break-even, and a Priority campaign's ad groups, have no Amazon twin in those tools, and ad-search-terms reads search
+ * queries, not keywords. Each row names the eBay change tools' own ids under their own names.
+ */
+const EBAY_DETAIL_VIEWS = ['listings', 'ad-groups', 'keywords'] as const
+type EbayDetailView = (typeof EBAY_DETAIL_VIEWS)[number]
+/** The most campaigns one call opens when no campaignId names one: each is read whole, as its page reads it. */
+const EBAY_DETAIL_CAMPAIGN_CAP = 40
+/** This read's money beyond AD_MONEY and the shared registry: an ad rate, a break-even rate and how the two compare. */
+const EBAY_DETAIL_MONEY = { ...AD_MONEY, ratePct: ADSPEND, breakEvenPct: ADSPEND, rateAboveBreakEven: ADSPEND } as const
+const EBAY_ENDED = new Set(['ENDED', 'DELETED', 'ARCHIVED'])
+const isPriority = (fundingModel: string | null | undefined) => fundingModel === 'COST_PER_CLICK'
+
+interface EbayDetailArgs { view: EbayDetailView; campaignId?: string; market?: string; adGroupId?: string; search?: string; days: number; limit?: number; cursor?: string }
+type EbayDetailRow = { id: string; sort: string[]; row: Record<string, unknown> }
+
+/** Why set-ebay-ad-rates refuses this campaign's listings (its own refusals, in its words); null when it sets them. */
+function ebayRateNote(c: EbayCampaignDetail['campaign']): string | null {
+  if (EBAY_ENDED.has(String(c.status).toUpperCase())) return 'ended: eBay changes nothing in an ended campaign.'
+  if (isPriority(c.fundingModel)) return 'Priority (cost-per-click): its listings have no ad rate; its keyword bids change with ebay-keywords-change.'
+  if (c.isRulesBased) return 'rules-based: eBay applies the campaign\'s own rate to the listings its rules select, so its ads have no rate of their own here.'
+  if (c.adRateStrategy === 'DYNAMIC') return 'dynamic rates: eBay sets each ad\'s rate every day under the campaign\'s cap.'
+  return null
+}
+
+async function ebayAdDetails(a: EbayDetailArgs, scope: string): Promise<ToolResult> {
+  const size = pageSize(a.limit)
+  const market = ebayMarket(a.market)
+  const census = await ebayCampaignCensus()
+  let picked: typeof census
+  if (a.campaignId) {
+    const one = census.find((c) => c.id === a.campaignId)
+    if (!one) return { ok: false, error: 'Campaign not found' }
+    if (market && one.marketplace !== market) return { ok: false, error: `${one.name} is a ${one.marketplace} campaign, not ${market}: leave market out, or name a campaign of ${market}.` }
+    if (a.view !== 'listings' && !isPriority(one.fundingModel)) {
+      return { ok: false, error: `${one.name} is a General (cost-per-sale) campaign: it has no ad groups or keywords (those belong to Priority, cost-per-click, campaigns). Its promoted listings and their rates: view listings.` }
+    }
+    picked = [one]
+  } else {
+    if (a.adGroupId) return { ok: false, error: 'adGroupId needs campaignId: the eBay campaign the ad group belongs to (ebayCampaignId in this read\'s rows).' }
+    picked = census.filter((c) => (!market || c.marketplace === market)
+      && (EBAY_MANAGED_STATUSES as readonly string[]).includes(c.status)
+      && (a.view === 'listings' || isPriority(c.fundingModel)))
+  }
+  picked.sort((x, y) => x.marketplace.localeCompare(y.marketplace) || x.name.localeCompare(y.name) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
+  const opened = picked.slice(0, EBAY_DETAIL_CAMPAIGN_CAP)
+  const { range } = windowOf(a.days)
+  const [details, currencies, configured, asOf] = await Promise.all([
+    Promise.all(opened.map((c) => ebayCampaignDetail(c.id, { startDate: range.sinceStr, endDate: range.untilStr }))),
+    ebayMarketCurrencies(),
+    configuredEbayCurrency(),
+    ebayPerformanceAsOf(market ?? (a.campaignId ? opened[0]?.marketplace : undefined)),
+  ])
+  const budgetCurrency = new Map(opened.map((c) => [c.id, c.budgetCurrency]))
+  const campaigns = details.filter((d): d is EbayCampaignDetail => d != null).map((d) => ({
+    d,
+    currency: budgetCurrency.get(d.campaign.id) ?? currencies.get(d.campaign.marketplace) ?? configured(d.campaign.marketplace),
+    // An unmapped market's break-even would be read from Italy's listings (the page's fallback): never shown.
+    knownMarket: Object.prototype.hasOwnProperty.call(EBAY_MARKETPLACE_SHORT, d.campaign.marketplace),
+  }))
+  if (a.adGroupId && !campaigns.some(({ d }) => d.adGroups.some((g) => g.id === a.adGroupId))) return { ok: false, error: 'Ad group not found' }
+
+  const needle = a.search?.toLowerCase()
+  const has = (text: string | null | undefined) => !needle || (text ?? '').toLowerCase().includes(needle)
+  const rows: EbayDetailRow[] = []
+  for (const { d, currency, knownMarket } of campaigns) {
+    const c = d.campaign
+    const where = { ebayCampaignId: c.id, campaignName: c.name, market: c.marketplace, currency }
+    if (a.view === 'listings') {
+      const groupName = new Map(d.adGroups.map((g) => [g.id, g.name]))
+      for (const ad of d.ads) {
+        if ((a.adGroupId && ad.adGroupId !== a.adGroupId) || !(has(ad.title) || has(ad.listingId))) continue
+        const ratePct = isPriority(c.fundingModel) ? null : ad.bidPercentage ?? c.bidPercentage
+        const breakEvenPct = knownMarket ? ad.breakEvenAdRatePct : null
+        rows.push({
+          id: ad.id,
+          sort: [c.marketplace, c.name, ad.title ?? '', ad.listingId ?? ''],
+          row: {
+            ebayItemId: ad.listingId,
+            ...(ad.listingId ? {} : { inventoryReference: ad.inventoryReference }),
+            title: ad.title,
+            productId: ad.productId,
+            ...where,
+            fundingModel: c.fundingModel,
+            ebayAdGroupId: ad.adGroupId,
+            adGroupName: ad.adGroupId ? groupName.get(ad.adGroupId) ?? null : null,
+            status: ad.status,
+            hiddenReason: ad.hiddenReason,
+            listingEnded: ad.listingEnded,
+            priceCents: ad.priceCents,
+            quantity: ad.quantity,
+            ratePct,
+            rateFrom: ratePct == null ? null : ad.bidPercentage != null ? 'listing' : 'campaign',
+            breakEvenPct,
+            economics: knownMarket ? ad.economicsStatus : null,
+            rateAboveBreakEven: ratePct != null && breakEvenPct != null ? ratePct > breakEvenPct : null,
+            metrics: ebayTotals(ad.metrics),
+          },
+        })
+      }
+    } else if (a.view === 'ad-groups') {
+      for (const g of d.adGroups) {
+        if ((a.adGroupId && g.id !== a.adGroupId) || !has(g.name)) continue
+        rows.push({
+          id: g.id,
+          sort: [c.marketplace, c.name, g.name],
+          row: {
+            ebayAdGroupId: g.id,
+            externalAdGroupId: g.externalAdGroupId,
+            name: g.name,
+            status: g.status,
+            ...where,
+            defaultBidCents: g.defaultBidCents,
+            counts: {
+              keywords: d.keywords.filter((k) => k.adGroupId === g.id).length,
+              listings: d.ads.filter((x) => x.adGroupId === g.id).length,
+              negativeKeywords: d.negativeKeywords.filter((n) => n.adGroupId === g.id).length,
+            },
+          },
+        })
+      }
+    } else {
+      for (const k of d.keywords) {
+        if ((a.adGroupId && k.adGroupId !== a.adGroupId) || !has(k.text)) continue
+        rows.push({
+          id: k.id,
+          sort: [c.marketplace, c.name, k.adGroupName ?? '', k.text, k.matchType],
+          row: {
+            ebayKeywordId: k.id,
+            externalKeywordId: k.externalKeywordId,
+            text: k.text,
+            matchType: k.matchType,
+            status: k.status,
+            bidCents: k.bidCents,
+            bidLocked: k.bidCents == null,
+            ebayAdGroupId: k.adGroupId,
+            adGroupName: k.adGroupName,
+            ...where,
+            metrics: { ...ebayTotals(k.metrics), cpcCents: k.metrics.avgCpcCents },
+          },
+        })
+      }
+    }
+  }
+  const page = keysetPage(rows, (r): CursorPosition => ({ values: r.sort, id: r.id }), size, scope, a.cursor)
+  const scopeWords = a.view === 'listings' ? 'running, paused or system-paused eBay campaign' : 'running, paused or system-paused Priority (cost-per-click) eBay campaign'
+  return {
+    ok: true,
+    data: {
+      channel: 'ebay',
+      view: a.view,
+      dataAsOf: asOf,
+      window: { from: range.sinceStr, to: range.untilStr, days: range.days },
+      attribution: 'eBay counts a sale after any click on the ad (any-click attribution); ACoS = ad fees ÷ those sales.',
+      writes: ebayWrites(),
+      campaigns: campaigns.map(({ d, currency }) => {
+        const c = d.campaign
+        const note = a.view === 'listings' ? ebayRateNote(c) : null
+        return {
+          ebayCampaignId: c.id,
+          externalCampaignId: c.externalCampaignId,
+          name: c.name,
+          market: c.marketplace,
+          fundingModel: c.fundingModel,
+          targetingType: c.targetingType ?? null,
+          status: c.status,
+          currency,
+          ratePct: isPriority(c.fundingModel) ? null : c.bidPercentage,
+          adRateStrategy: c.adRateStrategy ?? null,
+          rulesBased: c.isRulesBased,
+          ...(note ? { rateNote: note } : {}),
+          settingsSyncedAt: iso(c.lastEntitySyncAt),
+        }
+      }),
+      items: page.items.map((r) => r.row),
+      nextCursor: page.nextCursor,
+      total: rows.length,
+      ...(campaigns.length === 0 ? { empty: `No ${scopeWords}${market ? ` in ${market}` : ''}.` } : {}),
+      ...(picked.length > EBAY_DETAIL_CAMPAIGN_CAP
+        ? { truncated: `Only the first ${EBAY_DETAIL_CAMPAIGN_CAP} of ${picked.length} campaigns (by market and name) were opened: narrow with market or campaignId.` }
+        : {}),
+      ...(page.nextCursor ? { more: moreHint(page.items.length, rows.length, page.cut, 'campaignId, adGroupId, market or search') } : {}),
+    },
+  }
+}
+
+const ebayAdDetailsTool: AgentTool = {
+  name: 'ebay-ad-details',
+  title: 'eBay ad details',
+  category: 'insights',
+  riskTier: 'low',
+  readOnly: true,
+  requires: [F.adsView],
+  restrictedFields: EBAY_DETAIL_MONEY,
+  input: z.object({
+    view: z.preprocess(lower, z.enum(EBAY_DETAIL_VIEWS)).default('listings')
+      .describe('listings (default) = the promoted listings with their ad rate and break-even; ad-groups = the ad groups of Priority (cost-per-click) campaigns; keywords = their keywords with bid, status and metrics'),
+    campaignId: z.string().trim().min(1).max(64).optional()
+      .describe('only this eBay campaign: its Nexus id (campaignId in ad-campaigns with channel ebay; the ebayCampaignId the eBay change tools take). Without it: every running, paused or system-paused campaign (of the market, when given)'),
+    market: z.string().trim().toUpperCase().min(2).max(20).optional()
+      .describe('only this eBay marketplace: EBAY_IT, EBAY_DE, EBAY_FR, EBAY_ES, EBAY_GB or the short code (IT, DE, FR, ES, UK or GB)'),
+    adGroupId: z.string().trim().min(1).max(64).optional()
+      .describe('with campaignId: only this ad group, by its Nexus id (ebayAdGroupId in the rows)'),
+    search: z.string().trim().min(1).max(100).optional()
+      .describe('only listings whose title or item id, ad groups whose name, or keywords whose text contains this'),
+    days: daysArg(30, 'the metrics window'),
+    limit: limitArg,
+    cursor: cursorArg,
+  }),
+  description:
+    'What eBay Promoted Listings campaigns hold, as their page in Nexus shows it (stored data, no eBay call). Every row '
+    + 'names the ids the eBay change tools take, under the same names: ebayCampaignId, ebayItemId (the eBay item id), '
+    + 'ebayAdGroupId and ebayKeywordId. view listings: each promoted listing with its title, product, status (eBay '
+    + 'hides an out-of-stock ad: hiddenReason), price and stock, its ad rate (ratePct: its own, or the campaign\'s when '
+    + 'it has none — rateFrom; null in a Priority campaign), its break-even rate (breakEvenPct: the highest rate at '
+    + 'which a sale still covers the product cost and eBay\'s fees; null when Nexus does not know it, and economics says '
+    + 'why: MISSING_COGS no product cost, MISSING_PRICE no price, ESTIMATED fees estimated), whether the rate is above '
+    + 'it, and impressions, clicks, sold units, ad fees (as spend), sales and ACoS over the window. view ad-groups: a '
+    + 'Priority campaign\'s ad groups with their default bid and how many keywords, listings and negatives each holds. '
+    + 'view keywords: each keyword with its text, match type, status, bid (null and bidLocked under dynamic bidding), '
+    + 'its ad group, and impressions, clicks, sold units, ad fees, sales, ACoS and cost per click. campaigns lists the '
+    + 'campaigns read with their rate, strategy and, for listings, why set-ebay-ad-rates cannot change their rates '
+    + '(rateNote). Filter by campaignId, market, adGroupId or text.' + MONEY_WORDS + PAGING,
+  handler: (args) => listTool('ebay-ad-details', async () => ebayAdDetails(args as unknown as EbayDetailArgs, scopeOf('ebay-ad-details', args))),
+}
+
+export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adSearchTerms, adChanges, adRecommendations, ebayAdDetailsTool]

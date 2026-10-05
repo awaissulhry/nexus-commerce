@@ -82,8 +82,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     expect(open).toEqual(OPEN_WORLD)
   })
 
-  it('A2 — the six ad reads are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
-    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations']
+  it('A2 — the ad reads (T4: and the eBay ad details) are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
+    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations', 'ebay-ad-details']
     for (const name of reads) {
       const tool = listTools().find((t) => t.name === name)
       expect(tool, name).toBeDefined()

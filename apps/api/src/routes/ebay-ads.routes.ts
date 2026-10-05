@@ -22,6 +22,7 @@ import {
   ebayAdsActions,
   ebayAdsCampaigns,
   ebayAdsSummary,
+  ebayCampaignDetail,
   ebayAdsTrend,
   freshness,
   sumFields,
@@ -107,120 +108,11 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // ── Campaign detail ─────────────────────────────────────────────────────
+  // T4 — moved unchanged into ebay-ads-read.service.ts, so Claude's ebay-ad-details reads this page's own read.
   app.get<{ Params: { id: string }; Querystring: WindowQuery }>('/ebay-ads/campaigns/:id', async (req, reply) => {
-    const c = await prisma.ebayCampaign.findUnique({
-      where: { id: req.params.id },
-      include: {
-        ads: { orderBy: { updatedAt: 'desc' } },
-        adGroups: { orderBy: { name: 'asc' } },
-        keywords: { orderBy: { text: 'asc' } },
-        negativeKeywords: { orderBy: { text: 'asc' } },
-        automationPolicy: true, // ER1
-      },
-    })
-    if (!c) return reply.code(404).send({ error: 'campaign not found' })
-    const r = resolveRange(req.query)
-    const short = SHORT_BY_MKT[c.marketplace] ?? 'IT'
-    const listingIds = c.ads.map((a) => a.listingId).filter((x): x is string => !!x)
-
-    const [listingFacts, keywordFacts, index, economics] = await Promise.all([
-      prisma.ebayAdsDailyPerformance.groupBy({
-        by: ['entityId'],
-        where: { entityType: 'LISTING', entityId: { in: listingIds.length ? listingIds : ['−'] }, date: { gte: r.since, lte: r.until }, fundingModel: c.fundingModel ?? 'COST_PER_SALE' },
-        _sum: sumFields,
-      }),
-      prisma.ebayAdsDailyPerformance.groupBy({
-        by: ['entityId'],
-        where: { entityType: 'KEYWORD', date: { gte: r.since, lte: r.until } },
-        _sum: sumFields,
-      }),
-      prisma.ebayListingIndex.findMany({ where: { marketplace: short, itemId: { in: listingIds.length ? listingIds : ['−'] } }, select: { itemId: true, title: true, price: true, currency: true, quantity: true, endedAt: true } }),
-      prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: listingIds.length ? listingIds : ['−'] } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
-    ])
-    const lf = new Map(listingFacts.map((f) => [f.entityId, derive(toSums(f))]))
-    const kf = new Map(keywordFacts.map((f) => [f.entityId, derive(toSums(f))]))
-    const idx = new Map(index.map((i) => [i.itemId, i]))
-    const eco = new Map(economics.map((e) => [e.itemId, e]))
-    const groupsById = new Map(c.adGroups.map((g) => [g.id, g]))
-
-    return {
-      window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
-      currency: c.budgetCurrency ?? 'EUR',
-      campaign: {
-        id: c.id,
-        externalCampaignId: c.externalCampaignId,
-        name: c.name,
-        marketplace: c.marketplace,
-        fundingModel: c.fundingModel ?? 'COST_PER_SALE',
-        targetingType: c.campaignTargetingType,
-        channels: c.channels,
-        status: c.status,
-        adRateStrategy: c.adRateStrategy,
-        dynamicAdRatePrefs: c.dynamicAdRatePrefs,
-        campaignCriterion: c.campaignCriterion,
-        isRulesBased: c.isRulesBased,
-        nexusManaged: c.nexusManaged,
-        bidPercentage: c.bidPercentage != null ? Number(c.bidPercentage.toString()) : null,
-        dailyBudgetCents: c.dailyBudget != null ? Math.round(Number(c.dailyBudget.toString()) * 100) : null,
-        budgetUpdatesToday: c.budgetUpdatesToday,
-        startDate: c.startDate,
-        endDate: c.endDate,
-        lastEntitySyncAt: c.lastEntitySyncAt,
-        // ER1 — per-campaign automation policy (null = INHERIT defaults)
-        automationPolicy: c.automationPolicy ? {
-          posture: c.automationPolicy.posture,
-          protected: c.automationPolicy.protected,
-          rateCapPct: c.automationPolicy.rateCapPct != null ? Number(c.automationPolicy.rateCapPct.toString()) : null,
-          rateFloorPct: c.automationPolicy.rateFloorPct != null ? Number(c.automationPolicy.rateFloorPct.toString()) : null,
-          bidCapCents: c.automationPolicy.bidCapCents,
-          bidFloorCents: c.automationPolicy.bidFloorCents,
-        } : null,
-      },
-      ads: c.ads.map((a) => ({
-        id: a.id,
-        listingId: a.listingId,
-        inventoryReference: a.inventoryReference,
-        adGroupId: a.adGroupId, // ER1
-        hiddenReason: a.hiddenReason, // ER1 — OOS auto-hide surfaced as state
-        productId: a.productId, // ER1 — deep link to Products
-        status: a.status,
-        bidPercentage: a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null,
-        createdVia: a.createdVia,
-        title: a.listingId ? idx.get(a.listingId)?.title ?? null : null,
-        priceCents: a.listingId && idx.get(a.listingId)?.price != null ? Math.round(Number(idx.get(a.listingId)!.price!.toString()) * 100) : null,
-        quantity: a.listingId ? idx.get(a.listingId)?.quantity ?? null : null,
-        listingEnded: a.listingId ? idx.get(a.listingId)?.endedAt != null : null,
-        breakEvenAdRatePct: a.listingId && eco.get(a.listingId)?.breakEvenAdRatePct != null ? Number(eco.get(a.listingId)!.breakEvenAdRatePct!.toString()) : null,
-        economicsStatus: a.listingId ? eco.get(a.listingId)?.dataStatus ?? null : null,
-        metrics: a.listingId ? lf.get(a.listingId) ?? derive(zeroSums) : derive(zeroSums),
-      })),
-      adGroups: c.adGroups.map((g) => ({
-        id: g.id,
-        externalAdGroupId: g.externalAdGroupId,
-        name: g.name,
-        status: g.status,
-        defaultBidCents: g.defaultBidCents,
-      })),
-      keywords: c.keywords.map((k) => ({
-        id: k.id,
-        adGroupId: k.adGroupId,
-        adGroupName: groupsById.get(k.adGroupId)?.name ?? null,
-        externalKeywordId: k.externalKeywordId,
-        text: k.text,
-        matchType: k.matchType,
-        bidCents: k.bidCents,
-        status: k.status,
-        metrics: kf.get(k.externalKeywordId) ?? derive(zeroSums),
-      })),
-      negativeKeywords: c.negativeKeywords.map((n) => ({
-        id: n.id,
-        adGroupId: n.adGroupId, // ER1 — campaign-level (null) vs group-level split
-        text: n.text,
-        matchType: n.matchType,
-        status: n.status,
-      })),
-      freshness: await freshness(),
-    }
+    const detail = await ebayCampaignDetail(req.params.id, req.query)
+    if (!detail) return reply.code(404).send({ error: 'campaign not found' })
+    return detail
   })
 
   // ── ER1: ad-group drill-down ────────────────────────────────────────────

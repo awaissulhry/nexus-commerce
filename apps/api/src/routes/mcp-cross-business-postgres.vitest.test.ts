@@ -961,6 +961,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   // The loop's campaignId is the Amazon campaign: read the Amazon log and recommendations (1b aims the eBay ones).
   'ad-changes': { channel: 'amazon' },
   'ad-recommendations': { channel: 'amazon' },
+  // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
+  'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
@@ -1596,11 +1598,12 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
     })
   })
 
-  describe('1b — the ad reads (MCP full control A2, A13)', () => {
+  describe('1b — the ad reads (MCP full control A2, A13, T4)', () => {
     /** Each read aimed at one of business B's ad rows by its id. */
     const aimed = (): Array<[string, Record<string, unknown>]> => [
       ['ad-changes', { channel: 'ebay', campaignId: seeded.b.ebayCampaignId }],
       ['ad-recommendations', { channel: 'ebay', campaignId: seeded.b.ebayCampaignId }],
+      ['ebay-ad-details', { campaignId: seeded.b.ebayCampaignId }],
       ['ad-targets', { campaignId: seeded.b.campaignId }],
       ['ad-targets', { adGroupId: seeded.b.adGroupId }],
       ['ad-search-terms', { campaignId: seeded.b.campaignId }],
@@ -1636,6 +1639,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
           // A13 — eBay: A's own eBay campaign is listed (control), B's never.
           ['ad-campaigns', { channel: 'ebay' }, seeded.a.ebayCampaignId], ['ads-overview', { channel: 'ebay' }, seeded.a.ebayCampaignId],
           ['ad-changes', { channel: 'ebay' }, null], ['ad-recommendations', { channel: 'ebay' }, seeded.a.ebayCampaignId],
+          // T4 — the eBay ad details open A's own live campaigns (control), never B's.
+          ['ebay-ad-details', {}, seeded.a.ebayCampaignId],
         ]
         for (const [name, args, own] of lists) {
           const result = await client.callTool({ name, arguments: args })
