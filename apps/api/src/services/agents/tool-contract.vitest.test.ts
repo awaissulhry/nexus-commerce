@@ -219,6 +219,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'graduate-keyword': { before: { changeSetId: 'ap1', keyword: null }, after: { targetId: 't9', bidCents: 37 } },
       // A12 — the allowlist switch is set back through itself.
       'set-campaign-live-writes': { before: { campaignId: 'c1', enabled: false }, after: { campaignId: 'c1', enabled: true } },
+      // T5 — each campaign's earlier target ACoS (a fraction, or none) is set back through the tool's own list.
+      'set-campaign-target-acos': { before: { targets: { c1: 0.3, c2: null } }, after: { targets: { c1: 0.25, c2: 0.25 } } },
       // A8 — a suppression is undone by a restore, a restore by a suppression.
       'suppress-campaign': { before: { campaignId: 'c1', suppressed: false, by: null, changeSetId: 'ap1' }, after: { campaignId: 'c1', suppressed: true, by: 'user:u1' } },
       'restore-campaign': { before: { campaignId: 'c1', suppressed: true, by: 'user:u1', changeSetId: 'ap1' }, after: { campaignId: 'c1', suppressed: false, by: null } },
