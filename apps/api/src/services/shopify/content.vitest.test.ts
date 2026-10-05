@@ -197,6 +197,12 @@ describe('native Shopify publication', () => {
     expect(shopify.calls.filter(c => c.name === 'NexusTranslations').length).toBe(5)
     expect(shopify.calls.filter(c => c.name === 'NexusManifest').at(-1)!.variables.metafields[0].ownerId).toBe(result.productId)
   })
+  // Wave 2 D3 (Owner decision 11, A) — a create sends the reviewed theme template; '' (the store's default) goes as null.
+  it.each([['custom', 'custom'], ['', null], ['nexus', 'nexus']])('creates with the reviewed theme template %j (sent as %j)', async (templateSuffix, sent) => {
+    const c = content(), shopify = fakeShopify(c)
+    await publishContent(shopify.gql, { ...input(c), templateSuffix }, vi.fn())
+    expect(shopify.calls.find(call => call.name === 'NexusProductSet')!.variables.input.templateSuffix).toBe(sent)
+  })
   it('keeps collection grouping independent of SKUs and supports axes and exact variants', () => {
     const c = content()
     expect(collectionCards(c, variants).map(card => card.variantIds)).toEqual([['rs', 'rl'], ['bs', 'bl']])

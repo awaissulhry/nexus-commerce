@@ -19,6 +19,9 @@ import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type P
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { noInheritedInformation, resolveInheritedInformation, type InheritedInformation } from './inherited-information.js'
+import { resolveShopifyProductFacts, type ShopifyProductFacts } from './product-facts.js'
+import { readShopifyCreateChoice } from './create-status.js'
+import { SHOPIFY_CREATE_NOT_LISTED, type ShopifyCreateStatus } from '@nexus/shared/listing-actions'
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
   const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
@@ -36,7 +39,13 @@ function wholeProductRefusal(data: { draft: { target?: string }; publish: Record
   return new WorkspaceScopeError('This Shopify product was not created by Nexus. Nexus does not rewrite a store product as a whole; its changes go through Publish, which sends only the changed fields. Nothing was sent.', 409)
 }
 
-export async function previewContentSync(productId: string, scope: ContentScope, remote = false) {
+/**
+ * `options.createStatus` (Wave 2 D4): Publish passes its own create status (the Status column's choice, or "New listings
+ * start as"; null when Publish holds the product itself). Without it — the Media tab's "Create reviewed product", the
+ * listing wizard — a product Shopify does not hold yet is created with the Status column's choice too, and Not listed
+ * creates nothing (`SHOPIFY_CREATE_NOT_LISTED`). A stored Shopify status never decides a create.
+ */
+export async function previewContentSync(productId: string, scope: ContentScope, remote = false, options: { createStatus?: ShopifyCreateStatus | null } = {}) {
   const destination = await contentDestination(productId, scope)
   const cachedSchema = await readShopifyMappingSchema(destination.accountId)
   const data = await prisma.$transaction(tx => readContent(tx, destination, cachedSchema.locales, cachedSchema), { isolationLevel: 'RepeatableRead' })
@@ -51,6 +60,8 @@ export async function previewContentSync(productId: string, scope: ContentScope,
   let translationDraft: ShopifyLinkedDraft | null = null
   let informationOverrides: Array<ReturnType<typeof listingInformationOverrideReview>[number] & { shared?: true }> = []
   let inherited: InheritedInformation = noInheritedInformation()
+  let productFacts: ShopifyProductFacts | null = null
+  let createStatus: ShopifyCreateStatus | null = null
   if (remote) {
     const admin = await shopifyAdmin(destination.accountId); domain = admin.domain
     const schema = await readLinkedStoreSchema(admin.graphql)
@@ -63,6 +74,23 @@ export async function previewContentSync(productId: string, scope: ContentScope,
       variants: data.variants, listings: data.listings, remoteSkus: shopify?.variants?.nodes.map(variant => variant.sku) ?? [] })
     data.errors.push(...inherited.problems)
     informationOverrides = [...informationOverrides, ...inherited.review]
+    // Wave 2 item 5 + D3 — brand, product type (and, for a create, the theme template) as the resolver reads them.
+    productFacts = await resolveShopifyProductFacts({ familyId: data.family.id, accountId: destination.accountId, marketplace: destination.marketplace,
+      aliasKey: destination.aliasKey, listing: data.listing, newProduct: !shopify, locale: schema.locales.find(l => l.primary)?.locale ?? data.draft.defaultLocale })
+    data.errors.push(...productFacts.problems)
+    informationOverrides = [...informationOverrides, ...productFacts.review]
+    // Wave 2 D4 — a product Shopify does not hold yet is created with the Status column's choice: its stored Shopify
+    // status is not sent, so the review does not list it.
+    if (!shopify) {
+      informationOverrides = informationOverrides.filter(entry => entry.type !== 'status')
+      if ('createStatus' in options) createStatus = options.createStatus ?? null
+      else {
+        const choice = await readShopifyCreateChoice(data.family.id, destination)
+        // Nexus still holds a Shopify id Shopify no longer answers for: created again as a Draft (never exposed unasked).
+        createStatus = choice.onShopify ? 'DRAFT' : choice.status
+        if (!choice.onShopify && !choice.status) data.errors.push(SHOPIFY_CREATE_NOT_LISTED)
+      }
+    }
     if (shopify) {
       const source = { accountId: destination.accountId, familyId: data.family.id, productId: shopify.id, variantIds: data.publish.variantIds ?? {}, listings: data.listings }
       informationDraft = await listingInformationDraft(admin.graphql, source, schema)
@@ -76,10 +104,18 @@ export async function previewContentSync(productId: string, scope: ContentScope,
   }
   // The inherited values are part of what the operator reviews; a review without any keeps its earlier revision.
   const inheritedReview = Object.keys(inherited.values).length || inherited.problems.length ? [{ values: inherited.values, problems: inherited.problems }] : []
-  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft, ...inheritedReview]) : null, informationDraft, translationDraft, informationOverrides,
-    inheritedInformation: inherited.values,
+  // Wave 2 — what the create or the synchronization will send for the product's own facts, and a create's status, are
+  // part of what the operator reviews: a change of either after the review refuses the send ("changed after the preview").
+  const factsReview = productFacts ? [{ facts: { vendor: productFacts.vendor, productType: productFacts.productType, templateSuffix: productFacts.templateSuffix, problems: productFacts.problems }, ...(!shopify ? { createStatus } : {}) }] : []
+  // A product Shopify holds keeps its own status path (the stored status, applied by a synchronization).
+  const storedStatus = String(nativeListingValue(data.listing, 'status', 'DRAFT'))
+  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft, ...inheritedReview, ...factsReview]) : null, informationDraft, translationDraft, informationOverrides,
+    inheritedInformation: inherited.values, productFacts,
     changes: { variants: data.variants.map(v => ({ ...v, resolved: resolveShopifyContent(data.draft, v) })), metafieldDefinitions: data.draft.fields, reusableEntries: data.draft.metaobjects.length,
-      newProductStatus: nativeListingValue(data.listing, 'status', 'DRAFT'), requiresActiveConfirmation: !!shopify && shopify.status !== 'DRAFT' || ['ACTIVE', 'ARCHIVED'].includes(String(nativeListingValue(data.listing, 'status', 'DRAFT'))), preservesUnmanagedMedia: true, preservesUnmanagedMetafields: true },
+      // A new product: the status it is created with (null = nothing is created: the Status column says Not listed).
+      newProductStatus: remote && !shopify ? createStatus : storedStatus,
+      requiresActiveConfirmation: !!shopify && shopify.status !== 'DRAFT' || (remote && !shopify ? createStatus === 'ACTIVE' : ['ACTIVE', 'ARCHIVED'].includes(storedStatus)),
+      preservesUnmanagedMedia: true, preservesUnmanagedMetafields: true },
   }
 }
 
@@ -97,7 +133,9 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
   // D7 / R-LX-7 — one review verdict for every channel: an unreviewed machine
   // draft must not reach a Shopify translation any more than an Amazon payload.
   await assertListingContentReviewed({ productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, accountId: linkedDestination.accountId })
-  const preview = await previewContentSync(productId, scope, true)
+  // Publish names the create status it reviewed; every other caller reads the Status column (`previewContentSync`).
+  const chosen = input.createStatus === 'ACTIVE' || input.createStatus === 'DRAFT' ? input.createStatus as ShopifyCreateStatus : undefined
+  const preview = await previewContentSync(productId, scope, true, chosen ? { createStatus: chosen } : {})
   if (preview.revision !== input.expectedRevision || preview.remoteRevision !== input.expectedRemoteRevision) throw new WorkspaceScopeError('Nexus or Shopify changed after the preview. Refresh the review before synchronising.')
   if (preview.errors.length) throw new WorkspaceScopeError(preview.errors.join('\n'), 422)
   if (preview.changes.requiresActiveConfirmation && input.confirmActive !== true) throw new WorkspaceScopeError('This synchronisation applies the saved status and sales channels to this listing. Review and explicitly approve that destination first.', 422)
@@ -115,7 +153,8 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     }
     const wholeProduct = wholeProductRefusal(data)
     if (wholeProduct) throw wholeProduct
-    if (/^gid:\/\/shopify\//i.test(String(nativeListingValue(data.listing, 'productType', object(data.family.categoryAttributes).shopify_product_type) ?? '').trim()))
+    // The product type Shopify would receive (`product-facts.ts`): the listing's own, else the resolver's.
+    if (/^gid:\/\/shopify\//i.test(String(preview.productFacts?.productType ?? '').trim()))
       throw new WorkspaceScopeError('The Shopify product type holds a Shopify category id (gid://…). That is a data error: set the category in its own field and a plain product type, then publish. Nothing was sent.', 422)
     if (data.listing.syncLocked) throw new WorkspaceScopeError('Synchronisation is locked for this listing.', 422)
     if (data.publish.status === 'PUBLISHING' && Date.now() - Date.parse(data.publish.lastCheckpointAt ?? data.publish.startedAt) < 20 * 60_000) throw new WorkspaceScopeError('A Shopify synchronisation is already running for this family.')
@@ -151,8 +190,9 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     const result = await publishContent(graphql, { identity: preview.identity,
       title: listing.followMasterTitle ? current.family.name : listing.titleOverride ?? listing.title ?? current.family.name,
       description: listing.followMasterDescription ? current.family.description ?? '' : listing.descriptionOverride ?? listing.description ?? current.family.description ?? '',
-      vendor: String(nativeListingValue(listing, 'vendor', current.family.brand) ?? ''),
-      productType: String(nativeListingValue(listing, 'productType', object(current.family.categoryAttributes).shopify_product_type) ?? ''),
+      // Wave 2 item 5 + D3 — the reviewed facts (`product-facts.ts`): what the sheet shows is what Shopify receives.
+      vendor: preview.productFacts!.vendor, productType: preview.productFacts!.productType,
+      ...(!preview.remote ? { templateSuffix: preview.productFacts!.templateSuffix } : {}),
       tags: nativeListingValue(listing, 'tags') as string[] | undefined, content: current.draft, variants: current.variants,
       // Images rebuild P2f — a media-plan family's gallery is exactly the plan: managed media the plan dropped are removed.
       reconcileGallery: await isOnMediaPlan(current.family.id) || current.listings.some(l => Object.keys(object(object(l.platformAttributes)._productMediaLocales)).length > 0),
@@ -170,9 +210,10 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     }
     // S1 item 5 (e) — a product created here: the values its variants took from Shared are checked with the typed ones.
     const informationDraft = preview.informationDraft ?? await listingInformationDraft(graphql, { ...informationSource, inherited: preview.inheritedInformation }, await readLinkedStoreSchema(graphql))
-    // New listings (Owner 2026-10-04) — Publish's Status choice for a product Shopify did not hold yet wins over the stored
-    // Shopify status: ACTIVE (one status edit after the create), or DRAFT (as created; no status edit).
-    const createStatus = !preview.remote && (input.createStatus === 'ACTIVE' || input.createStatus === 'DRAFT') ? input.createStatus as 'ACTIVE' | 'DRAFT' : null
+    // New listings (Owner 2026-10-04), Wave 2 D4 — a product Shopify did not hold yet is created with the Status column's
+    // choice (Publish's, or read by the review): ACTIVE (one status edit after the create), or DRAFT (as created; no status
+    // edit). A stored Shopify status never decides a create.
+    const createStatus = !preview.remote ? preview.changes.newProductStatus as ShopifyCreateStatus | null : null
     if (createStatus) {
       // Status is the product's own field (a variant has none): Publish's choice replaces any stored one.
       informationDraft.nativeEdits = (informationDraft.nativeEdits ?? []).filter(edit => edit.field !== 'status')

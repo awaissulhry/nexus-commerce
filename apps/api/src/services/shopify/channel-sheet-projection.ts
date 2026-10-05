@@ -6,6 +6,7 @@ import { informationRegistry, informationSheetValue, informationPendingValue, in
 import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { shopifyInventoryHeldReason } from '../pim/shopify-inventory-hold.js'
+import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const linkedDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type ListingIdentity = { id: string; productId: string; externalListingId: string | null; platformAttributes: unknown }
@@ -19,6 +20,36 @@ export const active = (workspace: ShopifyLinkedWorkspace) => !!workspace.operati
  * from Shopify's is marked on the cell (`liveSharedDivergence`).
  */
 const SENT_FROM_SHARED = new Set(['title', 'descriptionHtml', 'vendor', 'productType', 'price', 'sku'])
+/**
+ * Wave 2 D3 — native fields whose default rule speaks only when Nexus CREATES the product (the theme template's "nexus"):
+ * a product already on Shopify shows and keeps Shopify's own value, with no mark (nothing would send the default).
+ */
+const CREATE_ONLY_DEFAULTS = new Set(['templateSuffix'])
+
+/**
+ * Wave 2 D4 (Owner decision 9) — a row NOT on Shopify yet (no persisted Shopify product or variant): its "Shopify status"
+ * cell is read-only and shows what Publish creates — the Status column's choice (`shopifyCreateStatus`): ACTIVE, DRAFT,
+ * or nothing ("Not set") when the Status column says Not listed. A row already on Shopify keeps its own editable cell.
+ * `create` null = the family's main product is on Shopify here (nothing to create): the rows are left as they are. Pure.
+ */
+export function withShopifyCreateStatus(rows: StudioRow[], columns: Array<{ key: string; shopifyField?: { id: string } }>, aliasId: string | null,
+  create: { status: 'ACTIVE' | 'DRAFT' | null } | null): StudioRow[] {
+  const keys = columns.filter(column => column.shopifyField?.id === 'status').map(column => column.key)
+  if (!create || !keys.length) return rows
+  return rows.map(row => {
+    if (row.aliasId !== aliasId || row.shopify) return row
+    const values = { ...row.values }
+    for (const key of keys) {
+      const base = values[key]
+      if (!base) continue
+      values[key] = { ...base, value: create.status, source: 'channelExplicit', layer: 'channel', pinned: false, inherited: false, follows: null,
+        nexusDraft: false, unsentDraft: undefined, channelOnly: true, mapped: null, divergence: undefined, resettable: false, shopifyWrite: undefined,
+        editable: false, writable: false, writeBlockedReason: SHOPIFY_STATUS_FROM_STATUS_COLUMN }
+    }
+    const readiness = row.readiness ? { ...row.readiness, issues: row.readiness.issues.filter(issue => !keys.includes(issue.key)) } : row.readiness
+    return { ...row, values, readiness }
+  })
+}
 /** Shopify's value as a person reads it: a weight as "1.2 kg", a list as its items, nothing as "no value". */
 function shopifyValueWords(field: InformationField, value: string | null): string {
   if (value == null || value === '') return 'no value'
@@ -145,7 +176,7 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const excluded = !remote.locale && rule?.excludedProductIds.includes(remote.id) === true
       const sharedConflict = rule && rule.sourceProductId !== remote.id && !excluded && pin ? sharedInformationSource(rule, field, workspace.draft, snapshot.rows) : undefined
       const conflictMessage = 'The saved draft conflicts with the sharing rule. Shopify will use the shared source. Edit or reset this field to resolve it.'
-      const mapped = !rule && field.id !== 'inventory' && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
+      const mapped = !rule && field.id !== 'inventory' && !CREATE_ONLY_DEFAULTS.has(field.id) && base?.mapped?.status === 'mapped' && base.mapped.sourceOwner?.kind !== 'listing'
       // D2 = A (Amazon sheet gaps): while Nexus sends this listing's quantity, Shopify's own inventory field is held and
       // points to Qty — the read set it (`studio-sheet`); this projection rebuilds the cell, so it applies the same rule.
       const stockHeld = field.id === 'inventory' && !row.isParent ? shopifyInventoryHeldReason(row) : null

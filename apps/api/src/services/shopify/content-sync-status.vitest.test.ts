@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const s = vi.hoisted(() => ({ row: {} as any, child: null as any, remote: null as any, status: 'DRAFT', category: false, applied: [] as string[], childWrites: [] as any[], childLookups: [] as any[], tx: {} as any }))
+const s = vi.hoisted(() => ({ row: {} as any, child: null as any, remote: null as any, status: 'DRAFT', category: false, applied: [] as string[], childWrites: [] as any[], childLookups: [] as any[], tx: {} as any,
+  choice: { onShopify: false, target: 'inactive', status: 'DRAFT' } as { onShopify: boolean; target: string | null; status: string | null }, published: null as any }))
+// Wave 2 D4 — the Status column's choice for the family's main row (`create-status.ts`); item 5 — the product's facts.
+vi.mock('./create-status.js', () => ({ readShopifyCreateChoice: async () => structuredClone(s.choice) }))
+vi.mock('./product-facts.js', () => ({ resolveShopifyProductFacts: async (input: any) => ({ vendor: '', productType: '', templateSuffix: input.newProduct ? 'nexus' : '', review: [], problems: [] }) }))
 // Images rebuild P2f — not on the media plan: the older Shopify gallery paths run here.
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
 vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))
@@ -22,11 +26,13 @@ vi.mock('./content-workspace.service.js', () => ({
 vi.mock('@nexus/shared/shopify-content', () => ({ inspectShopifyContent: () => [], resolveShopifyContent: () => ({}) }))
 vi.mock('./content-publisher.js', () => ({
   readRemoteProduct: async () => s.remote && structuredClone(s.remote),
-  publishContent: async (_g: any, _input: any, checkpoint: any) => { s.remote = { id: 'gid://shopify/Product/1', status: 'DRAFT' }; await checkpoint({ productId: s.remote.id }); return { productId: s.remote.id, variantIds: { child: 'gid://shopify/ProductVariant/2' }, inventoryItemIds: { child: 'gid://shopify/InventoryItem/3' }, status: 'VERIFIED' } },
+  publishContent: async (_g: any, input: any, checkpoint: any) => { s.published = input; s.remote = { id: 'gid://shopify/Product/1', status: 'DRAFT' }; await checkpoint({ productId: s.remote.id }); return { productId: s.remote.id, variantIds: { child: 'gid://shopify/ProductVariant/2' }, inventoryItemIds: { child: 'gid://shopify/InventoryItem/3' }, status: 'VERIFIED' } },
 }))
 import { previewContentSync, synchronizeContent } from './content-sync.service.js'
+import { SHOPIFY_CREATE_NOT_LISTED } from '@nexus/shared/listing-actions'
 beforeEach(() => {
-  s.remote = null; s.category = false; s.applied = []; s.childWrites = []; s.childLookups = []; s.child = null
+  s.remote = null; s.category = false; s.applied = []; s.childWrites = []; s.childLookups = []; s.child = null; s.published = null
+  s.choice = { onShopify: false, target: 'inactive', status: 'DRAFT' }
   s.row = { id: 'listing', productId: 'family', version: 1, platformAttributes: {}, followMasterTitle: true, followMasterDescription: true }
   s.tx = { channelListing: {
     findUnique: async () => structuredClone(s.row), findUniqueOrThrow: async () => structuredClone(s.row),
@@ -36,9 +42,12 @@ beforeEach(() => {
     create: async ({ data }: any) => { s.childWrites.push(data); return data },
   } }
 })
+// Wave 2 D4 (Owner decisions 9, 10) — the Media tab's "Create reviewed product" follows the Status column, as Publish does: a
+// stored Shopify status (even ARCHIVED) never decides a create.
 describe('New product synchronization records final verified native status', () => {
-  it.each(['ACTIVE', 'DRAFT', 'ARCHIVED'])('records %s after Information overrides and retains exact alias/variant identity', async status => {
-    s.status = status
+  it.each([['active', 'ACTIVE'], ['inactive', 'DRAFT']])('Status %s creates it %s whatever the stored status, and retains exact alias/variant identity', async (target, status) => {
+    s.status = 'ARCHIVED'
+    s.choice = { onShopify: false, target, status }
     const scope = { accountId: 'store-b', listingId: 'alias-listing', market: 'GLOBAL' }
     const preview = await previewContentSync('family', scope, true)
     const result = await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
@@ -48,6 +57,41 @@ describe('New product synchronization records final verified native status', () 
     expect(s.childWrites[0].listingStatus).toBe(s.row.listingStatus)
     expect(s.childWrites).toEqual([expect.objectContaining({ channelConnectionId: 'store-b', aliasKey: 'alias-b', aliasId: 'alias-b', productId: 'child', isPublished: status === 'ACTIVE', platformAttributes: expect.objectContaining({ variantId: '2', inventoryItemId: '3', shopifyProductId: '1' }) })])
     expect(s.childLookups).toEqual([{ where: { productId: 'child', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-b', aliasKey: 'alias-b' } }])
+    expect(s.remote.status).toBe(status)
+    expect(s.applied).toEqual(status === 'ACTIVE' ? ['status'] : [])
+  })
+  it('the review names the create status; Active needs the confirmation, as a live product does', async () => {
+    s.choice = { onShopify: false, target: 'active', status: 'ACTIVE' }
+    const preview = await previewContentSync('family', { accountId: 'store-b', market: 'GLOBAL' }, true)
+    expect(preview.changes).toMatchObject({ newProductStatus: 'ACTIVE', requiresActiveConfirmation: true })
+    await expect(synchronizeContent('family', { accountId: 'store-b', market: 'GLOBAL' }, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location' }))
+      .rejects.toThrow('explicitly approve')
+  })
+  it('Status Not listed: nothing is created, with the reason (no Shopify write, nothing claimed)', async () => {
+    s.choice = { onShopify: false, target: 'not_listed', status: null }
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    expect(preview.changes.newProductStatus).toBeNull()
+    expect(preview.errors).toContain(SHOPIFY_CREATE_NOT_LISTED)
+    await expect(synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true }))
+      .rejects.toThrow(SHOPIFY_CREATE_NOT_LISTED)
+    expect(s.remote).toBeNull()
+    expect(s.applied).toEqual([])
+    expect(s.row.version).toBe(1)
+  })
+  it('a Status change after the review refuses the create ("changed after the preview")', async () => {
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    s.choice = { onShopify: false, target: 'active', status: 'ACTIVE' }
+    await expect(synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true }))
+      .rejects.toThrow('changed after the preview')
+    expect(s.remote).toBeNull()
+  })
+  it('a create sends the theme template the facts read (D3)', async () => {
+    const scope = { accountId: 'store-b', market: 'GLOBAL' }
+    const preview = await previewContentSync('family', scope, true)
+    await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
+    expect(s.published.templateSuffix).toBe('nexus')
   })
 })
 
@@ -57,7 +101,8 @@ describe('New listings: the create status from Publish', () => {
   it.each([['DRAFT', 'ACTIVE', true], ['ACTIVE', 'DRAFT', false]] as const)('stored %s, chosen %s: Shopify verifies the choice', async (stored, chosen, live) => {
     s.status = stored
     const scope = { accountId: 'store-b', market: 'GLOBAL' }
-    const preview = await previewContentSync('family', scope, true)
+    // Publish reviews with its own create status, and sends the same one.
+    const preview = await previewContentSync('family', scope, true, { createStatus: chosen })
     await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true, createStatus: chosen })
     expect(s.remote.status).toBe(chosen)
     expect(s.applied).toEqual(chosen === 'ACTIVE' ? ['status'] : [])
@@ -79,7 +124,8 @@ describe('New listings: the create status from Publish', () => {
     const scope = { accountId: 'store-b', market: 'GLOBAL' }
     const preview = await previewContentSync('family', scope, true)
     await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
-    expect(s.applied).toEqual(['category', 'status'])
+    // Created as a Draft (the Status column's default): no status edit after the create.
+    expect(s.applied).toEqual(['category'])
     expect(s.remote.category).toBe('gid://shopify/TaxonomyCategory/aa-8')
   })
 
@@ -106,7 +152,7 @@ describe('Draft listing safety — Publish may send a paused still-draft, and de
     return synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
   }
   it.each(['ACTIVE', 'DRAFT'])('sends paused still-drafts and unpauses them with the Shopify ids and the verified status (%s)', async status => {
-    s.status = status
+    s.choice = { onShopify: false, target: status === 'ACTIVE' ? 'active' : 'inactive', status }
     Object.assign(s.row, stillDraft)
     s.child = { id: 'child-listing', productId: 'child', version: 1, platformAttributes: {}, ...stillDraft }
     expect((await publish()).success).toBe(true)

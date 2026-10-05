@@ -9,6 +9,9 @@ vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: as
 vi.mock('./linked-products-gateway.js', () => ({ readLinkedStoreSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))
 vi.mock('./linked-state-guard.js', () => ({ shopifyInformationPublicationIssue: () => null }))
 // S1 item 5 — no Shared values to inherit in this suite (`inherited-information.vitest.test.ts` covers them).
+// Wave 2 — the product's facts and the Status column's create choice (covered in `product-facts` / `content-sync-status`).
+vi.mock('./product-facts.js', () => ({ resolveShopifyProductFacts: async (input: any) => ({ vendor: '', productType: '', templateSuffix: input.newProduct ? 'nexus' : '', review: [], problems: [] }) }))
+vi.mock('./create-status.js', () => ({ readShopifyCreateChoice: async () => ({ onShopify: false, target: 'inactive', status: 'DRAFT' }) }))
 vi.mock('./inherited-information.js', () => ({ noInheritedInformation: () => ({ values: {}, problems: [], review: [] }), resolveInheritedInformation: async () => ({ values: {}, problems: [], review: [] }) }))
 vi.mock('./listing-information-plan.js', () => ({ validateListingInformationOverrides: () => {}, listingInformationOverrideReview: () => [], listingInformationDraft: async () => ({ edits: [], nativeEdits: [] }), listingInformationTranslations: async () => ({ edits: [], nativeEdits: [] }) }))
 vi.mock('./linked-products.service.js', () => ({ buildLinkedPlan: async (_g: any, draft: any) => ({ changes: draft.edits, nativeEdits: draft.nativeEdits }), applyLinkedBatch: async () => {} }))

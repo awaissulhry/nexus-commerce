@@ -9,9 +9,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ row: {} as any, remote: null as any, tx: {} as any, graphql: vi.fn(), events: [] as string[],
   content: {} as { target?: string; publish?: Record<string, unknown>; externalIds?: (string | null)[]; productType?: string },
   inherited: { values: {}, problems: [], review: [] } as { values: Record<string, Record<string, string>>; problems: string[]; review: any[] },
-  inheritedInput: null as any, published: null as any, drafts: [] as any[], applied: [] as any[] }))
+  inheritedInput: null as any, published: null as any, drafts: [] as any[], applied: [] as any[], facts: null as any, factsInput: null as any }))
 vi.mock('./inherited-information.js', () => ({ noInheritedInformation: () => ({ values: {}, problems: [], review: [] }),
   resolveInheritedInformation: async (input: any) => { s.inheritedInput = input; return structuredClone(s.inherited) } }))
+// Wave 2 item 5 + D4 — the product's facts as the resolver reads them (`product-facts.vitest.test.ts` covers the rule), and
+// the Status column's create choice (a Draft): the free-text product type comes from the facts.
+vi.mock('./product-facts.js', () => ({ resolveShopifyProductFacts: async (input: any) => { s.factsInput = input
+  return structuredClone(s.facts) ?? { vendor: 'Xavia', productType: s.content.productType ?? 'Jacket', templateSuffix: input.newProduct ? 'nexus' : '', review: [], problems: [] } } }))
+vi.mock('./create-status.js', () => ({ readShopifyCreateChoice: async () => ({ onShopify: false, target: 'inactive', status: 'DRAFT' }) }))
 // Images rebuild P2f — not on the media plan: the older Shopify gallery paths run here.
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
 vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))
@@ -61,7 +66,7 @@ const claimed = () => Boolean(s.row.platformAttributes?._nexusContentPublish)
 
 beforeEach(() => {
   vi.clearAllMocks(); s.remote = null; s.events = []; s.content = {}
-  s.inherited = { values: {}, problems: [], review: [] }; s.inheritedInput = null; s.published = null; s.drafts = []; s.applied = []
+  s.inherited = { values: {}, problems: [], review: [] }; s.inheritedInput = null; s.published = null; s.drafts = []; s.applied = []; s.facts = null; s.factsInput = null
   s.row = { id: 'listing', productId: 'family', version: 1, platformAttributes: {}, followMasterTitle: true, followMasterDescription: true }
   s.graphql.mockImplementation(async () => ({ locations: { nodes: [{ id: 'location', isActive: true }], pageInfo: { hasNextPage: false } }, shopLocales: [{ locale: 'en', primary: true, published: true }] }))
   s.tx = { channelListing: {
@@ -112,6 +117,44 @@ it('still re-publishes a product Nexus created (its own recorded product id on e
 it('still creates a brand-new draft when nothing is linked', async () => {
   await synchronizeContent('family', scope, await body())
   expect(mutations()).toHaveLength(1)
+})
+
+/* Wave 2 item 5 + D3 — the product's brand, product type and (for a create) theme template are what the review read. */
+describe('the product facts the review read are what Shopify receives', () => {
+  const facts = (extra: Record<string, unknown> = {}) => ({ vendor: 'Brand from a rule', productType: 'Giacca', templateSuffix: '', problems: [],
+    review: [{ productId: 'family', label: 'Brand', type: 'single_line_text_field', locale: 'en', value: 'Brand from a rule', shared: true }], ...extra })
+  it('a create sends the resolved brand and product type and the theme template ("" = the store default), and lists them Shared', async () => {
+    s.facts = facts()
+    const review = await previewContentSync('family', scope, true)
+    expect(s.factsInput).toMatchObject({ familyId: 'family', accountId: 'store', marketplace: 'GLOBAL', newProduct: true, locale: 'en' })
+    expect(review.informationOverrides).toContainEqual(expect.objectContaining({ label: 'Brand', value: 'Brand from a rule', shared: true }))
+    await synchronizeContent('family', scope, await body())
+    expect(s.published).toMatchObject({ vendor: 'Brand from a rule', productType: 'Giacca', templateSuffix: '' })
+  })
+  it('a product Shopify holds: brand and product type, never a theme template', async () => {
+    s.content = { publish: { productId: 'gid://shopify/Product/1', status: 'VERIFIED' }, externalIds: ['1', '1'] }
+    s.remote = { id: 'gid://shopify/Product/1', status: 'DRAFT' }
+    s.facts = facts({ templateSuffix: '' })
+    await synchronizeContent('family', scope, await body())
+    expect(s.factsInput.newProduct).toBe(false)
+    expect(s.published).toMatchObject({ vendor: 'Brand from a rule', productType: 'Giacca' })
+    expect(s.published).not.toHaveProperty('templateSuffix')
+  })
+  it('a fact the resolver could not read holds the send with its reason; nothing is sent or claimed', async () => {
+    s.facts = facts({ problems: ['Nexus could not read the Shared brand, product type and theme template for Shopify (timeout). Nothing was sent; try again.'] })
+    const review = await previewContentSync('family', scope, true)
+    expect(review.errors).toContain('Nexus could not read the Shared brand, product type and theme template for Shopify (timeout). Nothing was sent; try again.')
+    await expect(synchronizeContent('family', scope, await body())).rejects.toMatchObject({ statusCode: 422, message: expect.stringContaining('could not read the Shared brand') })
+    expect(mutations()).toEqual([])
+    expect(claimed()).toBe(false)
+  })
+  it('a change of a fact after the review refuses the send ("changed after the preview")', async () => {
+    s.facts = facts()
+    const reviewed = await body()
+    s.facts = facts({ vendor: 'Another brand' })
+    await expect(synchronizeContent('family', scope, reviewed)).rejects.toThrow('changed after the preview')
+    expect(mutations()).toEqual([])
+  })
 })
 
 /* S1 item 5 (product sheet consistency) — a new variant takes barcode, cost, country, HS code and weight from Shared. */

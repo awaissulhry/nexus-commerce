@@ -22,6 +22,16 @@ const variantCases: [NativeEdit['field'], string | null, object][] = [
   ['price', '0.00', { price: '0.00' }], ['compareAtPrice', null, { compareAtPrice: null }], ['barcode', '000002', { barcode: '000002' }], ['taxable', 'false', { taxable: false }], ['inventoryPolicy', 'CONTINUE', { inventoryPolicy: 'CONTINUE' }], ['sku', '00002-B', { inventoryItem: { sku: '00002-B' } }], ['tracked', 'false', { inventoryItem: { tracked: false } }], ['requiresShipping', 'false', { inventoryItem: { requiresShipping: false } }], ['harmonizedSystemCode', null, { inventoryItem: { harmonizedSystemCode: null } }], ['countryCodeOfOrigin', 'US', { inventoryItem: { countryCodeOfOrigin: 'US' } }], ['cost', '0.00', { inventoryItem: { cost: '0.00' } }], ['weight', '{"value":0,"unit":"GRAMS"}', { inventoryItem: { measurement: { weight: { value: 0, unit: 'GRAMS' } } } }], ['unitPriceMeasurement', '{"quantityValue":200,"quantityUnit":"ML","referenceValue":1,"referenceUnit":"L"}', { unitPriceMeasurement: { quantityValue: 200, quantityUnit: 'ML', referenceValue: 1, referenceUnit: 'L' } }],
 ]
 describe('Native field-to-mutation contracts on Shopify 2026-07', () => {
+  // Wave 2 D3 — the theme template's '' (the store's default template) is sent as null; '' and no value are the same.
+  it('sends a cleared theme template as null, and nothing when Shopify already uses the default template', async () => {
+    const s = setup()
+    s.product.templateSuffix = 'custom'
+    await applyNativeEdit(s.gql, { productId: pid, ownerId: pid, ownerLabel: 'Product', field: 'templateSuffix', value: 'custom', nextValue: '' })
+    expect(s.writes).toEqual([{ product: { id: pid, templateSuffix: null } }])
+    const again = setup()
+    await applyNativeEdit(again.gql, { productId: pid, ownerId: pid, ownerLabel: 'Product', field: 'templateSuffix', value: '', nextValue: null })
+    expect(again.writes).toEqual([])
+  })
   for (const [field, nextValue, patch] of productCases) it(`writes only product ${field} and verifies readback`, async () => {
     const s = setup(), [row] = await readInformationNativeOwners(s.gql, [pid]); await applyNativeEdit(s.gql, { productId: pid, ownerId: pid, ownerLabel: 'Product', field, value: row.values[field], nextValue })
     expect(s.writes).toEqual([{ product: { id: pid, ...patch } }])
