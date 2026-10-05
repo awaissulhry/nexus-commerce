@@ -19,6 +19,26 @@
  * Pure: no I/O. Unit-tested.
  */
 
+/**
+ * 1a (CM-4) — every `OutboundSyncQueue.syncType` an ad write is queued under, in ONE list.
+ *
+ * Three places must agree on it: the mutation service writes these types (`AdSyncType` is derived from this list),
+ * the ads drain dispatches, retries and reclaims them, and the generic queue processor and janitor leave them alone.
+ * Each kept its own copy, and rename (`AD_CAMPAIGN_NAME_UPDATE`) and portfolio moves (`AD_CAMPAIGN_PORTFOLIO_UPDATE`)
+ * were missing from the drain's: with Redis down the drain is the dispatch path, so those writes were never sent,
+ * retried or reclaimed, and the generic listings processor picked them up instead.
+ */
+export const AD_SYNC_TYPES = [
+  'AD_BID_UPDATE',
+  'AD_BUDGET_UPDATE',
+  'AD_ENTITY_STATE_UPDATE',
+  'AD_BIDDING_STRATEGY_UPDATE',
+  'AD_CAMPAIGN_NAME_UPDATE',
+  'AD_CAMPAIGN_PORTFOLIO_UPDATE',
+  'AD_PORTFOLIO_UPDATE',
+] as const
+export type AdSyncType = (typeof AD_SYNC_TYPES)[number]
+
 export const AD_MUTATION_STATES = [
   'PENDING', 'IN_FLIGHT', 'APPLIED', 'FAILED', 'CANCELLED', 'SUPERSEDED',
 ] as const

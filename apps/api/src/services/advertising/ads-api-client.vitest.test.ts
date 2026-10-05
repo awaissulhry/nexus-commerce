@@ -34,7 +34,7 @@ vi.mock('../outbound-api-call-log.service.js', async (original) => ({
 
 import { gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from '../gateway/rate.js'
-import { createNegativeKeyword, createNegativeProductTarget, liveCall, v3BatchResult, updateTarget } from './ads-api-client.js'
+import { createNegativeKeyword, createNegativeProductTarget, liveCall, v3BatchResult, updateCampaign, updatePortfolio, updateTarget } from './ads-api-client.js'
 import { NegativeRefusedError } from './ads-negation-policy.js'
 
 // A3 — the v3 batch-response parser must be CONSERVATIVE: flip to failure only on a recognized
@@ -317,5 +317,48 @@ describe('5a sandbox — the negative creators refuse what liveCall would refuse
       .rejects.toThrow(/protected term "b07xj8c8f5"/)
     expect(await createNegativeProductTarget(ctx, { externalCampaignId: 'EXT-1', externalAdGroupId: 'EXT-G', asin: 'B000000001' }))
       .toMatchObject({ ok: true, mode: 'sandbox', externalId: expect.stringMatching(/^sb-ntgt-/) })
+  })
+})
+
+// ── 1a — what a campaign-manager edit puts on the wire (live, through the gateway) ──────────────────
+describe('1a updateCampaign / updatePortfolio on the wire', () => {
+  const ctx = { profileId: '123', region: 'EU' as const }
+  beforeEach(() => {
+    __rateTest.useMemory()
+    h.calls = []; h.answers = []; gatewayLedger.length = 0
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_AMAZON_ADS_QUOTA_MODE', 'off')
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      h.calls.push({ url: String(url), init })
+      return h.answers.shift()?.() ?? new Response('{}', { status: 207 })
+    }))
+  })
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
+
+  it('CM-1/2/3: strategy with the lanes, a cleared end date and a cleared portfolio are all in the PUT body', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ campaigns: { success: [{ index: 0, campaignId: 'c-1' }], error: [] } }), { status: 207 }))
+    const r = await updateCampaign(ctx, 'c-1', {
+      biddingStrategy: 'autoForSales', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 35 }], endDate: null, portfolioId: null,
+    })
+    expect(r).toMatchObject({ ok: true, mode: 'live', error: null })
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['PUT', '/sp/campaigns']])
+    expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ campaigns: [{
+      campaignId: 'c-1', portfolioId: null, endDate: null,
+      dynamicBidding: { strategy: 'AUTO_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 35 }] },
+    }] })
+  })
+
+  it('CM-23: a portfolio Amazon refuses (207 with portfolios.error[]) is a failure with Amazon\'s reason', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ portfolios: { success: [], error: [{ index: 0, errors: [{ errorType: 'DUPLICATE_VALUE' }] }] } }), { status: 207 }))
+    const r = await updatePortfolio(ctx, { portfolioId: 'pf-1', name: 'Core' })
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['PUT', '/portfolios']])
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/amazon_rejected/)
+    expect(r.error).toMatch(/DUPLICATE_VALUE/)
+  })
+
+  it('CM-23: a portfolio Amazon accepts is ok', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ portfolios: { success: [{ index: 0, portfolioId: 'pf-1' }], error: [] } }), { status: 207 }))
+    expect(await updatePortfolio(ctx, { portfolioId: 'pf-1', name: 'Core' })).toMatchObject({ ok: true, mode: 'live', error: null })
   })
 })

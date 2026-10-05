@@ -752,8 +752,9 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
 // start+end). currencyCode must match the connection's marketplace (EUR for IT/DE/FR/ES).
 export interface PortfolioBudgetInput { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
 // P2/P3 — update a portfolio (v3 PUT /portfolios): rename + state (enabled/paused/archived) + budget.
-// Sandbox no-ops.
-export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput }): Promise<{ ok: boolean; mode: AdsMode }> {
+// Sandbox no-ops. 1a (CM-23) — Amazon answers a refused portfolio with HTTP 2xx and the reason in `portfolios.error[]`,
+// like the SP batch PUTs; that answer is read now (v3BatchResult) instead of reporting every write as accepted.
+export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput }): Promise<{ ok: boolean; mode: AdsMode; rawResponse?: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updatePortfolio', { input })
     return { ok: true, mode: 'sandbox' }
@@ -769,11 +770,12 @@ export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: 
       ...(b.endDate ? { endDate: b.endDate } : {}),
     }
   }
-  await liveCall<unknown>({
+  const response = await liveCall<unknown>({
     ...ctx, method: 'PUT', path: '/portfolios', body: { portfolios: [pf] },
     contentType: PORTFOLIO_V3_MIME, acceptHeader: PORTFOLIO_V3_MIME,
   })
-  return { ok: true, mode: 'live' }
+  const parsed = v3BatchResult(response, 'portfolios')
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 
 // B — live v3 campaign-settings read. POST /sp/campaigns/list returns each campaign's

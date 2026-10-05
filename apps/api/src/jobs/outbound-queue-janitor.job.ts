@@ -27,19 +27,13 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { AD_SYNC_TYPES as AD_SYNC_TYPE_LIST } from '../services/ads-core/ad-mutation-state.js'
 
 const JOB_NAME = 'outbound-queue-janitor'
 
-const AD_SYNC_TYPES = [
-  'AD_BID_UPDATE',
-  'AD_BUDGET_UPDATE',
-  'AD_ENTITY_STATE_UPDATE',
-  'AD_BIDDING_STRATEGY_UPDATE',
-  // AX-IE.2 — portfolios are ads rows too. Left out, this janitor would sweep
-  // them with its generic semantics while reclaimCrashedAdWrites (which uses
-  // the ads-side list) would not see them at all.
-  'AD_PORTFOLIO_UPDATE',
-]
+// AX-IE.2 — every ads row type, or this janitor sweeps it with its generic semantics while reclaimCrashedAdWrites
+// (which uses the same list) does not see it. 1a (CM-4) — one shared list, so the two can no longer drift.
+const AD_SYNC_TYPES: string[] = [...AD_SYNC_TYPE_LIST]
 
 /** IN_PROGRESS older than this is a crashed dispatch — reclaim to PENDING. */
 export const RECLAIM_IN_PROGRESS_AFTER_MS = 30 * 60_000

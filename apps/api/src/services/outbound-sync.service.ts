@@ -62,6 +62,7 @@ import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amaz
 import { PURCHASABLE_OFFER_LEAVES } from './amazon/offer-fields.js'
 import { amazonSendQuantity, readEuIntentRows, routedSendCeiling } from './amazon/send-quantity.js'
 import { CHANNEL_SKU_UNRESOLVED, listingSendSku } from './listings/listing-send-sku.js'
+import { AD_SYNC_TYPES as AD_SYNC_TYPE_LIST } from './ads-core/ad-mutation-state.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -98,12 +99,9 @@ export function countEbayReviseCall(itemId: string, now: number = Date.now()): n
 // through syncToAmazon (the listings PATCH path) fails it at the listings
 // publish gate and starves the real ads dispatcher. Exclude them from both the
 // pending and retry selections.
-const AD_SYNC_TYPES = [
-  "AD_BID_UPDATE",
-  "AD_BUDGET_UPDATE",
-  "AD_ENTITY_STATE_UPDATE",
-  "AD_BIDDING_STRATEGY_UPDATE",
-] as const;
+// 1a (CM-4) — the shared list: this copy lacked rename, portfolio-move and portfolio rows, so this processor claimed
+// them and sent them down the listings path, which cannot deliver an ads write.
+const AD_SYNC_TYPES = AD_SYNC_TYPE_LIST;
 
 // ── RT.0 — failure disposition (cron drain path) ────────────────────────────
 // The old handleSyncFailure burned the 3-attempt budget in 2s/4s/8s — inside a
