@@ -35,6 +35,17 @@ describe('the steps', () => {
     expect(stepWhat({ ...step, preview: {} })).toBe('Set master price')
   })
 
+  // The 2026-10-05 browser check: a plan step read "base price: 154 → 149" where a single row reads "€159.00 → €151.05".
+  it('a step reads in the grid’s words when the API sends them: the money in its currency, the label as a person says it', () => {
+    const worded = { ...step, changes: [{ label: 'Base price', from: '€19.90', to: '€21.00' }], changeCount: 1 }
+    expect(stepWhat(worded)).toBe('TEST-SKU-1 · Base price: €19.90 → €21.00')
+    const many = { ...step, changes: [{ label: 'Title', from: 'A', to: 'B' }, { label: 'Tags', from: null, to: 'x' }, { label: 'Name', from: 'n', to: null }], changeCount: 5 }
+    expect(stepWhat(many)).toBe('TEST-SKU-1 · Title: A → B; Tags: → x (new); and 3 more')
+    // A hidden step stays hidden, whatever else it carries.
+    expect(stepWhat({ ...worded, preview: null, previewHidden: 'Hidden.' })).toBe('Hidden.')
+    expect(stepMatches(worded, '€21.00')).toBe(true)
+  })
+
   // The 2026-10-02 browser check showed raw JSON in this line: 'tags: [] → ["Clearance","Winter"]'.
   it('a list or an object reads as words, never raw JSON; an empty list says so', () => {
     const tags = { ...step, preview: { sku: 'TEST-SKU-2', changes: { tags: { from: [], to: ['Clearance', 'Winter'] } } } }

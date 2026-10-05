@@ -47,7 +47,26 @@ export interface ResolvedRequest {
   summary: string | null
   /** One entry per item of a bulk request (sku + name + its change), as far as the preview lists them. */
   items: Array<{ sku: string | null; name: string | null; change: QueueChange | null }>
+  /**
+   * It changes a record Nexus keeps (a master price, warehouse stock, a product's photos — `NEXUS_RECORD_TOOLS`), so
+   * its Where is Nexus, even when the listings that follow that record then send the change on to a marketplace.
+   */
+  nexusRecord: boolean
 }
+
+/**
+ * The kinds that change Nexus's OWN record. They are marked as reaching a marketplace (registry `openWorld`) because
+ * the listings that follow the record are sent on, but the change itself is made in Nexus: the grid's Where says
+ * "Nexus", as it does for a kind that never leaves Nexus (apply-content). A change plan is one when every kind in it is.
+ */
+export const NEXUS_RECORD_TOOLS: ReadonlySet<string> = new Set([
+  // master prices (in the master currency)
+  'set-price', 'set-master-prices', 'bulk-price-change', 'schedule-price-change', 'set-tier-prices', 'set-price-bounds',
+  // stock at the business's own warehouses
+  'set-stock', 'transfer-stock', 'reconcile-stock-count', 'reserve-stock', 'receive-stock',
+  // the product's photos in Nexus
+  'add-photo-from-url',
+])
 
 /* ── small readers ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -187,8 +206,8 @@ const MATRIX_CELLS: Record<string, string> = {
   listing: 'Listing',
   fulfilment: 'Fulfilment',
   syncMode: 'Stock mode',
-  syncQty: 'Stock',
-  syncBuffer: 'Stock buffer',
+  syncQty: 'Quantity',
+  syncBuffer: 'Buffer',
   syncState: 'Stock sync',
   price: 'Price',
   salePrice: 'Sale price',
@@ -272,9 +291,13 @@ export function productRefsOf(toolName: string, args: unknown, preview: unknown,
     ...productIdsOfArgs(a).slice(0, all ? 50 : 1),
   ]
   if (toolName === 'publish-listing' || toolName === 'create-draft-listings') refs.push(text(rec(p.destination)?.sku))
+  // The Matrix and the stock sync name the listing's own SKU (a variation), not the family's parent.
+  if (MATRIX_TOOLS.has(toolName)) refs.push(text(recs(p.changes)[0]?.sku), text(recs(p.changes)[0]?.rowId))
+  if (toolName === 'bulk-listing-stock') refs.push(text(recs(p.cells)[0]?.sku))
   if (all) {
     for (const line of recs(p.changes).slice(0, 50)) refs.push(text(line.sku))
     for (const line of recs(p.listings).slice(0, 50)) refs.push(text(line.sku))
+    for (const line of recs(p.cells).slice(0, 50)) refs.push(text(line.sku))
   }
   return distinct(refs.filter((r): r is string => r !== null))
 }
@@ -514,9 +537,41 @@ const READERS: Record<string, Reader> = {
   },
 
   /* The Matrix: listing price and stock per channel and market (VerbChange: fromLabel/toLabel). */
-  'set-listing-stock': (p) => matrixPart(p),
-  'set-listing-price': (p) => matrixPart(p),
-  'revert-listing-change': (p) => matrixPart(p),
+  'set-listing-stock': (p, _a, ctx) => matrixPart(p, ctx),
+  'set-listing-price': (p, _a, ctx) => matrixPart(p, ctx),
+  'revert-listing-change': (p) => matrixWhere(p),
+  /* The stock sync of many listings: one line per listing (or Amazon EU group, or shared eBay variant). */
+  'bulk-listing-stock': (p, _a, ctx) => {
+    const cells = recs(p.cells)
+    const skus = distinct(cells.map((c) => text(c.sku)).filter((s): s is string => s !== null))
+    // An Amazon EU group reads "EU (DE, FR)": its market is a group, not a code, so it is named as written.
+    const wheres = cells.map((c) => [channelOf(c.channel) ? CHANNEL_WORDS[channelOf(c.channel)!] : null, text(c.market)].filter(Boolean).join(' ') || null)
+    const manyWheres = distinct(wheres).length > 1
+    const items = cells.map((c, i) => ({
+      sku: text(c.sku),
+      name: null,
+      change: {
+        label: [skus.length > 1 ? text(c.sku) : null, manyWheres ? wheres[i] : null, c.kind === 'shared variant' ? 'Shared variant stock sync' : 'Stock sync'].filter(Boolean).join(' · '),
+        from: text(c.from),
+        to: text(c.to),
+      },
+    }))
+    const totals = rec(p.totals) ?? {}
+    const rows = (num(totals.listings) ?? 0) + (num(totals.sharedVariants) ?? 0)
+    const first = skus[0] ?? null
+    const channel = agreed(cells.map((c) => channelOf(c.channel)))
+    return {
+      channel,
+      // An EU group is a market too: it agrees with no single code.
+      market: marketOf(agreed(cells.map((c) => text(c.market)?.toUpperCase() ?? null))),
+      changes: items.map((i) => i.change),
+      items,
+      changeCount: rows || cells.length + (num(p.moreCells) ?? 0),
+      ...(first
+        ? { target: target('listing', { sku: first, name: ctx.products?.get(first)?.name ?? null, count: rows || cells.length, href: listingHref(channel, first) }) }
+        : {}),
+    }
+  },
 
   /* Publishing: what is sent (the channel's value now → Nexus's), to which channel and market. */
   'publish-listing': (p) => {
@@ -735,17 +790,67 @@ const READERS: Record<string, Reader> = {
       target: null,
       channel: null,
       market: null,
+      // Every kind in it changes Nexus's own record, or never leaves Nexus: the plan is made in Nexus.
+      nexusRecord: kinds.length > 0 && kinds.every((k) => NEXUS_RECORD_TOOLS.has(text(k.tool) ?? '') || k.outbound === false),
     }
   },
 }
 READERS['set-master-prices'] = READERS['bulk-price-change']
 
-function matrixPart(p: Rec): Part {
-  const changes = recs(p.changes)
-  const coordinates = changes.map((c) => coordinateOf(c.coordinateKey))
+const MATRIX_TOOLS = new Set(['set-listing-stock', 'set-listing-price'])
+
+/** Channel and market of a Matrix request: the one every cell agrees on, else null. */
+function matrixWhere(p: Rec): Part {
+  const coordinates = recs(p.changes).map((c) => coordinateOf(c.coordinateKey))
   return {
     channel: agreed(coordinates.map((c) => c.channel)),
     market: agreed(coordinates.map((c) => c.market)),
+  }
+}
+
+/** A Matrix sale (`{ value, start, end }`) in words: the amount (no currency is stored with it) and its dates. */
+function saleWords(value: unknown): string {
+  const sale = rec(value)
+  const amount = num(sale?.value)
+  if (amount === null) return 'No sale'
+  const day = (v: unknown) => text(v)?.slice(0, 10) ?? null
+  const dates = [day(sale?.start) ? `from ${day(sale?.start)}` : null, day(sale?.end) ? `until ${day(sale?.end)}` : null].filter(Boolean).join(' ')
+  return `${money(amount, null)}${dates ? ` (${dates})` : ''}`
+}
+
+/**
+ * The Matrix (set-listing-stock, set-listing-price): one line per cell. The request is about the LISTING's own SKU (a
+ * variation), not the family's parent the preview also names; the SKU and the market have their own places (Product,
+ * Where), so a line repeats them only when the request spans several: "Quantity: Follow 403 → Pinned 10".
+ */
+function matrixPart(p: Rec, ctx: TargetContext): Part {
+  const rows = recs(p.changes)
+  const coordinates = rows.map((c) => coordinateOf(c.coordinateKey))
+  const skus = distinct(rows.map((r) => text(r.sku)).filter((s): s is string => s !== null))
+  const wheres = coordinates.map((c) => whereWords(c.channel, c.market))
+  const manyWheres = distinct(wheres).length > 1
+  const sale = p.verb === 'sale'
+  const items = rows.map((row, i) => {
+    const cell = text(row.cell)
+    const field = cell ? (MATRIX_CELLS[cell] ?? fieldLabel(cell)) : sale ? 'Sale price' : 'Change'
+    const value = (key: 'from' | 'to'): string | null => {
+      const shown = text(row[`${key}Label`])
+      // The Matrix's own words ("Buffer 2", "Pinned 10"): they stay whole, because the grid drops a lone line's label.
+      if (shown) return shown
+      if (sale) return saleWords(row[key])
+      return side(row, key, false)
+    }
+    return {
+      sku: text(row.sku),
+      name: null,
+      change: { label: [skus.length > 1 ? text(row.sku) : null, manyWheres ? wheres[i] : null, field].filter(Boolean).join(' · '), from: value('from'), to: value('to') },
+    }
+  })
+  const first = rows[0]
+  return {
+    ...matrixWhere(p),
+    ...(rows.length ? { changes: items.map((i) => i.change), items, changeCount: rows.length } : {}),
+    ...(text(first?.sku) ? { target: productTarget({ id: text(first?.rowId), sku: text(first?.sku) }, Math.max(skus.length, 1), ctx) } : {}),
   }
 }
 
@@ -801,7 +906,18 @@ export function resolveRequest(toolName: string, args: unknown, preview: unknown
     changeCount: Math.max(own.changeCount ?? changes.length + moreOf(p), changes.length),
     summary: summary ?? null,
     items: items.slice(0, 50),
+    nexusRecord: own.nexusRecord ?? NEXUS_RECORD_TOOLS.has(toolName),
   }
+}
+
+/**
+ * One step of a change plan in the words of a single request (the drawer's step list): its first change lines from the
+ * same resolver, so a step reads "Base price: €154.00 → €149.00" as the grid's row does. No preview, no lines.
+ */
+export function stepChangesOf(toolName: string, preview: unknown, ctx: TargetContext): { changes: QueueChange[]; changeCount: number } {
+  if (!rec(preview)) return { changes: [], changeCount: 0 }
+  const out = resolveRequest(toolName, {}, preview, ctx)
+  return { changes: out.changes.slice(0, 3), changeCount: out.changeCount }
 }
 
 /** The tools this file reads beyond the convention (for the report and the tests). */

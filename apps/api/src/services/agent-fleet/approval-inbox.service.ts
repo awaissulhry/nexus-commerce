@@ -1416,6 +1416,9 @@ export async function previewBulk(
   return bulkPreviewOf(await bulkRows(unique), decision, viewer)
 }
 
+/** A kind as the page names it: the registry title ("Set master price"), never the tool id ("set price"). */
+const kindTitle = (toolName: string): string => getTool(toolName)?.title ?? toolName.replace(/-/g, ' ')
+
 function bulkPreviewOf(
   all: BulkRow[],
   decision: 'approve' | 'reject',
@@ -1481,7 +1484,7 @@ function bulkPreviewOf(
   const blockedReason =
     decision === 'approve' && kinds.length > 1
       ? `These are ${kinds.length} different kinds of action (${kinds
-          .map((t) => t.replace(/-/g, ' '))
+          .map(kindTitle)
           .join(', ')}). Approve one kind at a time — a single yes should never span two different consequences.`
       : decision === 'approve' && !sameWorker
         ? `These come from ${workers.size} different workers. Approve one worker at a time — a single yes should never span two workers' judgement.`
@@ -1504,7 +1507,7 @@ function bulkPreviewOf(
   const euro = euroExposure(acting)
 
   const kindsClause = Object.entries(byTool)
-    .map(([tool, n]) => `${n} × ${tool.replace(/-/g, ' ')}`)
+    .map(([tool, n]) => `${n} × ${kindTitle(tool)}`)
     .join(', ')
   const verb = decision === 'approve' ? 'approves' : 'rejects'
   const money = euro ? ` It ${euro.label}.` : ''

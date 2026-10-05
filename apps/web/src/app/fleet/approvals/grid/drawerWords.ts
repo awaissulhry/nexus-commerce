@@ -31,9 +31,12 @@ export function whereWords(channel: string | null, market: string | null): strin
   return words || null
 }
 
-/** The "Where" line: the channel and market, or plainly that it stays in Nexus or names no place. */
-export function whereLine(row: Pick<QueueRow, 'channel' | 'market' | 'reachesOutside'>): string {
-  return whereWords(row.channel, row.market) ?? (row.reachesOutside ? 'Not named in the request' : 'In Nexus only')
+/**
+ * The "Where" line: the channel and market, or plainly that it stays in Nexus or names no place. A change to Nexus's own
+ * record (a master price, warehouse stock) is made in Nexus, even when its listings then follow it: "Nexus", as the grid.
+ */
+export function whereLine(row: Pick<QueueRow, 'channel' | 'market' | 'reachesOutside' | 'nexusRecord'>): string {
+  return whereWords(row.channel, row.market) ?? (row.nexusRecord ? 'Nexus' : row.reachesOutside ? 'Not named in the request' : 'In Nexus only')
 }
 
 /** The pill: the state's words, and for a run that is over, how far it got (only what Nexus knows). */
@@ -109,8 +112,12 @@ export interface WhyView {
   text: string
 }
 
-/** Why it waits, why it failed or came back (prominent), or the outcome. Null when the API has nothing to say. */
-export function whyView(row: Pick<QueueDetail, 'state' | 'note' | 'reason' | 'automation'>): WhyView | null {
+/**
+ * Why it waits, why it failed or came back (prominent), or the outcome. Null when the API has nothing to say — and for a
+ * running plan, whose step count the plan's own progress bar already shows ("2 of 6 steps done" once, not twice).
+ */
+export function whyView(row: Pick<QueueDetail, 'state' | 'note' | 'reason' | 'automation'> & { plan?: QueueDetail['plan'] }): WhyView | null {
+  if (row.state === 'running' && row.plan) return null
   const said = (row.note ?? row.reason ?? '').trim()
   switch (row.state) {
     case 'failed':

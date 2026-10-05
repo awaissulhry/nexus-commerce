@@ -1,3 +1,7 @@
+## Grid: the empty state's action can be clicked — 2026-10-05
+
+- **`GridNoRowsOverlay` `action`** (`grid/theme/grid.css`): AG sets `pointer-events: none` on `.ag-overlay` and re-enables it only for its own loading and export overlays, so the no-rows action ("Clear filters") was drawn but never reachable by pointer — the rows layer took the click (found by the approvals grid's browser check). `.nds-grid-noRows` takes pointer events again; the rest of the overlay stays click-through. Mirrored in Factory (`grid.css` is identical there).
+
 ## Approvals grid parts: before → after, two row verbs, a live countdown, grid shortcuts — 2026-10-05
 
 `docs/approvals-grid/PLAN.md` §8 C (gaps G1, G2, G7, G8 of `docs/approvals-grid/research/03-design-system-grid.md`). Mirrored in Factory: `cells.tsx`, `rowVerbs.ts` (new), `menuAdapters.tsx`, `components/index.ts`, `Countdown.tsx` and `countdownTicker.ts` (new). Web only: `ChangeCell.tsx`, `changeValue.ts`, `presets.ts`, the shortcut hook, the grid barrel, the `.nds-change*` / `.nds-countdown` styles (`components.css` already differs), the catalog and the tests.

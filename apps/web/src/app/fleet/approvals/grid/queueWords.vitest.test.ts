@@ -8,6 +8,7 @@ import type { QueueCounts, QueueRow } from '@nexus/shared/approval-queue'
 import {
   BULK_MAX,
   PHONE_COLUMNS,
+  PLAN_TOOL_NAME,
   POLL_FAST_MS,
   POLL_IDLE_MS,
   ageText,
@@ -18,6 +19,7 @@ import {
   bulkApproveVerdict,
   bulkOutcomeText,
   bulkRejectVerdict,
+  changeHidesLabel,
   countText,
   emptyWords,
   groupKey,
@@ -26,6 +28,8 @@ import {
   pollInterval,
   pollLimit,
   productText,
+  requestSubline,
+  rowMatchesSearch,
   rowMatchesTile,
   rowVerbIds,
   stateMeta,
@@ -57,6 +61,7 @@ function row(over: Partial<QueueRow> = {}): QueueRow {
     decider: null,
     reversibility: 'full',
     reachesOutside: true,
+    nexusRecord: false,
     requestedAt: '2026-10-05T09:00:00.000Z',
     expiresAt: '2026-10-06T09:00:00.000Z',
     executeAfter: null,
@@ -93,8 +98,11 @@ describe('one status for the whole life of a request', () => {
     expect(statusText(row({ state: 'running' }), NOW)).toBe('Running')
   })
 
-  it('gives a plan its size, and a running plan its progress', () => {
-    expect(whatSubline(row())).toBeNull()
+  it('gives a plan its size, a running plan its progress, and a single request where it lands', () => {
+    // What's second line says WHERE, so the Where column can stay hidden at desktop width.
+    expect(whatSubline(row({ channel: 'EBAY', market: 'IT' }))).toBe('eBay IT')
+    expect(whatSubline(row({ nexusRecord: true }))).toBe('Nexus')
+    expect(whatSubline(row())).toBeNull() // reaches a channel it does not name: nothing guessed
     expect(whatSubline(row({ plan: { steps: 120, byStatus: {} } }))).toBe('Plan · 120 steps')
     expect(whatSubline(row({ state: 'running', plan: { steps: 120, byStatus: { done: 34, failed: 2 } } }))).toBe('34 of 120 done, 2 failed')
   })
@@ -108,17 +116,47 @@ describe('the row in words', () => {
     expect(productText(null)).toBe('')
   })
 
-  it('says where in plain words, "Nexus" only when it never leaves Nexus, and never guesses a channel', () => {
-    expect(whereText({ channel: 'EBAY', market: 'it', reachesOutside: true })).toBe('eBay IT')
-    expect(whereText({ channel: 'AMAZON', market: null, reachesOutside: true })).toBe('Amazon')
-    expect(whereText({ channel: null, market: null, reachesOutside: false })).toBe('Nexus')
-    expect(whereText({ channel: null, market: null, reachesOutside: true })).toBeNull()
+  it('says where in plain words: "Nexus" when it never leaves Nexus or changes Nexus\'s own record; never a guessed channel', () => {
+    expect(whereText({ channel: 'EBAY', market: 'it', reachesOutside: true, nexusRecord: false })).toBe('eBay IT')
+    expect(whereText({ channel: 'AMAZON', market: null, reachesOutside: true, nexusRecord: false })).toBe('Amazon')
+    expect(whereText({ channel: null, market: null, reachesOutside: false, nexusRecord: false })).toBe('Nexus')
+    // A master price: made in Nexus, though the listings that follow it are sent on (as apply-content, which never leaves).
+    expect(whereText({ channel: null, market: null, reachesOutside: true, nexusRecord: true })).toBe('Nexus')
+    expect(whereText({ channel: null, market: null, reachesOutside: true, nexusRecord: false })).toBeNull()
   })
 
   it('shows the API note first, then why it waits under today\'s rule', () => {
     expect(whyText(row())).toBe('Your rule for Set master price: Ask me')
     expect(whyText(row({ note: 'Amazon: missing brand' }))).toBe('Amazon: missing brand')
     expect(whyText(row({ automation: { level: 'ask', max: 'ask', whyWaits: null } }))).toBeNull()
+  })
+
+  it('a finished request says its outcome AND who decided, once', () => {
+    const ana = { kind: 'person' as const, label: 'Ana' }
+    expect(whyText(row({ state: 'rejected', note: 'Rejected: too low', decider: ana }))).toBe('Rejected: too low · by Ana')
+    expect(whyText(row({ state: 'rejected', note: 'Rejected by Ana', decider: ana }))).toBe('Rejected by Ana')
+    expect(whyText(row({ state: 'done', note: 'Ran · approved by Ana', decider: ana }))).toBe('Ran · approved by Ana')
+    expect(whyText(row({ state: 'done', note: '5 of 6 changes ran; 1 skipped.', decider: ana }))).toBe('5 of 6 changes ran; 1 skipped. · approved by Ana')
+    expect(whyText(row({ state: 'done', note: 'Ran by your rule', decider: { kind: 'rule', label: 'Rule · Set master price' } }))).toBe('Ran by your rule')
+    expect(whyText(row({ state: 'done', note: 'Ran', decider: { kind: 'claude-code', label: 'Ana, code in Claude' } }))).toBe('Ran · approved by Ana, code in Claude')
+    // Nobody decided an expired request; a waiting one is not finished.
+    expect(whyText(row({ state: 'expired', note: 'Nobody decided in time. Nothing changed.', decider: { kind: 'expiry', label: 'Expired' } }))).toBe('Nobody decided in time. Nothing changed.')
+    expect(whyText(row({ decider: ana }))).toBe('Your rule for Set master price: Ask me')
+  })
+
+  it('one change line drops its label in the cell (What names it); several keep theirs', () => {
+    expect(changeHidesLabel(row())).toBe(true)
+    expect(changeHidesLabel(row({ changeCount: 3 }))).toBe(false)
+    expect(changeHidesLabel(row({ changes: [{ label: 'A', from: '1', to: '2' }, { label: 'B', from: '1', to: '2' }], changeCount: 2 }))).toBe(false)
+  })
+
+  it('the search finds a row by any word it shows, in any case and order', () => {
+    const r = row({ channel: 'EBAY', market: 'IT' })
+    for (const hit of ['xr-glove-m', 'gale glove', 'Set master price', 'set-price', 'eBay IT', '€52.00', 'Ana', 'ask me', 'waiting', 'glove master']) {
+      expect(rowMatchesSearch(r, hit), hit).toBe(true)
+    }
+    for (const miss of ['zzz-no-such-thing', 'glove helmet', 'Amazon']) expect(rowMatchesSearch(r, miss), miss).toBe(false)
+    expect(rowMatchesSearch(r, '   ')).toBe(true)
   })
 
   it('counts age and the toolbar total plainly', () => {
@@ -148,8 +186,12 @@ describe('the verbs a row offers', () => {
     expect(approveHeldWhy(row({ canApprove: false }))).toBe('You cannot approve this request.')
   })
 
-  it('offers "Automate this kind…" on Claude rows only, held when the kind always needs a person', () => {
+  it('offers "Automate this kind…" on Claude\'s single requests only, held when the kind always needs a person', () => {
     expect(automateOffer(row())).toEqual({ offered: true, heldWhy: null })
+    // A change plan is never automated: a rule is about one kind of Claude's requests.
+    expect(automateOffer(row({ toolName: PLAN_TOOL_NAME, plan: { steps: 6, byStatus: { pending: 6 } } })).offered).toBe(false)
+    expect(automateOffer(row({ toolName: PLAN_TOOL_NAME })).offered).toBe(false)
+    expect(automateOffer(row({ asker: { kind: 'assistant', label: 'Assistant', person: 'Ana', connection: null } })).offered).toBe(false)
     expect(automateOffer(row({ automation: { level: 'ask', max: 'ask', whyWaits: null } }))).toEqual({ offered: true, heldWhy: 'This kind always needs you' })
     expect(automateOffer(row({ automation: { level: 'off', max: 'off', whyWaits: null } })).heldWhy).toBe('This kind always needs you')
     expect(automateOffer(row({ asker: { kind: 'fleet', label: 'Ads director', person: null, connection: null } })).offered).toBe(false)
@@ -236,15 +278,20 @@ describe('group, phone, empty', () => {
     expect(groupKey(row(), 'asker')).toBe('Claude · Ana')
   })
 
-  it('shows three columns under 640 px', () => {
+  it('shows two columns under 640 px: the request and one verb', () => {
     expect(isPhoneWidth(639)).toBe(true)
     expect(isPhoneWidth(640)).toBe(false)
-    expect(PHONE_COLUMNS).toEqual(['status', 'what', 'actions'])
+    expect(PHONE_COLUMNS).toEqual(['request', 'actions'])
+    // The Request cell's second line: the product's SKU, a plan's progress, else where.
+    expect(requestSubline(row())).toBe('XR-GLOVE-M')
+    expect(requestSubline(row({ state: 'running', plan: { steps: 6, byStatus: { done: 2 } } }))).toBe('2 of 6 done')
+    expect(requestSubline(row({ target: { kind: 'product', id: null, sku: 'XR-1', name: null, count: 12, href: null } }))).toBe('12 products')
+    expect(requestSubline(row({ target: null, nexusRecord: true }))).toBe('Nexus')
   })
 
   it('says plainly why the list is empty', () => {
     expect(emptyWords('open', false)).toEqual({ title: 'Nothing needs you right now.', message: "Claude's requests show up here." })
-    expect(emptyWords('open', true).title).toBe('Nothing matches.')
+    expect(emptyWords('open', true).title).toBe('No requests match.')
   })
 })
 

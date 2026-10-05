@@ -4,9 +4,10 @@
  * The grid, the health strip and the toolbar read their labels, tones, filters and the bulk-button rules from here.
  * Nothing in this file fetches or renders. Times are passed in (`now`), never read from a clock, so a test is exact.
  */
-import type { QueueCounts, QueuePage, QueueRow, QueueShow, QueueState } from '@nexus/shared/approval-queue'
+import type { QueueChange, QueueCounts, QueuePage, QueueRow, QueueShow, QueueState } from '@nexus/shared/approval-queue'
 import type { Tone } from '@/design-system/primitives/tone'
 import { countdownText } from '@/design-system/components/countdownTicker'
+import { changeLineArrowText } from '@/design-system/grid/renderers/changeValue'
 
 /* ── statuses (PLAN §3) ───────────────────────────────────────────────────────────────────── */
 
@@ -75,11 +76,19 @@ export function statusText(row: QueueRow, now: number, timeZone?: string): strin
 
 /* ── the row's words ──────────────────────────────────────────────────────────────────────── */
 
-/** The "What" cell's second line: a plan says its size, a running plan its progress. Null for a single request. */
-export function whatSubline(row: Pick<QueueRow, 'plan' | 'state'>): string | null {
+/** A plan's second line: its size, or while it runs its progress. Null for a single request. */
+export function planSubline(row: Pick<QueueRow, 'plan' | 'state'>): string | null {
   if (!row.plan) return null
   if (row.state === 'running') return planProgress(row.plan)
   return `Plan · ${row.plan.steps} ${row.plan.steps === 1 ? 'step' : 'steps'}`
+}
+
+/**
+ * The "What" cell's second line: WHERE in plain words ("eBay IT", "Nexus"), so the separate Where column can stay hidden
+ * at desktop width; a plan says its size or its progress instead. Null when neither is known.
+ */
+export function whatSubline(row: Pick<QueueRow, 'plan' | 'state' | 'channel' | 'market' | 'reachesOutside' | 'nexusRecord'>): string | null {
+  return row.plan ? planSubline(row) : whereText(row)
 }
 
 const TARGET_NOUN: Record<NonNullable<QueueRow['target']>['kind'], [string, string]> = {
@@ -119,18 +128,68 @@ export function channelWord(channel: string): string {
 }
 
 /**
- * The "Where" column: "eBay IT", "Amazon", "Nexus" (a change that never leaves Nexus). Null when the request may
- * reach a channel but does not name one — the cell shows the dash rather than guessing.
+ * The "Where" column: "eBay IT", "Amazon", "Nexus" — a change that never leaves Nexus, or one made to Nexus's own record
+ * (a master price, warehouse stock: `nexusRecord`) that its listings then follow. Null when the request may reach a
+ * channel but does not name one — the cell shows the dash rather than guessing.
  */
-export function whereText(row: Pick<QueueRow, 'channel' | 'market' | 'reachesOutside'>): string | null {
+export function whereText(row: Pick<QueueRow, 'channel' | 'market' | 'reachesOutside' | 'nexusRecord'>): string | null {
   if (row.channel) return row.market ? `${channelWord(row.channel)} ${row.market.toUpperCase()}` : channelWord(row.channel)
-  if (!row.reachesOutside) return 'Nexus'
+  if (!row.reachesOutside || row.nexusRecord) return 'Nexus'
   return null
 }
 
-/** "Why / result": the API's own sentence, else why it waits under today's rule. */
-export function whyText(row: Pick<QueueRow, 'note' | 'automation'>): string | null {
-  return row.note ?? row.automation.whyWaits ?? null
+/** Finished requests whose "Why / result" also says who decided (an expiry or Nexus itself is no one). */
+const DECIDED_STATES: readonly QueueState[] = ['done', 'recorded', 'rejected', 'replaced']
+
+/** "approved by Ana", "by your rule"; null when nobody decided or the row is not finished. */
+function decidedBy(row: Pick<QueueRow, 'state' | 'decider'>): { words: string; marker: string } | null {
+  const d = row.decider
+  if (!d || !DECIDED_STATES.includes(row.state)) return null
+  if (d.kind === 'rule') return { words: 'by your rule', marker: 'rule' }
+  if (d.kind !== 'person' && d.kind !== 'claude-code') return null
+  const approved = row.state === 'done' || row.state === 'recorded'
+  return { words: `${approved ? 'approved ' : ''}by ${d.label}`, marker: d.label.replace(/, code in Claude$/, '') }
+}
+
+/**
+ * "Why / result": the API's own sentence, else why it waits under today's rule. A finished request also says who
+ * decided ("Rejected: too low · by Ana"), unless the sentence already names them.
+ */
+export function whyText(row: Pick<QueueRow, 'note' | 'automation' | 'state' | 'decider'>): string | null {
+  const said = row.note ?? row.automation.whyWaits ?? null
+  const by = decidedBy(row)
+  if (!by || (said && said.toLowerCase().includes(by.marker.toLowerCase()))) return said
+  return said ? `${said} · ${by.words}` : by.words.charAt(0).toUpperCase() + by.words.slice(1)
+}
+
+/**
+ * The Change cell of a row with exactly ONE change line hides that line's label: the What column already names it, so
+ * "€159.00 → €151.05" fits. A screen reader still hears the label (DS `ChangeValue hideLabels`), and the tooltip, the
+ * CSV and the search keep it.
+ */
+export function changeHidesLabel(row: Pick<QueueRow, 'changes' | 'changeCount'>): boolean {
+  return row.changes.length === 1 && row.changeCount <= 1
+}
+
+/** The row's change lines in one line of words ("Base price: €159.00 → €151.05"), for the search. */
+export function changeWords(changes: readonly QueueChange[]): string {
+  return changes.map(changeLineArrowText).join('; ')
+}
+
+/** Everything the search reads of a row: its kind, where, product, change, who asked, why and status. */
+export function searchText(row: QueueRow): string {
+  return [
+    row.title, row.toolName, whatSubline(row), productText(row.target), row.target?.name, changeWords(row.changes),
+    row.asker.label, whyText(row), stateMeta(row.state).label,
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+/** The search box: every word typed must appear somewhere in the row (any case, any order). Empty matches all. */
+export function rowMatchesSearch(row: QueueRow, search: string): boolean {
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return true
+  const text = searchText(row)
+  return words.every((word) => text.includes(word))
 }
 
 /* ── the verbs a row offers ───────────────────────────────────────────────────────────────── */
@@ -151,13 +210,20 @@ export function approveHeldWhy(row: Pick<QueueRow, 'canApprove' | 'cannotApprove
   return row.cannotApproveWhy ?? 'You cannot approve this request.'
 }
 
-/** "Automate this kind…" — offered on Claude's requests; held, with the reason, when the kind always needs a person. */
-export function automateOffer(row: Pick<QueueRow, 'asker' | 'automation'>): { offered: boolean; heldWhy: string | null } {
-  if (row.asker.kind !== 'claude') return { offered: false, heldWhy: null }
+/**
+ * "Automate this kind…" — offered on Claude's single requests only: a rule applies to Claude's requests of one kind,
+ * never to a change plan or to what a fleet agent, the assistant or a rule asked. Held, with the reason, when the kind
+ * always needs a person.
+ */
+export function automateOffer(row: Pick<QueueRow, 'asker' | 'automation' | 'plan' | 'toolName'>): { offered: boolean; heldWhy: string | null } {
+  if (row.asker.kind !== 'claude' || row.plan || row.toolName === PLAN_TOOL_NAME) return { offered: false, heldWhy: null }
   const max = row.automation.max
   if (max === 'ask' || max === 'off') return { offered: true, heldWhy: 'This kind always needs you' }
   return { offered: true, heldWhy: null }
 }
+
+/** The change-plan tool (the API's PLAN_TOOL): one request of many steps. */
+export const PLAN_TOOL_NAME = 'submit-change-plan'
 
 /* ── bulk (Decision 1 = A: one kind at a time) ────────────────────────────────────────────── */
 
@@ -320,9 +386,20 @@ export function groupKey(row: QueueRow, group: QueueGroup): string {
   return ''
 }
 
-/** Below this width the grid shows only Status, What (with the product under it) and the actions — PublishRuns' rule. */
+/**
+ * Below this width the grid shows two columns — Request (the status and the kind, the product under them) and ONE verb
+ * — so it fits a 390 px phone without sideways scrolling; a tap on the row opens the drawer, which has every verb.
+ */
 export const PHONE_MAX_PX = 639
-export const PHONE_COLUMNS: readonly string[] = ['status', 'what', 'actions']
+export const PHONE_COLUMNS: readonly string[] = ['request', 'actions']
+
+/** The phone Request cell's second line: a plan's size or progress, else the product's SKU (or name, or count). */
+export function requestSubline(row: Pick<QueueRow, 'plan' | 'state' | 'target' | 'channel' | 'market' | 'reachesOutside' | 'nexusRecord'>): string | null {
+  if (row.plan) return planSubline(row)
+  const t = row.target
+  if (!t) return whereText(row)
+  return targetCountText(t) ?? t.sku ?? t.name ?? null
+}
 export const isPhoneWidth = (px: number): boolean => px <= PHONE_MAX_PX
 
 /* ── polling (PLAN §5–§6) ─────────────────────────────────────────────────────────────────── */
@@ -365,7 +442,7 @@ export function appendPage(prev: readonly QueueRow[], page: QueuePage): QueueRow
 
 /** The empty-grid words for a list with nothing in it. */
 export function emptyWords(show: QueueShow, filtered: boolean): { title: string; message: string } {
-  if (filtered) return { title: 'Nothing matches.', message: 'Clear the filter or the search to see every request.' }
+  if (filtered) return { title: 'No requests match.', message: 'Clear the search and the tile filter to see every request.' }
   if (show === 'open') return { title: 'Nothing needs you right now.', message: "Claude's requests show up here." }
   if (show === 'done') return { title: 'Nothing finished yet.', message: 'Requests you or a rule decided show up here.' }
   return { title: 'No requests yet.', message: "Claude's requests show up here." }

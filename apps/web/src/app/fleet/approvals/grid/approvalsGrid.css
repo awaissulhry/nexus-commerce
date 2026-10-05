@@ -11,6 +11,12 @@
   gap: var(--nds-space-12);
   min-width: 0;
 }
+/* The global "Ask AI" button floats over the bottom-right corner. The fleet pages scroll in their own container, not in
+   the shared shell's `.h10-main`, which reserves this room already (shared-shell.css): while the button is on screen the
+   page ends with its footprint of room (the DS token), so the last row and "Show more" scroll clear of it. */
+:root:has([data-nds-fab]) .aqg-page {
+  padding-bottom: var(--nds-fab-reserve-block);
+}
 
 /* ── health strip on a phone: one row of chips ─────────────────────────── */
 .aqg-chips {
@@ -89,6 +95,33 @@
 .aqg-error {
   color: var(--nds-danger-strong);
   font-weight: var(--nds-font-weight-medium);
+}
+/* Why / result: two lines, so a failure reason is readable in the row (the column's tooltip has all of it). */
+.aqg-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+/* phone: the Request cell — the status and the kind on one line, the product under them */
+.aqg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.aqg-pill {
+  flex: none;
+  display: inline-flex;
+}
+
+/* the search field fills the toolbar's search slot (220–340 px): the whole placeholder shows */
+.aqg-search {
+  width: 100%;
 }
 
 /* ── under the grid ────────────────────────────────────────────────────── */

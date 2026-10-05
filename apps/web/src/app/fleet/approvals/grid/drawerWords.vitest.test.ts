@@ -30,6 +30,7 @@ const row = (over: Partial<QueueRow> = {}): QueueRow => ({
   decider: null,
   reversibility: 'full',
   reachesOutside: true,
+  nexusRecord: false,
   requestedAt: '2026-10-05T08:00:00.000Z',
   expiresAt: '2026-10-06T08:00:00.000Z',
   executeAfter: null,
@@ -94,6 +95,8 @@ describe('status: one set of words for the whole life of a request', () => {
     expect(whereLine(row({ channel: 'AMAZON', market: 'DE' }))).toBe('Amazon DE')
     expect(whereLine(row({ reachesOutside: false }))).toBe('In Nexus only')
     expect(whereLine(row())).toBe('Not named in the request')
+    // A master price is made in Nexus, even though the listings that follow it are sent on.
+    expect(whereLine(row({ nexusRecord: true }))).toBe('Nexus')
     expect(consequenceWords(row())).toBe('Reaches a marketplace or a buyer; can be undone')
     expect(consequenceWords(row({ reachesOutside: false, reversibility: 'none' }))).toBe('Stays in Nexus; cannot be undone')
     expect(targetWords(row().target)).toEqual({ main: 'TEST-GLOVE-M', name: 'Test glove M', more: null, href: '/products/p1/edit' })
@@ -115,6 +118,9 @@ describe('why, the timeline and the channel’s answer', () => {
     expect(whyView(detail({ state: 'failed', note: null }))?.text).toBe('Nexus did not record why.')
     expect(whyView(detail())).toMatchObject({ banner: false, title: 'Why it waits for you', text: 'Your rule for Set master price: Ask me' })
     expect(whyView(detail({ state: 'done', note: null }))).toBeNull()
+    // A running plan's step count is its progress bar's: not said twice.
+    expect(whyView({ ...detail({ state: 'running', note: '2 of 6 steps done' }), plan: { steps: 6, byStatus: { done: 2 } } })).toBeNull()
+    expect(whyView(detail({ state: 'running', note: 'Running' }))).toMatchObject({ title: 'Result', text: 'Running' })
   })
 
   it('an event the API sent without words gets plain ones; a reason becomes the detail', () => {

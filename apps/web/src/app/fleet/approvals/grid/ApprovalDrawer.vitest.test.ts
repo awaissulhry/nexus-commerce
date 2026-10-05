@@ -50,6 +50,7 @@ const base: QueueRow = {
   decider: null,
   reversibility: 'full',
   reachesOutside: true,
+  nexusRecord: false,
   requestedAt: '2026-10-05T08:00:00.000Z',
   expiresAt: '2026-10-06T08:00:00.000Z',
   executeAfter: null,
@@ -193,6 +194,8 @@ describe('the request drawer', () => {
     const step = (n: number, status: string) => ({
       step: n, tool: 'set-price', title: 'Set master price', status, reason: status === 'failed' ? 'Below the floor' : null, changeId: null,
       undoesChangeId: null, outbound: true, preview: { sku: `TEST-${n}`, changes: { 'base price': { from: 1, to: 2 } } },
+      // The API's words for the step (approval-queue.service.ts withStepChanges), as a single request's row reads.
+      changes: [{ label: 'Base price', from: '€1.00', to: '€2.00' }], changeCount: 1,
     })
     const plan = (status: string, steps: ReturnType<typeof step>[]): PlanDetail => ({
       approvalId: base.id, status, title: 'Reprice gloves', summary: 'Three gloves up by 5%.', planHash: 'h',
@@ -202,13 +205,23 @@ describe('the request drawer', () => {
     const planRow = { toolName: 'submit-change-plan', title: 'Change plan', target: null, canEdit: false, allChanges: [], changeCount: 3 }
 
     const running = render(
-      detailOf({ ...planRow, state: 'running', rawStatus: 'executing', plan: { steps: 3, byStatus: { done: 1, failed: 1, pending: 1 } } }),
+      detailOf({ ...planRow, state: 'running', rawStatus: 'executing', note: '1 of 3 steps done, 1 failed', plan: { steps: 3, byStatus: { done: 1, failed: 1, pending: 1 } } }),
       {},
       plan('executing', [step(1, 'done'), step(2, 'failed'), step(3, 'pending')]),
     )
     expect(running).toContain('Running · 1 of 3')
     expect(running).toContain('1 of 3 steps done · 1 failed')
     expect(running).toContain('3 × Set master price — reach a marketplace or a buyer; can be undone')
+    // Each fact once: the progress bar carries the step count (no "Result" line repeating it), the kinds list carries the
+    // kinds (not the plan's summary sentence as well).
+    expect(running).not.toContain('>Result<')
+    expect(running.match(/steps done/g)).toHaveLength(1)
+    expect(running).not.toContain('Three gloves up by 5%.')
+    // A step's change in the grid's words, never the preview's raw numbers.
+    expect(running).toContain('TEST-1 · Base price: €1.00 → €2.00')
+    expect(running).not.toContain('base price: 1 → 2')
+    // Rules apply to Claude's single requests only: no "Automate this kind…" on a plan.
+    expect(running).not.toContain('Automate this kind')
     expect(running).toMatch(/<ol[^>]*tabindex="0"/)
     expect(running).not.toMatch(/<input[^>]*type="checkbox"/)
     expect(running).toContain('Why it failed: Below the floor')
@@ -220,6 +233,7 @@ describe('the request drawer', () => {
       plan('pending', [step(1, 'pending'), step(2, 'pending'), step(3, 'pending')]),
     )
     expect(waiting).toContain('>Approve 3 changes<')
+    expect(waiting).not.toContain('Automate this kind')
     expect(waiting.match(/<input[^>]*type="checkbox"[^>]*>/g)).toHaveLength(3)
     expect(waiting.match(/<input[^>]*type="checkbox"[^>]*tabindex="0"/g)).toHaveLength(1)
     expect(waiting).not.toContain('Change the value, then approve')

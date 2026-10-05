@@ -5,7 +5,9 @@
  *
  * Reads GET /api/agent/fleet/approvals/:id/plan (its shape and words: `planWords.ts`), built on the design
  * system only:
- *   - one sentence per KIND of change ("120 × Set master price — reach a marketplace or a buyer; can be undone");
+ *   - one sentence per KIND of change ("120 × Set master price — reach a marketplace or a buyer; can be undone"), and
+ *     not the plan's summary sentence as well, which says the same;
+ *   - each step's change in the grid's words ("Base price: €154.00 → €149.00", from the API's `changes` per step);
  *   - while it runs, "34 of 120 steps done" (DS JobProgress), re-read whenever the plan's counts move;
  *   - the steps as a LIST, never a grid, and ONE tab stop (the 2026-10-02 rule, settings/ai/claude/claudePage.vitest
  *     .test.ts): while the plan waits, the arrow keys move between the steps' Keep ticks; after that the list is
@@ -152,7 +154,8 @@ export function PlanSection({ detail, busy, onReplaced }: {
   return (
     <section className={styles.section} aria-labelledby={`${filterId}-title`}>
       <h3 id={`${filterId}-title`} className={styles.sectionTitle}>{total ? `The plan: ${plural(total, 'step')}` : 'The plan'}</h3>
-      {plan?.summary && <p className={styles.text}>{plan.summary}</p>}
+      {/* Each fact once: the kinds list below says how many of each, where they land and whether they can be undone,
+          which is all the plan's own summary sentence says too. */}
 
       {progress && started && (
         <JobProgress

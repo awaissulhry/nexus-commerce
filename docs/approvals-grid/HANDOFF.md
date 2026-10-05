@@ -23,12 +23,18 @@
   - Wave 2 DONE + COMMITTED: 67c7e3e8d reports (docs/approvals-grid/reports/, renamed from git-ignored build/) ·
     cc5ef2700 the grid page (grid/ApprovalsGrid, drawer, Automate modal, QueueDetail.editArgs). Lead checks: web tsc
     pass; web tests 192 files 2551/2551; api tsc pass; queue route test 29/29; static gates 61/65 (the 4 on main).
-  - Wave 3 RUNNING: F clean-up (delete old cards, How it works + FleetGateState, nav badge, one state map, drawer
-    onFollow) in the worktree, no commits · G private stack + Playwright check OUTSIDE the repo:
-    ~/nexus-archive/2026-10-05-approvals-grid-stack/ (pg :55730 copy of nexus-sheet-publish-pg, redis :6730,
-    API :4730, web :3730, seed-approvals.mts seed|clean, approvals-check.mjs, STACK.md).
-  - After wave 3: lead reviews F, re-runs the check, READS the screenshots, fixes, commits; then the check table and
-    ask the Owner about push / PRs.
+  - Wave 3 DONE + COMMITTED: b0d78e0df clean-up (old cards deleted, HowItWorks + FleetGateState, Agent Fleet badge,
+    one state map, drawer onFollow, pinned text tokens). Web tests 206 files 2638/2638.
+  - Private stack RUNNING (agent G): ~/nexus-archive/2026-10-05-approvals-grid-stack/STACK.md — pg :55730 (dump of
+    nexus-sheet-publish-pg, 524 migrations), redis :6730, API :4730, web :3730, 13 seeded rows marked APX-GRID-SEED
+    (`seed-approvals.mts seed|clean|list`), `approvals-check.mjs` (THEME, WIDTHS, APPROVE=0). The Owner can open
+    http://localhost:3730/w/nexus_legacy_workspace/fleet/approvals (dev+owner@nexus.local; password in
+    apps/api/src/scripts/seed-dev-users.ts).
+  - Browser findings (lead read the shots): duplicate React key in plan drawer; AG "No Matching Rows"; Change column
+    cut; Why/result off-screen; phone columns overlap; Ask AI covers last row; plan steps raw numbers; repeated plan
+    facts; Automate shown for plans; set-listing-stock SKU/label; master-data Where; bulk sentence uses tool ids.
+  - Fix agent H RUNNING on that list (uncommitted). Then: lead re-reads the new shots, commits, check table, ask the
+    Owner about push / PRs.
 - Test env: `source ~/nexus-archive/2026-10-05-approvals-grid-stack/env.sh` (loopback guard, PGlite tests);
   `apps/api/.env` (git-ignored) holds a loopback test DATABASE_URL. Run API vitest only from apps/api.
 - PRs: nothing pushed yet; push/merge only on the Owner's word.

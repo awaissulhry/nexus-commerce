@@ -18,9 +18,11 @@ import {
   fieldLabel,
   marketOf,
   money,
+  NEXUS_RECORD_TOOLS,
   plainValue,
   productRefsOf,
   resolveRequest,
+  stepChangesOf,
   type TargetContext,
 } from './approval-target.js'
 
@@ -107,7 +109,24 @@ const CASES: Case[] = [
     target: { kind: 'product', id: 'prod-helm', sku: 'XR-HELM-L', count: 1 },
     channel: 'EBAY',
     market: 'IT',
-    first: { label: 'XR-HELM-L · eBay IT · Stock', from: 'Pinned 2', to: 'Pinned 4' },
+    // The SKU and the market have their own places (Product, Where): the line says only what changes.
+    first: { label: 'Quantity', from: 'Pinned 2', to: 'Pinned 4' },
+  },
+  {
+    // A variation's listing: the preview names the family's PARENT too; the request is about the listing's own SKU.
+    tool: 'set-listing-stock',
+    args: { productId: 'prod-jkt', action: 'set-buffer', buffer: 2, targets: [{ rowId: 'prod-jkt', coordinateKey: 'EBAY:IT' }] },
+    preview: {
+      action: 'set-listing-stock',
+      family: { productId: 'prod-jkt-parent', sku: 'XR-JKT' },
+      verb: 'set-buffer',
+      changes: [{ rowId: 'prod-jkt', sku: 'XR-JKT-S', coordinateKey: 'EBAY:IT', cell: 'syncBuffer', from: 0, to: 2, fromLabel: 'Buffer 0', toLabel: 'Buffer 2', note: 'Follow pushes 7' }],
+    },
+    target: { kind: 'product', id: 'prod-jkt', sku: 'XR-JKT-S', name: 'Jacket S', count: 1, href: '/products/prod-jkt/edit' },
+    channel: 'EBAY',
+    market: 'IT',
+    first: { label: 'Buffer', from: 'Buffer 0', to: 'Buffer 2' },
+    changeCount: 1,
   },
   {
     tool: 'set-listing-price',
@@ -120,11 +139,45 @@ const CASES: Case[] = [
         { rowId: 'prod-helm', sku: 'XR-HELM-L', coordinateKey: 'EBAY:DE', cell: 'price', from: 105, to: 99.75, fromLabel: '€105.00', toLabel: '€99.75' },
       ],
     },
-    target: { kind: 'product', id: 'prod-helm', sku: 'XR-HELM-L' },
+    target: { kind: 'product', id: 'prod-helm', sku: 'XR-HELM-L', count: 1 },
     channel: 'EBAY',
-    market: null, // two markets: no single one
-    first: { label: 'XR-HELM-L · eBay IT · Price', from: '€105.00', to: '€99.75' },
+    market: null, // two markets: no single one, so each line names its own
+    first: { label: 'eBay IT · Price', from: '€105.00', to: '€99.75' },
     changeCount: 2,
+  },
+  {
+    tool: 'set-listing-price',
+    args: { productId: 'prod-helm', action: 'sale', sale: { price: 89, start: '2026-10-10', end: null }, targets: [{ rowId: 'prod-helm', coordinateKey: 'AMAZON:IT' }] },
+    preview: {
+      action: 'set-listing-price',
+      family: { productId: 'prod-helm', sku: 'XR-HELM-L' },
+      verb: 'sale',
+      changes: [{ rowId: 'prod-helm', sku: 'XR-HELM-L', coordinateKey: 'AMAZON:IT', from: { value: null, start: null, end: null }, to: { value: 89, start: '2026-10-10', end: null }, version: 3 }],
+    },
+    target: { kind: 'product', sku: 'XR-HELM-L', name: 'Helm L' },
+    channel: 'AMAZON',
+    market: 'IT',
+    first: { label: 'Sale price', from: 'No sale', to: '89.00 (from 2026-10-10)' },
+  },
+  {
+    tool: 'bulk-listing-stock',
+    args: { action: 'BUFFER', buffer: 1, listingIds: ['lst-1', 'lst-2'] },
+    preview: {
+      action: 'bulk-listing-stock',
+      verb: 'BUFFER',
+      summary: 'Buffer 2 rows (2 listings, 0 shared eBay variants).',
+      cells: [
+        { sku: 'XR-GLOVE-M', channel: 'EBAY', market: 'IT', account: null, kind: 'listing', from: 'Follow', to: 'Follow, buffer 1' },
+        { sku: 'XR-GLOVE-M', channel: 'AMAZON', market: 'EU (DE, FR)', account: 'Xavia EU', kind: 'listing', from: 'Follow', to: 'Follow, buffer 1' },
+      ],
+      totals: { listings: 2, sharedVariants: 0, unchanged: 0, leftOut: 0 },
+    },
+    target: { kind: 'listing', sku: 'XR-GLOVE-M', name: 'Gale glove M', count: 2 },
+    channel: null, // two channels
+    market: null,
+    first: { label: 'eBay IT · Stock sync', from: 'Follow', to: 'Follow, buffer 1' },
+    changeCount: 2,
+    summary: 'Buffer 2 rows (2 listings, 0 shared eBay variants).',
   },
   {
     tool: 'publish-listing',
@@ -367,6 +420,47 @@ describe('resolveRequest — honesty', () => {
   })
 })
 
+describe('Where — a change to Nexus’s own record', () => {
+  it('master prices, warehouse stock and photos are made in Nexus, even when the listings that follow them are sent on', () => {
+    for (const tool of ['set-price', 'set-master-prices', 'bulk-price-change', 'schedule-price-change', 'set-stock']) {
+      expect(resolveRequest(tool, { productId: 'prod-gale' }, {}, ctx).nexusRecord, tool).toBe(true)
+    }
+    // A listing's own price or stock, a publish, an ad bid: made on the channel, not in Nexus.
+    for (const tool of ['set-listing-price', 'set-listing-stock', 'publish-listing', 'set-target-bid']) {
+      expect(resolveRequest(tool, {}, {}, ctx).nexusRecord, tool).toBe(false)
+    }
+  })
+
+  it('every kind named as Nexus’s own record is a registered change tool', () => {
+    const changeTools = new Set(listTools().filter((tool) => !tool.readOnly).map((tool) => tool.name))
+    for (const name of NEXUS_RECORD_TOOLS) expect(changeTools.has(name), name).toBe(true)
+  })
+
+  it('a change plan is made in Nexus only when every kind in it is', () => {
+    const plan = (kinds: Array<{ tool: string; outbound: boolean }>) =>
+      resolveRequest('submit-change-plan', {}, { action: 'submit-change-plan', kinds: kinds.map((k) => ({ ...k, title: k.tool, count: 1 })), totals: { steps: kinds.length } }, ctx).nexusRecord
+    expect(plan([{ tool: 'set-price', outbound: true }, { tool: 'apply-content', outbound: false }])).toBe(true)
+    expect(plan([{ tool: 'set-price', outbound: true }, { tool: 'set-listing-price', outbound: true }])).toBe(false)
+    expect(plan([])).toBe(false)
+  })
+})
+
+describe('stepChangesOf — a plan step in the grid’s words', () => {
+  it('a master-price step reads in the master currency, as a single request does', () => {
+    const preview = { action: 'set-price', sku: 'XR-GLOVE-M', scope: 'master', changes: { 'base price': { from: 154, to: 149 } } }
+    expect(stepChangesOf('set-price', preview, ctx)).toEqual({ changes: [{ label: 'Base price', from: '€154.00', to: '€149.00' }], changeCount: 1 })
+    expect(stepChangesOf('set-price', preview, ctx).changes[0]).toEqual(resolveRequest('set-price', {}, preview, ctx).changes[0])
+  })
+
+  it('a step whose preview is hidden has no lines; a long step keeps three and counts the rest', () => {
+    expect(stepChangesOf('set-price', null, ctx)).toEqual({ changes: [], changeCount: 0 })
+    const many = Object.fromEntries(Array.from({ length: 5 }, (_v, i) => [`field${i}`, { from: i, to: i + 1 }]))
+    const out = stepChangesOf('apply-content', { changes: many }, ctx)
+    expect(out.changes).toHaveLength(3)
+    expect(out.changeCount).toBe(5)
+  })
+})
+
 describe('the small readers', () => {
   it('money, values, fields, channels, markets, coordinates', () => {
     expect(money(49.9, 'EUR')).toBe('€49.90')
@@ -393,6 +487,10 @@ describe('the small readers', () => {
     expect(productRefsOf('set-price', { productId: 'p1' }, { sku: 'S1' })).toEqual(['p1', 'S1'])
     expect(productRefsOf('bulk-price-change', { products: ['a', 'b', 'c'] }, null)).toEqual(['a'])
     expect(productRefsOf('set-stock', { items: [] }, { changes: [{ sku: 'A' }, { sku: 'B' }] }, true)).toEqual(['A', 'B'])
+    // A Matrix request names the listing's own SKU (looked up), besides the family's parent.
+    expect(productRefsOf('set-listing-stock', { productId: 'child' }, { family: { productId: 'parent', sku: 'P' }, changes: [{ rowId: 'child', sku: 'P-S' }] }))
+      .toEqual(['parent', 'child', 'P', 'P-S'])
+    expect(productRefsOf('bulk-listing-stock', { listingIds: ['l1'] }, { cells: [{ sku: 'C-1' }] })).toEqual(['C-1'])
   })
 })
 

@@ -51,6 +51,7 @@ const row = (over: Partial<QueueRow> = {}): QueueRow => ({
   decider: null,
   reversibility: 'full',
   reachesOutside: false,
+  nexusRecord: false,
   requestedAt: '2026-10-05T10:00:00Z',
   expiresAt: null,
   executeAfter: null,

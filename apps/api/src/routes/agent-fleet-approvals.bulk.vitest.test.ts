@@ -167,7 +167,7 @@ describe('Decision 1 = A — a bulk approve: same kind only, each row through th
     const preview = (await post('all', '/agent/fleet/approvals/bulk-preview', { ids, decision: 'approve' })).json()
     expect(preview).toMatchObject({ count: 3, homogeneous: true, blockedReason: null, euro: { amount: 600 } })
     expect(preview.sentence).toBe(
-      'This approves 3 actions: 3 × set price — 3 of them high risk. It raises your prices by €6.00 in total across 3 products. All of these can be put back. You have 20 seconds to take it back.',
+      'This approves 3 actions: 3 × Set master price — 3 of them high risk. It raises your prices by €6.00 in total across 3 products. All of these can be put back. You have 20 seconds to take it back.',
     )
 
     const bulk = await post('all', '/agent/fleet/approvals/bulk-decide', { ids, decision: 'approve' })
@@ -201,7 +201,7 @@ describe('Decision 1 = A — a bulk approve: same kind only, each row through th
     const refunds = [await stored('issue-refund'), await stored('issue-refund')]
     const plans = [await plan('Bulk plan one'), await plan('Bulk plan two')]
     const cases: Array<[string[], string | RegExp]> = [
-      [mixed, /^These are 2 different kinds of action \(set price, apply content\)\. Approve one kind at a time/],
+      [mixed, /^These are 2 different kinds of action \(Set master price, Apply product content\)\. Approve one kind at a time/],
       [refunds, NEVER_IN_BULK['issue-refund']],
       [plans, 'A change plan is approved on its own: open it to see its steps, then approve it there.'],
     ]

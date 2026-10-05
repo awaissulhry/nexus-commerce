@@ -60,6 +60,7 @@ import {
   isPending,
   isQueueGroup,
   isQueueShow,
+  rowMatchesSearch,
   rowMatchesTile,
   type QueueGroup,
   type QueueTile,
@@ -73,7 +74,8 @@ const PERSIST_KEYS: readonly GridStateKey[] = ['columnSizing', 'columnOrder', 'c
 const LOADING_PARAMS = { rows: 6 }
 const BRIDGE: PrefsBridgeOptions = { columns: PREFERENCE_COLUMNS.map((c) => ({ key: c.key, locked: c.locked })) }
 const DEFAULT_PREFS: PreferencesValue = {
-  visibleColumns: PREFERENCE_COLUMNS.map((c) => c.key),
+  // Where starts hidden (its words sit under What); Customise shows it.
+  visibleColumns: PREFERENCE_COLUMNS.filter((c) => !c.hidden).map((c) => c.key),
   lockedColumns: [],
   stickyFirstColumn: false,
   stickyLastColumn: true,
@@ -187,11 +189,14 @@ function ApprovalsGridPage() {
   handlers.current = { actions, open: openRow }
   const columnDefs = useMemo(() => queueColumns(handlers, phone), [phone])
 
+  /* The tile and the search filter the rows HERE, not with AG's quick filter: a search with no match then empties
+     `rowData`, so the grid shows this page's own empty state ("No requests match." + Clear filters), never AG's
+     "No Matching Rows". The search reads the same words the row shows (`searchText`). */
   const rowData = useMemo(() => {
-    if (!tile) return queue.rows
+    if (!tile && !search.trim()) return queue.rows
     const ctx = { oldestNeedsYouAt: queue.counts?.oldestNeedsYouAt ?? null, now }
-    return queue.rows.filter((r) => rowMatchesTile(r, tile, ctx))
-  }, [queue.rows, queue.counts, tile, now])
+    return queue.rows.filter((r) => (!tile || rowMatchesTile(r, tile, ctx)) && rowMatchesSearch(r, search))
+  }, [queue.rows, queue.counts, tile, now, search])
 
   const clearFilters = useCallback(() => {
     setTile(null)
@@ -486,7 +491,6 @@ function ApprovalsGridPage() {
                 autoGroupColumnDef={AUTO_GROUP_COLUMN}
                 groupDefaultExpanded={-1}
                 suppressGroupChangesColumnVisibility="suppressShowOnUngroup"
-                quickFilterText={search}
                 loading={queue.loading}
                 loadingOverlayComponent={GridLoadingOverlay}
                 loadingOverlayComponentParams={LOADING_PARAMS}

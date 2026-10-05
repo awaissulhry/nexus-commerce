@@ -336,7 +336,7 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     const p = await previewBulk(['a', 'b', 'c'], 'approve')
     expect(p.count).toBe(3)
     expect(p.sentence).toContain('approves 3 actions')
-    expect(p.sentence).toContain('3 × set target bid')
+    expect(p.sentence).toContain("3 × Change a target's bid")
   })
 
   it('S8.1 — blocks an approve that spans two workers, even at one action kind', async () => {
@@ -394,7 +394,7 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.blockedReason).toBeNull()
     expect(p.homogeneous).toBe(true)
     expect(p.count).toBe(2)
-    expect(p.sentence).toContain('approves 2 actions: 2 × set price')
+    expect(p.sentence).toContain('approves 2 actions: 2 × Set master price')
     expect(p.sentence).toContain('20 seconds')
   })
 

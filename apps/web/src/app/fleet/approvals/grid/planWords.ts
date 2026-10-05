@@ -9,6 +9,8 @@
  *   rovingTarget  the step list is ONE tab stop; the arrow keys move between its Keep ticks
  *   STEP_STATUS   a step's fate in words
  */
+import type { QueueChange } from '@nexus/shared/approval-queue'
+import { changeLineArrowText } from '@/design-system/grid/renderers/changeValue'
 
 /** One kind of consequence: every step of one tool (the API's PlanKind). */
 export interface PlanKind {
@@ -31,6 +33,13 @@ export interface PlanStep {
   outbound: boolean
   preview?: unknown
   previewHidden?: string
+  /**
+   * The step's change lines in the grid's own words ("Base price" · "€154.00" → "€149.00"), from the API's resolver;
+   * absent when this viewer may not see the step's preview, or from an API that does not send them yet.
+   */
+  changes?: QueueChange[]
+  /** How many change lines the step makes in all (`changes` keeps the first three). */
+  changeCount?: number
 }
 
 /** GET /api/agent/fleet/approvals/:id/plan. */
@@ -86,15 +95,25 @@ export function plainValue(value: unknown, depth = 0): string {
 /** A value in a step line: an empty list is "(none)". */
 const shown = (value: unknown) => (Array.isArray(value) && value.length === 0 ? '(none)' : plainValue(value))
 
-/** One step in one line: what it touches and what it changes, from the preview the reader may see. */
+/**
+ * One step in one line: what it touches and what it changes, from the preview the reader may see. The change is said in
+ * the grid's words when the API sent them ("XR-1 · Base price: €154.00 → €149.00", as a single request's row reads);
+ * only without them does it fall back to the preview's own fields.
+ */
 export function stepWhat(step: PlanStep): string {
   if (step.preview == null) return step.previewHidden ?? '—'
   const preview = step.preview as { sku?: unknown; changes?: Record<string, { from?: unknown; to?: unknown }>; effect?: unknown }
+  const sku = typeof preview.sku === 'string' ? `${preview.sku} · ` : ''
+  if (step.changes?.length) {
+    const shown = step.changes.slice(0, 2)
+    const more = Math.max(step.changeCount ?? 0, step.changes.length) - shown.length
+    return `${sku}${shown.map(changeLineArrowText).join('; ')}${more > 0 ? `; and ${more} more` : ''}`
+  }
   const changes = preview.changes && typeof preview.changes === 'object' ? Object.entries(preview.changes) : []
   if (changes.length) {
     const what = changes.slice(0, 2).map(([field, c]) => `${field}: ${shown(c?.from)} → ${shown(c?.to)}`).join('; ')
     const more = changes.length > 2 ? `; and ${changes.length - 2} more` : ''
-    return `${typeof preview.sku === 'string' ? `${preview.sku} · ` : ''}${what}${more}`
+    return `${sku}${what}${more}`
   }
   if (typeof preview.effect === 'string') return preview.effect
   return step.title

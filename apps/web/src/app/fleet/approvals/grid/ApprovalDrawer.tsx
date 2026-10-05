@@ -32,6 +32,7 @@ import {
   TARGET_LABEL, askerSaysLabel, changesView, consequenceWords, drawerVerbs, shortId, statusWords, targetWords, timelineSteps, whereLine, whyView,
 } from './drawerWords'
 import { EditValue } from './EditValue'
+import { automateOffer } from './queueWords'
 import { PlanSection } from './PlanSteps'
 import { NOT_FOUND_WORDS, useApprovalDetail } from './useApprovalDetail'
 import styles from './ApprovalDrawer.module.css'
@@ -222,6 +223,7 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
   const error = actions.errors.get(row.id) ?? null
   // Approve (and approve-again) is HELD, not disabled, when this person may not approve: it stays focusable and says why.
   const held = !row.canApprove
+  const automate = automateOffer(row)
   const approveLabel = row.plan ? `Approve ${plural(row.plan.steps, 'change')}` : 'Approve'
   return (
     <section className={styles.section} aria-label="Decide">
@@ -252,7 +254,8 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
         {verbs.reject && <Button disabled={busy} onClick={onReject}>Reject…</Button>}
         {verbs.undo && <Button variant="primary" disabled={busy} onClick={() => void actions.undo(row)}>Undo</Button>}
         {verbs.hold && <Button disabled={busy} onClick={() => void actions.hold(row)}>Hold 10 min</Button>}
-        <Button variant="quiet" disabled={busy} onClick={() => actions.openAutomate(row)}>Automate this kind…</Button>
+        {/* Rules apply to Claude's single requests only: never to a change plan or to what someone else asked. */}
+        {automate.offered && <Button variant="quiet" disabled={busy} onClick={() => actions.openAutomate(row)}>Automate this kind…</Button>}
         <span className={styles.muted} role="status">{busy ? 'Working…' : ''}</span>
       </div>
       {held && (verbs.approve || verbs.retry) && (
@@ -266,7 +269,7 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
 /* ── 3. why it waits, why it failed or came back ─────────────────────────────────────────────── */
 
 function Why({ row, detail }: { row: QueueRow; detail: QueueDetail | null }) {
-  const view = whyView({ state: row.state, note: row.note, reason: detail?.reason ?? null, automation: row.automation })
+  const view = whyView({ state: row.state, note: row.note, reason: detail?.reason ?? null, automation: row.automation, plan: row.plan })
   if (!view) return null
   if (view.banner) return <Banner tone={view.tone} title={view.title}>{view.text}</Banner>
   return (
@@ -293,8 +296,9 @@ function DetailSections({ detail, busy, onFollow, onRefresh, onUndoChange }: {
   const steps: TimelineStep[] = timelineSteps(detail)
   return (
     <>
+      {/* Siblings of one fragment: each keyed by the request, under its own name (two equal keys warn on every plan). */}
       {detail.plan
-        ? <PlanSection key={detail.id} detail={detail} busy={busy} onReplaced={onFollow} />
+        ? <PlanSection key={`plan:${detail.id}`} detail={detail} busy={busy} onReplaced={onFollow} />
         : <Changes detail={detail} titleId={`${base}-changes`} />}
 
       {detail.askerReason && (
@@ -313,7 +317,7 @@ function DetailSections({ detail, busy, onFollow, onRefresh, onUndoChange }: {
       {detail.change && <UndoSection detail={detail} titleId={`${base}-undo`} onUndo={onUndoChange} />}
 
       <EditValue
-        key={detail.id}
+        key={`edit:${detail.id}`}
         detail={detail}
         busy={busy}
         onReplaced={(newId) => {

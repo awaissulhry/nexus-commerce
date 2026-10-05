@@ -126,6 +126,12 @@ export interface QueueRow {
   reversibility: QueueReversibility
   /** True when running it reaches a marketplace or a buyer (registry `openWorld`). */
   reachesOutside: boolean
+  /**
+   * True when it changes a record Nexus keeps (a master price, warehouse stock, a product's photos; a plan of only such
+   * kinds): its Where is Nexus, even when the listings that follow that record then send the change on
+   * (`reachesOutside`). The API decides it (approval-target.ts `NEXUS_RECORD_TOOLS`).
+   */
+  nexusRecord: boolean
   requestedAt: string
   expiresAt: string | null
   /** When an approved request runs (stop window end, or the end of a hold). */

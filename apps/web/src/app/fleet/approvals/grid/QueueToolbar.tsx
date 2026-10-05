@@ -101,8 +101,10 @@ export const QueueToolbar = memo(function QueueToolbar(p: QueueToolbarProps) {
           size="sm"
           type="search"
           aria-label="Search requests"
-          placeholder="Search product, SKU, kind…"
+          placeholder="Search SKU, product or kind"
           leadingIcon={<Search size={14} aria-hidden />}
+          // The field fills the toolbar's search slot (220–340 px), so the whole placeholder shows.
+          fieldClassName="aqg-search"
           value={p.search}
           onChange={(e) => p.onSearch(e.target.value)}
         />

@@ -59,7 +59,7 @@ import { cannotApproveFor, planApprovalRefusal, reversibilityOf, UNDO_WINDOW_MS 
 import { bulkApproveRefusal } from './bulk-approve-policy.js'
 import { FLEET_CHARTERS, resolveCharter } from './charter-registry.js'
 import { resolveFleetLabels } from './fleet-labels.service.js'
-import { clip, productRefsOf, resolveRequest, type ResolvedRequest, type TargetContext } from './approval-target.js'
+import { clip, productRefsOf, resolveRequest, stepChangesOf, type ResolvedRequest, type TargetContext } from './approval-target.js'
 
 /* ── the one status (PLAN §3) ──────────────────────────────────────────────────────────────────── */
 
@@ -637,6 +637,7 @@ async function buildRows(
       decider,
       reversibility: reversibilityOf(ap.toolName),
       reachesOutside: reachOutside,
+      nexusRecord: resolved.nexusRecord,
       requestedAt: ap.requestedAt.toISOString(),
       expiresAt: iso(ap.expiresAt),
       executeAfter: ap.status === 'scheduled' ? iso(ap.executeAfter) : null,
@@ -918,6 +919,19 @@ export async function queueDetail(id: string, viewer: ToolPrincipal | null): Pro
     // The request's own arguments, for the drawer's edit form: only when this viewer may edit it (same gate as canEdit).
     editArgs: mayEdit ? rec(ap.args) : null,
   }
+}
+
+/**
+ * GET …/:id/plan, for the drawer: each step this viewer may see gets its change lines in the grid's own words
+ * (`stepChangesOf`: "Base price: €154.00 → €149.00", never the preview's raw 154 → 149). A hidden step gets none.
+ */
+export function withStepChanges<T extends { tool: string; preview?: unknown }>(list: T[]): Array<T & { changes?: QueueChange[]; changeCount?: number }> {
+  const ctx: TargetContext = { masterCurrency: masterCurrency() }
+  return list.map((step) => {
+    if (step.preview == null) return step
+    const { changes, changeCount } = stepChangesOf(step.tool, step.preview, ctx)
+    return { ...step, changes: changes.map((c) => clipLine(c, LINE_MAX)), changeCount }
+  })
 }
 
 /** The product names of a plan's steps (one batched lookup), for the drawer's step list. */
