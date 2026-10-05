@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { informationGroups, informationRegistry, informationSheetValue, SHOPIFY_FIELD_NOT_SWITCHED_ON, SHOPIFY_WEIGHT_UNITS, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeFieldValueError, nativeValuesEqual,
-  normalizeShopifyWeight, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit } from './shopify-information.js'
+  normalizeShopifyWeight, shopifyStatusLabel, SHOPIFY_STATUS_LABEL, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit } from './shopify-information.js'
 import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema, type ShopifyStoreSchema } from './shopify-linked-products.js'
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
@@ -9,6 +9,19 @@ describe('Shopify Information field identities', () => {
     const labels = Object.fromEntries(informationRegistry(schema).map(f => [f.id, f.label]))
     expect(labels).toMatchObject({ title: 'Name', descriptionHtml: 'Description', sku: 'SKU', cost: 'Cost',
       'seo.title': 'SEO title', 'seo.description': 'SEO description', handle: 'URL handle', templateSuffix: 'Theme template', vendor: 'Brand', harmonizedSystemCode: 'HS code' })
+  })
+  // Wave 2 D4 — Shopify's own status is "Shopify status" (the sheet's Status column is another control); its codes read
+  // in Title Case while the stored value stays Shopify's code.
+  it('names Shopify\'s status "Shopify status", keeps Shopify\'s own name, and reads its codes in Title Case', () => {
+    const status = informationRegistry(schema).find(f => f.id === 'status')!
+    expect(status).toMatchObject({ label: 'Shopify status', channelLabel: 'Status', type: 'status' })
+    expect(SHOPIFY_STATUS_LABEL).toEqual({ ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' })
+    expect(['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'].map(shopifyStatusLabel)).toEqual(['Active', 'Draft', 'Archived', 'Unlisted'])
+    expect(shopifyStatusLabel('SCHEDULED')).toBe('SCHEDULED')
+    expect(shopifyStatusLabel('constructor')).toBe('constructor')
+    // The value Shopify takes is still its code: a word is refused.
+    expect(nativeFieldValueError('status', 'ACTIVE')).toBeNull()
+    expect(nativeFieldValueError('status', 'Active')).toBe('Choose a Shopify product status.')
   })
   it('declares native attributes without inventing store metafields', () => {
     const fields = informationRegistry(schema)

@@ -10,6 +10,10 @@
  * Who and when go in the tooltip and the screen-reader sentence ("Action: Delete is waiting for Publish, set by Awais
  * today 10:42. …").
  *
+ * Where Partial update sends no field (a product already on Shopify, Etsy — 2026-10-05), the caller passes
+ * `partialNote`: the tooltip and the screen-reader sentence say that instead of "Publish sends only the fields you
+ * changed.", and the editor's Partial update note says it too (the option's `warning`).
+ *
  * A row NOT on the channel (Owner 2026-10-04, simplify: never sent, no listing here, or deleted by Nexus) reads **Full
  * update** — a create always sends the whole listing — as an info Pill without a glyph (what Publish does, not a value
  * someone set); when its Status is Not listed, Publish leaves it out and the word is drawn quiet. Its editor lists Full
@@ -63,6 +67,11 @@ export interface PublishActionValue extends Partial<WaitingBy> {
   leftOut?: boolean
   /** A row not on the channel because Nexus deleted it (its tooltip says it stays deleted while it is left out). */
   deleted?: boolean
+  /**
+   * What Partial update does on this row when Publish sends none of its fields (plain English, e.g. a product already on
+   * Shopify): replaces `SEND_MODE_HINT.partial` in the tooltip and the screen-reader sentence. Absent = the usual hint.
+   */
+  partialNote?: string | null
 }
 
 export type PublishActionKind = 'loading' | 'default' | 'waiting' | 'locked' | 'new'
@@ -109,7 +118,8 @@ export function publishActionModel(value: PublishActionValue | undefined, now: n
     }
   }
   if (mode === 'partial') {
-    return { kind: 'default', label, pill: null, aside: null, tooltip: `${label}: ${SEND_MODE_HINT.partial}`, ariaLabel: `Action: ${label}. ${SEND_MODE_HINT.partial}`, editable: true, locked: false }
+    const hint = value.partialNote?.trim() || SEND_MODE_HINT.partial
+    return { kind: 'default', label, pill: null, aside: null, tooltip: `${label}: ${hint}`, ariaLabel: `Action: ${label}. ${hint}`, editable: true, locked: false }
   }
   const by = waitingSetPhrase(value, now)
   const waits = `${label} is waiting for Publish`
@@ -128,11 +138,14 @@ export function publishActionModel(value: PublishActionValue | undefined, now: n
 export type SendModeChoiceLike = Pick<SendModeOption, 'mode' | 'offered' | 'reason'> & { warning?: string | null }
 
 export const SEND_MODE_DEFAULT_NOTE = 'The default. Only the fields you changed.'
+/** Partial update's note where it carries a warning (Publish sends none of the row's fields): "The default. <warning>". */
+export const sendModeDefaultNote = (warning?: string | null) => warning?.trim() ? `The default. ${warning.trim()}` : SEND_MODE_DEFAULT_NOTE
 export const SEND_MODE_REFUSED_FALLBACK = 'Not possible for this listing.'
 
 /**
  * The options the Action editor shows, grouped Send (Partial update, Full update) · Remove (Delete). A refused value
- * stays in the list HELD with its reason; the waiting value says who set it and when; Full update carries its warning.
+ * stays in the list HELD with its reason; the waiting value says who set it and when; Full update carries its warning,
+ * and so does Partial update where it sends no field ("The default. Publish does not send Etsy listing fields yet. …").
  *
  * On a row not on the channel (`newRow`: never sent, no listing here, or deleted by Nexus): Full update is the value it
  * holds (its note: a new listing is always sent whole), Partial update and Delete are HELD with the caller's reasons.
@@ -154,7 +167,7 @@ export function sendModeEditorOptions(
     const isWaiting = !newRow && waiting != null && waiting.mode === choice.mode && choice.mode !== 'partial'
     const by = isWaiting ? waitingSetPhrase(waiting, now) : ''
     const note = isWaiting ? `Waiting for Publish${by ? `, ${by}` : ''}.`
-      : choice.mode === 'partial' ? SEND_MODE_DEFAULT_NOTE
+      : choice.mode === 'partial' ? sendModeDefaultNote(choice.warning)
         : choice.warning?.trim() || undefined
     return note ? { ...base, note } : base
   })

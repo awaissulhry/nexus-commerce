@@ -21,8 +21,15 @@ export interface InformationField {
 }
 type Core = [string, string, InformationGroup, 'PRODUCT' | 'PRODUCTVARIANT', string, string?]
 const P = 'PRODUCT', V = 'PRODUCTVARIANT'
-/** Confirmed Nexus equivalents, independent of editable mapping rules and store definitions. */
-const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', harmonizedSystemCode: 'HS code' }
+/**
+ * Confirmed Nexus equivalents, independent of editable mapping rules and store definitions. `status` is "Shopify status"
+ * (D4): the sheet's own Status column (the Publish group) is another control, so the two never share a header.
+ */
+const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', harmonizedSystemCode: 'HS code', status: 'Shopify status' }
+/** Shopify's product status codes as people read them (D4). The stored and sent value stays Shopify's code. */
+export const SHOPIFY_STATUS_LABEL: Readonly<Record<string, string>> = { ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' }
+/** A Shopify product status code in words ("ACTIVE" → "Active"); a code Nexus does not know stays as Shopify wrote it. */
+export const shopifyStatusLabel = (code: string): string => Object.prototype.hasOwnProperty.call(SHOPIFY_STATUS_LABEL, code) ? SHOPIFY_STATUS_LABEL[code] : code
 /** Native fields describe the connector capabilities. Custom fields come only from the selected store. */
 const core: Core[] = [
   ['title', 'Title', 'General', P, 'single_line_text_field'],

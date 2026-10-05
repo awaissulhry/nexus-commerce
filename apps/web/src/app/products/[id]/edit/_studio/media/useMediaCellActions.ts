@@ -8,7 +8,9 @@ import { pasteOps, planAddress, planCellSnapshot, planClipboardValue, readPlanCl
 
 export type MediaRow = { id: string; name?: string | null; sku?: string; productId?: string; aliasId?: string | null; aliasPosition?: number; listing?: { id: string } | null; productMedia?: MediaStripItem[]; productMediaError?: string; productMediaSaving?: boolean; productMediaWriteError?: string
   /** Photo plan families (images P3c): the set the cell edits — Common, the value's set or the SKU's own set. */
-  productMediaSet?: { ref: string; label: string; sharedBy: number } }
+  productMediaSet?: { ref: string; label: string; sharedBy: number }
+  /** Shopify channel sheet: the row is already on Shopify (`ChannelSheetRow.shopify`), so Review and synchronize… sends it. */
+  shopify?: { productId: string; listingId: string } | null }
 export interface MediaCellActions {
   canEdit(): boolean
   error(row: MediaRow): string | undefined

@@ -35,8 +35,8 @@
  */
 import { Prisma } from '@prisma/client'
 import {
-  ALL_STATUS_TARGETS, AMAZON_NO_END, deletedOn, deletedShort, ETSY_NO_END, isNewListingRow, newListingSentence, STATUS_TARGET_LABEL, statusOptionsFor,
-  type CapabilityFacts, type ListingModel, type SellingState, type StatusOption, type StatusTarget,
+  ALL_STATUS_TARGETS, AMAZON_NO_END, deletedOn, deletedShort, ETSY_NO_END, ETSY_PUBLISHING_OFF, holdStatusChanges, isNewListingRow, newListingSentence,
+  STATUS_TARGET_LABEL, statusOptionsFor, type CapabilityFacts, type ListingModel, type SellingState, type StatusOption, type StatusTarget,
 } from '@nexus/shared/listing-actions'
 import {
   leftOutSentence, newRowId, parseNewRowId, SEND_MODE_LABEL, SEND_MODES, SHARED_NO_LISTING, sendModeOf,
@@ -50,6 +50,7 @@ import { publishListingEvent } from '../listing-events.service.js'
 import { userNames } from '../pim/publication-history/users.js'
 import { readExcludedListingIds, variationExcludedColumnExists } from '../pim/variation-excluded.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
+import { isEtsyPublishEnabled } from '../etsy-publish-gate.service.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { logger } from '../../utils/logger.js'
 import { destinationLabel, destinationSellingStates, oldClosePauses } from './listing-action.service.js'
@@ -261,7 +262,15 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
 
 const sendOptionsOf = (r: RowRead): SendModeOption[] =>
   sendModeOptions(r.model, r.state, { ...r.facts, isParent: r.product.isParent, isVariation: !!r.product.parentId }, r.channelLabel)
-const statusOptionsOf = (r: RowRead): StatusOption[] => statusOptionsFor(r.state, r.model, r.facts, r.channelLabel)
+/**
+ * D13 (decision 12): while Etsy publishing is off on this server, Publish cannot send an Etsy Status change (the gateway
+ * refuses every Etsy write), so each change is HELD with the reason; the row's current value stays. A stored change then
+ * reads "No longer applies" with the same reason.
+ */
+const statusOptionsOf = (r: RowRead): StatusOption[] => {
+  const options = statusOptionsFor(r.state, r.model, r.facts, r.channelLabel)
+  return r.model === 'etsy' && !isEtsyPublishEnabled() ? holdStatusChanges(options, ETSY_PUBLISHING_OFF) : options
+}
 
 function basisOf(row: ListingRow): Basis {
   const raw = object(row.publishActionBasis)

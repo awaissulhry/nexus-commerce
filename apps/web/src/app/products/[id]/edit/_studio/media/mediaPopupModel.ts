@@ -1,5 +1,6 @@
 import { layerSet, mediaLayerKey, resolveAxis, resolveSet, type MediaOp, type MediaPlanStack, type MediaSetRef } from '@nexus/shared/media-plan'
 import { projectMediaDestination, rowGallery, type MediaCheck } from '@nexus/shared/media-plan-channels'
+import { ETSY_FIELDS_NOT_SENT } from '@nexus/shared/publish-actions'
 import type { MediaStripItem } from '@/design-system/components'
 
 import {
@@ -304,8 +305,14 @@ export function setTitle(base: PlanPopupBase, draft: PlanDraft): { label: string
   return { label: base.valueLabel ?? 'This value', detail: `${count} · used by ${base.valueSkus} SKU${base.valueSkus === 1 ? '' : 's'}` }
 }
 
-/** Where Enter saves, in one line. */
-export function saveLine(base: PlanPopupBase, draft: Pick<PlanDraft, 'skuOnly'>): string {
+/**
+ * Where Enter saves, in one line. Etsy (D13): Publish sends no Etsy listing field yet, so the line says they stay in Nexus.
+ * A row already on Shopify (`onShopify`, the channel sheet's `row.shopify` — the Shopify cell pop-up's rule, D5): Publish
+ * cannot update a product already on Shopify, so Review and synchronize… sends it. A row not on Shopify keeps the Publish line.
+ */
+export function saveLine(base: PlanPopupBase, draft: Pick<PlanDraft, 'skuOnly'>, facts: { onShopify?: boolean } = {}): string {
+  if (base.destination?.channel === 'ETSY') return `Saves in Nexus · ${ETSY_FIELDS_NOT_SENT}`
+  if (base.destination?.channel === 'SHOPIFY' && facts.onShopify) return 'Saves in Nexus · Review and synchronize… sends it to Shopify'
   if (base.destination) return `Saves in Nexus · Publish sends it to ${CHANNEL_LABEL[base.destination.channel]}`
   if (base.variant && draft.skuOnly) return 'Saves in Nexus · only this SKU changes'
   if (base.variant && base.valueRef) return 'Saves in Nexus · every SKU of this value changes together'

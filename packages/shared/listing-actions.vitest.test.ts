@@ -6,6 +6,7 @@ import {
   EBAY_NEW_INACTIVE_CHECK, EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN, ETSY_PUBLISH_NOT_YET, NEW_LISTING_ALIAS, NEW_LISTING_SENTENCE,
   newListingChoice, newListingDefault, newListingOptions, NOT_LISTED_MAIN_WARNING, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION, STATUS_TARGET_LABEL,
   AMAZON_REMOVED_ELSEWHERE, deletedShort, isNewListingRow, newListingSentence, NOT_ON_CHANNEL_KEEPS_NUMBER, RELIST_SENTENCE,
+  ETSY_PUBLISHING_OFF, holdStatusChanges,
 } from './listing-actions.js'
 
 /** Sheet publish parity, step 7 — the capability table, the selling state, and which changes a row offers. */
@@ -126,6 +127,17 @@ describe('the Status column', () => {
     // A draft is a new listing: Active, Inactive, Not listed (New listings, Owner 2026-10-04).
     expect(statusOptionsFor('draft', 'ebay-trading').map(o => o.target)).toEqual(['active', 'inactive', 'not_listed'])
     expect(statusOptionsFor('ended', 'ebay-trading').find(o => o.target === 'active')).toMatchObject({ offered: true, action: 'relist' })
+  })
+  // Wave 2 D13 (decision 12) — Etsy publishing off: every change is held with the reason; the current value stays.
+  it('holds every Status change with the reason, keeps the current value and what was refused already', () => {
+    expect(ETSY_PUBLISHING_OFF).toBe('Etsy publishing is turned off, so Publish cannot change this. Change it in Etsy.')
+    expect(holdStatusChanges(statusOptionsFor('active', 'etsy'), ETSY_PUBLISHING_OFF).map(o => [o.target, o.offered, o.reason])).toEqual([
+      ['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
+    expect(holdStatusChanges(statusOptionsFor('paused', 'etsy'), ETSY_PUBLISHING_OFF).map(o => [o.target, o.offered, o.reason])).toEqual([
+      ['active', false, ETSY_PUBLISHING_OFF], ['inactive', true, null]])
+    // A row not on Etsy: its choices were refused already, with their own reason.
+    const fresh = statusOptionsFor('draft', 'etsy')
+    expect(holdStatusChanges(fresh, ETSY_PUBLISHING_OFF)).toEqual(fresh)
   })
   it('Delete needs a listing on the channel', () => {
     expect(deleteOffered('draft', 'amazon').offered).toBe(false)

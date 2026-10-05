@@ -60,7 +60,13 @@ export const NOTHING_TO_DELETE_YET = 'Nothing to delete yet. To leave it out, se
 export const FULL_EBAY_VARIATION = 'eBay changes a whole listing. Choose Full update on the main row.'
 export const DELETE_EBAY_VARIATION = 'eBay changes a whole listing. Choose Delete on the main row.'
 export const FULL_EBAY_INVENTORY_LATER = 'Full update for eBay Inventory listings comes later. Partial update works.'
-export const SHOPIFY_EXISTING_NOT_YET = 'Nexus cannot update an existing Shopify product yet. Its status can change in the Status column.'
+/**
+ * A product already on Shopify: Publish refuses it (Full update held, and the review blocks it), so its Partial update
+ * carries the same sentence as a warning — Review and synchronize… sends its fields.
+ */
+export const SHOPIFY_EXISTING_NOT_YET = 'Publish cannot update a product already on Shopify yet. Use Review and synchronize… for its fields; its status changes in the Status column.'
+/** Etsy (D13): Publish refuses Etsy, so its listing fields stay in Nexus — the Partial update note and the photo pop-up's line. */
+export const ETSY_FIELDS_NOT_SENT = 'Publish does not send Etsy listing fields yet. They stay in Nexus.'
 export const SHOPIFY_VARIATION_PRODUCT = 'Shopify changes the whole product. Choose it on the main row.'
 export const ENDED_FIRST = 'Ended on the channel. Set Active to relist it first.'
 export const FULL_WARNING = 'Every field Nexus manages is sent again. The review lists what the channel holds that Nexus does not; those values are removed.'
@@ -69,6 +75,10 @@ export const FULL_WARNING = 'Every field Nexus manages is sent again. The review
  * The Action column's options for one row: Partial is always there (it is the default); Full and Delete by rule. A row
  * not on the channel (new, or deleted by Nexus) reads **Full update** — a create always sends the whole listing — with
  * Partial update and Delete held with their reasons (its Status says whether Publish creates it).
+ *
+ * Partial update stays offered everywhere (it is the default and stores nothing), but where Publish sends no fields it
+ * carries a warning that says so (D5, D13): a product already on Shopify (`SHOPIFY_EXISTING_NOT_YET`) and Etsy
+ * (`ETSY_FIELDS_NOT_SENT`).
  */
 export function sendModeOptions(model: ListingModel, state: SellingState, facts: SendModeFacts, channelLabel?: string): SendModeOption[] {
   const option = (mode: SendMode, reason: string | null, warning: string | null = null): SendModeOption => ({ mode, offered: !reason, reason, warning })
@@ -94,7 +104,8 @@ export function sendModeOptions(model: ListingModel, state: SellingState, facts:
     return capability.offered ? option('delete', null, capability.warning) : option('delete', capability.reason ?? 'Not available here.')
   }
   const fullReason = full()
-  return [option('partial', null), option('full', fullReason, fullReason ? null : FULL_WARNING), remove()]
+  const partialWarning = model === 'shopify' ? SHOPIFY_EXISTING_NOT_YET : model === 'etsy' ? ETSY_FIELDS_NOT_SENT : null
+  return [option('partial', null, partialWarning), option('full', fullReason, fullReason ? null : FULL_WARNING), remove()]
 }
 
 // ── Paste and fill ────────────────────────────────────────────────────────────────────────────────

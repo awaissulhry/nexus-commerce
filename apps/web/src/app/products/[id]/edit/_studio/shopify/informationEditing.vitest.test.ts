@@ -111,3 +111,16 @@ describe('a Shopify weight reads as its symbol', () => {
     expect(informationDraftCellError(handle, 'Moss-Jacket', 'moss-jacket', false)).toBe('Use lowercase letters, numbers and separating hyphens.')
   })
 })
+/* Wave 2 D4 — "Shopify status" reads in Title Case; the stored value stays Shopify's code. */
+describe('a Shopify status reads in Title Case', () => {
+  it.each([['ACTIVE', 'Active'], ['DRAFT', 'Draft'], ['ARCHIVED', 'Archived'], ['UNLISTED', 'Unlisted']])('%s', (code, words) => {
+    expect(informationValueLabel('status', code)).toBe(words)
+  })
+  it('an unknown code is shown as Shopify wrote it; no value keeps its words; the field is "Shopify status"', () => {
+    expect(informationValueLabel('status', 'SCHEDULED')).toBe('SCHEDULED')
+    expect(informationValueLabel('status', null)).toBe('Not set')
+    const status = fields.find(f => f.id === 'status')!
+    expect(status.label).toBe('Shopify status')
+    expect(informationDraftCellError(status, 'ACTIVE', 'DRAFT', false)).toBeNull()
+  })
+})

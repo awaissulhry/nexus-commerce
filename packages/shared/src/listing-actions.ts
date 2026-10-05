@@ -121,6 +121,8 @@ export const SHOPIFY_LINKED_REFUSED = 'This family is several Shopify products (
 export const SHOPIFY_PAUSE_CHECK = 'Nexus checks each variant first. A variant that sells when out of stock ("Continue selling when out of stock" in Shopify) is not paused, because quantity 0 would not stop its sales.'
 export const ETSY_NO_END = 'Etsy has no End here. Set Inactive to pause the listing.'
 export const ETSY_DELETE_NOT_YET = 'Deleting Etsy listings from Nexus is not available yet. Set Inactive, or delete it in Etsy.'
+/** D13 (decision 12): while Etsy publishing is off on the server, an Etsy Status change is held with this reason. */
+export const ETSY_PUBLISHING_OFF = 'Etsy publishing is turned off, so Publish cannot change this. Change it in Etsy.'
 
 export interface CapabilityFacts {
   /** Amazon: this row's offer is fulfilled by Amazon. */
@@ -475,6 +477,15 @@ export function statusOptionsFor(state: SellingState, model: ListingModel, facts
     const capability = listingActionCapability(model, action, facts, channelLabel)
     return { target, offered: capability.offered, action, reason: capability.reason, warning: capability.warning, checkedAtSend: capability.checkedAtSend }
   })
+}
+
+/**
+ * PURE. The same Status choices with every CHANGE held with `reason` (a channel Publish cannot send to now, e.g. Etsy
+ * while Etsy publishing is off): a choice that would send something is refused; the row's current value (no action) and
+ * a choice already refused keep what they say.
+ */
+export function holdStatusChanges(options: StatusOption[], reason: string): StatusOption[] {
+  return options.map(option => option.offered && option.action ? { ...option, offered: false, reason, warning: null, checkedAtSend: null } : option)
 }
 
 // ── The wire shapes (API ↔ web) ──────────────────────────────────────────────────────────────────

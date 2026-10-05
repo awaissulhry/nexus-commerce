@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { provenanceLabel } from '@/design-system/grid/renderers/provenance'
 import { describeValueSource } from './cellDetailsSource'
-import { channelCellProvenance, SHOPIFY_DRAFT_WORDS } from './channelCellProvenance'
+import { channelCellProvenance, SHOPIFY_DRAFT_WORDS, shopifyKeepsOwnValue } from './channelCellProvenance'
 import type { StudioCellValue } from './types'
 import { publishFullTime } from '@/design-system/grid/renderers/publishStatus'
 
@@ -115,5 +115,32 @@ describe('Shopify drafts', () => {
   it('a reset that has not reached Shopify waits — never drawn as a live value', () => {
     expect(channelCellProvenance(shopify({ pinned: false }))).toBe('pending')
     expect(words(shopify({ pinned: false }))).toMatchObject({ kind: 'pending', label: provenanceLabel('pending'), description: SHOPIFY_DRAFT_WORDS })
+  })
+})
+
+/* Wave 2 D5 — a divergence where nothing publishes the shown value is not "Publishes another value". */
+describe('a divergence says who holds the other value', () => {
+  const write = { ownerId: 'gid://shopify/Product/1', fieldId: 'weight', token: 't', baseline: '{"value":2,"unit":"KILOGRAMS"}' }
+  const keepsNote = 'Shopify keeps 2 kg. Shared changes are not sent to a product already on Shopify; enter the value here to send it.'
+  it('a product Shopify already holds keeps its own value: "Shopify keeps another value"', () => {
+    const keeps = cell({ source: 'masterColumn', layer: 'master', pinned: false, inherited: true, shopifyWrite: write, divergence: { publishesAs: '{"value":2,"unit":"KILOGRAMS"}', note: keepsNote } })
+    expect(shopifyKeepsOwnValue(keeps)).toBe(true)
+    expect(channelCellProvenance(keeps)).toBe('attention')
+    // The server's note already starts "Shopify keeps": it stands alone — never "Shopify keeps another value: Shopify keeps 2 kg. …".
+    expect(words(keeps)).toEqual({ kind: 'warning', label: provenanceLabel('attention'), description: keepsNote })
+    expect(words(keeps).description).not.toMatch(/Shopify keeps another value: Shopify keeps/)
+    // A note in other words still gets the prefix.
+    const other = { ...keeps, divergence: { publishesAs: '2 kg', note: 'Shared changes are not sent to a product already on Shopify.' } }
+    expect(words(other).description).toBe('Shopify keeps another value: Shared changes are not sent to a product already on Shopify.')
+  })
+  it('a saved draft against a sharing rule, and a master-column twin, still publish another value', () => {
+    const rule = 'The saved draft conflicts with the sharing rule. Shopify will use the shared source. Edit or reset this field to resolve it.'
+    const conflict = cell({ source: 'channelExplicit', pinned: true, inherited: false, nexusDraft: true, shopifyWrite: write, mapped: null, divergence: { publishesAs: 'Shared', note: rule } })
+    expect(shopifyKeepsOwnValue(conflict)).toBe(false)
+    expect(words(conflict).description).toBe(`Publishes another value: ${rule}`)
+    const twin = 'This cell edits the master column, which holds "A". An attribute of the same name holds "B", and that is what publishes.'
+    const masterTwin = cell({ source: 'masterColumn', layer: 'master', pinned: false, inherited: true, divergence: { publishesAs: 'B', note: twin } })
+    expect(shopifyKeepsOwnValue(masterTwin)).toBe(false)
+    expect(words(masterTwin).description).toBe(`Publishes another value: ${twin}`)
   })
 })

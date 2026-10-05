@@ -1,3 +1,9 @@
+## Words: Partial update says when Publish sends no field — 2026-10-05
+
+Product sheet consistency wave 2, "Shopify + Etsy honest words" (D5, D13). Mirrored in Factory (`publishAction.ts` and its test).
+
+- **`publishAction.ts`**: `PublishActionValue.partialNote` (optional) — on a row where Publish sends none of the fields (a product already on Shopify, Etsy) the Partial update cell's tooltip and screen-reader sentence say that note instead of "Publish sends only the fields you changed." Absent = unchanged. `sendModeEditorOptions`: a Partial update choice with a `warning` notes "The default. <warning>" (`sendModeDefaultNote`, exported from `grid/renderers` for the Shared scope's editor); without one it keeps `SEND_MODE_DEFAULT_NOTE`.
+
 ## Words: the translation marks say the fact, not an action the sheet cannot do — 2026-10-04
 
 Shared Cell details (`docs/shared-cell-details/PLAN.md`, "Words fixed in the same PR"). One change in `provenanceTooltip` for both sheet scopes — the Shared scope's per-page `tooltip` override is gone. Mirrored in Factory (`provenance.ts`), except the tests and the `/design/language-axis` page.

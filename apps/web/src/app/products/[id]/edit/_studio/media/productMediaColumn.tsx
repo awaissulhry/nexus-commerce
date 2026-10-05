@@ -117,7 +117,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
   const planElement = selected?.row.productMediaSet
     ? <PlanMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} rowProductId={selected.row.productId ?? selected.row.id}
         title={selected.row.sku || selected.row.name || 'Product'} address={planTarget} locale={context.locale} canEdit={canEdit} anchor={selected.anchor}
-        initial={selected.row.productMedia ?? []} onApply={applyToCells} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange}
+        initial={selected.row.productMedia ?? []} onApply={applyToCells} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} onShopify={!!selected.row.shopify}
         reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} />
     : undefined
   const galleryElement = selected && !selected.row.productMediaSet
