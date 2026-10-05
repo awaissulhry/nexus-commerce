@@ -33,6 +33,9 @@ import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './A
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 import { LaunchReceipt, type LaunchVerification } from '../LaunchReceipt'
 import '../launch-receipt.css'
+import { useCommandKey } from '@/lib/command-key'
+import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
+import { LaunchChecksPanel } from '../LaunchChecksPanel'
 
 type StepN = 1 | 2 | 3
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -93,17 +96,9 @@ export function SpSuperWizard() {
   }, [step, campaigns])
   const goBack = useCallback(() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s)), [])
 
-  // SPW.7 — gated create: POSTs the wizard plan; the API creates everything in our DB
-  // (no Amazon push unless a per-campaign live gate is open), then we land on /campaigns.
-  const launch = useCallback(async () => {
-    if (launching) return
-    // Never guess the launch target. If the console has not resolved a
-    // launchable market, refuse rather than fall back to a default that
-    // silently sends the campaign to the wrong country.
-    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
-    setLaunching(true); setLaunchErr('')
-    try {
-      const payload = {
+  // W2-B — the launch body, built once: the review step's checks (dryRun) and the launch send the same thing.
+  const launchUrl = `${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`
+  const payload = useMemo(() => ({
         market,
         productGroupName,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
@@ -123,10 +118,25 @@ export function SpSuperWizard() {
         aiControl: automationMode === 'ai' ? aiControl : undefined,
         bidConfig: automationMode === 'rule' && bidConfig.strategy !== 'none' ? bidConfig : undefined,
         portfolioId: portfolioId || undefined,
-      }
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+  }), [market, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId])
+  // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the launch step.
+  const { checks, checking } = useLaunchChecks(step === 3 && market ? launchUrl : null, payload)
+  // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
+  const launchKey = useCommandKey()
+
+  // SPW.7 — gated create: POSTs the wizard plan; the API creates everything in our DB
+  // (no Amazon push unless a per-campaign live gate is open), then we land on /campaigns.
+  const launch = useCallback(async () => {
+    if (launching) return
+    // Never guess the launch target. If the console has not resolved a
+    // launchable market, refuse rather than fall back to a default that
+    // silently sends the campaign to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    setLaunching(true); setLaunchErr('')
+    try {
+      const out = await sendLaunch<Record<string, any>>(launchKey, launchUrl, payload)
+      if (!out.ok) throw new Error(out.error)
+      const j = out.body
       // AI Control: provision the AutopilotPlan for the launched set (best-effort; campaigns are
       // already created). The Conductor (ad-autopilot.job) then drives these campaigns.
       if (automationMode === 'ai') {
@@ -155,7 +165,7 @@ export function SpSuperWizard() {
       }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, productGroupName, products, campaigns, bidMult, rules, automationMode, bidConfig, aiControl, portfolioId, router])
+  }, [launching, market, launchKey, launchUrl, payload, automationMode, productGroupName, aiControl, router])
 
   /** Re-run verification for the campaigns this launch created (transient read failures are common). */
   const recheck = useCallback(async () => {
@@ -293,6 +303,7 @@ export function SpSuperWizard() {
                 onContinue={() => router.push('/marketing/ads/campaigns')}
               />
             )}
+            <LaunchChecksPanel checks={checks} checking={checking} />
             <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />
           </>
         )}
@@ -302,7 +313,7 @@ export function SpSuperWizard() {
         {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
-        <Button variant="primary" size="lg" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching}>
+        <Button variant="primary" size="lg" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching || (step === 3 && launchBlocked(checks))}>
           {step < 3 ? 'Next' : launching ? 'Launching…' : 'Launch'}
         </Button>
       </footer>

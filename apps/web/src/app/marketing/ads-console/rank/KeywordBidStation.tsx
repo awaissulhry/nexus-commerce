@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ListChecks, Loader2, Zap, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { Button, Input, Textarea } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -113,7 +114,7 @@ export function KeywordBidStation({ campaignId, onChanged }: { campaignId: strin
     setAdding(true); setAddMsg('')
     let ok = 0
     for (const kw of newKws) {
-      try { const r = await fetch(`${getBackendUrl()}/api/advertising/keywords/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId: addGroup, keywordText: kw, matchType: match, bidEur: Number(addBid) || 0.5 }) }).then(x => x.ok); if (r) ok += 1 } catch { /* continue */ }
+      try { const r = await adsKeyedPost('/api/advertising/keywords/create', { adGroupId: addGroup, keywordText: kw, matchType: match, bidEur: Number(addBid) || 0.5 }).then(x => x.ok); if (r) ok += 1 } catch { /* continue */ }
     }
     const gname = adGroups.find(g => g.id === addGroup)?.name ?? 'the ad group'
     setAddMsg(`Added ${ok}/${newKws.length} ${match.toLowerCase()} keyword${newKws.length === 1 ? '' : 's'} to "${gname}" — staged until you open the write-gate.`)

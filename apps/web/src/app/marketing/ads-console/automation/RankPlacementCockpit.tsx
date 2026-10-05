@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { Button, Checkbox, Input, SegmentedControl, Textarea } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -682,10 +683,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
     let count = 0; let pushed = 0
     for (const k of toAdd) {
       try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/keywords/create`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adGroupId, keywordText: k.keyword, matchType: kwMatch, bidEur: k.bidCents / 100 }),
-        }).then(r => r.json())
+        const r = await adsKeyedPost('/api/advertising/keywords/create', { adGroupId, keywordText: k.keyword, matchType: kwMatch, bidEur: k.bidCents / 100 }).then(r => r.body)
         if (r?.id) { count += 1; if (r.externalTargetId) pushed += 1 }
       } catch { /* continue; partial result surfaced via count */ }
     }

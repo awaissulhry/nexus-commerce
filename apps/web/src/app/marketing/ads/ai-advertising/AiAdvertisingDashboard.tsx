@@ -27,6 +27,8 @@ import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { IconAtom } from '../_shell/builder-icons'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandKeyFor } from '@/lib/command-key'
+import { sendLaunch } from '../campaign-builder/launchChecks'
 import { GoalDrawer } from './GoalDrawer'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -166,9 +168,9 @@ export function AiAdvertisingDashboard() {
     if (busy) return
     setBusy(id)
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals/${id}/materialize`, { method: 'POST' })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      // CC-24 — one key per goal's launch: a press whose answer was lost waits for that run instead of building twice.
+      const out = await sendLaunch(commandKeyFor(`ads-goal-materialize:${id}`), `${getBackendUrl()}/api/advertising/ai-goals/${id}/materialize`, {})
+      if (!out.ok) throw new Error(out.error)
       setRefreshKey((k) => k + 1)
     } catch { /* surfaced by the still-unlaunched state */ } finally { setBusy(null) }
   }
