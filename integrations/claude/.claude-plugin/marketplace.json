@@ -13,7 +13,7 @@
         "path": "integrations/claude/nexus",
         "ref": "main"
       },
-      "description": "Connects Claude to Nexus Commerce for one business per connection, and adds 18 skills: listings, content, ids, prices, stock, reorders, orders, returns, buyer messages, ads, automations, platform health, change plans and undo. Every change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
+      "description": "Connects Claude to Nexus Commerce for one business per connection, and adds 20 skills: listings, content, ids, prices, stock, reorders, orders, returns, buyer messages, ads, automations, platform health, change plans and undo. Every change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
       "category": "commerce",
       "tags": ["nexus", "ecommerce", "listings", "pricing", "orders", "advertising", "mcp"]
     },

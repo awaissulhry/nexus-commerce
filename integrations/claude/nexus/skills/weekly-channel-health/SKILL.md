@@ -9,12 +9,10 @@ A read-only check of the one business this Nexus connection was approved for. Us
 
 ## Ground rules
 
-- **Say which business first.** This connection works in one business, and every Nexus answer names it (`business`). Open the report with that name. Before you ask for any change, say it again, and pass that exact name as `business` on the change tool or on `submit-change-plan`. Never reuse an id, a SKU or an approvalId read on another business's connection: the same SKU can exist in both.
-- **Read first, show the plan, ask.** This skill only reads. If the person then wants changes, show the plan (what changes, from → to, how many, where it lands) and ask before any change tool.
-- **One request.** Several changes go in ONE `submit-change-plan` (up to 200 steps; a bulk tool counts as one step) or one bulk tool. Never a loop of single requests.
-- **Follow up.** A change answers `waiting_for_approval` (give the `approveAt` link), `runs_by_rule` (it runs at `runsAt` unless stopped at `stopAt`), or carries `confirm` (ask the person for their 6-digit authenticator code, then `confirm-change`). Never say anything changed until `approval-status` says it ran.
-- **Never** pause an ad (lower its bids instead), change an FBA quantity (it is Amazon's number), send anyone to the old Amazon or eBay flat-file pages (use the product sheet and the product studio), or guess, keep or reuse an authenticator code.
-- **When something is missing.** If no Nexus tools are available, Nexus is not connected or its server is off (Claude Code: `/mcp`, choose Nexus, Authenticate; claude.ai: Customize › Connectors). If a tool is not offered or refuses (most often the person's role does not allow it), name the part you could not check and carry on with the rest.
+The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, never pause an ad, never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
+
+- **When something is missing.** If no Nexus tools are available, Nexus is not connected or its server is off (Claude Code: `/mcp`, choose Nexus, Authenticate; claude.ai: Customize › Connectors). If a tool is not offered, refuses, or says it is turned off for Claude, pass on the reason in plain words and carry on with the rest.
+- **This skill only reads.** Open the report with the business's name. If the person then wants changes, show the plan and ask before any change tool.
 
 ## Before you start
 

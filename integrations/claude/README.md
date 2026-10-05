@@ -2,7 +2,7 @@
 
 This folder connects Claude to Nexus. It holds two Claude plugins and the marketplace that lists them:
 
-- **`nexus`** — the commerce side (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations, platform). It holds the address of the Nexus MCP server, `https://nexusapi-production-b7bb.up.railway.app/mcp`, and 18 skills. Claude signs in with your own Nexus account.
+- **`nexus`** — the commerce side (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations, platform). It holds the address of the Nexus MCP server, `https://nexusapi-production-b7bb.up.railway.app/mcp`, and 20 skills. Claude signs in with your own Nexus account.
 - **`nexus-factory`** — the factory app. It starts the factory's own small server on the factory machine (no network) and adds one skill, `factory-desk`.
 
 No token, password or client secret is stored in these files.
@@ -114,17 +114,19 @@ Some new paths only act when the Owner turns them on in the server's environment
 |---|---|
 | `weekly-channel-health` | "How are my channels doing?", a Monday check (reads only) |
 | `fix-listing-issues` | "Fix my Amazon DE listing errors" |
-| `list-product` | Create a product, list it on a new channel or market, publish or re-publish |
+| `list-product` | Create a product, list it on a new channel or market, publish or re-publish (one reference file per channel, and one for every status and action of the product page) |
 | `listing-content` | Write, rewrite or translate titles, bullets, descriptions and keywords |
 | `identity-check` | Duplicate or wrong ids, broken families, barcode and SKU problems |
 | `bulk-reprice` | "Raise all helmets by 5%" |
 | `price-review` | Why a listing has its price, promotions, scheduled price changes, costs |
 | `stock-count` | Count, correct, move or hold stock at your own warehouses |
+| `listing-stock` | How much each listing shows and from where: pin, follow, buffer, hold, warehouse feeds, shared stock, Amazon's one EU quantity |
 | `reorder` | What to reorder, purchase orders, receiving goods |
 | `order-desk` | What to ship today, late orders, labels, tracking, refunds due |
 | `handle-return` | A return from request to refund |
 | `buyer-message` | Write to a buyer, reply to eBay feedback, ask for an Amazon review |
 | `ads-weekly-review` | How the ads are doing, and what to change (never pauses) |
+| `ads-strategy` | Your ads targets per market, kept in Nexus: read them, compare, and propose the settings as one plan |
 | `automation-review` | What is automated, why a rule did or did not act, rules and levels |
 | `platform-health` | Channel accounts, alerts, failed syncs and jobs |
 | `change-plan` | Many changes as one request |
