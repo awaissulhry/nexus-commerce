@@ -32,6 +32,12 @@ const AMAZON_AUDIENCES: Array<{ key: string; name: string; desc: string }> = [
   { key: 'highinterest', name: 'High Interest based on shopping history', desc: 'People whose shopping activity indicates a high interest in purchasing the advertised product.' },
 ]
 
+/**
+ * CC-8 — these three boosts and the audience picker are kept (placeholders stay), but nothing sends them to Amazon: the
+ * SP Super Wizard drops them, the Single builder only stores them, the campaign page saves nothing. Each says so.
+ */
+const NOT_SENT = 'Not sent to Amazon yet.'
+
 const PLACEMENTS: Array<{ k: 'tos' | 'pdp' | 'ros'; label: string }> = [
   { k: 'tos', label: 'Top of Search' },
   { k: 'pdp', label: 'Product Pages' },
@@ -51,11 +57,11 @@ export function PlacementBidMultiplier({ value, onChange }: { value: PlacementBi
         ))}
       </div>
       <div className="h10-cd-boost">
-        <div className="bl"><b>Further increase bids for video ads <InfoTip tip={TIPS.videoBoost} /></b><span>These increases apply on top of placement adjustments.</span></div>
+        <div className="bl"><b>Further increase bids for video ads <InfoTip tip={TIPS.videoBoost} /></b><span>These increases apply on top of placement adjustments. {NOT_SENT}</span></div>
         <label className="h10-cd-switch"><input type="checkbox" checked={value.videoBoost} onChange={(e) => onChange({ videoBoost: e.target.checked })} /><span className="tk" /> Enable Video Bid Boost</label>
       </div>
       <div className="h10-cd-boost">
-        <div className="bl"><b>Amazon Business Bid Boost <InfoTip tip={TIPS.abBoost} /></b><span>Further increase bids across placements on Amazon Business.</span></div>
+        <div className="bl"><b>Amazon Business Bid Boost <InfoTip tip={TIPS.abBoost} /></b><span>Further increase bids across placements on Amazon Business. {NOT_SENT}</span></div>
         <label className="h10-cd-switch"><input type="checkbox" checked={value.abBoost} onChange={(e) => onChange({ abBoost: e.target.checked })} /><span className="tk" /> Enable Amazon Business Bid Boost</label>
       </div>
       {value.abBoost && (
@@ -64,7 +70,7 @@ export function PlacementBidMultiplier({ value, onChange }: { value: PlacementBi
         </div>
       )}
       <div className="h10-cd-boost">
-        <div className="bl"><b>Audience Bid Modifier <InfoTip tip={TIPS.audience} /></b></div>
+        <div className="bl"><b>Audience Bid Modifier <InfoTip tip={TIPS.audience} /></b><span>{NOT_SENT}</span></div>
         <label className="h10-cd-switch"><input type="checkbox" checked={value.audienceMod} onChange={(e) => onChange({ audienceMod: e.target.checked })} /><span className="tk" /> Enable Audience Bid Modifier</label>
       </div>
       {value.audienceMod && <AudiencePicker />}

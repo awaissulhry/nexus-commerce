@@ -52,6 +52,12 @@ beforeAll(async () => {
     }
   })
   app = Fastify()
+  // The signed-in person, as the auth hook sets it in the app (`request.authUser`); a test header stands in for the session.
+  app.addHook('onRequest', (request, _reply, done) => {
+    const u = request.headers['x-test-signed-in']
+    if (typeof u === 'string') (request as unknown as { authUser?: { id: string } }).authUser = { id: u }
+    done()
+  })
   app.addHook('preHandler', (_request, _reply, done) => { withWorkspace(business, done) })
   const { default: routes } = await import('../../routes/advertising.routes.js')
   await app.register(routes)
@@ -138,5 +144,36 @@ describe('CC-4 — the bid strategy becomes rules the engine runs', () => {
     const rules = await rulesNamed('SingleAcos — ')
     expect(rules).toHaveLength(1)
     expect(rules[0]).toMatchObject({ actions: [{ type: 'bid_to_target_acos', targetAcos: 0.25, campaignId }], scopeMarketplace: 'IT', enabled: true, dryRun: true })
+  })
+})
+
+describe('CC-28 — a create from the screens is logged with the signed-in person', () => {
+  it('🔴 SP Super Wizard: the campaign\'s audit rows and its rules carry user:<signed-in id> (they were user:anonymous)', async () => {
+    const res = await app.inject({ method: 'POST', url: SPW, headers: { 'x-test-signed-in': 'u-owner' }, payload: {
+      market: 'DE', productGroupName: 'Actor', products: [{ sku: 'TEST-SKU-W2C' }], campaigns: spwCampaigns('Actor'),
+      automationMode: 'rule', bidConfig: { strategy: 'targetAcos', targetAcos: '30' },
+    } })
+    expect(res.statusCode).toBe(200)
+    const ids = (JSON.parse(res.payload).created as Array<{ campaignId: string }>).map((c) => c.campaignId)
+    const logs = await inside(() => database.client.advertisingActionLog.findMany({ where: { entityId: { in: ids }, actionType: 'create_campaign' } }))
+    expect(logs.length).toBe(2)
+    expect(new Set(logs.map((l: { userId: string | null }) => l.userId))).toEqual(new Set(['user:u-owner']))
+    const rules = await rulesNamed('Actor - SP')
+    expect(rules.length).toBeGreaterThan(0)
+    expect(new Set(rules.map((r: { createdBy: string | null }) => r.createdBy))).toEqual(new Set(['user:u-owner']))
+  })
+
+  it('Single: the same; without a session the x-actor-id header still names the person', async () => {
+    const signed = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-test-signed-in': 'u-owner' }, payload: { market: 'IT', name: 'ActorSingle', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
+    const header = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-actor-id': 'u-header' }, payload: { market: 'IT', name: 'ActorHeader', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
+    const actorOf = async (res: { payload: string }) => (await inside(() => database.client.advertisingActionLog.findFirst({ where: { entityId: JSON.parse(res.payload).campaignId, actionType: 'create_campaign' } })))?.userId
+    expect(await actorOf(signed)).toBe('user:u-owner')
+    expect(await actorOf(header)).toBe('user:u-header')
+  })
+
+  it('the person is recorded on an autopilot plan they create', async () => {
+    const res = await app.inject({ method: 'POST', url: '/advertising/autopilot-plans', headers: { 'x-test-signed-in': 'u-owner' }, payload: { name: 'Actor plan', marketplace: 'DE', campaignIds: ['x'] } })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.payload).plan.createdBy).toBe('user:u-owner')
   })
 })

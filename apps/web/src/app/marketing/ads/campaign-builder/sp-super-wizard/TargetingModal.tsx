@@ -20,6 +20,7 @@ import '../builder-ds.css'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwMatch } from '../../_shared/KeywordTargetingPanel'
 import { AUTO_GROUP_META, type SpwCampaign, type NegKeyword, type NegMatch, type AutoGroup } from './CampaignSetup'
+import { startingBidSource } from '../launchValues'
 
 // Positive keyword editing now uses the shared KeywordTargetingPanel (richer: Suggested/Enter/
 // My-List tabs + suggested keywords). The old textarea KeywordEditor was removed in favour of it.
@@ -88,13 +89,15 @@ function AutoTargetingEditor({ groups, currency, market, onChange }: { groups: A
   const setBid = (key: string, bid: string) => onChange(groups.map((g) => (g.key === key ? { ...g, bid } : g)))
   // AT.3 — data-grounded suggested bid per group (account median CPC × intent), read-only.
   const [suggested, setSuggested] = useState<Record<string, number> | null>(null)
+  // CC-9 — measured CPCs in this market, or a default: the button says which.
+  const [measured, setMeasured] = useState<number | null>(null)
   // CC-6 — the launch market's CPCs (it always asked for Italy's).
   useEffect(() => {
     let alive = true
-    setSuggested(null)
+    setSuggested(null); setMeasured(null)
     if (!market) return () => { alive = false }
     fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
-      .then((r) => (r.ok ? r.json() : null)).then((j) => { if (alive && j?.groups) setSuggested(j.groups as Record<string, number>) }).catch(() => {})
+      .then((r) => (r.ok ? r.json() : null)).then((j) => { if (alive && j?.groups) { setSuggested(j.groups as Record<string, number>); setMeasured(typeof j.accountMedianCpcCents === 'number' ? j.accountMedianCpcCents : null) } }).catch(() => {})
     return () => { alive = false }
   }, [market])
   return (
@@ -108,7 +111,7 @@ function AutoTargetingEditor({ groups, currency, market, onChange }: { groups: A
             <div className="nm"><span className="t">{meta.label}</span><span className="d">{meta.desc}</span></div>
             <div className="bid">
               <Input inputMode="decimal" prefix={currency} value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} fieldClassName="h10-spw-bidnum" />
-              {sugCents != null && <Button variant="link" size="sm" disabled={!g.enabled} title="Use the suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</Button>}
+              {sugCents != null && <Button variant="link" size="sm" disabled={!g.enabled} title={measured != null ? `Your median CPC in ${market}, scaled by this group's intent` : 'A default (no CPC data in this market yet), scaled by this group\'s intent'} onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>{startingBidSource(measured, market)}: {currency}{(sugCents / 100).toFixed(2)} · Use</Button>}
             </div>
           </div>
         )

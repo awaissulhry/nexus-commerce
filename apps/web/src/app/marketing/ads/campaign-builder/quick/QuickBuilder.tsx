@@ -32,7 +32,7 @@ import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSel
 import { defaultAutoGroups, type SpwCampaign } from '../sp-super-wizard/CampaignSetup'
 import { BidStrategyCardGrid, BID_STRATEGIES, bidStrategyRuns, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
 import { marketChangeNote, useOnMarketChange } from '../marketChange'
-import { missingBidOrBudget, positiveAmount } from '../launchValues'
+import { missingBidOrBudget, positiveAmount, startingBidSource } from '../launchValues'
 import { pcDefaultGroup } from '../../rules-automation/_shared/PerformanceCriteria'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -47,7 +47,6 @@ const STEPS: Array<{ n: StepN; label: string }> = [
 ]
 const EXIT_TO = '/marketing/ads/campaign-builder'
 const CURRENCY = '€'
-const SUG_LOW = 0.73, SUG_HIGH = 1.27
 const FALLBACK_BID = 0.75, BUDGET_MULT = 50 // budget ≈ 50× bid (matches the Helium 10 recording)
 
 // Quick's fixed 4-campaign harvest funnel. Auto discovers; Research (broad) + Performance
@@ -106,14 +105,16 @@ export function QuickBuilder() {
   // Data-grounded suggested default bid (account median CPC); budget heuristic ≈ 50× bid. Same
   // source as the Single builder (€9.09 bid → €454.25 budget in the recording).
   const [sugBidEur, setSugBidEur] = useState<number | null>(null)
+  // CC-9 — the account's measured CPC in this market, or null: then the starting bid is a default, and says so.
+  const [sugMedianCents, setSugMedianCents] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
-    setSugBidEur(null)
+    setSugBidEur(null); setSugMedianCents(null)
     if (!market) return () => { alive = false }
     // CC-6 — the launch market's CPCs (it always asked for Italy's).
     fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
+      .then((j) => { if (!alive || !j?.groups) return; setSugMedianCents(typeof j.accountMedianCpcCents === 'number' ? j.accountMedianCpcCents : null); const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
       .catch(() => {})
     return () => { alive = false }
   }, [market])
@@ -301,11 +302,11 @@ export function QuickBuilder() {
                     </div>
                     <div className="num">
                       <Input inputMode="decimal" prefix={CURRENCY} value={c.bid} onChange={(e) => updCampaign(c.id, { bid: e.target.value })} aria-label={`Default bid for ${c.name}`} fieldClassName="h10-qcb-moneyfield" />
-                      <div className="sug">Suggested: <b>{money(c.sugBid)}</b> ({money(c.sugBid * SUG_LOW)} - {money(c.sugBid * SUG_HIGH)})</div>
+                      <div className="sug">{startingBidSource(sugMedianCents, market)}: <b>{money(c.sugBid)}</b></div>
                     </div>
                     <div className="num">
                       <Input inputMode="decimal" prefix={CURRENCY} value={c.budget} onChange={(e) => updCampaign(c.id, { budget: e.target.value })} aria-label={`Budget for ${c.name}`} fieldClassName="h10-qcb-moneyfield" />
-                      <div className="sug">Suggested: <b>{money(c.sugBudget)}</b> ({money(c.sugBudget * SUG_LOW)} - {money(c.sugBudget * SUG_HIGH)})</div>
+                      <div className="sug">Default: <b>{money(c.sugBudget)}</b> (50 × the bid)</div>
                     </div>
                     <div className="algo"><BarChart3 size={15} /> {algoLabel}</div>
                   </div>

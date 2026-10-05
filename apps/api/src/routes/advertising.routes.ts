@@ -149,6 +149,15 @@ function actorFromHeaders(headers: Record<string, unknown>): AdsActor {
 }
 
 /**
+ * CC-28 — who a person's create is from: the signed-in user (auth sets `authUser`, as the brake routes read it), the
+ * `x-actor-id` header only when there is none. The web never sends that header, so every campaign created from the
+ * builders was logged as `user:anonymous`, and its rules' `createdBy` with it.
+ */
+function personActor(request: { authUser?: { id?: string }; headers: unknown }): AdsActor {
+  return request.authUser?.id ? (`user:${request.authUser.id}` as AdsActor) : actorFromHeaders(request.headers as Record<string, unknown>)
+}
+
+/**
  * CM-8 — a person's add, answered by what reached Amazon: 200 created or already there; 202 saved in Nexus only (the
  * campaign is not on Amazon yet); 403 refused by the write gate; 502 Amazon refused it or gave no id. `error` carries
  * the reason for every answer that is not 200, so a screen that reads only `error` (or only the status) is told too.
@@ -1209,7 +1218,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length } }
 
     const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
-    const userId = actorFromHeaders(request.headers as Record<string, unknown>)
+    const userId = personActor(request) // CC-28
     const matchTypesFor = (m?: string): Array<'BROAD' | 'PHRASE' | 'EXACT'> => {
       const u = (m || '').toLowerCase()
       if (u.includes('&')) return ['BROAD', 'PHRASE', 'EXACT']
@@ -1372,7 +1381,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // rule. Same gated local-first create path (no Amazon push unless the write gate is open).
   fastify.post('/advertising/campaign-builder/single/launch', async (request, reply) => {
     const { singleLaunch } = await import('../services/advertising/ads-single-launch.service.js')
-    const out = await singleLaunch(request.body as import('../services/advertising/ads-single-launch.service.js').SingleLaunchBody, actorFromHeaders(request.headers as Record<string, unknown>))
+    const out = await singleLaunch(request.body as import('../services/advertising/ads-single-launch.service.js').SingleLaunchBody, personActor(request)) // CC-28
     if (out.status !== 200) reply.status(out.status)
     return out.body
   })
@@ -6527,7 +6536,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.name || !b?.type || !b?.marketplace || b?.dailyBudgetEur == null) { reply.status(400); return { error: 'name, type, marketplace, dailyBudgetEur required' } }
     const { createCampaignLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return await createCampaignLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return await createCampaignLocal({ ...(b as object), userId: personActor(request) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // CM-8 — these four are a person's adds from the campaign screens: `requireAmazon` (nothing kept unless Amazon took
   // it), answered by personAddReply — 200 only when Amazon holds it.
@@ -6536,21 +6545,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b?.campaignId || !b?.name || b?.defaultBidEur == null) { reply.status(400); return { error: 'campaignId, name, defaultBidEur required' } }
     const { createAdGroupLocal } = await import('../services/advertising/ads-create.service.js')
     // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
-    try { return personAddReply(reply, await createAdGroupLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return personAddReply(reply, await createAdGroupLocal({ ...(b as object), requireAmazon: true, manual: true, userId: personActor(request) } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/keywords/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.keywordText || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, keywordText, matchType, bidEur required' } }
     const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
     // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
-    try { return personAddReply(reply, await createKeywordLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return personAddReply(reply, await createKeywordLocal({ ...(b as object), requireAmazon: true, manual: true, userId: personActor(request) } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/product-ads/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || (!b?.sku && !b?.asin)) { reply.status(400); return { error: 'adGroupId + sku|asin required' } }
     const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
     // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
-    try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true, manual: true, userId: personActor(request) } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // ── AME.14: autonomy & guardrails control center ────────────────────
   // Single pane: global kill state, rule posture (enabled / dry-run / off),
@@ -6903,7 +6912,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
     // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
-    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true, userId: personActor(request) } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/negative-targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
@@ -6911,7 +6920,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     // 5b — a refused negative writes nothing, so it is not answered 200 (the modal would say it was added).
     // 1e — a person's own add from a screen (isPersonCreate).
-    try { const r = await createNegativeProductTargetLocal({ ...b, manual: true } as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { const r = await createNegativeProductTargetLocal({ ...b, manual: true, userId: personActor(request) } as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // LAUNCH-REPAIR — push a campaign's existing local structure (ad group/keywords/auto/product ads)
@@ -7048,7 +7057,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: 'adGroupId, brandName, headline, asins[] required' } }
     const { createSbAdLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return await createSbAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try { return await createSbAdLocal({ ...(b as object), userId: personActor(request) } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
@@ -8205,6 +8214,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       goal: (b.goal as string) ?? 'BALANCED', autonomy: (b.autonomy as string) ?? 'SUGGEST',
       guardrails: (b.guardrails as object) ?? {}, modules: (b.modules as object) ?? {},
       graph: (b.graph as object) ?? {}, linkedRuleIds: (b.linkedRuleIds as object) ?? [],
+      createdBy: personActor(request), // CC-28
     } })
     return { plan }
   })
