@@ -5,6 +5,15 @@ import { shapeColumnDef } from './shapeColumn'
 import { parseScalarValue, scalarColumnDef } from './scalarValue'
 
 describe('typed list values', () => {
+  // W3-2 — Amazon IT's list names its options in English and keeps the market's words as accepted spellings: a member
+  // pasted in either becomes the code; a spelling two codes share stays as typed, for a named refusal.
+  it('turns a member pasted as a label or an accepted spelling into its code', () => {
+    const col = { options: ['nero', 'rosso', 'blu'], optionLabels: { nero: 'Black', rosso: 'Red', blu: 'Blue' },
+      optionAliases: { nero: ['Nero'], rosso: ['Rosso'], blu: ['Blu', 'Dark'] } }
+    expect(parseShape('list', 'Black | Rosso | blu', col)).toEqual(['nero', 'rosso', 'blu'])
+    expect(parseShape('list', 'Dark', { ...col, optionAliases: { ...col.optionAliases, nero: ['Nero', 'Dark'] } })).toEqual(['Dark'])
+  })
+
   it.each([
     ['7 | 8', [7, 8]],
     [['7', '8'], [7, 8]],

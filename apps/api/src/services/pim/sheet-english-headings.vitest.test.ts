@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { englishEbayAspectLabel, lookupEnglishAspectName } from '../ebay-aspect-names.js'
 import { aspectNames, ebaySpecFromCache, type EbayCachedAspect } from './channel-specs/ebay.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
+import { withEnglish } from './channel-specs/amazon-english.js'
+import { optionCodeFor } from './import-diff.service.js'
 import { buildSheetColumns, issueFieldLabel, type SheetCoordinate } from './sheet-columns.service.js'
 import { shopifyProductSpec } from './channel-specs/store.js'
 import type { FieldDefinition } from './field-registry.service.js'
@@ -157,5 +159,68 @@ describe('one name for one thing (W3-6)', () => {
     expect(issueFieldLabel(columns, 'child_parent_sku_relationship', 'AMAZON')).toBe('Parent SKU, Relationship type')
     expect(issueFieldLabel(columns, 'uvp_list_price', 'AMAZON')).toBe('List price (UVP)')
     expect(issueFieldLabel(columns, 'supplier_declared_dg_hz_regulation', 'AMAZON')).toBe('Supplier declared dg hz regulation')
+  })
+})
+
+/**
+ * W3-2 (2026-10-05) — Amazon in English, on the real IT OUTERWEAR fixture and a synthetic English copy (the same codes,
+ * Amazon's English names and help; one name left out). The column names each option in English and keeps Amazon IT's
+ * word as an accepted spelling (paste and import resolve both); the channel spec and every code are unchanged. Before
+ * the English copy exists: Amazon's Italian words, led by one line saying so.
+ */
+describe('Amazon in English (W3-2)', () => {
+  const amazon: SheetCoordinate = { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true }
+  const fixture = JSON.parse(readFileSync(new URL('./channel-specs/__tests__/fixtures/amazon-it-outerwear.trimmed.json', import.meta.url), 'utf8'))
+  /** The leaf of a property that carries its option list. */
+  const listLeaf = (node: any): any => !node || typeof node !== 'object' ? null : Array.isArray(node.enum) ? node
+    : Object.values(node).reduce((found: any, child) => found ?? listLeaf(child), null)
+  const ENGLISH: Record<string, string> = { other: 'Other', storage: 'Storage', ghs: 'GHS', not_applicable: 'Not applicable', unknown: 'Unknown', transportation: 'Transportation' }
+  const market = structuredClone(fixture)
+  market.__schemaProvenance = { locale: 'it_IT' }
+  listLeaf(market.properties.supplier_declared_dg_hz_regulation).description = 'Indica le normative applicabili.'
+  const copy = structuredClone(market)
+  copy.__schemaProvenance = { locale: 'en_GB' }
+  const leaf = listLeaf(copy.properties.supplier_declared_dg_hz_regulation)
+  // Amazon's English copy names every code but `waste` (left out on purpose: it keeps Amazon IT's "Rifiuti").
+  leaf.enum = leaf.enum.filter((code: string) => code !== 'waste')
+  leaf.enumNames = leaf.enum.map((code: string) => ENGLISH[code])
+  leaf.description = 'Select the regulations that apply.'
+  const at = new Date('2026-10-05T04:00:00Z')
+  const specOf = (definition: unknown, fetchedAt: Date | null = null) => amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: definition, fetchedAt })
+  const columnsWith = (english: ReturnType<typeof specOf> | null, englishLabels?: Map<string, string>) => buildSheetColumns({
+    fields: [], coordinates: [amazon], scopeKind: 'channel', englishLabels, specs: [{ coordinate: amazon, spec: withEnglish(specOf(market), english) }],
+  }).columns
+  const regulation = (columns: ReturnType<typeof columnsWith>) => columns.find(c => c.channels?.['Amazon · IT']?.attribute === 'supplier_declared_dg_hz_regulation')!
+
+  it('names Amazon IT\'s options in English, keeps the Italian words as accepted spellings, and the help in English', () => {
+    const column = regulation(columnsWith(specOf(copy, at)))
+    expect(column.options).toEqual(['other', 'storage', 'ghs', 'not_applicable', 'waste', 'unknown', 'transportation'])
+    expect(column.optionLabels).toEqual({ other: 'Other', storage: 'Storage', ghs: 'GHS', not_applicable: 'Not applicable', waste: 'Rifiuti', unknown: 'Unknown', transportation: 'Transportation' })
+    // GHS is the same in both: no second spelling. `waste` has no English name: it keeps "Rifiuti" and no alias.
+    expect(column.optionAliases).toEqual({ other: ['Altro'], storage: ['Conservazione'], not_applicable: ['Non applicabile'], unknown: ['Sconosciuto'], transportation: ['Trasporto'] })
+    expect(column.helpText).toBe('Select the regulations that apply.')
+    // Paste and import take either word to the same code; the code is what is stored and sent.
+    for (const typed of ['Other', 'Altro', 'other']) expect(optionCodeFor(column, typed)).toBe('other')
+    expect(optionCodeFor(column, 'Rifiuti')).toBe('waste')
+  })
+
+  it('leaves Amazon\'s spec as Amazon declared it: Italian names, the same codes', () => {
+    const spec = withEnglish(specOf(market), specOf(copy, at))
+    const field = spec.fields.find(f => f.attribute === 'supplier_declared_dg_hz_regulation')!
+    expect(field.optionLabels?.other).toBe('Altro')
+    expect(field.optionLabelsEnglish?.other).toBe('Other')
+    expect(field.helpText).toBe('Indica le normative applicabili.')
+  })
+
+  it('before the English copy: Amazon\'s Italian words, led by one line saying the English names are not downloaded yet', () => {
+    const column = regulation(columnsWith(null))
+    expect(column.optionLabels?.other).toBe('Altro')
+    expect(column.optionAliases).toBeUndefined()
+    expect(column.helpText).toBe("Amazon's English names are not downloaded yet. This shows Amazon's Italian words. Indica le normative applicabili.")
+  })
+
+  it('Amazon\'s own English titles read in sentence case (Owner decision 12), acronyms kept', () => {
+    const column = regulation(columnsWith(specOf(copy, at), new Map([['supplier_declared_dg_hz_regulation', 'Supplier Declared DG HZ Regulation']])))
+    expect(column.label).toBe('Supplier declared DG HZ regulation')
   })
 })

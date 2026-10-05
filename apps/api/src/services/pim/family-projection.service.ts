@@ -37,7 +37,7 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { marketplaceIdFor } from './variation-theme-segments.js'
 import { ebayDeclaredAxes, foldAvailability, lockedAxisKeysFrom, variationLockFor, VT_COPY } from './variation-rules.service.js'
 import { loadAmazonThemeFacts, resolveVariationCategory } from './variation-theme-facts.js'
-import { addsForTheme, attributeTitle, bindSegmentToAttribute, classifyThemes, dropsForTheme, offeredThemes, themeSegments } from './variation-theme-segments.js'
+import { addsForTheme, amazonAxisName, bindSegmentToAttribute, classifyThemes, dropsForTheme, offeredThemes, themeSegments } from './variation-theme-segments.js'
 import { ProductRelationshipError } from './product-relationship.service.js'
 import { readAxisValues, UnknownProductError, type StudioSheet } from './studio-sheet.service.js'
 import { getInformationSheet as getStudioSheet } from './information-sheet.js'
@@ -1030,7 +1030,7 @@ export function targetOptionsFrom(
      *     the schema's `properties` through `bindSegmentToAttribute`, the same function the cell resolver uses.
      *
      * The list is now the bound attributes of the segments of the themes this product type actually declares,
-     * labelled with the attribute's own localized `title` (`Colore` / `Farbe`). A segment that binds to nothing
+     * labelled in English (`amazonAxisName`, W3-2: `Color`, was the localized `title` `Colore` / `Farbe`). A segment that binds to nothing
      * is NOT offered as a target — offering it would let an operator map an axis onto an attribute Amazon would
      * reject at publish time.
      */
@@ -1043,7 +1043,7 @@ export function targetOptionsFrom(
         if (seen.has(bound.attribute)) continue
         seen.set(bound.attribute, {
           code: bound.attribute,
-          label: attributeTitle(bound.attribute, properties) ?? bound.attribute,
+          label: amazonAxisName(bound.attribute),
           columnKey: null,
           taken: false,
         })
@@ -1278,14 +1278,15 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
   const themeOptions: string[] = channel === 'AMAZON'
     ? (amazonThemeFacts?.facts.themes ?? [])
     : []
-  /* The picker's labels are the BOUND attributes' own `title`s joined with ` / ` (design §3.2: `Colore /
-     Taglia` on IT, `Farbe / Größe` on DE) — never `enumNames`, which T17 measured as machine-cased. */
+  /* The picker's labels are the BOUND attributes in English joined with ` / ` (W3-2, Owner decision 4: `Color / Size` on
+     every market; design §3.2 had the market's titles, `Colore / Taglia`) — never `enumNames`, which T17 measured as
+     machine-cased. Amazon receives only the code. */
   const themeLabels: Record<string, string> = {}
   const themeDeprecated = new Set(amazonThemeFacts?.facts.deprecated ?? [])
   for (const code of themeOptions) {
     const labels = themeSegments(code).map((segment) => {
       const bound = bindSegmentToAttribute(segment, amazonProperties)
-      return attributeTitle(bound?.attribute ?? null, amazonProperties) ?? bound?.attribute ?? segment
+      return amazonAxisName(bound?.attribute ?? segment)
     })
     themeLabels[code] = labels.join(' / ') || code
   }

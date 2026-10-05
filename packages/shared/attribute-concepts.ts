@@ -264,24 +264,31 @@ export function customAttributeConcepts(): AttributeConcept[] {
 
 export type ValueMatch = { to: string; how: 'exact' | 'synonym' }
 
+/** W3-2 — every name an option goes by: its code, its label and its other accepted spellings (`optionAliases`). */
+function optionNames(code: string, optionLabels?: Readonly<Record<string, string>> | null, optionAliases?: Readonly<Record<string, readonly string[]>> | null): string[] {
+  return [code, ...(optionLabels?.[code] ? [optionLabels[code]] : []), ...(optionAliases?.[code] ?? [])].filter(name => !!name)
+}
+
 /**
  * P5 (docs/attributes/PLAN.md §4.3) — the channel option a value stands for, or null. `options` are the codes the
- * channel accepts (what is sent); `optionLabels` their display names (Etsy sends ids and shows names).
- *   1. exact — the same text, ignoring case and accents (`nero` → `Nero`; a label match returns its code);
+ * channel accepts (what is sent); `optionLabels` their display names (Etsy sends ids and shows names); `optionAliases`
+ * the other names each is accepted under (W3-2: Amazon IT's "Nero" beside the English label "Black").
+ *   1. exact — the same text, ignoring case and accents (`nero` → `Nero`; a label or alias match returns its code);
  *   2. synonym — the concept's value synonyms say both mean the same (`Nero` → `Black`).
  * Nothing else: translation and AI suggestions are review-gated elsewhere, never applied as a match.
  * A value that already IS an option is returned as an exact match to itself.
  */
-export function matchConceptValue(concept: AttributeConcept | undefined, value: string, options: readonly string[], optionLabels?: Readonly<Record<string, string>> | null): ValueMatch | null {
+export function matchConceptValue(concept: AttributeConcept | undefined, value: string, options: readonly string[], optionLabels?: Readonly<Record<string, string>> | null,
+  optionAliases?: Readonly<Record<string, readonly string[]>> | null): ValueMatch | null {
   const token = conceptFieldToken(value)
   if (!token) return null
-  const names = options.map(code => ({ code, tokens: [conceptFieldToken(code), ...(optionLabels?.[code] ? [conceptFieldToken(optionLabels[code])] : [])] }))
-  const exact = names.find(option => option.tokens.includes(token))
+  const names = options.map(code => ({ code, names: optionNames(code, optionLabels, optionAliases) }))
+  const exact = names.find(option => option.names.some(name => conceptFieldToken(name) === token))
   if (exact) return { to: exact.code, how: 'exact' }
   if (!concept) return null
   const code = conceptValueCode(concept, value)
   if (!code) return null
-  const synonym = names.find(option => [option.code, optionLabels?.[option.code]].some(name => name && conceptValueCode(concept, name) === code))
+  const synonym = names.find(option => option.names.some(name => conceptValueCode(concept, name) === code))
   return synonym ? { to: synonym.code, how: 'synonym' } : null
 }
 
@@ -294,13 +301,15 @@ export function matchConceptValue(concept: AttributeConcept | undefined, value: 
  *   · otherwise the option's CODE (what is sent).
  * Matching only: the stored value is never rewritten.
  */
-export function conceptSynonymOption(concept: AttributeConcept | undefined, value: string, options: readonly string[], optionLabels?: Readonly<Record<string, string>> | null): string | null {
+export function conceptSynonymOption(concept: AttributeConcept | undefined, value: string, options: readonly string[], optionLabels?: Readonly<Record<string, string>> | null,
+  optionAliases?: Readonly<Record<string, readonly string[]>> | null): string | null {
   if (!concept?.valueSynonyms || !options.length) return null
   const token = conceptFieldToken(value)
   if (!token) return null
-  if (options.some(code => conceptFieldToken(code) === token || (!!optionLabels?.[code] && conceptFieldToken(optionLabels[code]) === token))) return null
+  // W3-2 — an accepted spelling (the market's own name beside an English label) is the option too.
+  if (options.some(code => optionNames(code, optionLabels, optionAliases).some(name => conceptFieldToken(name) === token))) return null
   const meaning = conceptValueCode(concept, value)
   if (!meaning) return null
-  const matches = [...new Set(options)].filter(code => [code, optionLabels?.[code]].some(name => !!name && conceptValueCode(concept, name) === meaning))
+  const matches = [...new Set(options)].filter(code => optionNames(code, optionLabels, optionAliases).some(name => conceptValueCode(concept, name) === meaning))
   return matches.length === 1 ? matches[0] : null
 }

@@ -23,7 +23,7 @@ import { variationAxisValue, variationCollisionGroups, variationCollisionSummary
 import type { ProjectionLimits, ProjectionVocabulary } from './family-projection-limits.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import {
-  attributeTitle,
+  amazonAxisName,
   bindSegmentToAttribute,
   canonicalThemeSegment,
   classifyThemes,
@@ -717,12 +717,11 @@ function resolveAmazon(input: ResolveVariationInput): VariationThemeCell {
       const fromFamily = wanted.find(a => a.axisKey === (explicitMapping ? canonicalVariantAxis(mapped?.axisKey ?? '') : canonicalThemeSegment(segment)))
       const axisKey = fromFamily?.axisKey ?? canonicalThemeSegment(segment)
       deliveredKeys.push(axisKey)
-      const title = attributeTitle(bound?.attribute ?? null, properties)
       axes.push({
         axisKey,
         familyKey: fromFamily?.familyKey ?? segment,
         label: fromFamily?.label ?? humanise(axisKey),
-        channelName: title ?? humanise(bound?.attribute ?? segment),
+        channelName: amazonAxisName(bound?.attribute ?? segment),
         target: bound?.attribute ?? null,
         included: true,
         segment,
@@ -762,7 +761,7 @@ function resolveAmazon(input: ResolveVariationInput): VariationThemeCell {
   const items = offeredThemes(classifyThemes(facts), code).map((t) => {
     const labels = themeSegments(t.code).map((segment) => {
       const bound = bindSegmentToAttribute(segment, properties)
-      return attributeTitle(bound?.attribute ?? null, properties) ?? humanise(bound?.attribute ?? segment)
+      return amazonAxisName(bound?.attribute ?? segment)
     })
     const drops = dropsForTheme(t.keys, wantedKeys)
     const adds = addsForTheme(t.keys, wantedKeys)

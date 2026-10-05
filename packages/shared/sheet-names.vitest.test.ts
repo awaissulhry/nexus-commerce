@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SHEET_NAMES, fieldNameFromKey, formerNamesOf, sheetName } from './sheet-names.js'
+import { SHEET_NAMES, fieldNameFromKey, formerNamesOf, sentenceCase, sheetName } from './sheet-names.js'
 
 describe('sheetName — one name for one thing (W3-6)', () => {
   it('names the product Title on every scope', () => {
@@ -91,5 +91,24 @@ describe('fieldNameFromKey — a readable name when only a key is known', () => 
   it('reads a compound Amazon key as "Parent · Leaf"', () => {
     expect(fieldNameFromKey('epr_eco_fee_eubr__currency')).toBe('EPR eco fee (EUBR) · Currency')
     expect(fieldNameFromKey('compliance_media__content_language')).toBe('Compliance media · Content language')
+  })
+})
+
+// W3-2 (Owner decision 12) — Amazon's own English titles read like every other name on the sheet.
+describe('sentenceCase — a channel\'s English title in sentence case', () => {
+  it.each([
+    ['Outer Material Type', 'Outer material type'],
+    ['Item Name', 'Item name'],
+    ['Supplier Declared DG HZ Regulation', 'Supplier declared DG HZ regulation'],
+    ['Country/Region of Origin', 'Country/region of origin'],
+    ['UNSPSC Code', 'UNSPSC code'],
+    ['Is Expiration Dated Product', 'Is expiration dated product'],
+    ['California Proposition 65 Warning Type', 'California proposition 65 warning type'],
+    ['Batteries Required?', 'Batteries required?'],
+    ['Ebay Item Id', 'eBay item ID'],
+    ['iPhone Model', 'iPhone model'],
+    ['  Fit Type ', 'Fit type'],
+  ])('%s → %s', (title, expected) => {
+    expect(sentenceCase(title)).toBe(expected)
   })
 })

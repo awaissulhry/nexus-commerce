@@ -126,6 +126,12 @@ describe('matchConceptValue — the auto-match ladder', () => {
     expect(matchConceptValue(color, 'Schwarz', ['10', '11'], { 10: 'Nero', 11: 'Bianco' })).toEqual({ to: '10', how: 'synonym' })
     expect(matchConceptValue(conceptByKey('target_gender')!, 'Uomo', ['mens', 'womens', 'unisex-adult'])).toEqual({ to: 'mens', how: 'synonym' })
   })
+  // W3-2 — an Amazon IT list shows English names ("Black") and keeps the market's word ("Nero") as an accepted spelling:
+  // the market's word still matches EXACTLY, as it did when it was the label.
+  it('matches an accepted spelling exactly, like the label it used to be', () => {
+    expect(matchConceptValue(color, 'Nero', ['1', '2'], { 1: 'Black', 2: 'Red' }, { 1: ['Nero'], 2: ['Rosso'] })).toEqual({ to: '1', how: 'exact' })
+    expect(matchConceptValue(undefined, 'rosso', ['1', '2'], { 1: 'Black', 2: 'Red' }, { 1: ['Nero'], 2: ['Rosso'] })).toEqual({ to: '2', how: 'exact' })
+  })
   it('never guesses: no concept, or no shared meaning, is no match', () => {
     expect(matchConceptValue(undefined, 'Nero', ['Black'])).toBeNull()
     expect(matchConceptValue(color, 'Chartreuse', ['Black', 'Blue'])).toBeNull()
@@ -150,6 +156,15 @@ describe('conceptSynonymOption — the ONE option a value means, or null', () =>
     const options = Object.keys(labels)
     expect(['men', 'Women', 'Uomo', 'Damen'].map(value => conceptSynonymOption(gender, value, options, labels))).toEqual(['male', 'female', 'male', 'female'])
     expect(conceptSynonymOption(gender, 'unisex', options, labels)).toBeNull() // already the code
+  })
+  // W3-2 — with English names shown and the market's words kept as accepted spellings, the outcome is the same as before.
+  it('an accepted spelling is the option too: the same answers as when the market word was the label', () => {
+    const options = ['female', 'male', 'unisex']
+    const english = { female: 'Female', male: 'Male', unisex: 'Unisex' }
+    const aliases = { female: ['Femmina'], male: ['Maschio'] }
+    expect(conceptSynonymOption(gender, 'Maschio', options, english, aliases)).toBeNull() // already the option: the validator takes it
+    expect(conceptSynonymOption(gender, 'Maschio', options, targetGender.IT)).toBeNull()
+    expect(['men', 'Women', 'Uomo'].map(value => conceptSynonymOption(gender, value, options, english, aliases))).toEqual(['male', 'female', 'male'])
   })
   it.each([
     ['IT', 'Uomo', 'Donna', 'Unisex - Adulto'], ['DE', 'Herren', 'Damen', null], ['FR', 'Homme', 'Femme', 'Mixte'], ['ES', 'Hombre', 'Mujer', 'Unisex adulto'],
