@@ -81,6 +81,7 @@ import { startCarrierMetricsCron } from "../jobs/carrier-metrics.job.js";
 import { startOutboundLateRiskCron } from "../jobs/outbound-late-risk.job.js";
 import { startSavedViewAlertsCron } from "../jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "../jobs/sync-drift-detection.job.js";
+import { startStockPushHealCron } from "../jobs/stock-push-heal.job.js";
 import { startFbaStatusPollCron } from "../jobs/fba-status-poll.job.js";
 import { startForecastAccuracyCron } from "../jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "../jobs/auto-po-replenishment.job.js";
@@ -649,6 +650,13 @@ export async function startScheduler(): Promise<void> {
   if (process.env.NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON !== '0') {
     startSyncDriftDetectionCron();
   }
+
+  // 2026-10-06 — stock push heal. Every 10 minutes, per business, a listing whose
+  // latest quantity push failed for good (dead, never retried, or pending for
+  // hours) gets ONE fresh push through the cascade's path, within a per-listing
+  // budget (a channel refusal once a day). Default-ON; opt out via
+  // NEXUS_STOCK_PUSH_HEAL=0 (checked inside).
+  startStockPushHealCron();
 
   // H.8d — FBA shipment status polling cron. Every 15 minutes,
   // batches non-terminal local FBAShipment IDs into SP-API
