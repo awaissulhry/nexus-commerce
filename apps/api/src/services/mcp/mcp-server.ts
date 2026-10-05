@@ -38,6 +38,7 @@ import { toolsFor } from '../agents/call-tool.js'
 import { claudeOffTools } from '../agents/claude-trust.service.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
 import type { AgentTool } from '../agents/tool-types.js'
+import { argumentNames } from '../agents/tool-arguments.js'
 import type { McpScope } from '../oauth/oauth-config.js'
 import { BUSINESS_ARGUMENT, principalOf, type McpBusiness, type McpPrincipal } from './mcp-auth.js'
 import { runToolForClaude } from './mcp-tool-call.js'
@@ -84,10 +85,11 @@ export function toolAnnotations(tool: AgentTool): ToolAnnotations {
 
 /**
  * C3 — the JSON Schema Claude is given: the tool's own (the one the in-app assistant also gets), plus, for a change
- * tool, the required `business` name. A read is offered exactly as it is.
+ * tool, the required `business` name. N1 — it says no other argument is taken (the door refuses one, naming the
+ * argument it likely meant), so Claude knows before it calls.
  */
 export function mcpInputSchema(tool: AgentTool, business: McpBusiness): Record<string, unknown> {
-  const own = inputJsonSchema(tool)
+  const own: Record<string, unknown> = { ...inputJsonSchema(tool), ...(argumentNames(tool) ? { additionalProperties: false } : {}) }
   if (tool.readOnly) return own
   const properties = (own.properties ?? {}) as Record<string, unknown>
   const required = Array.isArray(own.required) ? (own.required as string[]) : []

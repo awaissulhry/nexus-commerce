@@ -354,7 +354,7 @@ describe('MCP.7 — what Claude is offered', () => {
         expect(tool.annotations?.title).toBe(own.title)
         // C3 — a change tool also takes the business name; a read is offered exactly as the assistant gets it.
         expect(tool.inputSchema).toEqual(mcpInputSchema(own, stampOf(A)))
-        if (own.readOnly) expect(tool.inputSchema).toEqual(inputJsonSchema(own))
+        if (own.readOnly) expect(tool.inputSchema).toEqual({ ...inputJsonSchema(own), additionalProperties: false })
         expect(tool.annotations?.readOnlyHint).toBe(own.readOnly)
         expect(typeof tool.annotations?.destructiveHint).toBe('boolean')
         expect(typeof tool.annotations?.openWorldHint).toBe('boolean')
