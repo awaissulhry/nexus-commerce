@@ -53,6 +53,14 @@ export function formatMoney(cents: number, currency: string): string {
   }
 }
 
+/**
+ * AM-21 — the monthly spend-ceiling notice in the market's OWN currency ("£41.20 of £50.00" for eBay GB). It used to
+ * print "€" for every market.
+ */
+export function ceilingNoticeBody(c: { mtdCents: number; capCents: number; currency: string }): string {
+  return `${formatMoney(c.mtdCents, c.currency)} of ${formatMoney(c.capCents, c.currency)}`
+}
+
 export function weeklyDigestMoney(input: {
   current: CurrencySums[]
   prior: CurrencySums[]

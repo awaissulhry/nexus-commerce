@@ -2,7 +2,9 @@
  * AM-21 — the eBay weekly digest never adds two currencies. Pure; fake ids and amounts only.
  */
 import { describe, expect, it } from 'vitest'
-import { weeklyDigestMoney, type CurrencySums } from './ebay-ads-digest-money.js'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { ceilingNoticeBody, weeklyDigestMoney, type CurrencySums } from './ebay-ads-digest-money.js'
 
 const eur = (fees: number, sales: number, extra: Partial<CurrencySums> = {}): CurrencySums => ({ currency: 'EUR', adFeesCents: fees, salesCents: sales, clicks: 10, impressions: 100, soldQty: 1, ...extra })
 const gbp = (fees: number, sales: number, extra: Partial<CurrencySums> = {}): CurrencySums => ({ currency: 'GBP', adFeesCents: fees, salesCents: sales, clicks: 5, impressions: 50, soldQty: 2, ...extra })
@@ -57,5 +59,16 @@ describe('weeklyDigestMoney', () => {
       ],
     })
     expect(m.byMarketplace.map((x) => [x.marketplace, x.currency, x.adFeesCents])).toEqual([['unknown', 'GBP', 20], ['unknown', 'EUR', 10]])
+  })
+})
+
+describe('ceilingNoticeBody — the monthly spend-ceiling notice', () => {
+  it('prints each market in its own currency (it printed "€" for every market, eBay GB included)', () => {
+    expect(ceilingNoticeBody({ mtdCents: 4120, capCents: 5000, currency: 'GBP' })).toBe('£41.20 of £50.00')
+    expect(ceilingNoticeBody({ mtdCents: 4120, capCents: 5000, currency: 'EUR' })).toBe('€41.20 of €50.00')
+    // The anomaly guard hands each ceiling's own currency to the notice, never a fixed "€".
+    const src = readFileSync(fileURLToPath(new URL('./ebay-ads-automation.service.ts', import.meta.url)), 'utf8')
+    expect(src).toContain("body: ceilingNoticeBody(c), href: '/marketing/ads/ebay/automation'")
+    expect(src).not.toMatch(/€\$\{\(c\.(mtdCents|capCents)/)
   })
 })

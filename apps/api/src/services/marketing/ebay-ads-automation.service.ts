@@ -25,7 +25,8 @@ import * as writes from './ebay-ads-write.service.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 import { marketplaceShort } from '../ads-core/ebay-marketplace.js'
 import { parseGuardrails, capActions } from '../ads-core/ebay-rule-guardrails.js'
-import { weeklyDigestMoney } from './ebay-ads-digest-money.js'
+import { ceilingNoticeBody, formatMoney, weeklyDigestMoney } from './ebay-ads-digest-money.js'
+import { ebayMarketCurrencies } from './ebay-ads-read.service.js'
 
 const AUTOMATION_ACTOR = 'automation:ebay-ads'
 
@@ -656,9 +657,12 @@ export async function rollbackProposal(actorUserId: string | null, id: string): 
 }
 
 // ── Spend ceilings + anomaly guard ───────────────────────────────────────────
-export async function checkSpendCeilings(): Promise<Array<{ marketplace: string; mtdCents: number; capCents: number; pct: number; halted: boolean }>> {
+export async function checkSpendCeilings(): Promise<Array<{ marketplace: string; currency: string; mtdCents: number; capCents: number; pct: number; halted: boolean }>> {
   const ceilings = await prisma.marketingSpendCeiling.findMany({ where: { channel: 'EBAY' } })
-  const out: Array<{ marketplace: string; mtdCents: number; capCents: number; pct: number; halted: boolean }> = []
+  // AM-21 — each market's fees are reported in its own currency (EBAY_GB in GBP); the stored ceiling's currency is the
+  // fallback for a market with no row yet.
+  const reported = ceilings.length ? await ebayMarketCurrencies() : new Map<string, string>()
+  const out: Array<{ marketplace: string; currency: string; mtdCents: number; capCents: number; pct: number; halted: boolean }> = []
   const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0)
   for (const c of ceilings) {
     const agg = await prisma.ebayAdsDailyPerformance.aggregate({
@@ -666,18 +670,19 @@ export async function checkSpendCeilings(): Promise<Array<{ marketplace: string;
       _sum: { adFeesCents: true },
     })
     const mtd = agg._sum.adFeesCents ?? 0
+    const currency = reported.get(c.marketplace) ?? c.currency ?? 'EUR'
     const pct = c.monthlyCapCents > 0 ? (mtd / c.monthlyCapCents) * 100 : 0
     let halted = false
     if (pct >= 100) {
       await prisma.marketingAutomationState.upsert({
         where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) },
-        create: { channel: 'EBAY', globalMode: 'OFF', halted: true, haltReason: `spend ceiling breached for ${c.marketplace} (${(mtd / 100).toFixed(2)}€ ≥ ${(c.monthlyCapCents / 100).toFixed(2)}€)`, haltedBy: 'auto:spend-ceiling' },
+        create: { channel: 'EBAY', globalMode: 'OFF', halted: true, haltReason: `spend ceiling breached for ${c.marketplace} (${formatMoney(mtd, currency)} ≥ ${formatMoney(c.monthlyCapCents, currency)})`, haltedBy: 'auto:spend-ceiling' },
         update: { halted: true, haltReason: `spend ceiling breached for ${c.marketplace}`, haltedBy: 'auto:spend-ceiling' },
       })
       halted = true
-      logger.error(`[E5][ebay-ads] SPEND CEILING BREACHED ${c.marketplace}: €${(mtd / 100).toFixed(2)} / €${(c.monthlyCapCents / 100).toFixed(2)} — automation HALTED`)
+      logger.error(`[E5][ebay-ads] SPEND CEILING BREACHED ${c.marketplace}: ${formatMoney(mtd, currency)} / ${formatMoney(c.monthlyCapCents, currency)} — automation HALTED`)
     }
-    out.push({ marketplace: c.marketplace, mtdCents: mtd, capCents: c.monthlyCapCents, pct: Math.round(pct * 10) / 10, halted })
+    out.push({ marketplace: c.marketplace, currency, mtdCents: mtd, capCents: c.monthlyCapCents, pct: Math.round(pct * 10) / 10, halted })
   }
   return out
 }
@@ -992,7 +997,7 @@ export async function runAnomalyGuard(): Promise<{ anomalies: number; ceilings: 
         await notifyAutomation({ type: 'ebay-ads-anomaly', severity: a.severity === 'CRITICAL' ? 'danger' : 'warn', title: `eBay ads: ${a.type.replace(/_/g, ' ')}`, body: a.message, href: '/marketing/ads/ebay' })
       }
       for (const c of ceils.filter((x) => x.pct >= 80)) {
-        await notifyAutomation({ type: 'ebay-ads-ceiling', severity: c.pct >= 100 ? 'danger' : 'warn', title: `eBay ${c.marketplace} spend at ${c.pct}% of monthly ceiling`, body: `€${(c.mtdCents / 100).toFixed(2)} of €${(c.capCents / 100).toFixed(2)}`, href: '/marketing/ads/ebay/automation' })
+        await notifyAutomation({ type: 'ebay-ads-ceiling', severity: c.pct >= 100 ? 'danger' : 'warn', title: `eBay ${c.marketplace} spend at ${c.pct}% of monthly ceiling`, body: ceilingNoticeBody(c), href: '/marketing/ads/ebay/automation' })
       }
     } catch (e) {
       logger.warn(`[E5][ebay-ads] notify failed: ${(e as Error).message}`)
