@@ -10,7 +10,8 @@
  *
  *   publish-listing     (L5) publishes one product family to one channel, market and account THROUGH the studio — the
  *                       studio's review, its exact selection and its submit, run as the person who approves it — and only
- *                       the field groups named (d4: stock, price and fulfilment never ride a publish).
+ *                       the field groups named (d4: a re-publish never sends stock, price or fulfilment; a first
+ *                       publish creates the listing with them).
  *
  * All run in the caller's business (row-level security; no argument names a business), never take a channel's own id
  * (an ASIN, an eBay item number) as input, and resolve an account only among this business's own connections.
@@ -202,7 +203,7 @@ const publishReview: AgentTool = {
 
 /** Still waiting for the channel: it settles elsewhere, never in this read. */
 const PENDING = new Set(['PUBLISHING', 'SUBMITTED', 'UNVERIFIED'])
-const PENDING_NOTE = 'Pending — it settles through the 5-minute settle sweep (NEXUS_STUDIO_PUBLICATION_SETTLE) or when someone opens '
+const PENDING_NOTE = 'Pending — Nexus checks it again by itself every 2 minutes (the publication sweep), or when someone opens '
   + 'its result in the Nexus studio. Read it again later.'
 
 const publicationStatus: AgentTool = {
@@ -221,7 +222,7 @@ const publicationStatus: AgentTool = {
     + 'submitted it: SUBMITTED (an Amazon feed is processing), UNVERIFIED (eBay acknowledged the item; its live status is '
     + 'not confirmed yet), PUBLISHING, ACCEPTED, VERIFIED, PARTIAL (some products rejected), FAILED or NOT_SUBMITTED, with '
     + 'each product\'s result. It only reads: it never asks the channel and changes nothing. A pending publication '
-    + 'settles through the 5-minute settle sweep (when it is switched on) or when someone opens its result in the Nexus '
+    + 'settles by itself (Nexus checks it again every 2 minutes) or when someone opens its result in the Nexus '
     + 'studio; then this tool reports the settled result.',
   async handler(args): Promise<ToolResult> {
     const id = String(args.publicationId)
@@ -255,11 +256,14 @@ const publicationStatus: AgentTool = {
 
 // ── publish-listing (L5) ─────────────────────────────────────────────────────────────────────────────
 
-/** The field groups a publish may name (d4). Stock, price and fulfilment are not among them: they never ride a publish. */
+/** The field groups a publish may name (d4). Stock, price and fulfilment are not among them: a re-publish never sends them;
+ * a first publish creates the listing with them (inside its create message). */
 export const FIELD_GROUPS = ['title', 'description', 'bullets', 'keywords', 'photos', 'attributes'] as const
 type FieldGroup = (typeof FIELD_GROUPS)[number]
 type Group = FieldGroup | 'create' | 'never'
-const NEVER_SENT = 'Stock, price and fulfilment never ride a publish: set-listing-stock and set-listing-price change them.'
+const NEVER_SENT = 'A re-publish never sends stock, price or fulfilment: set-listing-stock and set-listing-price change them.'
+const SENT_IN_CREATE = 'Sent inside the new listing: a first publish creates it with its price, quantity and (Amazon) fulfilment. '
+  + 'After that, set-listing-stock and set-listing-price change them.'
 
 /** The group of one reviewed field (Amazon roots and content coordinates, eBay Trading and Inventory fields). */
 export function groupOf(field: string): Group {
@@ -315,7 +319,7 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
   for (const change of changes) {
     const group = groupOf(change.field)
     const skip = (reason: string) => plan.notSent.push({ sku: change.sku, field: change.field, label: change.label, reason })
-    if (group === 'never') { if (change.status !== 'SAME') skip(NEVER_SENT); continue }
+    if (group === 'never') { if (change.status !== 'SAME') skip(plan.publish === 'first publish' ? SENT_IN_CREATE : NEVER_SENT); continue }
     if (group === 'create') { if (change.selectable) plan.selected.push(change); else skip(change.reason); continue }
     if (!wanted.has(group)) continue
     if (change.status === 'SAME') { plan.unchanged += 1; continue }
@@ -410,7 +414,9 @@ const publishInput = z.object({
     .describe('a Nexus listing id from listing-coordinates, to publish a second listing (alias) of the family on this account and market'),
   fields: z.union([z.enum(['all', 'photos']), z.array(z.enum(FIELD_GROUPS)).min(1).max(FIELD_GROUPS.length)]).optional()
     .describe('what to send: "all" (default; every content field, and a new listing complete), "photos", or field groups: title, '
-      + 'description, bullets, keywords, photos, attributes. Stock, price and fulfilment are never sent by a publish'),
+      + 'description, bullets, keywords, photos, attributes. A re-publish never sends stock, price or fulfilment; a first publish '
+      + 'creates the listing with them. Amazon: a live listing\'s photos usually go through the photo review in Nexus (Images or '
+      + 'Media page), so "photos" may have nothing to send'),
   location: z.string().trim().min(1).max(200).optional()
     .describe('Shopify only: the inventory location (an id from publish-review\'s locations); optional when the store has one'),
 })
@@ -498,9 +504,12 @@ const publishListing: AgentTool = {
   description:
     'Publish one product family to one channel, market and account through the Nexus product studio, as the person who '
     + 'approves it: a draft\'s first publish (the complete listing) or a re-publish of the field groups named (fields: '
-    + '"all", "photos" or title, description, bullets, keywords, photos, attributes). Stock, price and fulfilment never '
-    + 'ride a publish. Its preview is the studio\'s review: what is sent, what it replaces on the channel, what is not '
-    + 'sent and why. Refused: Etsy (no publisher yet), an existing Shopify product, anything the review blocks, an FBA '
+    + '"all", "photos" or title, description, bullets, keywords, photos, attributes). A first publish creates the listing with '
+    + 'its price, quantity and (Amazon) fulfilment method from what Nexus holds: set them first. A re-publish never sends '
+    + 'stock, price or fulfilment (set-listing-stock, set-listing-price). Amazon: a live listing\'s photos usually go through '
+    + 'the photo review in Nexus (Images or Media page). Its preview is the studio\'s review: what is sent, what it replaces on the channel, what is not '
+    + 'sent and why. Refused: Etsy (no publisher yet), an existing Shopify product (its store fields go through set-shopify-content, '
+    + 'and a person sends them with Review and synchronize in Nexus), anything the review blocks, an FBA '
     + 'quantity, and an Amazon EU first publish whose quantity differs from the SKU\'s other live EU markets (Amazon '
     + 'keeps one EU quantity). Waits for a person to approve it in Nexus; if the review changed since, nothing is sent.',
   async handler(args) {

@@ -227,7 +227,7 @@ describe('publication-status', () => {
     const before = await state()
     const pending = await call('publication-status', { publicationId: id })
     expect(pending.data).toMatchObject({ publicationId: id, productId: ids.product, sku: 'TEST-SKU-L3', status: 'SUBMITTED', settled: false,
-      destination: { channel: 'AMAZON', market: 'IT', accountId: ids.amazon }, next: expect.stringContaining('NEXUS_STUDIO_PUBLICATION_SETTLE') })
+      destination: { channel: 'AMAZON', market: 'IT', accountId: ids.amazon }, next: expect.stringContaining('Nexus checks it again by itself every 2 minutes') })
     expect(fixture.readAmazon).not.toHaveBeenCalled()
     expect(await state()).toEqual(before)
     expect(before.listings.every((l: Json) => l.listingStatus === 'DRAFT' && !l.isPublished)).toBe(true)

@@ -214,7 +214,17 @@ describe('what a publish sends', () => {
     ]) } as any
     const plan = planPublish(review, 'AMAZON', 'all')
     expect(plan.selected.map((c) => c.field)).toEqual(['title'])
-    expect(plan.notSent).toEqual([expect.objectContaining({ field: 'fulfillment_availability', reason: expect.stringContaining('never ride a publish') })])
+    expect(plan.notSent).toEqual([expect.objectContaining({ field: 'fulfillment_availability', reason: expect.stringContaining('A re-publish never sends stock, price or fulfilment') })])
+  })
+
+  it('N3 — a first publish says price and quantity go inside the new listing, never "never sent"', () => {
+    const review = { action: 'create', issues: [], rows: [], mode: 'live', changes: planPublicationChanges([
+      change('p', 'TEST-SKU', '$create', 'New listing', null),
+      change('p', 'TEST-SKU', 'purchasable_offer', [{ our_price: 49.9 }], null),
+    ]) } as any
+    const plan = planPublish(review, 'AMAZON', 'all')
+    expect(plan.publish).toBe('first publish')
+    expect(plan.notSent).toEqual([expect.objectContaining({ field: 'purchasable_offer', reason: expect.stringContaining('Sent inside the new listing') })])
   })
 
   it('eBay re-publish: the preview is the studio review of the groups named', async () => {
