@@ -293,6 +293,8 @@ export interface GalleryMediaPopupProps {
   onLibraryChanged?(): void
   /** The family's root product: another screen's save of it is heard live. */
   familyId: string | null
+  /** Owner 2026-10-05 — eBay: the list is the listing's Image URLs list; what a save here does (`mediaSourceNote`). */
+  imageUrlsNote?: string
 }
 
 /**
@@ -301,7 +303,7 @@ export interface GalleryMediaPopupProps {
  * (`PUT /product-media` bound to the revision read when it opened).
  */
 export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
-  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId } = props
+  const { productId, title, context, contextLabel, channelLabel, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onLibraryChanged = onSaved, familyId, imageUrlsNote } = props
   const data = useGalleryPopupData(productId, context, familyId)
   // The list and its revision from the read the pop-up opened with; the library from the latest read.
   const working: ProductMediaWorkspace | null = useMemo(() => data.baseline ? { ...data.baseline, assets: data.latest?.assets ?? data.baseline.assets } : null, [data.baseline, data.latest])
@@ -428,6 +430,7 @@ export function GalleryMediaPopup(props: GalleryMediaPopupProps) {
     </>}>
     <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={contextLabel} title={title} />
+      {imageUrlsNote && <p className={styles.muted} role="note"><Tag tone="info">Image URLs</Tag> {imageUrlsNote}</p>}
       {error && <Banner tone="danger">{error}</Banner>}
       {!error && changedElsewhere && <Banner tone="warning">{model.POPUP_TEXT.changedElsewhere}</Banner>}
       {data.state.status === 'error' && <Banner tone="danger" action={<Button size="xs" onClick={() => void data.reload()}>Try again</Button>}>{data.state.message}</Banner>}

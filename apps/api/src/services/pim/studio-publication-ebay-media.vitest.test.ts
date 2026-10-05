@@ -135,7 +135,22 @@ describe('eBay Trading publish of a family on the media plan', () => {
     m.onPlan = false
     const plan = await prepareEbayPublication(facts())
     expect(gallery(plan.xml)).toEqual(['old-gallery'])
+    expect(sets(plan.xml)).toEqual([])
     expect(m.calls).toEqual([])
+  })
+
+  // Owner 2026-10-05 — Product media is the one source: off the plan, a colour row's own photos were never sent.
+  it('off the plan, each colour row\'s own photos are sent as that colour\'s set', async () => {
+    m.onPlan = false
+    const f = facts()
+    f.listings[1].platformAttributes = { imageUrls: ['https://img.example/n1.jpg'] }
+    f.listings[2].platformAttributes = { imageUrls: ['https://img.example/o1.jpg', 'https://img.example/cover.jpg'] }
+    const plan = await prepareEbayPublication(f)
+    expect(gallery(plan.xml)).toEqual(['old-gallery'])
+    expect(plan.xml).toContain('<VariationSpecificName>Colore</VariationSpecificName>')
+    // The sets follow the listing's own value order (its VariationSpecificsSet).
+    expect(plan.xml).toMatch(/<Name>Colore<\/Name><Value>Arancia<\/Value><Value>Nero<\/Value>/)
+    expect(sets(plan.xml)).toEqual([['Arancia', ['o1', 'cover']], ['Nero', ['n1']]])
   })
 })
 

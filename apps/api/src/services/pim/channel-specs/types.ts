@@ -54,7 +54,8 @@ export interface ChannelGroup {
 /** Where the channel's OWN copy of a value lives when it is not the resolver's override bag. */
 export type ChannelStore =
   | { kind: 'listingColumn'; column: string; followFlag?: string }
-  | { kind: 'platformAttributes'; path: string[]; unitPath?: string[]; legacyPaths?: string[][] }
+  /** `replaces`: paths every write of this value removes — another store it takes over (eBay Image URLs → Product media). */
+  | { kind: 'platformAttributes'; path: string[]; unitPath?: string[]; legacyPaths?: string[][]; replaces?: string[][] }
 
 export interface ChannelFieldSpec {
   /** A dedicated shared workspace owns authoring; the API field remains in the catalogue. */

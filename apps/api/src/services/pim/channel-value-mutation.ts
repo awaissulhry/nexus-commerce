@@ -55,6 +55,7 @@ export function channelValueMutation(store: ChannelStore | undefined, keys: stri
     mutation.platform.push({ path: store.path, value: measure ? measure.value ?? null : value, remove: inherit })
     if (store.unitPath) mutation.platform.push({ path: store.unitPath, value: measure?.unit ?? null, remove: inherit })
     for (const path of store.legacyPaths ?? []) mutation.platform.push({ path, value: null, remove: true })
+    for (const path of store.replaces ?? []) mutation.platform.push({ path, value: null, remove: true })
     for (const { path } of mutation.platform) {
       if (!path.length) throw new Error('Invalid channel storage path')
       if (isManagedShopifyAttribute(path[0])) throw new Error('Use the Shopify family workspace to change managed family state.')

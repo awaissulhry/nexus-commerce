@@ -11,6 +11,7 @@ import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { publishListingEvent } from '../listing-events.service.js'
 import { logger } from '../../utils/logger.js'
+import { addLibraryPhotos, isLegacyPhotoId, legacyImageUrls, legacyPhotoItems, matchLibraryPhoto } from './listing-photos.service.js'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
@@ -31,15 +32,21 @@ async function snapshot(input: Input, tx: Tx) {
     product.parentId ? tx.product.findFirst({ where: { id: product.parentId, deletedAt: null }, select: productSelect }) : null,
     tx.productImage.findMany({ where: { productId: { in: [product.id, ...(product.parentId ? [product.parentId] : [])] } }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
     input.scope === 'MASTER' ? null : tx.channelListing.findFirst({ where: { id: input.listingId, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId,
-      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, platformAttributes: true } }),
+      ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, platformAttributes: true } }),
   ])
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing destination is no longer available.')
   const assets: ProductMediaAsset[] = files.map(file => ({ id: file.id, type: file.mediaType || 'IMAGE', url: file.url,
     preview: file.mediaType === 'IMAGE' ? file.url : file.posterUrl, alt: file.alt ?? '', mimeType: file.mimeType,
     width: file.width, height: file.height, durationSec: file.durationSec, fileSize: file.fileSize }))
+  // Owner 2026-10-05 — Product media is the one photo source: an eBay listing with no Product media saved still sends its
+  // old Image URLs list, so the editor shows THAT list, with the sheet cell's ids (`legacyPhotoItems`, own files first):
+  // a library photo by its id, any other address by its `url:` id (an asset of its own until a save adds it).
+  const legacy = listing?.channel === 'EBAY' ? legacyImageUrls(listing.platformAttributes) : undefined
+  const old = legacy && legacyPhotoItems(legacy, files, product.id)
+  if (old) assets.push(...old.outside.map(photo => ({ id: photo.id, type: 'IMAGE', url: photo.url, preview: photo.url, alt: '' })))
   const isChannel = input.scope !== 'MASTER'
   const content = isChannel ? mediaObject(listing?.platformAttributes)._productMediaLocales : product.localizedContent
-  const resolved = resolveMediaCollection({ locale: input.locale, own: content,
+  const resolved = old ? { collection: { version: 1 as const, items: old.items }, source: 'locale' as const, hasOverride: true } : resolveMediaCollection({ locale: input.locale, own: content,
     shared: isChannel ? product.localizedContent : undefined, parent: parent?.localizedContent,
     ownIds: files.filter(file => file.productId === product.id).map(file => file.id),
     parentIds: files.filter(file => file.productId === parent?.id).map(file => file.id) })
@@ -103,9 +110,26 @@ async function persistCollection(input: Input, { workspace, product, listing }: 
     if (written.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
     return (await snapshot(input, tx)).workspace
   }
+  // Owner 2026-10-05 — a saved photo of an old eBay Image URLs list joins this row's library (`addLibraryPhotos`, by its
+  // address from this snapshot) and is saved by its new id; two addresses of one photo keep the first.
+  if (collection?.items.some(item => isLegacyPhotoId(item.assetId))) {
+    const urlOf = new Map(workspace.assets.map(asset => [asset.id, asset.url]))
+    const added = await addLibraryPhotos(tx, { productId: product.id, urls: collection.items.flatMap(item => isLegacyPhotoId(item.assetId) ? [urlOf.get(item.assetId)!] : []) })
+    const items: ProductMediaCollection['items'] = []
+    for (const item of collection.items) {
+      const assetId = isLegacyPhotoId(item.assetId) ? added.get(urlOf.get(item.assetId)!)!.id : item.assetId
+      if (!items.some(existing => existing.assetId === assetId)) items.push({ ...item, assetId })
+    }
+    collection = { ...collection, items }
+  }
+  // Owner 2026-10-05 — one list at a time, the last save wins: a save or a reset on an eBay listing removes its old Image
+  // URLs list (a reset then follows the shared list). The old list applied to every language, so the list that replaces it
+  // does too ('und'; review 2026-10-05: a save in the 'de' view of the IT sheet left Italian on the Shared list).
+  const { imageUrls: _old, ...attributes } = mediaObject(listing?.platformAttributes)
+  const locale = listing?.channel === 'EBAY' && legacyImageUrls(listing.platformAttributes) ? 'und' : input.locale
   const result = listing ? await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId },
-    data: { version: { increment: 1 }, platformAttributes: { ...mediaObject(listing.platformAttributes),
-      _productMediaLocales: writeMediaCollection(mediaObject(listing.platformAttributes)._productMediaLocales, input.locale, collection) } as Prisma.InputJsonValue } })
+    data: { version: { increment: 1 }, platformAttributes: { ...(listing.channel === 'EBAY' ? attributes : mediaObject(listing.platformAttributes)),
+      _productMediaLocales: writeMediaCollection(mediaObject(listing.platformAttributes)._productMediaLocales, locale, collection) } as Prisma.InputJsonValue } })
     : await tx.product.updateMany({ where: { id: product.id, version: product.version, deletedAt: null }, data: {
       version: { increment: 1 }, localizedContent: writeMediaCollection(product.localizedContent, input.locale, collection) as Prisma.InputJsonValue } })
   if (result.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
@@ -135,9 +159,14 @@ export async function copyProductMedia(input: Input, body: unknown) {
       if (source.workspace.missingAssetIds.length) throw new WorkspaceScopeError('The source gallery contains unavailable files. Review it before copying.', 422)
       const files = [...target.files], items: ProductMediaCollection['items'] = []
       for (const item of source.workspace.collection.items) {
-        const file = source.files.find(file => file.id === item.assetId)!
+        // Owner 2026-10-05 — a photo of the source's old eBay Image URLs list is not in a library yet: it is copied by its
+        // address (a target library photo at the same address or the same Cloudinary photo, else a new target file).
+        const legacy = isLegacyPhotoId(item.assetId) ? source.workspace.assets.find(asset => asset.id === item.assetId)! : undefined
+        const file = legacy ? { id: legacy.id, url: legacy.url, alt: '', publicId: null, mediaType: 'IMAGE', posterUrl: null, durationSec: null, width: null, height: null,
+          mimeType: null, fileSize: null, contentHash: null, sourceAssetId: null } : source.files.find(file => file.id === item.assetId)!
         let local = files.find(candidate => candidate.id === file.id)
           ?? files.find(candidate => !items.some(item => item.assetId === candidate.id) && candidate.mediaType === file.mediaType && (candidate.url === file.url || (!!file.contentHash && candidate.contentHash === file.contentHash)))
+          ?? (legacy ? matchLibraryPhoto(legacy.url, files.filter(candidate => !items.some(item => item.assetId === candidate.id)), target.product.id) : undefined)
         if (!local) {
           local = await tx.productImage.create({ data: {
             productId: target.product.id, type: 'ALT', isPrimary: false,

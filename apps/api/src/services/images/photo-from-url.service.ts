@@ -11,6 +11,7 @@
  * channel: a publish sends photos.
  */
 import { createHash } from 'node:crypto'
+import { mediaObject, PRODUCT_MEDIA_KEY } from '@nexus/shared/product-media'
 import prisma from '../../db.js'
 import { safeFetch, SafeFetchError } from '../net/safe-fetch.js'
 import { deleteFromCloudinary, isCloudinaryConfigured, uploadBufferToCloudinary } from '../cloudinary.service.js'
@@ -134,6 +135,18 @@ export async function photoInUse(home: PhotoHome, imageId: string): Promise<stri
   if (placed) return `the photo plan places it (${placed.layer.toLowerCase()}${placed.channel ? ` ${placed.channel}` : ''}); take it out with arrange-photos first`
   if (await prisma.productImage.count({ where: { sameAsImageId: imageId } })) return 'other photos are marked as the same picture as it'
   if (await prisma.listingImage.count({ where: { url: image.url } })) return 'a listing\'s own photos use it'
+  // Review 2026-10-05 — a listing's Product media (any channel, any row of the family, any language) names it by its id:
+  // removed, that listing's Publish would refuse "a saved gallery file is missing".
+  const listings = await prisma.channelListing.findMany({ where: { product: { OR: [{ id: home.rootId }, { parentId: home.rootId }] } },
+    select: { channel: true, marketplace: true, platformAttributes: true } })
+  const listed = listings.find((l) => (JSON.stringify(mediaObject(l.platformAttributes)._productMediaLocales) ?? '').includes(`"assetId":"${imageId}"`))
+  if (listed) return `a listing's Product media uses it (${listed.channel} ${listed.marketplace}); take it out of that listing's photos first`
+  // The same for a product's own saved lists (the family's main product or a row, any language): every listing that
+  // follows that product's list would lose the photo.
+  const products = await prisma.product.findMany({ where: { OR: [{ id: home.rootId }, { parentId: home.rootId }], deletedAt: null }, select: { sku: true, localizedContent: true } })
+  const saved = products.find((p) => Object.values(mediaObject(p.localizedContent)).some((language) =>
+    (JSON.stringify(mediaObject(language)[PRODUCT_MEDIA_KEY]) ?? '').includes(`"assetId":"${imageId}"`)))
+  if (saved) return `a product's own Product media uses it (${saved.sku}); take it out of that product's photos first`
   return null
 }
 

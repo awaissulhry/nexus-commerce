@@ -14,6 +14,7 @@ import { masterWorkbookField, channelWorkbookField, relationshipFields, workbook
 import { writeCatalogWorkbook, type WorkbookField } from './catalog-workbook.js'
 import { marketLanguages } from './market-languages.js'
 import { readinessLanguages } from './readiness-model.js'
+import { ebayListingPhotos, type PhotoFile } from '../images/listing-photos.pure.js'
 
 const empty = { row: 0, entity: 'Products' as const, sku: '', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: '', action: 'SET' as const }
 const contentFields = new Set(['name', 'title', 'description', 'bulletPoints', 'keywords'])
@@ -162,6 +163,7 @@ export async function catalogRows(
     const [channel, marketplace] = JSON.parse(coordinate)
     defaults.set(coordinate, await resolveCategoriesForProducts({ productIds: products.map(p => p.id), channel, marketplace }))
   }
+  const ebayPhotos = !input.effective && listings.some(l => l.channel === 'EBAY') ? await ebayPhotoReader(products, listings) : null
   for (const listing of listings) {
     const start = rows.length
     const sku = products.find(p => p.id === listing.productId)!.sku
@@ -195,8 +197,12 @@ export async function catalogRows(
         if (input.boundary && managedChannelField(field)) continue
         const textField = channelContentField(field, contract.masterLocalizableKeys)
         for (const locale of textField ? listingLanguages : ['']) {
-          const own = textField ? channelContentState(products.find(p => p.id === listing.productId)!, listing, textField, locale, listingLanguages) : storedChannelState(listing, field.channelStore, [field.fieldKey, field.sheetKey].filter((k): k is string => !!k))
+          let own = textField ? channelContentState(products.find(p => p.id === listing.productId)!, listing, textField, locale, listingLanguages) : storedChannelState(listing, field.channelStore, [field.fieldKey, field.sheetKey].filter((k): k is string => !!k))
           if (textField) own.value = contentWireValue(own.value, field.shape, textField)
+          // Owner 2026-10-05 — an eBay listing's Image URLs are the photos Publish sends, the same list as the sheet's Product
+          // media cell (after a save in Product media the old list is gone, and the file's Image columns read blank).
+          const photos = !textField && listing.channel === 'EBAY' && field.fieldKey === EBAY_PHOTOS_FIELD ? ebayPhotos?.(listing, listingLanguages[0] ?? 'und')?.urls : undefined
+          if (photos?.length) own = { state: 'stored', value: photos }
           const value = typeof own.value === 'object' && own.value && 'toNumber' in own.value ? (own.value as { toNumber(): number }).toNumber() : own.value
           rows.push({ ...identity, locale, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
         }
@@ -229,6 +235,41 @@ export async function catalogRows(
   return rows
 }
 
+
+/** The eBay field the sheet calls "Image URLs" (`channel-specs/ebay.ts`). */
+const EBAY_PHOTOS_FIELD = 'imageUrls'
+
+/** What `ebayPhotoReader` reads of a product: its Shared Product media and its parent's. */
+type PhotoProduct = { id: string; parentId: string | null; localizedContent?: unknown; parent?: { id: string; localizedContent?: unknown } | null }
+type PhotoListing = { productId: string; marketplace: string; channelConnectionId: string | null; aliasKey: string | null; platformAttributes: unknown }
+/**
+ * The photos of each eBay listing of one export page, as the sheet's Product media cell shows them: a family on the photo
+ * plan reads the plan's row (`sheetMediaPlan`, what its publisher sends; `own` false: the plan decides), any other
+ * `ebayListingPhotos`. Two reads per page (the files, which families are on the plan), plus the plan of each family that
+ * is. Owner 2026-10-05 — the import reads the same (`loadTransferContext`), so a re-imported export plans nothing.
+ */
+export async function ebayPhotoReader(products: readonly PhotoProduct[], listings: readonly { channel: string; productId: string }[],
+  db: Pick<typeof prisma, 'productImage' | 'productMediaPlan'> = prisma) {
+  const listed = new Set(listings.filter(l => l.channel === 'EBAY').map(l => l.productId))
+  const rows = products.filter(p => listed.has(p.id))
+  const files: PhotoFile[] = await db.productImage.findMany({ where: { productId: { in: [...new Set(rows.flatMap(p => [p.id, ...(p.parentId ? [p.parentId] : [])]))] } },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, productId: true, url: true, mediaType: true } })
+  const roots = [...new Set(rows.map(p => p.parentId ?? p.id))]
+  const onPlan = roots.length ? await db.productMediaPlan.findMany({ where: { productId: { in: roots }, layer: 'SHARED' }, select: { productId: true } }) : []
+  const plans = new Map<string, Awaited<ReturnType<typeof import('../images/media-plan.service.js').sheetMediaPlan>>>()
+  if (onPlan.length) {
+    const { sheetMediaPlan } = await import('../images/media-plan.service.js')
+    for (const root of new Set(onPlan.map(p => p.productId))) plans.set(root, await sheetMediaPlan(root))
+  }
+  return (listing: PhotoListing, locale: string): { urls: string[]; own: boolean } | undefined => {
+    const product = rows.find(p => p.id === listing.productId)
+    if (!product) return undefined
+    const plan = plans.get(product.parentId ?? product.id)
+    if (plan) return { own: false, urls: plan.row(product.id, { channel: 'EBAY', marketplace: listing.marketplace, accountId: listing.channelConnectionId ?? '', aliasKey: listing.aliasKey ?? '' }, locale)
+      .items.flatMap(item => item.type === 'IMAGE' && item.preview ? [item.preview] : []) }
+    return ebayListingPhotos({ listingAttributes: listing.platformAttributes, locale, product, parent: product.parent, files })
+  }
+}
 
 /** PSIE — stored listing values (`overrideData`) whose key the listing's current contract does not declare. */
 export function undeclaredListingValues(listing: { overrideData?: unknown }, fields: { fieldKey: string; sheetKey?: string | null }[]): [string, unknown][] {

@@ -66,6 +66,7 @@ import { UnknownMarketError, VARIATION_THEME_KEY, issueFieldLabel, type SheetCol
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
 import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
+import { legacyImageUrls, legacyPhotoItems } from '../images/listing-photos.pure.js'
 import { sheetMediaPlan } from '../images/media-plan.service.js'
 import { getStudioColumns } from './studio-columns.js'
 import { withCachedSchemas } from './cached-schema-context.js'
@@ -281,6 +282,11 @@ export interface StudioRow {
   productMediaError?: string
   /** Photo plan families only (P3c): the set this row's cell edits — Common, the value's set or the SKU's own set. */
   productMediaSet?: { ref: string; label: string; sharedBy: number }
+  /**
+   * Owner 2026-10-05 — set when the cell shows an eBay listing's old Image URLs list (no Product media saved on it yet):
+   * Publish still sends that list, and a save in Product media moves it into Product media.
+   */
+  productMediaSource?: 'image-urls'
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null
   familyId?: string | null
@@ -946,6 +952,29 @@ function layerFor(source: string | null, hasAlias: boolean): CellLayer {
     default:
       return 'default'
   }
+}
+
+/** Where an eBay row's photos come from: the photo plan, the listing's old Image URLs list, Product media saved on the
+ *  listing, or the Shared product's photos it follows. */
+export type EbayPhotoSource = 'plan' | 'image-urls' | 'listing' | 'shared'
+
+/** Review 2026-10-05 (finding 9) — why a photo plan family's Image URLs cell takes no edit. */
+export const PHOTO_PLAN_IMAGE_URLS_REASON = 'This family uses the photo plan. Change its photos on the Media page.'
+
+/**
+ * Owner 2026-10-05 — the eBay Image URLs cell is the photo addresses of the list the Product media cell shows (what
+ * Publish sends; photos only, eBay takes no videos). The listing's own list (its Product media, or its old Image URLs
+ * list) is the listing's value; Shared photos, or the photo plan's (kept on the family's main product), are inherited.
+ * No mapping rule decides an eBay photo, so `mapped` is null. Off the plan the cell stays editable: an edit writes Image
+ * URLs (one list at a time, the last save wins). On the plan it is read-only: Publish sends the plan's photos and ignores
+ * Image URLs, so an edit was saved and then snapped back to the plan's list (review finding 9).
+ */
+export function ebayPhotoCell(cell: StudioCellValue, urls: string[], from: EbayPhotoSource, row: { hasAlias: boolean; rootId: string }): StudioCellValue {
+  const own = from === 'image-urls' || from === 'listing'
+  const source = own ? 'channelExplicit' : 'master'
+  return { ...cell, value: urls, source, inheritedFrom: own ? null : row.rootId, inherited: !own, mapped: null,
+    layer: layerFor(source, row.hasAlias), pinned: own, follows: cell.follows === null ? null : !own,
+    ...(from === 'plan' ? { editable: false, writable: false, writeBlockedReason: PHOTO_PLAN_IMAGE_URLS_REASON } : {}) }
 }
 
 
@@ -1676,10 +1705,26 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const ownFace = pickFaceImage(ownImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE'))
       const face = ownFace ?? (isParent ? null : pickFaceImage(parentImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE')))
       let productMedia: StudioRow['productMedia'], productMediaError: string | undefined, productMediaSet: StudioRow['productMediaSet']
+      // Where the cell's list comes from — the eBay Image URLs cell shows its photo addresses (`ebayPhotoCell`, below).
+      let photoSource: EbayPhotoSource | undefined
+      // Owner 2026-10-05 — the cell shows what Publish sends: an eBay listing with no Product media saved yet still sends
+      // its old Image URLs list, so the cell shows that list (a library file by its id, any other photo by its address).
+      const legacy = !mediaPlan && coordinate?.channel === 'EBAY' ? legacyImageUrls(listingRow?.platformAttributes) : undefined
       if (mediaPlan) {
         const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
         productMedia = cell.items
         productMediaSet = cell.set
+        photoSource = 'plan'
+      } else if (legacy) {
+        photoSource = 'image-urls'
+        // The same ids as the Product media editor (`legacyPhotoItems`), so a drag or a paste in the cell matches it: the
+        // editor's file order too (product-media.service.ts snapshot: own files, then the parent's, each by sortOrder then
+        // id) — the sheet reads them by sortOrder then createdAt, so two files of one address could pick another id.
+        const editorOrder = (images: typeof ownImages) => [...images].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        const library = [...editorOrder(ownImages), ...(isParent ? [] : editorOrder(parentImages))]
+        const { items, outside } = legacyPhotoItems(legacy, library.map(image => ({ ...image, productId: ownImages.includes(image) ? product.id : root.id })), product.id)
+        productMedia = items.map(item => { const asset = library.find(image => image.id === item.assetId)
+          return { id: item.assetId, type: 'IMAGE', preview: asset?.url ?? outside.find(photo => photo.id === item.assetId)!.url, alt: asset?.alt ?? '' } })
       } else try {
         const media = resolveMediaCollection({ locale: mediaLocaleSchema.parse(input.locale ?? marketLocale),
           own: coordinate ? mediaObject(listingRow?.platformAttributes)._productMediaLocales : product.localizedContent,
@@ -1690,7 +1735,14 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           id: item.assetId, type: asset?.mediaType ?? 'FILE', preview: asset ? asset.mediaType === 'IMAGE' ? asset.url : asset.posterUrl : null,
           alt: item.alt ?? asset?.alt ?? '',
         } })
+        photoSource = media.source === 'locale' || media.source === 'all-languages' ? 'listing' : 'shared'
       } catch { productMediaError = 'Saved media needs attention. Open the gallery to inspect it.' }
+      // Owner 2026-10-05 — the eBay Image URLs column shows the photos of the Product media cell (what Publish sends), never
+      // the raw store: after a save in Product media the old list is gone and the column read blank.
+      if (coordinate?.channel === 'EBAY' && values.imageUrls && photoSource && !productMediaError) {
+        values.imageUrls = ebayPhotoCell(values.imageUrls, photoSource === 'image-urls' ? legacy! : (productMedia ?? []).flatMap(item => item.type === 'IMAGE' && item.preview ? [item.preview] : []),
+          photoSource, { hasAlias: projection.id !== null, rootId })
+      }
 
       const axisValues = axisValuesFromCells(variationBag(product as never), root.variationAxes ?? [], values)   // R-23 (Step 2.6c): the store first; it read the legacy bag only
 
@@ -1773,6 +1825,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         productMedia,
         ...(productMediaError ? { productMediaError } : {}),
         ...(productMediaSet ? { productMediaSet } : {}),
+        ...(photoSource === 'image-urls' ? { productMediaSource: 'image-urls' as const } : {}),
         axisValues,
         aliasId: projection.id,
         values: { ...values, ...relationshipValues({ parentId: product.parentId, isParent }, product.parentId ? root.sku : null) },

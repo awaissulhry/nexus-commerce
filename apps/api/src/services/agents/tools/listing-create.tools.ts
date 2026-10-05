@@ -33,6 +33,9 @@ import { connectionLabel } from '../../connection-label.js'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 import { isListingContentKey } from './listing-content-keys.js'
+import { ebayListingPhotos, legacyPhotoItems, photoAddresses } from '../../images/listing-photos.pure.js'
+import { isOnMediaPlan } from '../../images/media-plan-switch.js'
+import { marketLanguages } from '../../pim/market-languages.js'
 
 const DRAFT_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
@@ -398,8 +401,42 @@ async function currentValues(c: Coordinate, keys: string[]): Promise<{ values: R
     values[key] = { value: cell.value ?? null, own: cell.provenance === 'override' }
     labels[key] = cell.label ?? key
   }
+  // Owner 2026-10-05 (review 6) — an eBay listing's Image URLs are the photos Publish sends, not the old store the cell
+  // reads (a settle moves it into Product media): the before an undo puts back, and the after it checks.
+  if (c.channel === 'EBAY' && values.attr_imageUrls) {
+    const photos = (await ebayPhotoFacts(c))?.photos
+    if (photos) values.attr_imageUrls = { value: photos.urls, own: photos.own }
+  }
   const known = Object.keys(cells).filter((k) => !NOT_HERE.test(k) && !isListingContentKey(k)).sort().map((k) => `attr_${k}`)
   return { values, labels, unknown, known }
+}
+
+/**
+ * Owner 2026-10-05 — one eBay listing's photos as Publish sends them (`ebayListingPhotos`): its own list (an old Image URLs
+ * list, or Product media saved on it) or the Shared product's it follows (`own` false), with the media library they are
+ * read from. `photos` undefined when the saved list cannot be read: the resolved cell then stands.
+ */
+async function ebayPhotoFacts(c: Coordinate) {
+  const [listing, product] = await Promise.all([
+    prisma.channelListing.findFirst({ where: { productId: c.productId, channel: 'EBAY', marketplace: c.market, channelConnectionId: c.accountId, aliasKey: c.aliasKey }, select: { platformAttributes: true } }),
+    prisma.product.findFirst({ where: { id: c.productId }, select: { id: true, parentId: true, localizedContent: true } }),
+  ])
+  if (!listing || !product) return undefined
+  const parent = product.parentId ? await prisma.product.findFirst({ where: { id: product.parentId }, select: { id: true, localizedContent: true } }) : null
+  const files = await prisma.productImage.findMany({ where: { productId: { in: [product.id, ...(parent ? [parent.id] : [])] } }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    select: { id: true, productId: true, url: true, mediaType: true } })
+  const locale = (await marketLanguages('EBAY', c.market).catch(() => []))[0] ?? 'und'
+  return { files, productId: product.id, photos: ebayListingPhotos({ listingAttributes: listing.platformAttributes, locale, product, parent, files }) }
+}
+
+/** Owner 2026-10-05 — what becomes of an eBay Image URLs list this change sets (`settleListingPhotos`), said in its preview. */
+async function ebayPhotoNote(c: Coordinate, urls: unknown[]) {
+  if (await isOnMediaPlan(c.rootId)) return 'This family\'s photos are managed on the Media page: Publish sends the photo plan, and this list is kept on the listing as its Image URLs.'
+  const facts = await ebayPhotoFacts(c)
+  const outside = facts ? legacyPhotoItems(photoAddresses(urls), facts.files, facts.productId).outside.length : 1
+  return outside
+    ? `${outside === 1 ? 'An address is' : `${outside} addresses are`} not a photo of the media library: the list stays this listing's Image URLs list (Publish sends it as written) until it is saved in Product media.`
+    : 'Every address is a photo of the media library: the list becomes this listing\'s Product media, in this order, when the change runs.'
 }
 
 const clipValue = (value: unknown) => {
@@ -505,6 +542,8 @@ async function planSetFields(args: Record<string, unknown>, userId: string | nul
       c, kind, version: null,
       before: { coordinate: c, kind, listingId, values: plan.before },
       preview: { action: 'set-listing-fields', sku: c.sku, destination, changes,
+        // Owner 2026-10-05 — Product media is the one photo source of an eBay listing: what becomes of the list it sets.
+        ...(c.channel === 'EBAY' && Array.isArray(plan.values.attr_imageUrls) ? { note: await ebayPhotoNote(c, plan.values.attr_imageUrls) } : {}),
         ...(plan.warnings.length ? {
           warnings: plan.warnings.map((w) => `${w.field}: ${w.warning}`),
           warning: `Saved in Nexus, but ${new Set(plan.warnings.map((w) => w.field)).size === 1 ? 'this value is' : 'these values are'} likely `
