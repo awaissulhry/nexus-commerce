@@ -23,8 +23,11 @@ import prisma from '../../db.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { channelLabel } from '@nexus/shared/channel-label'
 import type { ListingModel } from '@nexus/shared/listing-actions'
-import { listingActionGate, ListingActionError, planListingAction, previewListingAction, readListingActionState, runListingAction } from './listing-action.service.js'
+import { ENDED_USE_RELIST, listingActionGate, ListingActionError, planListingAction, previewListingAction, readListingActionState, runListingAction } from './listing-action.service.js'
 import { clearOldCloseMarks } from './listing-action-adapters/hold.js'
+
+/** reopen-listing on an Ended listing: the engine says "use Relist"; Claude's Relist is relist-listing. */
+export const ENDED_USE_RELIST_TOOL = 'Ended — use relist-listing (on eBay it gets a NEW item number).'
 
 export type CloseAction = 'close' | 'reopen'
 const ENGINE_ACTION = { close: 'pause', reopen: 'resume' } as const
@@ -116,7 +119,8 @@ export async function planListingClose(listingIds: readonly string[], action: Cl
       if (!namedProducts.has(row.productId) || !row.listingId) continue
       // A main product follows its variations: listed, not refused.
       if (row.plan === 'skip' && /follows its variations/.test(row.sentence)) { rows.push({ ...base, listingId: row.listingId, does: 'skip', closed: action === 'reopen', note: row.sentence }); continue }
-      refusals.push(`${where}: ${row.sentence}`)
+      // An Ended listing is relisted, not resumed: Claude's door for that is relist-listing.
+      refusals.push(`${where}: ${action === 'reopen' && row.sentence === ENDED_USE_RELIST ? ENDED_USE_RELIST_TOOL : row.sentence}`)
     }
     consequences.push(plan.consequence)
     checkedAtSend = checkedAtSend ?? plan.checkedAtSend

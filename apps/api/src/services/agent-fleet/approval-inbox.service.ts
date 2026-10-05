@@ -928,6 +928,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // L9 — each listing and how its channel closes or reopens it (and the eBay quantity a reopen pins).
   'close-listing': ['listings', 'how'],
   'reopen-listing': ['listings', 'how', 'quantity'],
+  // Phase 3 (T1) — End, Relist and Delete: each listing and what the engine does to it, every row's state as it was (its
+  // from → to), and the engine's consequence. The FBA unit count in `warning` names its read time, so it is not material.
+  'end-listing': ['listings', 'changes', 'how'],
+  'relist-listing': ['listings', 'changes', 'how'],
+  'delete-listing': ['listings', 'changes', 'how'],
   // L10 — the photo layer, the revision it was read at and the plan the edit leaves it with.
   'arrange-photos': ['layer', 'revision', 'after'],
   'add-photo-from-url': ['family', 'place', 'host', 'contentHash', 'bytes'],

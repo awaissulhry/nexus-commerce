@@ -27,14 +27,14 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // T11 — the three content tools that read a channel live (a Shopify store, a listing on its channel) are open world too.
 // I8/I9 — channel-identity-check reads the marketplace live; link-channel-id verifies on the channel before it asks.
 // L8 — stock and price per listing reach the channels (the Matrix door queues the pushes); a revert sends the old values.
-// L9 — closing and reopening a listing changes it on the channel.
+// L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 const OPEN_WORLD = [
   'add-photo-from-url', 'advance-purchase-order', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
   'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
-  'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'dispose-return-items',
-  'ebay-keywords-change', 'email-supplier', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
+  'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
+  'ebay-keywords-change', 'email-supplier', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
-  'publish-review', 'receive-stock', 'reconcile-stock-count', 'reopen-listing', 'reply-to-review', 'request-review', 'resend-prices',
+  'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'reply-to-review', 'request-review', 'resend-prices',
   'reserve-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-campaign-budget', 'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion',

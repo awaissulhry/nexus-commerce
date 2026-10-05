@@ -138,6 +138,8 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   inventory: { part: '08', feature: 33 },
   'job-monitor': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },
   'keyword-actions': { part: '01', feature: 17 },
+  // The listing-action engine's doors (the sheet's Status column and the Action column's Delete).
+  'listing-actions': { part: '02', feature: 2, also: 'covered: Pause offer and Resume offer are close-listing and reopen-listing; End listing, Relist and Delete listing are end-listing, relist-listing and delete-listing (the same preview and run); the state read is listing-matrix (selling)' },
   'listing-automation-rules': { part: '06', feature: 43 },
   'listing-content': { excluded: 'AI generation inside Nexus spends the Nexus AI budget; Claude writes its own text', feature: 16 },
   'listing-health': { part: '02', feature: 2 },
@@ -191,6 +193,9 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'products-sheet': { part: '03', feature: 5 },
   products: { part: '02', feature: 1 },
   profile: { excluded: 'sign-in, passwords, 2FA, sessions, invitations, personal profile: never for Claude (09 §2)', feature: 55 },
+  'publication-batches': { part: '02', feature: 2, also: 'not covered: no tool makes or follows a background Publish batch (many families or markets, mixed Status changes); Claude publishes one family and destination per publish-listing (several in one submit-change-plan) and changes a status with close-, reopen-, end-, relist- or delete-listing' },
+  'publication-history': { part: '02', feature: 2, also: 'partly: publication-status reads one studio publication’s stored result and claude-activity what Claude changed; the history list, its counts and a listing’s raw request have no tool' },
+  'publish-actions': { part: '02', feature: 2, also: 'not covered: no tool reads or writes the sheet’s waiting Status and Action values (a person’s choices for their own Publish); Claude makes those changes directly with close-, reopen-, end-, relist- and delete-listing, each approved in Nexus, and publish-listing follows a Status a person chose' },
   'push-health': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },
   'push-latency': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },
   reconciliation: { part: '04', feature: 9 },
