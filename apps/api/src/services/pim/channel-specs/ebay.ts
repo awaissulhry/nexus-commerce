@@ -189,7 +189,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     // Wave 2 (Owner decision 7) — blank sends nothing (it sent <VATPercent>0</VATPercent>).
     listing('vatRate', 'Aliquota IVA', 'VAT rate (%)', { kind: 'number', channelStore: pa('vatRate'), helpText: `A number from 0 to 100. ${BLANK_NONE}` }),
     listing('videoId', 'Video', sheetName('videoId', 'EBAY')!, { kind: 'text', channelStore: pa('videoId'), helpText: BLANK_NONE }),
-    listing('imageUrls', 'Immagini', 'Image URLs', { kind: 'text', shape: 'list', cardinality: { min: 1, max: 24 }, channelStore: pa('imageUrls'), helpText: 'The listing\'s picture URLs, in order — the Images tab publishes them; this column reads the same store.' }),
+    listing('imageUrls', 'Immagini', 'Image URLs', { kind: 'text', shape: 'list', cardinality: { min: 1, max: 24 }, channelStore: { kind: 'platformAttributes', path: ['imageUrls'], replaces: [['_productMediaLocales']] },
+      // Owner 2026-10-05 — Product media is the one photo source: a write here replaces the listing's Product media, then
+      // the photos move into it (`settleListingPhotos`: library photos by address, others added to the library).
+      helpText: 'The listing\'s photo addresses, in order. They are this listing\'s Product media: a photo of the media library is used from the library, any other address is added to it.' }),
     listing('paymentPolicyId', 'Regola di pagamento', 'Payment policy', { kind: 'text', channelStore: pa('paymentPolicyId'), helpText: BLANK_POLICY }),
     listing('returnPolicyId', 'Regola di restituzione', 'Return policy', { kind: 'text', channelStore: pa('returnPolicyId'), helpText: BLANK_POLICY }),
     listing('fulfillmentPolicyId', 'Regola di spedizione', 'Shipping policy', { kind: 'text', channelStore: pa('fulfillmentPolicyId'), helpText: BLANK_POLICY }),

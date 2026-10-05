@@ -12,6 +12,7 @@ import { renderListingDescriptionSafe } from '../ebay-description-theme.service.
 import { ebayAuthService } from '../ebay-auth.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { publicationImages } from './studio-publication-media.js'
+import { ebayVariationPhotoSets, legacyImageUrls, rowHasOwnPhotos } from './ebay-variation-photos.js'
 import { readEbayMediaGallery } from '../images/ebay-media-workspace.service.js'
 import { inspectMediaDraft } from '@nexus/shared/ebay-media'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
@@ -441,6 +442,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   const moves: EbaySkuMove[] = []
   const packages = new Map<string, string>()
   const galleries = new Map<string, string[]>()
+  const ownPhotos = new Set<string>()
   let settings: Record<string, any> = {}
   const exclusionsFor = pushExclusionsCache()
   // Round 6 — the currency this publication sends its prices in (the destination market's; `listingSendPrice` below).
@@ -544,11 +546,11 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     row[`${scope.marketplace.toLowerCase()}_price`] = price
     row[`${scope.marketplace.toLowerCase()}_qty`] = quantity
     if (!onPlan) {
-      const images = pa._productMediaLocales !== undefined ? publicationImages(facts, product)
-        : Array.isArray(pa.imageUrls) ? pa.imageUrls as string[] : publicationImages(facts, product)
+      const images = legacyImageUrls(pa) ?? publicationImages(facts, product)
       if (images.length > 24) problems.add(`${ebayFieldLabel('pictures')}: eBay takes at most 24 photos; this row has ${images.length}.`, { ...at, field: 'pictures' })
       if (images.some(url => !/^https:\/\//i.test(url))) problems.add(`${ebayFieldLabel('pictures')}: eBay needs every photo as a public https:// link.`, { ...at, field: 'pictures' })
       galleries.set(product.id, images)
+      if (rowHasOwnPhotos({ listingAttributes: pa, productContent: product.localizedContent, ownFileCount: product.images.length, locale: facts.languages?.[0] ?? 'und' })) ownPhotos.add(product.id)
       for (let i = 0; i < 6; i++) row[`image_${i + 1}`] = images[i] ?? ''
     }
     rows.push(row)
@@ -586,7 +588,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   // Wave 2 (C6) — a note, not a refusal: a variation's own package is never sent (eBay takes the main row's, above).
   if (differing.length) problems.note(`${ebayFieldLabel('package')}: eBay takes one package for the whole listing, from the main row. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds a different package; it is' : 'hold a different package; they are'} not sent, and eBay takes the main row's package.`)
   if (!options.problems || !shared) problems.throwIfAny()
-  return { shared: shared!, itemId, parentListing, settings, galleries, variants, identities, moves, media: onPlan ? { channelValues } : null }
+  return { shared: shared!, itemId, parentListing, settings, galleries, ownPhotos, variants, identities, moves, media: onPlan ? { channelValues } : null }
 }
 
 /** Images rebuild P2c — the plan's eBay layout, checked, as the Trading/Inventory input's pictures (screen order = payload order). */
@@ -711,7 +713,7 @@ function ebayOfferChecks(input: { settings: Record<string, any>; shared: AddFixe
 async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>, problems: EbayProblems, live: boolean,
   options: { inactive?: boolean } = {}) {
   const { scope, parent, products } = facts
-  const { shared, itemId, parentListing, settings, galleries, variants } = built
+  const { shared, itemId, parentListing, settings, galleries } = built
   const main = { productId: parent.id, sku: parent.sku }
   // Audit P10 — the condition, named before eBay sees it (the pre-flight `ebay-shared-listing-push.service.ts` runs). A new
   // listing needs one on its main row (Owner 2026-10-01: required there, never a silent New); a word eBay does not know is
@@ -749,14 +751,20 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
     try { await ebayPicturesFromPlan(facts, shared, built.media.channelValues, problems) }
     catch (error) { problems.add(error instanceof Error ? error.message : String(error), { field: 'pictures' }) }
   }
-  else shared.pictureUrls = galleries.get(parent.id) ?? []
-  if (!built.media && shared.variationPictures) {
-    const axis = shared.variationPictures.axisName
-    for (const [value] of Object.entries(shared.variationPictures.byValue)) {
-      const matching = variants.filter(row => String(row[`aspect_${axis.replace(/ /g, '_')}`]) === value)
-      const urls = [...new Set(matching.flatMap(row => galleries.get(String(row._productId)) ?? []))]
-      if (urls.length > 24) problems.add(`The ${value} photos: eBay takes at most 24 per variation; there are ${urls.length}.`, { field: 'variationPictures' })
-      if (urls.length) shared.variationPictures.byValue[value] = urls
+  else {
+    shared.pictureUrls = galleries.get(parent.id) ?? []
+    // Product media is the one source (Owner 2026-10-05): each variation row's own Product media is the photo set eBay
+    // shows for its value. Off the photo plan these sets were never sent before.
+    if (products.length > 1) {
+      const productOf = new Map(built.identities.map(identity => [identity.sku, identity.productId]))
+      const photos = ebayVariationPhotoSets({ names: shared.variationSpecificNames, order: shared.variationSpecificsSet, gallery: shared.pictureUrls,
+        rows: shared.variations.flatMap(variation => {
+          const productId = productOf.get(variation.sku)
+          return productId ? [{ sku: variation.sku, specifics: variation.specifics, urls: galleries.get(productId) ?? [], own: built.ownPhotos.has(productId) }] : []
+        }) })
+      for (const problem of photos.problems) problems.add(problem, { field: 'variationPictures' })
+      if (photos.note) problems.note(photos.note)
+      shared.variationPictures = photos.sets
     }
   }
   let policies = { fulfillmentPolicyId: shared.policies?.fulfillmentPolicyId ?? defaults.fulfillmentPolicyId,

@@ -66,6 +66,7 @@ import { UnknownMarketError, VARIATION_THEME_KEY, issueFieldLabel, type SheetCol
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
 import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
+import { legacyImageUrls, legacyPhotoItems } from '../images/listing-photos.pure.js'
 import { sheetMediaPlan } from '../images/media-plan.service.js'
 import { getStudioColumns } from './studio-columns.js'
 import { withCachedSchemas } from './cached-schema-context.js'
@@ -1676,10 +1677,19 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const ownFace = pickFaceImage(ownImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE'))
       const face = ownFace ?? (isParent ? null : pickFaceImage(parentImages.filter(image => (image.mediaType ?? 'IMAGE') === 'IMAGE')))
       let productMedia: StudioRow['productMedia'], productMediaError: string | undefined, productMediaSet: StudioRow['productMediaSet']
+      // Owner 2026-10-05 — the cell shows what Publish sends: an eBay listing with no Product media saved yet still sends
+      // its old Image URLs list, so the cell shows that list (a library file by its id, any other photo by its address).
+      const legacy = !mediaPlan && coordinate?.channel === 'EBAY' ? legacyImageUrls(listingRow?.platformAttributes) : undefined
       if (mediaPlan) {
         const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
         productMedia = cell.items
         productMediaSet = cell.set
+      } else if (legacy) {
+        // The same ids as the Product media editor (`legacyPhotoItems`), so a drag or a paste in the cell matches it.
+        const library = [...ownImages, ...(isParent ? [] : parentImages)]
+        const { items, outside } = legacyPhotoItems(legacy, library.map(image => ({ ...image, productId: ownImages.includes(image) ? product.id : root.id })), product.id)
+        productMedia = items.map(item => { const asset = library.find(image => image.id === item.assetId)
+          return { id: item.assetId, type: 'IMAGE', preview: asset?.url ?? outside.find(photo => photo.id === item.assetId)!.url, alt: asset?.alt ?? '' } })
       } else try {
         const media = resolveMediaCollection({ locale: mediaLocaleSchema.parse(input.locale ?? marketLocale),
           own: coordinate ? mediaObject(listingRow?.platformAttributes)._productMediaLocales : product.localizedContent,
