@@ -167,6 +167,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'transactional eBay order writer (atomic lines and stock, shortfalls, races, locks, attribution)', file: 'src/services/ebay-order-writer-postgres.vitest.test.ts', expect: 32 },
   { name: 'eBay mixed own and pool stock (global Product locks, durable cancellation retries)', file: 'src/services/ebay-order-pool-postgres.vitest.test.ts', expect: 12 },
   { name: 'dormant eBay ORDER_CONFIRMATION execution (one read, own account, atomic receipt)', file: 'src/services/cx/ingress/ebay-order-processing-postgres.vitest.test.ts', expect: 13 },
+  { name: 'eBay order notice run now (a kick and the minute sweep at once: one claim, one read, one write; holds, other business, sweep fallback)', file: 'src/workers/ebay-order-notice-postgres.vitest.test.ts', expect: 5 },
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
   { name: 'invoice and credit-note numbers (counter conflict key; sequential, and a forced race gives 1…N with no duplicate or gap; two businesses each number their own series)', file: 'src/services/fiscal-numbering-postgres.vitest.test.ts', expect: 6 },
   { name: 'refund cap under a forced race (two returns of one order: what was paid is never exceeded)', file: 'src/services/refunds/refund-cap-postgres.vitest.test.ts', expect: 2 },
