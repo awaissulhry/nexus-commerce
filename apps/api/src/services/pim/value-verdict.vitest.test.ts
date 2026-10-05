@@ -84,7 +84,7 @@ describe('validateChannelValue — findings carry the rule behind each sentence'
     expect(validateChannelValue(field(condition), 'used')).toMatchObject({ value: 'USED_EXCELLENT', findings: [] })
     const shared = validateChannelValue(field({ ...condition, optionAliases: { NEW: ['Used'] } }), 'Used')
     expect(shared.findings.map(f => f.rule)).toEqual(['offList'])
-    expect(shared.findings[0].message).toContain('New with tags · Used')
+    expect(shared.findings[0].message).toBe('Field: "Used" is not one of this column\'s options. Allowed: New with tags, Used.')
   })
   it('names off-list, deprecated and over-limit problems by rule', () => {
     const checked = validateChannelValue(field({ options: ['A', 'B'], selectionOnly: true, deprecatedOptions: ['B'], maxLength: 1 }), 'C')
