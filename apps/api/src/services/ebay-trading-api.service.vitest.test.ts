@@ -50,6 +50,41 @@ describe('buildReviseInventoryStatusXml', () => {
     const xmlNeg = buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', quantity: -3 })
     expect(xmlNeg).toContain('<Quantity>0</Quantity>')
   })
+  it('a quantity-only request is byte-for-byte the one sent before StartPrice existed', () => {
+    expect(xml).toBe(`<?xml version="1.0" encoding="UTF-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <InventoryStatus>
+    <ItemID>110556677</ItemID>
+    <SKU>LNR-BLK-M</SKU>
+    <Quantity>7</Quantity>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>`)
+  })
+})
+
+// 2026-10-06 (Trading stock sync) — a Trading listing's price row: StartPrice in the market's currency, same InventoryStatus.
+describe('buildReviseInventoryStatusXml — StartPrice', () => {
+  it('a price alone: StartPrice with its currency and two decimals, no Quantity', () => {
+    const xml = buildReviseInventoryStatusXml({ itemId: '110556677', sku: 'LNR-BLK-M', price: 19.9, currency: 'EUR' })
+    expect(xml).toContain('<StartPrice currencyID="EUR">19.90</StartPrice>')
+    expect(xml).not.toContain('<Quantity>')
+  })
+  it('a quantity and a price in one InventoryStatus', () => {
+    const xml = buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', quantity: 2, price: 12.5, currency: 'GBP' })
+    expect(xml).toContain(`  <InventoryStatus>
+    <ItemID>1</ItemID>
+    <SKU>S</SKU>
+    <Quantity>2</Quantity>
+    <StartPrice currencyID="GBP">12.50</StartPrice>
+  </InventoryStatus>`)
+    expect(xml.match(/<InventoryStatus>/g)).toHaveLength(1)
+  })
+  it('refuses a request with nothing to change, a price that is not a positive number, or a price with no currency', () => {
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S' })).toThrow(/quantity or a price/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: 0, currency: 'EUR' })).toThrow(/positive number/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: Number.NaN, currency: 'EUR' })).toThrow(/positive number/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: 10 })).toThrow(/currency/)
+  })
 })
 
 import { buildAddFixedPriceItemXml } from './ebay-trading-api.service.js'
