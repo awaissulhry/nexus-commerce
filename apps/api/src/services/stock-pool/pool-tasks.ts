@@ -128,10 +128,16 @@ export async function processStockPoolTasks(): Promise<StockPoolRun> {
   for (const { task, error } of failures) {
     run.failed++
     // Released now, due again after its back-off (stock-pool.sql's nexus_pool_pending_workspaces reads the same columns).
-    await prisma.$executeRaw(Prisma.sql`
+    // Only while this run still holds the claim: a claim older than STALE_CLAIM can be taken by another run, which
+    // bumps `attempts`; releasing it then would clear that live claim and let a third run take the task alongside.
+    const released = await prisma.$executeRaw(Prisma.sql`
       UPDATE "StockPoolTask" SET "lastError" = ${error.slice(0, 500)}, "claimedAt" = NULL,
         "retryAt" = CURRENT_TIMESTAMP + ${retryDelayMs(task.attempts)}::double precision * interval '1 millisecond'
-      WHERE id = ${task.id}`)
+      WHERE id = ${task.id} AND attempts = ${task.attempts}`)
+    if (released === 0) {
+      logger.warn('[stock-pool] task failed after another run took it over; that run owns it now', { taskId: task.id, kind: task.kind, productId: task.productId, attempts: task.attempts, error: error.slice(0, 200) })
+      continue
+    }
     logger.warn('[stock-pool] task failed; it will be retried', { taskId: task.id, kind: task.kind, productId: task.productId, attempts: task.attempts, retryInMs: retryDelayMs(task.attempts), error: error.slice(0, 200) })
     if (task.attempts === MAX_ATTEMPTS) {
       await notifyOwners({

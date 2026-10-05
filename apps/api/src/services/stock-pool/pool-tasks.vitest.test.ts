@@ -109,6 +109,26 @@ describe('pool tasks — a failed task is released with a back-off', () => {
     expect(fake.notify).toHaveBeenCalledTimes(1)
   })
 
+  it('a run whose claim another run took over leaves that claim alone when it fails', async () => {
+    // The first run outlives its claim: meanwhile another run takes the task over (a fresh claim, attempts 2), and
+    // then the first run's recascade fails.
+    fake.recascade.mockImplementationOnce(async () => {
+      await sql(`UPDATE "StockPoolTask" SET attempts = attempts + 1, "claimedAt" = CURRENT_TIMESTAMP`)
+      throw new Error('lock timeout')
+    })
+    await queue()
+    expect(await inB(() => tasks.processStockPoolTasks())).toMatchObject({ claimed: 1, failed: 1 })
+    const row = await task()
+    expect(row.claimedAt).not.toBeNull() // the other run's claim stands
+    expect(row.attempts).toBe(2)
+    expect(row.retryAt).toBeNull()
+    expect(row.lastError).toBeNull()
+    // So no third run takes it while the second works.
+    expect(await pending()).toEqual([])
+    expect(await inB(() => tasks.processStockPoolTasks())).toMatchObject({ claimed: 0 })
+    expect(fake.recascade).toHaveBeenCalledTimes(1)
+  })
+
   it('a claim older than two minutes (a runner that died) is still taken again, whatever its retry time', async () => {
     fake.recascade.mockResolvedValue({ ok: true })
     await queue(', "claimedAt", "retryAt"', `, CURRENT_TIMESTAMP - interval '3 minutes', CURRENT_TIMESTAMP + interval '1 hour'`)
