@@ -362,3 +362,78 @@ describe('the sheet\'s door (channel-id.service): main row only, fenced, as the 
     expect(kept).toMatchObject({ rows: [], sentence: 'eBay confirms item 520000000001; Nexus already holds it. Nothing changed.' })
   }, TIMEOUT)
 })
+
+describe('an adopted extra listing (2026-10-05, normal-knee-slider ALT1): Link adds the rows eBay sells, and never touches the main listing\'s records', () => {
+  const KNEE = ['IDC-KNEE-BLUE', 'IDC-KNEE-GREEN', 'IDC-KNEE-RED']
+  const SHELL = 'IDC-KNEE-ALT1~merged-0000abcd'
+  const memberships = () => inside(() => db().sharedListingMembership.findMany({ where: { sku: { in: KNEE } }, orderBy: [{ parentSku: 'asc' }, { sku: 'asc' }] }))
+  beforeAll(async () => {
+    const client = db()
+    await inside(async () => {
+      const make = async (sku: string, extra: Data = {}) => { ids[sku] = (await client.product.create({ data: { sku, name: sku, basePrice: '10.00', ...extra } })).id }
+      await make('IDC-KNEE', { isParent: true })
+      for (const sku of KNEE) await make(sku, { parentId: ids['IDC-KNEE'] })
+      // merge-duplicate-products trashed the shell with a tombstone SKU when it adopted its listing.
+      await make(SHELL, { productType: 'EBAY_LISTING_SHELL', deletedAt: new Date() })
+      const base = { channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: ids.ebay }
+      // The main listing sells item 500; GREEN is left out of it on purpose (no row).
+      for (const sku of ['IDC-KNEE', 'IDC-KNEE-BLUE', 'IDC-KNEE-RED']) {
+        ids[`main:${sku}`] = (await client.channelListing.create({ data: { ...base, productId: ids[sku], listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: '520000000500' } })).id
+      }
+      // The adopted shell: an extra listing whose main row holds item 501, and no variation row yet.
+      ids.kneeAlias = (await client.productListingAlias.create({ data: { productId: ids['IDC-KNEE'], channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, label: 'IDC-KNEE-ALT1', position: 1, adoptedFromProductId: ids[SHELL] } })).id
+      ids.kneeAliasMain = (await client.channelListing.create({ data: { ...base, productId: ids['IDC-KNEE'], aliasId: ids.kneeAlias, aliasKey: ids.kneeAlias, listingStatus: 'DRAFT', isPublished: true, syncPaused: false, externalListingId: '520000000501' } })).id
+      // The old flat file's shared variation rows: the main listing's name the family's SKU, the shell's its old SKU.
+      for (const [parentSku, itemId] of [['IDC-KNEE', '520000000500'], ['IDC-KNEE-ALT1', '520000000501']]) {
+        for (const sku of KNEE) await client.sharedListingMembership.create({ data: { marketplace: 'IT', sku, itemId, parentSku, productId: ids[sku], variationSpecifics: { Colore: sku }, channelConnectionId: ids.ebay } })
+      }
+    })
+  }, TIMEOUT)
+
+  it('the main listing keeps its rule: a variation with no row there (GREEN) is left out on purpose, even when eBay sells it', async () => {
+    items.set('520000000500', item('520000000500', { skus: KNEE }))
+    const out = await inside(() => checkChannelId(ids['main:IDC-KNEE']))
+    expect(out).toMatchObject({ ok: true, refusal: null, unchanged: true })
+    expect(out.found.join(' ')).not.toContain('Linking adds')
+  }, TIMEOUT)
+
+  it('Check: the shell\'s own records are not another family\'s; the link carries the main row and adds the variations eBay sells on item 501', async () => {
+    items.set('520000000501', item('520000000501', { skus: ['IDC-KNEE-BLUE', 'IDC-KNEE-RED'] }))
+    const out = await inside(() => checkChannelId(ids.kneeAliasMain))
+    expect(out).toMatchObject({ ok: true, refusal: null, verdict: 'verified', status: 'ACTIVE', unchanged: false, currentId: '520000000501' })
+    expect(out.rows.map((r) => r.sku)).toEqual(['IDC-KNEE'])
+    expect(out.found).toContain('This listing has no row yet for 2 variations eBay sells on this item (IDC-KNEE-BLUE, IDC-KNEE-RED): Linking adds their rows.')
+    const plan = await inside(() => planLink(ids.kneeAliasMain, { externalId: '520000000501' }))
+    expect(plan.proof?.adds?.map((a) => [a.sku, a.channelSku])).toEqual([['IDC-KNEE-BLUE', 'IDC-KNEE-BLUE'], ['IDC-KNEE-RED', 'IDC-KNEE-RED']])
+  }, TIMEOUT)
+
+  it('Link: BLUE and RED get linked rows on the extra listing (eBay\'s status, paused, the SKU eBay proved), GREEN none; the main listing and its records stay on item 500', async () => {
+    items.set('520000000501', item('520000000501', { skus: ['IDC-KNEE-BLUE', 'IDC-KNEE-RED'] }))
+    const record = await inside(() => runLink(ids.kneeAliasMain, { externalId: '520000000501', expectedExternalId: '520000000501', actor: ids.user }))
+    expect(record.added?.map((a) => a.sku)).toEqual(['IDC-KNEE-BLUE', 'IDC-KNEE-RED'])
+    const aliasRows = await inside(() => db().channelListing.findMany({ where: { aliasKey: ids.kneeAlias }, include: { product: { select: { sku: true } } } }))
+    const bySku = (r: Data) => [r.product.sku, r.externalListingId, r.listingStatus, r.isPublished, r.syncPaused, r.aliasId, r.liveChannelSku ?? null]
+    expect(aliasRows.map(bySku).sort()).toEqual([
+      ['IDC-KNEE', '520000000501', 'ACTIVE', true, true, ids.kneeAlias, null],
+      ['IDC-KNEE-BLUE', '520000000501', 'ACTIVE', true, true, ids.kneeAlias, 'IDC-KNEE-BLUE'],
+      ['IDC-KNEE-RED', '520000000501', 'ACTIVE', true, true, ids.kneeAlias, 'IDC-KNEE-RED'],
+    ])
+    expect((await rows('main:IDC-KNEE', 'main:IDC-KNEE-BLUE', 'main:IDC-KNEE-RED')).map(shape)).toEqual(Array(3).fill(['520000000500', 'ACTIVE', true, false]))
+    expect((await memberships()).map((m: Data) => [m.parentSku, m.itemId, m.status])).toEqual([
+      ...KNEE.map(() => ['IDC-KNEE', '520000000500', 'ACTIVE']), ...KNEE.map(() => ['IDC-KNEE-ALT1', '520000000501', 'ACTIVE']),
+    ])
+    // Linked again: nothing to change. The listing has variation rows now, so a variation eBay adds later is not added here.
+    items.set('520000000501', item('520000000501', { skus: KNEE }))
+    const again = await inside(() => checkChannelId(ids.kneeAliasMain))
+    expect(again).toMatchObject({ ok: true, unchanged: true })
+    expect(again.found.join(' ')).not.toContain('Linking adds')
+  }, TIMEOUT)
+
+  it('Unlink of the extra listing ends ITS shared variation rows only; the main listing\'s stay live', async () => {
+    const record = await inside(() => runUnlink(ids.kneeAliasMain, '520000000501', ids.user))
+    expect(record.membershipIds).toHaveLength(3)
+    expect((await memberships()).map((m: Data) => [m.parentSku, m.status])).toEqual([
+      ...KNEE.map(() => ['IDC-KNEE', 'ACTIVE']), ...KNEE.map(() => ['IDC-KNEE-ALT1', 'ENDED']),
+    ])
+  }, TIMEOUT)
+})

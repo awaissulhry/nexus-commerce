@@ -70,7 +70,7 @@ async function upload(selection: ProductTransferSelection, bytes: Buffer) {
 }
 const uploadRows = async (selection: ProductTransferSelection, rows: TransferRow[]) => upload(selection, await writeTransferWorkbook(rows, []))
 
-function ebayInput() {
+function ebayInput(options: { tombstone?: boolean } = {}) {
   const book = new ExcelJS.Workbook(), sheet = book.addWorksheet('ebay_it')
   sheet.addRow(['SKU', 'Parent/Child', 'Parent SKU', 'Item ID', 'Listing ID', 'Category ID', 'Title', 'Qty'])
   const selection: ProductTransferSelection = { productIds: ['p0', 'p1'], listingIds: [], includeShared: false, locales: [] }
@@ -79,7 +79,8 @@ function ebayInput() {
   for (const [i, sourceParent] of ['000000', 'LEGACY-ALT1', 'LEGACY-ALT2'].entries()) {
     const aliasKey = i ? `ebay-alias-${i}` : '', itemId = `25656610142${i}`
     if (i) {
-      state.store.data.product.set(`shell-${i}`, { id: `shell-${i}`, sku: sourceParent, parentId: null, deletedAt: new Date() })
+      // `tombstone`: adopted by merge-duplicate-products, which trashes the shell as `<sku>~merged-<id>` (2026-10-05).
+      state.store.data.product.set(`shell-${i}`, { id: `shell-${i}`, sku: options.tombstone ? `${sourceParent}~merged-0000000${i}` : sourceParent, parentId: null, deletedAt: new Date() })
       state.store.data.productListingAlias.set(aliasKey, { id: aliasKey, productId: 'p0', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'ebay-account', label: `Renamed listing ${i}`, status: 'ACTIVE', adoptedFromProductId: `shell-${i}` })
     }
     for (const productId of selection.productIds) {
@@ -112,6 +113,30 @@ it('imports a legacy eBay workbook through product HTTP review and preserves ind
     }
     expect([...state.store.data.product.values()]).toEqual(before)
     expect(state.store.data.outboundSyncQueue.size).toBe(0)
+  } finally {
+    spec.mockRestore()
+    vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } } as never)
+  }
+})
+
+it('imports into extra listings whose shells merge-duplicate-products trashed with a tombstone SKU: the file\'s old SKU still names them', async () => {
+  const input = ebayInput({ tombstone: true }), before = structuredClone([...state.store.data.product.values()])
+  const spec = vi.spyOn(channelSpecs, 'loadEbaySpec').mockResolvedValue(ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: [] }))
+  vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: [{ ...fixtureFields[0], fieldKey: 'title' }], schema: { present: true } } as never)
+  try {
+    const response = await upload(input.selection, Buffer.from(await input.book.xlsx.writeBuffer()))
+    expect(response.statusCode, response.body).toBe(201)
+    const job = await review(response.json().jobId)
+    expect(job.state, JSON.stringify(job)).toBe('QUEUED')
+    expect(job.counts).toMatchObject({ listingsAffected: 6, productsAffected: 0, refused: 0 })
+    expect((await apply(job.jobId, job.reviewToken)).statusCode).toBe(202)
+    await vi.waitFor(async () => expect((await getJob(job.jobId)).state).toBe('COMPLETED'))
+    for (const i of [0, 1, 2]) for (const p of ['p0', 'p1']) {
+      expect([...state.store.data.channelListingTranslation.values()].find(t => t.channelListingId === `${p}-ebay-${i}`)).toMatchObject({ language: 'it', name: `eBay title ${i}` })
+    }
+    // No new listing was made for the old SKUs, and no product changed.
+    expect([...state.store.data.productListingAlias.keys()].sort()).toEqual(['ebay-alias-1', 'ebay-alias-2'])
+    expect([...state.store.data.product.values()]).toEqual(before)
   } finally {
     spec.mockRestore()
     vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } } as never)

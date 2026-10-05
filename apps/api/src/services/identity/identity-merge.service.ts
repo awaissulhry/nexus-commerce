@@ -23,6 +23,9 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { liveProductAdCount } from '../advertising/product-ad-links.service.js'
+import { tombstoneSku } from './tombstone-sku.js'
+
+export { tombstoneSku }
 
 export class IdentityMergeRefusal extends Error {
   constructor(message: string) {
@@ -150,9 +153,6 @@ export interface ReleasedIdentity {
   ebayItemId: string | null
   shopifyProductId: string | null
 }
-
-/** The SKU a trashed duplicate keeps: unique, and never the SKU an order, a file or a channel names. */
-export const tombstoneSku = (sku: string, productId: string) => `${sku}~merged-${productId.slice(-8)}`
 
 /**
  * 0(a) — trash a duplicate so that nothing finds it any more. Order ingest links a line by exact SKU (eBay, Amazon) or by
