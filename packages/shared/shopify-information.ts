@@ -6,6 +6,7 @@ export { informationInventorySchema, inventoryEditError, type InformationInvento
 import { shopifyTypeReason } from './shopify-field-codecs.js'
 import type { ShopifyFieldDefinition, ShopifyFieldSnapshot, ShopifyStoreSchema } from './shopify-linked-products.js'
 import { SHOPIFY_WEIGHT_UNITS } from './shopify-weight.js'
+import { sheetName } from './sheet-names.js'
 export { SHOPIFY_WEIGHT_UNITS, shopifyWeightUnit, normalizeShopifyWeight, shopifyWeightSymbol, shopifyWeightGrams, type ShopifyWeightUnit } from './shopify-weight.js'
 
 export const informationGroups = ['General', 'Publishing', 'Pricing', 'Inventory', 'Shipping', 'SEO', 'Metafields', 'Category Metafields'] as const
@@ -24,8 +25,13 @@ const P = 'PRODUCT', V = 'PRODUCTVARIANT'
 /**
  * Confirmed Nexus equivalents, independent of editable mapping rules and store definitions. `status` is "Shopify status"
  * (D4): the sheet's own Status column (the Publish group) is another control, so the two never share a header.
+ * W3-6 (2026-10-05) — the title, vendor and price read the sheet's naming table (`sheet-names.ts`): "Title", "Vendor",
+ * "Price" (were "Name", "Brand", "Base price"). Display only: a field's identity is its id.
  */
-const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', harmonizedSystemCode: 'HS code', status: 'Shopify status' }
+const nexusLabels: Record<string, string> = {
+  title: sheetName('name', 'SHOPIFY')!, vendor: sheetName('brand', 'SHOPIFY')!, price: sheetName('basePrice', 'SHOPIFY')!,
+  harmonizedSystemCode: 'HS code', status: 'Shopify status',
+}
 /** Shopify's product status codes as people read them (D4). The stored and sent value stays Shopify's code. */
 export const SHOPIFY_STATUS_LABEL: Readonly<Record<string, string>> = { ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' }
 /** A Shopify product status code in words ("ACTIVE" → "Active"); a code Nexus does not know stays as Shopify wrote it. */
@@ -68,7 +74,7 @@ const core: Core[] = [
   ['salesChannels', 'Sales channels', 'Publishing', P, 'publication'],
   ['scheduled', 'Online store schedule', 'Publishing', P, 'boolean', 'Computed from publication schedules. Edit Sales channels to add, change or remove a schedule.'],
   ['publishDate', 'Publish date', 'Publishing', P, 'date_time', 'Shopify’s recorded Online Store publication date. Not set when unpublished. Edit Sales channels to manage publication and future schedules.'],
-  ['price', 'Base price', 'Pricing', V, 'money'],
+  ['price', 'Price', 'Pricing', V, 'money'],
   ['unitPriceMeasurement', 'Unit price', 'Pricing', V, 'measurement'],
   ['compareAtPrice', 'Compare-at price', 'Pricing', V, 'money'],
   ['cost', 'Cost', 'Pricing', V, 'money'],
@@ -104,7 +110,7 @@ export function shopifyMappingFieldKey(field: InformationField, accountId: strin
 
 export function informationRegistry(schema: ShopifyStoreSchema | null): InformationField[] {
   const result: InformationField[] = core.map(([id, label, group, owner, type, reason]) => ({ id, label: nexusLabels[id] ?? label,
-    channelLabel: id === 'price' ? 'Price' : label, group, owner, source: id, type,
+    channelLabel: label, group, owner, source: id, type,
     width: ['title', 'descriptionHtml', 'media'].includes(id) ? 360 : label.length > 23 ? 240 : 160,
     editor: reason ? 'unavailable' : id === 'media' ? 'media' : 'scalar', reason, cardinality: type.startsWith('list.') || id === 'media' ? 'list' : 'scalar',
     sortable: false, filterable: false, permission: 'products.edit', discovery: 'adapter' }))

@@ -36,6 +36,13 @@ describe('the one cell opens its own editor, never a formula selector', () => {
     expect(def.cellEditorParams).toEqual({ slotList: { mode: 'slots', max: 10, maxLength: 700, itemLabel: 'Bullet', label: 'Bullet points' } })
     expect(def.suppressKeyboardEvent).toBe(suppressSlotListKeys)
   })
+  // W3-6 — the sheets' required mark: the header may say more than the list's name; the editor keeps the name.
+  it('the header is the list\'s name, or the header the sheet passes ("Bullet points *")', () => {
+    expect(setup().def.headerName).toBe('Bullet points')
+    const marked = slotListColumnDef<Row>(GROUP, { label: 'Bullet points', headerName: 'Bullet points *', cellOf: (r, k) => r.values[k], setSlot: () => false, rowIdOf: (r) => r.rowId }) as Record<string, any>
+    expect(marked.headerName).toBe('Bullet points *')
+    expect(marked.cellEditorParams.slotList.label).toBe('Bullet points')
+  })
   it('the fill handle is off, no pasted text is parsed, AG infers no data type; 240px', () => {
     const { def } = setup()
     expect(def.suppressFillHandle).toBe(true)

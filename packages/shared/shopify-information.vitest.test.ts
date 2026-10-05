@@ -7,10 +7,14 @@ import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
 describe('Shopify Information field identities', () => {
+  // W3-6 — the sheet's naming table: Title (was "Name"), Vendor (was "Brand"), Price (was "Base price"); Shopify's own
+  // names are kept beside them, and a field's identity is its id.
   it('uses Nexus labels for confirmed equivalents without equating distinct attributes', () => {
     const labels = Object.fromEntries(informationRegistry(schema).map(f => [f.id, f.label]))
-    expect(labels).toMatchObject({ title: 'Name', descriptionHtml: 'Description', sku: 'SKU', cost: 'Cost',
-      'seo.title': 'SEO title', 'seo.description': 'SEO description', handle: 'URL handle', templateSuffix: 'Theme template', vendor: 'Brand', harmonizedSystemCode: 'HS code' })
+    expect(labels).toMatchObject({ title: 'Title', descriptionHtml: 'Description', sku: 'SKU', cost: 'Cost', price: 'Price',
+      'seo.title': 'SEO title', 'seo.description': 'SEO description', handle: 'URL handle', templateSuffix: 'Theme template', vendor: 'Vendor', harmonizedSystemCode: 'HS code' })
+    const channelLabels = Object.fromEntries(informationRegistry(schema).map(f => [f.id, f.channelLabel]))
+    expect(channelLabels).toMatchObject({ title: 'Title', vendor: 'Vendor', price: 'Price', harmonizedSystemCode: 'Harmonized system code' })
   })
   // Wave 2 D4 — Shopify's own status is "Shopify status" (the sheet's Status column is another control); its codes read
   // in Title Case while the stored value stays Shopify's code.

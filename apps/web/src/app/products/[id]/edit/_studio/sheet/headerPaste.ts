@@ -13,11 +13,16 @@
  * skip every other column for that one paste. AG still consumes a skipped column's slot, so the block stays aligned.
  *
  * Matching is the DS's own (`matchPasteToHeaders`: by id or by name, case-insensitive). Before it, a name is trimmed and
- * a trailing " *" (the Shared sheet's required mark) is dropped, on both sides. A name two columns share (the same field
- * in two languages) matches neither — writing to one of them would be a guess; the id still matches. Header cells that
- * land nowhere are named in a note after the paste.
+ * a trailing " *" (the required mark both scopes draw) is dropped, on both sides. A name two columns share (the same
+ * field in two languages) matches neither — writing to one of them would be a guess; the id still matches. Header cells
+ * that land nowhere are named in a note after the paste.
+ *
+ * W3-6 (2026-10-05) — a header a column had BEFORE still lands on it: "Name" on Title, "Base price" on Shopify's Price,
+ * "Quantity" on eBay's Unit quantity (`formerNamesOf`, the sheet's naming table). A current name always wins, and a
+ * former name two columns share lands on neither.
  */
 import { useMemo, useRef } from 'react'
+import { formerNamesOf } from '@nexus/shared/sheet-names'
 import { matchPasteToHeaders, type ColDef, type NexusGridProps } from '@/design-system/grid'
 
 /** A sheet column as the paste sees it: its grid id and its name. */
@@ -56,6 +61,17 @@ export function headerPasteNote(plan: Pick<HeaderPastePlan, 'named' | 'notPasted
 
 const cleanName = (name: unknown): string => String(name ?? '').trim().replace(/\s*\*$/, '').trim()
 
+/** Header cells as the matcher reads them: a cell that names no column now, but one column by a former name, reads as its id. */
+function byFormerNames(header: readonly string[], columns: ReadonlyArray<{ colId?: string; headerName?: string }>): string[] {
+  const current = new Set(columns.flatMap((c) => [c.colId, c.headerName]).filter((n): n is string => !!n).map((n) => n.toLowerCase()))
+  return header.map((name) => {
+    const lower = name.toLowerCase()
+    if (!lower || current.has(lower)) return name
+    const owners = columns.filter((c) => c.colId && formerNamesOf(c.colId).some((former) => former.toLowerCase() === lower))
+    return owners.length === 1 ? owners[0].colId! : name
+  })
+}
+
 /**
  * Where a pasted block lands, by the names in its first row; null when the first row is not a header (fewer than two
  * names match, or there is only one row) and the block pastes as it is. `targets` are the column ids the paste covers,
@@ -65,8 +81,9 @@ export function planHeaderPaste(data: string[][], columns: ReadonlyArray<HeaderP
   if (data.length < 2) return null
   const header = data[0].map(cleanName)
   const cleaned = columns.map((c) => ({ colId: c.colId, headerName: cleanName(c.headerName) || undefined }))
+  const named = byFormerNames(header, cleaned)
   // The DS matcher decides every match. A probe row of source indexes shows where each header cell landed.
-  const probe = [header, header.map((_, i) => String(i))]
+  const probe = [named, header.map((_, i) => String(i))]
   const placed = matchPasteToHeaders(probe, cleaned, targets)
   if (placed === probe) return null
 
@@ -75,7 +92,7 @@ export function planHeaderPaste(data: string[][], columns: ReadonlyArray<HeaderP
   for (const c of cleaned) if (c.headerName) nameCount.set(c.headerName.toLowerCase(), (nameCount.get(c.headerName.toLowerCase()) ?? 0) + 1)
   const ambiguous = (name: string) => !ids.has(name.toLowerCase()) && (nameCount.get(name.toLowerCase()) ?? 0) > 1
 
-  const sourceOf = placed[0].map((cell) => (cell === null || ambiguous(header[Number(cell)]) ? null : Number(cell)))
+  const sourceOf = placed[0].map((cell) => (cell === null || ambiguous(named[Number(cell)]) ? null : Number(cell)))
   const landed = new Set(sourceOf.filter((i): i is number => i !== null))
   return {
     rows: data.slice(1).map((row) => sourceOf.map((i) => (i === null ? '' : row[i] ?? ''))),

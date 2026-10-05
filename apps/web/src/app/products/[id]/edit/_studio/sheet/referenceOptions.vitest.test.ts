@@ -43,6 +43,8 @@ describe('reference choice loading', () => {
     const scope = { market: 'IT', productType: 'COAT', connectionId: 'seller-a' }
     const choices = await loadReferenceChoices('merchant_shipping_group', scope, { live: true })
     expect(choices.options.map(o => o.value)).toEqual(['', 'id'])
+    // W3-6 — the row that empties the cell is "Clear", the DS select's word (was "Not set").
+    expect(choices.options[0].label).toBe('Clear')
     expect(choices.labels.id).toBe('seller-a')
     await loadReferenceChoices('shippingTemplate', scope, { live: true })
     expect(fetcher).toHaveBeenCalledTimes(1)

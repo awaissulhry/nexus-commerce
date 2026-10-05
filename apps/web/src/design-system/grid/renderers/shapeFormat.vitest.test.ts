@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { asList, asMeasure, formatList, formatMeasure, isEmptyShape, listLabelOf, listSummary, shapeTooltipLine, shapeValidation, unitSymbol } from './shapeFormat'
+import { asList, asMeasure, formatList, formatMeasure, isEmptyShape, listLabelOf, listSummary, shapeTooltipLine, shapeValidation, unitChoiceLabels, unitSymbol } from './shapeFormat'
 
 describe('asList / listSummary / formatList', () => {
   it('reads arrays, trims and drops empties, and reads a legacy scalar as one item', () => {
@@ -45,8 +45,10 @@ describe('shapeTooltipLine', () => {
     expect(shapeTooltipLine({ shape: 'list', cardinality: { min: 0, max: 15 }, capFrom: 'Amazon · IT', requiredBy: [] }, ['a', 'b'])).toBe('2 values of up to 15 (Amazon · IT): a · b')
     expect(shapeTooltipLine({ shape: 'list', requiredBy: [] }, [])).toBeUndefined()
   })
-  it('spells the unit out and lists the channel units', () => {
-    expect(shapeTooltipLine({ shape: 'measure', unitOptions: ['grams', 'kilograms'], requiredBy: [] }, { value: 1.2, unit: 'kilograms' })).toBe('1.2 kilograms · units: grams, kilograms')
+  // W3-6 — symbols, not the channel's codes; the stored value keeps the code.
+  it('names the unit and the channel\'s units by their symbols', () => {
+    expect(shapeTooltipLine({ shape: 'measure', unitOptions: ['grams', 'kilograms'], requiredBy: [] }, { value: 1.2, unit: 'kilograms' })).toBe('1.2 kg · units: g, kg')
+    expect(shapeTooltipLine({ shape: 'measure', unitOptions: ['CENTIMETER', 'METER', 'INCH', 'FEET'], requiredBy: [] }, { value: 60, unit: 'CENTIMETER' })).toBe('60 cm · units: cm, m, in, ft')
   })
 })
 
@@ -65,7 +67,7 @@ describe('shapeValidation', () => {
     expect(v.validate({ value: null, unit: null }, {}, 'k')).toEqual({ level: 'error', message: 'Required' })
     expect(v.validate({ value: 1.2, unit: null }, {}, 'k')).toEqual({ level: 'error', message: '1.2 without a unit' })
     expect(v.validate({ value: null, unit: 'grams' }, {}, 'k')).toEqual({ level: 'error', message: 'A unit without a value' })
-    expect(v.validate({ value: 1.2, unit: 'stone' }, {}, 'k').level).toBe('warn')
+    expect(v.validate({ value: 1.2, unit: 'stone' }, {}, 'k')).toEqual({ level: 'warn', message: '"stone" is not one of the channel\'s units (g, kg)' })
     expect(v.validate({ value: 1.2, unit: 'Kilograms' }, {}, 'k')).toEqual({ level: null })
   })
 })
@@ -76,5 +78,18 @@ describe('closed-list labels (#669 for lists)', () => {
     expect(labelOf('not_applicable')).toBe('Nicht zutreffend')
     expect(labelOf('ghs')).toBe('ghs')
     expect(shapeTooltipLine({ shape: 'list', requiredBy: [], optionLabels: { a: 'Alpha' } }, ['a', 'b'])).toBe('2 values: Alpha · b')
+  })
+})
+
+describe('unitChoiceLabels (W3-6) — the unit picker\'s words', () => {
+  it('shows each code as its symbol and keeps the code as the value', () => {
+    expect(unitChoiceLabels(['KILOGRAM', 'GRAM', 'POUND', 'OUNCE'])).toEqual([
+      { value: 'KILOGRAM', label: 'kg' }, { value: 'GRAM', label: 'g' }, { value: 'POUND', label: 'lb' }, { value: 'OUNCE', label: 'oz' },
+    ])
+    expect(unitChoiceLabels(['CENTIMETER', 'METER', 'INCH', 'FEET']).map((u) => u.label)).toEqual(['cm', 'm', 'in', 'ft'])
+  })
+  it('never invents a symbol, and never shows two choices the same', () => {
+    expect(unitChoiceLabels(['furlongs'])).toEqual([{ value: 'furlongs', label: 'furlongs' }])
+    expect(unitChoiceLabels(['kilograms', 'KILOGRAM'])).toEqual([{ value: 'kilograms', label: 'kg (kilograms)' }, { value: 'KILOGRAM', label: 'kg (KILOGRAM)' }])
   })
 })

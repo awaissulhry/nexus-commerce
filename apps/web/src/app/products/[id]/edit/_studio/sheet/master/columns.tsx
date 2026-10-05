@@ -19,6 +19,7 @@ import { SlotListEditor, type SlotListEditorParams } from '@/design-system/grid/
 import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
 import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
+import { sheetColumnHeader } from '../columnHeader'
 import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
 import { CellSaveReason, saveNote, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, MarkedValue, longTextEditor, textLimitFor, numericColumn, provenanceClassRules, roundTripClassRules, selectEditor, SelectChevron, openCellEditor, SELECT_CELL_CLASS, SELECT_CLEAR_LABEL, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
@@ -28,7 +29,7 @@ import { variationThemeColumnDef } from '@/design-system/grid'
 import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
-import { cellIsEditable, cellOf, holdsFamilyValue, requirementLabel, sharedCellFrom, sharedCellMember, sharedCellNotes, sharedHoverNote, validationApplies, widthFor, type AiDraft, type SharedCellFacts } from './columnRules'
+import { cellIsEditable, cellOf, holdsFamilyValue, sharedCellFrom, sharedCellMember, sharedCellNotes, sharedHoverNote, validationApplies, widthFor, type AiDraft, type SharedCellFacts } from './columnRules'
 import { optionLabel } from '../optionLabel'
 import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
@@ -227,17 +228,9 @@ export function buildMasterColumns(
       ...scalarColumnDef<StudioRow>(col),
       ...referenceColumnDef<StudioRow>(col, row => cellOf(row, col.key)?.value),
       colId: col.key,
-      headerName: col.label + (col.requiredBy.length > 0 ? ' *' : ''),
-      headerTooltip:
-        [
-          // Never "Master" in user words: the Shared record's own requirement, or the product family's (`requirementLabel`).
-          col.requiredBy.length > 0 ? `Required by ${[...new Set(col.requiredBy.map((label) => requirementLabel(col, label)))].join(', ')}` : null,
-          col.maxLength ? `Max ${col.maxLength} characters${col.capFrom ? ` (${col.capFrom})` : ''}` : null,
-          col.maxBytes ? `Max ${col.maxBytes} bytes` : null,
-          col.helpText,
-        ]
-          .filter(Boolean)
-          .join(' · ') || undefined,
+      // W3-6 — the one header both scopes draw (`columnHeader.ts`): " *" when required; who requires it (never "Master":
+      // `requirementLabel`), the cap and its source, the help.
+      ...sheetColumnHeader(col, { capSource: true }),
       // §9.3's ruled widths win over the contract's for the columns it names — see `widthFor`.
       width: widthFor(col, col.kind === 'longtext' ? 240 : 150),
       editable,
@@ -364,7 +357,9 @@ export function buildMasterColumns(
     if (slotGroup) {
       const first = columns.find((c) => c.key === slotGroup.keys[0])
       return slotListColumnDef<StudioRow>(slotGroup, {
-        label: col.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: col.width, headerTooltip: col.helpText,
+        label: col.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: col.width,
+        // W3-6 — the list's header carries position 1's requirement (the list's own); its per-position cap stays in the editor.
+        ...(first ? sheetColumnHeader({ ...first, label: col.label, helpText: col.helpText, maxLength: null, maxBytes: null }) : { headerTooltip: col.helpText }),
         cellOf: (row, key) => cellOf(row, key),
         setSlot: (row, key, value) => {
           const slotColumn = columns.find((c) => c.key === key)

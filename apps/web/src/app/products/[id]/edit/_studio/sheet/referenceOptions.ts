@@ -8,6 +8,13 @@ export interface ReferenceChoices { options: ReferenceOption[]; labels: Record<s
 export interface ReferenceScope { market?: string; productType?: string | null; connectionId?: string }
 const cache = new Map<string, { expires: number; pending: boolean; value: Promise<ReferenceChoices> }>()
 
+/**
+ * W3-6 (Owner decision 14) — the picker row that EMPTIES the cell is "Clear", the DS select's own word
+ * (`SELECT_CLEAR_LABEL`, not imported: this module stays free of the `.tsx` grid barrel for the node suite). Where Nexus
+ * knows what a blank does, the row says that instead ("Default theme · Classic"); a blank shown as a value is "Not set".
+ */
+export const REFERENCE_CLEAR_LABEL = 'Clear'
+
 /** Metadata only. Inactive themes keep their names but cannot become new assignments. */
 export function descriptionThemeChoices(body: unknown): ReferenceChoices {
   const themes = (body as { themes?: unknown })?.themes
@@ -56,14 +63,14 @@ export async function loadReferenceChoices(field: ReferenceField, scope: Referen
     if (etsy) {
       if (!Array.isArray(body?.choices) || body.choices.some((choice: any) => typeof choice.id !== 'string' || typeof choice.name !== 'string')) throw new Error('Etsy returned an incomplete resource list.')
       return { labels: Object.fromEntries(body.choices.map((choice: any) => [choice.id, choice.name])),
-        options: [{ value: '', label: 'Not set' }, ...body.choices.filter((choice: any) => choice.active !== false).map((choice: any) => ({ value: choice.id, label: choice.name, title: `${choice.name} · ID: ${choice.id}`, searchText: `${choice.name} ${choice.id}` }))] }
+        options: [{ value: '', label: REFERENCE_CLEAR_LABEL }, ...body.choices.filter((choice: any) => choice.active !== false).map((choice: any) => ({ value: choice.id, label: choice.name, title: `${choice.name} · ID: ${choice.id}`, searchText: `${choice.name} ${choice.id}` }))] }
     }
     if (body?.unavailable != null && !Array.isArray(body.unavailable)) throw new Error('Shipping-template names returned an incomplete response. Try again.')
     if (body?.unavailable?.includes('shippingTemplate')) throw new Error('Shipping-template names are unavailable. Check the Amazon connection in Connections, then try again.')
     const names = body?.labels?.merchant_shipping_group
     if (!names || typeof names !== 'object' || Array.isArray(names) || Object.values(names).some(name => typeof name !== 'string' || !name.trim())) throw new Error('Shipping-template names returned an incomplete response. Try again.')
     const labels = names as Record<string, string>
-    return { labels, options: [{ value: '', label: 'Not set' }, ...Object.entries(labels).map(([value, label]) => ({ value, label, title: `${label}\nID: ${value}`, searchText: `${label} ${value}` }))] }
+    return { labels, options: [{ value: '', label: REFERENCE_CLEAR_LABEL }, ...Object.entries(labels).map(([value, label]) => ({ value, label, title: `${label}\nID: ${value}`, searchText: `${label} ${value}` }))] }
   })().then(choices => {
     const entry = cache.get(key)
     if (entry?.value === pending) entry.pending = false

@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { ATTRIBUTE_CONCEPTS } from '@nexus/shared/attribute-concepts'
 import { conceptListMatcher, masterDefaultRule } from './master-default-rule.js'
 import { ebaySpecFromCache } from '../channel-specs/ebay.js'
 import { amazonSpecFromDefinition } from '../channel-specs/amazon.js'
@@ -106,5 +108,39 @@ describe('automatic eBay item-specific links read the value maps whatever the li
     const unlinked = (key: string) => masterDefaultRule(spec.fields.find(f => f.key === key), masterKeys)
     expect(unlinked('color')?.transforms).toBeUndefined()
     expect(unlinked('season')?.transforms).toEqual([{ type: 'valueMap', attribute: 'season' }])
+  })
+})
+
+// W3-6 (2026-10-05) — the sheet's naming table renamed eBay's columns ("Price", "Qty", "Video ID", "Unit quantity",
+// "Unit type"). The default rule matches a field by its key and by eBay's own English and Italian names
+// (`conceptSource`), never by a sheet header: every decision for the cached eBay IT 177104 category is pinned here.
+describe('the sheet\'s names change no default rule (W3-6)', () => {
+  const cached = JSON.parse(readFileSync(new URL('../channel-specs/__tests__/fixtures/ebay-it-177104.json', import.meta.url), 'utf8'))
+  const spec = ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: cached.aspects, conditions: cached.conditions })
+  // Every concept linked, so a name that newly matched (or stopped matching) a concept would change a rule.
+  const sourceFor = new Map(ATTRIBUTE_CONCEPTS.map(concept => [concept.key, concept.masterField ?? concept.key]))
+  const masterKeys = new Set([...sourceFor.values(), 'basePrice', 'totalStock'])
+  const concepts = { channel: 'EBAY' as const, sourceFor }
+  /** The English names these listing fields carried before the table. */
+  const BEFORE: Record<string, string> = { price: 'Listing price', quantity: 'Available quantity', videoId: 'Video id' }
+
+  it('decides every field the same under the old and the new English names', () => {
+    for (const field of spec.fields) {
+      const before = { ...field, englishLabel: BEFORE[field.key] ?? field.englishLabel }
+      expect(masterDefaultRule(field, masterKeys, concepts), field.key).toEqual(masterDefaultRule(before, masterKeys, concepts))
+    }
+  })
+
+  it('keeps eBay\'s own names on the item specifics the sheet renamed, and their rules', () => {
+    const byKey = new Map(spec.fields.map(f => [f.key, f]))
+    expect(byKey.get('quantita')).toMatchObject({ label: 'Quantità', englishLabel: 'Quantity' })
+    expect(byKey.get('unita_di_misura')).toMatchObject({ label: 'Unità di misura', englishLabel: 'Unit of measure' })
+    const rule = (key: string) => masterDefaultRule(byKey.get(key), masterKeys, concepts)
+    expect(rule('price')).toMatchObject({ source: 'basePrice' })
+    expect(rule('quantity')).toMatchObject({ source: 'totalStock' })
+    expect(rule('videoId')).toBeNull()
+    expect(rule('quantita')).toBeNull()
+    expect(rule('unita_di_misura')).toBeNull()
+    expect(rule('brand')).toMatchObject({ source: 'brand' })
   })
 })

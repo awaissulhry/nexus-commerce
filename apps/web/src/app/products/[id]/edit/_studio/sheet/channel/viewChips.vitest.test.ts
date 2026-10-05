@@ -85,8 +85,8 @@ describe('a cell you cannot reach is not a cell you can count', () => {
     const chip = buildChannelChips(rows, COLS).find((c) => c.id === 'missing-required')!
     // Counting it would promise the operator a destination the filter cannot reach.
     expect(chip.count).toEqual({ n: 1, unit: 'cells' })
-    expect(chip.note).toContain('not_a_column')
-    expect(chip.note).toMatch(/1 more/)
+    // W3-6 — named in words, never by its key, and without the false "switch view" advice.
+    expect(chip.note).toBe('1 more on fields with no column here: Not a column.')
   })
 })
 

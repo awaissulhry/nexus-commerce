@@ -56,8 +56,9 @@ export function listLabelOf(col: { optionLabels?: Record<string, string> }): (it
 
 /**
  * The cell reads `1.2 kg`, never `1.2 kilograms` (§A.3). Channels spell units as words in their
- * enums (Amazon `kilograms`, eBay `KILOGRAM`); the cell shows the symbol and the tooltip keeps the
- * word. Unknown units fall back to the word as given — an invented symbol would be a fabricated fact.
+ * enums (Amazon `kilograms`, eBay `KILOGRAM`); the cell, the unit picker, the tooltip and the warning show the symbol
+ * (W3-6), and the stored and sent value keeps the channel's word. Unknown units fall back to the word as given — an
+ * invented symbol would be a fabricated fact.
  */
 const UNIT_SYMBOLS: Record<string, string> = {
   kilogram: 'kg', kilograms: 'kg', gram: 'g', grams: 'g', milligram: 'mg', milligrams: 'mg',
@@ -74,6 +75,23 @@ export function unitSymbol(unit: string | null | undefined): string {
   if (unit == null || unit === '') return ''
   return UNIT_SYMBOLS[String(unit).trim().toLowerCase()] ?? String(unit)
 }
+
+/**
+ * W3-6 (2026-10-05) — a channel's unit codes as people choose them: `KILOGRAM` reads "kg", `CENTIMETER` "cm". The value
+ * stays the channel's code (stored and sent unchanged); only the words change. Two codes with one symbol keep their code
+ * beside it ("kg (KILOGRAM)"), so the choices never look the same. Used by the measure picker, tooltip and warning.
+ */
+export function unitChoiceLabels(units: readonly string[]): Array<{ value: string; label: string }> {
+  const symbols = units.map((unit) => unitSymbol(unit))
+  return units.map((unit, i) => {
+    const symbol = symbols[i]
+    const shared = symbols.filter((s) => s === symbol).length > 1
+    return { value: unit, label: shared && symbol !== unit ? `${symbol} (${unit})` : symbol }
+  })
+}
+
+/** The unit list as one line of symbols: "kg, g, lb, oz". */
+const unitList = (units: readonly string[]): string => unitChoiceLabels(units).map((u) => u.label).join(', ')
 
 /** The list a cell holds. A legacy scalar reads as a one-item list (read-compat, never written back as such). */
 export function asList(v: unknown): string[] {
@@ -162,8 +180,8 @@ export function shapeTooltipLine(col: ShapeColumnLike, v: unknown): string | und
   if (col.shape === 'measure') {
     const m = asMeasure(v)
     if (m.value === null && m.unit === null) return undefined
-    const units = col.unitOptions?.length ? ` · units: ${col.unitOptions.join(', ')}` : ''
-    return `${m.value ?? '—'} ${m.unit ?? '(no unit)'}${units}`
+    const units = col.unitOptions?.length ? ` · units: ${unitList(col.unitOptions)}` : ''
+    return `${m.value ?? '—'} ${m.unit ? unitSymbol(m.unit) : '(no unit)'}${units}`
   }
   return undefined
 }
@@ -201,7 +219,7 @@ export function shapeValidation<T>(col: ShapeColumnLike, required: boolean): She
         if (m.value === null) return { level: 'error', message: `A unit without a value${from}` }
         if (m.unit === null) return { level: 'error', message: `${formatNumber(m.value)} without a unit${from}` }
         if (col.unitOptions?.length && !col.unitOptions.some((u) => u.toLowerCase() === m.unit!.toLowerCase())) {
-          return { level: 'warn', message: `"${m.unit}" is not one of the channel's units (${col.unitOptions.join(', ')})` }
+          return { level: 'warn', message: `"${unitSymbol(m.unit)}" is not one of the channel's units (${unitList(col.unitOptions)})` }
         }
         return { level: null }
       },
