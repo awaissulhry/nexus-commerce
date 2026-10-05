@@ -16,7 +16,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import Fastify from 'fastify'
 
 vi.setConfig({ testTimeout: 60_000 })
-const state = vi.hoisted(() => ({ db: null as any, ebay: 'ok' as 'ok' | 'down', calls: [] as Array<{ url: string; auth: string | null }> }))
+const state = vi.hoisted(() => ({ db: null as any, ebay: 'ok' as 'ok' | 'down', calls: [] as Array<{ url: string; auth: string | null }>,
+  // W3 PR-A — Amazon's SP-API client, faked: it answers in the locale it is asked for.
+  amazonBody: '{"properties":{"color":{"type":"string","enum":["red"],"enumNames":["Rosso"]}}}', amazonCalls: [] as Array<{ locale: string; marketplaceIds: string[]; productType: string }> }))
 vi.mock('@nexus/database', async () => {
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -31,8 +33,21 @@ vi.mock('../pim/readiness-index.service.js', async () => (await import('../../te
 vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'seller-token' } }))
-// The route module builds these at import; neither is reached by an eBay download.
-vi.mock('../marketplaces/amazon.service.js', () => ({ AmazonService: class { isConfigured() { return false } } }))
+// The route module builds these at import; neither is reached by an eBay download. The Amazon client answers the
+// Amazon download below (W3 PR-A) as SP-API would: the definition's envelope in the locale it is asked for.
+vi.mock('../marketplaces/amazon.service.js', async () => {
+  const { createHash } = await import('node:crypto')
+  const checksum = createHash('md5').update(state.amazonBody).digest('base64')
+  return { AmazonService: class {
+    isConfigured() { return true }
+    getClient() {
+      return { callAPI: async (req: { path: { productType: string }; query: { locale: string; marketplaceIds: string[] } }) => {
+        state.amazonCalls.push({ locale: req.query.locale, marketplaceIds: req.query.marketplaceIds, productType: req.path.productType })
+        return { productType: req.path.productType, locale: req.query.locale, schema: { link: { resource: `https://schemas.example/${req.path.productType}`, verb: 'GET' }, checksum } }
+      } }
+    }
+  } }
+})
 vi.mock('../listing-wizard/product-types.service.js', () => ({ ProductTypesService: class {} }))
 
 /** eBay's two answers for leaf 57988 on EBAY_IT: the aspects (one open single, one closed multi) and the conditions. */
@@ -40,6 +55,7 @@ vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
   const url = String(input)
   const headers = new Headers(init?.headers)
   state.calls.push({ url, auth: headers.get('authorization') })
+  if (url.startsWith('https://schemas.example/')) return new Response(state.amazonBody)
   if (state.ebay === 'down') return new Response('{"errors":[{"message":"Service unavailable"}]}', { status: 503 })
   if (url.includes('/commerce/taxonomy/v1/category_tree/101/get_item_aspects_for_category?category_id=57988')) {
     return Response.json({ aspects: [
@@ -136,5 +152,48 @@ describe('a missing eBay field list, loaded from the sheet', () => {
     const byLabel = Object.fromEntries(aspectColumns(after).map(c => [c.channels![LABEL].label, c]))
     expect(byLabel.Marca).toMatchObject({ shape: 'scalar', mode: 'open' })
     expect(byLabel.Caratteristiche).toMatchObject({ shape: 'list' })
+  })
+})
+
+/**
+ * W3 PR-A — "Download rules" for Amazon also downloads the English copy: after an added pair, and for an in-use pair
+ * already cached but without one (within the request's cap). The answer is unchanged; a second click costs nothing.
+ */
+describe('Amazon "Download rules" and the English copy', () => {
+  beforeAll(() => scoped(async () => {
+    await prisma.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'APJ6JRA9NG5V4', isActive: true } as never })
+    for (const productType of ['COAT', 'OUTERWEAR']) {
+      const productId = (await prisma.product.create({ data: { sku: `SD-AMZ-${productType}`, name: productType, basePrice: 10 } as never })).id
+      await prisma.channelListing.create({ data: { productId, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', platformAttributes: { productType } } })
+    }
+    // OUTERWEAR's rules are already here; COAT's are missing. Neither has an English copy.
+    await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR', schemaVersion: 'cached-it',
+      schemaDefinition: { properties: { color: { type: 'string' } } }, expiresAt: new Date(Date.now() + 86_400_000) } })
+  }), 120_000)
+  const download = () => app.inject({ method: 'POST', url: '/categories/schema/download', payload: { channel: 'AMAZON', market: 'IT' } })
+  const english = () => scoped(() => prisma.categorySchema.findMany({ where: { channel: 'AMAZON_EN' }, select: { marketplace: true, productType: true, workspaceId: true, schemaDefinition: true }, orderBy: { productType: 'asc' } }))
+
+  it('adds the missing rules with their English copy, fills the cached pair\'s missing copy, and a second click costs nothing', async () => {
+    state.amazonCalls = []
+    const first = await download()
+    expect(first.statusCode).toBe(200)
+    expect(first.json()).toEqual({ channel: 'AMAZON', market: 'IT', remaining: 0, results: [{ productType: 'COAT', outcome: 'added' }, { productType: 'OUTERWEAR', outcome: 'already' }] })
+    expect(state.amazonCalls).toEqual([
+      { productType: 'COAT', locale: 'it_IT', marketplaceIds: ['APJ6JRA9NG5V4'] },
+      { productType: 'COAT', locale: 'en_GB', marketplaceIds: ['APJ6JRA9NG5V4'] },
+      { productType: 'OUTERWEAR', locale: 'en_GB', marketplaceIds: ['APJ6JRA9NG5V4'] },
+    ])
+    const copies = await english()
+    expect(copies.map(c => `${c.marketplace} ${c.productType}`)).toEqual(['IT COAT', 'IT OUTERWEAR'])
+    expect(copies.every(c => c.workspaceId === LEGACY_WORKSPACE_ID && (c.schemaDefinition as any).__schemaProvenance.locale === 'en_GB')).toBe(true)
+    // The market rows are still one per pair, in Italian.
+    const market = await scoped(() => prisma.categorySchema.findMany({ where: { channel: 'AMAZON' }, select: { productType: true } }))
+    expect(market.map(r => r.productType).sort()).toEqual(['COAT', 'OUTERWEAR'])
+
+    state.amazonCalls = []
+    const second = await download()
+    expect(second.json().results).toEqual([{ productType: 'COAT', outcome: 'already' }, { productType: 'OUTERWEAR', outcome: 'already' }])
+    expect(state.amazonCalls).toEqual([])
+    expect(await english()).toHaveLength(2)
   })
 })

@@ -21,6 +21,10 @@
  * come from what the business USES (services/categories/schema-coverage.service.ts): a missing pair is downloaded, a
  * cached one refreshed. The sheet's "Download rules" action runs the same loop.
  *
+ * W3 PR-A (2026-10-05): every added or refreshed Amazon pair in a non-English market also refreshes its English copy
+ * (CategorySchema channel AMAZON_EN, CategorySchemaService.refreshEnglishCopy) — one more SP-API call and S3 download
+ * per pair; the summary counts them (englishStored / englishFailed).
+ *
  * Per business: registered through lib/cron/clustered.ts, which with business profiles on runs this handler once per
  * active profile inside withWorkspace — every read, provider credential and cache row belongs to that business. With
  * profiles off it runs once, for the original business.
@@ -60,8 +64,11 @@ export async function runSchemaRefresh(): Promise<string> {
       skip: target => target.channel === 'AMAZON' && !amazonReady,
     })
 
+    // W3 PR-A — Amazon also prints its English copies: englishFailed > 0 with englishStored = 0 means Amazon did not
+    // answer in English (or could not be reached), and the sheet keeps the market's names.
     const summary = `targets=${targets.length} ` + Object.entries(counts)
-      .map(([channel, c]) => `${channel}: added=${c.added} refreshed=${c.refreshed} failed=${c.failed} skipped=${c.skipped}`).join(' · ')
+      .map(([channel, c]) => `${channel}: added=${c.added} refreshed=${c.refreshed} failed=${c.failed} skipped=${c.skipped}`
+        + (channel === 'AMAZON' ? ` englishStored=${c.englishStored} englishFailed=${c.englishFailed}` : '')).join(' · ')
     logger.info(`schema-refresh cron: ${summary}`)
     return summary
   })

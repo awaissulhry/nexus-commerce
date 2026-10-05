@@ -35,6 +35,7 @@
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import { clearSheetColumnCache, getSheetColumns } from '../services/pim/sheet-columns.service.js'
+import { AMAZON_ENGLISH_CHANNEL } from '../services/categories/category-schema-coordinate.js'
 
 const argv = process.argv.slice(2)
 const flag = (name: string) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined }
@@ -63,7 +64,8 @@ async function main() {
 
     // ── the coordinates that HAVE a cached schema ──
     const cached = await prisma.categorySchema.findMany({
-      where: { isActive: true },
+      // Amazon's English copies (W3 PR-A) carry display names only — no rules of their own.
+      where: { isActive: true, channel: { not: AMAZON_ENGLISH_CHANNEL } },
       select: { channel: true, marketplace: true, productType: true, fetchedAt: true },
       orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { productType: 'asc' }],
     })

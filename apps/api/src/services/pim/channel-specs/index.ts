@@ -1,4 +1,4 @@
-import { categorySchemaMarket, categorySchemaMarkets } from '../../categories/category-schema-coordinate.js'
+import { AMAZON_ENGLISH_CHANNEL, categorySchemaMarket, categorySchemaMarkets } from '../../categories/category-schema-coordinate.js'
 import { cachedSchemasOnly } from '../cached-schema-context.js'
 import { WorkspaceCache } from '../../../lib/workspace-cache.js'
 /**
@@ -14,6 +14,7 @@ import { WorkspaceCache } from '../../../lib/workspace-cache.js'
  */
 import prisma from '../../../db.js'
 import { amazonSpecFromDefinition } from './amazon.js'
+import { isEnglishLocale, schemaLocale, withEnglish } from './amazon-english.js'
 import { aspectNames, ebaySpecFromCache, type EbayCachedAspect, type EbayCachedCondition, type EbayChannelSchemaRow } from './ebay.js'
 import { normaliseKey, type ChannelSpec } from './types.js'
 
@@ -45,10 +46,11 @@ export function clearChannelSpecCache(): void {
   specCache.clear()
 }
 
+/** W3 PR-A — the English copy (`AMAZON_EN`) counts too, so a new copy re-joins the English names. */
 async function amazonStamp(marketplace: string, productType: string): Promise<string> {
   const rows = (await prisma.$queryRawUnsafe(
     `SELECT COALESCE(max("fetchedAt")::text, '') AS stamp, count(*)::int AS n
-     FROM "CategorySchema" WHERE channel='AMAZON' AND marketplace=$1 AND "productType"=$2 AND "isActive"=true`,
+     FROM "CategorySchema" WHERE channel IN ('AMAZON', '${AMAZON_ENGLISH_CHANNEL}') AND marketplace=$1 AND "productType"=$2 AND "isActive"=true`,
     marketplace,
     productType,
   )) as { stamp: string; n: number }[]
@@ -81,7 +83,17 @@ export async function loadAmazonSpec(marketplace: string, productType: string, a
     marketplace: mk, productType: pt, schemaDefinition: row.schemaDefinition,
     fetchedAt: row.fetchedAt, schemaVersion: row.schemaVersion,
   })
-  return remember(key, stamp, spec)
+  // W3 PR-A — Amazon's English names from the English copy; an English market's own row already has them.
+  const englishRow = isEnglishLocale(schemaLocale(spec)) ? null : await prisma.categorySchema.findFirst({
+    where: { channel: AMAZON_ENGLISH_CHANNEL, marketplace: mk, productType: pt, isActive: true },
+    orderBy: { fetchedAt: 'desc' },
+    select: { schemaDefinition: true, fetchedAt: true, schemaVersion: true },
+  })
+  const englishSpec = englishRow ? amazonSpecFromDefinition({
+    marketplace: mk, productType: pt, schemaDefinition: englishRow.schemaDefinition,
+    fetchedAt: englishRow.fetchedAt, schemaVersion: englishRow.schemaVersion,
+  }) : null
+  return remember(key, stamp, withEnglish(spec, englishSpec))
 }
 
 /**
