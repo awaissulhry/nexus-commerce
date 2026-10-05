@@ -236,10 +236,16 @@ export interface PublishActionCell {
   aliasKey: string
   /**
    * Aliases in the Publish window (Owner 2026-10-05): the alias's name and place, as the sheet's band shows them
-   * (`AliasMark`: ★ main listing, ①②③ the others). Null on the main listing. Only ACTIVE aliases are returned.
+   * (`AliasMark`: ★ main listing, ①②③ the others). Null on the main listing.
    */
   aliasLabel?: string | null
   aliasPosition?: number | null
+  /**
+   * The alias's state (null on the main listing). An ARCHIVED alias's rows are still returned, so a live item of an
+   * archived alias can still be ended or deleted from its Status cell; the Publish window and the listing picker offer
+   * ACTIVE aliases only (review 2026-10-05).
+   */
+  aliasStatus?: 'ACTIVE' | 'ARCHIVED' | null
   /** The live selling state Nexus holds (no channel call). */
   state: SellingState
   stateReason: string | null
