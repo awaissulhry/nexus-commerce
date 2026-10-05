@@ -532,13 +532,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // indistinguishable from a pre-August legacy row.
   fastify.patch('/advertising/campaigns/:id/placements', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { adjustments?: Array<{ placement: string; percentage: number }>; biddingStrategy?: string; reason?: string }
+    // CM-18 — `partial: true`: `adjustments` lists only the lanes a person changed; the others are not touched.
+    const b = request.body as { adjustments?: Array<{ placement: string; percentage: number }>; biddingStrategy?: string; reason?: string; partial?: boolean }
     if (!Array.isArray(b?.adjustments)) { reply.status(400); return { error: 'adjustments[] required' } }
     const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
     try {
       return await updatePlacementBidding({
         campaignId: id,
         adjustments: b.adjustments,
+        partial: b.partial === true,
         biddingStrategy: b.biddingStrategy as never,
         actor: actorFromHeaders(request.headers as Record<string, unknown>),
         reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,

@@ -28,13 +28,13 @@ import { InfoTip } from '../../InfoTip'
 import { num } from '../../_grid/format'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
+import { changedPlacementLanes } from '../../../_shared/placementLanes'
 import '../../campaigns-ds.css'
 
 interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string }
 type StratUI = 'DOWN' | 'UPDOWN' | 'FIXED'
 const STRAT_TO_UI: Record<string, StratUI> = { LEGACY_FOR_SALES: 'DOWN', AUTO_FOR_SALES: 'UPDOWN', MANUAL: 'FIXED' }
 const UI_TO_STRAT: Record<StratUI, string> = { DOWN: 'LEGACY_FOR_SALES', UPDOWN: 'AUTO_FOR_SALES', FIXED: 'MANUAL' }
-const AMZ_PLACEMENT = { tos: 'PLACEMENT_TOP', pdp: 'PLACEMENT_PRODUCT_PAGE', ros: 'PLACEMENT_REST_OF_SEARCH' } as const
 
 const STRATEGIES: Array<{ key: StratUI; label: string; desc: string }> = [
   { key: 'DOWN', label: 'Dynamic Bids - Down only', desc: 'Amazon lowers your bids in real time when your ad may be less likely to convert to a sale.' },
@@ -165,12 +165,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     if (form.dailyBudget !== baseline.dailyBudget && form.dailyBudget !== '') calls.push(patch('', { dailyBudget: Number(form.dailyBudget), applyImmediately: true, reason: 'Campaign Details daily budget' }))
     if (form.strategy !== baseline.strategy) calls.push(patch('', { biddingStrategy: UI_TO_STRAT[form.strategy], applyImmediately: true, reason: 'Campaign Details bidding strategy' }))
     if (form.neverExpire !== baseline.neverExpire || form.endDate !== baseline.endDate) calls.push(patch('', { endDate: form.neverExpire ? null : (form.endDate || null), applyImmediately: true, reason: 'Campaign Details end date' }))
-    if (form.tos !== baseline.tos || form.pdp !== baseline.pdp || form.ros !== baseline.ros) {
-      const adjustments = ([['tos', form.tos], ['pdp', form.pdp], ['ros', form.ros]] as Array<[keyof typeof AMZ_PLACEMENT, string]>)
-        .filter(([, v]) => v !== '' && Number(v) > 0)
-        .map(([k, v]) => ({ placement: AMZ_PLACEMENT[k], percentage: Number(v) }))
-      calls.push(patch('/placements', { adjustments }))
-    }
+    // CM-18 — only the lanes changed here; a lane left alone is not re-sent from this page's copy.
+    const changedLanes = changedPlacementLanes(baseline, form)
+    if (changedLanes.length) calls.push(patch('/placements', { adjustments: changedLanes, partial: true }))
     if (form.algo !== baseline.algo || form.targetAcos !== baseline.targetAcos) {
       const isAcos = form.algo === 'TARGET_ACOS'
       /**

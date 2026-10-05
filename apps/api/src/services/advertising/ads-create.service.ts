@@ -1135,6 +1135,12 @@ export interface PlacementBiddingInput {
    * undelivered values, so every placement in `adjustments` counts as set by this write, none as carried.
    */
   resend?: boolean
+  /**
+   * CM-18 — `adjustments` lists only the lanes a person changed. Every listed lane is set (0 clears it); a lane left out
+   * is not touched: it keeps Amazon's current value on a live push, the stored value otherwise. Without it, a lane left
+   * out while stored above 0 is removed — the full-array contract the engines and undo send.
+   */
+  partial?: boolean
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1156,6 +1162,28 @@ export interface PlacementBiddingResult {
   /** 4e (review 5.9) — Amazon's error when the live push failed (not a refusal: the local copy and history are written). */
   error?: string
 }
+/**
+ * CM-6 — store a placement write without writing back the rest of `dynamicBidding`.
+ *
+ * `updatePlacementBidding` reads the campaign, then spends seconds on the gate, Amazon's read and the PUT. Writing the
+ * whole JSON from that first read put back any Target ACoS, bid automation, bid algorithm, guardrail or CPC ceiling
+ * saved in those seconds — the detail page and the bulk modal send `/automation` beside `/placements`, and rank-defend
+ * writes placements every 15 minutes. One `jsonb_set` sets only `placementBidding`, inside the UPDATE, on the row as it
+ * is when the UPDATE runs: a concurrent writer that committed first is kept. A row with no settings yet (or settings
+ * that are not an object) starts from `{}`. The other columns (sync stamp, bidding strategy) go in the same transaction.
+ */
+async function writePlacementBidding(
+  campaignId: string,
+  adjustments: Array<{ placement: string; percentage: number }>,
+  columns: Record<string, unknown>,
+): Promise<void> {
+  const placementJson = JSON.stringify(adjustments)
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`UPDATE "Campaign" SET "dynamicBidding" = jsonb_set(CASE WHEN jsonb_typeof("dynamicBidding") = 'object' THEN "dynamicBidding" ELSE '{}'::jsonb END, '{placementBidding}', ${placementJson}::jsonb, true) WHERE id = ${campaignId}`
+    await tx.campaign.update({ where: { id: campaignId }, data: columns as never })
+  })
+}
+
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } })
   if (!c) throw new Error('campaign not found')
@@ -1166,6 +1194,9 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   // D1 — snapshot the prior placement bias so a mis-firing change can be rolled back.
   // G.4 — the local copy until Amazon's current array is read before a live push; then that array.
   let priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
+  // CM-18 — a partial write: the lanes it leaves out keep the stored value, until a live push merges onto Amazon's instead.
+  const requested = adjustments
+  if (input.partial) adjustments = mergeOntoAmazonPlacements(requested, priorAdjustments, priorAdjustments, { partial: true }).adjustments
   let drift: Array<{ placement: string; local: number; amazon: number }> = []
   let mode = 'local'
   // AR — placement writes go inline (not via the queued+stamped worker path), so a
@@ -1230,7 +1261,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
             // are unknown, not empty. `placementBidding` itself is left out when no lane is set.
             if (cur?.dynamicBidding) {
               const amazonNow = cur.dynamicBidding.placementBidding ?? []
-              const merged = mergeOntoAmazonPlacements(adjustments, priorAdjustments, amazonNow, { resend: input.resend })
+              const merged = mergeOntoAmazonPlacements(requested, priorAdjustments, amazonNow, { resend: input.resend, partial: input.partial })
               drift = merged.drift
               if (drift.length) logger.warn('[AX2.2] placement drift: Amazon differs from the local copy', { campaignId: input.campaignId, drift })
               adjustments = merged.adjustments
@@ -1276,8 +1307,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   }
 
   // G.4 — the local copy becomes what was actually sent (merged onto Amazon's current array on a live push).
-  const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
-  await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
+  // CM-6 — and ONLY that key is written, into the row as it is now (`writePlacementBidding`).
+  await writePlacementBidding(input.campaignId, adjustments, { ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) })
 
   /**
    * HX.2 — placement writes join the audit spine.
