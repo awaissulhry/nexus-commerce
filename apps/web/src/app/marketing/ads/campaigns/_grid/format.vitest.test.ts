@@ -14,7 +14,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { filterRows } from '@/design-system/patterns/workspace-grid/filterRows'
 import { compareSortValues } from '@/design-system/grid/sortValues'
-import { pct, acosRank, acosFilterValue, NO_SALES_ACOS } from './format'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { pct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
 import { TargetAcosCell } from '../../_shared/RuleColumnCells'
 
 describe('pct — a fraction in, a percent out, no guessing (AM-4)', () => {
@@ -106,5 +109,52 @@ describe('the ACoS sort, through the grid’s own compareSortValues', () => {
   })
   it('highest first: the no-sales spender leads; the idle row still sinks', () => {
     expect(sorted('desc')).toEqual(['spent-no-sales', 'over-100', 'good', 'idle'])
+  })
+})
+
+describe('acosSortNumber — for grids that cannot sink blanks (DS DataGrid, hand-rolled sorts)', () => {
+  const byNumber = (dir: 1 | -1) => [...rows]
+    .sort((a, b) => (acosSortNumber(a.acos, a.spend, a.sales) - acosSortNumber(b.acos, b.spend, b.sales)) * dir)
+    .map((r) => r.id)
+  it('lowest first: every real ACoS comes before the rows with none — no ACoS is never the best', () => {
+    expect(byNumber(1)).toEqual(['good', 'over-100', 'idle', 'spent-no-sales'])
+  })
+  it('highest first: the no-sales spender leads', () => {
+    expect(byNumber(-1)[0]).toBe('spent-no-sales')
+  })
+  it('stays a finite number between the worst real ACoS and no-sales spend', () => {
+    expect(acosSortNumber(null, 0, 0)).toBe(NO_ACOS_SORT)
+    expect(NO_ACOS_SORT).toBeGreaterThan(acosRank(50, 5000, 100)!)
+    expect(NO_ACOS_SORT).toBeLessThan(NO_SALES_ACOS)
+    expect(NO_ACOS_SORT - NO_ACOS_SORT).toBe(0)
+  })
+})
+
+/**
+ * The sweep: no ads screen (the console and the old ads-console) may sort or filter a missing ACoS
+ * as -1, 0 or -Infinity again — each of those ranks "no ACoS" as the best one on "lowest first".
+ * Scans sort/filter accessors only; chart series and rule thresholds are not sort keys.
+ */
+describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', () => {
+  const marketing = fileURLToPath(new URL('../../../', import.meta.url))
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n)
+    return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
+  })
+  const ACCESSOR = /sortValue|filterValue|case 'acos'|kind: 'range'/
+  // A measured ACoS / TACoS only: a Target ACoS is a setting, and "none set" may sort low.
+  const SENTINEL = /(?<!target)acos\w*\)?\s*\?\?\s*(-1|0)\b|(?<!target)acos\w*\s*==\s*null\s*\?\s*Number\.NEGATIVE_INFINITY/i
+  it('finds none in app/marketing/ads and app/marketing/ads-console', () => {
+    const files = [...walk(join(marketing, 'ads')), ...walk(join(marketing, 'ads-console'))]
+    expect(files.length).toBeGreaterThan(100)
+    const hits = files.flatMap((f) => readFileSync(f, 'utf8').split('\n')
+      .map((line, i) => ({ line, at: `${f.slice(marketing.length)}:${i + 1}` }))
+      .filter(({ line }) => ACCESSOR.test(line) && SENTINEL.test(line))
+      .map(({ at }) => at))
+    expect(hits).toEqual([])
+  })
+  it('CATCHES the old Conflicts accessor', () => {
+    const line = "{ key: 'acos', label: 'ACOS', sortable: true, sortValue: (x) => x.acos ?? -1 }"
+    expect(ACCESSOR.test(line) && SENTINEL.test(line)).toBe(true)
   })
 })

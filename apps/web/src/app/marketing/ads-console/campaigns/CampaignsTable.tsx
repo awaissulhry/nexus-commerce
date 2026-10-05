@@ -25,6 +25,7 @@ import { PerformancePanel } from './PerformancePanel'
 import { FilterPanel, EMPTY_FILTERS, countFilters, STATUS_LABEL, TARGETING_LABEL, METRIC_LABEL, METRIC_UNIT, opSym, type Filters } from './FilterPanel'
 import { META_BY_KEY, DEFAULT_VISIBLE, STORAGE_KEY } from './columns'
 import { readDailyBudget } from '../../ads/_shared/budgetInput'
+import { acosRank, acosSortNumber } from '../../ads/campaigns/_grid/format'
 
 interface Placements { tos: number | null; pdp: number | null; ros: number | null }
 interface Base {
@@ -110,7 +111,8 @@ const metricValue = (x: Row, metric: string): number | null => {
   switch (metric) {
     case 'spend': return x.spendC / 100
     case 'sales': return x.salesC / 100
-    case 'acos': return x.acos != null ? x.acos * 100 : null
+    // AM-11 rule: spend with no sales is the WORST ACoS (inside "ACoS ≥ N", never inside "≤ N"); nothing spent has none.
+    case 'acos': return acosRank(x.acos, x.spendC, x.salesC)
     case 'roas': return x.roas
     case 'cpc': return x.cpc != null ? x.cpc / 100 : null
     case 'ctr': return x.ctr != null ? x.ctr * 100 : null
@@ -247,7 +249,7 @@ function CampaignsTableView({ initial }: { initial: Base[] }) {
       case 'orders': return r.orders
       case 'cvr': return r.cvr ?? -1
       case 'sales': return r.salesC
-      case 'acos': return r.acos ?? -1
+      case 'acos': return acosSortNumber(r.acos, r.spendC, r.salesC) // never -1: no ACoS is not the best ACoS
       case 'roas': return r.roas ?? -1
       case 'aov': return r.aov ?? -1
       // Unknown sorts to the bottom, like every other nullable metric here.

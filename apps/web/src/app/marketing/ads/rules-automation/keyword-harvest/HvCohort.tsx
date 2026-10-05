@@ -44,6 +44,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, ShieldAlert } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { acosRank } from '../../campaigns/_grid/format'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
@@ -185,7 +186,8 @@ export function HvCohort({ scope, push }: HvSlotProps) {
     {
       key: 'acos', label: 'ACoS',
       render: (r) => (r.performance ? (r.performance.acosPct == null ? <span className="h10-hv-nd" title="served, but no attributed sales to divide by">—</span> : `${r.performance.acosPct.toFixed(0)}%`) : <Nd o={r.outcome} />),
-      sortValue: (r) => r.performance?.acosPct ?? -1,
+      // AM-11 rule (`acosPct` is PERCENT POINTS): no sales with spend is the WORST ACoS, never -1.
+      sortValue: (r) => (r.performance ? acosRank(r.performance.acosPct != null ? r.performance.acosPct / 100 : null, r.performance.spendCents, r.performance.salesCents) : null),
     },
     {
       key: 'seen', label: 'Measured over', metric: false,

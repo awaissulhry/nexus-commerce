@@ -17,6 +17,7 @@ import { DataGrid, Listbox, Pagination, type Column } from '@/design-system/comp
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
+import { acosSortNumber } from '../../ads/campaigns/_grid/format'
 
 interface Prod {
   id: string; sku?: string | null; name: string; asin?: string | null; photoUrl?: string | null; photoCount?: number
@@ -146,6 +147,8 @@ export function ProductsTable({ initial }: { initial: Prod[] }) {
     const dir = sortDir === 'asc' ? 1 : -1
     return [...r].sort((a, b) => {
       if (sortKey === 'product') return a.name.localeCompare(b.name) * dir
+      // AM-11 rule: no ACoS is never -1 (the best); spend with no sales is the worst.
+      if (sortKey === 'acos') return (acosSortNumber(null, a.adSpendCents, a.revenueCents) - acosSortNumber(null, b.adSpendCents, b.revenueCents)) * dir
       return ((mval(a, sortKey) ?? -1) - (mval(b, sortKey) ?? -1)) * dir
     })
   }, [raw, search, sortKey, sortDir, mval])

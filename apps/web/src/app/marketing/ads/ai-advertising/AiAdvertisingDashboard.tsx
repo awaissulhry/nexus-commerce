@@ -259,7 +259,8 @@ export function AiAdvertisingDashboard() {
     { key: 'target', label: 'AI Target', kind: 'select', placeholder: 'All', value: (r) => (r as Goal).aiTarget, options: Object.entries(TARGET_LABEL).map(([value, label]) => ({ value, label })) },
     { key: 'mode', label: 'Budget Mode', kind: 'select', placeholder: 'All', value: (r) => (r as Goal).budgetMode, options: Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label })) },
     { key: 'spend', label: 'Spend', kind: 'range', unit: '€', value: (r) => (perfByGoal.get((r as Goal).id)?.spendCents ?? 0) / 100 },
-    { key: 'acos', label: 'ACoS', kind: 'range', unit: '%', value: (r) => perfByGoal.get((r as Goal).id)?.acosPct ?? 0 },
+    // AM-11 — this accessor wins over the column's filterValue, so it carries the same rule.
+    { key: 'acos', label: 'ACoS', kind: 'range', unit: '%', value: (r) => { const p = perfByGoal.get((r as Goal).id); return p ? acosFilterValue(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : Number.NaN } },
   ]
 
   const csv = () => {

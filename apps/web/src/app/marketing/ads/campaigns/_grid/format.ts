@@ -58,6 +58,18 @@ export function acosRank(acosFraction: number | string | null | undefined, spend
 export const acosFilterValue = (acosFraction: number | string | null | undefined, spend: number, sales: number): number =>
   acosRank(acosFraction, spend, sales) ?? Number.NaN
 
+/**
+ * Where "no ACoS" sorts in a grid that CANNOT sink blanks — the DS `DataGrid` and the hand-rolled
+ * sorts compare plain numbers (`<` / `>` / `a - b`), so a null has to become a number. It goes to the
+ * WORST end, just before the no-sales spenders: unmeasured is never ranked as the best ACoS, which
+ * is what the old `?? -1` did on every "lowest ACoS first".
+ */
+export const NO_ACOS_SORT = Number.MAX_VALUE / 2
+
+/** `acosRank` for those grids: always a number; no ACoS at all is `NO_ACOS_SORT`. */
+export const acosSortNumber = (acosFraction: number | string | null | undefined, spend: number, sales: number): number =>
+  acosRank(acosFraction, spend, sales) ?? NO_ACOS_SORT
+
 export const int = (v: unknown): string => num(v).toLocaleString()
 
 export const STATUS_PILL: Record<string, { label: string; cls: string }> = {
