@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ themes: vi.fn(), categories: vi.fn() }))
+const mocks = vi.hoisted(() => ({ themes: vi.fn(), categories: vi.fn(), taxonomy: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { ebayDescriptionTheme: { findMany: mocks.themes } } }))
 vi.mock('../categories/reference-labels.service.js', () => ({ cachedCategoryLabelsMany: mocks.categories }))
+vi.mock('../taxonomy/repository.js', () => ({ taxonomyNames: mocks.taxonomy }))
 import { withSelectedReferenceNames } from './sheet-reference-names.js'
 const sheet = () => ({ scope: { kind: 'channel', channel: 'EBAY', marketplace: 'IT', connectionId: 'account-a' }, schema: { marketplace: 'IT', locale: 'it' },
   columns: ['categoryId','descriptionThemeId','paymentPolicyId'].map(key => ({ key })),
@@ -11,6 +12,7 @@ const sheet = () => ({ scope: { kind: 'channel', channel: 'EBAY', marketplace: '
 beforeEach(() => {
   mocks.themes.mockReset().mockResolvedValue([{ id: 'theme-a', name: 'Archived example', active: false }])
   mocks.categories.mockReset().mockResolvedValue({ categoryId: { '123': 'Example > Jackets' } })
+  mocks.taxonomy.mockReset().mockResolvedValue({ 'gid://shopify/TaxonomyCategory/aa-1-10-2': 'Apparel & Accessories > Clothing > Outerwear > Coats & Jackets' })
 })
 describe('selected sheet display names', () => {
   it('reads selected IDs once, keeps inactive assigned theme names, and never changes cell values or allowed choices', async () => {
@@ -47,5 +49,20 @@ describe('selected sheet display names', () => {
     expect(output).toBe(input)
     expect(mocks.themes).not.toHaveBeenCalled()
     expect(mocks.categories).not.toHaveBeenCalled()
+  })
+  it('W3-4: a Shopify product category is named from the synced taxonomy (no Shopify call); a value that is not a category id is not read', async () => {
+    const jacket = 'gid://shopify/TaxonomyCategory/aa-1-10-2'
+    const input = { scope: { channel: 'SHOPIFY' }, schema: { marketplace: 'GLOBAL' }, columns: [{ key: 'category' }],
+      rows: [{ values: { category: { value: jacket } } }, { values: { category: { value: jacket } } }, { values: { category: { value: 'not a category' } } }], meta: {} }
+    const output = await withSelectedReferenceNames(input)
+    expect(mocks.taxonomy).toHaveBeenCalledExactlyOnceWith('SHOPIFY', 'GLOBAL', [jacket])
+    expect(output.rows).toBe(input.rows)
+    expect(output.meta.referenceNames).toEqual({ channel: 'SHOPIFY', market: 'GLOBAL', lookups: [
+      { field: 'category', ids: [jacket], labels: { [jacket]: 'Apparel & Accessories > Clothing > Outerwear > Coats & Jackets' } },
+    ] })
+    // Another channel's `category` is not a Shopify taxonomy id.
+    mocks.taxonomy.mockClear()
+    expect(await withSelectedReferenceNames({ ...input, scope: { channel: 'EBAY' } })).toMatchObject({ meta: {} })
+    expect(mocks.taxonomy).not.toHaveBeenCalled()
   })
 })

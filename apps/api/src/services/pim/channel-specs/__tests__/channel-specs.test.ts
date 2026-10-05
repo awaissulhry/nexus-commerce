@@ -328,10 +328,23 @@ describe('eBay adapter — conformance', () => {
     expect(t.masterKey).toBe('name')
     const c = byKey.get('conditionId')!
     expect(c.options).toEqual(['NEW', 'NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT'])
-    expect(c.optionLabels!.NEW).toBe('Nuovo con etichette')
+    // W3-4 (Owner decision 7) — eBay's English names in the category's own wording; the market's words stay accepted on
+    // paste (`optionAliases`), and the codes stored and sent are unchanged.
+    expect(c.optionLabels).toEqual({ NEW: 'New with tags', NEW_OTHER: 'New without tags', NEW_WITH_DEFECTS: 'New with defects', USED_EXCELLENT: 'Used' })
+    expect(c.optionAliases).toEqual({ NEW: ['Nuovo con etichette'], NEW_OTHER: ['Nuovo senza etichette'], NEW_WITH_DEFECTS: ['Nuovo con difetti'], USED_EXCELLENT: ['Usato'] })
+    expect(byKey.get('dimensionUnit')!.optionLabels).toEqual({ CENTIMETER: 'cm', METER: 'm', INCH: 'in', FEET: 'ft' })
+    const pkg = byKey.get('packageType')!
+    expect(pkg.options!.every(code => pkg.optionLabels?.[code])).toBe(true)
+    expect(pkg.optionLabels!.PACKAGE_THICK_ENVELOPE).toBe('Package (or thick envelope)')
     const w = byKey.get('packageWeight')!
     expect(w.shape).toBe('measure')
     expect(w.channelStore).toEqual({ kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] })
+  })
+
+  it('W3-4: without cached conditions the fallback list still reads in English, with no market words to accept', () => {
+    const bare = ebaySpecFromCache({ marketplace: 'IT', categoryId: '1', aspects: [] }).fields.find(f => f.key === 'conditionId')!
+    expect(bare.optionLabels).toMatchObject({ NEW: 'New', NEW_OTHER: 'New other (see details)', USED_EXCELLENT: 'Used', FOR_PARTS_OR_NOT_WORKING: 'For parts or not working' })
+    expect(bare.optionAliases).toBeUndefined()
   })
 
   it('the two dead registry placeholders have real successors', () => {

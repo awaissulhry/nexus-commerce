@@ -17,15 +17,27 @@ export const EBAY_TRADING_PACKAGES: Readonly<Record<string, string>> = {
 /** The package type codes the sheet offers (the column's strict list). */
 export const EBAY_PACKAGE_TYPES: readonly string[] = Object.keys(EBAY_TRADING_PACKAGES)
 
-const codeByTradingName = new Map(Object.entries(EBAY_TRADING_PACKAGES).map(([code, name]) => [name.toLowerCase(), code]))
+/** Wave 3 (W3-4, 2026-10-05) — each package type in English words for the column's list. The code stored and sent is unchanged. */
+export const EBAY_PACKAGE_LABELS: Readonly<Record<string, string>> = {
+  LETTER: 'Letter', BULKY_GOODS: 'Bulky goods', CARAVAN: 'Caravan', CARS: 'Cars', EUROPALLET: 'Euro pallet', EXPANDABLE_TOUGH_BAGS: 'Expandable tough bags',
+  EXTRA_LARGE_PACK: 'Extra large package', FURNITURE: 'Furniture', INDUSTRY_VEHICLES: 'Industry vehicles', LARGE_CANADA_POSTBOX: 'Large Canada Post box',
+  LARGE_CANADA_POST_BUBBLE_MAILER: 'Large Canada Post bubble mailer', LARGE_ENVELOPE: 'Large envelope', MAILING_BOX: 'Mailing box', MEDIUM_CANADA_POST_BOX: 'Medium Canada Post box',
+  MEDIUM_CANADA_POST_BUBBLE_MAILER: 'Medium Canada Post bubble mailer', MOTORBIKES: 'Motorbikes', ONE_WAY_PALLET: 'One-way pallet', PACKAGE_THICK_ENVELOPE: 'Package (or thick envelope)',
+  PADDED_BAGS: 'Padded bags', PARCEL_OR_PADDED_ENVELOPE: 'Parcel or padded envelope', ROLL: 'Roll', SMALL_CANADA_POST_BOX: 'Small Canada Post box',
+  SMALL_CANADA_POST_BUBBLE_MAILER: 'Small Canada Post bubble mailer', TOUGH_BAGS: 'Tough bags', UPS_LETTER: 'UPS letter', USPS_FLAT_RATE_ENVELOPE: 'USPS flat rate envelope',
+  USPS_LARGE_PACK: 'USPS large package', VERY_LARGE_PACK: 'Very large package', WINE_PAK: 'Wine pack',
+}
 
-/** The sheet's code for a package type: a code in any case, or eBay Trading's name for it. Anything else unchanged. */
+const codeByTradingName = new Map(Object.entries(EBAY_TRADING_PACKAGES).map(([code, name]) => [name.toLowerCase(), code]))
+const codeByLabel = new Map(Object.entries(EBAY_PACKAGE_LABELS).map(([code, name]) => [name.toLowerCase(), code]))
+
+/** The sheet's code for a package type: a code in any case, eBay Trading's name or the English name for it. Anything else unchanged. */
 export function ebayPackageCode(value: string): string {
   const text = value.trim()
   if (!text) return value
   const upper = text.toUpperCase()
   if (EBAY_TRADING_PACKAGES[upper]) return upper
-  return codeByTradingName.get(text.toLowerCase()) ?? value
+  return codeByTradingName.get(text.toLowerCase()) ?? codeByLabel.get(text.toLowerCase()) ?? value
 }
 
 /** eBay Trading's name for a package type code (or for a Trading name already); null when eBay does not know it. */

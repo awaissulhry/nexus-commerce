@@ -78,6 +78,14 @@ describe('checkForStorage — type refusals vs stored findings, with the old sen
 
 describe('validateChannelValue — findings carry the rule behind each sentence', () => {
   const field = (extra: Record<string, unknown>) => ({ fieldKey: 'f', label: 'Field', options: null, selectionOnly: false, maxLength: null, maxBytes: null, priority: 'optional', ...extra }) as never
+  it('W3-4: an English label or the market\'s own name (an accepted spelling) is the code; a spelling two codes share is off the list', () => {
+    const condition = { options: ['NEW', 'USED_EXCELLENT'], selectionOnly: true, optionLabels: { NEW: 'New with tags', USED_EXCELLENT: 'Used' }, optionAliases: { NEW: ['Nuovo con etichette'], USED_EXCELLENT: ['Usato'] } }
+    expect(validateChannelValue(field(condition), 'Nuovo con etichette')).toMatchObject({ value: 'NEW', findings: [] })
+    expect(validateChannelValue(field(condition), 'used')).toMatchObject({ value: 'USED_EXCELLENT', findings: [] })
+    const shared = validateChannelValue(field({ ...condition, optionAliases: { NEW: ['Used'] } }), 'Used')
+    expect(shared.findings.map(f => f.rule)).toEqual(['offList'])
+    expect(shared.findings[0].message).toContain('New with tags · Used')
+  })
   it('names off-list, deprecated and over-limit problems by rule', () => {
     const checked = validateChannelValue(field({ options: ['A', 'B'], selectionOnly: true, deprecatedOptions: ['B'], maxLength: 1 }), 'C')
     expect(checked.findings.map(f => f.rule)).toEqual(['offList'])

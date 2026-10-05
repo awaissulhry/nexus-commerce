@@ -41,8 +41,11 @@ export function validateChannelValue(field: CatalogueField, input: unknown, chan
       const spelling = (value: string) => value.toLowerCase().replace(/[\s_-]/g, '')
       const sameSpelling = options.filter(option => spelling(option) === spelling(text))
       if (sameSpelling.length === 1) return sameSpelling[0]
-      // Otherwise accept only an unambiguous label from this actual schema.
-      const labels = options.filter(option => field.optionLabels?.[option]?.trim().toLowerCase() === text.toLowerCase())
+      // Otherwise accept only an unambiguous label from this actual schema, or another spelling it accepts (W3-4: the
+      // market's name beside an English label). A spelling naming two codes selects none.
+      const fold = text.toLowerCase()
+      const labels = options.filter(option => field.optionLabels?.[option]?.trim().toLowerCase() === fold
+        || field.optionAliases?.[option]?.some(alias => alias.trim().toLowerCase() === fold))
       if (labels.length === 1) return labels[0]
       return undefined
     })

@@ -89,6 +89,8 @@ export interface CatalogueField {
   maxBytes: number | null
   options: string[] | null
   optionLabels: Record<string, string> | null
+  /** W3-4 — other accepted spellings per code (the market's name when the label is English); never shown. */
+  optionAliases?: Record<string, string[]>
   /** The schema closes the list — an off-list value is an error, not a warning. */
   selectionOnly: boolean
   /** Amazon `editable: false` — cannot be changed on an EXISTING listing. */
@@ -328,6 +330,7 @@ export async function getFieldCatalogue(input: {
       maxBytes: cap?.maxBytes ?? null,
       options: cap?.options ?? (Array.isArray(row?.allowedValues) ? (row!.allowedValues as string[]) : null),
       optionLabels: cap?.optionLabels ?? null,
+      ...(cap?.optionAliases ? { optionAliases: cap.optionAliases } : {}),
       selectionOnly: cap?.mode === 'strict',
       editable: cap?.editable !== false,
       deprecatedOptions: cap?.deprecatedOptions ?? null,

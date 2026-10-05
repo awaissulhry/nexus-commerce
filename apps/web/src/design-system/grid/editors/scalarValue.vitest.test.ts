@@ -35,6 +35,15 @@ describe('attribute edit values', () => {
     expect(parseScalarValue({ kind: 'longtext' }, 'Line 1\nLine 2')).toBe('Line 1\nLine 2')
     expect(parseScalarValue({ kind: 'date' }, '2026-09-05')).toBe('2026-09-05')
   })
+  it('W3-4: an English label and the market\'s own name (an accepted spelling) both land on the code; a spelling two codes share lands on neither', () => {
+    const condition = { kind: 'select', options: ['NEW', 'USED_EXCELLENT'], optionLabels: { NEW: 'New with tags', USED_EXCELLENT: 'Used' },
+      optionAliases: { NEW: ['Nuovo con etichette'], USED_EXCELLENT: ['Usato'] } }
+    expect(parseScalarValue(condition, 'new with tags')).toBe('NEW')
+    expect(parseScalarValue(condition, 'Nuovo con etichette')).toBe('NEW')
+    expect(parseScalarValue(condition, ' usato ')).toBe('USED_EXCELLENT')
+    expect(parseScalarValue(condition, 'NEW')).toBe('NEW')
+    expect(parseScalarValue({ ...condition, optionAliases: { NEW: ['Used'] } }, 'Used')).toBe('Used')
+  })
   it('does not guess between duplicate option labels', () => {
     expect(parseScalarValue({ kind: 'select', options: ['a', 'b'], optionLabels: { a: 'Same', b: 'Same' } }, 'Same')).toBe('Same')
   })

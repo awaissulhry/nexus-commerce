@@ -37,6 +37,10 @@ describe('store product information contracts', () => {
     const validators = buildCoordinateValidators(result.columns, result.coordinates[0], { isParent: false, productType: null })
     expect(evaluateRow({}, validators).some(i => i.message.includes('no channel schema'))).toBe(false)
   })
+  it('W3-4 (Owner decision 10): Continue selling when out of stock offers Yes / No; the codes stay CONTINUE / DENY', () => {
+    const policy = shopifyProductSpec(null).fields.find(f => f.attribute === 'inventoryPolicy')!
+    expect(policy).toMatchObject({ kind: 'select', mode: 'strict', optionLabels: { CONTINUE: 'Yes', DENY: 'No' } })
+  })
   it('keeps Etsy limits out of Shopify and accepts the current era values', async () => {
     const etsy = await sheet('ETSY'), shopify = await sheet('SHOPIFY')
     const tag = etsy.columns.find(c => c.key === 'keywords')!

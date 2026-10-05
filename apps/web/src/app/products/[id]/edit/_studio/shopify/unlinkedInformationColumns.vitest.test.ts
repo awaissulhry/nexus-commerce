@@ -43,3 +43,14 @@ it('keeps server mappings once and removes a stale definition as soon as the liv
   expect(withUnlinkedShopifyColumns(loaded, { ...schema, definitions: [] })!.columns.some(c => c.key === key)).toBe(false)
   expect(withUnlinkedShopifyColumns(loaded, { ...schema, definitions: [{ ...schema.definitions[0], type: 'number_integer' }] })!.columns.some(c => c.key === key)).toBe(false)
 })
+
+it('W3-4: the Sales channels column carries the store\'s publication names for its cell words (display only)', () => {
+  const salesChannels = { ...title, key: 'salesChannels', label: 'Sales channels' }
+  const named = withUnlinkedShopifyColumns({ ...page, columns: [salesChannels] }, { ...schema, publications: [
+    { id: 'gid://shopify/Publication/1', name: 'Online Store', supportsFuturePublishing: true },
+    { id: 'gid://shopify/Publication/2', name: 'Point of Sale', supportsFuturePublishing: false },
+  ] })!
+  expect(named.columns[0].optionLabels).toEqual({ 'gid://shopify/Publication/1': 'Online Store', 'gid://shopify/Publication/2': 'Point of Sale' })
+  expect(named.columns[0].options).toBeUndefined()
+  expect(withUnlinkedShopifyColumns({ ...page, columns: [salesChannels] }, schema)!.columns[0].optionLabels).toBeUndefined()
+})

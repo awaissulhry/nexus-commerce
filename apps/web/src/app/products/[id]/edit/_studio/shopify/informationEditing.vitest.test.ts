@@ -133,3 +133,31 @@ describe('the theme template can be cleared', () => {
     expect(informationDraftCellError(template, 'not valid!', 'nexus', false)).toBe('Enter a template suffix, or leave it empty for the default template.')
   })
 })
+/* W3-4 — Shopify values in plain English. The value stored and sent never changes. */
+describe('Shopify values read in words (W3-4)', () => {
+  it('Continue selling when out of stock reads Yes / No (Owner decision 10)', () => {
+    expect(informationValueLabel('inventory_policy', 'CONTINUE')).toBe('Yes')
+    expect(informationValueLabel('inventory_policy', 'DENY')).toBe('No')
+    expect(informationValueLabel('inventory_policy', null)).toBe('Not set')
+    const policy = fields.find(f => f.id === 'inventoryPolicy')!
+    expect(informationDraftCellError(policy, 'CONTINUE', 'DENY', false)).toBeNull()
+  })
+  it('a product category shows its taxonomy name; without a synced name the id stays', () => {
+    const id = 'gid://shopify/TaxonomyCategory/aa-1-10-2'
+    expect(informationValueLabel('category', id, { [id]: 'Apparel & Accessories > Clothing > Outerwear > Coats & Jackets' })).toBe('Apparel & Accessories > Clothing > Outerwear > Coats & Jackets')
+    expect(informationValueLabel('category', id)).toBe(id)
+  })
+  it('sales channels read by the store\'s names; none, unknown and unnamed say so', () => {
+    const names = { 'gid://shopify/Publication/1': 'Online Store', 'gid://shopify/Publication/2': 'Point of Sale' }
+    const entries = (...ids: number[]) => JSON.stringify(ids.map(id => ({ publicationId: `gid://shopify/Publication/${id}`, publishDate: null })))
+    expect(informationValueLabel('publication', entries(1, 2), names)).toBe('Online Store, Point of Sale')
+    expect(informationValueLabel('publication', '[]', names)).toBe('No sales channels')
+    expect(informationValueLabel('publication', entries(1, 9), names)).toBe('Online Store, Unknown sales channel')
+    expect(informationValueLabel('publication', entries(8, 9), names)).toBe('2 unknown sales channels')
+    expect(informationValueLabel('publication', entries(1, 2))).toBe('2 sales channels')
+    expect(informationValueLabel('publication', '{"no":1}', names)).toBe('Stored value needs review')
+  })
+  it('a unit price reads "200 ml, priced per 1 L"', () => {
+    expect(informationValueLabel('measurement', '{"quantityValue":200,"quantityUnit":"ML","referenceValue":1,"referenceUnit":"L"}')).toBe('200 ml, priced per 1 L')
+  })
+})

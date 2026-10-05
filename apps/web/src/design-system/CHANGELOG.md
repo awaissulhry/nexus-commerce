@@ -11,6 +11,11 @@
 - **`Countdown`** (`components`, G7): "Runs in 14 s" — seconds under a minute, then minutes, hours, days, stepping every 30 s; ONE shared timer for the whole page (`countdownTicker.ts`), armed for the soonest change and none while the tab is hidden (it catches up on return); an instance re-renders only when its words change. `onDone` once, when it reaches zero on screen (not for a moment already past at mount). Polite screen-reader updates at 60, 30, 10 s and zero, cleared after 4 s; `announce={false}` for a page with its own live region. A component of its own rather than an `AsOf` mode: `AsOf` is an observation stamp ("checked 5 min ago"), a countdown is a deadline with an end the page acts on.
 - **`useGridShortcuts(containerRef, shortcuts)`** (`grid/hooks`, G8): single keys (A, R, Enter, Escape, X…) bound only while focus is inside that grid; never with Ctrl/⌘/Alt, while typing (inputs, selects, contenteditable, comboboxes), in an open cell editor, in a menu inside the grid or while a modal outside it is open; Enter/Space stay a focused button's; an auto-repeat runs only shortcuts that ask for it. Returns the hint list (`key`, `keyLabel`, `label`, `disabled`, `reason`) for a `Kbd` legend. The filter is `matchGridShortcut` (pure, tested in node).
 - Catalog: `#change-value-example`, `#countdown-example` (Components › Countdown), `#row-verbs-example` with `#grid-shortcuts-example` (a small approvals grid: two verbs, a held verb, a countdown status, a click that opens the row, the A/R/Enter/Esc legend).
+## Paste: a select code is also found by its accepted spellings — 2026-10-05
+
+Product sheet consistency wave 3, W3-4 (eBay, Shopify in plain English). Mirrored in Factory (`scalarValue.ts` and its `.d.ts`).
+
+- **`scalarValue.ts`**: `ScalarColumnLike.optionAliases` (optional, code → other spellings) — never shown; `optionCode` (paste, typing, lists through `parseShape`) matches a label OR an accepted spelling, and a text two codes answer to still selects none. The eBay condition column now shows English names ("New with tags") and keeps the market's words ("Nuovo con etichette") as accepted spellings. Absent = unchanged.
 
 ## Words: one off-list sentence for every sheet cell — 2026-10-05
 

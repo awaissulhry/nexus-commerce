@@ -1,10 +1,11 @@
 import prisma from '../../db.js'
 import { cachedCategoryLabelsMany } from '../categories/reference-labels.service.js'
+import { taxonomyNames } from '../taxonomy/repository.js'
 
 export interface SheetReferenceNames {
   channel: string
   market: string
-  lookups: Array<{ field: 'descriptionThemeId' | 'categoryId'; ids: string[]; labels: Record<string, string> }>
+  lookups: Array<{ field: 'descriptionThemeId' | 'categoryId' | 'category'; ids: string[]; labels: Record<string, string> }>
 }
 interface NameSheet {
   scope: { channel?: string | null }
@@ -25,7 +26,10 @@ export async function withSelectedReferenceNames<T extends NameSheet>(sheet: T):
   }))].sort() : []
   const themes = idsFor('descriptionThemeId').filter(id => id !== 'none' && id.length <= 500)
   const categories = channel === 'EBAY' ? idsFor('categoryId').filter(id => /^[A-Z0-9_]{1,100}$/i.test(id)) : []
-  if (!themes.length && !categories.length) return sheet
+  // W3-4 — a Shopify product category is a taxonomy id (gid://shopify/TaxonomyCategory/…): its name comes from the synced
+  // Shopify taxonomy, never from Shopify itself. Not synced: no name, and the cell keeps the id.
+  const shopifyCategories = channel === 'SHOPIFY' ? idsFor('category').filter(id => /^gid:\/\/shopify\/TaxonomyCategory\/[a-zA-Z0-9-]{1,100}$/.test(id)) : []
+  if (!themes.length && !categories.length && !shopifyCategories.length) return sheet
   const reads: Array<{ field: SheetReferenceNames['lookups'][number]['field']; ids: string[]; read: () => Promise<Record<string, string>> }> = []
   if (themes.length && themes.length <= 1000) reads.push({ field: 'descriptionThemeId', ids: themes, read: async () => {
     const rows = await prisma.ebayDescriptionTheme.findMany({ where: { id: { in: themes } }, select: { id: true, name: true } })
@@ -36,6 +40,7 @@ export async function withSelectedReferenceNames<T extends NameSheet>(sheet: T):
   if (categories.length && categories.length <= 1000) reads.push({ field: 'categoryId', ids: categories, read: async () =>
     (await cachedCategoryLabelsMany('EBAY', market, categories.map(id => id.toUpperCase()))).categoryId ?? {},
   })
+  if (shopifyCategories.length && shopifyCategories.length <= 1000) reads.push({ field: 'category', ids: shopifyCategories, read: () => taxonomyNames('SHOPIFY', market, shopifyCategories) })
   if (!reads.length) return sheet
   const started = Date.now()
   // Independent, bounded reads run outside the sheet transaction. Failed reads claim no coverage.

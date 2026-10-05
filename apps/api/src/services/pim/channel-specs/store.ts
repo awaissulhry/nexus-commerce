@@ -1,5 +1,5 @@
 import { normalizeLanguage } from '../content-language.js'
-import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
+import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_INVENTORY_POLICY_LABEL, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
 import { shopifyDefinitionApplicability, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
 
@@ -56,7 +56,8 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     weight: { shape: 'measure', kind: 'number', unitOptions: [...SHOPIFY_WEIGHT_UNITS],
       defaultRule: { source: 'weightValue', transforms: [{ type: 'expr', expr: `measure($weightValue, $weightUnit, "${SHOPIFY_WEIGHT_UNITS.join('|')}")` }] } },
     compareAtPrice: { validation: { minimum: 0 }, channelStore: { kind: 'platformAttributes', path: ['compareAtPrice'], legacyPaths: [['shopifyCompareAtPrice']] } },
-    inventoryPolicy: { kind: 'select', mode: 'strict', options: schema?.native?.enums.inventoryPolicy?.map(choice => choice.name) ?? [] },
+    // W3-4 (Owner decision 10) — Yes / No, as Shopify's checkbox reads; the code stored and sent stays CONTINUE / DENY.
+    inventoryPolicy: { kind: 'select', mode: 'strict', options: schema?.native?.enums.inventoryPolicy?.map(choice => choice.name) ?? [], optionLabels: { ...SHOPIFY_INVENTORY_POLICY_LABEL } },
     category: { validation: { pattern: '^gid://shopify/TaxonomyCategory/[a-zA-Z0-9-]+$' } },
     // Shopify's handle rule, the one Publish checks (`nativeFieldValueError`): capitals are refused, never lowered (decision 12).
     handle: { validation: { pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } },

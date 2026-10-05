@@ -111,6 +111,11 @@ export interface ChannelFieldSpec {
    * A code without one keeps its `optionLabels` name. Display only: the code sent never changes.
    */
   optionLabelsEnglish?: Record<string, string>
+  /**
+   * Wave 3 (W3-4) — other spellings a code is accepted under when pasted, typed or imported, never shown: the market's own
+   * name when `optionLabels` is English (eBay IT "Nuovo con etichette" for NEW). A spelling naming two codes selects none.
+   */
+  optionAliases?: Record<string, string[]>
   /** `strict` = the channel accepts only the list. */
   mode?: OptionMode
   deprecatedOptions?: string[]

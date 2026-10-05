@@ -71,6 +71,21 @@ beforeEach(() => {
 afterEach(() => { for (const slot of hooks.state.slots) slot.cleanup?.(); vi.unstubAllGlobals() })
 
 describe('selected names carried by the sheet', () => {
+  it('W3-4: a Shopify product category shows its synced taxonomy name; the value stays the category id', () => {
+    const id = 'gid://shopify/TaxonomyCategory/aa-1-10-2'
+    const input = { family: { id: 'family-a' }, scope: { kind: 'channel', connectionId: 'store-a', locale: 'en' }, columns: [{ key: 'category', kind: 'text' } as NamedColumn],
+      rows: [{ values: { category: { value: id } } }],
+      meta: { referenceNames: { channel: 'SHOPIFY', market: 'GLOBAL', lookups: [{ field: 'category', ids: [id], labels: { [id]: 'Apparel & Accessories > Clothing' } }] } } }
+    hooks.state.cursor = 0
+    const output = useReferenceNames(input, 'SHOPIFY', 'GLOBAL', 'store-a')!
+    for (const effect of hooks.state.effects.splice(0)) effect()
+    expect(output.columns[0].optionLabels).toEqual({ [id]: 'Apparel & Accessories > Clothing' })
+    expect(output.rows).toBe(input.rows)
+    // A name for an id the lookup did not cover is not accepted.
+    hooks.state.slots = []; hooks.state.cursor = 0
+    const forged = useReferenceNames({ ...input, meta: { referenceNames: { channel: 'SHOPIFY', market: 'GLOBAL', lookups: [{ field: 'category', ids: [id], labels: { other: 'Forged' } }] } } }, 'SHOPIFY', 'GLOBAL', 'store-a')!
+    expect(forged.columns[0].optionLabels).toBeUndefined()
+  })
   it('shows verified names immediately and retains the cold policy and breadcrumb reads', () => {
     const input = sheet(), output = render(input)
     expect(output.rows).toBe(input.rows)

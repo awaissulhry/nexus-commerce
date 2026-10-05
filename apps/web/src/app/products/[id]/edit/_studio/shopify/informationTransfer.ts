@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { InformationField } from '@nexus/shared/shopify-information'
+import { SHOPIFY_INVENTORY_POLICY_LABEL, type InformationField } from '@nexus/shared/shopify-information'
 
 const prefix = 'NEXUS_SHOPIFY_VALUE_V1:'
 const schema = z.object({ accountId: z.string().min(1), type: z.string(), kind: z.enum(['native', 'metafield']), value: z.string().nullable() }).strict()
@@ -19,6 +19,11 @@ export function decodeInformationTransfer(raw: string, field: InformationField, 
     } catch { return { value: null, error: 'This copied Shopify value is incomplete. Copy it again.' } }
   }
   if (/^NEXUS_|^gid:\/\/shopify\//.test(raw) || !acceptsTextTransfer(field)) return { value: null, error: 'Paste a compatible typed value copied from a Shopify cell, or use its editor.' }
+  // W3-4 — the words the cell shows (Yes / No) paste as Shopify's code (CONTINUE / DENY).
+  if (field.type === 'inventory_policy') {
+    const code = Object.keys(SHOPIFY_INVENTORY_POLICY_LABEL).find(code => SHOPIFY_INVENTORY_POLICY_LABEL[code].toLowerCase() === raw.trim().toLowerCase())
+    if (code) return { value: code }
+  }
   return { value: raw === '' && ['money', 'number_integer', 'number_decimal', 'boolean'].includes(field.type) ? null : raw }
 }
 /** Excel/Sheets quoted TSV, including multiline cells and intentional final empty cells. */

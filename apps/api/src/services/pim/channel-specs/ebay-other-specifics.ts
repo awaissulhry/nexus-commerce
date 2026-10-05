@@ -8,6 +8,7 @@
  * Pure: the caller hands the columns it already serves and the family's listings on the coordinate.
  */
 import { aspectCanonicalName } from '../../ebay-theme-axes.js'
+import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
 import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
 import { normaliseKey } from './types.js'
 import { isBlankValue } from '../sheet-values.js'
@@ -41,18 +42,29 @@ export function otherItemSpecificColumns(input: {
       found.set(identity, { name: seen?.name ?? name, list: (seen?.list ?? false) || Array.isArray(value) })
     }
   }
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name)).map(({ name, list }): SheetColumn => {
+  return [...found.values()].map(found => ({ ...found, header: otherSpecificHeader(found.name) }))
+    .sort((a, b) => a.header.label.localeCompare(b.header.label)).map(({ name, list, header }): SheetColumn => {
     const key = `${OTHER_SPECIFIC_PREFIX}${normaliseKey(name)}`
     const cardinality = list ? { min: 0, max: null } : { min: 0, max: 1 }
     return {
-      key, writeField: `attr_${key}`, label: name, channelLabel: name,
+      key, writeField: `attr_${key}`, label: header.label, channelLabel: name,
       group: OTHER_SPECIFICS_GROUP.label, groupKey: OTHER_SPECIFICS_GROUP.key,
       kind: 'text', storage: 'listing', scope: 'global', requiredBy: [], editable: true, defaultVisible: true,
       shape: list ? 'list' : 'scalar', cardinality, maxLength: EBAY_ASPECT_VALUE_MAX, capFrom: input.coordinateLabel,
-      helpText: 'Stored on this listing and sent to eBay, but not an item specific of this eBay category. Clear it to stop sending it.',
+      helpText: `Stored on this listing and sent to eBay, but not an item specific of this eBay category. Clear it to stop sending it. Sent to eBay as "${name}".${header.english ? '' : ' Nexus has no English name for it yet.'}`,
       channels: { [input.coordinateLabel]: { key, attribute: `aspect_${name}`, path: [], label: name, requirement: 'optional', cardinality,
         maxLength: EBAY_ASPECT_VALUE_MAX, store: { kind: 'platformAttributes', path: ['itemSpecifics', name] }, hidden: false, editableOnExisting: true,
         categories: input.category ? [input.category] : [] } },
     }
   })
+}
+
+/**
+ * Wave 3 (W3-4, Owner decision 8) — the header in English when Nexus knows the name (Genere → "Gender"), else eBay's own
+ * name; capitalised either way. Display only: the key, the eBay name (`channelLabel`) and the store path never change.
+ */
+export function otherSpecificHeader(name: string): { label: string; english: boolean } {
+  const english = englishEbayAspectLabel(name)
+  const text = (english ?? name).trim()
+  return { label: text.charAt(0).toUpperCase() + text.slice(1), english: !!english }
 }

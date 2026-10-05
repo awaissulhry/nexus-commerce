@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { informationGroups, informationRegistry, informationSheetValue, SHOPIFY_FIELD_NOT_SWITCHED_ON, SHOPIFY_WEIGHT_UNITS, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeFieldValueError, nativeValuesEqual,
   normalizeShopifyWeight, shopifyStatusLabel, SHOPIFY_STATUS_LABEL, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit,
-  nativeWriteValue, shopifyTemplateSuffixInput, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT } from './shopify-information.js'
+  nativeWriteValue, shopifyTemplateSuffixInput, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT,
+  shopifyInventoryPolicyLabel, SHOPIFY_INVENTORY_POLICY_LABEL, shopifyUnitPriceLabel, shopifyUnitPriceSymbol } from './shopify-information.js'
 import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema, type ShopifyStoreSchema } from './shopify-linked-products.js'
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
@@ -184,5 +185,20 @@ describe('the theme template', () => {
   it('says what a new product uses and how to choose the store\'s default', () => {
     expect(SHOPIFY_NEXUS_TEMPLATE).toBe('nexus')
     expect(SHOPIFY_TEMPLATE_HINT).toBe('New products use the Nexus template (nexus). Clear it to use the store\'s default template.')
+  })
+})
+
+describe('Shopify values in words (W3-4)', () => {
+  it('Continue selling when out of stock reads Yes / No (Owner decision 10); the codes are the ones Publish accepts', () => {
+    expect(shopifyInventoryPolicyLabel('CONTINUE')).toBe('Yes')
+    expect(shopifyInventoryPolicyLabel('DENY')).toBe('No')
+    expect(shopifyInventoryPolicyLabel('SOMETHING')).toBe('SOMETHING')
+    for (const code of Object.keys(SHOPIFY_INVENTORY_POLICY_LABEL)) expect(nativeFieldValueError('inventoryPolicy', code)).toBeNull()
+  })
+  it('a unit price reads "200 ml, priced per 1 L"; a unit Nexus does not know stays as Shopify wrote it', () => {
+    expect(shopifyUnitPriceLabel({ quantityValue: 200, quantityUnit: 'ML', referenceValue: 1, referenceUnit: 'L' })).toBe('200 ml, priced per 1 L')
+    expect(shopifyUnitPriceLabel({ quantityValue: 6, quantityUnit: 'ITEM', referenceValue: 1, referenceUnit: 'ITEM' })).toBe('6 items, priced per 1 item')
+    expect(shopifyUnitPriceSymbol('M2')).toBe('m²')
+    expect(shopifyUnitPriceSymbol('UNKNOWN')).toBe('UNKNOWN')
   })
 })

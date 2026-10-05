@@ -30,6 +30,30 @@ const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', ha
 export const SHOPIFY_STATUS_LABEL: Readonly<Record<string, string>> = { ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' }
 /** A Shopify product status code in words ("ACTIVE" → "Active"); a code Nexus does not know stays as Shopify wrote it. */
 export const shopifyStatusLabel = (code: string): string => Object.prototype.hasOwnProperty.call(SHOPIFY_STATUS_LABEL, code) ? SHOPIFY_STATUS_LABEL[code] : code
+/**
+ * Wave 3 (W3-4, Owner decision 10) — "Continue selling when out of stock" answers Yes / No, as Shopify's own checkbox does.
+ * The stored and sent value stays Shopify's code (CONTINUE / DENY).
+ */
+export const SHOPIFY_INVENTORY_POLICY_LABEL: Readonly<Record<string, string>> = { CONTINUE: 'Yes', DENY: 'No' }
+/** An inventory policy code in words ("DENY" → "No"); a code Nexus does not know stays as Shopify wrote it. */
+export const shopifyInventoryPolicyLabel = (code: string): string => Object.prototype.hasOwnProperty.call(SHOPIFY_INVENTORY_POLICY_LABEL, code) ? SHOPIFY_INVENTORY_POLICY_LABEL[code] : code
+/**
+ * Wave 3 (W3-4) — Shopify's unit price units as people write them ("200 ml, priced per 1 L"). The stored and sent value
+ * stays Shopify's code (ML, L…); a unit Nexus does not know stays as Shopify wrote it.
+ */
+export const SHOPIFY_UNIT_PRICE_SYMBOL: Readonly<Record<string, string>> = {
+  ML: 'ml', CL: 'cl', L: 'L', M3: 'm³', MG: 'mg', G: 'g', KG: 'kg', MM: 'mm', CM: 'cm', M: 'm', M2: 'm²',
+  FLOZ: 'fl oz', PT: 'pt', QT: 'qt', GAL: 'gal', OZ: 'oz', LB: 'lb', IN: 'in', FT: 'ft', FT2: 'ft²', YD: 'yd', ITEM: 'item',
+}
+export const shopifyUnitPriceSymbol = (code: string): string => Object.prototype.hasOwnProperty.call(SHOPIFY_UNIT_PRICE_SYMBOL, code) ? SHOPIFY_UNIT_PRICE_SYMBOL[code] : code
+/** A unit price measurement in words: `{ quantityValue: 200, quantityUnit: 'ML', referenceValue: 1, referenceUnit: 'L' }` → "200 ml, priced per 1 L". */
+export function shopifyUnitPriceLabel(value: { quantityValue?: unknown; quantityUnit?: unknown; referenceValue?: unknown; referenceUnit?: unknown }): string {
+  const part = (amount: unknown, unit: unknown) => {
+    const symbol = shopifyUnitPriceSymbol(String(unit ?? ''))
+    return `${String(amount ?? '')} ${unit === 'ITEM' && Number(amount) !== 1 ? 'items' : symbol}`.trim()
+  }
+  return `${part(value.quantityValue, value.quantityUnit)}, priced per ${part(value.referenceValue, value.referenceUnit)}`
+}
 /** Native fields describe the connector capabilities. Custom fields come only from the selected store. */
 const core: Core[] = [
   ['title', 'Title', 'General', P, 'single_line_text_field'],

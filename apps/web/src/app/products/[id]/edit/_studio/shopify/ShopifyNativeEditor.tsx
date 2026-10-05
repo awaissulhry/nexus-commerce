@@ -1,14 +1,19 @@
 'use client'
 import { useState } from 'react'
-import { SHOPIFY_TEMPLATE_HINT, shopifyStatusLabel, shopifyWeightSymbol, type InformationField, type InformationInventory } from '@nexus/shared/shopify-information'
+import { SHOPIFY_INVENTORY_POLICY_LABEL, SHOPIFY_TEMPLATE_HINT, shopifyStatusLabel, shopifyUnitPriceSymbol, shopifyWeightSymbol, type InformationField, type InformationInventory } from '@nexus/shared/shopify-information'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { Field } from '@/design-system/components'
 import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
 import { ReferencePicker } from './ReferencePicker'
 import styles from './linked.module.css'
 
-export function ShopifyNativeEditor({ path, schema, field, value, disabled, onChange }: {
+/**
+ * `names` (W3-4): the column's names for the ids this field holds (the synced taxonomy's category names); `onChosen` hears
+ * a category's name when one is picked, so the cell names it before the next read.
+ */
+export function ShopifyNativeEditor({ path, schema, field, value, disabled, onChange, names, onChosen }: {
   path: string; schema: ShopifyStoreSchema; field: InformationField; value: string | null; disabled: boolean; onChange(value: string | null): void
+  names?: Readonly<Record<string, string>>; onChosen?(id: string, label: string): void
 }) {
   const [picker, setPicker] = useState(false)
   if (field.id === 'inventory') {
@@ -43,11 +48,12 @@ export function ShopifyNativeEditor({ path, schema, field, value, disabled, onCh
   if (choices) return <Field label={field.label}><Select size="sm" disabled={disabled} value={value ?? ''} onChange={e => onChange(e.target.value || null)}><option value="">Not set</option>
     {value && !choices.some(c => c.name === value) && <option value={value}>{value} (current)</option>}
     {/* A Shopify status reads in Title Case (Active); the value saved stays Shopify's code (ACTIVE). */}
-    {choices.map(c => <option key={c.name} value={c.name}>{field.type === 'boolean' || field.type === 'inventory_policy' ? c.description : field.id === 'status' ? shopifyStatusLabel(c.name) : c.name}</option>)}
+    {/* W3-4 (Owner decision 10): Continue selling when out of stock reads Yes / No; the value saved stays CONTINUE / DENY. */}
+    {choices.map(c => <option key={c.name} value={c.name}>{field.type === 'inventory_policy' ? SHOPIFY_INVENTORY_POLICY_LABEL[c.name] ?? c.description : field.type === 'boolean' ? c.description : field.id === 'status' ? shopifyStatusLabel(c.name) : c.name}</option>)}
   </Select></Field>
-  if (field.id === 'category') return <div className={styles.stack}><p>{value ?? 'No category'}</p><Button size="sm" disabled={disabled} onClick={() => setPicker(true)}>Choose category</Button>
+  if (field.id === 'category') return <div className={styles.stack}><p>{value === null ? 'No category' : names?.[value] ?? value}</p><Button size="sm" disabled={disabled} onClick={() => setPicker(true)}>Choose category</Button>
     <p className={styles.hint}>Existing category metafields are preserved. Shopify will reject a category that conflicts with them.</p>
-    {picker && <ReferencePicker path={path} schema={schema} type="taxonomy_category" onClose={() => setPicker(false)} onChoose={item => { onChange(item.id); setPicker(false) }} />}</div>
+    {picker && <ReferencePicker path={path} schema={schema} type="taxonomy_category" onClose={() => setPicker(false)} onChoose={item => { if (item.label) onChosen?.(item.id, item.label); onChange(item.id); setPicker(false) }} />}</div>
   if (field.id === 'weight' || field.id === 'unitPriceMeasurement') {
     let object: Record<string, unknown>
     try { object = value === null ? {} : JSON.parse(value); if (!object || typeof object !== 'object' || Array.isArray(object)) throw new Error() }
@@ -60,8 +66,8 @@ export function ShopifyNativeEditor({ path, schema, field, value, disabled, onCh
       <Field label={label}><Input size="sm" inputMode="decimal" value={String(current[key])} disabled={disabled} onChange={e => update(key, e.target.value, true)} /></Field>
       <Field label={unitLabel}><Select size="sm" value={String(current[unit])} disabled={disabled} onChange={e => update(unit, e.target.value, false)}><option value="">Choose unit</option>
         {!!current[unit] && !unitChoices.some(c => c.name === current[unit]) && <option value={String(current[unit])}>{String(current[unit])} (current)</option>}
-        {/* A weight unit shows its symbol (kg); the value saved stays Shopify's code (KILOGRAMS). */}
-        {unitChoices.map(c => <option key={c.name} value={c.name}>{weight ? shopifyWeightSymbol(c.name) : c.name}</option>)}
+        {/* A weight or unit price unit shows its symbol (kg, ml); the value saved stays Shopify's code (KILOGRAMS, ML). */}
+        {unitChoices.map(c => <option key={c.name} value={c.name}>{weight ? shopifyWeightSymbol(c.name) : shopifyUnitPriceSymbol(c.name)}</option>)}
       </Select></Field></div>)}</div>
   }
   const hint = field.id === 'handle' ? 'The old URL will redirect to the new handle. Shopify is checked for collisions before synchronization.'

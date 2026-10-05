@@ -5,6 +5,8 @@ export interface ScalarColumnLike {
   shape?: string
   options?: string[]
   optionLabels?: Record<string, string>
+  /** Other spellings a code is accepted under (the market's own name beside an English label); never shown. */
+  optionAliases?: Record<string, string[]>
 }
 
 export const BOOLEAN_OPTIONS = [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]
@@ -31,13 +33,14 @@ export function parseScalarValue(col: ScalarColumnLike, raw: unknown): unknown {
   return raw
 }
 
-/** Codes win over labels; ambiguous labels must not silently select an arbitrary option. */
-export function optionCode(col: Pick<ScalarColumnLike, 'options' | 'optionLabels'>, raw: string): string {
+/** Codes win over labels (and accepted spellings); ambiguous labels must not silently select an arbitrary option. */
+export function optionCode(col: Pick<ScalarColumnLike, 'options' | 'optionLabels' | 'optionAliases'>, raw: string): string {
   const text = raw.trim()
   const options = col.options ?? []
   if (options.includes(text)) return text
   const fold = text.toLowerCase()
-  const labels = options.filter(code => col.optionLabels?.[code]?.trim().toLowerCase() === fold)
+  const labels = options.filter(code => col.optionLabels?.[code]?.trim().toLowerCase() === fold
+    || col.optionAliases?.[code]?.some(alias => alias.trim().toLowerCase() === fold))
   if (labels.length === 1) return labels[0]
   const codes = options.filter(code => code.toLowerCase() === fold)
   return codes.length === 1 ? codes[0] : raw

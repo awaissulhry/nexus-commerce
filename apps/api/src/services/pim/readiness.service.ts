@@ -171,7 +171,8 @@ export function buildCoordinateValidators(
         label: c.label,
         // Accept both the schema's option labels and their underlying codes:
         // rows in this catalogue carry either.
-        values: [...c.options, ...Object.keys(c.optionLabels ?? {}), ...Object.values(c.optionLabels ?? {})],
+        // W3-4: and the spellings still accepted beside an English label (the market's name).
+        values: [...c.options, ...Object.keys(c.optionLabels ?? {}), ...Object.values(c.optionLabels ?? {}), ...Object.values(c.optionAliases ?? {}).flat()],
         // See the header: the sheet grades a closed-list miss as a WARNING on
         // purpose. `false` is the policy, not an oversight.
         selectionOnly: false,
