@@ -67,7 +67,8 @@ const STYLE_WORDS = /^[\p{L}\p{Nd}\p{Zs}]+$/u
 const WHO_MADE: readonly string[] = etsyListingSchema.create.properties.who_made.enum
 const WHEN_MADE: readonly string[] = etsyListingSchema.create.properties.when_made.enum
 
-export const ETSY_ZERO_STOCK_NOTE = 'Etsy cannot sell at stock 0: the listing stays a draft; it can go live when you Publish with stock.'
+/** D2 — stock 0 at a create: Etsy refuses quantity 0 on createDraftListing (R1 §1), so the POST says 1 and the inventory PUT the real stock. */
+export const ETSY_ZERO_STOCK_NOTE = 'Stock is 0. Etsy cannot create a listing at 0, so Nexus creates the draft with quantity 1 and then sends each variation\'s real stock (0). Etsy cannot sell at 0: the listing can go live once it has stock.'
 export const ETSY_AUTO_RENEW_NOTE = 'Automatic renewal is on: Etsy renews the listing every 4 months and charges a renewal fee.'
 /** Etsy refuses an inventory where any offering has no processing profile (R1 §3, "All offerings need readiness state"). */
 export const ETSY_NEEDS_READINESS = 'Processing profile is not set. Etsy needs one for every variation: choose it on the main row (or on each row).'

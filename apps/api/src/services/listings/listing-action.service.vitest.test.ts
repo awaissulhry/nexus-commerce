@@ -51,9 +51,9 @@ vi.mock('../shopify/admin-client.js', async (original) => ({
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { permissionForRoute } from '../../lib/auth/permissions-manifest.js'
-import { AMAZON_FBA_DELETE_WARNING, AMAZON_FBA_PAUSE_WARNING, AMAZON_PAN_EU_DELETE_WARNING, deleteDoneSentence, deletedStatusReason, ETSY_DELETE_NOT_YET, ETSY_VARIATION_HIDDEN_REASON, SHOPIFY_PAUSE_CHECK } from '@nexus/shared/listing-actions'
+import { AMAZON_FBA_DELETE_WARNING, AMAZON_FBA_PAUSE_WARNING, AMAZON_PAN_EU_DELETE_WARNING, deleteDoneSentence, deletedStatusReason, ETSY_DELETE_NOT_YET, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE, ETSY_DRAFT_STATE, ETSY_VARIATION_HIDDEN_REASON, SHOPIFY_PAUSE_CHECK } from '@nexus/shared/listing-actions'
 import { destinationSellingStates, executeListingAction, OLD_CLOSE_PAUSE_REASON, previewListingAction, readListingActionState, runListingAction } from './listing-action.service.js'
-import { ETSY_HIDDEN_DONE, ETSY_HIDDEN_LISTING_INACTIVE, ETSY_HIDE_ALL, ETSY_LISTING_CHANGED, ETSY_LISTING_RESUMED_VARIATION_HIDDEN, ETSY_NOT_HIDDEN_LISTING_INACTIVE, ETSY_NOT_PAUSED, ETSY_SHOWN_DONE } from './listing-action-adapters/etsy.js'
+import { ETSY_HIDDEN_DONE, ETSY_HIDDEN_LISTING_INACTIVE, ETSY_HIDE_ALL, ETSY_LISTING_CHANGED, ETSY_LISTING_RESUMED_VARIATION_HIDDEN, ETSY_NOT_HIDDEN_LISTING_INACTIVE, ETSY_NOT_PAUSED, ETSY_SHOWN_DONE, etsyListingActions } from './listing-action-adapters/etsy.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -872,6 +872,56 @@ describe('Etsy (E2, D6): Status on ONE variation hides or shows it on the live l
       expect(fixture.etsy).toHaveBeenCalledExactlyOnceWith({ accountId: ids.etsy, listingId: '9000000012', change: { state: 'inactive' } })
       expect(fixture.etsyInventory).not.toHaveBeenCalled()
       expect(await row(id)).toMatchObject({ listingStatus: 'INACTIVE', offerCloseReason: 'sheet-pause' })
+    } finally { off() }
+  }))
+
+  /** E3 — a listing Nexus created as an Etsy draft (DRAFT with a listing number, paused, unpublished). */
+  const created = { listingStatus: 'DRAFT', isPublished: false, syncPaused: true }
+  it('E3 — a listing that is a draft on Etsy reads Inactive (the draft sentence); Active is refused (Nexus cannot set a draft live yet) — the main row, a variation, Claude\'s reopen (never "nothing to resume") — and nothing reaches Etsy', () => scoped(async () => {
+    const { f, rows } = await etsyFamily('ETSY-DR', { root: created, S: created, M: created, L: created })
+    live()
+    try {
+      const read = await readListingActionState(f.root, { channel: 'ETSY', market: 'GLOBAL', accountId: ids.etsy })
+      expect(read.rows.find(r => r.sku === 'ETSY-DR-S')).toMatchObject({ state: 'paused', reason: ETSY_DRAFT_STATE, actions: [], refusals: { resume: ETSY_DRAFT_NO_LIVE } })
+      expect(read.rows.find(r => r.sku === 'ETSY-DR')).toMatchObject({ state: 'paused', actions: [] })
+      // The whole listing, one variation, and Claude's reopen-listing (it names listings: never "nothing to resume" here).
+      const bodies: Array<[Record<string, unknown>, string[]]> = [[etsyScope(), ['ETSY-DR-S', 'ETSY-DR-M', 'ETSY-DR-L']], [{ ...etsyScope(), productIds: [f.children.S] }, ['ETSY-DR-S']],
+        [{ ...etsyScope(), productIds: [f.children.S], wholeListing: true }, ['ETSY-DR-S', 'ETSY-DR-M', 'ETSY-DR-L']]]
+      for (const [body, skus] of bodies) {
+        const preview = await previewListingAction(f.root, 'resume', body, USER)
+        expect(preview).toMatchObject({ sendCount: 0, consequence: ETSY_DRAFT_NO_LIVE })
+        expect(preview.rows.filter(r => r.plan !== 'skip').map(r => [r.sku, r.plan, r.sentence]).sort()).toEqual(skus.map(sku => [sku, 'refused', ETSY_DRAFT_NO_LIVE]).sort())
+        expect((await runListingAction(f.root, 'resume', { previewId: preview.previewId }, USER)).status).toBe('NOT_SENT')
+      }
+      // Inactive: a draft is not on sale, so there is nothing to pause (Claude's close-listing too).
+      const pause = await previewListingAction(f.root, 'pause', { ...etsyScope(), wholeListing: true }, USER)
+      expect(pause).toMatchObject({ sendCount: 0, consequence: ETSY_DRAFT_NO_PAUSE })
+      expect(fixture.etsy).not.toHaveBeenCalled()
+      expect(fixture.etsyInventory).not.toHaveBeenCalled()
+      expect(fixture.etsyStock).not.toHaveBeenCalled()
+      expect(await row(rows.S)).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, offerClosedAt: null })
+    } finally { off() }
+  }))
+
+  it('E3 — the Etsy adapter itself refuses Active and Inactive on a draft row (a defence behind the plan): NOT_SENT with true sentences, no state PATCH, no inventory write', () => scoped(async () => {
+    const { f, rows } = await etsyFamily('ETSY-DA', { root: created, S: created, M: created, L: created })
+    live()
+    try {
+      const family = await prisma.channelListing.findMany({ where: { id: { in: Object.values(rows) } } })
+      const targets = family.filter(r => r.id === rows.S || r.id === rows.M).map(r => ({ ...r, sku: r.id === rows.S ? 'ETSY-DA-S' : 'ETSY-DA-M', isParent: false,
+        productFulfillmentMethod: null })) as never[]
+      const ctx = { previewId: 'p', actor: USER, destination: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: ids.etsy, aliasKey: '' }, familyId: f.root, familySku: 'ETSY-DA',
+        family: targets, reach: 'row' as const } as never
+      expect((await etsyListingActions.run('resume', targets, ctx)).map(r => [r.sku, r.outcome, r.message]))
+        .toEqual([['ETSY-DA-S', 'NOT_SENT', ETSY_DRAFT_NO_LIVE], ['ETSY-DA-M', 'NOT_SENT', ETSY_DRAFT_NO_LIVE]])
+      expect((await etsyListingActions.run('pause', targets, ctx)).map(r => [r.sku, r.outcome, r.message]))
+        .toEqual([['ETSY-DA-S', 'NOT_SENT', ETSY_DRAFT_NO_PAUSE], ['ETSY-DA-M', 'NOT_SENT', ETSY_DRAFT_NO_PAUSE]])
+      expect(fixture.etsy).not.toHaveBeenCalled()
+      expect(fixture.etsyInventory).not.toHaveBeenCalled()
+      expect(fixture.etsyStock).not.toHaveBeenCalled()
+      // The gate still comes first: off, the gate's sentence (nothing is sent either way).
+      off()
+      expect((await etsyListingActions.run('resume', targets, ctx))[0]).toMatchObject({ outcome: 'NOT_SENT', message: 'Etsy publishing is turned off. Nothing was sent to Etsy.' })
     } finally { off() }
   }))
 })

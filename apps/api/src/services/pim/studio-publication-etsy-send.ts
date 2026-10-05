@@ -13,10 +13,10 @@
  * gave no clear answer to is "unknown" (it may have landed). VERIFIED only when every step was applied (or Etsy already
  * held it) and the read-back shows every applied field as sent.
  *
- * A NEW listing is never created here (E3): its create is refused at the review, at the claim and here.
+ * E3 — a NEW listing is created by `studio-publication-etsy-create.ts`, which runs its later calls through this file's
+ * step engine (`sendEtsySteps`); this send refuses a create (a defence: the studio routes creates there).
  */
 import type { StudioPublishResult } from '@nexus/shared/studio-publication'
-import { ETSY_CREATE_NOT_YET } from '@nexus/shared/publish-actions'
 import { logger } from '../../utils/logger.js'
 import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { replaceEtsyInventory } from '../etsy/inventory-write.service.js'
@@ -25,20 +25,26 @@ import type { EtsyListingPatch } from '../etsy/listing-content.js'
 import { deleteEtsyListingProperty, setEtsyListingProperty, updateEtsyListingContent, writeEtsyTranslation } from '../etsy/listing-write.service.js'
 import { readEtsyLive } from '../live-read/etsy.js'
 import { andList } from './studio-publication-etsy-build.js'
-import { etsyInventoryReplaceBody, etsyReadBackMismatches, ETSY_LIVE_READ_NEEDED } from './studio-publication-etsy-changes.js'
+import { etsyCreateInventoryBody, etsyInventoryReplaceBody, etsyReadBackMismatches, ETSY_LIVE_READ_NEEDED } from './studio-publication-etsy-changes.js'
 import { etsyFieldLabel, stripNothingSent } from './studio-publication-etsy-problems.js'
-import type { EtsyBeforeSend, EtsyCall, EtsyCompiled, EtsyLiveListing, EtsySendReceipt, EtsySendStep } from './studio-publication-etsy-types.js'
+import type { EtsyBeforeSend, EtsyCall, EtsyCompiled, EtsyJournalRequest, EtsyLiveListing, EtsySendReceipt, EtsySendStep } from './studio-publication-etsy-types.js'
 
 export const ETSY_SEND_DISABLED = 'Live Etsy publication was disabled.'
 export const ETSY_CHANGED_AFTER_REVIEW = 'Etsy changed this listing after the review (its fields, attributes, variations, translations or state). Review again.'
 /** The studio says "Nothing was submitted." before each of these, so none repeats it. */
 export const ETSY_NOTHING_SELECTED = 'No fields are selected.'
 export const ETSY_ALREADY_HOLDS = 'Etsy already holds these values.'
-const DEFAULT_READ_BACK_DELAY_MS = 2_000
+/** A defence: the studio routes a new listing to the create step (studio-publication-etsy-create.ts), never here. */
+export const ETSY_CREATE_ELSEWHERE = 'This review creates a new Etsy listing; the create step sends it.'
+/** The create's POST path (createDraftListing, R1 §1): the shop is read from the account at send. */
+export const ETSY_CREATE_PATH = '/shops/{shop_id}/listings'
+/** Etsy is not read-your-writes: a read right after a write may not show it yet (etsy/inventory-write.service.ts). */
+export const DEFAULT_READ_BACK_DELAY_MS = 2_000
 
 const textOf = (error: unknown) => error instanceof Error ? error.message : String(error)
 /** Nothing reached Etsy: the studio stores FAILED with "Nothing was submitted." (studio-publication.service.ts). */
-const notSent = (message: string): never => { throw Object.assign(new Error(stripNothingSent(message)), { notSent: true }) }
+export const etsyNotSent = (message: string): never => { throw Object.assign(new Error(stripNothingSent(message)), { notSent: true }) }
+const notSent = etsyNotSent
 
 /** Etsy refuses these before it applies anything (a body it cannot take, a sign-in or a permission): the same on any attempt. */
 const REFUSED_BEFORE_APPLYING: ReadonlySet<number> = new Set([400, 401, 403])
@@ -67,14 +73,15 @@ function afterJournal(method: EtsyCall['method'], error: unknown): { outcome: 'a
 /** The change field a single-field call writes, e.g. `property:200` → 200. */
 const propertyIdOf = (field: string) => /^property:(\d+)$/.test(field) ? Number(field.slice(9)) : null
 
-/** A step in the review's words: the fields of the PATCH, an attribute's name, a translation, the variations. */
-function stepLabel(plan: EtsyCompiled, call: EtsyCall, fresh: EtsyLiveListing): string {
+/** A step in the review's words: the create's POST, the fields of the PATCH, an attribute's name, a translation, the variations. */
+export function stepLabel(plan: EtsyCompiled, call: EtsyCall, fresh?: EtsyLiveListing | null): string {
   const fields = call.fields ?? []
+  if (call.method === 'POST' && call.path === ETSY_CREATE_PATH) return 'Create the draft listing'
   if (call.method === 'PATCH') return andList(fields.map(etsyFieldLabel))
   const field = fields[0] ?? ''
   const id = propertyIdOf(field)
   if (id !== null) return plan.properties.find(property => property.property_id === id)?.property_name
-    ?? fresh.properties.find(property => property.property_id === id)?.property_name ?? `Property ${id}`
+    ?? fresh?.properties.find(property => property.property_id === id)?.property_name ?? `Property ${id}`
   if (field.startsWith('translation:')) return `Translation (${field.slice(12)})`
   return etsyFieldLabel(field)
 }
@@ -95,7 +102,7 @@ export async function sendEtsyPublication(plan: EtsyCompiled, accountId: string,
   // 1 — defences: the review and the claim refuse each of these first.
   if (getEtsyPublishMode() !== 'live') notSent(ETSY_SEND_DISABLED)
   const listingId = plan.listingId
-  if (!listingId) return notSent(ETSY_CREATE_NOT_YET)
+  if (!listingId) return notSent(ETSY_CREATE_ELSEWHERE)
   const calls = plan.request?.calls ?? []
   if (!calls.length) notSent(ETSY_NOTHING_SELECTED)
   if (!plan.liveRevision) notSent(ETSY_LIVE_READ_NEEDED)
@@ -111,27 +118,7 @@ export async function sendEtsyPublication(plan: EtsyCompiled, accountId: string,
   const ledger = { productId: plan.ownerProductId, triggeredBy: 'api' as const }
   const steps: EtsySendStep[] = calls.map(call => ({ label: stepLabel(plan, call, fresh), fields: [...(call.fields ?? [])], outcome: 'not-sent' }))
   const mismatches: string[] = []
-  for (const [index, call] of calls.entries()) {
-    const step = steps[index]
-    /** The method journalled for this step (a translation's is chosen by the writer's GET): from then on, a failure may have reached Etsy. */
-    let journalled: EtsyCall['method'] | null = null
-    const journal = async (method: EtsyCall['method'], body: Record<string, unknown> | null) => {
-      await beforeSend({ operation: 'updateListing', method, path: call.path, encoding: call.encoding, body, fields: [...step.fields] })
-      journalled = method
-    }
-    try {
-      step.outcome = await sendStep(plan, call, step.fields, { accountId, listingId, ledger, journal, mismatches, readBackDelayMs: options.readBackDelayMs })
-    } catch (error) {
-      const ended = journalled ? afterJournal(journalled, error) : { outcome: 'refused' as const }
-      step.outcome = ended.outcome
-      step.message = ended.message ?? stripNothingSent(textOf(error))
-      // Applied after all (a DELETE of what is already gone): the send goes on.
-      if (ended.outcome === 'applied') continue
-      // Nothing reached Etsy yet: the whole publication is not sent.
-      if (ended.outcome === 'refused' && !steps.some(other => other.outcome === 'applied' || other.outcome === 'unknown')) notSent(textOf(error))
-      break
-    }
-  }
+  await sendEtsySteps(plan, calls, steps, 0, { accountId, listingId, ledger, mismatches, readBackDelayMs: options.readBackDelayMs, beforeSend, operation: 'updateListing' })
   if (steps.every(step => step.outcome === 'unchanged')) notSent(ETSY_ALREADY_HOLDS)
 
   // 4 — the read-back, once Etsy's read can show the writes (it is not read-your-writes, etsy/inventory-write.service.ts).
@@ -149,13 +136,47 @@ export async function sendEtsyPublication(plan: EtsyCompiled, accountId: string,
   return { reference: listingId, verified, steps, mismatches, ...(readBackError ? { readBackError } : {}) }
 }
 
-interface StepContext {
+export interface StepContext {
   accountId: string
   listingId: string
   ledger: { productId: string; triggeredBy: 'api' }
   journal: (method: EtsyCall['method'], body: Record<string, unknown> | null) => Promise<void>
   mismatches: string[]
   readBackDelayMs?: number
+  /** E3 — a draft Nexus has just created: its inventory is Nexus's own (`etsyCreateInventoryBody`), never a listing's kept rules. */
+  create?: boolean
+}
+
+/**
+ * The step engine (E2's send and E3's create): `calls[from..]` in order, one write each, each journalled (`beforeSend`,
+ * with the exact request) before it is made, never repeated. `steps` holds one entry per call; those before `from`
+ * already ended (the create's POST). A step that fails stops the send and the rest stays `not-sent`, except a DELETE of
+ * what is already gone. Throws (tagged `notSent`) only when a step is refused before anything reached Etsy.
+ */
+export async function sendEtsySteps(plan: EtsyCompiled, calls: readonly EtsyCall[], steps: EtsySendStep[], from: number,
+  context: Omit<StepContext, 'journal'> & { beforeSend: EtsyBeforeSend; operation: EtsyJournalRequest['operation'] }): Promise<void> {
+  const { beforeSend, operation, ...shared } = context
+  for (let index = from; index < calls.length; index++) {
+    const call = calls[index], step = steps[index]
+    /** The method journalled for this step (a translation's is chosen by the writer's GET): from then on, a failure may have reached Etsy. */
+    let journalled: EtsyCall['method'] | null = null
+    const journal = async (method: EtsyCall['method'], body: Record<string, unknown> | null) => {
+      await beforeSend({ operation, method, path: call.path, encoding: call.encoding, body, fields: [...step.fields] })
+      journalled = method
+    }
+    try {
+      step.outcome = await sendStep(plan, call, step.fields, { ...shared, journal })
+    } catch (error) {
+      const ended = journalled ? afterJournal(journalled, error) : { outcome: 'refused' as const }
+      step.outcome = ended.outcome
+      step.message = ended.message ?? stripNothingSent(textOf(error))
+      // Applied after all (a DELETE of what is already gone): the send goes on.
+      if (ended.outcome === 'applied') continue
+      // Nothing reached Etsy yet: the whole publication is not sent.
+      if (ended.outcome === 'refused' && !steps.some(other => other.outcome === 'applied' || other.outcome === 'unknown')) notSent(textOf(error))
+      break
+    }
+  }
 }
 
 /** One call, by the writer its fields name. Resolves `applied`, or `unchanged` when Etsy already held it; throws otherwise. */
@@ -197,11 +218,14 @@ async function sendStep(plan: EtsyCompiled, call: EtsyCall, fields: string[], co
     return 'applied'
   }
 
-  // The variations: built under the listing lock from Etsy's fresh inventory; Etsy's own price, stock and on/off kept.
+  // The variations: built under the listing lock from Etsy's fresh inventory; Etsy's own price, stock and on/off kept
+  // (E3: a draft Nexus has just created takes Nexus's whole inventory). A draft cannot sell, so the writer waives the
+  // stock rule (Etsy order import) when Etsy itself says the listing is a draft (`allowDraftStock`).
   if (field === 'inventory') {
     const result = await replaceEtsyInventory({ accountId, listingId, ledger, readBackDelayMs: context.readBackDelayMs, priceCurrency: plan.currency ?? undefined,
+      allowDraftStock: true,
       build: current => {
-        const out = etsyInventoryReplaceBody(plan, current)
+        const out = context.create ? etsyCreateInventoryBody(plan, current) : etsyInventoryReplaceBody(plan, current)
         if ('refusal' in out) throw new Error(out.refusal)
         return out.body
       },
@@ -224,10 +248,17 @@ export function etsyPublicationResult(reviewId: string, plan: EtsyCompiled, rece
   const products = plan.products.filter((product, index, all) => all.findIndex(other => other.sku === product.sku) === index)
   if (receipt.verified) return { id: reviewId, status: 'VERIFIED', message: `Etsy took the change to listing ${reference}, and the read-back matches.`,
     results: products.map(product => ({ sku: product.sku, status: 'VERIFIED', message: 'Read back from Etsy', reference })) }
+  return { id: reviewId, status: 'UNVERIFIED', warnings: etsyStepWarnings(receipt),
+    message: `Etsy took part of this change, or Nexus could not confirm it. Check listing ${reference} on Etsy, mark this publication checked, then Publish again: Nexus sends only what still differs.`,
+    results: products.map(product => ({ sku: product.sku, status: 'ACCEPTED', message: 'Sent to Etsy; not confirmed', reference })) }
+}
+
+/** An unconfirmed send's warnings, one line per step group, then the read-back's differences (E2's send and E3's create). */
+export function etsyStepWarnings(receipt: EtsySendReceipt): string[] {
   const labels = (outcome: EtsySendStep['outcome']) => receipt.steps.filter(step => step.outcome === outcome).map(step => step.label)
   const applied = labels('applied'), unchanged = labels('unchanged'), notSentAfter = labels('not-sent')
   const confirmed = !receipt.readBackError && !receipt.mismatches.length
-  const warnings = [
+  return [
     ...(applied.length ? [`${confirmed ? 'Sent and confirmed' : 'Sent'}: ${andList(applied)}.`] : []),
     ...(unchanged.length ? [`Etsy already held: ${andList(unchanged)}.`] : []),
     ...receipt.steps.filter(step => step.outcome === 'refused').map(step => `Not sent: ${step.label} — ${step.message ?? 'refused'}`),
@@ -236,7 +267,4 @@ export function etsyPublicationResult(reviewId: string, plan: EtsyCompiled, rece
     ...receipt.mismatches,
     ...(receipt.readBackError ? [receipt.readBackError] : []),
   ]
-  return { id: reviewId, status: 'UNVERIFIED', warnings,
-    message: `Etsy took part of this change, or Nexus could not confirm it. Check listing ${reference} on Etsy, mark this publication checked, then Publish again: Nexus sends only what still differs.`,
-    results: products.map(product => ({ sku: product.sku, status: 'ACCEPTED', message: 'Sent to Etsy; not confirmed', reference })) }
 }

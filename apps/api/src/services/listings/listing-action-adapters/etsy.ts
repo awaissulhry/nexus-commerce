@@ -17,7 +17,7 @@
  * ETSY_VARIATION_HIDDEN_REASON), so its stock pushes are held and the listing-level Pause/Resume neither overwrites
  * nor lifts it. Showing it needs Etsy order import (it sells again, and Nexus then sends its current stock).
  */
-import { ETSY_DELETE_NOT_YET, ETSY_NO_END, ETSY_VARIATION_HIDDEN_REASON, SHEET_PAUSE_REASON } from '@nexus/shared/listing-actions'
+import { ETSY_DELETE_NOT_YET, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE, ETSY_NO_END, ETSY_VARIATION_HIDDEN_REASON, SHEET_PAUSE_REASON } from '@nexus/shared/listing-actions'
 import prisma from '../../../db.js'
 import { etsyWriteRefusal } from '../../etsy-publish-gate.service.js'
 import { setEtsyListingState } from '../../etsy/listing-write.service.js'
@@ -57,6 +57,10 @@ function variationOutcomeOfError(err: unknown): Pick<AdapterRowResult, 'outcome'
 const where = (ctx: ActionContext, ids: string[]) => ({
   id: { in: ids }, channel: 'ETSY', marketplace: ctx.destination.marketplace, channelConnectionId: ctx.destination.accountId, aliasKey: ctx.destination.aliasKey,
 })
+
+/** E3 — a row whose listing is a draft on Etsy (Nexus made it, or someone on etsy.com): a listing number, and Nexus marks it DRAFT. */
+export const etsyDraftRow = (row: Pick<ActionListing, 'externalListingId' | 'listingStatus'>) =>
+  !!row.externalListingId?.trim() && String(row.listingStatus ?? '').toUpperCase() === 'DRAFT'
 
 /** E2 (D6) — a row hidden on its own (one variation), as opposed to the whole listing paused. */
 export const variationHidden = (row: Pick<ActionListing, 'offerClosedAt' | 'offerCloseReason'>) =>
@@ -198,6 +202,11 @@ export const etsyListingActions: ListingActionAdapter = {
     const results: AdapterRowResult[] = []
     const listings = new Map<string, ActionListing[]>()
     for (const row of targets) {
+      // E3 — a listing that is a draft on Etsy (Nexus's, or one made on etsy.com): Nexus cannot set it live yet, and a draft
+      // has nothing to pause. Nothing is sent (a Resume would otherwise read as showing variations).
+      if (etsyDraftRow(row)) {
+        results.push(rowResult(row, 'NOT_SENT', action === 'resume' ? ETSY_DRAFT_NO_LIVE : ETSY_DRAFT_NO_PAUSE)); continue
+      }
       const listingId = row.externalListingId?.trim() ?? ''
       if (!/^[1-9]\d*$/.test(listingId)) { results.push(rowResult(row, 'FAILED', 'This listing has no Etsy listing number.')); continue }
       listings.set(listingId, [...(listings.get(listingId) ?? []), row])

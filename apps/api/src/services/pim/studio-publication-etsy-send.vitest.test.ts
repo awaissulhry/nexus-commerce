@@ -27,12 +27,11 @@ vi.mock('../etsy/listing-write.service.js', () => ({ updateEtsyListingContent: m
   deleteEtsyListingProperty: m.deleteProperty, writeEtsyTranslation: m.translation }))
 vi.mock('../etsy/inventory-write.service.js', () => ({ replaceEtsyInventory: m.inventory }))
 
-import { ETSY_CREATE_NOT_YET } from '@nexus/shared/publish-actions'
 import type { EtsyInventoryWrite } from '../etsy/inventory.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { etsyCreateForm } from './studio-publication-etsy-build.js'
 import { compileEtsyChanges, prepareEtsyChanges, ETSY_LIVE_READ_NEEDED } from './studio-publication-etsy-changes.js'
-import { etsyPublicationResult, sendEtsyPublication, ETSY_ALREADY_HOLDS, ETSY_CHANGED_AFTER_REVIEW, ETSY_NOTHING_SELECTED, ETSY_SEND_DISABLED } from './studio-publication-etsy-send.js'
+import { etsyPublicationResult, sendEtsyPublication, ETSY_ALREADY_HOLDS, ETSY_CHANGED_AFTER_REVIEW, ETSY_CREATE_ELSEWHERE, ETSY_NOTHING_SELECTED, ETSY_SEND_DISABLED } from './studio-publication-etsy-send.js'
 import type { EtsyChangePlan, EtsyCompiled, EtsyJournalRequest, EtsyListingValues, EtsyLiveListing, EtsyPublication } from './studio-publication-etsy-types.js'
 
 const facts = {} as PublicationFacts
@@ -127,7 +126,9 @@ describe('refused before anything reaches Etsy (FAILED, "Nothing was submitted."
     m.mode = 'dry-run'
     expect(await refusal(send(compiled()))).toBe(ETSY_SEND_DISABLED)
     m.mode = 'live'
-    expect(await refusal(send({ ...compiled(), listingId: null }))).toBe(ETSY_CREATE_NOT_YET)
+    // E3 — a create is the create step's (studio-publication-etsy-create.ts); this send refuses it, in plain words.
+    expect(await refusal(send({ ...compiled(), listingId: null }))).toBe(ETSY_CREATE_ELSEWHERE)
+    expect(ETSY_CREATE_ELSEWHERE).toBe('This review creates a new Etsy listing; the create step sends it.')
     expect(await refusal(send({ ...compiled(), request: null }))).toBe(ETSY_NOTHING_SELECTED)
     expect(await refusal(send({ ...compiled(), liveRevision: null }))).toBe(ETSY_LIVE_READ_NEEDED)
     expect(m.read).not.toHaveBeenCalled()
@@ -189,7 +190,8 @@ describe('sent', () => {
     expect(m.patch).toHaveBeenCalledWith({ accountId: 'acc-etsy', listingId: '9000000001', content: { listing: { title: 'Leather knee slider' }, acceptAutoRenewCharge: false }, ledger })
     expect(m.setProperty).toHaveBeenCalledWith({ accountId: 'acc-etsy', listingId: '9000000001', property: { propertyId: 47626759834, valueIds: [300], values: ['Leather'], scaleId: null }, ledger })
     expect(m.translation).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-etsy', listingId: '9000000001', ledger, translation: TRANSLATION }))
-    expect(m.inventory).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-etsy', listingId: '9000000001', ledger, priceCurrency: 'EUR', readBackDelayMs: 0 }))
+    // E3 — the writer may waive the stock rule only when Etsy itself says the listing is a draft (its own read, under the lock).
+    expect(m.inventory).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-etsy', listingId: '9000000001', ledger, priceCurrency: 'EUR', readBackDelayMs: 0, allowDraftStock: true }))
     expect(m.read).toHaveBeenCalledTimes(2)
     expect(m.read).toHaveBeenLastCalledWith({ accountId: 'acc-etsy', listingId: '9000000001' })
     expect(receipt).toEqual({ reference: '9000000001', verified: true, mismatches: [], steps: [

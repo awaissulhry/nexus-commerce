@@ -128,6 +128,14 @@ describe('the create\'s own numbers', () => {
     expect(built.create).toEqual({ state: 'draft', price: 25, quantity: 1 })
     expect(built.inventory.products.map(p => p.offerings[0].quantity)).toEqual([0, 0])
     expect(problems.notes).toContain(ETSY_ZERO_STOCK_NOTE)
+    // E3 (D2) — the note says exactly what the create does at stock 0: the POST's 1, then each variation's real 0.
+    expect(ETSY_ZERO_STOCK_NOTE).toBe('Stock is 0. Etsy cannot create a listing at 0, so Nexus creates the draft with quantity 1 and then sends each variation\'s real stock (0). Etsy cannot sell at 0: the listing can go live once it has stock.')
+  })
+
+  it('stock above 0: no zero-stock note', () => {
+    const problems = etsyProblems()
+    buildEtsyListing(family(), problems)
+    expect(problems.notes).not.toContain(ETSY_ZERO_STOCK_NOTE)
   })
 
   it('stock 1200: each variation is sent 999, and the review names the SKU (W2)', () => {
