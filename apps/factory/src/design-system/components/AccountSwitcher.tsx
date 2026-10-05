@@ -91,7 +91,7 @@ export interface AccountRow {
   /** Permissions the catalogue requires that the grant does not carry. */
   scopeDrift?: string[]
   /** Measured facts from `ConnectionScope` — the marketplaces / sites this grant reaches. */
-  scopes?: { kind: string; externalId: string; label: string | null; isActive?: boolean }[]
+  scopes?: { kind: string; externalId: string; label: string | null; isActive?: boolean; state?: string | null }[]
   accessTokenExpiresAt?: string | null
   refreshTokenExpiresAt?: string | null
   lastRefreshAt?: string | null

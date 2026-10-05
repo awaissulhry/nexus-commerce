@@ -152,10 +152,13 @@ async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
         externalId: String(p.profileId),
         label: `${account?.name ?? 'Ads profile'} · ${market}`,
         region,
-        // Presence at the channel is what discovery measures. Whether WE write to it
-        // is the operator's mode/writes decision, which lives in the scope metadata
-        // the migration seeded and in the Ads write gate — never inferred here.
-        isActive: true,
+        // No `isActive`: Amazon answering for a profile says nothing about whether Nexus
+        // reads it or spends in it. Those are the operator's decisions (the row's
+        // isActive / mode / writesEnabledAt), and the heartbeat must not overwrite them
+        // with "true" every 15 minutes — that is how Settings → Channels → Accounts
+        // showed every profile active while only some were used (ads wave 4d). A new scope
+        // still starts active (the heartbeat's create default); the Accounts tab shows the
+        // row's real state beside it.
         metadata: {
           marketplace: market,
           marketplaceStringId: account?.marketplaceStringId,

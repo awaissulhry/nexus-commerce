@@ -1,3 +1,9 @@
+## Accounts panel: a scope chip shows the state the server sends — 2026-10-05
+
+Ads wave 4d (Settings → Channels → Accounts showed every Amazon Ads profile as active). Mirrored in Factory (`accounts-panel.ts`, its test, `AccountSwitcher.tsx`).
+
+- **`ScopeRow.state`** (`lib/accounts-panel.ts`, and `AccountRow.scopes[].state` in `AccountSwitcher.tsx`): optional text the server sends when it knows better than the scope's `isActive` — an Amazon Ads profile's "Live · writes on", "Reading only" or "Not read". `scopeChipLabel` draws `label · state` in place of the "· inactive" mark; absent or blank = unchanged.
+
 ## Grid: the empty state's action can be clicked — 2026-10-05
 
 - **`GridNoRowsOverlay` `action`** (`grid/theme/grid.css`): AG sets `pointer-events: none` on `.ag-overlay` and re-enables it only for its own loading and export overlays, so the no-rows action ("Clear filters") was drawn but never reachable by pointer — the rows layer took the click (found by the approvals grid's browser check). `.nds-grid-noRows` takes pointer events again; the rest of the overlay stays click-through. Mirrored in Factory (`grid.css` is identical there).

@@ -566,7 +566,7 @@ const dateColumn = (column: string): FieldColumn => ({ column, value: (v) => (v 
 /** Every field the update helpers below write locally, per entity, in their own vocabulary. */
 const LOCAL_COLUMNS: Partial<Record<AdEntityType, Record<string, FieldColumn>>> = {
   AD_TARGET: { bid: intColumn('bidCents'), status: textColumn('status') },
-  AD_GROUP: { defaultBid: intColumn('defaultBidCents'), status: textColumn('status') },
+  AD_GROUP: { defaultBid: intColumn('defaultBidCents'), status: textColumn('status'), name: textColumn('name') },
   CAMPAIGN: {
     dailyBudget: decimalColumn('dailyBudget'), status: textColumn('status'), name: textColumn('name'),
     portfolioId: textColumn('portfolioId', true), biddingStrategy: textColumn('biddingStrategy'),
@@ -843,6 +843,40 @@ export async function pendingWriteFieldsByEntity(
     // minute, suppressing a real one loses an operator's edit.
     return out
   }
+}
+
+/**
+ * CM-16 — the local COLUMNS a sync from Amazon must not overwrite, per entity id: the column of every field with an
+ * undelivered write (queued, in its grace window, or being sent). Only the 20-minute settings sync held these back;
+ * the keyword/target resync and the v1 export ingest wrote Amazon's older value over an operator's queued edit, so
+ * the screen showed the old value after a successful save and the engines read it until the next sync.
+ *
+ * Same source as that hold-back (`pendingWriteFieldsByEntity`, one query, fails open), translated to the column names
+ * the syncs write (`bid` → `bidCents`, `defaultBid` → `defaultBidCents`), so a sync can drop them by key with
+ * `holdBackPendingFields`.
+ */
+export async function pendingWriteColumnsByEntity(
+  entityType: AdEntityType,
+  now: Date = new Date(),
+): Promise<Map<string, Set<string>>> {
+  const columns = LOCAL_COLUMNS[entityType] ?? {}
+  const byField = await pendingWriteFieldsByEntity(entityType, Object.keys(columns), now)
+  const out = new Map<string, Set<string>>()
+  for (const [entityId, fields] of byField) {
+    out.set(entityId, new Set([...fields].map((f) => columns[f]?.column ?? f)))
+  }
+  return out
+}
+
+/** CM-16 — the same, for one entity (a row that changed after a sync took its snapshot). */
+export async function pendingWriteColumns(
+  entityType: AdEntityType,
+  entityId: string,
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  const columns = LOCAL_COLUMNS[entityType] ?? {}
+  const fields = await pendingWriteFields(entityType, entityId, Object.keys(columns), now)
+  return new Set([...fields].map((f) => columns[f]?.column ?? f))
 }
 
 /**
@@ -1155,6 +1189,8 @@ export async function updateCampaignWithSync(args: {
 export interface AdGroupPatch {
   defaultBidCents?: number
   status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
+  /** CM-15 — a rename, sent to Amazon like the status and the default bid. */
+  name?: string
 }
 
 export async function updateAdGroupWithSync(args: {
@@ -1182,6 +1218,7 @@ export async function updateAdGroupWithSync(args: {
     where: { id: args.adGroupId },
     select: {
       id: true,
+      name: true,
       externalAdGroupId: true,
       defaultBidCents: true,
       suppressedFromBidCents: true, // 1e (CM-9)
@@ -1226,6 +1263,15 @@ export async function updateAdGroupWithSync(args: {
     })
     syncType = 'AD_ENTITY_STATE_UPDATE'
   }
+  // CM-15 — a rename was a local `prisma.adGroup.update` in the route: never sent to Amazon, no audit row, and the v1
+  // ingest wrote Amazon's name back within two hours. It now travels like the other two fields. A name-only change
+  // rides AD_ENTITY_STATE_UPDATE because that type is on every list that dispatches, drains and reclaims ad writes
+  // (the campaign rename's own type is not yet — CM-4); the worker sends whatever fields the row carries.
+  const newName = args.patch.name?.trim()
+  if (newName && newName !== existing.name) {
+    changes.push({ field: 'name', oldValue: existing.name, newValue: newName })
+    if (changes.length === 1) syncType = 'AD_ENTITY_STATE_UPDATE'
+  }
   if (changes.length === 0) {
     // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
     await keepPersonBidThroughRestore('AD_GROUP', args.adGroupId, person && !args.reversal, args.patch.defaultBidCents, existing.suppressedFromBidCents)
@@ -1261,6 +1307,7 @@ export async function updateAdGroupWithSync(args: {
   const replacesMemory = person && !args.reversal && !args.force && args.patch.defaultBidCents != null
     && existing.suppressedFromBidCents != null && existing.suppressedFromBidCents !== args.patch.defaultBidCents
   const payloadBefore = {
+    name: existing.name,
     defaultBidCents: existing.defaultBidCents,
     status: existing.status,
     ...(replacesMemory ? { suppressedFromBidCents: existing.suppressedFromBidCents } : {}),
@@ -1270,6 +1317,7 @@ export async function updateAdGroupWithSync(args: {
   if (args.patch.defaultBidCents != null) data.defaultBidCents = args.patch.defaultBidCents
   if (args.patch.status) data.status = args.patch.status
   if (replacesMemory) data.suppressedFromBidCents = args.patch.defaultBidCents
+  if (newName) data.name = newName
   await prisma.adGroup.update({ where: { id: args.adGroupId }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -1300,6 +1348,7 @@ export async function updateAdGroupWithSync(args: {
     ...(args.patch.defaultBidCents != null ? { defaultBidCents: args.patch.defaultBidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
     ...(replacesMemory ? { suppressedFromBidCents: args.patch.defaultBidCents } : {}),
+    ...(newName ? { name: newName } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1747,23 +1796,46 @@ export async function updatePortfolioWithSync(args: {
 
 // AD.4 hook — operator cancel within grace window. Flips
 // syncStatus=CANCELLED so the BullMQ worker sees it and skips.
-export async function cancelPendingMutation(outboundQueueId: string): Promise<{ ok: boolean; error: string | null }> {
+export async function cancelPendingMutation(outboundQueueId: string): Promise<{
+  ok: boolean
+  error: string | null
+  /** CM-28 — the fields Nexus put back to the value the cancelled write replaced, and the ones it left (newer value). */
+  restored?: string[]
+  kept?: string[]
+}> {
   const row = await prisma.outboundSyncQueue.findUnique({
     where: { id: outboundQueueId },
-    select: { id: true, syncStatus: true, holdUntil: true },
+    select: { id: true, syncStatus: true, holdUntil: true, payload: true },
   })
   if (!row) return { ok: false, error: 'not_found' }
   if (row.syncStatus !== 'PENDING') return { ok: false, error: `not_pending:${row.syncStatus}` }
   if (row.holdUntil && row.holdUntil <= new Date()) {
     return { ok: false, error: 'grace_expired' }
   }
-  await prisma.outboundSyncQueue.update({
-    where: { id: outboundQueueId },
+  // Compare-and-set: only a row still PENDING is cancelled, so a row the worker took meanwhile is never marked
+  // cancelled (and put back) while it is being sent.
+  const cancelled = await prisma.outboundSyncQueue.updateMany({
+    where: { id: outboundQueueId, syncStatus: 'PENDING' },
     data: { syncStatus: 'CANCELLED' },
   })
+  if (cancelled.count === 0) return { ok: false, error: 'not_pending:CHANGED' }
+  // CM-28 — the update helpers write Nexus's own copy when they queue a write, so a cancelled write left Nexus showing
+  // a value Amazon never got (and nothing converges an ad group's default bid or a campaign's portfolio). Put each
+  // field back the way a gate refusal is put back: only where Nexus still holds the cancelled value, so a newer
+  // change is never overwritten. Same order as the worker: put back, then settle. Never fails the cancel.
+  let put: { restored: string[]; kept: string[] } = { restored: [], kept: [] }
+  try {
+    const payload = (await dispatchPayloadFromMutations(outboundQueueId).catch(() => null))
+      ?? (row.payload as unknown as DispatchPayload | null)
+    if (payload?.entityType && payload.entityId) put = await putBackRefusedWrite(payload)
+  } catch (err) {
+    logger.warn('[ads-mutation] could not put back a cancelled write', {
+      outboundQueueId, error: err instanceof Error ? err.message : String(err),
+    })
+  }
   // AX-ZD.1 — release the typed rows too. A cancelled intent that stayed
   // PENDING would keep suppressing drift on its fields for the full trust
   // window, which is exactly the bug this model exists to remove.
   await settleAdMutations(outboundQueueId, 'CANCELLED')
-  return { ok: true, error: null }
+  return { ok: true, error: null, restored: put.restored, kept: put.kept }
 }

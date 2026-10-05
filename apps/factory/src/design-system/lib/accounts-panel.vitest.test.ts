@@ -176,6 +176,17 @@ describe('scope chips', () => {
     expect(scopeChipLabel({ kind: 'marketplace', externalId: 'US', label: 'Amazon US', isActive: false })).toBe('Amazon US · inactive')
   })
 
+  it('shows the state the server sends (an Amazon Ads profile) in place of the "inactive" mark', () => {
+    // Ads wave 4d — the heartbeat used to mark every Ads profile active; the server now says what the business does.
+    expect(scopeChipLabel({ kind: 'profile', externalId: '1', label: 'Ads · IT', isActive: true, state: 'Live · writes on' })).toBe('Ads · IT · Live · writes on')
+    expect(scopeChipLabel({ kind: 'profile', externalId: '2', label: 'Ads · UK', isActive: true, state: 'Reading only' })).toBe('Ads · UK · Reading only')
+    expect(scopeChipLabel({ kind: 'profile', externalId: '3', label: 'Ads · US', isActive: false, state: 'Not read' })).toBe('Ads · US · Not read')
+    expect(scopeChipLabel({ kind: 'profile', externalId: '4', label: null, state: 'Not read' })).toBe('Profile name unavailable · Not read')
+    // No state, or a blank one: unchanged.
+    expect(scopeChipLabel({ kind: 'profile', externalId: '5', label: 'Ads · PL', isActive: false, state: ' ' })).toBe('Ads · PL · inactive')
+    expect(scopeChipLabel({ kind: 'profile', externalId: '6', label: 'Ads · SE', state: null })).toBe('Ads · SE')
+  })
+
   it('caps visible chips at 12 and folds the rest behind "+N more"', () => {
     const fifteen = Array.from({ length: 15 }, (_, i) => scope(i))
     const folded = visibleScopes(fifteen, false)

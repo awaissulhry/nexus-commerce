@@ -10175,15 +10175,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reason?: string
       applyImmediately?: boolean
     }
-    // CBN.3 G4 — Edit Groups inline rename. Name has no Amazon-sync path here, so it's a
-    // local rename; status/defaultBid still flow through the audited updateAdGroupWithSync.
-    if (typeof body.name === 'string' && body.name.trim()) {
-      const existing = await prisma.adGroup.findUnique({ where: { id }, select: { id: true } })
-      if (!existing) { reply.code(404); return { ok: false, error: 'not_found' } }
-      await prisma.adGroup.update({ where: { id }, data: { name: body.name.trim() } })
-    }
-    // No bid/status change → nothing for the sync service to do (name-only edit returns ok).
-    if (body.defaultBidCents == null && body.status == null) {
+    // CM-15 — the Edit Groups rename goes through the audited updateAdGroupWithSync with the status and the default
+    // bid, so it is queued for Amazon and logged. It was a local update here, which Amazon never saw and the v1 ingest
+    // wrote back within two hours.
+    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : undefined
+    // Nothing to change → nothing for the sync service to do.
+    if (body.defaultBidCents == null && body.status == null && name == null) {
       return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: null }
     }
     const result = await updateAdGroupWithSync({
@@ -10191,6 +10188,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       patch: {
         defaultBidCents: body.defaultBidCents,
         status: body.status,
+        name,
       },
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
@@ -10597,6 +10595,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
     })
     return { ok: true, connection: conn }
+  })
+
+  // ── Ads wave 4a: read an account's data, or stop (isActive only) ─────
+  // "Read this market's data" on Settings → Advertising. Writes `isActive` and nothing
+  // else: mode, writesEnabledAt and the campaign allowlist stay as they are, so a reading
+  // account cannot spend. Stopping is refused while writes are on. The why is in
+  // ads-read-switch.service.ts.
+  fastify.post('/advertising/connection/set-active', async (request, reply) => {
+    const { setAdsProfileReading } = await import('../services/advertising/ads-read-switch.service.js')
+    const result = await setAdsProfileReading(
+      (request.body ?? {}) as { profileId?: unknown; isActive?: unknown },
+      actorFromHeaders(request.headers as Record<string, unknown>),
+    )
+    // `=== false`, not `!`: apps/api compiles without strictNullChecks, and only equality narrows the union.
+    if (result.ok === false) return reply.code(result.status).send({ error: result.error, message: result.message })
+    return result
   })
 
   // ── APS.5b — saved product sets ───────────────────────────────────────
