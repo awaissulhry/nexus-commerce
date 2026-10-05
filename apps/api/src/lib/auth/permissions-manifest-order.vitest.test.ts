@@ -128,6 +128,17 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute(method, path)).toBe(permission)
   })
 
+  // Ads wave 4a — which Amazon Ads accounts Nexus reads belongs with connecting the account; the spend switches next to
+  // it keep ads.campaigns.manage (control).
+  it.each([
+    ['POST', '/api/advertising/connection/set-active', 'ads.connect'],
+    ['POST', '/api/advertising/connection/set-mode', 'ads.campaigns.manage'],
+    ['POST', '/api/advertising/connection/enable-writes', 'ads.campaigns.manage'],
+    ['GET', '/api/advertising/connections', 'ads.view'],
+  ])('4a: %s %s requires %s', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+  })
+
   it('separates catalogue language reads and estimates from translation edits and model spend', () => {
     for (const path of ['languages', 'translate/runs']) expect(permissionForRoute('GET', `/api/catalog-transfer/${path}`)).toBe('products.view')
     expect(permissionForRoute('POST', '/api/products/grid')).toBe('products.view')

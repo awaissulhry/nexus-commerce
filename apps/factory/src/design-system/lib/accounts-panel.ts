@@ -162,6 +162,11 @@ export interface ScopeRow {
   externalId: string
   label: string | null
   isActive?: boolean
+  /**
+   * What the business does with this scope, when the server knows better than `isActive` — an Amazon Ads profile's
+   * "Live · writes on" / "Reading only" / "Not read" (ads wave 4d). Shown in place of the "· inactive" mark.
+   */
+  state?: string | null
 }
 
 /** How many scope chips a row shows before folding the rest behind "+N more". */
@@ -173,6 +178,8 @@ export function scopeChipLabel(s: ScopeRow): string {
   const label = name && name !== s.externalId.trim()
     ? name
     : s.kind === 'marketplace' ? 'Marketplace name unavailable' : 'Profile name unavailable'
+  const state = s.state?.trim()
+  if (state) return `${label} · ${state}`
   return s.isActive === false ? `${label} · inactive` : label
 }
 

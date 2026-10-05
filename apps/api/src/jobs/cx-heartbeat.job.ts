@@ -102,7 +102,10 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
           await prisma.connectionScope.upsert({
             where: { connectionId_kind_externalId: workspaceKey({ connectionId: row.id, kind: s.kind, externalId: s.externalId }) },
             create: { connectionId: row.id, kind: s.kind, externalId: s.externalId, label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
-            update: { label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
+            // Same rule as the metadata merge: `isActive` changes only when discovery MEASURED it (Amazon SP-API's
+            // participation). A connector that does not say (Amazon Ads, Shopify, Etsy) leaves what is stored — the
+            // heartbeat used to rewrite every Ads profile "active" every 15 minutes (ads wave 4d).
+            update: { label: s.label ?? null, region: s.region ?? null, ...(s.isActive !== undefined ? { isActive: s.isActive } : {}), metadata: merged as Prisma.InputJsonValue },
           })
         }
       } catch (err) {

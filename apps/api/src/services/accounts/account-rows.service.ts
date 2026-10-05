@@ -16,6 +16,19 @@ import { connectionLabel } from "../connection-label.js";
 
 export type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
+/**
+ * One market / profile the grant reaches. `state` is set on an Amazon Ads profile only: what Nexus does with it, from
+ * the AmazonAdsConnection row every ads job reads ("Live · writes on", "Reading only", "Not read"). The scope's own
+ * `isActive` is not that answer — it only says the channel listed the profile (ads wave 4d).
+ */
+export interface AccountScope {
+  kind: string;
+  externalId: string;
+  label: string | null;
+  isActive?: boolean;
+  state?: string;
+}
+
 /** Xavia's operational scope (`project_active_channels`): Amazon + eBay + Shopify. */
 const ACTIVE_CHANNELS: Channel[] = ["AMAZON", "EBAY", "SHOPIFY"];
 const CHANNEL_ORDER: Record<string, number> = {
@@ -72,7 +85,7 @@ export interface AccountRow {
   /** Scopes the catalog wants that this grant lacks — non-empty means "Reconnect to grant new permissions". */
   scopeDrift: string[];
   /** Markets / marketplaces this grant reaches (ConnectionScope rows). */
-  scopes: Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }>;
+  scopes: AccountScope[];
   accessTokenExpiresAt: string | null;
   refreshTokenExpiresAt: string | null;
   lastRefreshAt: string | null;
@@ -131,7 +144,7 @@ function readMarkets(r: ChannelConnection): string[] {
 export function toAccountRow(
   r: ChannelConnection,
   isPrimary: boolean,
-  scopes: Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }> = [],
+  scopes: AccountScope[] = [],
 ): AccountRow {
   const spec = tryGetChannelSpec(channelKeyOf(r.channelType));
   return {
@@ -167,6 +180,20 @@ export function toAccountRow(
     consecutiveFailures: r.consecutiveFailures,
     identity: (r.identity as Record<string, unknown> | null) ?? null,
   };
+}
+
+/**
+ * Ads wave 4d — each Amazon Ads profile of THIS business's own Ads accounts gets its real state from the row every ads
+ * job reads. A profile with no row is "Not read". A borrowed account (another business's) gets none: its rows are that
+ * business's, invisible here, and "Not read" would be a guess.
+ */
+async function attachAdsProfileStates(rows: ChannelConnection[], scopesByConnection: Map<string, AccountScope[]>): Promise<void> {
+  const own = rows.filter((r) => r.channelType === "AMAZON_ADS" && isOwnConnection(r));
+  const profiles = own.flatMap((r) => (scopesByConnection.get(r.id) ?? []).filter((s) => s.kind === "profile"));
+  if (profiles.length === 0) return;
+  const { adsAccountStatesByProfile, ADS_ACCOUNT_STATE_LABEL } = await import("../advertising/ads-read-switch.service.js");
+  const states = await adsAccountStatesByProfile();
+  for (const scope of profiles) scope.state = ADS_ACCOUNT_STATE_LABEL[states.get(scope.externalId) ?? "not_read"];
 }
 
 function hasAnyChannelWithTwo(accounts: AccountRow[]): boolean {
@@ -206,12 +233,13 @@ export async function listAccountRows({ includeDisconnected }: { includeDisconne
         select: { connectionId: true, kind: true, externalId: true, label: true, isActive: true },
       })
     : [];
-  const scopesByConnection = new Map<string, Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }>>();
+  const scopesByConnection = new Map<string, AccountScope[]>();
   for (const s of scopeRows) {
     const list = scopesByConnection.get(s.connectionId) ?? [];
     list.push({ kind: s.kind, externalId: s.externalId, label: s.label, isActive: s.isActive });
     scopesByConnection.set(s.connectionId, list);
   }
+  await attachAdsProfileStates(rows, scopesByConnection);
 
   const accounts = rows
     // An account another business shares with this one is never this business's primary.
