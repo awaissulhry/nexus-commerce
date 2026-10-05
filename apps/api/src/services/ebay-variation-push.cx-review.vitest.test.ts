@@ -389,15 +389,81 @@ describe('Max per buyer — blank keeps eBay\'s limit (wave 2)', () => {
     expect(warnings).toContain('Max per buyer: eBay takes a whole number, 1 or more (this row has "abc"). Not sent.')
     expect(offerPuts().map((p) => p.body.quantityLimitPerBuyer)).toEqual([6, 6])
   })
-  it('eBay\'s offer cannot be read: that offer is not changed (a body without the limit would remove it), it is named, and nothing is published', async () => {
+  it.each([
+    ['group', 'eBay\'s offer could not be read (500), so Nexus cannot keep the values it holds (VAT, store categories…). This offer was not changed; publish again.'],
+    ['offers', 'Max per buyer is blank here, so Nexus keeps the limit eBay holds, but eBay\'s offer could not be read (500). This offer was not changed; publish again.'],
+  ] as const)('%s: eBay\'s offer cannot be read: that offer is not changed (a thin body would remove eBay\'s values), it is named, and nothing is published', async (mode, message) => {
     h.listings = h.listings.map((l) => ({ ...l, platformAttributes: { __offerIds: { EBAY_IT: `fp-${l.product.sku}` } } }))
     const base = h.send.getMockImplementation()!
     h.send.mockImplementation(async (url: string, init: RequestInit = {}) =>
       (init.method ?? 'GET') === 'GET' && new URL(url).pathname.endsWith('/offer/fp-SKU-A') ? response({}, 500) : base(url, init))
-    const result = await call('group', withLimit(''))
-    expect(result.find((r) => r.sku === 'SKU-A')).toMatchObject({ status: 'ERROR',
-      message: 'Max per buyer is blank here, so Nexus keeps the limit eBay holds, but eBay\'s offer could not be read (500). This offer was not changed; publish again.' })
+    const result = await call(mode, withLimit(''))
+    expect(result.find((r) => r.sku === 'SKU-A')).toMatchObject({ status: 'ERROR', message })
     expect(offerPuts().map((p) => p.id)).toEqual(['fp-SKU-B'])
     expect(h.send.mock.calls.some(([url]) => String(url).endsWith('/publish_by_inventory_item_group'))).toBe(false)
+  })
+})
+
+// Plan F item 3 (2026-10-05) — the photo publish of an eBay Inventory family (`pushVariationGroup`) PUT a thin offer, and
+// updateOffer replaces the whole offer: every photo publish deleted the VAT, store categories and the rest. The update now
+// starts from the offer eBay holds (the search's, else one read) with ours on top; VAT is always eBay's (Owner decision 1).
+describe('group push keeps the offer eBay holds (plan F item 3)', () => {
+  const offerReads = () => h.send.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === 'GET' && /^\/sell\/inventory\/v1\/offer\/[^/]+$/.test(new URL(url).pathname))
+    .map(([url]) => new URL(url).pathname.split('/').pop())
+  const held = { tax: { vatPercentage: 22, applyTax: true }, storeCategoryNames: ['/Fixture store/Helmets'], secondaryCategoryId: '3000',
+    listingDescription: '<p>eBay copy</p>', quantityLimitPerBuyer: 4,
+    pricingSummary: { price: { value: '1.00', currency: 'EUR' }, originalRetailPrice: { value: '99.00', currency: 'EUR' } },
+    listingPolicies: { fulfillmentPolicyId: 'old-fulfil', eBayPlusIfEligible: true } }
+  const cached = () => { h.listings = h.listings.map((l) => ({ ...l, platformAttributes: { __offerIds: { EBAY_IT: `fp-${l.product.sku}` } } })) }
+
+  it('a cached offer id: ONE read per SKU, then a PUT carrying eBay\'s VAT and store categories, with ours on top', async () => {
+    cached()
+    for (const id of ['fp-SKU-A', 'fp-SKU-B']) h.full[id] = { ...h.full[id], ...held }
+    const [main, other] = rows()
+    const result = await call('group', [{ ...main, quantity_limit_per_buyer: '3' }, other])
+    expect(result.map((r) => r.status)).toEqual(['PUSHED', 'PUSHED'])
+    // Read even though Max per buyer is set: the whole offer is the base of the update now.
+    expect(offerReads()).toEqual(['fp-SKU-A', 'fp-SKU-B'])
+    const [a, b] = offerPuts()
+    expect(a.id).toBe('fp-SKU-A')
+    expect(a.body.tax.vatPercentage).toBe(22)
+    expect(a.body.storeCategoryNames).toEqual(['/Fixture store/Helmets'])
+    expect(a.body).toMatchObject({ secondaryCategoryId: '3000', availableQuantity: 2, quantityLimitPerBuyer: 3, merchantLocationKey: 'here',
+      pricingSummary: { price: { value: '10.00', currency: 'EUR' }, originalRetailPrice: { value: '99.00', currency: 'EUR' } },
+      listingPolicies: { fulfillmentPolicyId: 'fulfill', paymentPolicyId: 'pay', returnPolicyId: 'return', eBayPlusIfEligible: true } })
+    for (const key of ['offerId', 'status', 'listing', 'listingDescription']) expect(key in a.body, key).toBe(false)
+    expect(b.body).toMatchObject({ tax: { vatPercentage: 22 }, availableQuantity: 0, pricingSummary: { price: { value: '20.00' } } })
+  })
+
+  it('the offer search already returned the offer: no extra read, and the PUT still carries eBay\'s VAT', async () => {
+    h.offerLists = { 'SKU-A': [offer('SKU-A', 'AUCTION', '999999999999'), { ...offer('SKU-A'), ...held }], 'SKU-B': [{ ...offer('SKU-B'), ...held }] }
+    await call('group')
+    expect(offerReads()).toEqual([])
+    expect(offerPuts().map((p) => [p.id, p.body.tax?.vatPercentage, p.body.storeCategoryNames])).toEqual([
+      ['fp-SKU-A', 22, ['/Fixture store/Helmets']], ['fp-SKU-B', 22, ['/Fixture store/Helmets']]])
+  })
+
+  it('the read throws (gateway refusal or no answer): that SKU is named and not sent; the others go on; nothing is published', async () => {
+    cached()
+    const base = h.send.getMockImplementation()!
+    h.send.mockImplementation(async (url: string, init: RequestInit = {}) => {
+      if ((init.method ?? 'GET') === 'GET' && new URL(url).pathname.endsWith('/offer/fp-SKU-B')) throw new Error('fixture: no answer')
+      return base(url, init)
+    })
+    const result = await call('group')
+    expect(result.find((r) => r.sku === 'SKU-B')).toMatchObject({ status: 'ERROR',
+      message: 'eBay\'s offer could not be read (fixture: no answer), so Nexus cannot keep the values it holds (VAT, store categories…). This offer was not changed; publish again.' })
+    expect(offerPuts().map((p) => p.id)).toEqual(['fp-SKU-A'])
+    expect(h.send.mock.calls.some(([url]) => String(url).endsWith('/publish_by_inventory_item_group'))).toBe(false)
+  })
+
+  it('a new offer (none on eBay) is created with ours only, as before — nothing read', async () => {
+    h.offerLists = {}
+    await call('group')
+    const posts = h.send.mock.calls.filter(([url, init]) => init?.method === 'POST' && new URL(url).pathname === '/sell/inventory/v1/offer').map(([, init]) => JSON.parse(init.body))
+    expect(posts[0]).toEqual({ sku: 'SKU-A', marketplaceId: 'EBAY_IT', format: 'FIXED_PRICE', availableQuantity: 2,
+      pricingSummary: { price: { value: '10.00', currency: 'EUR' } },
+      listingPolicies: { fulfillmentPolicyId: 'fulfill', paymentPolicyId: 'pay', returnPolicyId: 'return' }, merchantLocationKey: 'here' })
+    expect(offerReads()).toEqual([])
   })
 })

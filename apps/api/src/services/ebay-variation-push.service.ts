@@ -26,6 +26,7 @@ import { Prisma } from '@nexus/database'
 import { ebayTransport } from './gateway/ebay.js'
 import { ebayFixedPriceOfferOf } from './ebay-price-readback.service.js'
 import { ebayQuantityLimitInvalid, offerQuantityLimit, parseEbayQuantityLimit } from './ebay-quantity-limit.js'
+import { newOfferBody, offerUpdateBody, type VariationOfferOurs } from './ebay-offer-update.js'
 import { confirmVariationPrices, type WrittenVariationPrice } from './ebay-variation-price-confirmation.js'
 import { ebayListingLanguage } from './gateway/channels.js'
 import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
@@ -664,22 +665,41 @@ export function resolveQuantityLimitPerBuyer(row: Record<string, unknown>, warni
 }
 
 /**
- * Wave 2 (2026-10-05) — the Max per buyer an offer body carries (see `offerQuantityLimit`): ours when set; for an offer
- * eBay already holds, eBay's current limit (updateOffer replaces the whole offer), read once per SKU through the gateway
- * unless the offer search already returned it; none for a new offer. `unreadStatus` = eBay's offer could not be read, so
- * the caller must not send (a body without the limit would remove it).
+ * The offer eBay holds now for an existing offer id: the one the offer search already returned (`known`, getOffers
+ * answers with whole offers), else ONE getOffer through the gateway. `offer: null` = eBay answered 200 with something
+ * that is not an offer. `unreadStatus` = eBay refused the read. A thrown gateway error (refusal, no answer) is the
+ * caller's to handle.
+ */
+async function liveOfferFor(input: {
+  offerId: string; known: Record<string, any> | null
+  send: EbaySend; apiBase: string; headers: Record<string, string>
+}): Promise<{ offer: Record<string, unknown> | null } | { unreadStatus: number }> {
+  if (input.known) return { offer: input.known }
+  const res = await input.send(`${input.apiBase}/sell/inventory/v1/offer/${encodeURIComponent(input.offerId)}`, { headers: input.headers })
+  if (!res.ok) return { unreadStatus: res.status }
+  const body = await res.json().catch(() => null)
+  return { offer: body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : null }
+}
+
+/**
+ * Wave 2 (2026-10-05) — the Max per buyer the offers-only push (`pushOffersOnly`) adds to its offer body (see
+ * `offerQuantityLimit`): ours when set; for an offer eBay already holds, eBay's current limit (updateOffer replaces the
+ * whole offer), read once per SKU unless the offer search already returned it; none for a new offer. `unreadStatus` =
+ * eBay's offer could not be read, so the caller must not send (a body without the limit would remove it).
+ * The variation group push keeps eBay's whole offer instead (`liveOfferFor` + `offerUpdateBody`).
  */
 async function offerLimitFor(input: {
   ours: number | null; offerId: string | null; known: Record<string, any> | null
   send: EbaySend; apiBase: string; headers: Record<string, string>
 }): Promise<{ body: { quantityLimitPerBuyer?: number } } | { unreadStatus: number }> {
   if (input.ours != null || !input.offerId) return { body: offerQuantityLimit(input.ours, null) }
-  if (input.known) return { body: offerQuantityLimit(null, input.known) }
-  const res = await input.send(`${input.apiBase}/sell/inventory/v1/offer/${encodeURIComponent(input.offerId)}`, { headers: input.headers })
-  if (!res.ok) return { unreadStatus: res.status }
-  return { body: offerQuantityLimit(null, await res.json().catch(() => null)) }
+  const live = await liveOfferFor({ offerId: input.offerId, known: input.known, send: input.send, apiBase: input.apiBase, headers: input.headers })
+  if ('unreadStatus' in live) return live
+  return { body: offerQuantityLimit(null, live.offer) }
 }
 const OFFER_LIMIT_UNREAD = (status: number) => `Max per buyer is blank here, so Nexus keeps the limit eBay holds, but eBay's offer could not be read (${status}). This offer was not changed; publish again.`
+/** The variation group push: eBay's offer is the base of the update, so without it nothing is sent for that SKU. */
+const OFFER_UNREAD = (why: string) => `eBay's offer could not be read (${why}), so Nexus cannot keep the values it holds (VAT, store categories…). This offer was not changed; publish again.`
 
 /**
  * EFX P9d — map the sheet's shared `video_id` cell onto the eBay Inventory API
@@ -1890,26 +1910,14 @@ export async function pushVariationGroup(
     // EFX P9e — this market's resolved (snapshot-authoritative) parent subtitle,
     // falling back to the active-market parent row when the caller supplied none.
     const subtitle = (opts?.parentContent?.subtitle ?? (parentRow.subtitle as string | undefined))?.trim() ?? ''
-    const offerBody: Record<string, unknown> = {
-      sku,
-      marketplaceId,
-      format: 'FIXED_PRICE',
-      // listingDescription intentionally omitted — comes from group description
-      ...(catId ? { categoryId: catId } : {}),
-      ...(subtitle ? { subtitle } : {}),
-      availableQuantity: qty,
-      pricingSummary: { price: { value: price.toFixed(2), currency } },
-      listingPolicies: {
-        ...(fulfillmentPolicyId ? { fulfillmentPolicyId } : {}),
-        ...(paymentPolicyId     ? { paymentPolicyId }     : {}),
-        ...(returnPolicyId      ? { returnPolicyId }      : {}),
-        // EFX P9a — Best Offer OMITTED for variation groups: eBay forbids it on a
-        // SKU that belongs to an inventory item group (error 25737).
-      },
-      // merchantLocationKey (top-level, not inside listingPolicies) tells eBay
-      // the seller's location so it can resolve Item.Country for the listing.
-      ...(merchantLocationKey ? { merchantLocationKey } : {}),
-      // Max per buyer: added below, once the offer is known (wave 2 — a blank cell keeps eBay's limit).
+    // What Nexus sets on the offer (`ebay-offer-update.ts`): listingDescription is never sent (a group member shows
+    // the group's description) and Best Offer is never sent (EFX P9a — eBay forbids it on a SKU in an inventory item
+    // group, error 25737).
+    const ours: VariationOfferOurs = {
+      sku, marketplaceId, format: 'FIXED_PRICE', categoryId: catId, subtitle, availableQuantity: qty,
+      price: { value: price.toFixed(2), currency },
+      policies: { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
+      merchantLocationKey, quantityLimitPerBuyer,
     }
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
@@ -1928,20 +1936,31 @@ export async function pushVariationGroup(
       }
     }
 
-    const limit = await offerLimitFor({ ours: quantityLimitPerBuyer, offerId, known: knownOffer, send, apiBase, headers })
-    if ('unreadStatus' in limit) {
-      const msg = OFFER_LIMIT_UNREAD(limit.unreadStatus)
-      const idx = results.findIndex(r => r.sku === sku)
-      if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
-      else results.push({ sku, market: mp, status: 'ERROR', message: msg })
-      anyOfferFailed = true
-      continue
-    }
-    Object.assign(offerBody, limit.body)
-
     if (offerId) {
+      // Plan F item 3 (2026-10-05) — updateOffer REPLACES the whole offer, so the body starts from the offer eBay holds
+      // now (the search's, else one read) and puts ours on top (`offerUpdateBody`): VAT, store categories, product
+      // safety data, the original retail price, eBay Plus and the rest stay as eBay holds them. Unreadable → this SKU
+      // is not sent (a thin body would delete them) and is named; the other SKUs go on, and nothing is published.
+      let live: Record<string, unknown> | null = null
+      let unread = ''
+      try {
+        const read = await liveOfferFor({ offerId, known: knownOffer, send, apiBase, headers })
+        if ('unreadStatus' in read) unread = String(read.unreadStatus)
+        else if (!read.offer) unread = 'eBay\'s answer was not an offer'
+        else live = read.offer
+      } catch (e) {
+        unread = e instanceof Error && e.message ? e.message.slice(0, 160) : 'no answer'
+      }
+      if (!live) {
+        const msg = OFFER_UNREAD(unread)
+        const idx = results.findIndex(r => r.sku === sku)
+        if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
+        else results.push({ sku, market: mp, status: 'ERROR', message: msg })
+        anyOfferFailed = true
+        continue
+      }
       const upd = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
-        method: 'PUT', headers: headers, body: JSON.stringify(offerBody),
+        method: 'PUT', headers: headers, body: JSON.stringify(offerUpdateBody(live, ours)),
       })
       if (!upd.ok) {
         const err = await upd.text().catch(() => '')
@@ -1955,8 +1974,9 @@ export async function pushVariationGroup(
       }
       collectedOfferIds.set(sku, offerId)
     } else {
+      // A new offer: ours only, as before (no Max per buyer unless ours is set).
       const cre = await send(`${apiBase}/sell/inventory/v1/offer`, {
-        method: 'POST', headers: headers, body: JSON.stringify(offerBody),
+        method: 'POST', headers: headers, body: JSON.stringify(newOfferBody(ours)),
       })
       if (!cre.ok) {
         const err = await cre.text().catch(() => '')
