@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import './campaigns-ds.css'
-import { Listbox, Modal, Pagination } from '@/design-system/components'
+import { Listbox, Modal, Pagination, SummaryTable } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
@@ -30,6 +30,8 @@ import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { readWrite, reasonText } from '../_shared/adsWrite'
+import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRule, type RuleReach } from './_grid/campaignRules'
+import { amazonEditHold } from './_grid/amazonEditHold'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
 
@@ -261,6 +263,8 @@ interface AuthorityState {
   byId: Record<string, AuthorityRow>
   /** Rules that govern EVERY campaign because nothing narrows them. Not a per-row count. */
   accountWideRules: number
+  /** AM-12 — the same rules by name (null on an older API); `ruleReach` counts them per row's market. */
+  accountWideList: AccountWideRule[] | null
 }
 
 interface DeliveryState {
@@ -640,7 +644,9 @@ const COL_TIPS: Record<string, string> = {
   bidRule: 'Custom Bid Rule - Create your own bid change logic using PPC metrics available in Analytics',
   targetAcos: 'Only if "Target ACoS" is selected for the Bid Algorithm. This selection dictates the ACoS goal. Click the Edit Campaigns button to edit the displayed ACoS',
   minMaxBid: 'An absolute floor and ceiling on any bid in this campaign, enforced on every write to Amazon. Note these are BASE bids: placement modifiers stack on top, so an effective CPC can still exceed the max. Deliberate suppression (retail guard, budget cap, Min-bid windows) is exempt from the floor.',
-  bidAutomation: 'Active will automate the keyword bid suggestions currently found on the Suggestions page. Changes will be recorded in the Change Log',
+  // AM-13 — this promised "Active will automate the keyword bid suggestions … recorded in the Change Log". No bid
+  // optimiser reads the switch (only the settings writer and the list echo it), so the header now says what it does.
+  bidAutomation: 'An on/off switch recorded on the campaign, per row or in Bulk Actions. Not running yet: no bid optimiser reads it, so on its own it changes no bid and writes nothing to the Change Log. It is not the write gate either: that is the Automation Access column.',
   // ADM-H P4 — two columns, two questions, and each tip says which one it answers.
   delivery: 'Did OUR last change reach Amazon? Live = the write was accepted; Pending = queued; Gated = live writes are switched off for this campaign so the change stays local; Failed = Amazon rejected it. This says nothing about whether the campaign is currently serving — the Amazon Delivery column answers that.',
   amazonDelivery: 'Is Amazon serving this campaign right now, and if not, why \u2014 Amazon\u2019s own delivery status and reason codes, not ours. A campaign can read "Delivering" here while our last write is still queued, and can read "Not delivering \u00b7 out of budget" while every write we sent landed perfectly.',
@@ -683,7 +689,8 @@ const typeKey = (c: Camp): string => {
   // SP split into Auto/Manual, inferred from the campaign name (matches targetingLetter).
   return /(^|[^a-z])auto([^a-z]|$)/i.test(c.name) ? 'SP_AUTO' : 'SP_MANUAL'
 }
-type FilterPreset = { name: string; statuses: string[]; types: string[]; portfolio: string; campaigns: string[]; ranges: Record<string, Range> }
+// AM-24 — `bidAutomation` / `rule` are absent on presets saved before those two filters worked.
+type FilterPreset = { name: string; statuses: string[]; types: string[]; portfolio: string; campaigns: string[]; ranges: Record<string, Range>; bidAutomation?: string; rule?: string }
 const LIB_KEY = 'h10-am-preset-lib'
 
 // Dismiss a popover on outside-click (shared by the multi-selects, the campaign
@@ -891,6 +898,8 @@ function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudget
               <label className="ck"><Checkbox checked={enAuto} onChange={() => setEnAuto((v) => !v)} aria-label="Change Bid Automation" /></label>
               <span className="it">Bid Automation</span>
               <div className="ac"><Toggle checked={autoOn} onChange={setAutoOn} aria-label="Bid Automation" /></div>
+              {/* AM-13 — the switch is kept (a placeholder), and says it is not running yet. */}
+              <p className="n">Recorded on each campaign. Not running yet: no bid optimiser reads this switch, so it changes no bid by itself.</p>
             </div>
 
             <div className="h10-bulk-row">
@@ -989,9 +998,16 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
 // placeholder for planned work. C1 did not remove it; it gave it a real store
 // (`dynamicBidding.bidAlgorithm`) so the choice survives a reload and both grids read the same one.
 
-// P3 — H10 "Campaign Rules for …" modal. Per-campaign rules aren't exposed yet,
-// so it lists none and routes "Add Rule" to the Rules & Automation builder.
-function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: () => void }) {
+// P3 — H10 "Campaign Rules for …" modal. "Add Rule" routes to the Rules & Automation builder.
+// 🔴 AM-12 — it printed a hard-coded "0 Rules · No rules are applied" while the Rules cell that opens it counted 20.
+// It now lists exactly what the cell counts (`ruleReach`): rules bound to this campaign and account-wide rules, labelled.
+const RULE_MODE: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
+function CampaignRulesModal({ campaign, reach, onClose }: { campaign: Camp; reach: RuleReach | null; onClose: () => void }) {
+  const ruleLink = (r: { id: string; name: string }) => <Link href={`/marketing/ads/rules-automation/automations?rule=${r.id}`}>{r.name}</Link>
+  const rows = reach ? [
+    ...reach.bound.map((r) => ({ id: `b-${r.id}`, cells: [ruleLink(r), 'Bound to this campaign', RULE_MODE[r.level] ?? r.level] })),
+    ...(reach.accountWide ?? []).map((r) => ({ id: `a-${r.id}`, cells: [ruleLink(r), r.scopeMarketplace ? `Account-wide · ${r.scopeMarketplace} only` : 'Account-wide', RULE_MODE[r.level] ?? r.level] })),
+  ] : []
   return (
     <Modal
       open
@@ -1005,8 +1021,25 @@ function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: ()
         </>
       }
     >
-      <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="nds-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
-      <div className="h10-rules-empty">No rules are applied to this campaign yet. Create one in Rules &amp; Automation.</div>
+      <div className="h10-rules-top"><span className="cnt">{reach ? `${reach.total} Rule${reach.total === 1 ? '' : 's'}` : 'Rules'}</span><Link href="/marketing/ads/rules-automation/builder" className="nds-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
+      {reach == null ? (
+        <div className="h10-rules-empty">The rules are still loading.</div>
+      ) : reach.total === 0 ? (
+        <div className="h10-rules-empty">No switched-on rule can act on this campaign: none is bound to it, and none covers every campaign{campaign.marketplace ? ` in ${campaign.marketplace}` : ''}. Create one in Rules &amp; Automation.</div>
+      ) : (
+        <>
+          {rows.length > 0 && <SummaryTable label={`Rules for ${campaign.name}`} columns={['Rule', 'Reach', 'Mode']} rows={rows} />}
+          {reach.accountWide == null && reach.accountWideCount > 0 && (
+            <p className="am-rules-note">{reach.accountWideCount} account-wide rule{reach.accountWideCount === 1 ? '' : 's'} (switched on, naming no campaign or portfolio) also reach this campaign. Their names did not load.</p>
+          )}
+        </>
+      )}
+      {reach != null && reach.boundOff.length > 0 && (
+        <p className="am-rules-note">Bound to this campaign but switched off, so not counted: {reach.boundOff.map((r) => r.name).join(', ')}.</p>
+      )}
+      {reach != null && (
+        <p className="am-rules-note">Account-wide means the rule names no campaign and no portfolio. Its own settings, such as a picked campaign list or a product, can still narrow it: open the rule to check. Rules bound to a portfolio are not counted here yet.</p>
+      )}
     </Modal>
   )
 }
@@ -1066,9 +1099,8 @@ export function CampaignsGrid() {
   const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
   /** U13 — campaigns whose bid-automation PATCH is in flight. Transient, so the switch may go `disabled`. */
   const [busyAuto, setBusyAuto] = useState<Set<string>>(new Set())
-  // Two ⛔ placeholder filters: they were uncontrolled <FilterDropdown>s that remembered their own
-  // selection and told nobody. Listbox is controlled, so the state is explicit now — the surfaces
-  // stay on the roadmap and behave exactly as before.
+  // 🔴 AM-24 — these two accepted a choice and filtered nothing (and were not counted as active filters). They filter
+  // now: Bid Automation by the row's switch, Rule by the same rule count the Rules column shows (`reachOf`).
   const [bidAutoFilter, setBidAutoFilter] = useState('')
   const [ruleFilter, setRuleFilter] = useState('')
   // AGC (2026-09-05) — the grid is the shared WorkspaceGrid contract (`AdsDataGrid`, see `columns`
@@ -1110,14 +1142,19 @@ export function CampaignsGrid() {
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/control-room/guardrail-grid?limit=500`, { cache: 'no-store' })
       if (!r.ok) return
-      const j = (await r.json()) as { rows: AuthorityRow[]; accountWideRules: number }
+      const j = (await r.json()) as { rows: AuthorityRow[]; accountWideRules: number; accountWideRuleList?: AccountWideRule[] }
       setAuthority({
         byId: Object.fromEntries((j.rows ?? []).map((x) => [x.id, x])),
         accountWideRules: j.accountWideRules ?? 0,
+        accountWideList: Array.isArray(j.accountWideRuleList) ? j.accountWideRuleList : null,
       })
     } catch { /* advisory — never block the grid on it */ }
   }, [])
   useEffect(() => { void loadAuthority() }, [loadAuthority])
+  /** AM-12 / AM-24 — the ONE count the Rules cell, its dialog and the Rule filter read; null while loading. */
+  const reachOf = useCallback((c: Camp): RuleReach | null => (authority
+    ? ruleReach({ marketplace: c.marketplace, boundRules: authority.byId[c.id]?.boundRules, accountWideList: authority.accountWideList, accountWideCount: authority.accountWideRules })
+    : null), [authority])
 
   /**
    * C1 — who owns each campaign's bids, for the shared Bid Rule cell's second half. The same read
@@ -1177,15 +1214,15 @@ export function CampaignsGrid() {
   const setRange = (key: string, side: 'min' | 'max', v: string) => setRanges((m) => ({ ...m, [key]: { ...(m[key] ?? { min: '', max: '' }), [side]: v } }))
   const allStatuses = STATUS_OPTS.map((o) => o.value)
   const allTypes = TYPE_OPTS.map((o) => o.value)
-  const clearFilters = () => { setStatuses(DEFAULT_STATUSES); setTypes(allTypes); setPortfolio(''); setRanges({}); setCampaignSel([]) }
+  const clearFilters = () => { setStatuses(DEFAULT_STATUSES); setTypes(allTypes); setPortfolio(''); setRanges({}); setCampaignSel([]); setBidAutoFilter(''); setRuleFilter('') }
   const persistLibrary = (next: FilterPreset[]) => { setLibrary(next); try { localStorage.setItem(LIB_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
   const savePreset = () => {
-    persistLibrary([...library, { name: `Preset ${library.length + 1}`, statuses, types, portfolio, campaigns: campaignSel, ranges }])
+    persistLibrary([...library, { name: `Preset ${library.length + 1}`, statuses, types, portfolio, campaigns: campaignSel, ranges, bidAutomation: bidAutoFilter, rule: ruleFilter }])
     setPresetMsg('Saved'); setTimeout(() => setPresetMsg(''), 1500); setShowLibrary(true)
   }
   const applyPreset = (p: FilterPreset) => {
     setStatuses(p.statuses ?? allStatuses); setTypes(p.types ?? allTypes); setPortfolio(p.portfolio ?? '')
-    setCampaignSel(p.campaigns ?? []); setRanges(p.ranges ?? {}); setShowLibrary(false)
+    setCampaignSel(p.campaigns ?? []); setRanges(p.ranges ?? {}); setBidAutoFilter(p.bidAutomation ?? ''); setRuleFilter(p.rule ?? ''); setShowLibrary(false)
   }
   const deletePreset = (i: number) => persistLibrary(library.filter((_, idx) => idx !== i))
   // The dialog returns ONE ordered list — order and visibility from a single source, so the drag
@@ -1526,7 +1563,7 @@ export function CampaignsGrid() {
 
   const statusActive = statuses.length !== DEFAULT_STATUSES.length || !DEFAULT_STATUSES.every((s) => statuses.includes(s))
   const typeAll = types.length === TYPE_OPTS.length
-  const hasActiveFilters = statusActive || !typeAll || !!portfolio || campaignSel.length > 0
+  const hasActiveFilters = statusActive || !typeAll || !!portfolio || campaignSel.length > 0 || !!bidAutoFilter || !!ruleFilter
     || Object.values(ranges).some((r) => r && (r.min || r.max))
 
   const filtered = useMemo(() => {
@@ -1535,6 +1572,8 @@ export function CampaignsGrid() {
     return rows.filter((c) => {
       if (market !== 'all' && c.marketplace !== market) return false
       if (portfolio && c.portfolioId !== portfolio) return false
+      if (!matchesBidAutomation(bidAutoFilter, c.bidAutomation)) return false
+      if (!matchesRuleFilter(ruleFilter, reachOf(c))) return false
       if (campaignSel.length && !campaignSel.includes(c.name)) return false
       if (!sAll && !statuses.includes(c.status)) return false
       if (!tAll && !types.includes(typeKey(c))) return false
@@ -1546,7 +1585,7 @@ export function CampaignsGrid() {
       }
       return true
     })
-  }, [rows, campaignSel, statuses, types, portfolio, ranges, market])
+  }, [rows, campaignSel, statuses, types, portfolio, ranges, market, bidAutoFilter, ruleFilter, reachOf])
   // The header checkbox selects EVERY filtered campaign, across pages — the legacy `toggleAll` — while the
   // grid holds only the current page (`chromeless`); the contract's `selectAllIds` carries the whole set.
   const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered])
@@ -1560,6 +1599,10 @@ export function CampaignsGrid() {
     const ed = (display: ReactNode, kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget') => (
       <span className="h10-edcell">{display}<button type="button" className="h10-editpen" aria-label="Edit" onClick={(ev) => setEditPop({ id: c.id, kind, anchor: anchorFromEvent(ev) })}><Pencil size={11} /></button></span>
     )
+    // CM-26 — on a Sponsored Brands / Display row every Amazon-bound edit (status, budget, strategy, multiplier) is
+    // refused by the server. Those cells show their value read-only, with the reason on hover and keyboard focus.
+    const hold = amazonEditHold(c)
+    const held = (display: ReactNode, why: string) => <span className="am-held">{display}<InfoTip tip={why} /></span>
     switch (key) {
       // C1 — the shared cell: <algorithm> · <owner>, identical to Apply Rules' by construction.
       case 'bidRule': return <span className="h10-edcell"><BidRuleCell algorithm={c.bidAlgorithm} bidder={bidOwners?.get(c.id)?.bidder} bidderName={bidOwners?.get(c.id)?.bidderName} known={!!bidOwners?.has(c.id)} /><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td, .nds-ws-td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
@@ -1618,7 +1661,7 @@ export function CampaignsGrid() {
       }
       // ADM-H P4 — Amazon's own view, from fields the payload has always carried.
       case 'amazonDelivery': return <AmazonDeliveryCell status={c.deliveryStatus} reasons={c.deliveryReasons} />
-      case 'status': return <StatusCell status={c.status} name={c.name} onChange={(next) => void setCampaignStatus(c, next)} />
+      case 'status': return hold ? held(<StatusCell status={c.status} name={c.name} />, hold) : <StatusCell status={c.status} name={c.name} onChange={(next) => void setCampaignStatus(c, next)} />
       // C5 — one empty-state vocabulary: **None** = settable, nothing set · **—** = no value ·
       // **unknown** = the source did not say. ADM-H P1 moved the cell into
       // `_shared/RuleColumnCells.tsx` beside `MinMaxBidCell` and pointed it at the REAL
@@ -1637,20 +1680,19 @@ export function CampaignsGrid() {
        * says which half is which instead of the cell implying per-campaign variation.
        */
       case 'rules': {
+        // AM-12 — the count comes from `reachOf`, the same reader the dialog and the Rule filter use.
         const a = authority?.byId?.[c.id]
-        const boundN = (a?.boundRules ?? []).length
-        const acct = authority?.accountWideRules ?? 0
-        const total = acct + boundN
+        const reach = reachOf(c)
         return (
           <button
             type="button" className="h10-rules" onClick={() => setRulesModal(c)}
-            title={authority
-              ? `${total} rule(s) can write to this campaign: ${acct} account-wide (nothing narrows them) + ${boundN} bound to it.${a?.managed ? '' : ' The write gate is SHUT, so all of them are refused here.'}`
+            title={reach
+              ? `${reach.total} switched-on rule(s) may act on this campaign: ${reach.accountWideCount} account-wide + ${reach.bound.length} bound to it. Open to see them.${a?.managed ? '' : ' The write gate is SHUT, so all of them are refused here.'}`
               : 'Rule reach is still loading.'}
-          ><b>{authority ? total : '—'}</b> <Settings2 size={12} /></button>
+          ><b>{reach ? reach.total : '—'}</b> <Settings2 size={12} /></button>
         )
       }
-      case 'biddingStrategy': return <BiddingStrategyCell strategy={effStrat(c)} onEdit={() => setStrategyModal(c)} />
+      case 'biddingStrategy': return hold ? held(<BiddingStrategyCell strategy={effStrat(c)} />, hold) : <BiddingStrategyCell strategy={effStrat(c)} onEdit={() => setStrategyModal(c)} />
       /**
        * ADM-H P7 — this was a gear icon and nothing else, on all 220 rows: a column that told you
        * nothing about the campaign and made you open a modal per row to learn anything. The
@@ -1681,7 +1723,9 @@ export function CampaignsGrid() {
               ? <span className="v">{lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}</span>
               : <span className="h10-rc-none">None</span>}
             {planHeld && lanes.length > 0 && <i className="hourly" aria-label="Rewritten hourly by a rank schedule">⏱</i>}
-            <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>
+            {hold
+              ? <InfoTip tip={hold} />
+              : <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>}
           </span>
         )
       }
@@ -1692,6 +1736,7 @@ export function CampaignsGrid() {
       // and the two glyphs stop being a coin toss.
       case 'endDate': return c.endDate ? fmtDate(c.endDate) : <span className="h10-rc-none" title="No end date is set, so this campaign runs until it is paused or archived.">None</span>
       case 'dailyBudget': {
+        if (hold) return held(c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', hold)
         if (mode === 'edit') {
           const bud = e?.dailyBudget != null ? readDailyBudget(e.dailyBudget) : null
           const dirty = bud != null && (!bud.ok || bud.value !== num(c.dailyBudget))
@@ -2165,7 +2210,7 @@ export function CampaignsGrid() {
       {/* P3 — per-row Bidding Strategy / Bid Multiplier modals + Status menu */}
       {strategyModal && <StrategyModal strategy={strategyModal.biddingStrategy} onConfirm={(v) => void setCampaignStrategy(strategyModal, v)} onClose={() => setStrategyModal(null)} />}
       {multiplierModal && <BidMultiplierModal campaign={multiplierModal} onConfirm={(pl) => void setCampaignPlacements(multiplierModal, pl)} onClose={() => setMultiplierModal(null)} />}
-      {rulesModal && <CampaignRulesModal campaign={rulesModal} onClose={() => setRulesModal(null)} />}
+      {rulesModal && <CampaignRulesModal campaign={rulesModal} reach={reachOf(rulesModal)} onClose={() => setRulesModal(null)} />}
       {bidRuleMenu && (() => {
         const c = rows.find((x) => x.id === bidRuleMenu.id)
         if (!c) return null
