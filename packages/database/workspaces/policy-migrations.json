@@ -8,7 +8,7 @@
   "reference-guard.sql": "20260916e_bps3_publish_reference_guard",
   "assortment-share.sql": "20260928o_sharing_listing_content",
   "assortment-copy.sql": "20260916h_ae3_first_copy",
-  "stock-pool.sql": "20261001b_stock_pool_quantity_guard",
+  "stock-pool.sql": "20261006a_stock_pool_heal_triggers",
   "listing-end-times.sql": "20260919b_listing_end_times",
   "assortment-sync.sql": "20260928n_assortment_due_rounding",
   "shopify-colour-sync.sql": "20260930c_shopify_colour_sync",

@@ -330,6 +330,75 @@ describe('Shared stock step 1 — permission, links, queue and doors', () => {
     await clearTasks()
   })
 
+  it('a lent warehouse switched off, on or retyped queues its borrowers; an unlent one, or a change that keeps it counting, nothing', async () => {
+    const borrowers = [product.b_boots, product.b_helmet, product.b_jacket].map((p) => [p, 'location']).sort()
+    const queued = async () => (await tasks(B)).map((t) => [t.productId, t.reason]).sort()
+    const setLocation = (id: string, set: string, value: unknown) => sql(`UPDATE "StockLocation" SET ${set} = $2 WHERE id = $1`, [id, value])
+    await clearTasks()
+    // Not lent by any grant: nothing, either way.
+    await setLocation(loc.notLent, '"isActive"', false)
+    await setLocation(loc.notLent, '"isActive"', true)
+    // Lent, but still counting after the change (same flag, another name): nothing.
+    await setLocation(loc.second, '"isActive"', true)
+    await setLocation(loc.second, 'name', 'IT-SECOND renamed')
+    await setLocation(loc.second, 'name', 'IT-SECOND')
+    expect(await tasks(B)).toEqual([])
+    expect(await tasks(C)).toEqual([])
+
+    // Switched off: one task per borrower product linked through the grant; door 1 now counts it as 0.
+    await setLocation(loc.second, '"isActive"', false)
+    expect(await queued()).toEqual(borrowers)
+    expect(await tasks(C)).toEqual([]) // C borrows from B, not from this lender
+    const levels = await as(B, user.ownerB, () => doors.poolLevels(database.client as never, [product.b_jacket]))
+    expect(levels.get(product.b_jacket)!.map((l) => [l.locationCode, l.available])).toEqual([['IT-MAIN', 5], ['IT-SECOND', 0]])
+    await clearTasks()
+    // Still off and retyped: it did not count before and does not count now — nothing.
+    await setLocation(loc.second, 'type', 'CHANNEL_RESERVED')
+    expect(await tasks(B)).toEqual([])
+    await setLocation(loc.second, 'type', 'WAREHOUSE')
+    expect(await tasks(B)).toEqual([])
+    // Switched on again: queued again.
+    await setLocation(loc.second, '"isActive"', true)
+    expect(await queued()).toEqual(borrowers)
+    await clearTasks()
+    // Retyped while on: it stops counting — queued; and back to a warehouse — queued again.
+    await setLocation(loc.second, 'type', 'CHANNEL_RESERVED')
+    expect(await queued()).toEqual(borrowers)
+    await clearTasks()
+    await setLocation(loc.second, 'type', 'WAREHOUSE')
+    expect(await queued()).toEqual(borrowers)
+    expect((await as(B, user.ownerB, () => doors.poolLevels(database.client as never, [product.b_jacket]))).get(product.b_jacket)!.map((l) => l.available)).toEqual([5, 3])
+    await clearTasks()
+  })
+
+  it('a lending business that stops being active, or comes back, queues every borrower of a grant that is on; a borrower that stops, nothing', async () => {
+    const borrowers = [product.b_boots, product.b_helmet, product.b_jacket].map((p) => [p, 'lender']).sort()
+    const queued = async () => (await tasks(B)).map((t) => [t.productId, t.reason]).sort()
+    await clearTasks()
+    // A change that is not about being active: nothing.
+    await sql(`UPDATE "Workspace" SET name = 'Lender A renamed' WHERE id = $1`, [A])
+    await sql(`UPDATE "Workspace" SET name = 'Lender A' WHERE id = $1`, [A])
+    await sql(`UPDATE "Workspace" SET status = 'active' WHERE id = $1`, [A])
+    expect(await tasks(B)).toEqual([])
+
+    await sql(`UPDATE "Workspace" SET status = 'archived' WHERE id = $1`, [A])
+    expect(await queued()).toEqual(borrowers)
+    // While the lender is not active, the borrower sells from no pool.
+    expect((await as(B, user.ownerB, () => doors.poolLevels(database.client as never, [product.b_jacket]))).size).toBe(0)
+    await clearTasks()
+    await sql(`UPDATE "Workspace" SET status = 'active' WHERE id = $1`, [A])
+    expect(await queued()).toEqual(borrowers)
+    expect((await as(B, user.ownerB, () => doors.poolLevels(database.client as never, [product.b_jacket]))).size).toBe(1)
+    await clearTasks()
+
+    // B lends to C as well (grant B → C, one linked product); B stopping queues C, and nothing for B itself.
+    await sql(`UPDATE "Workspace" SET status = 'archived' WHERE id = $1`, [B])
+    expect(await tasks(B)).toEqual([])
+    expect((await tasks(C)).map((t) => [t.productId, t.reason])).toEqual([[product.c_gloves, 'lender']])
+    await sql(`UPDATE "Workspace" SET status = 'active' WHERE id = $1`, [B])
+    await clearTasks()
+  })
+
   // ── Door 1: check ───────────────────────────────────────────────────────────────────────────
   it('CHECK shows the borrower one row per lent warehouse, only for linked products, and nothing to anyone else', async () => {
     const levels = await as(B, user.ownerB, () => doors.poolLevels(database.client as never, [product.b_jacket, product.b_gloves, product.b_helmet]))

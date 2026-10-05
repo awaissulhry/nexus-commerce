@@ -9637,6 +9637,7 @@ CREATE TABLE "StockPoolTask" (
     "claimedAt" TIMESTAMP(3),
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "lastError" TEXT,
+    "retryAt" TIMESTAMP(3),
 
     CONSTRAINT "StockPoolTask_pkey" PRIMARY KEY ("id")
 );

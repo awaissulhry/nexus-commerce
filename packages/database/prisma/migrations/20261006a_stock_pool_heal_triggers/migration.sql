@@ -1,3 +1,20 @@
+-- Stock across business profiles in real time (Owner 2026-10-06: "make sure that the stock updates in real time
+-- across profiles").
+--
+-- 1. StockPoolTask."retryAt" (new, nullable): a failed pool task is released at once with a retry time that grows with
+--    its attempts (services/stock-pool/pool-tasks.ts), instead of keeping its claim and waiting two minutes.
+-- 2. The shared policy file packages/database/workspaces/stock-pool.sql, which this migration ENDS WITH byte for byte
+--    (policy-migrations.json), adds two triggers and changes one function:
+--    - nexus_stock_pool_location_changed: a lent warehouse switched off or on, or retyped, queues every borrower whose
+--      grant is on and lends it (door 1 counts only active WAREHOUSE locations, so the pool number moved with no stock
+--      write and nothing told the borrowers);
+--    - nexus_stock_pool_lender_changed: a lending business that stops being active, or comes back, queues every
+--      borrower product linked through a grant that is on (a pool is used only while both businesses are active);
+--    - nexus_pool_pending_workspaces: a released task waits for its "retryAt".
+-- Additive only: the previous release never writes "retryAt", so for it every task reads exactly as before.
+
+ALTER TABLE "StockPoolTask" ADD COLUMN IF NOT EXISTS "retryAt" TIMESTAMP(3);
+
 -- Shared stock between business profiles — the lending permission, the product links, the work
 -- queue and the safe doors. Plan: docs/2026-09-19-shared-stock-plan.md; contract:
 -- docs/2026-09-19-shared-stock-build.md §1.
