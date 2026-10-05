@@ -378,6 +378,14 @@ describe('an alias shows the main listing\'s photos, read-only (Owner 2026-10-05
     expect(fixture.state.listings.find(l => l.id === 'summer-p').platformAttributes._amazonMediaWorkspace.draft.common.MAIN.assetId).toBe('product:detail')
     expect((await createAmazonMediaReview(await alias(), own.revision, ['summer-blue'], 'editor')).status).toBe('REVIEW_QUEUED')
   })
+  it('the tab follows the Main listing iff the alias ROOT row does (mixed ASINs on its rows)', async () => {
+    await saved()
+    const asin = (id: string, value: string) => { fixture.state.listings.find(l => l.id === id).externalListingId = value }
+    asin('summer-p', 'ASIN-OWN-root')
+    expect((await readAmazonMedia(await alias())).readOnly).toBeUndefined()
+    asin('summer-p', 'ASIN-p'); asin('summer-blue', 'ASIN-OWN-blue')
+    expect((await readAmazonMedia(await alias())).readOnly).toBe(AMAZON_ALIAS_PHOTOS)
+  })
   it('NEGATIVE CONTROL: the main listing still saves its own draft', async () => {
     const { w } = await saved()
     expect(w.draft.common.MAIN).toEqual({ assetId: 'product:photo', language: 'zxx' })

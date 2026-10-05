@@ -116,6 +116,29 @@ describe('an Amazon alias shows the main listing\'s photos (Owner 2026-10-05)', 
     expect(own.values.main_product_image_locator).toMatchObject({ value: url('amazon-alias'), editable: true })
   })
 
+  it('a variation not on Amazon yet follows its alias ROOT row: on the Main page it shows the Main listing\'s, on its own page the alias\'s own', async () => {
+    const family = (aliasRootAsin: string) => {
+      setUp({ main: {}, alias: {} })
+      productFindMany.mockResolvedValue([
+        { id: 'p_solo', sku: 'SOLO', isParent: true, parentId: null, productType: null, name: 'Giacca', description: null, variationAxes: [], variantAttributes: {}, categoryAttributes: {},
+          translations: [], localizedContent: { und: collection('img-shared') }, images: [file('img-main', 0), file('img-alias', 1), file('img-shared', 2)] },
+        { id: 'p_kid', sku: 'SOLO-M', isParent: false, parentId: 'p_solo', productType: null, name: 'Giacca M', description: null, variationAxes: [], variantAttributes: {}, categoryAttributes: {},
+          translations: [], localizedContent: {}, images: [] }])
+      const row = (id: string, productId: string, aliasKey: string, externalListingId: string | null, platformAttributes: unknown) =>
+        ({ id, productId, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'account', platformAttributes, translations: [], aliasKey, aliasId: aliasKey || null, externalListingId })
+      channelListingFindMany.mockResolvedValue([
+        row('l-main', 'p_solo', '', 'B0TESTMROOT', {}), row('l-main-kid', 'p_kid', '', 'B0TESTMKID', { _productMediaLocales: { it: collection('img-main') } }),
+        row('l-alias', 'p_solo', 'alias-1', aliasRootAsin, {}), row('l-alias-kid', 'p_kid', 'alias-1', null, { _productMediaLocales: { it: collection('img-alias') } })])
+    }
+    family('B0TESTMROOT')
+    let kid = (await read()).rows.find(r => r.id === 'p_kid' && r.aliasId === 'alias-1')!
+    expect(kid).toMatchObject({ productMediaFollows: 'main-listing', productMedia: [expect.objectContaining({ id: 'img-main' })] })
+    family('B0TESTAROOT')
+    kid = (await read()).rows.find(r => r.id === 'p_kid' && r.aliasId === 'alias-1')!
+    expect(kid.productMediaFollows).toBeUndefined()
+    expect(kid.productMedia!.map(item => item.id)).toEqual(['img-alias'])
+  })
+
   it('NEGATIVE CONTROL: an eBay alias keeps its own photos (eBay listings hold their own)', async () => {
     setUp({ channel: 'EBAY', main: { _productMediaLocales: { it: collection('img-main') } }, alias: { _productMediaLocales: { it: collection('img-alias') } } })
     const alias = (await read('EBAY')).rows.find(r => r.aliasId === 'alias-1')!

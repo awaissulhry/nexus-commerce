@@ -47,6 +47,10 @@ beforeEach(() => {
     listing('l-alias', 'root', 'AMAZON', 'alias-1', { _productMediaLocales: media('img-alias'), other: 'kept' }),
     // An adopted listing of another product page (its own ASIN): its own photos, as before.
     listing('l-own', 'root', 'AMAZON', 'alias-3', { _productMediaLocales: media('img-other') }, 'B0TESTOTHER'),
+    // A variation of alias-4 not on Amazon yet: its alias root row decides.
+    listing('m-kid', 'child', 'AMAZON', '', { _productMediaLocales: media('img-main') }, 'B0TESTMKID'),
+    listing('a-root', 'root', 'AMAZON', 'alias-4', {}, 'B0TESTAROOT'),
+    listing('a-kid', 'child', 'AMAZON', 'alias-4', { _productMediaLocales: media('img-alias') }),
     listing('e-main', 'root', 'EBAY', '', {}),
     listing('e-alias', 'root', 'EBAY', 'alias-2', { _productMediaLocales: media('img-alias') }),
     listing('e-alias-child', 'child', 'EBAY', 'alias-2', { _productMediaLocales: media('img-other') }),
@@ -102,6 +106,17 @@ describe('an Amazon alias shows the main listing\'s photos, read-only (Owner 202
     expect(own.readOnly).toBeUndefined()
     await saveProductMedia(amazon({ listingId: 'l-own' }), { expectedRevision: own.revision, collection: list('img-alias') })
     expect(mocks.updates[0].where).toMatchObject({ id: 'l-own' })
+  })
+
+  it('a variation not on Amazon yet follows its alias root row: its own list on another page, the Main listing\'s on the Main page', async () => {
+    const kid = amazon({ productId: 'child', listingId: 'a-kid' })
+    const own = await readProductMedia(kid)
+    expect(own.collection).toEqual(list('img-alias'))
+    expect(own.readOnly).toBeUndefined()
+    mocks.listings.find(l => l.id === 'a-root').externalListingId = 'B0TESTMAIN'
+    expect(await readProductMedia(kid)).toMatchObject({ collection: list('img-main'), readOnly: AMAZON_ALIAS_PHOTOS })
+    mocks.listings.find(l => l.id === 'a-root').externalListingId = null
+    expect(await readProductMedia(kid)).toMatchObject({ collection: list('img-main'), readOnly: AMAZON_ALIAS_PHOTOS })
   })
 
   it('a reset on the alias clears its own older list (every language), and it still shows the Main listing\'s', async () => {

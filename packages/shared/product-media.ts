@@ -43,21 +43,28 @@ export interface ProductMediaWorkspace {
 
 /**
  * Owner 2026-10-05 — Amazon keeps ONE photo set per product (its ASIN, every market): a listing alias on the same product
- * page is another seller SKU of it, so it shows, and Publish sends, the Main listing's photos and never has its own.
+ * page is another seller SKU of it, so it shows the Main listing's photos and never has its own. Publish sends them from the
+ * alias only to a new row or while the Main listing is not live; otherwise it sends none (the page already shows them).
  */
 export const AMAZON_ALIAS_PHOTOS = 'Amazon shows one photo set per product. These are the Main listing\'s photos; change them on the Main listing.'
 /** The refusal of a photo review or publish started from such an alias (the older Amazon Images tab). */
 export const AMAZON_ALIAS_PUBLISH = 'Amazon shows one photo set per product: publish photos from the Main listing.'
 const asinOf = (value: string | null | undefined) => value?.trim() || null
 /**
- * The listing's photos are the Main listing's: an Amazon alias (`aliasKey` not '') on the Main listing's product page — its
- * row has no ASIN yet, or the Main listing's row of the product has the same ASIN (`externalListingId`). An alias on its
- * own ASIN (an adopted listing of another product page) keeps its own photos.
+ * The one rule (sheet, Product media, Images tab, Publish): an Amazon alias row (`aliasKey` not '') shows the Main listing's
+ * photos when it is on the Main listing's product page. ASINs are `externalListingId`.
+ * - A row WITH an ASIN: iff it equals the Main listing's row of the same product (`mainAsin`).
+ * - A row WITHOUT one (not on Amazon yet): iff the alias's ROOT row (the family root's row of the alias) is — it has no
+ *   ASIN, or the Main root row's (`aliasRootAsin` / `mainRootAsin`). A new variation of an alias on its own product page
+ *   keeps the alias's own photos. The Images tab asks for the alias root row itself.
  */
-export function followsMainListingPhotos(input: { channel: string | null | undefined; aliasKey: string | null | undefined; asin?: string | null; mainAsin?: string | null }): boolean {
+export function followsMainListingPhotos(input: { channel: string | null | undefined; aliasKey: string | null | undefined; asin?: string | null; mainAsin?: string | null
+  aliasRootAsin?: string | null; mainRootAsin?: string | null }): boolean {
   if (input.channel !== 'AMAZON' || !input.aliasKey) return false
   const asin = asinOf(input.asin)
-  return asin === null || asin === asinOf(input.mainAsin)
+  if (asin !== null) return asin === asinOf(input.mainAsin)
+  const root = asinOf(input.aliasRootAsin)
+  return root === null || root === asinOf(input.mainRootAsin)
 }
 
 export function mediaObject(value: unknown): Record<string, unknown> {

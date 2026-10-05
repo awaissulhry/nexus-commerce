@@ -173,8 +173,9 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   if (planMedia && planMedia.layout.channel !== 'AMAZON') throw new Error('This product\'s photo plan changed. Review again.')
   const planLayout = planMedia?.layout as (AmazonMediaLayout & { channel: 'AMAZON' }) | undefined
   // Owner 2026-10-05 — Amazon keeps ONE photo set per product: images belong to the ASIN in every market, whatever SKU sends
-  // them (Listings API FAQ). An alias row on its Main listing's product page (no ASIN yet, or the Main row's ASIN:
-  // `followsMainListingPhotos`) never sends photos of its own. A NEW row, or one whose Main listing is not live, is sent the
+  // them (Listings API FAQ). An alias row on its Main listing's product page (`followsMainListingPhotos`, the one rule: its
+  // ASIN is the Main row's; with none yet, its alias root row's is the Main root row's, or the root has none) never sends
+  // photos of its own. A NEW row, or one whose Main listing is not live, is sent the
   // Main listing's photos (its Images draft, else its Product media, else the Shared photos), so the photos its cell shows
   // reach Amazon. A row whose Main listing is live sends no image attribute: the page already shows the Main listing's,
   // a second send is only a second contribution to it (and its ~48 h image processing), and leaving the roots out removes
@@ -185,7 +186,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: '' }, select: { id: true, productId: true, version: true, externalListingId: true, isPublished: true, platformAttributes: true } }) : []
   const mainOf = (productId: string) => mains.find(l => l.productId === productId)
   const followsMain = (productId: string) => !!aliasKey && followsMainListingPhotos({ channel: 'AMAZON', aliasKey,
-    asin: listings.find(l => l.productId === productId)?.externalListingId, mainAsin: mainOf(productId)?.externalListingId })
+    asin: listings.find(l => l.productId === productId)?.externalListingId, mainAsin: mainOf(productId)?.externalListingId,
+    aliasRootAsin: rootListing?.externalListingId, mainRootAsin: mainOf(parent.id)?.externalListingId })
   const mainLive = (productId: string) => !!mainOf(productId)?.externalListingId?.trim() && mainOf(productId)!.isPublished
   const mainRoot = mainOf(parent.id)
   const mainGallery = mainRoot && products.some(p => followsMain(p.id)) && object(mainRoot.platformAttributes)._amazonMediaWorkspace

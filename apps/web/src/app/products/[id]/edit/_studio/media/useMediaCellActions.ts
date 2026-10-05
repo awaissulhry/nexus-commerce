@@ -13,7 +13,8 @@ export type MediaRow = { id: string; name?: string | null; sku?: string; product
   shopify?: { productId: string; listingId: string } | null
   /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
   productMediaSource?: 'image-urls'
-  /** Owner 2026-10-05 — an Amazon alias: the cell shows the main listing's photos, read-only (`mediaReadOnlyReason`). */
+  /** Owner 2026-10-05 — an Amazon alias on its Main listing's product page: the cell shows the Main listing's photos, read-only
+   *  (`mediaReadOnlyReason`); Publish sends them from the alias only to a new row or while the Main listing is not live. */
   productMediaFollows?: 'main-listing' }
 
 /** Owner 2026-10-05 — one list at a time, the last save wins: what an eBay Image URLs list in the cell means. */
@@ -32,7 +33,7 @@ export function mediaSourceNote(row: Pick<MediaRow, 'productMediaSource' | 'prod
 }
 /**
  * Why the cell's list cannot be changed from this row, or ''. Owner 2026-10-05 — Amazon keeps one photo set per product: an
- * Amazon alias shows the main listing's photos (the server's sentence, `AMAZON_ALIAS_PHOTOS`).
+ * Amazon alias on the Main listing's product page shows the Main listing's photos (the server's sentence, `AMAZON_ALIAS_PHOTOS`).
  */
 export function mediaReadOnlyReason(row: Pick<MediaRow, 'productMediaFollows'>): string {
   return row.productMediaFollows === 'main-listing' ? AMAZON_ALIAS_PHOTOS : ''

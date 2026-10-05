@@ -67,13 +67,15 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
   if (aliasKey && !aliases.some(a => a.id === aliasKey)) throw new WorkspaceScopeError('This listing alias is no longer active.')
   const rows = familyListings.filter(l => l.aliasKey === aliasKey && !l.product.deletedAt)
   const pa = mediaObject(root?.platformAttributes)
-  // Owner 2026-10-05 — an alias on its Main listing's product page (every row of it with no ASIN yet, or the same ASIN as the
-  // Main listing's row) shows the Main listing's photos (Amazon keeps one photo set per product): the draft and the stored
-  // slots are the Main listing's, each SKU's override moved onto the alias row of the same product. Read-only: saves,
-  // copies, reviews and publishes refuse it. Its own Amazon checks stay its own. An alias on its own ASIN keeps its own.
+  // Owner 2026-10-05 — an alias on its Main listing's product page (`followsMainListingPhotos`, the one rule, asked for the
+  // alias's root row: its draft is the alias root's) shows the Main listing's photos (Amazon keeps one photo set per
+  // product): the draft and the stored slots are the Main listing's, each SKU's override moved onto the alias row of the
+  // same product. Read-only: saves, copies, reviews and publishes refuse it. Its own Amazon checks stay its own. An alias on
+  // its own ASIN keeps its own.
   const mainRows = aliasKey ? familyListings.filter(l => l.aliasKey === '' && !l.product.deletedAt) : []
   const mainOf = (row: (typeof rows)[number]) => mainRows.find(l => l.productId === row.productId)
-  const follows = !!aliasKey && rows.every(row => followsMainListingPhotos({ channel: 'AMAZON', aliasKey, asin: row.externalListingId, mainAsin: mainOf(row)?.externalListingId }))
+  const aliasRootAsin = rows.find(l => l.productId === productId)?.externalListingId, mainRootAsin = mainRows.find(l => l.productId === productId)?.externalListingId
+  const follows = followsMainListingPhotos({ channel: 'AMAZON', aliasKey, asin: aliasRootAsin, mainAsin: mainRootAsin, aliasRootAsin, mainRootAsin })
   const mainRoot = follows ? mainRows.find(l => l.productId === productId) ?? null : null
   const photoOf = (row: (typeof rows)[number]) => follows ? mainOf(row) : row
   const photos = follows ? mediaObject(mainRoot?.platformAttributes) : pa

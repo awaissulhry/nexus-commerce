@@ -44,14 +44,19 @@ async function snapshot(input: Input, tx: Tx) {
       ...(input.listingId ? {} : { aliasKey: input.aliasKey }) }, select: { id: true, version: true, channel: true, aliasKey: true, externalListingId: true, platformAttributes: true } }),
   ])
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing destination is no longer available.')
-  // Owner 2026-10-05 — an Amazon alias on the Main listing's product page (no ASIN yet, or the same ASIN) shows the Main
-  // listing's photos (one photo set per product): its list is read from this product's Main listing on the same account and
-  // market, read-only (a save or a copy onto it is refused; a reset only clears its own older list). An alias on its own
+  // Owner 2026-10-05 — an Amazon alias on the Main listing's product page (`followsMainListingPhotos`, the one rule) shows the
+  // Main listing's photos (one photo set per product): its list is read from this product's Main listing on the same account
+  // and market, read-only (a save or a copy onto it is refused; a reset only clears its own older list). An alias on its own
   // ASIN keeps its own list.
   const aliasKey = listing ? listing.aliasKey : input.aliasKey
-  const main = input.scope === 'AMAZON' && aliasKey ? await tx.channelListing.findFirst({ where: { productId: product.id, channel: input.scope, marketplace: input.market,
-    channelConnectionId: input.accountId, aliasKey: '' }, select: { id: true, version: true, channel: true, aliasKey: true, externalListingId: true, platformAttributes: true } }) : null
-  const followsMain = followsMainListingPhotos({ channel: input.scope, aliasKey, asin: listing?.externalListingId, mainAsin: main?.externalListingId })
+  const amazonAlias = input.scope === 'AMAZON' && !!aliasKey
+  const at = (productId: string, key: string) => tx.channelListing.findFirst({ where: { productId, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId, aliasKey: key },
+    select: { id: true, version: true, channel: true, aliasKey: true, externalListingId: true, platformAttributes: true } })
+  const main = amazonAlias ? await at(product.id, '') : null
+  // The family root's rows of the alias and of the Main listing decide for a row not on Amazon yet.
+  const [aliasRoot, mainRoot] = amazonAlias && product.parentId ? await Promise.all([at(product.parentId, aliasKey!), at(product.parentId, '')]) : [listing, main]
+  const followsMain = followsMainListingPhotos({ channel: input.scope, aliasKey, asin: listing?.externalListingId, mainAsin: main?.externalListingId,
+    aliasRootAsin: aliasRoot?.externalListingId, mainRootAsin: mainRoot?.externalListingId })
   const assets: ProductMediaAsset[] = files.map(file => ({ id: file.id, type: file.mediaType || 'IMAGE', url: file.url,
     preview: file.mediaType === 'IMAGE' ? file.url : file.posterUrl, alt: file.alt ?? '', mimeType: file.mimeType,
     width: file.width, height: file.height, durationSec: file.durationSec, fileSize: file.fileSize }))

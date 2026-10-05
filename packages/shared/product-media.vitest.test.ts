@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PRODUCT_MEDIA_KEY, productMediaCollectionSchema, productMediaQuerySchema, readMediaCollection, resolveMediaCollection, writeMediaCollection } from './product-media'
+import { followsMainListingPhotos, PRODUCT_MEDIA_KEY, productMediaCollectionSchema, productMediaQuerySchema, readMediaCollection, resolveMediaCollection, writeMediaCollection } from './product-media'
 const gallery = (ids: string[]) => ({ version: 1 as const, items: ids.map(assetId => ({ assetId })) })
 const content = (locale: string, ids: string[]) => ({ [locale]: { [PRODUCT_MEDIA_KEY]: gallery(ids) } })
 const base = { locale: 'it', own: {}, ownIds: ['own'], parentIds: ['parent'] }
@@ -36,5 +36,26 @@ describe('Product media locale and scope contract', () => {
     expect(productMediaQuerySchema.safeParse({ ...query, scope: 'MASTER' }).success).toBe(false)
     expect(productMediaQuerySchema.safeParse({ scope: 'MASTER', market: 'GLOBAL', locale: 'und' }).success).toBe(true)
     expect(productMediaQuerySchema.safeParse({ ...query, listingId: undefined, aliasKey: '' }).success).toBe(true)
+  })
+})
+
+/** Owner 2026-10-05 — the one rule for an Amazon alias's photos (sheet, Product media, Images tab, Publish). Fake ASINs. */
+describe('followsMainListingPhotos', () => {
+  const rule = (input: Partial<Parameters<typeof followsMainListingPhotos>[0]>) => followsMainListingPhotos({ channel: 'AMAZON', aliasKey: 'alias-1', ...input })
+  it('only an Amazon alias row: never the Main listing, never another channel', () => {
+    expect(rule({ aliasKey: '' })).toBe(false)
+    expect(rule({ channel: 'EBAY' })).toBe(false)
+  })
+  it('a row WITH an ASIN follows iff it is the Main row\'s ASIN of the same product', () => {
+    expect(rule({ asin: 'B0TEST1', mainAsin: ' B0TEST1 ' })).toBe(true)
+    expect(rule({ asin: 'B0TEST1', mainAsin: 'B0TEST2', aliasRootAsin: null })).toBe(false)
+    expect(rule({ asin: 'B0TEST1', mainAsin: null })).toBe(false)
+  })
+  it('a row WITHOUT one follows iff its alias root row does: no ASIN, or the Main root row\'s', () => {
+    expect(rule({})).toBe(true)
+    expect(rule({ aliasRootAsin: 'B0ROOT', mainRootAsin: 'B0ROOT' })).toBe(true)
+    // A new variation of an alias on its own product page keeps the alias's own photos.
+    expect(rule({ aliasRootAsin: 'B0ROOTA', mainRootAsin: 'B0ROOTM' })).toBe(false)
+    expect(rule({ aliasRootAsin: 'B0ROOTA', mainRootAsin: null })).toBe(false)
   })
 })

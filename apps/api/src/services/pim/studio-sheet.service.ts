@@ -288,8 +288,9 @@ export interface StudioRow {
    */
   productMediaSource?: 'image-urls'
   /**
-   * Owner 2026-10-05 — an Amazon alias row: the cell shows the main listing's photos, read-only (`AMAZON_ALIAS_PHOTOS`):
-   * Amazon keeps one photo set per product, so a listing alias never has its own.
+   * Owner 2026-10-05 — an Amazon alias row on its Main listing's product page (`followsMainListingPhotos`): the cell shows
+   * the Main listing's photos, read-only (`AMAZON_ALIAS_PHOTOS`) — Amazon keeps one photo set per product. Publish sends
+   * them from the alias only to a new row or while the Main listing is not live; otherwise none.
    */
   productMediaFollows?: 'main-listing'
   productRole?: import('@nexus/shared/master-sheet').ProductRole
@@ -1718,12 +1719,13 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       // Owner 2026-10-05 — the cell shows what Publish sends: an eBay listing with no Product media saved yet still sends
       // its old Image URLs list, so the cell shows that list (a library file by its id, any other photo by its address).
       const legacy = !mediaPlan && coordinate?.channel === 'EBAY' ? legacyImageUrls(listingRow?.platformAttributes) : undefined
-      // Owner 2026-10-05 — an Amazon alias on its Main listing's product page (no ASIN yet, or the same ASIN) shows the Main
-      // listing's photos, read-only (one photo set per product): the cell is the Main listing's row of this product (built
-      // first: the Main listing is the first projection). An alias on its own ASIN keeps its own. On the photo plan the
-      // Amazon layer is the account's already (`sheetMediaPlan`).
+      // Owner 2026-10-05 — an Amazon alias row on its Main listing's product page (`followsMainListingPhotos`, the one rule)
+      // shows the Main listing's photos, read-only (one photo set per product): the cell is the Main listing's row of this
+      // product (built first: the Main listing is the first projection). An alias on its own ASIN keeps its own. On the photo
+      // plan the Amazon layer is the account's already (`sheetMediaPlan`).
       const mainRow = !mediaPlan && followsMainListingPhotos({ channel: coordinate?.channel, aliasKey: projection.id, asin: listingRow?.externalListingId,
-        mainAsin: listingByRow.get(`${product.id}:`)?.externalListingId }) ? rows.find(r => r.id === product.id && r.aliasId === null) : undefined
+        mainAsin: listingByRow.get(`${product.id}:`)?.externalListingId, aliasRootAsin: listingByRow.get(`${rootId}:${projection.id ?? ''}`)?.externalListingId,
+        mainRootAsin: listingByRow.get(`${rootId}:`)?.externalListingId }) ? rows.find(r => r.id === product.id && r.aliasId === null) : undefined
       if (mediaPlan) {
         const cell = mediaPlan.row(product.id, coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? '', aliasKey: projection.id ?? '' } : null, locale)
         productMedia = cell.items
