@@ -75,3 +75,13 @@ Each listing has 4/8 colours live (black/blue/orange/pink missing) → Full upda
   display labels → "Main listing" (display only).
 - Known limit (tell the Owner): a waiting End on an ARCHIVED alias cannot be sent (the resolver refuses archived aliases);
   the web has no archive control, so this needs an import-undo/DELETE-route archive first.
+## 00:20
+- PR A complete: be8bf97c0 (+ ScopedPerformance alias names). Web 4145 pass; typechecks; DS guards. PR body ready
+  (scratchpad pr-a-body.md). Not pushed yet.
+- PR B round 3 committed 8f4016042; R5 re-verifying.
+- Trial merge PR A + PR B: no conflicts; api+web typecheck pass; web 4027 + api 783 pass on the merged tree (aborted).
+- Plan: push PR B first → Owner "merge #N" → rebase PR A on main → push PR A → Owner "merge #N".
+## 00:45
+- PR B round 3 VERIFIED (R5). Rebased on main 8a5ef19dc (#356–#358 ads), typechecks + key tests pass. PUSHED → PR #364
+  (feat/alias-photos). Waits for "merge #364".
+- Next: after #364 merges → rebase PR A on main, rerun checks, push, open PR, wait for "merge #N".
