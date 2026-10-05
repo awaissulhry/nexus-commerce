@@ -1,3 +1,7 @@
+## Paste: a list member is found by its accepted spellings too — 2026-10-05
+
+`shapeValue.ts` (and its `.d.ts`): `parseShape`'s column may carry `optionAliases` (code → other spellings, never shown); a list member under one becomes its code through `optionCode`. Absent = unchanged. Mirrored from the web app.
+
 ## Paste: a select code is also found by its accepted spellings — 2026-10-05
 
 `scalarValue.ts` (and its `.d.ts`): optional `ScalarColumnLike.optionAliases` (code → other spellings, never shown); `optionCode` matches a label or an accepted spelling, and a text two codes answer to still selects none. Absent = unchanged. Mirrored from the web app.

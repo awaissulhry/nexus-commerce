@@ -26,6 +26,15 @@ describe('information grid reference names', () => {
     expect(referenceTooltip('123', column.optionLabels)).toBe('Jackets\nID: 123')
   })
 
+  // W3-2 — a column that shows English names keeps the market's words as accepted spellings: either pastes to the ID.
+  it('takes a pasted accepted spelling to its ID, and a spelling two IDs share to neither', () => {
+    const column = { key: 'categoryId', kind: 'text', optionLabels: { '123': 'Jackets', '456': 'Boots' }, optionAliases: { '123': ['Giacche'], '456': ['Stivali', 'Giacche'] } }
+    const parse = referenceColumnDef(column, () => null).valueParser!
+    expect(parse({ newValue: 'Stivali' })).toBe('456')
+    expect(parse({ newValue: 'Jackets' })).toBe('123')
+    expect(parse({ newValue: 'Giacche' })).toBe('Giacche')
+  })
+
   it('does not substitute another name for an unknown ID or blank value', () => {
     const [column] = nameReferenceColumns([{ key: 'returnPolicyId', kind: 'text' }], { returnPolicyId: { '123': '30-day returns' } })
     const def = referenceColumnDef(column, () => null)

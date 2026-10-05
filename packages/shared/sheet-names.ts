@@ -109,3 +109,22 @@ export function fieldNameFromKey(key: string, scope?: SheetNameScope): string {
   if (leaves.length > 0 && root) return [fieldNameFromKey(root, scope), ...leaves.map(keyWords)].join(' · ')
   return keyWords(raw)
 }
+
+/**
+ * W3-2 (Owner decision 12) — a channel's own English title in sentence case, so Amazon's "Outer Material Type" reads
+ * "Outer material type" like every other name on the sheet. The first word starts with a capital; an acronym or brand
+ * from this module's tables keeps its spelling, and so does a word written in capitals ("UNSPSC") or with a capital
+ * inside it ("iPhone"); every other word is lower case. Display only, like the rest of this module.
+ */
+export function sentenceCase(title: string): string {
+  let index = 0
+  return String(title ?? '').trim().replace(/\p{L}[\p{L}\p{N}'’]*/gu, (word) => {
+    const first = index++ === 0
+    const lower = word.toLowerCase()
+    if (ACRONYMS[lower]) return ACRONYMS[lower]
+    if (PROPER[lower]) return PROPER[lower]
+    if (word.length > 1 && word === word.toUpperCase()) return word
+    if (/\p{Lu}/u.test(word.slice(1))) return word
+    return first ? lower[0].toUpperCase() + lower.slice(1) : lower
+  })
+}

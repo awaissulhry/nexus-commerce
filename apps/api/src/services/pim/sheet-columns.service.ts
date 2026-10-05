@@ -4,6 +4,7 @@ import { marketLanguages } from './market-languages.js'
 import { assertInformationLocale } from './information-locale.js'
 import { WorkspaceCache } from '../../lib/workspace-cache.js'
 import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
+import { amazonInEnglish } from './channel-specs/amazon-english.js'
 /**
  * MS.1 / AM.1 — the SHEET's columns for one market and one scope.
  *
@@ -40,7 +41,7 @@ import {
 export { normaliseKey, SLOT_COLUMNS_MAX }
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import type { SheetTone } from '@nexus/shared/sheet-groups'
-import { fieldNameFromKey, sheetName, type SheetNameScope } from '@nexus/shared/sheet-names'
+import { fieldNameFromKey, sentenceCase, sheetName, type SheetNameScope } from '@nexus/shared/sheet-names'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -489,14 +490,16 @@ function mergeAliases(current: Record<string, string[]> | undefined, next: Recor
 /**
  * `fulfillment_availability` + `quantity` → "Fulfillment availability · Quantity". W3-6 — with no English name anywhere,
  * the key reads through the sheet's naming table, then in words with acronyms in capitals (`uvp_list_price` →
- * "List price (UVP)", was "Uvp list price").
+ * "List price (UVP)", was "Uvp list price"). W3-2 — Amazon's own English titles ("Outer Material Type") in sentence
+ * case like every other name ("Outer material type").
  */
 export function englishLeafLabel(f: ChannelFieldSpec, englishLabels?: Map<string, string>): string {
   if (f.englishLabel) return f.englishLabel
   const exact = englishLabels?.get(normaliseKey(f.key))
-  if (exact) return exact
+  if (exact) return sentenceCase(exact)
   if (f.path.length > 0 && f.key !== f.attribute) {
-    const parent = englishLabels?.get(normaliseKey(f.attribute)) ?? fieldNameFromKey(f.attribute)
+    const amazonParent = englishLabels?.get(normaliseKey(f.attribute))
+    const parent = amazonParent ? sentenceCase(amazonParent) : fieldNameFromKey(f.attribute)
     return `${parent} · ${humanizeKey(f.path[f.path.length - 1])}`
   }
   return fieldNameFromKey(f.key)
@@ -617,7 +620,10 @@ export function variationThemeColumn(scopeKind: 'master' | 'channel'): SheetColu
 }
 
 export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: SheetColumn[]; droppedKeys: string[]; groups: SheetGroup[] } {
-  const { fields, specs = [], coordinates, variationAxes = [], englishLabels, scopeKind = 'master' } = input
+  const { fields, coordinates, variationAxes = [], englishLabels, scopeKind = 'master' } = input
+  // W3-2 — Amazon's options and help as the operator sees them: English names (the market's kept as accepted
+  // spellings), or the market's words with a line saying the English ones are not downloaded yet. Codes never change.
+  const specs = (input.specs ?? []).map(entry => entry.spec.channel === 'AMAZON' ? { ...entry, spec: amazonInEnglish(entry.spec) } : entry)
   const nameScope = nameScopeOf(scopeKind, coordinates)
   const axes = new Set(variationAxes.map(canonicalVariantAxis).filter(Boolean))
   const coordinateLabels = new Set(coordinates.map((c) => c.label))

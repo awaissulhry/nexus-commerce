@@ -25,6 +25,11 @@ restate it**; where this document differs from VX it says so in §3.
 > amazon i choose → sizename/color name, it automatically maps to color & size on ebay and the axes must also
 > always be in the language of the market. (ALWAYS)
 
+**2026-10-05 — changed for Amazon only (product sheet consistency wave 3, W3-2, Owner decision 4, "yes, your picks").**
+Amazon's theme and axis NAMES are shown in English on every market ("Color / Size", `amazonAxisName` in
+`apps/api/src/services/pim/variation-theme-segments.ts`), because Amazon receives only the theme CODE, never a name.
+eBay receives its axis names, so eBay keeps the market's words (Taglia / Colore on IT).
+
 **Left section**
 > Should support Aliases and i think that its better to only keep it at parent level.
 > ↓ layout

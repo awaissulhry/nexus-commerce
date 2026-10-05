@@ -11,6 +11,12 @@
 - **`Countdown`** (`components`, G7): "Runs in 14 s" — seconds under a minute, then minutes, hours, days, stepping every 30 s; ONE shared timer for the whole page (`countdownTicker.ts`), armed for the soonest change and none while the tab is hidden (it catches up on return); an instance re-renders only when its words change. `onDone` once, when it reaches zero on screen (not for a moment already past at mount). Polite screen-reader updates at 60, 30, 10 s and zero, cleared after 4 s; `announce={false}` for a page with its own live region. A component of its own rather than an `AsOf` mode: `AsOf` is an observation stamp ("checked 5 min ago"), a countdown is a deadline with an end the page acts on.
 - **`useGridShortcuts(containerRef, shortcuts)`** (`grid/hooks`, G8): single keys (A, R, Enter, Escape, X…) bound only while focus is inside that grid; never with Ctrl/⌘/Alt, while typing (inputs, selects, contenteditable, comboboxes), in an open cell editor, in a menu inside the grid or while a modal outside it is open; Enter/Space stay a focused button's; an auto-repeat runs only shortcuts that ask for it. Returns the hint list (`key`, `keyLabel`, `label`, `disabled`, `reason`) for a `Kbd` legend. The filter is `matchGridShortcut` (pure, tested in node).
 - Catalog: `#change-value-example`, `#countdown-example` (Components › Countdown), `#row-verbs-example` with `#grid-shortcuts-example` (a small approvals grid: two verbs, a held verb, a countdown status, a click that opens the row, the A/R/Enter/Esc legend).
+## Paste: a list member is found by its accepted spellings too — 2026-10-05
+
+Product sheet consistency wave 3, W3-2 (Amazon in English). Mirrored in Factory (`shapeValue.ts` and its `.d.ts`).
+
+- **`parseShape`** (`grid/editors/shapeValue.ts`): the column may carry `optionAliases` (code → other spellings, never shown), and a list member pasted or typed under one becomes its code through `optionCode`, as a select does. Amazon's columns now name their options in English ("Black") and keep the market's words ("Nero") as accepted spellings. Absent = unchanged.
+
 ## Paste: a select code is also found by its accepted spellings — 2026-10-05
 
 Product sheet consistency wave 3, W3-4 (eBay, Shopify in plain English). Mirrored in Factory (`scalarValue.ts` and its `.d.ts`).

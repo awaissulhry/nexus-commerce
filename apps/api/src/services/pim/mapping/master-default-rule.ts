@@ -75,12 +75,13 @@ export function masterDefaultRule(field: DefaultRuleField | undefined, masterKey
  * (department). Null otherwise.
  */
 export function conceptListMatcher(channel: string, field: { fieldKey: string; label?: string | null; options?: readonly string[] | null;
-  optionLabels?: Readonly<Record<string, string>> | null; selectionOnly?: boolean }): ((value: string) => string | null) | null {
+  optionLabels?: Readonly<Record<string, string>> | null; optionAliases?: Readonly<Record<string, readonly string[]>> | null; selectionOnly?: boolean }): ((value: string) => string | null) | null {
   const options = field.options
   if (!options?.length) return null
   const concept = conceptForChannelField(channel as AttributeChannel, field.fieldKey, field.label)
   if (!concept?.valueSynonyms || (!field.selectionOnly && !(channel === 'AMAZON' && OPEN_LIST_CONCEPTS.has(concept.key)))) return null
-  return value => conceptSynonymOption(concept, value, options, field.optionLabels)
+  // W3-2 — the accepted spellings count as the option's names too (the market's name beside an English label).
+  return value => conceptSynonymOption(concept, value, options, field.optionLabels, field.optionAliases)
 }
 
 /** The master source the concept catalogue links this channel field to, or null. */
