@@ -78,6 +78,8 @@ import { savedAttributeFields } from './family-sheet-schema.js'
 import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
 import { completenessFor, decimalToNumber, listedState, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
+import { contentDriftByListing, type SheetContentDrift } from '../channel-drift/content-drift-view.js'
+import { ETSY_CONTENT_SOURCE } from '../channel-drift/etsy-content-compare.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
 import { readSheetSkuStores, sheetRowSku, type StudioRowSku } from './studio-sheet-sku.js'
 import { categoryFieldValue, channelCategoryField } from './mapping/category-mapping.service.js'
@@ -1315,6 +1317,14 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   // listings keyed by `${productId}:${aliasId ?? ''}`
   const listingByRow = new Map<string, (typeof listingRows)[number]>()
   for (const l of listingRows) listingByRow.set(`${l.productId}:${l.aliasId ?? ''}`, l)
+  // E5 — the Listing ID cell's "Differs on Etsy": Etsy's last content read, ONE query for the whole sheet (Etsy only, E5 §7 Q1).
+  // A mark, not the sheet: an unreadable drift store must not take the sheet down. It is then NOT COMPUTED — the listing
+  // carries no `contentDrift` at all — never `null`, which says "no difference recorded" (the exclusion store's rule, below).
+  let contentDrift: Map<string, SheetContentDrift> | null = new Map()
+  if (coordinate?.channel === 'ETSY' && listingRows.length) {
+    try { contentDrift = await contentDriftByListing(listingRows.map((l) => l.id), ETSY_CONTENT_SOURCE) }
+    catch { contentDrift = null }
+  }
 
   // ── 4. the alias groups to project the family through ─────────────
   // The PRIMARY listing is always a group, so the client renders ONE uniform
@@ -1699,6 +1709,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
             lastSyncedAt: listingRow.lastSyncedAt ? listingRow.lastSyncedAt.toISOString() : null,
             // Item ID control (I2): the last channel read's verdict (Etsy MISSING = not found on its last read), never a time.
             lastSyncStatus: listingRow.lastSyncStatus ?? null,
+            ...(contentDrift ? { contentDrift: contentDrift.get(listingRow.id) ?? null } : {}),
             follows: Object.fromEntries(FOLLOW_FLAGS.map((f) => [f, (listingRow as unknown as Record<string, boolean>)[f] !== false])),
           }
         : null
