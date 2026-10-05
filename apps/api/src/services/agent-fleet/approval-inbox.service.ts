@@ -60,6 +60,8 @@ import { createWorkspaceService } from '../workspace.service.js'
 import { autoCommitRefusal, autoPlanCommitRefusal, noteAutoFailure } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { PLAN_TOOL } from '../agents/tool-types.js'
+import type { QueueBulkResult } from '@nexus/shared/approval-queue'
+import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
 
 /** The tools the fleet's own workers may propose. */
 export const FLEET_TOOLS = ['create-negative-keyword', 'graduate-keyword', 'set-target-bid']
@@ -254,11 +256,18 @@ export async function decideFleetApproval(input: {
 
   const charterKey = await charterKeyOf(input.id)
 
+  /*
+   * Approvals grid (Owner, 2026-10-05) — a reject needs no reason. The person's words, when given, are stored (and go
+   * back to Claude through approval-status); without them the row still says who rejected it, in a neutral system
+   * sentence, so `reason` is never empty on a rejected row and is never mistaken for the person's own words
+   * (`operatorNote` stays null).
+   */
+  const words = input.reason?.trim() || undefined
   const out = await decideApproval(
     input.id,
     input.decision,
     input.actor,
-    input.reason || undefined,
+    words ?? rejectedBy(input.actor.label),
   )
   if (!out.ok) return out
 
@@ -273,13 +282,13 @@ export async function decideFleetApproval(input: {
        something other than a promise, which `.catch()` does not. */
     await prisma.agentApproval.update({
       where: { id: input.id },
-      data: { operatorNote: input.reason || null },
+      data: { operatorNote: words ?? null },
     })
   } catch {
     /* recorded in the audit trail regardless; the row's copy is a convenience */
   }
 
-  await mintExemplarFromDecision(input.id, input.decision, input.reason || undefined).catch(
+  await mintExemplarFromDecision(input.id, input.decision, words).catch(
     (err) => logger.error('[naf-ap] exemplar minting failed', { id: input.id, error: String(err) }),
   )
 
@@ -290,13 +299,19 @@ export async function decideFleetApproval(input: {
     charterKey,
     action: 'reject_action', // approve returned early, above
     to: { approvalId: input.id, status: out.status ?? null },
-    note: input.reason ?? null,
+    note: words ?? null,
     actor: input.actor.label,
   }).catch((err) =>
     logger.error('[naf-ap] control audit failed', { id: input.id, error: String(err) }),
   )
 
   return out
+}
+
+/** The reason stored on a request rejected without the person's own words. */
+export const REJECTED_BY_PREFIX = 'rejected by '
+export function rejectedBy(label: string): string {
+  return `${REJECTED_BY_PREFIX}${label}`
 }
 
 /* ── AP.4: the undo window ─────────────────────────────────────────────── */
@@ -1229,8 +1244,8 @@ export interface BulkPreview {
   /**
    * S8.1 — counted separately from `irreversible` so the sentence can say
    * "partly" instead of rounding it up to "not at all", which would over-warn.
-   * Returned even though S8.4 makes its prose unreachable on an approve that
-   * proceeds: the fact is still true and a caller may want it.
+   * Since the Owner's decision 1 = A (2026-10-05) a bulk approve of a partly
+   * reversible kind can proceed, so its prose is reachable now.
    */
   partlyReversible: number
   /**
@@ -1246,7 +1261,11 @@ export interface BulkPreview {
    * bid nudge and a customer email.
    */
   homogeneous: boolean
-  /** Set when a bulk APPROVE is refused. Rejecting a mixed set stays fine. */
+  /**
+   * Set when the bulk decision is refused: an APPROVE that breaks a bulk rule (two kinds, two workers, a kind that is
+   * never approved together — bulk-approve-policy.ts), or more than BULK_MAX_IDS at once (either verb). Rejecting a
+   * mixed set stays fine.
+   */
   blockedReason: string | null
 }
 
@@ -1350,10 +1369,61 @@ function euroExposure(
   return null
 }
 
+/** One selected request, as a bulk decision reads it. */
+interface BulkRow {
+  id: string
+  toolName: string
+  riskTier: string
+  preview: unknown
+  status: string
+  agentRun: { agentKey: string } | null
+}
+
+async function bulkRows(ids: string[]): Promise<BulkRow[]> {
+  return (await prisma.agentApproval.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      toolName: true,
+      riskTier: true,
+      preview: true,
+      status: true,
+      // One query, via the relation — the same idiom `charterKeyOf` uses just
+      // above. A second `agentRun.findMany` worked but cost an extra round
+      // trip to learn something the join already knows.
+      agentRun: { select: { agentKey: true } },
+    },
+  })) as BulkRow[]
+}
+
+const tooMany = (n: number) =>
+  `You selected ${n}; at most ${BULK_MAX_IDS} can be decided at once. Decide them in smaller groups.`
+
+/**
+ * What a bulk decision would do, before it does it. `viewer` (the person looking, null for a caller who is not a
+ * person): on an approve, the rows they may not approve are counted out and named, exactly as bulkDecide skips them.
+ */
 export async function previewBulk(
   ids: string[],
   decision: 'approve' | 'reject',
+  viewer?: ToolPrincipal | null,
 ): Promise<BulkPreview> {
+  const unique = [...new Set(ids)]
+  if (unique.length > BULK_MAX_IDS) {
+    const why = tooMany(unique.length)
+    return { count: 0, sentence: why, byTool: {}, highRisk: 0, irreversible: 0, partlyReversible: 0, euro: null, homogeneous: false, blockedReason: why }
+  }
+  return bulkPreviewOf(await bulkRows(unique), decision, viewer)
+}
+
+/** A kind as the page names it: the registry title ("Set master price"), never the tool id ("set price"). */
+const kindTitle = (toolName: string): string => getTool(toolName)?.title ?? toolName.replace(/-/g, ' ')
+
+function bulkPreviewOf(
+  all: BulkRow[],
+  decision: 'approve' | 'reject',
+  viewer?: ToolPrincipal | null,
+): BulkPreview {
   /*
    * AQ.6, after a test caught me getting this wrong.
    *
@@ -1368,19 +1438,6 @@ export async function previewBulk(
    * rather than silently dropping it and leaving the operator to wonder why
    * three selected became two.
    */
-  const all = await prisma.agentApproval.findMany({
-    where: { id: { in: ids } },
-    select: {
-      toolName: true,
-      riskTier: true,
-      preview: true,
-      status: true,
-      // One query, via the relation — the same idiom `charterKeyOf` uses just
-      // above. A second `agentRun.findMany` worked but cost an extra round
-      // trip to learn something the join already knows.
-      agentRun: { select: { agentKey: true } },
-    },
-  })
   const rows = all.filter((r) => r.status === 'pending')
 
   /*
@@ -1398,59 +1455,59 @@ export async function previewBulk(
    */
   const workers = new Set(rows.map((r) => r.agentRun?.agentKey ?? 'unknown'))
   const sameWorker = workers.size <= 1
+  const kinds = [...new Set(rows.map((r) => r.toolName))]
 
   /*
-   * S8.4 — a bulk YES never spans a row that can reach Amazon.
+   * Approvals grid, Owner decision 1 = A (2026-10-05) — replaces S8.4.
    *
-   * Today this holds by accident: the outside queue renders its cards without
-   * a checkbox, so executable rows cannot be selected. That is a property of
-   * one component, not a rule, and the endpoint takes a list of ids from
-   * anywhere. The same gap as same-worker before S8.1 — a UI convention doing
-   * an invariant's job.
+   * S8.4 refused a bulk approve containing any row that can execute, which since every Claude and fleet tool executes
+   * meant a bulk approve could never succeed. The Owner chose: bulk approve for rows of the SAME kind (and the same
+   * worker, above), never for a kind that cannot be undone, reaches a buyer or a supplier, spends money or removes
+   * something, and never for a change plan (bulk-approve-policy.ts names each with its why).
    *
-   * Why it must be a rule: S6's read-and-understood tick is per card, because
-   * the sentence it gates ("If this is wrong, you sell at the wrong price…")
-   * is per card. A bulk approve either bypasses that gate or asks for one tick
-   * covering forty different consequences, and both are worse than clicking
-   * forty times. This is also the only section whose failure mode is euros x N.
-   *
-   * Asked of the live tool registry rather than of FLEET_TOOLS, so a fleet
-   * tool that gains an executor is caught the day it does, without anyone
-   * remembering to update a list.
+   * What made S8.4 worth having is kept: a bulk approve is not a shortcut past any check. Each row goes through exactly
+   * the path a single approve takes (decideFleetApproval → the claim with the approver's permission → the 20-second
+   * stop window → the commit, which re-checks staleness against MATERIAL_PREVIEW_FIELDS, the approver's permission now
+   * and the rule). A row whose facts moved is handed back, never run. Asked of the live registry, so a kind that loses
+   * its undo is caught the day it does.
    *
    * Approve only. Rejecting many is always safe and is the operator's escape
    * hatch — refusing it would be friction with no hazard behind it.
    */
-  const executable = rows.filter((r) => typeof getTool(r.toolName)?.execute === 'function')
-  const anyExecutable = executable.length > 0
-  const notActionable = all.length - rows.length
-  const byTool: Record<string, number> = {}
-  for (const r of rows) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
-  const highRisk = rows.filter((r) => r.riskTier === 'high').length
-  const irreversible = rows.filter((r) => reversibilityOf(r.toolName) === 'none').length
-  const partlyReversible = rows.filter((r) => reversibilityOf(r.toolName) === 'partial').length
-  const euro = euroExposure(rows)
+  const kindRefusal = decision === 'approve' ? (kinds.map(bulkApproveRefusal).find((why) => why) ?? null) : null
 
   // Homogeneity: one action kind AND one worker. Either alone is insufficient
   // — two workers proposing the same kind of change are still two different
   // things to agree with, and that is the case the caller's grouping used to
   // hide rather than prevent.
-  const homogeneous = Object.keys(byTool).length <= 1 && sameWorker
+  const homogeneous = kinds.length <= 1 && sameWorker
   const blockedReason =
-    decision === 'approve' && Object.keys(byTool).length > 1
-      ? `These are ${Object.keys(byTool).length} different kinds of action (${Object.keys(byTool)
-          .map((t) => t.replace(/-/g, ' '))
+    decision === 'approve' && kinds.length > 1
+      ? `These are ${kinds.length} different kinds of action (${kinds
+          .map(kindTitle)
           .join(', ')}). Approve one kind at a time — a single yes should never span two different consequences.`
       : decision === 'approve' && !sameWorker
         ? `These come from ${workers.size} different workers. Approve one worker at a time — a single yes should never span two workers' judgement.`
-        : decision === 'approve' && anyExecutable
-          ? `${executable.length === 1 ? 'One of these' : `${executable.length} of these`} can actually change something on Amazon (${[
-              ...new Set(executable.map((r) => r.toolName.replace(/-/g, ' '))),
-            ].join(', ')}). Those are decided one at a time, each with its own confirmation — a single yes should never carry a real change to Amazon alongside anything else.`
-          : null
+        : kindRefusal
 
-  const kinds = Object.entries(byTool)
-    .map(([tool, n]) => `${n} × ${tool.replace(/-/g, ' ')}`)
+  /*
+   * Per row, never for the whole call: a row this viewer may not approve (their permissions do not cover its tool) is
+   * left out with its reason — the very sentence a single approve would answer with — and the rest go ahead.
+   */
+  const notYours = decision === 'approve' && viewer !== undefined ? cannotApproveFor(viewer) : null
+  const theirs = notYours ? rows.filter((r) => notYours(r.toolName)) : []
+  const acting = notYours ? rows.filter((r) => !notYours(r.toolName)) : rows
+
+  const notActionable = all.length - rows.length
+  const byTool: Record<string, number> = {}
+  for (const r of acting) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
+  const highRisk = acting.filter((r) => r.riskTier === 'high').length
+  const irreversible = acting.filter((r) => reversibilityOf(r.toolName) === 'none').length
+  const partlyReversible = acting.filter((r) => reversibilityOf(r.toolName) === 'partial').length
+  const euro = euroExposure(acting)
+
+  const kindsClause = Object.entries(byTool)
+    .map(([tool, n]) => `${n} × ${kindTitle(tool)}`)
     .join(', ')
   const verb = decision === 'approve' ? 'approves' : 'rejects'
   const money = euro ? ` It ${euro.label}.` : ''
@@ -1459,37 +1516,24 @@ export async function previewBulk(
     notActionable > 0
       ? ` ${notActionable} other${notActionable === 1 ? '' : 's'} you selected ${notActionable === 1 ? 'is' : 'are'} already decided or counting down, and ${notActionable === 1 ? 'is' : 'are'} not affected.`
       : ''
+  const notYoursWhy = theirs.length ? notYours!(theirs[0].toolName) : null
+  const leftOut =
+    theirs.length > 0
+      ? ` ${theirs.length} you may not approve ${theirs.length === 1 ? 'is' : 'are'} left out: ${notYoursWhy}`
+      : ''
   /*
    * S8.1 — reversibility, said EITHER WAY.
    *
    * The spec's complaint was that the server computes `irreversible` and never
-   * speaks it. Speaking only the count would have been worse than useless:
-   * every irreversible tool is also an executable one, and executable rows are
-   * not selectable (§18.2), so a bare count clause would be a sentence
-   * fragment that can never fire — a stale constant with extra steps.
+   * speaks it. So the sentence states the reversibility of the batch in every
+   * case. "All of these can be put back" is the common answer and it is worth
+   * reading: it is the fact that makes a bulk yes reasonable at all.
    *
-   * So the sentence states the reversibility of the batch in every case. "All
-   * of these can be put back" is the common answer and it is worth reading:
-   * it is the fact that makes a bulk yes reasonable at all.
-   *
-   * ⚠ Two lists disagree about `publish-listing`. The card's vocabulary
-   * (DecisionCard.tsx) classes it `partial`; the server's `IRREVERSIBLE_TOOLS`
-   * knew only `send-customer-message` and therefore called it fully
-   * reversible. AQ-S6 says reversibility must never be "asserted in two places
-   * that can drift", and it had. Latent rather than live — neither tool can
-   * reach a bulk selection today — but corrected here, and the real fix is a
-   * reversibility field on the tool registry so both sides read one source.
-   * Recorded in the study rather than built, because the registry is not this
-   * stream's.
-   */
-  /*
-   * ⚠ S8.4 makes the first two branches unreachable on an approve that
-   * proceeds: every tool that is irreversible or partly reversible is also
-   * executable, and an executable row blocks the batch before this sentence is
-   * built. They are kept, and the counts are returned in the payload, because
-   * the guard is a policy and policies get relaxed — if one ever is, the prose
-   * is already correct rather than silently reassuring. Asserted by the tests
-   * as a BLOCK today, not as prose that cannot render.
+   * Since decision 1 = A, "only partly undone" is reachable on an approve (a
+   * partly reversible kind may be approved together). "Cannot be undone" is
+   * not: such a kind is refused above, so the branch speaks only if that
+   * policy is ever relaxed — and then it is already correct rather than
+   * silently reassuring.
    */
   const reversibility =
     irreversible > 0
@@ -1503,20 +1547,22 @@ export async function previewBulk(
       : ''
 
   return {
-    count: rows.length,
+    count: acting.length,
     sentence:
       all.length === 0
         ? 'Nothing is selected.'
         : rows.length === 0
           ? `Nothing here can be decided — ${all.length === 1 ? 'the one you selected has' : `all ${all.length} you selected have`} already been decided or ${all.length === 1 ? 'is' : 'are'} counting down.`
-        : blockedReason
-          ? blockedReason
-          : // The kinds clause takes its own full stop only when nothing
-            // follows it. The shipped version always added one and then began
-            // the tail with an em-dash, producing "…set target bid. — 2 of
-            // them high risk." — a period followed by a dash, which reads as a
-            // typo on the one sentence that has to be trusted.
-            `This ${verb} ${rows.length} action${rows.length === 1 ? '' : 's'}: ${kinds}${tail ? '' : '.'}${tail}${skipped}`,
+          : blockedReason
+            ? blockedReason
+            : acting.length === 0
+              ? `You may not approve ${rows.length === 1 ? 'this one' : `any of these ${rows.length}`}: ${notYoursWhy}`
+              : // The kinds clause takes its own full stop only when nothing
+                // follows it. The shipped version always added one and then began
+                // the tail with an em-dash, producing "…set target bid. — 2 of
+                // them high risk." — a period followed by a dash, which reads as a
+                // typo on the one sentence that has to be trusted.
+                `This ${verb} ${acting.length} action${acting.length === 1 ? '' : 's'}: ${kindsClause}${tail ? '' : '.'}${tail}${skipped}${leftOut}`,
     byTool,
     highRisk,
     irreversible,
@@ -1527,30 +1573,79 @@ export async function previewBulk(
   }
 }
 
+/** The plain reason a selected row was not decided. */
+const NOT_FOUND = 'Nexus cannot find this request in this business.'
+const STATUS_WORDS: Record<string, string> = {
+  scheduled: 'already approved and counting down',
+  executing: 'already running',
+  executed: 'already done',
+  approved: 'already approved',
+  rejected: 'already rejected',
+  expired: 'expired',
+  superseded: 'replaced by an edited request',
+}
+const alreadyWhy = (status: string) => `Not decided: it is ${STATUS_WORDS[status] ?? `already ${status}`}.`
+function plainDecideError(error: string | undefined): string {
+  if (!error) return 'It could not be decided.'
+  if (error === 'approval not found') return NOT_FOUND
+  const already = /^already (\w+)$/.exec(error)
+  return already ? alreadyWhy(already[1]) : error
+}
+
+/** bulk-decide's answer: the queue contract, plus the old page's `failed` until the clean-up wave removes that page. */
+export type BulkDecideResult = QueueBulkResult & {
+  /** The reasons of `skipped`, in order (the old Approvals page reads this field). */
+  failed: string[]
+}
+
 export async function bulkDecide(input: {
   ids: string[]
   decision: 'approve' | 'reject'
+  /** Optional: the person's words. Without them each rejected row says who rejected it. */
   reason?: string
   actor: ToolPrincipal
-}): Promise<{ ok: boolean; done: number; of: number; failed: string[]; error?: string }> {
-  // NAF.AQ.6 — the homogeneity rule is enforced HERE, not only in the
-  // confirmation. A preview a client can choose not to read is a suggestion;
-  // the rule has to hold for anything that calls this, including the next
-  // caller nobody has written yet.
+}): Promise<BulkDecideResult> {
+  const ids = [...new Set(input.ids)]
+  const of = ids.length
+  const refused = (error: string): BulkDecideResult => ({ ok: false, done: 0, of, skipped: [], failed: [], error })
+  if (of === 0) return refused('Nothing is selected.')
+  if (of > BULK_MAX_IDS) return refused(tooMany(of))
+
+  const rows = await bulkRows(ids)
+  // NAF.AQ.6 — the bulk rule is enforced HERE, not only in the confirmation.
+  // A preview a client can choose not to read is a suggestion; the rule has to
+  // hold for anything that calls this, including the next caller nobody has
+  // written yet. Same rows, same function as the preview, so the two agree.
   //
   // Approve only. Rejecting a mixed set is safe — saying no to forty different
   // things at once cannot hurt anyone — and blocking it would be friction on
   // the safe path, which is the asymmetry AQ.4 exists to remove.
   if (input.decision === 'approve') {
-    const check = await previewBulk(input.ids, 'approve')
-    if (check.blockedReason) {
-      return { ok: false, done: 0, of: input.ids.length, failed: [], error: check.blockedReason }
-    }
+    const check = bulkPreviewOf(rows, 'approve', input.actor)
+    if (check.blockedReason) return refused(check.blockedReason)
   }
 
-  const failed: string[] = []
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const notYours = input.decision === 'approve' ? cannotApproveFor(input.actor) : null
+  const skipped: Array<{ id: string; why: string }> = []
   let done = 0
-  for (const id of input.ids) {
+  for (const id of ids) {
+    const row = byId.get(id)
+    if (!row) {
+      skipped.push({ id, why: NOT_FOUND })
+      continue
+    }
+    if (row.status !== 'pending') {
+      skipped.push({ id, why: alreadyWhy(row.status) })
+      continue
+    }
+    const notTheirs = notYours?.(row.toolName)
+    if (notTheirs) {
+      skipped.push({ id, why: notTheirs })
+      continue
+    }
+    // Exactly the path of a single decision: an approve is claimed with the approver's permissions and parked for the
+    // stop window; the commit after it re-checks the facts, the approver and the rule, row by row.
     const out = await decideFleetApproval({
       id,
       decision: input.decision,
@@ -1558,9 +1653,9 @@ export async function bulkDecide(input: {
       actor: input.actor,
     })
     if (out.ok) done++
-    else failed.push(out.error ?? id)
+    else skipped.push({ id, why: plainDecideError(out.error) })
   }
-  return { ok: true, done, of: input.ids.length, failed }
+  return { ok: true, done, of, skipped, failed: skipped.map((s) => s.why) }
 }
 
 export async function rejectAllForCharter(input: {

@@ -3348,3 +3348,23 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-mchip[data-sort-mark='before']::before { left: -4px; }
 .nds-mchip[data-sort-mark='after']::before { right: -4px; }
 @media (prefers-reduced-motion: reduce) { .nds-ordered-list.dragging > .nds-ordered-list-item { transition: none; } }
+
+/* ── ChangeValue · before → after (approvals grid G1, 2026-10-05) ─────────────────────────────────────────────────
+   The old value muted, an arrow, the new value emphasised. The drawn lines are aria-hidden; the sentence a screen
+   reader hears sits in `.nds-vh`. `.compact` is a grid row: ONE line that ellipsizes inside its column and never
+   widens it; the "+N more" never shrinks. Text inks are the 7:1 roles in both themes (DESIGN.md). Global, not in
+   grid.css, because drawers and lists draw it outside any grid. */
+.nds-change { display: inline-flex; min-width: 0; max-width: 100%; vertical-align: middle; color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.nds-change-lines { display: flex; flex-direction: column; gap: var(--nds-space-3); min-width: 0; }
+.nds-change.compact .nds-change-lines { flex-direction: row; align-items: baseline; gap: var(--nds-space-6); }
+.nds-change-line { min-width: 0; overflow-wrap: anywhere; }
+.nds-change.compact .nds-change-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-change-label { margin-inline-end: var(--nds-space-5); color: var(--nds-text-muted); }
+.nds-change-from { color: var(--nds-text-muted); }
+.nds-change-arrow { display: inline-block; margin-inline: var(--nds-space-4); vertical-align: -1px; color: var(--nds-text-muted); }
+.nds-change-to { color: var(--nds-text-strong); font-weight: var(--nds-font-weight-semibold); }
+.nds-change-gone { color: var(--nds-text-muted); font-style: italic; }
+.nds-change-more { flex: none; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); white-space: nowrap; }
+
+/* ── Countdown (approvals grid G7, 2026-10-05) — the time left, ticking. Figures keep their width as they change. */
+.nds-countdown { font-variant-numeric: tabular-nums; white-space: nowrap; }

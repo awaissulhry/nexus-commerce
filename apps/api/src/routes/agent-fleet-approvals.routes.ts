@@ -44,6 +44,7 @@ import {
   resolveActor,
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { amendPlan, planView } from '../services/agents/change-plan.service.js'
+import { withStepChanges } from '../services/agent-fleet/approval-queue.service.js'
 import { PLAN_TOOL } from '../services/agents/tool-types.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
@@ -802,7 +803,8 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>('/agent/fleet/approvals/:id/plan', async (request, reply) => {
     const view = await planView(request.params.id, { storedOutput: storedOutputOf(await requestPrincipal(request)) })
     if (!view) return reply.code(404).send({ error: 'plan not found' })
-    return view
+    // Approvals grid: each visible step's change lines in the grid's words (the drawer's step list reads them).
+    return { ...view, list: withStepChanges(view.list) }
   })
 
   // C6 — untick steps: a smaller plan of the steps kept, re-checked as the person; the original superseded (AQ.8).

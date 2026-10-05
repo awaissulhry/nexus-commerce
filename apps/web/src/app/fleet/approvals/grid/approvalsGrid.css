@@ -1,0 +1,160 @@
+/*
+ * Approvals grid — layout and this page's own text only. Every shared control (grid, buttons, pills, banners, the
+ * metric strip) keeps its DS look; nothing here restyles one. Semantic `--nds-*` tokens only. Prefix `aqg-`.
+ *
+ * `--nds-danger-strong` (a row's error) is pinned light by `.aq-page` in approvals.css, like the rest of the fleet.
+ */
+
+.aqg-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+/* The global "Ask AI" button floats over the bottom-right corner. The fleet pages scroll in their own container, not in
+   the shared shell's `.h10-main`, which reserves this room already (shared-shell.css): while the button is on screen the
+   page ends with its footprint of room (the DS token), so the last row and "Show more" scroll clear of it. */
+:root:has([data-nds-fab]) .aqg-page {
+  padding-bottom: var(--nds-fab-reserve-block);
+}
+
+/* ── health strip on a phone: one row of chips ─────────────────────────── */
+.aqg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+/* ── errors kept per row, above the grid ───────────────────────────────── */
+.aqg-errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+/* ── toolbar: Show / Group / Views / Customise ─────────────────────────── */
+.aqg-toolright {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.aqg-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-5);
+}
+.aqg-ctl-lbl {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-3);
+}
+
+/* ── cells ─────────────────────────────────────────────────────────────── */
+.aqg-host {
+  min-width: 0;
+}
+.aqg-two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+.aqg-title,
+.aqg-sub,
+.aqg-why,
+.aqg-error,
+.aqg-link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aqg-title {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+.aqg-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-3);
+}
+.aqg-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+.aqg-link:hover,
+.aqg-link:focus-visible {
+  text-decoration: underline;
+}
+.aqg-why {
+  color: var(--nds-text-2);
+}
+.aqg-error {
+  color: var(--nds-danger-strong);
+  font-weight: var(--nds-font-weight-medium);
+}
+/* Why / result: two lines, so a failure reason is readable in the row (the column's tooltip has all of it). */
+.aqg-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+/* phone: the Request cell — the status and the kind on one line, the product under them */
+.aqg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.aqg-pill {
+  flex: none;
+  display: inline-flex;
+}
+
+/* the search field fills the toolbar's search slot (220–340 px): the whole placeholder shows */
+.aqg-search {
+  width: 100%;
+}
+
+/* ── under the grid ────────────────────────────────────────────────────── */
+.aqg-more {
+  display: flex;
+  justify-content: center;
+}
+.aqg-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-3);
+}
+
+/* ── the Undo toast and the bulk confirm ───────────────────────────────── */
+.aqg-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.aqg-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+.aqg-sentence {
+  margin: 0;
+  color: var(--nds-text);
+  line-height: 1.5;
+}
+.aqg-note {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-3);
+}

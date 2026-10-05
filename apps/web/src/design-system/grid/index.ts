@@ -96,8 +96,17 @@ export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from '.
 export { landOnCell, collapsedAncestors, LANDING_CLASS, LANDING_MS, type LandOptions, type LandingGridApi, type LandingRowNode } from './landOnCell'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
-  stockColumn, lockedColumn, holdColumn, actionsColumn, type GridSelectionOptions, type ActionsColumnOptions,
+  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, type GridSelectionOptions, type ActionsColumnOptions,
 } from './columns/presets'
+// Approvals grid (2026-10-05) — G1 before → after (a plain component + the cell), G2 up to two visible verbs per row
+// (`actionsColumn({ primary: [a, b] | (row) => … })`, `actionVerbs` from the registry), G8 single-key grid shortcuts.
+export { ChangeValue, ChangeCell, type ChangeValueProps, type ChangeCellParams } from './renderers/ChangeCell'
+export { changeKind, changeLineText, changeLineArrowText, changeAccessibleText, changeTooltipText, changeSummaryText, changeMoreCount, asChangeValueData, type ChangeLine, type ChangeValueData, type ChangeKind } from './renderers/changeValue'
+export { rowVerbsOf, rowVerbVariant, rowVerbHeld, isMultiVerb, actionsColumnWidth, keepFromGrid, MAX_ROW_VERBS, AG_STOP_PROPAGATION_FLAG, type RowVerb, type RowVerbs, type RowVerbsInput, type RowVerbTone } from './renderers/rowVerbs'
+export { actionVerbs, type VerbAdapterOptions } from './actions/menuAdapters'
+export { useGridShortcuts, type UseGridShortcutsOptions } from './hooks/useGridShortcuts'
+export { matchGridShortcut, gridShortcutHints, shortcutKey, shortcutKeyLabel, type GridShortcut, type GridShortcutHint, type ShortcutKeyEvent } from './hooks/gridShortcuts'
+export { rendererOwnsKeyboard } from './rendererKeyboard'
 export * from './editors'
 // Sheet publish parity (2026-10-04) — the select editor's option: a ListboxOption that may be held (with its reason) and carry a note.
 export type { SelectPanelOption } from './editors/SelectPanelEditor'

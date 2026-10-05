@@ -8,7 +8,7 @@
  *
  *   1. every `.acr-btn` modifier a fleet page uses has a rule (a bare modifier with no rule is the shape that hid
  *      `.h10-pill.bad`), and the base is scoped to the fleet surface and its portals;
- *   2. every `--nds-*` those rules and the Approvals card's edges read is dark-safe, as defined above.
+ *   2. every `--nds-*` those rules and the Approvals page's row error read is dark-safe, as defined above.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -78,7 +78,7 @@ describe('MCP.12 — `.acr-btn` has its look back, once, for every fleet page', 
   })
 })
 
-describe('MCP.12 — what those rules and the Approvals card edges read stays light under a dark OS', () => {
+describe('MCP.12 — what those rules and the Approvals page read stays light under a dark OS', () => {
   it('the dark block is read (control)', () => {
     expect(declared(chromeDark).has('--nds-warning')).toBe(true)
     expect(flipsInDark.has('--nds-success-strong')).toBe(true)
@@ -101,10 +101,12 @@ describe('MCP.12 — what those rules and the Approvals card edges read stays li
     expect(unsafe).toEqual([])
   })
 
-  it('the card and section edges are dark-safe on the Approvals page', () => {
-    const read = tokensIn(rulesFor(approvals, /^\s*\.aq-outside-card\s*$|^\s*\.aq-card\.can-run\s*$/))
-    expect([...read].sort()).toEqual(['--nds-danger', '--nds-danger-soft', '--nds-danger-strong', '--nds-white'])
-    const unsafe = [...read].filter((t) => flipsInDark.has(t) && !fleetPin.has(t) && !pagePin.has(t))
+  // The old cards' edges left with the cards (clean-up F, 2026-10-05); a row's error in the grid reads the same token.
+  it('a row\'s error in the grid is dark-safe on the Approvals page', () => {
+    const grid = stripComments(read(join(FLEET, 'approvals', 'grid', 'approvalsGrid.css')))
+    const used = tokensIn(rulesFor(grid, /\.aqg-error\b/))
+    expect(used.has('--nds-danger-strong')).toBe(true)
+    const unsafe = [...used].filter((t) => flipsInDark.has(t) && !fleetPin.has(t) && !pagePin.has(t))
     expect(unsafe).toEqual([])
   })
 })

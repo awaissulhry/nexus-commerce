@@ -1,5 +1,6 @@
 /**
- * MCP full control C9 — Settings › AI › Claude and the plan card are reachable and built on the design system only.
+ * MCP full control C9 — Settings › AI › Claude and a plan's steps (the Approvals drawer, grid/PlanSteps.tsx) are reachable
+ * and built on the design system only.
  *
  *   reach   the settings rail lists the page for a person who may see the assistant (ai.view, the API's own rule)
  *   build   Tabs (Rules, Activity), lists whose controls are each a Tab stop, the 2FA dialog before any raise, ActionConfirm before
@@ -19,10 +20,11 @@ beforeAll(async () => {
 afterAll(() => vi.unstubAllEnvs())
 
 const HERE = import.meta.dirname
-const APPROVALS = join(HERE, '../../../fleet/approvals')
+/** The plan's steps moved from the old PlanCard to the approvals grid's drawer (clean-up F, 2026-10-05); the rules stay. */
+const APPROVALS = join(HERE, '../../../fleet/approvals/grid')
 const source = (dir: string, name: string) => readFileSync(join(dir, name), 'utf8')
 const FILES: Array<[string, string]> = [
-  [HERE, 'ClaudeClient.tsx'], [HERE, 'RulesPanel.tsx'], [HERE, 'ActivityPanel.tsx'], [HERE, 'StepUpModal.tsx'], [APPROVALS, 'PlanCard.tsx'],
+  [HERE, 'ClaudeClient.tsx'], [HERE, 'RulesPanel.tsx'], [HERE, 'ActivityPanel.tsx'], [HERE, 'StepUpModal.tsx'], [APPROVALS, 'PlanSteps.tsx'],
 ]
 
 describe('C9 — reachable', () => {
@@ -46,9 +48,9 @@ describe('C9 — built on the design system', () => {
     expect(source(HERE, 'ActivityPanel.tsx')).toMatch(/<ActivityRows /)
     expect(source(HERE, 'ActivityPanel.tsx')).not.toMatch(/<NexusGrid/)
     expect(source(HERE, 'ActivityPanel.tsx')).toMatch(/useActionConfirm\(\)/)
-    // The plan's steps are one tab stop (PlanStepList), not a grid that takes Tab through every cell.
-    expect(source(APPROVALS, 'PlanCard.tsx')).toMatch(/<PlanStepList /)
-    expect(source(APPROVALS, 'PlanCard.tsx')).not.toMatch(/<NexusGrid/)
+    // The plan's steps are one tab stop (PlanStepsList), not a grid that takes Tab through every cell.
+    expect(source(APPROVALS, 'PlanSteps.tsx')).toMatch(/<PlanStepsList /)
+    expect(source(APPROVALS, 'PlanSteps.tsx')).not.toMatch(/<NexusGrid/)
   })
 
   it('no raw control, no Tailwind, and every grid control keeps its keyboard', () => {
@@ -63,7 +65,7 @@ describe('C9 — built on the design system', () => {
   })
 
   it('the stylesheets hold layout only, on the design tokens', () => {
-    for (const css of [source(HERE, 'claude.css'), source(APPROVALS, 'planCard.css')]) {
+    for (const css of [source(HERE, 'claude.css'), source(APPROVALS, 'ApprovalDrawer.module.css')]) {
       expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i)
       expect(css).not.toMatch(/font-size:\s*\d/)
       expect(css).not.toMatch(/var\(--(?!nds-)/)

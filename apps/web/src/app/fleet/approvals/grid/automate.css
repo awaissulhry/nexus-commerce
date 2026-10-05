@@ -1,0 +1,19 @@
+/* Approvals grid — the "Automate this kind…" modal (AutomateModal.tsx). Layout and domain text only: every control keeps
+   its design-system size and colour. Prefix `aq-auto-` (the Approvals page owns `aq-`). Every token read here is set back
+   to its light value by the fleet's pin (`.fleet-portal`, fleet-pages.css and shared-shell.css), so the modal stays light
+   like the fleet pages in a dark theme. */
+.aq-auto { display: grid; gap: var(--nds-space-14); min-width: 0; font-size: var(--nds-font-size-base); }
+.aq-auto > * { min-width: 0; }
+.aq-auto-lead { margin: 0; color: var(--nds-text); font-weight: var(--nds-font-weight-medium); }
+.aq-auto-choices { display: grid; gap: var(--nds-space-8); min-width: 0; }
+.aq-auto-note { margin: 0; color: var(--nds-text-2); }
+.aq-auto-sub { margin: 0; color: var(--nds-text-3); font-size: var(--nds-font-size-sm); }
+.aq-auto-section { display: grid; gap: var(--nds-space-10); padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); min-width: 0; }
+.aq-auto-h { margin: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); }
+.aq-auto-busy { display: flex; align-items: center; gap: var(--nds-space-6); color: var(--nds-text-2); }
+.aq-auto-result { margin: 0; color: var(--nds-text); }
+.aq-auto-examples { display: grid; gap: var(--nds-space-6); margin: 0; padding-left: var(--nds-space-18); }
+.aq-auto-examples > li { overflow-wrap: anywhere; }
+.aq-auto-example-why { display: block; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.aq-auto-grow { flex: 1; }
+.aq-auto-link { color: var(--nds-text-link); }

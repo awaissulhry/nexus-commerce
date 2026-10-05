@@ -151,8 +151,11 @@ describe('C6 — a change plan on the Approvals page', { timeout: 30_000 }, () =
     expect(all).toMatchObject({ title: 'Card plan', steps: 3, byStatus: { pending: 3 } })
     expect(all.list.map((s) => [s.step, s.tool, s.status, s.outbound])).toEqual([[1, 'set-price', 'pending', true], [2, 'apply-content', 'pending', false], [3, 'set-price', 'pending', true]])
     expect(all.list[0].preview).toMatchObject({ action: 'set-price', changes: { 'base price': { from: 50, to: 52 } } })
+    // Approvals grid: each step also carries its change in the grid's own words (the master currency), not 50 → 52.
+    expect(all.list[0]).toMatchObject({ changes: [{ label: 'Base price', from: '€50.00', to: '€52.00' }], changeCount: 1 })
     const prices = (await get('prices', `/agent/fleet/approvals/${ids.plan}/plan`)).json() as { list: Array<Record<string, unknown>> }
     expect(prices.list[1]).toMatchObject({ preview: null, previewHidden: expect.stringContaining('apply-content') })
+    expect(prices.list[1].changes).toBeUndefined() // a hidden step's words stay hidden
     expect(prices.list[0].preview).toMatchObject({ action: 'set-price' })
     expect((await get('all', '/agent/fleet/approvals/no-such-plan/plan')).statusCode).toBe(404)
   })

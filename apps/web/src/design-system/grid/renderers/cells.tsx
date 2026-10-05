@@ -17,7 +17,7 @@ import Link from 'next/link'
 import { ChevronDown, ChevronRight, ExternalLink, MoreHorizontal } from 'lucide-react'
 import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 
-import { Button, InfoTip, Pill, TagGlyph, type Tone } from '../../primitives'
+import { Button, InfoTip, Pill, TagGlyph, Tooltip, type Tone } from '../../primitives'
 import { CoverageSummary, Menu, Thumbnail, type CoverageChannel, type MenuItemDef } from '../../components'
 import { DetailPopover } from '../../components/DetailPopover'
 import { BLANK_CELL_LABEL, useGridEmptyCells } from './emptyCells'
@@ -25,6 +25,7 @@ import { emptyValueA11y } from './emptyValue'
 import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } from './format'
 import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
 import { readinessMeta, readinessPillLabel, type RowReadinessState, type ScopeReadinessState } from './readiness'
+import { keepFromGrid, rowVerbHeld, rowVerbKey, rowVerbsOf, rowVerbVariant, type RowVerb, type RowVerbsInput } from './rowVerbs'
 
 /* ── the dash ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -253,30 +254,49 @@ export const CoverageCell = memo(function CoverageCell(p: ICellRendererParams) {
 /* ── actions ──────────────────────────────────────────────────────────────────────────────── */
 
 export interface ActionsCellParams<T = unknown> {
-  /** The one visible button (Edit). A link when `href` is given. */
-  primary?: { label: ReactNode; href?: (data: T) => string; onClick?: (data: T) => void }
+  /**
+   * The visible verbs. ONE — `{ label, href?, onClick? }`, the Edit button this cell was written for (a link when
+   * `href` is given) — or up to TWO (`[approve, reject]`), or a function of the row returning 0–2. Each verb may
+   * carry a `tone`, a held `disabled` reason and an `ariaLabel` (`RowVerb`, `./rowVerbs`; gap G2, 2026-10-05).
+   */
+  primary?: RowVerbsInput<T>
   /** The ⋯ menu. */
   items?: (data: T) => MenuItemDef[]
   /** Accessible name for the ⋯ trigger. */
   menuLabel?: (data: T) => string
 }
 
+/** One verb. A held verb keeps its focus and says why — a tooltip (portal: AG clips the cell) and its description. */
+function RowVerbButton<T>({ verb, data }: { verb: RowVerb<T>; data: T }) {
+  const held = rowVerbHeld(verb, data)
+  const variant = rowVerbVariant(verb.tone)
+  const ariaLabel = verb.ariaLabel?.(data)
+  if (verb.href && !held) {
+    return (
+      <Button asChild size="sm" variant={variant}>
+        <Link href={verb.href(data)} aria-label={ariaLabel}>{verb.label}</Link>
+      </Button>
+    )
+  }
+  const button = (
+    <Button size="sm" variant={variant} aria-label={ariaLabel} aria-disabled={held ? true : undefined} aria-description={held ?? undefined}
+      onClick={held ? undefined : () => verb.onClick?.(data)}>
+      {verb.label}
+    </Button>
+  )
+  return held ? <Tooltip label={held} portal>{button}</Tooltip> : button
+}
+
 function ActionsCellImpl<T>(p: ICellRendererParams<T> & ActionsCellParams<T>) {
   const data = p.data
   if (!data) return null
   const items = p.items?.(data) ?? []
+  const verbs = rowVerbsOf(p.primary, data)
+  /* A click anywhere in this cell — a verb, the ⋯ — must not reach the GRID: no `rowClicked` (the row's drawer), no
+     click-selection. Flagged in the capture phase, never stopped: see `keepFromGrid`. */
   return (
-    <div className="nds-cell-actions">
-      {p.primary &&
-        (p.primary.href ? (
-          <Button asChild size="sm">
-            <Link href={p.primary.href(data)}>{p.primary.label}</Link>
-          </Button>
-        ) : (
-          <Button size="sm" onClick={() => p.primary?.onClick?.(data)}>
-            {p.primary.label}
-          </Button>
-        ))}
+    <div className="nds-cell-actions" onClickCapture={keepFromGrid} onDoubleClickCapture={keepFromGrid}>
+      {verbs.map((verb, i) => <RowVerbButton key={rowVerbKey(verb, i)} verb={verb} data={data} />)}
       {items.length > 0 && (
         <Menu
           label={<MoreHorizontal size={15} />}

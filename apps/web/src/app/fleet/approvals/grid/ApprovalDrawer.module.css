@@ -1,0 +1,65 @@
+/* Approvals grid — the request drawer (ApprovalDrawer, PlanSteps, EditValue). Layout and domain content only, on the
+   design tokens; every control keeps its design-system size and colour. Text is the AAA roles (--nds-text, -2, -3). */
+.drawer { min-width: 0; }
+.body { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; font-size: var(--nds-font-size-base); }
+.body p { margin: 0; }
+
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.section { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.sectionTitle { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.label { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-2); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.actions > p { flex: 1 1 100%; }
+
+.text { color: var(--nds-text); overflow-wrap: anywhere; }
+.muted { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.mono { font-family: var(--nds-font-mono); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.link { color: var(--nds-text-link); text-decoration: underline; text-underline-offset: 2px; }
+.link:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+.target { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-6); min-width: 0; }
+
+/* What the asker wrote: plain text as written, line breaks kept, never rendered as Markdown. */
+.quote {
+  margin: 0; padding: var(--nds-space-10) var(--nds-space-12); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--nds-text);
+  background: var(--nds-surface-sunken); border-left: 3px solid var(--nds-border-strong); border-radius: var(--nds-radius-sm);
+}
+
+/* A bulk request's items: SKU and name, then the change. One column under 480 px of drawer. */
+.items { container: approval-items / inline-size; list-style: none; margin: 0; padding: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); min-width: 0; }
+.item { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--nds-space-4) var(--nds-space-12); align-items: start; padding: var(--nds-space-8) var(--nds-space-12); min-width: 0; }
+.item + .item { border-top: 1px solid var(--nds-border-subtle); }
+.itemName { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+@container approval-items (max-width: 480px) {
+  .item { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A plan: its kinds, then its steps as a list (one tab stop; never a grid). */
+.kinds { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-4); color: var(--nds-text); overflow-wrap: anywhere; }
+.steps {
+  list-style: none; margin: 0; padding: 0; max-height: 440px; overflow-y: auto; overscroll-behavior: contain; min-width: 0;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md);
+}
+.steps:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; }
+.step { display: flex; align-items: flex-start; gap: var(--nds-space-10); padding: var(--nds-space-8) var(--nds-space-12); min-width: 0; }
+.step + .step { border-top: 1px solid var(--nds-border-subtle); }
+.stepKeep { flex: none; padding-top: var(--nds-space-2); }
+.stepMain { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.stepHead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8); min-width: 0; }
+.stepNo { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.stepTitle { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.stepFate { margin-left: auto; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+.editForm { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+
+/* Questions asked inside the drawer (DrawerOverlayCard). */
+.overlay { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.overlayTitle { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.overlayActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); }
+.consequences { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-6); color: var(--nds-text); }
+
+/* Footer: the request's facts on one wrapping line. */
+.facts { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-16); margin: 0; min-width: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fact { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); min-width: 0; }
+.fact dt { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-2); }
+.fact dd { margin: 0; color: var(--nds-text); overflow-wrap: anywhere; }
+.copy { display: inline-flex; align-items: center; gap: var(--nds-space-2); min-width: 0; }

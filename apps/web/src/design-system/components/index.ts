@@ -88,6 +88,9 @@ export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmPr
 // Sheet publish parity (2026-10-04) — the typed confirmation, shared by ActionConfirm, the Publish window and the selling dialogs.
 export { ConfirmPhraseField, phraseMatches, phraseMatchState, PHRASE_STATE_TEXT, type ConfirmPhraseFieldProps, type PhraseMatchState } from './ConfirmPhraseField'
 export { AsOf, type AsOfProps } from './AsOf'
+// Approvals grid G7 (2026-10-05) — a live countdown ("Runs in 14 s"): one shared timer for the page, onDone once at zero.
+export { Countdown, type CountdownProps } from './Countdown'
+export { countdownText, countdownNextTick, countdownStep, countdownSnapshot, readCountdownSnapshot, countdownTarget, createCountdownTicker, countdownTicker, COUNTDOWN_SECONDS_UNDER, COUNTDOWN_SLOW_TICK, type CountdownStep, type CountdownView, type CountdownClock, type CountdownTicker } from './countdownTicker'
 export { PresenceMark, type PresenceMarkProps } from './PresenceMark'
 export { DetailPopover, type DetailPopoverProps } from './DetailPopover'
 export { ChangeReview, type ChangeReviewProps, type ChangeReviewItem } from './ChangeReview'

@@ -60,13 +60,17 @@ export const MCP_AGENT_KEY = 'claude'
 const KILL_SWITCH_TEXT = 'Nexus has paused its AI tools (the AI kill switch is on). Nothing ran.'
 const FAILED_TEXT = 'Nexus could not run this tool. Nothing changed. Try again later.'
 
-/** The page a person approves in — the business's own, when business profiles are on. */
-export function approvalsPageUrl(workspaceId: string): string {
+/**
+ * The page a person approves in — the business's own, when business profiles are on. Approvals grid (2026-10-05): with
+ * the request's id it opens that row (`?item=<approvalId>`; for a change plan, the plan's approval id).
+ */
+export function approvalsPageUrl(workspaceId: string, approvalId?: string | null): string {
   const path =
     process.env.NEXUS_WORKSPACES_ENABLED === '1'
       ? `/w/${encodeURIComponent(workspaceId)}/fleet/approvals`
       : '/fleet/approvals'
-  return `${oauthIssuer()}${path}`
+  const item = approvalId ? `?item=${encodeURIComponent(approvalId)}` : ''
+  return `${oauthIssuer()}${path}${item}`
 }
 
 const text = (value: unknown): CallToolResult['content'] => [
@@ -169,7 +173,7 @@ function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
           status: 'runs_by_rule',
           approvalId: outcome.approvalId,
           runsAt: outcome.rule.executeAfter,
-          stopAt: approvalsPageUrl(principal.workspace.workspaceId),
+          stopAt: approvalsPageUrl(principal.workspace.workspaceId, outcome.approvalId),
           preview: outcome.preview ?? null,
           trust: { level: 'auto' },
           ...(outcome.plan ? { plan: outcome.plan } : {}),
@@ -184,7 +188,7 @@ function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
         status: 'waiting_for_approval',
         approvalId: outcome.approvalId,
         expiresAt: outcome.expiresAt ?? null,
-        approveAt: approvalsPageUrl(principal.workspace.workspaceId),
+        approveAt: approvalsPageUrl(principal.workspace.workspaceId, outcome.approvalId),
         preview: outcome.preview ?? null,
         // C6 — a plan: how many steps, the summary a person reads, and its hash.
         ...(outcome.plan ? { plan: outcome.plan } : {}),

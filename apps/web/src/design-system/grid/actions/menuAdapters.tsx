@@ -25,6 +25,7 @@ import type { MenuItemDef } from '../../components/Menu'
 // Inside the grid engine: type-only vendor imports keep Factory independent of the web host.
 import type { MenuItemDef as AgMenuItemDef, DefaultMenuItem, GetContextMenuItemsParams } from 'ag-grid-community'
 import { actionLabel, actionsFor, isRunnable, ROW, SELECTION, type GridAction } from './registry'
+import { MAX_ROW_VERBS, type RowVerb, type RowVerbs, type RowVerbTone } from '../renderers/rowVerbs'
 
 export interface MenuAdapterOptions<T> {
   /** Declared by the lane that owns the data. Neither adapter adds a verb. */
@@ -36,6 +37,21 @@ export interface MenuAdapterOptions<T> {
    * at all rather than verbs that would act on an id that is not one.
    */
   isRecord?: (row: T) => boolean
+  /**
+   * Verb ids THIS adapter leaves out — the ones the row already shows as buttons (`actionVerbs`), so the `⋯` does not
+   * repeat them. Applies only to the adapter it is passed to: a right-click menu built without it keeps every verb.
+   */
+  omit?: readonly string[]
+}
+
+/** `actionVerbs`: which registry verbs a row shows as BUTTONS in the actions column (gap G2, 2026-10-05). */
+export interface VerbAdapterOptions<T> extends Omit<MenuAdapterOptions<T>, 'omit'> {
+  /** The verb ids to draw as buttons, in this order — at most two. A verb hidden for the row is skipped. */
+  show: readonly [string] | readonly [string, string]
+  /** A tone per verb id. Default: a `danger` verb is `danger`; otherwise the first verb shown is `primary`, the next `default`. */
+  tones?: Readonly<Record<string, RowVerbTone>>
+  /** The accessible name per row when the label repeats on every row ("Approve: Set price XR-GLOVE-M"). */
+  ariaLabel?: (action: GridAction<T>, row: T) => string
 }
 
 /**
@@ -58,6 +74,37 @@ const offered = <T,>(o: MenuAdapterOptions<T>, row: T) =>
   o.isRecord && !o.isRecord(row)
     ? []
     : [...actionsFor(o.actions, ROW, [row]), ...actionsFor(o.actions, SELECTION, [row])]
+        .filter(({ action }) => !o.omit?.includes(action.id))
+
+/**
+ * The row's visible verbs, for `actionsColumn({ primary: actionVerbs({ … }) })` — the row's buttons are a registry
+ * surface like the `⋯` and the right-click menu, so Approve is declared once and every surface draws that declaration.
+ *
+ * A disabled verb stays, HELD, with the registry's reason (never a silent grey button); a hidden one is skipped. The
+ * button runs `onSelect` — wire it to `useActionPress().press`, as for the menus. Pair it with
+ * `actionMenuItems({ …, omit: show })` so the `⋯` does not list the same verbs again.
+ */
+export function actionVerbs<T>(o: VerbAdapterOptions<T>): (row: T) => RowVerbs<T> {
+  return (row) => {
+    const byId = new Map(offered(o, row).map((entry) => [entry.action.id, entry] as const))
+    const verbs: RowVerb<T>[] = []
+    for (const id of o.show) {
+      const entry = byId.get(id)
+      if (!entry || verbs.length >= MAX_ROW_VERBS) continue
+      const { action, availability } = entry
+      const reason = isRunnable(availability) ? null : availability.kind === 'disabled' ? availability.reason : null
+      verbs.push({
+        id: action.id,
+        label: actionLabel(action, [row]),
+        tone: o.tones?.[id] ?? (action.danger ? 'danger' : verbs.length === 0 ? 'primary' : 'default'),
+        disabled: reason ? () => reason : undefined,
+        onClick: () => o.onSelect(action, [row]),
+        ariaLabel: o.ariaLabel ? (r) => o.ariaLabel!(action, r) : undefined,
+      })
+    }
+    return verbs as unknown as RowVerbs<T>
+  }
+}
 
 /**
  * The `⋯` column's items, for `actionsColumn({ items })`.

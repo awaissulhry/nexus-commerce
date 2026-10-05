@@ -105,6 +105,16 @@ describe('decideFleetApproval — AP.1', () => {
     expect(gate).toHaveBeenCalledWith('a1', 'reject', actor, 'too broad')
   })
 
+  // Approvals grid (Owner, 2026-10-05) — a reject needs no reason. Without one, the row says who rejected it; the
+  // person's own-words columns (operatorNote, the audit note, the exemplar) stay empty rather than holding our sentence.
+  it('a reject without a reason stores who rejected it, and never passes that sentence off as the person’s words', async () => {
+    await decideFleetApproval({ id: 'a1', decision: 'reject', reason: '   ', actor })
+    expect(gate).toHaveBeenCalledWith('a1', 'reject', actor, 'rejected by Awais')
+    expect(db.agentApproval.update).toHaveBeenCalledWith({ where: { id: 'a1' }, data: { operatorNote: null } })
+    expect(mint).toHaveBeenCalledWith('a1', 'reject', undefined)
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'reject_action', note: null, actor: 'Awais' }))
+  })
+
   it('writes an audit row naming who, what and why', async () => {
     await decideFleetApproval({ id: 'a1', decision: 'reject', reason: 'too broad', actor })
     expect(audit).toHaveBeenCalledWith(

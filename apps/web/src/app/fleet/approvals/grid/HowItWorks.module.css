@@ -1,0 +1,31 @@
+/* Approvals grid — the "How it works" drawer (HowItWorks, FleetGateState). Layout and text only, on the design tokens;
+   every control and pill keeps its design-system look. The drawer carries `fleet-portal`, so these roles stay light. */
+.body { display: flex; flex-direction: column; gap: var(--nds-space-20); min-width: 0; font-size: var(--nds-font-size-base); line-height: 1.6; }
+.body p { margin: 0; }
+
+.section { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.heading { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.text { color: var(--nds-text); overflow-wrap: anywhere; }
+.muted { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.link { color: var(--nds-text-link); text-decoration: underline; text-underline-offset: 2px; }
+.link:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+
+/* The statuses: the pill, then what it means. One column on a narrow drawer. */
+.states, .keys, .conditions, .tools { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nds-space-8); min-width: 0; }
+.state, .key { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: var(--nds-space-4) var(--nds-space-12); align-items: baseline; min-width: 0; }
+.statePill { min-width: 0; }
+
+/* The fleet's conditions: state, then the requirement, who can change it, and why. */
+.conditions { gap: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.condition { display: flex; align-items: flex-start; gap: var(--nds-space-10); padding: var(--nds-space-10) var(--nds-space-12); min-width: 0; }
+.condition + .condition { border-top: 1px solid var(--nds-border-subtle); }
+.conditionState { flex: none; min-width: 5.5rem; }
+.conditionBody { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.requirement { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.tools { gap: var(--nds-space-4); padding-top: var(--nds-space-4); }
+.tool { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+
+@media (max-width: 480px) {
+  .state, .key { grid-template-columns: minmax(0, 1fr); }
+  .condition { flex-direction: column; gap: var(--nds-space-4); }
+}

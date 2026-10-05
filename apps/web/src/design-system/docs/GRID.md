@@ -108,7 +108,8 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 | `textColumn(field)` | — | as-is |
 | `stockColumn(field, {threshold})` | `StockCell` | out / low / ok tones |
 | `lockedColumn(field)` | `LockedCell` | muted + 🔒, `editable:false`, unmovable |
-| `actionsColumn({primary, items, pinned})` | `ActionsCell` | Edit + ⋯ `Menu`; held at the right end, pinned on request |
+| `actionsColumn({primary, items, pinned})` | `ActionsCell` | Edit + ⋯ `Menu`; held at the right end, pinned on request. `primary` = one verb, two (`[approve, reject]`) or `(row) => verbs`; each `RowVerb` has a tone (`primary`/`default`/`danger` outline), a held reason and a per-row name; a click in the cell never reaches the row (`keepFromGrid`). Widths 56 / 120 / 200. Registry: `actionVerbs` + `actionMenuItems({ omit })` |
+| `changeColumn(field)` | `ChangeCell` | before → after: old muted · arrow · new strong; one line + "+N more"; the tooltip, CSV and quick filter say every line (`changeValue.ts`). `ChangeValue` is the same part outside a grid |
 | `holdColumn(col, end, pinned)` | — | cannot be hidden or moved |
 | identity | `IdentityCell` | expander slot · `Thumbnail` · title link + hover "Open" pill · sub-line (`SkuTag`, `Tag`s) |
 | chips | `IdentityChip` · `TargetingChip` · `ProgramChip` | 20×20 squares BEFORE the title, each with a tip — targeting A/M filled (`--nds-targeting-*`), programme SP/SB/SD outlined. Never a column of their own. |

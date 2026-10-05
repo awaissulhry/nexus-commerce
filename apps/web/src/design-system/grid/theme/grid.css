@@ -1080,6 +1080,11 @@
 @keyframes nds-grid-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .nds-grid-skel-line { animation: none; } }
 .nds-grid-noRows { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* AG sets `pointer-events: none` on `.ag-overlay` and turns it back on only for its own loading and export overlays,
+   so the empty state's action ("Clear filters") could be seen but never clicked: the rows layer took the click
+   (approvals grid, 2026-10-05). The empty state's own box takes pointer events again; the rest of the overlay stays
+   transparent to them. */
+.nds-grid-noRows { pointer-events: auto; }
 .nds-grid-noRows-title { font-weight: var(--nds-font-weight-semibold); color: var(--nds-grid-cell-fg); }
 .nds-grid-noRows-msg { color: var(--nds-grid-empty-fg); }
 
