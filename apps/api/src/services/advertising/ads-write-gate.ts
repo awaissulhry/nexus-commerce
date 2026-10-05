@@ -163,7 +163,8 @@ const BID_FIELDS = new Set(['bid', 'defaultBid'])
 /** Normalise a keyword for protection matching — 5a: it lives with the one matcher now; re-exported for its readers. */
 export { normaliseTerm } from './ads-negation-policy.js'
 
-function maxWriteValueCents(): number {
+/** The per-write value cap (€500 unless NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS says otherwise); CC-14's launch checks warn with it. */
+export function maxWriteValueCents(): number {
   const v = Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)
   if (Number.isFinite(v) && v > 0) return v
   return 50_000 // €500 default
@@ -676,26 +677,7 @@ async function spendCeilingDenial(args: {
     else if (c.grain === 'MARKET') campaignIds = (await prisma.campaign.findMany({ where: { marketplace: c.scopeId }, select: { id: true } })).map((x) => x.id)
     else campaignIds = (await prisma.adProductAd.findMany({ where: { product: { parentId: c.scopeId } }, select: { adGroup: { select: { campaignId: true } } } })).map((x) => x.adGroup.campaignId)
 
-    // Today's AUTHORISED budget increases inside the scope — our own ledger, in EUROS in the
-    // payloads (the one ads money field that is not cents; assuming cents inflates 100×).
-    // 4k — without this write's own row, which would count its increase twice (NULL-safe, as in the day-move bound).
-    const rows = await prisma.advertisingActionLog.findMany({
-      where: {
-        actionType: 'AD_BUDGET_UPDATE',
-        entityType: 'CAMPAIGN',
-        entityId: { in: campaignIds },
-        createdAt: { gte: midnightUtc },
-        rolledBackAt: null,
-        ...(args.queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: args.queueId } }] } : {}),
-      },
-      select: { payloadBefore: true, payloadAfter: true },
-    })
-    let usedCents = 0
-    for (const r of rows) {
-      const before = Number((r.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
-      const after = Number((r.payloadAfter as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
-      if (Number.isFinite(before) && Number.isFinite(after) && after > before) usedCents += Math.round((after - before) * 100)
-    }
+    const usedCents = await authorisedIncreasesTodayCents(campaignIds, midnightUtc, args.queueId ?? null)
     const cap = c.dailyCapCents as number
     if (usedCents + deltaCents > cap) {
       return {
@@ -706,6 +688,34 @@ async function spendCeilingDenial(args: {
     }
   }
   return null
+}
+
+/**
+ * Today's AUTHORISED budget increases across these campaigns, in cents — our own ledger, in EUROS in the payloads (the
+ * one ads money field that is not cents; assuming cents inflates 100×). 4k — without `queueId`'s own row, which would
+ * count its increase twice (NULL-safe, as in the day-move bound). Shared by the spend ceiling above and CC-14's launch
+ * warnings, so both read the ledger the same way.
+ */
+export async function authorisedIncreasesTodayCents(campaignIds: string[], since: Date, queueId: string | null = null): Promise<number> {
+  if (!campaignIds.length) return 0
+  const rows = await prisma.advertisingActionLog.findMany({
+    where: {
+      actionType: 'AD_BUDGET_UPDATE',
+      entityType: 'CAMPAIGN',
+      entityId: { in: campaignIds },
+      createdAt: { gte: since },
+      rolledBackAt: null,
+      ...(queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: queueId } }] } : {}),
+    },
+    select: { payloadBefore: true, payloadAfter: true },
+  })
+  let usedCents = 0
+  for (const r of rows) {
+    const before = Number((r.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+    const after = Number((r.payloadAfter as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+    if (Number.isFinite(before) && Number.isFinite(after) && after > before) usedCents += Math.round((after - before) * 100)
+  }
+  return usedCents
 }
 
 /**
