@@ -35,7 +35,7 @@
 import type { StudioPublishReview, StudioPublishResult, StudioPublishScope } from '@nexus/shared/studio-publication'
 import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, statusChangeAction, STATUS_TARGET_LABEL, type ListingAction, type ListingActionDestination, type ListingActionPlanRow,
   type ListingActionPreview, type ListingActionRunResult, type StatusTarget } from '@nexus/shared/listing-actions'
-import { CONTENT_HELD_FOR_DELETE, CONTENT_HELD_FOR_END, isStaleWaiting, needsTypedConfirm, publishPlanSummary, SEND_ORDER,
+import { AMAZON_MOVE_ROLE_CANNOT_DELETE, CONTENT_HELD_FOR_DELETE, CONTENT_HELD_FOR_END, isStaleWaiting, needsTypedConfirm, publishPlanSummary, SEND_ORDER,
   type PublishActionCell } from '@nexus/shared/publish-actions'
 import { CONTENT_HELD_FOR_RELIST, confirmMatches, lifecycleStep, MAX_PLAN_DESTINATIONS, publishPlanCounts, ROLE_CANNOT_END_OR_DELETE,
   STATUS_TARGET_ACTIONS, TYPE_TO_CONFIRM, type ListedStatusTarget, type PublishPlan, type PublishPlanColumn, type PublishPlanDestination, type PublishPlanHeldRow,
@@ -376,8 +376,12 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
 
 // ── The send request, checked against the values now ─────────────────────────────────────────────
 
-/** The submit body of one content review, as the batch stamps it (`{ selectionToken?, confirmOverwrite?, locationId? }`). */
-export interface PlanContentChild { reviewId: string; selectionToken?: string; confirmOverwrite?: boolean; locationId?: string }
+/**
+ * The submit body of one content review, as the batch stamps it (`{ selectionToken?, confirmOverwrite?, locationId?,
+ * confirm? }`). `confirm: 'DELETE'` (S10): the review moves a live Amazon listing to a new SKU, which deletes the old SKU;
+ * the plan checked the typed family SKU and the delete permission before stamping it.
+ */
+export interface PlanContentChild { reviewId: string; selectionToken?: string; confirmOverwrite?: boolean; locationId?: string; confirm?: 'DELETE' }
 
 /** One waiting value a lifecycle child carries, to clear after it succeeds (only if still set at `setAt`). */
 export interface PlanValueRef { listingId: string; productId: string; column: PublishPlanColumn; setAt: string }
@@ -451,9 +455,12 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
     if (entry.confirmOverwrite !== undefined && typeof entry.confirmOverwrite !== 'boolean') throw new PublishPlanError('The overwrite confirmation is not valid.', 400, 'invalid_request')
     const selectionToken = optionalText(entry.selectionToken, 200, 'A selection token')
     const locationId = optionalText(entry.locationId, 200, 'The inventory location')
+    // S10 — the review deletes an old Amazon SKU (a move): the typed family SKU and the delete permission, checked below.
+    if (entry.confirmDelete !== undefined && typeof entry.confirmDelete !== 'boolean') throw new PublishPlanError('The delete confirmation is not valid.', 400, 'invalid_request')
+    const confirmDelete = entry.confirmDelete === true && !!reviewId
     destinations.push({ scope, destination, label: planDestinationLabel(destination), held: [], listed: 0,
       content: reviewId ? { reviewId, ...(selectionToken ? { selectionToken } : {}), ...(entry.confirmOverwrite !== undefined ? { confirmOverwrite: entry.confirmOverwrite } : {}),
-        ...(locationId ? { locationId } : {}) } : null })
+        ...(locationId ? { locationId } : {}), ...(confirmDelete ? { confirm: 'DELETE' as const } : {}) } : null })
   }
   const destinationIndex = (cell: PublishActionCell) => destinations.findIndex(d => sameDestination(cell, d.destination))
 
@@ -482,6 +489,12 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
   if (confirming.length) {
     if (!canDelete) for (const group of confirming) group.refused = ROLE_CANNOT_END_OR_DELETE
     else if (!confirmMatches(familySku, confirmText)) throw new PublishPlanError(TYPE_TO_CONFIRM(familySku), 400, 'confirm_required')
+  }
+  // S10 — a content review that moves a live Amazon listing to a new SKU deletes the old SKU: the same typed family SKU
+  // and the same permission as Delete. The review itself refuses a send without it (`claimPublication`).
+  if (destinations.some(entry => entry.content?.confirm === 'DELETE')) {
+    if (!canDelete) throw new PublishPlanError(AMAZON_MOVE_ROLE_CANNOT_DELETE, 403, 'forbidden')
+    if (!confirmMatches(familySku, confirmText)) throw new PublishPlanError(TYPE_TO_CONFIRM(familySku), 400, 'confirm_required')
   }
 
   // The content held on each destination, decided as the review decided it.

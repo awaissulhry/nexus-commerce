@@ -41,7 +41,14 @@ export interface StudioPublishReview {
      */
     startsAs?: 'active' | 'inactive'
     /** New listings: the row, or its family's main row, has Status Not listed — nothing of it is sent (`blocked` says why). */
-    notListed?: true }>
+    notListed?: true
+    /**
+     * S10 (per-channel SKU) — the SKU this review sends for the row when it is not the row's product SKU (`sku`): the
+     * listing's own SKU. A create line and a relist line name it ("Creates GALE-M-IT (inactive)").
+     */
+    sendsSku?: string
+    /** S10 — the channel holds this row under another SKU than the one Nexus sends: what this review does about it. */
+    skuMove?: StudioPublishSkuMove }>
   excluded: number
   issues: StudioPublishIssue[]
   expiresAt: string
@@ -63,6 +70,39 @@ export interface StudioPublishReview {
    * Sending the review removes each of these from the channel. Absent when no row is a Full update.
    */
   removals?: StudioPublishRemoval[]
+  /**
+   * S10 (per-channel SKU, Owner D2 = A) — the typed confirmation this review needs before it is sent: it moves a live Amazon
+   * listing to a new SKU, which DELETES the old SKU there once Amazon accepts the new one. Typed like Delete (the family
+   * SKU, body `confirm: 'DELETE'`). Absent when nothing is deleted.
+   */
+  confirm?: StudioPublishConfirm
+}
+
+/** S10 — a typed confirmation, as Delete's (`ListingActionConfirm` with token 'DELETE'). */
+export interface StudioPublishConfirm {
+  kind: 'type'
+  /** What the person types: the family SKU. */
+  expected: string
+  /** The body field the submit needs: `confirm: 'DELETE'`. */
+  token: 'DELETE'
+  /** "Moving 1 listing to a new SKU deletes its old SKU on Amazon · IT once Amazon accepts the new one. …" */
+  sentence: string
+}
+
+/**
+ * S10 (per-channel SKU) — a row the channel holds under one SKU (`from`, the SKU it holds now) while Nexus sends another
+ * (`to`). `create-delete` (Amazon): NEW is created as a new offer on the same ASIN, and OLD is deleted there only after
+ * Amazon accepts NEW. `rename` (eBay Trading, Shopify): the channel renames it in place. `none`: nothing moves it from
+ * here (the sentence says why and what to do).
+ */
+export interface StudioPublishSkuMove {
+  from: string
+  to: string
+  kind: 'create-delete' | 'rename' | 'none'
+  /** "Creates GALE-M-IT on Amazon · IT as a new offer, then deletes GALE-M there." / "eBay renames GALE-M to GALE-M-IT." */
+  sentence: string
+  /** Read this first (an FBA move: Amazon's units stay under OLD), or null. */
+  warning: string | null
 }
 
 /** A row this review lists again after Nexus deleted it (its Status was set to Active or Inactive): its create is ticked by default. */
@@ -79,8 +119,15 @@ export interface StudioPublishRelist {
   warning: string | null
 }
 
-/** How one review row's content is sent: only the changed fields (the default), or every field Nexus manages. */
-export type StudioPublishMode = 'partial' | 'full'
+/**
+ * How one review row's content is sent: only the changed fields (the default), or every field Nexus manages. `move`
+ * (S10): a live Amazon listing moved to its own SKU — sent as the create of NEW, then the delete of OLD once Amazon accepts
+ * NEW (`rows[].skuMove`); never a Partial or Full update of the listing.
+ */
+export type StudioPublishMode = 'partial' | 'full' | 'move'
+
+/** S10 — the mode a moved row reads in the review and the Publish window: "Move to GALE-M-IT". */
+export const moveModeLabel = (to: string) => `Move to ${to}`
 
 /** One value a Full update removes from the channel (`StudioPublishReview.removals`). */
 export interface StudioPublishRemoval {

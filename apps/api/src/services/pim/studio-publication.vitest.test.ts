@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { deletedPublishSkip } from '@nexus/shared/listing-actions'
 
-const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false } }))
+const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false }, moves: null as any[] | null, claim: vi.fn(), amazonSkus: null as Record<string, string> | null }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -12,9 +12,13 @@ vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: m.mo
 vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: any) => m.published.push(event) }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
-vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
-  products: [{ productId: 'parent', sku: 'SELLER-SKU' }, { productId: 'child', sku: 'SELLER-CHILD' }],
-  feed: { header: { version: '2.0' }, messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
+vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => {
+  const sku = (productId: string, fallback: string) => m.amazonSkus?.[productId] ?? fallback
+  return { kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
+  products: [{ productId: 'parent', sku: sku('parent', 'SELLER-SKU') }, { productId: 'child', sku: sku('child', 'SELLER-CHILD') }],
+  feed: { header: { version: '2.0' }, messages: [{ sku: sku('parent', 'SELLER-SKU') }, { sku: sku('child', 'SELLER-CHILD') }] }, ...(m.moves ? { moves: m.moves } : {}) } }, sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
+// S10 — the coordinate claim of a moved SKU (shared accounts) is recorded, never written.
+vi.mock('../listing-claim.service.js', () => ({ assertClaimed: m.claim, releaseCoordinate: vi.fn() }))
 vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: '123', xml: '<Item/>', ...(m.ebayNotices.length ? { notices: m.ebayNotices } : {}),
   products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })) }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus,
   ebayPublicationRequest: (plan: any) => ({ operation: 'ReviseFixedPriceItem', xml: plan.xml }), usesEbayInventory: () => false, prepareEbayInventoryPublication: vi.fn() }))
@@ -24,6 +28,7 @@ vi.mock('./studio-publication-amazon-changes.js', () => ({
     changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
       lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
   compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    ...(plan.publication.moves ? { moves: plan.publication.moves.filter((move: any) => ids.includes(move.productId)) } : {}),
     feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.includes(p.productId))) },
     fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
 }))
@@ -79,7 +84,7 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.moves = null; m.amazonSkus = null; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
   m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0; m.published.length = 0
   m.fill.mockImplementation(async () => { m.events.push('fill'); return { dryRun: false, rows: [], counts: {} } }) })
 
@@ -495,7 +500,7 @@ it('delete and relist: Status Active after the delete lists it again, ticked; Am
   deletedChild({ sellingTarget: 'ACTIVE', sellingTargetAt: chosenAt, sellingTargetById: 'user-a' })
   const review = await previewStudioPublication('parent', scope, 'user-a')
   expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ relist: { deletedAt: deletedAt.toISOString(), oldReference: 'B0OLDCHILD', asin: null,
-    sentence: 'Lists CHILD again (it was ASIN B0OLDCHILD; Amazon matches it by its product ID).', warning: null } })
+    sentence: 'Lists SELLER-CHILD again (it was ASIN B0OLDCHILD; Amazon matches it by its product ID).', warning: null } }) // S10: the relist line names the SKU it sends
   expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ startsAs: 'active' })
   expect(review.rows.find(r => r.productId === 'child')!.blocked).toBeUndefined()
   expect(review.changes!.find(c => c.productId === 'child')).toMatchObject({ selectable: true, selectedByDefault: true })
@@ -517,4 +522,85 @@ it('delete and relist: an OLDER relist choice (Full update after the delete) rea
   m.amazon.mockRejectedValue(Object.assign(new Error('SELLER-CHILD: 13013: The SKU was recently deleted.'), { notSent: true }))
   const result = await submitStudioPublication('parent', review.id!, {}, 'user-a')
   expect(result).toMatchObject({ status: 'FAILED', message: expect.stringMatching(/^Nothing was submitted\. Amazon is still removing this SKU \(deleted 2 hours ago\)\. Try again later; Amazon can take up to 24 hours\. Amazon said: SELLER-CHILD: 13013: The SKU was recently deleted\.$/) })
+})
+
+// ── S10 (per-channel SKU, Owner D2 = A) — a live Amazon listing moved to its own SKU ─────────────────────────────────────
+const MOVE = { productId: 'child', listingId: 'listing-child', from: 'CHILD', to: 'SELLER-CHILD', asin: 'B0TESTMOVE', fba: false }
+const movingFacts = () => ({ ...existingFacts(), parent: { id: 'parent', sku: 'SKU' },
+  listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'B0TESTMOVE' }] })
+
+it('S10: the review says the move and asks for the typed confirmation Delete asks for', async () => {
+  m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(review.rows.find(row => row.productId === 'child')?.skuMove).toEqual({ from: 'CHILD', to: 'SELLER-CHILD', kind: 'create-delete',
+    sentence: 'Creates SELLER-CHILD on Amazon · IT as a new offer, then deletes CHILD there.', warning: null })
+  expect(review.rows.find(row => row.productId === 'child')?.sendsSku).toBe('SELLER-CHILD')
+  expect(review.confirm).toEqual({ kind: 'type', expected: 'SKU', token: 'DELETE', sentence: expect.stringContaining('This Publish deletes CHILD on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted.') })
+})
+
+it('S10: a move is refused without the typed confirmation, and by a role that cannot delete — nothing is sent, nothing is claimed', async () => {
+  m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user'))
+    .rejects.toThrow('Moving a listing to a new SKU deletes its old SKU on Amazon: type the SKU, then confirm. It cannot be undone.')
+  const token = m.rows.get(review.id!)?.changes.selection?.token
+  await expect(submitRaw('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE', selectionToken: token }, 'user', { canDelete: false }))
+    .rejects.toThrow(/Your role cannot delete listings/)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.claim).not.toHaveBeenCalled()
+  expect(m.rows.get(review.id!).status).toBe('PREVIEW')
+})
+
+it('S10: confirmed, the NEW coordinate is claimed before the send and the move is kept with the publication', async () => {
+  m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await submitStudioPublication('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE' }, 'user')
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1') expect(m.claim).toHaveBeenCalledWith({ connectionId: 'seller-b', marketplace: 'IT', sellerSku: 'SELLER-CHILD', channelListingId: 'listing-child' })
+  expect(m.amazon).toHaveBeenCalledOnce()
+  expect(m.rows.get(review.id!).changes.skuMoves).toEqual([{ ...MOVE, marketplaceId: 'market' }])
+})
+
+it('S10: another business holding NEW on a shared account refuses the send by name; nothing is sent', async () => {
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return
+  m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
+  m.claim.mockRejectedValue(new Error('Store A already publishes SELLER-CHILD on this account. One seller SKU can belong to one profile at a time.'))
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE' }, 'user'))
+    .rejects.toThrow('Store A already publishes SELLER-CHILD on this account. One seller SKU can belong to one profile at a time. Nothing was sent.')
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it('S10 parity: a review with no move asks for no confirmation and stores no move', async () => {
+  m.facts.mockResolvedValue(existingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(review.confirm).toBeUndefined()
+  expect(review.rows.some(row => row.skuMove)).toBe(false)
+  await submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')
+  expect(m.rows.get(review.id!).changes.skuMoves).toBeUndefined()
+})
+
+it('S10: a seller SKU longer than Amazon takes (40) is refused in the review, by name', async () => {
+  m.amazonSkus = { child: 'C'.repeat(41) }; m.facts.mockResolvedValue(existingFacts())
+  const review = await reviewStudioPublication('parent', scope)
+  expect(review.issues).toContainEqual({ productId: 'child', sku: 'CHILD', severity: 'error',
+    message: `${'C'.repeat(41)}: Amazon takes a seller SKU of up to 40 characters; this one has 41. Shorten this listing's SKU, then Publish again.` })
+})
+
+it('S10: Etsy — a live row with its own SKU that Etsy holds under another says Nexus cannot send it yet', async () => {
+  const etsy = { ...scope, channel: 'ETSY' }
+  m.facts.mockResolvedValue({ ...facts(), scope: etsy, listings: [
+    { id: 'l-child', productId: 'child', channel: 'ETSY', externalListingId: '777', listingStatus: 'ACTIVE', isPublished: true, channelSku: 'CHILD-ETSY', liveChannelSku: null }] })
+  const review = await reviewStudioPublication('parent', etsy)
+  const sentence = 'Nexus cannot send Etsy SKU changes yet: Etsy keeps CHILD for this listing (Nexus holds CHILD-ETSY).'
+  expect(review.rows.find(row => row.productId === 'child')?.skuMove).toEqual({ from: 'CHILD', to: 'CHILD-ETSY', kind: 'none', sentence, warning: null })
+  expect(review.issues).toContainEqual({ productId: 'child', sku: 'CHILD', severity: 'warning', message: `CHILD: ${sentence}` })
+})
+
+it('S10: a moved row reads its own mode, "move" — never Partial or Full update, even when Full update was asked for it', async () => {
+  m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user', { fullProductIds: ['child', 'parent'] })
+  expect(review.rows.find(row => row.productId === 'child')?.mode).toBe('move')
+  expect(review.rows.find(row => row.productId === 'parent')?.mode).toBe('full')
+  const plain = await previewStudioPublication('parent', scope, 'user-2')
+  expect(plain.rows.find(row => row.productId === 'child')?.mode).toBe('move')
+  expect(plain.rows.find(row => row.productId === 'parent')?.mode).toBe('partial')
 })

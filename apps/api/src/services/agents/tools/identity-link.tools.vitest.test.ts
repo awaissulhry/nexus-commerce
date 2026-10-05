@@ -51,6 +51,33 @@ vi.mock('../../amazon/listing-asin-fill.service.js', () => ({
   },
 }))
 
+// Etsy's account reader, Shopify's read-only admin reader and Amazon's catalog read (Item ID control, I2–I4): stood in.
+const doors = vi.hoisted(() => ({
+  etsy: new Map<string, { shop: string; state: string; skus: string[] }>(),
+  shopify: new Map<string, { status: string; variants: Array<{ id: string; sku: string; item: string }> }>(),
+  catalog: new Set<string>(),
+}))
+vi.mock('../../etsy/read-client.js', () => ({
+  EtsyReadError: class extends Error {},
+  etsyReader: async () => ({ shopId: '555', get: async (path: string) => {
+    const listing = doors.etsy.get(/\/listings\/(\d+)/.exec(path)?.[1] ?? '')
+    if (!listing) throw Object.assign(new Error('Etsy could not read this resource (HTTP 404).'), { status: 404 })
+    return path.endsWith('/inventory') ? { products: listing.skus.map((sku) => ({ sku })) } : { shop_id: Number(listing.shop), state: listing.state, title: 'Etsy jacket' }
+  } }),
+}))
+vi.mock('../../shopify/admin-client.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../shopify/admin-client.js')>(),
+  shopifyAdminReader: async () => ({ domain: 'link-test.myshopify.com', grantedScopes: [], read: async (_query: string, variables: Record<string, unknown> = {}) => {
+    const id = String(variables.id ?? '').split('/').at(-1)!
+    const product = doors.shopify.get(id)
+    return { errors: [], cost: null, data: { locations: { nodes: [{ id: 'gid://shopify/Location/1', isActive: true }] }, product: product ? { id: `gid://shopify/Product/${id}`, title: 'Shop jacket', status: product.status, identity: null,
+      variants: { nodes: product.variants.map((v) => ({ id: `gid://shopify/ProductVariant/${v.id}`, sku: v.sku, inventoryItem: { id: `gid://shopify/InventoryItem/${v.item}` } })), pageInfo: { hasNextPage: false } } } : null } }
+  } }),
+}))
+vi.mock('../../identity/channel-id-proofs/amazon-catalog.js', () => ({
+  readAmazonCatalog: async (_accountId: string, asin: string, market: string) => (doors.catalog.has(`${market}:${asin}`) ? { found: true, title: 'Catalog jacket' } : { found: false }),
+}))
+
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { commitScheduledApproval, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
@@ -128,6 +155,17 @@ beforeAll(async () => {
     await list('amz', 'LNK-AMZ', 'AMAZON', 'DE', ids.amazon, null, { listingStatus: 'DRAFT' })
     await make('LNK-SHOP')
     await list('shop', 'LNK-SHOP', 'SHOPIFY', 'GLOBAL', ids.shopify, '7001')
+    // Etsy (I2): a family whose S sends its own Etsy SKU.
+    ids.etsy = (await client.channelConnection.create({ data: { channelType: 'ETSY', isActive: true, externalAccountId: '555' } })).id
+    await make('LNK-ETY', { isParent: true })
+    await make('LNK-ETY-S', { parentId: ids['LNK-ETY'] })
+    await list('etyRoot', 'LNK-ETY', 'ETSY', 'GLOBAL', ids.etsy, null, { listingStatus: 'DRAFT', isPublished: false })
+    await list('etyS', 'LNK-ETY-S', 'ETSY', 'GLOBAL', ids.etsy, null, { listingStatus: 'DRAFT', isPublished: false, channelSku: 'OWN-LNK-ETY-S' })
+    // Shopify (I3): one product per family.
+    await make('LNK-SHF', { isParent: true })
+    await make('LNK-SHF-S', { parentId: ids['LNK-SHF'] })
+    await list('shfRoot', 'LNK-SHF', 'SHOPIFY', 'GLOBAL', ids.shopify, null, { listingStatus: 'DRAFT', isPublished: false })
+    await list('shfS', 'LNK-SHF-S', 'SHOPIFY', 'GLOBAL', ids.shopify, null, { listingStatus: 'DRAFT', isPublished: false })
   })
   await inside(async () => { ids.bravo = (await client.product.create({ data: { sku: 'LNK-ROOT', name: 'Bravo', basePrice: '1.00' } })).id }, B)
 }, 120_000)
@@ -138,6 +176,7 @@ afterAll(async () => {
 }, 30_000)
 
 beforeEach(() => {
+  doors.etsy.clear(); doors.shopify.clear(); doors.catalog.clear()
   channel.getItem = () => getItem('Active', 'test-seller-a', ['LNK-S'])
   channel.asin = null
   channel.token = async () => 'test-token'
@@ -250,13 +289,79 @@ describe('I9 — link-channel-id refuses what the channel does not prove', () =>
     expect(asked).toBe(0)
   }, TIMEOUT)
 
-  it('Amazon: the ASIN is read from Amazon, never typed; Shopify links in its own flow', async () => {
-    expect(await preview('link-channel-id', { listingId: ids.amz, externalId: 'B0TYPED001' })).toMatchObject({ ok: false, error: expect.stringContaining('an ASIN is never typed') })
+  it('Amazon, one rule with the sheet\'s ASIN cell: a typed ASIN on a draft is the ASIN it lists on at Publish; the live ASIN is read; a live offer refuses a typed one', async () => {
+    expect(await preview('link-channel-id', { listingId: ids.amz, externalId: 'B0TYPED001' })).toMatchObject({ ok: false, error: expect.stringContaining('Amazon has no ASIN B0TYPED001 on Amazon · DE') })
+    doors.catalog.add('DE:B0TYPED001')
+    expect((await preview('link-channel-id', { listingId: ids.amz, externalId: 'B0TYPED001' })).preview).toMatchObject({ externalId: 'B0TYPED001',
+      changes: { 'channel id': { from: null, to: 'B0TYPED001' } }, effect: 'Sets ASIN B0TYPED001 as the ASIN seller SKU LNK-AMZ lists on at Publish (Amazon DE); nothing is sent to Amazon now.' })
+    await askAndRun('link-channel-id', { listingId: ids.amz, externalId: 'B0TYPED001' })
+    expect((await rowsOf('LNK-AMZ'))[0]).toMatchObject({ externalListingId: null, overrideData: { merchant_suggested_asin: 'B0TYPED001' } })
     expect(await preview('link-channel-id', { listingId: ids.amz })).toMatchObject({ ok: false, error: expect.stringContaining('Amazon gave no ASIN') })
     channel.asin = { asin: 'B0LNKAMZ01', sku: 'LNK-AMZ' }
     expect((await preview('link-channel-id', { listingId: ids.amz })).preview).toMatchObject({ externalId: 'B0LNKAMZ01', proof: 'Amazon holds seller SKU LNK-AMZ as B0LNKAMZ01.' })
     await askAndRun('link-channel-id', { listingId: ids.amz })
     expect((await rowsOf('LNK-AMZ'))[0].externalListingId).toBe('B0LNKAMZ01')
-    expect(await preview('link-channel-id', { listingId: ids.shop, externalId: '7002' })).toMatchObject({ ok: false, error: expect.stringContaining('colour products') })
+    expect(await preview('link-channel-id', { listingId: ids.amz, externalId: 'B0TYPED001' })).toMatchObject({ ok: false,
+      error: expect.stringContaining('Amazon ties seller SKU LNK-AMZ to ASIN B0LNKAMZ01 on Amazon · DE. To use another ASIN: Delete (Status), set the ASIN here, Publish') })
+  }, TIMEOUT)
+
+  it('Amazon unlink, one rule with the sheet\'s Clear: a live ASIN is refused at preview with the sheet\'s sentence; a draft loses only its ASIN for Publish; undo sets it again', async () => {
+    // The live offer (linked above): refused before any approval, in the sheet's words; nothing is queued or changed.
+    const LIVE = 'Amazon ties seller SKU LNK-AMZ to ASIN B0LNKAMZ01 on Amazon · DE. To use another ASIN: Delete (Status), set the ASIN here, Publish — or give this listing a new SKU, which lists as a new offer.'
+    const approvals = () => inside(() => db().agentApproval.count({ where: { toolName: 'unlink-channel-id' } }))
+    const queuedBefore = await approvals()
+    expect(await preview('unlink-channel-id', { listingId: ids.amz })).toEqual({ ok: false, error: `${LIVE} Nothing was queued.` })
+    expect(await ask('unlink-channel-id', { listingId: ids.amz })).toMatchObject({ ok: false, error: expect.stringContaining(LIVE) })
+    expect((await rowsOf('LNK-AMZ'))[0]).toMatchObject({ externalListingId: 'B0LNKAMZ01' })
+    expect(await approvals()).toBe(queuedBefore)
+
+    // A still-draft row with an ASIN set for Publish: the unlink removes only that ASIN (a plain preview, then approval).
+    const draft = await inside(async () => {
+      const product = await db().product.create({ data: { sku: 'LNK-AMZ-DRAFT', name: 'LNK-AMZ-DRAFT', basePrice: '10.00' } })
+      return (await db().channelListing.create({ data: { productId: product.id, channel: 'AMAZON', marketplace: 'DE', region: 'DE', channelMarket: 'AMAZON_DE', channelConnectionId: ids.amazon,
+        listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: true, overrideData: { merchant_suggested_asin: 'B0DRAFT001' } } })).id
+    })
+    const out = await preview('unlink-channel-id', { listingId: draft })
+    expect(out.preview).toMatchObject({ suggested: true, externalId: 'B0DRAFT001', changes: { 'ASIN at Publish': { from: 'B0DRAFT001', to: null } },
+      effect: 'Removes ASIN B0DRAFT001 as the ASIN seller SKU LNK-AMZ-DRAFT lists on at Publish (Amazon DE). The row stays a draft; nothing changes on Amazon.' })
+    const approvalId = await askAndRun('unlink-channel-id', { listingId: draft })
+    const row = (await rowsOf('LNK-AMZ-DRAFT'))[0]
+    expect(row).toMatchObject({ externalListingId: null, listingStatus: 'DRAFT', isPublished: false })
+    expect(row.overrideData ?? {}).not.toHaveProperty('merchant_suggested_asin')
+    // Not an unlink of a channel item: no snapshot, no "Not listed" record.
+    expect(await inside(() => db().channelListingSnapshot.count({ where: { channelListingId: draft } }))).toBe(0)
+    doors.catalog.add('DE:B0DRAFT001')
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } }))
+    const asked = await ask('undo-change', { changeId: change.id })
+    expect(asked, asked.error).toMatchObject({ ok: true, mode: 'queued', preview: { action: 'link-channel-id', externalId: 'B0DRAFT001' } })
+    expect(await approveAndRun(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await rowsOf('LNK-AMZ-DRAFT'))[0]).toMatchObject({ externalListingId: null, overrideData: { merchant_suggested_asin: 'B0DRAFT001' } })
+  }, TIMEOUT)
+
+  it('Shopify (I3): a product of this store is proven variant by variant; another store\'s product is refused', async () => {
+    expect(await preview('link-channel-id', { listingId: ids.shop, externalId: '7002' })).toMatchObject({ ok: false, error: expect.stringContaining('(link-test.myshopify.com) has no product 7002') })
+    doors.shopify.set('7100', { status: 'ACTIVE', variants: [{ id: '91', sku: 'LNK-SHF-S', item: '71' }] })
+    expect((await preview('link-channel-id', { listingId: ids.shfRoot, externalId: '7100' })).preview).toMatchObject({ channel: 'SHOPIFY', listings: ['LNK-SHF', 'LNK-SHF-S'], effect: expect.stringContaining('they read Active in Nexus') })
+    await askAndRun('link-channel-id', { listingId: ids.shfRoot, externalId: '7100' })
+    const s = (await rowsOf('LNK-SHF-S'))[0]
+    expect(s).toMatchObject({ externalListingId: '7100', liveChannelSku: 'LNK-SHF-S', syncPaused: true, platformAttributes: { variantId: '91', inventoryItemId: '71', shopifyProductId: '7100' } })
+  }, TIMEOUT)
+})
+
+describe('Etsy (I2) through Claude\'s tools: the sheet\'s rule, and the proven SKU recorded and forgotten', () => {
+  it('link → unlink → undo (link again, verified on Etsy)', async () => {
+    doors.etsy.set('2100000001', { shop: '555', state: 'active', skus: ['OWN-LNK-ETY-S'] })
+    doors.etsy.set('2100000009', { shop: '777', state: 'active', skus: ['OWN-LNK-ETY-S'] })
+    expect(await preview('link-channel-id', { listingId: ids.etyRoot, externalId: '2100000009' })).toMatchObject({ ok: false, error: expect.stringContaining('not this account\'s shop 555') })
+    expect((await preview('link-channel-id', { listingId: ids.etyRoot, externalId: '2100000001' })).preview).toMatchObject({ channel: 'ETSY', listings: ['LNK-ETY', 'LNK-ETY-S'] })
+    await askAndRun('link-channel-id', { listingId: ids.etyRoot, externalId: '2100000001' })
+    expect((await rowsOf('LNK-ETY-S'))[0]).toMatchObject({ externalListingId: '2100000001', listingStatus: 'ACTIVE', syncPaused: true, liveChannelSku: 'OWN-LNK-ETY-S', lastSyncStatus: 'SUCCESS' })
+    const approvalId = await askAndRun('unlink-channel-id', { listingId: ids.etyS })
+    expect((await rowsOf('LNK-ETY-S'))[0]).toMatchObject({ externalListingId: null, liveChannelSku: null, channelSku: 'OWN-LNK-ETY-S' })
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } }))
+    const asked = await ask('undo-change', { changeId: change.id })
+    expect(asked, asked.error).toMatchObject({ ok: true, mode: 'queued', preview: { action: 'link-channel-id', externalId: '2100000001' } })
+    expect(await approveAndRun(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await rowsOf('LNK-ETY-S'))[0]).toMatchObject({ externalListingId: '2100000001', liveChannelSku: 'OWN-LNK-ETY-S' })
   }, TIMEOUT)
 })

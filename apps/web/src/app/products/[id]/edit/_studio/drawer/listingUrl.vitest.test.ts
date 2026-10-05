@@ -28,7 +28,14 @@ describe('listingUrl', () => {
   it('returns null for channels not addressable from a marketplace code', () => {
     expect(listingUrl('SHOPIFY', 'IT', '1')).toBeNull()
     expect(listingUrl('WOOCOMMERCE', 'IT', '1')).toBeNull()
-    expect(listingUrl('ETSY', 'IT', '1')).toBeNull()
+  })
+
+  it('Etsy (Item ID control, I2): one site whatever the market — etsy.com/listing/<id>; only a number links', () => {
+    expect(listingUrl('ETSY', 'GLOBAL', '1234567890')).toBe('https://www.etsy.com/listing/1234567890')
+    expect(listingUrl('etsy', 'IT', ' 1234567890 ')).toBe('https://www.etsy.com/listing/1234567890')
+    expect(listingUrl('ETSY', 'GLOBAL', '12/34')).toBeNull()
+    expect(listingUrl('ETSY', 'GLOBAL', 'abc')).toBeNull()
+    expect(listingUrl('ETSY', 'GLOBAL', '0123')).toBeNull()
   })
 
   it('returns null on any missing part — no link beats a broken one', () => {

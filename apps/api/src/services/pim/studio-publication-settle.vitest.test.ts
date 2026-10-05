@@ -26,6 +26,9 @@ const m = vi.hoisted(() => ({
   recordIssues: vi.fn(),
   resolveIssues: vi.fn(),
   published: [] as any[],
+  /** S10 — the listing rows the eBay rename reads (by id), and the shared-listing memberships it moves. */
+  listingById: new Map<string, any>(),
+  memberships: [] as any[],
   /** Runs inside a claim, before it is applied — a second replica moving the row first. */
   beforeClaim: null as null | ((row: any) => void),
 }))
@@ -59,7 +62,17 @@ vi.mock('../../db.js', () => {
       },
     },
     channelListingSnapshot: { findMany: m.snapshots },
-    channelListing: { findMany: m.findListings, updateMany: m.updateListings, count: m.countListings },
+    channelListing: { findMany: m.findListings, updateMany: m.updateListings, count: m.countListings,
+      findUnique: async ({ where }: any) => structuredClone(m.listingById.get(where.id) ?? null) },
+    sharedListingMembership: {
+      findFirst: async ({ where }: any) => m.memberships.find(row => row.marketplace === where.marketplace && row.itemId === where.itemId && row.sku === where.sku) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        const hits = m.memberships.filter(row => row.marketplace === where.marketplace && row.itemId === where.itemId && row.sku === where.sku
+          && where.OR.some((or: any) => or.productId === row.productId))
+        for (const row of hits) Object.assign(row, data)
+        return { count: hits.length }
+      },
+    },
     $transaction: async (fn: any) => fn(db),
   }
   return { default: db }
@@ -130,6 +143,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   m.rows.clear()
   m.published.length = 0
+  m.listingById.clear()
+  m.memberships = []
   m.beforeClaim = null
   m.amazonStatus.mockResolvedValue(null)
   m.snapshots.mockResolvedValue([])
@@ -397,6 +412,39 @@ describe('S4 — the accepted eBay SKU is recorded as the live one', () => {
     ])
     expect(m.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ outcome: 'ACCEPTED', channel: 'EBAY',
       payload: { path: ['channelConnectionId'], equals: 'ebay-a' } }) }))
+  })
+})
+
+/**
+ * S10 (per-channel SKU) — an eBay row this publication RENAMED in place (eBay accepted it under its own SKU): its
+ * shared-listing membership follows the new SKU before the SKU is recorded as live (the stock fan-out and order matching
+ * read memberships by SKU). A membership already under the new SKU, and a row that did not change SKU, are left alone.
+ */
+describe('S10 — an accepted eBay rename moves the item\'s membership to the new SKU', () => {
+  const liveRow = (id: string, productId: string, extra: Record<string, unknown> = {}) => ({ id, productId, channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'ebay-a',
+    aliasKey: '', externalListingId: 'item-123', listingStatus: 'ACTIVE', isPublished: true, channelSku: null, liveChannelSku: null, platformAttributes: {}, flatFileSnapshot: null,
+    overrideData: null, offers: [], alias: null, product: { sku: productId.toUpperCase(), deletedAt: null }, ...extra })
+
+  it('the renamed row\'s membership takes the new SKU; an unchanged row\'s stays; an occupied new SKU is never overwritten', async () => {
+    ebayUnverified()
+    m.ebayStatus.mockResolvedValue({ reference: 'item-123', warnings: [], verified: true })
+    m.listingById.set('listing-black', liveRow('listing-black', 'black', { channelSku: 'BLACK-EB' }))
+    m.listingById.set('listing-red', liveRow('listing-red', 'red'))
+    m.listingById.set('listing-blue', liveRow('listing-blue', 'blue', { channelSku: 'BLUE-EB' }))
+    m.memberships = [
+      { marketplace: 'IT', itemId: 'item-123', sku: 'BLACK', productId: 'black' },
+      { marketplace: 'IT', itemId: 'item-123', sku: 'RED', productId: 'red' },
+      { marketplace: 'IT', itemId: 'item-123', sku: 'BLUE', productId: 'blue' },
+      { marketplace: 'IT', itemId: 'item-123', sku: 'BLUE-EB', productId: 'other' },
+    ]
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-black', payload: { channelConnectionId: 'ebay-a', sku: 'BLACK-EB', requests: [] } },
+      { channelListingId: 'listing-red', payload: { channelConnectionId: 'ebay-a', sku: 'RED', requests: [] } },
+      { channelListingId: 'listing-blue', payload: { channelConnectionId: 'ebay-a', sku: 'BLUE-EB', requests: [] } },
+    ])
+    await tickAt(at(2))
+    expect(m.rows.get('pub-ebay').status).toBe('ACCEPTED')
+    expect(m.memberships.map(row => [row.productId, row.sku])).toEqual([['black', 'BLACK-EB'], ['red', 'RED'], ['blue', 'BLUE'], ['other', 'BLUE-EB']])
   })
 })
 

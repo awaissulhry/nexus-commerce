@@ -50,6 +50,8 @@ export const NEW_ROW_SENT_WHOLE = 'A new listing is always sent whole.'
 export const NEW_ROW_LEFT_OUT_HINT = 'Its Status is Not listed, so Publish leaves it out. Choose Active or Inactive in the Status column to create it.'
 /** The same on a row Nexus deleted. */
 export const DELETED_ROW_LEFT_OUT_HINT = 'Its Status is Not listed, so Publish leaves it out: it stays deleted. Set Status to Active to list it again.'
+/** The same on a row Nexus unlinked: left out whatever its Status says, until its channel ID is linked again. */
+export const UNLINKED_ROW_LEFT_OUT_HINT = 'Nexus unlinked it, so Publish leaves it out: the listing may still be live on the channel, and Nexus no longer updates it. Link its channel ID again to update it.'
 /** The note under a new row's Full update in the editor. */
 export const NEW_ROW_FULL_NOTE = 'Now. A new listing is always sent whole: its Status says whether Publish creates it.'
 
@@ -67,6 +69,11 @@ export interface PublishActionValue extends Partial<WaitingBy> {
   leftOut?: boolean
   /** A row not on the channel because Nexus deleted it (its tooltip says it stays deleted while it is left out). */
   deleted?: boolean
+  /**
+   * A row Nexus UNLINKED (Item ID control, 2026-10-05): Publish leaves it out whatever its Status says (the listing may
+   * still be live there; a create would make a second one). Drawn quiet, with `UNLINKED_ROW_LEFT_OUT_HINT`.
+   */
+  unlinked?: boolean
   /**
    * What Partial update does on this row when Publish sends none of its fields (plain English, e.g. a product already on
    * Shopify): replaces `SEND_MODE_HINT.partial` in the tooltip and the screen-reader sentence. Absent = the usual hint.
@@ -111,9 +118,11 @@ export function publishActionModel(value: PublishActionValue | undefined, now: n
   }
   if (newRow && mode === 'full') {
     // A row not on the channel: what Publish does (not a value someone set), so no glyph; quiet when its Status leaves it out.
-    const hint = value.leftOut ? `${NEW_ROW_SENT_WHOLE} ${value.deleted ? DELETED_ROW_LEFT_OUT_HINT : NEW_ROW_LEFT_OUT_HINT}` : NEW_ROW_SENT_WHOLE
+    const leftOut = !!value.leftOut || !!value.unlinked
+    const hint = value.unlinked ? `${NEW_ROW_SENT_WHOLE} ${UNLINKED_ROW_LEFT_OUT_HINT}`
+      : value.leftOut ? `${NEW_ROW_SENT_WHOLE} ${value.deleted ? DELETED_ROW_LEFT_OUT_HINT : NEW_ROW_LEFT_OUT_HINT}` : NEW_ROW_SENT_WHOLE
     return {
-      kind: 'new', label, pill: value.leftOut ? null : { label, tone: SEND_MODE_TONE.full, glyph: 'none' }, aside: null,
+      kind: 'new', label, pill: leftOut ? null : { label, tone: SEND_MODE_TONE.full, glyph: 'none' }, aside: null,
       tooltip: `${label}: ${hint}`, ariaLabel: `Action: ${label}. ${hint}`, editable: true, locked: false,
     }
   }

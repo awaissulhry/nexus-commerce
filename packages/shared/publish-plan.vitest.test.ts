@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { StudioPublishChange, StudioPublishReview } from './studio-publication.js'
+import { moveModeLabel, type StudioPublishChange, type StudioPublishReview } from './studio-publication.js'
 import {
   confirmCountMatches, confirmMatches, confirmRowsTicked, defaultLifecycleTicks, defaultReviewTicks, MANY_PUBLISH_ACTION_LABEL, MANY_PUBLISH_ACTIONS, manyEndCount,
   publishPlanCounts, publishPlanUsesBatch, STATUS_TARGET_ACTIONS, TYPE_COUNT_TO_END, type PublishPlanDestination, type PublishPlanLifecycleRow,
@@ -40,6 +40,13 @@ describe('publish plan counts', () => {
     expect(publishPlanCounts(plan, { fields: { r1: ['l1', 'l2'] }, lifecycle: ['p1', 'p2', 'd1'] }))
       .toEqual({ partial: 1, fields: 2, full: 0, delete: 0, active: 0, inactive: 2, ended: 0 })
     expect(confirmRowsTicked(plan, ['e1', 'd1', 'p1'])).toBe(1)
+  })
+
+  it('S10: a moved row (mode "move") is counted as a move, never as a partial or full update', () => {
+    const moved = review([change('c1', 'M'), change('t1', 'P')])
+    moved.rows = moved.rows.map(entry => entry.productId === 'M' ? { ...entry, mode: 'move' as const } : entry)
+    expect(publishPlanCounts({ destinations: [destination(moved, [])] })).toEqual({ partial: 1, fields: 1, full: 0, delete: 0, active: 0, inactive: 0, ended: 0, moved: 1 })
+    expect(moveModeLabel('GALE-M-IT')).toBe('Move to GALE-M-IT')
   })
 })
 

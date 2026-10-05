@@ -153,6 +153,8 @@ export interface HistoryPage {
 }
 
 export type HistoryStepKey = 'reviewed' | 'sent' | 'not_sent' | 'received' | 'waiting' | 'processed' | 'verified' | 'unknown' | 'needs_check' | 'checked'
+  /** S10 — what became of the old SKU of a live Amazon listing this publish moved to a new SKU. */
+  | 'old_sku'
 
 export interface HistoryStep {
   key: HistoryStepKey
@@ -214,6 +216,30 @@ export interface HistoryRunDetail {
    * Absent = the run has no parts.
    */
   children?: HistoryRun[]
+  /**
+   * S10 — the live Amazon listings this publish moved to a new SKU (create NEW, then delete OLD), and what became of each
+   * OLD. Absent when the publish moved none.
+   */
+  skuMoves?: HistorySkuMove[]
+}
+
+/** S10 — one move of a publish, as the history shows it. */
+export interface HistorySkuMove {
+  productId: string
+  /** The SKU Amazon held (deleted once Amazon accepted NEW). */
+  from: string
+  /** The listing's own SKU, created as a new offer. */
+  to: string
+  /**
+   * `deleted`, `kept` (Amazon refused NEW: OLD stays, nothing deleted), `shared` (another listing still sells OLD),
+   * `not-sent` (Amazon writes in preview mode), `failed` (Amazon did not confirm the delete yet), `pending` (Amazon has not
+   * answered about NEW yet).
+   */
+  state: 'deleted' | 'kept' | 'shared' | 'not-sent' | 'failed' | 'pending'
+  /** The sentence the result shows for it; null while pending. */
+  message: string | null
+  /** The publish offers "Delete the old SKU again" (`DELETE_OLD_SKU_AGAIN`, `POST …/studio-publication/:id/delete-old-sku`). */
+  canDeleteAgain: boolean
 }
 
 /**

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   ALREADY_DELETED, deletedOn, EBAY_NEW_INACTIVE_CHECK, NEW_LISTING_SENTENCE, NOT_LISTED_MAIN_WARNING, RELIST_SENTENCE, SELLING_STATE_LABEL, STATUS_TARGET_LABEL,
-  STATUS_TARGET_STATE, statusOptionsFor,
+  STATUS_TARGET_STATE, statusOptionsFor, ALREADY_UNLINKED, deletedStatusReason, newListingSentence, UNLINKED_NOT_LISTED,
 } from '@nexus/shared/listing-actions'
 import { NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, SEND_MODE_LABEL, sendModeOptions } from '@nexus/shared/publish-actions'
 import { NEW_ROW_FULL_NOTE, NEW_ROW_SENT_WHOLE, SEND_MODE_WORD, sendModeEditorOptions } from './publishAction'
-import { NEW_CHOICE_DELETED, SELLING_STATE_WORD, STATUS_TARGET_SELLING_STATE, STATUS_TARGET_WORD, newListingEditorOptions, statusEditorOptions } from './sellingStatus'
+import { NEW_CHOICE_DELETED, NEW_CHOICE_UNLINKED, newListingAside, SELLING_STATE_WORD, STATUS_TARGET_SELLING_STATE, STATUS_TARGET_WORD, newListingEditorOptions, statusEditorOptions } from './sellingStatus'
 
 /**
  * WEB ONLY (no Factory copy): the design system spells the Status and Action words itself because it is also compiled in
@@ -44,6 +44,19 @@ describe('one vocabulary with @nexus/shared', () => {
     expect(options[1].note).toBe(NEW_ROW_FULL_NOTE)
     const status = newListingEditorOptions(statusOptionsFor('not_listed', 'amazon', { deleted }), { target: 'not_listed', source: 'default', deleted: { on: deletedOn(deleted.at) } })
     expect(status.map(o => [o.value, o.note])).toEqual([['active', RELIST_SENTENCE.active], ['inactive', RELIST_SENTENCE.inactive], ['not_listed', `${RELIST_SENTENCE.not_listed} ${NEW_CHOICE_DELETED}`]])
+  })
+
+  it('a row Nexus UNLINKED: Delete held with the unlink\'s words; its Status offers only Not listed — never Active → Publish as a new item', () => {
+    const unlinked = { at: '2026-10-05T08:00:00.000Z', where: 'eBay · IT', oldReference: '520000000001', relistChosenAt: null, sku: null, unlinked: true as const }
+    const send = sendModeEditorOptions(sendModeOptions('ebay-trading', 'not_listed', { isParent: true, isVariation: false, deleted: unlinked }), null, Date.now(), true)
+    expect(send[2].value).toBe('delete')
+    const status = newListingEditorOptions(statusOptionsFor('not_listed', 'ebay-trading', { deleted: unlinked }),
+      { target: 'not_listed', source: 'default', deleted: { on: deletedOn(unlinked.at), unlinked: true } })
+    expect(status.map(o => [o.value, o.heldReason ?? null])).toEqual([['active', deletedStatusReason(unlinked)], ['inactive', deletedStatusReason(unlinked)], ['not_listed', null]])
+    expect(status[2].note).toBe(`${UNLINKED_NOT_LISTED} ${NEW_CHOICE_UNLINKED}`)
+    expect(newListingAside({ target: 'not_listed', source: 'default', deleted: { on: deletedOn(unlinked.at), unlinked: true } })).toBe(`unlinked ${deletedOn(unlinked.at)}`)
+    expect(newListingSentence({ target: 'not_listed', source: 'default' }, { deleted: unlinked })).toBe(deletedStatusReason(unlinked))
+    expect(ALREADY_UNLINKED('eBay · IT')).toMatch(/^Unlinked from eBay · IT: Nexus no longer holds its Item ID/)
   })
 
   it('a new row: Full update with the shared words; the editors run on the shared new-listing options', () => {

@@ -492,6 +492,11 @@ export interface SheetListing extends ListingPresenceFields {
   price: number | null
   quantity: number | null
   externalListingId: string | null
+  /**
+   * The last channel read's verdict (API `SheetListing.lastSyncStatus`): Etsy's 4-hourly read stamps SUCCESS, MISSING
+   * (the listing was not found), FAILED or NO_ACCOUNT. The Listing ID cell reads MISSING as "Not confirmed". Never a time.
+   */
+  lastSyncStatus?: string | null
   /** The six SSOT fields that have a follow flag; attributes have none. */
   follows: Record<string, boolean>
 }

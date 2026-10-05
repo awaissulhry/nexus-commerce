@@ -112,6 +112,8 @@ export {
   // New listings (2026-10-04): a row not on the channel yet chooses what Publish creates.
   newListingEditorOptions, newListingPill, newListingAside, NEW_LISTING_MARK, NEW_LISTING_MARK_MAIN, NEW_LISTING_AS_MAIN, NEW_CHOICE_MAIN,
   NEW_CHOICE_DEFAULT, NEW_CHOICE_DELETED, NEW_SOURCE_SENTENCE, RELIST_MARK,
+  // Item ID control (2026-10-05): a row Nexus unlinked is never listed as new ("unlinked 5 Oct").
+  NEW_CHOICE_UNLINKED, UNLINKED_MARK,
   type SellingState, type StatusTarget, type WaitingBy, type SellingStatusValue, type SellingCellKind, type SellingPillMeta,
   type SellingStatusModel, type StatusChoiceLike, type NewListingCellFacts, type NewListingTarget, type NewListingSource,
 } from './sellingStatus'
@@ -120,7 +122,7 @@ export {
   publishActionModel, sendModeEditorOptions, SEND_MODE_WORD, SEND_MODE_TONE, SEND_MODE_HINT, SEND_MODE_GROUP,
   SEND_MODE_DEFAULT_NOTE, SEND_MODE_REFUSED_FALLBACK, sendModeDefaultNote,
   // A row not on the channel (new, or deleted by Nexus) reads Full update: sent whole (simplify, 2026-10-04).
-  NEW_ROW_SENT_WHOLE, NEW_ROW_LEFT_OUT_HINT, DELETED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE,
+  NEW_ROW_SENT_WHOLE, NEW_ROW_LEFT_OUT_HINT, DELETED_ROW_LEFT_OUT_HINT, UNLINKED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE,
   type SendMode, type PublishActionValue, type PublishActionKind, type PublishActionModel, type SendModeChoiceLike,
 } from './publishAction'
 export { PublishActionCell, PublishActionView, type PublishActionViewProps } from './PublishActionCell'

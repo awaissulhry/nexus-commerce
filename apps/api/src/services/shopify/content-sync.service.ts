@@ -14,6 +14,7 @@ import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { contentDestination, readContent, publicContent, object, digest, CONTENT_KEY, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin } from './admin-client.js'
 import { publishContent, readRemoteProduct, shortId, type ShopifyRemoteProduct } from './content-publisher.js'
+import { shopifySkuRenames, type ShopifySkuRename } from './variant-match.js'
 import { nativeListingValue } from './native-listing-value.js'
 import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
@@ -22,6 +23,24 @@ import { noInheritedInformation, resolveInheritedInformation, type InheritedInfo
 import { resolveShopifyProductFacts, type ShopifyProductFacts } from './product-facts.js'
 import { readShopifyCreateChoice } from './create-status.js'
 import { SHOPIFY_CREATE_NOT_LISTED, type ShopifyCreateStatus } from '@nexus/shared/listing-actions'
+import { liveChannelSku } from '../listings/channel-sku.pure.js'
+import { confirmLiveChannelSku } from '../listings/channel-sku.js'
+
+/**
+ * S10 (per-channel SKU) — by Nexus variant id, the SKU Shopify HOLDS for each variant this family sends: its listing's
+ * live SKU (`liveChannelSku`: the confirmed one, else the product SKU). A still-draft row (or none) holds nothing and is
+ * left out. The publisher matches a variant with no stored Shopify id by this SKU first, so a rename is sent in place.
+ */
+export function shopifyLiveSkus(variants: ReadonlyArray<{ id: string }>, listings: ReadonlyArray<Record<string, any>>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const variant of variants) {
+    const listing = listings.find(row => row?.productId === variant.id)
+    if (!listing) continue
+    const held = liveChannelSku({ ...listing, channel: 'SHOPIFY' }, listing.product?.sku ?? null)
+    if (held?.sku) out[variant.id] = held.sku
+  }
+  return out
+}
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
   const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
@@ -102,6 +121,10 @@ export async function previewContentSync(productId: string, scope: ContentScope,
     if (response.shopLocales.find((l: any) => l.primary)?.locale !== data.draft.defaultLocale) data.errors.push('The document’s default language must match the Shopify store’s primary language.')
     for (const locale of data.draft.locales) if (!response.shopLocales.some((l: any) => l.locale === locale && l.published)) data.errors.push(`Shopify language ${locale} is not published in this store.`)
   }
+  // S10 — the variants Shopify holds under another SKU than the one sent now: renamed in place ("Shopify renames OLD to
+  // NEW."). Part of the reviewed remote revision only when there is one, so a review without any keeps its revision.
+  const skuRenames: ShopifySkuRename[] = shopify ? shopifySkuRenames(data.variants, shopify, shopifyLiveSkus(data.variants, data.listings)) : []
+  const renameReview = skuRenames.length ? [{ skuRenames: skuRenames.map(({ productId, from, to }) => ({ productId, from, to })) }] : []
   // The inherited values are part of what the operator reviews; a review without any keeps its earlier revision.
   const inheritedReview = Object.keys(inherited.values).length || inherited.problems.length ? [{ values: inherited.values, problems: inherited.problems }] : []
   // Wave 2 — what the create or the synchronization will send for the product's own facts, and a create's status, are
@@ -109,13 +132,13 @@ export async function previewContentSync(productId: string, scope: ContentScope,
   const factsReview = productFacts ? [{ facts: { vendor: productFacts.vendor, productType: productFacts.productType, templateSuffix: productFacts.templateSuffix, problems: productFacts.problems }, ...(!shopify ? { createStatus } : {}) }] : []
   // A product Shopify holds keeps its own status path (the stored status, applied by a synchronization).
   const storedStatus = String(nativeListingValue(data.listing, 'status', 'DRAFT'))
-  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft, ...inheritedReview, ...factsReview]) : null, informationDraft, translationDraft, informationOverrides,
+  return { ...publicContent(data), identity, domain, locations, remote: shopify, remoteRevision: remote ? digest([shopify, informationDraft, translationDraft, ...inheritedReview, ...factsReview, ...renameReview]) : null, informationDraft, translationDraft, informationOverrides,
     inheritedInformation: inherited.values, productFacts,
     changes: { variants: data.variants.map(v => ({ ...v, resolved: resolveShopifyContent(data.draft, v) })), metafieldDefinitions: data.draft.fields, reusableEntries: data.draft.metaobjects.length,
       // A new product: the status it is created with (null = nothing is created: the Status column says Not listed).
       newProductStatus: remote && !shopify ? createStatus : storedStatus,
       requiresActiveConfirmation: !!shopify && shopify.status !== 'DRAFT' || (remote && !shopify ? createStatus === 'ACTIVE' : ['ACTIVE', 'ARCHIVED'].includes(storedStatus)),
-      preservesUnmanagedMedia: true, preservesUnmanagedMetafields: true },
+      preservesUnmanagedMedia: true, preservesUnmanagedMetafields: true, skuRenames },
   }
 }
 
@@ -200,6 +223,8 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       galleryOperation: current.publish.galleryOperation,
       locationId: input.locationId, remote: preview.remote, confirmActive: input.confirmActive === true,
       variantFacts: preview.inheritedInformation,
+      // S10 — a variant renamed in Nexus is found by the SKU Shopify still holds, and renamed in place.
+      liveSkus: shopifyLiveSkus(current.variants, current.listings),
     }, checkpoint)
     const informationSource = { accountId: destination.accountId, familyId: current.family.id, productId: result.productId, variantIds: result.variantIds, listings: current.listings }
     if (!preview.informationDraft) {
@@ -256,9 +281,16 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
         const existing = await tx.channelListing.findFirst({ where: { productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
         const platformAttributes = { ...object(existing?.platformAttributes), nexusFamilyId: current.family.id, variantId: result.variantIds[variant.id].split('/').at(-1), inventoryItemId: result.inventoryItemIds[variant.id].split('/').at(-1), shopifyProductId: result.productId.split('/').at(-1), inventoryLocationId: input.locationId } as Prisma.InputJsonValue
         const mapping = { platformAttributes, externalListingId: result.productId.split('/').at(-1), platformProductId: result.productId.split('/').at(-1), isPublished, listingStatus }
+        // S10 (per-channel SKU) — the SKU Shopify read back for this variant is the SKU it holds now. Only variant rows: a
+        // grouped family's main row is the product's content owner and holds no SKU on Shopify (it is never a variant here).
+        const heldSku = String(verifiedProduct.variants?.nodes?.find(node => node.id === result.variantIds[variant.id])?.sku ?? '').trim()
         // A still-draft this delivery made real loses the pause that kept it inert; any other row keeps its own.
-        if (existing) await tx.channelListing.update({ where: { id: existing.id }, data: { ...mapping, ...(stillDrafts.has(existing.id) ? { syncPaused: false } : {}), version: { increment: 1 } } })
-        else await tx.channelListing.create({ data: { ...mapping, productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey } })
+        if (existing) {
+          await tx.channelListing.update({ where: { id: existing.id }, data: { ...mapping, ...(stillDrafts.has(existing.id) ? { syncPaused: false } : {}), version: { increment: 1 } } })
+          if (heldSku) await confirmLiveChannelSku(tx, existing.id, heldSku)
+        }
+        else await tx.channelListing.create({ data: { ...mapping, productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey,
+          ...(heldSku ? { liveChannelSku: heldSku } : {}) } })
       }
       const parent = await tx.channelListing.findUniqueOrThrow({ where: { id: listingId } })
       // New listings — the status Shopify verified for a product created with Publish's choice, kept on the family row as

@@ -467,7 +467,9 @@ it('Amazon: a row created Inactive is promoted AND paused when accepted (no offe
   expect(review.rows.map(row => [row.sku, row.startsAs])).toEqual([['PGLITE-PUBLISH', 'active'], ['PGLITE-CHILD', 'inactive']])
   const stored = (await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })).changes as any
   expect(stored).toMatchObject({ inactiveProductIds: [childId], createInactive: { [childId]: { productType: 'COAT', fba: false } }, createChoiceProductIds: [childId],
-    creates: [{ productId, sku: 'PGLITE-PUBLISH', startsAs: 'active' }, { productId: childId, sku: 'PGLITE-CHILD', startsAs: 'inactive' }] })
+    // S10 — a create line names the SKU it sends (here the seller SKU Amazon is sent), not the product SKU.
+    creates: [{ productId, sku: 'REMOTE-PGLITE-PUBLISH', startsAs: 'active' }, { productId: childId, sku: 'REMOTE-PGLITE-CHILD', startsAs: 'inactive' }] })
+  expect(review.rows.map(row => [row.sku, row.sendsSku])).toEqual([['PGLITE-PUBLISH', 'REMOTE-PGLITE-PUBLISH'], ['PGLITE-CHILD', 'REMOTE-PGLITE-CHILD']])
   await submitStudioPublication(productId, review.id!, {}, null)
   fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: false, message: 'Accepted' }] })
   expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })

@@ -17,6 +17,7 @@ import { emptyShopifyContent, shopifyContentSchema, inspectShopifyContent, resol
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { draftListingFields, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { nativeListingValue } from './native-listing-value.js'
+import { wantedChannelSku } from '../listings/channel-sku.pure.js'
 import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { applyListingMediaContent } from './listing-media-content.js'
@@ -80,7 +81,7 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
   if (!family || family.parentId) throw new WorkspaceScopeError('The product family is unavailable or nested. Resolve the family hierarchy first.', 422)
   const market = await tx.marketplace.findFirst({ where: { channel: 'SHOPIFY', code: destination.marketplace }, select: { channel: true, code: true, language: true, languages: true, schemaMapping: true, currency: true } })
   const languages = marketLanguages('SHOPIFY', destination.marketplace, market ? [market] : [])
-  const loadedListings = await tx.channelListing.findMany({ include: { translations: true, product: { include: { translations: true, parent: { include: { translations: true } } } } }, where: { productId: { in: [family.id, ...family.children.map(c => c.id)] }, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
+  const loadedListings = await tx.channelListing.findMany({ include: { translations: true, alias: { select: { sku: true, productId: true } }, product: { include: { translations: true, parent: { include: { translations: true } } } } }, where: { productId: { in: [family.id, ...family.children.map(c => c.id)] }, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
   const storedListings = loadedListings.map(listing => ({ ...listing, languages }))
   const listings = storeSchema ? listingSheetValues(storedListings, family.id, destination.accountId, storeSchema) : storedListings
   const listing = listings.find(l => l.productId === family.id) ?? null
@@ -124,6 +125,7 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
   // following variant the master price, whatever its rule or its market's currency. Nothing to send is an error by name.
   const marketCur = listingMarketCurrency({ channel: 'SHOPIFY', marketplace: destination.marketplace }, market ? [{ channel: market.channel, code: market.code, currency: market.currency }] : [])
   const priceErrors: string[] = []
+  const skuErrors: string[] = []
   const variants: ContentVariant[] = products.map(p => {
     const offer = listings.find(l => l.productId === p.id)
     const send = listingSendPrice(offer ?? NO_LISTING_PRICE_FACTS, { masterPrice: p.basePrice, marketCurrency: marketCur, where: `Shopify ${destination.marketplace}` })
@@ -132,10 +134,16 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     const followed = sellable.get(p.id) ?? p.totalStock
     const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
-    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: withShopifyOwnOptions({ ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, ownOptionKeys, p.categoryAttributes), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
+    // S9 — the variant's SKU is the listing's wanted SKU (`wantedChannelSku`, the one rule the sheet's SKU column shows too:
+    // `listings/shopify-sku-cell.ts`): its own `channelSku`, else the old sheet edit, else the stored native SKU or an
+    // extra listing's own SKU, else the product SKU.
+    const wanted = wantedChannelSku({ ...(offer ?? {}), channel: 'SHOPIFY' }, p.sku)
+    if (wanted.sku === null) skuErrors.push(wanted.conflict.sentence)
+    const sendSku = wanted.sku ?? ''
+    return { id: p.id, sku: sendSku, options: withShopifyOwnOptions({ ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, ownOptionKeys, p.categoryAttributes), price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })
   const revision = digest([family, market?.schemaMapping, mediaFiles, listings.map(l => [l.id, l.version, l.platformAttributes, l.priceOverride, l.quantityOverride, l.price, l.quantity, l.followMasterPrice, l.followMasterQuantity, l.stockBuffer])])
-  const errors = [...priceErrors, ...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
+  const errors = [...priceErrors, ...skuErrors, ...inspectShopifyContent(draft, variants), ...shopifyOptionValueProblems(draft, variants)]
   if (!family.children.length && (family.isParent || family.isMaster)) errors.push('This family has no sellable child products. Add its variants before publishing.')
   return { family, listing, listings, variants, draft, revision, storedDocumentRevision: digest(pa[CONTENT_KEY]), publish, errors, destination }
 }

@@ -232,6 +232,8 @@ describe('the API’s command receipts', () => {
       '/api/pim/attach-to-parent',
       '/api/pim/category-workspace/EBAY/site-assignments',
       '/api/pim/promote-to-parent',
+      // S10 — "Delete the old SKU again" in Publish history after a SKU move.
+      '/api/products/:id/studio-publication/:reviewId/delete-old-sku',
       '/api/products/bulk-save',
     ])
   })

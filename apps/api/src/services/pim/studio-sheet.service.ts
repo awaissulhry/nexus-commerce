@@ -551,7 +551,7 @@ const LISTING_SELECT = {
   titleOverride: true, descriptionOverride: true, priceOverride: true, quantityOverride: true,
   bulletPointsOverride: true, followMasterTitle: true, followMasterDescription: true,
   followMasterPrice: true, followMasterQuantity: true, followMasterImages: true,
-  followMasterBulletPoints: true, offerActive: true, lastSyncedAt: true,
+  followMasterBulletPoints: true, offerActive: true, lastSyncedAt: true, lastSyncStatus: true,
   offerClosedAt: true, offerClosedBy: true, offerCloseReason: true, syncPaused: true,
   // #542(2) — the three ChannelListing COLUMNS the prefixed write route targets
   // (`amazon_title` → `title`, etc.). They were never selected, which is why a
@@ -1650,6 +1650,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
             // still matches. Named `lastSyncedAt` so a renderer cannot label it
             // as a freshness check it is not; null means never synced.
             lastSyncedAt: listingRow.lastSyncedAt ? listingRow.lastSyncedAt.toISOString() : null,
+            // Item ID control (I2): the last channel read's verdict (Etsy MISSING = not found on its last read), never a time.
+            lastSyncStatus: listingRow.lastSyncStatus ?? null,
             follows: Object.fromEntries(FOLLOW_FLAGS.map((f) => [f, (listingRow as unknown as Record<string, boolean>)[f] !== false])),
           }
         : null

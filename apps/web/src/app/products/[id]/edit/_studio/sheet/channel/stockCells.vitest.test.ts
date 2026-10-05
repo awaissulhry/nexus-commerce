@@ -176,6 +176,16 @@ describe('patchStockRows — one Matrix read, only the rows that changed', () =>
       expect(r.listing!.externalListingId).toBe('520000000002') // the cell then reads "Not confirmed" with the held id
     }
   })
+  it('Shopify (I3): a moved Product ID never counts from a Matrix read — only the sheet\'s own Shopify read confirms it', () => {
+    const r = row('v1', {
+      listing: { id: 'L-SH-1', version: 3, externalListingId: '7001', listingStatus: 'ACTIVE', isPublished: true },
+      values: { stock_mode: value('FOLLOW'), stock_qty: value(12), stock_buffer: value(2), listing_item_id: value('7001') },
+      stock: { key: 'SHOPIFY:GLOBAL', marketKey: 'SHOPIFY:GLOBAL', cells: cells({ listingId: 'L-SH-1' }), coordinate: EU },
+    } as never)
+    patchStockRows([r], readOf([{ id: 'v1', cells: { 'SHOPIFY:GLOBAL': cells({ listingId: 'L-SH-1', listing: { state: 'listed', externalId: '7002', detail: null, published: true } }) } }]))
+    expect(r.listing!.externalListingId).toBe('7002')
+    expect(r.values.listing_item_id.value).toBeNull()
+  })
   it('a held row stays held, and a skipped row is reported, not patched', () => {
     const held = row('v1', { stock: { key: 'AMAZON:EU', marketKey: 'AMAZON:DE', cells: null, coordinate: EU } } as never)
     const busy = row('v2', { n: 2 })

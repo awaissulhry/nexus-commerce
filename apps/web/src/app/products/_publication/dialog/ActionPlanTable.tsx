@@ -9,6 +9,8 @@
  * - A **lifecycle** row (Active, Inactive, Ended, Delete) shows the server's sentence, its warning and what the channel
  *   checks only when sending. A refused row stays waiting: its tick is off and locked, the row says why.
  * - Rows that send nothing (held, blocked, "No longer applies") stay in the table, quiet, with the reason.
+ * - S10: a live Amazon listing moved to its own SKU reads "[Move to NEW]" (a danger row: it deletes OLD), never Partial or
+ *   Full update, with "Creates NEW on Amazon · IT as a new offer, then deletes OLD there.".
  * - Delete and relist: a row Nexus deleted whose Status is Not listed reads "[Not listed] Left out" (unticked, locked,
  *   the server's sentence); a row its Status lists again reads "[Full update]" with "Lists GALE-M on ASIN … (was …)."
  *   and its warning.
@@ -19,7 +21,7 @@
  * which rows are open; every tick goes back to the window through `onTicksChange`.
  */
 import { useCallback, useState } from 'react'
-import type { StudioPublishReview } from '@nexus/shared/studio-publication'
+import { moveModeLabel, type StudioPublishReview } from '@nexus/shared/studio-publication'
 import { Button, Checkbox, Pill } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { PublishActionView, SellingStatusView, SEND_MODE_WORD, STATUS_TARGET_WORD } from '@/design-system/grid'
@@ -44,6 +46,7 @@ export interface ActionPlanTableProps {
 /** The row's value in words, for the tick's accessible name. */
 function whatWord(row: ActionPlanRow): string {
   if (row.what.column === 'status') return STATUS_TARGET_WORD[row.what.target]
+  if (row.what.column === 'move') return moveModeLabel(row.what.to)
   return SEND_MODE_WORD[row.what.mode]
 }
 
@@ -59,6 +62,8 @@ function WhatCell({ row, now }: { row: ActionPlanRow; now: number }) {
   if (what.column === 'status') {
     return <SellingStatusView value={{ state: what.state, waiting: { target: what.target, setAt: what.setAt, setByName: what.setByName } }} now={now} />
   }
+  // S10 — a moved Amazon listing: neither Partial nor Full update — the create of NEW, then the delete of OLD.
+  if (what.column === 'move') return <span className={styles.whatCell}><Pill tone="danger">{moveModeLabel(what.to)}</Pill></span>
   return <PublishActionView value={{ mode: what.mode, setAt: what.setAt, setByName: what.setByName, ...(what.newRow ? { newRow: true } : {}) }} now={now} />
 }
 

@@ -19,3 +19,14 @@ it('returns ordinary channel rows without replacing resolved nulls or rebuilding
   calls.sheet.mockResolvedValue(raw)
   expect(await getInformationSheet({ productId: 'p', scope: 'channel', channel: 'EBAY', market: 'IT' })).toBe(raw)
 })
+
+it('Item ID control (I3): a Shopify row the read returned gets its Product ID; a row it did not return stays "Not confirmed"', async () => {
+  const cell = (writable: boolean) => ({ value: null, writable, editable: writable, writeBlockedReason: writable ? null : 'Not confirmed: …' })
+  const raw = { scope: { channel: 'SHOPIFY' }, rows: [] }
+  const returned = { id: 'root', parentId: null, listing: { externalListingId: '7001' }, shopify: { productId: 'gid://shopify/Product/7001', listingId: 'l' }, values: { listing_item_id: cell(true) } }
+  const notReturned = { id: 'child', parentId: 'root', listing: { externalListingId: '7009' }, values: { listing_item_id: cell(false) } }
+  calls.sheet.mockResolvedValue(raw); calls.enrich.mockResolvedValue({ ...raw, rows: [returned, notReturned] })
+  const out = await getInformationSheet({ productId: 'root', scope: 'channel', channel: 'SHOPIFY', market: 'GLOBAL', accountId: 'store' } as never)
+  expect(out.rows[0].values.listing_item_id).toMatchObject({ value: '7001', writable: true })
+  expect(out.rows[1]).toBe(notReturned)
+})

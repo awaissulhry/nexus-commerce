@@ -282,9 +282,22 @@ export function actionsFor(state: SellingState, model: ListingModel, facts: Capa
 /** Delete on a row Nexus already deleted. */
 export const ALREADY_DELETED = (where: string) => `Already deleted on ${where}. To keep it off, leave its Status Not listed.`
 
+/**
+ * Delete on a row Nexus UNLINKED (Item ID control, 2026-10-05): Nexus forgot the channel's id, so it has nothing to address
+ * a delete to. "Unlinked from eBay · IT: Nexus no longer holds its Item ID, so it cannot delete it. Link its Item ID again
+ * on the main row first, or delete it in eBay."
+ */
+export const ALREADY_UNLINKED = (where: string) => {
+  const words = unlinkWords(where)
+  return `Unlinked from ${where}: Nexus no longer holds its ${words.id}, so it cannot delete it. Link its ${words.id} again${words.on} first, or delete it in ${words.channel}.`
+}
+
+/** Delete on a row Nexus removed: `ALREADY_DELETED`, or `ALREADY_UNLINKED` when the removal was an unlink. */
+export const alreadyRemoved = (d: Pick<ListingDeletion, 'where' | 'unlinked'>) => d.unlinked ? ALREADY_UNLINKED(d.where) : ALREADY_DELETED(d.where)
+
 /** Delete needs a listing on the channel (a draft or an absent listing has nothing to delete) and a channel that can. */
 export function deleteOffered(state: SellingState, model: ListingModel, facts: CapabilityFacts = {}, channelLabel?: string): ActionCapability {
-  if (facts.deleted) return no(ALREADY_DELETED(facts.deleted.where))
+  if (facts.deleted) return no(alreadyRemoved(facts.deleted))
   if (state === 'draft' || state === 'not_listed') return no('Nothing to delete: this listing is not on the channel.')
   return listingActionCapability(model, 'delete', facts, channelLabel)
 }
@@ -431,7 +444,9 @@ export function newListingChoice(input: NewListingChoiceInput): { target: NewLis
  * again, set Status to Active and Publish.").
  */
 export function newListingSentence(choice: { target: NewListingTarget; source: NewListingSource },
-  options: { includedByDefault?: boolean; deleted?: Pick<ListingDeletion, 'where' | 'at'> | null; now?: number } = {}): string {
+  options: { includedByDefault?: boolean; deleted?: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'> | null; now?: number } = {}): string {
+  // An unlinked row is never listed as new (Publish holds it): every choice says why, in the unlink's own words.
+  if (options.deleted?.unlinked) return choice.target === 'not_listed' ? deletedStatusReason(options.deleted, options.now) : deletedPublishSkip(options.deleted, options.now)
   if (options.deleted && choice.target === 'not_listed' && choice.source !== 'main') return deletedStatusReason(options.deleted, options.now)
   const what = (options.deleted ? RELIST_SENTENCE : NEW_LISTING_SENTENCE)[choice.target]
   if (choice.source === 'main') return `${what} (It follows the main product's choice; set this row to choose for it.)`
@@ -460,6 +475,12 @@ export function newListingOptions(model: ListingModel, facts: CapabilityFacts = 
   if (channel === 'SHOPIFY') {
     if (facts.shopifyLinked) return all(SHOPIFY_LINKED_REFUSED)
     if (facts.isVariation) return all(SHOPIFY_NEW_VARIATION)
+  }
+  // Unlinked (Item ID control, 2026-10-05): the listing may still be live on the channel, so it is never listed as new —
+  // that would make a second one. Only Not listed is offered; Active and Inactive are held with the unlink's own words.
+  if (facts.deleted?.unlinked) {
+    const reason = deletedStatusReason(facts.deleted)
+    return [option('active', reason), option('inactive', reason), option('not_listed', null, { sentence: UNLINKED_NOT_LISTED })]
   }
   const notListedWarning = facts.isMain ? NOT_LISTED_MAIN_WARNING : null
   let inactive = option('inactive', null)
@@ -603,6 +624,17 @@ export interface ListingDeletion {
   /** The channel number the listing had (Amazon: its ASIN; eBay: the item number; Shopify: the product id), or null. */
   oldReference: string | null
   /**
+   * The seller SKU the channel held for this listing when it was removed (the delete record's `sku`: the SKU the Delete
+   * named), or null when the record does not say (an unlink records none). Absent on older readers.
+   */
+  sku?: string | null
+  /**
+   * Set when the removal was an UNLINK, not a delete (Item ID control, 2026-10-05: the sheet's Clear, Claude's
+   * unlink-channel-id): nothing was removed on the channel — the listing may still be live there, and Nexus no longer
+   * updates it. Such a row is never listed as new (a second item); its id is linked again instead.
+   */
+  unlinked?: true
+  /**
    * OLDER STORED VALUE (the first delete-and-relist build, before the simplify): when the Action column chose Partial
    * update or Full update on this row AFTER the delete (ISO), or null. It is read as the row's Status choice Active
    * (`new-listing-choices.ts`); any Status choice made since replaces it.
@@ -619,16 +651,73 @@ export function deletedOn(at: string, now: number = Date.now()): string {
   return `${date.getUTCDate()} ${SHORT_MONTH[date.getUTCMonth()]}${year}`
 }
 
-/** A deleted row's short reason: "Deleted on Amazon · IT on 4 Oct." */
-export const deletedShort = (d: Pick<ListingDeletion, 'where' | 'at'>, now?: number) => `Deleted on ${d.where} on ${deletedOn(d.at, now)}.`
+/**
+ * How an unlinked row is named per channel, from its `where` ("eBay · IT", "Amazon · IT", "Shopify", "Etsy · …"): the id
+ * the sheet links it by, what the channel holds, where the id is linked again, and — where listing it as new really makes
+ * a second one — what that would be. Amazon keys a listing by its seller SKU, so a create there is no second listing: it
+ * names none.
+ */
+export function unlinkWords(where: string): { channel: string; id: string; thing: string; on: string; second: string | null } {
+  const channel = String(where ?? '').split(' · ')[0].trim()
+  if (channel === 'eBay') return { channel, id: 'Item ID', thing: 'item', on: ' on the main row', second: 'item' }
+  if (channel === 'Amazon') return { channel, id: 'ASIN', thing: 'listing', on: ' on this row', second: null }
+  if (channel === 'Shopify') return { channel, id: 'Product ID', thing: 'product', on: ' on the main row', second: 'product' }
+  if (channel === 'Etsy') return { channel, id: 'Listing ID', thing: 'listing', on: ' on the main row', second: 'listing' }
+  return { channel: channel || 'the channel', id: 'channel ID', thing: 'listing', on: '', second: null }
+}
 
-/** The Status column's tooltip on a deleted row: "Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active and Publish." */
-export const deletedStatusReason = (d: Pick<ListingDeletion, 'where' | 'at'>, now?: number) =>
-  `${deletedShort(d, now)} To list it again, set Status to Active and Publish.`
+/** The small mark beside an unlinked row's Status: "unlinked 5 Oct". (A deleted row's: "deleted 4 Oct".) */
+export const removedMark = (d: Pick<ListingDeletion, 'at' | 'unlinked'>, now?: number) => `${d.unlinked ? 'unlinked' : 'deleted'} ${deletedOn(d.at, now)}`
 
-/** Why a Publish skips a deleted row: "Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active." */
-export const deletedPublishSkip = (d: Pick<ListingDeletion, 'where' | 'at'>, now?: number) =>
-  `${deletedShort(d, now)} To list it again, set Status to Active.`
+/**
+ * A removed row's short reason: "Deleted on Amazon · IT on 4 Oct." — or, unlinked: "Unlinked from eBay · IT on 5 Oct: the
+ * item may still be live there, and Nexus no longer updates it."
+ */
+export const deletedShort = (d: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'>, now?: number) => d.unlinked
+  ? `Unlinked from ${d.where} on ${deletedOn(d.at, now)}: the ${unlinkWords(d.where).thing} may still be live there, and Nexus no longer updates it.`
+  : `Deleted on ${d.where} on ${deletedOn(d.at, now)}.`
+
+/** "Link its Item ID again on the main row; listing it as new makes a second item." — what an unlinked row needs. */
+const relinkHow = (where: string) => {
+  const words = unlinkWords(where)
+  return `Link its ${words.id} again${words.on}${words.second ? `; listing it as new makes a second ${words.second}` : ' to update it from Nexus'}.`
+}
+
+/**
+ * The Status column's tooltip on a removed row: "Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active and
+ * Publish." — or, unlinked: "Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates
+ * it. Link its Item ID again on the main row; listing it as new makes a second item."
+ */
+export const deletedStatusReason = (d: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'>, now?: number) => d.unlinked
+  ? `${deletedShort(d, now)} ${relinkHow(d.where)}`
+  : `${deletedShort(d, now)} To list it again, set Status to Active and Publish.`
+
+/**
+ * Why a Publish skips a removed row: "Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active." — or,
+ * unlinked (skipped whatever its Status says): "Unlinked from eBay · IT on 5 Oct: the item may still be live there, and
+ * Nexus no longer updates it. Publish leaves it out: link its Item ID again on the main row; listing it as new makes a
+ * second item."
+ */
+export const deletedPublishSkip = (d: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'>, now?: number) => d.unlinked
+  ? `${deletedShort(d, now)} Publish leaves it out: ${relinkHow(d.where).replace(/^L/, 'l')}`
+  : `${deletedShort(d, now)} To list it again, set Status to Active.`
+
+/** "Set before the delete on 4 Oct. To list it again, set Status to Active." — a waiting value that belonged to the removed listing. */
+export const setBeforeRemoval = (d: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'>, now?: number) => d.unlinked
+  ? `Set before the unlink on ${deletedOn(d.at, now)}. ${relinkHow(d.where)}`
+  : `Set before the delete on ${deletedOn(d.at, now)}. To list it again, set Status to Active.`
+
+/** The Status choice Not listed on an unlinked row: Publish leaves it out (it is never listed as new). */
+export const UNLINKED_NOT_LISTED = 'Publish leaves it out. Nexus no longer updates it on the channel.'
+
+/**
+ * The Shared scope never lists a removed market again: "Deleted on Amazon · IT. To list it again, set its Status in the
+ * Amazon · IT sheet." — or, unlinked: "Unlinked from eBay · IT: the item may still be live there, and Nexus no longer
+ * updates it. Link its Item ID again in the eBay · IT sheet."
+ */
+export const sharedRemovedRefusal = (d: Pick<ListingDeletion, 'where' | 'unlinked'>) => d.unlinked
+  ? `Unlinked from ${d.where}: the ${unlinkWords(d.where).thing} may still be live there, and Nexus no longer updates it. Link its ${unlinkWords(d.where).id} again in the ${d.where} sheet.`
+  : `Deleted on ${d.where}. To list it again, set its Status in the ${d.where} sheet.`
 
 /** A Delete's result sentence: "Deleted on Amazon · IT. To list it again, set Status to Active and Publish." */
 export const deleteDoneSentence = (where: string) =>

@@ -107,7 +107,8 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
     expect(child.values.stock_mode).toMatchObject({ value: child.stock!.cells!.sync!.mode, writeTarget: 'channelListing' })
     expect(child.values.stock_qty.value).toBe(child.stock!.cells!.sync!.intended)
     expect(child.values.stock_buffer.value).toBe(2)
-    expect(child.values[LISTING_ASIN_KEY]).toMatchObject({ value: `EXT-AMAZON-${ids.child}`, writable: false })
+    // Item ID control (I4): the ASIN cell is its control's door on a row with a listing; a live offer's ASIN stays Amazon's.
+    expect(child.values[LISTING_ASIN_KEY]).toMatchObject({ value: `EXT-AMAZON-${ids.child}`, writable: true })
     expect(child.values[AMAZON_QUANTITY_KEY]).toBeUndefined()
     expect(keys(sheet)).not.toContain(LISTING_ITEM_ID_KEY)
   })
@@ -152,6 +153,16 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
     } finally {
       await scoped(() => prisma.channelListing.update({ where: { id: listing[`SHOPIFY:${ids.child}`].id }, data: { syncPaused: false } }))
     }
+  })
+
+  it('Shopify (I3): the Product ID column; a held id reads "Not confirmed" until Shopify\'s read returns the row (not run here)', async () => {
+    const sheet = await read('SHOPIFY', 'GLOBAL')
+    expect(sheet.columns.find((c) => c.key === LISTING_ITEM_ID_KEY)).toMatchObject({ label: 'Product ID', editable: false, formulaWritable: false })
+    expect(row(sheet, ids.parent).values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: null, writable: true })
+    expect(row(sheet, ids.child).values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: null, writable: false,
+      writeBlockedReason: expect.stringContaining(`Not confirmed: Nexus holds Shopify product EXT-SHOPIFY-${ids.child}, but Shopify did not return it`) })
+    // The listing wire carries the last channel read's verdict (Etsy MISSING), never as a time.
+    expect(row(sheet, ids.child).listing).toHaveProperty('lastSyncStatus', null)
   })
 
   it('the Shared sheet is unchanged: no stock or ASIN columns, no `stock` on the rows', async () => {

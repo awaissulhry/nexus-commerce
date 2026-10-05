@@ -156,8 +156,10 @@ describe('productForChannelSku — matching a channel\'s SKU back', () => {
   })
 })
 
+// These fixtures are live listings (ACTIVE, published); this block is about validation, uniqueness, version and
+// history, so it allows the live move. S9's live-move rule has its own tests (channel-sku-writes.vitest.test.ts).
 const write = (name: string, sku: string | null, extra: { expectedVersion?: number } = {}) =>
-  scoped(() => prisma.$transaction(tx => setChannelSku(tx, { listingId: lid[name], sku, actorId: 'user-1', ...extra })))
+  scoped(() => prisma.$transaction(tx => setChannelSku(tx, { listingId: lid[name], sku, actorId: 'user-1', liveMove: 'allow', ...extra })))
 const refusal = async (promise: Promise<unknown>) => {
   try { await promise } catch (error) { return error instanceof ChannelSkuError ? { code: error.code, message: error.message } : { thrown: String(error) } }
   return null

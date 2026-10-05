@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest'
 
 import { liveRefreshNeeded } from '../../listingValuesLive'
 import {
-  CHANNEL_ID_COPY, CHANNEL_ID_PERMISSION, ChannelIdControlProvider, ChannelIdFindings, channelIdActions, channelIdChangedEvent, channelIdTarget, looksLikeItemId,
-  readWriteAnswer, typedItemId, useChannelIdControl, type ChannelIdCheckAnswer, type ChannelIdTarget,
+  CHANNEL_ID_COPY, CHANNEL_ID_PERMISSION, CHANNEL_ID_WORDS, ChannelIdControlProvider, ChannelIdFindings, channelIdActions, channelIdChangedEvent, channelIdTarget, channelIdWords,
+  looksLikeChannelId, looksLikeItemId, readWriteAnswer, typedChannelId, typedItemId, useChannelIdControl, type ChannelIdCheckAnswer, type ChannelIdTarget,
 } from './channelIdControl'
 import type { ChannelSheetRow } from './types'
 
@@ -35,10 +35,23 @@ describe('the row it acts on, and the fence it sends', () => {
     expect(channelIdTarget(row(), 'EBAY')).toEqual(TARGET)
     expect(channelIdTarget(row({ listing: { id: 'L-1', version: 2, externalListingId: '  ', listingStatus: 'DRAFT', isPublished: false } as never }), 'EBAY')).toMatchObject({ currentId: null, version: 2 })
   })
-  it('never a variation row (one item per family), a row with no listing, or another channel', () => {
+  it('never a variation row (one item per family), a row with no listing, or a channel with no control', () => {
     expect(channelIdTarget(row({ parentId: 'root-1' }), 'EBAY')).toBeNull()
     expect(channelIdTarget(row({ listing: null }), 'EBAY')).toBeNull()
-    expect(channelIdTarget(row(), 'AMAZON')).toBeNull()
+    expect(channelIdTarget(row(), 'WOOCOMMERCE')).toBeNull()
+  })
+  it('Etsy and Shopify (I2, I3): the main row only, as eBay', () => {
+    for (const channel of ['ETSY', 'SHOPIFY']) {
+      expect(channelIdTarget(row(), channel)).toEqual(TARGET)
+      expect(channelIdTarget(row({ parentId: 'root-1' }), channel)).toBeNull()
+    }
+  })
+  it('Amazon (I4): every row with a listing; its id is the ASIN, or the ASIN it lists on at Publish (then Clear is offered)', () => {
+    const variation = row({ id: 'child-1', parentId: 'root-1', listing: { id: 'L-2', version: 6, externalListingId: 'B0LIVE0001', listingStatus: 'ACTIVE', isPublished: true } as never })
+    expect(channelIdTarget(variation, 'AMAZON')).toEqual({ listingId: 'L-2', productId: 'child-1', sku: 'JKT', currentId: 'B0LIVE0001', version: 6, suggested: false })
+    const draft = row({ listing: { id: 'L-3', version: 2, externalListingId: null, listingStatus: 'DRAFT', isPublished: false } as never,
+      values: { listing_asin: { value: null, pendingId: { id: 'B0NEW00001', sentence: 'Lists on B0NEW00001 at Publish' } } } as never })
+    expect(channelIdTarget(draft, 'AMAZON')).toMatchObject({ currentId: 'B0NEW00001', suggested: true })
   })
 })
 
@@ -67,6 +80,34 @@ describe('what the dialog offers', () => {
     expect(channelIdActions({ target: TARGET, typed: '', check: null, busy: null, canEdit: true }).hint).toBe(CHANNEL_ID_COPY.typeFirst)
     expect(channelIdActions({ target: TARGET, typed: '12ab', check: null, busy: null, canEdit: true })).toMatchObject({ check: false, hint: CHANNEL_ID_COPY.notANumber })
     expect(CHANNEL_ID_PERMISSION).toBe('listings.recover')
+  })
+})
+
+describe('per channel: the id\'s form, and what the dialog offers', () => {
+  it('typed ids: Shopify\'s admin gid becomes its number, an ASIN goes to capitals; a first hint per channel', () => {
+    expect(typedChannelId(' gid://shopify/Product/8001 ', 'SHOPIFY')).toBe('8001')
+    expect(typedChannelId('b0new 00001', 'AMAZON')).toBe('B0NEW00001')
+    expect(typedChannelId('1234 567 890', 'ETSY')).toBe('1234567890')
+    expect(looksLikeChannelId('1234567890', 'ETSY') && looksLikeChannelId('8001', 'SHOPIFY') && looksLikeChannelId('B0NEW00001', 'AMAZON')).toBe(true)
+    expect(looksLikeChannelId('0123', 'ETSY') || looksLikeChannelId('B0SHORT', 'AMAZON') || looksLikeChannelId('12ab', 'SHOPIFY')).toBe(false)
+  })
+  it('Amazon: Set (not Link); Clear only for an ASIN set for Publish — a live offer\'s ASIN is Amazon\'s', () => {
+    const base = { busy: null, canEdit: true, channel: 'AMAZON' } as const
+    const live: ChannelIdTarget = { listingId: 'L-2', productId: 'child-1', sku: 'JKT', currentId: 'B0LIVE0001', version: 6, suggested: false }
+    expect(channelIdActions({ ...base, target: live, typed: 'B0NEW00001', check: answer({ itemId: 'B0NEW00001' }) })).toMatchObject({ link: { label: 'Set', enabled: true }, clear: false })
+    expect(channelIdActions({ ...base, target: { ...live, suggested: true }, typed: 'B0NEW00001', check: null }).clear).toBe(true)
+    expect(channelIdActions({ ...base, target: live, typed: 'B0', check: null })).toMatchObject({ check: false, hint: CHANNEL_ID_WORDS.AMAZON.notANumber })
+  })
+  it('Etsy and Shopify: Link and Clear as eBay, in their own words', () => {
+    expect(channelIdActions({ target: TARGET, typed: '1234567890', check: null, busy: null, canEdit: false, channel: 'ETSY' }).hint).toBe(CHANNEL_ID_WORDS.ETSY.noPermission)
+    expect(channelIdActions({ target: TARGET, typed: '8002', check: answer({ itemId: '8002' }), busy: null, canEdit: true, channel: 'SHOPIFY' })).toMatchObject({ link: { label: 'Link' }, clear: true })
+    expect(channelIdWords('etsy').title).toBe('Etsy Listing ID')
+    expect(channelIdWords('unknown')).toBe(CHANNEL_ID_WORDS.EBAY)
+  })
+  it('the findings speak the channel\'s words', () => {
+    const html = renderToStaticMarkup(createElement(ChannelIdFindings, { check: answer({ found: ['Etsy reports it as active.'] }), channel: 'ETSY' }))
+    expect(html).toContain('What Etsy says')
+    expect(renderToStaticMarkup(createElement(ChannelIdFindings, { check: answer({ unchanged: true }), channel: 'SHOPIFY' }))).toContain(CHANNEL_ID_WORDS.SHOPIFY.nothingToChange)
   })
 })
 
@@ -128,5 +169,11 @@ describe('the words are the API\'s', () => {
   it('the Clear confirm says what the API answers', () => {
     expect(CHANNEL_ID_COPY.clearSentence('X')).toBe('Nexus forgets item X. Nothing changes on eBay; it stays live and Nexus stops updating it.')
     expect(api).toContain('`Nexus forgets item ${itemId}. Nothing changes on eBay; it stays live and Nexus stops updating it.`')
+  })
+  it('Etsy, Shopify and Amazon: each Clear confirm is the API\'s own sentence', () => {
+    for (const channel of ['ETSY', 'SHOPIFY', 'AMAZON'] as const) {
+      const sentence = CHANNEL_ID_WORDS[channel].clearSentence('${itemId}')
+      expect(api).toContain(`\`${sentence}\``)
+    }
   })
 })

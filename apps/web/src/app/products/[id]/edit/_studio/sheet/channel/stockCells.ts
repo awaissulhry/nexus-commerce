@@ -332,9 +332,11 @@ export function patchStockRows(rows: Iterable<ChannelSheetRow>, read: MatrixRead
     if (asinMoved && row.listing) {
       row.listing.externalListingId = asin
       if (values[LISTING_ASIN_KEY]) values[LISTING_ASIN_KEY] = { ...values[LISTING_ASIN_KEY], value: asin }
-      // eBay's Item ID counts only on a listing the Matrix reads as selling or ended (the server's rule, `listingItemIdValue`);
-      // any other moved id reads "Not confirmed" until the sheet reads the row again.
-      if (values[LISTING_ITEM_ID_KEY]) values[LISTING_ITEM_ID_KEY] = { ...values[LISTING_ITEM_ID_KEY], value: asin && ITEM_ID_COUNTS.has(market?.listing?.state ?? '') ? asin : null }
+      // eBay's Item ID and Etsy's Listing ID count only on a listing the Matrix reads as selling or ended (the server's rule,
+      // `listingItemIdValue`); Shopify's Product ID only when the sheet's own Shopify read returned the row (I3), which a
+      // Matrix read is not. Any other moved id reads "Not confirmed" until the sheet reads the row again.
+      const shopify = stock.key.toUpperCase().startsWith('SHOPIFY:')
+      if (values[LISTING_ITEM_ID_KEY]) values[LISTING_ITEM_ID_KEY] = { ...values[LISTING_ITEM_ID_KEY], value: !shopify && asin && ITEM_ID_COUNTS.has(market?.listing?.state ?? '') ? asin : null }
     }
     row.values = values
     out.changed.push(row)

@@ -60,6 +60,8 @@ export interface TransferContext {
   saleWindows?: Map<string, { start: string | null; end: string | null }>
   /** CFI-4 — the active offer SKUs each listing already carries, for the seller-SKU identity check. */
   offerSkus?: Map<string, string[]>
+  /** S9 — a SKU this file would create that another product's listing holds or sends as its channel SKU → its sentence. */
+  heldChannelSkus?: Map<string, string>
 }
 /** CFI-6 — a channel file's own selling price and sale, recorded through the one price door without a push. */
 export interface TransferPriceWrite {
@@ -417,6 +419,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     }
     if (mode === 'create' && before) { error(first, 'This record already exists; choose Update or Create or update'); continue }
     if (mode === 'update' && !before) { error(first, 'This record does not exist; Update never creates an unknown SKU or listing'); continue }
+    // S9 — a new product may not take a SKU another product's listing holds or sends as its channel SKU.
+    if (isProduct && !before && context.heldChannelSkus?.has(first.sku)) { error(first, context.heldChannelSkus.get(first.sku)!); continue }
     if (!isProduct && !existingProduct && !productRows.has(first.sku)) { error(first, 'Create the shared product in Products before adding its listings'); continue }
     if (!isProduct && !before && !group.some(r => r.entity === 'Listings')) { error(first, 'Declare a new listing in Listings before supplying overrides'); continue }
     const versions = [...new Set(group.filter(r => r.version !== undefined).map(r => r.version))]

@@ -62,7 +62,7 @@ export function actionCellValue(cell: PublishActionCell | null | undefined, read
   if (!cell) return { mode: 'partial', lockedReason: read.failed ? 'The publish action could not be read. Reload the sheet to try again.' : ACTION_NOT_LISTED }
   // A row not on the channel: Full update, sent whole (quiet when its Status leaves it out).
   if (cell.create) return { mode: cell.send.mode === 'delete' ? 'delete' : 'full', newRow: true, leftOut: cell.create.target === 'not_listed',
-    deleted: !!cell.deleted, setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason }
+    deleted: !!cell.deleted, ...(cell.deleted?.unlinked ? { unlinked: true } : {}), setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason }
   const partialNote = actionPartialNote(cell)
   return { mode: cell.send.mode, setAt: cell.send.setAt, setByName: cell.send.setByName, lockedReason: read.lockedReason, ...(partialNote ? { partialNote } : {}) }
 }

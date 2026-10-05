@@ -60,6 +60,11 @@ export interface CatalogueField {
   schemaKnown?: boolean
   sourceOwner?: { kind: 'listing' | 'system'; label: string; path: string } | null
   status: FieldStatus | 'owned'
+  /**
+   * The column takes no mapping rule (the Shopify SKU column: it always sends the listing's own SKU or the product SKU),
+   * with the server's one line saying so. The editor shows it read-only; a rule saved before is shown "Not used".
+   */
+  ruleNotUsed?: string
 }
 
 export interface FieldCatalogue {
@@ -281,6 +286,16 @@ export function fieldWithPreviewRule(field: CatalogueField, cell?: ResolvedCell)
   if (field.rule || !cell?.rule || cell.ruleOrigin !== 'master') return field
   return { ...field, rule: cell.rule, ruleOrigin: 'master', ruleKind: 'attribute',
     ruleSummary: cell.rule.source, status: 'mapped' }
+}
+
+/**
+ * A column that takes no mapping rule: how the editor shows it — read-only with the server's line, and a rule saved
+ * before it took none as "Not used" (kept in the database, read by nothing). Null = an ordinary, editable column.
+ */
+export function ruleNotUsedView(field: Pick<CatalogueField, 'ruleNotUsed' | 'ruleOrigin'>): { line: string; pill: { label: 'Not used' | 'Read-only'; tone: 'warning' | 'neutral' } } | null {
+  if (!field.ruleNotUsed) return null
+  const saved = field.ruleOrigin === 'default' || field.ruleOrigin === 'category'
+  return { line: field.ruleNotUsed, pill: saved ? { label: 'Not used', tone: 'warning' } : { label: 'Read-only', tone: 'neutral' } }
 }
 
 export function mappingOriginLabel(field: CatalogueField): string {

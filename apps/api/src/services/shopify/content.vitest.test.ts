@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { parse } from 'graphql'
 import { emptyShopifyContent, inspectShopifyContent, resolveShopifyContent, shopifyContentSchema, collectionCards, type ContentVariant, type ShopifyContent } from '@nexus/shared/shopify-content'
 vi.mock('./admin-client.js', () => ({ assertShopifyResult: (payload: any, operation: string) => { if (!payload || payload.userErrors?.length) throw new Error(`${operation}: ${payload?.userErrors?.[0]?.message ?? 'missing result'}`); return payload } }))
-import { ensureContentDefinitions, mapRemoteVariants, newVariantFacts, publishContent, publishMetaobjects, readRemoteProduct, SHOPIFY_IDENTITY_NOT_ID, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, type PublishContentInput } from './content-publisher.js'
+import { ensureContentDefinitions, mapRemoteVariants, newVariantFacts, publishContent, publishMetaobjects, readRemoteProduct, SHOPIFY_IDENTITY_NOT_ID, SHOPIFY_OPTION_VALUE_MAX, shopifyOptionValueProblems, shopifySkuRenames, type PublishContentInput } from './content-publisher.js'
 // P3b A4 — the workspace's pure pieces (option order, variant options) are imported below; no database is used here.
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, addJobSafely: vi.fn() }))
@@ -349,5 +349,55 @@ describe('P3b A4 — a Shopify-only option (own:shared:fit), sheet cell ≡ publ
     expect(gql).not.toHaveBeenCalled()
     // the limit itself is allowed (positive control: the check is not "any long value")
     expect(shopifyOptionValueProblems(c, publishInputFor(cell, { rr: 'x'.repeat(SHOPIFY_OPTION_VALUE_MAX) }).vs)).toEqual([])
+  })
+})
+
+/* ── S10 (per-channel SKU) — a SKU renamed in Nexus is renamed on Shopify in place, never a new variant + a removal ───── */
+
+describe('S10 — Shopify renames a variant\'s SKU in place', () => {
+  const remoteOf = (nodes: Array<{ id: string; sku: string }>): any => ({ variants: { nodes } })
+  const one = (sku: string, extra: Partial<ContentVariant> = {}): ContentVariant => ({ id: 'rs', sku, options: {}, price: '1.00', stock: 0, ...extra })
+
+  it('a stored Shopify variant id decides, whatever the SKUs', () => {
+    const remote = remoteOf([{ id: 'gid://shopify/ProductVariant/7', sku: 'ANY' }])
+    expect(mapRemoteVariants([one('NEW', { shopifyVariantId: '7' })], remote, { rs: 'OLD' })).toEqual({ rs: 'gid://shopify/ProductVariant/7' })
+  })
+  it('no stored id: the SKU Shopify holds (the live SKU) finds the variant the new SKU is sent to', () => {
+    const remote = remoteOf([{ id: 'gid://shopify/ProductVariant/1', sku: 'OLD' }])
+    expect(mapRemoteVariants([one('NEW')], remote, { rs: 'OLD' })).toEqual({ rs: 'gid://shopify/ProductVariant/1' })
+    // Without the live SKU (today's rule) the variant is not found, and Shopify's own is "outside this family".
+    expect(() => mapRemoteVariants([one('NEW')], remote)).toThrow('outside this Nexus family')
+  })
+  it('parity: a live SKU Shopify does not hold falls back to the SKU sent, as before', () => {
+    const remote = remoteOf([{ id: 'gid://shopify/ProductVariant/1', sku: 'SENT' }])
+    expect(mapRemoteVariants([one('SENT')], remote, { rs: 'PRODUCT-SKU' })).toEqual({ rs: 'gid://shopify/ProductVariant/1' })
+    expect(mapRemoteVariants([one('SENT')], remote)).toEqual({ rs: 'gid://shopify/ProductVariant/1' })
+  })
+  it('ambiguity is still refused: two Shopify variants hold the live SKU, or one Shopify variant matches two Nexus variants', () => {
+    expect(() => mapRemoteVariants([one('NEW')], remoteOf([{ id: 'a', sku: 'OLD' }, { id: 'b', sku: 'OLD' }]), { rs: 'OLD' })).toThrow('multiple variants with SKU OLD')
+    const two = [one('NEW-A'), { ...one('OLD'), id: 'rl' }]
+    expect(() => mapRemoteVariants(two, remoteOf([{ id: 'a', sku: 'OLD' }]), { rs: 'OLD' })).toThrow('matches two Nexus variants (NEW-A and OLD)')
+  })
+  it('the review sentence: "Shopify renames OLD to NEW." — only for a variant Shopify holds under another SKU', () => {
+    const remote = remoteOf([{ id: 'v1', sku: 'OLD' }, { id: 'v2', sku: 'SAME' }])
+    expect(shopifySkuRenames([one('NEW'), { ...one('SAME'), id: 'rl' }], remote, { rs: 'OLD', rl: 'SAME' }))
+      .toEqual([{ productId: 'rs', from: 'OLD', to: 'NEW', sentence: 'Shopify renames OLD to NEW.' }])
+    expect(shopifySkuRenames([one('NEW')], null, { rs: 'OLD' })).toEqual([])
+  })
+  it('publishContent sends the new SKU on the variant Shopify holds (same id, no new variant), and reads it back', async () => {
+    const c = content(), shop = fakeShopify(c)
+    await publishContent(shop.gql, input(c), async () => {})
+    const remote = structuredClone(shop.product), before = remote.variants.nodes.map((v: any) => v.id)
+    const renamed = variants.map(v => v.id === 'rs' ? { ...v, sku: 'RED-S-SHOP' } : v)
+    // Without the live SKU the rename is refused before anything is sent (today's behaviour).
+    const sets = () => shop.calls.filter(call => call.name === 'NexusProductSet').length
+    const setsBefore = sets()
+    await expect(publishContent(shop.gql, { ...input(c), variants: renamed, remote }, async () => {})).rejects.toThrow('outside this Nexus family')
+    expect(sets()).toBe(setsBefore)
+    const result = await publishContent(shop.gql, { ...input(c), variants: renamed, remote, liveSkus: Object.fromEntries(variants.map(v => [v.id, v.sku])) }, async () => {})
+    const sent = shop.calls.filter(call => call.name === 'NexusProductSet').at(-1)!.variables.input.variants
+    expect(sent.map((v: any) => [v.id, v.sku])).toEqual(before.map((id: string, index: number) => [id, renamed[index].sku]))
+    expect(result.variantIds.rs).toBe(before[0])
+    expect(shop.product.variants.nodes.map((v: any) => v.sku)).toEqual(renamed.map(v => v.sku))
   })
 })

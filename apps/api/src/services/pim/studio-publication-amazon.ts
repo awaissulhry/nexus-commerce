@@ -23,7 +23,9 @@ import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
-import { wantedChannelSku } from '../listings/channel-sku.pure.js'
+import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { amazonMainRowMove, amazonMoveNoAsin } from '@nexus/shared/publish-actions'
 import { CONTENT_ROOTS, OUT_OF_SCOPE_ROOTS, STRUCTURE_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { languageTag } from './market-languages.js'
 import { effectiveFulfilment } from './matrix-cells.js'
@@ -60,6 +62,24 @@ export interface AmazonPublication {
    * update. Never part of the feed: a compiled selection carries no `full`.
    */
   full?: Record<string, { managedRoots: string[] }>
+  /**
+   * S10 (per-channel SKU, Owner D2 = A) — the live rows this publication MOVES to a new seller SKU: NEW (the listing's own
+   * SKU) is created whole as a new offer on the same ASIN; OLD (the SKU Amazon holds now) is deleted in this market only
+   * after Amazon accepts NEW (`studio-publication-amazon-move.ts`). Absent when nothing moves.
+   */
+  moves?: AmazonSkuMove[]
+}
+
+/** S10 — one live Amazon row moved from the SKU Amazon holds (`from`) to the listing's own SKU (`to`), in one market. */
+export interface AmazonSkuMove {
+  productId: string
+  listingId: string
+  from: string
+  to: string
+  /** The ASIN the live listing is on; NEW is created on it (`merchant_suggested_asin`). */
+  asin: string
+  /** Amazon fulfils the row (FBA): NEW starts with no FBA units; Amazon's stay under OLD. */
+  fba: boolean
 }
 
 /** Sources whose values the Amazon builder does not take from the sheet cells (price, stock, photos, channel reads). */
@@ -101,6 +121,26 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     return [product.id, wanted.sku]
   }))
   if (new Set(sellerSkus.values()).size !== identityProducts.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
+  // S10 (per-channel SKU, Owner D2 = A) — a row Amazon holds under another seller SKU than the one this publication sends
+  // (its own SKU, set in the channel view) MOVES: NEW is created whole on the same ASIN, and OLD is deleted here once
+  // Amazon accepts NEW. A family's main row cannot move (its variations hang under the old parent SKU), and NEW cannot be
+  // created on the same product while Nexus does not know the ASIN: both are refused by name. A listing Amazon holds
+  // under two SKUs names no OLD: the resolver's sentence refuses it. Only a row with its OWN SKU (`channelSku`, the one
+  // writer: a channel-scope SKU edit) moves; a row without one publishes exactly as before (parity).
+  const moves: AmazonSkuMove[] = []
+  for (const product of products) {
+    const listing = listings.find(l => l.productId === product.id)
+    if (!listing || isStillDraftListing(listing) || !listing.channelSku?.trim()) continue
+    const held = liveChannelSku({ ...listing, channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
+    const to = sellerSkus.get(product.id)!
+    if (!held || held.sku === to) continue
+    if (held.sku === null) throw new Error(held.conflict.sentence)
+    if (product.id === parent.id && (product.isParent || products.length > 1)) throw new Error(amazonMainRowMove(held.sku, to))
+    const asin = listing.externalListingId?.trim()
+    if (!asin) throw new Error(amazonMoveNoAsin(held.sku, to))
+    moves.push({ productId: product.id, listingId: listing.id, from: held.sku, to, asin, fba: false })
+  }
+  const moveOf = (productId: string) => moves.find(move => move.productId === productId)
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
   let variationInput: Awaited<ReturnType<typeof loadStoredVariationProjection>>['input'] | undefined
   if (products.length > 1 || products.some(product => product.id !== parent.id)) {
@@ -147,7 +187,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     delete row.purchasable_offer__condition_type
     row.purchasable_offer__currency = facts.destination.currency
     row.item_sku = sellerSkus.get(product.id)
-    row._isNew = !listing?.externalListingId
+    // S10 — a moved row is a create of NEW (whole, with its offer), on the ASIN the live listing is on.
+    const move = moveOf(product.id)
+    row._isNew = !listing?.externalListingId || !!move
+    if (move) { row.external_product_id = move.asin; row.external_product_id_type = 'ASIN' }
     row.record_action = row._isNew ? 'full_update' : 'partial_update'
     if (projection?.theme) row.variation_theme = projection.theme.code
     const activeOffer = listing?.offers.find(o => o.isActive)
@@ -157,6 +200,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
       platformAttributes: listing?.platformAttributes, productMethod: product.fulfillmentMethod })?.method
       ?? describeAmazonFulfilmentCode(row.fulfillment_availability__fulfillment_channel_code).method ?? undefined
     if (row._isNew && !product.isParent && !fulfillment) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
+    if (move) move.fba = fulfillment === 'FBA'
     // A live listing's fulfilment root is the offer lane's (never a code from here, never AMAZON_<region>): see below.
     delete row.fulfillment_availability__fulfillment_channel_code
     if (planMedia && planLayout) {
@@ -220,6 +264,11 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
+    // S10 — NEW goes on the live listing's ASIN, whatever the product ID cell says (a barcode would let Amazon pick).
+    if (move && message.attributes) {
+      delete message.attributes.externally_assigned_product_identifier
+      message.attributes.merchant_suggested_asin = [{ value: move.asin, marketplace_id: marketplaceId }]
+    }
     // Amazon sheet gaps — a new listing's two offer roots from the one builder, over whatever the row and the mapping
     // wrote (an old sheet value in `overrideData` never leaks into them). A parent has none.
     if (row._isNew && message.attributes) {
@@ -246,7 +295,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
       if (message.attributes) delete message.attributes[root]
       if (message.patches) message.patches = message.patches.filter((p: any) => p.path !== `/attributes/${root}`)
     }
-    if (options.fullProductIds?.has(product.id) && listing?.externalListingId) {
+    if (options.fullProductIds?.has(product.id) && listing?.externalListingId && !move) {
       const fields = (resolved[0].catalogue?.fields ?? []) as Array<{ fieldKey: string; sourceOwner?: { label: string } | null }>
       const mapped = new Set(fields.filter(f => !f.sourceOwner || !NOT_FROM_CELLS.includes(f.sourceOwner.label))
         .filter(f => cells[f.fieldKey]?.status === 'mapped').map(f => amazonRootOf(f.fieldKey)))
@@ -258,7 +307,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
   }
   return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })),
-    ...(Object.keys(full).length ? { full } : {}) }
+    ...(Object.keys(full).length ? { full } : {}), ...(moves.length ? { moves } : {}) }
 }
 
 type PublicationListing = PublicationFacts['listings'][number]

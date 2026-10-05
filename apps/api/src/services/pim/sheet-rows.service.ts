@@ -88,6 +88,12 @@ export interface SheetListing {
    */
   lastSyncedAt?: string | null
   /**
+   * The last channel read's verdict for this listing (Etsy's 4-hourly read: SUCCESS, MISSING — the listing was not
+   * found —, FAILED, NO_ACCOUNT). The Listing ID cell reads MISSING as "Not confirmed" (Item ID control, I2). Optional
+   * for the same reason as `lastSyncedAt`; null = never stamped.
+   */
+  lastSyncStatus?: string | null
+  /**
    * The LISTING's own optimistic-concurrency token — NOT the product's.
    *
    * A channel-scoped write CASes on this (products.routes.ts), so a client that

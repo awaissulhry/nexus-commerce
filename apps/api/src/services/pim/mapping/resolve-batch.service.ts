@@ -17,6 +17,7 @@ import { ebayMarketWords } from '../ebay-market-label.js'
 import { variationDictionary } from '../variation-dictionary.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
+import { SHOPIFY_SKU_COLUMN_RULE, isShopifySkuColumn, withWantedShopifySku } from '../../listings/shopify-sku-cell.js'
 /**
  * PES.6.2 — the batched channel-field resolver. THE seam.
  *
@@ -272,7 +273,15 @@ export async function resolveBatch(input: {
     resolveCategoriesForProducts({ productIds: [...found], channel, marketplace, mappingSnapshot: input.categoryMappingSnapshot, channelConnectionId: connectionId }),
   ])
   const parentById = new Map(parents.map((p) => [p.id, { ...p, ...input.productChangesByProduct?.[p.id] }]))
-  const listingByProduct = new Map(listings.slice().reverse().map((l) => [l.productId, { ...l, ...input.listingChangesByProduct?.[l.productId] }]))
+  // S9 — a Shopify listing's SKU column shows exactly the SKU Publish sends (`wantedChannelSku`, through the read-only view
+  // `withWantedShopifySku`). An extra listing's own SKU is one of its stores: read for the alias rows of this scope only.
+  const shopifyAliasIds = channel === 'SHOPIFY' ? [...new Set(listings.map((l) => l.aliasId).filter((id): id is string => !!id))] : []
+  const shopifyAliases = new Map(shopifyAliasIds.length
+    ? (await prisma.productListingAlias.findMany({ where: { id: { in: shopifyAliasIds } }, select: { id: true, sku: true, productId: true } })).map((a) => [a.id, a] as const) : [])
+  const productSkuById = new Map(products.map((p) => [p.id, p.sku]))
+  const listingByProduct = new Map(listings.slice().reverse().map((l) => [l.productId, {
+    ...withWantedShopifySku(l, productSkuById.get(l.productId), l.aliasId ? shopifyAliases.get(l.aliasId) ?? null : undefined),
+    ...input.listingChangesByProduct?.[l.productId] }]))
   // Only an actual explicit parent blank needs an axis projection. Ordinary reads make no extra calls.
   const blankParentAxes = new Map<string, Promise<Set<string>>>()
   for (const product of products) {
@@ -380,7 +389,8 @@ export async function resolveBatch(input: {
       // Wave 2 (2026-10-05) — eBay's duration (GTC) and handling time (none: the shipping policy's) are fixed the same way:
       // the cell shows what publish sends, never a stored or mapped value (`EBAY_FIXED_VALUES`).
       const familyFact = (channel === 'AMAZON' && AMAZON_FAMILY_FACT_KEYS.has(field.fieldKey)) || (channel === 'EBAY' && isEbayFixedValue(field.fieldKey))
-      const rule: FieldMappingRule | null = familyFact ? null : rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
+      // S9 — the Shopify SKU column shows the SKU Publish sends: no business mapping rule applies to it (`SHOPIFY_SKU_COLUMN_RULE`).
+      const rule: FieldMappingRule | null = familyFact ? null : isShopifySkuColumn(channel, field.fieldKey) ? SHOPIFY_SKU_COLUMN_RULE as FieldMappingRule : rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
       }, attrsView.keys))
       const store = field.channelStore

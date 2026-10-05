@@ -151,6 +151,10 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
       const p = data.product.get(values[0] as string)
       return p ? [{ basePrice: p.basePrice ?? null, minPrice: p.minPrice ?? null, maxPrice: p.maxPrice ?? null }] : []
     }
+    // S9 — a new product's SKU is checked against the channel SKUs other products' listings hold (`channelSkuHoldings`):
+    // the alias-SKU column is there, and these fixtures hold no listing under another product's channel SKU.
+    if (sql.includes('information_schema.columns') && sql.includes('ProductListingAlias')) return [{ alias_sku: true }]
+    if (sql.includes('FROM unnest(') && sql.includes('"ChannelListing" cl')) return []
     throw new Error(`Unsupported fixture raw query: ${sql}`)
   }
   db.$executeRawUnsafe = async (sql: string, ...values: unknown[]) => {

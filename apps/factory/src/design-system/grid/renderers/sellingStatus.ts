@@ -19,7 +19,9 @@
  *    it; a choice made on this row waits with a CLOCK glyph (who and when in the tooltip); a choice the row takes from its
  *    main product or the default has no glyph ("new · as main"). Its editor offers Active · Inactive · Not listed, each
  *    with what Publish does (`newListingEditorOptions`). A row Nexus deleted is one too (simplify): Not listed by default
- *    with "deleted 4 Oct" beside it; Active or Inactive lists it again ("lists again").
+ *    with "deleted 4 Oct" beside it; Active or Inactive lists it again ("lists again"). A row Nexus UNLINKED (Item ID
+ *    control, 2026-10-05: the listing may still be live there) reads Not listed with "unlinked 5 Oct" beside it and is
+ *    never listed as new (the caller offers only Not listed; its sentence says to link the id again).
  *
  * The words are spelled here, not imported: this design system is also compiled in apps/factory, which has no runtime
  * dependency on @nexus/shared (the same reason as `metafieldDisplay.ts` and `channelAxes.ts`). Only TYPES come from
@@ -68,6 +70,10 @@ export const NEW_CHOICE_MAIN = 'Now: it follows the main product\'s choice.'
 export const NEW_CHOICE_DEFAULT = 'Now: the default for a new listing here.'
 /** The same on a row Nexus deleted (its default is Not listed). */
 export const NEW_CHOICE_DELETED = 'Now: a deleted listing stays off until you choose Active or Inactive.'
+/** The same on a row Nexus unlinked: it stays off whatever is chosen, until its channel ID is linked again. */
+export const NEW_CHOICE_UNLINKED = 'Now: an unlinked listing stays off until its channel ID is linked again.'
+/** The small mark beside an unlinked row's Status ("unlinked 5 Oct"); the caller gives the day. */
+export const UNLINKED_MARK = 'unlinked'
 /** The small mark beside a deleted row's Active or Inactive: Publish lists it again. */
 export const RELIST_MARK = 'lists again'
 /** Why a new row's choice is what it is, in the tooltip and the sentence. */
@@ -146,8 +152,11 @@ export interface NewListingCellFacts {
   sentence: string
   /** One more line for the tooltip (the eBay out-of-stock check), or null. */
   note?: string | null
-  /** Nexus deleted this row from the channel: when ("4 Oct", the caller's words), for the "deleted 4 Oct" mark. */
-  deleted?: { on: string } | null
+  /**
+   * Nexus deleted this row from the channel: when ("4 Oct", the caller's words), for the "deleted 4 Oct" mark. `unlinked`:
+   * Nexus UNLINKED it instead (nothing was removed on the channel) — the mark reads "unlinked 5 Oct", never "lists again".
+   */
+  deleted?: { on: string; unlinked?: boolean } | null
 }
 
 export type SellingCellKind = 'loading' | 'live' | 'waiting' | 'outgrown' | 'locked' | 'new'
@@ -207,9 +216,11 @@ export function newListingPill(create: Pick<NewListingCellFacts, 'target' | 'sou
 
 /**
  * The small mark beside a new row's pill: "new", "new · as main"; a Not listed choice is no new listing. A row Nexus
- * deleted: "deleted 4 Oct" while it stays off, "lists again" once Active or Inactive.
+ * deleted: "deleted 4 Oct" while it stays off, "lists again" once Active or Inactive. A row Nexus unlinked: "unlinked
+ * 5 Oct", whatever it holds (Publish leaves it out).
  */
 export function newListingAside(create: Pick<NewListingCellFacts, 'target' | 'source' | 'deleted'>): string | null {
+  if (create.deleted?.unlinked) return `${UNLINKED_MARK} ${create.deleted.on}`
   if (create.deleted) {
     if (create.target === 'not_listed') return create.source === 'main' ? NEW_LISTING_AS_MAIN : `deleted ${create.deleted.on}`
     return create.source === 'main' ? `${RELIST_MARK} · as main` : RELIST_MARK
@@ -244,7 +255,7 @@ export function sellingStatusModel(value: SellingStatusValue | undefined, now: n
     const source = create.source === 'own' ? (by ? `${by[0].toUpperCase()}${by.slice(1)}` : NEW_SOURCE_SENTENCE.own)
       : create.source === 'default' && !create.deleted ? NEW_SOURCE_SENTENCE.default : null // the caller's sentence names the main product
     const what = join(create.sentence, create.note, source)
-    const head = create.target === 'not_listed' ? `${word}` : create.deleted ? `Lists again: ${word}` : `New listing: ${word}`
+    const head = create.target === 'not_listed' || create.deleted?.unlinked ? `${word}` : create.deleted ? `Lists again: ${word}` : `New listing: ${word}`
     return {
       kind: lockedReason ? 'locked' : 'new', pill: newListingPill(create), aside: newListingAside(create),
       tooltip: join(lockedReason, what), ariaLabel: `Status: ${join(head, lockedReason, what)}`,
@@ -358,7 +369,7 @@ export function newListingEditorOptions(
     const by = holds && current.source === 'own' ? waitingSetPhrase(waiting, now) : ''
     const marker = !holds ? null
       : current.source === 'own' ? `Waiting for Publish${by ? `, ${by}` : ''}`
-        : current.source === 'main' ? NEW_CHOICE_MAIN : current.deleted ? NEW_CHOICE_DELETED : NEW_CHOICE_DEFAULT
+        : current.deleted?.unlinked ? NEW_CHOICE_UNLINKED : current.source === 'main' ? NEW_CHOICE_MAIN : current.deleted ? NEW_CHOICE_DELETED : NEW_CHOICE_DEFAULT
     const note = join(choice.sentence, choice.warning, choice.checkedAtSend, marker)
     return note ? { value: choice.target, label, note } : { value: choice.target, label }
   })

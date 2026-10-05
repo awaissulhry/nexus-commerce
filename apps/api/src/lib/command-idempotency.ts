@@ -54,6 +54,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   // Item ID control (step I1) — one Link or Clear press on the sheet's eBay Item ID cell, one write.
   '/api/listings/:id/channel-id/link': 'channel-id-link',
   '/api/listings/:id/channel-id/unlink': 'channel-id-unlink',
+  // S10 — one "Delete the old SKU again" press, one try of the old SKU's delete.
+  '/api/products/:id/studio-publication/:reviewId/delete-old-sku': 'delete-old-sku',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

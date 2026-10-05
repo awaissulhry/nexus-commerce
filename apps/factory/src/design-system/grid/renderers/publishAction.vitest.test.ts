@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DELETED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE, NEW_ROW_LEFT_OUT_HINT, NEW_ROW_SENT_WHOLE, SEND_MODE_DEFAULT_NOTE, SEND_MODE_WORD, publishActionModel, sendModeEditorOptions } from './publishAction'
+import { DELETED_ROW_LEFT_OUT_HINT, UNLINKED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE, NEW_ROW_LEFT_OUT_HINT, NEW_ROW_SENT_WHOLE, SEND_MODE_DEFAULT_NOTE, SEND_MODE_WORD, publishActionModel, sendModeEditorOptions } from './publishAction'
 
 const now = new Date(2026, 9, 4, 15, 0).getTime()
 const today = new Date(2026, 9, 4, 10, 42).toISOString()
@@ -73,6 +73,11 @@ describe('a row not on the channel: Full update, sent whole', () => {
     const gone = publishActionModel({ mode: 'full', newRow: true, leftOut: true, deleted: true }, now)
     expect(gone.tooltip).toBe(`Full update: ${NEW_ROW_SENT_WHOLE} ${DELETED_ROW_LEFT_OUT_HINT}`)
     expect(gone.ariaLabel).toMatch(/stays deleted\. Set Status to Active to list it again\.$/)
+    // An unlinked row (Item ID control) is left out whatever its Status says: quiet, and never "list it again".
+    const unlinked = publishActionModel({ mode: 'full', newRow: true, leftOut: false, deleted: true, unlinked: true }, now)
+    expect(unlinked.pill).toBeNull()
+    expect(unlinked.tooltip).toBe(`Full update: ${NEW_ROW_SENT_WHOLE} ${UNLINKED_ROW_LEFT_OUT_HINT}`)
+    expect(unlinked.tooltip).not.toMatch(/list it again/)
     expect(publishActionModel({ mode: 'full', newRow: true, lockedReason: 'Your role cannot publish listings' }, now)).toMatchObject({ kind: 'locked', label: 'Full update', pill: null })
   })
 

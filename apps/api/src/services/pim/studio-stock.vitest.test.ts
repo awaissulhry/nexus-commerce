@@ -44,7 +44,8 @@ import { etsyProductSpec } from './channel-specs/etsy.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import type { StudioRow } from './studio-sheet.service.js'
 import {
-  AMAZON_QUANTITY_KEY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, STUDIO_STOCK_KEYS, attachStudioStock, isRawQuantityColumn, isShopifyInventoryColumn,
+  AMAZON_QUANTITY_KEY, ETSY_LISTING_ID_COPY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, SHOPIFY_PRODUCT_ID_COPY, STUDIO_STOCK_KEYS, attachStudioStock,
+  confirmShopifyItemIds, isRawQuantityColumn, isShopifyInventoryColumn, listingItemIdState,
   listingAsinColumn, listingItemIdColumn, listingItemIdValue, shopifyInventoryHeldReason, studioStockColumns, studioStockKeys, studioStockSheetColumns,
   withStudioStockGroups, withoutRawQuantityColumns, type StudioRowStock,
 } from './studio-stock.js'
@@ -201,7 +202,8 @@ describe('every refusal is the Matrix sentence', () => {
     const r = row('ss-p', L.pDe!, { isParent: true })
     await attach([r], 'AMAZON', 'DE')
     for (const k of STUDIO_STOCK_KEYS) expect(r.values[k]).toMatchObject({ value: null, writable: false, writeBlockedReason: PARENT_REASON })
-    expect(r.values[LISTING_ASIN_KEY]).toMatchObject({ value: 'B0PARENTDE', writable: false, writeBlockedReason: 'Parent ASIN — not buyable' })
+    // Item ID control (I4): a row with a listing is the ASIN control's door (writable); the control decides what may change.
+    expect(r.values[LISTING_ASIN_KEY]).toMatchObject({ value: 'B0PARENTDE', writable: true, writeBlockedReason: null })
   })
 
   it('no listing on this market: held "No listing on this coordinate yet", no cells, no ASIN', async () => {
@@ -250,7 +252,8 @@ describe('the ASIN column', () => {
   it('per market externalListingId on Amazon (read-only, Amazon assigns it); not on another channel', async () => {
     const it = row('ss-c1', L.c1It!), de = row('ss-c1', L.c1De!)
     await attach([it], 'AMAZON', 'IT'); await attach([de], 'AMAZON', 'DE')
-    expect(it.values[LISTING_ASIN_KEY]).toMatchObject({ value: L.c1It!.externalListingId, writable: false, editable: false })
+    expect(it.values[LISTING_ASIN_KEY]).toMatchObject({ value: L.c1It!.externalListingId, writable: true, editable: true })
+    expect(it.values[LISTING_ASIN_KEY]).not.toHaveProperty('pendingId')
     expect(de.values[LISTING_ASIN_KEY]!.value).toBe('B0C1DE')
     const eb = row('ss-c1', L.c1Eb!)
     await attach([eb], 'EBAY', 'IT')
@@ -269,7 +272,10 @@ describe('the eBay Item ID column (Item ID control, step I1)', () => {
 
   it('a column on eBay only, beside the ASIN\'s group; never a bulk, formula or grid edit (its own control writes it)', () => {
     expect(listingItemIdColumn('EBAY')).toMatchObject({ key: LISTING_ITEM_ID_KEY, label: 'Item ID', kind: 'text', editable: false, formulaWritable: false, defaultVisible: true, groupKey: 'master:identifiers', width: 168 })
-    for (const ch of ['AMAZON', 'SHOPIFY', 'ETSY']) expect(listingItemIdColumn(ch)).toBeNull()
+    // I2 / I3: Etsy's Listing ID and Shopify's Product ID take the same column; Amazon keeps its ASIN column.
+    expect(listingItemIdColumn('ETSY')).toMatchObject({ key: LISTING_ITEM_ID_KEY, label: 'Listing ID', editable: false, formulaWritable: false })
+    expect(listingItemIdColumn('SHOPIFY')).toMatchObject({ key: LISTING_ITEM_ID_KEY, label: 'Product ID', editable: false, formulaWritable: false })
+    for (const ch of ['AMAZON', 'WOOCOMMERCE']) expect(listingItemIdColumn(ch)).toBeNull()
     const col = studioStockSheetColumns('EBAY').find((c) => c.key === LISTING_ITEM_ID_KEY)!
     expect(col).toMatchObject({ writable: false, formulaWritable: false })
     expect(isChannelWritable(col.writeField)).toBe(false)
@@ -320,6 +326,65 @@ describe('the eBay Item ID column (Item ID control, step I1)', () => {
     const amazon = row('ss-c1', L.c1It!)
     await attach([amazon], 'AMAZON', 'IT')
     expect(amazon.values[LISTING_ITEM_ID_KEY]).toBeUndefined()
+  })
+})
+
+describe('the Etsy Listing ID and the Shopify Product ID (Item ID control, steps I2 and I3)', () => {
+  type ItemRow = Parameters<typeof listingItemIdValue>[0]
+  const r = (id: string, listing: ItemRow['listing'], parentId: string | null = null): ItemRow => ({ id, parentId, aliasId: null, listing })
+  const etsy = (externalListingId: string | null, listingStatus = 'ACTIVE', lastSyncStatus: string | null = 'SUCCESS', isPublished = true) => ({ externalListingId, listingStatus, isPublished, lastSyncStatus })
+
+  it('Etsy: live, inactive and ended count; a listing Etsy did not return on its last read (MISSING) is "Not confirmed"', () => {
+    expect(listingItemIdValue(r('p', etsy('1234567890')), null, 'ETSY')).toMatchObject({ value: '1234567890', writable: true })
+    expect(listingItemIdValue(r('p', etsy('1234567890', 'INACTIVE')), null, 'ETSY')).toMatchObject({ value: '1234567890' })
+    expect(listingItemIdValue(r('p', etsy('1234567890', 'ENDED')), null, 'ETSY')).toMatchObject({ value: '1234567890' })
+    expect(listingItemIdState(r('p', etsy('1234567890', 'ACTIVE', 'MISSING')), null, 'ETSY')).toEqual({ state: 'notConfirmed', value: null, sentence: ETSY_LISTING_ID_COPY.missing('1234567890') })
+    // A FAILED or never-stamped read says nothing against the record: the Nexus record stands (D-A2 = A).
+    expect(listingItemIdValue(r('p', etsy('1234567890', 'ACTIVE', 'FAILED')), null, 'ETSY')).toMatchObject({ value: '1234567890' })
+    expect(listingItemIdValue(r('p', etsy('1234567890', 'ACTIVE', null)), null, 'ETSY')).toMatchObject({ value: '1234567890' })
+    expect(listingItemIdState(r('p', etsy('1234567890', 'DRAFT', 'SUCCESS', false)), null, 'ETSY').state).toBe('notConfirmed')
+  })
+
+  it('Etsy: one listing per family — a variation says "Set on the main row"; another listing than the main row\'s is "Not confirmed"', () => {
+    const main = r('p', etsy('1234567890'))
+    expect(listingItemIdValue(r('c', etsy('1234567890'), 'p'), main, 'ETSY')).toMatchObject({ value: '1234567890', writable: false, writeBlockedReason: ETSY_LISTING_ID_COPY.variation })
+    expect(listingItemIdValue(r('c', etsy('999'), 'p'), main, 'ETSY')).toMatchObject({ value: null, writeBlockedReason: ETSY_LISTING_ID_COPY.otherItem('999', '1234567890') })
+    expect(listingItemIdValue(r('c', etsy(null, 'DRAFT', null, false), 'p'), null, 'ETSY')).toMatchObject({ writeBlockedReason: `${ETSY_LISTING_ID_COPY.draft} ${ETSY_LISTING_ID_COPY.variation}` })
+  })
+
+  it('Shopify: a held Product ID is "Not confirmed" until the open sheet\'s Shopify read returns the row; then it counts', () => {
+    const shop = (externalListingId: string | null, listingStatus = 'ACTIVE', isPublished = true) => ({ externalListingId, listingStatus, isPublished })
+    expect(listingItemIdState(r('p', shop('7001')), null, 'SHOPIFY')).toEqual({ state: 'notConfirmed', value: null, sentence: SHOPIFY_PRODUCT_ID_COPY.notConfirmed('7001') })
+    // Colour stores: a variation's product differs from the root's — never "another item" (Shopify's read decides).
+    expect(listingItemIdValue(r('c', shop('7002'), 'p'), r('p', shop(null, 'DRAFT', false)), 'SHOPIFY')).toMatchObject({ value: null, writable: false,
+      writeBlockedReason: `${SHOPIFY_PRODUCT_ID_COPY.notConfirmed('7002')} ${SHOPIFY_PRODUCT_ID_COPY.variation}` })
+    expect(listingItemIdValue(r('p', shop(null, 'DRAFT', false)), null, 'SHOPIFY')).toMatchObject({ value: null, writable: true })
+    const rows = [
+      { id: 'p', parentId: null, listing: shop('7001'), shopify: { productId: 'gid://shopify/Product/7001', listingId: 'l-p' }, values: { [LISTING_ITEM_ID_KEY]: listingItemIdValue(r('p', shop('7001')), null, 'SHOPIFY') } },
+      { id: 'c', parentId: 'p', listing: shop('7001'), shopify: { productId: 'gid://shopify/Product/7001', listingId: 'l-p' }, values: { [LISTING_ITEM_ID_KEY]: listingItemIdValue(r('c', shop('7001'), 'p'), null, 'SHOPIFY') } },
+      { id: 'd', parentId: 'p', listing: shop('7009'), values: { [LISTING_ITEM_ID_KEY]: listingItemIdValue(r('d', shop('7009'), 'p'), null, 'SHOPIFY') } },
+    ] as unknown as StudioRow[]
+    const [p, c, d] = confirmShopifyItemIds(rows)
+    expect(p.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: '7001', writable: true, writeBlockedReason: null })
+    expect(c.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: '7001', writable: false, writeBlockedReason: SHOPIFY_PRODUCT_ID_COPY.variation })
+    // Not returned by Shopify: unchanged, "Not confirmed".
+    expect(d).toBe(rows[2])
+    expect(d.values[LISTING_ITEM_ID_KEY]).toMatchObject({ value: null })
+  })
+
+  it('Amazon (I4): a row not on Amazon carries the ASIN it lists on at Publish, never as its value; a live row carries none', async () => {
+    const draft = await scoped(async () => {
+      await product('ss-c5', { parentId: 'ss-p', stock: 2 })
+      return prisma.channelListing.create({ data: { productId: 'ss-c5', channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', channelConnectionId: acc.AMAZON,
+        listingStatus: 'DRAFT', isPublished: false, externalListingId: null, overrideData: { merchant_suggested_asin: 'b0sugg0001' } } as never, select: { id: true, version: true, externalListingId: true } })
+    })
+    const r5 = row('ss-c5', draft)
+    Object.assign(r5.listing!, { listingStatus: 'DRAFT', isPublished: false })
+    const live = row('ss-c1', L.c1It!)
+    Object.assign(live.listing!, { listingStatus: 'ACTIVE', isPublished: true })
+    await attach([r5, live], 'AMAZON', 'IT')
+    expect(r5.values[LISTING_ASIN_KEY]).toMatchObject({ value: null, writable: true, pendingId: { id: 'B0SUGG0001', sentence: 'Lists on B0SUGG0001 at Publish' } })
+    expect(live.values[LISTING_ASIN_KEY]).not.toHaveProperty('pendingId')
   })
 })
 

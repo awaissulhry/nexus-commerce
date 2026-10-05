@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NEW_CHOICE_DEFAULT, NEW_CHOICE_DELETED, NEW_CHOICE_MAIN, RELIST_MARK, SELLING_ROW_MARK_CLASS, SELLING_STATE_TONE, SELLING_STATE_WORD, STATUS_NOW_NOTE, STATUS_TARGET_TONE,
+  NEW_CHOICE_DEFAULT, NEW_CHOICE_DELETED, NEW_CHOICE_MAIN, NEW_CHOICE_UNLINKED, RELIST_MARK, SELLING_ROW_MARK_CLASS, SELLING_STATE_TONE, SELLING_STATE_WORD, STATUS_NOW_NOTE, STATUS_TARGET_TONE,
   STATUS_TARGET_WORD, newListingEditorOptions, rowCarriesInactiveMark, sellingStatusModel, statusEditorOptions, waitingSetPhrase, waitingWhen,
   type SellingState, type SellingStatusValue,
 } from './sellingStatus'
@@ -181,6 +181,25 @@ describe('a new row (not on the channel yet)', () => {
     const editor = newListingEditorOptions([{ target: 'not_listed' as const, offered: true, reason: null, sentence: 'Publish leaves it out: it stays deleted on the channel.' }],
       { target: 'not_listed', source: 'default', deleted: { on: '4 Oct' } }, null, now)
     expect(editor[0].note).toBe(`Publish leaves it out: it stays deleted on the channel. ${NEW_CHOICE_DELETED}`)
+  })
+
+  it('a row Nexus UNLINKED (Item ID control): "unlinked 5 Oct", the unlink\'s words alone, never "lists again" (Publish leaves it out)', () => {
+    const words = 'Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates it. Link its Item ID again on the main row; listing it as new makes a second item.'
+    const off = sellingStatusModel({ state: 'not_listed', create: { target: 'not_listed', source: 'default', sentence: words, deleted: { on: '5 Oct', unlinked: true } } }, now)
+    expect(off).toMatchObject({ kind: 'new', editable: true, aside: 'unlinked 5 Oct' })
+    expect(off.tooltip).toBe(words)
+    expect(off.ariaLabel).toBe(`Status: Not listed. ${words}`)
+    // An older own choice the row still holds: no "Lists again", no "lists again" mark.
+    const stale = sellingStatusModel({ state: 'not_listed', waiting: { target: 'active', setAt: today, setByName: 'Awais' },
+      create: { target: 'active', source: 'own', sentence: 'Publish leaves it out.', deleted: { on: '5 Oct', unlinked: true } } }, now)
+    expect(stale.aside).toBe('unlinked 5 Oct')
+    expect(stale.ariaLabel.startsWith('Status: Active. Publish leaves it out.')).toBe(true)
+    const editor = newListingEditorOptions([
+      { target: 'active' as const, offered: false, reason: words },
+      { target: 'not_listed' as const, offered: true, reason: null, sentence: 'Publish leaves it out. Nexus no longer updates it on the channel.' }],
+    { target: 'not_listed', source: 'default', deleted: { on: '5 Oct', unlinked: true } }, null, now)
+    expect(editor[0]).toMatchObject({ value: 'active', heldReason: words })
+    expect(editor[1].note).toBe(`Publish leaves it out. Nexus no longer updates it on the channel. ${NEW_CHOICE_UNLINKED}`)
   })
 
   it('its editor: Active · Inactive · Not listed with what each does, a held one with its reason, and where the current choice comes from', () => {

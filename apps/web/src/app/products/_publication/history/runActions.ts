@@ -6,7 +6,7 @@
  * carry a publish status the vocabulary knows; the older sources (flat-file uploads, photo runs) carry their own raw
  * status ("DONE", "FATAL"), so they are labelled by the plain `state` the server derived — never by the raw word.
  */
-import type { HistoryKind, HistoryProduct, HistoryProductResult, HistoryRun, HistoryRunDetail, HistoryState } from '@nexus/shared/publication-history'
+import type { HistoryKind, HistoryProduct, HistoryProductResult, HistoryRun, HistoryRunDetail, HistorySkuMove, HistoryState } from '@nexus/shared/publication-history'
 import type { StudioPublishChange } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, publishResultMeta, publishFullTime, toCsv, type CsvColumn, type PublishStatusMeta } from '@/design-system/grid'
@@ -228,6 +228,8 @@ export interface RunActionContext {
   canPublish: boolean
   /** The surface can open a new review with the failed products ticked (the studio passes a handler). */
   canOpenReview: boolean
+  /** The viewer holds `products.delete` (S10: "Delete the old SKU again" deletes a listing on Amazon, as Delete). */
+  canDelete?: boolean
 }
 
 export interface RunActionVisibility {
@@ -243,6 +245,11 @@ export interface RunActionVisibility {
   download: boolean
   /** Copy the failed SKUs. */
   copyFailed: boolean
+  /**
+   * S10 — "Delete the old SKU again": the publish moved a live Amazon listing to a new SKU and Amazon did not confirm the
+   * delete of the old one. Product sheet runs only; needs `products.delete`.
+   */
+  deleteOldAgain: boolean
 }
 
 const failedCount = (run: Pick<HistoryRun, 'counts'>) => run.counts.failed + run.counts.notSent
@@ -251,7 +258,8 @@ const failedCount = (run: Pick<HistoryRun, 'counts'>) => run.counts.failed + run
  * Which actions a run offers. Only product sheet runs can be checked again or marked: the older sources have no
  * route that reads the channel again. Every action that writes or reads the channel needs `products.publish`.
  */
-export function runActionVisibility(run: HistoryRun, ctx: RunActionContext, products: readonly HistoryProduct[] = []): RunActionVisibility {
+export function runActionVisibility(run: HistoryRun, ctx: RunActionContext, products: readonly HistoryProduct[] = [],
+  skuMoves: readonly HistorySkuMove[] = []): RunActionVisibility {
   const studio = run.source === 'studio'
   const waiting = run.state === 'in_progress' || run.state === 'needs_check'
   const hasFailed = failedCount(run) > 0 || products.some(p => p.result === 'FAILED' || p.result === 'NOT_SENT')
@@ -264,6 +272,7 @@ export function runActionVisibility(run: HistoryRun, ctx: RunActionContext, prod
     publishAgainUnavailable: againPossible && !ctx.canOpenReview,
     download: products.length > 0,
     copyFailed: products.some(p => p.result === 'FAILED' || p.result === 'NOT_SENT'),
+    deleteOldAgain: studio && settled && skuMoves.some(move => move.canDeleteAgain) && !!ctx.canDelete,
   }
 }
 

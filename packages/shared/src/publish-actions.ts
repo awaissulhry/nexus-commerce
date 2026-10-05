@@ -23,7 +23,7 @@
  * it again on the next Publish. There is no "Deleted", "Keep deleted" or "Create" Action value.
  */
 import type { CapabilityFacts, FbaUnits, ListingAction, ListingDeletion, ListingModel, NewListingSource, NewListingTarget, SellingState, StatusTarget } from './listing-actions.js'
-import { agoText, ALREADY_DELETED, deleteOffered, fbaUnitTotal, isNewListingRow, STATUS_TARGET_LABEL } from './listing-actions.js'
+import { agoText, alreadyRemoved, deletedPublishSkip, deleteOffered, fbaUnitTotal, isNewListingRow, STATUS_TARGET_LABEL } from './listing-actions.js'
 
 /** What Publish sends for a row: Partial update, Full update or Delete. A row not on the channel always reads Full update. */
 export type SendMode = 'partial' | 'full' | 'delete'
@@ -82,8 +82,14 @@ export const FULL_WARNING = 'Every field Nexus manages is sent again. The review
  */
 export function sendModeOptions(model: ListingModel, state: SellingState, facts: SendModeFacts, channelLabel?: string): SendModeOption[] {
   const option = (mode: SendMode, reason: string | null, warning: string | null = null): SendModeOption => ({ mode, offered: !reason, reason, warning })
+  // S10 / I1 — an UNLINKED row (the item may still be live; Nexus forgot its id) is never sent as a new listing: every
+  // Action is held with its own words (Publish leaves it out until its id is linked again).
+  if (isNewListingRow(state, facts) && facts.deleted?.unlinked) {
+    const held = deletedPublishSkip(facts.deleted)
+    return [option('partial', held), option('full', held), option('delete', alreadyRemoved(facts.deleted))]
+  }
   if (isNewListingRow(state, facts)) return [option('partial', NEW_LISTING_SENT_WHOLE), option('full', null, NEW_LISTING_SENT_WHOLE),
-    option('delete', facts.deleted ? ALREADY_DELETED(facts.deleted.where) : NOTHING_TO_DELETE_YET)]
+    option('delete', facts.deleted ? alreadyRemoved(facts.deleted) : NOTHING_TO_DELETE_YET)]
   const notOnChannel = state === 'draft' || state === 'not_listed'
   const full = (): string | null => {
     if (notOnChannel) return FULL_NEW_LISTING
@@ -201,11 +207,15 @@ export function contentGoesOut(mode: SendMode, statusAction: ListingAction | nul
 export const CONTENT_HELD_FOR_END = 'This listing is being ended, so its changes are not sent. Relist it to send them.'
 export const CONTENT_HELD_FOR_DELETE = 'This listing is being deleted, so its changes are not sent.'
 
-/** The review's one summary line: "18 partial updates (41 fields) · 2 full updates · 3 inactive · 1 ended · 1 delete". */
-export function publishPlanSummary(plan: { partial: number; fields: number; full: number; delete: number; active: number; inactive: number; ended: number }): string {
+/**
+ * The review's one summary line: "18 partial updates (41 fields) · 2 full updates · 1 move to a new SKU · 3 inactive ·
+ * 1 ended · 1 delete".
+ */
+export function publishPlanSummary(plan: { partial: number; fields: number; full: number; delete: number; active: number; inactive: number; ended: number; moved?: number }): string {
   return [
     plan.partial ? `${plural(plan.partial, 'partial update', 'partial updates')}${plan.fields ? ` (${plural(plan.fields, 'field', 'fields')})` : ''}` : null,
     plan.full ? plural(plan.full, 'full update', 'full updates') : null,
+    plan.moved ? plural(plan.moved, 'move to a new SKU', 'moves to a new SKU') : null,
     plan.active ? `${plan.active.toLocaleString('en')} active` : null,
     plan.inactive ? `${plan.inactive.toLocaleString('en')} inactive` : null,
     plan.ended ? `${plan.ended.toLocaleString('en')} ended` : null,
@@ -467,3 +477,88 @@ export function explainAmazonRelist(publication: unknown, sku: string | null, is
   const found = issues.length ? issues : amazonIssuesInText(amazonWords)
   return withAmazonWords(amazonRelistAnswer(found, { deletedAt: entry.deletedAt, oldAsin: entry.oldReference, asin: entry.asin }, now), amazonWords)
 }
+
+// ── S10 (per-channel SKU): a live listing moved to its own SKU, and the SKU each line names ─────────────────────
+
+/**
+ * Amazon (Owner D2 = A): ONE Publish creates NEW as a new offer on the same ASIN, then — only after Amazon accepts NEW —
+ * deletes OLD in this market. `where` = "Amazon · IT".
+ */
+export const amazonMoveSentence = (to: string, from: string, where: string) => `Creates ${to} on ${where} as a new offer, then deletes ${from} there.`
+
+/** The review's typed confirmation for one or more Amazon moves (`StudioPublishReview.confirm.sentence`). */
+export function amazonMoveConfirmSentence(moves: ReadonlyArray<{ from: string }>, where: string): string {
+  const olds = moves.map(move => move.from)
+  const named = olds.length <= 3 ? olds.join(', ') : `${olds.slice(0, 3).join(', ')} and ${olds.length - 3} more`
+  return `This Publish deletes ${named} on ${where} once Amazon accepts ${olds.length === 1 ? 'its new SKU' : 'their new SKUs'}. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.`
+}
+
+/** The submit's refusal when the person may not delete listings (a move deletes the old SKU, as Delete does). */
+export const AMAZON_MOVE_ROLE_CANNOT_DELETE = 'Your role cannot delete listings (it needs permission to delete products), and moving an Amazon listing to a new SKU deletes its old SKU there. Nothing was sent.'
+
+/** The submit's refusal when a review that deletes an old Amazon SKU arrives without the typed confirmation. */
+export const AMAZON_MOVE_NEEDS_CONFIRM = 'Moving a listing to a new SKU deletes its old SKU on Amazon: type the SKU, then confirm. It cannot be undone.'
+
+/**
+ * An FBA move (the FBA delete warning's counts): NEW starts with no FBA units, and Amazon's units stay under OLD. Null
+ * units (Nexus holds no count) say so without a number.
+ */
+export function fbaMoveWarning(units: FbaUnits | null, to: string, from: string, now: number = Date.now()): string {
+  const after = `Once ${from} is deleted they cannot sell until you list ${from} here again, and Amazon still charges storage.`
+  if (!units) return `${to} starts with no FBA units; any FBA units Amazon holds stay under ${from}. ${after}`
+  const total = fbaUnitTotal(units)
+  const read = units.readAt ? `, read ${agoText(units.readAt, now)}` : ''
+  if (!total) return `${to} starts with no FBA units. Nexus read 0 FBA units under ${from} here${read}.`
+  const parts = [units.sellable ? `${units.sellable} sellable` : null, units.inbound ? `${units.inbound} on the way` : null,
+    units.reserved ? `${units.reserved} reserved` : null, units.other ? `${units.other} not sellable` : null].filter(Boolean)
+  return `${to} starts with no FBA units; Amazon's ${total} FBA unit${total === 1 ? '' : 's'} stay under ${from} (${parts.join(', ')})${read}. ${after}`
+}
+
+/**
+ * The Nexus action that tries the delete of OLD again, after Amazon did not confirm it (Publish history → this publish;
+ * `POST …/studio-publication/:id/delete-old-sku`, every old SKU of the publish Amazon did not confirm deleting). Never "do
+ * it in Seller Central": the flow stays in Nexus (Owner rule).
+ */
+export const DELETE_OLD_SKU_AGAIN = 'Delete the old SKU again'
+
+/** Both SKUs sell until OLD is gone (said whenever OLD's delete is not confirmed). */
+export const bothSkusSell = (from: string, to: string, where: string) => `Until ${from} is gone, ${from} and ${to} can both sell on ${where}.`
+
+/** A family's main row on Amazon cannot move: its variations hang under the old parent SKU (a named Nexus gap). */
+export const amazonMainRowMove = (from: string, to: string) =>
+  `Nexus cannot move a family's main listing on Amazon to a new SKU yet (${from} → ${to}): its variations hang under ${from}. Delete the family here, then list it again.`
+
+/** Amazon: the live listing's ASIN is not known yet, so NEW cannot be created on the same product. */
+export const amazonMoveNoAsin = (from: string, to: string) =>
+  `Nexus does not know the ASIN of ${from} here yet, so it cannot create ${to} on the same Amazon product. Wait for the ASIN (Nexus reads it after a publish), then Publish again.`
+
+/** eBay Trading and Shopify rename a live SKU in place. */
+export const ebayRenameSentence = (from: string, to: string) => `eBay renames ${from} to ${to}.`
+export const shopifyRenameSentence = (from: string, to: string) => `Shopify renames ${from} to ${to}.`
+
+/** eBay Inventory API listings: a named Nexus gap (not an eBay refusal). */
+export const EBAY_INVENTORY_SKU_MOVE = 'Nexus cannot move an eBay Inventory listing to a new SKU yet: Delete it, then list it again.'
+
+/** Etsy: studio Publish does not send to Etsy, and nothing else sends an Etsy SKU change. */
+export const etsySkuMoveSentence = (from: string, to: string) =>
+  `Nexus cannot send Etsy SKU changes yet: Etsy keeps ${from} for this listing (Nexus holds ${to}).`
+
+/**
+ * The longest SKU each channel takes, where the repo can show it. Amazon: 40 characters (the seller-SKU limit; its
+ * product type schema caps `child_parent_sku_relationship.parent_sku`, a seller SKU, at `maxLength: 40` —
+ * apps/api/src/services/channel-mapping/__fixtures__/golden/specs/amazon-IT-COAT.json.gz). eBay, Etsy and Shopify are NOT
+ * listed: no channel spec, schema or fixture in the repo states their SKU limit, so Nexus does not refuse on a guess
+ * (the channel's own answer stands). A Nexus SKU is at most 100 characters (`PRODUCT_SKU_MAX_LENGTH`).
+ */
+export const CHANNEL_SKU_MAX_LENGTH: Readonly<Record<string, number>> = { AMAZON: 40 }
+
+/** "GALE-M-…: Amazon takes a seller SKU of up to 40 characters; this one has 45. Shorten this listing's SKU." — or null. */
+export function channelSkuLengthProblem(channel: string, sku: string): string | null {
+  const max = CHANNEL_SKU_MAX_LENGTH[String(channel ?? '').toUpperCase()]
+  if (!max || sku.length <= max) return null
+  const name = String(channel).toUpperCase() === 'AMAZON' ? 'Amazon takes a seller SKU' : `${channel} takes a SKU`
+  return `${sku}: ${name} of up to ${max} characters; this one has ${sku.length}. Shorten this listing's SKU, then Publish again.`
+}
+
+/** A relist under a new SKU: the old one Nexus deleted stays deleted ("GALE-M, deleted 4 Oct, stays deleted."). */
+export const oldSkuStaysDeleted = (oldSku: string, deletedOn: string) => `${oldSku}, deleted ${deletedOn}, stays deleted.`

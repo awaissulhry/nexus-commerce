@@ -2,6 +2,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { ServerTiming } from "../utils/server-timing.js";
+import { channelSkuCreateRefusal } from "../services/listings/channel-sku-rename.js";
 
 // ── Bulk Upload (Parent-level) ──────────────────────────────────────────
 
@@ -164,6 +165,13 @@ export async function inventoryRoutes(app: FastifyInstance) {
                   status: "updated",
                 });
               } else {
+                // S9 — a new product may not take a SKU another product's listing holds or sends as its channel SKU.
+                const held = await channelSkuCreateRefusal([item.sku], tx);
+                if (held) {
+                  result.failed++;
+                  result.results.push({ sku: item.sku, status: "failed", message: held });
+                  continue;
+                }
                 // Create new product
                 await tx.product.create({
                   data: {

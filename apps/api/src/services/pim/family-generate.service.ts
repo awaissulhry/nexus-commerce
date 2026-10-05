@@ -21,6 +21,8 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { ProductRelationshipError, relationshipTransaction } from './product-relationship.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { resolveFamilyRoot, buildFamilyAxes, axisValuesOf, FAMILY_MEMBER_SELECT, type FamilyAxis } from './family-projection.service.js'
+import type { Prisma } from '@prisma/client'
+import { channelSkuHoldings } from '../listings/channel-sku-rename.js'
 
 export interface GenerateInput {
   productId: string
@@ -100,10 +102,12 @@ export interface GenerateResult {
 export class SkuCollisionError extends Error {
   readonly code = 'sku_collision'
   readonly statusCode = 409
-  constructor(readonly collisions: Array<{ sku: string; existingProductId: string }>) {
+  /** `message`: S9 — a SKU another product's listing holds or sends as its channel SKU says so in its own sentence. */
+  constructor(readonly collisions: Array<{ sku: string; existingProductId: string; message?: string }>) {
     super(
       collisions.length === 1
-        ? `The SKU ${collisions[0].sku} already exists. Change the pattern — this never renames a SKU for you.`
+        ? collisions[0].message ? `${collisions[0].message} Change the pattern — this never renames a SKU for you.`
+        : `The SKU ${collisions[0].sku} already exists. Change the pattern — this never renames a SKU for you.`
         : `${collisions.length} of these SKUs already exist (${collisions.slice(0, 3).map((c) => c.sku).join(', ')}${collisions.length > 3 ? ', …' : ''}). Change the pattern — this never renames a SKU for you.`,
     )
     this.name = 'SkuCollisionError'
@@ -293,8 +297,11 @@ export async function generateCombinations(input: GenerateInput): Promise<Genera
   const taken = wantedSkus.length > 0
     ? await prisma.product.findMany({ where: { sku: { in: wantedSkus } }, select: { id: true, sku: true } })
     : []
+  // S9 — and against the channel SKUs other products' listings hold or send (one SKU names one product).
+  const held = wantedSkus.length > 0 ? await channelSkuHoldings(prisma as unknown as Prisma.TransactionClient, wantedSkus.filter((sku) => !taken.some((row) => row.sku === sku))) : []
   const collisions = [
     ...taken.map((row) => ({ sku: row.sku, existingProductId: row.id })),
+    ...held.map((holding) => ({ sku: holding.sku, existingProductId: holding.productId, message: holding.sentence })),
     ...[...new Set(duplicateInRun)].map((sku) => ({ sku, existingProductId: '(twice in this run)' })),
   ]
 
@@ -382,6 +389,8 @@ export async function generateCombinations(input: GenerateInput): Promise<Genera
     // rather than about the SKU an operator chose.
     const late = await tx.product.findMany({ where: { sku: { in: wantedSkus } }, select: { id: true, sku: true } })
     if (late.length > 0) throw new SkuCollisionError(late.map((row) => ({ sku: row.sku, existingProductId: row.id })))
+    const lateHeld = await channelSkuHoldings(tx as unknown as Prisma.TransactionClient, wantedSkus)
+    if (lateHeld.length > 0) throw new SkuCollisionError(lateHeld.map((holding) => ({ sku: holding.sku, existingProductId: holding.productId, message: holding.sentence })))
 
     const out: Array<{ id: string; sku: string }> = []
     for (const row of plan) {

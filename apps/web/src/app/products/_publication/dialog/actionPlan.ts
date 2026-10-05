@@ -55,6 +55,8 @@ export const FIELDS_NOT_LISTED = 'The fields to send were not listed. Check agai
 export const WHOLE_NEW = 'The whole product is sent (a new listing).'
 export const WHOLE_AGAIN = 'The whole product is sent again.'
 export const NO_LONGER_APPLIES = 'No longer applies'
+/** S10 — a move whose create is unticked: nothing is created, and the old SKU is not deleted. */
+export const MOVE_UNTICKED = 'Unticked: nothing is created, and the old SKU stays.'
 export const CLEARED_ON_SEND = 'It is cleared when you publish.'
 export const STARTS_UNTICKED = 'Starts unticked.'
 export const PLAN_CHANGED = 'A waiting value changed while you looked. The review is updated.'
@@ -151,6 +153,8 @@ export type PlanRowKind = 'content' | 'lifecycle' | 'outgrown' | 'held'
  */
 export type PlanRowWhat =
   | { column: 'send'; mode: SendMode; setAt: string | null; setByName: string | null; newRow?: boolean }
+  /** S10 — a live Amazon listing moved to its own SKU: the create of NEW, then the delete of OLD ("Move to NEW"). */
+  | { column: 'move'; from: string; to: string }
   | { column: 'status'; target: StatusTarget; state: SellingState; setAt: string | null; setByName: string | null }
 
 /**
@@ -202,7 +206,7 @@ export interface ActionPlanRow {
 }
 
 /** Danger first (Delete, then End), then Pause, Full update, Resume and Relist, Partial; rows that send nothing last. */
-const RANK: Readonly<Record<string, number>> = { delete: 0, end: 1, pause: 2, full: 3, resume: 4, relist: 4, partial: 5, idle: 6, held: 7, outgrown: 8 }
+const RANK: Readonly<Record<string, number>> = { delete: 0, move: 0, end: 1, pause: 2, full: 3, resume: 4, relist: 4, partial: 5, idle: 6, held: 7, outgrown: 8 }
 
 /** A removed value as one short line. */
 export function removalText(value: unknown): string {
@@ -260,6 +264,8 @@ const rankOf = (row: ActionPlanRow): number => {
   if (row.kind === 'held' || row.notListed) return RANK.held
   if (row.kind === 'lifecycle') return RANK[row.action ?? 'partial'] ?? RANK.partial
   if (row.notSent || row.tick === 'none') return RANK.idle
+  // S10 — a move deletes the old SKU: with the deletes, first.
+  if (row.what.column === 'move') return RANK.move
   return row.what.column === 'send' && row.what.mode === 'full' ? RANK.full : RANK.partial
 }
 
@@ -310,22 +316,33 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     const relistWords = relist ? (row.startsAs === 'inactive' ? `${relist.sentence} ${START_AS_WORD.inactive} — ${CREATES_INACTIVE_NOTE}.` : relist.sentence) : null
     // Held back (problems, an earlier publish) it still names the relist, then why it waits.
     if (relistWords) sent = notSent ? `${relistWords} ${notSent}` : tick === 'off' ? `${relistWords} ${RELIST_UNTICKED}` : relistWords
+    // S10 — a row the channel holds under another SKU says what this Publish does about it ("Creates GALE-M-IT on Amazon ·
+    // IT as a new offer, then deletes GALE-M there."; "eBay renames GALE-M to GALE-M-IT."); a held row says only why it waits.
+    // A moved Amazon row (`mode: 'move'`) is the create of NEW and the delete of OLD: its sentence is what is sent.
+    const move = row.skuMove ?? null
+    const moving = row.mode === 'move' && move?.kind === 'create-delete'
+    if (move && !notSent) sent = move.kind === 'none' ? `${sent} · ${move.sentence}` : tick === 'off' ? `${move.sentence} ${MOVE_UNTICKED}`
+      : moving ? move.sentence : `${move.sentence} ${sent}`
     // New listings: Not listed leaves the row out (held, with the server's reason); a row this review creates says how.
     const notListed = !!row.notListed || !!row.deleted || heldNotListed.has(row.productId)
     const startsAs = !notListed && !relist && row.startsAs ? row.startsAs : null
-    const creates = startsAs ? { startsAs, sentence: tick === 'off' && !notSent ? `${createsLine(row.sku, startsAs, channel)} ${CREATE_UNTICKED}` : createsLine(row.sku, startsAs, channel) } : null
+    // S10 — the create line names the SKU it sends (the listing's own, when it has one).
+    const sentSku = row.sendsSku ?? row.sku
+    const creates = startsAs ? { startsAs, sentence: tick === 'off' && !notSent ? `${createsLine(sentSku, startsAs, channel)} ${CREATE_UNTICKED}` : createsLine(sentSku, startsAs, channel) } : null
     // A row not on the channel (created, or listed again) reads Full update: it is always sent whole.
     const newRow = !!creates || !!relist
     const what: PlanRowWhat = notListed ? NOT_LISTED_WHAT
+      : moving ? { column: 'move', from: move!.from, to: move!.to }
       : { column: 'send', mode: newRow ? 'full' : mode, setAt: null, setByName: null, ...(newRow ? { newRow } : {}) }
     rows.push({
       key: `content:${row.productId}`, kind: 'content', productId: row.productId, sku: row.sku,
-      what, action: null, sent, warning: relist?.warning ?? null,
+      what, action: null, sent, warning: relist?.warning ?? (move && !notSent ? move.warning : null) ?? null,
       checkedAtSend: null, notSent, setBy: null, stale: false,
-      tick, tickable: tick !== 'none' && tick !== 'whole' && !!review?.id, danger: false,
+      // S10 — a move deletes the old SKU: a danger row, like Delete.
+      tick, tickable: tick !== 'none' && tick !== 'whole' && !!review?.id, danger: moving && !notSent,
       changeIds: changes.map(c => c.id), defaultFieldIds: (defaults.length ? defaults : usable).map(c => c.id),
       fields: { ticked: on, total: usable.length }, removals,
-      expandable: sparse && !notSent && (changes.length > 0 || removals.length > 0),
+      expandable: sparse && !notSent && !moving && (changes.length > 0 || removals.length > 0),
       creates, notListed,
     })
   }
@@ -383,6 +400,8 @@ export interface PlanConfirm {
   expected: string
   ended: number
   deleted: number
+  /** S10 — live Amazon listings this Publish moves to a new SKU (their old SKU is deleted once Amazon accepts the new one). */
+  moved?: number
   /** The destinations with a ticked Ended or Delete row ("eBay · IT"). */
   places: string[]
 }
@@ -405,6 +424,18 @@ export interface ActionPlanSend {
   roleLocked: { ended: number; deleted: number }
   /** The batch (`{ plan }`), else today's direct submit. */
   batch: boolean
+}
+
+/**
+ * S10 — the rows of a destination's content review that move a live Amazon listing to a new SKU (create NEW, then delete
+ * OLD) and whose create is ticked. Each one needs the typed confirmation.
+ */
+export function movedRowsTicked(entry: Pick<DestinationEntry, 'review' | 'selectedIds'>): number {
+  const review = entry.review
+  if (!review?.confirm) return 0
+  const ticked = new Set(tickedChanges(entry))
+  return review.rows.filter(row => row.skuMove?.kind === 'create-delete'
+    && (review.changes ?? []).some(change => change.productId === row.productId && ticked.has(change.id))).length
 }
 
 /** A destination's content counts only while it can go (ready, or waiting for an input or a fresh check). */
@@ -433,15 +464,20 @@ export function actionPlanSend(keys: readonly string[], stateOf: (key: string) =
   const outgrown = plans.flatMap(plan => plan.outgrown.map(row => row.id))
 
   let confirm: PlanConfirm | null = null
-  if (confirmRowsTicked({ destinations: plans }, lifecycle) > 0) {
+  // S10 — content that moves a live Amazon listing to a new SKU deletes the old SKU: typed like Delete, and sent through
+  // the batch, which carries the typed confirmation (`confirmDelete`).
+  const moving = content.filter(key => contentCounts(stateOf(key)) && movedRowsTicked(entryOf(key)) > 0)
+  if (confirmRowsTicked({ destinations: plans }, lifecycle) > 0 || moving.length) {
     const rows = lifecycleRows.filter(row => row.needsTypedConfirm)
-    const places = send.filter(key => tickedLifecycleRows(entryOf(key)).some(row => row.needsTypedConfirm)).map(key => entryOf(key).plan?.label ?? key)
-    const expected = keys.map(key => entryOf(key).familySku).find((sku): sku is string => !!sku) ?? ''
-    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places }
+    const places = [...new Set([...send.filter(key => tickedLifecycleRows(entryOf(key)).some(row => row.needsTypedConfirm)), ...moving])].map(key => entryOf(key).plan?.label ?? key)
+    const expected = keys.map(key => entryOf(key).familySku).find((sku): sku is string => !!sku)
+      ?? moving.map(key => entryOf(key).review?.confirm?.expected).find((sku): sku is string => !!sku) ?? ''
+    const moved = moving.reduce((n, key) => n + movedRowsTicked(entryOf(key)), 0)
+    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(moved ? { moved } : {}) }
   }
   const locked = plans.flatMap(plan => plan.lifecycle).filter(row => row.refused === ROLE_CANNOT_END_OR_DELETE)
   const roleLocked = { ended: locked.filter(row => row.action === 'end').length, deleted: locked.filter(row => row.action === 'delete').length }
-  const batch = send.length > 0 && publishPlanUsesBatch({ destinations: plans }, { destinations: send.length, lifecycle })
+  const batch = send.length > 0 && (moving.length > 0 || publishPlanUsesBatch({ destinations: plans }, { destinations: send.length, lifecycle }))
   return { send, content, lifecycle, outgrown, counts, wholeProducts: base.wholeProducts, confirm, roleLocked, batch }
 }
 
@@ -510,10 +546,12 @@ export function planStateLabel(state: DestinationState, entry: Pick<DestinationE
 }
 
 /** "to end 1 listing and delete 1 on eBay · IT" — the words after "Type GALE-JACKET". */
-export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places'>): string {
+export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved'>): string {
   const parts = [
     confirm.ended ? `end ${plural(confirm.ended, 'listing', 'listings')}` : null,
     confirm.deleted ? (confirm.ended ? `delete ${confirm.deleted.toLocaleString('en')}` : `delete ${plural(confirm.deleted, 'listing', 'listings')}`) : null,
+    // S10 — "move 1 listing to its new SKU (its old SKU is deleted)".
+    confirm.moved ? `move ${plural(confirm.moved, 'listing', 'listings')} to ${confirm.moved === 1 ? 'its new SKU (its old SKU is deleted)' : 'their new SKUs (their old SKUs are deleted)'}` : null,
   ].filter(Boolean).join(' and ')
   const places = confirm.places.length === 0 ? '' : confirm.places.length <= 2 ? ` on ${confirm.places.join(' and ')}` : ` on ${confirm.places.length} markets`
   return `to ${parts}${places}`
@@ -543,7 +581,7 @@ export function roleLockSentence(locked: { ended: number; deleted: number }): st
  */
 export function planButtonText(counts: PublishPlanCounts, sending: readonly string[], word: { one: string; many: string }, skippedMarkets: readonly string[] = [],
   wholeProducts = 0): string {
-  const listings = counts.partial + counts.full + counts.active + counts.inactive + wholeProducts
+  const listings = counts.partial + counts.full + (counts.moved ?? 0) + counts.active + counts.inactive + wholeProducts
   const places = sending.length
   const skipped = marketsSendingNothing(skippedMarkets, sending).length
   const where = places > 1 ? plural(places, word.one, word.many) : ''
@@ -572,6 +610,8 @@ export function planSubmit(productId: string, send: ActionPlanSend, entryOf: (ke
         ...(isSparse(review) && entry.selection?.token ? { selectionToken: entry.selection.token } : {}),
         ...(!isSparse(review) && entry.confirmedReviewId === review.id ? { confirmOverwrite: true } : {}),
         ...(review.locations ? { locationId: entry.locationId } : {}),
+        // S10 — this content deletes an old Amazon SKU (a move): the typed family SKU below confirms it.
+        ...(movedRowsTicked(entry) > 0 && send.confirm && confirmText ? { confirmDelete: true } : {}),
       }]
     }),
     lifecycle: [...send.lifecycle],

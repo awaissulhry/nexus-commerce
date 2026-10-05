@@ -25,7 +25,9 @@ import { object } from './studio-publication-plan.js'
 import { readAmazonPublication } from './studio-publication-amazon.js'
 import { readEbayPublication } from './studio-publication-ebay.js'
 import { settlePublicationRecords, type PublicationRecordContext } from './studio-publication-records.js'
-import { confirmLiveChannelSku } from '../listings/channel-sku.js'
+import { CHANNEL_SKU_LISTING_SELECT, confirmLiveChannelSku } from '../listings/channel-sku.js'
+import { liveChannelSku } from '../listings/channel-sku.pure.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 
 export const PUBLICATION_KIND = 'studio-publication'
 export const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
@@ -228,8 +230,24 @@ async function confirmAcceptedSellerSkus(tx: Prisma.TransactionClient, context: 
   }
   for (const row of rows) {
     const sku = object(row.payload).sku
-    if (typeof sku === 'string' && sku.trim()) await confirmLiveChannelSku(tx, row.channelListingId, sku)
+    if (typeof sku !== 'string' || !sku.trim()) continue
+    // S10 — an eBay row this publication renamed in place: its shared-listing membership follows the new SKU (the stock
+    // fan-out and order matching read it by SKU), as the variation relabel does. A membership already under the new SKU
+    // is left as it is.
+    if (context.channel === 'EBAY') await followEbayRename(tx, context, row.channelListingId, sku.trim())
+    await confirmLiveChannelSku(tx, row.channelListingId, sku)
   }
+}
+
+/** S10 — the membership of an eBay row renamed from the SKU eBay held to `sku` (before that SKU is recorded as live). */
+async function followEbayRename(tx: Prisma.TransactionClient, context: PublicationRecordContext, listingId: string, sku: string): Promise<void> {
+  const listing = await tx.channelListing.findUnique({ where: { id: listingId }, select: CHANNEL_SKU_LISTING_SELECT })
+  if (!listing?.externalListingId || isStillDraftListing(listing)) return
+  const before = liveChannelSku(listing, listing.product?.sku)?.sku
+  if (!before || before === sku) return
+  const where = { marketplace: context.marketplace.toUpperCase(), itemId: listing.externalListingId }
+  if (await tx.sharedListingMembership.findFirst({ where: { ...where, sku }, select: { id: true } })) return
+  await tx.sharedListingMembership.updateMany({ where: { ...where, sku: before, OR: [{ productId: listing.productId }, { productId: null }] }, data: { sku } })
 }
 
 /** New listings — the rows a publication created Inactive (`inactiveProductIds`), with Amazon's product type and FBA fact. */
@@ -313,6 +331,12 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
   if (stored.count && data.captureVersion === 1) await import('./studio-publication-offer-promotion.js')
     .then(({ promoteOffersAfterResult }) => promoteOffersAfterResult(id, data, result, userId))
     .catch(error => logger.warn('studio publication: offer promotion not loaded; the result sweep runs it', { publicationId: id, error: error instanceof Error ? error.message : String(error) }))
+  // S10 (per-channel SKU) — live Amazon listings this publication moved to a new SKU: each OLD whose NEW Amazon accepted is
+  // deleted there now, once (`studio-publication-amazon-move.ts`; the result sweep recovers a run that never finished).
+  // A refused NEW deletes nothing. The sentences join `result.warnings`. Never throws.
+  if (stored.count && data.captureVersion === 1 && Array.isArray(data.skuMoves) && data.skuMoves.length) await import('./studio-publication-amazon-move.js')
+    .then(({ finishAmazonMovesAfterResult }) => finishAmazonMovesAfterResult(id, data, result, userId))
+    .catch(error => logger.warn('studio publication: SKU moves not loaded; the result sweep runs them', { publicationId: id, error: error instanceof Error ? error.message : String(error) }))
   return stored
 }
 

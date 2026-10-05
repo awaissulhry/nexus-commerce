@@ -394,8 +394,9 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       }
       const target = await prisma.channelListing.findFirst({ where: whereCoordinate(req), select: { id: true } })
       if (!target) throw new Error('The listing of this recovery is gone, so its new SKU was not saved.')
+      // `liveMove: 'allow'`: step 1 deleted the old Amazon listing, so this is no move of a live listing (S9's refusal).
       await prisma.$transaction(tx => setChannelSku(tx, {
-        listingId: target.id, sku: newSku, actorId: req.initiatedBy ?? null, reason: `Listing recovery (${req.action})`,
+        listingId: target.id, sku: newSku, actorId: req.initiatedBy ?? null, reason: `Listing recovery (${req.action})`, liveMove: 'allow',
       }))
       await pushStep('renamed_sku')
     }

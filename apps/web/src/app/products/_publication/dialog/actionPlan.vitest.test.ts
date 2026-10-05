@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AMAZON_PAN_EU_DELETE_WARNING, deleteDoneSentence, fbaDeleteWarning } from '@nexus/shared/listing-actions'
 import { relistSentence } from '@nexus/shared/publish-actions'
-import type { StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
+import { moveModeLabel, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
 import { ROLE_CANNOT_END_OR_DELETE, confirmMatches, type PublishPlanBatchChild, type PublishPlanDestination, type PublishPlanLifecycleRow } from '@nexus/shared/publish-plan'
 import { EMPTY_ENTRY, destinationState, initialTicks, type DestinationEntry } from './destinations'
 import { matchesPublishPlan } from './model'
@@ -444,5 +444,66 @@ describe('new listings in the Publish window', () => {
       body: 'Buyers cannot buy it until you set it Active and Publish. The saved sales-channel selections are applied.' })
     expect(shopifyVisibilityWords({ visibility: 'ACTIVE', action: 'update', rows: [{ ...rowsNew[0], existing: true }] })?.title).toBe('Shopify status: Active')
     expect(shopifyVisibilityWords({ visibility: undefined, action: 'create', rows: rowsNew })).toBeNull()
+  })
+})
+
+// ── S10 (per-channel SKU): a live listing moved to its own SKU, and the SKU each line names ─────────────────────────────
+describe('S10 — a SKU move in the Publish window', () => {
+  const AMAZON_IT: StudioPublishScope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'amz' }
+  const move = { from: 'GALE-S', to: 'GALE-S-IT', kind: 'create-delete' as const, sentence: 'Creates GALE-S-IT on Amazon · IT as a new offer, then deletes GALE-S there.', warning: 'GALE-S-IT starts with no FBA units.' }
+  const moving = (over: Partial<StudioPublishReview> = {}) => destination(AMAZON_IT, { label: 'Amazon · IT', fullProductIds: [], review: review(AMAZON_IT, {
+    rows: [{ productId: 'gale-s', sku: 'GALE-S', title: 'Jacket S', existing: true, mode: 'move', sendsSku: 'GALE-S-IT', skuMove: move },
+      { productId: 'gale-m', sku: 'GALE-M', title: 'Jacket M', existing: true, mode: 'partial' }],
+    changes: [change('gale-s', '$create'), change('gale-m', 'title')], removals: undefined,
+    confirm: { kind: 'type', expected: 'GALE-JACKET', token: 'DELETE', sentence: 'This Publish deletes GALE-S on Amazon · IT once Amazon accepts its new SKU.' }, ...over }) })
+
+  it('the row reads its own mode, "Move to NEW" — never Partial or Full update — as a danger row first, with its FBA note', () => {
+    const plan = moving()
+    const rows = actionPlanRows(entryOf(plan), destinationState(entryOf(plan), true, NOW), NOW)
+    const row = rows.find(r => r.key === 'content:gale-s')!
+    expect(row.what).toEqual({ column: 'move', from: 'GALE-S', to: 'GALE-S-IT' })
+    expect(moveModeLabel('GALE-S-IT')).toBe('Move to GALE-S-IT')
+    expect(row.sent).toBe(move.sentence)
+    expect(row.warning).toBe(move.warning)
+    expect(row.danger).toBe(true)
+    expect(row.expandable).toBe(false)
+    expect(rows.map(r => r.key)).toEqual(['content:gale-s', 'content:gale-m'])
+    expect(rows.find(r => r.key === 'content:gale-m')!.what).toMatchObject({ column: 'send', mode: 'partial' })
+  })
+
+  it('the summary and the button count a move as a move, not a partial update', () => {
+    const entries = { it: entryOf(moving()) }
+    const send = sendOf(entries)
+    expect(send.counts).toMatchObject({ partial: 1, fields: 1, full: 0, moved: 1 })
+    expect(planSummaryLine(send.counts)).toBe('1 partial update (1 field) · 1 move to a new SKU')
+    expect(planButtonText({ ...send.counts, delete: 1 }, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 2 listings · delete 1')
+  })
+
+  it('a ticked move asks for the typed family SKU like Delete, and goes through the batch with confirmDelete', () => {
+    const entries = { it: entryOf(moving()) }
+    const send = sendOf(entries)
+    expect(send.confirm).toEqual({ expected: 'GALE-JACKET', ended: 0, deleted: 0, places: ['Amazon · IT'], moved: 1 })
+    expect(send.batch).toBe(true)
+    expect(confirmSentence(send.confirm!)).toBe('Type GALE-JACKET to move 1 listing to its new SKU (its old SKU is deleted) on Amazon · IT')
+    const body = planSubmit('gale', send, key => entries[key as 'it'], () => AMAZON_IT, 'GALE-JACKET')
+    expect(body.destinations[0]).toMatchObject({ reviewId: 'r-IT', confirmDelete: true })
+    expect(body.confirmText).toBe('GALE-JACKET')
+  })
+
+  it('an unticked move asks for nothing, sends no confirmDelete, and says the old SKU stays', () => {
+    const plan = moving()
+    const entry = entryOf(plan, { selectedIds: [] })
+    expect(sendOf({ it: entry }).confirm).toBeNull()
+    const row = actionPlanRows(entry, destinationState(entry, true, NOW), NOW).find(r => r.key === 'content:gale-s')!
+    expect(row.sent).toBe(`${move.sentence} Unticked: nothing is created, and the old SKU stays.`)
+    expect(row.what).toEqual({ column: 'move', from: 'GALE-S', to: 'GALE-S-IT' })
+  })
+
+  it('a create line names the SKU it sends (the listing\'s own)', () => {
+    const plan = destination(AMAZON_IT, { label: 'Amazon · IT', fullProductIds: [], review: review(AMAZON_IT, {
+      rows: [{ productId: 'gale-s', sku: 'GALE-S', title: 'Jacket S', existing: false, mode: 'partial', startsAs: 'active', sendsSku: 'GALE-S-IT' }],
+      changes: [change('gale-s', '$create')], removals: undefined, action: 'create' }) })
+    const row = actionPlanRows(entryOf(plan), destinationState(entryOf(plan), true, NOW), NOW).find(r => r.key === 'content:gale-s')!
+    expect(row.creates?.sentence).toBe(createsLine('GALE-S-IT', 'active', 'AMAZON'))
   })
 })

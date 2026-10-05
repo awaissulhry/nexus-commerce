@@ -323,6 +323,18 @@ describe('delete and relist (simplify) — a market Nexus deleted, in the shared
     expect(sharedDeletedRefusal(deleted())).toBe(refusal)
   })
 
+  it('an UNLINKED market says the unlink\'s truth: counted "1 unlinked", never "lists again" or "list it again"', () => {
+    const unlinked = deleted({ deleted: { at: '2026-10-05T06:00:00.000Z', where: 'eBay · IT', oldReference: '520000000001', relistChosenAt: null, sku: null, unlinked: true,
+      sentence: 'Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates it.' } })
+    const said = 'Unlinked from eBay · IT: the item may still be live there, and Nexus no longer updates it. Link its Item ID again in the eBay · IT sheet.'
+    expect(sharedDeletedRefusal(unlinked)).toBe(said)
+    expect(sellingSummaryOf([cell({ marketplace: 'DE' }), unlinked])).toMatchObject({ deleted: 0, unlinked: 1 })
+    expect(sharedStatusValue([cell({ marketplace: 'DE' }), unlinked], read, NOW)).toMatchObject({ aside: '1 unlinked' })
+    expect(sharedStatusValue([unlinked], read, NOW)!.lockedReason).toBe(said)
+    expect(sharedStatusValue([unlinked, deleted({ marketplace: 'DE' })], read, NOW)!.lockedReason).not.toMatch(/^Deleted on every market/)
+    expect(sharedActionValue([cell({ marketplace: 'DE' }), unlinked], read, NOW)!.aside).toBe('1 unlinked')
+  })
+
   it('Status: a deleted market reads Not listed (counted "1 deleted"), its line says why; deleted on every market = read-only', () => {
     const cells = [cell({ marketplace: 'DE' }), deleted()]
     expect(sellingSummaryOf(cells)).toMatchObject({ word: 'Active in 1 of 2', deleted: 1, fresh: 0 })

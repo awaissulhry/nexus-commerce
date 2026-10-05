@@ -255,7 +255,10 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       const messages = prepared.feed.messages.filter(message => message.sku === product.sku)
       if (messages.length !== 1 || !facts.products.some(p => p.id === product.productId)) throw new Error(`${product.sku}: the prepared product identity is ambiguous.`)
       const message = messages[0], current = currentRoots(message)
-      const newListing = !facts.listings.find(listing => listing.productId === product.productId)?.externalListingId && !previouslyPublished.has(product.productId)
+      // S10 — a moved row is the create of its NEW seller SKU (OLD is deleted after Amazon accepts it): reviewed and sent
+      // as a new listing, so Amazon must not hold NEW yet.
+      const moved = !!prepared.moves?.some(move => move.productId === product.productId)
+      const newListing = moved || (!facts.listings.find(listing => listing.productId === product.productId)?.externalListingId && !previouslyPublished.has(product.productId))
       // A new listing is always sent whole (its create); Full update is a mode of an existing listing only.
       const full = !newListing && !!options.fullProductIds?.has(product.productId)
       const meta: ProductPlan = { ...product, newListing, patches: {}, content: {}, contentRoots: {}, ...(full ? { full: true as const } : {}) }
@@ -288,6 +291,7 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
         const relisted = options.relist?.get(product.productId)
         const stillRemoving = relisted && Date.now() - Date.parse(relisted.deletedAt) < RELIST_WAIT_MS
         const refusal = readError ?? (confirmedAbsent ? null : stillRemoving ? `${AMAZON_RELIST_TOO_EARLY(relisted.deletedAt)} (Amazon still shows this SKU here.)`
+          : moved ? `${product.sku} already exists on Amazon here. Nexus moves a listing by creating its new SKU, so choose a SKU Amazon does not hold yet; nothing was deleted.`
           : 'This seller SKU already exists on Amazon. Link the existing listing before publishing; a full UPDATE was refused.')
         observations[index] = { sku: product.sku, newListing: true, confirmedAbsent, error: refusal }
         inputs[index].push({ ...product, field: '$create', label: 'Create complete listing', current: known(message), lastAccepted: unknown('No accepted publish record'),
@@ -424,6 +428,9 @@ export function compileAmazonChanges(plan: AmazonChangePlan, selectedIds: string
     }
     products.push({ productId: product.productId, sku: product.sku })
   }
+  // S10 — the moves whose NEW create was selected: only those delete their OLD once Amazon accepts NEW.
+  const moves = (plan.publication.moves ?? []).filter(move => products.some(product => product.productId === move.productId))
   return { kind: 'amazon', sellerId: plan.publication.sellerId, marketplaceId: plan.publication.marketplaceId, products,
-    feed: { header: clone(plan.publication.feed.header), messages }, fieldWrites, ...(Object.keys(offers).length ? { offers } : {}) }
+    feed: { header: clone(plan.publication.feed.header), messages }, fieldWrites, ...(Object.keys(offers).length ? { offers } : {}),
+    ...(moves.length ? { moves: clone(moves) } : {}) }
 }

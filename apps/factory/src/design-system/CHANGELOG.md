@@ -13,6 +13,10 @@
 
 `shapeFormat.ts`: new `unitChoiceLabels(units)` — unit codes read as symbols (`KILOGRAM` → "kg"; the value stays the code); the measure tooltip and unit warning list symbols. `MeasureEditor`: the unit list shows them. `slotListColumnDef`: optional `headerName` (absent = `label`). Mirrored from the web app.
 
+## An unlinked row is never listed as new — 2026-10-05
+
+`sellingStatus.ts`: optional `NewListingCellFacts.deleted.unlinked` — "unlinked 5 Oct" (`UNLINKED_MARK`) instead of "lists again", the word alone as the screen-reader head, `NEW_CHOICE_UNLINKED` in the editor. `publishAction.ts`: optional `PublishActionValue.unlinked` — drawn quiet with `UNLINKED_ROW_LEFT_OUT_HINT`. Both exported from `grid/renderers`. Absent = unchanged. Mirrored from the web app.
+
 ## Partial update says when Publish sends no field — 2026-10-05
 
 `publishAction.ts`: optional `PublishActionValue.partialNote` replaces the Partial update hint in the tooltip and the screen-reader sentence; `sendModeEditorOptions` notes a Partial update choice's `warning` as "The default. <warning>" (`sendModeDefaultNote`, exported from `grid/renderers`). Absent = unchanged. Mirrored from the web app.

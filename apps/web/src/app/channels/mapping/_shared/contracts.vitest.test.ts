@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isCategoryField, emptyReason, fieldWithPreviewRule, mappingOriginLabel, type CatalogueField, type ResolvedCell } from './contracts'
+import { isCategoryField, emptyReason, fieldWithPreviewRule, mappingOriginLabel, ruleNotUsedView, type CatalogueField, type ResolvedCell } from './contracts'
 
 describe('mapping display provenance', () => {
   const field = { fieldKey: 'pattern', rule: null, status: 'unmapped', ruleKind: 'unmapped' } as CatalogueField
@@ -23,4 +23,19 @@ it('routes Shopify custom product type to its data mapping editor', () => {
   expect(isCategoryField('productType', 'SHOPIFY')).toBe(false)
   expect(isCategoryField('productType', 'AMAZON')).toBe(true)
   expect(isCategoryField('categoryId', 'EBAY')).toBe(true)
+})
+
+describe('a column that takes no mapping rule (the Shopify SKU column)', () => {
+  const line = "The SKU column always sends the listing's own SKU, or the product SKU; edit it in the product sheet."
+  const sku = { fieldKey: 'listing_sku', rule: { source: 'sku' }, status: 'mapped', ruleKind: 'attribute', ruleOrigin: 'master', ruleNotUsed: line } as CatalogueField
+  it('is read-only with the server\'s one line', () => {
+    expect(ruleNotUsedView(sku)).toEqual({ line, pill: { label: 'Read-only', tone: 'neutral' } })
+  })
+  it('a rule saved before (market or category) is shown "Not used", with the same line', () => {
+    expect(ruleNotUsedView({ ...sku, ruleOrigin: 'default' })).toEqual({ line, pill: { label: 'Not used', tone: 'warning' } })
+    expect(ruleNotUsedView({ ...sku, ruleOrigin: 'category' })?.pill.label).toBe('Not used')
+  })
+  it('every other column is an ordinary, editable one', () => {
+    expect(ruleNotUsedView({ ...sku, ruleNotUsed: undefined })).toBeNull()
+  })
 })

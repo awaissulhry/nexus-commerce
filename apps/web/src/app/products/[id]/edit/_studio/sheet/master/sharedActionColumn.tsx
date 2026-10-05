@@ -88,9 +88,11 @@ export const sharedSendCell = (cell: PublishActionCell): PublishActionCell => sh
 
 /** "1 deleted · 1 lists again" — the deleted markets of a product, or null. */
 function deletedWords(cells: readonly PublishActionCell[]): string | null {
-  const off = cells.filter(cell => cell.deleted && cell.create?.target === 'not_listed').length
-  const again = cells.filter(cell => cell.deleted && cell.create && cell.create.target !== 'not_listed').length
-  return [off ? `${n(off)} deleted` : null, again ? `${n(again)} lists again` : null].filter(Boolean).join(' · ') || null
+  // An unlinked market (Item ID control) is counted apart: Publish leaves it out whatever it holds — never "lists again".
+  const unlinked = cells.filter(cell => cell.deleted?.unlinked).length
+  const off = cells.filter(cell => cell.deleted && !cell.deleted.unlinked && cell.create?.target === 'not_listed').length
+  const again = cells.filter(cell => cell.deleted && !cell.deleted.unlinked && cell.create && cell.create.target !== 'not_listed').length
+  return [off ? `${n(off)} deleted` : null, again ? `${n(again)} lists again` : null, unlinked ? `${n(unlinked)} unlinked` : null].filter(Boolean).join(' · ') || null
 }
 
 /** One market's Action as a tooltip line. */
@@ -138,7 +140,7 @@ export function sharedActionValue(cells: readonly PublishActionCell[], read: Pub
   const waiting = sendWaitingOf(listedCells)
   if (!waiting && notOn.length === total) {
     // On no channel: Full update (sent whole) — quiet when every market's Status leaves it out.
-    const goesOut = notOn.some(cell => cell.create!.target !== 'not_listed')
+    const goesOut = notOn.some(cell => cell.create!.target !== 'not_listed' && !cell.deleted?.unlinked)
     const words = total > 1 ? `${SEND_MODE_WORD.full} on every market (${n(total)})` : SEND_MODE_WORD.full
     const aside = [total > 1 ? `${n(total)} markets` : null, gone].filter(Boolean).join(' · ') || null
     const hint = goesOut ? NEW_ROW_SENT_WHOLE : `${NEW_ROW_SENT_WHOLE} Every market's Status is Not listed, so Publish leaves ${total === 1 ? 'it' : 'them'} out.`
@@ -185,7 +187,8 @@ export function sharedActionEditorOptions(input: readonly PublishActionCell[], c
     const gone = cells.filter(cell => cell.deleted)
     if (mode === 'partial' && gone.length === total) return { ...base, heldReason: sharedDeletedRefusal(gone[0]), note: sharedDeletedRefusal(gone[0]) }
     if (mode === 'partial') {
-      const skipped = gone.length ? ` ${n(gone.length)} deleted ${gone.length === 1 ? 'market stays' : 'markets stay'} as ${gone.length === 1 ? 'it is' : 'they are'}: set ${gone.length === 1 ? 'its' : 'their'} Status in ${gone.length === 1 ? 'its' : 'their'} own sheet.` : ''
+      const word = gone.every(cell => cell.deleted?.unlinked) ? 'unlinked' : gone.some(cell => cell.deleted?.unlinked) ? 'deleted or unlinked' : 'deleted'
+      const skipped = gone.length ? ` ${n(gone.length)} ${word} ${gone.length === 1 ? 'market stays' : 'markets stay'} as ${gone.length === 1 ? 'it is' : 'they are'}: ${word === 'deleted' ? `set ${gone.length === 1 ? 'its' : 'their'} Status` : 'see what to do'} in ${gone.length === 1 ? 'its' : 'their'} own sheet.` : ''
       const note = sendModeDefaultNote(sharedPartialHint(cells.filter(cell => !cell.create)))
       return { ...base, note: `${waiting ? `Clears ${plural(waiting.count, 'waiting value', 'waiting values')}. ` : ''}${note}${skipped}` }
     }

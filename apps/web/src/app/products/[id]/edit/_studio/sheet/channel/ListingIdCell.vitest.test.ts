@@ -7,12 +7,12 @@
  */
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { MATRIX_COPY } from '../../matrix/contract'
 import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, DRAFT_CHIP_LABEL, draftChipDetail } from '../../draftListing'
 import {
-  ASIN_COLUMN_MIN_WIDTH, ASIN_COPY, AsinCell, asinCellKeys, asinCellModel, asinColumnDef, isListingIdKey, ITEM_ID_COLUMN_MIN_WIDTH, ITEM_ID_COPY,
+  ASIN_COLUMN_MIN_WIDTH, ASIN_CONTROL_COPY, ASIN_COPY, AsinCell, asinCellModel, asinColumnDef, asinKeyIntent, CHANNEL_ITEM_ID_COPY, isListingIdKey, ITEM_ID_COLUMN_MIN_WIDTH, ITEM_ID_COPY,
   ItemIdCell, itemIdCellModel, itemIdKeyIntent, listingIdCellModel, listingIdCellText, listingIdColumnDef, PARENT_ASIN_NOTE,
 } from './ListingIdCell'
 import type { ChannelSheetRow, SheetColumn } from './types'
@@ -23,6 +23,12 @@ function row(over: { asin?: string | null; listing?: Record<string, unknown> | n
     rowId: 'primary:v1', id: 'v1', isParent: over.isParent ?? false, listing,
     values: { listing_asin: { value: over.asin ?? null, editable: false, writable: false, writeBlockedReason: over.reason ?? 'Amazon assigns the ASIN; Nexus shows it.' } },
   } as unknown as ChannelSheetRow
+}
+
+/** A still-draft Amazon row whose ASIN cell carries the ASIN it lists on at Publish (the API's `pendingId`). */
+function suggestedRow(asin: string): ChannelSheetRow {
+  const r = row({ listing: { listingStatus: 'DRAFT', isPublished: false } })
+  return { ...r, values: { listing_asin: { value: null, editable: true, writable: true, writeBlockedReason: null, pendingId: { id: asin, sentence: `Lists on ${asin} at Publish` } } } } as unknown as ChannelSheetRow
 }
 
 const COL = { key: 'listing_asin', writeField: 'listing_asin', label: 'ASIN', width: 130, group: 'Identifiers', kind: 'text', storage: 'listing', scope: 'per_variant', requiredBy: [], editable: false, defaultVisible: true } as SheetColumn
@@ -78,14 +84,23 @@ describe('asinColumnDef and its keys', () => {
     expect((def.valueGetter as (p: unknown) => unknown)({ data: row({ asin: null }) })).toBeNull()
     expect(def.cellEditorSelector).toBeUndefined()
   })
-  it('Enter on the cell opens the ASIN on Amazon; other keys stay the grid\'s', () => {
-    const open = vi.fn()
-    const key = (k: string, type = 'keydown') => ({ key: k, type, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault: () => {} }) as unknown as KeyboardEvent
-    expect(asinCellKeys({ event: key('Enter'), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE', open)).toBe(true)
-    expect(open).toHaveBeenCalledWith('https://www.amazon.de/dp/B0DE000001')
-    expect(asinCellKeys({ event: key('c'), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE', open)).toBe(false)
-    expect(asinCellKeys({ event: key('Enter'), editing: false, data: row({ asin: null }) }, 'DE', open)).toBe(false)
-    expect(open).toHaveBeenCalledTimes(1)
+  it('(I4) Enter on a row with a listing opens the ASIN control; Delete clears only an ASIN set for Publish; other keys stay the grid\'s', () => {
+    const key = (k: string, extra: Record<string, unknown> = {}) => ({ key: k, type: 'keydown', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault: () => {}, ...extra }) as unknown as KeyboardEvent
+    expect(asinKeyIntent({ event: key('Enter'), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE')).toBe('edit')
+    expect(asinKeyIntent({ event: key('Delete'), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE')).toBeNull()
+    expect(asinKeyIntent({ event: key('Delete'), editing: false, data: suggestedRow('B0NEW00001') }, 'DE')).toBe('clear')
+    expect(asinKeyIntent({ event: key('c'), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE')).toBeNull()
+    expect(asinKeyIntent({ event: key('Enter', { ctrlKey: true }), editing: false, data: row({ asin: 'B0DE000001' }) }, 'DE')).toBeNull()
+    expect(asinKeyIntent({ event: key('Enter'), editing: true, data: row({ asin: 'B0DE000001' }) }, 'DE')).toBeNull()
+    expect(asinKeyIntent({ event: key('Enter'), editing: false, data: row({ listing: null }) }, 'DE')).toBeNull()
+    expect((def.suppressKeyboardEvent as (p: unknown) => boolean)({ event: key('Enter'), editing: false, data: row({ asin: 'B0DE000001' }) })).toBe(true)
+    expect((def.suppressKeyboardEvent as (p: unknown) => boolean)({ event: key('ArrowDown'), editing: false, data: row({ asin: 'B0DE000001' }) })).toBe(false)
+  })
+  it('(I4) a row not on Amazon with an ASIN set for Publish: "Lists on B0X at Publish", never as its ASIN (no copy, no export text)', () => {
+    expect(asinCellModel(suggestedRow('B0NEW00001'), 'DE')).toEqual({ kind: 'suggested', asin: 'B0NEW00001', label: 'Lists on B0NEW00001 at Publish', tooltip: ASIN_CONTROL_COPY.suggestedHover('B0NEW00001') })
+    expect(listingIdCellText(suggestedRow('B0NEW00001'), { channel: 'AMAZON', marketplace: 'DE' })).toBe('')
+    // A live ASIN wins over any stored suggestion.
+    expect(asinCellModel({ ...suggestedRow('B0NEW00001'), listing: { ...suggestedRow('B0NEW00001').listing!, externalListingId: 'B0LIVE0001' } }, 'DE')).toMatchObject({ kind: 'asin', asin: 'B0LIVE0001' })
   })
 })
 
@@ -163,7 +178,7 @@ describe('listingIdColumnDef — eBay', () => {
     expect((def.suppressKeyboardEvent as (p: unknown) => boolean)({ ...k('Enter'), data: ebayRow({ value: '520000000001', parentId: 'p' }) })).toBe(false)
     expect((def.suppressKeyboardEvent as (p: unknown) => boolean)({ ...k('ArrowDown'), data: ebayRow({ value: '520000000001' }) })).toBe(false)
   })
-  it('the Amazon branch is the ASIN\'s, as before', () => {
+  it('the Amazon branch is the ASIN\'s (its own control\'s keys)', () => {
     const amazon = listingIdColumnDef(COL, { channel: 'AMAZON', marketplace: 'DE' })
     expect(amazon.cellRenderer).toBe(AsinCell)
     expect(amazon.width).toBe(ASIN_COLUMN_MIN_WIDTH)
@@ -191,5 +206,62 @@ describe('ItemIdCell — DS parts only', () => {
   })
   it('without the sheet\'s control (no provider) the cell offers no Change action', () => {
     expect(render(ebayRow({ value: '520000000001' }))).not.toContain(ITEM_ID_COPY.change)
+  })
+})
+
+/* ── Etsy Listing ID (I2) and Shopify Product ID (I3) ─────────────────────────────────────────────────────────────── */
+
+function channelRow(over: { value?: string | null; listing?: Record<string, unknown> | null; parentId?: string | null; reason?: string | null } = {}): ChannelSheetRow {
+  return ebayRow(over)
+}
+const ETSY = { channel: 'ETSY', marketplace: 'GLOBAL' } as const
+const SHOPIFY = { channel: 'SHOPIFY', marketplace: 'GLOBAL' } as const
+
+describe('Etsy Listing ID cell', () => {
+  const E = CHANNEL_ITEM_ID_COPY.ETSY
+  it('the id that counts, with Copy and Open on etsy.com (one site for every market); ended says Ended', () => {
+    expect(itemIdCellModel(channelRow({ value: '1234567890' }), 'GLOBAL', 'ETSY')).toEqual({ kind: 'item', itemId: '1234567890', url: 'https://www.etsy.com/listing/1234567890', ended: false, tooltip: E.live('1234567890'), editable: true })
+    expect(itemIdCellModel(channelRow({ value: '1234567890', listing: { listingStatus: 'ENDED' } }), 'GLOBAL', 'ETSY')).toMatchObject({ ended: true, tooltip: E.endedHover('1234567890') })
+    expect(listingIdCellText(channelRow({ value: '1234567890' }), ETSY)).toBe('1234567890')
+  })
+  it('"Not confirmed" with Etsy\'s reason: not found on its last read (MISSING), or a status that does not sell', () => {
+    expect(itemIdCellModel(channelRow({ value: null, listing: { externalListingId: '1234567890', lastSyncStatus: 'MISSING' } }), 'GLOBAL', 'ETSY'))
+      .toEqual({ kind: 'notConfirmed', itemId: '1234567890', label: 'Not confirmed', tooltip: E.missingHover('1234567890'), editable: true })
+    expect(itemIdCellModel(channelRow({ value: null, listing: { externalListingId: '1234567890', listingStatus: 'DRAFT', isPublished: false } }), 'GLOBAL', 'ETSY'))
+      .toMatchObject({ kind: 'notConfirmed', tooltip: E.notConfirmedHover('1234567890', 'DRAFT') })
+  })
+  it('the control on the main row only; a variation row\'s hover is the server\'s sentence', () => {
+    const key = { key: 'Enter', type: 'keydown', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false } as unknown as KeyboardEvent
+    expect(itemIdKeyIntent({ event: key, editing: false, data: channelRow({ value: '1234567890' }) }, 'GLOBAL', 'ETSY')).toBe('edit')
+    const variation = channelRow({ value: '1234567890', parentId: 'p', reason: 'Set on the main row: one Etsy listing carries the whole family.' })
+    expect(itemIdKeyIntent({ event: key, editing: false, data: variation }, 'GLOBAL', 'ETSY')).toBeNull()
+    expect(itemIdCellModel(variation, 'GLOBAL', 'ETSY')).toMatchObject({ editable: false, tooltip: 'Set on the main row: one Etsy listing carries the whole family.' })
+  })
+  it('the column: the Item ID cell with Etsy\'s words, its keys, its Open action', () => {
+    const def = listingIdColumnDef({ ...ITEM_COL, label: 'Listing ID' } as SheetColumn, ETSY)
+    expect(def.cellRenderer).toBe(ItemIdCell)
+    expect(def.cellRendererParams).toEqual({ market: 'GLOBAL', channel: 'ETSY' })
+    const html = renderToStaticMarkup(createElement(ItemIdCell, { data: channelRow({ value: '1234567890' }), market: 'GLOBAL', channel: 'ETSY', node: { rowIndex: 0 }, api: { setFocusedCell: () => {} }, column: { getColId: () => 'listing_item_id' }, eGridCell: null } as never))
+    expect(html).toContain(`aria-label="${E.copy('1234567890')}"`)
+    expect(html).toContain(`aria-label="${E.open}"`)
+  })
+})
+
+describe('Shopify Product ID cell', () => {
+  const S = CHANNEL_ITEM_ID_COPY.SHOPIFY
+  const render = (data: ChannelSheetRow) => renderToStaticMarkup(createElement(ItemIdCell, { data, market: 'GLOBAL', channel: 'SHOPIFY', node: { rowIndex: 0 }, api: { setFocusedCell: () => {} }, column: { getColId: () => 'listing_item_id' }, eGridCell: null } as never))
+  it('returned by the sheet\'s Shopify read: the id with Copy and NO Open (the store\'s address is not known; never another business\'s)', () => {
+    expect(itemIdCellModel(channelRow({ value: '7001' }), 'GLOBAL', 'SHOPIFY')).toEqual({ kind: 'item', itemId: '7001', url: null, ended: false, tooltip: S.live('7001'), editable: true })
+    const html = render(channelRow({ value: '7001' }))
+    expect(html).toContain(`aria-label="${S.copy('7001')}"`)
+    expect(html.match(/data-nds-cell-action/g)?.length).toBe(1)
+  })
+  it('a draft or archived product on Shopify says so beside the id', () => {
+    expect(itemIdCellModel(channelRow({ value: '7001', listing: { listingStatus: 'INACTIVE', isPublished: false, channelFactDetail: { shopifyStatus: 'ARCHIVED' } } }), 'GLOBAL', 'SHOPIFY')).toMatchObject({ kind: 'item', note: 'Archived' })
+    expect(render(channelRow({ value: '7001', listing: { listingStatus: 'INACTIVE', isPublished: false, channelFactDetail: { shopifyStatus: 'DRAFT' } } }))).toContain('Draft on Shopify')
+  })
+  it('a held id Shopify did not return is "Not confirmed", with that reason', () => {
+    expect(itemIdCellModel(channelRow({ value: null, listing: { externalListingId: '7009' } }), 'GLOBAL', 'SHOPIFY')).toEqual({ kind: 'notConfirmed', itemId: '7009', label: 'Not confirmed', tooltip: S.notReturnedHover('7009'), editable: true })
+    expect(listingIdCellText(channelRow({ value: null, listing: { externalListingId: '7009' } }), SHOPIFY)).toBe('')
   })
 })

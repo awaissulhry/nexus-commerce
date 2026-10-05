@@ -25,8 +25,11 @@ import { isRelistChoice, PAN_EU_MARKETS } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 
-/** A removal Nexus recorded: a Delete the channel accepted, or an unlink (`unlinked`: nothing was removed on the channel). */
-export type ListingRemoval = ListingDeletion & { unlinked?: true }
+/**
+ * A removal Nexus recorded: a Delete the channel accepted, or an unlink (`unlinked`: nothing was removed on the channel).
+ * The shared `ListingDeletion` itself (it carries `unlinked` and `sku`); the name stays for the readers that import it.
+ */
+export type ListingRemoval = ListingDeletion
 
 /** The snapshot reasons that leave a row not on the channel as far as Nexus knows: an accepted Delete, an accepted unlink. */
 export const REMOVAL_REASONS = ['delete', 'unlink'] as const
@@ -81,8 +84,11 @@ export async function readListingDeletions(rows: readonly DeletionCandidate[]): 
     const evidence = object(object(entry.payload).evidence)
     const old = evidence.oldExternalListingId
     const chosen = isRelistChoice({ value: row.publishAction ?? null, at: row.publishActionAt ?? null }, at)
+    // S10 — the seller SKU the channel held, as the delete named it (the engine's record keeps it as `sku`); an unlink's
+    // record names none, so it stays unknown (null).
+    const sku = object(entry.payload).sku
     const removal: ListingRemoval = { at, where: deletionWhere(row.channel, row.marketplace), oldReference: typeof old === 'string' && old ? old : null,
-      relistChosenAt: chosen && row.publishActionAt ? row.publishActionAt.toISOString() : null }
+      relistChosenAt: chosen && row.publishActionAt ? row.publishActionAt.toISOString() : null, sku: typeof sku === 'string' && sku.trim() ? sku.trim() : null }
     out.set(id, entry.unlinked ? { ...removal, unlinked: true } : removal)
   }
   return out

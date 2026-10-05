@@ -5,6 +5,8 @@ import {
   relistSentence, SEND_ORDER, sendModeOf, sendModeOptions, statusTargetOf, storedSendMode, storedStatusTarget,
   waitingMark, NEW_LISTING_SENT_WHOLE, SEND_MODE_LABEL, SEND_MODES, newRowId, parseNewRowId, isNewRowId, startedSentence, leftOutSentence,
   SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, ETSY_FIELDS_NOT_SENT,
+  amazonMoveConfirmSentence, amazonMoveSentence, AMAZON_MOVE_NEEDS_CONFIRM, channelSkuLengthProblem, CHANNEL_SKU_MAX_LENGTH, EBAY_INVENTORY_SKU_MOVE,
+  ebayRenameSentence, etsySkuMoveSentence, fbaMoveWarning, oldSkuStaysDeleted, shopifyRenameSentence, DELETE_OLD_SKU_AGAIN, bothSkusSell,
 } from './publish-actions.js'
 import { AMAZON_FBA_DELETE_WARNING, type ListingDeletion } from './listing-actions.js'
 
@@ -216,5 +218,53 @@ describe('New listings', () => {
     const sentence = fillResultSentence('Active', { applied: ['a'], refused: [{ listingId: 'b', sku: 'GALE-S', reason: SHARED_NO_LISTING }], conflicts: [],
       started: { sentence: 'Started Amazon · IT for GALE.', listingIds: ['x'], rows: [] }, leftOut: { count: 1, sentence: leftOutSentence(1) } })
     expect(sentence).toBe('Active set on 1 row. Started Amazon · IT for GALE. 1 market without a listing was left out: set it in its own sheet.')
+  })
+})
+
+// ── S10 (per-channel SKU) ────────────────────────────────────────────────────────────────────────────────────────────
+
+describe('S10 — the sentences of a SKU move', () => {
+  const NOW = Date.parse('2026-10-05T12:00:00Z')
+  it('Amazon: creates NEW, then deletes OLD there; the confirmation says a refused NEW deletes nothing', () => {
+    expect(amazonMoveSentence('GALE-M-IT', 'GALE-M', 'Amazon · IT')).toBe('Creates GALE-M-IT on Amazon · IT as a new offer, then deletes GALE-M there.')
+    expect(amazonMoveConfirmSentence([{ from: 'GALE-M' }], 'Amazon · IT')).toBe('This Publish deletes GALE-M on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.')
+    expect(amazonMoveConfirmSentence([{ from: 'A' }, { from: 'B' }, { from: 'C' }, { from: 'D' }], 'Amazon · DE')).toMatch(/^This Publish deletes A, B, C and 1 more on Amazon · DE once Amazon accepts their new SKUs\./)
+    expect(AMAZON_MOVE_NEEDS_CONFIRM).toMatch(/type the SKU, then confirm/)
+  })
+  it('FBA: NEW starts with no FBA units; Amazon\'s stay under OLD (with Nexus\'s count, or without one)', () => {
+    expect(fbaMoveWarning({ sellable: 12, inbound: 2, reserved: 0, other: 0, readAt: '2026-10-05T10:00:00Z' }, 'N', 'O', NOW))
+      .toBe('N starts with no FBA units; Amazon\'s 14 FBA units stay under O (12 sellable, 2 on the way), read 2 hours ago. Once O is deleted they cannot sell until you list O here again, and Amazon still charges storage.')
+    expect(fbaMoveWarning(null, 'N', 'O')).toBe('N starts with no FBA units; any FBA units Amazon holds stay under O. Once O is deleted they cannot sell until you list O here again, and Amazon still charges storage.')
+    expect(fbaMoveWarning({ sellable: 0, inbound: 0, reserved: 0, other: 0, readAt: null }, 'N', 'O')).toBe('N starts with no FBA units. Nexus read 0 FBA units under O here.')
+  })
+  it('eBay, Shopify, Etsy and the eBay Inventory gap', () => {
+    expect(ebayRenameSentence('OLD', 'NEW')).toBe('eBay renames OLD to NEW.')
+    expect(shopifyRenameSentence('OLD', 'NEW')).toBe('Shopify renames OLD to NEW.')
+    expect(EBAY_INVENTORY_SKU_MOVE).toBe('Nexus cannot move an eBay Inventory listing to a new SKU yet: Delete it, then list it again.')
+    expect(etsySkuMoveSentence('OLD', 'NEW')).toBe('Nexus cannot send Etsy SKU changes yet: Etsy keeps OLD for this listing (Nexus holds NEW).')
+    expect(oldSkuStaysDeleted('GALE-M', '4 Oct')).toBe('GALE-M, deleted 4 Oct, stays deleted.')
+  })
+  it('the channel SKU limit: Amazon 40 (shown in the repo); no guess for the others', () => {
+    expect(CHANNEL_SKU_MAX_LENGTH).toEqual({ AMAZON: 40 })
+    expect(channelSkuLengthProblem('AMAZON', 'A'.repeat(40))).toBeNull()
+    expect(channelSkuLengthProblem('AMAZON', 'A'.repeat(41))).toBe(`${'A'.repeat(41)}: Amazon takes a seller SKU of up to 40 characters; this one has 41. Shorten this listing's SKU, then Publish again.`)
+    for (const channel of ['EBAY', 'ETSY', 'SHOPIFY']) expect(channelSkuLengthProblem(channel, 'A'.repeat(100))).toBeNull()
+  })
+  it('an UNLINKED row holds every Action with its own words (never a new listing)', () => {
+    const unlinked: ListingDeletion = { at: '2026-10-05T09:00:00Z', where: 'eBay · IT', oldReference: '520000000001', relistChosenAt: null, unlinked: true }
+    const options = sendModeOptions('ebay-trading', 'not_listed', { deleted: unlinked } as never)
+    expect(options.every(option => !option.offered)).toBe(true)
+    expect(options.find(option => option.mode === 'full')!.reason).toMatch(/^Unlinked from eBay · IT on 5 Oct/)
+  })
+})
+
+describe('S10 — a move is its own mode, counted on its own; the old SKU\'s delete stays a Nexus action', () => {
+  it('the summary line counts moves apart from partial and full updates', () => {
+    expect(publishPlanSummary({ partial: 1, fields: 2, full: 0, delete: 0, active: 0, inactive: 0, ended: 0, moved: 1 })).toBe('1 partial update (2 fields) · 1 move to a new SKU')
+    expect(publishPlanSummary({ partial: 0, fields: 0, full: 0, delete: 0, active: 0, inactive: 0, ended: 0, moved: 2 })).toBe('2 moves to a new SKU')
+  })
+  it('the delete-again action and the both-sell warning', () => {
+    expect(DELETE_OLD_SKU_AGAIN).toBe('Delete the old SKU again')
+    expect(bothSkusSell('OLD', 'NEW', 'Amazon · IT')).toBe('Until OLD is gone, OLD and NEW can both sell on Amazon · IT.')
   })
 })

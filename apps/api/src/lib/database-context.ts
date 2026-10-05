@@ -9,6 +9,8 @@ type Context = {
   effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>>
   /** Items collected under one after-commit key (`afterDatabaseCommitBatch`), so N writers pay ONE effect. */
   batches: Map<string, Set<unknown>>
+  /** How many `inSavepoint` calls are open: Prisma cannot open a savepoint inside another (`insideSavepoint`). */
+  savepoints?: number
 }
 const context = new AsyncLocalStorage<Context>()
 
@@ -31,6 +33,13 @@ export function contextualDatabase(root: PrismaClient): PrismaClient {
 }
 
 export const activeDatabaseTransaction = () => context.getStore()?.client
+
+/**
+ * True while an `inSavepoint` of this transaction runs. Prisma cannot open a second savepoint inside it ("Concurrent
+ * nested transactions are not supported"), so a writer that would contain a refusal in a savepoint of its own (S9's
+ * product SKU rename) runs its work directly there, and the enclosing savepoint undoes the whole unit on a refusal.
+ */
+export const insideSavepoint = () => (context.getStore()?.savepoints ?? 0) > 0
 
 /**
  * A plain raw read (`$queryRaw` of a SELECT with no effect) that a `memoReads` transaction may answer from memory until
@@ -249,6 +258,7 @@ export async function inSavepoint<T>(work: () => Promise<T>): Promise<{ ok: true
   const client = active.client as unknown as { $transaction: (run: () => Promise<unknown>) => Promise<unknown> }
   const writesBefore = active.memo?.writes
   let value: T
+  active.savepoints = (active.savepoints ?? 0) + 1
   try {
     await client.$transaction(async () => { value = await work() })
     return { ok: true, value: value! }
@@ -261,5 +271,7 @@ export async function inSavepoint<T>(work: () => Promise<T>): Promise<{ ok: true
     restoreInPlace(active.producers, producers)
     restoreInPlace(active.batches, batches)
     return { ok: false, error }
+  } finally {
+    active.savepoints = (active.savepoints ?? 1) - 1
   }
 }

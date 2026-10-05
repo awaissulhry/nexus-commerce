@@ -26,7 +26,17 @@ export interface EbayChangePlan {
   full?: true
   removals?: StudioPublishRemoval[]
   fullIssues?: StudioPublishIssue[]
+  /**
+   * S10 (per-channel SKU) — the rows this review can rename in place on eBay: the main row's Custom label (`field` 'SKU',
+   * eBay holding exactly `from`) or a variation's SKU (`field` 'variationSku', the live variation found under `from`; a
+   * narrow revise names it by eBay's own values, `specifics`). A move eBay cannot be found under is not here (said as a
+   * warning). Absent when none.
+   */
+  renames?: EbayRename[]
 }
+
+/** S10 — one rename this review can send. */
+export interface EbayRename { productId: string; from: string; to: string; field: 'SKU' | 'variationSku'; specifics: Array<[string, string]> }
 
 const unknown = (reason: string): StudioPublishValue => ({ state: 'unknown', reason })
 const known = (value: unknown): StudioPublishValue => value == null || value === '' || (Array.isArray(value) && !value.length) ? { state: 'absent' } : { state: 'value', value }
@@ -116,9 +126,12 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
   const identities = publication.products
   const live = publication.liveContent ?? null
   const liveSkus = new Set(variants(live ?? {}).map(variant => ebayXmlText(variant.SKU)))
+  // S10 — a row renamed in place is found on eBay under the SKU eBay holds (`from`), and sent under its own (`to`).
+  const moveOf = (productId: string) => publication.moves?.find(move => move.productId === productId)
+  const liveSkuOf = (product: ProductIdentity) => moveOf(product.productId)?.from ?? product.sku
   const products = publication.itemId ? identities.filter(product => facts.listings.some(listing => listing.productId === product.productId && listing.externalListingId === publication.itemId
     && listing.channel === facts.scope.channel && listing.marketplace === facts.scope.marketplace && listing.channelConnectionId === facts.scope.accountId && listing.aliasKey === (facts.destination.aliasKey ?? ''))
-    && (product.productId === facts.parent.id || liveSkus.has(product.sku))) : identities
+    && (product.productId === facts.parent.id || liveSkus.has(liveSkuOf(product)))) : identities
   const owner = products.find(product => product.productId === facts.parent.id) ?? products[0] ?? identities[0]
   if (!owner) throw new Error('No included eBay product can own this listing publication.')
   const readError = publication.liveReadError ?? 'The current eBay content could not be read.'
@@ -142,8 +155,12 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
       ...(publication.itemId && !live ? { refusal: readError } : refusal ? { refusal } : {}), ...(channelCopy ? { channelCopy } : {}) })
   }
   const channel = (value: unknown) => live ? known(value) : unknown(readError)
-  // A Full update sends eBay's own seller SKU (it never changes it); a narrow revise refuses the row.
-  add(owner, 'SKU', 'Seller SKU', known(ebayXmlText(current.SKU)), channel(ebayXmlText(live?.SKU)), full ? undefined : 'Changing the seller SKU is unsupported by change-only Publish.')
+  // A Full update sends eBay's own seller SKU (it never changes it); a narrow revise refuses the row — unless this Publish
+  // renames the main row in place (S10: its own SKU, while eBay holds the SKU Nexus knows it holds), in either mode.
+  const ownerMove = moveOf(owner.productId)
+  const itemRenamed = !!ownerMove && !!live && ebayXmlText(live.SKU)?.trim() === ownerMove.from && ebayXmlText(current.SKU)?.trim() === ownerMove.to
+  const renames: EbayRename[] = itemRenamed ? [{ productId: owner.productId, from: ownerMove!.from, to: ownerMove!.to, field: 'SKU', specifics: [] }] : []
+  add(owner, 'SKU', 'Seller SKU', known(ebayXmlText(current.SKU)), channel(ebayXmlText(live?.SKU)), full || itemRenamed ? undefined : 'Changing the seller SKU is unsupported by change-only Publish.')
   add(owner, 'title', 'Title', known(ours.title), channel(theirs?.title), must(!ours.title?.trim() ? 'A title is required; it cannot be cleared.' : undefined))
   const description = ebayXmlText(current.Description)
   add(owner, 'description', 'Description', known(description), channel(ebayXmlText(live?.Description)), must(!description?.trim() ? 'Clearing the description is unsupported; eBay requires a description.' : undefined))
@@ -208,10 +225,24 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
   const currentVariants = variants(current), liveVariants = live ? variants(live) : []
   for (const product of identities) {
     const variant = currentVariants.find(variant => ebayXmlText(variant.SKU) === product.sku)
-    const remote = liveVariants.find(variant => ebayXmlText(variant.SKU) === product.sku)
+    const remote = liveVariants.find(variant => ebayXmlText(variant.SKU) === liveSkuOf(product))
     const linked = products.some(linked => linked.productId === product.productId)
     if (variant || !linked) add(product, 'variation', linked ? 'Variation content' : 'New variation', known(variant ? strip(variant) : { sku: product.sku }), channel(remote ? strip(remote) : null),
       full ? undefined : 'Variation content requires price and quantity writes. It is not supported by change-only Publish; this variation will not be sent.')
+    // S10 — a variation renamed in place: its own line, sendable in either mode (a narrow revise names the new SKU and
+    // eBay's own values for the variation, never its price or quantity). eBay's own answer stands if it refuses.
+    const move = moveOf(product.productId)
+    if (move && remote && product.productId !== owner.productId) {
+      add(product, 'variationSku', 'Variation SKU', known(move.to), channel(ebayXmlText(remote.SKU)))
+      renames.push({ productId: product.productId, from: move.from, to: move.to, field: 'variationSku', specifics: liveSpecifics(remote) })
+    }
+  }
+  // S10 — a move eBay cannot be found under is never renamed (and never said to be): the person checks the listing.
+  for (const move of publication.moves ?? []) {
+    if (renames.some(rename => rename.productId === move.productId) || !live) continue
+    const held = move.productId === owner.productId ? ebayXmlText(live.SKU)?.trim() || null : null
+    fullIssues.push({ productId: move.productId, sku: identities.find(identity => identity.productId === move.productId)?.sku, severity: 'warning',
+      message: `eBay does not hold ${move.from} ${move.productId === owner.productId ? 'as this listing\'s Custom label' : 'on this item'}${held ? ` (it holds ${held})` : ''}, so Nexus cannot rename it to ${move.to} from here. Check the listing on eBay.` })
   }
   // Full update — each eBay variation Nexus does not hold: deleted, or kept at quantity 0 when it has sales.
   for (const extra of full ? publication.full?.extras ?? [] : [])
@@ -248,7 +279,7 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
       label: extra.action === 'delete' ? 'Variation removed from the listing' : 'Variation kept at quantity 0 (it has sales, so eBay keeps it)', value: extra.specifics })
     const nexusSku = ebayXmlText(parseEbayItemDocument(publication.xml).SKU)
     const warn = (message: string) => fullIssues.push({ productId: owner.productId, sku: owner.sku, severity: 'warning', message: `${owner.sku}: ${message}` })
-    if (live && nexusSku && nexusSku !== ebayXmlText(live.SKU)) warn(`the seller SKU stays ${ebayXmlText(live.SKU) ?? 'empty'} on eBay (Nexus holds ${nexusSku}); a Full update never changes it.`)
+    if (live && nexusSku && nexusSku !== ebayXmlText(live.SKU) && !itemRenamed) warn(`the seller SKU stays ${ebayXmlText(live.SKU) ?? 'empty'} on eBay (Nexus holds ${nexusSku}); a Full update never changes it.`)
     const keptAll = [...new Set([...kept, ...(publication.full?.keptRoots ?? [])])]
     if (live && keptAll.length) warn(`Full update leaves ${keptAll.length === 1 ? 'this field' : `these ${keptAll.length} fields`} as eBay holds ${keptAll.length === 1 ? 'it' : 'them'}: ${keptAll.join(', ')}.`)
     for (const sku of publication.full?.added ?? []) warn(`${sku} is new on this eBay item. Full update adds it at quantity 0 (it never sends stock); send its stock from the Matrix (Push quantity now) after the publish.`)
@@ -260,7 +291,26 @@ export async function prepareEbayChanges(facts: PublicationFacts, publication: E
   }
   return { kind: 'ebay-changes', changes, remoteRevision: publication.liveRevision ?? (publication.itemId ? 'unavailable' : 'new'), publication,
     products: full ? identities : products, ownerProductId: owner.productId, liveSpecifics: theirs?.itemSpecifics ?? {}, aspectNames, createWrites,
-    ...(full ? { full: true as const } : {}), ...(removals.length ? { removals } : {}), ...(fullIssues.length ? { fullIssues } : {}) }
+    ...(full ? { full: true as const } : {}), ...(removals.length ? { removals } : {}), ...(fullIssues.length ? { fullIssues } : {}), ...(renames.length ? { renames } : {}) }
+}
+
+/** A live variation's own values (name, first value), in eBay's order: how a narrow revise finds it. */
+function liveSpecifics(variation: Record<string, unknown>): Array<[string, string]> {
+  return ebayXmlList(ebayXmlObject(variation.VariationSpecifics).NameValueList).map(ebayXmlObject)
+    .map((nv): [string, string] => [ebayXmlText(nv.Name) ?? '', ebayXmlText(ebayXmlList(nv.Value)[0]) ?? '']).filter(([name]) => !!name)
+}
+
+/**
+ * S10 — the SKU each journalled row is left under: a row renamed by this send is sent (and recorded once eBay accepts it)
+ * under its own SKU; a move that is not sent stays under the SKU eBay holds (so the settle never records a SKU eBay did
+ * not take). Rows that do not move keep the SKU they were sent under.
+ */
+function journalIdentities(plan: EbayChangePlan, products: ProductIdentity[], sent: ReadonlySet<string>): ProductIdentity[] {
+  const moves = plan.publication.moves ?? []
+  return products.map(product => {
+    const move = moves.find(entry => entry.productId === product.productId)
+    return move && !sent.has(product.productId) ? { ...product, sku: move.from } : product
+  })
 }
 
 export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]): EbayPublication & { products: ProductIdentity[]; fieldWrites: Record<string, StudioPublishFieldWrite[]> } {
@@ -279,10 +329,14 @@ export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]):
       if (change.current.state === 'unknown') throw new Error('An unknown value cannot be sent to eBay.')
       ;(fieldWrites[change.productId] ??= []).push({ field: change.field, value: change.current })
     }
-    return { ...plan.publication, xml: full.xml, products: plan.products, fieldWrites }
+    return { ...plan.publication, xml: full.xml, products: journalIdentities(plan, plan.products, new Set((plan.renames ?? []).map(rename => rename.productId))), fieldWrites }
   }
   const fields: string[] = [], deleted: string[] = [], fieldWrites: Record<string, StudioPublishFieldWrite[]> = {}
   const specifics = { ...plan.liveSpecifics }
+  // S10 — renames in place (the item's Custom label; variations by eBay's own values) and the variation pictures share ONE
+  // <Variations> (eBay's order: Variation, then Pictures).
+  const renamed = new Set<string>(), renamedVariations: string[] = []
+  let itemSku: string | null = null, variationPictures: string | null = null
   let aspectChanged = false
   for (const change of selected) {
     if (change.current.state === 'unknown') throw new Error('An unknown value cannot be sent to eBay.')
@@ -297,7 +351,14 @@ export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]):
       if (!Array.isArray(value) || !value.length || value.some(url => typeof url !== 'string' || !/^https:\/\//i.test(url))) throw new Error('The picture gallery cannot be empty or invalid.')
       fields.push(`<PictureDetails>${value.map(url => `<PictureURL>${escapeXml(String(url))}</PictureURL>`).join('')}</PictureDetails>`)
     } else if (change.field === 'Pictures') {
-      fields.push(`<Variations>${variationPicturesXml(value)}</Variations>`)
+      variationPictures = variationPicturesXml(value)
+    } else if (change.field === 'SKU' || change.field === 'variationSku') {
+      // S10 — a rename in place: only one this review matched on eBay (`renames`); eBay's own answer stands if it refuses.
+      const rename = (plan.renames ?? []).find(entry => entry.productId === change.productId && entry.field === change.field)
+      if (!rename || typeof value !== 'string' || value !== rename.to) throw new Error(`${change.label} has no supported narrow eBay write.`)
+      renamed.add(rename.productId)
+      if (rename.field === 'SKU') itemSku = rename.to
+      else renamedVariations.push(`<Variation><SKU>${escapeXml(rename.to)}</SKU><VariationSpecifics>${rename.specifics.map(([name, value]) => `<NameValueList><Name>${escapeXml(name)}</Name><Value>${escapeXml(value)}</Value></NameValueList>`).join('')}</VariationSpecifics></Variation>`)
     } else if (change.field.startsWith('aspect:')) {
       const key = change.field.slice(7)
       for (const name of Object.keys(specifics)) if (ebayAspectKey(name) === key) delete specifics[name]
@@ -313,12 +374,14 @@ export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]):
     if (!entries.length) deleted.push('<DeletedField>Item.ItemSpecifics</DeletedField>')
     else fields.push(`<ItemSpecifics>${entries.map(([name, values]) => `<NameValueList><Name>${escapeXml(name)}</Name>${[...values].sort().map(value => `<Value>${escapeXml(value)}</Value>`).join('')}</NameValueList>`).join('')}</ItemSpecifics>`)
   }
+  if (renamedVariations.length || variationPictures) fields.push(`<Variations>${renamedVariations.join('')}${variationPictures ?? ''}</Variations>`)
   const trackedBySku = ebayXmlText(plan.publication.liveContent.InventoryTrackingMethod) === 'SKU'
   const liveSku = ebayXmlText(plan.publication.liveContent.SKU)
   if (trackedBySku && !liveSku) throw new Error('The SKU-managed eBay listing has no verified live SKU identifier.')
-  const identifier = `<ItemID>${escapeXml(plan.publication.itemId)}</ItemID>${trackedBySku ? `<SKU>${escapeXml(liveSku!)}</SKU>` : ''}`
+  // S10 — a renamed Custom label: the ItemID names the listing and <SKU> carries the new label (eBay answers if it refuses).
+  const identifier = `<ItemID>${escapeXml(plan.publication.itemId)}</ItemID>${itemSku ? `<SKU>${escapeXml(itemSku)}</SKU>` : trackedBySku ? `<SKU>${escapeXml(liveSku!)}</SKU>` : ''}`
   const xml = `<?xml version="1.0" encoding="UTF-8"?><ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">${deleted.join('')}<Item>${identifier}${fields.join('')}</Item></ReviseFixedPriceItemRequest>`
-  return { ...plan.publication, xml, products: plan.products, fieldWrites }
+  return { ...plan.publication, xml, products: journalIdentities(plan, plan.products, renamed), fieldWrites }
 }
 
 /** UUID belongs to Item; InvocationID is inherited from AbstractRequestType, beside Item. */

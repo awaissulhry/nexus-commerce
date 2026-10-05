@@ -7,6 +7,7 @@ import {
   newListingChoice, newListingDefault, newListingOptions, NOT_LISTED_MAIN_WARNING, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION, STATUS_TARGET_LABEL,
   AMAZON_REMOVED_ELSEWHERE, deletedShort, isNewListingRow, newListingSentence, NOT_ON_CHANNEL_KEEPS_NUMBER, RELIST_SENTENCE,
   ETSY_PUBLISHING_OFF, holdStatusChanges, shopifyCreateStatus, SHOPIFY_STATUS_FROM_STATUS_COLUMN, SHOPIFY_CREATE_NOT_LISTED,
+  ALREADY_UNLINKED, alreadyRemoved, deletedStatusReason, removedMark, setBeforeRemoval, sharedRemovedRefusal, UNLINKED_NOT_LISTED, unlinkWords,
 } from './listing-actions.js'
 
 /** Sheet publish parity, step 7 — the capability table, the selling state, and which changes a row offers. */
@@ -283,3 +284,61 @@ describe('the status a new Shopify product is created with', () => {
     expect(SHOPIFY_CREATE_NOT_LISTED).toBe('This product\'s Status is Not listed for this Shopify store, so Nexus does not create it. Set its Status to Active or Inactive first.')
   })
 })
+
+/**
+ * Item ID control (2026-10-05) — an UNLINKED row is not a deleted one: nothing was removed on the channel, the listing may
+ * still be live there, and Nexus no longer updates it. It must never read "set Status to Active and Publish" (that made a
+ * second eBay item), and its Status never offers Active or Inactive as a new listing.
+ */
+describe('an unlinked row: the unlink\'s own words, never listed as new', () => {
+  const now = Date.parse('2026-10-05T15:00:00Z')
+  const unlinked: ListingDeletion = { at: '2026-10-05T09:00:00.000Z', where: 'eBay · IT', oldReference: '520000000001', relistChosenAt: null, sku: null, unlinked: true }
+  const drafted = { channel: 'EBAY', listingStatus: 'DRAFT', isPublished: false, externalListingId: null, offerClosedAt: null }
+  const EBAY = 'Unlinked from eBay · IT on 5 Oct: the item may still be live there, and Nexus no longer updates it.'
+
+  it('the cell, the skip, the mark and the delete refusal say the truth, per channel', () => {
+    expect(deletedShort(unlinked, now)).toBe(EBAY)
+    expect(deletedStatusReason(unlinked, now)).toBe(`${EBAY} Link its Item ID again on the main row; listing it as new makes a second item.`)
+    expect(deletedPublishSkip(unlinked, now)).toBe(`${EBAY} Publish leaves it out: link its Item ID again on the main row; listing it as new makes a second item.`)
+    expect(removedMark(unlinked, now)).toBe('unlinked 5 Oct')
+    expect(removedMark({ ...unlinked, unlinked: undefined }, now)).toBe('deleted 5 Oct')
+    expect(setBeforeRemoval(unlinked, now)).toBe('Set before the unlink on 5 Oct. Link its Item ID again on the main row; listing it as new makes a second item.')
+    expect(ALREADY_UNLINKED('eBay · IT')).toBe('Unlinked from eBay · IT: Nexus no longer holds its Item ID, so it cannot delete it. Link its Item ID again on the main row first, or delete it in eBay.')
+    expect(alreadyRemoved(unlinked)).toBe(ALREADY_UNLINKED('eBay · IT'))
+    expect(alreadyRemoved({ ...unlinked, unlinked: undefined })).toBe('Already deleted on eBay · IT. To keep it off, leave its Status Not listed.')
+    expect(sharedRemovedRefusal(unlinked)).toBe('Unlinked from eBay · IT: the item may still be live there, and Nexus no longer updates it. Link its Item ID again in the eBay · IT sheet.')
+    expect(sharedRemovedRefusal({ where: 'Amazon · IT' })).toBe('Deleted on Amazon · IT. To list it again, set its Status in the Amazon · IT sheet.')
+    // Amazon keys a listing by its seller SKU: a create there is no second listing, so none is claimed.
+    expect(deletedStatusReason({ ...unlinked, where: 'Amazon · IT' }, now))
+      .toBe('Unlinked from Amazon · IT on 5 Oct: the listing may still be live there, and Nexus no longer updates it. Link its ASIN again on this row to update it from Nexus.')
+    expect(deletedStatusReason({ ...unlinked, where: 'Shopify' }, now))
+      .toBe('Unlinked from Shopify on 5 Oct: the product may still be live there, and Nexus no longer updates it. Link its Product ID again on the main row; listing it as new makes a second product.')
+    expect(unlinkWords('Etsy · GLOBAL')).toMatchObject({ id: 'Listing ID', second: 'listing' })
+    // A deleted row keeps its words.
+    expect(deletedStatusReason({ ...unlinked, unlinked: undefined }, now)).toBe('Deleted on eBay · IT on 5 Oct. To list it again, set Status to Active and Publish.')
+  })
+
+  it('it reads Not listed with the unlink\'s reason; Status offers only Not listed; nothing can be deleted or changed', () => {
+    expect(sellingStateOf({ ...drafted, deletion: unlinked })).toEqual({ state: 'not_listed', deleted: unlinked,
+      reason: `${EBAY.replace('5 Oct', deletedOnToday(unlinked.at))} Link its Item ID again on the main row; listing it as new makes a second item.` })
+    const options = statusOptionsFor('not_listed', 'ebay-trading', { deleted: unlinked })
+    expect(options.map(o => [o.target, o.offered])).toEqual([['active', false], ['inactive', false], ['not_listed', true]])
+    expect(options[0].reason).toBe(deletedStatusReason(unlinked))
+    expect(options[2].sentence).toBe(UNLINKED_NOT_LISTED)
+    expect(deleteOffered('not_listed', 'ebay-trading', { deleted: unlinked })).toMatchObject({ offered: false, reason: ALREADY_UNLINKED('eBay · IT') })
+    expect(actionsFor('not_listed', 'ebay-trading', { deleted: unlinked })).toEqual([])
+  })
+
+  it('its choice\'s sentence never says Publish lists it again', () => {
+    expect(newListingSentence({ target: 'not_listed', source: 'default' }, { deleted: unlinked, now })).toBe(deletedStatusReason(unlinked, now))
+    expect(newListingSentence({ target: 'active', source: 'own' }, { deleted: unlinked, now })).toBe(deletedPublishSkip(unlinked, now))
+    expect(newListingSentence({ target: 'inactive', source: 'main' }, { deleted: unlinked, now })).toBe(deletedPublishSkip(unlinked, now))
+  })
+})
+
+/** `deletedOn` against the real clock (sellingStateOf reads no `now`). */
+function deletedOnToday(at: string) {
+  const date = new Date(at)
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]
+  return `${date.getUTCDate()} ${month}${date.getUTCFullYear() !== new Date().getUTCFullYear() ? ` ${date.getUTCFullYear()}` : ''}`
+}

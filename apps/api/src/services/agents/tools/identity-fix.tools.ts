@@ -5,13 +5,15 @@
  *
  * Every tool here changes Nexus only — nothing is sent to a channel — and always waits for a person (alwaysAsk). The
  * `handler` is the preview and writes nothing: product changes go through the product bulk writer's own dry run
- * (`applyProductBulkEdits`, `dryRun: true`), so a preview carries the writer's refusals (SKU unique, a live product's
- * SKU is never renamed, a SKU an extra listing uses) and warnings. `execute` works the change out again from what is
- * stored when it runs (the gate has already compared the approved preview's material fields) and writes through the
- * same writer. Each records what it replaced, and undo asks for the old value through the same gate.
+ * (`applyProductBulkEdits`, `dryRun: true`), so a preview carries the writer's refusals (SKU unique, a SKU an extra
+ * listing or another product's listing uses) and warnings. `execute` works the change out again from what is stored
+ * when it runs (the gate has already compared the approved preview's material fields) and writes through the same
+ * writer. Each records what it replaced, and undo asks for the old value through the same gate.
  *
- * d12 (decided): a live listing's channel SKU is RECORDED in Nexus, never renamed on the channel. So a live product's
- * SKU is not renamed (the writer refuses), and an extra listing's SKU may be recorded, but not changed once it is live.
+ * S9 (per-channel SKU, the Owner's rule 2026-10-05) replaces d12's refusals: a product SKU rename keeps every channel in
+ * step — the listings a channel holds keep the old SKU, drafts follow the new one (the preview names them). A listing's
+ * own SKU is that listing's (`ChannelListing.channelSku`, set-listing-sku, through `setChannelSku`); on a listing the
+ * channel holds, a new SKU is allowed where Publish's move step carries it (S10: Amazon, eBay Trading, Shopify).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -32,6 +34,9 @@ import { barcodeDuplicates } from '../../identity/identity-write-guards.js'
 import { validateGtin } from '../../listing-preflight.service.js'
 import { IdentityFixRefusal, coordinateOf, planLink, planUnlink, runLink, runUnlink } from '../../identity/identity-fix.service.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import { CHANNEL_SKU_LISTING_SELECT, ChannelSkuError, channelSkuMoveFacts, setChannelSku } from '../../listings/channel-sku.js'
+import { liveChannelSku, wantedChannelSku } from '../../listings/channel-sku.pure.js'
+import { listingPlace, liveChannelSkuMoveRefusal } from '../../listings/channel-sku-live-move.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 
 type Change = ProductBulkInput['changes'][number]
@@ -49,20 +54,22 @@ function writerContext(userId: string | null | undefined): ProductBulkContext {
   return { formulaCascade: false, userId: userId ?? null, logger: { warn: log('warn'), error: log('error') } as unknown as ProductBulkContext['logger'] }
 }
 
-type WriterOut = { dryRun?: boolean; wouldUpdate?: number; updated?: number; operationId?: string; errors?: ProductBulkChangeError[]; warnings?: ProductBulkChangeWarning[] }
+type WriterOut = { dryRun?: boolean; wouldUpdate?: number; updated?: number; operationId?: string; errors?: ProductBulkChangeError[]; warnings?: ProductBulkChangeWarning[]
+  /** S9 — what each product SKU rename does on the channels (`channel-sku-rename.ts`). */
+  skuRenames?: Array<{ productId: string; from: string; to: string; summary: string }> }
 
 const writerLines = (items: Array<{ id: string; error?: string; warning?: string }>, skuOf: Map<string, string>) =>
   items.map((item) => `${skuOf.get(item.id) ?? item.id}: ${item.error ?? item.warning}`)
 
 /** The writer's verdict on every change, writing nothing. */
-async function writerDryRun(changes: Change[], skuOf: Map<string, string>): Promise<Refusal | { warnings: string[] }> {
+async function writerDryRun(changes: Change[], skuOf: Map<string, string>): Promise<Refusal | { warnings: string[]; skuRenames: NonNullable<WriterOut['skuRenames']> }> {
   try {
     const out = (await applyProductBulkEdits({ changes, dryRun: true }, writerContext(null))) as WriterOut
     if (out.errors?.length) return { error: writerLines(out.errors, skuOf).join(' ') }
     if (out.dryRun !== true || out.wouldUpdate !== changes.length) {
       return { error: `The product writer could not check every change (${out.wouldUpdate ?? 0} of ${changes.length}).` }
     }
-    return { warnings: writerLines(out.warnings ?? [], skuOf) }
+    return { warnings: writerLines(out.warnings ?? [], skuOf), skuRenames: out.skuRenames ?? [] }
   } catch (error) {
     if (!(error instanceof ProductBulkError)) throw error
     const errors = error.details.errors
@@ -90,7 +97,8 @@ interface SkuPlan {
   productId: string
   from: string
   to: string
-  draftListings: number
+  /** S9 — what the rename does on the channels ("Amazon · DE keeps OLD; drafts follow NEW."); '' with no listing. */
+  channels: string
   warnings: string[]
 }
 
@@ -102,8 +110,8 @@ async function planSku(args: Record<string, unknown>, nothing: string): Promise<
   if (product.sku === to) return { error: `${product.sku} already has this SKU. ${nothing}` }
   const checked = await writerDryRun([{ id: product.id, field: 'sku', value: to, target: 'master' }], new Map([[product.id, product.sku]]))
   if ('error' in checked) return { error: refused(checked.error, nothing) }
-  const draftListings = await prisma.channelListing.count({ where: { productId: product.id, listingStatus: 'DRAFT' } })
-  return { productId: product.id, from: product.sku, to, draftListings, warnings: checked.warnings }
+  const channels = checked.skuRenames.find((rename) => rename.productId === product.id)?.summary ?? ''
+  return { productId: product.id, from: product.sku, to, channels, warnings: checked.warnings }
 }
 
 const SET_PRODUCT_SKU_UNDO: ToolUndo = {
@@ -136,9 +144,11 @@ const setProductSku: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: SET_PRODUCT_SKU_UNDO,
   description:
-    `Rename a product's SKU in Nexus. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. Refused when another `
-    + 'product or an extra listing of this business uses the SKU, and when the product (or its variation) is live on a '
-    + 'channel: a channel\'s seller SKU is never renamed — the SKU the channel shows is recorded instead (set-listing-sku).',
+    `Rename a product's SKU in Nexus (the Shared SKU). ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. `
+    + 'Every listing a channel holds keeps the SKU it has there (the old one), so nothing on a channel changes; draft '
+    + 'listings follow the new SKU and Publish lists them under it. The preview names which listings keep the old SKU. '
+    + 'Refused when another product, an extra listing or another product\'s listing of this business uses the SKU, and '
+    + 'when the product shares stock with another business (disconnect it first).',
   async handler(args): Promise<ToolResult> {
     const plan = await planSku(args, 'Nothing was queued.')
     if ('error' in plan) return { ok: false, error: plan.error }
@@ -148,7 +158,7 @@ const setProductSku: AgentTool = {
         action: 'set-product-sku',
         sku: plan.from,
         changes: { SKU: { from: plan.from, to: plan.to } },
-        effect: `Renames ${plan.from} to ${plan.to} in Nexus.${plan.draftListings ? ` ${plural(plan.draftListings, 'draft listing')} will be published under the new SKU.` : ''}`,
+        effect: `Renames ${plan.from} to ${plan.to} in Nexus.${plan.channels ? ` ${plan.channels}` : ''}`,
         ...(plan.warnings.length ? { warnings: plan.warnings } : {}),
         note: `${NEXUS_ONLY} Nothing changes until a person approves this in Nexus.`,
       },
@@ -161,7 +171,7 @@ const setProductSku: AgentTool = {
     if ('error' in out) return { ok: false, error: refused(out.error, 'Nothing changed.') }
     return {
       ok: true,
-      data: { sku: plan.to, previousSku: plan.from, operationId: out.operationId ?? null, note: NEXUS_ONLY },
+      data: { sku: plan.to, previousSku: plan.from, operationId: out.operationId ?? null, ...(plan.channels ? { channels: plan.channels } : {}), note: NEXUS_ONLY },
       change: { before: { productId: plan.productId, sku: plan.from }, after: { productId: plan.productId, sku: plan.to } },
     }
   },
@@ -399,75 +409,163 @@ const setBrand: AgentTool = {
 
 // ── set-listing-sku ───────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * S9 — a listing's own SKU (`ChannelListing.channelSku`: that channel, that market, that account and listing), written
+ * through its one writer (`setChannelSku`: characters, uniqueness per account and against product SKUs, version,
+ * history, and the live-move rule). Named by `listingId` (any listing), or by `extraListingId` (an extra listing): then
+ * its main row (the listing of the extra listing's own product) is the listing, and `ProductListingAlias.sku` is kept in
+ * step with it. An extra listing with no listing row yet keeps only its recorded SKU, checked as before.
+ */
 interface ListingSkuPlan {
-  aliasId: string
-  label: string
+  /** The listing whose own SKU is written; null for an extra listing with no listing row yet. */
+  listingId: string | null
+  version: number | null
+  /** The extra listing whose SKU is kept in step (`ProductListingAlias.sku`); null for a listing that is not one. */
+  aliasId: string | null
+  aliasFrom: string | null
+  label: string | null
   productSku: string
   channel: string
   market: string
+  place: string
   from: string | null
   to: string | null
-  liveListings: number
+  /** The SKU the channel holds for this listing; null = it holds none yet (a draft, or Deleted back to one). */
+  held: string | null
+  /** The SKU the listing sends after this change (Publish moves a held listing to it where it can: S10). */
+  sends: string | null
+}
+
+const LISTING_SKU_SELECT = { ...CHANNEL_SKU_LISTING_SELECT, aliasId: true, product: { select: { sku: true, deletedAt: true } } } as const
+
+/**
+ * Every check of the write, writing nothing: `setChannelSku`'s own dry run. For an extra listing's main row the alias SKU
+ * changes with it, so the live-move rule is asked here of the listing as it will be (`liveMove: 'allow'` to the writer).
+ */
+async function checkListingSku(listingId: string, to: string | null, aliasInStep: boolean): Promise<string | null> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (aliasInStep) {
+        const row = await tx.channelListing.findUnique({ where: { id: listingId }, select: CHANNEL_SKU_LISTING_SELECT })
+        const refusal = row ? liveChannelSkuMoveRefusal({ ...row, alias: row.alias ? { ...row.alias, sku: to } : row.alias }, row.product?.sku, to, await channelSkuMoveFacts(tx, row)) : null
+        if (refusal) throw new ChannelSkuError(409, refusal, 'LIVE_SKU_HELD')
+      }
+      await setChannelSku(tx, { listingId, sku: to, actorId: null, dryRun: true, liveMove: aliasInStep ? 'allow' : 'refuse' })
+    })
+    return null
+  } catch (error) {
+    if (error instanceof ChannelSkuError) return error.message
+    throw error
+  }
 }
 
 async function planListingSku(args: Record<string, unknown>, nothing: string): Promise<ListingSkuPlan | Refusal> {
-  const aliasId = String(args.extraListingId ?? '')
+  const listingId = String(args.listingId ?? '').trim()
+  const extraListingId = String(args.extraListingId ?? '').trim()
+  if (!listingId && !extraListingId) return { error: `Name the listing: listingId (any listing), or extraListingId (an extra listing). ${nothing}` }
   const to = String(args.sku ?? '').trim() || null
-  const alias = await prisma.productListingAlias.findFirst({
-    where: { id: aliasId, product: { deletedAt: null } },
-    select: { id: true, label: true, channel: true, marketplace: true, product: { select: { sku: true } } },
-  })
-  if (!alias) return { error: 'Extra listing not found' }
-  const name = `The extra listing "${alias.label}" of ${alias.product.sku} (${alias.channel} ${alias.marketplace})`
-  // The listing's own SKU comes with the eBay import by SKU (ProductListingAlias.sku). Until that column exists there is
-  // nowhere to keep it, and this tool says so instead of pretending.
-  if (!(await availableRequirements()).has('listing-alias-sku')) {
-    return { error: `${name}: ${REQUIREMENT_MISSING['listing-alias-sku']} ${nothing}` }
-  }
   const ws = workspaceIdForQuery()
-  const [row] = await prisma.$queryRaw<Array<{ sku: string | null }>>`SELECT sku FROM "ProductListingAlias" WHERE id = ${alias.id} AND "workspaceId" = ${ws}`
-  const from = row?.sku ?? null
-  if (from === to) return { error: `${name} already has this SKU. ${nothing}` }
-  const liveListings = await prisma.channelListing.count({ where: { aliasId: alias.id, listingStatus: 'ACTIVE', isPublished: true } })
-  // d12 — a live listing's channel SKU is recorded, never renamed: once recorded, it is not changed to another SKU while
-  // live. Recording one, and clearing a wrong record (what undo of a record asks), change nothing on the channel.
-  if (from && to && liveListings) {
-    return { error: `${name} is live with the SKU ${from}. A channel's seller SKU is never renamed from Nexus: end or relist it on the channel first. ${nothing}` }
+  const readListing = (where: { id: string } | { aliasId: string; productId: string }) =>
+    prisma.channelListing.findFirst({ where: { ...where, product: { deletedAt: null } }, select: LISTING_SKU_SELECT })
+  let row: Awaited<ReturnType<typeof readListing>> = null
+  let alias: { id: string; label: string; sku: string | null } | null = null
+  if (extraListingId) {
+    const found = await prisma.productListingAlias.findFirst({
+      where: { id: extraListingId, product: { deletedAt: null } },
+      select: { id: true, label: true, channel: true, marketplace: true, productId: true, product: { select: { sku: true } } },
+    })
+    if (!found) return { error: 'Extra listing not found' }
+    const name = `The extra listing "${found.label}" of ${found.product.sku} (${found.channel} ${found.marketplace})`
+    // The listing's own SKU comes with the eBay import by SKU (ProductListingAlias.sku). Until that column exists there is
+    // nowhere to keep it, and this tool says so instead of pretending.
+    if (!(await availableRequirements()).has('listing-alias-sku')) {
+      return { error: `${name}: ${REQUIREMENT_MISSING['listing-alias-sku']} ${nothing}` }
+    }
+    const [stored] = await prisma.$queryRaw<Array<{ sku: string | null }>>`SELECT sku FROM "ProductListingAlias" WHERE id = ${found.id} AND "workspaceId" = ${ws}`
+    alias = { id: found.id, label: found.label, sku: stored?.sku ?? null }
+    if (alias.sku === to) return { error: `${name} already has this SKU. ${nothing}` }
+    row = await readListing({ aliasId: found.id, productId: found.productId })
+    // Both named: they must be one listing (the extra listing's main row).
+    if (listingId && row?.id !== listingId) {
+      const named = await readListing({ id: listingId })
+      if (!named) return { error: 'Listing not found' }
+      return { error: `${name}: listingId names another listing (${listingPlace(named)} of ${named.product?.sku}). Name one listing. ${nothing}` }
+    }
+    if (!row) {
+      // No listing row yet: only the recorded SKU, checked as before (a product's or another extra listing's SKU).
+      if (to) {
+        const [clash] = await prisma.$queryRaw<Array<{ what: string; sku: string }>>`
+          SELECT 'product' AS what, p.sku FROM "Product" p
+            WHERE p."workspaceId" = ${ws} AND p."deletedAt" IS NULL AND lower(btrim(p.sku)) = ${to.toLowerCase()}
+          UNION ALL
+          SELECT 'extra listing', a.sku FROM "ProductListingAlias" a
+            WHERE a."workspaceId" = ${ws} AND a.id <> ${found.id} AND lower(btrim(a.sku)) = ${to.toLowerCase()}
+          LIMIT 1`
+        if (clash) return { error: `${name}: ${to} is already the SKU of ${clash.what === 'product' ? 'a product' : 'another extra listing'} (${clash.sku}). One SKU names one thing. ${nothing}` }
+      }
+      return { listingId: null, version: null, aliasId: found.id, aliasFrom: alias.sku, label: found.label, productSku: found.product.sku,
+        channel: found.channel, market: found.marketplace, place: listingPlace({ channel: found.channel, marketplace: found.marketplace, aliasKey: found.id }),
+        from: alias.sku, to, held: null, sends: to }
+    }
+  } else {
+    row = await readListing({ id: listingId })
+    if (!row) return { error: 'Listing not found' }
+    // An extra listing's main row: its recorded SKU (ProductListingAlias.sku) is kept in step with the listing's own SKU.
+    if (row.aliasId && row.alias?.productId === row.productId && (await availableRequirements()).has('listing-alias-sku')) {
+      const [stored] = await prisma.$queryRaw<Array<{ sku: string | null; label: string }>>`
+        SELECT sku, label FROM "ProductListingAlias" WHERE id = ${row.aliasId} AND "workspaceId" = ${ws}`
+      if (stored) alias = { id: row.aliasId, label: stored.label, sku: stored.sku }
+    }
   }
-  if (to) {
-    const [clash] = await prisma.$queryRaw<Array<{ what: string; sku: string }>>`
-      SELECT 'product' AS what, p.sku FROM "Product" p
-        WHERE p."workspaceId" = ${ws} AND p."deletedAt" IS NULL AND lower(btrim(p.sku)) = ${to.toLowerCase()}
-      UNION ALL
-      SELECT 'extra listing', a.sku FROM "ProductListingAlias" a
-        WHERE a."workspaceId" = ${ws} AND a.id <> ${alias.id} AND lower(btrim(a.sku)) = ${to.toLowerCase()}
-      LIMIT 1`
-    if (clash) return { error: `${name}: ${to} is already the SKU of ${clash.what === 'product' ? 'a product' : 'another extra listing'} (${clash.sku}). One SKU names one thing. ${nothing}` }
-  }
-  return { aliasId: alias.id, label: alias.label, productSku: alias.product.sku, channel: alias.channel, market: alias.marketplace, from, to, liveListings }
+  const from = alias && extraListingId ? alias.sku : row.channelSku?.trim() || null
+  const place = listingPlace(row)
+  if (from === to && (!alias || alias.sku === to)) return { error: `The ${place} listing of ${row.product?.sku} already has this SKU. ${nothing}` }
+  const refusal = await checkListingSku(row.id, to, !!alias)
+  if (refusal) return { error: `The ${place} listing of ${row.product?.sku}: ${refusal} ${nothing}` }
+  const after = { ...row, channelSku: to, ...(alias ? { alias: row.alias ? { ...row.alias, sku: to } : row.alias } : {}) }
+  return { listingId: row.id, version: row.version, aliasId: alias?.id ?? null, aliasFrom: alias?.sku ?? null, label: alias?.label ?? null,
+    productSku: row.product?.sku ?? '', channel: row.channel, market: row.marketplace, place, from, to,
+    held: liveChannelSku(row, row.product?.sku)?.sku ?? null, sends: wantedChannelSku(after, row.product?.sku).sku }
 }
 
 const SET_LISTING_SKU_UNDO: ToolUndo = {
   async current(change) {
-    const aliasId = String((change.after as { extraListingId?: unknown } | null)?.extraListingId ?? '')
+    const after = (change.after ?? {}) as { listingId?: unknown; extraListingId?: unknown }
+    if (typeof after.listingId === 'string' && after.listingId) {
+      const row = await prisma.channelListing.findFirst({ where: { id: after.listingId }, select: { channelSku: true } })
+      return { listingId: after.listingId, sku: row ? row.channelSku : undefined }
+    }
+    const aliasId = String(after.extraListingId ?? '')
     if (!(await availableRequirements()).has('listing-alias-sku')) return { extraListingId: aliasId, sku: undefined }
     const [row] = await prisma.$queryRaw<Array<{ sku: string | null }>>`
       SELECT sku FROM "ProductListingAlias" WHERE id = ${aliasId} AND "workspaceId" = ${workspaceIdForQuery()}`
     return { extraListingId: aliasId, sku: row ? row.sku : undefined }
   },
   request(change) {
-    const before = (change.before ?? {}) as { extraListingId?: string; sku?: string | null }
-    if (!before.extraListingId) return { refusal: 'This change does not name its extra listing.' }
+    const before = (change.before ?? {}) as { listingId?: string; extraListingId?: string; sku?: string | null }
+    if (before.listingId) return { tool: 'set-listing-sku', args: { listingId: before.listingId, sku: before.sku ?? '' } }
+    if (!before.extraListingId) return { refusal: 'This change does not name its listing.' }
     return { tool: 'set-listing-sku', args: { extraListingId: before.extraListingId, sku: before.sku ?? '' } }
   },
 }
 
+/** What the channel sees: nothing (it holds that SKU), a first listing under it, or Publish's move (S10). */
+function listingSkuOutcome(plan: ListingSkuPlan): string {
+  if (!plan.held) return plan.sends ? `Publish lists it under ${plan.sends}.` : ''
+  if (plan.held === plan.sends) return `It is the SKU ${plan.place} holds: nothing moves on the channel.`
+  return `${plan.place} holds ${plan.held}: the next Publish moves it to ${plan.sends}.`
+}
+
+/** The listing changed between the plan and the write: nothing is kept. */
+class ListingSkuMoved extends Error {}
+
 const setListingSku: AgentTool = {
   name: 'set-listing-sku',
-  title: 'Record an extra listing SKU',
+  title: 'Set a listing\'s own SKU',
   input: z.object({
-    extraListingId: z.string().trim().min(1).max(64).describe('the extra listing (listing alias) id, as product-identity shows it'),
-    sku: z.string().trim().max(100).describe('the seller SKU this listing has on its channel; empty clears it'),
+    listingId: z.string().trim().max(64).optional().describe('the listing (one channel, market and account), as listing-coordinates or product-identity show it'),
+    extraListingId: z.string().trim().max(64).optional().describe('or: the extra listing (listing alias) id, as product-identity shows it'),
+    sku: z.string().trim().max(100).describe('the SKU this listing sends on its channel; empty = follow the product SKU again'),
   }),
   requires: [F.listingsEdit],
   category: 'listings',
@@ -479,56 +577,73 @@ const setListingSku: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: SET_LISTING_SKU_UNDO,
   description:
-    `Record the seller SKU of an extra listing (a second listing of a product on the same channel and market). ${NEXUS_ONLY} `
-    + 'Always waits for a person to approve it in Nexus. Refused when a product or another extra listing of this business '
-    + 'uses the SKU, and when a live listing already has one: a channel\'s seller SKU is recorded, never renamed. Available '
-    + 'once the listing-SKU column exists (it comes with the eBay import by SKU); until then it is refused and says so.',
+    `Set the SKU ONE listing uses on its channel (that channel, market and account only; Amazon's EU markets each on their own), `
+    + `or let it follow the product SKU again (empty). ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. Name the `
+    + 'listing by listingId, or an extra listing by extraListingId (its recorded SKU changes with it). A draft or deleted '
+    + 'listing takes any SKU: Publish lists it under that SKU. A listing the channel holds moves to the new SKU at the next '
+    + 'Publish on Amazon (new offer, old one deleted), eBay Trading and Shopify (renamed in place); an Amazon family\'s main '
+    + 'listing, an eBay Inventory listing and Etsy cannot move yet (delete it, then list it again). Refused when another product, an extra listing, '
+    + 'or another listing on the same account uses the SKU.',
   async handler(args): Promise<ToolResult> {
     const plan = await planListingSku(args, 'Nothing was queued.')
     if ('error' in plan) return { ok: false, error: plan.error }
+    const extra = plan.label ? ` (the extra listing "${plan.label}")` : ''
     return {
       ok: true,
       preview: {
         action: 'set-listing-sku',
         sku: plan.productSku,
-        extraListing: plan.label,
+        ...(plan.label ? { extraListing: plan.label } : {}),
         channel: plan.channel,
         market: plan.market,
         changes: { 'listing SKU': { from: plan.from, to: plan.to } },
-        effect: plan.to
-          ? `Records ${plan.to} as the SKU of the extra listing "${plan.label}" in Nexus.${plan.liveListings ? ' It is live: make sure this is the SKU the channel shows — Nexus does not change it there.' : ''}`
-          : `Clears the SKU of the extra listing "${plan.label}" in Nexus.`,
+        effect: `${plan.to ? `The ${plan.place} listing of ${plan.productSku}${extra} uses ${plan.to} in Nexus.`
+          : `The ${plan.place} listing of ${plan.productSku}${extra} follows the product SKU again in Nexus.`} ${listingSkuOutcome(plan)}`.trim(),
         note: `${NEXUS_ONLY} Nothing changes until a person approves this in Nexus.`,
       },
     }
   },
-  async execute(args): Promise<ToolResult> {
+  async execute(args, ctx): Promise<ToolResult> {
     const plan = await planListingSku(args, 'Nothing changed.')
     if ('error' in plan) return { ok: false, error: plan.error }
-    let updated = 0
     try {
-      // Fenced on the SKU the plan read: a change in between writes nothing.
-      updated = await prisma.$executeRaw`
-        UPDATE "ProductListingAlias" SET sku = ${plan.to}, "updatedAt" = now()
-        WHERE id = ${plan.aliasId} AND "workspaceId" = ${workspaceIdForQuery()} AND sku IS NOT DISTINCT FROM ${plan.from}`
+      await prisma.$transaction(async (tx) => {
+        // The recorded SKU first, fenced on what the plan read, so the listing's own rules read the listing as it will be.
+        if (plan.aliasId) {
+          const updated = await tx.$executeRaw`
+            UPDATE "ProductListingAlias" SET sku = ${plan.to}, "updatedAt" = now()
+            WHERE id = ${plan.aliasId} AND "workspaceId" = ${workspaceIdForQuery()} AND sku IS NOT DISTINCT FROM ${plan.aliasFrom}`
+          if (updated !== 1) throw new ListingSkuMoved('The extra listing changed meanwhile. Nothing changed.')
+        }
+        if (plan.listingId) {
+          await setChannelSku(tx, { listingId: plan.listingId, sku: plan.to, actorId: ctx.userId ?? null, expectedVersion: plan.version ?? undefined,
+            reason: 'set-listing-sku, approved in Nexus', liveMove: plan.aliasId ? 'allow' : 'refuse' })
+        }
+      })
     } catch (error) {
+      if (error instanceof ListingSkuMoved) return { ok: false, error: error.message }
+      if (error instanceof ChannelSkuError) {
+        return { ok: false, error: error.code === 'VERSION_CONFLICT' ? 'The listing changed meanwhile. Nothing changed.' : `${error.message} Nothing changed.` }
+      }
       if (/unique|23505|P2010/i.test(String((error as { code?: string; message?: string })?.code ?? '') + String((error as Error)?.message ?? ''))) {
         return { ok: false, error: `${plan.to} became another extra listing's SKU meanwhile. Nothing changed.` }
       }
       throw error
     }
-    if (updated !== 1) return { ok: false, error: 'The extra listing changed meanwhile. Nothing changed.' }
     try {
       const { publishListingEvent } = await import('../../listing-events.service.js')
-      const listings = await prisma.channelListing.findMany({ where: { aliasId: plan.aliasId }, select: { id: true } })
+      const listings = plan.aliasId
+        ? await prisma.channelListing.findMany({ where: { aliasId: plan.aliasId }, select: { id: true } })
+        : [{ id: plan.listingId! }]
       for (const l of listings) publishListingEvent({ type: 'listing.updated', listingId: l.id, reason: 'listing-sku', ts: Date.now() })
     } catch {
       // Best-effort: the write committed; a refresh that did not fire is not a failed change.
     }
+    const key = args.extraListingId ? { extraListingId: plan.aliasId } : { listingId: plan.listingId }
     return {
       ok: true,
-      data: { extraListing: plan.label, sku: plan.to, previous: plan.from, note: NEXUS_ONLY },
-      change: { before: { extraListingId: plan.aliasId, sku: plan.from }, after: { extraListingId: plan.aliasId, sku: plan.to } },
+      data: { listing: plan.place, ...(plan.label ? { extraListing: plan.label } : {}), sku: plan.to, previous: plan.from, note: NEXUS_ONLY },
+      change: { before: { ...key, sku: plan.from }, after: { ...key, sku: plan.to } },
     }
   },
 }
@@ -551,11 +666,12 @@ const UNLINK_UNDO: ToolUndo = {
     return { listingId, externalId: coordinate?.externalId ?? null }
   },
   request(change) {
-    const before = (change.before ?? {}) as { listingId?: string; channel?: string; externalId?: string }
+    const before = (change.before ?? {}) as { listingId?: string; channel?: string; externalId?: string; suggested?: boolean }
     if (!before.listingId || !before.externalId) return { refusal: 'This change does not name its listing and channel id.' }
-    if (before.channel === 'EBAY') return { tool: 'link-channel-id', args: { listingId: before.listingId, externalId: before.externalId } }
+    // An ASIN a draft listed on at Publish is set again by name (checked in Amazon's catalog first).
+    if (before.channel === 'EBAY' || before.channel === 'ETSY' || before.channel === 'SHOPIFY' || before.suggested) return { tool: 'link-channel-id', args: { listingId: before.listingId, externalId: before.externalId } }
     if (before.channel === 'AMAZON') return { tool: 'link-channel-id', args: { listingId: before.listingId } }
-    return { refusal: `A ${before.channel ?? 'channel'} id is linked again in its own flow in Nexus (Shopify: colour products).` }
+    return { refusal: `A ${before.channel ?? 'channel'} id is linked again in its own flow in Nexus.` }
   },
 }
 
@@ -578,12 +694,26 @@ const unlinkChannelId: AgentTool = {
     'Take a channel id (eBay Item ID, ASIN, Shopify product, Etsy listing) off a listing and the family rows that share it, '
     + `so Nexus stops driving that item. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. A snapshot of each `
     + 'row is kept first; the rows become paused drafts and the shared eBay variations of the item end in Nexus. The item '
-    + 'stays live on the channel and can oversell: the preview names the quantity last advertised. Undo links it again '
-    + '(eBay and Amazon, verified on the channel).',
+    + 'stays live on the channel and can oversell: the preview names the quantity last advertised. The SKU the channel held '
+    + 'for each row is forgotten (the SKU Nexus sends stays). A Shopify colour product is not unlinked here. Amazon, one rule '
+    + 'with the product sheet\'s ASIN cell: a row on Amazon keeps its ASIN (Amazon ties its seller SKU to it; refused with the '
+    + 'way to change it); a row not on Amazon loses only the ASIN it would list on at Publish. Undo links it again (verified '
+    + 'on the channel).',
   async handler(args): Promise<ToolResult> {
     try {
       const plan = await planUnlink(String(args.listingId))
       const c = plan.coordinate
+      if (plan.suggested) {
+        return {
+          ok: true,
+          preview: {
+            action: 'unlink-channel-id', sku: c.rows[0]?.sku ?? c.root.sku, channel: c.channel, market: c.market, externalId: plan.externalId, suggested: true,
+            changes: { 'ASIN at Publish': { from: plan.externalId, to: null } },
+            effect: `Removes ASIN ${plan.externalId} as the ASIN seller SKU ${plan.suggested.sellerSku} lists on at Publish (Amazon ${c.market}). The row stays a draft; nothing changes on Amazon.`,
+            note: 'Nothing is sent to Amazon. Nothing changes until a person approves this in Nexus.',
+          },
+        }
+      }
       return {
         ok: true,
         preview: {
@@ -613,7 +743,9 @@ const unlinkChannelId: AgentTool = {
       const record = await runUnlink(String(args.listingId), expected, ctx.userId ?? null)
       return {
         ok: true,
-        data: { unlinked: record.externalId, rows: record.rows.length, sharedVariationsEnded: record.membershipIds.length, snapshots: record.snapshotIds.length, note: NEXUS_ONLY },
+        data: record.suggested
+          ? { removedAsinAtPublish: record.externalId, note: 'Nothing is sent to Amazon: Publish lists the row without an ASIN of your choice.' }
+          : { unlinked: record.externalId, rows: record.rows.length, sharedVariationsEnded: record.membershipIds.length, snapshots: record.snapshotIds.length, note: NEXUS_ONLY },
         change: { before: record, after: { listingId: record.listingId, externalId: null } },
       }
     } catch (error) {
@@ -624,12 +756,15 @@ const unlinkChannelId: AgentTool = {
 
 const LINK_UNDO: ToolUndo = {
   async current(change) {
-    const listingId = String((change.after as { listingId?: unknown } | null)?.listingId ?? '')
+    const after = (change.after ?? {}) as { listingId?: unknown; suggestedAsin?: boolean }
+    const listingId = String(after.listingId ?? '')
     const coordinate = await coordinateOf(listingId)
+    // An ASIN set for Publish reads back as the draft's suggestion (the row holds no ASIN of Amazon's).
+    if (after.suggestedAsin) return { listingId, externalId: coordinate?.externalId ?? coordinate?.suggestedId ?? null, suggestedAsin: true }
     return { listingId, externalId: coordinate?.externalId ?? null }
   },
   request(change) {
-    const after = (change.after ?? {}) as { listingId?: string }
+    const after = (change.after ?? {}) as { listingId?: string; suggestedAsin?: boolean }
     if (!after.listingId) return { refusal: 'This change does not name its listing.' }
     return { tool: 'unlink-channel-id', args: { listingId: after.listingId } }
   },
@@ -641,9 +776,10 @@ const linkChannelId: AgentTool = {
   input: z.object({
     listingId: z.string().trim().min(1).max(64).describe('the listing to link (its family\'s rows on that account and market follow)'),
     externalId: z.string().trim().min(1).max(40).optional()
-      .describe('eBay: the Item ID to link. Amazon: leave it out — the ASIN is read from Amazon by the listing\'s seller SKU, never typed'),
+      .describe('eBay: the Item ID. Etsy: the Listing ID. Shopify: the Product ID. Amazon: leave it out to read the live ASIN from Amazon by the listing\'s seller SKU; '
+        + 'give an ASIN only for a row not on Amazon (a draft, or deleted): it becomes the ASIN the row lists on at Publish'),
     acknowledgeUnverifiable: z.boolean().optional()
-      .describe('eBay only: link even though it cannot be proven the item is this account\'s (the account has no recorded seller)'),
+      .describe('eBay, Etsy, Shopify: link even though it cannot be proven the item is this account\'s or this listing\'s (no recorded seller; an item with no SKUs)'),
   }),
   requires: [F.listingsEdit, F.listingsRecover],
   category: 'listings',
@@ -655,13 +791,17 @@ const linkChannelId: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: LINK_UNDO,
   description:
-    'Link a listing to the channel item it sells, after checking it on the channel: eBay — the Item ID must be listed by '
-    + 'this account\'s seller and carry this family\'s SKUs on this market and account (no other family may hold it); it is '
-    + 'written only on the rows the item carries, with the status eBay reports (an ended item reads Ended, and Relist is '
-    + 'offered); a variation that holds another item moves to this one only when eBay shows its own SKU on it (the preview '
-    + 'lists each such row, and the rows left alone); Amazon — the ASIN is read from Amazon by the listing\'s seller SKU. Always waits for a person to approve it '
-    + 'in Nexus, and checks again before it writes. The rows stay paused until a person resumes their pushes. The product '
-    + 'sheet\'s Item ID cell uses the same rules. Shopify links through colour products in Nexus; Etsy is not built yet.',
+    'Link a listing to the channel item it sells, after checking it on the channel as this business\'s own account. eBay — '
+    + 'the Item ID must be listed by this account\'s seller; Etsy — the listing must belong to this account\'s shop; Shopify — '
+    + 'the product must be in this business\'s store and carry no other Nexus identity (a colour store confirms the colour it '
+    + 'matches, which writes the Nexus identity on the Shopify product). Each must carry this family\'s SKUs on this market and '
+    + 'account, and no other family may hold it. It is written only on the rows the item carries, with the status the channel '
+    + 'reports, and each row records the SKU the channel proved for it; a variation that holds another item moves to this one '
+    + 'only when the channel shows its own SKU on it (the preview lists each such row, and the rows left alone). Amazon — with '
+    + 'no externalId the live ASIN is read from Amazon by the listing\'s seller SKU; an ASIN given for a row not on Amazon is '
+    + 'checked in Amazon\'s catalog and becomes the ASIN it lists on at Publish; a live offer\'s ASIN is refused (Amazon ties '
+    + 'its seller SKU to it). Always waits for a person to approve it in Nexus, and checks again before it writes. The rows '
+    + 'stay paused until a person resumes their pushes. The product sheet\'s id cells use the same rules.',
   async handler(args): Promise<ToolResult> {
     try {
       const plan = await planLink(String(args.listingId), { externalId: (args.externalId as string | undefined) ?? null, acknowledgeUnverifiable: args.acknowledgeUnverifiable === true })
@@ -678,17 +818,21 @@ const linkChannelId: AgentTool = {
           proof: plan.reason,
           ...(plan.seller ? { seller: plan.seller } : {}),
           ...(plan.matchedSkus.length ? { matchedSkus: plan.matchedSkus.slice(0, LINE_CAP) } : {}),
-          changes: { 'channel id': { from: c.externalId, to: plan.externalId } },
+          ...(plan.suggestedAsin ? { listings: [plan.suggestedAsin.sellerSku], found: plan.suggestedAsin.found } : {}),
           ...(plan.proof ? {
             listings: plan.proof.rows.slice(0, LINE_CAP).map((r) => r.sku),
+            ...(plan.proof.colour ? { colour: plan.proof.colour.name, writesOnShopify: plan.proof.colour.writes } : {}),
             // Owner option A (2026-10-05): rows that hold another item and that eBay shows on this one move with the link.
             ...(plan.proof.moved.length ? { movesFromOtherItem: plan.proof.moved.slice(0, LINE_CAP).map((m) => m.sentence) } : {}),
             ...(plan.proof.kept.length ? { keptOtherItem: plan.proof.kept.slice(0, LINE_CAP).map((k) => k.sentence) } : {}),
           } : {}),
-          effect: plan.proof
-            ? `Links ${c.channel} ${plan.externalId} to ${plan.proof.rows.length} row(s) of ${c.root.sku} (${c.market})${plan.proof.moved.length ? `, moving ${plan.proof.moved.length} of them from another item` : ''}; they read ${plan.proof.status === 'ENDED' ? 'Ended (Relist is offered)' : 'Active'} in Nexus and stay paused until a person resumes their pushes.`
+          changes: { 'channel id': { from: plan.suggestedAsin ? plan.suggestedAsin.current : c.externalId, to: plan.externalId } },
+          effect: plan.suggestedAsin
+            ? `Sets ASIN ${plan.externalId} as the ASIN seller SKU ${plan.suggestedAsin.sellerSku} lists on at Publish (Amazon ${c.market}); nothing is sent to Amazon now.`
+            : plan.proof
+            ? `Links ${c.channel} ${plan.externalId} to ${plan.proof.rows.length} row(s) of ${c.root.sku} (${c.market})${plan.proof.moved.length ? `, moving ${plan.proof.moved.length} of them from another item` : ''}; they read ${plan.proof.status === 'ENDED' ? `Ended${c.channel === 'EBAY' ? ' (Relist is offered)' : ''}` : plan.proof.status === 'INACTIVE' ? 'Inactive' : 'Active'} in Nexus and stay paused until a person resumes their pushes.`
             : `Links ${c.channel} ${plan.externalId} to ${c.root.sku} (${c.market}); its rows become live in Nexus and stay paused until a person resumes their pushes.`,
-          note: 'Nothing is sent to the channel. Nothing changes until a person approves this in Nexus.',
+          note: plan.proof?.colour ? `${plan.proof.colour.writes} Nothing changes until a person approves this in Nexus.` : 'Nothing is sent to the channel. Nothing changes until a person approves this in Nexus.',
         },
       }
     } catch (error) {
@@ -703,8 +847,12 @@ const linkChannelId: AgentTool = {
       const record = await runLink(String(args.listingId), { externalId: (args.externalId as string | undefined) ?? null, acknowledgeUnverifiable: args.acknowledgeUnverifiable === true, expectedExternalId: expected, actor: ctx.userId ?? null })
       return {
         ok: true,
-        data: { linked: record.externalId, rows: record.rows.length, ...(record.status ? { status: record.status } : {}), sharedVariationsLive: record.membershipsReactivated.length, note: 'Pushes stay paused until a person resumes them.' },
-        change: { before: { listingId: record.listingId, externalId: before?.externalId ?? null, rows: record.rows }, after: { listingId: record.listingId, externalId: record.externalId } },
+        data: record.suggestedAsin
+          ? { listsOnAtPublish: record.externalId, changed: record.suggestedAsin.changed, note: 'Nothing is sent to Amazon now: Publish lists the row on this ASIN.' }
+          : { linked: record.externalId, rows: record.rows.length, ...(record.status ? { status: record.status } : {}), sharedVariationsLive: record.membershipsReactivated.length,
+            ...(record.liveSkus?.length ? { channelSkusRecorded: record.liveSkus.length } : {}), note: 'Pushes stay paused until a person resumes them.' },
+        change: { before: { listingId: record.listingId, externalId: record.suggestedAsin ? record.suggestedAsin.previous : before?.externalId ?? null, rows: record.rows },
+          after: { listingId: record.listingId, externalId: record.externalId, ...(record.suggestedAsin ? { suggestedAsin: true } : {}) } },
       }
     } catch (error) {
       return fixRefusal(error, 'Nothing changed.')

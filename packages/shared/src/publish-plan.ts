@@ -153,6 +153,8 @@ export interface PublishPlanCounts {
   inactive: number
   /** End. */
   ended: number
+  /** S10 — live Amazon listings moved to their own SKU (create NEW, then delete OLD). Absent when none. */
+  moved?: number
 }
 
 /** The typed confirmation Ended and Delete rows need. */
@@ -192,6 +194,11 @@ export interface PublishPlanSubmitDestination {
   confirmOverwrite?: boolean
   /** Shopify: the inventory location. */
   locationId?: string
+  /**
+   * S10 — this content review moves a live Amazon listing to a new SKU, which deletes the old SKU there once Amazon
+   * accepts the new one (`StudioPublishReview.confirm`): the person typed the family SKU (`confirmText`).
+   */
+  confirmDelete?: boolean
 }
 
 export interface PublishPlanSubmit {
@@ -203,7 +210,7 @@ export interface PublishPlanSubmit {
   lifecycle: string[]
   /** The plan's "No longer applies" ids: cleared when the batch is queued (only if nobody changed them since the review). */
   outgrown?: string[]
-  /** The typed confirmation for Ended and Delete rows: the family SKU (`PublishPlan.confirm.expected`). */
+  /** The typed confirmation for Ended and Delete rows, and for a content review that deletes an old SKU: the family SKU. */
   confirmText?: string | null
 }
 
@@ -307,14 +314,17 @@ export function publishPlanCounts(plan: Pick<PublishPlan, 'destinations'>, ticks
     if (review?.id && review.changes) {
       const ticked = new Set(ticks.fields?.[review.id] ?? defaultReviewTicks(review))
       const modeOf = new Map(review.rows.map(row => [row.productId, row.mode ?? 'partial']))
-      const partialRows = new Set<string>(), fullRows = new Set<string>()
+      const partialRows = new Set<string>(), fullRows = new Set<string>(), movedRows = new Set<string>()
       for (const change of review.changes) {
         if (!change.selectable || !ticked.has(change.id)) continue
         if (modeOf.get(change.productId) === 'full') fullRows.add(change.productId)
+        // S10 — a moved row is neither a Partial nor a Full update: it is counted as a move.
+        else if (modeOf.get(change.productId) === 'move') movedRows.add(change.productId)
         else { partialRows.add(change.productId); counts.fields += 1 }
       }
       counts.partial += partialRows.size
       counts.full += fullRows.size
+      if (movedRows.size) counts.moved = (counts.moved ?? 0) + movedRows.size
     }
     for (const row of destination.lifecycle) {
       if (row.refused || !lifecycle.has(row.id)) continue

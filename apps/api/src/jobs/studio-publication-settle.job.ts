@@ -35,6 +35,8 @@ export interface PublicationSettleTick {
   failed: number
   /** Accepted publications whose missed offer promotion ran now. */
   offersRecovered?: number
+  /** S10 — publications whose SKU moves were finished by the sweep (`recoverAmazonMoves`). */
+  movesRecovered?: number
 }
 
 /** One sweep in the current business. Exported for tests and for a manual run. */
@@ -83,7 +85,16 @@ export async function runPublicationSettleTick(now = new Date()): Promise<Public
   } catch (error) {
     logger.warn('[publication-settle] offer promotion recovery failed; the next tick tries again', { error: error instanceof Error ? error.message : String(error) })
   }
-  if (tick.due || tick.offersRecovered) logger.info('[publication-settle] tick', { ...tick })
+  // S10 — an accepted publication whose SKU moves never finished (a crash, or a delete Amazon did not confirm yet).
+  try {
+    const { recoverAmazonMoves } = await import('../services/pim/studio-publication-amazon-move.js')
+    const recovered = await recoverAmazonMoves(now)
+    if (recovered.finished) tick.movesRecovered = recovered.finished
+    if (recovered.failed) tick.failed += recovered.failed
+  } catch (error) {
+    logger.warn('[publication-settle] SKU move recovery failed; the next tick tries again', { error: error instanceof Error ? error.message : String(error) })
+  }
+  if (tick.due || tick.offersRecovered || tick.movesRecovered) logger.info('[publication-settle] tick', { ...tick })
   return tick
 }
 
@@ -104,7 +115,7 @@ export function startPublicationSettleCron(): void {
   scheduledTask = cron.schedule(schedule, async () => {
     await recordCronRun('publication-settle', async () => {
       const r = await runPublicationSettleTick()
-      return `due=${r.due} claimed=${r.claimed} settled=${r.settled} failed=${r.failed} offersRecovered=${r.offersRecovered ?? 0}`
+      return `due=${r.due} claimed=${r.claimed} settled=${r.settled} failed=${r.failed} offersRecovered=${r.offersRecovered ?? 0} movesRecovered=${r.movesRecovered ?? 0}`
     })
   })
   logger.info('publication-settle cron: scheduled', { schedule })

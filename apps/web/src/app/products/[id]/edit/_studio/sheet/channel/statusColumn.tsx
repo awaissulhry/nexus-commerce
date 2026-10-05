@@ -90,13 +90,20 @@ export function statusCellValue(cell: PublishActionCell | null | undefined, read
   }
 }
 
+/**
+ * A removed row's mark facts: when ("4 Oct"), and whether Nexus UNLINKED it (Item ID control, 2026-10-05) rather than
+ * deleted it — an unlinked row reads "unlinked 5 Oct" and is never listed as new (the listing may still be live there).
+ */
+export const removedFacts = (deleted: PublishActionCell['deleted']) =>
+  deleted ? { on: deletedOn(deleted.at), ...(deleted.unlinked ? { unlinked: true } : {}) } : null
+
 /** A new row's Status facts for the cell: its choice, the sentence, and the check Publish makes again (eBay). */
 export function newListingFacts(cell: PublishActionCell & { create: NonNullable<PublishActionCell['create']> }): NonNullable<SellingStatusValue['create']> {
   const option = cell.statusOptions.find(o => o.target === cell.create.target)
   const outgrown = cell.status.target && cell.status.noLongerApplies ? `This choice no longer applies: ${sentence(cell.status.noLongerApplies)}` : null
   const note = [outgrown, option?.checkedAtSend ?? null].filter(Boolean).join(' ') || null
   return { target: cell.create.target, source: cell.create.source, sentence: cell.create.sentence, note,
-    deleted: cell.deleted ? { on: deletedOn(cell.deleted.at) } : null }
+    deleted: removedFacts(cell.deleted) }
 }
 
 /** The Status the editor opens on: a new row's choice, the waiting target, else the live state's own target (none for Draft, Mixed …). */
@@ -110,7 +117,7 @@ export function currentStatusTarget(cell: PublishActionCell | null | undefined):
 /** The editor's options: the server's choices; Ended held without `products.delete` (the server refuses it too). */
 export function statusEditorChoices(cell: PublishActionCell, canDelete: boolean): SelectPanelOption[] {
   // A new row: Active · Inactive · Not listed, each with what Publish does; the current choice says where it comes from.
-  if (cell.create) return newListingEditorOptions(cell.statusOptions, { ...cell.create, deleted: cell.deleted ? { on: deletedOn(cell.deleted.at) } : null },
+  if (cell.create) return newListingEditorOptions(cell.statusOptions, { ...cell.create, deleted: removedFacts(cell.deleted) },
     cell.create.source === 'own' ? cell.status : null)
   const choices = cell.statusOptions.map(option => option.target === 'ended' && option.offered && option.action && !canDelete
     ? { ...option, offered: false, reason: ENDED_NEEDS_DELETE } : option)

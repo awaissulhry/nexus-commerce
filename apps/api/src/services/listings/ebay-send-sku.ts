@@ -6,7 +6,9 @@
  *
  *   - A push or a listing action addresses what eBay HOLDS: `listingSendSku` (listing-send-sku.ts), the live SKU.
  *   - Publish (create, Full and Partial update) sends each row's WANTED SKU (`ebayPublishSku`). A row eBay already holds
- *     under ANOTHER SKU keeps eBay's: moving a live eBay SKU is step S10 (`waitsForMove` marks those rows).
+ *     under ANOTHER SKU (`moves`: the row has its own SKU, `channelSku`, and eBay holds another) is renamed in place by a
+ *     Trading Publish (S10: ReviseFixedPriceItem, a variation matched by its values); an Inventory listing cannot move yet
+ *     (the review refuses it by name). A row without its own SKU keeps sending the SKU eBay holds, as before.
  *   - The custom-label guard and the label / relabel / add-variation services name the listing's WANTED SKU
  *     (`ebayItemLabel`, `ebayRowsOnItem`), so a listing with its own SKU is never put back to `Product.sku`.
  *
@@ -31,22 +33,23 @@ export interface EbayPublishSku {
   /** The SKU eBay holds for this row; null = no listing, or a still-draft row (eBay holds nothing yet). */
   live: string | null
   /**
-   * TODO(S10): the row wants another SKU than the one eBay holds. Publish keeps sending eBay's SKU (a Full update matches
-   * variations by SKU, and Nexus cannot move a live eBay SKU yet); S10 moves it in place (Trading) or says it cannot.
+   * S10 — the row has its own SKU (`channelSku`) and eBay holds it under another: Publish moves it. `sku` stays the SKU
+   * eBay holds; a Trading Publish sends `wanted` instead (renaming the row in place), an Inventory one refuses it.
    */
-  waitsForMove: boolean
+  moves: boolean
 }
 
 /**
  * The SKU Publish sends for one row: a row eBay holds sends the SKU eBay holds (its own when it has one, as before
- * otherwise); a row eBay does not hold yet (no listing, or still a draft) sends its wanted SKU.
+ * otherwise) — unless it MOVES (`moves`, the caller sends `wanted`); a row eBay does not hold yet (no listing, or still a
+ * draft) sends its wanted SKU. Only an own SKU moves a live row: an extra listing's SKU without one keeps eBay's (parity).
  */
 export function ebayPublishSku(listing: EbayFacts | null | undefined, productSku: string | null | undefined): EbayPublishSku {
   const wanted = wantedChannelSku(facts(listing), productSku).sku
   const held = listing ? liveChannelSku(facts(listing), productSku) : null
   const live = held?.sku ?? null
-  if (live) return { sku: live, wanted, live, waitsForMove: !!wanted && wanted !== live }
-  return { sku: wanted ?? '', wanted, live: null, waitsForMove: false }
+  if (live) return { sku: live, wanted, live, moves: !!wanted && wanted !== live && !!text(listing?.channelSku) }
+  return { sku: wanted ?? '', wanted, live: null, moves: false }
 }
 
 /**
@@ -67,7 +70,7 @@ export type EbayItemRow = EbayFacts & { id: string; productId: string; product?:
 export interface EbayItemLabel {
   /** The label to write when eBay holds none of `keep`. */
   target: string
-  /** Labels left as they are: the wanted SKU, and the SKU eBay holds (TODO(S10): moving that one is S10's). */
+  /** Labels left as they are: the wanted SKU, and the SKU eBay holds (a Publish renames that one: S10). */
   keep: string[]
   /** The root row whose SKU the label is (recorded as what eBay holds once eBay takes it); null = the caller's fallback. */
   listingId: string | null

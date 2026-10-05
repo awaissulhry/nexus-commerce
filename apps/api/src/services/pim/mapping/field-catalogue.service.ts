@@ -42,6 +42,7 @@ import { loadEtsyProductSpec } from '../channel-specs/etsy-loader.js'
 import { loadAmazonSpec, loadAmazonEnglishLabels, loadEbaySpec, clearChannelSpecCache, type ChannelSpec } from '../channel-specs/index.js'
 import { englishLeafLabel } from '../sheet-columns.service.js'
 import { amazonInEnglish } from '../channel-specs/amazon-english.js'
+import { SHOPIFY_SKU_RULE_NOT_USED, isShopifySkuColumn } from '../../listings/shopify-sku-cell.js'
 import {
   getMappingForMarketplace,
   getMappingForMarketplaceWithWarnings,
@@ -111,6 +112,11 @@ export interface CatalogueField {
   schemaKnown?: boolean
   sourceOwner?: SourceOwner | null
   status: 'mapped' | 'unmapped' | 'owned'
+  /**
+   * S9 — this column takes no mapping rule (the Shopify SKU column: Publish sends the listing's own SKU or the product
+   * SKU): the one line the mapping editor shows instead of a rule editor. A rule saved before is shown "Not used".
+   */
+  ruleNotUsed?: string
 }
 
 export interface FieldCatalogue {
@@ -348,6 +354,8 @@ export async function getFieldCatalogue(input: {
       schemaKnown: present ? specFields.has(key) : rowByKey.has(key) || specFields.has(key),
       sourceOwner: owner,
       status: rule ? 'mapped' : owner ? 'owned' : 'unmapped',
+      // S9 — the Shopify SKU column takes no rule (it sends the listing's own SKU or the product SKU).
+      ...(isShopifySkuColumn(channel, key) ? { ruleNotUsed: SHOPIFY_SKU_RULE_NOT_USED } : {}),
       ...seed,
     } as CatalogueField)
   }
