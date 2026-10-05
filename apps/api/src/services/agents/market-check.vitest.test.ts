@@ -57,7 +57,7 @@ describe('marketRefusal', () => {
 
   it('refuses a market the business does not have, and lists the ones it has', async () => {
     expect(await marketRefusal(change, { channel: 'EBAY', marketplace: 'ES' })).toBe(
-      'There is no eBay market ES in this business. Its eBay markets: IT, DE, UK (inactive). business-overview lists every market with its code. Nothing was queued.')
+      'eBay market ES not found in this business. Its eBay markets: IT, DE, UK (inactive). business-overview lists every market with its code. Nothing was queued.')
     expect(await marketRefusal(change, { channel: 'SHOPIFY', market: 'IT' })).toContain('Its Shopify markets: GLOBAL.')
   })
 
@@ -75,7 +75,7 @@ describe('marketRefusal', () => {
   })
 
   it('checks publish-review, the read a publish is decided on', async () => {
-    expect(await marketRefusal({ name: 'publish-review', readOnly: true }, { channel: 'EBAY', market: 'ES' })).toMatch(/no eBay market ES.*Nothing was read\.$/)
+    expect(await marketRefusal({ name: 'publish-review', readOnly: true }, { channel: 'EBAY', market: 'ES' })).toMatch(/eBay market ES not found in this business.*Nothing was read\.$/)
   })
 
   it('checks each step of a change plan', async () => {
@@ -84,6 +84,6 @@ describe('marketRefusal', () => {
       { tool: 'publish-listing', args: { channel: 'EBAY', marketplace: 'IT' } },
       { tool: 'publish-listing', args: { channel: 'EBAY', marketplace: 'FR' } },
     ] }, () => change)
-    expect(refusal).toBe('Step 2: there is no eBay market FR in this business. Its eBay markets: IT, DE, UK (inactive). business-overview lists every market with its code. Nothing was queued.')
+    expect(refusal).toBe('Step 2: eBay market FR not found in this business. Its eBay markets: IT, DE, UK (inactive). business-overview lists every market with its code. Nothing was queued.')
   })
 })
