@@ -41,6 +41,7 @@ import { logger } from '../utils/logger.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { postEbayMarketing, readEbayPromotionPushControls } from './ebay-marketing-dispatch.service.js'
 import { validateVolumeTiers, type VolumeTier } from './ebay-volume-pricing.service.js'
+import { ebayMarketplaceId } from './ebay-account-defaults.js'
 
 export interface PushVolumePromotionResult {
   ok: boolean
@@ -126,7 +127,7 @@ export async function pushVolumePromotion(
   // The first discountRule is the required baseline: minQuantity 1 / 0% off.
   const payload = {
     name: promo.name,
-    marketplaceId: `EBAY_${promo.marketplace}`,
+    marketplaceId: ebayMarketplaceId(promo.marketplace), // UK is eBay's EBAY_GB
     promotionStatus: 'SCHEDULED' as const,
     promotionType: 'VOLUME_DISCOUNT' as const,
     applyDiscountToSingleItemOnly: true, // multiples of the SAME SKU

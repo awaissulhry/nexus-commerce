@@ -32,6 +32,7 @@ import { masterCurrency } from '../../fx-rate.service.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 import { accountRefusal, draftMarkdown, draftVolumePromotion, EbayPromotionRefusal, markdownLive, promotionAccount, volumeLive } from '../../pricing/ebay-price-promotion.service.js'
+import { ebayMarkdownBenefit } from '../../ebay-markdown-benefit.js'
 import { validateVolumeTiers } from '../../ebay-volume-pricing.service.js'
 
 const DAY_MS = 86_400_000
@@ -645,10 +646,10 @@ async function planEbayPromotion(args: Record<string, unknown>): Promise<EbayPro
       if (!row.externalListingId) { problems.push(`${sku} on eBay ${row.marketplace} is not live on eBay yet`); continue }
       if (row.price == null) { problems.push(`${sku} on eBay ${row.marketplace} has no price`); continue }
       const price = Number(row.price)
-      const markdownPrice = type === 'PERCENTAGE' ? Math.round(price * (1 - value / 100) * 100) / 100 : value
-      if (type === 'PERCENTAGE' && value >= 100) { problems.push(`${sku}: a markdown takes less than 100 % off`); continue }
-      if (markdownPrice >= price) { problems.push(`${sku}: ${markdownPrice} is not below its eBay price ${price}`); continue }
-      listings.push({ id: row.id, sku, marketplace: row.marketplace, price, markdownPrice })
+      // The same check the push makes: only a discount eBay takes is queued (currency is not needed for the check).
+      const discount = ebayMarkdownBenefit({ discountType: type === 'PERCENTAGE' ? 'PERCENTAGE' : 'FIXED_PRICE', discountValue: value, price, currency: '' })
+      if (!discount.ok) { problems.push(`${sku} on eBay ${row.marketplace}: ${discount.reason}`); continue }
+      listings.push({ id: row.id, sku, marketplace: row.marketplace, price, markdownPrice: discount.markdownPrice })
     }
     if (problems.length) return { error: `Not queued: ${problems.slice(0, 5).join('; ')}${problems.length > 5 ? `; and ${problems.length - 5} more` : ''}` }
     return { kind, live: markdownLive(), start, end, listings, volume: null, discount: { type, value } }
@@ -680,7 +681,7 @@ const setEbayPricePromotion: AgentTool = {
     kind: z.preprocess(lower, z.enum(PROMO_KINDS)).default('markdown').describe('markdown (default: a price cut on eBay listings) or volume (buy more, pay less per unit)'),
     listingIds: z.array(z.string().trim().min(1).max(64)).min(1).max(PROMO_MAX).optional().describe(`markdown: the eBay listings, 1 to ${PROMO_MAX} (channel-price-stock shows them)`),
     discountType: z.preprocess(upper, z.enum(['PERCENTAGE', 'FIXED_PRICE'])).default('PERCENTAGE').describe('markdown: PERCENTAGE off (default) or FIXED_PRICE (the new price)'),
-    discountValue: z.coerce.number().positive().max(1_000_000).optional().describe('markdown: the percent off, or the new price in the market\'s currency'),
+    discountValue: z.coerce.number().positive().max(1_000_000).optional().describe('markdown: the percent off (a whole number, 5 to 80), or the new price in the market\'s currency (the amount off it makes must be 5 to 100 in steps of 1, 105 to 1000 in steps of 5, or 1100 to 15000 in steps of 100: eBay\'s list)'),
     marketplace: z.string().trim().min(2).max(20).optional().describe('volume: the eBay market, e.g. IT'),
     productIds: z.array(z.string().trim().min(1).max(64)).min(1).max(PROMO_MAX).optional().describe(`volume: the products (their eBay listings in that market), 1 to ${PROMO_MAX}`),
     tiers: z.array(z.object({

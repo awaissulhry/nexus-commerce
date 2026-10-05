@@ -46,6 +46,8 @@ import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { postEbayMarketing, readEbayPromotionPushControls } from './ebay-marketing-dispatch.service.js'
+import { ebayMarketplaceId } from './ebay-account-defaults.js'
+import { ebayMarkdownBenefit } from './ebay-markdown-benefit.js'
 
 export interface PushMarkdownResult {
   ok: boolean
@@ -137,30 +139,37 @@ export async function pushMarkdownToEbay(
     )
   }
 
+  // The discount eBay takes for a markdown (percentageOffItem / amountOffItem, from eBay's preset list), priced against
+  // the listing's current price. A FIXED_PRICE value is the new price; eBay is sent the amount off. Refused before
+  // the dry run too, so a dry run proves the payload eBay would accept.
+  const discount = ebayMarkdownBenefit({
+    discountType: markdown.discountType === 'PERCENTAGE' ? 'PERCENTAGE' : 'FIXED_PRICE',
+    discountValue: Number(markdown.discountValue),
+    price: currentListingPrice ?? draftedOriginal,
+    currency: markdown.currency,
+  })
+  if (!discount.ok) {
+    const error = `eBay would refuse this markdown: ${discount.reason}`
+    await prisma.ebayMarkdown.update({ where: { id: markdownId }, data: { lastSyncStatus: 'FAILED', lastSyncedAt: new Date(), lastSyncError: error } })
+    return { ok: false, markdownId, liveMode, warnings, error, durationMs: Date.now() - startedAt }
+  }
+
   // Build the payload. eBay's Marketing API
   // (createItemPriceMarkdownPromotion) shape:
   //   { name, description, marketplaceId, status: 'SCHEDULED',
   //     promotionImageUrl?, startDate, endDate, selectedInventoryDiscounts: [
-  //       { ruleOrder, discountBenefit: { percentageOffOrder | amountOffOrder },
+  //       { ruleOrder, discountBenefit: { percentageOffItem | amountOffItem },
   //         discountSpecification: { listingIds: [...] } } ] }
   const payload = {
     name: `Markdown ${markdown.id}`,
-    marketplaceId: `EBAY_${markdown.channelListing.marketplace}`,
+    marketplaceId: ebayMarketplaceId(markdown.channelListing.marketplace),
     status: 'SCHEDULED' as const,
     startDate: markdown.startDate.toISOString(),
     endDate: markdown.endDate?.toISOString() ?? null,
     selectedInventoryDiscounts: [
       {
         ruleOrder: 1,
-        discountBenefit:
-          markdown.discountType === 'PERCENTAGE'
-            ? { percentageOffOrder: Number(markdown.discountValue).toFixed(2) }
-            : {
-                amountOffOrder: {
-                  value: Number(markdown.discountValue).toFixed(2),
-                  currency: markdown.currency,
-                },
-              },
+        discountBenefit: discount.benefit,
         discountSpecification: {
           listingIds: [markdown.channelListing.externalListingId],
         },

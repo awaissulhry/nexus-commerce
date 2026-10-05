@@ -89,7 +89,7 @@ describe('08 S13 — set-ebay-price-promotion', () => {
     vi.stubEnv('NEXUS_EBAY_MARKDOWN_LIVE', '0')
     expect((await run('set-ebay-price-promotion', { listingIds: [ids.otherListing], discountValue: 10 })).error)
       .toBe('Not queued: TEST-SKU-S13-GLOVES is listed on another eBay account: a promotion is sent with the primary eBay account only (set it in Nexus)')
-    expect((await run('set-ebay-price-promotion', { listingIds: [ids.jacketListing], discountType: 'fixed_price', discountValue: 120 })).error).toMatch(/120 is not below its eBay price 100/)
+    expect((await run('set-ebay-price-promotion', { listingIds: [ids.jacketListing], discountType: 'fixed_price', discountValue: 120 })).error).toMatch(/the new price 120.00 is not below the eBay price 100.00/)
     const dry = await run('set-ebay-price-promotion', { listingIds: [ids.jacketListing, ids.glovesListing], discountValue: 15 })
     expect(dry, dry.error).toMatchObject({
       ok: true,
@@ -106,8 +106,17 @@ describe('08 S13 — set-ebay-price-promotion', () => {
     vi.stubEnv('NEXUS_EBAY_MARKDOWN_LIVE', '1')
     const ran = await run('set-ebay-price-promotion', { listingIds: [ids.glovesListing], discountValue: 10, startDate: '2099-01-01' }, 'execute')
     expect(ran, ran.error).toMatchObject({ ok: true, data: { live: true } })
-    expect(dispatch.posts).toEqual([expect.objectContaining({ path: '/sell/marketing/v1/item_price_markdown_promotion', payload: expect.objectContaining({ marketplaceId: 'EBAY_IT', selectedInventoryDiscounts: [expect.objectContaining({ discountSpecification: { listingIds: ['TEST-ITEM-2'] } })] }) })])
+    expect(dispatch.posts).toEqual([expect.objectContaining({ path: '/sell/marketing/v1/item_price_markdown_promotion', payload: expect.objectContaining({ marketplaceId: 'EBAY_IT', selectedInventoryDiscounts: [expect.objectContaining({ discountBenefit: { percentageOffItem: '10' }, discountSpecification: { listingIds: ['TEST-ITEM-2'] } })] }) })])
     expect(await inside(() => database.client.ebayMarkdown.findFirstOrThrow({ where: { channelListingId: ids.glovesListing }, select: { status: true, externalPromotionId: true } }))).toEqual({ status: 'SCHEDULED', externalPromotionId: 'TEST-PROMO-1' })
+  })
+
+  it('a fixed new price goes to eBay as the amount off, and only an amount eBay takes is queued', async () => {
+    vi.stubEnv('NEXUS_EBAY_MARKDOWN_LIVE', '1')
+    expect((await run('set-ebay-price-promotion', { listingIds: [ids.jacketListing], discountType: 'fixed_price', discountValue: 97 })).error)
+      .toMatch(/100.00 → 97.00 is 3.00 off; a new price of 95.00 works/)
+    const ran = await run('set-ebay-price-promotion', { listingIds: [ids.jacketListing], discountType: 'fixed_price', discountValue: 90, startDate: '2099-01-01' }, 'execute')
+    expect(ran, ran.error).toMatchObject({ ok: true, data: { live: true } })
+    expect(dispatch.posts.at(-1)?.payload.selectedInventoryDiscounts[0].discountBenefit).toEqual({ amountOffItem: { value: '10.00', currency: 'EUR' } })
   })
 
   it('volume pricing: tiers are checked; the SKUs of one market; dry run records it', async () => {
