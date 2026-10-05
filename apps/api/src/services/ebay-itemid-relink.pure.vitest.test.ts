@@ -13,6 +13,8 @@ import {
   parseListingStatus,
   parseTopLevelSku,
   parseSellerUserId,
+  accountSellerFor,
+  accountSellerNames,
   checkSellerOwnership,
   combineOwnership,
   isEndedEbayStatus,
@@ -141,6 +143,22 @@ describe('GetItem parsing', () => {
 
 // I4 / G2 — the SKUs alone do not prove ownership: two businesses that share stock by SKU carry the same SKUs. The
 // item must also be listed by the seller behind the account Nexus would drive it through.
+describe('accountSellerNames / accountSellerFor — the names an eBay account\'s seller goes by (2026-10-05)', () => {
+  it('an OAuth account: the sign-in name first, then the immutable user id; an older account: its one id', () => {
+    expect(accountSellerNames({ ebaySignInName: ' shop-seller ', externalAccountId: 'Imm0tableId1' })).toEqual(['shop-seller', 'Imm0tableId1'])
+    expect(accountSellerNames({ ebaySignInName: null, externalAccountId: 'test-seller-a' })).toEqual(['test-seller-a'])
+    expect(accountSellerNames({ ebaySignInName: 'same', externalAccountId: 'same' })).toEqual(['same'])
+    expect(accountSellerNames(null)).toEqual([])
+  })
+  it('picks the name the item\'s seller matches (case-insensitive), else the first, else null', () => {
+    expect(accountSellerFor('SHOP-SELLER', ['shop-seller', 'Imm0tableId1'])).toBe('shop-seller')
+    expect(accountSellerFor('imm0tableid1', ['shop-seller', 'Imm0tableId1'])).toBe('Imm0tableId1')
+    expect(accountSellerFor('someone-else', ['shop-seller', 'Imm0tableId1'])).toBe('shop-seller')
+    expect(accountSellerFor(null, ['shop-seller'])).toBe('shop-seller')
+    expect(accountSellerFor('shop-seller', [])).toBeNull()
+  })
+})
+
 describe('checkSellerOwnership', () => {
   it('VERIFIES when eBay names the account\'s own seller (case-insensitive, as eBay user ids are)', () => {
     expect(checkSellerOwnership({ itemSeller: 'Test-Seller_A', accountSeller: 'test-seller_a' })).toMatchObject({ verdict: 'verified' })

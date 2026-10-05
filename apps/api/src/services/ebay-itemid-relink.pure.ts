@@ -144,6 +144,21 @@ export interface SellerCheck {
 }
 
 /**
+ * The names an eBay account's seller goes by. GetItem names the seller by its sign-in name (Item.Seller.UserID). An OAuth
+ * connection stores eBay's immutable user id as `externalAccountId` and the sign-in name as `ebaySignInName`
+ * (cx/token.service.ts); an older connection stored the sign-in name as `externalAccountId`. Comparing the item's seller
+ * with the immutable id alone refused every item of the account (2026-10-05).
+ */
+export function accountSellerNames(account: { ebaySignInName?: string | null; externalAccountId?: string | null } | null | undefined): string[] {
+  return [...new Set([account?.ebaySignInName, account?.externalAccountId].map((name) => (name ?? '').trim()).filter(Boolean))]
+}
+
+/** The account's name the item's seller matches, else its first name (the one a refusal names), else null. */
+export function accountSellerFor(itemSeller: string | null, names: readonly string[]): string | null {
+  return names.find((name) => !!itemSeller && norm(name) === norm(itemSeller)) ?? names[0] ?? null
+}
+
+/**
  * I4 / G2 — is the item listed by the seller behind the account Nexus would drive it through? The SKUs alone do not
  * say so: two businesses that share stock by SKU carry the same SKUs, so another business's live item passed the SKU
  * check. eBay user ids are case-insensitive. An account connected before Nexus recorded its seller (no

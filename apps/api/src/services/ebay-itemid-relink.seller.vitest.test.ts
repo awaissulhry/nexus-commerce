@@ -26,7 +26,7 @@ import { relinkEbayItemId } from './ebay-itemid-relink.service.js'
 const A = LEGACY_WORKSPACE_ID
 const inside = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const NEW_ITEM = '120000000001'
-const accounts = { known: '', unknown: '' }
+const accounts = { known: '', unknown: '', oauth: '' }
 
 const answer = (seller: string | null) => ({
   ack: 'Success',
@@ -48,6 +48,8 @@ beforeAll(async () => {
     const db = database.client
     accounts.known = (await db.channelConnection.create({ data: { channelType: 'EBAY', isActive: true, externalAccountId: 'test-seller-a' } })).id
     accounts.unknown = (await db.channelConnection.create({ data: { channelType: 'EBAY', isActive: true, externalAccountId: null } })).id
+    // An OAuth connection (cx/token.service.ts): eBay's immutable user id, and the sign-in name GetItem names the seller by.
+    accounts.oauth = (await db.channelConnection.create({ data: { channelType: 'EBAY', isActive: true, externalAccountId: 'ImmutableUser1', ebaySignInName: 'test-seller-a' } })).id
     const root = await db.product.create({ data: { sku: 'REL-ROOT', name: 'Relink jacket', basePrice: '10.00', isParent: true } })
     for (const sku of ['REL-S', 'REL-M']) await db.product.create({ data: { sku, name: sku, basePrice: '10.00', parentId: root.id } })
     await db.channelListing.create({
@@ -98,6 +100,20 @@ describe('I4 / G2 — the re-link asks eBay who lists the item', () => {
     const confirmed = await relink(accounts.unknown, { apply: true, acknowledgeUnverifiable: true })
     expect(confirmed).toMatchObject({ verdict: 'unverifiable', applied: true })
     expect(await storedItemId()).toBe(NEW_ITEM)
+  })
+
+  it('an OAuth account (immutable user id + sign-in name): its own item is verified by the sign-in name (2026-10-05)', async () => {
+    getItem.mockResolvedValue(answer('Test-Seller-A'))
+    const result = await relink(accounts.oauth, { apply: true })
+    expect(result).toMatchObject({ verdict: 'verified', applied: true, seller: { item: 'Test-Seller-A', account: 'test-seller-a' } })
+    expect(await storedItemId()).toBe(NEW_ITEM)
+  })
+
+  it('an OAuth account: another seller\'s item is still rejected, naming the account\'s sign-in name', async () => {
+    getItem.mockResolvedValue(answer('test-seller-b'))
+    const result = await relink(accounts.oauth, { apply: true, acknowledgeUnverifiable: true })
+    expect(result).toMatchObject({ verdict: 'rejected', applied: false, seller: { item: 'test-seller-b', account: 'test-seller-a' } })
+    expect(await storedItemId()).toBe('110000000009')
   })
 
   it('eBay names no seller: unverifiable, not verified', async () => {

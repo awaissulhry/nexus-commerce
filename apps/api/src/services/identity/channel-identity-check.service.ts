@@ -7,7 +7,7 @@
  * with no account, or on a channel whose live read is not built yet (Shopify, Etsy), says so instead of guessing.
  */
 import prisma from '../../db.js'
-import { checkSellerOwnership, parseListingStatus, parseSellerUserId } from '../ebay-itemid-relink.pure.js'
+import { accountSellerFor, accountSellerNames, checkSellerOwnership, parseListingStatus, parseSellerUserId } from '../ebay-itemid-relink.pure.js'
 
 /** At most this many coordinates (channel, market, account, extra listing) are read in one call. */
 export const CHECK_COORDINATES = 5
@@ -64,8 +64,8 @@ export async function checkFamilyIdentity(productId: string, filters: { channel?
   const chosen = all.slice(0, CHECK_COORDINATES)
   const accounts = new Map((await prisma.channelConnection.findMany({
     where: { id: { in: chosen.map((c) => c.accountId).filter((id): id is string => Boolean(id)) } },
-    select: { id: true, externalAccountId: true },
-  })).map((a) => [a.id, a.externalAccountId]))
+    select: { id: true, externalAccountId: true, ebaySignInName: true },
+  })).map((a) => [a.id, accountSellerNames(a)]))
 
   const checks: CoordinateCheck[] = []
   for (const c of chosen) {
@@ -98,7 +98,8 @@ export async function checkFamilyIdentity(productId: string, filters: { channel?
     if (c.channel === 'EBAY') {
       const xml = (read.raw as { xml?: string | null } | null)?.xml ?? ''
       const status = xml ? parseListingStatus(xml) : null
-      const seller = { onChannel: xml ? parseSellerUserId(xml) : null, account: accounts.get(c.accountId) ?? null }
+      const onChannel = xml ? parseSellerUserId(xml) : null
+      const seller = { onChannel, account: accountSellerFor(onChannel, accounts.get(c.accountId) ?? []) }
       const owner = checkSellerOwnership({ itemSeller: seller.onChannel, accountSeller: seller.account })
       const verdict: IdentityVerdict = status && status.toLowerCase() !== 'active' ? 'ended'
         : owner.verdict === 'rejected' ? 'foreign' : owner.verdict === 'unverifiable' ? 'unverifiable' : 'held'
