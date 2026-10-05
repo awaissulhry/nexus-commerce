@@ -172,6 +172,19 @@ describe.skipIf(!concurrentDatabaseUrl())('stored eBay ORDER_CONFIRMATION execut
     expect(await q('SELECT quantity FROM "StockLevel" WHERE "productId"=$1', [a.id])).toEqual([{ quantity: 5 }])
   })
 
+  it('trusts only the reloaded receipt\'s seller: a stored notice whose seller changed during the read writes nothing', async () => {
+    const a = await product('RELOADED-SELLER', 5)
+    let id = ''
+    respond = async () => {
+      await q(`UPDATE "WebhookEvent" SET payload=jsonb_set(payload,'{notification,data,user,userId}',to_jsonb($2::text)) WHERE id=$1`, [id, randomUUID()])
+      return json(fulfillmentOrder('N-RELOADED-SELLER', [{ sku: a.sku, quantity: 1 }]))
+    }
+    id = await queued(await account(), { order: { orderId: 'N-RELOADED-SELLER' } })
+    expect(await process(id)).toEqual({ kind: 'dead_letter' })
+    expect(await orders('N-RELOADED-SELLER')).toEqual([])
+    expect(await q('SELECT quantity FROM "StockLevel" WHERE "productId"=$1', [a.id])).toEqual([{ quantity: 5 }])
+  })
+
   it('dead-letters a notice without its seller id without reading anything', async () => {
     const id = await queued(await account(), { user: { username: 'only-a-name' }, order: { orderId: 'N-NO-SELLER' } })
     expect(await process(id)).toEqual({ kind: 'dead_letter' })
