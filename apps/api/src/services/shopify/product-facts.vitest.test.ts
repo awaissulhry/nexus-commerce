@@ -28,13 +28,13 @@ describe('what Shopify receives for the product', () => {
     expect(r.calls).toEqual([{ channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-a', aliasKey: '', productIds: ['family'],
       fieldKeys: [spec('vendor').key, spec('productType').key, spec('templateSuffix').key], includeCatalogue: false }])
     expect(facts).toMatchObject({ vendor: 'Xavia Racing', productType: 'Giacca', templateSuffix: 'nexus', problems: [] })
-    expect(facts.review.map(entry => [entry.label, entry.value, entry.shared])).toEqual([['Brand', 'Xavia Racing', true], ['Product type', 'Giacca', true], ['Theme template', 'nexus', undefined]])
+    expect(facts.review.map(entry => [entry.label, entry.value, entry.shared])).toEqual([['Vendor', 'Xavia Racing', true], ['Product type', 'Giacca', true], ['Theme template', 'nexus', undefined]])
   })
   it('a product Shopify holds: brand and product type only — the template is sent only at a create', async () => {
     const facts = await resolveShopifyProductFacts(input({ newProduct: false }))
     expect(r.calls[0].fieldKeys).toEqual([spec('vendor').key, spec('productType').key])
     expect(facts.templateSuffix).toBe('')
-    expect(facts.review.map(entry => entry.label)).toEqual(['Brand', 'Product type'])
+    expect(facts.review.map(entry => entry.label)).toEqual(['Vendor', 'Product type'])
   })
   it('the listing\'s own value wins (a legacy import key too), and a cleared template is the store\'s default (\'\')', async () => {
     let listing: any = { id: 'listing', platformAttributes: { shopifyVendor: 'Imported brand' } }
@@ -53,10 +53,10 @@ describe('what Shopify receives for the product', () => {
     expect((await resolveShopifyProductFacts(input())).problems).toEqual(['Nexus could not read the Shared brand, product type and theme template for Shopify (timeout). Nothing was sent; try again.'])
     r.fail = null; r.answer = { products: [] }
     expect((await resolveShopifyProductFacts(input({ newProduct: false }))).problems).toEqual([
-      'Brand: Nexus could not read its Shared value for Shopify. Nothing was sent; reload and try again.',
+      'Vendor: Nexus could not read its Shared value for Shopify. Nothing was sent; reload and try again.',
       'Product type: Nexus could not read its Shared value for Shopify. Nothing was sent; reload and try again.'])
     r.answer = answer({ vendor: cell('X', { warnings: ['expr failed: missing brand'] }), productType: cell('Giacca', { mappingErrors: ['Unknown source path'] }), templateSuffix: cell('not a suffix!') })
-    expect((await resolveShopifyProductFacts(input())).problems).toEqual(['Brand: expr failed: missing brand', 'Product type: Unknown source path',
+    expect((await resolveShopifyProductFacts(input())).problems).toEqual(['Vendor: expr failed: missing brand', 'Product type: Unknown source path',
       'Theme template: Enter a template suffix, or leave it empty for the default template.'])
   })
   it('wire text: text as it is, a number as its text, nothing as \'\' (pure)', () => {
