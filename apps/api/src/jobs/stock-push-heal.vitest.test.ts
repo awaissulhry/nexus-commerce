@@ -34,6 +34,7 @@ vi.mock('../lib/queue.js', () => {
 const A = 'ws_a_heal_lender'
 const B = 'ws_b_heal_borrower'
 const flagBefore = process.env.NEXUS_WORKSPACES_ENABLED
+const healFlagBefore = process.env.NEXUS_STOCK_PUSH_HEAL
 
 type Row = Record<string, any>
 
@@ -42,7 +43,8 @@ describe('stock push heal — a failed quantity push is queued again', () => {
   const id: Record<string, string> = {}
   const sql = async (text: string, params: unknown[] = []) => (await database.db.query(text, params)).rows as Row[]
   const inB = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: B, actorUserId: null, membershipId: null, roleKeys: [] }, work)
-  const run = (options: { max?: number } = {}) => inB(() => heal.runStockPushHeal(options))
+  // Explicitly on: flipping STOCK_PUSH_HEAL_DEFAULT_MODE must not change what these tests prove.
+  const run = (options: { max?: number; mode?: 'on' | 'count' | 'off' } = {}) => inB(() => heal.runStockPushHeal({ mode: 'on', ...options }))
   /** One listing per market, so one product can carry many (the listing key is product + channel + market). */
   const MARKETS = ['DE', 'FR', 'ES', 'GB', 'AT', 'NL', 'BE', 'PL', 'SE', 'IE', 'CH', 'DK', 'PT', 'CZ']
   const onMarket = (market: string, extra: Record<string, unknown> = {}) =>
@@ -82,6 +84,7 @@ describe('stock push heal — a failed quantity push is queued again', () => {
   beforeAll(async () => {
     database = await formulaDatabase()
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
+    delete process.env.NEXUS_STOCK_PUSH_HEAL
     heal = await import('./stock-push-heal.job.js')
     await sql(`ALTER TABLE "StockLevel" ADD CONSTRAINT "StockLevel_available_invariant" CHECK ("available" = "quantity" - "reserved")`)
     for (const [ws, name] of [[A, 'Lender A'], [B, 'Borrower B']]) {
@@ -122,6 +125,7 @@ describe('stock push heal — a failed quantity push is queued again', () => {
   afterAll(async () => {
     if (flagBefore === undefined) delete process.env.NEXUS_WORKSPACES_ENABLED
     else process.env.NEXUS_WORKSPACES_ENABLED = flagBefore
+    if (healFlagBefore !== undefined) process.env.NEXUS_STOCK_PUSH_HEAL = healFlagBefore
     await database?.close()
   })
 
@@ -344,6 +348,39 @@ describe('stock push heal — a failed quantity push is queued again', () => {
     await failAgainAndAge(2)
     expect(await run()).toMatchObject({ candidates: 0, healed: 0 }) // 3 in the last 24 h
     expect((await heals(lid)).map((h) => h.payload.healClass)).toEqual(['RETRYABLE', 'RETRYABLE', 'RETRYABLE'])
+  })
+
+  it('the switch: unset is the one default constant; 1/on, count, 0/off; anything unreadable is off (pure)', async () => {
+    const { stockPushHealMode, STOCK_PUSH_HEAL_DEFAULT_MODE } = await import('./stock-push-heal-mode.js')
+    expect(STOCK_PUSH_HEAL_DEFAULT_MODE).toBe('on')
+    expect(stockPushHealMode(undefined)).toBe(STOCK_PUSH_HEAL_DEFAULT_MODE)
+    expect(stockPushHealMode('  ')).toBe(STOCK_PUSH_HEAL_DEFAULT_MODE)
+    expect(['1', 'on', 'TRUE', 'yes'].map(stockPushHealMode)).toEqual(['on', 'on', 'on', 'on'])
+    expect(['count', 'Count-Only', 'dry-run'].map(stockPushHealMode)).toEqual(['count', 'count', 'count'])
+    expect(['0', 'off', 'false', 'no', 'paused'].map(stockPushHealMode)).toEqual(['off', 'off', 'off', 'off', 'off'])
+  })
+
+  it('count-only lists what it would heal and sends nothing; off does nothing at all', async () => {
+    const lid = await listing(id.own, { quantity: 4 })
+    const failed = await dead(lid, id.own, 30, { errorCode: 'EBAY_VALIDATION', retryCount: 1 })
+    const held = await listing(id.own, { quantity: 4, marketplace: 'DE', region: 'DE', channelMarket: 'EBAY_DE', syncPaused: true })
+    await dead(held, id.own, 30)
+
+    const counted = await run({ mode: 'count' })
+    expect(counted).toMatchObject({ mode: 'count', candidates: 1, healed: 0 })
+    expect(counted.wouldHeal).toEqual([{ listingId: lid, rowId: failed, channel: 'EBAY', marketplace: 'IT', healReason: 'DEAD', healClass: 'REFUSED' }])
+    expect(heal.summarizeStockPushHeal(counted)).toContain(`mode=count candidates=1 wouldHeal=1 listings=${lid}`)
+    expect(await rows(lid)).toHaveLength(1)
+    expect(fake.addJobSafely).not.toHaveBeenCalled()
+    // Nothing was sent, so nothing was spent: it lists the same listing next time.
+    expect((await run({ mode: 'count' })).wouldHeal.map((w) => w.listingId)).toEqual([lid])
+
+    expect(await run({ mode: 'off' })).toMatchObject({ mode: 'off', candidates: 0, healed: 0, wouldHeal: [] })
+    expect(await rows(lid)).toHaveLength(1)
+
+    // On: the same listing is healed.
+    expect(await run()).toMatchObject({ mode: 'on', healed: 1, wouldHeal: [] })
+    expect(fake.addJobSafely).toHaveBeenCalledTimes(1)
   })
 
   it('a listing that sells from another business\'s stock is healed to the pool\'s number', async () => {

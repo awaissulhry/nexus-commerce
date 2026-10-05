@@ -42,8 +42,11 @@
  * Shared eBay variants (SharedListingMembership rows, no ChannelListing) are not covered: their pushes have no listing
  * to re-read, and the Trading read-back heals them.
  *
- * Opt out: NEXUS_STOCK_PUSH_HEAL=0. Schedule: NEXUS_STOCK_PUSH_HEAL_SCHEDULE (default every 10 minutes). Listings per
- * business per run: NEXUS_STOCK_PUSH_HEAL_MAX (default 100).
+ * The switch (stock-push-heal-mode.ts): NEXUS_STOCK_PUSH_HEAL = on (`1`), count-only (`count`: it finds the same
+ * listings, lists them in its log line and its CronRun summary, and sends nothing) or off (`0`: not scheduled; a manual
+ * run does nothing). Unset, it is STOCK_PUSH_HEAL_DEFAULT_MODE (on). The automation inventory lists it with the
+ * detectors (automation-adapters.ts N17), at AUTO, OBSERVE or OFF. Schedule: NEXUS_STOCK_PUSH_HEAL_SCHEDULE (default
+ * every 10 minutes). Listings per business per run: NEXUS_STOCK_PUSH_HEAL_MAX (default 100).
  */
 
 import { Prisma } from '@prisma/client'
@@ -58,6 +61,7 @@ import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../services/s
 import { coalescePendingQuantityRows } from '../services/sync-coalesce.js'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import { lockProductStock } from '../services/stock-lock.js'
+import { STOCK_PUSH_HEAL_FLAG, stockPushHealMode, type StockPushHealMode } from './stock-push-heal-mode.js'
 
 export const JOB_NAME = 'stock-push-heal'
 export const HEAL_SOURCE = 'STOCK_PUSH_HEAL'
@@ -101,9 +105,22 @@ export interface CandidateRow {
   nextRetryAt: Date | null
 }
 
+/** A heal count-only mode found and did not send. */
+export interface WouldHeal {
+  listingId: string
+  rowId: string
+  channel: string
+  marketplace: string
+  healReason: HealReason
+  healClass: HealClass
+}
+
 export interface StockPushHealResult {
+  mode: StockPushHealMode
   candidates: number
   healed: number
+  /** Count-only: what it would have queued (on: always empty). */
+  wouldHeal: WouldHeal[]
   skipped: Partial<Record<SkipReason, number>>
   capped: boolean
   durationMs: number
@@ -318,14 +335,19 @@ async function candidatePage(after: PageCursor | null, limit: number, paused: Pa
     LIMIT ${limit}`)
 }
 
-/** Run once in the current business's context. Exported for the manual trigger and the tests. */
-export async function runStockPushHeal(options: { max?: number } = {}): Promise<StockPushHealResult> {
+/**
+ * Run once in the current business's context. Exported for the manual trigger and the tests. The mode is the switch's
+ * (NEXUS_STOCK_PUSH_HEAL) unless given.
+ */
+export async function runStockPushHeal(options: { max?: number; mode?: StockPushHealMode } = {}): Promise<StockPushHealResult> {
   const startedAt = Date.now()
   const now = new Date()
+  const mode = options.mode ?? stockPushHealMode()
   const envMax = Number.parseInt(process.env.NEXUS_STOCK_PUSH_HEAL_MAX ?? '', 10)
   const max = options.max ?? (Number.isFinite(envMax) && envMax > 0 ? envMax : 100)
-  const result: StockPushHealResult = { candidates: 0, healed: 0, skipped: {}, capped: false, durationMs: 0 }
+  const result: StockPushHealResult = { mode, candidates: 0, healed: 0, wouldHeal: [], skipped: {}, capped: false, durationMs: 0 }
   const skip = (reason: SkipReason) => { result.skipped[reason] = (result.skipped[reason] ?? 0) + 1 }
+  if (mode === 'off') return finish(result, startedAt)
 
   const policies = await loadChannelPolicies()
   const paused = await pausedCoordinates(policies)
@@ -362,6 +384,10 @@ export async function runStockPushHeal(options: { max?: number } = {}): Promise<
       const previous = healsByListing.get(row.listingId) ?? []
       if (!budgetAllows(healClass, previous, now.getTime())) { skip('budget'); continue }
       tried++
+      if (mode === 'count') {
+        result.wouldHeal.push({ listingId: row.listingId, rowId: row.id, channel: listing!.channel, marketplace: listing!.marketplace, healReason: healReasonOf(row), healClass })
+        continue
+      }
       const created = await queueHeal(listing!, row, healClass, previous.length + 1, now, skip)
       if (created) { queued.push(...created); result.healed++ }
     }
@@ -429,20 +455,25 @@ async function queueHeal(l: HealListing, row: CandidateRow, healClass: HealClass
 
 function finish(result: StockPushHealResult, startedAt: number): StockPushHealResult {
   result.durationMs = Date.now() - startedAt
+  // Count-only lists every listing it would heal here (listing, failed row, reason): the log is its report.
   if (result.candidates > 0) logger.info(`[${JOB_NAME}] run`, { ...result })
   return result
 }
 
 export function summarizeStockPushHeal(r: StockPushHealResult): string {
   const skipped = Object.entries(r.skipped).map(([k, v]) => `${k}=${v}`).join(' ')
-  return `candidates=${r.candidates} healed=${r.healed}${r.capped ? ' capped' : ''}${skipped ? ` skipped: ${skipped}` : ''} durationMs=${r.durationMs}`
+  const done = r.mode === 'count'
+    ? `wouldHeal=${r.wouldHeal.length}${r.wouldHeal.length ? ` listings=${r.wouldHeal.slice(0, 20).map((w) => w.listingId).join(',')}${r.wouldHeal.length > 20 ? ',…' : ''}` : ''}`
+    : `healed=${r.healed}`
+  return `mode=${r.mode} candidates=${r.candidates} ${done}${r.capped ? ' capped' : ''}${skipped ? ` skipped: ${skipped}` : ''} durationMs=${r.durationMs}`
 }
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export function startStockPushHealCron(): void {
-  if (process.env.NEXUS_STOCK_PUSH_HEAL === '0') {
-    logger.info(`${JOB_NAME}: disabled via NEXUS_STOCK_PUSH_HEAL=0`)
+  const mode = stockPushHealMode()
+  if (mode === 'off') {
+    logger.info(`${JOB_NAME}: off (${STOCK_PUSH_HEAL_FLAG})`)
     return
   }
   if (scheduledTask) return
@@ -455,7 +486,7 @@ export function startStockPushHealCron(): void {
     await recordCronRun(JOB_NAME, async () => summarizeStockPushHeal(await runStockPushHeal())).catch((error) =>
       logger.error(`${JOB_NAME} run failed`, { error: error instanceof Error ? error.message : String(error) }))
   })
-  logger.info(`${JOB_NAME} cron: scheduled`, { schedule })
+  logger.info(`${JOB_NAME} cron: scheduled`, { schedule, mode })
 }
 
 export function stopStockPushHealCron(): void {

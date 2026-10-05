@@ -654,8 +654,9 @@ export async function startScheduler(): Promise<void> {
   // 2026-10-06 — stock push heal. Every 10 minutes, per business, a listing whose
   // latest quantity push failed for good (dead, never retried, or pending for
   // hours) gets ONE fresh push through the cascade's path, within a per-listing
-  // budget (a channel refusal once a day). Default-ON; opt out via
-  // NEXUS_STOCK_PUSH_HEAL=0 (checked inside).
+  // budget (a channel refusal once a day). NEXUS_STOCK_PUSH_HEAL: 1 on,
+  // count = count-only (lists, sends nothing), 0 off; unset = the default in
+  // jobs/stock-push-heal-mode.ts (on). Checked inside.
   startStockPushHealCron();
 
   // H.8d — FBA shipment status polling cron. Every 15 minutes,
