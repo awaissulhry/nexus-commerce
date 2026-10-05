@@ -98,6 +98,8 @@ export function buildBlendedAdjustments(
  *    always meant for it (the Ad Manager's multiplier dialog leaves out a lane set to 0).
  * `resend` (re-sending a write Amazon did not take) counts every requested placement as set: there the
  * local copy holds the undelivered values, not Amazon's last state.
+ * `partial` (CM-18: the request lists only the lanes a person changed) also counts every requested
+ * placement as set, and a placement it leaves out is never removed: it keeps Amazon's current value.
  *
  * Returns the array to send — a placement is listed when it ends above 0 or Amazon lists it, so no
  * "nothing → 0" entry is invented — and the drift: placements where Amazon differs from the local copy.
@@ -107,7 +109,7 @@ export function mergeOntoAmazonPlacements(
   requested: Array<{ placement: string; percentage: number }>,
   local: Array<{ placement: string; percentage: number }>,
   amazon: Array<{ placement: string; percentage: number }>,
-  opts: { resend?: boolean } = {},
+  opts: { resend?: boolean; partial?: boolean } = {},
 ): { adjustments: Array<{ placement: string; percentage: number }>; drift: Array<{ placement: string; local: number; amazon: number }> } {
   const toMap = (arr: Array<{ placement: string; percentage: number }>) => {
     const m = new Map<string, number>()
@@ -122,7 +124,7 @@ export function mergeOntoAmazonPlacements(
     const a = amz.get(p) ?? 0
     if (a !== l) drift.push({ placement: p, local: l, amazon: a })
     const r = req.get(p)
-    const next = r !== undefined ? (opts.resend || r !== l ? r : a) : (l > 0 ? 0 : a)
+    const next = r !== undefined ? (opts.resend || opts.partial || r !== l ? r : a) : (l > 0 && !opts.partial ? 0 : a)
     if (next > 0 || amz.has(p)) adjustments.push({ placement: p, percentage: next })
   }
   return { adjustments, drift }

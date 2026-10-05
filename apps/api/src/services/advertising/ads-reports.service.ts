@@ -31,6 +31,7 @@ import {
   REPORT_V3_MIME,
   type AdsRegion,
 } from './ads-api-client.js'
+import { reportCurrencyOrSkip } from './ads-profile-facts.service.js'
 
 export type AdProduct =
   | 'SPONSORED_PRODUCTS'
@@ -605,15 +606,25 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
 
   const profile = await prisma.amazonAdsProfile.findUnique({
     where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
-    select: { currencyCode: true, marketplace: true },
+    select: { marketplace: true },
   })
   // Fall back to AmazonAdsConnection.marketplace if AmazonAdsProfile not yet populated
   const conn = profile ? null : await prisma.amazonAdsConnection.findUnique({
     where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
     select: { marketplace: true },
   })
-  const currencyCode = profile?.currencyCode ?? 'EUR'
   const marketplace = profile?.marketplace ?? conn?.marketplace ?? ''
+  // Ads wave 4b — the account's real currency, never an assumed EUR (ads-profile-facts.service.ts). Unknown: the
+  // job is not downloaded and stays un-ingested, so it is picked up again if discovery reports the currency before
+  // its download link expires; it is never stored as euro.
+  const currencyCode = await reportCurrencyOrSkip({ profileId: job.profileId, marketplace }, 'ingest')
+  if (!currencyCode) {
+    await prisma.amazonAdsReportJob.update({
+      where: { id: jobId },
+      data: { errorMessage: `currency unknown for ${marketplace || 'this account'}: not ingested (never counted as EUR)` },
+    })
+    return { jobId, rowsIngested: 0, error: 'currency_unknown' }
+  }
 
   // Download from S3 presigned URL — no auth header needed.
   let bytes: Buffer
@@ -1286,12 +1297,9 @@ export async function runReportCreationCycle(
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion)
       : 'EU'
-    // Resolve currency from AmazonAdsProfile if present, else fall back to EUR.
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
-      select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'campaign report')
+    if (!currencyCode) continue
 
     for (const adProduct of adProducts) {
       if (!delivering.get(profile.marketplace)?.has(adProduct)) {
@@ -1349,11 +1357,9 @@ export async function runSearchTermReportCycle(
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
-      select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'search-term report')
+    if (!currencyCode) continue
 
     for (const adProduct of adProducts) {
       const reportTypeId = SEARCH_TERM_REPORT_TYPE_ID[adProduct]
@@ -1404,11 +1410,9 @@ export async function runPlacementReportCycle(
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
-      select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'placement report')
+    if (!currencyCode) continue
 
     try {
       const out = await createReportJob({
@@ -1459,11 +1463,9 @@ export async function runAdvertisedProductReportCycle(
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
-      select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'advertised-product report')
+    if (!currencyCode) continue
     for (const day of days) {
       try {
         const out = await createReportJob({
@@ -1500,11 +1502,9 @@ export async function runTargetingReportCycle(
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
-    const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
-      select: { currencyCode: true },
-    })
-    const currencyCode = meta?.currencyCode ?? 'EUR'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'targeting report')
+    if (!currencyCode) continue
     for (const day of days) {
       try {
         const out = await createReportJob({

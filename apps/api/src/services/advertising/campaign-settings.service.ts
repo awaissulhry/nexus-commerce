@@ -12,6 +12,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { patchDynamicBidding } from './dynamic-bidding-write.js'
 
 /**
  * Success, or a refusal the handler turns into a status code.
@@ -95,7 +96,13 @@ export async function setBidAutomation(
   if (applied.error) return { status: applied.status, error: applied.error }
 
   const next = applied.value as Record<string, unknown>
-  await prisma.campaign.update({ where: { id: campaignId }, data: { dynamicBidding: next as never } })
+  // CM-6 — write only the keys this patch names (set, or removed when the patch clears them), into the row as it is
+  // now: writing `next` whole put back a placement (or a CPC ceiling, a guardrail) saved since the read above.
+  const keys = (['bidAutomation', 'bidAlgorithm', 'targetAcos'] as const).filter((k) => patch[k] !== undefined)
+  await patchDynamicBidding(campaignId, {
+    set: Object.fromEntries(keys.filter((k) => k in next).map((k) => [k, next[k]])),
+    remove: keys.filter((k) => !(k in next)),
+  })
   return {
     value: {
       ok: true,
@@ -124,7 +131,8 @@ export async function setCpcCeiling(
   const next = { ...((campaign.dynamicBidding ?? {}) as Record<string, unknown>) }
   const cpcCeiling = { enabled: !!patch.enabled, multiple: clampCpcMultiple(patch.multiple) }
   next.cpcCeiling = cpcCeiling
-  await prisma.campaign.update({ where: { id: campaignId }, data: { dynamicBidding: next as never } })
+  // CM-6 — only `cpcCeiling`, into the row as it is now (not `next` whole, read before).
+  await patchDynamicBidding(campaignId, { set: { cpcCeiling } })
   return { value: { ok: true, cpcCeiling } }
 }
 

@@ -150,6 +150,7 @@ describe('connect callback (P4.5b — the region is measured, not assumed)', () 
 // ── 4. The reconcile job ───────────────────────────────────────────────────
 const created: any[] = []
 const updated: any[] = []
+const profilesCreated: any[] = []
 let scopeRows: any[] = []
 let connRows: any[] = []
 
@@ -160,6 +161,12 @@ vi.mock('../db.js', () => ({
       findMany: async () => connRows,
       create: async (a: any) => { created.push(a.data); return a.data },
       update: async (a: any) => { updated.push(a); return {} },
+    },
+    // Ads wave 4b — the reconcile also records each profile's facts (ads-profile-facts.service.ts).
+    amazonAdsProfile: {
+      findMany: async () => [],
+      create: async (a: any) => { profilesCreated.push(a.data); return a.data },
+      update: async () => ({}),
     },
   },
 }))
@@ -175,6 +182,7 @@ describe('reconcileAdsRegions (P4.5b)', () => {
   beforeEach(() => {
     created.length = 0
     updated.length = 0
+    profilesCreated.length = 0
     delete process.env.NEXUS_ADS_ALL_REGIONS
     // The measured shape: 9 EU rows, 14 scopes.
     scopeRows = [
@@ -281,5 +289,23 @@ describe('reconcileAdsRegions (P4.5b)', () => {
     const job = read('jobs/p45b-ads-region-reconcile.job.ts')
     expect(job).toContain("import cron from '../lib/cron/clustered.js'")
     expect(read('runtime/scheduler.ts')).toContain('startAdsRegionReconcileCron();')
+  })
+
+  // ── Ads wave 4b — each profile's currency, from the same scopes, with no Amazon call ──
+  it('records each discovered profile\'s currency and timezone, variable OFF or ON, and names the ones without', async () => {
+    scopeRows = [
+      { externalId: 'p-eu', region: 'EU', label: 'IT', metadata: { marketplace: 'IT', currencyCode: 'EUR', timezone: 'Europe/Rome' } },
+      { externalId: 'p-us', region: 'NA', label: 'US', metadata: { marketplace: 'US', currencyCode: 'USD', timezone: 'America/Los_Angeles' } },
+      { externalId: 'p-jp', region: 'FE', label: 'JP', metadata: { marketplace: 'JP' } },
+    ]
+    const r = await reconcileAdsRegions()
+    expect(r.profileFactsFilled).toBe(2)
+    expect(r.profileCurrencyMissing).toEqual(['JP'])
+    expect(profilesCreated.map((p) => [p.profileId, p.currencyCode, p.timezone])).toEqual([
+      ['p-eu', 'EUR', 'Europe/Rome'],
+      ['p-us', 'USD', 'America/Los_Angeles'],
+    ])
+    // Facts are not spend: the rows the variable governs are still not created.
+    expect(created).toEqual([])
   })
 })

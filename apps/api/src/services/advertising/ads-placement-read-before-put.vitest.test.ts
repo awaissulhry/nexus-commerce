@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   mode: 'live' as 'live' | 'sandbox',
   findUnique: vi.fn(),
   campaignUpdate: vi.fn(),
+  executeRaw: vi.fn(),
   historyCreateMany: vi.fn(),
   actionLogCreate: vi.fn(),
   connFindFirst: vi.fn(),
@@ -24,14 +25,17 @@ const h = vi.hoisted(() => ({
   warn: vi.fn(),
 }))
 
-vi.mock('../../db.js', () => ({
-  default: {
+// CM-6 — the local write is a transaction: `placementBidding` alone via jsonb_set, then the sync-stamp columns.
+vi.mock('../../db.js', () => {
+  const tx = { $executeRaw: h.executeRaw, campaign: { update: h.campaignUpdate } }
+  return { default: {
+    $transaction: async (work: (t: typeof tx) => Promise<unknown>) => work(tx),
     campaign: { findUnique: h.findUnique, update: h.campaignUpdate },
     campaignBidHistory: { createMany: h.historyCreateMany },
     advertisingActionLog: { create: h.actionLogCreate },
     amazonAdsConnection: { findFirst: h.connFindFirst },
-  },
-}))
+  } }
+})
 vi.mock('./ads-api-client.js', () => ({
   adsMode: () => h.mode,
   listCampaignsV3: h.listCampaignsV3,
@@ -46,7 +50,11 @@ const TOP = 'PLACEMENT_TOP', PP = 'PLACEMENT_PRODUCT_PAGE', REST = 'PLACEMENT_RE
 const LOCAL = [{ placement: TOP, percentage: 50 }, { placement: PP, percentage: 0 }]
 const pmap = (arr: Array<{ placement: string; percentage: number }>) => Object.fromEntries(arr.map((x) => [x.placement, x.percentage]))
 const sentArray = () => (h.updateCampaign.mock.calls[0][2] as { placementBidding: Array<{ placement: string; percentage: number }> }).placementBidding
-const storedArray = () => (h.campaignUpdate.mock.calls[0][0] as { data: { dynamicBidding: { placementBidding: Array<{ placement: string; percentage: number }> } } }).data.dynamicBidding.placementBidding
+// the keys the raw UPDATE merges into dynamicBidding, as JSON: only `placementBidding`
+const storedSet = () => (h.executeRaw.mock.calls[0] as unknown[]).slice(1)
+  .map((v) => { try { return JSON.parse(String(v)) as unknown } catch { return null } })
+  .find((v): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)) as { placementBidding: Array<{ placement: string; percentage: number }> }
+const storedArray = () => storedSet().placementBidding
 const auditRow = () => (h.actionLogCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data
 
 beforeEach(() => {
@@ -55,6 +63,7 @@ beforeEach(() => {
   h.mode = 'live'
   h.findUnique.mockResolvedValue({ externalCampaignId: 'EXT-1', marketplace: 'IT', dynamicBidding: { strategy: 'LEGACY_FOR_SALES', placementBidding: LOCAL } })
   h.campaignUpdate.mockResolvedValue({})
+  h.executeRaw.mockResolvedValue(1)
   h.historyCreateMany.mockResolvedValue({ count: 0 })
   h.actionLogCreate.mockResolvedValue({})
   h.connFindFirst.mockResolvedValue({ profileId: 'P1', region: 'EU' })
@@ -77,6 +86,7 @@ describe('updatePlacementBidding — read Amazon before every placement PUT (G.4
     expect(pmap(sentArray())).toEqual({ [TOP]: 80, [PP]: 40 })
     // the local copy becomes what was sent, and the result says what was sent
     expect(pmap(storedArray())).toEqual({ [TOP]: 80, [PP]: 40 })
+    expect(Object.keys(storedSet())).toEqual(['placementBidding'])
     expect(r).toMatchObject({ ok: true, mode: 'live' })
     expect(pmap(r.adjustments)).toEqual({ [TOP]: 80, [PP]: 40 })
     // drift is logged and kept on the audit row
@@ -97,6 +107,7 @@ describe('updatePlacementBidding — read Amazon before every placement PUT (G.4
     expect(h.calls).toEqual(['gate', 'read'])
     expect(h.updateCampaign).not.toHaveBeenCalled()
     expect(h.campaignUpdate).not.toHaveBeenCalled()
+    expect(h.executeRaw).not.toHaveBeenCalled()
     expect(h.historyCreateMany).not.toHaveBeenCalled()
     expect(r.ok).toBe(false)
     expect(r.mode).toBe('blocked')
@@ -115,6 +126,7 @@ describe('updatePlacementBidding — read Amazon before every placement PUT (G.4
     for (const r of [a, b]) expect(r).toMatchObject({ ok: false, mode: 'blocked', deniedAt: 'placement_read' })
     expect(h.updateCampaign).not.toHaveBeenCalled()
     expect(h.campaignUpdate).not.toHaveBeenCalled()
+    expect(h.executeRaw).not.toHaveBeenCalled()
   })
 
   it('Amazon reporting no lanes at all (placementBidding left out) is a real answer: lanes the write does not set stay at 0', async () => {
@@ -144,5 +156,44 @@ describe('updatePlacementBidding — read Amazon before every placement PUT (G.4
     await updatePlacementBidding({ campaignId: 'c1', adjustments: [{ placement: TOP, percentage: 80 }, { placement: PP, percentage: 0 }] })
     expect(h.listCampaignsV3).not.toHaveBeenCalled()
     expect(sentArray()).toEqual([{ placement: TOP, percentage: 80 }, { placement: PP, percentage: 0 }])
+  })
+})
+
+/**
+ * CM-18 — the row modal, the bulk modal and the detail page send only the lanes the operator changed (`partial`).
+ * A lane they leave out is not touched; before, every screen re-sent all three lanes from a copy up to five minutes old.
+ */
+describe('updatePlacementBidding — partial lane set (CM-18)', () => {
+  it('live: only the changed lane is set; a lane moved by rank-defend since the page loaded keeps Amazon\'s value', async () => {
+    // stored Top 50 / Product 0; Amazon now Top 70 (rank-defend) / Product 40 (console); the operator changed Rest only
+    h.listCampaignsV3.mockImplementationOnce(async () => [{ campaignId: 'EXT-1', dynamicBidding: { placementBidding: [{ placement: TOP, percentage: 70 }, { placement: PP, percentage: 40 }] } }])
+    const r = await updatePlacementBidding({ campaignId: 'c1', adjustments: [{ placement: REST, percentage: 30 }], partial: true })
+    expect(pmap(sentArray())).toEqual({ [TOP]: 70, [PP]: 40, [REST]: 30 })
+    expect(pmap(storedArray())).toEqual({ [TOP]: 70, [PP]: 40, [REST]: 30 })
+    expect(r).toMatchObject({ ok: true, mode: 'live' })
+    const rows = (h.historyCreateMany.mock.calls[0][0] as { data: Array<{ field: string }> }).data
+    expect(rows.map((x) => x.field)).toEqual([REST])
+  })
+
+  it('live: without `partial` the same one-lane request still removes a stored lane it leaves out (engines and undo rely on it)', async () => {
+    h.findUnique.mockResolvedValueOnce({ externalCampaignId: 'EXT-1', marketplace: 'IT', dynamicBidding: { placementBidding: [{ placement: TOP, percentage: 50 }] } })
+    h.listCampaignsV3.mockImplementationOnce(async () => [{ campaignId: 'EXT-1', dynamicBidding: { placementBidding: [{ placement: TOP, percentage: 50 }] } }])
+    await updatePlacementBidding({ campaignId: 'c1', adjustments: [{ placement: REST, percentage: 30 }] })
+    expect(pmap(sentArray())).toEqual({ [TOP]: 0, [REST]: 30 })
+  })
+
+  it('live: a lane set to 0 is sent as 0 and clears it', async () => {
+    await updatePlacementBidding({ campaignId: 'c1', adjustments: [{ placement: TOP, percentage: 0 }], partial: true })
+    expect(pmap(sentArray())).toEqual({ [TOP]: 0, [PP]: 40 })
+  })
+
+  it('sandbox (no Amazon read): the lanes left out keep the stored value', async () => {
+    h.mode = 'sandbox'
+    h.findUnique.mockResolvedValueOnce({ externalCampaignId: 'EXT-1', marketplace: 'IT', dynamicBidding: { placementBidding: [{ placement: TOP, percentage: 50 }, { placement: PP, percentage: 25 }] } })
+    h.updateCampaign.mockResolvedValueOnce({ ok: true, mode: 'sandbox', rawResponse: {} })
+    await updatePlacementBidding({ campaignId: 'c1', adjustments: [{ placement: REST, percentage: 30 }], partial: true })
+    expect(h.listCampaignsV3).not.toHaveBeenCalled()
+    expect(pmap(sentArray())).toEqual({ [TOP]: 50, [PP]: 25, [REST]: 30 })
+    expect(pmap(storedArray())).toEqual({ [TOP]: 50, [PP]: 25, [REST]: 30 })
   })
 })

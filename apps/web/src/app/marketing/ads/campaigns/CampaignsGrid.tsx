@@ -15,6 +15,7 @@ import Link from '@/lib/workspaces/Link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
+import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
@@ -26,6 +27,7 @@ import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
+import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
@@ -819,30 +821,40 @@ export type BulkChanges = {
   status?: { value: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; label: string }
   budget?: { mode: 'set' | 'incPct' | 'decPct'; value: number; label: string }
   automation?: boolean
+  /** Target ACoS as a fraction (0.3 = 30 %), as typed. A blank box sends nothing (CM-13). */
   acos?: number
   multiplier?: { placement: string; placementLabel: string; value: number }
   strategy?: { value: string; label: string }
 }
-function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) => void; onClose: () => void }) {
+function BulkActionsModal({ currentBudgets, onSubmit, onClose }: { currentBudgets: number[]; onSubmit: (c: BulkChanges) => void; onClose: () => void }) {
   const [step, setStep] = useState<1 | 2>(1)
   const [enStatus, setEnStatus] = useState(false); const [statusVal, setStatusVal] = useState<'ENABLED' | 'PAUSED' | 'ARCHIVED'>('ENABLED')
-  const [enBudget, setEnBudget] = useState(false); const [budgetMode, setBudgetMode] = useState<'set' | 'incPct' | 'decPct'>('set'); const [budgetVal, setBudgetVal] = useState('0')
+  const [enBudget, setEnBudget] = useState(false); const [budgetMode, setBudgetMode] = useState<'set' | 'incPct' | 'decPct'>('set'); const [budgetVal, setBudgetVal] = useState('')
   const [enAuto, setEnAuto] = useState(false); const [autoOn, setAutoOn] = useState(false)
-  const [enAcos, setEnAcos] = useState(false); const [acosVal, setAcosVal] = useState('30')
+  const [enAcos, setEnAcos] = useState(false); const [acosVal, setAcosVal] = useState('')
   const [enMult, setEnMult] = useState(false); const [placement, setPlacement] = useState('TOS'); const [multVal, setMultVal] = useState('')
   const [enStrat, setEnStrat] = useState(false); const [stratVal, setStratVal] = useState('LEGACY_FOR_SALES')
 
   const any = enStatus || enBudget || enAuto || enAcos || enMult || enStrat
+  // PR 1c (CM-7, CM-13) — `budgetInput.ts` reads both boxes. A ticked row whose box is empty, not a
+  // number or out of range keeps Apply off and says why: a blank "Set" used to review as €0.00 and
+  // write €1.00, and a cleared Target ACoS wrote 0 %. Both boxes start empty (ACoS was pre-filled 30).
+  const budgetRead = readBudgetChange(budgetMode, budgetVal)
+  const budgetProblem = enBudget && !budgetRead.ok ? budgetRead.message : null
+  const acosRead = readTargetAcosPercent(acosVal, { blank: 'refuse' })
+  const acosProblem = enAcos && !acosRead.ok ? acosRead.message : null
   const allOn = enStatus && enBudget && enAuto && enAcos && enMult && enStrat
   const setAll = (v: boolean) => { setEnStatus(v); setEnBudget(v); setEnAuto(v); setEnAcos(v); setEnMult(v); setEnStrat(v) }
   const changes: BulkChanges = {}
   if (enStatus) changes.status = { value: statusVal, label: STATUS_ACTIONS.find((s) => s.value === statusVal)!.label }
-  if (enBudget) changes.budget = { mode: budgetMode, value: Number(budgetVal) || 0, label: BUDGET_MODES.find((b) => b.value === budgetMode)!.label }
+  if (enBudget && budgetRead.ok) changes.budget = { mode: budgetMode, value: budgetRead.value, label: BUDGET_MODES.find((b) => b.value === budgetMode)!.label }
   if (enAuto) changes.automation = autoOn
-  if (enAcos) changes.acos = Number(acosVal) || 0
+  if (enAcos && acosRead.ok && acosRead.fraction != null) changes.acos = acosRead.fraction
   if (enMult) changes.multiplier = { placement, placementLabel: PLACEMENT_OPTS.find((p) => p.value === placement)!.label, value: Number(multVal) || 0 }
   if (enStrat) changes.strategy = { value: stratVal, label: STRAT_LABEL[stratVal] ?? stratVal }
   const budgetUnit = budgetMode === 'set' ? '€' : '%'
+  const budgetSummary = changes.budget ? summariseBudgetChange(currentBudgets, changes.budget.mode, changes.budget.value) : null
+  const budgetFloorNote = budgetSummary ? atMinimumNote(budgetSummary.atMinimum) : null
 
   return (
     <Modal
@@ -852,7 +864,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
       title="Bulk Actions"
       subtitle={step === 1 ? 'Select items and make changes' : 'Review the changes'}
       footer={step === 1 ? (
-        <><span className="grow" /><Button variant="primary" disabled={!any} onClick={() => setStep(2)}>Apply</Button></>
+        <><span className="grow" /><Button variant="primary" disabled={!any || budgetProblem != null || acosProblem != null} onClick={() => setStep(2)}>Apply</Button></>
       ) : (
         <><Button variant="link" className="back" onClick={() => setStep(1)}>Back</Button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></>
       )}
@@ -872,8 +884,9 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
               <span className="it">Campaign Budget</span>
               <div className="ac">
                 <Listbox width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
-                <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="1" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" /></span>
+                <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="any" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" aria-invalid={budgetProblem != null && budgetVal.trim() !== ''} /></span>
               </div>
+              {budgetProblem && (budgetVal.trim() === '' ? <p className="n">{budgetProblem}</p> : <p className="e" role="alert">{budgetProblem}</p>)}
             </div>
 
             <div className="h10-bulk-row">
@@ -885,7 +898,8 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             <div className="h10-bulk-row">
               <label className="ck"><Checkbox checked={enAcos} onChange={() => setEnAcos((v) => !v)} aria-label="Change Target ACoS" /></label>
               <span className="it">Target ACoS</span>
-              <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="1" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" /></span></div>
+              <div className="ac"><span className="h10-bulk-inp"><span className="pf">%</span><input type="number" min="0" step="any" value={acosVal} onChange={(e) => setAcosVal(e.target.value)} aria-label="Target ACoS value" aria-invalid={acosProblem != null && acosVal.trim() !== ''} /></span></div>
+              {acosProblem && (acosVal.trim() === '' ? <p className="n">{acosProblem}</p> : <p className="e" role="alert">{acosProblem}</p>)}
             </div>
 
             <div className="h10-bulk-row">
@@ -908,9 +922,9 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
           <div className="h10-bulk-review">
             <div className="rh">Changes</div>
             {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><Pill tone={pillTone(STATUS_RESULT[changes.status.value].cls)}>{STATUS_RESULT[changes.status.value].label}</Pill></span></div>}
-            {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}</span></div>}
+            {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}{changes.budget.mode !== 'set' && budgetSummary && ` · new budgets ${budgetSummary.lowest === budgetSummary.highest ? eur(budgetSummary.lowest) : `${eur(budgetSummary.lowest)} to ${eur(budgetSummary.highest)}`}`}{budgetFloorNote && <span className="n">{budgetFloorNote}</span>}</span></div>}
             {changes.automation != null && <div className="rr"><span className="f">Bid Automation</span><span className="v"><span className="h10-rv-pill">{changes.automation ? 'On' : 'Off'}</span></span></div>}
-            {changes.acos != null && <div className="rr"><span className="f">Target ACoS</span><span className="v">{changes.acos.toFixed(2)}%</span></div>}
+            {changes.acos !== undefined && <div className="rr"><span className="f">Target ACoS</span><span className="v">{(changes.acos * 100).toFixed(2)}%</span></div>}
             {changes.multiplier && <div className="rr"><span className="f">Bid Multiplier</span><span className="v">{changes.multiplier.placementLabel} {changes.multiplier.value}%</span></div>}
             {changes.strategy && <div className="rr"><span className="f">Bidding Strategy</span><span className="v">{changes.strategy.label}</span></div>}
           </div>
@@ -1040,7 +1054,7 @@ export function CampaignsGrid() {
   const [showBulk, setShowBulk] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [adjMode, setAdjMode] = useState<'set' | 'incPct' | 'decPct'>('set')
-  const [adjVal, setAdjVal] = useState('0')
+  const [adjVal, setAdjVal] = useState('')
   const [bulkConfirm, setBulkConfirm] = useState<'ENABLED' | 'PAUSED' | 'ARCHIVED' | null>(null)
   // P2b — bulk assign selected campaigns to a portfolio (real names from /portfolios).
   const [portfolioMenu, setPortfolioMenu] = useState(false)
@@ -1211,28 +1225,25 @@ export function CampaignsGrid() {
         if (ch.status) { body.status = ch.status.value; opt.status = ch.status.value }
         if (ch.strategy) { body.biddingStrategy = ch.strategy.value; opt.biddingStrategy = ch.strategy.value }
         if (ch.budget) {
-          const cur = num(c.dailyBudget); const v = ch.budget.value
-          let next = ch.budget.mode === 'set' ? v : ch.budget.mode === 'incPct' ? cur * (1 + v / 100) : cur * (1 - v / 100)
-          next = Math.max(1, Math.round(next)); body.dailyBudget = next; opt.dailyBudget = String(next)
+          // PR 1c (CM-7) — to the cent, never to the euro (€12.34 +10% wrote €14.00); only a cut can
+          // land below €1.00, and the review / Adjust Budget note said how many stop there.
+          const next = nextDailyBudget(num(c.dailyBudget), ch.budget.mode, ch.budget.value).value
+          body.dailyBudget = next; opt.dailyBudget = String(next)
         }
         calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}`, body))
       }
       // 2) bid automation / target ACoS — local automation settings (dynamicBidding)
-      if (ch.automation != null || ch.acos != null) {
+      if (ch.automation != null || ch.acos !== undefined) {
         const body: Record<string, unknown> = {}
         if (ch.automation != null) { body.bidAutomation = ch.automation; opt.bidAutomation = ch.automation }
-        if (ch.acos != null) { const frac = ch.acos / 100; body.targetAcos = frac; opt.targetAcos = frac }
+        if (ch.acos !== undefined) { body.targetAcos = ch.acos; opt.targetAcos = ch.acos }
         calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
       }
-      // 3) bid multiplier — placement bidding (merge chosen placement with current)
+      // 3) bid multiplier — placement bidding. CM-18: only the chosen placement is sent (`partial`); the server keeps
+      // the other two as they are now, not as this list's copy had them.
       if (ch.multiplier) {
         const cur = c.placements ?? { tos: null, pdp: null, ros: null }
-        const entries: Array<{ placement: string; percentage: number }> = []
-        for (const [k, v] of [['TOS', cur.tos], ['PP', cur.pdp], ['ROS', cur.ros]] as Array<['TOS' | 'PP' | 'ROS', number | null]>) {
-          const p = ch.multiplier.placement === k ? ch.multiplier.value : (v ?? 0)
-          if (p > 0) entries.push({ placement: AMZ_PLACEMENT[k], percentage: p })
-        }
-        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: entries }))
+        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }], partial: true }))
         const npl = { tos: cur.tos, pdp: cur.pdp, ros: cur.ros }
         const slot = ch.multiplier.placement === 'TOS' ? 'tos' : ch.multiplier.placement === 'PP' ? 'pdp' : 'ros'
         npl[slot] = ch.multiplier.value
@@ -1247,8 +1258,10 @@ export function CampaignsGrid() {
     setTimeout(() => setApplyMsg(''), 6000)
   }
   const applyAdjustBudget = () => {
+    const r = readBudgetChange(adjMode, adjVal)
+    if (!r.ok) return // Apply is off while the box says why
     setAdjustOpen(false)
-    void applyBulkChanges({ budget: { mode: adjMode, value: Number(adjVal) || 0, label: BUDGET_MODES.find((b) => b.value === adjMode)!.label } })
+    void applyBulkChanges({ budget: { mode: adjMode, value: r.value, label: BUDGET_MODES.find((b) => b.value === adjMode)!.label } })
   }
   // CBN.2h.2 — bulk status (Enable/Archive/Pause) via the gated campaign PATCH,
   // behind a confirmation. Live markets push to Amazon; non-live update locally.
@@ -1333,9 +1346,10 @@ export function CampaignsGrid() {
   }
   const setCampaignPlacements = async (c: Camp, pl: { tos: number | null; pdp: number | null; ros: number | null }) => {
     setMultiplierModal(null)
-    const adjustments: Array<{ placement: string; percentage: number }> = []
-    for (const [k, v] of [['TOS', pl.tos], ['PP', pl.pdp], ['ROS', pl.ros]] as Array<['TOS' | 'PP' | 'ROS', number | null]>) { if (v && v > 0) adjustments.push({ placement: AMZ_PLACEMENT[k], percentage: v }) }
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments })
+    // CM-18 — only the lanes changed in the dialog; a lane left alone is not re-sent from this row's copy.
+    const adjustments = changedPlacementLanes(c.placements ?? {}, pl)
+    if (adjustments.length === 0) { toast(`Bid multiplier unchanged · ${c.name}`); return }
+    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments, partial: true })
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, placements: pl } : x)))
     toast(ok ? `Bid multiplier updated · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
@@ -1412,17 +1426,22 @@ export function CampaignsGrid() {
     }
   }
   // Target ACoS → real /automation write (fraction); Daily Budget → gated PATCH.
+  // PR 1c (CM-13) — a blank box sends `null` (unset), as the popover's note promises. It used to
+  // send 0 %, because `Number('')` is 0 and passed the finite check.
   const setCampaignTargetAcos = async (c: Camp, pctStr: string) => {
     setEditPop(null)
-    const pct = Number(pctStr); if (!Number.isFinite(pct)) return
-    const frac = Math.max(0, Math.min(5, pct / 100))
+    const t = readTargetAcosPercent(pctStr); if (!t.ok) return
+    const frac = t.fraction
     const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { targetAcos: frac })
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, targetAcos: frac } : x)))
-    toast(ok ? `Target ACoS → ${pct.toFixed(2)}% · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    toast(ok ? (frac == null ? `Target ACoS unset · ${c.name}` : `Target ACoS → ${(frac * 100).toFixed(2)}% · ${c.name}`) : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
+  // PR 1c (CM-7) — the value as typed, to the cent. It was rounded to whole euros (€12.34 → €12.00)
+  // and an empty box wrote €1.00; the popover now keeps Apply off for those.
   const setCampaignDailyBudget = async (c: Camp, valStr: string) => {
     setEditPop(null)
-    const v = Math.max(1, Math.round(Number(valStr) || 0))
+    const b = readDailyBudget(valStr); if (!b.ok) return
+    const v = b.value
     const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { dailyBudget: v, applyImmediately: true, reason: 'Ad Manager daily budget' })
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, dailyBudget: String(v) } : x)))
     toast(ok ? `Daily budget → ${eur(v)} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
@@ -1447,11 +1466,26 @@ export function CampaignsGrid() {
       const ch: Array<{ field: string; from: string; to: string }> = []
       const origStrat = c.biddingStrategy ?? 'LEGACY_FOR_SALES'
       if (e.biddingStrategy && e.biddingStrategy !== origStrat) ch.push({ field: 'Bidding Strategy', from: STRAT_LABEL[origStrat] ?? '—', to: STRAT_LABEL[e.biddingStrategy] ?? e.biddingStrategy })
-      if (e.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) > 0 && Number(e.dailyBudget) !== num(c.dailyBudget)) ch.push({ field: 'Daily Budget', from: c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', to: eur(Number(e.dailyBudget)) })
+      const bud = e.dailyBudget != null ? readDailyBudget(e.dailyBudget) : null
+      if (bud?.ok && bud.value !== num(c.dailyBudget)) ch.push({ field: 'Daily Budget', from: c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', to: eur(bud.value) })
       if (ch.length) out.push({ c, changes: ch })
     }
     return out
   }, [rows, edits])
+  // PR 1c (CM-7) — a staged budget box that is empty, not a number or below €1.00 sends nothing:
+  // the edit bar says so and keeps "Review & Apply" off until it is fixed or discarded.
+  const budgetEditProblems = useMemo(() => {
+    const out: Array<{ c: Camp; message: string }> = []
+    for (const c of rows) {
+      const v = edits[c.id]?.dailyBudget
+      if (v == null) continue
+      const b = readDailyBudget(v)
+      if (!b.ok) out.push({ c, message: b.message })
+    }
+    return out
+  }, [rows, edits])
+  /** The selected campaigns' current daily budgets: what a bulk Set / ±% change starts from. */
+  const selectedBudgets = useMemo(() => rows.filter((c) => sel.has(c.id)).map((c) => num(c.dailyBudget)), [rows, sel])
 
   const applyAll = async () => {
     setApplying(true)
@@ -1462,7 +1496,8 @@ export function CampaignsGrid() {
       const body: Record<string, unknown> = { applyImmediately: true, reason: 'Ad Manager inline edit' }
       const origStrat = d.c.biddingStrategy ?? 'LEGACY_FOR_SALES'
       if (e.biddingStrategy && e.biddingStrategy !== origStrat) body.biddingStrategy = e.biddingStrategy
-      if (e.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) > 0 && Number(e.dailyBudget) !== num(d.c.dailyBudget)) body.dailyBudget = Number(e.dailyBudget)
+      const bud = e.dailyBudget != null ? readDailyBudget(e.dailyBudget) : null
+      if (bud?.ok && bud.value !== num(d.c.dailyBudget)) body.dailyBudget = bud.value
       try {
         const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${d.c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         const j = await r.json().catch(() => ({}))
@@ -1472,7 +1507,8 @@ export function CampaignsGrid() {
     // optimistic local update for the rows that succeeded
     setRows((rs) => rs.map((x) => {
       const a = applied[x.id]; if (!a) return x
-      return { ...x, biddingStrategy: a.biddingStrategy ?? x.biddingStrategy, dailyBudget: a.dailyBudget != null && a.dailyBudget !== '' ? a.dailyBudget : x.dailyBudget }
+      const bud = a.dailyBudget != null ? readDailyBudget(a.dailyBudget) : null
+      return { ...x, biddingStrategy: a.biddingStrategy ?? x.biddingStrategy, dailyBudget: bud?.ok ? String(bud.value) : x.dailyBudget }
     }))
     setApplying(false); setEdits({}); setShowApply(false)
     setApplyMsg(`Applied ${ok} change${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate or non-live market)` : ''}`)
@@ -1664,11 +1700,13 @@ export function CampaignsGrid() {
       case 'endDate': return c.endDate ? fmtDate(c.endDate) : <span className="h10-rc-none" title="No end date is set, so this campaign runs until it is paused or archived.">None</span>
       case 'dailyBudget': {
         if (mode === 'edit') {
-          const dirty = e?.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) !== num(c.dailyBudget)
+          const bud = e?.dailyBudget != null ? readDailyBudget(e.dailyBudget) : null
+          const dirty = bud != null && (!bud.ok || bud.value !== num(c.dailyBudget))
+          const problem = bud && !bud.ok ? bud.message : undefined
           return (
-            <span className={`h10-bud ${dirty ? 'dirty' : ''}`}>
+            <span className={`h10-bud ${dirty ? 'dirty' : ''} ${problem ? 'bad' : ''}`} title={problem}>
               <span className="cur">€</span>
-              <input type="number" min="1" step="1" value={effBudget(c)} onChange={(ev) => setEdit(c.id, { dailyBudget: ev.target.value })} aria-label={`Daily budget for ${c.name}`} />
+              <input type="number" min="1" step="any" value={effBudget(c)} onChange={(ev) => setEdit(c.id, { dailyBudget: ev.target.value })} aria-label={`Daily budget for ${c.name}`} aria-invalid={problem != null} />
             </span>
           )
         }
@@ -1969,10 +2007,22 @@ export function CampaignsGrid() {
                 {BUDGET_MODES.map((m) => (
                   <label className="abr" key={m.value}><input type="radio" name="adjmode" checked={adjMode === m.value} onChange={() => setAdjMode(m.value)} /> {m.label}</label>
                 ))}
-                <div className="abrow">
-                  <span className="h10-bulk-inp"><span className="pf">{adjMode === 'set' ? '€' : '%'}</span><input type="number" min="0" step="1" value={adjVal} onChange={(e) => setAdjVal(e.target.value)} aria-label="Budget value" /></span>
-                  <Button variant="primary" size="sm" onClick={applyAdjustBudget}>Apply</Button>
-                </div>
+                {(() => {
+                  // PR 1c (CM-7) — the same reader as the Bulk Actions modal: an empty, non-number or
+                  // below-€1.00 box keeps Apply off and says why; a cut that lands below €1.00 says
+                  // how many campaigns stop at Amazon's minimum before anything is written.
+                  const r = readBudgetChange(adjMode, adjVal)
+                  const sum = r.ok ? summariseBudgetChange(selectedBudgets, adjMode, r.value) : null
+                  const floorNote = sum ? atMinimumNote(sum.atMinimum) : null
+                  return <>
+                    <div className="abrow">
+                      <span className="h10-bulk-inp"><span className="pf">{adjMode === 'set' ? '€' : '%'}</span><input type="number" min="0" step="any" value={adjVal} onChange={(e) => setAdjVal(e.target.value)} aria-label="Budget value" aria-invalid={!r.ok && adjVal.trim() !== ''} /></span>
+                      <Button variant="primary" size="sm" disabled={!r.ok} onClick={applyAdjustBudget}>Apply</Button>
+                    </div>
+                    {!r.ok && (adjVal.trim() === '' ? <p className="n">{r.message}</p> : <p className="e" role="alert">{r.message}</p>)}
+                    {floorNote && <p className="n">{floorNote}</p>}
+                  </>
+                })()}
               </div>
             </>}
           </div>
@@ -2051,12 +2101,19 @@ export function CampaignsGrid() {
       <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
-      {mode === 'edit' && diffs.length > 0 && (
+      {mode === 'edit' && (diffs.length > 0 || budgetEditProblems.length > 0) && (
         <div className="h10-am-editbar">
-          <span className="lbl"><b>{diffs.length}</b> campaign{diffs.length > 1 ? 's' : ''} edited · {diffs.reduce((n, d) => n + d.changes.length, 0)} change{diffs.reduce((n, d) => n + d.changes.length, 0) > 1 ? 's' : ''}</span>
+          {diffs.length > 0 && <span className="lbl"><b>{diffs.length}</b> campaign{diffs.length > 1 ? 's' : ''} edited · {diffs.reduce((n, d) => n + d.changes.length, 0)} change{diffs.reduce((n, d) => n + d.changes.length, 0) > 1 ? 's' : ''}</span>}
+          {budgetEditProblems.length > 0 && (
+            <span className="lbl bad" role="alert">
+              {budgetEditProblems.length === 1
+                ? `Daily budget for ${budgetEditProblems[0].c.name}: ${budgetEditProblems[0].message}`
+                : `${budgetEditProblems.length} daily budgets cannot be sent. Fix the boxes outlined in red, or Discard.`}
+            </span>
+          )}
           <span className="grow" />
      <Button onClick={() => setEdits({})} disabled={applying}>Discard</Button>
-     <Button variant="primary" onClick={() => setShowApply(true)} disabled={applying}>Review &amp; Apply</Button>
+     <Button variant="primary" onClick={() => setShowApply(true)} disabled={applying || diffs.length === 0 || budgetEditProblems.length > 0}>Review &amp; Apply</Button>
         </div>
       )}
 
@@ -2110,7 +2167,7 @@ export function CampaignsGrid() {
         </Modal>
       )}
 
-      {showBulk && <BulkActionsModal onSubmit={(c) => void applyBulkChanges(c)} onClose={() => setShowBulk(false)} />}
+      {showBulk && <BulkActionsModal currentBudgets={selectedBudgets} onSubmit={(c) => void applyBulkChanges(c)} onClose={() => setShowBulk(false)} />}
 
       {/* P3 — per-row Bidding Strategy / Bid Multiplier modals + Status menu */}
       {strategyModal && <StrategyModal strategy={strategyModal.biddingStrategy} onConfirm={(v) => void setCampaignStrategy(strategyModal, v)} onClose={() => setStrategyModal(null)} />}

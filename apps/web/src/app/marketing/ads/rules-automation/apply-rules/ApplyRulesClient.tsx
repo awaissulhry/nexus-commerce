@@ -90,6 +90,7 @@ import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
 import { BidRuleCell, BidAlgoMenu, bidAlgoLabel, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../../_shared/RuleColumnEditors'
+import { readTargetAcosPercent } from '../../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell } from '../../_shared/CampaignRowCells'
 import { RuleAssignModal } from '../../_shared/RuleAssignModal'
 import { useAdsSync, emitAdsChange } from '../_shared/adsBus'
@@ -1456,7 +1457,7 @@ export function ApplyRulesClient() {
           busy={popBusy}
           error={popErr}
           onClose={() => setEditPop(null)}
-          onApply={(v) => void applyPop('automation', editPop.row, { targetAcos: v.trim() === '' ? null : Number(v) / 100 })}
+          onApply={(v) => { const t = readTargetAcosPercent(v); if (t.ok) void applyPop('automation', editPop.row, { targetAcos: t.fraction }) }}
         />
       )}
     </div>

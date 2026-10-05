@@ -546,13 +546,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // indistinguishable from a pre-August legacy row.
   fastify.patch('/advertising/campaigns/:id/placements', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { adjustments?: Array<{ placement: string; percentage: number }>; biddingStrategy?: string; reason?: string }
+    // CM-18 — `partial: true`: `adjustments` lists only the lanes a person changed; the others are not touched.
+    const b = request.body as { adjustments?: Array<{ placement: string; percentage: number }>; biddingStrategy?: string; reason?: string; partial?: boolean }
     if (!Array.isArray(b?.adjustments)) { reply.status(400); return { error: 'adjustments[] required' } }
     const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
     try {
       return await updatePlacementBidding({
         campaignId: id,
         adjustments: b.adjustments,
+        partial: b.partial === true,
         biddingStrategy: b.biddingStrategy as never,
         actor: actorFromHeaders(request.headers as Record<string, unknown>),
         reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,
@@ -733,11 +735,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (n > 0) db.maxWritesPerDay = n
       else delete db.maxWritesPerDay
     }
-    // CM-12 — the blob is written back only when this call changed one of its keys. A bounds-only call (the campaign
-    // detail page's Min/Max Bid) rewrote the copy read above, so a Target ACoS or placement saved at the same moment
-    // was put back to its old value.
-    const blobTouched = b.maxBidChangePct !== undefined || b.maxWritesPerDay !== undefined
-    await prisma.campaign.update({ where: { id }, data: { ...(blobTouched ? { dynamicBidding: db as never } : {}), ...boundsData, ...budgetData } })
+    // CM-6 — only the guardrail keys this request names go into `dynamicBidding` (set, or removed when cleared), merged
+    // into the row as it is now: writing `db` whole put back a placement (or an automation / CPC ceiling edit) saved
+    // since the read above.
+    const guardKeys = (['maxBidChangePct', 'maxWritesPerDay'] as const).filter((k) => b[k] !== undefined)
+    const { patchDynamicBidding } = await import('../services/advertising/dynamic-bidding-write.js')
+    await patchDynamicBidding(id, {
+      set: Object.fromEntries(guardKeys.filter((k) => k in db).map((k) => [k, db[k]])),
+      remove: guardKeys.filter((k) => !(k in db)),
+    }, { ...boundsData, ...budgetData })
 
     // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
     // AD_BUDGET_UPDATE whose payloads are euros).

@@ -475,6 +475,16 @@
 .h10-menu.adjbud .abrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .h10-menu.adjbud .abrow .h10-bulk-inp { flex: 1; height: 32px; }
 .h10-menu.adjbud .abrow .h10-bulk-inp input { width: 100%; }
+/* PR 1c (CM-7) — a budget box that sends nothing says why: red (.e) for a value it refuses, muted
+   (.n) for an empty box and for a cut that stops at Amazon's €1.00 minimum. Rules in
+   `_shared/budgetInput.ts`. */
+.h10-menu.adjbud .e, .h10-bulk-row .e { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--nds-danger-text); }
+.h10-menu.adjbud .n, .h10-bulk-row .n, .h10-bulk-review .rr .n { margin: 0; font-size: 11.5px; font-weight: 400; line-height: 1.45; color: var(--nds-text-muted); }
+.h10-menu.adjbud .e, .h10-menu.adjbud .n { max-width: 212px; }
+.h10-bulk-row .e, .h10-bulk-row .n { grid-column: 2 / -1; }
+.h10-bulk-review .rr .n { display: block; margin-top: 2px; }
+.h10-bud.bad { border-color: var(--nds-danger); background: var(--nds-danger-soft); }
+.h10-am-editbar .lbl.bad { color: var(--nds-danger-text); }
 
 .h10-am-toolbar .cnt { white-space: nowrap; }
 

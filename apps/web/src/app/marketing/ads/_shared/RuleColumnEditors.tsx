@@ -56,6 +56,7 @@
  */
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
+import { readDailyBudget, readTargetAcosPercent } from './budgetInput'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -209,6 +210,11 @@ export function RangePopover({
  * 🔴 `initial` must be `''` when the field is genuinely unset. It used to be pre-filled with the
  * engine's 30% fallback, which made "press Apply without typing" write a target nobody chose.
  * `placeholder` is where a fallback belongs.
+ *
+ * PR 1c (CM-7, CM-13) — the box is read by `budgetInput.ts`, the one rule every budget and
+ * Target ACoS box follows. A daily budget that is empty, not a number or below Amazon's €1.00
+ * keeps Apply off and says why (an empty box used to write €1.00). A blank Target ACoS is
+ * allowed: it means "unset", and callers send `null` for it, never 0 %.
  */
 const VALUE_COPY = {
   targetAcos: {
@@ -236,7 +242,8 @@ export function ValuePopover({
   const { title, prefix, suffix, placeholder, note } = VALUE_COPY[kind]
   const { ref, pos } = useClampedAnchor(anchor)
   const [v, setV] = useState(initial)
-  const bad = v.trim() !== '' && !Number.isFinite(Number(v))
+  const read = kind === 'dailyBudget' ? readDailyBudget(v) : readTargetAcosPercent(v)
+  const problem = read.ok ? null : read.message
   return (
     <>
       <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => { if (!busy) onClose() }} />
@@ -248,11 +255,11 @@ export function ValuePopover({
           {suffix && <span className="sfx">{suffix}</span>}
         </span>
         <p className="n">{note}</p>
-        {bad && <p className="e" role="alert">Enter a number.</p>}
+        {problem && <p className="e" role="alert">{problem}</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="sm" disabled={busy || bad} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
+          <Button variant="primary" size="sm" disabled={busy || problem != null} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>
     </>

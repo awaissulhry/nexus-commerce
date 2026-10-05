@@ -257,6 +257,8 @@ export async function updatePortfolioById(args: { portfolioId: string; name?: st
     if (gate.allowed) {
       const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state, budget: args.budget })
       mode = r.mode
+      // 1a (CM-23) — Amazon refused it: nothing changes in Nexus, and the caller gets Amazon's reason.
+      if (!r.ok) return { ok: false, mode, error: r.error ?? 'Amazon refused the portfolio change' }
     } else if (args.budget) {
       // Budget caps are spend-affecting — never record a cap we couldn't actually push to Amazon.
       return { ok: false, mode: 'gated', error: (gate as { reason?: string }).reason || 'write gate closed' }

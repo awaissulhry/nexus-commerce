@@ -18,9 +18,9 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, putBackRefusedWrite, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
-import { ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
+import { AD_SYNC_TYPES, ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { isEntityGoneError, orphanReasonFrom } from '../services/ads-core/amazon-entity-gone.js'
@@ -30,7 +30,9 @@ import {
   updateTarget,
   updateProductAd,
   updatePortfolio,
+  listCampaignsV3,
   adsMode,
+  type CampaignPatch,
   type ClientContext,
   type AdsRegion,
 } from '../services/advertising/ads-api-client.js'
@@ -57,15 +59,22 @@ interface AdMutationPayload {
 }
 
 /**
+ * The money fields a payload can carry. 1a (CM-3) — only these are a spend value: a portfolio id is a long number
+ * (Amazon's ids are numeric), so counting every numeric value made each portfolio move "worth" billions of cents and the
+ * value cap refused it.
+ */
+const VALUE_FIELDS = new Set(['bid', 'defaultBid', 'dailyBudget', 'budgetAmount'])
+
+/**
  * Estimate the spend impact of a payload for the write-gate value cap.
- * Conservative — picks the largest numeric newValue across fieldChanges.
+ * Conservative — picks the largest numeric newValue across the money fields.
  * Bid changes are cents per click (small); budget changes are EUR units
  * (need ×100). The worker uses this to gate value-cap denials.
  */
 function estimatePayloadValueCents(payload: AdMutationPayload): number {
   let maxCents = 0
   for (const c of payload.fieldChanges) {
-    if (c.newValue == null) continue
+    if (c.newValue == null || !VALUE_FIELDS.has(c.field)) continue
     const n = Number(c.newValue)
     if (!Number.isFinite(n)) continue
     if (c.field === 'dailyBudget') {
@@ -147,17 +156,39 @@ async function resolveProfileId(marketplace: string | null): Promise<string | nu
   return conn?.profileId ?? null
 }
 
+/** 1a (CM-1) — `Campaign.biddingStrategy` (the database enum) in the client's words; updateCampaign maps those to v3. */
+const STRATEGY_FOR_CLIENT: Record<string, NonNullable<CampaignPatch['biddingStrategy']>> = {
+  LEGACY_FOR_SALES: 'legacyForSales',
+  AUTO_FOR_SALES: 'autoForSales',
+  MANUAL: 'manual',
+}
+
+/** 1a (CM-2) — SP v3 takes a campaign end date as YYYY-MM-DD; Nexus queues the ISO instant of that day (UTC midnight). */
+function amazonDate(value: string): string | undefined {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  const t = Date.parse(value)
+  return Number.isNaN(t) ? undefined : new Date(t).toISOString().slice(0, 10)
+}
+
 function patchFromChanges(payload: AdMutationPayload): {
   state?: 'enabled' | 'paused' | 'archived'
   name?: string
-  portfolioId?: string
+  portfolioId?: string | null
   dailyBudget?: number
   defaultBid?: number
   bid?: number
+  biddingStrategy?: CampaignPatch['biddingStrategy']
+  endDate?: string | null
 } {
   const out: Record<string, unknown> = {}
   for (const c of payload.fieldChanges) {
-    if (!c.newValue) continue
+    // 1a (CM-2, CM-3) — a cleared end date ("never expire") and a cleared portfolio ("no portfolio") are changes too.
+    // They were dropped here, so an empty PUT went out and was marked a success. Every other field needs a value.
+    if (c.newValue == null || c.newValue === '') {
+      if (c.field === 'endDate') out.endDate = null
+      else if (c.field === 'portfolioId') out.portfolioId = null
+      continue
+    }
     if (c.field === 'status') {
       out.state = c.newValue.toLowerCase()
     } else if (c.field === 'name') {
@@ -171,9 +202,41 @@ function patchFromChanges(payload: AdMutationPayload): {
       out.defaultBid = Number(c.newValue) / 100
     } else if (c.field === 'bid') {
       out.bid = Number(c.newValue) / 100
+    } else if (c.field === 'biddingStrategy') {
+      // 1a (CM-1) — never mapped, so a strategy change went out as an empty PUT, marked a success.
+      const strategy = STRATEGY_FOR_CLIENT[String(c.newValue)]
+      if (strategy) out.biddingStrategy = strategy
+    } else if (c.field === 'endDate') {
+      // 1a (CM-2) — never mapped either.
+      const date = amazonDate(String(c.newValue))
+      if (date) out.endDate = date
     }
   }
   return out
+}
+
+/**
+ * 1a (CM-1) — the placement lanes Amazon holds for a campaign now, read through the gateway, or why they could not be.
+ *
+ * SP v3 keeps the bidding strategy and the placement percentages in ONE object, `dynamicBidding`, and the placement PUT
+ * replaces the whole array. Whether a PUT carrying the strategy alone also resets the lanes is not written down, so the
+ * strategy goes out with the lanes Amazon holds (as updatePlacementBidding reads them, G.4), never with Nexus's copy,
+ * which can be up to 20 minutes old. No read, no write: the write fails (retried) and nothing changes on Amazon.
+ */
+async function currentPlacementLanes(
+  ctx: ClientContext,
+  externalCampaignId: string,
+): Promise<Array<{ placement: string; percentage: number }> | { error: string }> {
+  const notSent = 'bidding strategy not sent: Amazon\'s current placement percentages for this campaign could not be read, and sending the strategy without them could reset them'
+  try {
+    const current = (await listCampaignsV3(ctx, { campaignIds: [externalCampaignId] }))
+      .find((x) => String(x.campaignId) === externalCampaignId)
+    // SP v3 always reports `dynamicBidding` (it carries the strategy); `placementBidding` is left out when no lane is set.
+    if (!current?.dynamicBidding) return { error: notSent }
+    return (current.dynamicBidding.placementBidding ?? []).map((p) => ({ placement: p.placement, percentage: p.percentage }))
+  } catch (err) {
+    return { error: `${notSent} (${err instanceof Error ? err.message : String(err)})` }
+  }
 }
 
 async function dispatchToAmazon(
@@ -189,7 +252,14 @@ async function dispatchToAmazon(
   }
   try {
     if (payload.entityType === 'CAMPAIGN') {
-      const res = await updateCampaign(ctx, payload.externalId, patch)
+      let campaignPatch: CampaignPatch = patch
+      // 1a (CM-1) — see currentPlacementLanes. Sandbox has no Amazon to read and sends nothing.
+      if (patch.biddingStrategy && adsMode() === 'live') {
+        const lanes = await currentPlacementLanes(ctx, payload.externalId)
+        if ('error' in lanes) return { ok: false, rawResponse: null, error: lanes.error }
+        if (lanes.length) campaignPatch = { ...patch, placementBidding: lanes }
+      }
+      const res = await updateCampaign(ctx, payload.externalId, campaignPatch)
       return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'AD_GROUP') {
@@ -237,7 +307,12 @@ async function dispatchToAmazon(
         name: get('name'),
         budget: budget as Parameters<typeof updatePortfolio>[1]['budget'],
       })
-      return { ok: res.ok, rawResponse: null, error: null }
+      // 1a (CM-23) — Amazon's own answer (portfolios.error[]), not "ok" for every write.
+      return {
+        ok: res.ok,
+        rawResponse: res.rawResponse ?? null,
+        error: res.ok ? null : (res.error ?? 'Amazon refused the portfolio change'),
+      }
     }
     return { ok: false, rawResponse: null, error: `unknown_entity_type:${payload.entityType}` }
   } catch (err) {
@@ -337,6 +412,28 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     return { status: 'DEFERRED', queueId }
   }
 
+  // 1a (CM-5) — a field that a newer write to the same entity replaced is not sent (supersedeOlderWrites). When
+  // nothing is left, the row ends here: never sent, and visibly so. Best-effort: if the check fails, the row goes out
+  // as it did before.
+  const superseded = await supersedeOlderWrites(queueId).catch((err) => {
+    logger.warn('[ads-sync.worker] supersede check failed; dispatching as queued', {
+      queueId, error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  })
+  if (superseded?.typed && superseded.remaining === 0 && superseded.superseded.length) {
+    const reason = `superseded: a newer write to ${superseded.superseded.join(', ')} replaced it before it was sent`
+    await prisma.outboundSyncQueue.update({
+      where: { id: queueId },
+      data: { syncStatus: 'CANCELLED', errorCode: 'ADS_SUPERSEDED', errorMessage: reason },
+    })
+    await prisma.advertisingActionLog
+      .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SUPERSEDED' } })
+      .catch(() => { /* audit-update failure must not break the worker */ })
+    logger.info('[ads-sync.worker] superseded — not sent', { queueId, fields: superseded.superseded })
+    return { status: 'SUPERSEDED', queueId }
+  }
+
   // The claim above already moved the typed rows to IN_FLIGHT — that IS the
   // exclusion token, so settling again here would be a redundant write.
   await prisma.outboundSyncQueue.update({
@@ -378,7 +475,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   const gate = await checkAdsWriteGate({
     marketplace,
     payloadValueCents,
-    campaignId,
+    // 1a (CM-23) — a portfolio is not a campaign: resolveCampaignId answers null for it, and the gate refuses null as
+    // "unattributable", so every queued portfolio write was refused in live mode. Left out (undefined), the portfolio
+    // write is gated like the Portfolios screen's own push (updatePortfolioById): mode, connection and value cap.
+    campaignId: payload.entityType === 'PORTFOLIO' ? undefined : campaignId,
     field: bidChange?.field ?? budgetChange?.field ?? payload.fieldChanges[0]?.field ?? null,
     // ACR.1.2b — the authority pins need EVERY field, not the one representative field the
     // A1 bounds want. A payload carrying both a bid and a budget change would otherwise be
@@ -618,13 +718,10 @@ export function stopAdsSyncWorker(): void {
 
 // Exposed for tests + the manual /api/advertising/cron/drain-ads-sync
 // endpoint (mounts under cron triggers).
-const AD_SYNC_TYPE_LIST = [
-  'AD_BID_UPDATE', 'AD_BUDGET_UPDATE', 'AD_ENTITY_STATE_UPDATE', 'AD_BIDDING_STRATEGY_UPDATE',
-  // AX-IE.2 — portfolios dispatch on the same rails. Omitting this would queue
-  // portfolio writes that the drain never picks up, and Redis is down on prod
-  // so the drain IS the dispatch path.
-  'AD_PORTFOLIO_UPDATE',
-]
+// AX-IE.2 — every ads row type dispatches on these rails: Redis is down on prod, so the drain IS the dispatch path.
+// 1a (CM-4) — the shared list (ad-mutation-state.ts); this copy lacked rename and portfolio moves, so those were
+// never sent, retried after a failure, picked up after a defer or reclaimed after a crash.
+const AD_SYNC_TYPE_LIST: string[] = [...AD_SYNC_TYPES]
 
 /**
  * AX-ZD.1 — reclaim ad writes orphaned by a crashed dispatch.
@@ -708,6 +805,50 @@ export async function reclaimCrashedAdWrites(
   return { reclaimed: fresh.length, deadLettered: stale.length }
 }
 
+/**
+ * 1a (CM-4) — a PENDING ad write older than ADS_STALE_INTENT_MS is dead-lettered, never sent.
+ *
+ * The rule reclaimCrashedAdWrites applies to a crashed write, for the same reason: a write pushes the value decided
+ * when it was queued, and a day later that is not a decision anybody is making. A healthy write is sent within
+ * minutes (5-minute grace, retries after 2 and 4 minutes), so only a stuck row is this old. It matters now because
+ * rename and portfolio-move rows join the drain: nothing sent them before, so any still PENDING would otherwise apply
+ * an old rename or portfolio move today, over whatever was changed since. Dead-lettered rows stay visible.
+ */
+export async function expireStalePendingAdWrites(now: Date = new Date()): Promise<number> {
+  const stale = await prisma.outboundSyncQueue.findMany({
+    where: {
+      syncType: { in: AD_SYNC_TYPE_LIST },
+      syncStatus: 'PENDING',
+      createdAt: { lt: new Date(now.getTime() - ADS_STALE_INTENT_MS) },
+    },
+    select: { id: true },
+    take: 500,
+  })
+  if (!stale.length) return 0
+  const ids = stale.map((r) => r.id)
+  const reason = 'ads-drain: queued more than a day ago and never sent — the intent is stale, not applied'
+  await prisma.outboundSyncQueue.updateMany({
+    where: { id: { in: ids }, syncStatus: 'PENDING' },
+    data: { syncStatus: 'FAILED', isDead: true, diedAt: now, errorCode: 'ADS_STALE_PENDING', errorMessage: reason },
+  })
+  for (const id of ids) await settleAdMutations(id, 'FAILED', { isDead: true, error: reason })
+  await prisma.advertisingActionLog
+    .updateMany({ where: { outboundQueueId: { in: ids }, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'FAILED' } })
+    .catch(() => { /* audit-update failure must not stop the drain */ })
+  logger.warn('[ads-sync.worker] dead-lettered stale PENDING ad writes', { count: ids.length })
+  void import('../services/advertising/ads-automation-notify.service.js')
+    .then(({ notifyAutomation }) => notifyAutomation({
+      type: 'ads_write_failed',
+      severity: 'warn',
+      title: 'Queued ad writes expired unsent',
+      body: `${ids.length} write${ids.length === 1 ? '' : 's'} waited more than a day without being sent — dead-lettered, not applied.`,
+      href: '/marketing/ads/rules-automation/automations?view=ledger',
+      meta: { count: ids.length },
+    }))
+    .catch(() => { /* best-effort */ })
+  return ids.length
+}
+
 export async function drainAdsSyncOnce(limit = 50): Promise<{
   processed: number
   reclaimed: number
@@ -722,11 +863,23 @@ export async function drainAdsSyncOnce(limit = 50): Promise<{
     })
     return { reclaimed: 0, deadLettered: 0 }
   })
+  const expired = await expireStalePendingAdWrites().catch((err) => {
+    logger.warn('[ads-sync.worker] stale-pending sweep failed; draining anyway', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return 0
+  })
+  const now = new Date()
   const candidates = await prisma.outboundSyncQueue.findMany({
     where: {
       syncType: { in: AD_SYNC_TYPE_LIST },
       syncStatus: 'PENDING',
-      OR: [{ holdUntil: null }, { holdUntil: { lte: new Date() } }],
+      AND: [
+        { OR: [{ holdUntil: null }, { holdUntil: { lte: now } }] },
+        // 1a (CM-5) — a write that failed with a retryable error waits for its backoff (2^n minutes). The drain read
+        // only holdUntil, so it was resent the next minute, and could land after a newer write to the same field.
+        { OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }] },
+      ],
     },
     take: limit,
     orderBy: { createdAt: 'asc' },
@@ -737,5 +890,5 @@ export async function drainAdsSyncOnce(limit = 50): Promise<{
     const fakeJob = { id: `manual-${c.id}`, data: { queueId: c.id, syncType: c.syncType } } as unknown as Job<AdsJobData>
     results.push(await processAdsSyncJob(fakeJob))
   }
-  return { processed: results.length, reclaimed: swept.reclaimed, deadLettered: swept.deadLettered, results }
+  return { processed: results.length, reclaimed: swept.reclaimed, deadLettered: swept.deadLettered + expired, results }
 }
