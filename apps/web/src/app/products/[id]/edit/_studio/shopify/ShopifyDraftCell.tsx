@@ -21,6 +21,7 @@ import { linkedEndpoint, linkedRequest } from './api'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { isShopifyHistoryValue, noteShopifyEdit, noteShopifyReplay, replayShopifyHistory } from './draftHistory'
 import { optimisticCell } from '../sheet/channel/savedCellPatch'
+import { rememberChosenReferenceLabel } from '../sheet/referenceOptions'
 import { shopifyKeepsOwnValue } from '../sheet/channel/channelCellProvenance'
 import styles from './information.module.css'
 
@@ -149,19 +150,19 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
  * also when they are equal, because the conflict is the rule, not the text. Showing them writes nothing.
  * `follows` (S1 item 5 f): the cell follows Shared on a product Shopify already holds, and Shopify keeps its own value.
  */
-export function ShopifyDivergenceBanner({ type, kept, divergence, follows = false }: { type: string; kept: string | null; divergence: StudioCellValue['divergence']; follows?: boolean }) {
+export function ShopifyDivergenceBanner({ type, kept, divergence, follows = false, names }: { type: string; kept: string | null; divergence: StudioCellValue['divergence']; follows?: boolean; names?: Record<string, string> }) {
   if (!divergence) return null
   if (follows) return <Banner tone="warning" title="Shopify keeps its own value">
     <KeyValue dense items={[
-      { label: 'Shared value, shown here', value: informationValueLabel(type, kept) },
-      { label: 'Shopify has', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs)) },
+      { label: 'Shared value, shown here', value: informationValueLabel(type, kept, names) },
+      { label: 'Shopify has', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs), names) },
     ]} />
     <p>{divergence.note}</p>
   </Banner>
   return <Banner tone="warning" title="Shopify receives the shared value">
     <KeyValue dense items={[
-      { label: 'Saved draft, kept here', value: informationValueLabel(type, kept) },
-      { label: 'Shopify receives', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs)) },
+      { label: 'Saved draft, kept here', value: informationValueLabel(type, kept, names) },
+      { label: 'Shopify receives', value: informationValueLabel(type, shopifyRawValue(divergence.publishesAs), names) },
     ]} />
     <p>{divergence.note}</p>
   </Banner>
@@ -271,7 +272,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
       <div className={styles.cellPanelHead}><strong>{field.label}</strong><span>{selected.row.sku}</span></div>
       {error && <Banner tone="danger">{error}</Banner>}{reason && <Banner tone="neutral">{reason}</Banner>}
       {warning && <Banner tone="warning" title="Can save as a Nexus draft">Fix this before publishing: {warning}</Banner>}
-      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} follows={shopifyKeepsOwnValue(selected.row.values[selected.column.key])} />
+      <ShopifyDivergenceBanner type={field.type} kept={selected.baseline} divergence={divergence} follows={shopifyKeepsOwnValue(selected.row.values[selected.column.key])} names={selected.column.optionLabels} />
       {template ? <Banner tone={switchOn === 'done' ? 'success' : 'info'} title={switchOn === 'done' ? `${field.label} is switched on in Shopify` : `${field.label} is not switched on in this Shopify store`}
           action={switchOn === 'done' ? undefined : <Button size="sm" variant="primary" disabled={!canPublish || switchOn === 'busy'} onClick={() => void switchOnField()}>{switchOn === 'busy' ? 'Switching on…' : 'Switch on in Shopify'}</Button>}>
           {switchOn === 'done' ? 'The sheet reloads this field. Open the cell again to choose its values.'
@@ -281,7 +282,8 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
         onOpenEntry={id => setEntry({ id })} onCopyEntry={!locked && canPublish ? id => setEntry({ id, copy: true }) : undefined}
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />
-        : <ShopifyNativeEditor path={path} schema={schema} field={field} value={value} disabled={locked} onChange={setValue} />}
+        : <ShopifyNativeEditor path={path} schema={schema} field={field} value={value} disabled={locked} onChange={setValue} names={selected.column.optionLabels}
+          onChosen={(id, label) => rememberChosenReferenceLabel(selected.column.key, scope.accountId, id, label)} />}
       {/* A cleared theme template is saved as '' (the store's default template): Clear offers it too (Wave 2 D3). */}
       {!field.definition && (translated || nativeNullableFields.includes(field.id) || nativeEmptyClearFields.includes(field.id)) && value !== null && !(clearsToEmpty && value === '') && <Button size="xs" variant="quiet" disabled={locked} onClick={() => setValue(clearsToEmpty ? '' : null)}>{translated ? 'Use primary language' : 'Clear value'}</Button>}
     </div>
@@ -309,7 +311,7 @@ export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Clo
          raw value, and the write takes the intent the state needs. */
       if (isShopifyHistoryValue(p.newValue)) {
         const replay = replayShopifyHistory(old, p.newValue)
-        if (replay.kind === 'refuse') onHistoryRefused?.(p.data, column, informationValueLabel(field.type, shopifyRawValue(replay.earlier)))
+        if (replay.kind === 'refuse') onHistoryRefused?.(p.data, column, informationValueLabel(field.type, shopifyRawValue(replay.earlier), column.optionLabels))
         if (replay.kind !== 'apply') return false
         noteShopifyReplay(replay)
         p.data.values = { ...p.data.values, [column.key]: replay.cell }
@@ -329,7 +331,8 @@ export function shopifyDraftColumn(column: SheetColumn, open: Open, closed?: Clo
       if (field.type.includes('_reference') && raw) {
         try { return (field.type.startsWith('list.') ? JSON.parse(raw) : [raw]).map((id: string) => column.optionLabels?.[id] ?? id).join(', ') } catch { return 'Stored references need review' }
       }
-      return informationValueLabel(field.type, raw)
+      // W3-4 — a category, sales channel or unit price in words; the names are the column's (taxonomy, store publications).
+      return informationValueLabel(field.type, raw, column.optionLabels)
     },
   }
 }

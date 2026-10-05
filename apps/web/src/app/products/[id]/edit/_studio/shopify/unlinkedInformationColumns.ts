@@ -17,7 +17,10 @@ export function withShopifyColumns(page: ChannelScopePage | null, schema: Shopif
     const field = fields.find(f => !f.definition && (f.id === address || f.id === column.key || (f.id === 'title' && column.key === 'name') ||
       Object.values(column.channels ?? {}).some(c => c.attribute === f.id)))
     const originalName = field?.channelLabel && field.channelLabel !== field.label ? `Shopify: ${field.channelLabel}.` : ''
-    return field ? { ...column, label: field.id === 'inventory' ? column.label : field.label,
+    // W3-4 — the store's sales channels by name, for the cell's words ("Online Store, Point of Sale"). Display only.
+    const publications = field?.id === 'salesChannels' && schema.publications?.length
+      ? { optionLabels: { ...column.optionLabels, ...Object.fromEntries(schema.publications.map(p => [p.id, p.name])) } } : {}
+    return field ? { ...column, label: field.id === 'inventory' ? column.label : field.label, ...publications,
       helpText: [originalName && !column.helpText?.includes(originalName) ? originalName : '', column.helpText].filter(Boolean).join(' ') || undefined } : column
   })
   const weight = columns.find(column => column.shopifyField?.id === 'weight')

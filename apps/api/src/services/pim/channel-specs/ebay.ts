@@ -22,10 +22,10 @@ import {
   humanizeKey, isProseKey, normaliseKey,
   type ChannelFieldSpec, type ChannelGroup, type ChannelSpec,
 } from './types.js'
-import { toInventoryCondition } from '../../ebay-condition.js'
+import { ebayConditionName, toInventoryCondition } from '../../ebay-condition.js'
 import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
 import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
-import { EBAY_PACKAGE_TYPES } from '../ebay-packages.js'
+import { EBAY_PACKAGE_LABELS, EBAY_PACKAGE_TYPES } from '../ebay-packages.js'
 
 export interface EbayCachedAspect {
   id: string
@@ -99,6 +99,26 @@ const WEIGHT_UNITS = ['KILOGRAM', 'GRAM', 'POUND', 'OUNCE']
 const LENGTH_UNITS = ['CENTIMETER', 'METER', 'INCH', 'FEET']
 // E1 — the one package list publish knows (`ebay-packages.ts`); the column is strict: a type outside it cannot be sent.
 const PACKAGE_TYPES = EBAY_PACKAGE_TYPES
+/** W3-4 — the dimension units as people write them; the code stored and sent is unchanged (eBay's CENTIMETER…). */
+const LENGTH_UNIT_LABELS: Record<string, string> = { CENTIMETER: 'cm', METER: 'm', INCH: 'in', FEET: 'ft' }
+/** The condition list when the category's cached conditions are not known. */
+const CONDITION_FALLBACK = ['NEW', 'NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING']
+
+/**
+ * W3-4 — each condition in eBay's English words, following the category's own wording for 1000 / 1500 (its cached market
+ * name says tags or box). The market name ("Nuovo con etichette") stays an accepted spelling (`optionAliases`), so a
+ * paste or an import of the old words still lands on the code.
+ */
+function conditionNames(conditions: EbayCachedCondition[]): Pick<ChannelFieldSpec, 'optionLabels' | 'optionAliases'> {
+  const entries = conditions.length > 0 ? conditions.map(c => ({ code: c.value, market: typeof c.label === 'string' ? c.label.trim() : '' }))
+    : CONDITION_FALLBACK.map(code => ({ code, market: '' }))
+  const optionLabels = Object.fromEntries(entries.map(({ code, market }) => [code, ebayConditionName(code, market)]))
+  const optionAliases: Record<string, string[]> = {}
+  for (const { code, market } of entries) {
+    if (market && market.toLowerCase() !== optionLabels[code].toLowerCase() && !optionAliases[code]?.includes(market)) optionAliases[code] = [...(optionAliases[code] ?? []), market]
+  }
+  return { optionLabels, ...(Object.keys(optionAliases).length ? { optionAliases } : {}) }
+}
 
 // Wave 2 (Owner decision 8, 2026-10-05) — each listing setting says what a BLANK cell does at Publish, in true words for the
 // Trading publish (new listing, Partial update, Full update) and the Inventory photo publish. A field Publish fixes or
@@ -134,8 +154,10 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('description', 'Descrizione', 'Description', { kind: 'longtext', requirement: 'required', masterKey: 'description', channelStore: { kind: 'listingColumn', column: 'description', followFlag: 'followMasterDescription' } }),
     listing('conditionId', 'Condizione', 'Condition', {
       kind: 'select', requirement: 'required', mode: 'strict',
-      options: conditions.length > 0 ? conditions.map((c) => c.value) : ['NEW', 'NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING'],
-      optionLabels: conditions.length > 0 ? Object.fromEntries(conditions.map((c) => [c.value, c.label])) : undefined,
+      options: conditions.length > 0 ? conditions.map((c) => c.value) : [...CONDITION_FALLBACK],
+      // W3-4 (Owner decision 7) — eBay's English names, in the category's own wording ("New with tags"); the market's name
+      // ("Nuovo con etichette") is still accepted when pasted. The code stored and sent is unchanged.
+      ...conditionNames(conditions),
       channelStore: pa('conditionId'),
       helpText: 'Blank: Publish refuses a new listing without one. A live listing keeps eBay\'s condition.',
     }),
@@ -155,12 +177,12 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     // / `settings.itemPostalCode`) had no column, so a new listing on an account with no default location could not be published.
     listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: `City or town where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account's default location. ${BLANK_LOCATION}` }),
     listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: `Postal code where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account's default location. ${BLANK_LOCATION}` }),
-    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'strict', options: [...PACKAGE_TYPES], channelStore: pa('packageType'), helpText: BLANK_NONE }),
+    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'strict', options: [...PACKAGE_TYPES], optionLabels: { ...EBAY_PACKAGE_LABELS }, channelStore: pa('packageType'), helpText: BLANK_NONE }),
     listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] }, helpText: BLANK_NONE }),
     listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
     listing('packageWidth', 'Larghezza del pacco', 'Package width', { kind: 'number', channelStore: pa('packageWidth'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
     listing('packageHeight', 'Altezza del pacco', 'Package height', { kind: 'number', channelStore: pa('packageHeight'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
-    listing('dimensionUnit', 'Unità delle dimensioni', 'Package dimension unit', { kind: 'select', mode: 'strict', options: LENGTH_UNITS, channelStore: pa('dimensionUnit'), helpText: 'Applies to package length, width and height together. Blank: a package length, width or height cannot be sent without it.' }),
+    listing('dimensionUnit', 'Unità delle dimensioni', 'Package dimension unit', { kind: 'select', mode: 'strict', options: LENGTH_UNITS, optionLabels: LENGTH_UNIT_LABELS, channelStore: pa('dimensionUnit'), helpText: 'Applies to package length, width and height together. Blank: a package length, width or height cannot be sent without it.' }),
     // Wave 2 (Owner decision 7) — blank sends nothing (it sent <VATPercent>0</VATPercent>).
     listing('vatRate', 'Aliquota IVA', 'VAT rate (%)', { kind: 'number', channelStore: pa('vatRate'), helpText: `A number from 0 to 100. ${BLANK_NONE}` }),
     listing('videoId', 'Video', 'Video id', { kind: 'text', channelStore: pa('videoId'), helpText: BLANK_NONE }),

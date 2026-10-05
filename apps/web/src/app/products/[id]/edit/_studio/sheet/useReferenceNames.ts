@@ -15,12 +15,15 @@ async function read(path: string, signal: AbortSignal) {
 }
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+/** The columns whose names arrive with the sheet (`meta.referenceNames`). */
+const SHEET_NAME_FIELDS = ['descriptionThemeId', 'categoryId', 'category'] as const
 /** Coverage is accepted only for the sheet's exact coordinate and an unambiguous completed lookup. */
 function sheetNames(meta: unknown, channel: string, market: string) {
-  const result = { labels: {} as ReferenceLabels, covered: { descriptionThemeId: [] as string[], categoryId: [] as string[] } }
+  const result = { labels: {} as ReferenceLabels, covered: { descriptionThemeId: [] as string[], categoryId: [] as string[], category: [] as string[] } }
   const names = record(meta) ? meta.referenceNames : undefined
   if (!record(names) || names.channel !== channel || names.market !== market || !Array.isArray(names.lookups)) return result
-  for (const field of ['descriptionThemeId', 'categoryId'] as const) {
+  // W3-4 — `category`: a Shopify product category's taxonomy name (`sheet-reference-names.ts`); its id stays the value.
+  for (const field of SHEET_NAME_FIELDS) {
     const matching = names.lookups.filter(lookup => record(lookup) && lookup.field === field)
     if (matching.length !== 1) continue
     const lookup = matching[0] as Record<string, unknown>
@@ -38,7 +41,7 @@ function sheetNames(meta: unknown, channel: string, market: string) {
 /** A completed missing-ID read removes only that old name; a failed read removes nothing. */
 function applySheetNames(previous: ReferenceLabels, hydrated: ReturnType<typeof sheetNames>): ReferenceLabels {
   const labels = { ...previous }
-  for (const field of ['descriptionThemeId', 'categoryId'] as const) {
+  for (const field of SHEET_NAME_FIELDS) {
     if (!hydrated.labels[field]) continue
     const names = { ...labels[field] }
     for (const id of hydrated.covered[field]) delete names[field === 'categoryId' ? id.toUpperCase() : id]

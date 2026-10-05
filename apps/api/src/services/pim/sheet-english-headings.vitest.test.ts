@@ -37,6 +37,18 @@ describe('English Information grid headings', () => {
     // Only these columns: the variation theme keeps its own editing.
     expect(byKey.get('variation_theme')?.editable).toBe(true)
   })
+  it('W3-4: the eBay condition column names its options in English and carries the market\'s words as accepted spellings', () => {
+    const columns = buildSheetColumns({ fields: [], coordinates: [coordinate], scopeKind: 'channel',
+      specs: [{ coordinate, spec: ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: cached.aspects, conditions: cached.conditions }) }] }).columns
+    const condition = columns.find(c => c.key === 'conditionId')!
+    expect(condition).toMatchObject({ options: ['NEW', 'NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT'], mode: 'strict',
+      optionLabels: { NEW: 'New with tags', NEW_OTHER: 'New without tags', NEW_WITH_DEFECTS: 'New with defects', USED_EXCELLENT: 'Used' },
+      optionAliases: { NEW: ['Nuovo con etichette'], NEW_OTHER: ['Nuovo senza etichette'], NEW_WITH_DEFECTS: ['Nuovo con difetti'], USED_EXCELLENT: ['Usato'] } })
+    expect(columns.find(c => c.key === 'dimensionUnit')).toMatchObject({ options: ['CENTIMETER', 'METER', 'INCH', 'FEET'], optionLabels: { CENTIMETER: 'cm', METER: 'm', INCH: 'in', FEET: 'ft' } })
+    expect(columns.find(c => c.key === 'packageType')!.optionLabels!.LARGE_ENVELOPE).toBe('Large envelope')
+    // A column without accepted spellings carries none.
+    expect(columns.find(c => c.key === 'listingFormat')!.optionAliases).toBeUndefined()
+  })
   it('names every aspect in the cached Italian category in English and preserves its write address', () => {
     const columns = columnsFor(cached.aspects)
     const aspects = columns.filter(column => column.group === 'Item specifics')

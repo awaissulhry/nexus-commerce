@@ -206,7 +206,7 @@ export function canonical(v: unknown): string {
  * returned in the TYPE the contract stores it (`false`, not `'false'`) when the options carry it.
  */
 export function optionCodeFor(
-  col: { options?: unknown[]; optionLabels?: Record<string, string> } | undefined,
+  col: { options?: unknown[]; optionLabels?: Record<string, string>; optionAliases?: Record<string, string[]> } | undefined,
   incoming: unknown,
 ): unknown {
   if (!col || typeof incoming !== 'string') return incoming
@@ -216,7 +216,10 @@ export function optionCodeFor(
   if (codes.some((c) => String(c) === s)) return codes.find((c) => String(c) === s)
   const fold = (x: unknown) => String(x).trim().toLowerCase()
   const byLabel = Object.entries(col.optionLabels ?? {}).find(([, label]) => fold(label) === fold(s))
-  const codeStr = byLabel?.[0] ?? (codes.map(String).find((c) => fold(c) === fold(s)) ?? null)
+  // W3-4 — a file written before the labels were English (eBay IT "Nuovo con etichette") still names its code; a
+  // spelling two codes share names neither.
+  const byAlias = Object.entries(col.optionAliases ?? {}).filter(([, names]) => names.some((name) => fold(name) === fold(s)))
+  const codeStr = byLabel?.[0] ?? (byAlias.length === 1 ? byAlias[0][0] : null) ?? (codes.map(String).find((c) => fold(c) === fold(s)) ?? null)
   if (codeStr === null) return incoming
   return codes.find((c) => String(c) === codeStr) ?? codeStr
 }

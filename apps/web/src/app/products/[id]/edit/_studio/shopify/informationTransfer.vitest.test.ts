@@ -16,6 +16,13 @@ describe('Shopify typed grid transfer', () => {
     for (const raw of ['NEXUS_MEDIA_V1:{}', 'gid://shopify/MediaImage/1']) expect(decodeInformationTransfer(raw, title, 'store-a').error).toBeTruthy()
     expect(decodeInformationTransfer('Ordinary text', title, 'store-a')).toEqual({ value: 'Ordinary text' })
   })
+  it('W3-4: Continue selling when out of stock pastes the words the cell shows (Yes / No) as Shopify\'s code', () => {
+    const policy = fields.find(f => f.id === 'inventoryPolicy')!
+    expect(decodeInformationTransfer('Yes', policy, 'store-a')).toEqual({ value: 'CONTINUE' })
+    expect(decodeInformationTransfer(' no ', policy, 'store-a')).toEqual({ value: 'DENY' })
+    expect(decodeInformationTransfer('DENY', policy, 'store-a')).toEqual({ value: 'DENY' })
+    expect(encodeInformationTransfer(policy, 'CONTINUE', 'store-a')).toBe('CONTINUE')
+  })
   it('keeps clear distinct from an empty text value and preserves quoted TSV cells', () => {
     expect(decodeInformationTransfer(encodeInformationTransfer(title, null, 'store-a'), title, 'store-a')).toEqual({ value: null })
     expect(decodeInformationTransfer('', title, 'store-a')).toEqual({ value: '' })

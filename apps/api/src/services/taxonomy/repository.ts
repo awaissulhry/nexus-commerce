@@ -85,6 +85,24 @@ export async function getTaxonomyNode(channel: string, market: string, id: strin
   return { node, source }
 }
 
+/**
+ * Wave 3 (W3-4) — the names of taxonomy categories by id, from the channel's ACTIVE synced revision (Shopify:
+ * "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets" for gid://shopify/TaxonomyCategory/aa-1-10-2).
+ * Display only, and no channel call: a taxonomy that is not synced names nothing, and an id it does not hold is left
+ * out, so the caller keeps showing the id.
+ */
+export async function taxonomyNames(channel: string, market: string, ids: readonly string[]): Promise<Record<string, string>> {
+  const wanted = [...new Set(ids.filter(id => typeof id === 'string' && id))]
+  if (!wanted.length) return {}
+  const source = await prisma.marketplaceTaxonomy.findUnique({ where: sourceKey(channel, market), select: { activeSnapshotId: true } })
+  if (!source?.activeSnapshotId) return {}
+  const rows = await prisma.marketplaceTaxonomyNode.findMany({ where: { snapshotId: source.activeSnapshotId, externalId: { in: wanted } }, select: { externalId: true, name: true, path: true } })
+  return Object.fromEntries(rows.flatMap(row => {
+    const name = (row.path || row.name || '').trim()
+    return name ? [[row.externalId, name]] : []
+  }))
+}
+
 export async function readTaxonomyRequirements(channel: string, market: string, id: string) {
   const { node, source } = await getTaxonomyNode(channel, market, id)
   const schema = channel === 'SHOPIFY' ? null : await prisma.categorySchema.findFirst({ where: { channel, productType: id,

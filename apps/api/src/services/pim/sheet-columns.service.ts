@@ -146,6 +146,8 @@ export interface SheetColumn {
   scope: 'global' | 'per_variant'
   options?: string[]
   optionLabels?: Record<string, string>
+  /** W3-4 — other accepted spellings per code (the market's name when the label is English); never shown. */
+  optionAliases?: Record<string, string[]>
   /** `strict` = the channel accepts only the list (an off-list value WARNS, never blocks). */
   mode?: 'strict' | 'open'
   /** Which coordinates require this field. Empty = required by none. */
@@ -476,6 +478,13 @@ function tighterOf(a: number | undefined, b: number | undefined): number | undef
   return Math.min(a, b)
 }
 
+/** W3-4 — every coordinate's accepted spellings of a code, once each. */
+function mergeAliases(current: Record<string, string[]> | undefined, next: Record<string, string[]>): Record<string, string[]> {
+  const out: Record<string, string[]> = { ...(current ?? {}) }
+  for (const [code, names] of Object.entries(next)) out[code] = [...new Set([...(out[code] ?? []), ...names])]
+  return out
+}
+
 /** `fulfillment_availability` + `quantity` → "Fulfillment availability · Quantity". */
 export function englishLeafLabel(f: ChannelFieldSpec, englishLabels?: Map<string, string>): string {
   if (f.englishLabel) return f.englishLabel
@@ -508,6 +517,7 @@ interface Draft {
   storage: SheetStorage
   options?: string[]
   optionLabels?: Record<string, string>
+  optionAliases?: Record<string, string[]>
   /** `true` while every contributor with options closes the list. */
   allStrict: boolean
   hasOptions: boolean
@@ -804,6 +814,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       validation: d.validation,
       options,
       optionLabels: d.optionLabels,
+      ...(options && d.optionAliases ? { optionAliases: d.optionAliases } : {}),
       mode: options ? (d.allStrict ? 'strict' : 'open') : undefined,
       requiredBy: d.requiredBy,
       maxLength: d.cap.maxLength,
@@ -1071,6 +1082,7 @@ function mergeSpecField(
     d.hasOptions = true
     if (f.mode !== 'strict') d.allStrict = false
     if (f.optionLabels) d.optionLabels = { ...(d.optionLabels ?? {}), ...f.optionLabels }
+    if (f.optionAliases) d.optionAliases = mergeAliases(d.optionAliases, f.optionAliases)
   }
   if (f.deprecatedOptions) d.deprecatedOptions = [...new Set([...d.deprecatedOptions, ...f.deprecatedOptions])]
 

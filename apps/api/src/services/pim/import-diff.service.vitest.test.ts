@@ -56,6 +56,13 @@ describe('optionCodeFor — D15.2: a closed-list cell arrives as its label OR it
   it('passes an unknown value through untouched — the write path refuses it with the real reason', () => {
     expect(optionCodeFor(country, 'Mars')).toBe('Mars')
   })
+  it('W3-4: a file from before the English labels still names its code through an accepted spelling; a spelling two codes share names neither', () => {
+    const condition = { options: ['NEW', 'USED_EXCELLENT'], optionLabels: { NEW: 'New with tags', USED_EXCELLENT: 'Used' }, optionAliases: { NEW: ['Nuovo con etichette'], USED_EXCELLENT: ['Usato'] } }
+    expect(optionCodeFor(condition, 'New with tags')).toBe('NEW')
+    expect(optionCodeFor(condition, 'nuovo con etichette')).toBe('NEW')
+    expect(optionCodeFor(condition, 'Usato')).toBe('USED_EXCELLENT')
+    expect(optionCodeFor({ ...condition, optionAliases: { NEW: ['Nuovo'], USED_EXCELLENT: ['Nuovo'] } }, 'Nuovo')).toBe('Nuovo')
+  })
   it('leaves a free-text column and a blank alone', () => {
     expect(optionCodeFor(undefined, 'Pakistan')).toBe('Pakistan')
     expect(optionCodeFor({}, 'Pakistan')).toBe('Pakistan')

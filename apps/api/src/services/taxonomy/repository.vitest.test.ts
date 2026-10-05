@@ -7,7 +7,7 @@ const db = vi.hoisted(() => ({
 }))
 vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('@nexus/database/workspace-context', () => ({ workspaceKey: (value: unknown) => value }))
-import { listTaxonomySources, publishTaxonomy, readTaxonomyRequirements, searchTaxonomy, schemaMarkets } from './repository.js'
+import { listTaxonomySources, publishTaxonomy, readTaxonomyRequirements, searchTaxonomy, schemaMarkets, taxonomyNames } from './repository.js'
 import { mappingToken } from '../pim/mapping/revision-token.js'
 import { taxonomySearchCache } from './search-cache.js'
 const download = { providerVersion: 'v2', nodes: [{ externalId: '001', name: 'Suits', path: 'Suits', parentId: null, assignable: true }] }
@@ -92,5 +92,23 @@ describe('cached taxonomy reads', () => {
   it('finds existing UK aliases while keeping country-specific categories separate', () => {
     expect(schemaMarkets('EBAY','UK')).toEqual(expect.arrayContaining(['UK','GB','EBAY_GB']))
     expect(schemaMarkets('AMAZON','DE')).not.toContain('IT')
+  })
+})
+
+describe('taxonomyNames (W3-4)', () => {
+  it('names ids from the ACTIVE revision only, and leaves an unknown id out', async () => {
+    db.marketplaceTaxonomy.findUnique.mockResolvedValue({ activeSnapshotId: 'active' })
+    db.marketplaceTaxonomyNode.findMany.mockResolvedValue([{ externalId: 'gid://shopify/TaxonomyCategory/aa-1', name: 'Clothing', path: 'Apparel & Accessories > Clothing' }])
+    expect(await taxonomyNames('SHOPIFY', 'GLOBAL', ['gid://shopify/TaxonomyCategory/aa-1', 'gid://shopify/TaxonomyCategory/zz-9', 'gid://shopify/TaxonomyCategory/aa-1']))
+      .toEqual({ 'gid://shopify/TaxonomyCategory/aa-1': 'Apparel & Accessories > Clothing' })
+    expect(db.marketplaceTaxonomyNode.findMany.mock.calls[0][0].where).toEqual({ snapshotId: 'active', externalId: { in: ['gid://shopify/TaxonomyCategory/aa-1', 'gid://shopify/TaxonomyCategory/zz-9'] } })
+  })
+  it('a taxonomy that is not synced names nothing, and no ids read nothing', async () => {
+    db.marketplaceTaxonomy.findUnique.mockResolvedValue({ activeSnapshotId: null })
+    expect(await taxonomyNames('SHOPIFY', 'GLOBAL', ['gid://shopify/TaxonomyCategory/aa-1'])).toEqual({})
+    expect(db.marketplaceTaxonomyNode.findMany).not.toHaveBeenCalled()
+    db.marketplaceTaxonomy.findUnique.mockClear()
+    expect(await taxonomyNames('SHOPIFY', 'GLOBAL', [])).toEqual({})
+    expect(db.marketplaceTaxonomy.findUnique).not.toHaveBeenCalled()
   })
 })
