@@ -62,6 +62,10 @@ export interface AdsRegionReconcileReport {
   marketCorrected: number
   unchanged: number
   createsSkippedOff: number
+  /** Ads wave 4b — AmazonAdsProfile rows created or corrected from discovery (currency, timezone, country). */
+  profileFactsFilled: number
+  /** Markets whose currency discovery did not report: their reports are skipped, never counted as EUR. */
+  profileCurrencyMissing: string[]
 }
 
 const createsEnabled = () => process.env.NEXUS_ADS_ALL_REGIONS === '1'
@@ -69,6 +73,7 @@ const createsEnabled = () => process.env.NEXUS_ADS_ALL_REGIONS === '1'
 export async function reconcileAdsRegions(): Promise<AdsRegionReconcileReport> {
   const report: AdsRegionReconcileReport = {
     scopes: 0, created: 0, regionCorrected: 0, marketCorrected: 0, unchanged: 0, createsSkippedOff: 0,
+    profileFactsFilled: 0, profileCurrencyMissing: [],
   }
 
   const { tryResolveConnection } = await import('../services/connection-resolver.service.js')
@@ -156,6 +161,21 @@ export async function reconcileAdsRegions(): Promise<AdsRegionReconcileReport> {
     })
   }
 
+  // Ads wave 4b — each profile's currency, timezone and country, from the same discovery scopes (no Amazon call), so
+  // the report paths read a measured currency instead of assuming EUR. Not behind NEXUS_ADS_ALL_REGIONS: these are
+  // facts, not spend. Best-effort: a failure here must not undo the region repair above.
+  try {
+    const { fillAdsProfileFacts } = await import('../services/advertising/ads-profile-facts.service.js')
+    const facts = await fillAdsProfileFacts(scopes)
+    report.profileFactsFilled = facts.filled
+    report.profileCurrencyMissing = facts.noCurrency
+    if (facts.noCurrency.length > 0) {
+      logger.warn('[p45b-ads-regions] discovery reported no currency for these profiles; their reports are skipped', { markets: facts.noCurrency })
+    }
+  } catch (err) {
+    logger.warn('[p45b-ads-regions] could not record profile facts', { error: err instanceof Error ? err.message : String(err) })
+  }
+
   return report
 }
 
@@ -165,7 +185,8 @@ export async function runAdsRegionReconcile(): Promise<string> {
     logger.info('[p45b-ads-regions] reconcile complete', r as unknown as Record<string, unknown>)
     return (
       `scopes=${r.scopes} created=${r.created} regionCorrected=${r.regionCorrected} ` +
-      `marketCorrected=${r.marketCorrected} unchanged=${r.unchanged} createsSkippedOff=${r.createsSkippedOff}` +
+      `marketCorrected=${r.marketCorrected} unchanged=${r.unchanged} createsSkippedOff=${r.createsSkippedOff} ` +
+      `profileFactsFilled=${r.profileFactsFilled} profileCurrencyMissing=${r.profileCurrencyMissing.length}` +
       (r.createsSkippedOff > 0 ? ' (set NEXUS_ADS_ALL_REGIONS=1 to record them)' : '')
     )
   })
