@@ -249,6 +249,17 @@ describe('08 S7 — bulk-listing-stock', { timeout: 60_000 }, () => {
     for (const id of [ids.jacketIt, ids.jacketDe, ids.jacketFr]) expect((await listing(id)).followMasterQuantity).toBe(true)
   })
 
+  it('a hold on one Amazon EU market is per market, and says it does not freeze the one EU quantity', async () => {
+    const bulk = await preview('bulk-listing-stock', { action: 'PAUSE', listingIds: [ids.jacketIt] })
+    expect(bulk.ok, bulk.error).toBe(true)
+    expect(bulk.preview).toMatchObject({ totals: { listings: 1 }, warning: expect.stringContaining('holding the stock sync of Amazon IT does not freeze it') })
+    expect(bulk.preview.euMarketsAdded).toBeUndefined()
+    const policy = await preview('set-stock-policy', { channel: 'AMAZON', marketplace: 'DE', pushesPaused: true })
+    expect(policy.ok, policy.error).toBe(true)
+    expect(policy.preview.warning).toContain('holding Amazon DE does not freeze it')
+    expect(policy.preview.warning).not.toContain('keep what the channel shows now')
+  })
+
   it('FBA: a named FBA listing is refused, a product\'s FBA listing is left out, and its quantity never changes', async () => {
     const fields = { quantity: true, quantityOverride: true, followMasterQuantity: true, syncPaused: true, stockBuffer: true }
     const before = await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: ids.fbaIt }, select: fields }))
@@ -320,6 +331,9 @@ describe('08 S7 — set-stock-policy', { timeout: 60_000 }, () => {
     expect(shown.preview).toMatchObject({ location: { code: 'TEST-S7-MAIN' }, changes: { feeds: { from: [], to: ['EBAY:IT', 'SHOPIFY'] } }, totals: { productsRecomputed: 1 } })
     const { approvalId } = await askAndRun('set-stock-policy', { locationCode: 'TEST-S7-MAIN', feeds: ['EBAY:IT', 'SHOPIFY'] })
     expect((await inside(() => db().stockLocation.findUniqueOrThrow({ where: { id: ids.main } }))).syncRoutes).toEqual(['EBAY:IT', 'SHOPIFY'])
+    // An empty list routes the stock everywhere (sync-control-core locationServes), never nowhere: the preview says so.
+    expect((await preview('set-stock-policy', { locationCode: 'TEST-S7-MAIN', feeds: [] })).preview.summary)
+      .toBe('TEST-S7-MAIN feeds every channel and market (was EBAY:IT, SHOPIFY).')
     await undo(approvalId)
     expect((await inside(() => db().stockLocation.findUniqueOrThrow({ where: { id: ids.main } }))).syncRoutes).toEqual([])
     expect(await preview('set-stock-policy', { locationCode: 'TEST-S7-FBA', feeds: ['EBAY:IT'] })).toMatchObject({ ok: false, error: expect.stringContaining('Amazon FBA stock') })
