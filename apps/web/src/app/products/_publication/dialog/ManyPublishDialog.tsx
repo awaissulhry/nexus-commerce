@@ -49,7 +49,7 @@ import type { PublicationDestinationOption } from './model'
 import { activeTab, childMarketKey, initialChoice, marketShortLabel, refillChoice, type PickerChoice } from './pickers'
 import { DestinationPicker } from './DestinationPicker'
 import {
-  KEEP_CHANNEL_VALUES_HINT, KEEP_CHANNEL_VALUES_LABEL, MANY_CHANNELS_NOTE, MANY_STATUS_CHANNELS_NOTE, MANY_STATUS_HINT, estimateText, keepChannelValuesState,
+  KEEP_CHANNEL_VALUES_HINT, KEEP_CHANNEL_VALUES_LABEL, MANY_ALIASES_NOTE, MANY_CHANNELS_NOTE, MANY_STATUS_CHANNELS_NOTE, MANY_STATUS_HINT, estimateText, keepChannelValuesState,
   manyActionOptions, manyBatchOptions, manyCapMessage, manyCheckButtonText, manyCheckingText, manyCreatesSummary, manyDestinationLabel,
   manyDestinationOptions, manyDiffersSummary, manyListedNote, manyListedSet, manyMarketName, manyMarketTabWords, manyNotListedSummary, manyPlan, manyPlanSummary,
   manyPublishButtonText, manyRequest, manyReviewed, manyReviewing, manyRowLabel, manyRowState,
@@ -337,7 +337,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
 
       {!batch && !status && <>
         <p>Choose the channel and the markets above. Nexus checks each product in each market first and shows what it would send. Nothing is sent until you press Publish.</p>
-        <p className={styles.muted}>{MANY_CHANNELS_NOTE}</p>
+        <p className={styles.muted}>{MANY_CHANNELS_NOTE} {MANY_ALIASES_NOTE}</p>
       </>}
       {!batch && status && <>
         <p>{MANY_STATUS_HINT[status]}</p>

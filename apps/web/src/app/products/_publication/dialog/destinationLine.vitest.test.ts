@@ -15,3 +15,11 @@ it('falls back to the channel when the account has no name, and skips empty part
     expect(line.lead).not.toMatch(/^\s*·|·\s*$/); expect(line.rest).not.toMatch(/^\s*·|·\s*$/)
   }
 })
+
+it('names a listing alias with the sheet band’s mark when the window gives it (aliases, 2026-10-05)', () => {
+  const alias = { accountLabel: 'Store', aliasLabel: 'normal-knee-slider-ALT1', scope: { ...scope, listingId: 'alias-1' } }
+  expect(publicationDestinationParts(alias, true, '① normal-knee-slider-ALT1')).toEqual({ lead: 'Store', rest: '① normal-knee-slider-ALT1 · IT' })
+  expect(publicationDestinationParts({ accountLabel: 'Store', aliasLabel: 'Primary listing', scope }, true, '★ Primary')).toEqual({ lead: 'Store', rest: '★ Primary · IT' })
+  // No listing name from the window (a market's only listing): the review's own words, as before.
+  expect(publicationDestinationParts(alias, true, null)).toEqual({ lead: 'Store', rest: 'normal-knee-slider-ALT1 · IT' })
+})

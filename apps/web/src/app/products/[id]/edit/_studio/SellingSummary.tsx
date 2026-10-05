@@ -34,18 +34,30 @@ import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import type { Tone } from '@/design-system/primitives/tone'
 import { statusCellValue } from './sheet/channel/statusColumn'
 import { sheetWaitingMark, waitingTotalOf } from './sheet/usePublishActions'
+import { aliasMarkText } from './listingScope'
 
 // ── Labels and order ─────────────────────────────────────────────────────────────────────────────
 
-/** "Amazon · IT" — the market as every publish message names it; a second listing on the same market says so. */
-export function marketLabel(cell: Pick<PublishActionCell, 'channel' | 'marketplace' | 'aliasKey'>): string {
+type MarketCell = Pick<PublishActionCell, 'channel' | 'marketplace' | 'aliasKey'> & Partial<Pick<PublishActionCell, 'aliasLabel' | 'aliasPosition'>>
+
+/**
+ * "Amazon · IT" — the market as every publish message names it. A second listing on the same market carries its mark and
+ * name, as the sheet's band shows it (Owner 2026-10-05): "eBay · IT · ① ALT1". A server that does not name the alias
+ * yet leaves "· alias".
+ */
+export function marketLabel(cell: MarketCell): string {
   const base = `${channelLabel(cell.channel)} · ${cell.marketplace}`
-  return cell.aliasKey ? `${base} · alias` : base
+  if (!cell.aliasKey) return base
+  const position = typeof cell.aliasPosition === 'number' && cell.aliasPosition > 0 ? cell.aliasPosition : null
+  const label = cell.aliasLabel?.trim() || null
+  return position !== null ? `${base} · ${aliasMarkText(position, label)}` : label ? `${base} · ${label}` : `${base} · alias`
 }
 
-/** A product's listings in a stable order: by market, the primary listing first. */
+/** A product's listings in a stable order: by market, the primary listing first, then the aliases in their place order. */
 export function sortedCells(cells: readonly PublishActionCell[]): PublishActionCell[] {
-  return [...cells].sort((a, b) => marketLabel(a).localeCompare(marketLabel(b), 'en') || a.aliasKey.localeCompare(b.aliasKey, 'en') || a.listingId.localeCompare(b.listingId))
+  const market = (cell: PublishActionCell) => `${channelLabel(cell.channel)} · ${cell.marketplace}`
+  const place = (cell: PublishActionCell) => (!cell.aliasKey ? 0 : typeof cell.aliasPosition === 'number' ? cell.aliasPosition : Number.MAX_SAFE_INTEGER)
+  return [...cells].sort((a, b) => market(a).localeCompare(market(b), 'en') || place(a) - place(b) || a.aliasKey.localeCompare(b.aliasKey, 'en') || a.listingId.localeCompare(b.listingId))
 }
 
 /** Every product's listings, in the stable order (the shared scope: one sheet row = one product). */

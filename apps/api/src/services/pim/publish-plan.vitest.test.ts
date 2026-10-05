@@ -66,11 +66,14 @@ async function fakePreview(productId: string, scope: StudioPublishScope, userId:
   const changes = products.filter(p => p.parentId).flatMap(p => full.has(p.id) ? [change(p, 'item_name'), change(p, 'bullet_point')] : [change(p, 'item_name')])
   const id = randomUUID()
   const expiresAt = new Date(Date.now() + 15 * 60_000)
+  // The listing it reviews, as the studio resolves it: '' = the main listing, else the alias id (named by its id or a listing id).
+  const aliasKey = scope.listingId ? (await prisma.productListingAlias.findUnique({ where: { id: scope.listingId }, select: { id: true } }))?.id
+    ?? (await prisma.channelListing.findUnique({ where: { id: scope.listingId }, select: { aliasKey: true } }))?.aliasKey ?? '' : ''
   const review: StudioPublishReview = { id, productId, scope, accountLabel: 'acc', aliasLabel: '', mode: 'live', action: 'update', excluded: 0, issues: [],
     expiresAt: expiresAt.toISOString(), changes,
     rows: products.map(p => ({ productId: p.id, sku: p.sku, title: p.sku, existing: true, mode: full.has(p.id) ? 'full' as const : 'partial' as const })) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: products.length, changeCount: 0, kind: 'studio-publication', productId: familyId,
-    channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: '', expiresAt,
+    channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey, expiresAt,
     changes: { kind: 'studio-publication', publicationKey: `key-${id}`, productId, scope, revision: 'r1', changeVersion: 1, changePlan: { kind: 'amazon-changes', changes }, review,
       ...(full.size ? { fullProductIds: [...full].sort() } : {}) } } as never })
   return review
@@ -536,6 +539,55 @@ describe('New listings: a row not on the channel holds its create choice, never 
     expect(await afterContentSettled(publicationId, data, { status: 'PARTIAL' })).toEqual([s])
     expect(await stored(s)).toMatchObject({ sellingTarget: null })
     expect(await stored(m)).toMatchObject({ sellingTarget: 'INACTIVE' })
+  }))
+})
+
+/** Aliases in the Publish window (Owner 2026-10-05): an alias is a destination of its own, named by its alias id. */
+describe('aliases: a second listing on a market is its own destination', () => {
+  async function aliasFamily(prefix: string) {
+    const f = await family(prefix, ['S'])
+    const alias = (await prisma.productListingAlias.create({ data: { productId: f.root, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, label: 'ALT1', position: 1 } as never })).id
+    const main = await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '111' })
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '111' })
+    const aliasRoot = await listing(f.root, 'EBAY', 'IT', ids.ebay, { aliasKey: alias, aliasId: alias, externalListingId: '222' })
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { aliasKey: alias, aliasId: alias, externalListingId: '222' })
+    return { f, alias, main, aliasRoot }
+  }
+  const ebayAlias = (listingId: string, marketplace = 'IT'): StudioPublishScope => ({ ...ebayIT(), marketplace, listingId })
+
+  it('the main listing and an alias are two destinations, each reviewed and named; a destination that cannot be read still names its alias', () => scoped(async () => {
+    const { f, alias } = await aliasFamily('PP-ALIAS')
+    const plan = await reviewPublishPlan(f.children.S, { destinations: [ebayIT(), ebayAlias(alias)] }, owner(), { preview: fakePreview })
+    expect(plan.destinations.map(d => [d.label, d.aliasLabel, d.aliasPosition, d.destination.aliasKey, d.error])).toEqual([
+      ['eBay · IT', null, null, '', null], ['eBay · IT · ALT1', 'ALT1', 1, alias, null]])
+    expect(fixture.previews.map(p => p.scope)).toEqual([ebayIT(), ebayAlias(alias)])
+    const unreadable = await reviewPublishPlan(f.root, { destinations: [ebayAlias(alias, 'ZZ')] }, owner(), { preview: fakePreview })
+    expect(unreadable.destinations[0]).toMatchObject({ label: 'eBay · ZZ · ALT1', aliasLabel: 'ALT1', review: null, error: expect.stringMatching(/unavailable in the selected market/) })
+  }))
+
+  it('one listing is one destination: an alias by its alias id and by its listing id, or the main listing with and without its id, is refused as a repeat', () => scoped(async () => {
+    const { f, alias, main, aliasRoot } = await aliasFamily('PP-TWICE')
+    const twice = { statusCode: 400, message: 'A destination appears twice in this request.' }
+    await expect(reviewPublishPlan(f.root, { destinations: [ebayAlias(alias), ebayAlias(aliasRoot)] }, owner(), { preview: fakePreview })).rejects.toMatchObject(twice)
+    await expect(reviewPublishPlan(f.root, { destinations: [ebayIT(), ebayAlias(main)] }, owner(), { preview: fakePreview })).rejects.toMatchObject(twice)
+    expect(fixture.previews).toEqual([])
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias) }, { scope: ebayAlias(aliasRoot) }], lifecycle: [] } }, ids.anna, owner()))
+      .rejects.toMatchObject(twice)
+  }))
+
+  it('the send refuses a content review of another listing on the same market, and sends the alias\'s own review', () => scoped(async () => {
+    const { f, alias } = await aliasFamily('PP-SEND-ALIAS')
+    const mainReview = await fakePreview(f.root, ebayIT(), ids.anna, {})
+    const mainToken = await tick(mainReview.id!, mainReview.changes!.map(c => c.id))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: mainReview.id, selectionToken: mainToken }], lifecycle: [] } }, ids.anna, owner()))
+      .rejects.toMatchObject({ statusCode: 409, message: 'eBay · IT · ALT1: this review is for the main listing on this market, not the listing chosen. Review again.' })
+    const aliasReview = await fakePreview(f.root, ebayAlias(alias), ids.anna, {})
+    const aliasToken = await tick(aliasReview.id!, aliasReview.changes!.map(c => c.id))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayIT(), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna, owner()))
+      .rejects.toMatchObject({ statusCode: 409, message: 'eBay · IT: this review is for another listing (an alias) on this market, not the listing chosen. Review again.' })
+    const { batchId } = await createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna, owner())
+    expect(await prisma.bulkOperation.findUnique({ where: { id: aliasReview.id! } })).toMatchObject({ batchId, aliasKey: alias })
+    expect(await prisma.bulkOperation.findUnique({ where: { id: mainReview.id! } })).toMatchObject({ batchId: null, status: 'PREVIEW' })
   }))
 })
 

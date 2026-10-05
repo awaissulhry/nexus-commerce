@@ -202,10 +202,26 @@ export function rowPublishValue(row: PublishRowLike, read: PublishRead, lookup: 
 }
 
 /**
- * A row the channel rejected in the destination's LATEST publish: its own result failed, or the whole publication
- * failed and no per-row result says otherwise. What the toolbar's "N rejected" filter shows.
+ * Aliases (Owner 2026-10-05) — the read that answers for a row. With every listing shown, the sheet's own read covers the
+ * main listing and each alias is read on its own (`usePublicationStatus().aliasReads`): an alias's row takes its alias's read,
+ * every other row the sheet's. A listing nobody read falls back to the sheet's read, whose cell then says "Other listing".
  */
-export function isRejectedRow(row: PublishRowLike, status: StudioPublicationStatus | null): boolean {
+export function publishReadFor(row: Pick<PublishRowLike, 'aliasId'>, read: PublishRead, byAlias: ReadonlyMap<string, PublishRead>): PublishRead {
+  const alias = row.aliasId ?? ''
+  return (alias && byAlias.get(alias)) || read
+}
+
+/** One status for every row, or each row's own (`publishReadFor`). */
+export type PublishStatusSource = StudioPublicationStatus | null | ((row: PublishRowLike) => StudioPublicationStatus | null)
+const statusOf = (source: PublishStatusSource, row: PublishRowLike) => (typeof source === 'function' ? source(row) : source)
+
+/**
+ * A row the channel rejected in the destination's LATEST publish: its own result failed, or the whole publication
+ * failed and no per-row result says otherwise. What the toolbar's "N rejected" filter shows. With every listing shown,
+ * each row is judged by its own listing's read.
+ */
+export function isRejectedRow(row: PublishRowLike, source: PublishStatusSource): boolean {
+  const status = statusOf(source, row)
   const latest = status?.latest
   if (!status || !latest || (latest.status !== 'FAILED' && latest.status !== 'PARTIAL')) return false
   if ((row.aliasId ?? '') !== status.destination.aliasKey) return false
@@ -215,8 +231,8 @@ export function isRejectedRow(row: PublishRowLike, status: StudioPublicationStat
 }
 
 /** How many rows of the latest publish the channel rejected — what the filter will show. */
-export function rejectedRowCount(rows: readonly PublishRowLike[], status: StudioPublicationStatus | null): number {
-  return rows.reduce((n, row) => n + (isRejectedRow(row, status) ? 1 : 0), 0)
+export function rejectedRowCount(rows: readonly PublishRowLike[], source: PublishStatusSource): number {
+  return rows.reduce((n, row) => n + (isRejectedRow(row, source) ? 1 : 0), 0)
 }
 
 /** The cell's text for copy, export and search: "Verified · 1 Oct". */

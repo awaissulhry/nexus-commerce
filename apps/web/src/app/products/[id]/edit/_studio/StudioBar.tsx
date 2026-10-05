@@ -1,10 +1,12 @@
 'use client'
 
 import { connectionScopePolicy } from './presence/connection'
-import { useStudioDiscovery } from './contracts'
+import { useStudioDiscovery, useStudioProduct } from './contracts'
 import { useMemo } from 'react'
-import { Button } from '@/design-system/primitives'
+import { AliasMark, Button } from '@/design-system/primitives'
 import { Listbox, MultiSelect } from '@/design-system/components'
+import { listingParamOf, listingPickerOptions, listingPickerValue, showListingPicker } from './listingScope'
+import { useListingChoices } from './useListingChoices'
 import { ScopeBar } from '@/design-system/patterns'
 import { languageSummary, orderedLocales } from './languageControl'
 import { participationSuffix, scopeItems } from './scopeItems'
@@ -18,6 +20,11 @@ export function StudioBar() {
   const readiness = useScopeReadiness()
   const discovery = useStudioDiscovery()
   const save = useStudioSave()
+  const product = useStudioProduct()
+  /* Aliases (Owner 2026-10-05: "I do not want to do anything in the address bar") — the listings of this channel ·
+     market · account, from one read; the picker below chooses one of them, or all. */
+  const listingChoices = useListingChoices(product.id, product.parentId ?? product.id,
+    { channel: scope === MASTER_SCOPE ? null : scope, marketplace: market, accountId }).choices
   // A-55 — the items and their readiness words live in `scopeItems.ts` (pure, tested); "Not set up" only when proven.
   // The open channel's primary destination has no listing on this market (an alias destination is a choice, not a fact).
   const unlisted = destination.status === 'ready' && !destination.data.listing && !destination.data.aliasKey
@@ -45,7 +52,16 @@ export function StudioBar() {
       <Listbox size="sm" width="auto" options={options.markets.filter(m => m.channels.includes(scope)).map(m => { const only = languagesOf(m.code); return { value: m.code, label: m.label + (only.length === 1 ? ` · ${languageLabel(only[0])}` : '') + participationSuffix(marketplaces.find(p => p.channel === scope && p.code === m.code)) } })}
         value={market ?? undefined} onChange={setMarket} ariaLabel="Market" placeholder="Market" />
 
-      {listingId && <Button size="sm" variant="ghost" onClick={() => setListing()} title="Clear this listing selection and show all listings in the selected account and market">{destination.status === 'ready' && destination.data.aliasKey ? 'Listing customization' : 'Selected listing'} · Clear</Button>}
+      {/* The listing picker: All listings · ★ Main listing · ① <alias> · ② <alias>… — the sheet's own marks and names.
+          "All listings" is the way back (it clears the choice). Without a read of the listings, a chosen listing keeps
+          its Clear button. */}
+      {listingChoices && showListingPicker(listingChoices, listingId)
+        ? <Listbox size="sm" width="auto" ariaLabel="Listing" placeholder="Listing"
+            value={listingPickerValue(listingId, destination.status === 'ready' && listingId ? destination.data.aliasKey : undefined, listingChoices)}
+            options={listingPickerOptions(listingChoices).map(option => ({ value: option.value, label: option.label, disabled: option.disabled, title: option.title,
+              leading: option.position === null ? undefined : <AliasMark position={option.position} /> }))}
+            onChange={value => setListing(listingParamOf(value, listingChoices))} />
+        : listingId && <Button size="sm" variant="ghost" onClick={() => setListing()} title="Clear this listing selection and show all listings in the selected account and market">{destination.status === 'ready' && destination.data.aliasKey ? 'Listing customization' : 'Selected listing'} · Clear</Button>}
       </>}
       {/* TOOLBAR REBUILD (Owner, 2026-09-27) — THE language control, and the only one: the sheet's "Languages" chip
           is gone. Always a multi-choice that never drops below one language. One ticked is the ordinary sheet; two or
@@ -61,7 +77,7 @@ export function StudioBar() {
           else setLocales(ordered)
         }} />}
     </>
-  ), [scope, accounts, accountId, setAccount, options, marketplaces, market, setMarket, listingId, destination, setListing, primaryLanguage, locales, locale, setLanguages, setLocales, setLocale]) // everything the controls (and `languagesOf`, `available`, `languageOptions`) read
+  ), [scope, accounts, accountId, setAccount, options, marketplaces, market, setMarket, listingId, destination, setListing, listingChoices, primaryLanguage, locales, locale, setLanguages, setLocales, setLocale]) // everything the controls (and `languagesOf`, `available`, `languageOptions`) read
   return <ScopeBar variant="menu" className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={right} />
 }
 

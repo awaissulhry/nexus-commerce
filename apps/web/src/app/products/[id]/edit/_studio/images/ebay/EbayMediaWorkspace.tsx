@@ -11,6 +11,7 @@ import { GridDensityProvider } from '@/design-system/lib/density'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Presentation/usePresentationNavigationGuard'
 import { useSaveReporter } from '../../contracts'
+import { useListingParamForRecord } from '../../useListingChoices'
 import { ListingPhotoPreview } from './ListingPhotoPreview'
 import { MediaReview } from './MediaReview'
 import { dimensions, SourceLibrary } from './SourceLibrary'
@@ -21,6 +22,8 @@ import styles from './media.module.css'
 const LISTING: EbayMediaGallery = { axis: null, value: null, assetIds: [] }
 
 export function EbayMediaWorkspace({ path, productId, onListingChange, accountLabel }: { accountLabel: string; path: string; productId: string; onListingChange: (id: string) => void }) {
+  // One id kind (aliases, Owner 2026-10-05): a listing chosen here is written as the studio bar's picker writes it.
+  const listingParam = useListingParamForRecord('EBAY')
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [draft, setDraft] = useState<EbayMediaDraft | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -231,7 +234,7 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
         <Button variant="tonal" disabled={blocked || (!dirty && !workspace.destination.inherited) || requiresReload || !!check.problems.length} onClick={() => { void save() }}>{!compactLayout && <Save size={16} aria-hidden />}Save draft</Button>
       </div>} />
       <section className={styles.destination} aria-label="Listing destination">
-        <Field label="Listing alias"><Select value={workspace.destination.listingId ?? ''} disabled={busy || uploading || !workspace.destination.listings.length} onChange={event => onListingChange(event.target.value)}>
+        <Field label="Listing alias"><Select value={workspace.destination.listingId ?? ''} disabled={busy || uploading || !workspace.destination.listings.length} onChange={event => onListingChange(listingParam(event.target.value))}>
           {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
           {workspace.destination.listings.map(listing => <option key={listing.id} value={listing.id}>{listing.label}{listing.externalListingId ? ` · ${listing.externalListingId}` : ' · No live ID'}{workspace.destination.listings.some(other => other.id !== listing.id && other.label === listing.label && other.externalListingId === listing.externalListingId) ? ` · ${listing.id}` : ''}</option>)}
         </Select></Field>

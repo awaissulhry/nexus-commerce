@@ -234,6 +234,12 @@ export interface PublishActionCell {
   marketplace: string
   accountId: string
   aliasKey: string
+  /**
+   * Aliases in the Publish window (Owner 2026-10-05): the alias's name and place, as the sheet's band shows them
+   * (`AliasMark`: ★ main listing, ①②③ the others). Null on the main listing. Only ACTIVE aliases are returned.
+   */
+  aliasLabel?: string | null
+  aliasPosition?: number | null
   /** The live selling state Nexus holds (no channel call). */
   state: SellingState
   stateReason: string | null

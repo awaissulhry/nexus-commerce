@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { StudioPublishScope } from '@nexus/shared/studio-publication'
+import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { PublishDialog, type PublicationInitialSelection, type PublicationSaveBridge } from '@/app/products/_publication/dialog/PublishDialog'
-import { listedDestinationKeys, type ListedDestinations } from '@/app/products/_publication/dialog/destinations'
+import { canonicalScope, listedAliases, listedDestinationKeys, sheetDestinationScope, type ListedDestinations } from '@/app/products/_publication/dialog/destinations'
 import { publicationDestinations } from '@/app/products/_publication/dialog/model'
 import { usePublicationSave, useStudioDiscoveryFailure, useStudioProduct, useStudioScope } from './contracts'
 import { readPublishActions } from './sheet/publishActionsApi'
@@ -16,6 +17,12 @@ import { readPublishActions } from './sheet/publishActionsApi'
  * with no filter: every listing of the family, no channel call), so the window starts with every listed market of the
  * sheet's channel and account — from the Shared tab, the first channel where the family is listed. A retry ("Publish
  * failed products again…") or an Undo review opens on its own destination only, as before.
+ *
+ * Aliases (Owner 2026-10-05: "I should be able to publish the aliases as well … I do not want to do anything in the
+ * address bar"): the same read names the family's listing aliases, so every window — the sheet's, a retry's, an Undo
+ * review's — offers each alias after its market's main listing, and a listed alias starts ticked like a listed main
+ * listing. The sheet's own listing is named by its ALIAS id (a `listing=` ChannelListing id in the address never makes a
+ * second destination), and never replaces its market's main listing.
  */
 export function StudioPublishDialog({ onClose, initialDestination, initialSelection = null }: {
   onClose(): void
@@ -27,11 +34,20 @@ export function StudioPublishDialog({ onClose, initialDestination, initialSelect
   const { state, preparePublication, publicationBlocker } = usePublicationSave()
   const discoveryFailed = useStudioDiscoveryFailure()
   const canChangeEditor = studio.canChangeEditor
-  const current = useMemo<StudioPublishScope | undefined>(() => studio.scope !== 'master' && studio.market && studio.accountId
-    ? { channel: studio.scope, marketplace: studio.market, accountId: studio.accountId, ...(studio.listingId ? { listingId: studio.listingId } : {}) }
-    : undefined, [studio.scope, studio.market, studio.accountId, studio.listingId])
-  const initial = initialDestination ?? current
-  const destinations = useMemo(() => publicationDestinations(studio.marketplaces, initial), [studio.marketplaces, initial])
+  const familyId = product.parentId ?? product.id
+  const read = useFamilyListings(product.id)
+  const aliasKey = studio.destination.status === 'ready' ? studio.destination.data.aliasKey : undefined
+  const current = useMemo<StudioPublishScope | undefined>(() => sheetDestinationScope(studio.scope, studio.market, studio.accountId, studio.listingId, aliasKey, read.cells),
+    [studio.scope, studio.market, studio.accountId, studio.listingId, aliasKey, read.cells])
+  // A retry's listing may be named by its ChannelListing id: it waits for the read, then becomes its alias id.
+  const holding = !!initialDestination?.listingId && read.loading
+  const initial = useMemo(() => {
+    if (holding) return undefined
+    const asked = initialDestination ?? current
+    return asked && read.cells ? canonicalScope(asked, read.cells) : asked
+  }, [initialDestination, current, holding, read.cells])
+  const aliases = useMemo(() => (read.cells ? listedAliases(read.cells, familyId) : []), [read.cells, familyId])
+  const destinations = useMemo(() => publicationDestinations(studio.marketplaces, initial, aliases), [studio.marketplaces, initial, aliases])
   const initialDestinations = useMemo(() => (initial ? [initial] : []), [initial])
   const save = useMemo<PublicationSaveBridge>(() => ({
     state,
@@ -39,21 +55,31 @@ export function StudioPublishDialog({ onClose, initialDestination, initialSelect
     blocker: () => publicationBlocker(canChangeEditor),
   }), [state, preparePublication, publicationBlocker, canChangeEditor])
   const productIds = useMemo(() => [product.id], [product.id])
-  const listed = useListedDestinations(product.id, product.parentId ?? product.id, !initialDestination && !initialSelection)
+  const wanted = !initialDestination && !initialSelection
+  const listed = useMemo<ListedDestinations | null>(() => {
+    // The retry's own destination is still being read: the window says it is finding it.
+    if (holding) return { keys: new Set(), loading: true }
+    if (!wanted) return null
+    if (read.loading) return { keys: new Set(), loading: true }
+    if (!read.cells) return { keys: new Set(), loading: false, failed: true }
+    return { keys: listedDestinationKeys(read.cells, familyId), loading: false, aliases }
+  }, [holding, wanted, read.loading, read.cells, familyId, aliases])
   return <PublishDialog productIds={productIds} productLabel={product.sku} destinations={destinations} initialDestinations={initialDestinations}
     initialSelection={initialSelection} save={save} discoveryFailed={discoveryFailed} listed={listed} onClose={onClose} />
 }
 
-/** Where the family is listed, read once when the window opens; null when the window opens on one destination only. */
-function useListedDestinations(productId: string, familyId: string, wanted: boolean): ListedDestinations | null {
-  const [listed, setListed] = useState<ListedDestinations | null>(() => (wanted ? { keys: new Set(), loading: true } : null))
+/**
+ * Every listing of the family (the Status and Action read with no filter, no channel call), read once when the window
+ * opens: where the family is listed, and its listing aliases with their names and places. Null cells when it failed.
+ */
+function useFamilyListings(productId: string): { cells: PublishActionCell[] | null; loading: boolean } {
+  const [read, setRead] = useState<{ productId: string; cells: PublishActionCell[] | null } | null>(null)
   useEffect(() => {
-    if (!wanted) return
     const controller = new AbortController()
     readPublishActions(productId, {}, controller.signal)
-      .then(read => { if (!controller.signal.aborted) setListed({ keys: listedDestinationKeys(read.rows, familyId), loading: false }) })
-      .catch(() => { if (!controller.signal.aborted) setListed({ keys: new Set(), loading: false, failed: true }) })
+      .then(result => { if (!controller.signal.aborted) setRead({ productId, cells: result.rows }) })
+      .catch(() => { if (!controller.signal.aborted) setRead({ productId, cells: null }) })
     return () => controller.abort()
-  }, [productId, familyId, wanted])
-  return listed
+  }, [productId])
+  return read?.productId === productId ? { cells: read.cells, loading: false } : { cells: null, loading: true }
 }

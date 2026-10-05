@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Banner, Card, EmptyState, Field, Listbox, ProgressBar } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { AliasMark, Button } from '@/design-system/primitives'
 import { useSaveReporter, useStudioProduct, useStudioScope } from './contracts'
 import { useChannelSheet, commitChannelRow } from './sheet/channel/useChannelSheet'
 import { withRowIdentity } from './sheet/channel/rows'
@@ -20,6 +20,7 @@ import { PublicationReview } from '@/app/products/ebay-flat-file/Presentation/Pu
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { presentationListing } from '@/app/products/ebay-flat-file/Presentation/listing-selection'
+import { aliasMarkText, aliasName, listingSelection } from './listingScope'
 
 /** Product presentation consumes the same cells, write routing and version check as the sheet. */
 export function PresentationTab() { return <PresentationPage mode="description" /> }
@@ -62,10 +63,14 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
   const row = presentationListing(rows, sheet.data?.family.id, selectedListing)
   const aliasKey = row?.aliasId ?? ''
   const destinationAccount = sheet.data?.scope.connectionId ?? accountId
+  /* One id kind (aliases, Owner 2026-10-05): an alias is chosen by its ALIAS ID, as the studio bar's listing picker and
+     the sheet's bands choose it; the main listing by its own record id (`listingSelection`). An old link that carries a
+     listing record id still resolves (`presentationListing`). */
   const selectListing = (alias: string) => {
     if (busy || editorPending || orderPending || publicationPending) return
     const target = presentationListing(rows, sheet.data?.family.id, alias || null)
-    if (target?.listing) setListing(target.listing.id)
+    const next = target?.listing ? listingSelection(target.aliasId, target.listing.id) : undefined
+    if (next) setListing(next)
   }
   const cell = row?.values.descriptionThemeId
   const selection = cell?.inherited ? '__inherit' : typeof cell?.value === 'string' && cell.value ? cell.value : '__inherit'
@@ -128,8 +133,10 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
     {(error || sheet.error) && <Banner tone="danger" action={<Button disabled={pending} onClick={() => { setError(null); setRefresh(n => n + 1); sheet.reload() }}>Try again</Button>}>{error || sheet.error}</Banner>}
     {sheet.data && <Card padded>
       <div className={styles.destination}>
-        <Field label="Listing alias"><Listbox ariaLabel="Presentation listing" value={row ? aliasKey : undefined} disabled={pending || sheet.loading} onChange={selectListing}
-          options={sheet.data.aliases.map(a => ({ value: a.id ?? '', label: a.label || 'Primary listing' }))} /></Field>
+        {/* The studio's own names and marks (aliases, Owner 2026-10-05): ★ Main listing · ① ALT1 · ② ALT2… */}
+        <Field label="Listing"><Listbox ariaLabel="Presentation listing" value={row ? aliasKey : undefined} disabled={pending || sheet.loading} onChange={selectListing}
+          options={sheet.data.aliases.map(a => ({ value: a.id ?? '', label: aliasName(a.id ? a.position : 0, a.id ? a.label : null),
+            leading: <AliasMark position={a.id ? a.position : 0} /> }))} /></Field>
         <dl className={styles.facts}>
           <div><dt>Account</dt><dd>{accountLabel}</dd></div>
           <div><dt>Market</dt><dd>{market}</dd></div>
@@ -174,7 +181,7 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
       </div>
       <Card header={<span role="heading" aria-level={2} className={styles.sectionTitle}>Buyer preview</span>} headerAction={<Button disabled={busy || previewing} onClick={() => setRefresh(n => n + 1)}>Refresh</Button>}>
         <div className={styles.stack}>
-          <p>{selectedAlias?.label == null || selectedAlias.label === '' ? 'Listing alias label not reported' : selectedAlias.label} · {accountLabel} · {market}</p>
+          <p>{selectedAlias ? aliasMarkText(selectedAlias.id ? selectedAlias.position : 0, selectedAlias.id ? selectedAlias.label : null) : 'Listing not reported'} · {accountLabel} · {market}</p>
           {previewing && <ProgressBar indeterminate ariaLabel="Rendering description preview" />}
           {preview && <>
             <p role="status">{preview.stale ? preview.reasons.join(' · ') : 'Matches the recorded description publication.'}</p>

@@ -8,9 +8,10 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { tidyServerMessage } from './rows'
 
 import {
-  ACTION_NOT_ON_CHANNEL, ACTION_ROLE_CANNOT_DELETE, CHANNEL_VERB_PERMISSION, actionMenuEntries, broadcastToListings, channelActions,
-  openRecordAction, permissionRefusal, type ChannelActionDeps,
+  ACTION_NOT_ON_CHANNEL, ACTION_ROLE_CANNOT_DELETE, CHANNEL_VERB_PERMISSION, LISTING_NOT_RECORDED, PUBLISH_THIS_LISTING, SHOW_ALL_LISTINGS, SHOW_ONLY_LISTING,
+  actionMenuEntries, broadcastToListings, channelActions, listingBandActions, openRecordAction, permissionRefusal, type ChannelActionDeps, type ListingBandDeps,
 } from './channelActions'
+import { actionsFor, ROW } from '@/design-system/grid/actions/registry'
 import type { ChannelSheetRow } from './types'
 
 describe('permission refusals name the RIGHT permission (ruling #123)', () => {
@@ -207,5 +208,74 @@ describe('build shape v2 — "Mark paused / active" is gone; Action ▾ counts w
   it('Ended appears only when a ticked row\'s channel can end a listing (never on Amazon)', () => {
     const amazon = cell({ statusOptions: (['active', 'inactive'] as const).map(target => ({ target, offered: true, action: target === 'inactive' ? 'pause' as const : null, reason: null, warning: null, checkedAtSend: null })) })
     expect(actionMenuEntries([{ sku: 'A', cell: amazon }], { publish: true, delete: true }).some(e => e.id === 'status:ended')).toBe(false)
+  })
+})
+
+describe('a listing band\'s own verbs (aliases, Owner 2026-10-05)', () => {
+  const band = (aliasId: string | null) => ({ rowId: `${aliasId ?? 'primary'}:fam-1`, rowKind: 'parent', aliasId, id: 'fam-1' }) as unknown as ChannelSheetRow
+  const variant = { rowId: 'primary:child-1', rowKind: 'variant', aliasId: null, id: 'child-1' } as unknown as ChannelSheetRow
+  function setup(over: Partial<ListingBandDeps> = {}) {
+    const calls: { listing: Array<string | undefined>; publish: Array<string | null> } = { listing: [], publish: [] }
+    const deps: ListingBandDeps = {
+      listingCount: 3, shownAliasKey: null, publishRefusal: null,
+      selectionOf: (aliasId) => aliasId ?? 'cl-main',
+      setListing: (listing) => { calls.listing.push(listing) },
+      publishListing: (aliasId) => { calls.publish.push(aliasId) },
+      ...over,
+    }
+    return { calls, actions: listingBandActions(deps) }
+  }
+  const offered = (actions: ReturnType<typeof listingBandActions>, row: ChannelSheetRow) =>
+    actionsFor(actions, ROW, [row]).map(({ action, availability }) => [action.label, availability.kind])
+
+  it('a band offers "Show only this listing" and "Publish this listing…" — a variation row offers neither', () => {
+    const { actions } = setup()
+    expect(offered(actions, band('alias-1'))).toEqual([[SHOW_ONLY_LISTING, 'available'], [PUBLISH_THIS_LISTING, 'available']])
+    expect(offered(actions, band(null))).toEqual([[SHOW_ONLY_LISTING, 'available'], [PUBLISH_THIS_LISTING, 'available']])
+    expect(offered(actions, variant)).toEqual([])
+  })
+
+  it('one lone listing needs no band verbs', () => {
+    expect(offered(setup({ listingCount: 1 }).actions, band(null))).toEqual([])
+  })
+
+  it('with one listing shown alone, the band offers the way back instead', () => {
+    const { actions, calls } = setup({ shownAliasKey: 'alias-1', listingCount: 3 })
+    expect(offered(actions, band('alias-1'))).toEqual([[SHOW_ALL_LISTINGS, 'available'], [PUBLISH_THIS_LISTING, 'available']])
+    void actions.find(a => a.id === 'show-all-listings')!.run([band('alias-1')])
+    expect(calls.listing).toEqual([undefined])
+  })
+
+  it('shows an alias by its alias id and the main listing by its own record', async () => {
+    const { actions, calls } = setup()
+    const show = actions.find(a => a.id === 'show-only-listing')!
+    await show.run([band('alias-2')])
+    await show.run([band(null)])
+    expect(calls.listing).toEqual(['alias-2', 'cl-main'])
+  })
+
+  it('a listing with no record here cannot be shown alone, and says why', () => {
+    const { actions } = setup({ selectionOf: () => undefined })
+    expect(actions.find(a => a.id === 'show-only-listing')!.available([band('alias-1')])).toEqual({ kind: 'disabled', reason: LISTING_NOT_RECORDED })
+  })
+
+  it('publishes only this listing: an alias by its alias id, the main listing by none', async () => {
+    const { actions, calls } = setup()
+    const publish = actions.find(a => a.id === 'publish-listing')!
+    await publish.run([band('alias-1')])
+    await publish.run([band(null)])
+    expect(calls.publish).toEqual(['alias-1', null])
+  })
+
+  it('Publish is held with its reason when the window cannot open here', async () => {
+    const { actions, calls } = setup({ publishRefusal: 'Choose an account for this market first.' })
+    const publish = actions.find(a => a.id === 'publish-listing')!
+    expect(publish.available([band('alias-1')])).toEqual({ kind: 'disabled', reason: 'Choose an account for this market first.' })
+    expect((await publish.run([band('alias-1')])).ok).toBe(false)
+    expect(calls.publish).toEqual([])
+  })
+
+  it('every band verb stays on this page: local reach, no preflight', () => {
+    for (const action of setup().actions) expect([action.reach, action.preflight]).toEqual(['local', undefined])
   })
 })

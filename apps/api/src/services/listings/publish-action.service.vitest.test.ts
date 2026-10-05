@@ -392,7 +392,9 @@ describe('New listings: control before the first publish', () => {
 
   it('an alias destination never creates a listing; the Shared scope never starts one and says how many markets it left out', () => scoped(async () => {
     const f = await family('NL-ALIAS', ['S', 'M'])
-    const aliasCells = await readPublishActions(f.root, at('AMAZON', 'DE', ids.amazon, 'alias-1'), { newRows: true })
+    const alias = (await prisma.productListingAlias.create({ data: { productId: f.root, channel: 'AMAZON', marketplace: 'DE', channelConnectionId: ids.amazon, label: 'Second', position: 1 } as never })).id
+    const aliasCells = await readPublishActions(f.root, at('AMAZON', 'DE', ids.amazon, alias), { newRows: true })
+    expect(aliasCells.map(c => [c.aliasLabel, c.aliasPosition])).toEqual([['Second', 1], ['Second', 1], ['Second', 1]])
     expect(aliasCells.every(c => c.statusOptions.every(o => !o.offered && o.reason === NEW_LISTING_ALIAS))).toBe(true)
     const aliasWrite = await writePublishActions(f.root, { listingIds: [aliasCells[0].listingId], change: { column: 'status', target: 'active' } }, publisher())
     expect(aliasWrite.refused).toEqual([expect.objectContaining({ reason: NEW_LISTING_ALIAS })])
@@ -422,6 +424,35 @@ describe('New listings: control before the first publish', () => {
     const calls = ebayOutOfStock.calls
     await writePublishActions(f.root, { listingIds: [id], change: { column: 'status', target: 'active' } }, publisher())
     expect(ebayOutOfStock.calls).toBe(calls)
+  }))
+})
+
+/** Aliases in the Publish window (Owner 2026-10-05): an alias row is read with its name and place; an archived alias is not read. */
+describe('aliases: name and place, archived aliases never read', () => {
+  it('each alias row carries its name and place (null on the main listing); the rows of an archived alias are not read or written', () => scoped(async () => {
+    const f = await family('PA-ALIAS', ['S'])
+    const alias = async (label: string, position: number, status = 'ACTIVE') => (await prisma.productListingAlias.create({ data: {
+      productId: f.root, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, label, position, status } as never })).id
+    const alt1 = await alias('ALT1', 1)
+    const old = await alias('OLD', 2, 'ARCHIVED')
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '901' })
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '901' })
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { aliasKey: alt1, aliasId: alt1, externalListingId: '902' })
+    const altS = await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { aliasKey: alt1, aliasId: alt1, externalListingId: '902' })
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { aliasKey: old, aliasId: old, externalListingId: '903' })
+    const oldS = await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { aliasKey: old, aliasId: old, externalListingId: '903' })
+    const cells = await readPublishActions(f.root)
+    expect(cells).toHaveLength(4)
+    expect(cells.filter(c => c.aliasKey === '').map(c => [c.sku, c.aliasLabel, c.aliasPosition])).toEqual([['PA-ALIAS', null, null], ['PA-ALIAS-S', null, null]])
+    expect(cells.filter(c => c.aliasKey === alt1).map(c => [c.sku, c.aliasLabel, c.aliasPosition]).sort()).toEqual([['PA-ALIAS', 'ALT1', 1], ['PA-ALIAS-S', 'ALT1', 1]])
+    expect(cells.some(c => c.aliasKey === old)).toBe(false)
+    // One destination, by its alias: the same name and place.
+    expect((await readPublishActions(f.root, { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: alt1 })).map(c => c.aliasLabel)).toEqual(['ALT1', 'ALT1'])
+    // The archived alias, named exactly: nothing (no new rows either); a write to its row is refused, the active alias's goes.
+    expect(await readPublishActions(f.root, { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: old }, { newRows: true })).toEqual([])
+    await expect(writePublishActions(f.root, { listingIds: [oldS], change: { column: 'status', target: 'inactive' } }, publisher())).rejects.toMatchObject({ statusCode: 400 })
+    expect(await stored(oldS)).toMatchObject({ sellingTarget: null })
+    expect((await writePublishActions(f.root, { listingIds: [altS], change: { column: 'status', target: 'inactive' } }, publisher())).applied).toEqual([altS])
   }))
 })
 

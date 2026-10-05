@@ -119,8 +119,14 @@ export interface PublishPlanDestination {
   scope: StudioPublishScope
   /** The resolved destination (account and listing alias) the lifecycle rows run on. */
   destination: ListingActionDestination
-  /** "Amazon · IT", "eBay · DE", "Shopify". */
+  /** "Amazon · IT", "eBay · DE", "Shopify"; an alias adds its name: "eBay · IT · Racing edition". */
   label: string
+  /**
+   * Aliases in the Publish window (Owner 2026-10-05): the alias's name and place when this destination is an alias
+   * (`destination.aliasKey` is its id), null on the main listing — set even when `review` is null.
+   */
+  aliasLabel?: string | null
+  aliasPosition?: number | null
   /**
    * The content review (Partial and Full update rows): exactly what `POST …/studio-publication/preview` returns, made
    * with this destination's Full update rows. Its held rows' changes cannot be ticked (`reason` says why) and its

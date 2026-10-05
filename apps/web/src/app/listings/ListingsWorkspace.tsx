@@ -4856,8 +4856,9 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
                       <div className="text-md text-slate-900 dark:text-slate-100 truncate">{d.product.name}</div>
                       <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{d.product.sku} · {d.marketplace}</div>
                     </div>
+                    {/* An alias draft opens on its account and alias (Owner 2026-10-05), not on the main listing. */}
                     <Link
-                      href={productStudioPath(d.productId, { channel: d.channel, market: d.marketplace })}
+                      href={productStudioPath(d.productId, { channel: d.channel, market: d.marketplace, account: d.channelConnectionId, listing: d.aliasKey || null })}
                       className="h-7 px-3 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
                     >Publish →</Link>
                   </li>

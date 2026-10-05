@@ -60,9 +60,23 @@ export interface PublishPlanActor {
 }
 
 const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy', WOOCOMMERCE: 'WooCommerce' }
-/** "Amazon · IT", "eBay · DE", "Shopify" (as the listing-action engine names a destination). */
-export const planDestinationLabel = (d: Pick<ListingActionDestination, 'channel' | 'marketplace'>) =>
-  d.channel === 'SHOPIFY' || d.marketplace === 'GLOBAL' ? CHANNEL_LABEL[d.channel] ?? d.channel : `${CHANNEL_LABEL[d.channel] ?? d.channel} · ${d.marketplace}`
+/** "Amazon · IT", "eBay · DE", "Shopify" (as the listing-action engine names a destination); an alias adds its name
+ * ("eBay · IT · Racing edition", Owner 2026-10-05). */
+export const planDestinationLabel = (d: Pick<ListingActionDestination, 'channel' | 'marketplace'>, aliasLabel?: string | null) => {
+  const place = d.channel === 'SHOPIFY' || d.marketplace === 'GLOBAL' ? CHANNEL_LABEL[d.channel] ?? d.channel : `${CHANNEL_LABEL[d.channel] ?? d.channel} · ${d.marketplace}`
+  return aliasLabel ? `${place} · ${aliasLabel}` : place
+}
+
+/** Aliases (Owner 2026-10-05): the name and place of each alias id among `keys` ('' and unknown ids are skipped). */
+async function aliasMarks(keys: ReadonlyArray<string | null | undefined>): Promise<Map<string, { label: string; position: number }>> {
+  const ids = [...new Set(keys.filter((key): key is string => !!key))]
+  if (!ids.length) return new Map()
+  const rows = await prisma.productListingAlias.findMany({ where: { id: { in: ids } }, select: { id: true, label: true, position: true } })
+  return new Map(rows.map(row => [row.id, { label: row.label, position: row.position }]))
+}
+
+/** One resolved destination: channel, market, account and listing ('' = the main listing, else the alias id). */
+const resolvedKey = (d: ListingActionDestination) => JSON.stringify([d.channel, d.marketplace, d.accountId, d.aliasKey])
 
 const MAX_ROWS = 2000
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
@@ -338,16 +352,34 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
   const { familyId, familySku } = family
   const canDelete = actor.can('products.delete')
   const cells = await readPublishActions(productId)
+  // Aliases (Owner 2026-10-05): every destination is resolved first, and one listing is one destination — an alias named
+  // by its alias id and by one of its listing ids is the same destination, refused as a repeat like any other.
+  const resolved: Array<ListingActionDestination | { error: string }> = []
+  for (const scope of scopes) {
+    try { resolved.push(await resolveDestination(productId, scope)) } catch (error) { resolved.push({ error: errorText(error) }) }
+  }
+  const seenResolved = new Set<string>()
+  for (const entry of resolved) {
+    if ('error' in entry) continue
+    if (seenResolved.has(resolvedKey(entry))) throw new PublishPlanError('A destination appears twice in this request.', 400, 'invalid_request')
+    seenResolved.add(resolvedKey(entry))
+  }
+  const marks = await aliasMarks([...resolved.map(entry => 'error' in entry ? null : entry.aliasKey), ...scopes.map(scope => scope.listingId)])
+  const named = (aliasKey: string | null | undefined) => {
+    const mark = aliasKey ? marks.get(aliasKey) : undefined
+    return { aliasLabel: mark?.label ?? null, aliasPosition: mark?.position ?? null }
+  }
 
   // Destinations of one channel account one after another (its read rate); two accounts side by side.
-  const reviewOne = async (scope: StudioPublishScope): Promise<PublishPlanDestination> => {
+  const reviewOne = async (scope: StudioPublishScope, entry: ListingActionDestination | { error: string }): Promise<PublishPlanDestination> => {
     const empty = { review: null, fullProductIds: [], contentHeld: [], lifecycle: [], outgrown: [] }
-    let destination: ListingActionDestination
-    try { destination = await resolveDestination(productId, scope) }
-    catch (error) {
+    if ('error' in entry) {
       const fallback = { channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: '' }
-      return { scope, destination: fallback, label: planDestinationLabel(fallback), ...empty, error: errorText(error) }
+      const alias = named(scope.listingId)
+      return { scope, destination: fallback, label: planDestinationLabel(fallback, alias.aliasLabel), ...alias, ...empty, error: entry.error }
     }
+    const destination = entry
+    const alias = named(destination.aliasKey)
     const here = cells.filter(cell => sameDestination(cell, destination))
     const waiting = waitingValuesOf(here)
     const lifecycle = await lifecycleRowsOf(family, destination, waiting.values, actor, plan, now.getTime())
@@ -355,7 +387,7 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
     const contentHeld = heldOnDestination(destination.channel, familyId, here, canDelete)
     const heldIds = new Set(contentHeld.map(row => row.productId))
     const fullProductIds = waiting.fullProductIds.filter(id => !heldIds.has(id))
-    const base = { scope, destination, label: planDestinationLabel(destination), fullProductIds, contentHeld, lifecycle, outgrown: waiting.outgrown }
+    const base = { scope, destination, label: planDestinationLabel(destination, alias.aliasLabel), ...alias, fullProductIds, contentHeld, lifecycle, outgrown: waiting.outgrown }
     // Every row this destination lists is held: no content goes out here, so no review is made (no channel read).
     if (products.length && contentHeld.length === products.length) return { ...base, review: null, error: null }
     try {
@@ -368,7 +400,7 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
   const groups = new Map<string, number[]>()
   scopes.forEach((scope, at) => { const key = `${scope.channel}\u0000${scope.accountId}`; groups.set(key, [...(groups.get(key) ?? []), at]) })
   const destinations = new Array<PublishPlanDestination>(scopes.length)
-  await inOrder([...groups.values()], 2, async indexes => { for (const at of indexes) destinations[at] = await reviewOne(scopes[at]) })
+  await inOrder([...groups.values()], 2, async indexes => { for (const at of indexes) destinations[at] = await reviewOne(scopes[at], resolved[at]) })
 
   const counts = publishPlanCounts({ destinations })
   const confirmRows = destinations.flatMap(d => d.lifecycle).filter(row => row.needsTypedConfirm && !row.refused).length
@@ -450,7 +482,7 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
     const entry = object(raw)
     const scope = publicationScope(entry.scope)
     const destination = await resolveDestination(productId, scope)
-    const key = JSON.stringify([destination.channel, destination.marketplace, destination.accountId, destination.aliasKey])
+    const key = resolvedKey(destination)
     if (seen.has(key)) throw new PublishPlanError('A destination appears twice in this request.', 400, 'invalid_request')
     seen.add(key)
     const reviewId = optionalText(entry.reviewId, 200, 'A review')
@@ -464,6 +496,9 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
       content: reviewId ? { reviewId, ...(selectionToken ? { selectionToken } : {}), ...(entry.confirmOverwrite !== undefined ? { confirmOverwrite: entry.confirmOverwrite } : {}),
         ...(locationId ? { locationId } : {}), ...(confirmDelete ? { confirm: 'DELETE' as const } : {}) } : null })
   }
+  // Aliases (Owner 2026-10-05): each destination is named with its alias, as the review named it.
+  const marks = await aliasMarks(destinations.map(entry => entry.destination.aliasKey))
+  for (const entry of destinations) entry.label = planDestinationLabel(entry.destination, marks.get(entry.destination.aliasKey)?.label)
   const destinationIndex = (cell: PublishActionCell) => destinations.findIndex(d => sameDestination(cell, d.destination))
 
   // Every ticked row must still hold the value the review saw, and still lead to the same action.

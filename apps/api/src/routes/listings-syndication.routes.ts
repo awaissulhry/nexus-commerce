@@ -906,6 +906,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           productId: d.productId,
           channel: d.channel,
           marketplace: d.marketplace,
+          // Aliases (Owner 2026-10-05): the draft's account and listing alias ('' = the main listing), so the Drafts
+          // lens's "Publish →" opens the studio on this exact listing, not the main one.
+          channelConnectionId: d.channelConnectionId,
+          aliasKey: d.aliasKey,
           listingStatus: d.listingStatus,
           price: d.price == null ? null : Number(d.price),
           title: d.title,

@@ -62,9 +62,22 @@ describe('the shared words of one product (sellingSummaryOf)', () => {
     expect(sellingSummaryOf([]).word).toBe('Not listed')
   })
 
-  it('names each market "Amazon · IT" and an extra listing on a market as an alias', () => {
+  it('names each market "Amazon · IT" and an extra listing on a market by its mark and name, as the sheet\'s band does', () => {
     expect(marketLabel(cell())).toBe('Amazon · IT')
+    expect(marketLabel(ebay({ aliasKey: 'alias-alt1', aliasLabel: 'ALT1', aliasPosition: 1 }))).toBe('eBay · IT · ① ALT1')
+    expect(marketLabel(ebay({ aliasKey: 'alias-alt2', aliasLabel: null, aliasPosition: 2 }))).toBe('eBay · IT · ② Listing alias 2')
+    // A server that does not name the alias yet: the label alone, else the old word.
+    expect(marketLabel(cell({ aliasKey: 'b', aliasLabel: 'ALT1' }))).toBe('Amazon · IT · ALT1')
     expect(marketLabel(cell({ aliasKey: 'b' }))).toBe('Amazon · IT · alias')
+    // The main listing carries no mark, whatever the read says about it.
+    expect(marketLabel(cell({ aliasKey: '', aliasLabel: null, aliasPosition: null }))).toBe('Amazon · IT')
+  })
+
+  it('lists a market\'s main listing first, then its aliases in their place order', () => {
+    const map = cellsByProduct([
+      ebay({ aliasKey: 'z-alias', aliasLabel: 'ALT2', aliasPosition: 2 }), ebay({ aliasKey: 'a-alias', aliasLabel: 'ALT1', aliasPosition: 1 }), ebay(),
+    ])
+    expect(map.get('p1')!.map(c => marketLabel(c))).toEqual(['eBay · IT', 'eBay · IT · ① ALT1', 'eBay · IT · ② ALT2'])
   })
 
   it('groups the family\'s listings by product, in a stable market order', () => {

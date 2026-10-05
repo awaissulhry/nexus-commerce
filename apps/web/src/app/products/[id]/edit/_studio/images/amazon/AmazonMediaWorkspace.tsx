@@ -11,6 +11,7 @@ import { GridDensityProvider } from '@/design-system/lib/density'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Presentation/usePresentationNavigationGuard'
 import { useSaveReporter } from '../../contracts'
+import { useListingParamForRecord } from '../../useListingChoices'
 import { SourceLibrary, dimensions } from '../ebay/SourceLibrary'
 import { amazonMediaPath, requestAmazonRun, requestAmazonWorkspace, requestAmazonDestinations } from './transport'
 import { CopyMarketGallery } from './CopyMarketGallery'
@@ -30,6 +31,8 @@ const desiredUrls = (w: Workspace, d: AmazonMediaDraft, id: string) => Object.fr
 }))
 
 export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingChange }: { path: string; productId: string; accountLabel: string; onListingChange(id: string): void }) {
+  // One id kind (aliases, Owner 2026-10-05): a listing chosen here is written as the studio bar's picker writes it.
+  const listingParam = useListingParamForRecord('AMAZON')
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [listingChoices, setListingChoices] = useState<Array<{ id: string; label: string }>>([])
   const [draft, setDraft] = useState<AmazonMediaDraft | null>(null)
@@ -224,7 +227,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
   }
 
   if (!workspace || !draft) return <div className={styles.loading}>{error ? <><EmptyState title="Amazon images unavailable" description={error} action={<Button onClick={() => void reload()}>Try again</Button>} />
-    {listingChoices.length > 0 && <Field label="Choose an Amazon listing"><Select value="" onChange={event => onListingChange(event.target.value)}><option value="">Choose listing</option>{listingChoices.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</Select></Field>}</> : <p role="status">Loading Amazon images…</p>}</div>
+    {listingChoices.length > 0 && <Field label="Choose an Amazon listing"><Select value="" onChange={event => onListingChange(listingParam(event.target.value))}><option value="">Choose listing</option>{listingChoices.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</Select></Field>}</> : <p role="status">Loading Amazon images…</p>}</div>
   const themes = [...new Set(items.flatMap(i => i.theme ? [i.theme] : []))]
   const activeObservation = item && workspace.observations[item.id]
   const activeDesired = item ? desiredUrls(workspace, draft, item.id) : {}
@@ -250,7 +253,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     </header>
     <div className={styles.body}>
       <aside className={styles.navigation} aria-label="Amazon image galleries">
-        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId ?? ''} disabled={locked} onChange={event => onListingChange(event.target.value)}>
+        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId ?? ''} disabled={locked} onChange={event => onListingChange(listingParam(event.target.value))}>
           {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
           {workspace.destination.listings.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select></Field>

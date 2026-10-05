@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems } from './model'
+import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
 import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
@@ -28,11 +28,27 @@ it('requires overwrite confirmation for the exact current review and refuses mis
   expect(publicationOverwriteAcknowledged({ ...review, overwrite: undefined }, 'review-a')).toBe(false)
   expect(publicationOverwriteAcknowledged({ ...review, overwrite: undefined, rows: review.rows.map(r => ({ ...r, existing: false })) }, null)).toBe(true)
 })
-it('keeps a selected alias only in its exact account and marketplace', () => {
+it('keeps a selected listing only in its exact account and marketplace, after its market’s main listing, which it never replaces', () => {
   const current = { channel: 'AMAZON', marketplace: 'IT', accountId: 'two', listingId: 'alias' }
   const options = publicationDestinations([market, { ...market, id: 'de', code: 'DE' }], current)
-  expect(options.map(o => o.scope.listingId)).toEqual([undefined, 'alias', undefined, undefined])
-  expect(new Set(options.map(o => o.key)).size).toBe(4)
+  expect(options.map(o => [o.scope.accountId, o.scope.marketplace, o.scope.listingId])).toEqual([
+    ['one', 'IT', undefined], ['two', 'IT', undefined], ['two', 'IT', 'alias'], ['one', 'DE', undefined], ['two', 'DE', undefined]])
+  expect(new Set(options.map(o => o.key)).size).toBe(5)
+  expect(options.map(optionListingLabel)).toEqual([null, '★ Primary', 'Selected listing', null, null])
+})
+it('offers every alias of a market after its main listing, by position, keyed by the alias id', () => {
+  const aliases = [
+    { channel: 'AMAZON', marketplace: 'IT', accountId: 'two', id: 'a2', label: 'Racing edition', position: 2 },
+    { channel: 'AMAZON', marketplace: 'IT', accountId: 'two', id: 'a1', label: 'Touring edition', position: 1 },
+    { channel: 'AMAZON', marketplace: 'IT', accountId: 'gone', id: 'x', label: 'Other account', position: 1 },
+  ]
+  // The studio's current listing is a known alias: no extra option.
+  const options = publicationDestinations([market], { channel: 'AMAZON', marketplace: 'IT', accountId: 'two', listingId: 'a2' }, aliases)
+  expect(options.map(o => o.scope.listingId ?? null)).toEqual([null, null, 'a1', 'a2'])
+  expect(options.map(o => o.alias ?? null)).toEqual([null, null, { id: 'a1', label: 'Touring edition', position: 1 }, { id: 'a2', label: 'Racing edition', position: 2 }])
+  expect(options.map(o => o.listings)).toEqual([1, 3, 3, 3])
+  expect(options.map(optionListingLabel)).toEqual([null, '★ Primary', '① Touring edition', '② Racing edition'])
+  expect(options[2].key).toBe(publicationScopeKey({ channel: 'AMAZON', marketplace: 'IT', accountId: 'two', listingId: 'a1' }))
 })
 it('excludes disconnected destinations and deduplicates discovery rows', () => {
   expect(publicationDestinations([market, market, { ...market, id: 'de', code: 'DE', connected: false }])).toHaveLength(2)
