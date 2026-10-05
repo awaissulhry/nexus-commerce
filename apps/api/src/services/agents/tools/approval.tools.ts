@@ -23,9 +23,80 @@ const MEANING: Record<string, string> = {
   // did beyond Nexus depends on the tool: executedMeaning says it per tool.
   executed: 'Approved, and it ran.',
   approved: 'Approved. This tool only previews, so nothing ran.',
-  rejected: 'A person rejected it. Nothing changed.',
+  rejected: 'A person rejected it. Nothing changed.', // outcomeOf says who, and their words when they gave some
   expired: 'Nobody decided in time. Nothing changed.',
   superseded: 'A person replaced it with an edited request.',
+}
+
+/**
+ * Approvals grid (2026-10-05) — what became of a request that did NOT simply wait or run, said so Claude can tell the
+ * person plainly: rejected (with the person's words when they gave some — a reject reason is optional), withdrawn by
+ * Nexus, replaced by an edited request (and which), approved but handed back without running (and why), or approved,
+ * tried and failed (and why). Null for every other state, which MEANING says on its own.
+ */
+export interface Outcome {
+  meaning: string
+  /** The person's own words on a reject; absent when they gave none. */
+  rejectedReason?: string
+  /** The edited request that replaced this one: follow it with approval-status. */
+  replacedBy?: string
+  /** Why an approved request was handed back to a person without running. */
+  handedBack?: string
+  /** Why an approved request failed when Nexus ran it. */
+  failed?: string
+}
+
+const HANDED_BACK = /^not run(?: by rule)? — /
+const FAILED = /^execution (?:failed|error): /
+
+export function outcomeOf(ap: {
+  status: string
+  reason: string | null
+  operatorNote: string | null
+  decidedBy: string | null
+}, replacedBy: string | null = null): Outcome | null {
+  const reason = ap.reason ?? ''
+  if (ap.status === 'rejected') {
+    if (reason.startsWith('withdrawn:')) {
+      return { meaning: `Nexus withdrew it (${reason.replace(/^withdrawn:\s*/, '')}). Nothing changed.` }
+    }
+    const who = ap.decidedBy ?? 'A person'
+    const words = ap.operatorNote?.trim()
+    return words
+      ? { meaning: `${who} rejected it, saying: "${words}". Nothing changed.`, rejectedReason: words }
+      : { meaning: `${who} rejected it without giving a reason. Nothing changed.` }
+  }
+  if (ap.status === 'superseded') {
+    return replacedBy
+      ? { meaning: `A person edited it before approving, so it was replaced by a new request (${replacedBy}). Nothing ran from this one; call approval-status with replacedBy to follow the new one.`, replacedBy }
+      : { meaning: 'A person edited it before approving, so it was replaced by a new request. Nothing ran from this one.' }
+  }
+  if (ap.status === 'pending' && HANDED_BACK.test(reason)) {
+    const why = reason.replace(HANDED_BACK, '')
+    return {
+      meaning: `It was approved, but Nexus did not run it: ${why}. Nothing changed; it waits for a person to approve or reject it again.`,
+      handedBack: why,
+    }
+  }
+  if (ap.status === 'pending' && FAILED.test(reason)) {
+    const why = reason.replace(FAILED, '')
+    return {
+      meaning: `It was approved and Nexus tried to run it, but it failed: ${why}. It waits for a person to approve it again or reject it.`,
+      failed: why,
+    }
+  }
+  return null
+}
+
+/** The request that replaced an edited one: the edit's audit row names both (agent-fleet-approvals amend, amendPlan). */
+async function replacementOf(approvalId: string): Promise<string | null> {
+  const edit = await prisma.agentControlAudit.findFirst({
+    where: { action: 'amend_action', fromValue: { path: ['approvalId'], equals: approvalId } },
+    orderBy: { createdAt: 'desc' },
+    select: { toValue: true },
+  })
+  const next = (edit?.toValue as { approvalId?: unknown } | null)?.approvalId
+  return typeof next === 'string' ? next : null
 }
 
 /**
@@ -305,6 +376,9 @@ const approvalStatus: AgentTool = {
   readOnly: true,
   description:
     'Check a change that was queued for approval: whether a person approved or rejected it, when, and when it expires. '
+    + 'A rejected one says so, with the person\'s words in rejectedReason when they gave a reason; one replaced by an '
+    + 'edit names the new request in replacedBy; one approved but handed back without running says why in handedBack; '
+    + 'one that failed when it ran says why in failed (both wait for a person again). '
     + 'For an approved change that is sent on to a marketplace (a price change, a publish), channels counts the queue rows '
     + 'it made: waiting to be sent, sent, failed. For an approved ad change, ads counts its writes at Amazon: waiting, '
     + 'sent, refused by the write gate, failed (or says it ran in sandbox), and ebay counts eBay ad writes. For an approved '
@@ -326,11 +400,14 @@ const approvalStatus: AgentTool = {
         decidedBy: true,
         executeAfter: true,
         reason: true,
+        operatorNote: true,
         preview: true,
         args: true,
       },
     })
     if (!ap) return { ok: false, error: 'Approval not found' }
+    // Approvals grid — rejected (and why), replaced by an edit (and by which), handed back or failed (and why).
+    const outcome = outcomeOf(ap, ap.status === 'superseded' ? await replacementOf(ap.id) : null)
     const preview = ap.preview == null ? null : (ctx.storedOutput?.(ap.toolName, ap.preview) ?? null)
     const asked = (ap.args && typeof ap.args === 'object' && !Array.isArray(ap.args) ? ap.args : {}) as Record<string, unknown>
     const channels = ap.status === 'executed' ? await channelQueueOf(ap.toolName, asked, ap.decidedAt) : null
@@ -359,9 +436,14 @@ const approvalStatus: AgentTool = {
         approvalId: ap.id,
         tool: ap.toolName,
         status: ap.status,
-        meaning: ap.status !== 'executed' ? (MEANING[ap.status] ?? null)
+        meaning: outcome ? outcome.meaning
+          : ap.status !== 'executed' ? (MEANING[ap.status] ?? null)
           : publication ? publishedMeaning(publication.status)
           : ads ? adMeaning(ads) : EBAY_AD_TOOLS.has(ap.toolName) ? ebayMeaning(ebay) : executedMeaning(ap.toolName, channels),
+        ...(outcome?.rejectedReason ? { rejectedReason: outcome.rejectedReason } : {}),
+        ...(outcome?.replacedBy ? { replacedBy: outcome.replacedBy } : {}),
+        ...(outcome?.handedBack ? { handedBack: outcome.handedBack } : {}),
+        ...(outcome?.failed ? { failed: outcome.failed } : {}),
         ...(channels ? { channels } : {}),
         ...(ads ? { ads } : {}),
         ...(ebay ? { ebay } : {}),

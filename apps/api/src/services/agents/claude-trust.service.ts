@@ -108,7 +108,8 @@ export interface ClaudeToolRule {
   storedLimits: Record<string, unknown> | null
 }
 
-function ruleFrom(tool: AgentTool, row: { claudeTrust: string; claudeLimits: unknown } | null): ClaudeToolRule {
+/** Exported for the approvals queue (approval-queue.service.ts), which loads every rule in one query. */
+export function ruleFrom(tool: AgentTool, row: { claudeTrust: string; claudeLimits: unknown } | null): ClaudeToolRule {
   const ceiling = trustCeiling(tool)
   const stored: ClaudeTrust = isLevel(row?.claudeTrust) ? row!.claudeTrust as ClaudeTrust : 'ask'
   const storedLimits = row?.claudeLimits && typeof row.claudeLimits === 'object' && !Array.isArray(row.claudeLimits)

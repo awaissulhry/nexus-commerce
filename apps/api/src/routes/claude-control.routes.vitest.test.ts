@@ -20,6 +20,7 @@ const m = vi.hoisted(() => ({
   resume: vi.fn(),
   activity: vi.fn(),
   undo: vi.fn(),
+  simulate: vi.fn(),
 }))
 vi.mock('../db.js', () => ({ default: {} }))
 vi.mock('../services/agents/claude-trust.service.js', () => ({
@@ -34,6 +35,7 @@ vi.mock('../services/agents/claude-activity.service.js', async (original) => ({
   claudeActivity: m.activity,
 }))
 vi.mock('../services/agents/change-undo.service.js', () => ({ undoChangeByClick: m.undo }))
+vi.mock('../services/agents/claude-rule-simulate.service.js', () => ({ simulateClaudeRule: m.simulate }))
 vi.mock('../lib/auth/session.js', () => ({ validateSession: async (token?: string) => sessions[token ?? ''] ?? null, truncateIp: () => 'fixture' }))
 
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -76,6 +78,7 @@ const workspaces = {
 
 const ROUTES = [
   ['GET', '/api/claude/trust'],
+  ['GET', '/api/claude/trust/:tool/simulate'],
   ['PUT', '/api/claude/trust/:tool'],
   ['PUT', '/api/claude/autonomy'],
   ['POST', '/api/claude/pause'],
@@ -112,6 +115,7 @@ beforeEach(() => {
   m.resume.mockResolvedValue({ ok: true })
   m.activity.mockResolvedValue({ rows: [], nextCursor: null })
   m.undo.mockResolvedValue({ ok: true, approvalId: 'apr-undo', tool: 'set-price', undoes: 'chg-1', executeAfter: '2026-10-01T12:00:20.000Z' })
+  m.simulate.mockResolvedValue({ ok: true, simulation: { toolName: 'set-price', days: 30, considered: 40, wouldRun: 34, rejectedAmongWouldRun: 2, examples: [] } })
 })
 
 function call(method: string, url: string, session?: string, payload?: unknown) {
@@ -233,5 +237,29 @@ describe('C8 — Undo on the activity page', () => {
     const refused = await call('POST', '/api/claude/changes/chg-1/undo', 'token-viewer', {})
     expect(refused.statusCode).toBe(409)
     expect(refused.json()).toEqual({ ok: false, error: 'Not undone: it has changed since.' })
+  })
+})
+
+describe('Approvals grid — what a rule would have done (the Automate modal)', () => {
+  it('needs ai.view, like reading the rules; hands the tool, days, level and limits as asked, and the reader’s money filter', async () => {
+    expect((await call('GET', '/api/claude/trust/set-price/simulate', 'token-none')).statusCode).toBe(403)
+    expect(m.simulate).not.toHaveBeenCalled()
+    const limits = encodeURIComponent(JSON.stringify({ maxChangePercent: 10 }))
+    const read = await call('GET', `/api/claude/trust/set-price/simulate?days=30&level=auto&limits=${limits}`, 'token-viewer')
+    expect(read.statusCode).toBe(200)
+    expect(read.json()).toEqual({ toolName: 'set-price', days: 30, considered: 40, wouldRun: 34, rejectedAmongWouldRun: 2, examples: [] })
+    expect(read.headers['cache-control']).toBe('private, no-store')
+    const [tool, query, storedOutput] = m.simulate.mock.calls[0]
+    expect(tool).toBe('set-price')
+    expect(query).toEqual({ days: '30', level: 'auto', limits: '{"maxChangePercent":10}' })
+    // The viewer holds ai.view and ai.run, not products.price.edit: a set-price preview is not theirs to describe.
+    expect(storedOutput('set-price', { summary: 'Price 10 → 11' })).toBeNull()
+  })
+
+  it('a refusal (bad limits, a level above the ceiling) is a 400 in the service’s words', async () => {
+    m.simulate.mockResolvedValue({ ok: false, status: 400, error: 'publish-listing can be set to ask at most: a person always approves it.' })
+    const refused = await call('GET', '/api/claude/trust/publish-listing/simulate?level=auto', 'token-viewer')
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json()).toEqual({ error: 'publish-listing can be set to ask at most: a person always approves it.' })
   })
 })

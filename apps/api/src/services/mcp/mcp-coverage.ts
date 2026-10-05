@@ -44,6 +44,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'automation-switch': { part: '06', feature: 20, also: "a person's engine switch in the Control Room; Claude moves it with turn-up / turn-down-automation (R16)" },
   advertising: { part: '01', feature: 17, also: 'its automation paths (rules, autopilot, dayparting) are the automation part, 06 (#20)' },
   'agent-fleet-approvals': { part: '05', feature: 45 },
+  'approval-queue': { part: '05', feature: 45, also: 'the Approvals grid reads every request; Claude follows its own with approval-status and claude-activity' },
   'agent-fleet-assignments': { part: '06', feature: 44 },
   'agent-fleet-map': { part: '06', feature: 44 },
   'agent-fleet-timeline': { part: '06', feature: 44 },

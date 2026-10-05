@@ -442,8 +442,9 @@ describe('MCP.7 — a change is only ever queued for a person', () => {
       approvalId: expect.any(String),
       preview: { action: 'set-price', sku: 'ALPHA-MCP-SKU', changes: { 'base price': { from: 19.9, to: 25 } } },
     })
+    // Approvals grid (2026-10-05) — the link opens this request's row on the page (?item=), not only the page.
     const approveAt = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? `${WEB}/w/${A}/fleet/approvals` : `${WEB}/fleet/approvals`
-    expect(out.approveAt).toBe(approveAt)
+    expect(out.approveAt).toBe(`${approveAt}?item=${out.approvalId}`)
     expect(out.next).toContain('you cannot approve it')
 
     const approval = await withWorkspace(business(A), () => database.client.agentApproval.findUnique({ where: { id: out.approvalId } }))

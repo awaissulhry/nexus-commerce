@@ -27,6 +27,7 @@ import {
   undoScheduledApproval,
   type InboxView,
 } from '../services/agent-fleet/approval-inbox.service.js'
+import { BULK_MAX_IDS } from '../services/agent-fleet/bulk-approve-policy.js'
 import { requestPrincipal } from '../services/agents/call-tool.js'
 import {
   bustCharterCache,
@@ -64,6 +65,11 @@ import { collectRefs, resolveFleetLabels } from '../services/agent-fleet/fleet-l
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import { getRunTrace } from '../services/agent-fleet/fleet-trace.service.js'
 import { getSweepReport } from '../services/agent-fleet/sweep-report.service.js'
+
+/** A bulk call's ids: strings only, each once. Anything else in the list is dropped, never decided. */
+function idsOf(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
+}
 
 const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/agent/fleet/charters', async () => {
@@ -307,11 +313,9 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     if (decision !== 'approve' && decision !== 'reject') {
       return reply.code(400).send({ error: 'decision must be approve or reject' })
     }
-    // A rejection without a reason is a wasted datapoint — the reject
-    // reason is the highest-value exemplar input (spec Part 10).
-    if (decision === 'reject' && !reason) {
-      return reply.code(400).send({ error: 'a one-line reason is required to reject' })
-    }
+    // Approvals grid (Owner, 2026-10-05) — a reject needs no reason. It used to (a reason is the best exemplar input,
+    // spec Part 10), which made "Reject the plan" fail every time; the person's words are still stored when given, and
+    // without them the row says who rejected it (decideFleetApproval).
     // NAF.AP.1 — the signed-in user, not the literal string 'operator'.
     // MCP.1 — with their permissions: they approve only what they could do.
     const out = await decideFleetApproval({
@@ -357,31 +361,35 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // NAF.AP.4 — what a bulk decision would do, before it does it.
+  // NAF.AP.4 — what a bulk decision would do, before it does it. The viewer, so the rows they may not approve are
+  // counted out exactly as bulk-decide skips them.
   fastify.post<{ Body: { ids?: string[]; decision?: 'approve' | 'reject' } }>(
     '/agent/fleet/approvals/bulk-preview',
     async (request, reply) => {
-      const ids = request.body?.ids ?? []
+      const ids = idsOf(request.body?.ids)
       const decision = request.body?.decision
       if (decision !== 'approve' && decision !== 'reject') {
         return reply.code(400).send({ error: 'decision must be approve or reject' })
       }
-      return previewBulk(ids, decision)
+      return previewBulk(ids, decision, await inboxViewer(request))
     },
   )
 
   fastify.post<{ Body: { ids?: string[]; decision?: 'approve' | 'reject'; reason?: string } }>(
     '/agent/fleet/approvals/bulk-decide',
     async (request, reply) => {
-      const ids = request.body?.ids ?? []
+      const ids = idsOf(request.body?.ids)
       const decision = request.body?.decision
       const reason = (request.body?.reason ?? '').trim()
       if (decision !== 'approve' && decision !== 'reject') {
         return reply.code(400).send({ error: 'decision must be approve or reject' })
       }
       if (ids.length === 0) return reply.code(400).send({ error: 'nothing selected' })
-      if (decision === 'reject' && !reason) {
-        return reply.code(400).send({ error: 'a one-line reason is required to reject' })
+      // Approvals grid — one bulk call decides at most BULK_MAX_IDS requests (the service holds the same rule). A reject
+      // reason is optional, as on a single row.
+      if (ids.length > BULK_MAX_IDS) {
+        const error = `You selected ${ids.length}; at most ${BULK_MAX_IDS} can be decided at once. Decide them in smaller groups.`
+        return reply.code(400).send({ ok: false, done: 0, of: ids.length, skipped: [], failed: [], error })
       }
       return bulkDecide({
         ids,

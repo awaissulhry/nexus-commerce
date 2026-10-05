@@ -4,6 +4,10 @@
  *
  *   GET  /api/claude/trust          every tool Claude is offered: its level, ceiling and limits; the business's brakes
  *   PUT  /api/claude/trust/:tool    { level?, limits?, code? } — raising a level or changing limits needs a fresh 2FA code
+ *   GET  /api/claude/trust/:tool/simulate?days=30&level=auto&limits=<url-encoded JSON>
+ *                                   Approvals grid — what that rule would have done with Claude's requests of the tool in
+ *                                   the last days (max 90): RuleSimulation (services/agents/claude-rule-simulate.service.ts).
+ *                                   Read-only; ai.view, like GET /claude/trust
  *   PUT  /api/claude/autonomy       { dailyAutoCap, code? } — raising the cap needs the code
  *   POST /api/claude/pause          { reason? } — at once; what waits to run by rule goes back to a person
  *   POST /api/claude/resume         { code }
@@ -22,7 +26,8 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { hasPermission } from '../lib/auth/rbac.js'
-import { actorLabel, requestPrincipal, storedOutputOf } from '../services/agents/call-tool.js'
+import { actorLabel, requestPrincipal, storedOutputOf, ToolAccessError } from '../services/agents/call-tool.js'
+import { simulateClaudeRule } from '../services/agents/claude-rule-simulate.service.js'
 import { ActivityQueryError, claudeActivity } from '../services/agents/claude-activity.service.js'
 import { undoChangeByClick } from '../services/agents/change-undo.service.js'
 import {
@@ -70,6 +75,25 @@ const claudeControlRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/claude/trust', async () => listClaudeRules())
+
+  // Approvals grid — "would have run N of the last M; you rejected K". The reader's money filter for the examples; a
+  // caller who is not a person (an API key) gets the counts and no example text.
+  fastify.get<{ Params: { tool: string }; Querystring: { days?: string; level?: string; limits?: string } }>(
+    '/claude/trust/:tool/simulate',
+    async (request, reply) => {
+      const { days, level, limits } = request.query ?? {}
+      let storedOutput: (toolName: string, value: unknown) => unknown | null = () => null
+      try {
+        storedOutput = storedOutputOf(await requestPrincipal(request))
+      } catch (error) {
+        if (!(error instanceof ToolAccessError)) throw error
+      }
+      const out = await simulateClaudeRule(request.params.tool, { days, level, limits }, storedOutput)
+      if (out.ok) return out.simulation
+      const { status, error } = out as Extract<typeof out, { ok: false }>
+      return reply.code(status).send({ error })
+    },
+  )
 
   fastify.put<{ Params: { tool: string } }>('/claude/trust/:tool', async (request, reply) => {
     const { level, limits, code } = body(request)

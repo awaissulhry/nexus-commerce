@@ -30,6 +30,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         connectedChannels,
         inboxCritical,
         inboxWarn,
+        approvalsNeedYou,
       ] = await Promise.all([
         prisma.product.count({ where: { parentId: null } }),
         prisma.product.count({ where: { reviewStatus: 'PENDING_REVIEW' } }),
@@ -56,6 +57,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { notIn: ['errorRate', 'latencyP95'] } } } }).catch(() => 0),
           prisma.webhookEvent.count({ where: { isProcessed: false, error: { not: null } } }).catch(() => 0),
         ]).then(([s, a, w]: [number, number, number]) => s + a + w),
+        // Approvals grid — the nav badge: requests that need a person (waiting + back to you), one count. Imported on
+        // use, so loading this module does not load the agent tool registry.
+        import('../services/agent-fleet/approval-queue.service.js').then((m) => m.approvalsNeedYouCount()).catch(() => 0),
       ])
 
       // Group listings by channel + per-marketplace breakdown
@@ -79,6 +83,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         monitoring: { syncIssues },
         system: { connectedChannels },
         inbox: { critical: inboxCritical, warn: inboxWarn, total: inboxCritical + inboxWarn },
+        approvals: { needsYou: approvalsNeedYou },
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[sidebar/counts] failed')

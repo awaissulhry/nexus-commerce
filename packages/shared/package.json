@@ -249,6 +249,10 @@
     "./product-create": {
       "types": "./dist/product-create.d.ts",
       "default": "./dist/product-create.js"
+    },
+    "./approval-queue": {
+      "types": "./dist/approval-queue.d.ts",
+      "default": "./dist/approval-queue.js"
     }
   },
   "scripts": {

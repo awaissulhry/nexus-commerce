@@ -196,7 +196,8 @@ function outcomeOf(run: RunRow, approval: ApprovalRow | undefined, change: Chang
   }
 }
 
-function undoStateOf(change: ChangeRow, liveUndos: Set<string>): UndoState {
+/** Whether a recorded change can still be put back (also the approvals grid's drawer, approval-queue.service.ts). */
+export function undoStateOf(change: { undoneAt: Date | null; reversibility: string; undoneByApprovalId: string | null; toolName: string }, liveUndos: Set<string>): UndoState {
   if (change.undoneAt) return 'done'
   if (change.reversibility === 'none') return 'not possible'
   if (change.undoneByApprovalId && liveUndos.has(change.undoneByApprovalId)) return 'waiting'

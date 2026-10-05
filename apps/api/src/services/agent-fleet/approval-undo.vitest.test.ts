@@ -31,21 +31,10 @@ vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
 vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }))
 /*
- * MCP full control A4 — `set-target-bid` executes now, so S8.4 refuses its bulk approve (tested below with the real
- * tool). The bulk-sentence cases were written with it as the preview-only stand-in: they keep it as one, a copy of
- * the real tool without its executor, so they still test what they were written to test.
+ * The bulk cases use the real tool registry. (Under S8.4 they needed a preview-only stand-in of `set-target-bid`, since
+ * any executable row blocked a bulk approve; the Owner's decision 1 = A of 2026-10-05 replaced S8.4, so the real,
+ * executable tools are what a bulk approve is about now.)
  */
-vi.mock('../agents/tool-registry.js', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../agents/tool-registry.js')>()
-  return {
-    ...real,
-    getTool: (name: string) => {
-      const tool = real.getTool(name)
-      return name === 'set-target-bid' && tool && !executableBid.on ? { ...tool, execute: undefined } : tool
-    },
-  }
-})
-const executableBid = vi.hoisted(() => ({ on: false }))
 
 import prisma from '../../db.js'
 import { decideApproval } from '../agents/approval-gate.service.js'
@@ -380,33 +369,47 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.sentence).toContain('All of these can be put back')
   })
 
-  it('S8.1/S8.4 — counts a partly-reversible row, and blocks it for being executable', async () => {
+  /*
+   * Owner decision 1 = A (2026-10-05) replaced S8.4, deliberately: rows of the SAME kind and worker may be approved
+   * together even when they execute; each still goes through the stop window and the commit's re-checks. The cases
+   * below used to pin S8.4's block; they now pin the new rule.
+   */
+  it('S8.1 / decision 1 = A — counts a partly-reversible row and says so, now that it may be approved together', async () => {
     db.agentApproval.findMany.mockResolvedValue([
       pending('publish-listing', 'high', {}, 'listing-quality-keeper'),
     ] as never)
     const p = await previewBulk(['a'], 'approve')
-    // The fact is computed and returned...
     expect(p.partlyReversible).toBe(1)
-    // ...but the prose for it is unreachable while S8.4 stands, because every
-    // partly-reversible tool is also executable. Asserting the sentence here
-    // would have been asserting a branch that cannot render.
-    expect(p.blockedReason).toContain('can actually change something on Amazon')
+    // Unreachable under S8.4 (every partly-reversible tool executes); reachable now, and already correct.
+    expect(p.blockedReason).toBeNull()
+    expect(p.sentence).toContain('1 of them can only be partly undone')
   })
 
-  it('S8.4 — refuses to bulk-approve anything that can reach Amazon', async () => {
+  it('decision 1 = A — same-kind executable rows from one worker may be bulk-approved (S8.4 refused them)', async () => {
     db.agentApproval.findMany.mockResolvedValue([
       pending('set-price', 'high', {}, 'pricing-watchdog'),
       pending('set-price', 'high', {}, 'pricing-watchdog'),
     ] as never)
     const p = await previewBulk(['a', 'b'], 'approve')
-    expect(p.blockedReason).toContain('can actually change something on Amazon')
-    // Same worker, same kind — every other homogeneity rule is satisfied, so
-    // this can only be the executable guard.
-    expect(p.blockedReason).not.toContain('different kinds')
-    expect(p.blockedReason).not.toContain('different workers')
+    expect(p.blockedReason).toBeNull()
+    expect(p.homogeneous).toBe(true)
+    expect(p.count).toBe(2)
+    expect(p.sentence).toContain('approves 2 actions: 2 × set price')
+    expect(p.sentence).toContain('20 seconds')
   })
 
-  it('S8.4 — still allows a bulk REJECT of executable rows', async () => {
+  it('decision 1 = A — a kind that cannot be undone is still never approved together', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('send-customer-message', 'high', {}, 'claude'),
+      pending('send-customer-message', 'high', {}, 'claude'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.homogeneous).toBe(true)
+    expect(p.blockedReason).toBe('A message to a buyer cannot be recalled once it is sent, so each one is approved on its own.')
+    expect(p.sentence).toBe(p.blockedReason)
+  })
+
+  it('still allows a bulk REJECT of executable rows', async () => {
     db.agentApproval.findMany.mockResolvedValue([
       pending('set-price', 'high', {}, 'pricing-watchdog'),
     ] as never)
@@ -497,25 +500,22 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.sentence).toContain('already decided or counting down')
   })
 
-  it('A4 — a bid change that executes is decided one at a time (S8.4), and its money is still stated', async () => {
-    executableBid.on = true
-    try {
-      db.agentApproval.findMany.mockResolvedValue([
-        pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 31, proposedBidCents: 84 }),
-        pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 50, proposedBidCents: 60, effectiveBidCents: 55 }),
-      ] as never)
-      const p = await previewBulk(['a', 'b'], 'approve')
-      expect(p.blockedReason).toContain('can actually change something on Amazon (set target bid)')
-      // The bid that lands (after the clamps) is what is counted: 53c + 5c.
-      expect(p.euro?.amount).toBe(58)
-      // A bid in another currency is not added to euros.
-      db.agentApproval.findMany.mockResolvedValue([
-        pending('set-target-bid', 'high', { currency: 'GBP', currentBidCents: 31, proposedBidCents: 84 }),
-      ] as never)
-      expect((await previewBulk(['a'], 'approve')).euro).toBeNull()
-    } finally {
-      executableBid.on = false
-    }
+  it('A4 / decision 1 = A — bid changes that execute may be approved together, and their money is stated', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 31, proposedBidCents: 84 }),
+      pending('set-target-bid', 'high', { currency: 'EUR', currentBidCents: 50, proposedBidCents: 60, effectiveBidCents: 55 }),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    // S8.4 refused this ("decided one at a time"); the Owner's decision 1 = A (2026-10-05) allows it.
+    expect(p.blockedReason).toBeNull()
+    // The bid that lands (after the clamps) is what is counted: 53c + 5c.
+    expect(p.euro?.amount).toBe(58)
+    expect(p.sentence).toContain('raises what you pay per click by €0.58 in total across 2 keywords')
+    // A bid in another currency is not added to euros.
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'high', { currency: 'GBP', currentBidCents: 31, proposedBidCents: 84 }),
+    ] as never)
+    expect((await previewBulk(['a'], 'approve')).euro).toBeNull()
   })
 
   it('says so plainly when nothing is selected', async () => {
