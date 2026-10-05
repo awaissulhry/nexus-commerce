@@ -34,3 +34,15 @@ file's order; super smart and dynamic; deploy multiple sub-agents, AAA quality".
 - import: catalog-transfer-plan.ts:783 channelValuePatch → catalog-transfer.service.ts applyTransferTarget (:295, :320)
 - old flat-file page: ebay-flat-file.routes.ts (Owner: never use it) — not changed
 - `_mediaGalleryDraft` (old eBay Images tab, reachable from the popup "Media page" link) still overrides at publish — open.
+
+## 17:30 — review round (R1 found 12 items) → design change
+- Settle writes ONLY the listing: settles only when EVERY address is a library photo (same address, or same Cloudinary
+  path with another version marker/ending; a transformation step = another photo). Otherwise the old list stays (cell
+  says how many photos are outside). Never adds to a library, never pins (fixed R1 #1 import blocker, #4 library mode,
+  #5 cross-business share, #7 rendering swap, #10 slow LIKE). Photo-plan families never settle (#9).
+- Editor save adds outside photos to the ROW's product (copy semantics, row pinned) — explicit user action only.
+- Colour photos: the chosen axis (`_imageAxis`, else Product.imageAxisPreference) wins; rows without own photos count
+  as the gallery (#2); >12 → first 12 + note, never blocks (#3).
+- Committed 3c73b3234. Round 2 running: W1 (und on legacy save #8, photoInUse #11), W2 (tests, wording, Claude undo #6,
+  import family test), W3 (plan families read-only #9, outside-count note). R2 sweep running on the older state.
+- Still open → PR 2: `_mediaGalleryDraft` override (#12); live drift mark.
