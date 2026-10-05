@@ -317,6 +317,21 @@ describe('VT.4 — the refusals', () => {
       .rejects.toThrow('already carries SIZE/COLOR')
   })
 
+  it('refuses a deprecated target even when it is the theme in use, and counts only the themes Amazon accepts (wave 2 A4)', async () => {
+    const read = readFor('AMAZON', 'IT', [['Taglia', 'size'], ['Colore', 'color']], { theme: 'SIZE_NAME/COLOR_NAME' })
+    // The dock's list: the theme in use (deprecated) plus the two Amazon accepts — `offeredThemes`.
+    read.theme = { value: 'SIZE_NAME/COLOR_NAME', options: [
+      { code: 'SIZE_NAME/COLOR_NAME', label: 'Taglia / Colore', deprecated: true, coversAll: true, drops: [], adds: [] },
+      { code: 'COLOR/SIZE', label: 'Colore / Taglia', deprecated: false, coversAll: true, drops: [], adds: [] },
+      { code: 'SIZE/COLOR', label: 'Taglia / Colore', deprecated: false, coversAll: true, drops: [], adds: [] },
+    ] } as never
+    getProjectionRead.mockResolvedValue(read)
+    const plan = (theme: string) => buildThemeChangePlan({ productId: 'p', channel: 'AMAZON', market: 'IT', expectedVersion: 3, dryRun: true, theme })
+    await expect(plan('SIZE_NAME/COLOR_NAME')).rejects.toThrow('Amazon has deprecated SIZE_NAME/COLOR_NAME on IT. Choose one of the 2 themes Amazon accepts there.')
+    await expect(plan('COLOR_NAME/SIZE_NAME')).rejects.toThrow('"COLOR_NAME/SIZE_NAME" is not one of the 2 variation themes Amazon accepts on IT.')
+    await expect(plan('COLOR_NAME/SIZE_NAME')).rejects.toMatchObject({ detail: { themeOptions: ['COLOR/SIZE', 'SIZE/COLOR'] } })
+  })
+
   it('names a channel with no theme-change operation rather than inventing one', async () => {
     getProjectionRead.mockResolvedValue(readFor('ETSY', 'GLOBAL', [['Taglia', 'x']]))
     await expect(buildThemeChangePlan({ productId: 'p', channel: 'ETSY', market: 'GLOBAL', expectedVersion: 3, dryRun: true }))

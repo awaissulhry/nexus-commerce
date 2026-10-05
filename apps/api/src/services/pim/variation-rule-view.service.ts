@@ -32,6 +32,7 @@ import {
   classifyThemes,
   deriveAmazonTheme,
   dropsForTheme,
+  offeredThemes,
   themeSegments,
   attributeTitle,
   bindSegmentToAttribute,
@@ -155,16 +156,17 @@ async function readVariationRuleView(input: VariationRuleViewInput): Promise<Var
     return attributeTitle(bound?.attribute ?? null, facts.properties as Record<string, unknown>)
       ?? segment.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   }
-  const themeOptions = classifyThemes(facts).map((t) => ({
+  const limits = limitsFor(channel, facts.themes)
+  const effectiveTheme = stored?.rule.theme ?? derived?.match.code ?? null
+  // Wave 2 A4 — only the themes Amazon accepts, plus the theme this rule shows (its own, or the derived one) even when
+  // Amazon deprecated it.
+  const themeOptions = offeredThemes(classifyThemes(facts), effectiveTheme).map((t) => ({
     code: t.code,
     label: themeSegments(t.code).map(labelFor).join(' / '),
     coversAll: dropsForTheme(t.keys, wantedKeys).length === 0 && addsForTheme(t.keys, wantedKeys).length === 0 && wantedKeys.length > 0,
     drops: dropsForTheme(t.keys, wantedKeys),
     deprecated: t.deprecated,
   }))
-
-  const limits = limitsFor(channel, facts.themes)
-  const effectiveTheme = stored?.rule.theme ?? derived?.match.code ?? null
   const effectiveAxes: VariationRuleView['axes'] = stored
     ? stored.rule.axes.slice().sort((a, b) => a.order - b.order).map((axis) => ({
         axisKey: axis.axisKey,

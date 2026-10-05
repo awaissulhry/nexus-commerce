@@ -172,6 +172,25 @@ export function classifyThemes(facts: ThemeSchemaFacts): ThemeMatch[] {
   }))
 }
 
+/**
+ * Wave 2 A4 — the themes an editor OFFERS: the ones Amazon accepts, plus the one in use.
+ *
+ * Amazon's schema lists every theme it ever had and marks most of them dead (`$lifecycle.enumDeprecated`: 70 of 84 on
+ * IT COAT, 106 of 120 on IT PANTS), and Amazon's own template shows only the live ones. Offering the dead ones invites a
+ * choice the projection save then refuses. A deprecated theme that is IN USE stays — it is what the listing carries, so
+ * the editor shows it (under "Deprecated", with its warning) rather than a value with no matching option.
+ *
+ * One rule for the three option builders (the sheet cell, the family dock, the mapping rule) and for the two writers
+ * that check a target against those lists (theme change, the agent tool). Order is kept; nothing is relabelled.
+ */
+export function offeredThemes<T extends { code: string; deprecated: boolean }>(
+  items: readonly T[],
+  currentCode: string | null | undefined,
+): T[] {
+  const current = normaliseStoredTheme(currentCode)
+  return items.filter((t) => !t.deprecated || t.code === current)
+}
+
 export type ThemeTieBreak = 'only-match' | 'only-live' | 'bare-form' | 'set-order'
 
 /**
