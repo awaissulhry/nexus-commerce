@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { Button, Radio, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../_shared/adsWrite'
 
 type MT = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
 type Staged = { keyword: string; matchType: MT }
@@ -29,7 +29,7 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
   const [text, setText] = useState('')
   const [staged, setStaged] = useState<Staged[]>([])
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<{ ok: number; fail: number } | null>(null)
+  const [result, setResult] = useState<{ fail: number; text: string } | null>(null)
 
   const stage = () => {
     const kws = text.split('\n').map((s) => s.trim()).filter(Boolean)
@@ -46,19 +46,14 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
   const submit = async () => {
     if (!staged.length || !externalCampaignId || !marketplace || busy) return
     setBusy(true); setResult(null)
-    let ok = 0, fail = 0
-    await Promise.all(staged.map(async (s) => {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/negative-keywords`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ externalCampaignId, keywordText: s.keyword, matchType: s.matchType, scope: 'CAMPAIGN', marketplace }),
-        })
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok || (d as { error?: string; denied?: boolean }).error || (d as { denied?: boolean }).denied) fail++; else ok++
-      } catch { fail++ }
-    }))
-    setResult({ ok, fail }); setBusy(false)
-    if (fail === 0) { onDone(); window.setTimeout(onClose, 800) }
+    // CM-8/CM-25 — "added" means Amazon holds it; every other answer carries the write gate's or Amazon's reason.
+    const results = await Promise.all(staged.map((s) => adsAdd('/api/advertising/negative-keywords',
+      { externalCampaignId, keywordText: s.keyword, matchType: s.matchType, scope: 'CAMPAIGN', marketplace })))
+    const sum = addSummary(results, 'negative')
+    setResult({ fail: results.filter((r) => !r.added).length, text: sum.text }); setBusy(false)
+    if (sum.anyAdded) onDone()
+    if (sum.allAdded) window.setTimeout(onClose, 800)
+    else setStaged((prev) => prev.filter((_, i) => !results[i]!.added))
   }
 
   return (
@@ -106,7 +101,7 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
           </div>
         </div>
       </div>
-      {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
+      {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.text}.</div>}
     </Modal>
   )
 }

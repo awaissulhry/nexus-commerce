@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react'
 import { Button, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../../../_shared/adsWrite'
 import '../../../../campaigns-ds.css'
 
 export function AddNegativeTargetsModal({ adGroupId, adGroupName, campaignName, onClose, onAdded }: {
@@ -42,13 +42,17 @@ export function AddNegativeTargetsModal({ adGroupId, adGroupName, campaignName, 
   const submit = async () => {
     if (!staged.length || submitting) return
     setSubmitting(true); setMsg(null)
-    const outcomes = await Promise.allSettled(staged.map((asin) =>
-      fetch(`${getBackendUrl()}/api/advertising/negative-targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId, asin }) })
-        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`) })))
-    const ok = outcomes.filter((r) => r.status === 'fulfilled').length
+    // CM-8/CM-25 — "added" means Amazon holds it; a refusal or failure carries the write gate's or Amazon's reason.
+    const results = await Promise.all(staged.map((asin) => adsAdd('/api/advertising/negative-targets/create', { adGroupId, asin })))
+    const sum = addSummary(results, 'negative product target')
     setSubmitting(false)
-    if (ok === staged.length) { onAdded?.(); onClose() }
-    else { setMsg(`${ok}/${staged.length} added — some failed (write-gate / non-live).`); if (ok) onAdded?.() }
+    if (sum.allAdded) { onAdded?.(); onClose() }
+    else {
+      const sent = staged.filter((_, i) => results[i]!.added)
+      setStaged((prev) => prev.filter((x) => !sent.includes(x)))
+      setMsg(sum.text)
+      if (sum.anyAdded) onAdded?.()
+    }
   }
 
   const n = staged.length

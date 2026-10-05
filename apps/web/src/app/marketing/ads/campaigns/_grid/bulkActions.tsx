@@ -10,13 +10,14 @@ import { Button, Input } from '@/design-system/primitives'
 import { Field, Modal } from '@/design-system/components'
 import '../campaigns-ds.css'
 
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsWriteEach, type EachResult } from '../../_shared/adsWrite'
 
-/** PATCH the same body to /api/advertising/<base>/<id> for every id (applyImmediately:false). */
-export async function bulkPatch(base: string, ids: string[], body: Record<string, unknown>): Promise<void> {
-  await Promise.all(ids.map((id) => fetch(`${getBackendUrl()}/api/advertising/${base}/${id}`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, applyImmediately: false }),
-  })))
+/**
+ * PATCH the same body to /api/advertising/<base>/<id> for every id (applyImmediately:false). CM-11 — it reads every
+ * answer now: which ids changed and, for the rest, the server's reason (it used to ignore them all).
+ */
+export async function bulkPatch(base: string, ids: string[], body: Record<string, unknown>): Promise<EachResult> {
+  return adsWriteEach(base, ids, { ...body, applyImmediately: false })
 }
 
 export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€', onClose, onApply }: {

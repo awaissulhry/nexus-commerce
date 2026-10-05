@@ -1306,6 +1306,47 @@ export function v3BatchResult(response: unknown, resourceKey: string): { ok: boo
   return { ok: true, error: null }
 }
 
+/** CM-8 — Amazon's own words from one v3 per-item error: every `message` it carries, else the item as JSON. */
+export function amazonErrorText(item: unknown): string {
+  const messages: string[] = []
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 6 || v == null) return
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return }
+    if (typeof v !== 'object') return
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (k === 'message' && typeof x === 'string' && x.trim() && !messages.includes(x.trim())) messages.push(x.trim())
+      else walk(x, depth + 1)
+    }
+  }
+  walk(item, 0)
+  return (messages.length ? messages.join('; ') : JSON.stringify(item ?? null)).slice(0, 300)
+}
+
+/** CM-8 — Amazon's words from the first per-item error anywhere in a v3 answer (`{ <resource>: { error: [...] } }`), or null. */
+export function v3ErrorText(response: unknown): string | null {
+  if (!response || typeof response !== 'object') return null
+  for (const block of Object.values(response as Record<string, unknown>)) {
+    const list = (block as { error?: unknown } | null)?.error
+    if (Array.isArray(list) && list.length > 0) return amazonErrorText(list[0])
+  }
+  return null
+}
+
+/** CM-8 — the sentence when a create came back with neither an id nor an error. */
+export const CREATE_NO_ID = 'Amazon answered without an id, so Nexus cannot confirm it exists on Amazon.'
+
+/**
+ * CM-8 — read a v3 create response (HTTP 207: `{ <resource>: { success: [...], error: [...] } }`). Only an id is a
+ * create: a per-item error is Amazon's refusal, in its own words, and an answer with neither is not a create either.
+ */
+export function v3CreateResult(response: unknown, resourceKey: string, idField: string): { externalId: string | null; error: string | null } {
+  const block = (response as Record<string, unknown> | null)?.[resourceKey] as { success?: Array<Record<string, unknown>>; error?: unknown[] } | undefined
+  const id = block?.success?.[0]?.[idField]
+  if (id != null && String(id) !== '') return { externalId: String(id), error: null }
+  if (Array.isArray(block?.error) && block.error.length > 0) return { externalId: null, error: `Amazon refused it: ${amazonErrorText(block.error[0])}` }
+  return { externalId: null, error: CREATE_NO_ID }
+}
+
 export interface AdGroupPatch {
   state?: 'enabled' | 'paused' | 'archived'
   defaultBid?: number
@@ -1603,15 +1644,17 @@ export async function createCampaign(ctx: ClientContext, input: CreateCampaignIn
 }
 
 export interface CreateAdGroupInput { externalCampaignId: string; name: string; defaultBid: number; state?: 'enabled' | 'paused' }
-export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-adg-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createAdGroup', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, name: input.name, defaultBid: input.defaultBid, state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ adGroups?: { success?: Array<{ adGroupId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/adGroups', body: { adGroups: [v3] }, contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.adGroups?.success?.[0]?.adGroupId ?? null, rawResponse: response }
+  // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
+  const made = v3CreateResult(response, 'adGroups', 'adGroupId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 // ── ACR Stage 5 — SD and SB campaign creates ─────────────────────────────
@@ -1974,27 +2017,31 @@ export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampai
 }
 
 export interface CreateKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bid: number; state?: 'enabled' | 'paused' }
-export async function createKeyword(ctx: ClientContext, input: CreateKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+export async function createKeyword(ctx: ClientContext, input: CreateKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-kw-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createKeyword', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ keywords?: { success?: Array<{ keywordId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/keywords', body: { keywords: [v3] }, contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.keywords?.success?.[0]?.keywordId ?? null, rawResponse: response }
+  // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
+  const made = v3CreateResult(response, 'keywords', 'keywordId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 export interface CreateProductAdInput { externalCampaignId: string; externalAdGroupId: string; sku?: string; asin?: string; state?: 'enabled' | 'paused' }
-export async function createProductAd(ctx: ClientContext, input: CreateProductAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+export async function createProductAd(ctx: ClientContext, input: CreateProductAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-ad-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createProductAd', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3: Record<string, unknown> = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, state: (input.state ?? 'enabled').toUpperCase(), ...(input.sku ? { sku: input.sku } : {}), ...(input.asin ? { asin: input.asin } : {}) }
   const response = await liveCall<{ productAds?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/productAds', body: { productAds: [v3] }, contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.productAds?.success?.[0]?.adId ?? null, rawResponse: response }
+  // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
+  const made = v3CreateResult(response, 'productAds', 'adId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 /**
@@ -2048,15 +2095,17 @@ export interface CreateTargetInput {
   expression: Array<{ type: string; value?: string }>
   expressionType: 'MANUAL' | 'AUTO'; bid: number; state?: 'enabled' | 'paused'
 }
-export async function createTarget(ctx: ClientContext, input: CreateTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+export async function createTarget(ctx: ClientContext, input: CreateTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-tgt-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createTarget', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expressionType: input.expressionType, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
   const response = await liveCall<{ targetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/targets', body: { targetingClauses: [v3] }, contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json' })
-  return { ok: true, mode: 'live', externalId: response?.targetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
+  // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
+  const made = v3CreateResult(response, 'targetingClauses', 'targetId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }

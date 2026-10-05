@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react'
 import { Button, Radio, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../../../_shared/adsWrite'
 import '../../../../campaigns-ds.css'
 
 type MT = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
@@ -52,13 +52,18 @@ export function AddNegativeKeywordsAgModal({ externalCampaignId, externalAdGroup
     if (!staged.length || submitting) return
     if (!synced) { setMsg('This ad group is not synced to Amazon yet — cannot add negatives.'); return }
     setSubmitting(true); setMsg(null)
-    const outcomes = await Promise.allSettled(staged.map((s) =>
-      fetch(`${getBackendUrl()}/api/advertising/negative-keywords`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId, externalAdGroupId, keywordText: s.keyword, matchType: s.matchType, scope: 'AD_GROUP', marketplace }) })
-        .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok || (d as { error?: string; denied?: boolean }).error || (d as { denied?: boolean }).denied) throw new Error('rejected') })))
-    const ok = outcomes.filter((r) => r.status === 'fulfilled').length
+    // CM-8/CM-25 — "added" means Amazon holds it; every other answer carries the write gate's or Amazon's reason.
+    const results = await Promise.all(staged.map((s) => adsAdd('/api/advertising/negative-keywords',
+      { externalCampaignId, externalAdGroupId, keywordText: s.keyword, matchType: s.matchType, scope: 'AD_GROUP', marketplace })))
+    const sum = addSummary(results, 'negative keyword')
     setSubmitting(false)
-    if (ok === staged.length) { onAdded?.(); onClose() }
-    else { setMsg(`${ok}/${staged.length} added — some failed (write-gate / non-live).`); if (ok) onAdded?.() }
+    if (sum.allAdded) { onAdded?.(); onClose() }
+    else {
+      const sent = staged.filter((_, i) => results[i]!.added)
+      setStaged((prev) => prev.filter((x) => !sent.includes(x)))
+      setMsg(sum.text)
+      if (sum.anyAdded) onAdded?.()
+    }
   }
 
   const n = staged.length

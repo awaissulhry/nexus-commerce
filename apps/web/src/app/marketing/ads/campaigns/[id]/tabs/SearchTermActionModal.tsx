@@ -12,7 +12,7 @@ import { Button, Input } from '@/design-system/primitives'
 import { Field, Listbox, Modal } from '@/design-system/components'
 import '../../campaigns-ds.css'
 
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../_shared/adsWrite'
 
 const KW_MATCH = [{ value: 'EXACT', label: 'Exact' }, { value: 'PHRASE', label: 'Phrase' }, { value: 'BROAD', label: 'Broad' }]
 const NEG_MATCH = [{ value: 'NEGATIVE_EXACT', label: 'Negative Exact' }, { value: 'NEGATIVE_PHRASE', label: 'Negative Phrase' }]
@@ -32,27 +32,22 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
   const [matchType, setMatchType] = useState(isKw ? 'EXACT' : 'NEGATIVE_EXACT')
   const [bid, setBid] = useState('0.50')
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<{ ok: number; fail: number } | null>(null)
+  const [result, setResult] = useState<{ fail: number; text: string } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const valid = terms.length > 0 && (isKw ? (adGroupId !== '' && Number(bid) > 0) : (!!externalCampaignId && !!marketplace))
 
   async function submit() {
     setBusy(true); setErr(null); setResult(null)
-    let ok = 0, fail = 0
     try {
-      await Promise.all(terms.map(async (kw) => {
-        try {
-          const url = isKw ? '/api/advertising/keywords/create' : '/api/advertising/negative-keywords'
-          const body = isKw
-            ? { adGroupId, keywordText: kw, matchType, bidEur: Number(bid) }
-            : { externalCampaignId, keywordText: kw, matchType, scope: 'CAMPAIGN', marketplace }
-          const r = await fetch(`${getBackendUrl()}${url}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-          const d = await r.json().catch(() => ({}))
-          if (!r.ok || (d as { error?: string; denied?: boolean }).error || (d as { denied?: boolean }).denied) fail++; else ok++
-        } catch { fail++ }
-      }))
-      setResult({ ok, fail })
-      if (fail === 0) { onDone(); window.setTimeout(onClose, 800) }
+      // CM-8 — "added" means Amazon holds it; every other answer carries the write gate's or Amazon's reason.
+      const url = isKw ? '/api/advertising/keywords/create' : '/api/advertising/negative-keywords'
+      const results = await Promise.all(terms.map((kw) => adsAdd(url, isKw
+        ? { adGroupId, keywordText: kw, matchType, bidEur: Number(bid) }
+        : { externalCampaignId, keywordText: kw, matchType, scope: 'CAMPAIGN', marketplace })))
+      const sum = addSummary(results, isKw ? 'keyword' : 'negative')
+      setResult({ fail: results.filter((r) => !r.added).length, text: sum.text })
+      if (sum.anyAdded) onDone()
+      if (sum.allAdded) window.setTimeout(onClose, 800)
     } catch (e) { setErr(e instanceof Error ? e.message : 'Request failed') } finally { setBusy(false) }
   }
 
@@ -89,7 +84,7 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
           <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} fieldClassName="cd-money-field" />
         </Field>
       )}
-      {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
+      {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.text}.</div>}
       {err && <div className="h10-cd-modalerr">{err}</div>}
     </Modal>
   )
