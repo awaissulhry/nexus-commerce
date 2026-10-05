@@ -82,7 +82,9 @@ async function accountFor(channel: string, accountId: string | undefined, listin
   const name = channelLabel(channel)
   let wanted = accountId
   if (!wanted && listingId) {
+    // A listing id, or an alias id (Owner 2026-10-05: an alias is named by its own id, as the Publish window names it).
     const listing = await prisma.channelListing.findFirst({ where: { id: listingId }, select: { channelConnectionId: true } })
+      ?? await prisma.productListingAlias.findFirst({ where: { id: listingId, status: 'ACTIVE' }, select: { channelConnectionId: true } })
     if (!listing) return { error: 'Listing not found in this business: listing-coordinates lists the listings of a product.' }
     if (!listing.channelConnectionId) return { error: 'This listing has no account recorded: name the account (accountId).' }
     wanted = listing.channelConnectionId
@@ -382,7 +384,7 @@ interface EuQuantity { sku: string; sends: number; otherMarkets: Array<{ market:
  * sets it in all; refused when the live EU listings of the same SKU hold another number. A re-publish never carries a
  * quantity (the studio's change rows leave stock out), so it has nothing to guard.
  */
-async function amazonGuards(plan: PublishPlan, market: string, accountId: string): Promise<{ refusal: string | null; euQuantity: EuQuantity[] }> {
+async function amazonGuards(plan: PublishPlan, market: string, accountId: string, aliasKey = ''): Promise<{ refusal: string | null; euQuantity: EuQuantity[] }> {
   const creates = plan.selected.filter((c) => groupOf(c.field) === 'create')
   for (const change of creates) {
     if (fulfilmentOf(change).some((row) => isFbaRow(row) && row.quantity !== undefined)) {
@@ -391,22 +393,35 @@ async function amazonGuards(plan: PublishPlan, market: string, accountId: string
   }
   if (!AMAZON_EU_SHARED_MARKETS.has(market)) return { refusal: null, euQuantity: [] }
   const euQuantity: EuQuantity[] = []
+  const { CHANNEL_SKU_LISTING_SELECT } = await import('../../listings/channel-sku.js')
+  const { liveChannelSku } = await import('../../listings/channel-sku.pure.js')
   for (const change of creates) {
     const row = fulfilmentOf(change).find((r) => !isFbaRow(r) && typeof r.quantity === 'number')
     if (!row) continue
+    // Amazon's one EU quantity is per seller SKU and account (as the batch's `batchEuQuantityConflicts`): the live EU
+    // listings holding the SKU this create sends — not every listing of the product, so an alias with its own seller SKU
+    // and the main listing are never mixed (Owner 2026-10-05). A listing whose SKU cannot be read counts when it is the
+    // same product's main listing and this create is too (the guard refuses rather than guess).
+    const message = change.current.state === 'value' ? change.current.value as { sku?: unknown } | null : null
+    const sku = typeof message?.sku === 'string' && message.sku ? message.sku : change.sku
     const others = await prisma.channelListing.findMany({
-      where: { productId: change.productId, channel: 'AMAZON', channelConnectionId: accountId, isPublished: true, offerClosedAt: null,
-        marketplace: { in: [...AMAZON_EU_SHARED_MARKETS].filter((m) => m !== market) } },
-      select: { marketplace: true, quantity: true, fulfillmentMethod: true },
-      orderBy: { marketplace: 'asc' },
+      where: { channel: 'AMAZON', channelConnectionId: accountId, isPublished: true, offerClosedAt: null,
+        marketplace: { in: [...AMAZON_EU_SHARED_MARKETS].filter((m) => m !== market) },
+        OR: [{ productId: change.productId }, { channelSku: sku }, { liveChannelSku: sku }] },
+      select: { ...CHANNEL_SKU_LISTING_SELECT, quantity: true, fulfillmentMethod: true },
+      orderBy: [{ marketplace: 'asc' }, { id: 'asc' }],
     })
-    const live = others.filter((o) => o.fulfillmentMethod !== 'FBA')
+    const holdsSku = (o: (typeof others)[number]) => {
+      const held = liveChannelSku(o, o.product?.sku)
+      return held?.sku ? held.sku === sku : o.productId === change.productId && !o.aliasKey && !aliasKey
+    }
+    const live = others.filter((o) => o.fulfillmentMethod !== 'FBA' && holdsSku(o))
     if (!live.length) continue
-    const entry = { sku: change.sku, sends: row.quantity as number, otherMarkets: live.map((o) => ({ market: o.marketplace, holds: o.quantity })) }
+    const entry = { sku, sends: row.quantity as number, otherMarkets: live.map((o) => ({ market: o.marketplace, holds: o.quantity })) }
     euQuantity.push(entry)
     const differs = entry.otherMarkets.filter((o) => o.holds !== entry.sends)
     if (differs.length) {
-      return { euQuantity, refusal: `${change.sku}: this first publish in ${market} would set Amazon's one EU quantity to ${entry.sends}, but its live EU listings hold `
+      return { euQuantity, refusal: `${sku}: this first publish in ${market} would set Amazon's one EU quantity to ${entry.sends}, but its live EU listings hold `
         + `${differs.map((o) => `${o.holds ?? 'no number'} (${o.market})`).join(', ')}. Amazon EU merchant quantity is one number for every EU market: `
         + 'align the quantity first, then publish.' }
     }
@@ -474,7 +489,20 @@ async function publishDestination(args: Record<string, unknown>) {
   const accountId = (args.accountId as string | undefined) ?? (!args.listingId && attributed.length === 1 ? attributed[0] : undefined)
   const resolved = await accountFor(channel, accountId, args.listingId as string | undefined)
   if ('error' in resolved) return { error: `${product.sku} on ${name} ${market}: ${resolved.error}` }
-  return { product, channel, market, account: resolved.account,
+  // The listing a publish is about, resolved as the studio resolves it: '' = the main listing, else the alias id (a listing
+  // id or an alias id may name it). Its undo closes that listing's rows, never the main listing's (Owner 2026-10-05).
+  let aliasKey = ''
+  if (args.listingId) {
+    try {
+      const { resolveWorkspaceDestination } = await import('../../pim/workspace-destination.js')
+      aliasKey = (await resolveWorkspaceDestination({ productId: product.id, channel, marketplace: market, accountId: resolved.account.id, listingId: String(args.listingId) })).aliasKey ?? ''
+    } catch (error) {
+      const sentence = personError(error)
+      if (sentence === null) throw error
+      return { error: `${product.sku} on ${name} ${market}: ${sentence}` }
+    }
+  }
+  return { product, channel, market, account: resolved.account, aliasKey,
     scope: { channel, marketplace: market, accountId: resolved.account.id, ...(args.listingId ? { listingId: String(args.listingId) } : {}) } }
 }
 type Destination = Exclude<Awaited<ReturnType<typeof publishDestination>>, { error: string }>
@@ -490,7 +518,7 @@ function locationFor(review: StudioPublishReview, named: string | undefined): { 
 /** The full plan of a publish from one review: what is sent, the guards, the Shopify location and the fingerprint. */
 async function publishPlanFor(d: Destination, review: StudioPublishReview, fields: Fields, named: string | undefined) {
   const plan = planPublish(review, d.channel, fields)
-  const guards = !plan.refusal && d.channel === 'AMAZON' ? await amazonGuards(plan, d.market, d.account.id) : { refusal: null, euQuantity: [] as EuQuantity[] }
+  const guards = !plan.refusal && d.channel === 'AMAZON' ? await amazonGuards(plan, d.market, d.account.id, d.aliasKey) : { refusal: null, euQuantity: [] as EuQuantity[] }
   const shop = d.channel === 'SHOPIFY' && !plan.refusal ? locationFor(review, named) : { location: null }
   const refusal = plan.refusal ?? guards.refusal ?? shop.error ?? null
   const destination = { channel: d.channel, marketplace: d.market, accountId: d.account.id, accountLabel: d.account.label, ...(d.scope.listingId ? { listingId: d.scope.listingId } : {}) }
@@ -614,10 +642,10 @@ const publishListing: AgentTool = {
       // Refused before anything was sent (a preflight the studio stopped): the approval waits again, with the reason.
       if (result.status === 'FAILED' && result.message.startsWith('Nothing was submitted')) return { ok: false, error: `${where}: ${result.message}` }
       const fieldsSent = built.plan.selected.map((c) => ({ id: c.id, sku: c.sku, field: c.field }))
-      // The listings this publication is about, at its destination: what close-listing would close (its undo).
-      const alias = d.scope.listingId ? (await prisma.channelListing.findFirst({ where: { id: d.scope.listingId }, select: { aliasKey: true } }))?.aliasKey ?? '' : ''
+      // The listings this publication is about, at its destination (the resolved listing: the main one or that alias): what
+      // close-listing would close (its undo).
       const listingIds = (await prisma.channelListing.findMany({ where: { productId: { in: review.rows.map((r) => r.productId) }, channel: d.channel, marketplace: d.market,
-        channelConnectionId: d.account.id, aliasKey: alias }, select: { id: true }, orderBy: { id: 'asc' } })).map((l) => l.id)
+        channelConnectionId: d.account.id, aliasKey: d.aliasKey }, select: { id: true }, orderBy: { id: 'asc' } })).map((l) => l.id)
       return {
         ok: true,
         data: { publicationId: review.id, status: result.status, message: clip(result.message, 600), publish: built.plan.publish, destination: built.destination,

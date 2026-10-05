@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PublishActionCell, PublishActionChange, PublishActionWriteResult } from '@nexus/shared/publish-actions'
 import {
-  PublishActionFence, PublishActionsStore, SHOW_ALL_ROWS, SHOW_THESE_ROWS, SKIP_CELL, groupStaged, inactiveStatusMark, isWaitingCell, newChoiceOf, operationToast,
+  PUBLISH_ACTION_EVENT, PublishActionFence, PublishActionsStore, SHOW_ALL_ROWS, SHOW_THESE_ROWS, SKIP_CELL, groupStaged, inactiveStatusMark, isLocalPublishActionWrite, isWaitingCell, newChoiceOf, operationToast,
   optimisticValue, publishActionEventMatches, publishCellKey, sheetWaitingMark, waitingCountsOf, waitingStatusMark, withoutSameNewChoice, type PublishActionWriteOutcome, type StagedPublishCell,
 } from './usePublishActions'
 import type { PublishActionsRead } from './publishActionsApi'
@@ -60,6 +60,52 @@ function server(rows: PublishActionCell[]) {
 }
 
 afterEach(() => vi.useRealTimers())
+
+describe('usePublishActions store — the shared read (review 2026-10-05, m2)', () => {
+  const answer = async (): Promise<PublishActionWriteResult> => ({ applied: ['a'], refused: [], conflicts: [] })
+  const viewer = () => ({ id: 'u-me', name: 'Awais' })
+
+  it('a settled write drops the shared reads first (the picker and the mark read again), then reads an answer newer than the write', async () => {
+    const reads: Array<{ since?: number }> = []
+    const events: string[] = []
+    const store = new PublishActionsStore({
+      read: async (_signal, options) => { reads.push(options ?? {}); events.push('read'); return { rows: [cell('a')], readAt: T0 } },
+      write: answer, viewer, invalidate: () => { events.push('invalidate') },
+    })
+    await store.load()
+    const before = Date.now()
+    await store.write({ column: 'send', mode: 'full' }, ['a'])
+    expect(events).toEqual(['read', 'invalidate', 'read'])
+    expect(reads[0].since).toBeUndefined()
+    expect(reads[1].since).toBeGreaterThanOrEqual(before)
+    // A lost answer drops them too, and reads back.
+    const failing = new PublishActionsStore({
+      read: async (_signal, options) => { reads.push(options ?? {}); events.push('read'); return { rows: [cell('a')], readAt: T0 } },
+      write: async () => { throw new Error('offline') }, viewer, invalidate: () => { events.push('invalidate') },
+    })
+    await failing.load()
+    events.length = 0
+    await failing.write({ column: 'send', mode: 'full' }, ['a'])
+    expect(events).toEqual(['invalidate', 'read'])
+  })
+
+  it('a write from another tab (an origin no store of this tab has) is never taken for this tab’s own', () => {
+    expect(isLocalPublishActionWrite({ type: 'listing.updated', meta: { subtype: PUBLISH_ACTION_EVENT, origin: 'pa-another-tab' } })).toBe(false)
+    expect(isLocalPublishActionWrite({ type: 'listing.updated', meta: { subtype: PUBLISH_ACTION_EVENT } })).toBe(false)
+    expect(isLocalPublishActionWrite({ type: 'listing.created', meta: { origin: 'pa-x' } })).toBe(false)
+  })
+
+  it('asks for the new read before it stops the old one, so a shared read both would use is joined, not started again', async () => {
+    const order: string[] = []
+    const store = new PublishActionsStore({
+      read: signal => { order.push('read'); signal.addEventListener('abort', () => order.push('stop')); return new Promise(() => undefined) },
+      write: answer, viewer,
+    })
+    void store.load()
+    void store.load({ since: 1 })
+    expect(order).toEqual(['read', 'read', 'stop'])
+  })
+})
 
 describe('usePublishActions store — optimistic, then the server decides', () => {
   it('shows the change at once (who = you, when = now), sends the compare-and-set from what it READ, and settles on the re-read', async () => {

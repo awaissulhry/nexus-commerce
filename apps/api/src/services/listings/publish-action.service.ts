@@ -130,7 +130,12 @@ interface RowRead {
   create: PublishActionCreate | null
   /** New listings: no listing record here — `row` is a stand-in whose id is a `new:` id (`newRowId`). */
   noRecord: boolean
+  /** Aliases in the Publish window (Owner 2026-10-05): the alias's name, place and state; null on the main listing (and on
+   *  a row whose alias has no record). */
+  alias: AliasMark | null
 }
+
+interface AliasMark { label: string; position: number; status: 'ACTIVE' | 'ARCHIVED' }
 
 interface FamilyRead {
   familyId: string
@@ -194,6 +199,11 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
     select: LISTING_SELECT,
     orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { id: 'asc' }],
   }) as ListingRow[]
+  // Aliases (Owner 2026-10-05): an alias row carries its name, place and state. An ARCHIVED alias's rows are still read
+  // (review 2026-10-05): its live item must stay endable and deletable from its Status cell; the Publish window and the
+  // listing picker offer ACTIVE aliases only (`aliasStatus`).
+  const aliases = await aliasMarks([...rows.map(row => row.aliasKey), filter.aliasKey ?? ''])
+  const activeAlias = (aliasKey: string) => !aliasKey || aliases.get(aliasKey)?.status === 'ACTIVE'
   const productOf = new Map(products.map(p => [p.id, p]))
   const byDestination = new Map<string, ListingRow[]>()
   for (const row of rows) {
@@ -204,7 +214,8 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
   // New listings: a destination the filter names exactly (channel, market, account; alias '' unless named) is read even
   // when the family has no listing there yet — every member is then a new row.
   const named: NewRowRef | null = channel && marketplace && accountId ? { productId: '', channel, marketplace, accountId, aliasKey: filter.aliasKey ?? '' } : null
-  if (options.newRows && named) {
+  // Stand-ins (new rows) only for the main listing or an ACTIVE alias: an archived alias never starts a listing.
+  if (options.newRows && named && activeAlias(named.aliasKey)) {
     const key = destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey })
     if (!byDestination.has(key)) byDestination.set(key, [])
   }
@@ -233,6 +244,7 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
     // New listings: what Publish does with every row not on the channel here (own choice, the main row's, the default —
     // Not listed for a row Nexus deleted).
     const familyRow = group.find(row => row.productId === familyId)
+    const alias = d.aliasKey ? aliases.get(d.aliasKey) ?? null : null
     const choices = newListingChoices({ channel: d.channel, aliasKey: d.aliasKey, familyId, products, listings: group, excludedListingIds: excluded,
       deletions,
       shopifyActive: d.channel === 'SHOPIFY' && String(nativeListingValue(familyRow ?? null, 'status', 'DRAFT') ?? '').toUpperCase() === 'ACTIVE' })
@@ -241,7 +253,7 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
       const facts: CapabilityFacts = { isFba: read.isFba.get(row.id) ?? false, shopifyLinked: read.shopifyLinked, deleted: deleted ?? null,
         isMain: product.isParent, isVariation: !!product.parentId, noRecord, alias: d.aliasKey !== '', onChannel: !!row.externalListingId }
       const choice = isNewListingRow(state, facts) ? choices.get(product.id) : undefined
-      out.push({ row, product, model: read.model, state, reason, facts, channelLabel: channelName(d.channel), noRecord,
+      out.push({ row, product, model: read.model, state, reason, facts, channelLabel: channelName(d.channel), noRecord, alias,
         deleted: deleted ? { ...deleted, sentence: deletedShort(deleted) } : null,
         create: choice ? { target: choice.target, source: choice.source, defaultTarget: choice.defaultTarget, noRecord,
           sentence: newListingSentence(choice, { includedByDefault: choice.includedByDefault, deleted: choice.deleted }) } : null })
@@ -251,11 +263,19 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
     for (const product of products) {
       if (listed.has(product.id)) continue
       if (group.length) missingByProduct.set(product.id, (missingByProduct.get(product.id) ?? 0) + 1)
-      if (options.newRows && named && key === destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey }))
+      if (options.newRows && named && activeAlias(named.aliasKey) && key === destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey }))
         readRow(standInRow(product, { ...d, productId: product.id }), product, true)
     }
   }
   return { familyId, products, rows: out, missingByProduct }
+}
+
+/** The aliases among these alias keys ('' = the main listing, skipped), by id: their name, place and state. */
+async function aliasMarks(keys: readonly string[]): Promise<Map<string, AliasMark>> {
+  const ids = [...new Set(keys.filter(Boolean))]
+  if (!ids.length) return new Map()
+  const rows = await prisma.productListingAlias.findMany({ where: { id: { in: ids } }, select: { id: true, label: true, position: true, status: true } })
+  return new Map(rows.map(alias => [alias.id, { label: alias.label, position: alias.position, status: alias.status === 'ARCHIVED' ? 'ARCHIVED' as const : 'ACTIVE' as const }]))
 }
 
 // ── Options and the "No longer applies" rule ─────────────────────────────────────────────────────
@@ -325,6 +345,7 @@ function cellOf(r: RowRead, names: Map<string, string | null>): PublishActionCel
   return {
     listingId: row.id, productId: product.id, sku: product.sku,
     channel: row.channel, marketplace: row.marketplace, accountId: row.channelConnectionId ?? '', aliasKey: row.aliasKey,
+    aliasLabel: r.alias?.label ?? null, aliasPosition: r.alias?.position ?? null, aliasStatus: r.alias?.status ?? null,
     state: r.state, stateReason: r.reason,
     // A row not on the channel reads Full update (a create always sends the whole listing); a stored Delete shows until it
     // is cleared. Its time and author are a stored value's only (never an older relist choice's: that reads as Status Active).
@@ -347,6 +368,9 @@ function cellOf(r: RowRead, names: Map<string, string | null>): PublishActionCel
  * Every listing row of the product's family (optionally one destination, or part of one), with its waiting values and
  * options. `newRows` (New listings): when the filter names one destination exactly (channel, market, account; alias ''
  * unless named), every family member with no listing there is read too, as a new row with a `new:` listing id.
+ * Aliases (Owner 2026-10-05): an alias row carries its name, place and state (`aliasLabel`, `aliasPosition`,
+ * `aliasStatus`). An archived alias's rows are read too, so its live item can still be ended or deleted from its Status
+ * cell; it never gets new rows, and the Publish window and the listing picker offer ACTIVE aliases only.
  */
 export async function readPublishActions(productId: string, destination?: PublishActionDestinationFilter, options: ReadOptions = {}): Promise<PublishActionCellRead[]> {
   const family = await readFamilyRows(productId, destination, options)

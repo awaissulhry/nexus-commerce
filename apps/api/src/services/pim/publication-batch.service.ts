@@ -75,7 +75,15 @@ function parseRequest(body: unknown): BatchReviewInput[] {
   return parsed
 }
 
-const destinationLabel = (scope: Record<string, any>) => [scope?.channel === 'EBAY' ? 'eBay' : scope?.channel === 'AMAZON' ? 'Amazon' : scope?.channel === 'SHOPIFY' ? 'Shopify' : String(scope?.channel ?? ''), scope?.marketplace].filter(Boolean).join(' · ')
+/** "eBay · IT"; an alias adds its name: "eBay · IT · Racing edition" (Owner 2026-10-05). */
+const destinationLabel = (scope: Record<string, any>, aliasLabel?: string | null) => [scope?.channel === 'EBAY' ? 'eBay' : scope?.channel === 'AMAZON' ? 'Amazon' : scope?.channel === 'SHOPIFY' ? 'Shopify' : String(scope?.channel ?? ''), scope?.marketplace, aliasLabel].filter(Boolean).join(' · ')
+
+/** Aliases (Owner 2026-10-05): the name of each alias id among `keys` ('' = the main listing, skipped). */
+async function aliasLabels(tx: Prisma.TransactionClient, keys: ReadonlyArray<string | null | undefined>): Promise<Map<string, string>> {
+  const ids = [...new Set(keys.filter((key): key is string => !!key))]
+  if (!ids.length) return new Map()
+  return new Map((await tx.productListingAlias.findMany({ where: { id: { in: ids } }, select: { id: true, label: true } })).map(alias => [alias.id, alias.label]))
+}
 
 /**
  * Queue a batch for sending. With queue workers (ENABLE_QUEUE_WORKERS=1) the worker sends it; without them it runs in
@@ -105,6 +113,8 @@ interface FamiliesRequest { productIds: string[]; destinations: StudioPublishSco
   startAs: StartAsTarget | null }
 
 const MAX_REQUEST_PRODUCTS = 200
+/** The products list's Publish never names a listing: an alias is published from its product's own Publish window. */
+export const ALIAS_FROM_OWN_WINDOW = 'Aliases are published from each product\'s own Publish window.'
 const text = (value: unknown, max: number) => typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : null
 
 /** Step 6 — the products list's request: products (a variation means its family) × destinations. */
@@ -123,8 +133,10 @@ function parseFamiliesRequest(body: unknown): FamiliesRequest {
     const entry = object(raw)
     const channel = text(entry.channel, 40), marketplace = text(entry.marketplace, 40), accountId = text(entry.accountId, 200)
     if (!channel || !marketplace || !accountId) throw new WorkspaceScopeError('Every destination needs its channel, market and account.', 400)
-    if (entry.listingId !== undefined && entry.listingId !== null && !text(entry.listingId, 200)) throw new WorkspaceScopeError('A destination listing is not valid.', 400)
-    const scope: StudioPublishScope = { channel: channel.toUpperCase(), marketplace: marketplace.toUpperCase(), accountId, ...(text(entry.listingId, 200) ? { listingId: text(entry.listingId, 200)! } : {}) }
+    // Aliases (Owner 2026-10-05): this path publishes each family's MAIN listing only (its review, Status and presence never
+    // read a listing), so a destination that names a listing is refused rather than sent to the main listing.
+    if (entry.listingId !== undefined && entry.listingId !== null) throw new WorkspaceScopeError(ALIAS_FROM_OWN_WINDOW, 400)
+    const scope: StudioPublishScope = { channel: channel.toUpperCase(), marketplace: marketplace.toUpperCase(), accountId }
     const key = reviewPairKey('', scope)
     if (seen.has(key)) throw new WorkspaceScopeError('A destination appears twice in this request.', 400)
     seen.add(key)
@@ -204,7 +216,7 @@ async function createFamiliesBatch(body: unknown, userId: string | null, actor: 
 
 interface CheckedReview {
   review: BatchReviewInput
-  row: { id: string; status: string; changeCount: number | null; productId: string | null; changes: Prisma.JsonValue }
+  row: { id: string; status: string; changeCount: number | null; productId: string | null; aliasKey: string | null; changes: Prisma.JsonValue }
   data: Record<string, any>
   label: string
 }
@@ -218,13 +230,14 @@ interface CheckedReview {
 async function checkReviews(tx: Prisma.TransactionClient, reviews: BatchReviewInput[], userId: string | null, now: Date,
   extra: (row: CheckedReview['row'], data: Record<string, any>, label: string) => string | null = () => null): Promise<CheckedReview[]> {
   const rows = await tx.bulkOperation.findMany({ where: { id: { in: reviews.map(r => r.reviewId) }, userId },
-    select: { id: true, status: true, kind: true, expiresAt: true, batchId: true, changeCount: true, productId: true, changes: true } })
+    select: { id: true, status: true, kind: true, expiresAt: true, batchId: true, changeCount: true, productId: true, aliasKey: true, changes: true } })
   const byId = new Map(rows.map(row => [row.id, row]))
+  const labels = await aliasLabels(tx, rows.map(row => row.aliasKey))
   const children = reviews.map(review => {
     const row = byId.get(review.reviewId)
     const data = object(row?.changes)
     if (!row || data.kind !== PUBLICATION_KIND) throw new WorkspaceScopeError('A review in this batch was not found. Review the destinations again.', 404)
-    const label = destinationLabel(data.scope)
+    const label = destinationLabel(data.scope, row.aliasKey ? labels.get(row.aliasKey) : null)
     if (CLOSED_UNSENT.has(row.status)) throw new WorkspaceScopeError(`${label}: this review was not sent and is closed. Review the current values again.`, 409)
     if (row.status !== 'PREVIEW') throw new WorkspaceScopeError(`${label}: this review was already sent. Check its result.`, 409)
     if (row.batchId) throw new WorkspaceScopeError(`${label}: this review already belongs to another batch.`, 409)
@@ -244,9 +257,10 @@ async function checkReviews(tx: Prisma.TransactionClient, reviews: BatchReviewIn
   // A destination still waiting for an earlier result is not sent again (the submit would refuse it anyway).
   if (keys.length) {
     const open = await tx.bulkOperation.findMany({ where: { ...OPEN_PUBLICATION, id: { notIn: children.map(c => c.row.id) },
-      OR: keys.map(key => ({ changes: { path: ['publicationKey'], equals: key } })) }, select: { changes: true } })
+      OR: keys.map(key => ({ changes: { path: ['publicationKey'], equals: key } })) }, select: { aliasKey: true, changes: true } })
     if (open.length) {
-      const waiting = [...new Set(open.map(row => destinationLabel(object(object(row.changes).scope))))].join(', ')
+      const openLabels = await aliasLabels(tx, open.map(row => row.aliasKey))
+      const waiting = [...new Set(open.map(row => destinationLabel(object(object(row.changes).scope), row.aliasKey ? openLabels.get(row.aliasKey) : null)))].join(', ')
       throw new WorkspaceScopeError(`A previous publication still needs a result on ${waiting}. Check it before publishing there again.`, 409)
     }
   }
@@ -334,6 +348,9 @@ async function createPlanBatch(planBody: unknown, userId: string | null, actor: 
         const scope = object(data.scope)
         if (row.productId !== prepared.familyId || scope.channel !== entry.scope.channel || scope.marketplace !== entry.scope.marketplace || scope.accountId !== entry.scope.accountId)
           return `${label}: this review is for another product or destination. Review again.`
+        // Aliases (Owner 2026-10-05): the review must be of the same listing there — the main listing, or that alias.
+        if ((row.aliasKey ?? '') !== entry.destination.aliasKey)
+          return `${entry.label}: this review is for ${row.aliasKey ? 'another listing (an alias)' : 'the main listing'} on this market, not the listing chosen. Review again.`
         return heldTickRefusal(entry, data)
       })
       await tx.bulkOperation.create({ data: { id: batchId, userId, status: 'QUEUED', kind: BATCH_KIND, productCount: order.length,

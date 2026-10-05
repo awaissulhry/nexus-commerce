@@ -573,7 +573,7 @@ export interface AliasReadiness {
 /**
  * One listing alias.
  *
- * The PRIMARY listing is always `{ id: null, position: 0, label: 'Primary' }`, so this lane renders
+ * The PRIMARY listing is always `{ id: null, position: 0, label: 'Main listing' }`, so this lane renders
  * ONE uniform list of groups and never special-cases the un-aliased rows (PES.5 §3.2). Every place
  * that keys on an alias therefore goes through `aliasKeyOf()` rather than using `id` raw.
  */

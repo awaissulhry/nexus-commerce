@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
 import { publicationScopeKey, type PublicationDestinationOption } from './model'
-import { publishButtonText, publishPlan, MAX_BATCH_DESTINATIONS, type DestinationState } from './destinations'
+import { LISTINGS_WORD, MARKETS_WORD, publishButtonText, publishPlan, MAX_BATCH_DESTINATIONS, type DestinationState } from './destinations'
 import {
-  activeTab, changeAccount, changeChannel, changeMarkets, childMarketKey, familySummary, initialChoice, listedMarkets, manySummary, manyTabWords, marketOptionLabel,
-  marketTabLabel, pickerAccounts, pickerChannels, pickerMarkets, refillChoice, removeMarket, reviewTabWords,
+  activeTab, changeAccount, changeChannel, changeMarkets, childMarketKey, choiceWord, familySummary, initialChoice, listedMarkets, manySummary, manyTabWords, marketOptionLabel,
+  marketShortLabel, marketsPickerText, marketTabLabel, marketTabParts, pickerAccounts, pickerChannels, pickerMarkets, refillChoice, removeMarket, reviewTabWords,
 } from './pickers'
 
 const option = (channel: string, marketplace: string, accountId: string, marketName: string, accountLabel = 'Main'): PublicationDestinationOption => {
@@ -61,11 +61,30 @@ describe('pickers', () => {
     expect(activeTab(choice.keys, amazonDE.key)).toBe(amazonDE.key)
   })
 
-  it('names a market by its code first, as the sheet does', () => {
+  it('names a market by its code first, as the sheet does; an alias and its main listing with the sheet band’s mark', () => {
     expect(marketOptionLabel(amazonIT)).toBe('IT · Italy')
     expect(marketOptionLabel(option('EBAY', 'GLOBAL', 'e1', 'GLOBAL'))).toBe('GLOBAL')
     const listing = { ...amazonIT, scope: { ...amazonIT.scope, listingId: 'l1' } }
     expect(marketOptionLabel(listing)).toBe('IT · Italy · selected listing')
+    expect(marketShortLabel(listing)).toBe('IT · selected listing')
+    const alias = { ...amazonIT, key: 'alias', scope: { ...amazonIT.scope, listingId: 'a1' }, alias: { id: 'a1', label: 'sample-listing-ALT1', position: 1 }, listings: 2 }
+    const main = { ...amazonIT, listings: 2 }
+    expect(marketOptionLabel(alias)).toBe('IT · Italy · ① sample-listing-ALT1')
+    expect(marketOptionLabel(main)).toBe('IT · Italy · ★ Main listing')
+    expect(marketShortLabel(alias)).toBe('IT ① sample-listing-ALT1')
+    expect(marketShortLabel(main)).toBe('IT ★ Main listing')
+    expect(marketShortLabel(amazonIT)).toBe('IT')
+    expect(marketTabLabel(alias, { kind: 'ready', changes: 3, whole: false, requestReady: true })).toBe('IT ① sample-listing-ALT1 · 3 changes')
+    // Phone width: the tab's listing name may end with an ellipsis; its review words are always shown whole.
+    expect(marketTabParts(alias, { kind: 'ready', changes: 3, whole: false, requestReady: true })).toEqual({ name: 'IT ① sample-listing-ALT1', words: '3 changes' })
+    expect(marketTabParts(alias, { kind: 'checking' }, 'Waiting for channel')).toEqual({ name: 'IT ① sample-listing-ALT1', words: 'Waiting for channel' })
+    expect(marketTabLabel(main, { kind: 'checking' })).toBe('IT ★ Main listing · checking…')
+    // The Markets picker counts listings once an alias is chosen.
+    expect(marketsPickerText([main, alias, amazonDE], [main.key, amazonDE.key])).toBe('Markets: 2')
+    expect(marketsPickerText([main, alias, amazonDE], [main.key, alias.key, amazonDE.key])).toBe('Listings: 3')
+    expect(marketsPickerText([amazonIT], [amazonIT.key], 'Markets to check')).toBe('Markets to check: 1')
+    expect(choiceWord([main, alias], [alias.key])).toBe(LISTINGS_WORD)
+    expect(choiceWord([main, alias], [main.key])).toBe(MARKETS_WORD)
   })
 
   it('writes a tab label for every review state', () => {
@@ -99,6 +118,7 @@ describe('pickers', () => {
     const scopeOf = (key: string) => options.find(o => o.key === key)?.scope
     expect(publishButtonText(plan, scopeOf)).toBe('Publish 21 changes to 2 markets · skip 1 with problems')
     expect(familySummary(3, plan)).toBe('3 markets · 21 changes · 1 with problems')
+    expect(familySummary(3, plan, LISTINGS_WORD)).toBe('3 listings · 21 changes · 1 with problems')
   })
 
   it('labels a many-product market tab from its rows', () => {
@@ -142,11 +162,17 @@ describe('one-click publish — the listed markets start chosen (OD1 A, OD2 A)',
     expect(initialChoice(all, [], new Set())).toEqual({ channel: 'AMAZON', accountId: 'a1', keys: [] })
   })
 
-  it('keeps a market the sheet shows on a second listing, and never adds another listing’s option by itself', () => {
+  it('chooses an alias the sheet shows, and a listed alias by its own key; an unlisted alias is offered, never chosen by itself', () => {
     const alias = { ...amazonDE, key: publicationScopeKey({ ...amazonDE.scope, listingId: 'second' }), scope: { ...amazonDE.scope, listingId: 'second' } }
-    const withAlias = [amazonIT, alias, amazonFR]
-    expect(listedMarkets(withAlias, new Set([amazonDE.key, amazonFR.key]), 'AMAZON', 'a1', [alias.key])).toEqual([alias.key, amazonFR.key])
-    expect(listedMarkets(withAlias, new Set([amazonDE.key]), 'AMAZON', 'a1')).toEqual([])
+    const withAlias = [amazonIT, amazonDE, alias, amazonFR]
+    expect(listedMarkets(withAlias, new Set([amazonDE.key, amazonFR.key]), 'AMAZON', 'a1', [alias.key])).toEqual([amazonDE.key, alias.key, amazonFR.key])
+    expect(listedMarkets(withAlias, new Set([amazonDE.key]), 'AMAZON', 'a1')).toEqual([amazonDE.key])
+    expect(listedMarkets(withAlias, new Set([alias.key]), 'AMAZON', 'a1')).toEqual([alias.key])
+    // Another channel carries the market codes of the main listings only (an alias belongs to its own account).
+    expect(changeChannel([...withAlias, ebayDE], { channel: 'AMAZON', accountId: 'a1', keys: [alias.key] }, 'EBAY').keys).toEqual([ebayDE.key])
+    // The cap counts listings.
+    const many = Array.from({ length: MAX_BATCH_DESTINATIONS + 2 }, (_, i) => ({ ...amazonIT, key: `k${i}`, scope: { ...amazonIT.scope, listingId: `a${i}` } }))
+    expect(listedMarkets(many, new Set(many.map(o => o.key)), 'AMAZON', 'a1')).toHaveLength(MAX_BATCH_DESTINATIONS)
   })
 
   it('switching channel or account refills with its listed markets (plus the sheet’s market there); listed nowhere keeps the pickers’ choice', () => {

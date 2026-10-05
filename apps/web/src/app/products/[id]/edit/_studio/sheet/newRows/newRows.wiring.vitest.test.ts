@@ -50,6 +50,6 @@ describe('the channel sheet', () => {
     expect(channel).not.toContain('addListingAlias')
   })
   it('shows every listing once a batch created one while a single listing was shown', () => {
-    expect(channel).toContain("if (kinds.has('alias') && selectedAlias !== null) setListing(undefined);")
+    expect(channel).toContain("if (kinds.has('alias')) { invalidatePublishActions(productId); if (selectedAlias !== null) setListing(undefined) }")
   })
 })

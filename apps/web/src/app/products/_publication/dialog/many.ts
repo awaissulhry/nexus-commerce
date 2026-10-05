@@ -58,6 +58,11 @@ export const manyDestinationOptions = (options: readonly PublicationDestinationO
   return options.filter(o => channels.includes(o.scope.channel) && !o.scope.listingId)
 }
 export const MANY_CHANNELS_NOTE = 'Amazon and eBay only. Publish Shopify and Etsy from each product’s own Publish window: Shopify asks for a stock location and a confirmation per product.'
+/**
+ * Aliases (Owner 2026-10-05): this window publishes each market's main listing only (the server refuses an alias here);
+ * a product's listing aliases are published from its own Publish window, where each is a destination of its own.
+ */
+export const MANY_ALIASES_NOTE = 'Aliases are published from each product’s own Publish window.'
 export const MANY_STATUS_CHANNELS_NOTE = 'Amazon, eBay, Shopify and Etsy. A listing its channel cannot change is shown with the reason, and is left as it is.'
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`

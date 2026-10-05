@@ -11,6 +11,8 @@ import { GridDensityProvider } from '@/design-system/lib/density'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Presentation/usePresentationNavigationGuard'
 import { useSaveReporter } from '../../contracts'
+import { useListingParamForRecord } from '../../useListingChoices'
+import { listingDisplayLabel } from '@/app/products/_publication/dialog/model'
 import { ListingPhotoPreview } from './ListingPhotoPreview'
 import { MediaReview } from './MediaReview'
 import { dimensions, SourceLibrary } from './SourceLibrary'
@@ -21,6 +23,8 @@ import styles from './media.module.css'
 const LISTING: EbayMediaGallery = { axis: null, value: null, assetIds: [] }
 
 export function EbayMediaWorkspace({ path, productId, onListingChange, accountLabel }: { accountLabel: string; path: string; productId: string; onListingChange: (id: string) => void }) {
+  // One id kind (aliases, Owner 2026-10-05): a listing chosen here is written as the studio bar's picker writes it.
+  const listingParam = useListingParamForRecord('EBAY')
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [draft, setDraft] = useState<EbayMediaDraft | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -231,9 +235,9 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
         <Button variant="tonal" disabled={blocked || (!dirty && !workspace.destination.inherited) || requiresReload || !!check.problems.length} onClick={() => { void save() }}>{!compactLayout && <Save size={16} aria-hidden />}Save draft</Button>
       </div>} />
       <section className={styles.destination} aria-label="Listing destination">
-        <Field label="Listing alias"><Select value={workspace.destination.listingId ?? ''} disabled={busy || uploading || !workspace.destination.listings.length} onChange={event => onListingChange(event.target.value)}>
-          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
-          {workspace.destination.listings.map(listing => <option key={listing.id} value={listing.id}>{listing.label}{listing.externalListingId ? ` · ${listing.externalListingId}` : ' · No live ID'}{workspace.destination.listings.some(other => other.id !== listing.id && other.label === listing.label && other.externalListingId === listing.externalListingId) ? ` · ${listing.id}` : ''}</option>)}
+        <Field label="Listing alias"><Select value={workspace.destination.listingId ?? ''} disabled={busy || uploading || !workspace.destination.listings.length} onChange={event => onListingChange(listingParam(event.target.value))}>
+          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Main listing · starts as a draft on save' : 'Choose a listing'}</option>}
+          {workspace.destination.listings.map(listing => <option key={listing.id} value={listing.id}>{listingDisplayLabel(listing.label)}{listing.externalListingId ? ` · ${listing.externalListingId}` : ' · No live ID'}{workspace.destination.listings.some(other => other.id !== listing.id && other.label === listing.label && other.externalListingId === listing.externalListingId) ? ` · ${listing.id}` : ''}</option>)}
         </Select></Field>
         <div className={styles.destinationSummary}><strong>eBay {workspace.destination.marketplace} · {accountLabel}</strong><p>Draft only · Saving does not publish</p></div>
         <p className={styles.saveStatus} role="status">{busy ? 'Saving or refreshing…' : requiresReload ? 'Reload required before saving' : dirty ? 'Unsaved changes' : workspace.destination.inherited ? 'Starting images · Save to keep' : 'Saved in Nexus'}</p>
@@ -297,7 +301,7 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
           onAdd={ids => { const added = add(ids); if (added && !pinned) setLibraryOpen(false); return added }} onPreview={setPreviewId} onRefresh={refreshLibrary} onBusyChange={setUploading} />}
       </div>
     </div>
-    <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title="Photo preview" subtitle={`${workspace.destination.label} · eBay ${workspace.destination.marketplace} · Draft preview only`} size="full">
+    <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title="Photo preview" subtitle={`${listingDisplayLabel(workspace.destination.label)} · eBay ${workspace.destination.marketplace} · Draft preview only`} size="full">
       <ListingPhotoPreview workspace={workspace} draft={draft} galleries={galleries} onPreview={setPreviewId} />
     </Modal>
     <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="Review image draft" size="xl"

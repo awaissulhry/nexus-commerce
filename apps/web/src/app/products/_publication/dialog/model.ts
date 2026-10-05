@@ -1,5 +1,6 @@
 import type { StudioPublishIssue, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
 import type { PublishPlan } from '@nexus/shared/publish-plan'
+import { aliasMarkGlyph } from '@/design-system/primitives'
 
 /**
  * The markets the dialog can publish to, as any surface describes them (the studio's `MarketplaceLite` fits). Kept
@@ -14,18 +15,72 @@ export interface PublicationMarket {
   accounts?: Array<{ id: string; label: string }>
 }
 
-/** One place the dialog can publish to: a market of a channel on one connected account (and, rarely, one listing). */
+/**
+ * Aliases in the Publish window (Owner 2026-10-05): a second (third…) listing of the family on one channel, market and
+ * account. Its destination's `scope.listingId` is the ALIAS id (`ProductListingAlias.id`, the publish-actions cell's
+ * `aliasKey`) — never a ChannelListing id; the main listing has no `listingId`. `position` is its place in the sheet's
+ * bands (1 = ①, 2 = ②…).
+ */
+export interface PublicationAlias {
+  channel: string
+  marketplace: string
+  accountId: string
+  id: string
+  label: string
+  position: number
+}
+
+/**
+ * One place the dialog can publish to: a market of a channel on one connected account — its main listing, or one of
+ * its listing aliases (`alias`), or (rarely) a listing the dialog was asked for and knows nothing more about.
+ */
 export interface PublicationDestinationOption {
   key: string
   scope: StudioPublishScope
-  /** "Amazon Italy · Xavia Racing" — the old one-line label. */
+  /** "Amazon Italy · Xavia Racing" — the old one-line label ("… · ① Racing edition" on an alias). */
   label: string
   /** The market's own name ("Amazon Italy"). */
   marketName: string
   accountLabel: string
+  /** The listing alias this destination publishes (`scope.listingId` is its id); null or absent on the main listing. */
+  alias?: { id: string; label: string; position: number } | null
+  /**
+   * How many listings of the family this market and account offers here (the main listing, its aliases, a listing asked
+   * for): the main listing shows ★ only when there is more than one, as the sheet's bands do (`AliasMark`).
+   */
+  listings?: number
 }
 
 export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify([scope.channel, scope.marketplace, scope.accountId, scope.listingId ?? null])
+
+/**
+ * The main listing's name beside its ★ when its market has aliases — one word everywhere (review 2026-10-05, m3): the
+ * studio's listing picker, the window, its tabs, the toolbar mark and the toast all say "Main listing".
+ */
+export const MAIN_LISTING_LABEL = 'Main listing'
+
+/** The server's older names for the main listing: a review's or a run's `aliasLabel`, the Media pages' listing options. */
+const SERVER_MAIN_LISTING_NAMES: ReadonlySet<string> = new Set(['Primary listing', 'Primary'])
+
+/**
+ * A listing's name as the studio shows it: the server's "Primary listing" / "Primary" read "Main listing" (one word,
+ * review 2026-10-05, m3); every other name as it is. DISPLAY ONLY — never a value sent to the server or matched on import.
+ */
+export function listingDisplayLabel(label: string): string {
+  return SERVER_MAIN_LISTING_NAMES.has(label.trim()) ? MAIN_LISTING_LABEL : label
+}
+/** A listing the window was asked for (a retry) that is neither the main listing nor a known alias. */
+export const SELECTED_LISTING_LABEL = 'Selected listing'
+
+/**
+ * Which listing of its market a destination is, in the sheet band's words (`AliasBandCell`): "① Racing edition" for an
+ * alias, "★ Main listing" for the main listing when its market has aliases, null for a market's only listing.
+ */
+export function optionListingLabel(option: Pick<PublicationDestinationOption, 'scope' | 'alias' | 'listings'>): string | null {
+  if (option.alias) return `${aliasMarkGlyph(option.alias.position)} ${option.alias.label}`
+  if (option.scope.listingId) return SELECTED_LISTING_LABEL
+  return (option.listings ?? 1) > 1 ? `${aliasMarkGlyph(0)} ${MAIN_LISTING_LABEL}` : null
+}
 
 /** Out-of-order selection responses cannot enable a different review or checkbox set. */
 export function matchesPublicationSelection(value: unknown, review: StudioPublishReview | null, selectedIds: string[]): value is StudioPublishSelection {
@@ -60,13 +115,36 @@ export function retainPublicationReceipt(previous: StudioPublishResult | null, n
     message: `${next.message} Previously received channel reference: ${references.join(', ')}.` }
 }
 
-export function publicationDestinations(markets: PublicationMarket[], current?: StudioPublishScope): PublicationDestinationOption[] {
-  const options = markets.filter(m => m.connected !== false).flatMap(m => (m.accounts ?? []).map(a => {
-    const scope: StudioPublishScope = { channel: m.channel, marketplace: m.code, accountId: a.id,
-      ...(current?.channel === m.channel && current.marketplace === m.code && current.accountId === a.id && current.listingId ? { listingId: current.listingId } : {}) }
-    return { key: publicationScopeKey(scope), scope, label: `${m.name} · ${a.label}${scope.listingId ? ' · Selected listing' : ''}`, marketName: m.name, accountLabel: a.label }
-  }))
-  return [...new Map(options.map(option => [option.key, option])).values()]
+/**
+ * Every destination of the connected markets: each market's main listing on each account, followed by its listing
+ * aliases (`aliases`, see `listedAliases`) in their position order. The surface's current listing (`current`, the
+ * studio's sheet) never replaces the main listing: an alias the window knows is already there; a listing it does not
+ * know (not read yet) is added after the market's aliases, so it can start ticked.
+ */
+export function publicationDestinations(markets: PublicationMarket[], current?: StudioPublishScope, aliases: readonly PublicationAlias[] = []): PublicationDestinationOption[] {
+  const out = new Map<string, PublicationDestinationOption>()
+  for (const m of markets) {
+    if (m.connected === false) continue
+    for (const a of m.accounts ?? []) {
+      const where: StudioPublishScope = { channel: m.channel, marketplace: m.code, accountId: a.id }
+      const own = [...new Map(aliases.filter(x => x.channel === m.channel && x.marketplace === m.code && x.accountId === a.id).map(x => [x.id, x])).values()]
+        .sort((x, y) => x.position - y.position || x.label.localeCompare(y.label))
+      const asked = current?.listingId && current.channel === m.channel && current.marketplace === m.code && current.accountId === a.id
+        && !own.some(x => x.id === current.listingId) ? current.listingId : null
+      const listings = 1 + own.length + (asked ? 1 : 0)
+      const add = (scope: StudioPublishScope, alias: PublicationDestinationOption['alias']) => {
+        const key = publicationScopeKey(scope)
+        if (out.has(key)) return
+        const option: PublicationDestinationOption = { key, scope, label: '', marketName: m.name, accountLabel: a.label, alias, listings }
+        const listing = optionListingLabel(option)
+        out.set(key, { ...option, label: `${m.name} · ${a.label}${listing ? ` · ${listing}` : ''}` })
+      }
+      add(where, null)
+      for (const x of own) add({ ...where, listingId: x.id }, { id: x.id, label: x.label, position: x.position })
+      if (asked) add({ ...where, listingId: asked }, null)
+    }
+  }
+  return [...out.values()]
 }
 export function matchesPublicationReview(value: unknown, productId: string, scope: StudioPublishScope): value is StudioPublishReview {
   const review = value as StudioPublishReview | null

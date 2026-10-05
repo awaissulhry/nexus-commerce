@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StudioPublicationStatus } from '@nexus/shared/studio-publication'
-import { SHOW_ALL_ACTION, SHOW_REJECTED_ACTION, destinationLabel, isSettled, publicationEventMatches, publicationEventOf, publicationMark, publicationOutcome, rejectedFilterMenuLabel, resultCounts, summaryCounts, withRejectedFilter } from './outcome'
+import { SHOW_ALL_ACTION, SHOW_REJECTED_ACTION, combinedPublicationMark, destinationLabel, eventListing, isSettled, listingPlace, publicationEventMatches, publicationEventOf, publicationMark, publicationOutcome, rejectedFilterMenuLabel, resultCounts, summaryCounts, watchedListings, withRejectedFilter } from './outcome'
 
 const destination = { productIds: ['child', 'family'], channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: '' }
 const meta = { publicationId: 'pub', productId: 'family', channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: '', status: 'PARTIAL', terminal: true, source: 'sse' }
@@ -41,6 +41,8 @@ describe('publicationOutcome', () => {
   it('says every product went through', () => {
     expect(publicationOutcome('ACCEPTED', counts({ products: 21, accepted: 21 }), 'AMAZON', 'IT')).toEqual({ tone: 'info', message: 'Amazon · IT accepted all 21 products.' })
     expect(publicationOutcome('VERIFIED', counts({ products: 1, verified: 1 }), 'EBAY', 'IT')).toEqual({ tone: 'success', message: 'eBay · IT accepted the product.' })
+    // Aliases (2026-10-05): the window's own name for a listing alias.
+    expect(publicationOutcome('VERIFIED', counts({ products: 1, verified: 1 }), 'EBAY', 'IT', 'eBay · IT · ① Racing edition')?.message).toBe('eBay · IT · ① Racing edition accepted the product.')
   })
   it('counts a partial result', () => {
     expect(publicationOutcome('PARTIAL', counts({ products: 21, accepted: 19, failed: 2 }), 'AMAZON', 'IT'))
@@ -135,5 +137,85 @@ describe('withRejectedFilter — the "N rejected" mark shows those rows (step 3)
     expect(rejectedFilterMenuLabel(2, false, 'AMAZON', 'IT')).toBe('Show the 2 rows rejected on Amazon · IT')
     expect(rejectedFilterMenuLabel(1, false, 'AMAZON', 'IT')).toBe('Show the row rejected on Amazon · IT')
     expect(rejectedFilterMenuLabel(2, true, 'AMAZON', 'IT')).toBe('Show all rows')
+  })
+})
+
+describe('aliases (2026-10-05) — the mark and the toast cover every listing of the destination', () => {
+  const aliases = [{ id: 'alias-1', label: 'sample-listing-ALT1', position: 1 }, { id: 'alias-2', label: 'sample-listing-ALT2', position: 2 }]
+  const at = (minutes: number) => new Date(Date.parse('2026-10-05T10:00:00Z') + minutes * 60_000).toISOString()
+  const latest = (status: string, summary: Record<string, unknown> | null, minutes = 0) => ({ publicationId: `pub-${status}-${minutes}`, status, at: at(minutes), completedAt: at(minutes), summary })
+  const ebay = (over: Partial<StudioPublicationStatus>, aliasKey = '') => read({ destination: { channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey }, ...over })
+
+  it('watches the chosen listing alone, or the main listing and every alias when none is chosen', () => {
+    expect(watchedListings('', aliases)).toEqual(['', 'alias-1', 'alias-2'])
+    expect(watchedListings('alias-2', aliases)).toEqual(['alias-2'])
+    expect(watchedListings('', [])).toEqual([''])
+  })
+
+  it('m5 — "Main listing" chosen is not "All listings": only the main listing is watched, and an alias event is not ours', () => {
+    expect(watchedListings('', aliases, true)).toEqual([''])
+    expect(watchedListings('', aliases, false)).toEqual(['', 'alias-1', 'alias-2'])
+    const destination = { productIds: ['family'], channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: '' }
+    const event = (aliasKey: string) => ({ publicationId: 'p', productId: 'family', channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey, status: 'ACCEPTED', terminal: true })
+    expect(eventListing(event('alias-1'), destination, [''], false)).toBeNull()
+    expect(eventListing(event('alias-new'), destination, [''], false)).toBeNull()
+    expect(eventListing(event(''), destination, [''], false)).toEqual({ aliasKey: '', known: true })
+    // No listing chosen: an alias not read yet asks for the aliases again, as before.
+    expect(eventListing(event('alias-new'), destination, [''], true)).toEqual({ aliasKey: 'alias-new', known: false })
+  })
+
+  it('m9 — until the aliases are read (or when that read fails), the main or chosen listing reads as before: "eBay · IT"', () => {
+    expect(listingPlace('EBAY', 'IT', '', null)).toBe('eBay · IT')
+    expect(listingPlace('EBAY', 'IT', 'alias-1', null, 'alias-1')).toBe('eBay · IT')
+    // Read, but the chosen listing is not among the offered aliases (an archived one opened by an old link).
+    expect(listingPlace('EBAY', 'IT', 'alias-9', aliases, 'alias-9')).toBe('eBay · IT')
+    expect(publicationOutcome('ACCEPTED', counts({ products: 1, accepted: 1 }), 'EBAY', 'IT', listingPlace('EBAY', 'IT', '', null))?.message).toBe('eBay · IT accepted the product.')
+    // Only another alias the read does not name is "Other listing".
+    expect(listingPlace('EBAY', 'IT', 'alias-9', aliases, '')).toBe('eBay · IT · Other listing')
+    // Read: the main listing of a market with aliases carries the one word.
+    expect(listingPlace('EBAY', 'IT', '', aliases, '')).toBe('eBay · IT · ★ Main listing')
+  })
+
+  it('names each listing as the Publish window does', () => {
+    expect(listingPlace('EBAY', 'IT', 'alias-1', aliases)).toBe('eBay · IT · ① sample-listing-ALT1')
+    expect(listingPlace('EBAY', 'IT', '', aliases)).toBe('eBay · IT · ★ Main listing')
+    expect(listingPlace('EBAY', 'IT', '', [])).toBe('eBay · IT')
+    expect(listingPlace('EBAY', 'IT', 'alias-9', aliases)).toBe('eBay · IT · Other listing')
+    expect(publicationOutcome('ACCEPTED', counts({ products: 4, accepted: 4 }), 'EBAY', 'IT', listingPlace('EBAY', 'IT', 'alias-1', aliases))?.message)
+      .toBe('eBay · IT · ① sample-listing-ALT1 accepted all 4 products.')
+  })
+
+  it('shows the worst listing’s mark, the newest of equals, and names the others in its detail', () => {
+    const main = ebay({ latest: latest('ACCEPTED', { products: 8, accepted: 8 }) })
+    const alt1 = ebay({ inFlight: { publicationId: 'pub-SUBMITTED-5', status: 'SUBMITTED' }, latest: latest('SUBMITTED', { products: 8, submitted: 8 }, 5) }, 'alias-1')
+    const alt2 = ebay({ latest: latest('PARTIAL', { products: 8, accepted: 4, failed: 4 }, 1) }, 'alias-2')
+    const place = (key: string) => listingPlace('EBAY', 'IT', key, aliases)
+    // Nothing to say about a clean main listing; the alias on its way is the mark.
+    expect(combinedPublicationMark([{ read: main, place: place('') }, { read: alt1, place: place('alias-1') }], 'EBAY', 'IT'))
+      .toMatchObject({ tone: 'info', label: 'eBay · IT · ① sample-listing-ALT1 is processing 8 products' })
+    // A rejection outranks a publish on its way; the other mark is named, not dropped.
+    const mark = combinedPublicationMark([{ read: main, place: place('') }, { read: alt1, place: place('alias-1') }, { read: alt2, place: place('alias-2') }], 'EBAY', 'IT')
+    expect(mark).toMatchObject({ tone: 'danger', label: '4 rejected on eBay · IT · ② sample-listing-ALT2' })
+    expect(mark?.detail).toMatch(/rejected 4 of 8 products\. Also: eBay · IT · ① sample-listing-ALT1 is processing 8 products\.$/)
+    // Two rejections: the newer one leads.
+    const older = ebay({ latest: latest('FAILED', null, -30) })
+    expect(combinedPublicationMark([{ read: older, place: place('') }, { read: alt2, place: place('alias-2') }], 'EBAY', 'IT')?.label).toBe('4 rejected on eBay · IT · ② sample-listing-ALT2')
+    expect(combinedPublicationMark([{ read: main, place: place('') }, { read: null, place: place('alias-1') }], 'EBAY', 'IT')).toBeNull()
+    // One listing: exactly the single mark.
+    expect(combinedPublicationMark([{ read: alt2, place: 'eBay · IT' }], 'EBAY', 'IT')).toEqual(publicationMark(alt2, 'EBAY', 'IT'))
+  })
+
+  it('routes an event to its listing; an alias not read yet asks for the aliases again; a chosen listing hears only itself', () => {
+    const destination = { productIds: ['child', 'family'], channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: '' }
+    const event = (aliasKey: string, over: Record<string, unknown> = {}) => ({ publicationId: 'p', productId: 'family', channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey, status: 'ACCEPTED', terminal: true, ...over })
+    const listings = watchedListings('', aliases)
+    expect(eventListing(event('alias-1'), destination, listings)).toEqual({ aliasKey: 'alias-1', known: true })
+    expect(eventListing(event(''), destination, listings)).toEqual({ aliasKey: '', known: true })
+    expect(eventListing(event('alias-new'), destination, listings)).toEqual({ aliasKey: 'alias-new', known: false })
+    expect(eventListing(event('alias-1', { marketplace: 'DE' }), destination, listings)).toBeNull()
+    expect(eventListing(event('alias-1', { productId: 'other' }), destination, listings)).toBeNull()
+    const chosen = { ...destination, aliasKey: 'alias-2' }
+    expect(eventListing(event('alias-1'), chosen, watchedListings('alias-2', aliases))).toBeNull()
+    expect(eventListing(event('alias-2'), chosen, watchedListings('alias-2', aliases))).toEqual({ aliasKey: 'alias-2', known: true })
   })
 })

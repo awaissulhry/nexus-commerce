@@ -170,3 +170,12 @@
    (step 4, D6). */
 
 /* Ordered language chips share the scope bar and wrap with it. */
+
+/* The studio bar's listing picker (aliases, review 2026-10-05). The Listbox trigger already ends a long label with an
+   ellipsis (`.nds-listbox-btn > span`); this gives the trigger a definite ceiling so a long alias name truncates there
+   instead of widening the scope bar past a phone's width. `ch` is definite, so the cap also holds while the wrapping
+   bar measures its items. The option list shows the whole name (and its tooltip). */
+.listingPicker {
+  min-width: 0;
+  max-width: 32ch;
+}

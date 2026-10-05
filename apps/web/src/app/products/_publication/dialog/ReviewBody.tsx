@@ -12,18 +12,21 @@ import { ActionPlanTable } from './ActionPlanTable'
 import { DiffersSummary } from './DiffersSummary'
 import { reviewRowListingWord, shopifyVisibilityWords, type ActionPlanRow } from './actionPlan'
 import { isSparse } from './destinations'
-import { publicationProblems, type PublicationProblemRow } from './model'
+import { listingDisplayLabel, publicationProblems, type PublicationProblemRow } from './model'
 import styles from './publication.module.css'
 
 /**
  * The review's destination as one line: account (or, when the account has no name, the channel), listing, market.
  * Empty parts are skipped, so the line never starts or ends with a lone " · " (a nameless account printed
- * "· Primary listing · IT").
+ * "· Primary listing · IT"). `listing`: the window's own name for the listing, with the sheet band's mark ("① Racing
+ * edition", "★ Main listing"), used in place of the review's `aliasLabel` when its market has more than one listing.
  */
-export function publicationDestinationParts(review: Pick<StudioPublishReview, 'accountLabel' | 'aliasLabel' | 'scope'>, withListing = true): { lead: string; rest: string } {
+export function publicationDestinationParts(review: Pick<StudioPublishReview, 'accountLabel' | 'aliasLabel' | 'scope'>, withListing = true, listing?: string | null): { lead: string; rest: string } {
   const named = (value: string | null | undefined) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
   const lead = named(review.accountLabel) ?? channelLabel(review.scope.channel)
-  const rest = [withListing ? named(review.aliasLabel) : null, named(review.scope.marketplace)].filter((part): part is string => part != null).join(' · ')
+  // One word for the main listing in the window (review 2026-10-05, m3): the server's "Primary listing" reads "Main listing".
+  const own = named(review.aliasLabel)
+  const rest = [withListing ? named(listing) ?? (own === null ? null : listingDisplayLabel(own)) : null, named(review.scope.marketplace)].filter((part): part is string => part != null).join(' · ')
   return { lead, rest }
 }
 
@@ -81,6 +84,11 @@ export interface ReviewBodyProps {
    * differ from Nexus, with the "Keep Amazon's values" switch (`DiffersSummary`). Off where the window has its own.
    */
   nexusWins?: boolean
+  /**
+   * Aliases (Owner 2026-10-05): which listing of its market this review is, with the sheet band's mark ("① Racing
+   * edition", "★ Main listing"); null when the market has one listing (the review's own words then).
+   */
+  listing?: string | null
 }
 
 /** The closed fold's words: "Exact request to the channel · 12 changes affecting 3 products", or that it is being prepared. */
@@ -113,10 +121,10 @@ function PlanPart({ plan, review, selectedIds, locked }: { plan: ReviewBodyPlan;
   </>
 }
 
-function ContentReviewBody({ review, selectedIds, selection, selecting = false, locationId, confirmed, locked, onSelectionChange, onLocationChange, onConfirmChange, plan, nexusWins = false }: ReviewBodyProps & { review: StudioPublishReview }) {
+function ContentReviewBody({ review, selectedIds, selection, selecting = false, locationId, confirmed, locked, onSelectionChange, onLocationChange, onConfirmChange, plan, nexusWins = false, listing = null }: ReviewBodyProps & { review: StudioPublishReview }) {
   const sparse = isSparse(review)
   const blockers = blockingIssues(review.issues, review.photosOnly ? selectedIds : undefined)
-  const line = publicationDestinationParts(review)
+  const line = publicationDestinationParts(review, true, listing)
   const { problems, notes } = publicationProblems(review.issues)
   const visibility = shopifyVisibilityWords(review)
   return <div className={styles.body}>
@@ -148,7 +156,7 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
     {/* One-click publish: the exact request is built by itself and sits in a closed fold (audit D4: never a payload in a banner). */}
     {sparse && (selection || selecting) && <Disclosure summary={exactRequestSummary(selection, selecting)}>
       {selection ? <div className={styles.body}>
-        <p className={styles.muted}>Only the ticked changes are applied on {(() => { const l = publicationDestinationParts(review, false); return [l.lead, l.rest].filter(Boolean).join(' · ') })()}. Where a channel requires a complete collection, its other values are preserved in the request below.</p>
+        <p className={styles.muted}>Only the ticked changes are applied on {(() => { const l = publicationDestinationParts(review, !!listing, listing); return [l.lead, l.rest].filter(Boolean).join(' · ') })()}. Where a channel requires a complete collection, its other values are preserved in the request below.</p>
         <pre tabIndex={0} aria-label={`Exact request to ${channelLabel(review.scope.channel)} ${review.scope.marketplace}`} className={styles.payload}>{selection.payload.content}</pre>
       </div> : <p className={styles.muted}>Preparing the exact request…</p>}
     </Disclosure>}

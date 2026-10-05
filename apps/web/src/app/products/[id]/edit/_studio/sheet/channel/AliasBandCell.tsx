@@ -33,6 +33,7 @@ import { ExpandButton, ExpandSlot, IdentityBand, ProvenanceMark, readinessMeta, 
 import { ProductRoleChip } from '../ProductRoleChip'
 import type { MenuItemDef } from '@/design-system/components'
 import { AliasMark } from '@/design-system/primitives'
+import { aliasMarkSpoken, aliasName } from '../../listingScope'
 
 /* 🔴 The pill takes the STATE, not a tone and not a percentage (#43 → #724 → #727).
  *
@@ -138,7 +139,8 @@ export const AliasBandCell = memo(function AliasBandCell(
   if (!row || row.rowKind !== 'parent') return null
   const s = p.summary
   const alias = s?.alias
-  const label = alias?.label || row.name || row.sku
+  // The main listing is "Main listing" on every surface (review 2026-10-05), whatever an older read calls it.
+  const label = (alias && !alias.id ? aliasName(0, null) : alias?.label) || row.name || row.sku
   const status = alias?.listingStatus ?? null
   const pct = s?.percent ?? null
   /* 🔴 THE BAND IS MASTER'S PARENT ROW (Owner, 2026-09-05, from two screenshots: "the parent row is
@@ -163,9 +165,10 @@ export const AliasBandCell = memo(function AliasBandCell(
       role={
         <>
           <ProductRoleChip product={row} />
-          {multi && (
-            <AliasMark position={row.aliasPosition} />
-          )}
+          {/* A mark that only repeats the name beside it ("Main listing") is hidden from screen readers: read once. */}
+          {multi && (aliasMarkSpoken(row.aliasPosition, label)
+            ? <AliasMark position={row.aliasPosition} />
+            : <span aria-hidden="true"><AliasMark position={row.aliasPosition} /></span>)}
         </>
       }
       image={row.imageUrl}

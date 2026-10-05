@@ -10,16 +10,24 @@
  * (`listedDestinationKeys`), reviews them one at a time per account (`ReviewQueue`, the sheet's market first), and
  * builds each market's exact request by itself (`requestsDue`); a market whose request cannot be built is skipped with
  * its reason, the others are sent.
+ *
+ * Aliases (Owner 2026-10-05: "I should be able to publish the aliases as well"): a market's listing aliases (a second,
+ * third… listing of the family on the same channel, market and account) are destinations of their own, offered right
+ * after their market's main listing (`listedAliases`), keyed by the ALIAS id (`scope.listingId`), and ticked by the same
+ * "listed" rule as the main listing. The counts then say "listings" instead of "markets" (`placesWord`).
  */
 import { blockingIssues, isPhotoChangeId, type PublicationBatchChild, type PublicationBatchView, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
-import type { PublishActionCell } from '@nexus/shared/publish-actions'
+import { isNewRowId, type PublishActionCell } from '@nexus/shared/publish-actions'
 import type { PublishPlanDestination } from '@nexus/shared/publish-plan'
-import { channelLabel } from '@nexus/shared/channel-label'
+import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import type { Tone } from '@/design-system/primitives/tone'
-import { matchesPublicationSelection, publicationOverwriteAcknowledged, publicationScopeKey, type PublicationDestinationOption } from './model'
+import {
+  SELECTED_LISTING_LABEL, matchesPublicationSelection, optionListingLabel, publicationOverwriteAcknowledged, publicationScopeKey,
+  type PublicationAlias, type PublicationDestinationOption,
+} from './model'
 
-/** The batch route takes at most this many destinations (server: `publication-batch.service.ts`). */
+/** The batch route takes at most this many destinations — markets and listing aliases alike (server: `publication-batch.service.ts`). */
 export const MAX_BATCH_DESTINATIONS = 25
 
 /** What the dialog holds for one destination. Each one is reviewed only while it is ticked. */
@@ -191,19 +199,33 @@ export function publishPlan(ticked: readonly string[], stateOf: (key: string) =>
 export type PublishPath = 'none' | 'single' | 'batch'
 export const publishPath = (plan: Pick<PublishPlan, 'send'>): PublishPath => plan.send.length === 0 ? 'none' : plan.send.length === 1 ? 'single' : 'batch'
 
-/** "markets" when every destination is one channel, "destinations" when channels or accounts mix. */
-function placesWord(keys: readonly string[], scopeOf: (key: string) => StudioPublishScope | undefined): { one: string; many: string } {
-  const scopes = keys.map(scopeOf).filter((s): s is StudioPublishScope => !!s)
-  const sameChannel = new Set(scopes.map(s => s.channel)).size <= 1 && new Set(scopes.map(s => s.accountId)).size <= 1
-  return sameChannel ? { one: 'market', many: 'markets' } : { one: 'destination', many: 'destinations' }
-}
+export type PlacesWord = { one: string; many: string }
+export const MARKETS_WORD: PlacesWord = Object.freeze({ one: 'market', many: 'markets' })
+export const LISTINGS_WORD: PlacesWord = Object.freeze({ one: 'listing', many: 'listings' })
+export const DESTINATIONS_WORD: PlacesWord = Object.freeze({ one: 'destination', many: 'destinations' })
 
 /**
- * The counted primary button: "Publish 21 changes to 2 markets", "… · skip 1 with problems". A Shopify destination
- * sends a whole NEW product (the dialog refuses existing Shopify products), so it is counted as one.
+ * What the window counts: "listings" when the chosen destinations (`chosen`, by default `keys`) include a listing alias
+ * — two listings of one market are not two markets — else "markets" when every destination of `keys` is one channel and
+ * account, else "destinations".
+ */
+export function placesWord(keys: readonly string[], scopeOf: (key: string) => StudioPublishScope | undefined, chosen: readonly string[] = keys): PlacesWord {
+  if (chosen.some(key => !!scopeOf(key)?.listingId)) return LISTINGS_WORD
+  const scopes = keys.map(scopeOf).filter((s): s is StudioPublishScope => !!s)
+  const sameChannel = new Set(scopes.map(s => s.channel)).size <= 1 && new Set(scopes.map(s => s.accountId)).size <= 1
+  return sameChannel ? MARKETS_WORD : DESTINATIONS_WORD
+}
+
+/** Every destination a plan counts (ticked), in its order. */
+const planKeys = (plan: Pick<PublishPlan, 'send' | 'skipped' | 'nothing' | 'pending'>) => [...plan.send, ...plan.skipped, ...plan.nothing, ...plan.pending]
+
+/**
+ * The counted primary button: "Publish 21 changes to 2 markets", "… · skip 1 with problems" — "to 3 listings" when an
+ * alias is ticked. A Shopify destination sends a whole NEW product (the dialog refuses existing Shopify products), so it
+ * is counted as one.
  */
 export function publishButtonText(plan: PublishPlan, scopeOf: (key: string) => StudioPublishScope | undefined): string {
-  const word = placesWord(plan.send, scopeOf)
+  const word = placesWord(plan.send, scopeOf, planKeys(plan))
   const what = [plan.changes ? plural(plan.changes, 'change', 'changes') : null, plan.wholeProducts ? plural(plan.wholeProducts, 'new product', 'new products') : null]
     .filter(Boolean).join(' and ')
   const skip = plan.skipped.length ? ` · skip ${plan.skipped.length} with problems` : ''
@@ -250,11 +272,17 @@ export function checkingProgress(keys: readonly string[], stateOf: (key: string)
   return { checking, done: keys.length - checking, total: keys.length }
 }
 
-/** The button while markets are checked: "Checking 3 of 7 markets…" (the one being checked now), or "Checking…" for one. */
-export function checkingButtonText(progress: { done: number; total: number }): string {
+/**
+ * The button while markets are checked: "Checking 3 of 7 markets…" (the one being checked now), "Checking 2 of 3
+ * listings…" when an alias is chosen (`word`), or "Checking…" for one.
+ */
+export function checkingButtonText(progress: { done: number; total: number }, word: PlacesWord = MARKETS_WORD): string {
   if (progress.total <= 1) return 'Checking…'
-  return `Checking ${Math.min(progress.done + 1, progress.total)} of ${progress.total} markets…`
+  return `Checking ${Math.min(progress.done + 1, progress.total)} of ${progress.total} ${word.many}…`
 }
+
+/** "At most 25 markets can be published at once." — "listings" when an alias is chosen: the cap counts every destination. */
+export const batchLimitText = (word: PlacesWord = MARKETS_WORD) => `At most ${MAX_BATCH_DESTINATIONS} ${word.many} can be published at once.`
 
 /** One review queue per account: the channel and the account (two Amazon reviews at once were throttled by Amazon). */
 export const accountGroup = (scope: Pick<StudioPublishScope, 'channel' | 'accountId'>) => `${scope.channel}|${scope.accountId}`
@@ -298,10 +326,12 @@ export class ReviewQueue {
 }
 
 /**
- * OD1 A — where the family counts as listed: the market's key (channel, market, account; no listing) when the family's
- * main listing there is Active or Inactive (Mixed: its variations differ), or when a row not on the channel yet was set
- * Active or Inactive by a person (the new-listings choice). A draft nobody chose for does not count (OD1 B was not
- * chosen). Read from `GET /api/products/:id/studio/publish-actions` with no filter (every listing of the family).
+ * OD1 A — where the family counts as listed: the destination's key when the family's main row there is Active or
+ * Inactive (Mixed: its variations differ), or when a row not on the channel yet was set Active or Inactive by a person
+ * (the new-listings choice). A draft nobody chose for does not count (OD1 B was not chosen). Read from
+ * `GET /api/products/:id/studio/publish-actions` with no filter (every listing of the family). The main listing's key is
+ * the market's (channel, market, account; no listing); a listing alias's key adds its alias id (`listingId`), and the
+ * same rule decides it on its own rows (Owner 2026-10-05). Only an alias the window offers counts (`offeredAliasIds`).
  */
 export interface ListedDestinations {
   keys: ReadonlySet<string>
@@ -309,31 +339,188 @@ export interface ListedDestinations {
   loading: boolean
   /** The read failed: only the sheet's market is chosen, and the window says so. */
   failed?: boolean
+  /** The family's listing aliases (`listedAliases`), from the same read: offered after their market's main listing. */
+  aliases?: readonly PublicationAlias[]
 }
 
 const LISTED_STATES: ReadonlySet<string> = new Set(['active', 'paused', 'mixed'])
 
-/** A destination's key without its listing: what `listedDestinationKeys` holds. */
+/** A destination's key without its listing: the main listing's key. */
 export const marketKey = (scope: Pick<StudioPublishScope, 'channel' | 'marketplace' | 'accountId'>) =>
   publicationScopeKey({ channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId })
 
-export function listedDestinationKeys(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'>>,
-  familyId: string): Set<string> {
-  const byMarket = new Map<string, Array<(typeof cells)[number]>>()
+/** The destination key of a publish-actions cell: its market's (the main listing), or with its alias id (a listing alias). */
+export const cellDestinationKey = (cell: Pick<PublishActionCell, 'channel' | 'marketplace' | 'accountId' | 'aliasKey'>) =>
+  cell.aliasKey ? publicationScopeKey({ channel: cell.channel, marketplace: cell.marketplace, accountId: cell.accountId, listingId: cell.aliasKey }) : marketKey(cell)
+
+/** A read's cell as far as offering its alias goes (no `listingId`: a listing record). */
+type OfferCell = Pick<PublishActionCell, 'productId' | 'aliasKey'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>
+
+/**
+ * The listing aliases the Publish window and the studio's listing picker offer (review 2026-10-05), from a
+ * publish-actions read: an ACTIVE alias — an ARCHIVED alias's rows are still read, so a live item of it can be ended or
+ * deleted from its Status cell, but it is never offered (nor an alias the read names no state for, once it names one for
+ * any; a read that names none comes from a server that reads ACTIVE aliases only) — that the family's main product has
+ * a listing record of: the review of an alias opens that record, so an alias without one could never be reviewed (m7).
+ * `familyId` absent: the record check is skipped.
+ */
+export function offeredAliasIds(cells: ReadonlyArray<OfferCell>, familyId?: string | null): Set<string> {
+  const stated = cells.some(cell => !!cell.aliasKey && cell.aliasStatus !== undefined)
+  const active = new Set<string>(), rooted = new Set<string>()
   for (const cell of cells) {
-    // The window publishes each market's primary listing; a second listing on a market is chosen from its own sheet.
-    if (cell.aliasKey) continue
-    const key = marketKey(cell)
-    byMarket.set(key, [...(byMarket.get(key) ?? []), cell])
+    if (!cell.aliasKey) continue
+    if (stated ? cell.aliasStatus === 'ACTIVE' : true) active.add(cell.aliasKey)
+    if ((!familyId || cell.productId === familyId) && !isNewRowId(cell.listingId)) rooted.add(cell.aliasKey)
   }
+  return new Set([...active].filter(id => rooted.has(id)))
+}
+
+/** The cells of the main listings and of the offered aliases only (`offeredAliasIds`): what the window and the picker read. */
+export function offeredCells<T extends OfferCell>(cells: readonly T[], familyId?: string | null): T[] {
+  const offered = offeredAliasIds(cells, familyId)
+  return cells.filter(cell => !cell.aliasKey || offered.has(cell.aliasKey))
+}
+
+/**
+ * A destination the window may offer: the main listing (no listing named), an offered alias, or a listing the read does
+ * not know as an alias (a retry's ChannelListing id; the server resolves it). An alias the read knows but the window
+ * does not offer (archived, or without a record of the family's main product) is never offered.
+ */
+export function isOfferedScope(scope: StudioPublishScope, cells: ReadonlyArray<OfferCell>, familyId?: string | null): boolean {
+  if (!scope.listingId) return true
+  if (!cells.some(cell => cell.aliasKey === scope.listingId)) return true
+  return offeredAliasIds(cells, familyId).has(scope.listingId)
+}
+
+/**
+ * Does a listing event change the listings of this family the studio's listing picker offers (review 2026-10-05, m1)?
+ * A listing created or removed for a product of the family (`productIds`; an event that names no product: created —
+ * it may be ours — or removed when it is one of our records, `records`), or a waiting Status choice of the family that
+ * may have started drafts (`listing.updated` with the publish-action subtype: an alias gets its records then).
+ */
+export function listingEventConcerns(event: { type: string; id?: string; meta?: Record<string, unknown> }, productIds: ReadonlySet<string>, records: ReadonlySet<string>): boolean {
+  const meta = event.meta ?? {}
+  const product = typeof meta.productId === 'string' && meta.productId ? meta.productId : null
+  if (event.type === 'listing.created' || event.type === 'listing.deleted') {
+    if (product) return productIds.has(product)
+    return event.type === 'listing.created' || (!!event.id && records.has(event.id))
+  }
+  if (event.type === 'listing.updated') return meta.subtype === 'listing.publish_action_changed' && productIds.has(product ?? event.id ?? '')
+  return false
+}
+
+export function listedDestinationKeys(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>>,
+  familyId: string,
+  /**
+   * The studio's chosen listing (review 2026-10-05, M2): the window ticks ONLY that listing in its market — never its
+   * market's other listings — and on every other market the listed main listing (as before aliases). Absent (no listing
+   * chosen): every listed main listing and every listed alias, for one-click publish.
+   */
+  chosen?: StudioPublishScope | null): Set<string> {
+  const offered = offeredAliasIds(cells, familyId)
+  const byDestination = new Map<string, Array<(typeof cells)[number]>>()
+  for (const cell of cells) {
+    if (cell.aliasKey && !offered.has(cell.aliasKey)) continue
+    // Each listing on a market is its own destination: the main listing, and each alias by its alias id.
+    const key = cellDestinationKey(cell)
+    byDestination.set(key, [...(byDestination.get(key) ?? []), cell])
+  }
+  const chosenMarket = chosen ? marketKey(chosen) : null
+  const chosenKey = chosen ? publicationScopeKey(chosen) : null
   const out = new Set<string>()
-  for (const [key, rows] of byMarket) {
+  for (const [key, rows] of byDestination) {
+    if (chosen) {
+      const [first] = rows
+      if (marketKey(first) === chosenMarket ? key !== chosenKey : !!first.aliasKey) continue
+    }
     const main = rows.filter(row => row.productId === familyId)
     const live = (main.length ? main : rows).some(row => LISTED_STATES.has(row.state))
-    const chosen = rows.some(row => row.create?.source === 'own' && row.create.target !== 'not_listed')
-    if (live || chosen) out.add(key)
+    const asked = rows.some(row => row.create?.source === 'own' && row.create.target !== 'not_listed')
+    if (live || asked) out.add(key)
   }
   return out
+}
+
+/**
+ * The family's listing aliases the window offers (`offeredAliasIds`), one per channel, market, account and alias, from
+ * the publish-actions read, with their name and place. Each is offered whether it is listed or not; only a listed one
+ * starts ticked (`listedDestinationKeys`). A cell without a name falls back to the alias's main row SKU (the family's
+ * own row, `familyId`); one without a place follows the known ones of its market, in read order.
+ */
+export function listedAliases(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>>,
+  familyId?: string): PublicationAlias[] {
+  const offered = offeredAliasIds(cells, familyId)
+  const found = new Map<string, { alias: Omit<PublicationAlias, 'label' | 'position'>; label: string | null; position: number | null; sku: string | null; own: boolean }>()
+  for (const cell of cells) {
+    if (!cell.aliasKey || !offered.has(cell.aliasKey)) continue
+    const key = cellDestinationKey(cell)
+    const entry = found.get(key) ?? { alias: { channel: cell.channel, marketplace: cell.marketplace, accountId: cell.accountId, id: cell.aliasKey }, label: null, position: null, sku: null, own: false }
+    found.set(key, entry)
+    const label = typeof cell.aliasLabel === 'string' ? cell.aliasLabel.trim() : ''
+    if (!entry.label && label) entry.label = label
+    if (entry.position === null && typeof cell.aliasPosition === 'number' && Number.isInteger(cell.aliasPosition) && cell.aliasPosition > 0) entry.position = cell.aliasPosition
+    const own = !!familyId && cell.productId === familyId
+    if (cell.sku && (!entry.sku || (own && !entry.own))) { entry.sku = cell.sku; entry.own = own }
+  }
+  const last = new Map<string, number>()
+  for (const entry of found.values()) {
+    if (entry.position === null) continue
+    const market = marketKey(entry.alias)
+    last.set(market, Math.max(last.get(market) ?? 0, entry.position))
+  }
+  return [...found.values()].map(entry => {
+    const market = marketKey(entry.alias)
+    let position = entry.position
+    if (position === null) { position = (last.get(market) ?? 0) + 1; last.set(market, position) }
+    return { ...entry.alias, label: entry.label ?? entry.sku ?? `Listing alias ${position}`, position }
+  })
+}
+
+/**
+ * The canonical destination of a scope (Owner 2026-10-05): a listing named by its ChannelListing id becomes its alias id,
+ * or no listing at all when it is the market's main listing — so one listing never has two keys. An alias id stays as
+ * it is; an id the read does not know is kept (the server resolves it).
+ */
+export function canonicalScope(scope: StudioPublishScope, cells: ReadonlyArray<Pick<PublishActionCell, 'listingId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey'>>): StudioPublishScope {
+  if (!scope.listingId) return scope
+  const here = cells.filter(cell => cell.channel === scope.channel && cell.marketplace === scope.marketplace && cell.accountId === scope.accountId)
+  if (here.some(cell => cell.aliasKey === scope.listingId)) return scope
+  const row = here.find(cell => cell.listingId === scope.listingId)
+  if (!row) return scope
+  const main: StudioPublishScope = { channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId }
+  return row.aliasKey ? { ...main, listingId: row.aliasKey } : main
+}
+
+/**
+ * The studio sheet's own destination (`scope` is its channel, or 'master'), canonical (Owner 2026-10-05): a listing alias
+ * by its ALIAS id (the resolved destination's `aliasKey`; `undefined` while it resolves), the market's main listing with
+ * no listing at all. Until the destination resolves, the family's listings (`cells`) name it when they know the id;
+ * otherwise it waits — a `listing=` ChannelListing id in the address never becomes a destination key of its own.
+ */
+export function sheetDestinationScope(scope: string, market: string | null, accountId: string | undefined, listingId: string | undefined,
+  aliasKey: string | null | undefined, cells?: ReadonlyArray<Pick<PublishActionCell, 'listingId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey'>> | null): StudioPublishScope | undefined {
+  if (scope === 'master' || !market || !accountId) return undefined
+  const main: StudioPublishScope = { channel: scope, marketplace: market, accountId }
+  if (!listingId) return main
+  if (aliasKey !== undefined) return aliasKey ? { ...main, listingId: aliasKey } : main
+  const known = cells?.some(cell => cell.channel === scope && cell.marketplace === market && cell.accountId === accountId
+    && (cell.aliasKey === listingId || cell.listingId === listingId))
+  return known && cells ? canonicalScope({ ...main, listingId }, cells) : undefined
+}
+
+/**
+ * A destination's place in the banners and hints: "eBay · IT", and with its listing when its market has more than one
+ * ("eBay · IT · ① Racing edition", "eBay · IT · ★ Main listing") — the sheet band's mark and name.
+ */
+export function destinationPlace(scope: Pick<StudioPublishScope, 'channel' | 'marketplace'>, option?: Pick<PublicationDestinationOption, 'scope' | 'alias' | 'listings'> | null): string {
+  const listing = option ? optionListingLabel(option) : null
+  return [channelPlace(scope.channel, scope.marketplace), listing].filter(Boolean).join(' · ')
+}
+
+/** A destination's market name with its listing ("eBay Italy · ① Racing edition"), for a hint or a button's label. */
+export function destinationName(option: Pick<PublicationDestinationOption, 'scope' | 'alias' | 'listings' | 'marketName'>): string {
+  const listing = optionListingLabel(option)
+  return listing ? `${option.marketName} · ${listing}` : option.marketName
 }
 
 /**
@@ -353,15 +540,27 @@ export function initialTicked(options: readonly PublicationDestinationOption[], 
 }
 
 /**
- * Add the asked-for destinations that the market list does not name — a retry of a publish to a non-primary listing
- * carries its `listingId` — as their own options, so they can start ticked.
+ * Add the asked-for destinations that the market list does not name — a retry of a publish to a listing the window does
+ * not know as an alias carries its `listingId` — as their own options ("Selected listing"), after their market's other
+ * listings, so they can start ticked.
  */
 export function withInitialOptions(options: readonly PublicationDestinationOption[], initial: readonly StudioPublishScope[]): PublicationDestinationOption[] {
-  const extra = initial.filter(scope => !options.some(o => o.key === publicationScopeKey(scope))).flatMap(scope => {
-    const base = options.find(o => o.scope.channel === scope.channel && o.scope.marketplace === scope.marketplace && o.scope.accountId === scope.accountId)
-    return base ? [{ ...base, key: publicationScopeKey(scope), scope: { ...scope }, label: `${base.marketName} · ${base.accountLabel}${scope.listingId ? ' · Selected listing' : ''}` }] : []
-  })
-  return [...options, ...extra]
+  const out = [...options]
+  for (const scope of initial) {
+    const key = publicationScopeKey(scope)
+    if (out.some(o => o.key === key)) continue
+    const same = (o: PublicationDestinationOption) => o.scope.channel === scope.channel && o.scope.marketplace === scope.marketplace && o.scope.accountId === scope.accountId
+    const at = out.map(same).lastIndexOf(true)
+    if (at < 0) continue
+    const base = out[at]
+    const listings = out.filter(same).length + 1
+    const added: PublicationDestinationOption = { ...base, key, scope: { ...scope }, alias: null, listings,
+      label: `${base.marketName} · ${base.accountLabel}${scope.listingId ? ` · ${SELECTED_LISTING_LABEL}` : ''}` }
+    // The market now holds one more listing: its main listing shows ★.
+    out.forEach((o, i) => { if (same(o)) out[i] = { ...o, listings } })
+    out.splice(at + 1, 0, added)
+  }
+  return out
 }
 
 // ── the batch, after the click ───────────────────────────────────────────────────────────────────────────────────
@@ -398,6 +597,14 @@ export function limitOneAccountPerChannel(next: ReadonlySet<string>, previous: R
   }))
 }
 
+/**
+ * How many destinations a batch publishes to: each channel, market, account and listing (an alias is its own place; its
+ * status changes and its content are one place).
+ */
+export function batchPlaces(children: ReadonlyArray<Pick<PublicationBatchChild, 'channel' | 'marketplace' | 'accountId' | 'aliasKey'>>): number {
+  return new Set(children.map(c => JSON.stringify([c.channel, c.marketplace, c.accountId, c.aliasKey || null]))).size
+}
+
 /** "2 of 3 markets" — destinations with a final word, out of all. */
 export function batchProgress(view: Pick<PublicationBatchView, 'children'>): { done: number; total: number } {
   return { done: view.children.filter(c => c.terminal).length, total: view.children.length }
@@ -411,7 +618,7 @@ export const batchCancellable = (view: Pick<PublicationBatchView, 'phase' | 'cou
   !!view && !view.cancelRequestedAt && ['QUEUED', 'RUNNING'].includes(view.phase) && view.counts.waiting > 0
 
 /** One sentence for the whole batch, for the banner and the screen reader. */
-export function batchSentence(view: PublicationBatchView, word: { one: string; many: string } = { one: 'market', many: 'markets' }): string {
+export function batchSentence(view: PublicationBatchView, word: PlacesWord = MARKETS_WORD): string {
   const { done, total } = batchProgress(view)
   const c = view.counts
   const places = (n: number) => plural(n, word.one, word.many)

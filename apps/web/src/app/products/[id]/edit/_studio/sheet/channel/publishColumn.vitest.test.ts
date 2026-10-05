@@ -7,7 +7,7 @@ import type { StudioPublicationStatus, StudioRowLastPublish, StudioRowPublicatio
 import { publishCellModel } from '@/design-system/grid'
 import {
   PUBLISH_COLUMN, PUBLISH_COLUMN_WIDTH, SELLING_REREAD_WINDOW_MS, familyCounts, isRejectedRow, lastPublishKindLabel, publishCellText, publishColumn,
-  publishColumnLookup, publishIssues, publishSheetColumn, rejectedRowCount, rowPublishValue, samePublishValue, sellingChangeInFlight, sentFieldLabels,
+  publishColumnLookup, publishIssues, publishReadFor, publishSheetColumn, rejectedRowCount, rowPublishValue, samePublishValue, sellingChangeInFlight, sentFieldLabels,
   statusRowFor, type PublishRead,
 } from './publishColumn'
 
@@ -151,6 +151,39 @@ describe('isRejectedRow — what the "N rejected" filter shows', () => {
   })
   it('counts the rows the filter will show', () => {
     expect(rejectedRowCount([row(), row({ id: 'child-2', listing: { id: 'cl-2' } })], status())).toBe(1)
+  })
+})
+
+describe('every listing shown — each alias reads its own last publish (aliases, Owner 2026-10-05)', () => {
+  // The sheet's own read answers for the main listing; alias "alt-1" was read on its own (aliasKey=alt-1).
+  const altStatus = status({
+    destination: { channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: 'alt-1' },
+    latest: { publicationId: 'pub-9', status: 'FAILED', at: '2026-10-05T08:00:00.000Z', completedAt: null, summary: null },
+    rows: [statusRow({ listingId: 'cl-alt-1', last: last({ publicationId: 'pub-9', status: 'FAILED', outcome: 'FAILED', at: '2026-10-05T08:00:00.000Z' }) })],
+  })
+  const byAlias: ReadonlyMap<string, PublishRead> = new Map([['alt-1', ready(altStatus)]])
+  const altRow = row({ aliasId: 'alt-1', listing: { id: 'cl-alt-1' } })
+
+  it('an alias row takes its alias\'s read; a main row and a listing nobody read take the sheet\'s', () => {
+    expect(publishReadFor(altRow, ready(), byAlias).status).toBe(altStatus)
+    expect(publishReadFor(row(), ready(), byAlias).status).toEqual(status())
+    expect(publishReadFor(row({ aliasId: 'alt-2' }), ready(), byAlias).status).toEqual(status())
+  })
+
+  it('so an alias row shows its own last publish, not "Other listing"', () => {
+    expect(rowPublishValue(altRow, ready(), lookup, SCOPE)).toEqual({ otherListing: true, destinationLabel: SCOPE })
+    const own = rowPublishValue(altRow, publishReadFor(altRow, ready(), byAlias), lookup, SCOPE) as unknown as { last: Record<string, unknown> }
+    expect(own.last).toMatchObject({ publicationId: 'pub-9', status: 'FAILED', at: '2026-10-05T08:00:00.000Z' })
+    // While the alias's read is on its way, the cell is a skeleton — never another listing's answer.
+    const loading = new Map([['alt-1', { state: 'loading', status: null } as PublishRead]])
+    expect(rowPublishValue(altRow, publishReadFor(altRow, ready(), loading), lookup, SCOPE)).toBeUndefined()
+  })
+
+  it('the "N rejected" filter judges each row by its own listing\'s latest publish', () => {
+    const statusOf = (r: { aliasId: string | null }) => publishReadFor(r, ready(), byAlias).status
+    expect(isRejectedRow(altRow, statusOf)).toBe(true)
+    expect(isRejectedRow(altRow, status())).toBe(false)
+    expect(rejectedRowCount([row(), row({ id: 'child-2', listing: { id: 'cl-2' } }), altRow], statusOf)).toBe(2)
   })
 })
 

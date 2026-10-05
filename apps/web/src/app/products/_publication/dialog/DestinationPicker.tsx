@@ -6,12 +6,18 @@
  * per single choice and a `MultiSelect` with type-to-search (and its own "Select all") for the markets.
  *
  * Once a publish has started the destinations are fixed, so the row turns into one plain line saying where it goes.
+ *
+ * A market's listing aliases are options of the same Markets picker, each after its market's main listing and named
+ * with the sheet band's mark ("IT · Italy · ① Racing edition"); once one is chosen the picker counts "Listings: 3".
  */
 import { Listbox, MultiSelect } from '@/design-system/components'
 import { TokenChip } from '@/design-system/primitives'
 import { channelLabel } from '@nexus/shared/channel-label'
 import type { PublicationDestinationOption } from './model'
-import { changeAccount, changeChannel, changeMarkets, marketOptionLabel, pickerAccounts, pickerChannels, pickerMarkets, removeMarket, type PickerChoice } from './pickers'
+import {
+  changeAccount, changeChannel, changeMarkets, marketOptionLabel, marketShortLabel, marketsPickerText, pickerAccounts, pickerChannels, pickerMarkets, removeMarket,
+  type PickerChoice,
+} from './pickers'
 import styles from './publication.module.css'
 
 export interface DestinationPickerProps {
@@ -36,7 +42,7 @@ export function DestinationPicker({ options, choice, onChange, locked = false, m
     return <p className={styles.destinationLine}>
       <strong>{choice.channel ? channelLabel(choice.channel) : 'No channel'}</strong>
       {accounts.length > 1 && accountName ? ` · ${accountName}` : ''}
-      {chosen.length ? ` · ${chosen.map(o => o.scope.marketplace).join(', ')}` : ''}
+      {chosen.length ? ` · ${chosen.map(marketShortLabel).join(', ')}` : ''}
     </p>
   }
 
@@ -48,12 +54,15 @@ export function DestinationPicker({ options, choice, onChange, locked = false, m
         options={accounts} onChange={accountId => onChange(changeAccount(options, choice, accountId))} />}
       <MultiSelect size="sm" width="auto" searchable ariaLabel={marketsLabel} placeholder={`${marketsLabel}: none`} searchPlaceholder="Type a market, e.g. de"
         options={markets.map(o => ({ value: o.key, label: marketOptionLabel(o) }))} value={choice.keys}
-        formatLabel={value => `${marketsLabel}: ${value.length.toLocaleString('en')}`}
+        formatLabel={value => marketsPickerText(markets, value, marketsLabel)}
         onChange={keys => onChange(changeMarkets(options, choice, keys))} />
     </div>
     {chosen.length > 0 && <ul className={styles.chips} aria-label={`Chosen ${marketsLabel.toLowerCase()}`}>
       {chosen.map(o => <li key={o.key}>
-        <TokenChip onRemove={() => onChange(removeMarket(choice, o.key))} removeLabel={`Remove ${marketOptionLabel(o)}`}>{marketOptionLabel(o)}</TokenChip>
+        {/* A long listing name ends with an ellipsis inside the chip (its whole name on hover), never past a phone's width. */}
+        <TokenChip onRemove={() => onChange(removeMarket(choice, o.key))} removeLabel={`Remove ${marketOptionLabel(o)}`}>
+          <span className={styles.chipText} title={marketOptionLabel(o)}>{marketOptionLabel(o)}</span>
+        </TokenChip>
       </li>)}
     </ul>}
   </div>

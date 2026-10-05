@@ -12,6 +12,7 @@ import { publicationStatusMeta, publishFullTime } from '@/design-system/grid/ren
 import type { SheetStatus } from '@/design-system/grid/toolbars/SheetStatus'
 import type { Tone } from '@/design-system/primitives/tone'
 import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
+import { optionListingLabel, type PublicationAlias } from './model'
 
 /** The payload of `publication.status_changed`, as the invalidation channel carries it in `meta`. */
 export interface PublicationStatusEvent {
@@ -92,10 +93,11 @@ const products = (n: number) => `${n} ${n === 1 ? 'product' : 'products'}`
 
 /**
  * The one sentence for a publication that has settled — or that the channel never confirmed. `null` while it is
- * still on its way: nothing has happened that needs telling. Used by the toast and the dialog's announcement.
+ * still on its way: nothing has happened that needs telling. Used by the toast and the dialog's announcement. `place`:
+ * the dialog's own name for the destination ("eBay · IT · ① Racing edition" on a listing alias), else "eBay · IT".
  */
-export function publicationOutcome(status: string, counts: PublicationCounts | null, channel: string, marketplace: string): { message: string; tone: Tone } | null {
-  const label = destinationLabel(channel, marketplace)
+export function publicationOutcome(status: string, counts: PublicationCounts | null, channel: string, marketplace: string, place?: string | null): { message: string; tone: Tone } | null {
+  const label = place || destinationLabel(channel, marketplace)
   const channelName = channelLabel(channel)
   const meta = publicationStatusMeta(status)
   const n = counts?.products ?? 0
@@ -125,11 +127,11 @@ export function publicationOutcome(status: string, counts: PublicationCounts | n
 /**
  * The sheet's toolbar mark for one destination, from its status read. Shown only while a publication is on its way
  * or unconfirmed, or after the last one failed in whole or in part. A publication that went through needs no mark;
- * the toast told the person once.
+ * the toast told the person once. `place`: the listing's own name ("eBay · IT · ① Racing edition"), else "eBay · IT".
  */
-export function publicationMark(read: StudioPublicationStatus | null, channel: string, marketplace: string): SheetStatus | null {
+export function publicationMark(read: StudioPublicationStatus | null, channel: string, marketplace: string, place?: string | null): SheetStatus | null {
   if (!read) return null
-  const label = destinationLabel(channel, marketplace)
+  const label = place || destinationLabel(channel, marketplace)
   const channelName = channelLabel(channel)
   const latest = read.latest
   const latestCounts = summaryCounts(latest?.summary)
@@ -181,4 +183,71 @@ export function withRejectedFilter(mark: SheetStatus | null, rejectedRows: numbe
 export function rejectedFilterMenuLabel(rejectedRows: number, filterOn: boolean, channel: string, marketplace: string): string {
   const label = destinationLabel(channel, marketplace)
   return filterOn ? 'Show all rows' : `Show the ${rejectedRows === 1 ? 'row' : `${rejectedRows} rows`} rejected on ${label}`
+}
+
+// ── Aliases (Owner 2026-10-05): every listing of the sheet's destination ───────────────────────────────────────────
+
+/** A listing alias the sheet watches: its id (the event's `aliasKey`), name and place (`listedAliases`). */
+export type WatchedAlias = Pick<PublicationAlias, 'id' | 'label' | 'position'>
+
+/**
+ * The listings the sheet's toolbar mark and toast cover: the chosen listing alone — an alias, or the main listing (`''`)
+ * when "Main listing" is chosen (review 2026-10-05, m5: it is not "All listings") — or, no listing chosen, the main
+ * listing and every alias the window offers on the destination (ACTIVE, `offeredAliasIds`). `chosen` defaults to
+ * "an alias is chosen".
+ */
+export function watchedListings(chosenAliasKey: string, aliases: readonly WatchedAlias[], chosen: boolean = !!chosenAliasKey): string[] {
+  return chosen ? [chosenAliasKey] : ['', ...new Set(aliases.map(alias => alias.id).filter(Boolean))]
+}
+
+/**
+ * One listing's place in the mark and the toast, as the Publish window names it: "eBay · IT" when the destination has
+ * no aliases; else "eBay · IT · ★ Main listing" (the main listing) or "eBay · IT · ① Racing edition". `aliases` null:
+ * not read (still loading, or the read failed) — the main or chosen listing (`chosenAliasKey`) then reads as before
+ * aliases, "eBay · IT" (review 2026-10-05, m9), and so does the chosen listing when the read does not name it. Only
+ * another alias the read does not name reads "eBay · IT · Other listing".
+ */
+export function listingPlace(channel: string, marketplace: string, aliasKey: string, aliases: readonly WatchedAlias[] | null, chosenAliasKey: string = ''): string {
+  const place = destinationLabel(channel, marketplace)
+  const alias = aliasKey && aliases ? aliases.find(a => a.id === aliasKey) : null
+  if (aliasKey && !alias) return aliasKey === chosenAliasKey ? place : `${place} · Other listing`
+  if (!aliases) return place
+  const listing = optionListingLabel({ scope: { channel, marketplace, accountId: '', ...(aliasKey ? { listingId: aliasKey } : {}) }, alias: alias ?? null, listings: 1 + aliases.length })
+  return listing ? `${place} · ${listing}` : place
+}
+
+const MARK_RANK: Record<SheetStatus['tone'], number> = { danger: 3, warning: 2, info: 1, neutral: 0 }
+const readTime = (read: StudioPublicationStatus | null) => {
+  const at = Date.parse(read?.latest?.completedAt ?? read?.latest?.at ?? '')
+  return Number.isFinite(at) ? at : 0
+}
+
+/**
+ * The ONE toolbar mark over every listing the sheet watches: the worst (a rejection, then a result nobody confirmed,
+ * then a publish on its way), the newest of equals. Each listing's mark names its listing; the other listings that also
+ * have a mark are named in its detail ("Also: Sending 3 products to eBay · IT · ① Racing edition."), never dropped.
+ */
+export function combinedPublicationMark(listings: ReadonlyArray<{ read: StudioPublicationStatus | null; place: string }>, channel: string, marketplace: string): SheetStatus | null {
+  const marks = listings.flatMap(listing => {
+    const mark = publicationMark(listing.read, channel, marketplace, listing.place)
+    return mark ? [{ mark, at: readTime(listing.read) }] : []
+  }).sort((a, b) => MARK_RANK[b.mark.tone] - MARK_RANK[a.mark.tone] || b.at - a.at)
+  if (!marks.length) return null
+  const [first, ...others] = marks
+  if (!others.length) return first.mark
+  const also = `Also: ${others.map(o => o.mark.label).join('; ')}.`
+  return { ...first.mark, detail: first.mark.detail ? `${first.mark.detail.replace(/\s+$/, '')} ${also}` : also }
+}
+
+/**
+ * Which watched listing a `publication.status_changed` event is about: its alias key ('' = the main listing), or null
+ * when it is about another family, destination or (a listing chosen) another listing. `known: false` — no listing is
+ * chosen (`all`, by default when the destination is the main listing) and the event names an alias of this destination
+ * the sheet has not read yet: read the aliases again. With "Main listing" chosen, pass `all` false.
+ */
+export function eventListing(event: PublicationStatusEvent, destination: PublicationDestination, listings: readonly string[],
+  all: boolean = destination.aliasKey === ''): { aliasKey: string; known: boolean } | null {
+  if (!publicationEventMatches(event, { ...destination, aliasKey: event.aliasKey })) return null
+  if (listings.includes(event.aliasKey)) return { aliasKey: event.aliasKey, known: true }
+  return all && event.aliasKey ? { aliasKey: event.aliasKey, known: false } : null
 }

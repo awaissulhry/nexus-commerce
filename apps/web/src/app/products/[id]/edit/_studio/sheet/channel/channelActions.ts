@@ -40,6 +40,7 @@ import { AMAZON_NO_END, ETSY_NO_END, STATUS_TARGET_LABEL, type StatusTarget } fr
 import { SEND_MODE_LABEL, type PublishActionCell, type PublishActionChange, type SendMode } from '@nexus/shared/publish-actions'
 
 import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelSheetRow } from './types'
+import { LISTING_NOT_RECORDED } from '../../listingScope'
 
 /**
  * 🔴 The permission a channel verb needs is NOT a channel permission (ruling #123).
@@ -232,6 +233,95 @@ export function openRecordAction(deps: ChannelActionDeps): GridAction<ChannelShe
       return { ok: true }
     },
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// The listing band's verbs (aliases, Owner 2026-10-05)
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What the band's ⋯ needs to show one listing alone or publish it. The band is a listing (the main listing, or an alias),
+ * not a record, so these verbs are the band's own: they are offered on band rows and nowhere else.
+ */
+export interface ListingBandDeps {
+  /** How many listings this account and market hold (the unfiltered read): one listing needs no band verbs. */
+  listingCount: number
+  /** The listing the studio shows alone (`''` = the main listing), or null when it shows every listing. */
+  shownAliasKey: string | null
+  /** The `listing=` value that shows this band's listing alone on this page (`pageListingSelection`: the alias id, or the
+   *  page product's own main record), or undefined when none is known. */
+  selectionOf: (aliasId: string | null) => string | undefined
+  /** Write the studio's listing choice (`useStudioScope().setListing`); undefined = every listing. */
+  setListing: (listing?: string) => void
+  /** Open the studio's Publish window with only this listing ticked (an alias by its alias id, the main listing by none). */
+  publishListing: (aliasId: string | null) => void
+  /** Why the Publish window cannot open here (no account yet, a deleted product), or null. */
+  publishRefusal: string | null
+}
+
+export const SHOW_ONLY_LISTING = 'Show only this listing'
+export const SHOW_ALL_LISTINGS = 'Show all listings'
+export const PUBLISH_THIS_LISTING = 'Publish this listing…'
+/** The band's listing has no record of this page's product here — the studio's one sentence for it (`listingScope`). */
+export { LISTING_NOT_RECORDED }
+
+const isBand = (row: ChannelSheetRow | undefined): row is ChannelSheetRow => row?.rowKind === 'parent'
+/** The band verbs appear where a product holds more than one listing here, or one listing is shown alone. */
+const bandVerbsApply = (deps: ListingBandDeps) => deps.listingCount > 1 || deps.shownAliasKey !== null
+
+/**
+ * "Show only this listing" / "Show all listings" and "Publish this listing…" on a listing band. Showing writes the same
+ * `listing=` the studio bar's picker writes; publishing opens the studio's own Publish window on this listing only. Both
+ * stay on this page and send nothing (reach `local`): Publish still reviews before anything goes to the channel.
+ */
+export function listingBandActions(deps: ListingBandDeps): GridAction<ChannelSheetRow>[] {
+  return [
+    {
+      id: 'show-only-listing',
+      label: SHOW_ONLY_LISTING,
+      scope: ROW,
+      reach: 'local',
+      available: (rows) => {
+        const row = rows[0]
+        if (!isBand(row) || !bandVerbsApply(deps) || deps.shownAliasKey !== null) return HIDDEN
+        return deps.selectionOf(row.aliasId) ? AVAILABLE : disabled(LISTING_NOT_RECORDED)
+      },
+      run: async (rows): Promise<ActionResult> => {
+        const listing = rows[0] ? deps.selectionOf(rows[0].aliasId) : undefined
+        if (!listing) return { ok: false, message: LISTING_NOT_RECORDED }
+        deps.setListing(listing)
+        return { ok: true }
+      },
+    },
+    {
+      id: 'show-all-listings',
+      label: SHOW_ALL_LISTINGS,
+      scope: ROW,
+      reach: 'local',
+      available: (rows) => (isBand(rows[0]) && deps.shownAliasKey !== null ? AVAILABLE : HIDDEN),
+      run: async (): Promise<ActionResult> => {
+        deps.setListing(undefined)
+        return { ok: true }
+      },
+    },
+    {
+      id: 'publish-listing',
+      label: PUBLISH_THIS_LISTING,
+      scope: ROW,
+      reach: 'local',
+      available: (rows) => {
+        if (!isBand(rows[0]) || !bandVerbsApply(deps)) return HIDDEN
+        return deps.publishRefusal ? disabled(deps.publishRefusal) : AVAILABLE
+      },
+      run: async (rows): Promise<ActionResult> => {
+        const row = rows[0]
+        if (!row) return { ok: false, message: 'No listing to publish.' }
+        if (deps.publishRefusal) return { ok: false, message: deps.publishRefusal }
+        deps.publishListing(row.aliasId ?? null)
+        return { ok: true }
+      },
+    },
+  ]
 }
 
 export function channelActions(deps: ChannelActionDeps): GridAction<ChannelSheetRow>[] {

@@ -412,3 +412,49 @@ describe('N4 — a publish in words', () => {
     expect(story.summary).toBe('B: re-publish — sends 2 changed fields to eBay IT.')
   })
 })
+
+/** Aliases (Owner 2026-10-05): a second listing on a market is named by its alias id and is published as its own listing. */
+describe('aliases: publish-listing acts on the alias, never on the main listing', () => {
+  const alias = (productId: string, channel: string, marketplace: string, accountId: string, label: string, sku?: string) =>
+    inside(async () => (await db().productListingAlias.create({ data: { productId, channel, marketplace, channelConnectionId: accountId, label, position: 1, ...(sku ? { sku } : {}) } as never })).id)
+  const row = (productId: string, channel: string, marketplace: string, accountId: string, data: Json = {}) => inside(async () => (await db().channelListing.create({ data: {
+    productId, channel, marketplace, region: marketplace, channelMarket: `${channel}_${marketplace}`, channelConnectionId: accountId, ...data } as never })).id)
+
+  it('the undo record names the alias\'s own listing rows when the alias is named by its alias id (no account needed)', async () => {
+    const productId = await inside(async () => (await db().product.create({ data: { sku: 'TEST-SKU-L5-ALIAS', name: 'Alias product', basePrice: 10 } })).id)
+    const main = await row(productId, 'EBAY', 'IT', ids.ebay, { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ITEM-L5-MAIN', quantity: 2 })
+    const altId = await alias(productId, 'EBAY', 'IT', ids.ebay, 'ALT1')
+    const alt = await row(productId, 'EBAY', 'IT', ids.ebay, { aliasKey: altId, aliasId: altId, listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ITEM-L5-ALT', quantity: 2 })
+    const { preview, ran } = await approveAndRun({ productId, channel: 'EBAY', marketplace: 'IT', listingId: altId, fields: ['title'] })
+    expect(preview.destination).toMatchObject({ accountId: ids.ebay, listingId: altId })
+    expect(ran.ok, ran.error).toBe(true)
+    expect(ran.change.after.listingIds).toEqual([alt])
+    expect(ran.change.after.listingIds).not.toContain(main)
+    // An alias of another market is not this destination's: refused before anything is reviewed.
+    const elsewhere = await alias(productId, 'EBAY', 'DE', ids.ebay, 'DE1')
+    expect(await dryRun({ productId, channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, listingId: elsewhere })).toMatchObject({ ok: false, error: expect.stringContaining('TEST-SKU-L5-ALIAS on eBay IT:') })
+  })
+
+  it('Amazon EU: the one EU quantity is compared by the seller SKU this create sends, so an alias with its own SKU is not mixed with the main listing', async () => {
+    const productId = await inside(async () => (await db().product.create({ data: { sku: 'TEST-SKU-L5-EUA', name: 'EU alias product', basePrice: 10 } })).id)
+    await row(productId, 'AMAZON', 'IT', ids.amazon, { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ASIN-EUA', quantity: 3 })
+    const altId = await alias(productId, 'AMAZON', 'DE', ids.amazon, 'Second', 'TEST-SKU-L5-EUA-ALT')
+    await row(productId, 'AMAZON', 'DE', ids.amazon, { aliasKey: altId, aliasId: altId, listingStatus: 'DRAFT', isPublished: false })
+    // The studio sends the alias's own seller SKU for its listing.
+    fixture.facts.mockImplementation(async (id: string, scope: Json) => {
+      const facts = await factsFor(productId)(id, scope)
+      return { ...facts, products: facts.products.map((p: Json) => ({ ...p, sku: 'TEST-SKU-L5-EUA-ALT' })) }
+    })
+    const args = { productId, channel: 'AMAZON', marketplace: 'DE', listingId: altId }
+    // The main listing holds 3 in IT under the product SKU: another SKU, so this create of 5 is not refused.
+    const sent = await dryRun(args)
+    expect(sent.ok, sent.error).toBe(true)
+    expect(sent.preview).toMatchObject({ publish: 'first publish', destination: { listingId: altId } })
+    expect(sent.preview).not.toHaveProperty('euQuantity')
+    // A live IT listing that holds the alias's seller SKU (whatever its product) is the same Amazon quantity: refused.
+    const other = await inside(async () => (await db().product.create({ data: { sku: 'TEST-SKU-L5-EUB', name: 'Other', basePrice: 10 } })).id)
+    await row(other, 'AMAZON', 'IT', ids.amazon, { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ASIN-EUB', quantity: 2, liveChannelSku: 'TEST-SKU-L5-EUA-ALT' })
+    expect(await dryRun(args)).toMatchObject({ ok: false,
+      error: expect.stringContaining("TEST-SKU-L5-EUA-ALT: this first publish in DE would set Amazon's one EU quantity to 5, but its live EU listings hold 2 (IT)") })
+  })
+})

@@ -404,6 +404,8 @@ export interface PlanConfirm {
   moved?: number
   /** The destinations with a ticked Ended or Delete row ("eBay · IT"). */
   places: string[]
+  /** One of `places` is a listing alias (Owner 2026-10-05): three or more are counted as destinations, not markets. */
+  aliases?: boolean
   /**
    * S11 follow-up — the SKUs the ticked End and Delete rows act on: the ones the channel holds for those listings (the
    * plan's lifecycle rows name them), so the confirmation says what is ended or deleted, not the product SKU in its place.
@@ -474,12 +476,14 @@ export function actionPlanSend(keys: readonly string[], stateOf: (key: string) =
   const moving = content.filter(key => contentCounts(stateOf(key)) && movedRowsTicked(entryOf(key)) > 0)
   if (confirmRowsTicked({ destinations: plans }, lifecycle) > 0 || moving.length) {
     const rows = lifecycleRows.filter(row => row.needsTypedConfirm)
-    const places = [...new Set([...send.filter(key => tickedLifecycleRows(entryOf(key)).some(row => row.needsTypedConfirm)), ...moving])].map(key => entryOf(key).plan?.label ?? key)
+    const placeKeys = [...new Set([...send.filter(key => tickedLifecycleRows(entryOf(key)).some(row => row.needsTypedConfirm)), ...moving])]
+    const places = placeKeys.map(key => entryOf(key).plan?.label ?? key)
+    const aliases = placeKeys.some(key => !!entryOf(key).plan?.scope.listingId)
     const expected = keys.map(key => entryOf(key).familySku).find((sku): sku is string => !!sku)
       ?? moving.map(key => entryOf(key).review?.confirm?.expected).find((sku): sku is string => !!sku) ?? ''
     const moved = moving.reduce((n, key) => n + movedRowsTicked(entryOf(key)), 0)
     const skusOf = (action: 'end' | 'delete') => [...new Set(rows.filter(row => row.action === action).map(row => row.sku))]
-    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(moved ? { moved } : {}),
+    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(aliases ? { aliases } : {}), ...(moved ? { moved } : {}),
       ...(rows.length ? { skus: { ended: skusOf('end'), deleted: skusOf('delete') } } : {}) }
   }
   const locked = plans.flatMap(plan => plan.lifecycle).filter(row => row.refused === ROLE_CANNOT_END_OR_DELETE)
@@ -507,14 +511,15 @@ export const marketsSendingNothing = (skipped: readonly string[], sending: reado
 /**
  * The line above the tabs when two or more markets are chosen: "3 markets · 18 partial updates (41 fields) · 1 delete ·
  * 1 with problems". A market whose content is blocked but whose status changes still go reads "1 with content blocked".
+ * With a listing alias chosen it counts listings (`word`): "3 listings · …".
  */
 export function planFamilySummary(markets: number, base: Pick<ContentPlan, 'skipped' | 'nothing' | 'pending'>, counts: PublishPlanCounts, wholeProducts = 0, sending: readonly string[] = [],
-  created?: CreatedCounts | null): string {
+  created?: CreatedCounts | null, word: { one: string; many: string } = { one: 'market', many: 'markets' }): string {
   const nothing = base.nothing.filter(key => !sending.includes(key)).length
   const problems = marketsSendingNothing(base.skipped, sending).length
   const contentBlocked = base.skipped.length - problems
   return [
-    plural(markets, 'market', 'markets'),
+    plural(markets, word.one, word.many),
     publishPlanSummary(counts) || null,
     wholeProducts ? plural(wholeProducts, 'new product', 'new products') : null,
     createdWords(created),
@@ -559,7 +564,7 @@ const listed = (names: readonly string[]) => names.length <= 1 ? names.join('') 
  * the SKU each End or Delete acts on (`skus`, one per listing); more, or one SKU on several markets, are counted ("to end 1
  * listing and delete 4 on 3 markets").
  */
-export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved' | 'skus'>): string {
+export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved' | 'skus' | 'aliases'>): string {
   const skus = confirm.skus
   const named = !!skus && skus.ended.length === confirm.ended && skus.deleted.length === confirm.deleted && confirm.ended + confirm.deleted <= 3
   const parts = [
@@ -569,7 +574,8 @@ export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'pl
     // S10 — "move 1 listing to its new SKU (its old SKU is deleted)".
     confirm.moved ? `move ${plural(confirm.moved, 'listing', 'listings')} to ${confirm.moved === 1 ? 'its new SKU (its old SKU is deleted)' : 'their new SKUs (their old SKUs are deleted)'}` : null,
   ].filter(Boolean).join(' and ')
-  const places = confirm.places.length === 0 ? '' : confirm.places.length <= 2 ? ` on ${confirm.places.join(' and ')}` : ` on ${confirm.places.length} markets`
+  const places = confirm.places.length === 0 ? '' : confirm.places.length <= 2 ? ` on ${confirm.places.join(' and ')}`
+    : ` on ${confirm.places.length} ${confirm.aliases ? 'destinations' : 'markets'}`
   return `to ${parts}${places}`
 }
 
@@ -594,13 +600,16 @@ export function roleLockSentence(locked: { ended: number; deleted: number }): st
  * updates, new products, Active and Inactive; End and Delete are named after them. With only End or Delete: "End 1
  * listing · delete 1", "Delete 1 listing". `sending` = the markets that send something (`ActionPlanSend.send`);
  * "skip N with problems" counts the skipped markets that send nothing at all (`marketsSendingNothing`).
+ * The rows are already counted as "listings": when the window counts its places as listings (an alias is chosen), they
+ * are called destinations here ("Publish 24 listings to 3 destinations"), never "24 listings to 3 listings".
  */
 export function planButtonText(counts: PublishPlanCounts, sending: readonly string[], word: { one: string; many: string }, skippedMarkets: readonly string[] = [],
   wholeProducts = 0): string {
   const listings = counts.partial + counts.full + (counts.moved ?? 0) + counts.active + counts.inactive + wholeProducts
   const places = sending.length
   const skipped = marketsSendingNothing(skippedMarkets, sending).length
-  const where = places > 1 ? plural(places, word.one, word.many) : ''
+  const placeWord = word.one === 'listing' ? { one: 'destination', many: 'destinations' } : word
+  const where = places > 1 ? plural(places, placeWord.one, placeWord.many) : ''
   const skip = skipped ? ` · skip ${skipped.toLocaleString('en')} with problems` : ''
   if (listings) {
     const tail = [counts.ended ? `end ${counts.ended.toLocaleString('en')}` : null, counts.delete ? `delete ${counts.delete.toLocaleString('en')}` : null].filter(Boolean)

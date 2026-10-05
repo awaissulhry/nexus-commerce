@@ -42,7 +42,7 @@ import type { SheetStatus } from '@/design-system/grid'
 import { isInactiveSellingState } from '@/design-system/grid/renderers/sellingStatus'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { emitInvalidation, useInvalidationChannel, type InvalidationEvent } from '@/lib/sync/invalidation-channel'
-import { readPublishActions, writePublishActions, type PublishActionsDestination, type PublishActionsRead } from './publishActionsApi'
+import { invalidatePublishActions, publishActionsReads, readPublishActionsShared, writePublishActions, type PublishActionsDestination, type PublishActionsRead, type SharedReadOptions } from './publishActionsApi'
 
 export type { PublishActionsDestination } from './publishActionsApi'
 
@@ -89,10 +89,13 @@ export interface PublishActionWriteOutcome {
 export interface PublishActionsViewer { id: string | null; name: string | null }
 
 export interface PublishActionsStoreDeps {
-  read: (signal: AbortSignal) => Promise<PublishActionsRead>
+  /** `options.since`: the answer must come from a read started at or after this time (the shared cache, m2). */
+  read: (signal: AbortSignal, options?: SharedReadOptions) => Promise<PublishActionsRead>
   write: (change: PublishActionChange, body: { listingIds: readonly string[]; expected: Record<string, string | null> }) => Promise<PublishActionWriteResult>
   viewer: () => PublishActionsViewer
   now?: () => number
+  /** A write settled (or its answer was lost): the shared reads of this family are out of date. Called before the re-read. */
+  invalidate?: () => void
 }
 
 const EMPTY_MAP: ReadonlyMap<string, PublishActionCell> = new Map()
@@ -223,16 +226,23 @@ export class PublishActionsStore {
     }
   }
 
-  /** Read again. A newer read supersedes an older one; a failed re-read keeps the rows it had. */
-  async load(): Promise<void> {
+  /**
+   * Read again. A newer read supersedes an older one; a failed re-read keeps the rows it had. `options.since`: an answer
+   * from a read started before this time is out of date (an event, or this sheet's own write, happened then).
+   */
+  async load(options: SharedReadOptions = {}): Promise<void> {
     const id = ++this.loadSeq
     const startTick = this.tick
-    this.loadController?.abort()
+    const previous = this.loadController
     const controller = new AbortController()
     this.loadController = controller
     if (!this.server && this.status !== 'loading') { this.status = 'loading'; this.changed() }
+    // The new read is asked for before the old one is stopped: a shared read both would use is joined, never cancelled
+    // and started again.
+    const reading = this.deps.read(controller.signal, options)
+    previous?.abort()
     try {
-      const read = await this.deps.read(controller.signal)
+      const read = await reading
       if (id !== this.loadSeq) return
       this.server = read.rows
       this.serverById = new Map(read.rows.map(r => [r.listingId, r]))
@@ -286,8 +296,9 @@ export class PublishActionsStore {
       } catch (err) {
         this.revert(ids, column, seq)
         this.changed()
-        // The answer may have been lost after the save: read what is stored.
-        await this.load()
+        // The answer may have been lost after the save: read what is stored (never an answer read before it).
+        this.deps.invalidate?.()
+        await this.load({ since: Date.now() })
         return { ...base, error: err instanceof Error && err.message ? err.message : 'The change could not be saved.' }
       }
       const applied = new Set(result.applied)
@@ -299,7 +310,9 @@ export class PublishActionsStore {
       }
       this.changed()
       // New listings: the drafts this write started replace the `new:` rows in the re-read (same product, same alias).
-      await this.load()
+      // The other readers of this family (the listing picker, the toolbar mark) read again too.
+      this.deps.invalidate?.()
+      await this.load({ since: Date.now() })
       return { ...base, ok: true, applied: result.applied, refused: result.refused, conflicts: result.conflicts, started: result.started ?? null, leftOut: result.leftOut ?? null }
     }
     const next = this.queue.then(run, run)
@@ -572,7 +585,7 @@ export class PublishActionFence {
 export interface UsePublishActions extends PublishActionsSnapshot {
   /** Set (or clear) one column on these rows. Never throws: the outcome says what was stored, refused or lost. */
   write: (change: PublishActionChange, listingIds: readonly string[]) => Promise<PublishActionWriteOutcome>
-  /** Read again now. */
+  /** Read again now (never an answer read before this call). */
   reload: () => Promise<void>
   /** Every waiting value of the rows read (outgrown values not counted), and the deleted rows listed again. */
   waiting: SheetWaitingCounts
@@ -586,6 +599,18 @@ export interface UsePublishActionsOptions {
 }
 
 const noopSubscribe = () => () => undefined
+
+/** The origins of this tab's stores: their own writes reach the page's other readers through the shared read's drop. */
+const localOrigins = new Set<string>()
+/**
+ * A Status or Action write of this tab (`listing.updated` with the publish-action subtype and one of this tab's store
+ * origins): the page's other readers of the family already read again when the write dropped the shared reads, so they
+ * need not read once more on its event. Another tab's write is never local (each store's origin is random).
+ */
+export function isLocalPublishActionWrite(event: Pick<InvalidationEvent, 'type' | 'meta'>): boolean {
+  const origin = event.meta?.origin
+  return event.type === 'listing.updated' && event.meta?.subtype === PUBLISH_ACTION_EVENT && typeof origin === 'string' && localOrigins.has(origin)
+}
 const emptySnapshot = () => EMPTY_PUBLISH_ACTIONS
 
 /** Does this invalidation concern these rows? Own writes are not read twice (the store already re-read). */
@@ -614,6 +639,7 @@ export function usePublishActions(productId: string, destination: PublishActions
   // Random, not `useId`: two tabs on the same page would draw the same `useId`, and a tab must not take another tab's
   // write for its own.
   const [origin] = useState(() => `pa-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`)
+  useEffect(() => { localOrigins.add(origin); return () => { localOrigins.delete(origin) } }, [origin])
 
   const key = destination ? JSON.stringify({
     channel: destination.channel ?? null, marketplace: destination.marketplace ?? null,
@@ -621,11 +647,18 @@ export function usePublishActions(productId: string, destination: PublishActions
   }) : null
   const target = useMemo(() => (key ? JSON.parse(key) as PublishActionsDestination : null), [key])
 
+  /** True while this sheet's own write drops the shared reads: its store reads again by itself. */
+  const invalidating = useRef(false)
   const store = useMemo(() => target ? new PublishActionsStore({
-    read: signal => readPublishActions(productId, target, signal),
+    // One shared read per destination (m2): the listing picker and the toolbar mark read the same answer.
+    read: (signal, options) => readPublishActionsShared(productId, target, signal, options),
     // No channel = the Shared scope (every market of the family).
     write: (change, body) => writePublishActions(productId, change, { ...body, sharedScope: !target.channel }),
     viewer: () => viewer.current,
+    invalidate: () => {
+      invalidating.current = true
+      try { invalidatePublishActions(productId) } finally { invalidating.current = false }
+    },
   }) : null, [productId, target])
 
   useEffect(() => {
@@ -641,15 +674,25 @@ export function usePublishActions(productId: string, destination: PublishActions
   const live = useRef({ productIds, target, store })
   live.current = { productIds, target, store }
 
-  // A burst of events (a fill in another tab, a Publish settling many rows) reads ONCE.
+  // A burst of events (a fill in another tab, a Publish settling many rows) reads ONCE — an answer read after the last
+  // event (the shared cache may hold an older one).
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const since = useRef(0)
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  const readSoon = useCallback(() => {
+    since.current = Date.now()
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => { timer.current = null; void live.current.store?.load({ since: since.current }) }, 250)
+  }, [])
   useInvalidationChannel(['listing.updated', 'publication.status_changed'], useCallback((event: InvalidationEvent) => {
     const { productIds, target, store } = live.current
     if (!store || !target || !publishActionEventMatches(event, productIds, target, origin)) return
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => { timer.current = null; void live.current.store?.load() }, 250)
-  }, [origin]))
+    readSoon()
+  }, [origin, readSoon]))
+  // Someone dropped this product's shared reads (a listing of it changed elsewhere on the page): read again.
+  useEffect(() => publishActionsReads.subscribe(productId, event => {
+    if (event.type === 'invalidated' && !invalidating.current && live.current.store) readSoon()
+  }), [productId, readSoon])
 
   const write = useCallback(async (change: PublishActionChange, listingIds: readonly string[]): Promise<PublishActionWriteOutcome> => {
     const current = live.current.store
@@ -664,7 +707,7 @@ export function usePublishActions(productId: string, destination: PublishActions
     return outcome
   }, [options.familyId, productId, origin])
 
-  const reload = useCallback(async () => { await live.current.store?.load() }, [])
+  const reload = useCallback(async () => { await live.current.store?.load({ since: Date.now() }) }, [])
   const waiting = useMemo(() => waitingCountsOf(snapshot.rows), [snapshot.rows])
   const mark = useMemo(() => sheetWaitingMark(waiting), [waiting])
   return useMemo(() => ({ ...snapshot, write, reload, waiting, mark }), [snapshot, write, reload, waiting, mark])

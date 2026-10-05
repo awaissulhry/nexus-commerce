@@ -22,7 +22,7 @@ vi.mock('./publication-batch.processor.js', async original => ({ ...await origin
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { batchView, cancelPublicationBatch, createPublicationBatch, readPublicationBatch } from './publication-batch.service.js'
+import { ALIAS_FROM_OWN_WINDOW, batchView, cancelPublicationBatch, createPublicationBatch, readPublicationBatch } from './publication-batch.service.js'
 import { batchEuQuantityConflicts, createdQuantity } from './publication-batch-eu-quantity.js'
 import { BATCH_KIND, BATCH_REVIEW_TTL_MS } from './publication-batch.processor.js'
 
@@ -130,6 +130,17 @@ describe('publication batches', () => {
     await expect(createPublicationBatch({ reviews: [] }, USER)).rejects.toMatchObject({ statusCode: 400 })
     await expect(createPublicationBatch({ reviews: [{ reviewId: 'x' }, { reviewId: 'x' }] }, USER)).rejects.toMatchObject({ statusCode: 400, message: expect.stringMatching(/twice/) })
     await expect(createPublicationBatch({ reviews: Array.from({ length: 26 }, (_, i) => ({ reviewId: `r${i}` })) }, USER)).rejects.toMatchObject({ statusCode: 400 })
+  }))
+
+  it('the products list never names a listing: an alias is refused (it would act on the main listing), nothing is queued (Owner 2026-10-05)', () => scoped(async () => {
+    const before = await prisma.bulkOperation.count({ where: { kind: BATCH_KIND } })
+    const destination = { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay-account' }
+    for (const listingId of ['alias-1', ''])
+      await expect(createPublicationBatch({ productIds: ['p-1'], destinations: [destination, { ...destination, listingId }], options: { content: true } }, USER))
+        .rejects.toMatchObject({ statusCode: 400, message: ALIAS_FROM_OWN_WINDOW })
+    expect(ALIAS_FROM_OWN_WINDOW).toBe('Aliases are published from each product\'s own Publish window.')
+    expect(await prisma.bulkOperation.count({ where: { kind: BATCH_KIND } })).toBe(before)
+    expect(fixture.run).not.toHaveBeenCalled()
   }))
 
   it('refuses a batch whose new Amazon listings send two EU markets two quantities, naming the SKU and the markets', () => scoped(async () => {

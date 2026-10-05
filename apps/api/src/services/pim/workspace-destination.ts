@@ -35,11 +35,21 @@ export async function resolveWorkspaceDestination(input: WorkspaceDestinationInp
   // Retain existing alias links, resolving them only inside the named account and root family.
   // External listing IDs can be shared by variants, so only a root may supply this legacy link.
   if (input.listingId && !listing && input.accountId) {
-    const matches = await prisma.channelListing.findMany({ where: {
-      productId: familyId, channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.accountId,
-      OR: [{ aliasKey: input.listingId }, { externalListingId: input.listingId }],
-    }, select, take: 2 })
-    if (matches.length === 1) listing = matches[0]
+    const coordinate = { channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.accountId }
+    // An alias id names the alias of THIS page's product first (review 2026-10-05): a variation's page that chooses an
+    // alias opens the variation's own record of it, so the page never shows or saves the family root's record. The
+    // alias id alone, never a shared external id. Without a record of its own, the root's record answers as before.
+    if (input.productId !== familyId) {
+      const own = await prisma.channelListing.findMany({ where: { ...coordinate, productId: input.productId, aliasKey: input.listingId }, select, take: 2 })
+      if (own.length === 1) listing = own[0]
+    }
+    if (!listing) {
+      const matches = await prisma.channelListing.findMany({ where: {
+        ...coordinate, productId: familyId,
+        OR: [{ aliasKey: input.listingId }, { externalListingId: input.listingId }],
+      }, select, take: 2 })
+      if (matches.length === 1) listing = matches[0]
+    }
   }
   if (input.listingId && !listing) throw new WorkspaceScopeError('The selected listing is unavailable in this product, account and market.', 404)
   if (listing) {

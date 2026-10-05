@@ -22,6 +22,10 @@
  * changes to 6 markets · skip 1 with problems". A market whose request cannot be built is skipped with its reason; a
  * click waits for a request still being built, then sends. Each tab opens with the "Nexus wins" line and its "Keep
  * Amazon's values" switch (`DiffersSummary`); the exact request sits in a closed fold.
+ *
+ * Aliases (Owner 2026-10-05): each listing alias of a market is a destination of its own — its own tab, review, ticks,
+ * exact request and send — keyed by the alias id. A listed alias starts chosen like a listed main listing; the tabs,
+ * banners and hints name it with the sheet band's mark ("IT ① Racing edition"), and the counts say "listings".
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { StudioPublishResult, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
@@ -35,20 +39,21 @@ import { saveFirstNotice } from '@/app/products/[id]/edit/_studio/saveFirst'
 import { PublishStatusPill, publicationStatusMeta } from '@/design-system/grid'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { usePermission } from '@/lib/auth/AuthProvider'
-import { matchesPublicationSelection, matchesPublishPlan, retainPublicationReceipt, type PublicationDestinationOption } from './model'
+import { matchesPublicationSelection, matchesPublishPlan, optionListingLabel, retainPublicationReceipt, type PublicationDestinationOption } from './model'
 import { publicationRequest as request, requestFailure } from './request'
-import { destinationLabel, isSettled, publicationEventOf, publicationOutcome, resultCounts } from './outcome'
+import { isSettled, publicationEventOf, publicationOutcome, resultCounts } from './outcome'
 import {
-  EMPTY_ENTRY, MAX_BATCH_DESTINATIONS, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchProgress, batchSending, batchSentence, batchTone,
-  checkingButtonText, checkingProgress, destinationState, destinationStateLabel, euRefusal, initialTicked, initialTicks, isSparse, publishButtonText,
-  publishPlan, requestOutstanding, requestsDue, reviewOrder, tickedChanges, withInitialOptions, type DestinationEntry, type DestinationState, type ListedDestinations,
+  EMPTY_ENTRY, MAX_BATCH_DESTINATIONS, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchLimitText, batchPlaces as countBatchPlaces, batchProgress,
+  batchSending, batchSentence, batchTone, checkingButtonText, checkingProgress, destinationName, destinationPlace, destinationState, destinationStateLabel, euRefusal,
+  initialTicked, initialTicks, isSparse, placesWord, publishButtonText, publishPlan, requestOutstanding, requestsDue, reviewOrder, tickedChanges, withInitialOptions,
+  type DestinationEntry, type DestinationState, type ListedDestinations,
 } from './destinations'
 import {
   PLAN_CHANGED, PLAN_OUT_OF_DATE, actionPlanRows, actionPlanSend, confirmReason, confirmWhat, createdCounts, destinationChildren, planBatchSentence, planButtonText, planFamilySummary,
   planResultRows, planResultWord, planStateLabel, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence, tickedLifecycleRows,
   undoButtonText, undoSentence, type PlanResultRow,
 } from './actionPlan'
-import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, refillChoice, type PickerChoice } from './pickers'
+import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, marketTabParts, refillChoice, type PickerChoice } from './pickers'
 import { DestinationPicker } from './DestinationPicker'
 import { ReviewBody } from './ReviewBody'
 import { ManyPublishDialog, type ManyPublishDialogProps } from './ManyPublishDialog'
@@ -142,11 +147,22 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   // The person changed the markets: the listed markets arriving later never undo that choice.
   const touched = useRef(false)
   const filledListed = useRef(!!listedKeys)
+  // The asked-for destination can arrive after the window opened (a retry's listing is known once the family's listings
+  // are read): it is chosen then, unless the person already chose.
+  const firstSignature = firstTicked.join('\n')
+  const filledFirst = useRef(firstSignature)
   useEffect(() => {
     if (touched.current || !options.length) return
+    if (filledFirst.current !== firstSignature) {
+      filledFirst.current = firstSignature
+      if (listedKeys) filledListed.current = true
+      setChoice(initialChoice(options, firstTicked, listedKeys))
+      if (firstTicked[0]) setActive(firstTicked[0])
+      return
+    }
     if (listedKeys && !filledListed.current) { filledListed.current = true; setChoice(initialChoice(options, firstTicked, listedKeys)); return }
     if (!choice.channel) setChoice(initialChoice(options, firstTicked, listedKeys))
-  }, [choice.channel, options, firstTicked, listedKeys])
+  }, [choice.channel, options, firstTicked, firstSignature, listedKeys])
   const ticked = useMemo(() => new Set(choice.keys), [choice.keys])
   const [active, setActive] = useState<string | null>(firstTicked[0] ?? null)
   const shownTab = activeTab(choice.keys, active)
@@ -456,7 +472,11 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   })
 
   const withStatusChanges = !!batch?.children.some(child => child.kind === 'lifecycle')
-  const word = new Set(tickedKeys.map(k => optionOf(k)?.scope.channel)).size <= 1 ? { one: 'market', many: 'markets' } : { one: 'destination', many: 'destinations' }
+  // "markets", "listings" once a listing alias is chosen (two listings of one market are not two markets), "destinations"
+  // when channels mix.
+  const word = useMemo(() => placesWord(tickedKeys, scopeOf), [tickedKeys, scopeOf])
+  /** A destination's place with its listing when its market has more than one: "eBay · IT · ① Racing edition". */
+  const placeOf = (key: string | null, scope: Pick<StudioPublishScope, 'channel' | 'marketplace'>) => destinationPlace(scope, key ? optionOf(key) : null)
   const batchLine = (view: PublishPlanBatchView) => (view.children.some(child => child.kind === 'lifecycle') ? planBatchSentence(view) : batchSentence(view, word))
 
   // Announce a final result once, politely. The banner shows it; this line is for a screen reader.
@@ -464,9 +484,10 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (!result || !shownReview || !(isSettled(result.status) || result.status === 'UNVERIFIED')) return
     const key = `${result.id}:${result.status}`
     if (announced?.key === key) return
-    const outcome = publicationOutcome(result.status, resultCounts(result), shownReview.scope.channel, shownReview.scope.marketplace)
+    const outcome = publicationOutcome(result.status, resultCounts(result), shownReview.scope.channel, shownReview.scope.marketplace,
+      destinationPlace(shownReview.scope, shownKey ? optionOf(shownKey) : null))
     if (outcome) setAnnounced({ key, message: outcome.message })
-  }, [result, shownReview, announced?.key])
+  }, [result, shownReview, shownKey, optionOf, announced?.key])
   useEffect(() => {
     if (!batch?.done) return
     const key = `${batch.batchId}:${batch.outcome}`
@@ -529,7 +550,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     // The one button keeps its place while the window works; its words wrap on a phone.
     const one = { size: 'sm' as const, wrap: true, className: oneClick.oneButton }
     if (listed?.loading && !choice.keys.length && !locked) return <Button {...one} variant="primary" disabled>Finding the markets…</Button>
-    if (checkingNow) return <Button {...one} variant="primary" disabled>{checkingButtonText(checking)}</Button>
+    if (checkingNow) return <Button {...one} variant="primary" disabled>{checkingButtonText(checking, word)}</Button>
     if (sendWaiting) return <Button {...one} variant="primary" disabled>{tickedKeys.length > 1 ? 'Preparing the requests…' : 'Preparing the request…'}</Button>
     // One market with content only: today's single publish.
     if (tickedKeys.length <= 1 && !action.batch) {
@@ -549,7 +570,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       onClick={publish}>{busy === 'batch' ? 'Publishing…' : text}</Button>
   })()
   const waitingHint = tickedKeys.length > 1 && !locked && !checkingNow && plan.pending.length > 0
-    ? `${plan.pending.length} ${plan.pending.length === 1 ? 'destination is' : 'destinations are'} not ready yet: ${plan.pending.map(key => `${optionOf(key)?.marketName ?? ''} (${destinationStateLabel(stateOf(key)).label.toLowerCase()})`).join(', ')}.`
+    ? `${plan.pending.length} ${plan.pending.length === 1 ? 'destination is' : 'destinations are'} not ready yet: ${plan.pending.map(key => { const o = optionOf(key); return `${o ? destinationName(o) : ''} (${destinationStateLabel(stateOf(key)).label.toLowerCase()})` }).join(', ')}.`
     : null
   // Markets with nothing to send stay as quiet tabs: they are not counted in the line above the tabs.
   const quiet = plan.nothing.filter(key => !action.send.includes(key))
@@ -567,9 +588,15 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (sent) return sent
     return result && key === shownKey ? publicationStatusMeta(result.status).label : null
   }
+  // A long listing name ends with an ellipsis (its whole name on hover); what the review says is always shown whole —
+  // so a tab never runs past a phone's width (review 2026-10-05).
   const tabs = choice.keys.flatMap(key => {
     const o = optionOf(key)
-    return o ? [{ id: key, label: marketTabLabel(o, stateOf(key), sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))) }] : []
+    if (!o) return []
+    const said = sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))
+    const { name, words } = marketTabParts(o, stateOf(key), said)
+    return [{ id: key, label: <span className={styles.tabLabel} title={marketTabLabel(o, stateOf(key), said)}>
+      <span className={styles.tabName}>{name}</span><span>{` · ${words}`}</span></span> }]
   })
   const renderPanel = (key: string) => {
     const option = optionOf(key)
@@ -583,20 +610,22 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     const stale = staleReview && key === singleKey
     const own = entry.plan ? actionPlanSend([key], stateOf, entryOf) : null
     const rows = entry.plan ? actionPlanRows(entry, state, now) : []
+    // An alias (or the main listing of a market with aliases) is named with the band's mark; else the plan's own words.
+    const place = optionListingLabel(option) ? destinationPlace(option.scope, option) : entry.plan?.label ?? destinationPlace(option.scope)
     const planPart = entry.plan && own ? {
-      label: entry.plan.label, summary: planSummaryLine(own.counts, own.wholeProducts, own.content.includes(key) ? createdCounts(rows) : null), rows,
+      label: place, summary: planSummaryLine(own.counts, own.wholeProducts, own.content.includes(key) ? createdCounts(rows) : null), rows,
       lifecycleIds: entry.lifecycleIds, contentError: entry.plan.error, now, onTicksChange: (next: { selectedIds: string[]; lifecycleIds: string[] }) => chooseTicks(key, next),
     } : null
     return <div className={styles.tabPanel} {...tabPanelProps(tabBase, key)} ref={panelRef} aria-label={`Review for ${marketOptionLabel(option)}`}>
       {status}
-      {kids.length > 0 && <DataGrid ariaLabel={`Results on ${entry.plan?.label ?? marketOptionLabel(option)}`} size="sm" columns={PLAN_RESULT_COLUMNS}
+      {kids.length > 0 && <DataGrid ariaLabel={`Results on ${place}`} size="sm" columns={PLAN_RESULT_COLUMNS}
         rows={planResultRows(kids, productLabel, tickedLifecycleRows(entry))} rowKey={row => row.key} />}
-      {canCheckAgain && <div className={styles.actions}><Button size="sm" onClick={() => checkAgain(key)} aria-label={`Check ${option.marketName} again`}>Check again</Button></div>}
-      {requestFailed && <div className={styles.actions}><Button size="sm" disabled={!!busy || sendWaiting} onClick={() => retryRequest(key)} aria-label={`Build the exact request for ${option.marketName} again`}>Try again</Button></div>}
+      {canCheckAgain && <div className={styles.actions}><Button size="sm" onClick={() => checkAgain(key)} aria-label={`Check ${destinationName(option)} again`}>Check again</Button></div>}
+      {requestFailed && <div className={styles.actions}><Button size="sm" disabled={!!busy || sendWaiting} onClick={() => retryRequest(key)} aria-label={`Build the exact request for ${destinationName(option)} again`}>Try again</Button></div>}
       {entry.error && !entry.plan && <Banner tone="danger" title="Review could not complete" action={!locked && <Button size="sm" onClick={() => checkAgain(key)}>Check again</Button>}>{entry.error}</Banner>}
       {!entry.plan && !entry.error && <p className={styles.muted}>Reading the saved values, the waiting status changes and the channel for {marketOptionLabel(option)}…</p>}
-      {entry.review && stale && <p>This review was made while that publish was still waiting, so its notes are out of date. Review again to publish to {destinationLabel(entry.review.scope.channel, entry.review.scope.marketplace)}.</p>}
-      {entry.plan && !stale && <ReviewBody review={entry.review} selectedIds={entry.selectedIds} plan={planPart}
+      {entry.review && stale && <p>This review was made while that publish was still waiting, so its notes are out of date. Review again to publish to {placeOf(key, entry.review.scope)}.</p>}
+      {entry.plan && !stale && <ReviewBody review={entry.review} selectedIds={entry.selectedIds} plan={planPart} listing={optionListingLabel(option)}
         selection={matchesPublicationSelection(entry.selection, entry.review, tickedChanges(entry)) ? entry.selection : null}
         selecting={entry.selecting || requestOutstanding(state, entry)} nexusWins
         locationId={entry.locationId} confirmed={!!entry.review && entry.confirmedReviewId === entry.review.id} locked={locked || !!busy || sendWaiting}
@@ -607,7 +636,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   }
 
   const progress = batch ? batchProgress(batch) : null
-  const batchPlaces = batch ? new Set(batch.children.map(c => `${c.channel}|${c.marketplace}|${c.accountId}`)).size : 0
+  const batchPlaces = batch ? countBatchPlaces(batch.children) : 0
 
   return <Modal open onClose={() => { if (!pending) onClose() }} size="lg" readable title="Publish product"
     subtitle={`${productLabel} · Saved product information and included variants`}
@@ -622,7 +651,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     <div className={styles.body} aria-busy={!!busy}>
       {options.length > 0 && <div className={styles.top}>
         <DestinationPicker options={options} choice={choice} onChange={pick} locked={locked} />
-        {tabs.length > 0 && <Tabs ariaLabel="Chosen markets" size="sm" overflow="scroll" idBase={tabBase} tabs={tabs} active={shownTab ?? ''} onChange={setActive} />}
+        {tabs.length > 0 && <Tabs ariaLabel={`Chosen ${word.many}`} size="sm" overflow="scroll" idBase={tabBase} tabs={tabs} active={shownTab ?? ''} onChange={setActive} />}
       </div>}
       {!canPublish && <Banner tone="warning" title="Publishing permission required">Your role needs product publishing access.</Banner>}
       {discoveryFailed && <Banner tone="danger" title="Destinations could not be loaded">Close this dialog, then choose Try again in the sheet footer.</Banner>}
@@ -639,13 +668,13 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       {error && <Banner tone="danger" title={uncertain ? 'Publication result needs checking' : 'Review could not complete'}>{error}</Banner>}
       {eu && <Banner tone="danger" title={eu.title}><ul className={styles.issues}>{eu.lines.map(line => <li key={line}>{line}</li>)}</ul></Banner>}
       {/* An earlier publish to this destination has no answer yet: say so first, not only inside the review's issues. */}
-      {earlierWaiting && singleReview && <Banner tone="info" title={`Waiting for ${destinationLabel(singleReview.scope.channel, singleReview.scope.marketplace)}`}>
+      {earlierWaiting && singleReview && <Banner tone="info" title={`Waiting for ${placeOf(singleKey, singleReview.scope)}`}>
         <p>An earlier publish to this destination has no answer from the channel yet. This window updates when the channel answers. Use Check now to ask the channel yourself.</p>
       </Banner>}
       {/* The result leads: a long review below must never hide what became of the publication. */}
       {result && (() => {
         const meta = publicationStatusMeta(result.status)
-        const where = shownReview ? destinationLabel(shownReview.scope.channel, shownReview.scope.marketplace) : null
+        const where = shownReview ? placeOf(shownKey, shownReview.scope) : null
         return <Banner tone={meta.tone} title={<span className={styles.resultTitle}><PublishStatusPill meta={meta} />{where && <span>{where}</span>}</span>}>
           <p>{result.message}</p>
           {!meta.terminal && result.status !== 'UNVERIFIED' && <p>You can close this window. Nexus checks the channel by itself and tells you when it answers.</p>}
@@ -673,11 +702,11 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
         ? 'Finding the markets where this product is listed…' : 'Choose one or more markets above. Each market gets its own review, in its own tab.'}</p>}
       {listed?.failed && !touched.current && !locked && <p className={styles.muted}>Where this product is listed could not be read, so only the markets shown are chosen. Add others above.</p>}
       {choice.keys.length > 1 && !batch && !result && <p className={styles.summary}>{counted > 0 || checkingNow
-        ? planFamilySummary(counted, { ...plan, nothing: [] }, action.counts, action.wholeProducts, action.send, created)
-        : 'Nothing to send: these markets already have the saved values.'}</p>}
+        ? planFamilySummary(counted, { ...plan, nothing: [] }, action.counts, action.wholeProducts, action.send, created, word)
+        : `Nothing to send: these ${word.many} already have the saved values.`}</p>}
       {roleLock && <Banner tone="warning" title={roleLock}>The other changes can still be sent.</Banner>}
       {shownTab && renderPanel(shownTab)}
-      {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>At most {MAX_BATCH_DESTINATIONS} markets can be published at once.</p>}
+      {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>{batchLimitText(word)}</p>}
       {waitingHint && <p className={styles.muted}>{waitingHint}</p>}
 
       {/* Ended and Delete (and an Amazon SKU move, S10): the publisher's own typed confirmation (the family SKU), last, right above the button. */}

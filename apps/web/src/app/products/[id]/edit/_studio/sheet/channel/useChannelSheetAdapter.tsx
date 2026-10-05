@@ -51,7 +51,10 @@ import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, 
 import { AliasPublishControl } from './AliasPublishControl';
 import { usePublicationStatus } from '@/app/products/_publication/dialog/usePublicationStatus';
 import { destinationLabel as publishDestinationLabel, rejectedFilterMenuLabel, withRejectedFilter } from '@/app/products/_publication/dialog/outcome';
-import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishHistorySearch, publishSheetColumn, rejectedRowCount, rowPublishValue, useSellingChangeReRead, type PublishCellValue } from './publishColumn';
+import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishHistorySearch, publishReadFor, publishSheetColumn, rejectedRowCount, rowPublishValue, sellingChangeInFlight, useSellingChangeReRead, type PublishCellValue } from './publishColumn';
+import { StudioPublishDialog } from '../../StudioPublishDialog';
+import { aliasName, listingPublishScope, pageListingSelection } from '../../listingScope';
+import type { StudioPublishScope } from '@nexus/shared/studio-publication';
 import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
@@ -68,7 +71,7 @@ import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
 import { commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
 import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount, connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, draftStartSentence, noAccountTitle, notListedTitle } from '../../draftListing';
-import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
+import { useReadinessRefresh, useSaveReporter, useStudioProduct, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
@@ -90,7 +93,8 @@ import { useReferenceNames } from '../useReferenceNames';
 import { referenceSearchText } from '../referenceLabels';
 import { RESERVED_COLUMN_IDS } from '../views';
 import { flaggedColumnKeys } from '../flaggedColumns';
-import { ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, actionMenuEntries, channelActions, type PermissionState } from './channelActions';
+import { ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, actionMenuEntries, channelActions, listingBandActions, type PermissionState } from './channelActions';
+import { invalidatePublishActions } from '../publishActionsApi';
 import { PublishActionFence, groupStaged, inactiveStatusMark, isInactiveCell, isWaitingCell, operationToast, publishCellKey, usePublishActions, waitingCountsOf, waitingStatusMark, waitingTotalOf, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type StagedPublishCell } from '../usePublishActions';
 import { STATUS_COLUMN, statusCellValue, statusColumn, statusSheetColumn, type PublishCellReadState } from './statusColumn';
 import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, actionSheetColumn } from './actionColumn';
@@ -142,8 +146,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const selectedAlias = destination.status === 'ready' ? destination.data.aliasKey : null;
     /* Sheet publish parity, step 2 — a publication's result arrives without a click: the toolbar mark below and one toast. */
     const publication = usePublicationStatus({ channel, marketplace, accountId, aliasKey: destination.status === 'ready' ? destination.data.aliasKey ?? '' : null });
-    // Selling changes send no publication event: the Last publish column reads again while one is still being sent.
-    useSellingChangeReRead(publication.status, publication.reload);
+    // Selling changes send no publication event: the Last publish column reads again while one is still being sent — on
+    // the main (or chosen) listing, or on any alias shown with it (aliases, Owner 2026-10-05).
+    useSellingChangeReRead([publication.status, ...[...publication.aliasReads.values()].map((read) => read.status)].find((status) => sellingChangeInFlight(status)) ?? null, publication.reload);
+
     /* Build shape v2, P8 — the Status and Action columns: the family's waiting values on this channel · market (every
        listing of it: rows are matched by their listing id). Read alongside the sheet, not after it. */
     const publishActions = usePublishActions(productId, { channel, marketplace, accountId: accountId ?? null }, { familyId: loadedData?.family?.id ?? null });
@@ -231,9 +237,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
        ref, so a new answer refreshes its cells without rebuilding the column (`refreshCells` below). */
     const publishLookup = useMemo(() => publishColumnLookup(data?.columns ?? [], data?.scope.label ?? ''), [data?.columns, data?.scope.label]);
     const publishValueRef = useRef<(row: ChannelSheetRow) => PublishCellValue>(() => undefined);
-    publishValueRef.current = (row) => rowPublishValue(row, publication.read, publishLookup, publishDestinationLabel(channel, marketplace));
+    /* Aliases (Owner 2026-10-05) — with every listing shown, each alias's rows read that alias's own last publish
+       (`publication.aliasReads`, the same reader as the mark and the toast); the main (or chosen) listing's rows read
+       `publication.read`. With one listing chosen there are no other reads. */
+    const listingPublications = publication.aliasReads;
+    const rowPublicationStatus = useCallback((row: { aliasId: string | null }) => publishReadFor(row, publication.read, listingPublications).status, [publication.read, listingPublications]);
+    publishValueRef.current = (row) => rowPublishValue(row, publishReadFor(row, publication.read, listingPublications), publishLookup, publishDestinationLabel(channel, marketplace));
     const [showRejectedOnly, setShowRejectedOnly] = useState(false);
-    const rejectedCount = useMemo(() => rejectedRowCount(rows, publication.status), [rows, publication.status]);
+    const rejectedCount = useMemo(() => rejectedRowCount(rows, rowPublicationStatus), [rows, rowPublicationStatus]);
     useEffect(() => { if (!rejectedCount) setShowRejectedOnly(false); }, [rejectedCount]);
     /* Create path, step 6 — a save that STARTED this coordinate's draft (parent + variants) has its listings adopted
        into the rows in place (`commitChannelRow` → `adoptCreatedListings`), so the next save on any row of the family
@@ -469,7 +480,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         target: (kind) => kind === 'variation' ? variationTarget(rows.find((row) => row.rowKind === 'parent'), canAddRows)
             : aliasTarget({ productId, channel, marketplace, accountId, noAccount: !accountId && !data?.scope.connectionId && accounts.length === 0, canEdit: canAddRows }),
         skuContext: () => ({ family: null, takenSkus: rows.flatMap((row) => [row.sku, row.skuFacts?.wanted ?? '']) }),
-        onCreated: (kinds) => { followUp.owe(); followUp.settle(); refreshReadiness(); if (kinds.has('alias') && selectedAlias !== null) setListing(undefined); } });
+        onCreated: (kinds) => { followUp.owe(); followUp.settle(); refreshReadiness(); if (kinds.has('alias')) { invalidatePublishActions(productId); if (selectedAlias !== null) setListing(undefined) } } });
     useEffect(() => newRows.store.landed(new Set([...rows.map((row) => row.id), ...(data?.aliases ?? []).flatMap((alias) => (alias.id ? [alias.id] : []))])), [rows, data, newRows.store]);
     const identitySku = useIdentitySkuColumn<ChannelSheetRow>({ scope: { kind: 'channel', channel, marketplace }, tracker, writer, getGridApi, rowIdOf, recordUndo: undo.record, announce: announceRefusals,
         onCreate: (row, sku) => { newRows.store.type(row.rowId, sku); } });
@@ -935,10 +946,30 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const { press, problem, clearProblem, confirmElement } = useActionPress<ChannelSheetRow>();
     const isRecordRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'variant', []);
     const menuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: verbs, onSelect: press, isRecord: isRecordRow }), [verbs, press, isRecordRow]);
+    /* Aliases (Owner 2026-10-05) — a listing band's own verbs: show this listing alone (or every listing again) and
+       publish only this listing, in the studio's own Publish window. The band's ⋯ and its right-click offer them. */
+    const studioProduct = useStudioProduct();
+    const [publishListingScope, setPublishListingScope] = useState<StudioPublishScope | null>(null);
+    const publishAccount = data?.scope.connectionId ?? accountId ?? null;
+    const bandVerbs = useMemo(() => listingBandActions({
+        listingCount: loadedData?.aliases.length ?? 0,
+        shownAliasKey: selectedAlias,
+        // The `listing=` that shows one listing alone: the alias id, or THIS page's product's own main record — a
+        // variation's page stays on the variation (review 2026-10-05).
+        selectionOf: (aliasId) => pageListingSelection(aliasId, loadedData?.rows ?? [], studioProduct.id),
+        setListing,
+        publishListing: (aliasId) => { if (publishAccount) setPublishListingScope(listingPublishScope({ channel, marketplace, accountId: publishAccount }, aliasId)); },
+        publishRefusal: studioProduct.deletedAt ? 'This product is deleted, so it cannot be published.'
+            : !publishAccount ? 'Choose an account for this market first.' : null,
+    }), [loadedData?.aliases.length, loadedData?.rows, selectedAlias, setListing, publishAccount, channel, marketplace, studioProduct.deletedAt, studioProduct.id]);
+    // A listing band the sheet read — never an empty "new listing" row that has no listing yet.
+    const isBandRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'parent' && !isUnsavedRowData(r), []);
+    const bandMenuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: bandVerbs, onSelect: press, isRecord: isBandRow }), [bandVerbs, press, isBandRow]);
     const contextMenu = useMemo(() => {
         const actions = actionContextMenu<ChannelSheetRow>({ actions: verbs, onSelect: press, isRecord: isRecordRow });
+        const bandActions = actionContextMenu<ChannelSheetRow>({ actions: bandVerbs, onSelect: press, isRecord: isBandRow });
         return (params: GetContextMenuItemsParams<ChannelSheetRow>) => {
-            const items = actions(params);
+            const items = params.node?.data && isBandRow(params.node.data) ? bandActions(params) : actions(params);
             const row = params.node?.data;
             const column = data?.columns.find(c => c.key === params.column?.getColId());
             if (row && column)
@@ -951,7 +982,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return [{ name: 'Open reusable mapping for this field', tooltip: 'This rule can affect other matching products. Opens separately to preserve your edits.',
                     action: () => window.open(supplyingRule?.href ?? mappingHref({ channel, market: marketplace, category: row.productType, field, productId: row.id }), '_blank', 'noopener') }, ...items];
         };
-    }, [verbs, press, isRecordRow, data, channel, marketplace, control.cellMenuItems]);
+    }, [verbs, bandVerbs, press, isRecordRow, isBandRow, data, channel, marketplace, control.cellMenuItems]);
     const productLevelOnly = data?.meta?.mapping?.productLevelOnly ?? false;
     const familyShowsAxes = useMemo(() => {
         const variants = rows.filter((r) => r.rowKind === 'variant');
@@ -1061,7 +1092,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             onOpenHistory: (publicationId, p) => openPublishHistory(publicationId, (p.data as ChannelSheetRow | undefined)?.sku ?? null),
         },
     })] : [], [scopePage, getGridApi, revealCell, openPublishHistory]);
-    useEffect(() => { getGridApi()?.refreshCells({ columns: [PUBLISH_COLUMN] }); }, [publication.read, publishLookup, getGridApi]);
+    useEffect(() => { getGridApi()?.refreshCells({ columns: [PUBLISH_COLUMN] }); }, [publication.read, listingPublications, publishLookup, getGridApi]);
     // "Show in sheet" from Publish history lands on the FIELD the channel named (the request names the row and fields).
     useEffect(() => {
         if (!gridReady || !rows.length)
@@ -1097,14 +1128,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const scopeRows = useMemo(() => {
         const afterRefused = showRefusedOnly && refusedRowIds.size ? filterProductSheetRows(rows, row => refusedRowIds.has(productSheetRowKey(row))) : rows;
         // Step 3 — the channel's rejections in the latest publish (the toolbar mark's filter), not the save refusals above.
-        const afterRejected = showRejectedOnly && rejectedCount ? filterProductSheetRows(afterRefused, row => isRejectedRow(row, publication.status)) : afterRefused;
+        const afterRejected = showRejectedOnly && rejectedCount ? filterProductSheetRows(afterRefused, row => isRejectedRow(row, rowPublicationStatus(row))) : afterRefused;
         const afterWaiting = offerDrafts.filterOn ? filterProductSheetRows(afterRejected, offerDrafts.keep) : afterRejected;
         // P8 — the waiting mark's and the inactive chip's filters.
         const afterPublish = publishFilter === 'waiting' ? filterProductSheetRows(afterWaiting, row => isWaitingCell(publishCellOf(row)))
             : publishFilter === 'inactive' ? filterProductSheetRows(afterWaiting, row => isInactiveCell(publishCellOf(row)))
                 : afterWaiting;
         return searchTerm ? filterProductSheetRows(afterPublish, matchesSearch) : afterPublish;
-    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, publication.status, offerDrafts, publishFilter, publishCellOf, publishActions.version]);
+    }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, rowPublicationStatus, offerDrafts, publishFilter, publishCellOf, publishActions.version]);
     useLanguageChips(data ? scopeRows : null, gridColumns);
     useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
@@ -1187,7 +1218,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     { colId: '__sku', header: 'SKU', value: row => row.sku },
                     { colId: '__account', header: 'Account', value: () => accountId ?? 'Primary account' },
                     { colId: '__market', header: 'Marketplace', value: () => marketplace },
-                    { colId: '__alias', header: 'Listing alias', value: row => row.aliasId ?? '' },
+                    // The alias's name as the band shows it (Owner 2026-10-05), not its id; the main listing has none.
+                    { colId: '__alias', header: 'Listing alias', value: row => (row.aliasId ? aliasName(row.aliasPosition, aliasLabelOf(row.aliasId)) : '') },
                 ],
                 narrowed: searchTerm.length > 0 || !!activeId,
             });
@@ -1196,7 +1228,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         catch (e: unknown) {
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
-    }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
+    }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns, aliasLabelOf]);
     const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
@@ -1206,6 +1238,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     familyShowsAxesRef.current = familyShowsAxes;
     const menuItemsRef = useRef(menuItems);
     menuItemsRef.current = menuItems;
+    const bandMenuItemsRef = useRef(bandMenuItems);
+    bandMenuItemsRef.current = bandMenuItems;
     useUnpinOnNarrowSheet(getGridApi, gridReady);
     const autoGroupColumnDef = useMemo<ColDef<ChannelSheetRow>>(() => ({
         colSpan: bandSpan,
@@ -1220,7 +1254,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 const alias = (dataRef.current?.aliases ?? []).find((a) => aliasKeyOf(a.id) === aliasKeyOf(row.aliasId));
                 if (!alias)
                     return null;
-                return <AliasBandCell {...p} summary={summariseAlias(rowsRef.current, alias)} aliasCount={(dataRef.current?.aliases ?? []).length} menuItems={menuItemsRef.current(row)} skuNode={identityNodeRef.current(row)} titleOf={(own) => identityHoverRef.current(row, own)}/>;
+                return <AliasBandCell {...p} summary={summariseAlias(rowsRef.current, alias)} aliasCount={(dataRef.current?.aliases ?? []).length} menuItems={[...menuItemsRef.current(row), ...bandMenuItemsRef.current(row)]} skuNode={identityNodeRef.current(row)} titleOf={(own) => identityHoverRef.current(row, own)}/>;
             }
             const axes = familyShowsAxesRef.current ? Object.values(row.axisValues ?? {}).filter(Boolean) : [];
             const axisTitle = Object.entries(row.axisValues ?? {}).map(([axis, value]) => `${axis}: ${value}`).join(' · ');
@@ -1478,6 +1512,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
     {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}
-        {shopifyEditor.element}</>,
+        {shopifyEditor.element}
+        {/* "Publish this listing…" (a band's ⋯): the studio's own Publish window, only this listing ticked. */}
+        {publishListingScope && <StudioPublishDialog onClose={() => setPublishListingScope(null)} initialDestination={publishListingScope}/>}</>,
     };
 }

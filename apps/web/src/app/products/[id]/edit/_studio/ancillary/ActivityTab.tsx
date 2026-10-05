@@ -15,6 +15,7 @@ import { PublishHistoryHost, type PublishHistoryHostValue } from '@/app/products
 import { historyRequest, parseHistoryDeepLink, requestSheetLanding, sheetFieldHints, sheetRowIdOf, type RunUndo } from '@/app/products/_publication/history/runActions'
 import { useStudioProduct, useStudioRecord, useStudioScope } from '../contracts'
 import { StudioPublishDialog } from '../StudioPublishDialog'
+import { retryPublishScope, undoPublishScope } from '../listingScope'
 import { readPublishActions, writePublishActions } from '../sheet/publishActionsApi'
 import { useWorkspaceRead } from '../useWorkspaceRead'
 import {
@@ -197,7 +198,8 @@ export function ActivityTab() {
     const result = await writePublishActions(product.id, { column: 'status', target: 'active' },
       { listingIds, expected: Object.fromEntries(listingIds.map(id => [id, setAt.get(id) ?? null])) })
     toast(`${fillResultSentence('Active', result)} Nothing is sent until you publish.`, result.applied.length ? 'success' : 'warning')
-    if (result.applied.length) setUndoReview({ channel: run.channel, marketplace: run.marketplace ?? '', accountId: run.accountId })
+    // Aliases (Owner 2026-10-05): Publish opens on the run's own listing — an alias by its alias id, the main listing by none.
+    if (result.applied.length) setUndoReview(undoPublishScope({ channel: run.channel, marketplace: run.marketplace, accountId: run.accountId, aliasKey: run.aliasKey }))
   }, [product.id, toast])
   const host = useMemo<PublishHistoryHostValue>(() => ({
     focusSku: link.sku,
@@ -236,9 +238,9 @@ export function ActivityTab() {
           </PublishHistoryHost>
         )}
       {undoReview && <StudioPublishDialog onClose={() => setUndoReview(null)} initialDestination={undoReview} />}
+      {/* The failed publication's own listing: an alias by its alias id (`destination.aliasKey`), the main listing by none. */}
       {retry && <StudioPublishDialog onClose={() => setRetry(null)}
-        initialDestination={{ channel: retry.destination.channel, marketplace: retry.destination.marketplace, accountId: retry.destination.accountId,
-          ...(retry.destination.listingId ? { listingId: retry.destination.listingId } : {}) }}
+        initialDestination={retryPublishScope(retry.destination)}
         initialSelection={{ productIds: retry.productIds, fieldIds: retry.fieldIds }} />}
     </div>
   )

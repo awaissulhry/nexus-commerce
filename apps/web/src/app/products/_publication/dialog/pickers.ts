@@ -9,12 +9,16 @@
  *
  * One-click publish (Owner 2026-10-04, OD1/OD2 A): the window opens with every market where the family is listed
  * (`initialChoice` with `listed`), and another channel or account refills the same way (`refillChoice`).
+ *
+ * Aliases (Owner 2026-10-05): a market's listing aliases are picked like markets — each right after its market's main
+ * listing, named with the sheet band's mark ("IT · Italy · ① Racing edition"; the main listing "IT · Italy · ★ Main listing"
+ * when its market has aliases) — and a listed alias starts chosen like a listed main listing.
  */
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
-import { MAX_BATCH_DESTINATIONS, type DestinationState, type PublishPlan } from './destinations'
+import { LISTINGS_WORD, MARKETS_WORD, MAX_BATCH_DESTINATIONS, type DestinationState, type PlacesWord, type PublishPlan } from './destinations'
 import { manyRowState, type ManyPlan } from './many'
-import { publicationScopeKey, type PublicationDestinationOption } from './model'
+import { optionListingLabel, publicationScopeKey, type PublicationDestinationOption } from './model'
 
 /** What the pickers hold: one channel, one account of it, and the chosen markets (option keys). */
 export interface PickerChoice {
@@ -45,34 +49,64 @@ export function pickerMarkets(options: readonly PublicationDestinationOption[], 
   return options.filter(o => o.scope.channel === channel && o.scope.accountId === accountId)
 }
 
-/** "IT · Italy" — the market code first, as the sheet's market picker reads ("IT · Italy · Italian"). */
+/** Which listing of its market an option is, for the pickers: the band's mark and name, or "selected listing". */
+const pickerListing = (option: PublicationDestinationOption) =>
+  option.scope.listingId && !option.alias ? 'selected listing' : optionListingLabel(option)
+
+/**
+ * "IT · Italy" — the market code first, as the sheet's market picker reads ("IT · Italy · Italian"). A listing alias
+ * adds the sheet band's mark and name ("IT · Italy · ① Racing edition"); its market's main listing then reads
+ * "IT · Italy · ★ Main listing".
+ */
 export function marketOptionLabel(option: PublicationDestinationOption): string {
   const prefix = `${channelLabel(option.scope.channel)} `
   const name = option.marketName.startsWith(prefix) ? option.marketName.slice(prefix.length) : option.marketName
-  const parts = [option.scope.marketplace, name !== option.scope.marketplace ? name : null, option.scope.listingId ? 'selected listing' : null]
+  const parts = [option.scope.marketplace, name !== option.scope.marketplace ? name : null, pickerListing(option)]
   return parts.filter(Boolean).join(' · ')
 }
 
-/** The market's short name for a tab or a chip: "IT", or "IT · selected listing". */
-export const marketShortLabel = (option: PublicationDestinationOption) =>
-  option.scope.listingId ? `${option.scope.marketplace} · selected listing` : option.scope.marketplace
+/**
+ * The market's short name for a tab or a chip: "IT"; with aliases on the market "IT ★ Main listing" and
+ * "IT ① Racing edition"; "IT · selected listing" for a listing the window knows nothing more about.
+ */
+export function marketShortLabel(option: PublicationDestinationOption): string {
+  const listing = pickerListing(option)
+  if (!listing) return option.scope.marketplace
+  return option.alias || !option.scope.listingId ? `${option.scope.marketplace} ${listing}` : `${option.scope.marketplace} · ${listing}`
+}
+
+/**
+ * What the window counts in the chosen set (`keys`): "listings" when it includes a listing alias, else "markets". The
+ * pickers show one channel and one account at a time, so the chosen set never mixes channels.
+ */
+export function choiceWord(options: readonly PublicationDestinationOption[], keys: readonly string[]): PlacesWord {
+  const chosen = new Set(keys)
+  return options.some(o => chosen.has(o.key) && !!o.scope.listingId) ? LISTINGS_WORD : MARKETS_WORD
+}
+
+/** The Markets picker's closed face: "Markets: 3", or "Listings: 3" once an alias is chosen. */
+export function marketsPickerText(options: readonly PublicationDestinationOption[], keys: readonly string[], marketsLabel = 'Markets'): string {
+  const word = choiceWord(options, keys)
+  const label = word === LISTINGS_WORD ? 'Listings' : marketsLabel
+  return `${label}: ${keys.length.toLocaleString('en')}`
+}
 
 /** OD2 A — the channel the Shared tab opens with: the first where the family is listed, in this order, then the rest. */
 export const LISTED_CHANNEL_ORDER: readonly string[] = ['AMAZON', 'EBAY', 'SHOPIFY']
 
 /**
- * OD1 A — the markets of one channel and account the window chooses: every market where the family is listed
- * (`listed`, see `listedDestinationKeys`), plus `extra` (the sheet's own market), in the market list's order, at most
- * the batch limit. A market the sheet shows on a second listing keeps that listing.
+ * OD1 A — the destinations of one channel and account the window chooses: every main listing and every listing alias
+ * where the family is listed (`listed`, see `listedDestinationKeys`: an alias by its own key), plus `extra` (the sheet's
+ * own destination), in the market list's order (each alias after its market's main listing), at most the batch limit.
+ * An alias that is not listed is offered but not chosen.
  */
 export function listedMarkets(options: readonly PublicationDestinationOption[], listed: ReadonlySet<string>, channel: string | null, accountId: string | null,
   extra: readonly string[] = []): string[] {
   const wanted = new Set(extra)
   return pickerMarkets(options, channel, accountId)
-    .filter(o => wanted.has(o.key) || (!o.scope.listingId && listed.has(marketKeyOf(o))))
+    .filter(o => wanted.has(o.key) || listed.has(o.key))
     .map(o => o.key).slice(0, MAX_BATCH_DESTINATIONS)
 }
-const marketKeyOf = (o: PublicationDestinationOption) => publicationScopeKey({ channel: o.scope.channel, marketplace: o.scope.marketplace, accountId: o.scope.accountId })
 
 /**
  * What the window opens with. The asked-for destinations (the sheet's own channel, market and account) when they
@@ -164,9 +198,21 @@ export function reviewTabWords(state: DestinationState): string {
   }
 }
 
-/** One market's tab in the family publish: "IT · 12 changes"; once sent, the publish word ("IT · Waiting for channel"). */
+/**
+ * One market's tab in the family publish: "IT · 12 changes"; once sent, the publish word ("IT · Waiting for channel").
+ * A listing alias's tab: "IT ① Racing edition · 12 changes".
+ */
 export function marketTabLabel(option: PublicationDestinationOption, state: DestinationState, sentWord?: string | null): string {
-  return `${marketShortLabel(option)} · ${sentWord ?? reviewTabWords(state)}`
+  const { name, words } = marketTabParts(option, state, sentWord)
+  return `${name} · ${words}`
+}
+
+/**
+ * The tab's two parts (phone width, review 2026-10-05): the listing's name, which may end with an ellipsis, and what its
+ * review says, which is always shown whole.
+ */
+export function marketTabParts(option: PublicationDestinationOption, state: DestinationState, sentWord?: string | null): { name: string; words: string } {
+  return { name: marketShortLabel(option), words: sentWord ?? reviewTabWords(state) }
 }
 
 /** The key of a reviewed batch row's market, to put it under that market's tab. */
@@ -195,9 +241,9 @@ export function manyTabWords(children: readonly PublicationBatchChild[], stage: 
 }
 
 /** One quiet line when two or more markets are chosen — it replaces the big counters: "3 markets · 21 changes · 1 with problems". */
-export function familySummary(markets: number, plan: Pick<PublishPlan, 'changes' | 'wholeProducts' | 'skipped' | 'nothing' | 'pending'>): string {
+export function familySummary(markets: number, plan: Pick<PublishPlan, 'changes' | 'wholeProducts' | 'skipped' | 'nothing' | 'pending'>, word: PlacesWord = MARKETS_WORD): string {
   return [
-    plural(markets, 'market', 'markets'),
+    plural(markets, word.one, word.many),
     plan.changes ? plural(plan.changes, 'change', 'changes') : null,
     plan.wholeProducts ? plural(plan.wholeProducts, 'new product', 'new products') : null,
     plan.skipped.length ? `${plan.skipped.length.toLocaleString('en')} with problems` : null,

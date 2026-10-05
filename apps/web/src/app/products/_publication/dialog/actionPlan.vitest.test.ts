@@ -239,6 +239,25 @@ describe('what one click sends', () => {
     const entry = entryOf(held)
     expect(planTabWords(destinationState(entry, true, NOW), entry)).toBe('1 inactive · 1 delete')
   })
+  it('aliases (2026-10-05): the request names each listing alias by its alias id, beside its market’s main listing', () => {
+    const ALT1: StudioPublishScope = { ...IT, listingId: 'alias-1' }
+    const aliasPlan = destination(ALT1, { destination: { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey: 'alias-1' }, label: 'eBay · IT · ALT1',
+      review: review(ALT1, { id: 'r-ALT1', aliasLabel: 'ALT1' }), lifecycle: [lifecycle('a1', 'pause')] })
+    const entries: Record<string, DestinationEntry> = { main: entryOf(destination(IT, { review: null, lifecycle: [lifecycle('m1', 'pause')] })), alt1: entryOf(aliasPlan) }
+    const send = sendOf(entries)
+    expect(send.send).toEqual(['main', 'alt1'])
+    const body = planSubmit('gale', send, key => entries[key], key => (key === 'alt1' ? ALT1 : IT), null)
+    expect(body.destinations.map(d => d.scope)).toEqual([IT, ALT1])
+    expect(body.destinations[1]).toMatchObject({ scope: { listingId: 'alias-1' }, reviewId: 'r-ALT1' })
+    expect(body.lifecycle).toEqual(['m1', 'a1'])
+    expect(planFamilySummary(2, { skipped: [], nothing: [], pending: [] }, send.counts, 0, send.send, null, { one: 'listing', many: 'listings' }))
+      .toMatch(/^2 listings · /)
+    // The rows are counted as listings already: the places are destinations in the button, never "listings to listings".
+    expect(planButtonText({ ...send.counts, partial: 0, full: 0, active: 0, inactive: 2 }, send.send, { one: 'listing', many: 'listings' }))
+      .toBe('Publish 2 listings to 2 destinations')
+    expect(confirmWhat({ ended: 2, deleted: 0, places: ['eBay · IT', 'eBay · IT · ALT1', 'eBay · IT · ALT2'], aliases: true })).toBe('to end 2 listings on 3 destinations')
+    expect(confirmWhat({ ended: 2, deleted: 0, places: ['eBay · IT', 'eBay · DE', 'eBay · FR'] })).toBe('to end 2 listings on 3 markets')
+  })
 })
 
 describe('after the click: results, words and Undo', () => {

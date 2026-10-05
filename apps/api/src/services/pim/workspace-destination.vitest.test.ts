@@ -80,6 +80,30 @@ describe('workspace destination isolation', () => {
     await expect(resolveWorkspaceDestination({ ...input, listingId: 'b-primary' })).rejects.toThrow('does not belong')
     await expect(resolveWorkspaceListing('p', 'b-primary', 'b')).rejects.toThrow('does not belong')
   })
+  /* Review 2026-10-05 (M1): a variation's page that chooses a listing stays on that variation — the alias id names the
+     page product's own record of the alias first, the root's only when the variation has none. */
+  describe("an alias id on a variation's page", () => {
+    const own = (aliasKey: string) => ({ id: `child-${aliasKey || 'primary'}`, productId: 'child', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'b', aliasKey, version: 1, price: 25, priceOverride: null })
+    beforeEach(() => { fixture.data.channelListing.push(own(''), own('alt')) })
+    it("opens the variation's own record of the alias", async () => {
+      expect(await resolveWorkspaceDestination({ ...input, productId: 'child', listingId: 'alt' }))
+        .toMatchObject({ productId: 'child', familyId: 'p', accountId: 'b', aliasKey: 'alt', listing: { id: 'child-alt', productId: 'child', aliasKey: 'alt' } })
+    })
+    it("the root's page is unchanged: the root's record", async () => {
+      expect(await resolveWorkspaceDestination({ ...input, listingId: 'alt' })).toMatchObject({ productId: 'p', aliasKey: 'alt', listing: { id: 'b-alt', productId: 'p' } })
+    })
+    it("a variation without a record of the alias falls back to the root's, as before", async () => {
+      fixture.data.channelListing = fixture.data.channelListing.filter(row => row.id !== 'child-alt')
+      expect(await resolveWorkspaceDestination({ ...input, productId: 'child', listingId: 'alt' })).toMatchObject({ aliasKey: 'alt', listing: { id: 'b-alt', productId: 'p' } })
+    })
+    it("the variation's own main record keeps the page on the variation", async () => {
+      expect(await resolveWorkspaceDestination({ ...input, productId: 'child', listingId: 'child-primary' })).toMatchObject({ aliasKey: '', listing: { id: 'child-primary', productId: 'child' } })
+    })
+    it('an archived alias is still refused on a variation page', async () => {
+      fixture.data.productListingAlias[0].status = 'ARCHIVED'
+      await expect(resolveWorkspaceDestination({ ...input, productId: 'child', listingId: 'alt' })).rejects.toThrow('customization is unavailable')
+    })
+  })
   it('rejects an archived alias without falling back to the root', async () => {
     fixture.data.productListingAlias[0].status = 'ARCHIVED'
     await expect(resolveWorkspaceDestination({ ...input, listingId: 'b-alt' })).rejects.toThrow('customization is unavailable')

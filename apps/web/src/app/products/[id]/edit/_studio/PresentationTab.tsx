@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Banner, Card, EmptyState, Field, Listbox, ProgressBar } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { AliasMark, Button } from '@/design-system/primitives'
 import { useSaveReporter, useStudioProduct, useStudioScope } from './contracts'
 import { useChannelSheet, commitChannelRow } from './sheet/channel/useChannelSheet'
 import { withRowIdentity } from './sheet/channel/rows'
@@ -20,6 +20,7 @@ import { PublicationReview } from '@/app/products/ebay-flat-file/Presentation/Pu
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { presentationListing } from '@/app/products/ebay-flat-file/Presentation/listing-selection'
+import { LISTING_NOT_RECORDED, aliasMarkSpoken, aliasMarkText, aliasName, pageListingSelection } from './listingScope'
 
 /** Product presentation consumes the same cells, write routing and version check as the sheet. */
 export function PresentationTab() { return <PresentationPage mode="description" /> }
@@ -35,7 +36,7 @@ function PresentationPage({ mode }: { mode: 'description' | 'order' }) {
 
 function EbayPresentation({ market, mode }: { market: string; mode: 'description' | 'order' }) {
   const product = useStudioProduct()
-  const { registerScopeChangeGuard, accountId, accounts, locale, setListing, setTab } = useStudioScope()
+  const { registerScopeChangeGuard, accountId, accounts, locale, setListing, setTab, destination } = useStudioScope()
   const instanceId = useId()
   const search = useSearchParams()
   const selectedListing = search.get('listing')
@@ -59,13 +60,20 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
     return true
   }), [editorPending, orderPending, publicationPending, busy, registerScopeChangeGuard])
   const rows = useMemo(() => sheet.data ? withRowIdentity(sheet.data.rows, sheet.data.aliases) : [], [sheet.data])
-  const row = presentationListing(rows, sheet.data?.family.id, selectedListing)
+  /* The listing the studio resolved `listing=` to ('' = the main listing) names the listing's band row — also when it is a
+     variation's own record of it (a variation's page stays on the variation, review 2026-10-05). While it resolves, an
+     alias id or a band's record id still names its row (`presentationListing`). */
+  const resolvedAlias = selectedListing && destination.status === 'ready' ? destination.data.aliasKey ?? '' : undefined
+  const row = presentationListing(rows, sheet.data?.family.id, resolvedAlias === undefined ? selectedListing : resolvedAlias || null)
   const aliasKey = row?.aliasId ?? ''
   const destinationAccount = sheet.data?.scope.connectionId ?? accountId
+  /* One id kind (aliases, Owner 2026-10-05): an alias is chosen by its ALIAS ID, as the studio bar's listing picker and
+     the sheet's bands choose it; the main listing by THIS page's product's own record (`pageListingSelection`), so a
+     variation's page stays on the variation. An old link that carries a listing record id still resolves. */
   const selectListing = (alias: string) => {
     if (busy || editorPending || orderPending || publicationPending) return
-    const target = presentationListing(rows, sheet.data?.family.id, alias || null)
-    if (target?.listing) setListing(target.listing.id)
+    const next = pageListingSelection(alias || null, rows, product.id)
+    if (next) setListing(next)
   }
   const cell = row?.values.descriptionThemeId
   const selection = cell?.inherited ? '__inherit' : typeof cell?.value === 'string' && cell.value ? cell.value : '__inherit'
@@ -117,6 +125,9 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
   </div>
   if (sheet.loading && !sheet.data) return <ProgressBar indeterminate ariaLabel="Loading eBay listing" />
   const selectedAlias = sheet.data?.aliases.find(a => (a.id ?? '') === aliasKey)
+  /* A lone listing needs no mark (AliasMark, Owner 2026-09-05): ★ ①② are drawn only when this account and market hold
+     two or more listings, so a family without aliases reads as it always did (review 2026-10-05, N2). */
+  const multiListing = (sheet.data?.aliases.length ?? 0) > 1
   const accountLabel = accounts.find(a => a.id === destinationAccount)?.label ?? destinationAccount
   const title = mode === 'description' ? 'Description themes' : 'Variation order'
   const pending = busy || editorPending || orderPending || publicationPending
@@ -128,8 +139,20 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
     {(error || sheet.error) && <Banner tone="danger" action={<Button disabled={pending} onClick={() => { setError(null); setRefresh(n => n + 1); sheet.reload() }}>Try again</Button>}>{error || sheet.error}</Banner>}
     {sheet.data && <Card padded>
       <div className={styles.destination}>
-        <Field label="Listing alias"><Listbox ariaLabel="Presentation listing" value={row ? aliasKey : undefined} disabled={pending || sheet.loading} onChange={selectListing}
-          options={sheet.data.aliases.map(a => ({ value: a.id ?? '', label: a.label || 'Primary listing' }))} /></Field>
+        {/* The studio's own names and marks (aliases, Owner 2026-10-05): ★ Main listing · ① ALT1 · ② ALT2… — marks only
+            beside two or more listings. A listing this page's product holds no record of cannot be chosen (review
+            2026-10-05, N3): it would open another product's record. */}
+        <Field label="Listing"><Listbox ariaLabel="Presentation listing" value={row ? aliasKey : undefined} disabled={pending || sheet.loading} onChange={selectListing}
+          options={sheet.data.aliases.map(a => {
+            const position = a.id ? a.position : 0
+            const label = aliasName(position, a.id ? a.label : null)
+            if (!multiListing) return { value: a.id ?? '', label }
+            // A mark that only repeats the name ("Main listing") is hidden from screen readers: the listing is read once.
+            const mark = <AliasMark position={position} />
+            const recorded = !!pageListingSelection(a.id, rows, product.id)
+            return { value: a.id ?? '', label, leading: aliasMarkSpoken(position, label) ? mark : <span aria-hidden="true">{mark}</span>,
+              ...(recorded ? {} : { disabled: true, title: LISTING_NOT_RECORDED }) }
+          })} /></Field>
         <dl className={styles.facts}>
           <div><dt>Account</dt><dd>{accountLabel}</dd></div>
           <div><dt>Market</dt><dd>{market}</dd></div>
@@ -174,7 +197,7 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
       </div>
       <Card header={<span role="heading" aria-level={2} className={styles.sectionTitle}>Buyer preview</span>} headerAction={<Button disabled={busy || previewing} onClick={() => setRefresh(n => n + 1)}>Refresh</Button>}>
         <div className={styles.stack}>
-          <p>{selectedAlias?.label == null || selectedAlias.label === '' ? 'Listing alias label not reported' : selectedAlias.label} · {accountLabel} · {market}</p>
+          <p>{selectedAlias ? (multiListing ? aliasMarkText : aliasName)(selectedAlias.id ? selectedAlias.position : 0, selectedAlias.id ? selectedAlias.label : null) : 'Listing not reported'} · {accountLabel} · {market}</p>
           {previewing && <ProgressBar indeterminate ariaLabel="Rendering description preview" />}
           {preview && <>
             <p role="status">{preview.stale ? preview.reasons.join(' · ') : 'Matches the recorded description publication.'}</p>

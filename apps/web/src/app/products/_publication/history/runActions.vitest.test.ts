@@ -34,8 +34,10 @@ describe('productsAsShown — no promise of an answer that is not coming', () =>
 })
 
 describe('runListingLabel — the listing only when the source recorded it', () => {
-  it('names the primary listing, an extra listing, or nothing at all', () => {
-    expect(runListingLabel(run())).toBe('Primary listing')
+  it('names the main listing, an extra listing, or nothing at all', () => {
+    expect(runListingLabel(run())).toBe('Main listing')
+    // The server's older name for the main listing reads the studio's one word (display only).
+    expect(runListingLabel(run({ aliasKey: '', aliasLabel: 'Primary listing' }))).toBe('Main listing')
     expect(runListingLabel(run({ aliasKey: 'alias-1', aliasLabel: 'IT-GALE' }))).toBe('IT-GALE')
     // The old flat-file pages never recorded the listing: saying "Primary listing" would be a guess.
     expect(runListingLabel(run({ source: 'ebay-flat-file', aliasKey: null }))).toBeNull()
