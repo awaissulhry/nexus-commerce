@@ -32,12 +32,26 @@ import { evaluateOversellRisk } from '../inventory-oversell-watchdog.service.js'
  * (`startStockPoolWorker`: woken by the database's notify, with a poll behind it) for changes made
  * elsewhere — a lender's own sale, an import, a trigger, a sale written by the API process. A
  * task is claimed with SKIP LOCKED, so two runners never do the same task; a claim older than two
- * minutes is taken again (a runner that died). After MAX_ATTEMPTS failures the owners are told.
+ * minutes is taken again (a runner that died). A task that FAILS is released at once (claimedAt
+ * null) with a "retryAt" that grows with its attempts (retryDelayMs): a passing failure — a lock
+ * timeout, a deadlock — is retried within seconds, not after the two-minute claim, and a lasting one
+ * does not spin. After MAX_ATTEMPTS failures the owners are told; it keeps being retried.
  */
 
 const CLAIM_BATCH = 500
 const STALE_CLAIM = "2 minutes"
 const MAX_ATTEMPTS = 10
+const RETRY_FIRST_MS = 5_000
+const RETRY_MAX_MS = 5 * 60_000
+
+/**
+ * How long a task waits after its `attempts`-th failure: 5 s, doubling, at most 5 minutes
+ * (5 s, 10 s, 20 s, 40 s, 80 s, 160 s, then 300 s). Pure.
+ */
+export function retryDelayMs(attempts: number): number {
+  const n = Math.max(1, Math.floor(Number.isFinite(attempts) ? attempts : 1))
+  return Math.min(RETRY_MAX_MS, RETRY_FIRST_MS * 2 ** Math.min(n - 1, 16))
+}
 
 interface ClaimedTask {
   id: string
@@ -63,7 +77,8 @@ export async function processStockPoolTasks(): Promise<StockPoolRun> {
     UPDATE "StockPoolTask" SET "claimedAt" = CURRENT_TIMESTAMP, attempts = attempts + 1
     WHERE id IN (
       SELECT id FROM "StockPoolTask"
-      WHERE "claimedAt" IS NULL OR "claimedAt" < CURRENT_TIMESTAMP - ${STALE_CLAIM}::interval
+      WHERE ("claimedAt" IS NULL AND ("retryAt" IS NULL OR "retryAt" <= CURRENT_TIMESTAMP))
+         OR "claimedAt" < CURRENT_TIMESTAMP - ${STALE_CLAIM}::interval
       ORDER BY "createdAt", id
       LIMIT ${CLAIM_BATCH}
       FOR UPDATE SKIP LOCKED)
@@ -112,8 +127,18 @@ export async function processStockPoolTasks(): Promise<StockPoolRun> {
   if (done.length > 0) await prisma.$executeRaw(Prisma.sql`DELETE FROM "StockPoolTask" WHERE id = ANY(${done}::text[])`)
   for (const { task, error } of failures) {
     run.failed++
-    await prisma.$executeRaw(Prisma.sql`UPDATE "StockPoolTask" SET "lastError" = ${error.slice(0, 500)} WHERE id = ${task.id}`)
-    logger.warn('[stock-pool] task failed; it will be retried', { taskId: task.id, kind: task.kind, productId: task.productId, attempts: task.attempts, error: error.slice(0, 200) })
+    // Released now, due again after its back-off (stock-pool.sql's nexus_pool_pending_workspaces reads the same columns).
+    // Only while this run still holds the claim: a claim older than STALE_CLAIM can be taken by another run, which
+    // bumps `attempts`; releasing it then would clear that live claim and let a third run take the task alongside.
+    const released = await prisma.$executeRaw(Prisma.sql`
+      UPDATE "StockPoolTask" SET "lastError" = ${error.slice(0, 500)}, "claimedAt" = NULL,
+        "retryAt" = CURRENT_TIMESTAMP + ${retryDelayMs(task.attempts)}::double precision * interval '1 millisecond'
+      WHERE id = ${task.id} AND attempts = ${task.attempts}`)
+    if (released === 0) {
+      logger.warn('[stock-pool] task failed after another run took it over; that run owns it now', { taskId: task.id, kind: task.kind, productId: task.productId, attempts: task.attempts, error: error.slice(0, 200) })
+      continue
+    }
+    logger.warn('[stock-pool] task failed; it will be retried', { taskId: task.id, kind: task.kind, productId: task.productId, attempts: task.attempts, retryInMs: retryDelayMs(task.attempts), error: error.slice(0, 200) })
     if (task.attempts === MAX_ATTEMPTS) {
       await notifyOwners({
         type: 'stock-pool-task-stuck',

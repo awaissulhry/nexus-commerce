@@ -17,6 +17,7 @@ import { FEATURES } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
 import { ADS_AUTOMATION_ADAPTERS, adsCron } from '../advertising/ads-automation-adapters.js'
 import { E1 } from '../marketing/ebay-automation-adapters.js'
+import { STOCK_PUSH_HEAL_FLAG, stockPushHealMode } from '../../jobs/stock-push-heal-mode.js'
 import {
   aiKill, envVerdict, flagOn, fromRows, isOne, isTrue, iso, noEnv, notZero, on, outboundEmails, ruleDetail, ruleExplain, rulesOf,
   previewSavedRule, ruleLevelSwitch,
@@ -614,25 +615,39 @@ const N16: AutomationAdapter = {
   noSwitch: 'alerts are switched in Nexus',
 }
 
-const DETECTORS = [
+/** The stock push heal's level by its switch (jobs/stock-push-heal-mode.ts): it sends, it only lists, it is off. */
+const HEAL_LEVEL = { on: 'AUTO', count: 'OBSERVE', off: 'OFF' } as const satisfies Record<ReturnType<typeof stockPushHealMode>, AutomationLevel>
+
+/** A detector reads OBSERVE while its flag lets it run; the heal, which sends, says its own level. */
+const DETECTORS: ReadonlyArray<{ id: string; name: string; allows: () => boolean; flag: string; level?: () => AutomationLevel; extra?: () => Record<string, unknown> }> = [
   { id: 'stockout-detector', name: 'Stockout detector', allows: () => notZero('NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON'), flag: 'NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON' },
   { id: 'sync-drift-detection', name: 'Sync drift detection', allows: () => notZero('NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON'), flag: 'NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON' },
   { id: 'sales-drift-detector', name: 'Sales drift detector', allows: () => isOne('NEXUS_ENABLE_SALES_DRIFT_DETECTOR'), flag: 'NEXUS_ENABLE_SALES_DRIFT_DETECTOR' },
   { id: 'latency-watchdog', name: 'Latency watchdog', allows: () => process.env.NEXUS_LATENCY_WATCHDOG !== '0', flag: 'NEXUS_LATENCY_WATCHDOG' },
-] as const
+  {
+    id: 'stock-push-heal', name: 'Stock push heal', allows: () => stockPushHealMode() !== 'off', flag: STOCK_PUSH_HEAL_FLAG,
+    level: () => HEAL_LEVEL[stockPushHealMode()],
+    extra: () => ({
+      mode: stockPushHealMode(),
+      what: 'Every 10 minutes, a listing whose last quantity push failed for good gets one fresh push to its channel (a refusal at most once a day, other failures 3 a day). Count-only lists them in its run summary and sends nothing.',
+    }),
+  },
+]
 
 const N17: AutomationAdapter = {
-  id: 'N17', key: 'detectors', name: 'Nexus-only detectors',
-  what: 'Stockouts, sync drift, sales drift and latency: findings in Nexus, nothing sent to a channel.',
-  area: 'detectors', writesTo: ['nexus'], view: FEATURES.inventoryView, claude: 'see', preview: 'none',
-  previewNote: 'They only record findings.',
+  id: 'N17', key: 'detectors', name: 'Detectors and the stock push heal',
+  what: 'Stockouts, sync drift, sales drift and latency record findings in Nexus. The stock push heal sends a channel a fresh quantity push for a listing whose last one failed for good (count-only: it only lists them).',
+  area: 'detectors', writesTo: ['nexus', 'channels'], view: FEATURES.inventoryView, claude: 'see', preview: 'none',
+  previewNote: `The detectors only record findings. The heal has no preview; ${STOCK_PUSH_HEAL_FLAG}=count runs it count-only (it lists what it would send).`,
   crons: DETECTORS.map((d) => d.id), schedule: 'per detector',
   env: noEnv,
   async rows() {
-    return DETECTORS.map((d) => ({ id: d.id, name: d.name, level: (d.allows() ? 'OBSERVE' : 'OFF') as AutomationLevel, env: { flag: d.flag, allows: d.allows() } }))
+    return DETECTORS.map((d) => ({
+      id: d.id, name: d.name, level: d.level?.() ?? ((d.allows() ? 'OBSERVE' : 'OFF') as AutomationLevel), env: { flag: d.flag, allows: d.allows() }, ...d.extra?.(),
+    }))
   },
   async state() { return fromRows(await this.rows!(), 'No detectors.') },
-  noSwitch: 'the detectors are switched by the server env only',
+  noSwitch: `the detectors and the stock push heal are switched by the server env only (the heal: ${STOCK_PUSH_HEAL_FLAG} = 1 on, count, 0 off)`,
 }
 
 /** All 39, in the inventory's order (plan part 06 §1). */
