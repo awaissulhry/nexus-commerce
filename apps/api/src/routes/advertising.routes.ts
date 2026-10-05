@@ -2171,6 +2171,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       adSpend30dCents: agg._sum.advertisingSpendCents ?? 0,
       grossRevenue30dCents: grossCents,
       trueProfit30dCents: trueProfitCents,
+      // PERCENT POINTS (31.2 = 31.2 %), negative on a loss — never a fraction (AM-7).
       trueProfitMargin30dPct: marginPct,
       // What share of 30d revenue the profit figure above actually covers. 0 means the
       // number is absent because no product has a cost price, not because profit is zero.
@@ -3402,6 +3403,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const ctr = (p._sum.impressions ?? 0) > 0
         ? ((p._sum.clicks ?? 0) / (p._sum.impressions ?? 1)) * 100 : null
 
+      // Units: `acos`, `tacos` and `ctr` are PERCENT POINTS (38.02 = 38.02 %), rounded to 2 dp,
+      // and null when the divisor is 0 (no sales / no revenue / no impressions) — never 0 %.
       return {
         date:             dateKey,
         impressions:      p._sum.impressions  ?? 0,
@@ -3420,6 +3423,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // rows already computed + one aggregate query over the immediately prior
     // equal-length window (same scope), so the detail page can render ▲/▼ vs
     // the previous period on each KPI tile.
+    // `acos` and `ctr` are PERCENT POINTS like the rows above; `roas` is a plain ratio.
     const summarize = (sp: number, sa: number, im: number, cl: number, or: number) => ({
       impressions: im, clicks: cl, orders: or, spendCents: sp, salesCents: sa,
       acos: sa > 0 ? Math.round((sp / sa) * 10000) / 100 : null,

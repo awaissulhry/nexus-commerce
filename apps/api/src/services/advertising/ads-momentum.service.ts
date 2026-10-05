@@ -11,13 +11,24 @@
 
 import prisma from '../../db.js'
 
-export interface MomentumEntity { id: string; label: string; status?: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null }
+/**
+ * Units (AM-2 / AM-3 — the Dashboard used to guess them from the size of the number):
+ *  · `acos`     a FRACTION — spend ÷ sales, 0.38 = 38 %, 1.5 = 150 %. Null when nothing sold.
+ *  · `sharePct` a FRACTION despite its name — this placement's share of the day's placement sales,
+ *               0.62 = 62 %. Kept under its old name so no reader breaks; read it as a fraction.
+ */
+export interface MomentumEntity {
+  id: string; label: string; status?: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number
+  /** FRACTION (spend ÷ sales); null when nothing sold. */
+  acos: number | null
+}
 export interface MomentumResult {
   date: string | null
   counts: { enabled: number; paused: number }
   campaigns: MomentumEntity[]
   keywords: MomentumEntity[]
   asins: MomentumEntity[]
+  /** `sharePct` is a FRACTION (0.62 = 62 %) of the day's placement sales. */
   placements: Array<{ placement: string; spendCents: number; salesCents: number; sharePct: number }>
 }
 

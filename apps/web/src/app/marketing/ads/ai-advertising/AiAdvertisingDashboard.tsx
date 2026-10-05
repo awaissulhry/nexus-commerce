@@ -22,6 +22,7 @@ import { Plus, Archive } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { useAdsMarketplace, ALL_MARKETS } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
+import { acosRank, acosFilterValue } from '../campaigns/_grid/format'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
 import { EmptyState } from '@/design-system/components/EmptyState'
@@ -231,7 +232,10 @@ export function AiAdvertisingDashboard() {
       total: (rows) => eur2(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.salesCents ?? 0), 0)),
     },
     {
-      key: 'acos', label: 'ACoS', metric: true, sortable: true, sortValue: (g) => perfByGoal.get(g.id)?.acosPct ?? -1, filterValue: (g) => perfByGoal.get(g.id)?.acosPct ?? 0,
+      // AM-11 — `acosPct` is PERCENT POINTS; spend with no sales sorts/filters as the WORST ACoS, never 0 %.
+      key: 'acos', label: 'ACoS', metric: true, sortable: true,
+      sortValue: (g) => { const p = perfByGoal.get(g.id); return p ? acosRank(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : null },
+      filterValue: (g) => { const p = perfByGoal.get(g.id); return p ? acosFilterValue(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : Number.NaN },
       render: (g) => { const p = perfByGoal.get(g.id); return p?.acosPct == null ? '—' : `${p.acosPct.toFixed(2)}%` },
     },
     {

@@ -1,17 +1,62 @@
 /**
  * CBN.3.2 — shared grid formatters. Mirror the Ad Manager grid exactly (en-IE euros,
- * ratio-or-percent ACoS) so every grid in the console renders numbers identically.
+ * fraction ACoS) so every grid in the console renders numbers identically.
  */
 export const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0)
 
 export const eur = (v: unknown): string => `€${num(v).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-/** Percent that accepts either a fraction (0.25 → 25.00%) or an already-scaled value (25 → 25.00%). */
-export const pct = (v: unknown): string => {
+/**
+ * THE percent formatter of the ads console: a FRACTION in, a percent out — 0.25 → "25.00%",
+ * 1.5 → "150.00%", -0.05 → "-5.00%". `dp` is the number of decimals (2 in grids).
+ *
+ * 🔴 AM-4 — this used to GUESS (`n <= 1 ? n * 100 : n`): any value above 1 was taken as "already a
+ * percent", so an eBay ACOS of 150% (fraction 1.5) printed "1.50%" — the worst row showing the
+ * best-looking number. The Amazon grid dropped the same guess in ADM-H P7. No guessing now: every
+ * API field states its unit next to its type, and a caller holding PERCENT POINTS (25 for 25%)
+ * divides by 100 at the call site, where the unit is visible (`pct(r.acosPct / 100)`).
+ */
+export const pct = (v: unknown, dp = 2): string => {
   if (v == null || v === '') return '—'
   const n = Number(v)
-  return Number.isFinite(n) ? `${(n <= 1 ? n * 100 : n).toFixed(2)}%` : '—'
+  return Number.isFinite(n) ? `${(n * 100).toFixed(dp)}%` : '—'
 }
+
+/**
+ * The sort/filter value of "spent money, no sales": worse than every real ACoS. Finite on
+ * purpose — `a - b` of two of them is 0, never NaN, so a comparator stays a comparator.
+ */
+export const NO_SALES_ACOS = Number.MAX_VALUE
+
+/**
+ * AM-11 — ONE rule for sorting and filtering ACoS in every ads grid, in PERCENT POINTS (the unit
+ * the ACoS filter box takes: "max 30" means 30 %).
+ *
+ *  · a real ACoS → its percent: the API's FRACTION × 100 when it sent one, else spend ÷ sales × 100;
+ *  · spend and no sales → `NO_SALES_ACOS`: the WORST value. Last on "lowest first", first on
+ *    "highest first", and never inside "ACoS max N %". It used to be 0 % — the best possible
+ *    value — so "ACoS max 30 %" kept every campaign that spent and sold nothing;
+ *  · nothing spent and nothing sold → `null`: there is no ACoS at all. It sorts as a blank (the
+ *    grid sinks blanks in both directions) and matches no ACoS range.
+ *
+ * `spend` and `sales` only need the SAME unit as each other (euros, or cents).
+ */
+export function acosRank(acosFraction: number | string | null | undefined, spend: number, sales: number): number | null {
+  if (acosFraction != null && acosFraction !== '') {
+    const f = Number(acosFraction)
+    if (Number.isFinite(f)) return f * 100
+  }
+  if (sales > 0) return (spend / sales) * 100
+  if (spend > 0) return NO_SALES_ACOS
+  return null
+}
+
+/**
+ * `acosRank` for a range filter. The shared grid's filter reads NaN as "not measured" and never
+ * lets such a row match a set range (`filterRows` rule 1), so "no ACoS" is NaN here, not 0.
+ */
+export const acosFilterValue = (acosFraction: number | string | null | undefined, spend: number, sales: number): number =>
+  acosRank(acosFraction, spend, sales) ?? Number.NaN
 
 export const int = (v: unknown): string => num(v).toLocaleString()
 

@@ -345,6 +345,7 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
         clicks: n(a?.clicks) + n(b?.clicks),
         spend: spendCents / 100,
         sales: salesCents / 100,
+        // `acos` is a FRACTION (0.38 = 38 %), null when nothing sold; `roas` a plain ratio.
         acos: salesCents > 0 ? spendCents / salesCents : null,
         roas: spendCents > 0 ? salesCents / spendCents : null,
         ppcOrders,
