@@ -442,8 +442,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     // E1 (2026-10-04) — product safety (GPSR) and parts compatibility have no sheet cell and no publisher: a saved value is
     // said in the review and blocks nothing (it blocked a new listing with no cell to clear it).
     if (mainRow) for (const key of ['compatibility', 'regulatory']) if (filled(pa[key])) problems.note(`${ebayFieldLabel(key)}: Nexus does not send this to eBay; the saved value is not sent.`)
-    // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none. The main
-    // row's is checked; a variation's that cannot be read counts as a different package (named once, below).
+    // #36 — eBay takes ONE package per listing (item level), the main row's. The main row's is checked; a variation's own
+    // is never sent, and one that differs (or cannot be read) is said once, in a note below (wave 2, C6).
     if (!itemId) {
       if (mainRow) packages.set(product.id, problems.attempt(() => ebayPackageXml(pa, product.sku), { ...at, field: 'package' }) ?? '')
       else { try { packages.set(product.id, ebayPackageXml(pa, product.sku)) } catch { packages.set(product.id, 'unreadable') } }
@@ -519,7 +519,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   }
   const shared = problems.attempt(() => buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency))
   const differing = products.filter(p => p.id !== parent.id && (packages.get(p.id) ?? '') !== '' && packages.get(p.id) !== (packages.get(parent.id) ?? ''))
-  if (differing.length) problems.add(`eBay takes one package type, weight and size for the whole listing. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds' : 'hold'} a different package than the main row: make them the same as the main row, or leave them blank.`, { field: 'package' })
+  // Wave 2 (C6) — a note, not a refusal: a variation's own package is never sent (eBay takes the main row's, above).
+  if (differing.length) problems.note(`${ebayFieldLabel('package')}: eBay takes one package for the whole listing, from the main row. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds a different package; it is' : 'hold a different package; they are'} not sent, and eBay takes the main row's package.`)
   if (!options.problems || !shared) problems.throwIfAny()
   return { shared: shared!, itemId, parentListing, settings, galleries, variants, identities, media: onPlan ? { channelValues } : null }
 }

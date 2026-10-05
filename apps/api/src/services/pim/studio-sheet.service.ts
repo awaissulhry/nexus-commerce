@@ -1940,6 +1940,16 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   // business policies), named on the main row only when Nexus KNOWS publish could not fill it (`ebay-publish-readiness.ts`).
   if (coordinate?.channel === 'EBAY') {
     const { addEbayPublishReadiness, judgeEbayItemLevelOnMainRow } = await import('./ebay-publish-readiness.js')
+    // Wave 2 (C6) — a variation row shows the main row's value of those fields, read-only, with the reason. Not for the
+    // readers that judge rows by their own values. An Inventory-model listing keeps condition and package per variation.
+    if (!input.rowOwnValues) {
+      const [{ holdEbayItemLevelOnVariations }, { usesEbayInventory }] = await Promise.all([import('./ebay-listing-level.js'), import('./ebay-listing-model.js')])
+      const inventoryAliases = new Set(projections.filter(group => usesEbayInventory({ listings: family.flatMap(product => {
+        const listing = listingByRow.get(`${product.id}:${group.id ?? ''}`)
+        return listing ? [listing] : []
+      }) })).map(group => group.id ?? ''))
+      holdEbayItemLevelOnVariations({ rows, columns, label: coordinate.label, inventoryAliases })
+    }
     // Follow-up 2026-10-01 — Condition, policies, location… go to eBay once, from the main row: a variation row's own
     // value is never sent, so it names no issue there (the publish review judges them the same way).
     judgeEbayItemLevelOnMainRow({ rows, columns, label: coordinate.label,
