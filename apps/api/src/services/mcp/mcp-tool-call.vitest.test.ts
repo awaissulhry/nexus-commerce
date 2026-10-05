@@ -160,3 +160,36 @@ describe('C3 — a change names its business: a check, never a choice', () => {
     expect(gate.runOrQueueTool).not.toHaveBeenCalled()
   })
 })
+
+describe('N4 — what a single change does once it runs', () => {
+  beforeEach(() => {
+    gate.runOrQueueTool.mockReset()
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-1' })
+  })
+  const reaching = { name: 'set-stock', readOnly: false, openWorld: true, reversibility: 'partial', undo: { current: async () => null, request: () => ({ refusal: 'x' }) } } as unknown as AgentTool
+
+  it('a queued change says whether it reaches beyond Nexus and how it can be put back', async () => {
+    const result = await runToolForClaude(principal, reaching, { business: 'Xavia Racing' })
+    expect(answerOf(result).consequences).toEqual({
+      reaches: 'beyond Nexus: a marketplace, a buyer or a supplier (the preview says which)',
+      reversibility: 'partial',
+      undo: 'undo-change can ask to put it back (partly: the preview says what stays)',
+    })
+    const nexusOnly = { ...reaching, openWorld: false, reversibility: 'none', undo: undefined } as unknown as AgentTool
+    expect(answerOf(await runToolForClaude(principal, nexusOnly, { business: 'Xavia Racing' })).consequences)
+      .toEqual({ reaches: 'Nexus only', reversibility: 'none', undo: 'it cannot be undone' })
+  })
+
+  it('a plan and an undo request carry their own facts, not this block', async () => {
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-2', plan: { steps: 2 } })
+    expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))).not.toHaveProperty('consequences')
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-3', undoes: 'change-1' })
+    expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))).not.toHaveProperty('consequences')
+  })
+
+  it('set to confirm, the next step names the code as well as the Approvals page', async () => {
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-4', rule: { by: 'person', level: 'confirm', confirm: { summary: 's', planHash: 'h' } } })
+    expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' })).next)
+      .toMatch(/^Nothing has changed yet\. The person who asked can approve it with their authenticator code \(confirm\)/)
+  })
+})

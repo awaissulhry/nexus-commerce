@@ -164,8 +164,27 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
   }
 }
 
+/**
+ * N4 — what a single change does once it runs, from the tool's own declared facts (the same facts the Approvals page
+ * reads): whether it reaches beyond Nexus, and whether and how it can be put back. A plan has its own per-step summary
+ * and an undo request is judged by the change it asks for, so neither gets this block.
+ */
+export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo'>) {
+  if (tool.control || !tool.reversibility) return null
+  return {
+    reaches: tool.openWorld ? 'beyond Nexus: a marketplace, a buyer or a supplier (the preview says which)' : 'Nexus only',
+    reversibility: tool.reversibility,
+    undo: tool.reversibility === 'none'
+      ? 'it cannot be undone'
+      : tool.undo
+        ? `undo-change can ask to put it back${tool.reversibility === 'partial' ? ' (partly: the preview says what stays)' : ''}`
+        : 'no undo tool: a person puts it back in Nexus',
+  }
+}
+
 /** What Claude reads for each way the gate can end. */
-function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
+function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo'>): CallToolResult {
+  const consequences = tool && !outcome.plan && !outcome.undoes ? consequencesOf(tool) : null
   switch (outcome.mode) {
     case 'queued':
       if (outcome.rule?.by === 'rule') {
@@ -175,6 +194,7 @@ function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
           runsAt: outcome.rule.executeAfter,
           stopAt: approvalsPageUrl(principal.workspace.workspaceId, outcome.approvalId),
           preview: outcome.preview ?? null,
+          ...(consequences ? { consequences } : {}),
           trust: { level: 'auto' },
           ...(outcome.plan ? { plan: outcome.plan } : {}),
           ...(outcome.undoes ? { undoes: { changeId: outcome.undoes } } : {}),
@@ -190,6 +210,7 @@ function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
         expiresAt: outcome.expiresAt ?? null,
         approveAt: approvalsPageUrl(principal.workspace.workspaceId, outcome.approvalId),
         preview: outcome.preview ?? null,
+        ...(consequences ? { consequences } : {}),
         // C6 — a plan: how many steps, the summary a person reads, and its hash.
         ...(outcome.plan ? { plan: outcome.plan } : {}),
         // C2 — an undo says which change it puts back.
@@ -212,9 +233,12 @@ function answer(outcome: GateOutcome, principal: McpPrincipal): CallToolResult {
             }
           : {}),
         next:
-          'Nothing has changed yet. A person with the right permission must approve this in the Nexus ' +
-          'Approvals page before it runs; you cannot approve it. Call approval-status with the approvalId ' +
-          'to see what became of it.',
+          (outcome.rule?.by === 'person' && outcome.rule.confirm
+            ? 'Nothing has changed yet. The person who asked can approve it with their authenticator code (confirm), or a '
+              + 'person with the right permission approves it in the Nexus Approvals page; you cannot approve it yourself. '
+            : 'Nothing has changed yet. A person with the right permission must approve this in the Nexus '
+              + 'Approvals page before it runs; you cannot approve it. ')
+          + 'Call approval-status with the approvalId to see what became of it.',
       })
     case 'preview':
       return ok(principal, {
@@ -304,7 +328,7 @@ export async function runToolForClaude(
         }
         const outcome = await runOrQueueTool(tool.name, toolArgs, principal, run.id, { forceAsk: !tool.readOnly, rule: claudeGateRule(principal) })
         await finish(ending(outcome))
-        return answer(outcome, principal)
+        return answer(outcome, principal, tool)
       } catch (error) {
         // An unexpected failure stays in the log and on the run; Claude gets no internals.
         const message = error instanceof Error ? error.message : String(error)
