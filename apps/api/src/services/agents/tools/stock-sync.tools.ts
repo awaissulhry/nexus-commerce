@@ -364,6 +364,8 @@ function cellsOf(plan: BulkPlan): Cell[] {
 
 function bulkPreview(plan: BulkPlan) {
   const cells = cellsOf(plan)
+  // A hold is per market, even on Amazon EU (PAUSE is not one of the EU quantity actions).
+  const euHeld = [...new Set(plan.listings.filter((c) => c.row.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(c.row.marketplace)).map((c) => c.row.marketplace))].sort()
   const rows = plan.listings.length + plan.shared.length
   return {
     action: 'bulk-listing-stock',
@@ -383,6 +385,7 @@ function bulkPreview(plan: BulkPlan) {
       shared: plan.shared.map((c) => [c.row.id, c.row.followPool, c.row.pinnedQuantity, c.row.stockBuffer, c.row.lastQtyPushed]),
     }),
     ...(plan.euAdded.length ? { warning: 'Amazon keeps ONE quantity per SKU for every EU market: this covers each SKU\'s other open EU markets too.' } : {}),
+    ...(plan.action === 'PAUSE' && euHeld.length ? { warning: euHoldWarning(`the stock sync of Amazon ${euHeld.join(', ')}`) } : {}),
     note: `${NOT_YET} It runs as the Sync Control page runs it, as the person who approves it; a row whose stock mode moved since then stops the run. `
       + 'Listings that follow the stock are recomputed and queued to their channels. Amazon FBA quantity is never changed.',
   }
@@ -508,7 +511,8 @@ const bulkListingStock: AgentTool = {
     + 'release the stock sync, follow the stock, keep a fixed number, zero & pin (stops selling now), set a buffer, exclude or '
     + 'include a shared eBay variant. Name listings, or products (each with all its listings and shared variants, narrowed '
     + 'by channel or market). Amazon keeps one quantity per SKU for every EU market, so a quantity change on an Amazon EU '
-    + 'market covers every EU market of that SKU (one EU line in the preview). Refused: a fixed number on a SKU that sells '
+    + 'market covers every EU market of that SKU (one EU line in the preview); a hold is per market, so holding one Amazon EU '
+    + 'market does not freeze that number while another EU market of the SKU still follows the stock. Refused: a fixed number on a SKU that sells '
     + 'from another business\'s shared stock; a pin to 0 on eBay while the account\'s out-of-stock option is off (eBay '
     + 'would end the listing); an Amazon FBA listing (its quantity is Amazon\'s); a quantity change on a listing whose selling is '
     + 'paused (Inactive — resume it in the product sheet\'s Status column). Always waits for a person to approve it '
@@ -569,7 +573,7 @@ const policyInput = z.object({
   locationCode: z.string().trim().min(1).max(30).optional()
     .describe('a location\'s feeds: the location code (stock-locations), instead of a policy'),
   feeds: z.array(z.string().trim().min(1).max(40)).max(50).optional()
-    .describe('a location\'s feeds: what its stock serves — CHANNEL:MARKET (EBAY:IT), a channel (SHOPIFY) or a market (DE); empty = nothing'),
+    .describe('a location\'s feeds: what its stock serves — CHANNEL:MARKET (EBAY:IT), a channel (SHOPIFY) or a market (DE); an empty list = every channel and market (no limit, the default)'),
 })
 
 type PolicyPlan =
@@ -582,7 +586,7 @@ async function planPolicy(args: Record<string, unknown>): Promise<PolicyPlan | R
   const policyNamed = args.channel !== undefined || args.marketplace !== undefined || args.accountId !== undefined || args.pushesPaused !== undefined || args.newListingDefaultMode !== undefined
   if (location && policyNamed) return { error: 'Name either a policy (channel, marketplace …) or a location\'s feeds (locationCode, feeds), one per request.' }
   if (location) {
-    if (!Array.isArray(args.feeds)) return { error: 'Name what the location\'s stock feeds (feeds): an empty list feeds nothing.' }
+    if (!Array.isArray(args.feeds)) return { error: 'Name what the location\'s stock feeds (feeds): an empty list feeds every channel and market.' }
     const feeds = [...new Set((args.feeds as string[]).map((t) => t.trim().toUpperCase()).filter(Boolean))]
     const problems = validateServesTokens(feeds)
     if (problems.length) return { error: `Not queued: ${listed(problems.map((p) => `${p.token}: ${p.problem}`))}.` }
@@ -620,12 +624,21 @@ async function planPolicy(args: Record<string, unknown>): Promise<PolicyPlan | R
   return { kind: 'policy', channel, marketplace, accountId, accountLabel, before, after, listings }
 }
 
+/** What a location's feeds serve, in words: no route at all serves every channel and market (sync-control-core locationServes). */
+const feedsWords = (feeds: string[]) => (feeds.length ? feeds.join(', ') : 'every channel and market')
+
+/** The Amazon EU warning for a hold on some EU markets: Amazon keeps ONE quantity per SKU for all of them, and an EU
+ * market that is not held keeps sending it (a held row expresses no EU intent: amazon-eu-quantity-guard). */
+const euHoldWarning = (markets: string) => `Amazon keeps ONE quantity per SKU for every EU market (${[...AMAZON_EU_SHARED_MARKETS].join(', ')}): `
+  + `holding ${markets} does not freeze it. Any EU market of the same SKU whose stock sync is not held keeps sending that number, `
+  + 'so the quantity there still changes. Hold every EU market to freeze it.'
+
 function policyPreview(plan: PolicyPlan) {
   if (plan.kind === 'feeds') {
     return {
       action: 'set-stock-policy',
       location: { code: plan.code, name: plan.name },
-      summary: `${plan.code} feeds ${plan.after.length ? plan.after.join(', ') : 'nothing'} (was ${plan.before.length ? plan.before.join(', ') : 'nothing'}).`,
+      summary: `${plan.code} feeds ${feedsWords(plan.after)} (was ${feedsWords(plan.before)}).`,
       changes: { feeds: { from: plan.before, to: plan.after } },
       totals: { productsRecomputed: plan.products },
       note: `${NOT_YET} Every product with stock there is recomputed and its listings that follow the stock are queued to their channels.`,
@@ -641,7 +654,11 @@ function policyPreview(plan: PolicyPlan) {
     summary: `Stock policy for ${where}: ${Object.entries(changes).map(([k, v]) => `${k} ${v.from} → ${v.to}`).join('; ')}.`,
     changes,
     totals: { listingsInScope: plan.listings },
-    ...(plan.after.pushesPaused && !plan.before.pushesPaused ? { warning: `No stock number is sent to ${where} while its stock sync is held: its ${plural(plan.listings, 'listing')} keep what the channel shows now, and can oversell.` } : {}),
+    ...(plan.after.pushesPaused && !plan.before.pushesPaused ? {
+      warning: plan.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(plan.marketplace)
+        ? `No stock number is sent from ${where} while its stock sync is held, and its ${plural(plan.listings, 'listing')} can oversell. ${euHoldWarning(`Amazon ${plan.marketplace}`)}`
+        : `No stock number is sent to ${where} while its stock sync is held: its ${plural(plan.listings, 'listing')} keep what the channel shows now, and can oversell.`,
+    } : {}),
     note: `${NOT_YET} ${!plan.after.pushesPaused && plan.before.pushesPaused ? 'Releasing the stock sync recomputes every product there and queues its listings. ' : ''}`
       + `${plan.after.newListingDefaultMode === 'PAUSED' && plan.before.newListingDefaultMode !== 'PAUSED' ? 'New listings there start with the stock sync held, and listings still new are held now. ' : ''}`.trim(),
   }
@@ -686,9 +703,9 @@ const setStockPolicy: AgentTool = {
   undo: STOCK_POLICY_UNDO,
   description:
     'Set what the stock sync does for a channel, a market or one account: hold it — no stock push there (its listings keep '
-    + 'what the channel shows and can oversell) — or release it (every product there is recomputed and sent), and whether a '
+    + 'what the channel shows and can oversell; on Amazon EU only when every EU market is held, as Amazon keeps one quantity for all) — or release it (every product there is recomputed and sent), and whether a '
     + 'new listing there starts following the stock or with the sync held. Or set which channels and markets one location\'s stock '
-    + 'feeds (an Amazon FBA location is refused). As the Sync Control page does it. Always waits for a person to approve '
+    + 'feeds (an empty list = every channel and market; an Amazon FBA location is refused). As the Sync Control page does it. Always waits for a person to approve '
     + 'it in Nexus.',
   async handler(args): Promise<ToolResult> {
     const plan = await planPolicy(args)
