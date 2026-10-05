@@ -34,7 +34,7 @@ import {
   dropsForTheme,
   offeredThemes,
   themeSegments,
-  attributeTitle,
+  amazonAxisName,
   bindSegmentToAttribute,
   type ThemeSchemaFacts,
 } from './variation-theme-segments.js'
@@ -153,8 +153,8 @@ async function readVariationRuleView(input: VariationRuleViewInput): Promise<Var
 
   const labelFor = (segment: string) => {
     const bound = bindSegmentToAttribute(segment, facts.properties as Record<string, unknown>)
-    return attributeTitle(bound?.attribute ?? null, facts.properties as Record<string, unknown>)
-      ?? segment.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    // W3-2 — in English (Amazon gets only the theme code).
+    return amazonAxisName(bound?.attribute ?? segment)
   }
   const limits = limitsFor(channel, facts.themes)
   const effectiveTheme = stored?.rule.theme ?? derived?.match.code ?? null

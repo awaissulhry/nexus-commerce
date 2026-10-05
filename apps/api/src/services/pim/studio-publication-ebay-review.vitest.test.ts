@@ -123,7 +123,7 @@ describe('every problem in one review (P1, P13)', () => {
     const issues = await problemsOf(prepareEbayPublication(facts()))
     expect(issues.length).toBeGreaterThanOrEqual(4)
     expect(issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sku: 'FAM', field: 'videoId', severity: 'error', message: 'Video id: Nexus cannot send a video with a new eBay listing yet. Clear the "Video id" cell on this row in the sheet.' }),
+      expect.objectContaining({ sku: 'FAM', field: 'videoId', severity: 'error', message: 'Video ID: Nexus cannot send a video with a new eBay listing yet. Clear the "Video ID" cell on this row in the sheet.' }),
       expect.objectContaining({ sku: 'FAM', field: 'conditionId', message: 'Condition: eBay does not know "Nuovissimo". Choose a condition from the list on the main row.' }),
       expect.objectContaining({ sku: 'FAM-NERO-L', field: 'price', message: 'This listing has no price of its own for eBay IT. Set its price first.' }),
       expect.objectContaining({ sku: 'FAM', field: 'itemPostalCode', message: expect.stringContaining('eBay needs the item location country and a postal code or city') }),
@@ -135,7 +135,7 @@ describe('every problem in one review (P1, P13)', () => {
 
   it('a reader without a collector still gets one refusal naming them all (the old one-line contract)', async () => {
     m.pa = { p: { videoId: 'v-123', listingFormat: 'AUCTION' } }
-    await expect(prepareEbayPublication(facts())).rejects.toThrow(/FAM: Video id[\s\S]*Listing format: Nexus publishes fixed-price eBay listings only/)
+    await expect(prepareEbayPublication(facts())).rejects.toThrow(/FAM: Video ID[\s\S]*Listing format: Nexus publishes fixed-price eBay listings only/)
   })
 })
 

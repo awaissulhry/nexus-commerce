@@ -1,4 +1,5 @@
 import { WorkspaceCache } from '../../lib/workspace-cache.js'
+import { sheetName } from '@nexus/shared/sheet-names'
 /**
  * Field registry — single source of truth for which fields exist on
  * the Product table, plus channel-scoped and category-scoped extras.
@@ -41,6 +42,10 @@ export interface FieldDefinition {
   unitOptions?: string[]
   cardinality?: { min: number; max: number | null }
   optionLabels?: Record<string, string>
+  /** W3-3 — other spellings a code is accepted under (the content language's label beside the English one); never shown. */
+  optionAliases?: Record<string, string[]>
+  /** W3-3 — names this field was shown under before (its content-language label); a header paste still lands by them. */
+  formerNames?: string[]
   maxLength?: number
   longText?: boolean
   localizable?: boolean
@@ -86,7 +91,7 @@ let ebayCategoryServiceSingleton: import('../ebay-category.service.js').EbayCate
 
 const UNIVERSAL_FIELDS: FieldDefinition[] = [
   { id: 'sku', label: 'SKU', type: 'text', category: 'universal', editable: false, width: 220, helpText: 'Unique product identifier; not editable in bulk' },
-  { id: 'name', label: 'Name', type: 'text', category: 'universal', editable: true, width: 380, required: true },
+  { id: 'name', label: sheetName('name', 'shared')!, type: 'text', category: 'universal', editable: true, width: 380, required: true },
   { id: 'brand', label: 'Brand', type: 'text', category: 'universal', editable: true, width: 160 },
   { id: 'manufacturer', label: 'Manufacturer', type: 'text', category: 'universal', editable: true, width: 160 },
   { id: 'status', label: 'Status', type: 'select', options: ['ACTIVE', 'DRAFT', 'INACTIVE'], category: 'universal', editable: true, width: 110 },
@@ -94,7 +99,7 @@ const UNIVERSAL_FIELDS: FieldDefinition[] = [
   // schema-driven attribute set; per-listing override still happens
   // via Q.5's platformAttributes.productType in the per-product
   // editor's Listing Setup card.
-  { id: 'productType', label: 'Product Type', type: 'text', category: 'universal', editable: true, width: 160, helpText: 'Master Amazon productType — drives category-specific attribute fields. Per-channel overrides happen in the per-product editor.' },
+  { id: 'productType', label: 'Product type', type: 'text', category: 'universal', editable: true, width: 160, helpText: 'Master Amazon productType — drives category-specific attribute fields. Per-channel overrides happen in the per-product editor.' },
   // D.5: description is HTML-string content shown on listings. Made
   // editable in the registry primarily for the ZIP-upload path
   // (description.html files); the spreadsheet grid can edit it too,
@@ -104,21 +109,21 @@ const UNIVERSAL_FIELDS: FieldDefinition[] = [
 
 // ── Pricing ────────────────────────────────────────────────────────────
 const PRICING_FIELDS: FieldDefinition[] = [
-  { id: 'basePrice', label: 'Base Price', type: 'number', category: 'pricing', editable: true, width: 100 },
+  { id: 'basePrice', label: sheetName('basePrice', 'shared')!, type: 'number', category: 'pricing', editable: true, width: 100 },
   { id: 'costPrice', label: 'Cost', type: 'number', category: 'pricing', editable: true, width: 100 },
-  { id: 'minMargin', label: 'Min Margin %', type: 'number', category: 'pricing', editable: true, width: 110 },
-  { id: 'minPrice', label: 'Min Price', type: 'number', category: 'pricing', editable: true, width: 100 },
-  { id: 'maxPrice', label: 'Max Price', type: 'number', category: 'pricing', editable: true, width: 100 },
+  { id: 'minMargin', label: sheetName('minMargin', 'shared')!, type: 'number', category: 'pricing', editable: true, width: 110 },
+  { id: 'minPrice', label: sheetName('minPrice', 'shared')!, type: 'number', category: 'pricing', editable: true, width: 100 },
+  { id: 'maxPrice', label: sheetName('maxPrice', 'shared')!, type: 'number', category: 'pricing', editable: true, width: 100 },
   { id: 'buyBoxPrice', label: 'Buy Box', type: 'number', category: 'pricing', editable: false, width: 100, helpText: 'Read-only; synced from Amazon' },
   { id: 'competitorPrice', label: 'Competitor', type: 'number', category: 'pricing', editable: false, width: 100, helpText: 'Read-only; synced from Amazon' },
 ]
 
 // ── Inventory ─────────────────────────────────────────────────────────
 const INVENTORY_FIELDS: FieldDefinition[] = [
-  { id: 'totalStock', label: 'Stock', type: 'number', category: 'inventory', editable: true, width: 90 },
-  { id: 'lowStockThreshold', label: 'Low Stock Alert', type: 'number', category: 'inventory', editable: true, width: 110 },
+  { id: 'totalStock', label: sheetName('totalStock', 'shared')!, type: 'number', category: 'inventory', editable: true, width: 90 },
+  { id: 'lowStockThreshold', label: sheetName('lowStockThreshold', 'shared')!, type: 'number', category: 'inventory', editable: true, width: 110 },
   { id: 'fulfillmentChannel', label: 'Fulfillment', type: 'select', options: ['FBA', 'FBM'], category: 'inventory', editable: true, width: 100 },
-  { id: 'shippingTemplate', label: 'Shipping Template', type: 'text', category: 'inventory', editable: false, width: 160 },
+  { id: 'shippingTemplate', label: sheetName('shippingTemplate', 'shared')!, type: 'text', category: 'inventory', editable: false, width: 160 },
 ]
 
 // ── Identifiers ───────────────────────────────────────────────────────
@@ -234,14 +239,14 @@ const EBAY_FIELDS: FieldDefinition[] = [
 // unrelated categories never leak into the wrong cell.
 const CATEGORY_FIELDS_BY_TYPE: Record<string, FieldDefinition[]> = {
   OUTERWEAR: [
-    { id: 'attr_armorType', label: 'Armor Type', type: 'select', options: ['Level 1', 'Level 2', 'No Armor'], category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 120, helpText: 'CE certification level for impact protection' },
-    { id: 'attr_ceCertification', label: 'CE Certification', type: 'text', category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 140, helpText: 'EN-numbered certification reference' },
+    { id: 'attr_armorType', label: 'Armor type', type: 'select', options: ['Level 1', 'Level 2', 'No Armor'], category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 120, helpText: 'CE certification level for impact protection' },
+    { id: 'attr_ceCertification', label: 'CE certification', type: 'text', category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 140, helpText: 'EN-numbered certification reference' },
     { id: 'attr_waterproofRating', label: 'Waterproof', type: 'select', options: ['Yes', 'Water Resistant', 'No'], category: 'category', productTypes: ['OUTERWEAR'], editable: true, width: 130 },
   ],
   HELMET: [
     { id: 'attr_dotCertification', label: 'DOT', type: 'text', category: 'category', productTypes: ['HELMET'], editable: true, width: 100, helpText: 'US DOT FMVSS 218 certification number' },
     { id: 'attr_eceNumber', label: 'ECE', type: 'text', category: 'category', productTypes: ['HELMET'], editable: true, width: 100, helpText: 'European ECE 22.06 (or .05) certification number' },
-    { id: 'attr_helmetType', label: 'Helmet Type', type: 'select', options: ['Full Face', 'Modular', 'Open Face', 'Off-Road'], category: 'category', productTypes: ['HELMET'], editable: true, width: 120 },
+    { id: 'attr_helmetType', label: 'Helmet type', type: 'select', options: ['Full Face', 'Modular', 'Open Face', 'Off-Road'], category: 'category', productTypes: ['HELMET'], editable: true, width: 120 },
   ],
 }
 

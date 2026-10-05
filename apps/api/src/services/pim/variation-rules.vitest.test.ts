@@ -128,14 +128,15 @@ describe('AMAZON - the three tiers, in order', () => {
   const amazonIT = { amazon: { facts: factsFor(OUTERWEAR_IT), fetchedAt: OUTERWEAR_IT.fetchedAt } }
   const amazonDE = { amazon: { facts: factsFor(OUTERWEAR_DE), fetchedAt: OUTERWEAR_DE.fetchedAt } }
 
-  it('DERIVED on DE: the bare form wins by the deprecation marker, labelled from the bound titles', () => {
+  it('DERIVED on DE: the bare form wins by the deprecation marker, named in English from the bound attributes', () => {
     const cell = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'DE', schema: amazonDE,
       listing: listing({ version: 13, externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
       limits: limitsFor('AMAZON', [...OUTERWEAR_DE.themes]),
     }))
     expect(cell.source).toMatchObject({ kind: 'derived', label: VT_COPY.derived, tieBreak: 'only-live' })
-    expect(cell.theme).toEqual({ code: 'COLOR/SIZE', label: 'Farbe / Größe', deprecated: false })
+    // W3-2 (Owner decision 4) — Amazon's names in English; Amazon receives only the code.
+    expect(cell.theme).toEqual({ code: 'COLOR/SIZE', label: 'Color / Size', deprecated: false })
     expect(cell.axes.map((a) => a.target)).toEqual(['color', 'size'])
     expect(cell.axes.map((a) => a.segment)).toEqual(['COLOR', 'SIZE'])
     expect(cell.axes.every((a) => !a.unbound)).toBe(true)
@@ -149,10 +150,14 @@ describe('AMAZON - the three tiers, in order', () => {
     expect(cell.separator).toBe(' / ')
   })
 
-  it('DERIVED on IT gives the SAME code and the IT titles - names follow the market (the Owner\'s ALWAYS)', () => {
+  // W3-2 (Owner decision 4, 2026-10-05) — this changed the 09-13 rule "names follow the market" for AMAZON only: Amazon
+  // receives only the theme code, so its names are English on every market. eBay keeps the market's (the EBAY tests).
+  it('DERIVED on IT gives the SAME code, and the same ENGLISH names as DE - Amazon names are never the market\'s', () => {
     const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'IT', schema: amazonIT, listing: listing({ version: 87 }) }))
-    expect(cell.theme).toEqual({ code: 'COLOR/SIZE', label: 'Colore / Taglia', deprecated: false })
-    expect(cell.axes.map((a) => a.channelName)).toEqual(['Colore', 'Taglia'])
+    expect(cell.theme).toEqual({ code: 'COLOR/SIZE', label: 'Color / Size', deprecated: false })
+    expect(cell.axes.map((a) => a.channelName)).toEqual(['Color', 'Size'])
+    expect(cell.candidates!.items.find((i) => i.code === 'COLOR/SIZE')?.label).toBe('Color / Size')
+    expect(cell.candidates!.items.map((i) => i.label).join(' ')).not.toMatch(/Colore|Taglia/)
   })
 
   it("OVERRIDE: a stored theme WINS over the derivation and keeps its spelling, even the deprecated one", () => {
@@ -161,7 +166,7 @@ describe('AMAZON - the three tiers, in order', () => {
       listing: listing({ variationTheme: 'SIZE_NAME/COLOR_NAME', externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
     }))
     expect(cell.source).toMatchObject({ kind: 'override', label: VT_COPY.override, tieBreak: 'kept-from-listing' })
-    expect(cell.theme).toEqual({ code: 'SIZE_NAME/COLOR_NAME', label: 'Größe / Farbe', deprecated: true })
+    expect(cell.theme).toEqual({ code: 'SIZE_NAME/COLOR_NAME', label: 'Size / Color', deprecated: true })
     expect(cell.axes.map((a) => a.axisKey)).toEqual(['size', 'color'])
     expect(cell.axes.map((a) => a.target)).toEqual(['size', 'color'])
     // Wave 2 A4 — the deprecated theme in use stays offered (the editor shows it under Deprecated); no other dead one does.

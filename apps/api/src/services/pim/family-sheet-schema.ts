@@ -5,6 +5,7 @@ import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from './master-field-gate
 import type { FieldDefinition } from './field-registry.service.js'
 import { humanizeKey } from './channel-specs/types.js'
 import { AMAZON_NON_ATTRIBUTE_KEYS } from './amazon-plumbing-keys.js'
+import { conceptByKey, conceptValueCode, type AttributeConcept } from '@nexus/shared/attribute-concepts'
 
 const INTERNAL_KEYS = new Set(['variations', 'ebayClusterParent', 'ebayFileExcluded'])
 
@@ -80,18 +81,62 @@ export async function familySheetFields(familyIds: string[], locale = 'it'): Pro
 
 type DictionaryRow = Prisma.CustomAttributeGetPayload<{ include: { group: true; options: true } }>
 
-/** One dictionary attribute as a Master field. `requirement` / `rules` come from the families that carry it (none for the core list). */
-function toFieldDefinition(a: DictionaryRow, locale: string, requirement?: { everywhere: boolean; channels: Set<string> }, rules?: NonNullable<FieldDefinition['familyRules']>): FieldDefinition {
+/** A label in one language from a `labels` map (`validation.labels`, an option's `metadata.labels`), or undefined. */
+function labelIn(labels: unknown, language: string): string | undefined {
+  if (!labels || typeof labels !== 'object' || Array.isArray(labels)) return undefined
+  const map = labels as Record<string, unknown>
+  const selected = map[language] ?? map[language.split('-')[0]]
+  return typeof selected === 'string' && selected.trim() ? selected : undefined
+}
+
+/** The names other than the one shown, each once (case-insensitive): accepted when typed, pasted or imported; never shown. */
+function otherNames(shown: string, names: ReadonlyArray<string | undefined>): string[] {
+  const fold = (name: string) => name.trim().toLocaleLowerCase()
+  const out: string[] = []
+  for (const name of names) {
+    if (!name?.trim() || fold(name) === fold(shown) || out.some(other => fold(other) === fold(name))) continue
+    out.push(name)
+  }
+  return out
+}
+
+/** The concept's English name for one of its values (`black` → Black, `one_size` → One Size), by the option's code or label. */
+function conceptEnglish(concept: AttributeConcept | undefined, option: { code: string; label: string }): string | undefined {
+  if (!concept?.valueLabels) return undefined
+  const value = conceptValueCode(concept, option.code) ?? conceptValueCode(concept, option.label)
+  return value ? concept.valueLabels[value]?.en : undefined
+}
+
+/**
+ * One dictionary attribute as a Master field. `requirement` / `rules` come from the families that carry it (none for the core list).
+ *
+ * W3-3 (product sheet consistency wave 3, E5, Owner decision 5, 2026-10-05) — the Shared names are English whatever the
+ * content language (they followed it, default Italian: "Nero", "Taglia unica", "Colore"):
+ *  - an option: its own English label (`metadata.labels.en`), else the concept's English name for the value, else its label;
+ *  - the field: its own English label (`validation.labels.en`), else the concept's English name, else its label.
+ * The content language's label and the plain label stay accepted where a name is typed, pasted or imported (options:
+ * `optionAliases`, the sheet's one accepted-spellings mechanism; the field: `formerNames`, for a header paste). Display
+ * only: the option code stored and every word a channel receives (eBay's market words, `ebay-market-label.ts`) are unchanged.
+ */
+export function toFieldDefinition(a: DictionaryRow, locale: string, requirement?: { everywhere: boolean; channels: Set<string> }, rules?: NonNullable<FieldDefinition['familyRules']>): FieldDefinition {
     const native = ALLOWED_MASTER_FIELDS.has(a.code)
     const validation = a.validation && typeof a.validation === 'object' ? a.validation as Record<string, unknown> : {}
-    const labels = validation.labels
-    const labelFor = (labels: unknown, fallback: string) => {
-      const selected = labels && typeof labels === 'object' ? (labels as Record<string, unknown>)[locale] ?? (labels as Record<string, unknown>)[locale.split('-')[0]] : undefined
-      return typeof selected === 'string' && selected.trim() ? selected : fallback
+    const concept = conceptByKey(a.semanticKey)
+    const label = labelIn(validation.labels, 'en') ?? concept?.label ?? a.label
+    const formerNames = otherNames(label, [labelIn(validation.labels, locale), a.label])
+    const optionLabels: Record<string, string> = {}
+    const optionAliases: Record<string, string[]> = {}
+    for (const o of a.options) {
+      const labels = (o.metadata as { labels?: unknown } | null)?.labels
+      const name = labelIn(labels, 'en') ?? conceptEnglish(concept, o) ?? o.label
+      optionLabels[o.code] = name
+      const others = otherNames(name, [labelIn(labels, locale), o.label])
+      if (others.length) optionAliases[o.code] = others
     }
     return {
       id: native ? a.code : `attr_${a.code}`,
-      label: labelFor(labels, a.label),
+      label,
+      ...(formerNames.length ? { formerNames } : {}),
       type: MASTER_FIELD_OPTIONS[a.code] ? 'select' : ['number', 'boolean', 'date'].includes(a.type) ? a.type as 'number' | 'boolean' | 'date'
         : a.type === 'select' || a.type === 'multiselect' ? 'select' : 'text',
       category: 'category', editable: !['asset', 'reference'].includes(a.type),
@@ -103,7 +148,8 @@ function toFieldDefinition(a: DictionaryRow, locale: string, requirement?: { eve
       scope: a.scope === 'per_variant' ? 'per_variant' : 'global',
       // P3/P6 — a retired option is no longer OFFERED; its label stays below, so a value saved with it still reads well.
       options: MASTER_FIELD_OPTIONS[a.code] ?? a.options.filter(o => !(o as { archivedAt?: Date | null }).archivedAt).map(o => o.code),
-      optionLabels: Object.fromEntries(a.options.map(o => [o.code, labelFor((o.metadata as any)?.labels, o.label)])),
+      optionLabels,
+      ...(Object.keys(optionAliases).length ? { optionAliases } : {}),
       unitOptions: Array.isArray(validation.unitOptions) ? validation.unitOptions.filter((unit): unit is string => typeof unit === 'string') : undefined,
       shape: validation.shape === 'measure' ? 'measure' : a.type === 'multiselect' || validation.shape === 'list' ? 'list' : 'scalar',
       cardinality: a.type === 'multiselect' || validation.shape === 'list' ? { min: 0, max: null } : undefined,

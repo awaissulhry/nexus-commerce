@@ -36,6 +36,16 @@ describe('Amazon reference names', () => {
     expect(result.unavailable).toEqual(['browseNodes'])
     expect(mocks.client).not.toHaveBeenCalled()
   })
+  // W3-2 — the names the sheet shows: Amazon's English name where the English copy gives one, else the market's.
+  it('names reference values in English where Amazon gave an English name, else in the market\'s words', async () => {
+    mocks.spec.mockResolvedValue({ channel: 'AMAZON', marketplace: 'IT', english: { locale: 'en_GB', fetchedAt: null }, unrecognised: [], fields: [
+      { key: 'recommended_browse_nodes', options: ['123', '456'], optionLabels: { '123': 'Moda > Giacche', '456': 'Moda > Guanti' }, optionLabelsEnglish: { '123': 'Fashion > Jackets' } },
+    ] })
+    mocks.browseNames.mockResolvedValue({})
+    const result = await amazonReferenceLabels({ marketplace: 'IT', productType: 'OUTERWEAR', shipping: false })
+    expect(result.labels.recommended_browse_nodes).toEqual({ '123': 'Fashion > Jackets', '456': 'Moda > Guanti' })
+    expect(result.labels.browseNodeId).toEqual(result.labels.recommended_browse_nodes)
+  })
   it('uses the selected market’s saved category path and rejects conflicting labels', async () => {
     mocks.mappings.mockResolvedValue([
       { marketplace: '*', channelCategoryPath: 'Generic jackets' },

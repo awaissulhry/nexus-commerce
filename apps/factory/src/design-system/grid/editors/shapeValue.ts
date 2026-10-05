@@ -4,7 +4,7 @@ import { optionCode, parseScalarValue } from './scalarValue'
 
 /** Decode displayed labels using this column's schema; preserve unparseable input for refusal. */
 export function parseShape(shape: CellShape | undefined, raw: unknown, col: {
-  kind?: string; options?: string[]; optionLabels?: Record<string, string>; unitOptions?: string[]
+  kind?: string; options?: string[]; optionLabels?: Record<string, string>; optionAliases?: Record<string, string[]>; unitOptions?: string[]
 } = {}): unknown {
   if (raw == null || raw === '') return null
   if (typeof raw === 'string' && isFormulaDraft(raw)) return raw

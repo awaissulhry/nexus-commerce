@@ -81,6 +81,38 @@ describe('planHeaderPaste — where a block with a header row lands', () => {
     const byId = planHeaderPaste([['title@en', 'Size'], ['Jacket', 'M']], langs, ['title@it', 'title@en', 'size'])!
     expect(byId.rows).toEqual([['', 'Jacket', 'M']])
   })
+
+  // W3-6 — the sheet's naming table renamed columns ("Name" is "Title"); a file exported before still lands.
+  it('a header a column had before lands on it: an old "Name" header on Title', () => {
+    const sheet: HeaderPasteColumn[] = [{ colId: 'name', headerName: 'Title *' }, { colId: 'size', headerName: 'Size' }, { colId: 'basePrice', headerName: 'Price' }]
+    const plan = planHeaderPaste([['Name', 'Size', 'Base price'], ['Giacca', 'M', '99']], sheet, ['name', 'size', 'basePrice'])!
+    expect(plan.rows).toEqual([['Giacca', 'M', '99']])
+    expect([...plan.named]).toEqual(['name', 'size', 'basePrice'])
+    expect(plan.notPasted).toEqual([])
+  })
+
+  // W3-3 — a dictionary field now named in English keeps the header its content language gave it.
+  it('an old Italian header lands on the English-named dictionary field ("Colore" on Color), and one two columns had on neither', () => {
+    const sheet: HeaderPasteColumn[] = [{ colId: 'color', headerName: 'Color', formerNames: ['Colore'] }, { colId: 'size', headerName: 'Size', formerNames: ['Taglia'] }, { colId: 'fit', headerName: 'Fit' }]
+    const plan = planHeaderPaste([['Colore', 'Taglia', 'Fit'], ['Nero', 'M', 'Slim']], sheet, ['color', 'size', 'fit'])!
+    expect([...plan.named]).toEqual(['color', 'size', 'fit'])
+    expect(plan.rows).toEqual([['Nero', 'M', 'Slim']])
+    const shared: HeaderPasteColumn[] = [{ colId: 'color', headerName: 'Color', formerNames: ['Colore'] }, { colId: 'colour_name', headerName: 'Colour name', formerNames: ['Colore'] }, { colId: 'size', headerName: 'Size' }, { colId: 'fit', headerName: 'Fit' }]
+    const ambiguous = planHeaderPaste([['Colore', 'Size', 'Fit'], ['Nero', 'M', 'Slim']], shared, ['color', 'colour_name', 'size', 'fit'])!
+    expect([...ambiguous.named]).toEqual(['size', 'fit'])
+    expect(ambiguous.notPasted).toEqual(['Colore'])
+  })
+
+  it('a current name wins over a former one, and a former name two columns had lands on neither', () => {
+    // eBay: "Quantity" was the old name of Unit quantity (`quantita`) — and is another column's current name here.
+    const current: HeaderPasteColumn[] = [{ colId: 'quantita', headerName: 'Unit quantity' }, { colId: 'other', headerName: 'Quantity' }, { colId: 'size', headerName: 'Size' }]
+    expect([...planHeaderPaste([['Quantity', 'Size'], ['2', 'M']], current, ['quantita', 'other', 'size'])!.named]).toEqual(['other', 'size'])
+    // Shopify's stock and eBay's/Etsy's were both "Available quantity" once (`availableQuantity`, `quantity`): neither is guessed.
+    const both: HeaderPasteColumn[] = [{ colId: 'availableQuantity', headerName: 'Available' }, { colId: 'quantity', headerName: 'Qty' }, { colId: 'size', headerName: 'Size' }]
+    const plan = planHeaderPaste([['Available quantity', 'Size', 'Qty'], ['2', 'M', '3']], both, ['availableQuantity', 'quantity', 'size'])!
+    expect([...plan.named]).toEqual(['quantity', 'size'])
+    expect(plan.notPasted).toEqual(['Available quantity'])
+  })
 })
 
 describe('the note after a header paste', () => {

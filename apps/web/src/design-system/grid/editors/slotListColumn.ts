@@ -25,8 +25,10 @@ import { slotListChanges, slotListKey, slotListText, slotListValue, suppressSlot
 import { sameValue } from './writeGate'
 
 export interface SlotListColumnOptions<T> {
-  /** The header — the list's own name (`Bullet points`). */
+  /** The list's own name (`Bullet points`): the editor's title and the tooltip's. */
   label: string
+  /** The header when it says more than the name (the sheets' required mark: `Bullet points *`). Absent = `label`. */
+  headerName?: string
   /** One position's name (`Bullet`). */
   itemLabel?: string
   width?: number
@@ -76,7 +78,7 @@ export function slotListColumnDef<T>(group: SlotGroup, options: SlotListColumnOp
     : {}
   return {
     colId,
-    headerName: options.label,
+    headerName: options.headerName ?? options.label,
     headerTooltip: options.headerTooltip ?? `${options.label} — all ${group.max} positions in one cell. Each position is also a column in Customise.`,
     width: options.width ?? 240,
     cellDataType: false,

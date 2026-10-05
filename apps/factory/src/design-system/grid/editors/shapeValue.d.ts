@@ -3,5 +3,6 @@ import { type CellShape } from '../renderers/shapeFormat';
 export declare function parseShape(shape: CellShape | undefined, raw: unknown, col?: {
     options?: string[];
     optionLabels?: Record<string, string>;
+    optionAliases?: Record<string, string[]>;
     unitOptions?: string[];
 }): unknown;

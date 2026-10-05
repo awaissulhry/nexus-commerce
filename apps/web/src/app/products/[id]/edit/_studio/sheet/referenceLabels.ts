@@ -5,7 +5,7 @@ import { marketLabel } from '../scopes'
 import { isReferenceField } from '@nexus/shared/reference-values'
 
 export type ReferenceLabels = Record<string, Record<string, string>>
-export interface NamedColumn { key: string; kind: string; shape?: string; options?: string[]; optionLabels?: Record<string, string> }
+export interface NamedColumn { key: string; kind: string; shape?: string; options?: string[]; optionLabels?: Record<string, string>; optionAliases?: Record<string, string[]> }
 
 /** Reference labels are display metadata; only the server may resolve an assignment. */
 export function parseReferenceOrScalarValue(column: NamedColumn, value: unknown): unknown {
@@ -108,7 +108,7 @@ export function referenceColumnDef<R>(column: NamedColumn, valueOf: (row: R) => 
     getQuickFilterText: (p: { value: unknown }) => label(p.value),
     ...(column.kind === 'text' ? {
       valueParser: (p: { newValue: unknown }) => typeof p.newValue === 'string' && !isReferenceField(column.key)
-        ? optionCode({ options: Object.keys(column.optionLabels!), optionLabels: column.optionLabels }, p.newValue) : p.newValue,
+        ? optionCode({ options: Object.keys(column.optionLabels!), optionLabels: column.optionLabels, optionAliases: column.optionAliases }, p.newValue) : p.newValue,
       filterValueGetter: (p: { data?: R }) => p.data ? label(valueOf(p.data)) : '',
       comparator: (a, b, _nodeA, _nodeB, descending = false) => compareForAgGrid(label(a) || null, label(b) || null, descending),
     } : {}),

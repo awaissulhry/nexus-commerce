@@ -1,5 +1,6 @@
 import { cachedSchemasOnly } from '../pim/cached-schema-context.js'
 import { loadAmazonSpec } from '../pim/channel-specs/index.js'
+import { amazonInEnglish } from '../pim/channel-specs/amazon-english.js'
 import { resolveChannelConnectionId } from '../connection-resolver.service.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
@@ -161,7 +162,8 @@ export async function amazonReferenceLabels(input: { marketplace: string; produc
      (`reference_stale_measurement_looks_like_a_missing_one`: both predict "nothing moved"). */
   lastShippingSource = 'none'
   lastShippingFetchedAt = null
-  const spec = await loadAmazonSpec(input.marketplace, input.productType, input.accountId)
+  // W3-2 — names in English where Amazon gave an English name (the sheet's own names), else the market's.
+  const spec = amazonInEnglish(await loadAmazonSpec(input.marketplace, input.productType, input.accountId))
   const labels: Labels = Object.fromEntries(spec.fields.filter(field => field.optionLabels && field.key !== 'merchant_shipping_group').map(field => [field.key, field.optionLabels!]))
   const unavailable: string[] = []
   const missingNodes = (input.browseNodeIds ?? []).filter(id => !labels.recommended_browse_nodes?.[id] || labels.recommended_browse_nodes[id] === id)

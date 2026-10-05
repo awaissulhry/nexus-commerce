@@ -11,6 +11,12 @@
 - **`Countdown`** (`components`, G7): "Runs in 14 s" — seconds under a minute, then minutes, hours, days, stepping every 30 s; ONE shared timer for the whole page (`countdownTicker.ts`), armed for the soonest change and none while the tab is hidden (it catches up on return); an instance re-renders only when its words change. `onDone` once, when it reaches zero on screen (not for a moment already past at mount). Polite screen-reader updates at 60, 30, 10 s and zero, cleared after 4 s; `announce={false}` for a page with its own live region. A component of its own rather than an `AsOf` mode: `AsOf` is an observation stamp ("checked 5 min ago"), a countdown is a deadline with an end the page acts on.
 - **`useGridShortcuts(containerRef, shortcuts)`** (`grid/hooks`, G8): single keys (A, R, Enter, Escape, X…) bound only while focus is inside that grid; never with Ctrl/⌘/Alt, while typing (inputs, selects, contenteditable, comboboxes), in an open cell editor, in a menu inside the grid or while a modal outside it is open; Enter/Space stay a focused button's; an auto-repeat runs only shortcuts that ask for it. Returns the hint list (`key`, `keyLabel`, `label`, `disabled`, `reason`) for a `Kbd` legend. The filter is `matchGridShortcut` (pure, tested in node).
 - Catalog: `#change-value-example`, `#countdown-example` (Components › Countdown), `#row-verbs-example` with `#grid-shortcuts-example` (a small approvals grid: two verbs, a held verb, a countdown status, a click that opens the row, the A/R/Enter/Esc legend).
+## Paste: a list member is found by its accepted spellings too — 2026-10-05
+
+Product sheet consistency wave 3, W3-2 (Amazon in English). Mirrored in Factory (`shapeValue.ts` and its `.d.ts`).
+
+- **`parseShape`** (`grid/editors/shapeValue.ts`): the column may carry `optionAliases` (code → other spellings, never shown), and a list member pasted or typed under one becomes its code through `optionCode`, as a select does. Amazon's columns now name their options in English ("Black") and keep the market's words ("Nero") as accepted spellings. Absent = unchanged.
+
 ## Paste: a select code is also found by its accepted spellings — 2026-10-05
 
 Product sheet consistency wave 3, W3-4 (eBay, Shopify in plain English). Mirrored in Factory (`scalarValue.ts` and its `.d.ts`).
@@ -24,6 +30,12 @@ Product sheet consistency wave 3, E3 (`docs/product-sheet-consistency/wave3/plan
 - **`offListSentence`** (`grid/editors/sheet.ts`, new): THE off-list sentence, the same words as `@nexus/shared/off-list-message` (the server's readiness, publish checks, formula warnings and AI drafts say it too; `sheet.vitest.test.ts` pins the two equal). Channel list: `Season: "Tutte le stagioni" is not on eBay's list. eBay may refuse it. Allowed: Estate, Inverno, … (12 in all)`; the column's own list: `Season: "X" is not one of this column's options. Allowed: …`. At most 8 allowed values, then how many in all. No final full stop (the DS punctuation rule).
 - **`selectValidation`**: new optional fourth argument `words` (`OffListWords`: `field`, `channel`, `optionLabels`). Its off-list warning was `"X" is not in the channel's list — it may be rejected at publish`, on Shared lists too.
 - **`sheetValidationFor`**: a select column's warning names the column (`label`) and its options in the cell's words (`optionLabels`); new optional third argument `{ channelList: true }` says the options are a channel's list, named from the column's coordinates (`listChannelOf`, new: the one channel every key of `channels` shares). Without it (the Shared scope, Cell details) the sentence speaks of the column's own options. `SheetColumnLike` gains optional `label`, `optionLabels`, `channels`.
+## Words: unit symbols in the measure picker; a list header may carry the required mark — 2026-10-05
+
+Product sheet consistency wave 3, "One name for one thing" (W3-6). Mirrored in Factory (`shapeFormat.ts`, `MeasureEditor.tsx`, `slotListColumn.ts`).
+
+- **`unitChoiceLabels(units)`** (`grid/renderers/shapeFormat.ts`, new): a channel's unit codes as people choose them — `KILOGRAM` reads "kg", `CENTIMETER` "cm"; the value stays the code, stored and sent unchanged. Two codes with one symbol keep their code beside it ("kg (KILOGRAM)"). **`MeasureEditor`**'s unit list, **`shapeTooltipLine`** ("1.2 kg · units: kg, g, lb, oz") and **`shapeValidation`**'s unit warning ("\"lbs\" is not one of the channel's units (kg, g)") show the symbols; they showed the codes.
+- **`slotListColumnDef`**: optional `headerName` — the header when it says more than the list's name (the sheets' required mark, "Bullet points *"). Absent = `label`, as before; the editor and the tooltip keep `label`.
 
 ## Words: Partial update says when Publish sends no field — 2026-10-05
 

@@ -683,7 +683,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         headerTooltip: 'Family — a parent and its children',
     }), [bandWidth]);
     // Wave 2 E14 — paste with a header row: the same module as the channel scopes (`../headerPaste`).
-    const headerPaste = useHeaderPaste<StudioRow>(customisableColumns.map((c) => ({ colId: c.key, headerName: c.label })), (message, tone) => toast(message, tone));
+    const headerPaste = useHeaderPaste<StudioRow>(customisableColumns.map((c) => ({ colId: c.key, headerName: c.label, formerNames: c.formerNames })), (message, tone) => toast(message, tone));
     const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true, ...headerPaste.defaultColDef }), [headerPaste.defaultColDef]);
     const onCellValueChanged = useCallback((e: {
         data: StudioRow;

@@ -246,7 +246,8 @@ describe('targetOptionsFrom derives the options from the coordinate itself', () 
     }
     const options = targetOptionsFrom('AMAZON', [], 'Amazon · IT', ['SIZE_NAME/COLOR_NAME', 'COLOR_NAME/STYLE_NAME'], properties)
     expect(options.map((o) => o.code).sort()).toEqual(['color', 'size', 'style'])
-    expect(options.find((o) => o.code === 'size')?.label).toBe('Taglia')
+    // W3-2 (Owner decision 4) — named in English, not by the market title ('Taglia'); the code is the attribute.
+    expect(options.find((o) => o.code === 'size')?.label).toBe('Size')
   })
 
   it('Amazon with NO cached schema offers nothing — the empty list the caller turns into a state word', () => {

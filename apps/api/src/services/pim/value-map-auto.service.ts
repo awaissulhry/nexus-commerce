@@ -76,7 +76,8 @@ export async function autoMatchValueMaps(input: { channel: string; marketplace: 
     for (const value of values) {
       if (options.includes(value)) { entry.alreadyValid++; continue }
       if (mapped.has(value)) { entry.alreadyMapped++; continue }
-      const match = matchConceptValue(concept ?? undefined, value, options, field.optionLabels)
+      // W3-2 — the market's own name still matches exactly beside an English label.
+      const match = matchConceptValue(concept ?? undefined, value, options, field.optionLabels, field.optionAliases)
       if (!match) { entry.unmatched.push(value); continue }
       entry.matched.push({ from: value, ...match })
       rows.push({ channel, marketplace: input.marketplace, attribute: valueMap.attribute, fromValue: value, toValue: match.to,

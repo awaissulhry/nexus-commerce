@@ -98,6 +98,10 @@ export interface SheetColumn {
   scope: 'global' | 'per_variant'
   options?: string[]
   optionLabels?: Record<string, string>
+  /** W3-4 / W3-3 — other spellings a code is accepted under (the market's or content language's name beside an English one); never shown. */
+  optionAliases?: Record<string, string[]>
+  /** W3-3 — names the column was shown under before (a dictionary field's content-language label); a header paste still lands by them. */
+  formerNames?: string[]
   /** Shopify reference id → picture URL (files, video posters, products), resolved with the names. Display only. */
   referenceImages?: Record<string, string>
   /** Reference id → colour swatch, for entries whose picture is a colour (sheet pop-up rebuild P1). */

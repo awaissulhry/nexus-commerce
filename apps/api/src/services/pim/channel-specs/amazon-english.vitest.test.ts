@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { amazonSpecFromDefinition } from './amazon.js'
-import { isEnglishLocale, schemaLocale, withEnglish } from './amazon-english.js'
+import { amazonInEnglish, englishMissingLine, isEnglishLocale, schemaLocale, withEnglish } from './amazon-english.js'
+import { AMAZON_FULFILMENT_KEY } from './amazon.js'
 
 /** A trimmed product-type definition: one closed option list (`color`), one open one (`fit_type`), one text field. */
 function definition(locale: string, names: { color: Record<string, string>; fit: Record<string, string> }, opts: { help?: string; colorCodes?: string[]; extra?: boolean; maxLength?: number } = {}) {
@@ -89,5 +90,71 @@ describe('locale helpers', () => {
     expect(schemaLocale(spec('IT', { properties: { item_name: { type: 'string' } } }))).toBeNull()
     expect(['en_GB', 'en_US', 'en-IE', 'en'].every(isEnglishLocale)).toBe(true)
     expect([null, undefined, '', 'it_IT', 'nl_BE', 'eng'].some(isEnglishLocale)).toBe(false)
+  })
+})
+
+/**
+ * W3-2 — what the operator sees: English names (the market's kept as accepted spellings), English help; before the
+ * English copy exists, the market's words with one line saying so. Codes, options, mode and rules never change.
+ */
+describe('amazonInEnglish — the operator\'s view of a joined Amazon spec', () => {
+  const shown = amazonInEnglish(withEnglish(spec('IT', italian), spec('IT', english, englishAt)))
+
+  it('names each option in English and keeps the market\'s name as an accepted spelling; help in English', () => {
+    expect(field(shown, 'color')).toMatchObject({
+      options: ['red', 'blue', 'green'], mode: 'strict',
+      optionLabels: { red: 'Red', blue: 'Blue', green: 'Verde' },
+      optionAliases: { red: ['Rosso'], blue: ['Blu'] },
+      helpText: 'The main colour.',
+    })
+    // A code the English copy does not name keeps the market's name and gains no alias.
+    expect(field(shown, 'color').optionAliases).not.toHaveProperty('green')
+    expect(field(shown, 'fit_type')).toMatchObject({ mode: 'open', optionLabels: { slim: 'Slim', loose: 'Loose' }, optionAliases: { slim: ['Aderente'], loose: ['Ampio'] } })
+  })
+
+  it('a market name that IS the English name is no second spelling', () => {
+    const same = amazonInEnglish(withEnglish(spec('IT', definition('it_IT', { color: { red: 'Red', blue: 'Blu' }, fit: {} })),
+      spec('IT', definition('en_GB', { color: { red: 'RED', blue: 'Blue' }, fit: {} }), englishAt)))
+    expect(field(same, 'color').optionAliases).toEqual({ blue: ['Blu'] })
+  })
+
+  it('never changes what Amazon accepts, and never the spec it was given', () => {
+    const market = withEnglish(spec('IT', italian), spec('IT', english, englishAt))
+    const before = JSON.stringify(market)
+    const view = amazonInEnglish(market)
+    expect(JSON.stringify(market)).toBe(before)
+    for (const key of ['color', 'fit_type', 'item_name']) {
+      const { optionLabels: _l, optionAliases: _a, helpText: _h, ...rest } = field(view, key)
+      const { optionLabels: _l2, optionAliases: _a2, helpText: _h2, ...was } = field(market, key)
+      expect(rest).toEqual(was)
+    }
+  })
+
+  it('before the English copy exists: the market\'s words, led by one line naming the market\'s language', () => {
+    const line = "Amazon's English names are not downloaded yet. This shows Amazon's Italian words."
+    const alone = amazonInEnglish(withEnglish(spec('IT', italian), null))
+    expect(englishMissingLine(withEnglish(spec('IT', italian), null))).toBe(line)
+    expect(field(alone, 'color')).toMatchObject({ optionLabels: { red: 'Rosso', blue: 'Blu', green: 'Verde' }, helpText: `${line} Il colore principale.` })
+    expect(field(alone, 'color').optionAliases).toBeUndefined()
+    // Amazon gave this field no words (no list, no help): no line.
+    expect(field(alone, 'item_name').helpText).toBeUndefined()
+    // German market, the market language from the catalogue when the download recorded none.
+    const de = withEnglish(spec('DE', { properties: definition('de_DE', { color: { red: 'Rot' }, fit: {} }).properties }), null)
+    expect(englishMissingLine(de)).toBe("Amazon's English names are not downloaded yet. This shows Amazon's German words.")
+  })
+
+  it('an English market needs no line and no copy; a spec never joined is returned as it is', () => {
+    const uk = withEnglish(spec('UK', definition('en_GB', { color: { red: 'Red' }, fit: {} }, { help: 'The main colour.' })), null)
+    expect(englishMissingLine(uk)).toBeNull()
+    expect(field(amazonInEnglish(uk), 'color').helpText).toBe('The main colour.')
+    const raw = spec('IT', italian)
+    expect(amazonInEnglish(raw)).toBe(raw)
+  })
+
+  it('Nexus\'s own words take no line: the fulfilment choice keeps its English text', () => {
+    const fulfilment = { fulfillment_availability: { type: 'array', items: { type: 'object', properties: {
+      fulfillment_channel_code: { type: 'string', enum: ['DEFAULT', 'AMAZON_EU'], enumNames: ['Predefinito', 'Amazon'] }, quantity: { type: 'integer' } } } } }
+    const alone = amazonInEnglish(withEnglish(spec('IT', { __schemaProvenance: { locale: 'it_IT' }, properties: fulfilment }), null))
+    expect(field(alone, AMAZON_FULFILMENT_KEY).helpText).toMatch(/^FBA: Amazon stores and ships the order\./)
   })
 })

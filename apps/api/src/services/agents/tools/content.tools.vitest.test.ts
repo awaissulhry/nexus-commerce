@@ -187,6 +187,13 @@ describe('product-content — the shared text', () => {
     expect(Object.keys(rowOf(data, ids.parent).cells).sort()).toEqual(['keywords', 'title'])
     expect(data.unknownFields).toEqual(['no-such-field'])
   })
+
+  // W3-6 — the sheet heads the name "Title" everywhere; the old header still names it.
+  it('the old header "Name" still names the title', async () => {
+    const data = await read('product-content', { product: ids.parent, fields: ['Name'] })
+    expect(data.fields.map((f: Data) => f.field)).toEqual(['title'])
+    expect(data.unknownFields ?? []).toEqual([])
+  })
 })
 
 describe('product-content — one listing (channel + market)', () => {

@@ -1,3 +1,4 @@
+import { fieldNameFromKey } from '@nexus/shared/sheet-names'
 import type { ViewChip } from '../types'
 import { productSheetRowKey } from './productSheetRows'
 
@@ -7,8 +8,8 @@ export interface DiagnosticRow {
   rowId?: string
   parentId: string | null
   values: Record<string, DiagnosticCell>
-  readiness?: { issues: Array<{ key: string; severity: string }> } | null
-  completeness?: { required?: { missing?: Array<{ key: string }> } }
+  readiness?: { issues: Array<{ key: string; severity: string; label?: string }> } | null
+  completeness?: { required?: { missing?: Array<{ key: string; label?: string }> } }
 }
 
 /** Mirrors the frame's `ViewChipCells` without importing across the lane boundary for a type. */
@@ -29,11 +30,17 @@ export interface ChipDraft {
 interface Accum {
   byRow: Record<string, string[]>
   cells: number
-  /** Issue keys that are not columns on this scope — real, but not reachable from this sheet. */
-  unreachable: Set<string>
+  /** Issues on fields that are not columns on this scope — real, but not reachable from this sheet: key → its name. */
+  unreachable: Map<string, string>
 }
 
-const empty = (): Accum => ({ byRow: {}, cells: 0, unreachable: new Set() })
+const empty = (): Accum => ({ byRow: {}, cells: 0, unreachable: new Map() })
+
+/** W3-6 — a field the note names by its name, never its key: the server's label, else the key in words. */
+function unreachable(acc: Accum, key: string, label: string | undefined): void {
+  if (acc.unreachable.has(key)) return
+  acc.unreachable.set(key, label && label !== key ? label : fieldNameFromKey(key))
+}
 
 function add(acc: Accum, rowId: string, colId: string): void {
   const list = acc.byRow[rowId] ?? (acc.byRow[rowId] = [])
@@ -51,11 +58,15 @@ function fullyCounted(rows: DiagnosticRow[]): boolean {
   return rows.every((r) => !!r.readiness && Array.isArray(r.readiness.issues))
 }
 
+/**
+ * W3-6 — "2 more on fields with no column here: Parent SKU, Relationship type." The fields are named, not keyed, and
+ * the note no longer says "switch view to reach them": no view of this scope has a column for them.
+ */
 function noteFor(counted: boolean, acc: Accum, why: string): string | undefined {
   if (!counted) return why
   if (acc.unreachable.size > 0) {
-    const keys = [...acc.unreachable].sort().join(', ')
-    return `${acc.unreachable.size} more on fields this view does not show (${keys}) — switch view to reach them`
+    const names = [...new Set(acc.unreachable.values())].sort((a, b) => a.localeCompare(b, 'en')).join(', ')
+    return `${acc.unreachable.size} more on fields with no column here: ${names}.`
   }
   return undefined
 }
@@ -83,17 +94,18 @@ export function buildSheetChips(
   const mapping = empty()
 
   for (const row of rows) {
-    const missing = new Set(row.completeness?.required?.missing?.map((m) => m.key) ?? [])
-    for (const key of missing) {
-      if (colIds.has(key)) add(required, productSheetRowKey(row), key)
-      else required.unreachable.add(key)
+    const missingList = row.completeness?.required?.missing ?? []
+    const missing = new Set(missingList.map((m) => m.key))
+    for (const m of missingList) {
+      if (colIds.has(m.key)) add(required, productSheetRowKey(row), m.key)
+      else unreachable(required, m.key, m.label)
     }
     for (const issue of row.readiness?.issues ?? []) {
       if (sharedProduct && issue.severity !== 'error' && issue.severity !== 'warn') continue
       if (missing.has(issue.key) && issue.severity === 'error') continue
       const target = issue.severity === 'error' ? invalid : warnings
       if (!colIds.has(issue.key)) {
-        target.unreachable.add(issue.key)
+        unreachable(target, issue.key, issue.label)
         continue
       }
       add(target, productSheetRowKey(row), issue.key)
