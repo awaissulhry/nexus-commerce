@@ -3,8 +3,8 @@ import type { PublicationBatchView, StudioPublishReview, StudioPublishScope } fr
 import {
   EMPTY_ENTRY, LISTINGS_WORD, MAX_BATCH_DESTINATIONS, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchChildMeta, batchLimitText, batchPlaces, batchProgress,
   batchRequest, batchSentence, canonicalScope, cellDestinationKey, channelOptions, checkingButtonText, checkingProgress, destinationName, destinationPlace, destinationState,
-  destinationStateLabel, euRefusal, initialTicked, initialTicks, listedAliases, listedDestinationKeys, marketKey, placesWord, publishButtonText, publishPath, publishPlan,
-  requestOutstanding, requestSkipReason, requestsDue, reviewOrder, selectAllText, sheetDestinationScope, withInitialOptions,
+  destinationStateLabel, euRefusal, initialTicked, initialTicks, isOfferedScope, listedAliases, listedDestinationKeys, listingEventConcerns, marketKey, offeredAliasIds, offeredCells,
+  placesWord, publishButtonText, publishPath, publishPlan, requestOutstanding, requestSkipReason, requestsDue, reviewOrder, selectAllText, sheetDestinationScope, withInitialOptions,
   type DestinationEntry, type DestinationState,
 } from './destinations'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
@@ -46,7 +46,7 @@ describe('which destinations start ticked', () => {
     expect(initialTicked(extended, [retry])).toEqual([publicationScopeKey(retry)])
     // Right after Amazon DE's main listing, which now shows ★ (its market holds two listings).
     expect(extended.map(o => o.key).indexOf(publicationScopeKey(retry))).toBe(extended.map(o => o.key).indexOf(key('AMAZON', 'DE')) + 1)
-    expect(optionListingLabel(extended.find(o => o.key === key('AMAZON', 'DE'))!)).toBe('★ Primary')
+    expect(optionListingLabel(extended.find(o => o.key === key('AMAZON', 'DE'))!)).toBe('★ Main listing')
     expect(optionListingLabel(extended.find(o => o.key === publicationScopeKey(retry))!)).toBe('Selected listing')
     expect(withInitialOptions(options, [{ channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'x' }])).toHaveLength(options.length)
   })
@@ -317,13 +317,13 @@ describe('OD4 A — a market whose request cannot be built is skipped with its r
 
 describe('aliases — every listing of a market is a destination of its own', () => {
   type Cell = Pick<PublishActionCell, 'listingId' | 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition' | 'state' | 'create'>
-  const cell = (over: Partial<Cell>): Cell => ({ listingId: 'cl-main', productId: 'fam', sku: 'KNEE', channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey: '',
+  const cell = (over: Partial<Cell>): Cell => ({ listingId: 'cl-main', productId: 'fam', sku: 'FAM', channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey: '',
     aliasLabel: null, aliasPosition: null, state: 'active', create: null, ...over })
   const cells: Cell[] = [
-    cell({}), cell({ productId: 'child', sku: 'KNEE-BLK', listingId: 'cl-main-blk' }),
-    cell({ aliasKey: 'alias-2', aliasLabel: 'knee-slider-ALT2', aliasPosition: 2, listingId: 'cl-alt2', sku: 'KNEE-ALT2', state: 'draft' }),
-    cell({ aliasKey: 'alias-1', aliasLabel: 'knee-slider-ALT1', aliasPosition: 1, listingId: 'cl-alt1', sku: 'KNEE-ALT1', state: 'paused' }),
-    cell({ aliasKey: 'alias-1', aliasLabel: 'knee-slider-ALT1', aliasPosition: 1, listingId: 'cl-alt1-blk', productId: 'child', sku: 'KNEE-ALT1-BLK' }),
+    cell({}), cell({ productId: 'child', sku: 'FAM-BLK', listingId: 'cl-main-blk' }),
+    cell({ aliasKey: 'alias-2', aliasLabel: 'sample-ALT2', aliasPosition: 2, listingId: 'cl-alt2', sku: 'FAM-ALT2', state: 'draft' }),
+    cell({ aliasKey: 'alias-1', aliasLabel: 'sample-ALT1', aliasPosition: 1, listingId: 'cl-alt1', sku: 'FAM-ALT1', state: 'paused' }),
+    cell({ aliasKey: 'alias-1', aliasLabel: 'sample-ALT1', aliasPosition: 1, listingId: 'cl-alt1-blk', productId: 'child', sku: 'FAM-ALT1-BLK' }),
   ]
   const aliases = listedAliases(cells, 'fam')
   const all = publicationDestinations(markets, undefined, aliases)
@@ -333,22 +333,22 @@ describe('aliases — every listing of a market is a destination of its own', ()
 
   it('reads one alias per channel, market, account and alias id, with its name and place', () => {
     expect(aliases).toEqual([
-      { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'alias-2', label: 'knee-slider-ALT2', position: 2 },
-      { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'alias-1', label: 'knee-slider-ALT1', position: 1 },
+      { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'alias-2', label: 'sample-ALT2', position: 2 },
+      { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'alias-1', label: 'sample-ALT1', position: 1 },
     ])
     // An older answer without the name or place: the alias's own main row SKU, after the known places of its market.
     expect(listedAliases([cell({ aliasKey: 'a', productId: 'child', sku: 'CHILD' }), cell({ aliasKey: 'a', sku: 'OWN' }), cell({ aliasKey: 'b', aliasPosition: 3, aliasLabel: ' ' })], 'fam'))
       .toEqual([
         { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'a', label: 'OWN', position: 4 },
-        { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'b', label: 'KNEE', position: 3 },
+        { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', id: 'b', label: 'FAM', position: 3 },
       ])
   })
 
   it('keeps the main listing and puts each alias right after it, by position', () => {
     const ebay = all.filter(o => o.scope.channel === 'EBAY')
     expect(ebay.map(o => o.key)).toEqual([ebayKey, aliasKey('alias-1'), aliasKey('alias-2')])
-    expect(ebay.map(optionListingLabel)).toEqual(['★ Primary', '① knee-slider-ALT1', '② knee-slider-ALT2'])
-    expect(ebay.map(o => o.label)).toEqual(['eBay Italy · Xavia eBay · ★ Primary', 'eBay Italy · Xavia eBay · ① knee-slider-ALT1', 'eBay Italy · Xavia eBay · ② knee-slider-ALT2'])
+    expect(ebay.map(optionListingLabel)).toEqual(['★ Main listing', '① sample-ALT1', '② sample-ALT2'])
+    expect(ebay.map(o => o.label)).toEqual(['eBay Italy · Xavia eBay · ★ Main listing', 'eBay Italy · Xavia eBay · ① sample-ALT1', 'eBay Italy · Xavia eBay · ② sample-ALT2'])
     // A market without aliases: no mark at all.
     expect(optionListingLabel(all.find(o => o.key === key('AMAZON', 'IT'))!)).toBeNull()
   })
@@ -407,9 +407,101 @@ describe('aliases — every listing of a market is a destination of its own', ()
     const child = (aliasKey: string | null, publicationId: string) => ({ publicationId, channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey })
     expect(batchPlaces([child('', 'c1'), child(null, 'l1'), child('alias-1', 'c2'), child('alias-1', 'l2'), child('alias-2', 'c3')])).toBe(3)
     const alias1 = all.find(o => o.key === aliasKey('alias-1'))!
-    expect(destinationPlace(alias1.scope, alias1)).toBe('eBay · IT · ① knee-slider-ALT1')
-    expect(destinationPlace(alias1.scope, all.find(o => o.key === ebayKey))).toBe('eBay · IT · ★ Primary')
+    expect(destinationPlace(alias1.scope, alias1)).toBe('eBay · IT · ① sample-ALT1')
+    expect(destinationPlace(alias1.scope, all.find(o => o.key === ebayKey))).toBe('eBay · IT · ★ Main listing')
     expect(destinationPlace({ channel: 'AMAZON', marketplace: 'IT' }, all.find(o => o.key === key('AMAZON', 'IT')))).toBe('Amazon · IT')
-    expect(destinationName(alias1)).toBe('eBay Italy · ① knee-slider-ALT1')
+    expect(destinationName(alias1)).toBe('eBay Italy · ① sample-ALT1')
+  })
+})
+
+// ── Review 2026-10-05: the chosen listing, archived aliases, aliases that could never be reviewed ───────────────────
+
+describe('M2 — a listing chosen in the studio ticks ONLY that listing in its market', () => {
+  type Cell = Pick<PublishActionCell, 'listingId' | 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition' | 'aliasStatus' | 'state' | 'create'>
+  const cell = (marketplace: string, over: Partial<Cell> = {}): Cell => ({ listingId: `cl-${marketplace}`, productId: 'fam', sku: 'FAM', channel: 'EBAY', marketplace, accountId: 'ebay',
+    aliasKey: '', aliasLabel: null, aliasPosition: null, aliasStatus: null, state: 'active', create: null, ...over })
+  const alias = (marketplace: string, id: string, position: number, over: Partial<Cell> = {}) =>
+    cell(marketplace, { listingId: `cl-${marketplace}-${id}`, aliasKey: id, aliasLabel: `Listing ${id}`, aliasPosition: position, aliasStatus: 'ACTIVE', ...over })
+  // eBay IT: the main listing and two listed aliases; DE: the main listing and a listed alias; FR: the main listing; ES: not listed.
+  const cells: Cell[] = [cell('IT'), alias('IT', 'it-1', 1), alias('IT', 'it-2', 2), cell('DE'), alias('DE', 'de-1', 1), cell('FR'), cell('ES', { state: 'draft' })]
+  const ebayMarkets = ['IT', 'DE', 'FR', 'ES'].map(code => ({ id: code, channel: 'EBAY', code, name: `eBay ${code}`, accounts: [{ id: 'ebay', label: 'Shop' }] }))
+  const options = publicationDestinations(ebayMarkets, undefined, listedAliases(cells, 'fam'))
+  const at = (marketplace: string, listingId?: string) => ({ channel: 'EBAY', marketplace, accountId: 'ebay', ...(listingId ? { listingId } : {}) })
+  const k = (marketplace: string, listingId?: string) => publicationScopeKey(at(marketplace, listingId))
+  const opened = (chosen?: StudioPublishScope) => initialChoice(options, initialTicked(options, chosen ? [chosen] : []), listedDestinationKeys(cells, 'fam', chosen)).keys
+
+  it('an alias chosen: that alias alone in its market, and the listed main listings of the other markets', () => {
+    expect(opened(at('IT', 'it-2'))).toEqual([k('IT', 'it-2'), k('DE'), k('FR')])
+    // The rule before aliases, unchanged: the sheet's listing plus every other listed market's main listing.
+    expect(listedMarkets(options, listedDestinationKeys(cells, 'fam', at('IT', 'it-2')), 'EBAY', 'ebay', [k('IT', 'it-2')])).toEqual([k('IT', 'it-2'), k('DE'), k('FR')])
+  })
+
+  it('"Main listing" chosen: the main listing alone in its market — never its aliases', () => {
+    expect(opened(at('IT'))).toEqual([k('IT'), k('DE'), k('FR')])
+    expect(listedDestinationKeys(cells, 'fam', at('IT'))).toEqual(new Set([k('IT'), k('DE'), k('FR')]))
+  })
+
+  it('no listing chosen: every listed main listing and every listed alias (one-click publish)', () => {
+    expect(opened()).toEqual([k('IT'), k('IT', 'it-1'), k('IT', 'it-2'), k('DE'), k('DE', 'de-1'), k('FR')])
+    // The studio on the main listing with no listing chosen: the same.
+    expect(initialChoice(options, [k('IT')], listedDestinationKeys(cells, 'fam')).keys).toEqual([k('IT'), k('IT', 'it-1'), k('IT', 'it-2'), k('DE'), k('DE', 'de-1'), k('FR')])
+  })
+
+  it('"Publish this listing…" opens with that listing only (nothing listed is added)', () => {
+    expect(initialChoice(options, initialTicked(options, [at('DE', 'de-1')]), null).keys).toEqual([k('DE', 'de-1')])
+  })
+})
+
+describe('archived aliases, and aliases the family’s main product has no record of, are never offered', () => {
+  type Cell = Pick<PublishActionCell, 'listingId' | 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition' | 'aliasStatus' | 'state' | 'create'>
+  const cell = (over: Partial<Cell>): Cell => ({ listingId: 'cl-main', productId: 'fam', sku: 'FAM', channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey: '',
+    aliasLabel: null, aliasPosition: null, aliasStatus: null, state: 'active', create: null, ...over })
+  const cells: Cell[] = [
+    cell({}),
+    cell({ aliasKey: 'live', aliasLabel: 'Live one', aliasPosition: 1, aliasStatus: 'ACTIVE', listingId: 'cl-live' }),
+    // Archived: its rows are read (its live item stays endable from its Status cell), but it is not offered.
+    cell({ aliasKey: 'old', aliasLabel: 'Old one', aliasPosition: 2, aliasStatus: 'ARCHIVED', listingId: 'cl-old' }),
+    // Only a variation has a record of it, the family's main product a stand-in: it could never be reviewed.
+    cell({ aliasKey: 'orphan', aliasLabel: 'Orphan', aliasPosition: 3, aliasStatus: 'ACTIVE', listingId: 'cl-orphan-child', productId: 'child' }),
+    cell({ aliasKey: 'orphan', aliasLabel: 'Orphan', aliasPosition: 3, aliasStatus: 'ACTIVE', listingId: 'new:fam:EBAY:IT:ebay:orphan', state: 'draft' }),
+    // No state named for it once the read names one for others: not offered.
+    cell({ aliasKey: 'unknown', aliasStatus: null, listingId: 'cl-unknown' }),
+  ]
+  const ebayKey = publicationScopeKey({ channel: 'EBAY', marketplace: 'IT', accountId: 'ebay' })
+  const aliasKey = (id: string) => publicationScopeKey({ channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', listingId: id })
+
+  it('offers only ACTIVE aliases with a record of the family’s main product', () => {
+    expect(offeredAliasIds(cells, 'fam')).toEqual(new Set(['live']))
+    expect(listedAliases(cells, 'fam').map(a => a.id)).toEqual(['live'])
+    expect(offeredCells(cells, 'fam').map(c => c.listingId)).toEqual(['cl-main', 'cl-live'])
+    // Every alias is listed (state active), yet only the offered one is ticked.
+    expect(listedDestinationKeys(cells, 'fam')).toEqual(new Set([ebayKey, aliasKey('live')]))
+    // A read from a server that names no state: every alias with a record of the main product.
+    const unstated = cells.map(({ aliasStatus: _ignored, ...rest }) => rest)
+    expect(offeredAliasIds(unstated, 'fam')).toEqual(new Set(['live', 'old', 'unknown']))
+  })
+
+  it('never offers such an alias even when asked for (a retry, an Undo, the studio on it); an id it does not know is kept', () => {
+    const where = { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay' }
+    expect(isOfferedScope({ ...where, listingId: 'old' }, cells, 'fam')).toBe(false)
+    expect(isOfferedScope({ ...where, listingId: 'orphan' }, cells, 'fam')).toBe(false)
+    expect(isOfferedScope({ ...where, listingId: 'live' }, cells, 'fam')).toBe(true)
+    expect(isOfferedScope(where, cells, 'fam')).toBe(true)
+    expect(isOfferedScope({ ...where, listingId: 'cl-somewhere' }, cells, 'fam')).toBe(true)
+  })
+})
+
+describe('m1 — the listing picker reads again when a listing of the family changes', () => {
+  const products = new Set(['fam', 'child']), records = new Set(['cl-main', 'cl-live'])
+  it('a listing created or removed for the family, or a waiting Status choice of it (drafts may start)', () => {
+    expect(listingEventConcerns({ type: 'listing.created', id: 'sub-1', meta: { productId: 'child', source: 'wizard-publish' } }, products, records)).toBe(true)
+    expect(listingEventConcerns({ type: 'listing.created', id: 'sub-1', meta: { productId: 'another' } }, products, records)).toBe(false)
+    // The listing stream names no product: a creation may be ours; a removal is when the listing is one of ours.
+    expect(listingEventConcerns({ type: 'listing.created', id: 'cl-new', meta: { source: 'sse' } }, products, records)).toBe(true)
+    expect(listingEventConcerns({ type: 'listing.deleted', id: 'cl-live', meta: { source: 'sse' } }, products, records)).toBe(true)
+    expect(listingEventConcerns({ type: 'listing.deleted', id: 'cl-elsewhere', meta: { source: 'sse' } }, products, records)).toBe(false)
+    expect(listingEventConcerns({ type: 'listing.updated', id: 'fam', meta: { subtype: 'listing.publish_action_changed', productId: 'fam' } }, products, records)).toBe(true)
+    expect(listingEventConcerns({ type: 'listing.updated', id: 'other', meta: { subtype: 'listing.publish_action_changed', productId: 'other' } }, products, records)).toBe(false)
+    expect(listingEventConcerns({ type: 'listing.updated', id: 'cl-main', meta: { subtype: 'listing.synced' } }, products, records)).toBe(false)
   })
 })

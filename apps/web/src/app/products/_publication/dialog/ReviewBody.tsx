@@ -12,19 +12,24 @@ import { ActionPlanTable } from './ActionPlanTable'
 import { DiffersSummary } from './DiffersSummary'
 import { reviewRowListingWord, shopifyVisibilityWords, type ActionPlanRow } from './actionPlan'
 import { isSparse } from './destinations'
-import { publicationProblems, type PublicationProblemRow } from './model'
+import { MAIN_LISTING_LABEL, publicationProblems, type PublicationProblemRow } from './model'
 import styles from './publication.module.css'
+
+/** The review's own name for a main listing (`StudioPublishReview.aliasLabel`). */
+const SERVER_MAIN_LISTING_LABEL = 'Primary listing'
 
 /**
  * The review's destination as one line: account (or, when the account has no name, the channel), listing, market.
  * Empty parts are skipped, so the line never starts or ends with a lone " · " (a nameless account printed
  * "· Primary listing · IT"). `listing`: the window's own name for the listing, with the sheet band's mark ("① Racing
- * edition", "★ Primary"), used in place of the review's `aliasLabel` when its market has more than one listing.
+ * edition", "★ Main listing"), used in place of the review's `aliasLabel` when its market has more than one listing.
  */
 export function publicationDestinationParts(review: Pick<StudioPublishReview, 'accountLabel' | 'aliasLabel' | 'scope'>, withListing = true, listing?: string | null): { lead: string; rest: string } {
   const named = (value: string | null | undefined) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
   const lead = named(review.accountLabel) ?? channelLabel(review.scope.channel)
-  const rest = [withListing ? named(listing) ?? named(review.aliasLabel) : null, named(review.scope.marketplace)].filter((part): part is string => part != null).join(' · ')
+  // One word for the main listing in the window (review 2026-10-05, m3): the server's "Primary listing" reads "Main listing".
+  const own = named(review.aliasLabel)
+  const rest = [withListing ? named(listing) ?? (own === SERVER_MAIN_LISTING_LABEL ? MAIN_LISTING_LABEL : own) : null, named(review.scope.marketplace)].filter((part): part is string => part != null).join(' · ')
   return { lead, rest }
 }
 
@@ -84,7 +89,7 @@ export interface ReviewBodyProps {
   nexusWins?: boolean
   /**
    * Aliases (Owner 2026-10-05): which listing of its market this review is, with the sheet band's mark ("① Racing
-   * edition", "★ Primary"); null when the market has one listing (the review's own words then).
+   * edition", "★ Main listing"); null when the market has one listing (the review's own words then).
    */
   listing?: string | null
 }

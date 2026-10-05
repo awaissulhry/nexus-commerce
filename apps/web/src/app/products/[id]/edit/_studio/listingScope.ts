@@ -12,11 +12,15 @@
  * with the main listing's own record id — the one id the destination read resolves to the main listing. An old link that
  * carries a listing record id (an alias's, or a variation's) keeps resolving as before.
  *
+ * The page stays on its product (review 2026-10-05): the studio opens the product of the record `listing=` resolves to.
+ * So on a variation's page "Main listing" writes THAT variation's own main record (never the family main product's), and
+ * an alias id resolves to the variation's own record of the alias first (the server's `resolveWorkspaceDestination`).
+ *
  * Pure: the bar, the sheet and the tests read the same rules.
  */
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import type { StudioPublishScope } from '@nexus/shared/studio-publication'
-import { aliasMarkGlyph } from '@/design-system/primitives/AliasMark'
+import { aliasMarkGlyph, aliasMarkName } from '@/design-system/primitives/AliasMark'
 
 /** The picker's options: every listing, the main listing, one alias. */
 export const ALL_LISTINGS = 'all'
@@ -35,13 +39,15 @@ export interface ListingAliasChoice {
 export interface ListingChoices {
   /** The main listing's record id on this destination (the family's main product), or null when it has none here. */
   mainListingId: string | null
+  /** Each family product's own main-listing record here, by product id — what "Main listing" writes on that product's page. */
+  mainByProduct: Readonly<Record<string, string>>
   /** The destination's aliases, in their position order. */
   aliases: ListingAliasChoice[]
   /** Every listing record here (any product of the family) → its listing: '' = the main listing, else the alias id. */
   aliasByRecord: Readonly<Record<string, string>>
 }
 
-export const NO_LISTING_CHOICES: ListingChoices = Object.freeze({ mainListingId: null, aliases: [], aliasByRecord: {} }) as ListingChoices
+export const NO_LISTING_CHOICES: ListingChoices = Object.freeze({ mainListingId: null, mainByProduct: {}, aliases: [], aliasByRecord: {} }) as ListingChoices
 
 /** An alias's name: its own label, else "Listing alias 2"; position 0 is the main listing. */
 export function aliasName(position: number, label: string | null | undefined): string {
@@ -55,26 +61,40 @@ export function aliasMarkText(position: number, label: string | null | undefined
   return `${aliasMarkGlyph(position)} ${aliasName(position, label)}`
 }
 
-type ChoiceCell = Pick<PublishActionCell, 'listingId' | 'productId' | 'aliasKey'> & Partial<Pick<PublishActionCell, 'aliasLabel' | 'aliasPosition'>>
+/**
+ * Whether the mark (`AliasMark`, role img) adds anything a screen reader would not hear from the name beside it: not for
+ * "Main listing" or an unnamed "Listing alias 2" — the mark's own spoken name — so there it is drawn hidden from assistive
+ * technology, and the listing is read once.
+ */
+export function aliasMarkSpoken(position: number, label: string | null | undefined): boolean {
+  return aliasName(position, label) !== aliasMarkName(position)
+}
+
+type ChoiceCell = Pick<PublishActionCell, 'listingId' | 'productId' | 'aliasKey'> & Partial<Pick<PublishActionCell, 'aliasLabel' | 'aliasPosition' | 'aliasStatus'>>
 
 /**
  * The listings of one destination, from its Status and Action read (`GET …/studio/publish-actions?channel&marketplace&
  * accountId`, every listing record there, no channel call). The main listing is the family main product's record without
  * an alias ('' alias key; a `new:` stand-in is not a record). An alias is listed when a record carries its id.
  *
- * The server names each ACTIVE alias's place (`aliasPosition`) and label; once a read carries a place for any alias, an
- * alias without one is not active and is left out (the studio cannot open it). A read from a server that names no place
- * keeps every alias, numbered in id order.
+ * The server names each alias's place (`aliasPosition`), label and state (`aliasStatus`). Only an ACTIVE alias is offered:
+ * an archived alias's rows are still read (its live item stays endable from its Status cell), but the studio cannot open
+ * it. A read that names no state, but places, leaves out an alias without a place; a read that names neither keeps every
+ * alias, numbered in id order.
  */
 export function listingChoicesFromCells(cells: readonly ChoiceCell[], familyId: string): ListingChoices {
+  const stated = cells.some(cell => !!cell.aliasKey && cell.aliasStatus !== undefined)
   const placed = cells.some(cell => !!cell.aliasKey && typeof cell.aliasPosition === 'number')
   // A `new:` id (`newRowId`) is a stand-in for a family member with no record here, never a listing to open.
-  const main = cells.find(cell => cell.productId === familyId && !cell.aliasKey && !cell.listingId.startsWith('new:'))
+  const records = cells.filter(cell => !cell.listingId.startsWith('new:'))
+  const main = records.find(cell => cell.productId === familyId && !cell.aliasKey)
+  const mainByProduct: Record<string, string> = {}
+  for (const cell of records) if (!cell.aliasKey && !(cell.productId in mainByProduct)) mainByProduct[cell.productId] = cell.listingId
   const byId = new Map<string, ListingAliasChoice>()
   for (const cell of cells) {
     if (!cell.aliasKey) continue
     const position = typeof cell.aliasPosition === 'number' ? cell.aliasPosition : null
-    if (placed && position === null) continue
+    if (stated ? cell.aliasStatus !== 'ACTIVE' : placed && position === null) continue
     const known = byId.get(cell.aliasKey)
     const label = cell.aliasLabel?.trim() ?? ''
     if (!known) byId.set(cell.aliasKey, { id: cell.aliasKey, label, position: position ?? 0 })
@@ -88,9 +108,19 @@ export function listingChoicesFromCells(cells: readonly ChoiceCell[], familyId: 
   }
   return {
     mainListingId: main?.listingId ?? null,
+    mainByProduct,
     aliases: placed ? aliases : aliases.map((alias, index) => ({ ...alias, position: index + 1 })),
     aliasByRecord,
   }
+}
+
+/**
+ * The main-listing record "Main listing" writes on a product's page: that product's OWN record here, so a variation's
+ * page stays on the variation; null when it has none (the choice is then not offered). No product named: the family's.
+ */
+export function mainListingOf(choices: ListingChoices | null, productId?: string | null): string | null {
+  if (!choices) return null
+  return productId ? choices.mainByProduct[productId] ?? null : choices.mainListingId
 }
 
 /** The picker is drawn when the destination holds more than one listing, or one listing is chosen (the way back). */
@@ -107,13 +137,17 @@ export interface ListingPickerOption {
   title?: string
 }
 
-/** "All listings · ★ Main listing · ① ALT1 · ② ALT2 …", the aliases in their position order. */
-export function listingPickerOptions(choices: ListingChoices): ListingPickerOption[] {
+/** "All listings · ★ Main listing · ① ALT1 · ② ALT2 …", the aliases in their position order. `productId`: the page's. */
+export function listingPickerOptions(choices: ListingChoices, productId?: string | null): ListingPickerOption[] {
   return [
     { value: ALL_LISTINGS, label: 'All listings', position: null, title: 'Show every listing on this account and market' },
-    choices.mainListingId
+    mainListingOf(choices, productId)
       ? { value: MAIN_LISTING, label: 'Main listing', position: 0, title: 'Show only the main listing' }
-      : { value: MAIN_LISTING, label: 'Main listing', position: 0, disabled: true, title: 'The main listing has no record on this account and market yet.' },
+      : { value: MAIN_LISTING, label: 'Main listing', position: 0, disabled: true,
+        // The family's main product has one, this variation has none: choosing it would move the page to the main product.
+        title: productId && choices.mainListingId
+          ? 'This product has no record on the main listing on this account and market yet.'
+          : 'The main listing has no record on this account and market yet.' },
     ...choices.aliases.map(alias => ({ value: `${ALIAS_PREFIX}${alias.id}`, label: aliasName(alias.position, alias.label), position: alias.position,
       title: `Show only ${aliasName(alias.position, alias.label)}` })),
   ]
@@ -127,31 +161,54 @@ export function listingPickerValue(listingId: string | null | undefined, resolve
   if (!listingId) return ALL_LISTINGS
   if (typeof resolvedAliasKey === 'string') return resolvedAliasKey ? `${ALIAS_PREFIX}${resolvedAliasKey}` : MAIN_LISTING
   if (choices?.aliases.some(alias => alias.id === listingId)) return `${ALIAS_PREFIX}${listingId}`
-  if (choices?.mainListingId && choices.mainListingId === listingId) return MAIN_LISTING
+  // A listing record (any product's): its own listing.
+  const alias = choices?.aliasByRecord[listingId]
+  if (alias === '') return MAIN_LISTING
+  if (alias) return `${ALIAS_PREFIX}${alias}`
   return undefined
 }
 
-/** What the studio's `setListing` receives for a picker option; undefined = every listing. */
-export function listingParamOf(value: string, choices: ListingChoices): string | undefined {
-  if (value === MAIN_LISTING) return choices.mainListingId ?? undefined
+/** What the studio's `setListing` receives for a picker option; undefined = every listing. `productId`: the page's. */
+export function listingParamOf(value: string, choices: ListingChoices, productId?: string | null): string | undefined {
+  if (value === MAIN_LISTING) return mainListingOf(choices, productId) ?? undefined
   if (value.startsWith(ALIAS_PREFIX)) return value.slice(ALIAS_PREFIX.length) || undefined
   return undefined
 }
 
 /**
  * A page that lists listing RECORDS (the Media workspaces) writes the same `listing=` as the picker: an alias's record
- * becomes its alias id, a main-listing record the family's main record. A record these choices do not know (not read
- * yet, or another product's) stays as it is — the studio still resolves a record id.
+ * becomes its alias id; a main-listing record stays itself — those pages list the page product's OWN records, and that
+ * record is exactly what the picker's "Main listing" writes on this page (a variation's page stays on the variation). A
+ * record these choices do not know (not read yet, or another product's) stays as it is — the studio still resolves it.
  */
 export function listingParamForRecord(recordId: string, choices: ListingChoices | null): string {
   const alias = choices?.aliasByRecord[recordId]
-  if (alias === undefined) return recordId
-  return alias || choices?.mainListingId || recordId
+  return alias || recordId
 }
 
 /** The `listing=` value that shows one listing alone: the alias id, or the main listing's record id; undefined = none known. */
 export function listingSelection(aliasId: string | null | undefined, mainListingId: string | null | undefined): string | undefined {
   return aliasId || mainListingId || undefined
+}
+
+/** A sheet row as far as choosing its listing goes: its product, its listing (alias) and its record here. */
+export interface ListingSelectionRow {
+  id: string
+  aliasId?: string | null
+  rowKind?: string
+  listing: { id: string } | null
+}
+
+/**
+ * The `listing=` that shows one listing alone from a page's sheet rows (the band's "Show only this listing", the
+ * Presentation tab): an alias by its alias id, when its band or the page's product holds a record of it; the main listing
+ * by the PAGE PRODUCT's own main record — never the family main product's on a variation's page, which would move the
+ * page to the family main product. Undefined when no record is known (the choice is then refused).
+ */
+export function pageListingSelection(aliasId: string | null | undefined, rows: readonly ListingSelectionRow[], pageProductId: string): string | undefined {
+  const of = (row: ListingSelectionRow) => row.aliasId || null
+  if (aliasId) return rows.some(row => of(row) === aliasId && !!row.listing?.id && (row.id === pageProductId || row.rowKind === 'parent')) ? aliasId : undefined
+  return rows.find(row => row.id === pageProductId && of(row) === null && !!row.listing?.id)?.listing?.id
 }
 
 /** A Publish destination for one listing: an alias names its alias id; the main listing names none. */

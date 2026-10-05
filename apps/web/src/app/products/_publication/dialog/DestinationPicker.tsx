@@ -59,7 +59,10 @@ export function DestinationPicker({ options, choice, onChange, locked = false, m
     </div>
     {chosen.length > 0 && <ul className={styles.chips} aria-label={`Chosen ${marketsLabel.toLowerCase()}`}>
       {chosen.map(o => <li key={o.key}>
-        <TokenChip onRemove={() => onChange(removeMarket(choice, o.key))} removeLabel={`Remove ${marketOptionLabel(o)}`}>{marketOptionLabel(o)}</TokenChip>
+        {/* A long listing name ends with an ellipsis inside the chip (its whole name on hover), never past a phone's width. */}
+        <TokenChip onRemove={() => onChange(removeMarket(choice, o.key))} removeLabel={`Remove ${marketOptionLabel(o)}`}>
+          <span className={styles.chipText} title={marketOptionLabel(o)}>{marketOptionLabel(o)}</span>
+        </TokenChip>
       </li>)}
     </ul>}
   </div>

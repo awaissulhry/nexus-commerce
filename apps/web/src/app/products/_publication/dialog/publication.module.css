@@ -29,11 +29,19 @@
 .picker { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .pickerControls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); margin: 0; padding: 0; list-style: none; min-width: 0; }
+/* Aliases (review 2026-10-05) — a long listing name never runs past a phone's width: a chip shrinks to its row and its
+   words end with an ellipsis (the whole name on hover and in the remove button's name); a tab caps the listing's name and
+   always shows its review words whole (the tab strip itself scrolls, DS `overflow="scroll"`). */
+.chips > li { min-width: 0; max-width: 100%; }
+.chipText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabLabel { display: inline-flex; align-items: baseline; min-width: 0; }
+.tabName { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .destinationLine { margin: 0; overflow-wrap: anywhere; }
 .summary { margin: 0; color: var(--nds-text-3); overflow-wrap: anywhere; }
 .tabPanel { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
 @media (max-width: 639px) {
   .pickerControls { flex-direction: column; align-items: stretch; }
+  .tabName { max-width: 16ch; }
   /* The Markets trigger fills the row like Channel and Account (MultiSelect's root stretches, its button does not). */
   .pickerControls :global(.nds-ms-btn) { flex: 1 1 auto; }
 }

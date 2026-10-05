@@ -53,7 +53,7 @@ import { usePublicationStatus } from '@/app/products/_publication/dialog/usePubl
 import { destinationLabel as publishDestinationLabel, rejectedFilterMenuLabel, withRejectedFilter } from '@/app/products/_publication/dialog/outcome';
 import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publishHistorySearch, publishReadFor, publishSheetColumn, rejectedRowCount, rowPublishValue, sellingChangeInFlight, useSellingChangeReRead, type PublishCellValue } from './publishColumn';
 import { StudioPublishDialog } from '../../StudioPublishDialog';
-import { aliasName, listingPublishScope, listingSelection } from '../../listingScope';
+import { aliasName, listingPublishScope, pageListingSelection } from '../../listingScope';
 import type { StudioPublishScope } from '@nexus/shared/studio-publication';
 import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
@@ -94,6 +94,7 @@ import { referenceSearchText } from '../referenceLabels';
 import { RESERVED_COLUMN_IDS } from '../views';
 import { flaggedColumnKeys } from '../flaggedColumns';
 import { ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, actionMenuEntries, channelActions, listingBandActions, type PermissionState } from './channelActions';
+import { invalidatePublishActions } from '../publishActionsApi';
 import { PublishActionFence, groupStaged, inactiveStatusMark, isInactiveCell, isWaitingCell, operationToast, publishCellKey, usePublishActions, waitingCountsOf, waitingStatusMark, waitingTotalOf, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type StagedPublishCell } from '../usePublishActions';
 import { STATUS_COLUMN, statusCellValue, statusColumn, statusSheetColumn, type PublishCellReadState } from './statusColumn';
 import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, actionSheetColumn } from './actionColumn';
@@ -479,7 +480,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         target: (kind) => kind === 'variation' ? variationTarget(rows.find((row) => row.rowKind === 'parent'), canAddRows)
             : aliasTarget({ productId, channel, marketplace, accountId, noAccount: !accountId && !data?.scope.connectionId && accounts.length === 0, canEdit: canAddRows }),
         skuContext: () => ({ family: null, takenSkus: rows.flatMap((row) => [row.sku, row.skuFacts?.wanted ?? '']) }),
-        onCreated: (kinds) => { followUp.owe(); followUp.settle(); refreshReadiness(); if (kinds.has('alias') && selectedAlias !== null) setListing(undefined); } });
+        onCreated: (kinds) => { followUp.owe(); followUp.settle(); refreshReadiness(); if (kinds.has('alias')) { invalidatePublishActions(productId); if (selectedAlias !== null) setListing(undefined) } } });
     useEffect(() => newRows.store.landed(new Set([...rows.map((row) => row.id), ...(data?.aliases ?? []).flatMap((alias) => (alias.id ? [alias.id] : []))])), [rows, data, newRows.store]);
     const identitySku = useIdentitySkuColumn<ChannelSheetRow>({ scope: { kind: 'channel', channel, marketplace }, tracker, writer, getGridApi, rowIdOf, recordUndo: undo.record, announce: announceRefusals,
         onCreate: (row, sku) => { newRows.store.type(row.rowId, sku); } });
@@ -953,16 +954,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const bandVerbs = useMemo(() => listingBandActions({
         listingCount: loadedData?.aliases.length ?? 0,
         shownAliasKey: selectedAlias,
-        // The `listing=` that shows one listing alone: the alias id, or the main listing's record id (the band's own).
-        selectionOf: (aliasId) => {
-            const band = loadedData?.rows.find((row) => row.rowKind === 'parent' && (row.aliasId ?? null) === (aliasId ?? null));
-            return band?.listing?.id ? listingSelection(aliasId, band.listing.id) : undefined;
-        },
+        // The `listing=` that shows one listing alone: the alias id, or THIS page's product's own main record — a
+        // variation's page stays on the variation (review 2026-10-05).
+        selectionOf: (aliasId) => pageListingSelection(aliasId, loadedData?.rows ?? [], studioProduct.id),
         setListing,
         publishListing: (aliasId) => { if (publishAccount) setPublishListingScope(listingPublishScope({ channel, marketplace, accountId: publishAccount }, aliasId)); },
         publishRefusal: studioProduct.deletedAt ? 'This product is deleted, so it cannot be published.'
             : !publishAccount ? 'Choose an account for this market first.' : null,
-    }), [loadedData?.aliases.length, loadedData?.rows, selectedAlias, setListing, publishAccount, channel, marketplace, studioProduct.deletedAt]);
+    }), [loadedData?.aliases.length, loadedData?.rows, selectedAlias, setListing, publishAccount, channel, marketplace, studioProduct.deletedAt, studioProduct.id]);
     // A listing band the sheet read — never an empty "new listing" row that has no listing yet.
     const isBandRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'parent' && !isUnsavedRowData(r), []);
     const bandMenuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: bandVerbs, onSelect: press, isRecord: isBandRow }), [bandVerbs, press, isBandRow]);

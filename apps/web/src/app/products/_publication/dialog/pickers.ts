@@ -11,7 +11,7 @@
  * (`initialChoice` with `listed`), and another channel or account refills the same way (`refillChoice`).
  *
  * Aliases (Owner 2026-10-05): a market's listing aliases are picked like markets — each right after its market's main
- * listing, named with the sheet band's mark ("IT · Italy · ① Racing edition"; the main listing "IT · Italy · ★ Primary"
+ * listing, named with the sheet band's mark ("IT · Italy · ① Racing edition"; the main listing "IT · Italy · ★ Main listing"
  * when its market has aliases) — and a listed alias starts chosen like a listed main listing.
  */
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
@@ -56,7 +56,7 @@ const pickerListing = (option: PublicationDestinationOption) =>
 /**
  * "IT · Italy" — the market code first, as the sheet's market picker reads ("IT · Italy · Italian"). A listing alias
  * adds the sheet band's mark and name ("IT · Italy · ① Racing edition"); its market's main listing then reads
- * "IT · Italy · ★ Primary".
+ * "IT · Italy · ★ Main listing".
  */
 export function marketOptionLabel(option: PublicationDestinationOption): string {
   const prefix = `${channelLabel(option.scope.channel)} `
@@ -66,7 +66,7 @@ export function marketOptionLabel(option: PublicationDestinationOption): string 
 }
 
 /**
- * The market's short name for a tab or a chip: "IT"; with aliases on the market "IT ★ Primary" and
+ * The market's short name for a tab or a chip: "IT"; with aliases on the market "IT ★ Main listing" and
  * "IT ① Racing edition"; "IT · selected listing" for a listing the window knows nothing more about.
  */
 export function marketShortLabel(option: PublicationDestinationOption): string {
@@ -203,7 +203,16 @@ export function reviewTabWords(state: DestinationState): string {
  * A listing alias's tab: "IT ① Racing edition · 12 changes".
  */
 export function marketTabLabel(option: PublicationDestinationOption, state: DestinationState, sentWord?: string | null): string {
-  return `${marketShortLabel(option)} · ${sentWord ?? reviewTabWords(state)}`
+  const { name, words } = marketTabParts(option, state, sentWord)
+  return `${name} · ${words}`
+}
+
+/**
+ * The tab's two parts (phone width, review 2026-10-05): the listing's name, which may end with an ellipsis, and what its
+ * review says, which is always shown whole.
+ */
+export function marketTabParts(option: PublicationDestinationOption, state: DestinationState, sentWord?: string | null): { name: string; words: string } {
+  return { name: marketShortLabel(option), words: sentWord ?? reviewTabWords(state) }
 }
 
 /** The key of a reviewed batch row's market, to put it under that market's tab. */

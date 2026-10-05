@@ -12,6 +12,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Presentation/usePresentationNavigationGuard'
 import { useSaveReporter } from '../../contracts'
 import { useListingParamForRecord } from '../../useListingChoices'
+import { aliasName } from '../../listingScope'
 import { SourceLibrary, dimensions } from '../ebay/SourceLibrary'
 import { amazonMediaPath, requestAmazonRun, requestAmazonWorkspace, requestAmazonDestinations } from './transport'
 import { CopyMarketGallery } from './CopyMarketGallery'
@@ -33,6 +34,8 @@ const desiredUrls = (w: Workspace, d: AmazonMediaDraft, id: string) => Object.fr
 export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingChange }: { path: string; productId: string; accountLabel: string; onListingChange(id: string): void }) {
   // One id kind (aliases, Owner 2026-10-05): a listing chosen here is written as the studio bar's picker writes it.
   const listingParam = useListingParamForRecord('AMAZON')
+  // The main listing is "Main listing" on every studio surface (review 2026-10-05); an alias keeps its own name.
+  const destinationName = (d: { aliasKey: string; label: string }) => d.aliasKey ? d.label : aliasName(0, null)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [listingChoices, setListingChoices] = useState<Array<{ id: string; label: string }>>([])
   const [draft, setDraft] = useState<AmazonMediaDraft | null>(null)
@@ -238,7 +241,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
 
   return <div ref={root} className={styles.workspace}>
     <header className={styles.header}>
-      <PageHeader title="Images" subtitle={`${accountLabel} · Amazon ${workspace.destination.marketplace} · ${workspace.destination.label}`}
+      <PageHeader title="Images" subtitle={`${accountLabel} · Amazon ${workspace.destination.marketplace} · ${destinationName(workspace.destination)}`}
         actions={<><ToolbarButton icon={<RefreshCw size={16} />} label="Reload saved Amazon gallery" disabled={locked} onClick={() => void reload()} />
           <ToolbarButton icon={<Eye size={16} />} label="Preview Amazon image gallery" onClick={() => setPreviewOpen(true)} />
           <Button disabled={disabled || !dirty} onClick={() => void save()}>Save draft</Button>
@@ -254,7 +257,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     <div className={styles.body}>
       <aside className={styles.navigation} aria-label="Amazon image galleries">
         <Field label="Listing"><Select size="sm" value={workspace.destination.listingId ?? ''} disabled={locked} onChange={event => onListingChange(listingParam(event.target.value))}>
-          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
+          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Main listing · starts as a draft on save' : 'Choose a listing'}</option>}
           {workspace.destination.listings.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select></Field>
         <PressableRow label="Common images" current={active === 'common'} onClick={() => setActive('common')} description="Images shared by SKUs in this market; SKU overrides take precedence."><Tag>{Object.values(draft.common).filter(Boolean).length}</Tag></PressableRow>
@@ -367,7 +370,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
       editVersion.current++; setBulkUndo({ before: draft, fingerprint: imageDraftFingerprint(next) }); setDraft(next); setRun(null); setCopyOpen(false); setMessage(`Applied to ${count} SKUs in this draft. Save to keep these changes.`)
     }} />}
     {exportOpen && <SafetyImageExport path={path} workspace={workspace} axis={axis} onClose={() => setExportOpen(false)} onBusyChange={setBusy} />}
-    <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="Review Amazon publication" subtitle={`${accountLabel} · Amazon ${workspace.destination.marketplace} · ${workspace.destination.label}`} size="xl"
+    <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="Review Amazon publication" subtitle={`${accountLabel} · Amazon ${workspace.destination.marketplace} · ${destinationName(workspace.destination)}`} size="xl"
       footer={<><Button onClick={() => setReviewOpen(false)}>Close</Button>
         {run?.status === 'REVIEW' ? <Button variant="primary" disabled={disabled || dirty || runBlocked || !run.items.some(i => i.patches.length)} onClick={() => void publish()}>Publish reviewed changes</Button>
           : <Button variant="primary" disabled={disabled || dirty || working(run) || !targetIds.length} onClick={() => void review()}>Check {targetIds.length} SKUs for publication</Button>}</>}>

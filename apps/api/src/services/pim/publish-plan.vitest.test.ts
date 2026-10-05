@@ -562,7 +562,28 @@ describe('aliases: a second listing on a market is its own destination', () => {
       ['eBay · IT', null, null, '', null], ['eBay · IT · ALT1', 'ALT1', 1, alias, null]])
     expect(fixture.previews.map(p => p.scope)).toEqual([ebayIT(), ebayAlias(alias)])
     const unreadable = await reviewPublishPlan(f.root, { destinations: [ebayAlias(alias, 'ZZ')] }, owner(), { preview: fakePreview })
-    expect(unreadable.destinations[0]).toMatchObject({ label: 'eBay · ZZ · ALT1', aliasLabel: 'ALT1', review: null, error: expect.stringMatching(/unavailable in the selected market/) })
+    // It keeps its alias (review 2026-10-05): the window never shows the main listing's results on the alias's tab.
+    expect(unreadable.destinations[0]).toMatchObject({ label: 'eBay · ZZ · ALT1', aliasLabel: 'ALT1', review: null, error: expect.stringMatching(/unavailable in the selected market/),
+      destination: { channel: 'EBAY', marketplace: 'ZZ', aliasKey: alias } })
+  }))
+
+  it('a destination that cannot be read keeps its listing when named by a listing record: the alias\'s, or the main listing\'s', () => scoped(async () => {
+    const { f, alias, main, aliasRoot } = await aliasFamily('PP-UNREAD')
+    const plan = await reviewPublishPlan(f.root, { destinations: [ebayAlias(aliasRoot, 'ZZ'), ebayAlias(main, 'YY')] }, owner(), { preview: fakePreview })
+    expect(plan.destinations.map(d => [d.label, d.destination.aliasKey, d.review])).toEqual([['eBay · ZZ · ALT1', alias, null], ['eBay · YY', '', null]])
+  }))
+
+  it('an alias published from a variation\'s page covers the whole alias family, never the main listing', () => scoped(async () => {
+    const { f, alias } = await aliasFamily('PP-FROM-VARIATION')
+    const rows = await prisma.channelListing.findMany({ where: { productId: { in: [f.root, f.children.S] } }, select: { id: true, productId: true, aliasKey: true } })
+    const aliasRows = rows.filter(row => row.aliasKey === alias).map(row => row.id)
+    const mainS = rows.find(row => row.aliasKey === '' && row.productId === f.children.S)!.id
+    await writePublishActions(f.root, { listingIds: [...aliasRows, mainS], change: { column: 'status', target: 'inactive' } }, publisher())
+    const plan = await reviewPublishPlan(f.children.S, { destinations: [ebayAlias(alias)] }, owner(), { preview: fakePreview })
+    const d = plan.destinations[0]
+    expect(d.destination).toEqual({ channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: alias })
+    expect(d.lifecycle.map(row => row.listingId).sort()).toEqual([...aliasRows].sort())
+    expect(fixture.previews).toEqual([{ productId: f.children.S, scope: ebayAlias(alias), options: {} }])
   }))
 
   it('one listing is one destination: an alias by its alias id and by its listing id, or the main listing with and without its id, is refused as a repeat', () => scoped(async () => {

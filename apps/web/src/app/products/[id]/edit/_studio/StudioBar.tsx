@@ -5,7 +5,7 @@ import { useStudioDiscovery, useStudioProduct } from './contracts'
 import { useMemo } from 'react'
 import { AliasMark, Button } from '@/design-system/primitives'
 import { Listbox, MultiSelect } from '@/design-system/components'
-import { listingParamOf, listingPickerOptions, listingPickerValue, showListingPicker } from './listingScope'
+import { aliasMarkSpoken, listingParamOf, listingPickerOptions, listingPickerValue, showListingPicker } from './listingScope'
 import { useListingChoices } from './useListingChoices'
 import { ScopeBar } from '@/design-system/patterns'
 import { languageSummary, orderedLocales } from './languageControl'
@@ -13,6 +13,7 @@ import { participationSuffix, scopeItems } from './scopeItems'
 import { useScopeReadiness, useStudioScope, useStudioSave } from './contracts'
 import { MASTER_SCOPE } from './types'
 import { languageLabel, scopeLanguages } from './scopes'
+import styles from './studio.module.css'
 
 /** Scope selects the owner; product navigation selects the work. Grid controls stay in the sheet. */
 export function StudioBar() {
@@ -54,13 +55,16 @@ export function StudioBar() {
 
       {/* The listing picker: All listings · ★ Main listing · ① <alias> · ② <alias>… — the sheet's own marks and names.
           "All listings" is the way back (it clears the choice). Without a read of the listings, a chosen listing keeps
-          its Clear button. */}
+          its Clear button. The page stays on its product (review 2026-10-05): "Main listing" writes THIS product's own
+          main record. A long alias name truncates instead of widening the bar (`.listingPicker`); a mark that only
+          repeats the name ("Main listing") is hidden from screen readers, so the listing is read once. */}
       {listingChoices && showListingPicker(listingChoices, listingId)
-        ? <Listbox size="sm" width="auto" ariaLabel="Listing" placeholder="Listing"
+        ? <Listbox size="sm" width="auto" className={styles.listingPicker} ariaLabel="Listing" placeholder="Listing"
             value={listingPickerValue(listingId, destination.status === 'ready' && listingId ? destination.data.aliasKey : undefined, listingChoices)}
-            options={listingPickerOptions(listingChoices).map(option => ({ value: option.value, label: option.label, disabled: option.disabled, title: option.title,
-              leading: option.position === null ? undefined : <AliasMark position={option.position} /> }))}
-            onChange={value => setListing(listingParamOf(value, listingChoices))} />
+            options={listingPickerOptions(listingChoices, product.id).map(option => ({ value: option.value, label: option.label, disabled: option.disabled, title: option.title,
+              leading: option.position === null ? undefined : aliasMarkSpoken(option.position, option.label)
+                ? <AliasMark position={option.position} /> : <span aria-hidden="true"><AliasMark position={option.position} /></span> }))}
+            onChange={value => setListing(listingParamOf(value, listingChoices, product.id))} />
         : listingId && <Button size="sm" variant="ghost" onClick={() => setListing()} title="Clear this listing selection and show all listings in the selected account and market">{destination.status === 'ready' && destination.data.aliasKey ? 'Listing customization' : 'Selected listing'} · Clear</Button>}
       </>}
       {/* TOOLBAR REBUILD (Owner, 2026-09-27) — THE language control, and the only one: the sheet's "Languages" chip
@@ -77,7 +81,7 @@ export function StudioBar() {
           else setLocales(ordered)
         }} />}
     </>
-  ), [scope, accounts, accountId, setAccount, options, marketplaces, market, setMarket, listingId, destination, setListing, listingChoices, primaryLanguage, locales, locale, setLanguages, setLocales, setLocale]) // everything the controls (and `languagesOf`, `available`, `languageOptions`) read
+  ), [scope, accounts, accountId, setAccount, options, marketplaces, market, setMarket, listingId, destination, setListing, listingChoices, product.id, primaryLanguage, locales, locale, setLanguages, setLocales, setLocale]) // everything the controls (and `languagesOf`, `available`, `languageOptions`) read
   return <ScopeBar variant="menu" className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={right} />
 }
 

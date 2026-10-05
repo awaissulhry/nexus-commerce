@@ -75,6 +75,17 @@ async function aliasMarks(keys: ReadonlyArray<string | null | undefined>): Promi
   return new Map(rows.map(row => [row.id, { label: row.label, position: row.position }]))
 }
 
+/**
+ * The listing of a destination that could not be resolved, so its row in the window still names that listing (review
+ * 2026-10-05): no listing named → '' (the main listing); a listing record → its alias key ('' when it is a main-listing
+ * record); anything else (an alias id, an id no record carries) → the id itself, which never matches the main listing.
+ */
+async function unreadAliasKey(listingId: string | undefined): Promise<string> {
+  if (!listingId) return ''
+  const record = await prisma.channelListing.findUnique({ where: { id: listingId }, select: { aliasKey: true } }).catch(() => null)
+  return record ? record.aliasKey : listingId
+}
+
 /** One resolved destination: channel, market, account and listing ('' = the main listing, else the alias id). */
 const resolvedKey = (d: ListingActionDestination) => JSON.stringify([d.channel, d.marketplace, d.accountId, d.aliasKey])
 
@@ -354,9 +365,10 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
   const cells = await readPublishActions(productId)
   // Aliases (Owner 2026-10-05): every destination is resolved first, and one listing is one destination — an alias named
   // by its alias id and by one of its listing ids is the same destination, refused as a repeat like any other.
-  const resolved: Array<ListingActionDestination | { error: string }> = []
+  const resolved: Array<ListingActionDestination | { error: string; aliasKey: string }> = []
   for (const scope of scopes) {
-    try { resolved.push(await resolveDestination(productId, scope)) } catch (error) { resolved.push({ error: errorText(error) }) }
+    try { resolved.push(await resolveDestination(productId, scope)) }
+    catch (error) { resolved.push({ error: errorText(error), aliasKey: await unreadAliasKey(scope.listingId) }) }
   }
   const seenResolved = new Set<string>()
   for (const entry of resolved) {
@@ -364,18 +376,20 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
     if (seenResolved.has(resolvedKey(entry))) throw new PublishPlanError('A destination appears twice in this request.', 400, 'invalid_request')
     seenResolved.add(resolvedKey(entry))
   }
-  const marks = await aliasMarks([...resolved.map(entry => 'error' in entry ? null : entry.aliasKey), ...scopes.map(scope => scope.listingId)])
+  const marks = await aliasMarks(resolved.map(entry => entry.aliasKey))
   const named = (aliasKey: string | null | undefined) => {
     const mark = aliasKey ? marks.get(aliasKey) : undefined
     return { aliasLabel: mark?.label ?? null, aliasPosition: mark?.position ?? null }
   }
 
   // Destinations of one channel account one after another (its read rate); two accounts side by side.
-  const reviewOne = async (scope: StudioPublishScope, entry: ListingActionDestination | { error: string }): Promise<PublishPlanDestination> => {
+  const reviewOne = async (scope: StudioPublishScope, entry: ListingActionDestination | { error: string; aliasKey: string }): Promise<PublishPlanDestination> => {
     const empty = { review: null, fullProductIds: [], contentHeld: [], lifecycle: [], outgrown: [] }
     if ('error' in entry) {
-      const fallback = { channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: '' }
-      const alias = named(scope.listingId)
+      // An alias destination that cannot be read keeps its alias (review 2026-10-05): its tab never shows the main
+      // listing's results.
+      const fallback = { channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: entry.aliasKey }
+      const alias = named(entry.aliasKey)
       return { scope, destination: fallback, label: planDestinationLabel(fallback, alias.aliasLabel), ...alias, ...empty, error: entry.error }
     }
     const destination = entry

@@ -141,7 +141,7 @@ describe('withRejectedFilter — the "N rejected" mark shows those rows (step 3)
 })
 
 describe('aliases (2026-10-05) — the mark and the toast cover every listing of the destination', () => {
-  const aliases = [{ id: 'alias-1', label: 'normal-knee-slider-ALT1', position: 1 }, { id: 'alias-2', label: 'normal-knee-slider-ALT2', position: 2 }]
+  const aliases = [{ id: 'alias-1', label: 'sample-listing-ALT1', position: 1 }, { id: 'alias-2', label: 'sample-listing-ALT2', position: 2 }]
   const at = (minutes: number) => new Date(Date.parse('2026-10-05T10:00:00Z') + minutes * 60_000).toISOString()
   const latest = (status: string, summary: Record<string, unknown> | null, minutes = 0) => ({ publicationId: `pub-${status}-${minutes}`, status, at: at(minutes), completedAt: at(minutes), summary })
   const ebay = (over: Partial<StudioPublicationStatus>, aliasKey = '') => read({ destination: { channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey }, ...over })
@@ -152,13 +152,37 @@ describe('aliases (2026-10-05) — the mark and the toast cover every listing of
     expect(watchedListings('', [])).toEqual([''])
   })
 
+  it('m5 — "Main listing" chosen is not "All listings": only the main listing is watched, and an alias event is not ours', () => {
+    expect(watchedListings('', aliases, true)).toEqual([''])
+    expect(watchedListings('', aliases, false)).toEqual(['', 'alias-1', 'alias-2'])
+    const destination = { productIds: ['family'], channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: '' }
+    const event = (aliasKey: string) => ({ publicationId: 'p', productId: 'family', channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey, status: 'ACCEPTED', terminal: true })
+    expect(eventListing(event('alias-1'), destination, [''], false)).toBeNull()
+    expect(eventListing(event('alias-new'), destination, [''], false)).toBeNull()
+    expect(eventListing(event(''), destination, [''], false)).toEqual({ aliasKey: '', known: true })
+    // No listing chosen: an alias not read yet asks for the aliases again, as before.
+    expect(eventListing(event('alias-new'), destination, [''], true)).toEqual({ aliasKey: 'alias-new', known: false })
+  })
+
+  it('m9 — until the aliases are read (or when that read fails), the main or chosen listing reads as before: "eBay · IT"', () => {
+    expect(listingPlace('EBAY', 'IT', '', null)).toBe('eBay · IT')
+    expect(listingPlace('EBAY', 'IT', 'alias-1', null, 'alias-1')).toBe('eBay · IT')
+    // Read, but the chosen listing is not among the offered aliases (an archived one opened by an old link).
+    expect(listingPlace('EBAY', 'IT', 'alias-9', aliases, 'alias-9')).toBe('eBay · IT')
+    expect(publicationOutcome('ACCEPTED', counts({ products: 1, accepted: 1 }), 'EBAY', 'IT', listingPlace('EBAY', 'IT', '', null))?.message).toBe('eBay · IT accepted the product.')
+    // Only another alias the read does not name is "Other listing".
+    expect(listingPlace('EBAY', 'IT', 'alias-9', aliases, '')).toBe('eBay · IT · Other listing')
+    // Read: the main listing of a market with aliases carries the one word.
+    expect(listingPlace('EBAY', 'IT', '', aliases, '')).toBe('eBay · IT · ★ Main listing')
+  })
+
   it('names each listing as the Publish window does', () => {
-    expect(listingPlace('EBAY', 'IT', 'alias-1', aliases)).toBe('eBay · IT · ① normal-knee-slider-ALT1')
-    expect(listingPlace('EBAY', 'IT', '', aliases)).toBe('eBay · IT · ★ Primary')
+    expect(listingPlace('EBAY', 'IT', 'alias-1', aliases)).toBe('eBay · IT · ① sample-listing-ALT1')
+    expect(listingPlace('EBAY', 'IT', '', aliases)).toBe('eBay · IT · ★ Main listing')
     expect(listingPlace('EBAY', 'IT', '', [])).toBe('eBay · IT')
     expect(listingPlace('EBAY', 'IT', 'alias-9', aliases)).toBe('eBay · IT · Other listing')
     expect(publicationOutcome('ACCEPTED', counts({ products: 4, accepted: 4 }), 'EBAY', 'IT', listingPlace('EBAY', 'IT', 'alias-1', aliases))?.message)
-      .toBe('eBay · IT · ① normal-knee-slider-ALT1 accepted all 4 products.')
+      .toBe('eBay · IT · ① sample-listing-ALT1 accepted all 4 products.')
   })
 
   it('shows the worst listing’s mark, the newest of equals, and names the others in its detail', () => {
@@ -168,14 +192,14 @@ describe('aliases (2026-10-05) — the mark and the toast cover every listing of
     const place = (key: string) => listingPlace('EBAY', 'IT', key, aliases)
     // Nothing to say about a clean main listing; the alias on its way is the mark.
     expect(combinedPublicationMark([{ read: main, place: place('') }, { read: alt1, place: place('alias-1') }], 'EBAY', 'IT'))
-      .toMatchObject({ tone: 'info', label: 'eBay · IT · ① normal-knee-slider-ALT1 is processing 8 products' })
+      .toMatchObject({ tone: 'info', label: 'eBay · IT · ① sample-listing-ALT1 is processing 8 products' })
     // A rejection outranks a publish on its way; the other mark is named, not dropped.
     const mark = combinedPublicationMark([{ read: main, place: place('') }, { read: alt1, place: place('alias-1') }, { read: alt2, place: place('alias-2') }], 'EBAY', 'IT')
-    expect(mark).toMatchObject({ tone: 'danger', label: '4 rejected on eBay · IT · ② normal-knee-slider-ALT2' })
-    expect(mark?.detail).toMatch(/rejected 4 of 8 products\. Also: eBay · IT · ① normal-knee-slider-ALT1 is processing 8 products\.$/)
+    expect(mark).toMatchObject({ tone: 'danger', label: '4 rejected on eBay · IT · ② sample-listing-ALT2' })
+    expect(mark?.detail).toMatch(/rejected 4 of 8 products\. Also: eBay · IT · ① sample-listing-ALT1 is processing 8 products\.$/)
     // Two rejections: the newer one leads.
     const older = ebay({ latest: latest('FAILED', null, -30) })
-    expect(combinedPublicationMark([{ read: older, place: place('') }, { read: alt2, place: place('alias-2') }], 'EBAY', 'IT')?.label).toBe('4 rejected on eBay · IT · ② normal-knee-slider-ALT2')
+    expect(combinedPublicationMark([{ read: older, place: place('') }, { read: alt2, place: place('alias-2') }], 'EBAY', 'IT')?.label).toBe('4 rejected on eBay · IT · ② sample-listing-ALT2')
     expect(combinedPublicationMark([{ read: main, place: place('') }, { read: null, place: place('alias-1') }], 'EBAY', 'IT')).toBeNull()
     // One listing: exactly the single mark.
     expect(combinedPublicationMark([{ read: alt2, place: 'eBay · IT' }], 'EBAY', 'IT')).toEqual(publicationMark(alt2, 'EBAY', 'IT'))

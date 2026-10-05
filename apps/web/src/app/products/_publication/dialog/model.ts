@@ -53,14 +53,17 @@ export interface PublicationDestinationOption {
 
 export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify([scope.channel, scope.marketplace, scope.accountId, scope.listingId ?? null])
 
-/** The main listing's name beside its ★ when its market has aliases — the sheet band's own word for it. */
-export const MAIN_LISTING_LABEL = 'Primary'
+/**
+ * The main listing's name beside its ★ when its market has aliases — one word everywhere (review 2026-10-05, m3): the
+ * studio's listing picker, the window, its tabs, the toolbar mark and the toast all say "Main listing".
+ */
+export const MAIN_LISTING_LABEL = 'Main listing'
 /** A listing the window was asked for (a retry) that is neither the main listing nor a known alias. */
 export const SELECTED_LISTING_LABEL = 'Selected listing'
 
 /**
  * Which listing of its market a destination is, in the sheet band's words (`AliasBandCell`): "① Racing edition" for an
- * alias, "★ Primary" for the main listing when its market has aliases, null for a market's only listing.
+ * alias, "★ Main listing" for the main listing when its market has aliases, null for a market's only listing.
  */
 export function optionListingLabel(option: Pick<PublicationDestinationOption, 'scope' | 'alias' | 'listings'>): string | null {
   if (option.alias) return `${aliasMarkGlyph(option.alias.position)} ${option.alias.label}`

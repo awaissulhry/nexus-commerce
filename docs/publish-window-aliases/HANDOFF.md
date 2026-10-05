@@ -35,3 +35,31 @@ Each listing has 4/8 colours live (black/blue/orange/pink missing) → Full upda
   toolbar mark/toast per listing, one status read per alias via usePublicationStatus().aliasReads).
 - Accepted side effect: on a variation page, picking a listing on the old Media pages moves to the family's main product.
 - Running: R1 adversarial review, R2 test/guard sweep. PR B (alias photos, /private/tmp/feat-alias-photos) builder running.
+## 21:40 — review round on PR A
+- R2 sweep: nothing caused by the branch (pre-existing: delete+relist ×3, attribute-scope-baseline B3, variation-one-writer,
+  variation-store-readers, DB-down suites; 4 static gates).
+- R1: M1 variation page switched to the parent's photos (wrong-product edit) — fixing; M2 a chosen listing ticks the
+  whole market — fixing (chosen listing → only it in its market); M3 real ids in this file's history → removed, branch
+  squashed to one commit (dc191ad0d), 0 cuid-like ids in history. Minors m1–m9 being fixed (shared cached read, picker
+  refresh, archived aliases kept endable via aliasStatus, "Main listing" everywhere, phone width).
+- Shared shape a4e590523: PublishActionCell.aliasStatus.
+- Fixers running: F-A1 (window/status/shared read), F-A2 (studio + server). PR B reviewers R3/R4 running.
+- Merge order: PR B (alias photos) FIRST, then rebase PR A (both edit useChannelSheetAdapter.tsx; Amazon alias photos rule
+  must be live before aliases are ticked by default).
+## 22:00 — PR B review round
+- R4 sweep PR B: nothing branch-caused (each failure re-run on base 502761c62 too). R3: no blockers; M1 seed sets must
+  follow #355 (rows w/o own list = gallery; set every value or no axis), M2 adopted alias order (draft → Product media/
+  imageUrls → builder rows last), M3 Amazon alias on a DIFFERENT ASIN keeps its own photos, M4 existing alias sends the
+  main's photos when the main listing is not live; m1–m6 (old Amazon tab read-only for following aliases, reset allowed,
+  [parent, ...products] query, sentences, revision hash, seed edge cases). B4 fixing. git merge-tree PR A × PR B: clean.
+- After merge of both: unify the two alias-naming helpers (PR A listingScope aliasMarkText vs PR B mediaListingName).
+## 22:40
+- PR B fixes committed d4b8947de (feature 6aa4aeb3c). Decision: Amazon alias with an ASIN while the main row has none =
+  its own page (keeps own photos). R5 verifying the fix round.
+- Pre-existing, outside these PRs (tell the Owner): the photo-plan switch builds Shared from builder rows/draft/library,
+  ignoring the product's own Shared Product media; the library curation has no axis, so eBay listings that follow it can be
+  blocked ("has no photos") after a switch.
+- PR A: F-A2 done (variation stays on its product; archived aliases readable/writable with aliasStatus; unread alias keeps
+  its aliasKey; "Main listing" in band/picker/Presentation; picker max 32ch). F-A1 (window/status/shared read) running.
+  Open naming: server strings "Primary listing" (old Media workspaces, review aliasLabel, catalog/transfer files — import may
+  match the text) left as is.

@@ -247,7 +247,8 @@ export interface ListingBandDeps {
   listingCount: number
   /** The listing the studio shows alone (`''` = the main listing), or null when it shows every listing. */
   shownAliasKey: string | null
-  /** The `listing=` value that shows this band's listing alone (`listingSelection`), or undefined when none is known. */
+  /** The `listing=` value that shows this band's listing alone on this page (`pageListingSelection`: the alias id, or the
+   *  page product's own main record), or undefined when none is known. */
   selectionOf: (aliasId: string | null) => string | undefined
   /** Write the studio's listing choice (`useStudioScope().setListing`); undefined = every listing. */
   setListing: (listing?: string) => void
@@ -260,7 +261,9 @@ export interface ListingBandDeps {
 export const SHOW_ONLY_LISTING = 'Show only this listing'
 export const SHOW_ALL_LISTINGS = 'Show all listings'
 export const PUBLISH_THIS_LISTING = 'Publish this listing…'
-export const LISTING_NOT_RECORDED = 'This listing has no record on this account and market yet, so it cannot be shown alone.'
+/** The band's listing has no record of this page's product here (on a variation's page, the variation's own record is
+ *  what keeps the page on the variation, review 2026-10-05). */
+export const LISTING_NOT_RECORDED = 'This product has no record of this listing on this account and market yet, so it cannot be shown alone.'
 
 const isBand = (row: ChannelSheetRow | undefined): row is ChannelSheetRow => row?.rowKind === 'parent'
 /** The band verbs appear where a product holds more than one listing here, or one listing is shown alone. */

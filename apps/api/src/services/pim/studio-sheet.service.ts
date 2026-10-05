@@ -1318,9 +1318,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
 
   // ── 4. the alias groups to project the family through ─────────────
   // The PRIMARY listing is always a group, so the client renders ONE uniform
-  // list and never special-cases the un-aliased rows.
+  // list and never special-cases the un-aliased rows. Its name is the studio's one
+  // word for it, "Main listing" (review 2026-10-05: the picker, Presentation and band).
   const groups: Array<{ id: string | null; label: string; position: number; status: string }> = [
-    { id: null, label: 'Primary', position: 0, status: 'ACTIVE' },
+    { id: null, label: 'Main listing', position: 0, status: 'ACTIVE' },
     ...aliasRows.map((a) => ({ id: a.id, label: a.label, position: a.position, status: a.status })),
   ]
   const projections = coordinate ? groups : [{ id: null, label: 'Master', position: 0, status: 'ACTIVE' }]

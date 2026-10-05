@@ -17,7 +17,7 @@
  * "listed" rule as the main listing. The counts then say "listings" instead of "markets" (`placesWord`).
  */
 import { blockingIssues, isPhotoChangeId, type PublicationBatchChild, type PublicationBatchView, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
-import type { PublishActionCell } from '@nexus/shared/publish-actions'
+import { isNewRowId, type PublishActionCell } from '@nexus/shared/publish-actions'
 import type { PublishPlanDestination } from '@nexus/shared/publish-plan'
 import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
@@ -331,7 +331,7 @@ export class ReviewQueue {
  * (the new-listings choice). A draft nobody chose for does not count (OD1 B was not chosen). Read from
  * `GET /api/products/:id/studio/publish-actions` with no filter (every listing of the family). The main listing's key is
  * the market's (channel, market, account; no listing); a listing alias's key adds its alias id (`listingId`), and the
- * same rule decides it on its own rows (Owner 2026-10-05).
+ * same rule decides it on its own rows (Owner 2026-10-05). Only an alias the window offers counts (`offeredAliasIds`).
  */
 export interface ListedDestinations {
   keys: ReadonlySet<string>
@@ -353,35 +353,106 @@ export const marketKey = (scope: Pick<StudioPublishScope, 'channel' | 'marketpla
 export const cellDestinationKey = (cell: Pick<PublishActionCell, 'channel' | 'marketplace' | 'accountId' | 'aliasKey'>) =>
   cell.aliasKey ? publicationScopeKey({ channel: cell.channel, marketplace: cell.marketplace, accountId: cell.accountId, listingId: cell.aliasKey }) : marketKey(cell)
 
-export function listedDestinationKeys(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'>>,
-  familyId: string): Set<string> {
+/** A read's cell as far as offering its alias goes (no `listingId`: a listing record). */
+type OfferCell = Pick<PublishActionCell, 'productId' | 'aliasKey'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>
+
+/**
+ * The listing aliases the Publish window and the studio's listing picker offer (review 2026-10-05), from a
+ * publish-actions read: an ACTIVE alias — an ARCHIVED alias's rows are still read, so a live item of it can be ended or
+ * deleted from its Status cell, but it is never offered (nor an alias the read names no state for, once it names one for
+ * any; a read that names none comes from a server that reads ACTIVE aliases only) — that the family's main product has
+ * a listing record of: the review of an alias opens that record, so an alias without one could never be reviewed (m7).
+ * `familyId` absent: the record check is skipped.
+ */
+export function offeredAliasIds(cells: ReadonlyArray<OfferCell>, familyId?: string | null): Set<string> {
+  const stated = cells.some(cell => !!cell.aliasKey && cell.aliasStatus !== undefined)
+  const active = new Set<string>(), rooted = new Set<string>()
+  for (const cell of cells) {
+    if (!cell.aliasKey) continue
+    if (stated ? cell.aliasStatus === 'ACTIVE' : true) active.add(cell.aliasKey)
+    if ((!familyId || cell.productId === familyId) && !isNewRowId(cell.listingId)) rooted.add(cell.aliasKey)
+  }
+  return new Set([...active].filter(id => rooted.has(id)))
+}
+
+/** The cells of the main listings and of the offered aliases only (`offeredAliasIds`): what the window and the picker read. */
+export function offeredCells<T extends OfferCell>(cells: readonly T[], familyId?: string | null): T[] {
+  const offered = offeredAliasIds(cells, familyId)
+  return cells.filter(cell => !cell.aliasKey || offered.has(cell.aliasKey))
+}
+
+/**
+ * A destination the window may offer: the main listing (no listing named), an offered alias, or a listing the read does
+ * not know as an alias (a retry's ChannelListing id; the server resolves it). An alias the read knows but the window
+ * does not offer (archived, or without a record of the family's main product) is never offered.
+ */
+export function isOfferedScope(scope: StudioPublishScope, cells: ReadonlyArray<OfferCell>, familyId?: string | null): boolean {
+  if (!scope.listingId) return true
+  if (!cells.some(cell => cell.aliasKey === scope.listingId)) return true
+  return offeredAliasIds(cells, familyId).has(scope.listingId)
+}
+
+/**
+ * Does a listing event change the listings of this family the studio's listing picker offers (review 2026-10-05, m1)?
+ * A listing created or removed for a product of the family (`productIds`; an event that names no product: created —
+ * it may be ours — or removed when it is one of our records, `records`), or a waiting Status choice of the family that
+ * may have started drafts (`listing.updated` with the publish-action subtype: an alias gets its records then).
+ */
+export function listingEventConcerns(event: { type: string; id?: string; meta?: Record<string, unknown> }, productIds: ReadonlySet<string>, records: ReadonlySet<string>): boolean {
+  const meta = event.meta ?? {}
+  const product = typeof meta.productId === 'string' && meta.productId ? meta.productId : null
+  if (event.type === 'listing.created' || event.type === 'listing.deleted') {
+    if (product) return productIds.has(product)
+    return event.type === 'listing.created' || (!!event.id && records.has(event.id))
+  }
+  if (event.type === 'listing.updated') return meta.subtype === 'listing.publish_action_changed' && productIds.has(product ?? event.id ?? '')
+  return false
+}
+
+export function listedDestinationKeys(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'state' | 'create'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>>,
+  familyId: string,
+  /**
+   * The studio's chosen listing (review 2026-10-05, M2): the window ticks ONLY that listing in its market — never its
+   * market's other listings — and on every other market the listed main listing (as before aliases). Absent (no listing
+   * chosen): every listed main listing and every listed alias, for one-click publish.
+   */
+  chosen?: StudioPublishScope | null): Set<string> {
+  const offered = offeredAliasIds(cells, familyId)
   const byDestination = new Map<string, Array<(typeof cells)[number]>>()
   for (const cell of cells) {
+    if (cell.aliasKey && !offered.has(cell.aliasKey)) continue
     // Each listing on a market is its own destination: the main listing, and each alias by its alias id.
     const key = cellDestinationKey(cell)
     byDestination.set(key, [...(byDestination.get(key) ?? []), cell])
   }
+  const chosenMarket = chosen ? marketKey(chosen) : null
+  const chosenKey = chosen ? publicationScopeKey(chosen) : null
   const out = new Set<string>()
   for (const [key, rows] of byDestination) {
+    if (chosen) {
+      const [first] = rows
+      if (marketKey(first) === chosenMarket ? key !== chosenKey : !!first.aliasKey) continue
+    }
     const main = rows.filter(row => row.productId === familyId)
     const live = (main.length ? main : rows).some(row => LISTED_STATES.has(row.state))
-    const chosen = rows.some(row => row.create?.source === 'own' && row.create.target !== 'not_listed')
-    if (live || chosen) out.add(key)
+    const asked = rows.some(row => row.create?.source === 'own' && row.create.target !== 'not_listed')
+    if (live || asked) out.add(key)
   }
   return out
 }
 
 /**
- * The family's listing aliases, one per channel, market, account and alias, from the publish-actions read (the server
- * returns only ACTIVE aliases, with their name and place). Each is offered whether it is listed or not; only a listed
- * one starts ticked (`listedDestinationKeys`). A cell without a name falls back to the alias's main row SKU (the
- * family's own row, `familyId`); one without a place follows the known ones of its market, in read order.
+ * The family's listing aliases the window offers (`offeredAliasIds`), one per channel, market, account and alias, from
+ * the publish-actions read, with their name and place. Each is offered whether it is listed or not; only a listed one
+ * starts ticked (`listedDestinationKeys`). A cell without a name falls back to the alias's main row SKU (the family's
+ * own row, `familyId`); one without a place follows the known ones of its market, in read order.
  */
-export function listedAliases(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition'>>,
+export function listedAliases(cells: ReadonlyArray<Pick<PublishActionCell, 'productId' | 'sku' | 'channel' | 'marketplace' | 'accountId' | 'aliasKey' | 'aliasLabel' | 'aliasPosition'> & Partial<Pick<PublishActionCell, 'listingId' | 'aliasStatus'>>>,
   familyId?: string): PublicationAlias[] {
+  const offered = offeredAliasIds(cells, familyId)
   const found = new Map<string, { alias: Omit<PublicationAlias, 'label' | 'position'>; label: string | null; position: number | null; sku: string | null; own: boolean }>()
   for (const cell of cells) {
-    if (!cell.aliasKey) continue
+    if (!cell.aliasKey || !offered.has(cell.aliasKey)) continue
     const key = cellDestinationKey(cell)
     const entry = found.get(key) ?? { alias: { channel: cell.channel, marketplace: cell.marketplace, accountId: cell.accountId, id: cell.aliasKey }, label: null, position: null, sku: null, own: false }
     found.set(key, entry)
@@ -439,7 +510,7 @@ export function sheetDestinationScope(scope: string, market: string | null, acco
 
 /**
  * A destination's place in the banners and hints: "eBay · IT", and with its listing when its market has more than one
- * ("eBay · IT · ① Racing edition", "eBay · IT · ★ Primary") — the sheet band's mark and name.
+ * ("eBay · IT · ① Racing edition", "eBay · IT · ★ Main listing") — the sheet band's mark and name.
  */
 export function destinationPlace(scope: Pick<StudioPublishScope, 'channel' | 'marketplace'>, option?: Pick<PublicationDestinationOption, 'scope' | 'alias' | 'listings'> | null): string {
   const listing = option ? optionListingLabel(option) : null

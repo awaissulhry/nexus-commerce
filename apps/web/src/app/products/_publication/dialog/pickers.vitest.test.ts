@@ -4,7 +4,7 @@ import { publicationScopeKey, type PublicationDestinationOption } from './model'
 import { LISTINGS_WORD, MARKETS_WORD, publishButtonText, publishPlan, MAX_BATCH_DESTINATIONS, type DestinationState } from './destinations'
 import {
   activeTab, changeAccount, changeChannel, changeMarkets, childMarketKey, choiceWord, familySummary, initialChoice, listedMarkets, manySummary, manyTabWords, marketOptionLabel,
-  marketShortLabel, marketsPickerText, marketTabLabel, pickerAccounts, pickerChannels, pickerMarkets, refillChoice, removeMarket, reviewTabWords,
+  marketShortLabel, marketsPickerText, marketTabLabel, marketTabParts, pickerAccounts, pickerChannels, pickerMarkets, refillChoice, removeMarket, reviewTabWords,
 } from './pickers'
 
 const option = (channel: string, marketplace: string, accountId: string, marketName: string, accountLabel = 'Main'): PublicationDestinationOption => {
@@ -67,15 +67,18 @@ describe('pickers', () => {
     const listing = { ...amazonIT, scope: { ...amazonIT.scope, listingId: 'l1' } }
     expect(marketOptionLabel(listing)).toBe('IT · Italy · selected listing')
     expect(marketShortLabel(listing)).toBe('IT · selected listing')
-    const alias = { ...amazonIT, key: 'alias', scope: { ...amazonIT.scope, listingId: 'a1' }, alias: { id: 'a1', label: 'normal-knee-slider-ALT1', position: 1 }, listings: 2 }
+    const alias = { ...amazonIT, key: 'alias', scope: { ...amazonIT.scope, listingId: 'a1' }, alias: { id: 'a1', label: 'sample-listing-ALT1', position: 1 }, listings: 2 }
     const main = { ...amazonIT, listings: 2 }
-    expect(marketOptionLabel(alias)).toBe('IT · Italy · ① normal-knee-slider-ALT1')
-    expect(marketOptionLabel(main)).toBe('IT · Italy · ★ Primary')
-    expect(marketShortLabel(alias)).toBe('IT ① normal-knee-slider-ALT1')
-    expect(marketShortLabel(main)).toBe('IT ★ Primary')
+    expect(marketOptionLabel(alias)).toBe('IT · Italy · ① sample-listing-ALT1')
+    expect(marketOptionLabel(main)).toBe('IT · Italy · ★ Main listing')
+    expect(marketShortLabel(alias)).toBe('IT ① sample-listing-ALT1')
+    expect(marketShortLabel(main)).toBe('IT ★ Main listing')
     expect(marketShortLabel(amazonIT)).toBe('IT')
-    expect(marketTabLabel(alias, { kind: 'ready', changes: 3, whole: false, requestReady: true })).toBe('IT ① normal-knee-slider-ALT1 · 3 changes')
-    expect(marketTabLabel(main, { kind: 'checking' })).toBe('IT ★ Primary · checking…')
+    expect(marketTabLabel(alias, { kind: 'ready', changes: 3, whole: false, requestReady: true })).toBe('IT ① sample-listing-ALT1 · 3 changes')
+    // Phone width: the tab's listing name may end with an ellipsis; its review words are always shown whole.
+    expect(marketTabParts(alias, { kind: 'ready', changes: 3, whole: false, requestReady: true })).toEqual({ name: 'IT ① sample-listing-ALT1', words: '3 changes' })
+    expect(marketTabParts(alias, { kind: 'checking' }, 'Waiting for channel')).toEqual({ name: 'IT ① sample-listing-ALT1', words: 'Waiting for channel' })
+    expect(marketTabLabel(main, { kind: 'checking' })).toBe('IT ★ Main listing · checking…')
     // The Markets picker counts listings once an alias is chosen.
     expect(marketsPickerText([main, alias, amazonDE], [main.key, amazonDE.key])).toBe('Markets: 2')
     expect(marketsPickerText([main, alias, amazonDE], [main.key, alias.key, amazonDE.key])).toBe('Listings: 3')

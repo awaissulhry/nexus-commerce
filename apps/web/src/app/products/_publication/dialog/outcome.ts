@@ -191,22 +191,27 @@ export function rejectedFilterMenuLabel(rejectedRows: number, filterOn: boolean,
 export type WatchedAlias = Pick<PublicationAlias, 'id' | 'label' | 'position'>
 
 /**
- * The listings the sheet's toolbar mark and toast cover: the chosen listing alone, or — no listing chosen (`''`, the
- * main listing) — the main listing and every ACTIVE alias of the destination (the server reads only those).
+ * The listings the sheet's toolbar mark and toast cover: the chosen listing alone — an alias, or the main listing (`''`)
+ * when "Main listing" is chosen (review 2026-10-05, m5: it is not "All listings") — or, no listing chosen, the main
+ * listing and every alias the window offers on the destination (ACTIVE, `offeredAliasIds`). `chosen` defaults to
+ * "an alias is chosen".
  */
-export function watchedListings(chosenAliasKey: string, aliases: readonly WatchedAlias[]): string[] {
-  return chosenAliasKey ? [chosenAliasKey] : ['', ...new Set(aliases.map(alias => alias.id).filter(Boolean))]
+export function watchedListings(chosenAliasKey: string, aliases: readonly WatchedAlias[], chosen: boolean = !!chosenAliasKey): string[] {
+  return chosen ? [chosenAliasKey] : ['', ...new Set(aliases.map(alias => alias.id).filter(Boolean))]
 }
 
 /**
  * One listing's place in the mark and the toast, as the Publish window names it: "eBay · IT" when the destination has
- * no aliases; else "eBay · IT · ★ Primary" (the main listing) or "eBay · IT · ① Racing edition". An alias the read does
- * not name yet reads "eBay · IT · Other listing".
+ * no aliases; else "eBay · IT · ★ Main listing" (the main listing) or "eBay · IT · ① Racing edition". `aliases` null:
+ * not read (still loading, or the read failed) — the main or chosen listing (`chosenAliasKey`) then reads as before
+ * aliases, "eBay · IT" (review 2026-10-05, m9), and so does the chosen listing when the read does not name it. Only
+ * another alias the read does not name reads "eBay · IT · Other listing".
  */
-export function listingPlace(channel: string, marketplace: string, aliasKey: string, aliases: readonly WatchedAlias[]): string {
+export function listingPlace(channel: string, marketplace: string, aliasKey: string, aliases: readonly WatchedAlias[] | null, chosenAliasKey: string = ''): string {
   const place = destinationLabel(channel, marketplace)
-  const alias = aliasKey ? aliases.find(a => a.id === aliasKey) : null
-  if (aliasKey && !alias) return `${place} · Other listing`
+  const alias = aliasKey && aliases ? aliases.find(a => a.id === aliasKey) : null
+  if (aliasKey && !alias) return aliasKey === chosenAliasKey ? place : `${place} · Other listing`
+  if (!aliases) return place
   const listing = optionListingLabel({ scope: { channel, marketplace, accountId: '', ...(aliasKey ? { listingId: aliasKey } : {}) }, alias: alias ?? null, listings: 1 + aliases.length })
   return listing ? `${place} · ${listing}` : place
 }
@@ -237,10 +242,12 @@ export function combinedPublicationMark(listings: ReadonlyArray<{ read: StudioPu
 /**
  * Which watched listing a `publication.status_changed` event is about: its alias key ('' = the main listing), or null
  * when it is about another family, destination or (a listing chosen) another listing. `known: false` — no listing is
- * chosen and the event names an alias of this destination the sheet has not read yet: read the aliases again.
+ * chosen (`all`, by default when the destination is the main listing) and the event names an alias of this destination
+ * the sheet has not read yet: read the aliases again. With "Main listing" chosen, pass `all` false.
  */
-export function eventListing(event: PublicationStatusEvent, destination: PublicationDestination, listings: readonly string[]): { aliasKey: string; known: boolean } | null {
+export function eventListing(event: PublicationStatusEvent, destination: PublicationDestination, listings: readonly string[],
+  all: boolean = destination.aliasKey === ''): { aliasKey: string; known: boolean } | null {
   if (!publicationEventMatches(event, { ...destination, aliasKey: event.aliasKey })) return null
   if (listings.includes(event.aliasKey)) return { aliasKey: event.aliasKey, known: true }
-  return destination.aliasKey === '' && event.aliasKey ? { aliasKey: event.aliasKey, known: false } : null
+  return all && event.aliasKey ? { aliasKey: event.aliasKey, known: false } : null
 }

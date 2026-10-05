@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
+import { MAIN_LISTING_LABEL, publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
 import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
@@ -34,7 +34,7 @@ it('keeps a selected listing only in its exact account and marketplace, after it
   expect(options.map(o => [o.scope.accountId, o.scope.marketplace, o.scope.listingId])).toEqual([
     ['one', 'IT', undefined], ['two', 'IT', undefined], ['two', 'IT', 'alias'], ['one', 'DE', undefined], ['two', 'DE', undefined]])
   expect(new Set(options.map(o => o.key)).size).toBe(5)
-  expect(options.map(optionListingLabel)).toEqual([null, '★ Primary', 'Selected listing', null, null])
+  expect(options.map(optionListingLabel)).toEqual([null, '★ Main listing', 'Selected listing', null, null])
 })
 it('offers every alias of a market after its main listing, by position, keyed by the alias id', () => {
   const aliases = [
@@ -47,7 +47,9 @@ it('offers every alias of a market after its main listing, by position, keyed by
   expect(options.map(o => o.scope.listingId ?? null)).toEqual([null, null, 'a1', 'a2'])
   expect(options.map(o => o.alias ?? null)).toEqual([null, null, { id: 'a1', label: 'Touring edition', position: 1 }, { id: 'a2', label: 'Racing edition', position: 2 }])
   expect(options.map(o => o.listings)).toEqual([1, 3, 3, 3])
-  expect(options.map(optionListingLabel)).toEqual([null, '★ Primary', '① Touring edition', '② Racing edition'])
+  expect(options.map(optionListingLabel)).toEqual([null, '★ Main listing', '① Touring edition', '② Racing edition'])
+  // One word for the main listing everywhere (review 2026-10-05, m3): the studio's listing picker says "Main listing" too.
+  expect(MAIN_LISTING_LABEL).toBe('Main listing')
   expect(options[2].key).toBe(publicationScopeKey({ channel: 'AMAZON', marketplace: 'IT', accountId: 'two', listingId: 'a1' }))
 })
 it('excludes disconnected destinations and deduplicates discovery rows', () => {

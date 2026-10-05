@@ -53,7 +53,7 @@ import {
   planResultRows, planResultWord, planStateLabel, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence, tickedLifecycleRows,
   undoButtonText, undoSentence, type PlanResultRow,
 } from './actionPlan'
-import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, refillChoice, type PickerChoice } from './pickers'
+import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, marketTabParts, refillChoice, type PickerChoice } from './pickers'
 import { DestinationPicker } from './DestinationPicker'
 import { ReviewBody } from './ReviewBody'
 import { ManyPublishDialog, type ManyPublishDialogProps } from './ManyPublishDialog'
@@ -588,9 +588,15 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     if (sent) return sent
     return result && key === shownKey ? publicationStatusMeta(result.status).label : null
   }
+  // A long listing name ends with an ellipsis (its whole name on hover); what the review says is always shown whole —
+  // so a tab never runs past a phone's width (review 2026-10-05).
   const tabs = choice.keys.flatMap(key => {
     const o = optionOf(key)
-    return o ? [{ id: key, label: marketTabLabel(o, stateOf(key), sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))) }] : []
+    if (!o) return []
+    const said = sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))
+    const { name, words } = marketTabParts(o, stateOf(key), said)
+    return [{ id: key, label: <span className={styles.tabLabel} title={marketTabLabel(o, stateOf(key), said)}>
+      <span className={styles.tabName}>{name}</span><span>{` · ${words}`}</span></span> }]
   })
   const renderPanel = (key: string) => {
     const option = optionOf(key)
