@@ -198,7 +198,7 @@ const setStock: AgentTool = {
     `Set the on-hand count of up to ${SET_STOCK_MAX} products at their own warehouses (the absolute number, not a +/-). `
     + 'Each row becomes one audited stock movement, and every listing that follows stock is updated and sent to its '
     + 'channel. Amazon FBA and Shopify locations are refused. A row whose count moved after the approval stops the run. '
-    + 'Always waits for a person to approve it in Nexus.',
+    + 'Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planSetStock(args)
     if (refused(plan)) return { ok: false, error: plan.error }
@@ -664,7 +664,7 @@ const reconcileStockCount: AgentTool = {
     'Apply a count: for each counted item, stock at the count\'s warehouse moves by counted − expected (one audited '
     + 'movement), and the listings that follow stock show the new number. The preview shows each item\'s stock now and '
     + 'after; a sale between the approval and the run stops it (ask again). Undo sets the old numbers back; the items '
-    + 'stay reconciled. Always waits for a person to approve it in Nexus.',
+    + 'stay reconciled. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planReconcile(args)
     if (refused(plan)) return { ok: false, error: plan.error }
@@ -804,8 +804,8 @@ const reserveStock: AgentTool = {
     'Hold units of a product at an own warehouse (for a promotion, a customer, a check) so channels stop selling them, '
     + 'or release such a hold. Holds for orders are made and released by their orders, and holds for another '
     + 'business are settled in Nexus: both are refused. Amazon FBA and Shopify locations, and products that sell from '
-    + 'shared stock, are refused. Listings that follow stock show the change. Always waits for a person to approve it '
-    + 'in Nexus.',
+    + 'shared stock, are refused. Listings that follow stock show the change. '
+    + 'Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planHold(args)
     if (refused(plan)) return { ok: false, error: plan.error }

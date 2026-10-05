@@ -602,7 +602,7 @@ const bulkPriceChange: AgentTool = {
   withinLimits: bulkPriceWithinLimits,
   description:
     `Change the master price of up to ${BULK_MAX_PRODUCTS} products at once: set a price, or change it by a percent or an amount. ` +
-    'Listings that follow the master price change too and are sent to their marketplace. Always waits for a person to approve it in Nexus.',
+    'Listings that follow the master price change too and are sent to their marketplace. Waits for a person to approve it in Nexus, unless the business set it to run by its rule (inside its limits, after a short window in which a person can stop it).',
   undo: PRICES_UNDO,
   async handler(args): Promise<ToolResult> {
     return previewPrices(await planPrices(args, 'Nothing was queued.'), 'Nothing was queued.', 'Every product already has that master price.')
@@ -682,7 +682,7 @@ const setMasterPrices: AgentTool = {
   undo: PRICES_UNDO,
   description:
     `Set the master price of up to ${BULK_MAX_PRODUCTS} products, each to its own price (undo of a bulk price change uses it). ` +
-    'Listings that follow the master price change too and are sent to their marketplace. Always waits for a person to approve it in Nexus.',
+    'Listings that follow the master price change too and are sent to their marketplace. Waits for a person to approve it in Nexus, unless the business set it to run by its rule (inside its limits, after a short window in which a person can stop it).',
   async handler(args): Promise<ToolResult> {
     return previewPrices(await planEachPrice(args, 'Nothing was queued.'), 'Nothing was queued.', 'Every product already has that master price.')
   },
@@ -806,7 +806,7 @@ const bulkAttributeChange: AgentTool = {
   limits: BULK_ATTRIBUTE_LIMITS,
   withinLimits: bulkAttributeWithinLimits,
   description:
-    `Set master attributes on up to ${BULK_MAX_PRODUCTS} products at once. ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. `
+    `Set master attributes on up to ${BULK_MAX_PRODUCTS} products at once. ${NEXUS_ONLY} Waits for a person to approve it in Nexus, unless the business set it to run by its rule (inside its limits, after a short window in which a person can stop it). `
     + "It sets an attribute of the product's family, or one the product already holds a value for (a key saved empty or null does not count). "
     + 'It cannot set text kept per language — title, description, bullet points, keywords, or an attribute the family marks translatable: '
     + 'those are changed in the product sheet, in the language they are for.',

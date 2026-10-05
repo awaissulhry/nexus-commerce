@@ -515,8 +515,8 @@ const bulkListingStock: AgentTool = {
     + 'market does not freeze that number while another EU market of the SKU still follows the stock. Refused: a fixed number on a SKU that sells '
     + 'from another business\'s shared stock; a pin to 0 on eBay while the account\'s out-of-stock option is off (eBay '
     + 'would end the listing); an Amazon FBA listing (its quantity is Amazon\'s); a quantity change on a listing whose selling is '
-    + 'paused (Inactive — resume it in the product sheet\'s Status column). Always waits for a person to approve it '
-    + 'in Nexus; a row that changed since stops the run.',
+    + 'paused (Inactive — resume it in the product sheet\'s Status column). Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so;'
+    + ' a row that changed since stops the run.',
   async handler(args): Promise<ToolResult> {
     const plan = await planBulk(args)
     if (refused(plan)) return { ok: false, error: plan.error }
