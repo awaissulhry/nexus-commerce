@@ -740,6 +740,17 @@ export async function pendingWriteColumnsByEntity(
   return out
 }
 
+/** CM-16 — the same, for one entity (a row that changed after a sync took its snapshot). */
+export async function pendingWriteColumns(
+  entityType: AdEntityType,
+  entityId: string,
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  const columns = LOCAL_COLUMNS[entityType] ?? {}
+  const fields = await pendingWriteFields(entityType, entityId, Object.keys(columns), now)
+  return new Set([...fields].map((f) => columns[f]?.column ?? f))
+}
+
 /**
  * AX-ZD.1 — which of these fields have a write in flight on this entity?
  *

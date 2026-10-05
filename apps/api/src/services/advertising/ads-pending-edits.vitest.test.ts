@@ -4,7 +4,9 @@
  * CM-15: an ad-group rename was a local update in the route — never sent to Amazon, no audit row, and the v1 ingest
  *        wrote Amazon's name back. It is now queued and logged like the status and the default bid.
  * CM-16: only the 20-minute settings sync held back fields with an undelivered write. The keyword/target list sync
- *        and the v1 export ingest wrote Amazon's older value over a queued edit. They now hold back too.
+ *        and the v1 export ingest wrote Amazon's older value over a queued edit. They now hold back too, including an
+ *        edit queued WHILE the sync runs: right after its snapshot (re-checked per row), or between its read of a row
+ *        and its write (the `updatedAt` guard). Hooks below land the operator's edit at exactly those moments.
  * CM-28: cancelling a staged write left Nexus showing the cancelled value (written when it was queued). Cancel now
  *        puts each field back, unless something newer has replaced it.
  *
@@ -18,10 +20,47 @@ import { seedAdsFixture } from '../../test-support/ads-fixtures.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
+/** One-shot hooks that land an operator's edit in the middle of a sync. */
+const hooks = vi.hoisted(() => ({
+  /** Runs just before the sync's `updateMany` of row `id` on `model` (after the sync read the row). */
+  beforeUpdateMany: null as null | { model: string; id: string; run: () => Promise<unknown> },
+  /** Runs just after a sync took its snapshot of pending writes. */
+  afterSnapshot: null as null | (() => Promise<unknown>),
+}))
 vi.mock('../../db.js', async () => {
   const { contextualDatabase } = await import('../../lib/database-context.js')
   let wrapped: object | null = null
-  return { default: new Proxy({}, { get: (_t, p) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), p) }) }
+  const real = () => (wrapped ??= contextualDatabase(database.client as never))
+  return {
+    default: new Proxy({}, {
+      get: (_t, p) => {
+        const value = Reflect.get(real(), p)
+        if (!hooks.beforeUpdateMany || p !== hooks.beforeUpdateMany.model) return value
+        return new Proxy(value as object, {
+          get: (d: any, k) => {
+            if (k !== 'updateMany') { const v = d[k]; return typeof v === 'function' ? v.bind(d) : v }
+            return async (args: { where?: { id?: string } }) => {
+              const h = hooks.beforeUpdateMany
+              if (h && args?.where?.id === h.id) { hooks.beforeUpdateMany = null; await h.run() }
+              return d.updateMany(args)
+            }
+          },
+        })
+      },
+    }),
+  }
+})
+vi.mock('./ads-mutation.service.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./ads-mutation.service.js')>()
+  return {
+    ...real,
+    pendingWriteColumnsByEntity: async (...args: Parameters<typeof real.pendingWriteColumnsByEntity>) => {
+      const snapshot = await real.pendingWriteColumnsByEntity(...args)
+      const h = hooks.afterSnapshot
+      if (h) { hooks.afterSnapshot = null; await h() }
+      return snapshot
+    },
+  }
 })
 vi.mock('../../lib/queue.js', () => {
   const queue = { add: vi.fn(async () => ({})), addBulk: vi.fn(async () => []), getJob: vi.fn(async () => null), getJobCounts: vi.fn(async () => ({})) }
@@ -99,10 +138,13 @@ beforeAll(async () => {
   await inside(async () => {
     await seedAdsFixture(database.client)
     await db().adProductAd.create({ data: { id: 'ad-1', adGroupId: 'g-c-it', externalAdId: 'EXT-ad-1', asin: 'ASIN-TEST-1', status: 'ENABLED' } })
-    await db().adTarget.create({ data: {
-      id: 't-cneg', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'cheap', bidCents: 0,
-      isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: 'EXT-t-cneg',
-    } })
+    await db().adProductAd.create({ data: { id: 'ad-2', adGroupId: 'g-c-it', externalAdId: 'EXT-ad-2', asin: 'ASIN-TEST-2', status: 'ENABLED' } })
+    for (const [id, text] of [['t-cneg', 'cheap'], ['t-cneg2', 'used']]) {
+      await db().adTarget.create({ data: {
+        id, adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: text, bidCents: 0,
+        isNegative: true, negativeLevel: 'CAMPAIGN', externalTargetId: `EXT-${id}`,
+      } })
+    }
   })
   const { default: advertisingRoutes } = await import('../../routes/advertising.routes.js')
   app = Fastify()
@@ -111,7 +153,7 @@ beforeAll(async () => {
   await app.ready()
 }, 180_000)
 afterAll(async () => { await app?.close(); await database?.close() }, 30_000)
-beforeEach(() => { amazon.calls = []; amazon.lists = {} })
+beforeEach(() => { amazon.calls = []; amazon.lists = {}; hooks.beforeUpdateMany = null; hooks.afterSnapshot = null })
 
 describe('CM-15 — an ad-group rename reaches Amazon', () => {
   it('the Edit Groups PATCH queues the rename with an audit row, and the worker sends it', async () => {
@@ -212,6 +254,102 @@ describe('CM-16 — the v1 export ingest holds back a queued edit', () => {
     }] as never))
     const ad = await inside(() => db().adProductAd.findUniqueOrThrow({ where: { id: 'ad-1' }, select: { status: true } }))
     expect(ad.status).toBe('PAUSED')
+  })
+})
+
+/** Amazon's current keyword lists for g-c-it: every row it holds, so nothing is archived as missing. */
+const keywordLists = (lowBid: number) => {
+  amazon.lists['/sp/keywords/list'] = [
+    { keywordId: 'EXT-t-it', adGroupId: 'EXT-g-c-it', keywordText: 'race jacket', matchType: 'EXACT', bid: 0.45, state: 'ENABLED' },
+    { keywordId: 'EXT-t-sup', adGroupId: 'EXT-g-c-it', keywordText: 'leather gloves', matchType: 'EXACT', bid: 0.02, state: 'ENABLED' },
+    { keywordId: 'EXT-t-low', adGroupId: 'EXT-g-c-it', keywordText: 'cheap boots', matchType: 'EXACT', bid: lowBid, state: 'ENABLED' },
+  ]
+  amazon.lists['/sp/negativeKeywords/list'] = [
+    { keywordId: 'EXT-t-neg', adGroupId: 'EXT-g-c-it', keywordText: 'free', matchType: 'NEGATIVE_EXACT', state: 'ENABLED' },
+  ]
+}
+const SP = 'SPONSORED_PRODUCTS'
+
+describe('CM-16 — an edit queued between the sync\'s read of a row and its write is not overwritten', () => {
+  // Each case: the operator's edit lands after the sync read the row and just before it writes it; Amazon still
+  // reports the old value. Without the `updatedAt` guard the sync writes Amazon's value over the edit.
+  const cases: Array<{ sync: string; model: string; id: string; edit: () => Promise<unknown>; run: () => Promise<unknown>; check: () => Promise<unknown>; expected: unknown }> = [
+    {
+      sync: 'keyword list sync', model: 'adTarget', id: 't-sup',
+      edit: () => updateAdTargetWithSync({ adTargetId: 't-sup', patch: { bidCents: 12 }, actor: PERSON }),
+      run: () => { keywordLists(0.09); return syncKeywordsForAdGroups({ profileId: 'P-IT-TEST', region: 'EU', externalAdGroupIds: ['EXT-g-c-it'] }) },
+      check: async () => (await target('t-sup')).bidCents, expected: 12,
+    },
+    {
+      sync: 'targeting-clause sync', model: 'adTarget', id: 't-low',
+      edit: () => updateAdTargetWithSync({ adTargetId: 't-low', patch: { bidCents: 15 }, actor: PERSON }),
+      run: () => { amazon.lists['/sp/targets/list'] = [{ targetId: 'EXT-t-low', adGroupId: 'EXT-g-c-it', bid: 0.13, state: 'ENABLED' }]; return syncTargetsForAdGroups({ profileId: 'P-IT-TEST', region: 'EU', externalAdGroupIds: ['EXT-g-c-it'] }) },
+      check: async () => (await target('t-low')).bidCents, expected: 15,
+    },
+    {
+      sync: 'campaign-negative sync', model: 'adTarget', id: 't-cneg2',
+      edit: () => updateAdTargetWithSync({ adTargetId: 't-cneg2', patch: { status: 'PAUSED' }, actor: PERSON }),
+      run: () => upsertCampaignNegativeRows([{ campaignNegativeKeywordId: 'EXT-t-cneg2', campaignId: 'EXT-c-it', keywordText: 'used', matchType: 'NEGATIVE_EXACT', state: 'ENABLED' }]),
+      check: async () => (await target('t-cneg2')).status, expected: 'PAUSED',
+    },
+    {
+      sync: 'v1 ingest, campaigns', model: 'campaign', id: 'c-uk',
+      edit: () => updateCampaignWithSync({ campaignId: 'c-uk', patch: { name: 'UK renamed' }, actor: PERSON }),
+      run: () => ingestCampaigns('P-UK-TEST', [{ campaignId: 'EXT-c-uk', adProduct: SP, name: 'UK exact', state: 'ENABLED', startDate: '2026-01-01' }] as never),
+      check: async () => (await campaign('c-uk')).name, expected: 'UK renamed',
+    },
+    {
+      sync: 'v1 ingest, ad groups', model: 'adGroup', id: 'g-c-uk',
+      edit: () => updateAdGroupWithSync({ adGroupId: 'g-c-uk', patch: { name: 'UK group renamed' }, actor: PERSON }),
+      run: () => ingestAdGroups('P-UK-TEST', [{ adGroupId: 'EXT-g-c-uk', campaignId: 'EXT-c-uk', adProduct: SP, name: 'group c-uk', state: 'ENABLED' }] as never),
+      check: async () => (await group('g-c-uk')).name, expected: 'UK group renamed',
+    },
+    {
+      sync: 'v1 ingest, targets', model: 'adTarget', id: 't-pin',
+      edit: () => updateAdTargetWithSync({ adTargetId: 't-pin', patch: { bidCents: 44 }, actor: PERSON }),
+      run: () => ingestTargets([{
+        targetId: 'EXT-t-pin', campaignId: 'EXT-c-pin', adGroupId: 'EXT-g-c-pin', adProduct: SP, state: 'ENABLED', negative: false,
+        targetType: 'KEYWORD', targetLevel: 'AD_GROUP', targetDetails: { keyword: 'pinned jacket', matchType: 'EXACT' }, bid: 0.4,
+      }] as never),
+      check: async () => (await target('t-pin')).bidCents, expected: 44,
+    },
+    {
+      sync: 'v1 ingest, product ads', model: 'adProductAd', id: 'ad-2',
+      edit: () => updateProductAdWithSync({ productAdId: 'ad-2', status: 'PAUSED', actor: PERSON }),
+      run: () => ingestAds('P-IT-TEST', [{
+        adId: 'EXT-ad-2', adGroupId: 'EXT-g-c-it', campaignId: 'EXT-c-it', adProduct: SP, state: 'ENABLED', adType: 'PRODUCT_AD',
+        creative: { products: [{ productIdType: 'ASIN', productId: 'ASIN-TEST-2' }] },
+      }] as never),
+      check: async () => (await inside(() => db().adProductAd.findUniqueOrThrow({ where: { id: 'ad-2' }, select: { status: true } }))).status, expected: 'PAUSED',
+    },
+  ]
+  it.each(cases)('$sync', async ({ model, id, edit, run, check, expected }) => {
+    let edited = false
+    hooks.beforeUpdateMany = { model, id, run: async () => { await inside(edit); edited = true } }
+    await inside(run)
+    expect(edited).toBe(true) // the edit really landed mid-sync
+    expect(await check()).toBe(expected)
+  })
+})
+
+describe('CM-16 — an edit queued just after the sync took its snapshot is re-checked and held', () => {
+  it('keyword list sync', async () => {
+    // t-neg has no write pending before the sync starts, so only the per-row re-check can hold this one back.
+    hooks.afterSnapshot = () => inside(() => updateAdTargetWithSync({ adTargetId: 't-neg', patch: { status: 'PAUSED' }, actor: PERSON }))
+    keywordLists(0.13)
+    await inside(() => syncKeywordsForAdGroups({ profileId: 'P-IT-TEST', region: 'EU', externalAdGroupIds: ['EXT-g-c-it'] }))
+    expect(hooks.afterSnapshot).toBeNull()
+    expect((await target('t-neg')).status).toBe('PAUSED')
+  })
+
+  it('v1 ingest, campaigns', async () => {
+    hooks.afterSnapshot = () => inside(() => updateCampaignWithSync({ campaignId: 'c-off', patch: { dailyBudget: 23 }, actor: PERSON }))
+    await inside(() => ingestCampaigns('P-IT-TEST', [{
+      campaignId: 'EXT-c-off', adProduct: SP, name: 'Italy not allowlisted', state: 'ENABLED', startDate: '2026-01-01',
+      budgetCaps: { budgetValue: { monetaryBudget: { amount: 20 } } },
+    }] as never))
+    expect(hooks.afterSnapshot).toBeNull()
+    expect(Number((await campaign('c-off')).dailyBudget)).toBe(23)
   })
 })
 

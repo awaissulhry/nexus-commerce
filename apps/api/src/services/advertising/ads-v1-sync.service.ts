@@ -26,8 +26,7 @@ import { logger } from '../../utils/logger.js'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { listingAccounts, productForChannelSkuOnAccounts } from '../listings/listing-sku-holders.js'
 import { liveCall, type AdsRegion } from './ads-api-client.js'
-import { pendingWriteColumnsByEntity, type AdEntityType } from './ads-mutation.service.js'
-import { holdBackPendingFields } from '../ads-core/drift.js'
+import { syncHoldBack, type SyncHoldBack } from './ads-sync-hold-back.js'
 
 // ── Resource configuration ────────────────────────────────────────────
 
@@ -452,25 +451,11 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
 /**
  * CM-16 — this ingest overwrote local rows with Amazon's export every 2 hours, over writes still on their way to
  * Amazon: an operator's rename, budget, strategy, end date, state or bid reverted on screen after a successful save,
- * and the engines read Amazon's old value until the next sync. Like the 20-minute settings sync, each update now
- * leaves out the columns that have an undelivered write (queued, in its grace window, or being sent). The record is
- * read once per ingest, right before its writes; usually empty, so usually one query.
+ * and the engines read Amazon's old value until the next sync. Each update now leaves out the columns with an
+ * undelivered write and lands only if the row has not moved since it was read (ads-sync-hold-back.ts).
  */
-async function heldColumns(entityType: AdEntityType): Promise<{ drop: <T extends Record<string, unknown>>(id: string, data: T) => T; count: () => number }> {
-  const byId = await pendingWriteColumnsByEntity(entityType)
-  let held = 0
-  return {
-    drop: (id, data) => {
-      const cols = byId.get(id)
-      if (!cols?.size) return data
-      held++
-      return holdBackPendingFields(data, cols) as typeof data
-    },
-    count: () => held,
-  }
-}
-const logHeld = (resource: string, rows: number): void => {
-  if (rows) logger.info('[ads-v1-sync] held back fields with an undelivered write', { resource, rows })
+const logHoldBack = (resource: string, hb: SyncHoldBack): void => {
+  if (hb.held || hb.raced) logger.info('[ads-v1-sync] left pending edits alone', { resource, heldRows: hb.held, racedRows: hb.raced })
 }
 
 // The four ingest functions are exported for their tests (CM-16 hold-back); production calls them from ingestCompletedExport.
@@ -480,7 +465,7 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
     select: { marketplace: true },
   })
   const marketplace = conn?.marketplace ?? ''
-  const held = await heldColumns('CAMPAIGN') // CM-16
+  const hb = await syncHoldBack('CAMPAIGN') // CM-16
   let upserted = 0
   for (const r of records) {
     if (!r.campaignId) continue
@@ -530,10 +515,11 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
       // marketplace id (A1PA…) vs our short code (DE) → split-data duplicates.
       const existing = await prisma.campaign.findFirst({
         where: { externalCampaignId: r.campaignId },
-        select: { id: true },
+        select: { id: true, updatedAt: true },
       })
       if (existing) {
-        await prisma.campaign.update({ where: { id: existing.id }, data: held.drop(existing.id, { ...base, ...settings }) })
+        const w = await prisma.campaign.updateMany({ where: { id: existing.id, updatedAt: existing.updatedAt }, data: await hb.without(existing.id, existing.updatedAt, { ...base, ...settings }) })
+        if (!w.count) { hb.raced++; continue }
       } else {
         await prisma.campaign.create({ data: { ...base, dailyBudget: budgetAmount ?? 0, biddingStrategy: stratMapped ?? 'LEGACY_FOR_SALES', status: statusMapped ?? 'ENABLED' } })
       }
@@ -545,7 +531,7 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
       })
     }
   }
-  logHeld('campaigns', held.count())
+  logHoldBack('campaigns', hb)
   return upserted
 }
 
@@ -558,7 +544,7 @@ export async function ingestAdGroups(profileId: string, records: V1AdGroup[]): P
     select: { id: true, externalCampaignId: true },
   })
   const campMap = new Map(campaigns.map((c) => [c.externalCampaignId ?? '', c.id]))
-  const held = await heldColumns('AD_GROUP') // CM-16
+  const hb = await syncHoldBack('AD_GROUP') // CM-16
 
   let upserted = 0
   for (const r of records) {
@@ -583,14 +569,15 @@ export async function ingestAdGroups(profileId: string, records: V1AdGroup[]): P
     try {
       const existing = await prisma.adGroup.findFirst({
         where: { externalAdGroupId: r.adGroupId, campaignId: localCampaignId },
-        select: { id: true, defaultBidCents: true },
+        select: { id: true, defaultBidCents: true, updatedAt: true },
       })
       if (existing) {
         // Keep the existing defaultBidCents — v1 doesn't carry it
-        await prisma.adGroup.update({
-          where: { id: existing.id },
-          data: held.drop(existing.id, { ...data, defaultBidCents: existing.defaultBidCents }),
+        const w = await prisma.adGroup.updateMany({
+          where: { id: existing.id, updatedAt: existing.updatedAt },
+          data: await hb.without(existing.id, existing.updatedAt, { ...data, defaultBidCents: existing.defaultBidCents }),
         })
+        if (!w.count) { hb.raced++; continue }
       } else {
         await prisma.adGroup.create({ data })
       }
@@ -602,7 +589,7 @@ export async function ingestAdGroups(profileId: string, records: V1AdGroup[]): P
       })
     }
   }
-  logHeld('adGroups', held.count())
+  logHoldBack('adGroups', hb)
   return upserted
 }
 
@@ -662,16 +649,16 @@ export async function ingestTargets(records: V1Target[]): Promise<{ upserted: nu
   const existing = rows.length
     ? await prisma.adTarget.findMany({
         where: { adGroupId: { in: [...new Set(rows.map((x) => x.adGroupId))] }, externalTargetId: { in: rows.map((x) => x.externalTargetId) } },
-        select: { id: true, externalTargetId: true, adGroupId: true },
+        select: { id: true, externalTargetId: true, adGroupId: true, updatedAt: true },
       })
     : []
-  const existKey = new Map(existing.map((e) => [`${e.adGroupId}|${e.externalTargetId}`, e.id]))
-  const held = await heldColumns('AD_TARGET') // CM-16
+  const existKey = new Map(existing.map((e) => [`${e.adGroupId}|${e.externalTargetId}`, e]))
+  const hb = await syncHoldBack('AD_TARGET') // CM-16
   const toCreate: Array<Record<string, unknown>> = []
-  const toUpdate: Array<{ id: string; data: Record<string, unknown> }> = []
+  const toUpdate: Array<{ id: string; updatedAt: Date; data: Record<string, unknown> }> = []
   for (const x of rows) {
-    const id = existKey.get(x.key)
-    if (id) {
+    const found = existKey.get(x.key)
+    if (found) {
       // PERF/accuracy — the v1 export's bid is unreliable (nested → often 0),
       // and re-zeroing good bids every 5-min ingest was what forced a heavy
       // hourly resync. On UPDATE, never clobber an existing bid with 0; the v3
@@ -679,7 +666,7 @@ export async function ingestTargets(records: V1Target[]): Promise<{ upserted: nu
       // genuine positive value.
       const data = { ...x.data }
       if (!data.bidCents || (data.bidCents as number) <= 0) delete data.bidCents
-      toUpdate.push({ id, data: held.drop(id, data) })
+      toUpdate.push({ id: found.id, updatedAt: found.updatedAt, data: await hb.without(found.id, found.updatedAt, data) })
     } else { toCreate.push(x.data) }
   }
   ;(bd as Record<string, unknown>).toCreate = toCreate.length
@@ -701,9 +688,9 @@ export async function ingestTargets(records: V1Target[]): Promise<{ upserted: nu
   ;(bd as Record<string, unknown>).created = createdCount
   for (let i = 0; i < toUpdate.length; i += 25) {
     const chunk = toUpdate.slice(i, i + 25)
-    await Promise.all(chunk.map((u) => prisma.adTarget.update({ where: { id: u.id }, data: u.data }).then(() => { upserted++ }).catch((err) => logger.warn('[ads-v1-sync] target update failed', { id: u.id, error: String(err).slice(0, 120) }))))
+    await Promise.all(chunk.map((u) => prisma.adTarget.updateMany({ where: { id: u.id, updatedAt: u.updatedAt }, data: u.data }).then((w) => { if (w.count) upserted++; else hb.raced++ }).catch((err) => logger.warn('[ads-v1-sync] target update failed', { id: u.id, error: String(err).slice(0, 120) }))))
   }
-  logHeld('targets', held.count())
+  logHoldBack('targets', hb)
   logger.info('[ads-v1-sync] targets ingest breakdown', { ...bd, upserted })
   return { upserted, breakdown: { ...bd, upserted } }
 }
@@ -747,7 +734,7 @@ export async function ingestAds(profileId: string, records: V1Ad[]): Promise<num
     return new Map<string, string | null>()
   })
 
-  const held = await heldColumns('PRODUCT_AD') // CM-16
+  const hb = await syncHoldBack('PRODUCT_AD') // CM-16
   let upserted = 0
   for (const r of records) {
     if (!r.adId) continue
@@ -780,10 +767,11 @@ export async function ingestAds(profileId: string, records: V1Ad[]): Promise<num
       // The natural unique key in our schema is (adGroupId, asin); use findFirst by externalAdId for stability
       const existing = await prisma.adProductAd.findFirst({
         where: { externalAdId: r.adId, adGroupId: localAdGroupId },
-        select: { id: true },
+        select: { id: true, updatedAt: true },
       })
       if (existing) {
-        await prisma.adProductAd.update({ where: { id: existing.id }, data: held.drop(existing.id, data) })
+        const w = await prisma.adProductAd.updateMany({ where: { id: existing.id, updatedAt: existing.updatedAt }, data: await hb.without(existing.id, existing.updatedAt, data) })
+        if (!w.count) { hb.raced++; continue }
       } else {
         await prisma.adProductAd.create({ data })
       }
@@ -795,7 +783,7 @@ export async function ingestAds(profileId: string, records: V1Ad[]): Promise<num
       })
     }
   }
-  logHeld('ads', held.count())
+  logHoldBack('ads', hb)
   return upserted
 }
 
