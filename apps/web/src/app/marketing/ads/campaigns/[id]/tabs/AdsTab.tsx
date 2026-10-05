@@ -15,7 +15,8 @@ import { bulkPatch } from '../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
-import { Listbox } from '@/design-system/components'
+import { Listbox, useToast } from '@/design-system/components'
+import { adsWriteMany, eachSummary, type EachResult } from '../../../_shared/adsWrite'
 
 interface AdRow {
   id: string; asin?: string | null; sku?: string | null; name?: string | null; photoUrl?: string | null
@@ -30,6 +31,12 @@ export function AdsTab({ campaign, dateRange }: { campaign: CampaignDetailData |
   const [rows, setRows] = useState<AdRow[]>([])
   const [loading, setLoading] = useState(true)
   const [bump, setBump] = useState(0)
+  // CM-11 — every write's answer is read and shown, with the server's reason for what did not change.
+  const { toast } = useToast()
+  const report = useMemo(() => (res: EachResult) => {
+    const s = eachSummary(res, 'ad')
+    toast(s.text, s.tone, { duration: res.failed.length ? 9000 : 4000 })
+  }, [toast])
 
   useEffect(() => {
     if (!adGroups.length) { setLoading(false); setRows([]); return }
@@ -78,18 +85,19 @@ export function AdsTab({ campaign, dateRange }: { campaign: CampaignDetailData |
       { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
     ],
     onApply: async (edits) => {
-      await Promise.all(edits.filter((e) => e.values.status).map((e) =>
-        fetch(`${getBackendUrl()}/api/advertising/product-ads/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: e.values.status, applyImmediately: false, reason: 'Ads inline edit' }) })))
+      const res = await adsWriteMany(edits.filter((e) => e.values.status).map((e) =>
+        ({ id: e.id, path: `/api/advertising/product-ads/${e.id}`, body: { status: e.values.status, applyImmediately: false, reason: 'Ads inline edit' } })))
       setBump((b) => b + 1)
+      report(res)
     },
-  }), [])
+  }), [report])
 
   // Bulk actions (shown when ads are selected): Enable/Archive/Pause (ads have no bid).
   const [bulkBusy, setBulkBusy] = useState(false)
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
-    try { await bulkPatch('product-ads', ids, body); clear(); setBump((b) => b + 1) } finally { setBulkBusy(false) }
+    try { const res = await bulkPatch('product-ads', ids, body); clear(); setBump((b) => b + 1); report(res) } finally { setBulkBusy(false) }
   }
 
   return (

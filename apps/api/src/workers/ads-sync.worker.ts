@@ -548,6 +548,8 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       },
     })
     await settleAdMutations(queueId, 'FAILED', { isDead: true, error: 'no_active_ads_connection_for_marketplace' })
+    // CM-17 — nothing reached Amazon: the value it replaced comes back, as below.
+    await putBackRefusedWrite(payload).catch(() => { /* best-effort, as every put-back */ })
     return { status: 'FAILED', queueId }
   }
 
@@ -652,6 +654,14 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         /* swallow */
       })
     await stampEntitySync(payload, 'FAILED', result.error) // A2 — surface the failure on the entity itself
+    // CM-17 — Amazon rejected it for good, so Nexus shows the value it replaced again (as for a gate refusal above): field
+    // by field, only where Nexus still holds the rejected value. An ad group's default bid has no sync to correct it. A
+    // transient failure that ran out of retries keeps the value: the failed-write reconcile sweep sends it again.
+    if (permanent) {
+      await putBackRefusedWrite(payload).catch((err) => logger.warn('[ads-sync.worker] could not put back a rejected write', {
+        queueId, entityType: payload.entityType, entityId: payload.entityId, error: err instanceof Error ? err.message : String(err),
+      }))
+    }
     /**
      * BID.S9 — a write that terminally failed must not wait to be discovered on page-load: the
      * 2026-07 phantom cuts sat undetected for 32 days because nothing said "Amazon refused this".

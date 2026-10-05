@@ -18,11 +18,11 @@ import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS } from '../.
 import { pickMetricFilters } from '../../../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
-import { getBackendUrl } from '@/lib/backend-url'
 import { ColumnNA, naCell } from '../../../../../_shared/RuleColumnCells'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
-import { Listbox } from '@/design-system/components'
+import { Listbox, useToast } from '@/design-system/components'
+import { adsWriteMany, eachSummary, type EachResult } from '../../../../../_shared/adsWrite'
 
 interface TargetRow {
   id: string
@@ -73,6 +73,13 @@ const TYPE_LABEL: Record<string, string> = { EXACT: 'Exact', PHRASE: 'Phrase', B
 
 export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void }) {
   const rows = useMemo<TargetRow[]>(() => ((adGroup?.targets as TargetRow[] | undefined) ?? []).filter((t) => !t.isNegative), [adGroup])
+  // CM-11 — every write's answer is read and shown (a bid under the floor, a bound, the write gate, a target Amazon no
+  // longer has); a refused value was never written, so the refresh shows the old one again.
+  const { toast } = useToast()
+  const report = useMemo(() => (res: EachResult) => {
+    const s = eachSummary(res, 'target')
+    toast(s.text, s.tone, { duration: res.failed.length ? 9000 : 4000 })
+  }, [toast])
 
   // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
   const tot = (vr: typeof rows) => vr.reduce(
@@ -130,15 +137,16 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
       { key: 'bid', initial: (r) => (num(r.bidCents) / 100).toFixed(2), render: (v, set) => <div className="h10-edit-money"><span className="cur">€</span><input inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} aria-label="Bid" /></div> },
     ],
     onApply: async (edits) => {
-      await Promise.all(edits.map((e) => {
+      const res = await adsWriteMany(edits.map((e) => {
         const body: Record<string, unknown> = { applyImmediately: false, reason: 'Edit Targets inline' }
         if (e.values.status != null) body.status = e.values.status
         if (e.values.bid != null) body.bidCents = Math.round(parseFloat(e.values.bid) * 100)
-        return fetch(`${getBackendUrl()}/api/advertising/ad-targets/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return { id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body }
       }))
       onRefresh?.()
+      report(res)
     },
-  }), [onRefresh])
+  }), [onRefresh, report])
 
   // Bulk actions (shown when targets are selected): Adjust Bid + Enable/Archive/Pause.
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -147,7 +155,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
-    try { await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.() } finally { setBulkBusy(false) }
+    try { const res = await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.(); report(res) } finally { setBulkBusy(false) }
   }
 
   return (

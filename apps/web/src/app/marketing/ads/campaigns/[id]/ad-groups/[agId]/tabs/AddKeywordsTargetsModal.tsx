@@ -15,7 +15,7 @@ import { useMemo, useState } from 'react'
 import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal, Tabs } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../../../_shared/adsWrite'
 import '../../../../campaigns-ds.css'
 
 type KMatch = 'BROAD' | 'PHRASE' | 'EXACT'
@@ -63,18 +63,24 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
   const submit = async () => {
     if (!staged.length || submitting) return
     setSubmitting(true); setMsg(null)
-    const outcomes = await Promise.allSettled(staged.map((s) => {
+    // CM-8 — "added" means Amazon holds it: each answer says so, or says why not (the write gate's or Amazon's words).
+    const results = await Promise.all(staged.map((s) => {
       const url = s.kind === 'keyword' ? '/api/advertising/keywords/create' : '/api/advertising/targets/create'
       const body = s.kind === 'keyword'
         ? { adGroupId, keywordText: s.value, matchType: s.matchType, bidEur: s.bid }
         : { adGroupId, kind: 'PRODUCT', value: s.value, bidEur: s.bid }
-      return fetch(`${getBackendUrl()}${url}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok || (d as { error?: string; denied?: boolean }).error || (d as { denied?: boolean }).denied) throw new Error('rejected') })
+      return adsAdd(url, body)
     }))
-    const ok = outcomes.filter((r) => r.status === 'fulfilled').length
+    const sum = addSummary(results, 'keyword or target')
     setSubmitting(false)
-    if (ok === staged.length) { onAdded?.(); onClose() }
-    else { setMsg(`${ok}/${staged.length} added — some failed (write-gate / non-live).`); if (ok) onAdded?.() }
+    if (sum.allAdded) { onAdded?.(); onClose() }
+    else {
+      // What Amazon took leaves the list; what it did not stays staged, to fix or send again.
+      const sent = staged.filter((_, i) => results[i]!.added || results[i]!.savedOnly)
+      setStaged((prev) => prev.filter((x) => !sent.includes(x)))
+      setMsg(sum.text)
+      if (sum.anyAdded) onAdded?.()
+    }
   }
 
   const n = staged.length

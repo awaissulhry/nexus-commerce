@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP, type EachResult } from '../../../../../_shared/adsWrite'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../_grid/AdsDataGrid'
 import { STATUS_PILL } from '../../../../_grid/format'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
@@ -20,10 +20,10 @@ import { AddNegativeTargetsModal } from './AddNegativeTargetsModal'
 import { AddNegativeKeywordsAgModal } from './AddNegativeKeywordsAgModal'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
-import { Listbox } from '@/design-system/components'
+import { Listbox, useToast } from '@/design-system/components'
 
-interface NegT { id: string; expressionValue: string; expressionType?: string | null; kind?: string | null; status: string; isNegative?: boolean; createdAt?: string | null }
-interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null }
+interface NegT { id: string; expressionValue: string; expressionType?: string | null; kind?: string | null; status: string; isNegative?: boolean; createdAt?: string | null; externalTargetId?: string | null }
+interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null; onAmazon: boolean }
 const titleCase = (s?: string | null) => (s ? s.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—')
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—')
 
@@ -32,14 +32,21 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
     const all = (adGroup?.targets as NegT[] | undefined) ?? []
     return all
       .filter((t) => t.isNegative === true && (mode === 'keywords' ? t.kind === 'KEYWORD' : t.kind !== 'KEYWORD'))
-      .map((t) => ({ id: t.id, text: t.expressionValue, matchType: t.expressionType ?? '', status: t.status, createdAt: t.createdAt }))
+      // CM-25 — null = Amazon never took it (a row without the field, from an older API, reads as on Amazon).
+      .map((t) => ({ id: t.id, text: t.expressionValue, matchType: t.expressionType ?? '', status: t.status, createdAt: t.createdAt, onAmazon: t.externalTargetId !== null }))
   }, [adGroup, mode])
   const noun = mode === 'keywords' ? 'Keyword' : 'Target'
   const [bulkBusy, setBulkBusy] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  // CM-11 — every write's answer is read and shown, with the server's reason for what did not change.
+  const { toast } = useToast()
+  const report = useMemo(() => (res: EachResult) => {
+    const s = eachSummary(res, `negative ${noun.toLowerCase()}`)
+    toast(s.text, s.tone, { duration: res.failed.length ? 9000 : 4000 })
+  }, [toast, noun])
 
   const columns: GridColumn<NegRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { if (!r.onAmazon) return <Pill tone="warning" title={NOT_ON_AMAZON_TIP}>Not on Amazon</Pill>; const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'matchType', label: 'Match Type', metric: false, sortable: true, render: (r) => titleCase(r.matchType), sortValue: (r) => titleCase(r.matchType), total: '' },
     { key: 'dateAdded', label: 'Date Added', metric: false, sortable: true, render: (r) => fmtDate(r.createdAt), sortValue: (r) => (r.createdAt ? Date.parse(r.createdAt) : 0), total: '' },
   ], [])
@@ -50,16 +57,17 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
       { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
     ],
     onApply: async (edits) => {
-      await Promise.all(edits.filter((e) => e.values.status).map((e) =>
-        fetch(`${getBackendUrl()}/api/advertising/ad-targets/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: e.values.status, applyImmediately: false, reason: `Edit Negative ${noun}s` }) })))
+      const res = await adsWriteMany(edits.filter((e) => e.values.status).map((e) =>
+        ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { status: e.values.status, applyImmediately: false, reason: `Edit Negative ${noun}s` } })))
       onRefresh?.()
+      report(res)
     },
-  }), [noun, onRefresh])
+  }), [noun, onRefresh, report])
 
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
-    try { await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.() } finally { setBulkBusy(false) }
+    try { const res = await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.(); report(res) } finally { setBulkBusy(false) }
   }
 
   return (

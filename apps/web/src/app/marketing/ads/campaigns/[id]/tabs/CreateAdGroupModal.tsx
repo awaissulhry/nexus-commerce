@@ -7,8 +7,8 @@
  */
 import { useState } from 'react'
 import { Button, Input, RadioCard } from '@/design-system/primitives'
-import { Field, Modal } from '@/design-system/components'
-import { getBackendUrl } from '@/lib/backend-url'
+import { Field, Modal, useToast } from '@/design-system/components'
+import { adsAdd } from '../../../_shared/adsWrite'
 import '../../campaigns-ds.css'
 
 const TARGETING = [
@@ -25,18 +25,20 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
   const [targeting, setTargeting] = useState('AUTO')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const { toast } = useToast()
   const valid = name.trim() !== '' && Number(bid) > 0
 
   async function create() {
     setBusy(true); setErr(null)
-    try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/adgroups/create`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId, name: name.trim(), defaultBidEur: Number(bid), targetingType: targeting }),
-      })
-      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error((d as { error?: string }).error || `HTTP ${r.status}`) }
-      onCreated(); onClose()
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to create ad group') } finally { setBusy(false) }
+    // CM-8 — created means Amazon holds the ad group; otherwise the write gate's or Amazon's reason is shown.
+    const r = await adsAdd('/api/advertising/adgroups/create', { campaignId, name: name.trim(), defaultBidEur: Number(bid), targetingType: targeting })
+    setBusy(false)
+    if (r.added || r.savedOnly) {
+      if (r.savedOnly) toast(`Ad group saved in Nexus only: ${r.reason}`, 'warning', { duration: 9000 })
+      onCreated(); onClose(); return
+    }
+    // Nothing was written: the reason stays here, and creating again is safe.
+    setErr(`Not created: ${r.reason}`)
   }
 
   return (

@@ -31,7 +31,7 @@ import {
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
-import { entityBoundsDenial, logGateDeny, type EntityBoundsCampaign } from './ads-write-gate.js'
+import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, type EntityBoundsCampaign } from './ads-write-gate.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -178,6 +178,77 @@ async function boundsRefused(args: {
     denial.deniedAt,
   )
   return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: denial.reason }
+}
+
+/** The money fields of a write — the same set as the ads worker's `VALUE_FIELDS` (1a): a portfolio id is not money. */
+const VALUE_FIELDS = new Set(['bid', 'defaultBid', 'dailyBudget', 'budgetAmount'])
+
+/**
+ * CM-10 — the money a write moves, in cents, for the write gate's value cap, computed as the ads worker computes it
+ * (`estimatePayloadValueCents`): bids are cents, a daily budget is euros, and only money fields count.
+ */
+export function writeValueCents(fieldChanges: FieldChange[]): number {
+  let maxCents = 0
+  for (const c of fieldChanges ?? []) {
+    if (c.newValue == null || !VALUE_FIELDS.has(c.field)) continue
+    const n = Number(c.newValue)
+    if (!Number.isFinite(n)) continue
+    maxCents = Math.max(maxCents, Math.round(c.field === 'dailyBudget' ? n * 100 : n))
+  }
+  return maxCents
+}
+
+/**
+ * CM-10 — a person's edit from a screen (`askGate`) asks the write gate BEFORE Nexus writes its copy.
+ *
+ * The worker asks the gate only at dispatch, after the screen had already said "Enabled" or "Daily budget → €600": the
+ * halt, the live-write allowlist, a pin, a spend ceiling, the day's budget movement, the market limits or the value cap
+ * then refused it and the worker put the old value back in silence. This asks the same gate the same question, with
+ * what the worker would hand it (the `user:` actor, every field, the money value, the value replaced), and a refusal is
+ * answered at once in the gate's own words — nothing written, no queue row, no audit row; recorded as a gate refusal
+ * (queueId null). It decides nothing itself: every rule is the gate's, and the worker still asks again at dispatch.
+ * Engines and the other callers do not pass `askGate` and keep the queue-then-dispatch path.
+ */
+async function gateRefusedNow(args: {
+  askGate?: boolean
+  actor: AdsActor
+  entity: AdEntityType
+  entityId: string
+  campaignId: string | null | undefined
+  marketplace: string | null | undefined
+  changes: FieldChange[]
+  force?: boolean
+}): Promise<MutationOutcome | null> {
+  if (!args.askGate || !args.actor.startsWith('user:')) return null
+  const cents = (v: string | null | undefined, euros = false): number | null => {
+    const n = v == null || String(v).trim() === '' ? NaN : Number(v)
+    return Number.isFinite(n) ? Math.round(euros ? n * 100 : n) : null
+  }
+  // The worker's choice of the one judged field: the bid, else the budget, else the first.
+  const bid = args.changes.find((c) => c.field === 'bid' || c.field === 'defaultBid')
+  const budget = bid ? undefined : args.changes.find((c) => c.field === 'dailyBudget')
+  const gate = await checkAdsWriteGate({
+    marketplace: args.marketplace ?? null,
+    payloadValueCents: writeValueCents(args.changes),
+    campaignId: args.campaignId ?? null,
+    field: bid?.field ?? budget?.field ?? args.changes[0]?.field ?? null,
+    fields: args.changes.map((c) => c.field),
+    intendedValueCents: bid ? cents(bid.newValue) : budget ? cents(budget.newValue, true) : null,
+    isSuppression: isSuppressionWrite(args.force === true, args.changes),
+    actor: args.actor,
+    previousValueCents: budget ? cents(budget.oldValue, true) : null,
+    queueId: null,
+  })
+  if (gate.allowed !== false) return null
+  logGateDeny(
+    {
+      queueId: null, marketplace: args.marketplace ?? null, payloadValueCents: writeValueCents(args.changes),
+      campaignId: args.campaignId ?? null, entityType: args.entity, entityId: args.entityId,
+    },
+    gate.reason,
+    gate.deniedAt,
+  )
+  return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: `Not sent to Amazon: ${gate.reason}` }
 }
 
 /** The campaign columns `boundsRefused` reads, for the selects below. */
@@ -919,6 +990,8 @@ export async function updateCampaignWithSync(args: {
   applyImmediately?: boolean
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
+  askGate?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -1038,6 +1111,11 @@ export async function updateCampaignWithSync(args: {
     })
     if (refused) return refused
   }
+  const atDispatch = await gateRefusedNow({
+    askGate: args.askGate, actor: args.actor, entity: 'CAMPAIGN', entityId: args.campaignId,
+    campaignId: existing.id, marketplace: existing.marketplace, changes,
+  })
+  if (atDispatch) return atDispatch
 
   // Capture payloadBefore snapshot BEFORE we write to local row.
   const payloadBefore = {
@@ -1128,6 +1206,8 @@ export async function updateAdGroupWithSync(args: {
   forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
+  askGate?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adGroup.findUnique({
     where: { id: args.adGroupId },
@@ -1209,6 +1289,11 @@ export async function updateAdGroupWithSync(args: {
     })
     if (refused) return refused
   }
+  const atDispatch = await gateRefusedNow({
+    askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
+    campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
+  })
+  if (atDispatch) return atDispatch
 
   const payloadBefore = {
     name: existing.name,
@@ -1275,6 +1360,8 @@ export async function updateProductAdWithSync(args: {
   applyImmediately?: boolean
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
+  askGate?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
@@ -1287,6 +1374,11 @@ export async function updateProductAdWithSync(args: {
   if (args.status === existing.status) return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
 
   const changes: FieldChange[] = [{ field: 'status', oldValue: existing.status, newValue: args.status }]
+  const atDispatch = await gateRefusedNow({
+    askGate: args.askGate, actor: args.actor, entity: 'PRODUCT_AD', entityId: args.productAdId,
+    campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes,
+  })
+  if (atDispatch) return atDispatch
   await prisma.adProductAd.update({ where: { id: args.productAdId }, data: { status: args.status } })
 
   const outboundQueueId = await enqueueOutbound({
@@ -1340,6 +1432,8 @@ export async function updateAdTargetWithSync(args: {
    * retire path passes `retire_negative` so NEG.8 has something to filter on.
    */
   actionType?: string | null
+  /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
+  askGate?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
@@ -1445,6 +1539,11 @@ export async function updateAdTargetWithSync(args: {
     })
     if (refused) return refused
   }
+  const atDispatch = await gateRefusedNow({
+    askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
+    campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: args.force,
+  })
+  if (atDispatch) return atDispatch
 
   const payloadBefore = {
     bidCents: existing.bidCents,

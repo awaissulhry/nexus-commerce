@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
-import { Tabs } from '@/design-system/components'
+import { Tabs, ToastProvider } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../campaigns-ds.css'
@@ -78,7 +78,12 @@ const badgeLetter = (c: CampaignDetailData | null): string => {
 
 const fmtISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
+/** PR 1d — the tabs report every write's outcome as a toast; ads routes get no DS ToastProvider from the shell. */
 export function CampaignDetail({ id }: { id: string }) {
+  return <ToastProvider><CampaignDetailView id={id} /></ToastProvider>
+}
+
+function CampaignDetailView({ id }: { id: string }) {
   const router = useRouter()
   const search = useSearchParams()
   const tabParam = (search.get('tab') ?? 'details') as TabKey
