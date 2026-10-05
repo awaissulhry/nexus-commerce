@@ -21,6 +21,7 @@ import { validateSaleWindow } from './sale-window.js'
 import { storedCompareAt } from './compare-at-price.js'
 import { SHOPIFY_CSV_IDENTITY, shopifyCsvIdentityError } from './catalog-shopify-csv.js'
 import { withFieldName } from '@nexus/shared/off-list-message'
+import { restatesPhotoList } from '../images/listing-photos.pure.js'
 
 // Inventory, pricing and publication have their own transactional owners. An attribute import
 // must not bypass their ledgers, rules or outbound queues by writing their backing columns.
@@ -35,9 +36,15 @@ export const CLASSIFICATION_FIELDS = new Set(['family', 'parentSku', 'categoryId
 const CONTENT = new Set(['name', 'title', 'description', 'bulletPoints', 'keywords'])
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 export const fingerprint = (value: unknown) => createHash('sha256').update(transferCanonical(value)).digest('hex')
-/** Everything a target WRITES. Apply re-plans each record and refuses unless this is byte-identical to the reviewed one. */
-export const targetWriteFingerprint = (target: Pick<TransferTarget, 'patch' | 'contentWrites' | 'priceWrite' | 'presence'>) =>
-  fingerprint([target.patch, target.contentWrites, target.priceWrite ?? null, target.presence ?? null])
+/**
+ * Everything a target WRITES. Apply re-plans each record and refuses unless this is byte-identical to the reviewed one.
+ * Owner 2026-10-05 — plus the eBay photos the review compared (`ebayPhotos`); a target without them keeps its old print.
+ */
+export const targetWriteFingerprint = (target: Pick<TransferTarget, 'patch' | 'contentWrites' | 'priceWrite' | 'presence' | 'ebayPhotos'>) =>
+  fingerprint([target.patch, target.contentWrites, target.priceWrite ?? null, target.presence ?? null, ...(target.ebayPhotos ? [target.ebayPhotos] : [])])
+/** Owner 2026-10-05 — the eBay field the sheet calls "Image URLs": its list is the listing's Product media. */
+export const isEbayPhotoField = (channel: string, field: Pick<CatalogueField, 'channelStore'>) =>
+  channel === 'EBAY' && field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'imageUrls'
 export interface TransferProduct extends ValueRecord {
   id: string; sku: string; version: number; parentId: string | null; familyId: string | null; isParent: boolean
   categories: { categoryId: string; isPrimary: boolean }[]
@@ -62,6 +69,12 @@ export interface TransferContext {
   offerSkus?: Map<string, string[]>
   /** S9 — a SKU this file would create that another product's listing holds or sends as its channel SKU → its sentence. */
   heldChannelSkus?: Map<string, string>
+  /**
+   * Owner 2026-10-05 — per eBay listing id, the photos Publish sends (`ebayPhotoReader`, the list the export writes) and
+   * whether the listing holds them itself (`own`) or follows the Shared product's. Loaded for the listings a file SETs
+   * Image URLs on: the file is compared with this list, not with the old `imageUrls` store a Product media save removes.
+   */
+  ebayPhotos?: Map<string, { urls: string[]; own: boolean }>
 }
 /** CFI-6 — a channel file's own selling price and sale, recorded through the one price door without a push. */
 export interface TransferPriceWrite {
@@ -94,6 +107,12 @@ export interface TransferTarget {
   priceWrite?: TransferPriceWrite
   /** CFI-3 (Q1 delete) — the channel deleted this listing; applied by `recordChannelDeletion`, nothing sent. */
   presence?: 'ENDED'
+  /**
+   * Owner 2026-10-05 — the photos Publish sent when the review compared this eBay listing's Image URLs. Part of the write
+   * fingerprint: the Shared product's and the parent's Product media and the library live outside the listing snapshot, so
+   * a save there between review and apply refuses the record instead of being overwritten unseen.
+   */
+  ebayPhotos?: string[]
 }
 export interface TransferPlan {
   targets: TransferTarget[]; issues: TransferIssue[]; warnings: string[]; exclusions?: SourceExclusion[]
@@ -277,6 +296,8 @@ async function effectiveForClears(groups: Map<string, TransferRow[]>, context: T
     for (const r of clears) {
       const field = fields.find(f => f.fieldKey === r.field || f.sheetKey === r.field)
       if (!field) continue // the row loop names it
+      // Owner 2026-10-05 — an eBay Image URLs list is compared with the photos Publish sends (`context.ebayPhotos`), not here.
+      if (r.action === 'SET' && listing && isEbayPhotoField(first.channel, field) && context.ebayPhotos?.has(String(listing.id))) continue
       const locale = r.locale || languages[0] || ''
       const batchKey = JSON.stringify([first.channel, first.accountId, first.marketplace, first.aliasKey, category, locale])
       if (!batches.has(batchKey)) batches.set(batchKey, { channel: first.channel, accountId: first.accountId, marketplace: first.marketplace, aliasKey: first.aliasKey, category, locale, productIds: new Set(), fieldKeys: new Set(), keys: [], clears: false, sets: false })
@@ -719,7 +740,12 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           resolvedFields.add(fieldIdentity)
           if (field.fieldKey === categoryKey || field.sheetKey === categoryKey) { error(row, 'Set the listing category in Listings'); continue }
           const keys = [...new Set([field.fieldKey, field.sheetKey].filter((s): s is string => !!s))]
-          const old = textField && address && existingProduct ? channelContentState(existingProduct, working, textField, address.language, languages) : storedChannelState(working, field.channelStore, keys)
+          // Owner 2026-10-05 — Product media is the one photo source: an eBay Image URLs SET is compared with the photos Publish
+          // sends (the list the export writes), held by the listing (stored) or followed from Shared (inherited) — not with the
+          // old `imageUrls` store, which a save in Product media removes. Blank, CLEAR and INHERIT keep their own rules.
+          const photos = row.action === 'SET' && before && !textField && isEbayPhotoField(first.channel, field) ? context.ebayPhotos?.get(String(before.id)) : undefined
+          const old: { state: 'stored' | 'inherited'; value: unknown } = photos ? { state: photos.own ? 'stored' : 'inherited', value: photos.urls }
+            : textField && address && existingProduct ? channelContentState(existingProduct, working, textField, address.language, languages) : storedChannelState(working, field.channelStore, keys)
           if (textField) old.value = contentWireValue(old.value, field.shape, textField)
           // CFI-3 (Q1, D3) — a full-update blank clears the market value ONLY when Nexus would publish one; an already-empty
           // value plans nothing. `before` shows the value Nexus would have published, so the review says what goes.
@@ -731,6 +757,12 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             if (old.state === 'inherited') old.value = current.value
           }
           if (preserve(row, old.state === 'stored')) continue
+          if (photos) {
+            target.ebayPhotos = photos.urls
+            // A file that restates that list (the same addresses in the same order) plans nothing: a listing that follows the
+            // Shared product's photos keeps following them, and one with its own list keeps it.
+            if (restatesPhotoList(row.value, photos.urls)) { target.cells.push(cell(row, old, old.value, old.state)); continue }
+          }
           // B2 (the Owner's decision 4, every channel file) — a cell that follows Shared, which the file sets to exactly what
           // Nexus already sends, keeps following Shared: a channel file restates every value, it does not choose them.
           const current = fromChannelFile(row) && row.action === 'SET' ? effective.get(clearKey(key, row.locale, row.field)) : undefined
@@ -744,7 +776,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           // START of the Nexus list keeps the whole list; any other list replaces it, and the review names what goes.
           const slots = row.listSlots
           if (fromChannelFile(row) && row.action === 'SET' && field.shape === 'list' && typeof slots === 'number' && Array.isArray(row.value)) {
-            const held = old.state === 'stored' ? old.value : current?.value
+            const held = old.state === 'stored' || photos ? old.value : current?.value
             if (Array.isArray(held) && held.length > slots) {
               const where = `${first.channel} ${first.marketplace}: ${row.sku} ${field.label}`
               if (row.value.length === slots && sameSent(field, row.value, held.slice(0, slots))) {
@@ -782,7 +814,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (changed.verdict === 'changed') {
             if (textField && address) planContentWrite(target.contentWrites ??= [], address, textField, row.action, value)
             else {
-              if (first.channel === 'EBAY' && row.action === 'SET' && field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'imageUrls') {
+              if (row.action === 'SET' && isEbayPhotoField(first.channel, field)) {
                 const market = `${first.channel} ${first.marketplace}`
                 photoLists.set(market, (photoLists.get(market) ?? 0) + 1)
               }

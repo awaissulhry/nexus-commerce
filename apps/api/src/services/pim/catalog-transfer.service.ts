@@ -16,6 +16,7 @@ import { relationshipAliasConflicts } from './relationship-alias-guard.js'
 import { DraftListingError, draftListingFields, ensureDraftListings } from './draft-listing.service.js'
 import { channelSkuHoldings } from '../listings/channel-sku-rename.js'
 import { settleAndAnnounce } from '../images/listing-photos.service.js'
+import { marketLanguages } from './market-languages.js'
 
 type Payload = { kind: 'catalog-transfer-v1'; market: string; mode: TransferMode; rows?: TransferRow[]; plan: TransferPlan; previewExpiresAt: string }
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -116,9 +117,27 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
     for (const product of products) categoryDefaults[JSON.stringify([product.sku, channel, marketplace])] = defaults[product.id]?.channelCategoryId ?? null
   }
   const listingMap = new Map<string, Record<string, unknown>[]>()
+  // Owner 2026-10-05 — a file's eBay Image URLs are compared with the photos Publish sends (the list the export writes,
+  // `ebayPhotoReader`), not with the old `imageUrls` store a Product media save removes. Only for the listings a SET row
+  // names; two reads per file (the files, which families are on the photo plan) plus the plan of each family that is.
+  const photoKeys = new Set(channelRows.filter(r => r.channel === 'EBAY' && r.entity === 'Overrides' && r.action === 'SET' && r.field.replace(/^attr_/, '') === 'imageUrls').map(transferTargetKey))
+  const photoListings: typeof listings = []
   for (const listing of listings) {
     const key = transferTargetKey({ entity: 'Listings', sku: byId.get(listing.productId)!, channel: listing.channel, accountId: listing.channelConnectionId!, marketplace: listing.marketplace, aliasKey: listing.aliasKey })
     listingMap.set(key, [...(listingMap.get(key) ?? []), safeSnapshot(listing)!])
+    if (listing.channel === 'EBAY' && photoKeys.has(key)) photoListings.push(listing)
+  }
+  const ebayPhotos = new Map<string, { urls: string[]; own: boolean }>()
+  if (photoListings.length) {
+    const { ebayPhotoReader } = await import('./catalog-transfer-export.js')
+    const read = await ebayPhotoReader(products, photoListings, db)
+    for (const listing of photoListings) {
+      // The export's language: the market's first. A market without languages is compared as before (the stored value).
+      let locale: string
+      try { locale = marketLanguages('EBAY', listing.marketplace, markets.map(m => ({ ...m, languages: m.languages ?? [] })))[0] } catch { continue }
+      const photos = read(listing, locale ?? 'und')
+      if (photos) ebayPhotos.set(listing.id, photos)
+    }
   }
   const productIds = products.map(p => p.id)
   const formulas = await db.cellFormula.findMany({ where: { OR: [{ productId: { in: productIds } }, { product: { parentId: { in: productIds } } }] }, select: { productId: true, scope: true, channel: true, marketplace: true, locale: true, fieldKey: true, dependsOn: true, product: { select: { parentId: true } } } })
@@ -139,7 +158,7 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
   return { products: productMap, listings: listingMap, families, categories, accounts, markets, aliases, categoryDefaults, formulas, relationshipBlockedProducts, parentsWithChildren: new Set(products.filter(p => p._count?.children > 0).map(p => p.id)),
     ...(heldChannelSkus.size ? { heldChannelSkus } : {}),
     ...(pricing ? { pendingPriceListings: new Set(pendingPrices.map(p => p.channelListingId).filter((id): id is string => !!id)), saleWindows } : {}),
-    ...(identity ? { offerSkus } : {}) }
+    ...(identity ? { offerSkus } : {}), ...(ebayPhotos.size ? { ebayPhotos } : {}) }
 }
 
 function payloadOf(value: unknown): Payload | null {

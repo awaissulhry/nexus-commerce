@@ -14,8 +14,7 @@ import { masterWorkbookField, channelWorkbookField, relationshipFields, workbook
 import { writeCatalogWorkbook, type WorkbookField } from './catalog-workbook.js'
 import { marketLanguages } from './market-languages.js'
 import { readinessLanguages } from './readiness-model.js'
-import { mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
-import { legacyImageUrls } from '../images/listing-photos.pure.js'
+import { ebayListingPhotos, type PhotoFile } from '../images/listing-photos.pure.js'
 
 const empty = { row: 0, entity: 'Products' as const, sku: '', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: '', action: 'SET' as const }
 const contentFields = new Set(['name', 'title', 'description', 'bulletPoints', 'keywords'])
@@ -202,7 +201,7 @@ export async function catalogRows(
           if (textField) own.value = contentWireValue(own.value, field.shape, textField)
           // Owner 2026-10-05 — an eBay listing's Image URLs are the photos Publish sends, the same list as the sheet's Product
           // media cell (after a save in Product media the old list is gone, and the file's Image columns read blank).
-          const photos = !textField && field.fieldKey === EBAY_PHOTOS_FIELD ? ebayPhotos?.(listing, listingLanguages[0] ?? 'und') : undefined
+          const photos = !textField && listing.channel === 'EBAY' && field.fieldKey === EBAY_PHOTOS_FIELD ? ebayPhotos?.(listing, listingLanguages[0] ?? 'und')?.urls : undefined
           if (photos?.length) own = { state: 'stored', value: photos }
           const value = typeof own.value === 'object' && own.value && 'toNumber' in own.value ? (own.value as { toNumber(): number }).toNumber() : own.value
           rows.push({ ...identity, locale, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
@@ -240,56 +239,35 @@ export async function catalogRows(
 /** The eBay field the sheet calls "Image URLs" (`channel-specs/ebay.ts`). */
 const EBAY_PHOTOS_FIELD = 'imageUrls'
 
-type PhotoFile = { id: string; productId: string; url: string; mediaType?: string | null }
-/**
- * Owner 2026-10-05 — Product media is the one photo source: the photos Publish sends for one eBay listing row, off the
- * photo plan — its old Image URLs list while that is still the list sent (`legacyImageUrls`), else its Product media
- * resolved the way Publish resolves it (`studio-publication-media.ts` publicationImages: the listing's own list, the
- * Shared product's, the parent's, the library, by sortOrder then id). Photos only: eBay takes no videos, and a missing
- * file is left out (Publish names it). Undefined when the saved list cannot be read (the stored value is exported then).
- * The import compares a file's Image URLs with this same list.
- */
-export function ebayListingPhotoUrls(input: { listingAttributes: unknown; locale: string; product: { id: string; localizedContent?: unknown }
-  parent?: { id: string; localizedContent?: unknown } | null; files: readonly PhotoFile[] }): string[] | undefined {
-  const legacy = legacyImageUrls(input.listingAttributes)
-  if (legacy) return legacy
-  const parent = input.parent && input.parent.id !== input.product.id ? input.parent : null
-  try {
-    const { collection } = resolveMediaCollection({ locale: input.locale, own: mediaObject(input.listingAttributes)._productMediaLocales,
-      shared: input.product.localizedContent, parent: parent?.localizedContent,
-      ownIds: input.files.filter(f => f.productId === input.product.id).map(f => f.id), parentIds: parent ? input.files.filter(f => f.productId === parent.id).map(f => f.id) : [] })
-    return collection.items.flatMap(item => {
-      const file = input.files.find(f => f.id === item.assetId && (f.productId === input.product.id || f.productId === parent?.id))
-      return file && (file.mediaType ?? 'IMAGE') === 'IMAGE' ? [file.url] : []
-    })
-  } catch { return undefined }
-}
-
+/** What `ebayPhotoReader` reads of a product: its Shared Product media and its parent's. */
+type PhotoProduct = { id: string; parentId: string | null; localizedContent?: unknown; parent?: { id: string; localizedContent?: unknown } | null }
+type PhotoListing = { productId: string; marketplace: string; channelConnectionId: string | null; aliasKey: string | null; platformAttributes: unknown }
 /**
  * The photos of each eBay listing of one export page, as the sheet's Product media cell shows them: a family on the photo
- * plan reads the plan's row (`sheetMediaPlan`, what its publisher sends), any other `ebayListingPhotoUrls`. Two reads per
- * page (the files, which families are on the plan), plus the plan of each family that is.
+ * plan reads the plan's row (`sheetMediaPlan`, what its publisher sends; `own` false: the plan decides), any other
+ * `ebayListingPhotos`. Two reads per page (the files, which families are on the plan), plus the plan of each family that
+ * is. Owner 2026-10-05 — the import reads the same (`loadTransferContext`), so a re-imported export plans nothing.
  */
-async function ebayPhotoReader(products: Prisma.ProductGetPayload<{ include: typeof productInclude }>[],
-  listings: { channel: string; productId: string }[]) {
+export async function ebayPhotoReader(products: readonly PhotoProduct[], listings: readonly { channel: string; productId: string }[],
+  db: Pick<typeof prisma, 'productImage' | 'productMediaPlan'> = prisma) {
   const listed = new Set(listings.filter(l => l.channel === 'EBAY').map(l => l.productId))
   const rows = products.filter(p => listed.has(p.id))
-  const files = await prisma.productImage.findMany({ where: { productId: { in: [...new Set(rows.flatMap(p => [p.id, ...(p.parentId ? [p.parentId] : [])]))] } },
+  const files: PhotoFile[] = await db.productImage.findMany({ where: { productId: { in: [...new Set(rows.flatMap(p => [p.id, ...(p.parentId ? [p.parentId] : [])]))] } },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, productId: true, url: true, mediaType: true } })
   const roots = [...new Set(rows.map(p => p.parentId ?? p.id))]
-  const onPlan = await prisma.productMediaPlan.findMany({ where: { productId: { in: roots }, layer: 'SHARED' }, select: { productId: true } })
+  const onPlan = roots.length ? await db.productMediaPlan.findMany({ where: { productId: { in: roots }, layer: 'SHARED' }, select: { productId: true } }) : []
   const plans = new Map<string, Awaited<ReturnType<typeof import('../images/media-plan.service.js').sheetMediaPlan>>>()
   if (onPlan.length) {
     const { sheetMediaPlan } = await import('../images/media-plan.service.js')
     for (const root of new Set(onPlan.map(p => p.productId))) plans.set(root, await sheetMediaPlan(root))
   }
-  return (listing: { productId: string; marketplace: string; channelConnectionId: string | null; aliasKey: string | null; platformAttributes: unknown }, locale: string) => {
+  return (listing: PhotoListing, locale: string): { urls: string[]; own: boolean } | undefined => {
     const product = rows.find(p => p.id === listing.productId)
     if (!product) return undefined
     const plan = plans.get(product.parentId ?? product.id)
-    if (plan) return plan.row(product.id, { channel: 'EBAY', marketplace: listing.marketplace, accountId: listing.channelConnectionId ?? '', aliasKey: listing.aliasKey ?? '' }, locale)
-      .items.flatMap(item => item.type === 'IMAGE' && item.preview ? [item.preview] : [])
-    return ebayListingPhotoUrls({ listingAttributes: listing.platformAttributes, locale, product, parent: product.parent, files })
+    if (plan) return { own: false, urls: plan.row(product.id, { channel: 'EBAY', marketplace: listing.marketplace, accountId: listing.channelConnectionId ?? '', aliasKey: listing.aliasKey ?? '' }, locale)
+      .items.flatMap(item => item.type === 'IMAGE' && item.preview ? [item.preview] : []) }
+    return ebayListingPhotos({ listingAttributes: listing.platformAttributes, locale, product, parent: product.parent, files })
   }
 }
 

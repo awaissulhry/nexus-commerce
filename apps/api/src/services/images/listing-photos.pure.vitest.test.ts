@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cloudinaryPhotoKey, isLegacyPhotoId, legacyImageUrls, legacyPhotoId, legacyPhotoItems, matchLibraryPhoto, photoAddresses } from './listing-photos.pure.js'
+import { cloudinaryPhotoKey, ebayListingPhotos, isLegacyPhotoId, legacyImageUrls, legacyPhotoId, legacyPhotoItems, matchLibraryPhoto, photoAddresses, restatesPhotoList } from './listing-photos.pure.js'
 
 const cdn = (path: string) => `https://res.cloudinary.com/demo-cloud/image/upload/${path}`
 
@@ -63,5 +63,45 @@ describe('the old Image URLs list', () => {
     expect(isLegacyPhotoId(legacyPhotoId(outside))).toBe(true)
     expect(legacyPhotoId(outside)).toBe(legacyPhotoId(outside))
     expect(isLegacyPhotoId('lib-1')).toBe(false)
+  })
+})
+
+// Owner 2026-10-05 — the import compares a file's eBay Image URLs with the list Publish sends.
+describe('ebayListingPhotos — the list Publish sends, held by the listing or followed from Shared', () => {
+  const url = (id: string) => `https://cdn.example/${id}.jpg`
+  const media = (...ids: string[]) => ({ _productMedia: { version: 1, items: ids.map(assetId => ({ assetId })) } })
+  const files = [{ id: 'p1', productId: 'root', url: url('p1') }, { id: 'p2', productId: 'root', url: url('p2') }]
+  const root = { id: 'root', localizedContent: { und: media('p2', 'p1') } }
+  const child = { id: 'child', localizedContent: null }
+
+  it('own: an old Image URLs list, or Product media saved on the listing for this language or all languages', () => {
+    expect(ebayListingPhotos({ listingAttributes: { imageUrls: [url('x')] }, locale: 'it', product: child, parent: root, files })).toEqual({ urls: [url('x')], own: true })
+    expect(ebayListingPhotos({ listingAttributes: { _productMediaLocales: { it: media('p1') } }, locale: 'it', product: child, parent: root, files })).toEqual({ urls: [url('p1')], own: true })
+    expect(ebayListingPhotos({ listingAttributes: { _productMediaLocales: { und: media('p1') } }, locale: 'it', product: child, parent: root, files })).toEqual({ urls: [url('p1')], own: true })
+  })
+  it('following: nothing saved on the listing for this language — the Shared (here the parent\'s) list', () => {
+    expect(ebayListingPhotos({ listingAttributes: {}, locale: 'it', product: child, parent: root, files })).toEqual({ urls: [url('p2'), url('p1')], own: false })
+    expect(ebayListingPhotos({ listingAttributes: { _productMediaLocales: { de: media('p1') } }, locale: 'it', product: child, parent: root, files })).toEqual({ urls: [url('p2'), url('p1')], own: false })
+  })
+})
+
+describe('restatesPhotoList — a file restates the list only with the same addresses in the same order', () => {
+  const sent = ['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg']
+  it('the same list, cleaned and each address once', () => {
+    expect(restatesPhotoList([...sent], sent)).toBe(true)
+    expect(restatesPhotoList([` ${sent[0]} `, sent[0], '', sent[1]], sent)).toBe(true)
+  })
+  it('another order, a missing or extra photo, another size of the same Cloudinary photo: a change', () => {
+    expect(restatesPhotoList([sent[1], sent[0]], sent)).toBe(false)
+    expect(restatesPhotoList([sent[0]], sent)).toBe(false)
+    expect(restatesPhotoList([...sent, 'https://cdn.example/c.jpg'], sent)).toBe(false)
+    const cdn = (path: string) => `https://res.cloudinary.com/demo-cloud/image/upload/${path}`
+    expect(restatesPhotoList([cdn('w_800/v1/p/a.jpg')], [cdn('v1/p/a.jpg')])).toBe(false)
+  })
+  it('not a list of addresses, or an empty list: restates nothing', () => {
+    expect(restatesPhotoList(sent.join(','), sent)).toBe(false)
+    expect(restatesPhotoList([sent[0], 5, sent[1]], sent)).toBe(false)
+    expect(restatesPhotoList([], [])).toBe(false)
+    expect(restatesPhotoList(null, sent)).toBe(false)
   })
 })

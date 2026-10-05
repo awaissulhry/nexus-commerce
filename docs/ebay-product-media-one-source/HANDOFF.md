@@ -22,7 +22,11 @@ file's order; super smart and dynamic; deploy multiple sub-agents, AAA quality".
 - Builders running: W1 product-media.service.ts (editor bridge, adopt url: ids on save, delete imageUrls on save, copy);
   W2 writers (bulk-edit, import applyTransferTarget → settle in tx, live event); W3 sheet Image URLs column = Product
   media, row note, eBay export from Product media, live-read check.
-- Then: 2 reviewers (correctness/data safety; tests + full area runs), then PR.
+- 16:40 W1/W2/W3 DONE, committed locally 56635ace3 (not pushed). settleAndAnnounce shared. All their checks pass.
+- Running: W4 import round-trip (planner compares eBay imageUrls with the list Publish sends; ebayListingPhotoUrls → pure);
+  R1 adversarial review (data safety, versions, publish, ids). Next: R2 test sweep (profiles ON, web, guards), fixes, PR.
+- Known follow-ups (not in PR 1): Claude undo of Image URLs reads only imageUrls (blind after settle); photo-plan families'
+  Image URLs edits are ignored by Publish (pre-existing); live-read may compare eBay-hosted addresses.
 - Open for PR 2: `_mediaGalleryDraft` (old eBay Images tab) still overrides at publish; live drift mark in the cell.
 
 ## Writers of imageUrls (subagent map)

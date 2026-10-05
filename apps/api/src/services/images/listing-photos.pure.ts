@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mediaObject, type ProductMediaCollection } from '@nexus/shared/product-media'
+import { mediaObject, resolveMediaCollection, type ProductMediaCollection } from '@nexus/shared/product-media'
 
 /**
  * Pure rules of an eBay listing's photo list (Owner 2026-10-05: Product media is the one photo source). The writes are
@@ -81,3 +81,47 @@ export function legacyPhotoItems<T extends LibraryPhoto>(urls: string[], files: 
   return { items, outside }
 }
 
+
+/** A file of the media library as a photo list reads it. */
+export interface PhotoFile { id: string; productId: string; url: string; mediaType?: string | null }
+export interface EbayListingPhotosInput {
+  listingAttributes: unknown; locale: string; product: { id: string; localizedContent?: unknown }
+  parent?: { id: string; localizedContent?: unknown } | null; files: readonly PhotoFile[]
+}
+/**
+ * Owner 2026-10-05 — Product media is the one photo source: the photos Publish sends for one eBay listing row, off the
+ * photo plan — its old Image URLs list while that is still the list sent (`legacyImageUrls`), else its Product media
+ * resolved the way Publish resolves it (`studio-publication-media.ts` publicationImages: the listing's own list, the
+ * Shared product's, the parent's, the library, by sortOrder then id). Photos only: eBay takes no videos, and a missing
+ * file is left out (Publish names it). `own`: the listing holds the list itself (old list, or Product media saved on it
+ * for this language or all languages); else it follows the Shared product's. Undefined when the saved list cannot be read.
+ * The export writes this list (catalog-transfer-export.ts) and the import compares a file's Image URLs with it.
+ */
+export function ebayListingPhotos(input: EbayListingPhotosInput): { urls: string[]; own: boolean } | undefined {
+  const legacy = legacyImageUrls(input.listingAttributes)
+  if (legacy) return { urls: legacy, own: true }
+  const parent = input.parent && input.parent.id !== input.product.id ? input.parent : null
+  try {
+    const { collection, source } = resolveMediaCollection({ locale: input.locale, own: mediaObject(input.listingAttributes)._productMediaLocales,
+      shared: input.product.localizedContent, parent: parent?.localizedContent,
+      ownIds: input.files.filter(f => f.productId === input.product.id).map(f => f.id), parentIds: parent ? input.files.filter(f => f.productId === parent.id).map(f => f.id) : [] })
+    const urls = collection.items.flatMap(item => {
+      const file = input.files.find(f => f.id === item.assetId && (f.productId === input.product.id || f.productId === parent?.id))
+      return file && (file.mediaType ?? 'IMAGE') === 'IMAGE' ? [file.url] : []
+    })
+    return { urls, own: source === 'locale' || source === 'all-languages' }
+  } catch { return undefined }
+}
+/** The addresses of `ebayListingPhotos`; undefined when the saved list cannot be read (the export keeps the stored value). */
+export const ebayListingPhotoUrls = (input: EbayListingPhotosInput): string[] | undefined => ebayListingPhotos(input)?.urls
+
+/**
+ * Owner 2026-10-05 — a file's Image URLs restate the list Publish sends: a list of addresses that are, cleaned and each
+ * once (`photoAddresses`), exactly that list in that order. Exact addresses: the same Cloudinary photo at another size is
+ * another address here (an import then settles it onto the same library photo). An empty list restates nothing.
+ */
+export function restatesPhotoList(value: unknown, sent: readonly string[]): boolean {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) return false
+  const file = photoAddresses(value), current = photoAddresses(sent)
+  return current.length > 0 && file.length === current.length && file.every((url, i) => url === current[i])
+}

@@ -20,7 +20,8 @@ vi.mock('./mapping/category-mapping.service.js', () => ({ resolveCategoriesForPr
 vi.mock('../images/media-plan.service.js', () => ({ sheetMediaPlan: async () => ({ row: planRow }) }))
 
 import prisma from '../../db.js'
-import { catalogRows, ebayListingPhotoUrls } from './catalog-transfer-export.js'
+import { catalogRows } from './catalog-transfer-export.js'
+import { ebayListingPhotoUrls } from '../images/listing-photos.pure.js'
 import type { transferContracts } from './catalog-transfer-plan.js'
 import { buildEbayWorkbookRows, type EbayExportRecord } from '../channel-mapping/ebay-export.js'
 import { buildEbayDraftFields } from '../channel-mapping/ebay-draft.js'
