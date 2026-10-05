@@ -209,6 +209,8 @@ interface Seeded {
   sourcePresetId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
+/** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
+const MCP8_EBAY_CATEGORY = '177104'
 const inside = <T>(workspaceId: string, work: () => Promise<T>) =>
   withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
@@ -224,6 +226,14 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         channel: 'EBAY', code: market, name: `eBay ${market}`, region: 'EU', currency: 'EUR', language: 'it', languages: ['it'], marketplaceId: `TEST_EBAY_${market}`,
         // P5 — one mapping rule, what channel-mappings shows for this market.
         schemaMapping: { version: 1, fields: { title: { source: 'name', notes: `${canary}-MAPPING` } } },
+      },
+    })
+    // Phase 3 T3 — the business's loaded details of one eBay category on its market (what "Load eBay fields" stores),
+    // named with the canary: ebay-categories reads them from the cache, never from eBay.
+    await db.categorySchema.create({
+      data: {
+        channel: 'EBAY', marketplace: market, productType: MCP8_EBAY_CATEGORY, schemaVersion: `${mark}-${RUN}`, expiresAt: new Date(Date.now() + 86_400_000),
+        schemaDefinition: { aspects: [{ id: 'aspect_Lining', label: `${canary}-ASPECT`, localizedName: `${canary}-ASPECT`, options: [], required: true }], conditions: [{ value: 'NEW', label: 'New' }] },
       },
     })
     // O3 — the business's identity for buyers (Settings → Company): a buyer-facing tool refuses a business without one.
@@ -884,6 +894,10 @@ const B_FORMS: Record<string, () => Array<{ form: string; value: unknown }>> = {
  * bulk-attribute-change may set only an attribute the product's family has or the product already holds.
  */
 const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unknown>)> = {
+  // Phase 3 T3 — one eBay category of B's own market, loaded in B only: from A the market is not A's (refused before any
+  // read), inside B its details come from B's cache. Neither side calls eBay. `query` is left out (B_VALUES names a
+  // product search's words): with it the call would be an eBay search, which no test may send.
+  get 'ebay-categories'() { return { market: seeded.b.market, categoryId: MCP8_EBAY_CATEGORY, query: undefined } },
   // L7 — a new product of its own: a SKU no business has (a create names no row to aim at B).
   'create-product': { sku: `MCP8-NEW-${RUN}` },
   // L8 — the value the first action (pin-quantity, set-price) needs.
