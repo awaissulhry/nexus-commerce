@@ -436,9 +436,13 @@ async function planValues(c: Coordinate, args: Record<string, unknown>, userId: 
   const now = await currentValues(c, keys)
   if (now.unknown.length) return { error: `${now.unknown.join(', ')}: not an attribute of this listing. Its attributes: ${now.known.slice(0, 60).join(', ')}${now.known.length > 60 ? ' …' : ''}.` }
   const { applyProductBulkEdits } = await import('../../products/bulk-edit.service.js')
-  const check = await applyProductBulkEdits(bulkInput(c, values, reset, true) as never, bulkContext(userId) as never) as { errors?: Array<{ field: string; error: string }> }
+  const check = await applyProductBulkEdits(bulkInput(c, values, reset, true) as never, bulkContext(userId) as never) as
+    { errors?: Array<{ field: string; error: string }>; warnings?: Array<{ field: string; warning: string }> }
   if (check.errors?.length) return { error: check.errors.slice(0, 10).map((e) => `${e.field}: ${e.error}`).join(' ') }
-  return { values, reset, before: now.values, labels: now.labels }
+  // N4 — what the writer stores but warns about (a value off a closed channel list, a value over a channel cap): it is
+  // saved, and the channel refuses it at the next publish. The approver and Claude see it before, not at publish.
+  const warnings = (check.warnings ?? []).slice(0, 10)
+  return { values, reset, before: now.values, labels: now.labels, warnings }
 }
 
 const SET_FIELDS_UNDO: ToolUndo = {
@@ -500,6 +504,12 @@ async function planSetFields(args: Record<string, unknown>, userId: string | nul
       c, kind, version: null,
       before: { coordinate: c, kind, listingId, values: plan.before },
       preview: { action: 'set-listing-fields', sku: c.sku, destination, changes,
+        ...(plan.warnings.length ? {
+          warnings: plan.warnings.map((w) => `${w.field}: ${w.warning}`),
+          warning: `Saved in Nexus, but ${new Set(plan.warnings.map((w) => w.field)).size === 1 ? 'this value is' : 'these values are'} likely `
+            + `to be refused by ${channelLabel(c.channel)} at the next publish: `
+            + `${plan.warnings.slice(0, 3).map((w) => w.warning.replace(/\.+$/, '')).join('; ')}. product-content lists the allowed values.`,
+        } : {}),
         fingerprint: fingerprint({ c, before: plan.before, values: plan.values, reset: plan.reset }) },
       apply: async () => {
         const { applyProductBulkEdits } = await import('../../products/bulk-edit.service.js')

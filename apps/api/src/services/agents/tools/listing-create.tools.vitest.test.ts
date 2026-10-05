@@ -169,7 +169,13 @@ describe('set-listing-fields', () => {
     expect(await dryRun('set-listing-fields', { ...base, values: { item_package_weight: 2 } }))
       .toMatchObject({ ok: false, error: expect.stringContaining('send { value, unit }') })
     // P1 (value-verdict): a unit off the list is stored with a finding, and the publish review blocks it.
-    expect(await dryRun('set-listing-fields', { ...base, values: { item_package_weight: { value: 2, unit: 'stones' } } })).toMatchObject({ ok: true })
+    const offList = await dryRun('set-listing-fields', { ...base, values: { item_package_weight: { value: 2, unit: 'stones' } } })
+    expect(offList).toMatchObject({ ok: true })
+    // N4 — and the preview says so before it is approved, not only the publish review after.
+    expect(offList.preview.warning).toMatch(/^Saved in Nexus, but this value is likely to be refused by Amazon at the next publish: .*stones/)
+    expect(offList.preview.warnings.length).toBeGreaterThan(0)
+    for (const w of offList.preview.warnings) expect(w).toContain('stones')
+    expect(offList.preview.warning).not.toContain('..')
   })
 
   it('refuses stock, price, content and unknown keys, and two kinds of change at once', async () => {
