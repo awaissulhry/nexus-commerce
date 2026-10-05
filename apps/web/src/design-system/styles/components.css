@@ -3252,7 +3252,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 @container (max-width: 560px) { .nds-media-board-row { grid-template-columns: minmax(0, 1fr); } .nds-media-board-head { flex-direction: row; flex-wrap: wrap; align-items: center; } }
 /* MediaBoard `slots` (the Media page's photo grid, 2026-09-29): one header of slot names over every row, fixed slots,
    and the board scrolls sideways as one with the set names kept in view. Stays a two-column grid on a phone. */
-.nds-media-board.slots { --nds-media-board-tile: 76px; overflow-x: auto; overscroll-behavior-x: contain; }
+.nds-media-board.slots { --nds-media-board-tile: 76px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+/* While the board scrolls under an overlay scrollbar, the bar sits in a band under the last row — not over its frame
+   and, under the pointer, its captions (the Tabs band, same 14px and the same reason). */
+.nds-media-board.slots[data-overflows='overlay'] { padding-bottom: var(--nds-space-14); }
 .nds-media-board.slots .nds-media-board-row, .nds-media-board-columns { grid-template-columns: 136px max-content; width: max-content; min-width: 100%; }
 .nds-media-board-columns { display: grid; gap: var(--nds-space-10); padding: 0 var(--nds-space-10); border: 1px solid transparent; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); font-variant-numeric: tabular-nums; }
 .nds-media-board-columns-head { position: sticky; inset-inline-start: 0; }
