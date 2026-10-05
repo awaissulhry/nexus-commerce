@@ -143,7 +143,9 @@ describe('AMAZON - the three tiers, in order', () => {
     expect(cell.candidates!.limit).toBe(4)
     expect(cell.candidates!.schemaFetchedAt).toBe(OUTERWEAR_DE.fetchedAt)
     expect(cell.candidates!.state).toBe('ok')
-    expect(cell.candidates!.items).toHaveLength(50)
+    // Wave 2 A4 — the 22 themes Amazon accepts, not the schema's 50 (28 are deprecated).
+    expect(cell.candidates!.items).toHaveLength(22)
+    expect(cell.candidates!.items.every((i) => !i.deprecated)).toBe(true)
     expect(cell.separator).toBe(' / ')
   })
 
@@ -162,6 +164,9 @@ describe('AMAZON - the three tiers, in order', () => {
     expect(cell.theme).toEqual({ code: 'SIZE_NAME/COLOR_NAME', label: 'Größe / Farbe', deprecated: true })
     expect(cell.axes.map((a) => a.axisKey)).toEqual(['size', 'color'])
     expect(cell.axes.map((a) => a.target)).toEqual(['size', 'color'])
+    // Wave 2 A4 — the deprecated theme in use stays offered (the editor shows it under Deprecated); no other dead one does.
+    expect(cell.candidates!.items.filter((i) => i.deprecated).map((i) => i.code)).toEqual(['SIZE_NAME/COLOR_NAME'])
+    expect(cell.candidates!.items).toHaveLength(23)
   })
 
   it("T16: `''` on a LIVE row is NOT an override - it falls through to the derivation", () => {

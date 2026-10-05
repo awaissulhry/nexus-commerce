@@ -21,6 +21,7 @@ import {
   dropsForTheme,
   marketplaceIdFor,
   normaliseStoredTheme,
+  offeredThemes,
   themeSchemaFacts,
   themeSegments,
   type ThemeSchemaFacts,
@@ -290,5 +291,28 @@ describe('marketplaceIdFor - one rule for the __lastPublishedAxes key', () => {
     expect(marketplaceIdFor('ebay', 'de')).toBe('EBAY_DE')
     expect(marketplaceIdFor('AMAZON', 'IT')).toBe('IT')
     expect(marketplaceIdFor('SHOPIFY', 'GLOBAL')).toBe('GLOBAL')
+  })
+})
+
+describe('offeredThemes - the themes Amazon accepts, plus the one in use (wave 2 A4)', () => {
+  const classified = classifyThemes(factsFor(OUTERWEAR_IT))
+
+  it('drops every deprecated theme on the real 50, keeping order', () => {
+    const offered = offeredThemes(classified, null)
+    expect(offered).toHaveLength(22)
+    expect(offered.every((t) => !t.deprecated)).toBe(true)
+    expect(offered.map((t) => t.code)).toEqual(classified.filter((t) => !t.deprecated).map((t) => t.code))
+  })
+
+  it('keeps a deprecated theme that is IN USE, and only that one', () => {
+    const offered = offeredThemes(classified, 'SIZE_NAME/COLOR_NAME')
+    expect(offered).toHaveLength(23)
+    expect(offered.filter((t) => t.deprecated).map((t) => t.code)).toEqual(['SIZE_NAME/COLOR_NAME'])
+  })
+
+  it('a live theme in use changes nothing, and a blank stored theme is no theme (T16)', () => {
+    expect(offeredThemes(classified, 'COLOR/SIZE')).toHaveLength(22)
+    expect(offeredThemes(classified, '  ')).toHaveLength(22)
+    expect(offeredThemes(classified, undefined)).toHaveLength(22)
   })
 })

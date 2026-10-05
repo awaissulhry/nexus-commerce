@@ -67,3 +67,18 @@ describe('Cell details belongs to the control', () => {
     expect(shared).not.toContain('Cell details…')
   })
 })
+
+/**
+ * Wave 2 E14 — paste with a header row is ONE module both scopes wire the same way: its clipboard processor on the grid
+ * and its `suppressPaste` in the grid's default column, so a column the header does not name is skipped, never
+ * rewritten. The DS processor that writes the current value back is no longer used by either sheet.
+ */
+describe.each([['channel', read('channel', 'useChannelSheetAdapter.tsx')], ['master', read('master', 'useMasterSheetAdapter.tsx')]])('%s sheet — paste with a header row', (_scope, src) => {
+  it('uses the shared header paste, its processor and its default column', () => {
+    expect(src).toContain("import { useHeaderPaste } from '../headerPaste';")
+    expect(src).toMatch(/const headerPaste = useHeaderPaste<\w+>\(/)
+    expect(src).toContain('processDataFromClipboard: headerPaste.processDataFromClipboard,')
+    expect(src).toMatch(/defaultColDef: headerPaste\.defaultColDef,|\.\.\.headerPaste\.defaultColDef/)
+    expect(src).not.toContain('sheetPasteProcessor')
+  })
+})

@@ -37,7 +37,7 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { marketplaceIdFor } from './variation-theme-segments.js'
 import { ebayDeclaredAxes, foldAvailability, lockedAxisKeysFrom, variationLockFor, VT_COPY } from './variation-rules.service.js'
 import { loadAmazonThemeFacts, resolveVariationCategory } from './variation-theme-facts.js'
-import { addsForTheme, attributeTitle, bindSegmentToAttribute, classifyThemes, dropsForTheme, themeSegments } from './variation-theme-segments.js'
+import { addsForTheme, attributeTitle, bindSegmentToAttribute, classifyThemes, dropsForTheme, offeredThemes, themeSegments } from './variation-theme-segments.js'
 import { ProductRelationshipError } from './product-relationship.service.js'
 import { readAxisValues, UnknownProductError, type StudioSheet } from './studio-sheet.service.js'
 import { getInformationSheet as getStudioSheet } from './information-sheet.js'
@@ -916,7 +916,8 @@ export interface ProjectionRead {
   freeform: boolean
   /** Where a mapping SAVE lands, so the dock can say it before the operator commits. */
   affectsAllMarkets: boolean
-  theme: { value: string | null; options: Array<{ code: string; label: string }> } | null
+  /** `options`: the themes Amazon accepts, plus the one in use even when deprecated (`offeredThemes`, wave 2 A4). */
+  theme: { value: string | null; options: Array<{ code: string; label: string; deprecated?: boolean; coversAll?: boolean; drops?: string[]; adds?: string[] }> } | null
   /**
    * The presentation ORDER, relayed read-only so the dock paints in one round trip.
    *
@@ -1657,15 +1658,18 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
      * wanted keys, the same grouping the sheet cell's editor renders (`Covers every axis` · `Drops an axis` ·
      * `Deprecated`), so the two hosts group the list identically.
      */
+    /* Wave 2 A4 — only the themes Amazon accepts, plus the family's own theme on this market even when Amazon
+       deprecated it (it then sits under `Deprecated`, with the cell's warning). Theme change and the agent tool check a
+       target against THIS list, so a deprecated theme is never a choice anywhere. */
     theme: channel === 'AMAZON'
       ? {
           value: variation.theme?.code ?? null,
-          options: themeOptions.map((code) => ({
+          options: offeredThemes(themeOptions.map((code) => ({
             code,
             label: themeLabels[code] ?? code,
             deprecated: themeDeprecated.has(code),
             ...(amazonThemeGrouping.get(code) ?? { coversAll: false, drops: [] as string[], adds: [] as string[] }),
-          })),
+          })), variation.theme?.code ?? null),
         }
       : null,
     split: {

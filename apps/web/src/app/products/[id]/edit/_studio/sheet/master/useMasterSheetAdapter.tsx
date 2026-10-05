@@ -14,6 +14,7 @@ import { useSheetGeometry } from '../useSheetGeometry';
 import type { ProductSheetModel } from '../productSheetModel';
 import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { sheetEmptyState } from '../sheetGridStates';
+import { useHeaderPaste } from '../headerPaste';
 import { chooseCategoryLink, FAMILY_UNSET, setupSentence } from '../channel/rulesStatus';
 import Link from '@/lib/workspaces/Link';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
@@ -25,7 +26,7 @@ import { Button, InfoTip, Pill } from '@/design-system/primitives';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
 import { FormulaBulkDialog } from '../FormulaBulkDialog';
 import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
-import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
+import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
 import { SCOPE_PROGRESS_COLUMN, SHARED_PROGRESS_TIP, coordinateProgressValue, coordinateReadinessColumns, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
@@ -681,8 +682,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         cellRendererParams: { secondaryRef, rowMenuRef },
         headerTooltip: 'Family — a parent and its children',
     }), [bandWidth]);
-    const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), []);
-    const processDataFromClipboard = useMemo(() => sheetPasteProcessor<StudioRow>(customisableColumns.map((c) => ({ colId: c.key, headerName: c.label }))), [customisableColumns]);
+    // Wave 2 E14 — paste with a header row: the same module as the channel scopes (`../headerPaste`).
+    const headerPaste = useHeaderPaste<StudioRow>(customisableColumns.map((c) => ({ colId: c.key, headerName: c.label })), (message, tone) => toast(message, tone));
+    const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true, ...headerPaste.defaultColDef }), [headerPaste.defaultColDef]);
     const onCellValueChanged = useCallback((e: {
         data: StudioRow;
         colDef: {
@@ -943,7 +945,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             // The same events open and close the Status and Action fence (P9).
             ...publishFenceProps,
             rowClassRules: rowClassRules,
-            processDataFromClipboard: processDataFromClipboard,
+            processDataFromClipboard: headerPaste.processDataFromClipboard,
             loading: loading,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,

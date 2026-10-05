@@ -263,11 +263,17 @@ export async function buildThemeChangePlan(input: ThemeChangeInput): Promise<The
         'An Amazon theme change needs the theme it changes TO. Send `theme` with one of this product type’s variation themes.',
       )
     }
+    // Wave 2 A4 — the dock's own list (`offeredThemes`): the themes Amazon accepts, plus the one in use. The one in use
+    // may be deprecated; it is never a TARGET.
     const offered = read.theme?.options ?? []
-    if (offered.length > 0 && !offered.some((o) => o.code === theme)) {
+    const target = offered.find((o) => o.code === theme)
+    if (offered.length > 0 && (!target || target.deprecated)) {
+      const accepted = offered.filter((o) => !o.deprecated)
       throw new ProjectionRequestError(
-        `"${theme}" is not one of the ${offered.length} variation themes this product type offers on ${read.coordinate.market}.`,
-        { themeOptions: offered.map((o) => o.code) },
+        target
+          ? `Amazon has deprecated ${theme} on ${read.coordinate.market}. Choose one of the ${accepted.length} themes Amazon accepts there.`
+          : `"${theme}" is not one of the ${accepted.length} variation themes Amazon accepts on ${read.coordinate.market}.`,
+        { themeOptions: accepted.map((o) => o.code) },
       )
     }
     const current = currentThemeOf(read)

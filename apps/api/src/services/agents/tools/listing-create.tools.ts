@@ -533,10 +533,14 @@ async function planSetFields(args: Record<string, unknown>, userId: string | nul
   }
   if (c.channel !== 'AMAZON') return { error: `${where}: a variation theme is set here for Amazon only; other channels name their variation axes in Nexus.` }
   const theme = String(args.variationTheme)
+  // Wave 2 A4 — the dock's own list: the themes Amazon accepts, plus the one in use, which may be deprecated and is
+  // then never a target.
   const options = read.theme?.options ?? []
-  if (!options.some((o) => o.code === theme)) {
-    return { error: `${where}: ${theme} is not a variation theme of this product type here${options.length ? ` (${options.slice(0, 20).map((o) => o.code).join(', ')})` : ''}.` }
-  }
+  const target = options.find((o) => o.code === theme)
+  const accepted = options.filter((o) => !o.deprecated)
+  const named = accepted.length ? ` (${accepted.slice(0, 20).map((o) => o.code).join(', ')})` : ''
+  if (target?.deprecated) return { error: `${where}: Amazon has deprecated ${theme} here; choose a theme Amazon accepts${named}.` }
+  if (!target) return { error: `${where}: ${theme} is not a variation theme Amazon accepts for this product type here${named}.` }
   const from = read.theme?.value ?? null
   if (from === theme) return { error: `${where}: the variation theme is already ${theme}.` }
   return {
