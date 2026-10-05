@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { NativeEdit } from '@nexus/shared/shopify-information'
-import { nativeFieldValueError, nativeNullableFields } from '@nexus/shared/shopify-information'
+import { nativeEmptyClearFields, nativeFieldValueError, nativeNullableFields } from '@nexus/shared/shopify-information'
 import { validateShopifyField, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { Banner, KeyValue } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
@@ -262,6 +262,7 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
   /* A field not switched on explains itself in its own banner below; the generic read-only note would repeat it. */
   const reason = permissionReason || (template ? null : field?.reason || (selected ? selected.row.values[selected.column.key]?.writeBlockedReason : null))
   const divergence = selected?.row.values[selected.column.key]?.divergence
+  const clearsToEmpty = !translated && !!field && !field.definition && nativeEmptyClearFields.includes(field.id)
   const warning = !locked && field && !(translated && value === null) && !informationDraftCellError(field, value, selected?.baseline ?? null, contentWrite)
     ? field.definition ? validateShopifyField(field.definition, value) : nativeFieldValueError(field.id as NativeEdit['field'], value, selected?.baseline ?? null) : null
   return { open, closed, historyRefused, element: selected && field && schema ? <><CellPanel anchor={selected.anchor} label={`${field.label}: ${selected.row.sku}`} onSave={save} onCancel={() => close()}
@@ -281,7 +282,8 @@ export function useShopifyDraftCell(schema: ShopifyStoreSchema | null | undefine
         onCreateEntry={!locked && canPublish ? type => setEntry({ id: null, type }) : undefined} />
         : field.id === 'tags' ? <InformationTagsEditor original={selected.baseline} disabled={locked} onChange={setValue} />
         : <ShopifyNativeEditor path={path} schema={schema} field={field} value={value} disabled={locked} onChange={setValue} />}
-      {!field.definition && (translated || nativeNullableFields.includes(field.id)) && value !== null && <Button size="xs" variant="quiet" disabled={locked} onClick={() => setValue(null)}>{translated ? 'Use primary language' : 'Clear value'}</Button>}
+      {/* A cleared theme template is saved as '' (the store's default template): Clear offers it too (Wave 2 D3). */}
+      {!field.definition && (translated || nativeNullableFields.includes(field.id) || nativeEmptyClearFields.includes(field.id)) && value !== null && !(clearsToEmpty && value === '') && <Button size="xs" variant="quiet" disabled={locked} onClick={() => setValue(clearsToEmpty ? '' : null)}>{translated ? 'Use primary language' : 'Clear value'}</Button>}
     </div>
   </CellPanel>{entry && <EntryEditor key={`${entry.id}:${!!entry.copy}:${entry.type ?? ''}`} id={entry.id} copy={entry.copy} initialType={entry.type} path={path} schema={schema} canPublish={canPublish && !locked}
     onClose={() => setEntry(null)} onSaved={saved => {

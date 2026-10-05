@@ -46,6 +46,9 @@ describe('Shopify information mapping contract', () => {
     // S1 (Owner decision 10) — the barcode is the Shared EAN, else the GTIN; it is no longer a listing-only field.
     expect(rule('barcode')).toEqual({ source: 'ean', fallback: 'gtin' })
     expect(sourceOwner(spec.fields.find(f => f.key === 'barcode')!)).toBeNull()
+    // Wave 2 D3 (Owner decision 11, A) — a product Nexus creates uses the Nexus template: the default rule supplies "nexus".
+    expect(rule('templateSuffix')).toEqual({ source: '', transforms: [{ type: 'default', value: 'nexus' }] })
+    expect(spec.fields.find(f => f.key === 'templateSuffix')!.helpText).toBe('New products use the Nexus template (nexus). Clear it to use the store\'s default template.')
   })
   /* S1 item 6 — before this, a new product with a Shared weight could not publish: the sheet's units were g/kg/oz/lb and
      Publish's rule took GRAMS/KILOGRAMS/OUNCES/POUNDS, so every weight failed one of the two. */

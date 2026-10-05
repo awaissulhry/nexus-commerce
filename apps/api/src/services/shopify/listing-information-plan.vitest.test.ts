@@ -49,6 +49,23 @@ describe('Channel sheet schema, storage and publication validation', () => {
     const denied = shopifyProductSpec({ ...schema, native: { ...schema.native!, scopes: ['write_products'] } }, 'store-a', 'it')
     expect(denied.fields.find(f => f.shopifyField?.definition)?.readOnlyReason).toContain('write_translations')
   })
+  /* Wave 2 D3 (Owner decision 11, A) — a cleared theme template (stored as '', or an older stored clear) is the store's
+     default template: it no longer holds Publish with "Enter a value", and an equal Shopify value needs no edit. */
+  it('a cleared theme template passes the check and is no edit where Shopify already uses the default template', async () => {
+    const store = { ...schema, native: { ...schema.native!, inputs: { ...schema.native!.inputs, product: [...(schema.native!.inputs.product ?? []), 'templateSuffix'] } } }
+    const template = shopifyProductSpec(store, 'store-a').fields.find(f => f.shopifyField?.id === 'templateSuffix')!
+    for (const value of ['', null]) {
+      const cleared = { ...listing, languages: ['en'], ...channelValuePatch(listing, template.channelStore, [template.key], value === null ? 'CLEAR' : 'SET', value) }
+      expect(() => validateListingInformationOverrides([cleared], 'store-a', store)).not.toThrow()
+    }
+    const PRODUCT = 'gid://shopify/Product/9', before = read.rows
+    read.rows = [{ id: PRODUCT, productId: PRODUCT, kind: 'PRODUCT', title: 'Jacket', handle: 'jacket', image: null, values: { templateSuffix: '' }, fields: [], media: [] }]
+    try {
+      const cleared = { ...listing, languages: ['en'], ...channelValuePatch(listing, template.channelStore, [template.key], 'SET', '') }
+      const draft = await listingInformationDraft(null as never, { accountId: 'store-a', familyId: 'family', productId: PRODUCT, variantIds: {}, listings: [cleared] }, store)
+      expect(draft.nativeEdits ?? []).toEqual([])
+    } finally { read.rows = before }
+  })
   /* Found on a real development store (D2, 2026-09-28): "Add child" gives each child its own name, so with a second language every
      child row resolved the Shopify PRODUCT title as stored and the step threw — after Shopify had created the product. */
   describe('translations of a new family', () => {

@@ -425,7 +425,8 @@ it('L3: reviews a Shopify family without saving its content document or starting
   const review = await reviewStudioPublication('parent', shopScope)
   expect(review).toMatchObject({ id: null, visibility: 'DRAFT', locations: [{ id: 'shop-location', name: 'Warehouse' }] })
   expect(m.shopSave).not.toHaveBeenCalled()
-  expect(m.shopPreview).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, true)
+  // Wave 2 D4 — facts without Status choices decide no create status: the review reads the Status column, as the send does.
+  expect(m.shopPreview).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, true, {})
   expect(m.rows.size).toBe(0)
 })
 

@@ -124,3 +124,12 @@ describe('a Shopify status reads in Title Case', () => {
     expect(informationDraftCellError(status, 'ACTIVE', 'DRAFT', false)).toBeNull()
   })
 })
+/* Wave 2 D3 (Owner decision 11, A) — clearing the theme template is the store's default template, never "Enter a value". */
+describe('the theme template can be cleared', () => {
+  it('no value and \'\' are both the store\'s default template; a bad suffix still says why', () => {
+    const template = fields.find(f => f.id === 'templateSuffix')!
+    expect(informationDraftCellError(template, null, 'nexus', false)).toBeNull()
+    expect(informationDraftCellError(template, '', 'nexus', false)).toBeNull()
+    expect(informationDraftCellError(template, 'not valid!', 'nexus', false)).toBe('Enter a template suffix, or leave it empty for the default template.')
+  })
+})

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry, informationStoredValue } from '@nexus/shared/shopify-information'
-import { projectShopifyChannelSheet, shopifyCellToken } from './channel-sheet-projection.js'
+import { projectShopifyChannelSheet, shopifyCellToken, withShopifyCreateStatus } from './channel-sheet-projection.js'
+import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 import { resolveSharedContent } from './linked-shared-content.service.js'
 import type { ShopifyGraphql } from './admin-client.js'
 
@@ -522,5 +523,49 @@ describe('Shopify behind the common channel sheet', () => {
     s.workspace.draft.nativeEdits = []
     expect(project().vendor).toMatchObject({ value: 'A durable override', pinned: true, mapped: null })
     expect(project().vendor).not.toHaveProperty('channelOnly')
+  })
+})
+
+/* Wave 2 D3 (Owner decision 11, A) — the theme template's default "nexus" speaks only when Nexus creates the product. */
+describe('the theme template', () => {
+  it('a product already on Shopify shows Shopify\'s own template, with no mark (nothing would send the default)', () => {
+    const base = page()
+    base.rows[0].values = { ...base.rows[0].values, templateSuffix: { ...base.rows[0].values.templateSuffix, value: 'nexus', mapped: { status: 'mapped', value: 'nexus', provenance: 'default' } } }
+    s.snapshot.rows[0].values.templateSuffix = 'custom'
+    const cell = projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema, [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')[0].values.templateSuffix
+    expect(cell).toMatchObject({ value: 'custom', channelOnly: true, mapped: null })
+    expect(cell.divergence).toBeUndefined()
+  })
+  it('a cleared template is saved as \'\' (the store\'s default template), never null', async () => {
+    s.snapshot.rows[0].values.templateSuffix = 'nexus'
+    const result = await saveShopifySheetCells('family', scope, { cells: [change('templateSuffix', null)] }, 'editor')
+    expect(result.cells.templateSuffix).toMatchObject({ ok: true })
+    expect(s.workspace.draft.nativeEdits).toContainEqual(expect.objectContaining({ field: 'templateSuffix', value: 'nexus', nextValue: '' }))
+    expect(s.workspace.draft.sheetValues).toContainEqual(expect.objectContaining({ fieldId: 'templateSuffix', value: '' }))
+  })
+})
+
+/* Wave 2 D4 (Owner decision 9) — rows not on Shopify yet: "Shopify status" shows what Publish creates, read-only. */
+describe('the Shopify status of a product not on Shopify yet', () => {
+  const rows = () => { const base = page(); base.rows[0].values.status = { ...base.rows[0].values.status, value: 'ARCHIVED', pinned: true, nexusDraft: true }
+    base.rows[0].readiness = { state: 'errors', issues: [{ key: 'status', label: 'Shopify status', message: 'stale', severity: 'error' }, { key: 'title', label: 'Name', message: 'kept', severity: 'warn' }] }
+    return base }
+  it.each([['ACTIVE'], ['DRAFT'], [null]] as const)('shows the Status column\'s create value %s, read-only with the reason, with no mark', status => {
+    const base = rows()
+    const out = withShopifyCreateStatus(base.rows, base.columns, 'alias-a', { status })
+    for (const row of out) expect(row.values.status).toMatchObject({ value: status, editable: false, writable: false, writeBlockedReason: SHOPIFY_STATUS_FROM_STATUS_COLUMN,
+      pinned: false, nexusDraft: false, channelOnly: true, mapped: null })
+    // Its own stored value no longer raises a readiness issue; the row's other issues stay.
+    expect(out[0].readiness.issues.map((issue: any) => issue.key)).toEqual(['title'])
+    // Every other cell is left as it is.
+    expect(out[0].values.title).toBe(base.rows[0].values.title)
+  })
+  it('a row on Shopify, another listing alias, or a family already on Shopify keeps its own cell', () => {
+    const base = rows()
+    base.rows[1] = { ...base.rows[1], shopify: { productId: 'family', listingId: 'listing-a' } }
+    const out = withShopifyCreateStatus(base.rows, base.columns, 'alias-a', { status: 'DRAFT' })
+    expect(out[1]).toBe(base.rows[1])
+    expect(withShopifyCreateStatus(base.rows, base.columns, 'alias-b', { status: 'DRAFT' })).toEqual(base.rows)
+    expect(withShopifyCreateStatus(base.rows, base.columns, 'alias-a', null)).toBe(base.rows)
   })
 })

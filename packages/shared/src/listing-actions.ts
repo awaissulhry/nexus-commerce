@@ -382,6 +382,21 @@ export function newListingDefault(channel: string, options: { shopifyActive?: bo
   return 'not_listed'
 }
 
+/**
+ * Wave 2 D4 (Owner decisions 9, 10) — the ONE rule for the status a product Shopify does not hold yet is created with:
+ * the Status column's choice of its main row on that Shopify store (`newListingChoice`). Active creates it ACTIVE,
+ * Inactive creates it as a DRAFT, Not listed creates nothing (null). Publish, the sheet's "Shopify status" cell and the
+ * Media tab's "Create reviewed product" read it; a stored Shopify status never decides a create.
+ */
+export type ShopifyCreateStatus = 'ACTIVE' | 'DRAFT'
+export function shopifyCreateStatus(target: NewListingTarget | null | undefined): ShopifyCreateStatus | null {
+  return target === 'active' ? 'ACTIVE' : target === 'inactive' ? 'DRAFT' : null
+}
+/** The "Shopify status" cell of a row not on Shopify yet: read-only, it shows the Status column's create value. */
+export const SHOPIFY_STATUS_FROM_STATUS_COLUMN = 'A product not on Shopify yet is created with the Status column\'s choice. Change it there.'
+/** The Media tab's "Create reviewed product" when the Status column says Not listed: nothing is created. */
+export const SHOPIFY_CREATE_NOT_LISTED = 'This product\'s Status is Not listed for this Shopify store, so Nexus does not create it. Set its Status to Active or Inactive first.'
+
 export interface NewListingChoiceInput {
   channel: string
   /** This row's own stored choice (`sellingTarget` on a row not on the channel), or null. */

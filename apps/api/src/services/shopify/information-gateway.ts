@@ -4,7 +4,7 @@ import { addInformationTranslations, applyInformationTranslation, verifyTranslat
 import { applyMediaMembership, verifyMediaMembership } from './information-media-membership.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { InformationSnapshot, InformationRow, InformationMedia, NativeEdit, MediaOrderEdit } from '@nexus/shared/shopify-information'
-import { mediaMoves, nativeFieldError, nativeValuesEqual } from '@nexus/shared/shopify-information'
+import { mediaMoves, nativeFieldError, nativeValuesEqual, shopifyTemplateSuffixInput } from '@nexus/shared/shopify-information'
 import type { ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 import { collectShopifyPages, readLinkedOwner, readLinkedStoreSchema } from './linked-products-gateway.js'
 import { assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
@@ -135,7 +135,9 @@ export async function applyNativeEdit(gql: ShopifyGraphql, edit: NativeEdit, ope
   if (nativeValuesEqual(edit.field, current.values[edit.field], edit.nextValue)) return // reconcile an uncertain acknowledgement
   if (!nativeValuesEqual(edit.field, current.values[edit.field], edit.value)) throw new WorkspaceScopeError(`${edit.ownerLabel}: this value changed in Shopify. Review both versions.`)
   const boolean = ['taxable', 'requiresShipping', 'tracked'].includes(edit.field)
-  const value = boolean ? edit.nextValue === 'true' : ['tags', 'weight', 'unitPriceMeasurement'].includes(edit.field) ? JSON.parse(edit.nextValue!) : edit.nextValue
+  // Wave 2 D3 — the theme template's '' (the store's default template) is sent as null.
+  const value = boolean ? edit.nextValue === 'true' : ['tags', 'weight', 'unitPriceMeasurement'].includes(edit.field) ? JSON.parse(edit.nextValue!)
+    : edit.field === 'templateSuffix' ? shopifyTemplateSuffixInput(edit.nextValue) : edit.nextValue
   if (current.kind === 'PRODUCT') {
     const patch = edit.field.startsWith('seo.') ? { seo: { [edit.field.slice(4)]: value } } : { [edit.field]: value }
     if (edit.field === 'handle') {

@@ -1,8 +1,10 @@
 import { informationRestriction, applyInformationCells, informationSharingRule, informationSharedValue, informationSharingFacts } from '@nexus/shared/shopify-information-editing'
-import { active, projectShopifyChannelSheet, shopifyCellToken } from './channel-sheet-projection.js'
+import { active, projectShopifyChannelSheet, shopifyCellToken, withShopifyCreateStatus } from './channel-sheet-projection.js'
+import { shopifyCreateChoiceOf } from './create-status.js'
+import { readListingDeletions } from '../listings/listing-deletions.js'
 import { z } from 'zod'
 import prisma from '../../db.js'
-import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, mediaOrderEditSchema, nativeSchemaError,
+import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, mediaOrderEditSchema, nativeSchemaError, nativeWriteValue,
   type InformationField, type InformationRow, type InformationSnapshot, type ShopifySheetWrite } from '@nexus/shared/shopify-information'
 import { shopifyLinkedDraftSchema, shopifyReferenceError, shopifyTaxonomyCategories, validateShopifyField, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
@@ -22,7 +24,9 @@ export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<Stud
   const accountId = page.scope.connectionId
   // Display only: the last known field list now, a refresh behind it (a cold read took 34 s, 2026-09-24).
   const schema = await readShopifyDisplaySchema(accountId)
-  const listings = await prisma.channelListing.findMany({ where: { productId: { in: page.rows.map(r => r.id) }, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: accountId }, select: { id: true, productId: true, externalListingId: true, platformAttributes: true, aliasKey: true } })
+  const listings = await prisma.channelListing.findMany({ where: { productId: { in: page.rows.map(r => r.id) }, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: accountId },
+    select: { id: true, productId: true, externalListingId: true, platformAttributes: true, aliasKey: true, channel: true, marketplace: true, listingStatus: true, isPublished: true,
+      sellingTarget: true, sellingTargetAt: true, publishAction: true, publishActionAt: true } })
   const result = { ...page, rows: [...page.rows] }
   for (const alias of page.aliases) {
     const owned = listings.filter(l => l.aliasKey === (alias.id ?? ''))
@@ -36,6 +40,14 @@ export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<Stud
     const snapshot = await readInformation(graphql, ids, schema, page.scope.locale)
     const rows = projectShopifyChannelSheet(page, workspace, snapshot, schema, owned, alias.id)
     result.rows = [...result.rows.filter(r => r.aliasId !== alias.id), ...rows]
+  }
+  // Wave 2 D4 (Owner decision 9) — rows not on Shopify yet: "Shopify status" is read-only and shows what Publish creates,
+  // the Status column's choice (`create-status.ts`), so the sheet, Publish and the Media tab follow one rule.
+  const products = [...new Map(page.rows.map(row => [row.id, { id: row.id, parentId: row.parentId ?? null }])).values()]
+  const deletions = await readListingDeletions(listings.map(listing => ({ ...listing, channel: 'SHOPIFY', marketplace: 'GLOBAL' })))
+  for (const alias of page.aliases) {
+    const choice = shopifyCreateChoiceOf({ familyId: page.family.id, aliasKey: alias.id ?? '', products, listings: listings.filter(l => l.aliasKey === (alias.id ?? '')), deletions })
+    result.rows = withShopifyCreateStatus(result.rows, page.columns, alias.id, choice.onShopify ? null : choice)
   }
   result.aliases = result.aliases.map(alias => {
     const rows = result.rows.filter(row => row.aliasId === alias.id), issues = rows.flatMap(row => row.readiness.issues)
@@ -173,6 +185,8 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
         if (change.token !== shopifyCellToken(current.workspace, row.id, field, row.locale, aliasKey) && !await continuesAbsentRoot(change.token, row, field)) throw new Error('Another editor changed this draft cell. Your input is retained; review the saved value before retrying.')
         const reason = informationRestriction(row, field, draft, false)
         if (reason) throw new Error(reason)
+        // Wave 2 D3 — a cleared theme template is '' (the store's default template, as Shopify reads it), never null.
+        const written = field.definition || row.locale ? change.value : nativeWriteValue(field.id, change.value)
         const referenceRefusal = referenceRefusals.get(receipt)
         if (referenceRefusal) {
           /* Same form as every other draft-save refusal (`applyInformationCells`): "<owner> / <field>: <sentence>". */
@@ -203,14 +217,14 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
           if (!draft.members.length) { draft.informationOnly = true; draft.members = snapshot.rows.filter(r => r.kind === 'PRODUCT').map(r => ({ id: r.id, title: r.title, handle: r.handle, image: r.image })) }
         } else {
           if (field.currency && change.value !== null && JSON.parse(change.value).currency_code !== field.currency) throw new Error(`Use this store’s ${field.currency} currency.`)
-          draft = applyValue(draft, row, field, change.value)
+          draft = applyValue(draft, row, field, written)
         }
         // Inventory is a live operational quantity, not a persistent content override.
         // Its durable pending adjustment is cleared only after exact location readback.
         if (field.id !== 'media' && field.id !== 'inventory') {
           draft.sheetValues = (draft.sheetValues ?? []).filter(v => !(v.ownerId === row.id && v.fieldId === field.id && v.locale === (row.locale ?? '')))
           const inherited = change.intent === 'reset' || change.intent === 'reset-list'
-          if (!sharedReset) draft.sheetValues.push({ ownerId: row.id, fieldId: field.id, type: field.type, locale: row.locale ?? '', value: inherited ? resetValues.get(receipt)! : change.value, ...(inherited ? { inherited: true as const } : {}) })
+          if (!sharedReset) draft.sheetValues.push({ ownerId: row.id, fieldId: field.id, type: field.type, locale: row.locale ?? '', value: inherited ? resetValues.get(receipt)! : written, ...(inherited ? { inherited: true as const } : {}) })
         }
         cells[receipt] = { ok: true }
       } catch (e) { cells[receipt] = { ok: false, reason: e instanceof Error ? e.message : 'This edit could not be saved.' } }
