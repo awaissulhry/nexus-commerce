@@ -572,9 +572,12 @@ function findingOf(check: IdentityCheck, row: FindingRow): IdentityFinding {
   }
 }
 
-/** The columns this database has of those a check may need. Read each time: a migration may have added one. */
-export async function availableRequirements(): Promise<Set<IdentityRequirement>> {
-  const [row] = await prisma.$queryRaw<Array<{ alias_sku: boolean }>>`
+/**
+ * The columns this database has of those a check may need. Read each time: a migration may have added one. `db`: the
+ * caller's transaction, when it has one (a write guard reads inside the write's transaction).
+ */
+export async function availableRequirements(db: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma): Promise<Set<IdentityRequirement>> {
+  const [row] = await db.$queryRaw<Array<{ alias_sku: boolean }>>`
     SELECT EXISTS (SELECT 1 FROM information_schema.columns
       WHERE table_schema = current_schema() AND table_name = 'ProductListingAlias' AND column_name = 'sku') AS alias_sku`
   const present = new Set<IdentityRequirement>()

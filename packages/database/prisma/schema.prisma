@@ -1595,6 +1595,15 @@ model ChannelListing {
   externalListingId String?
   externalParentId  String? // For Amazon parent ASIN
 
+  // Per-listing channel SKU (2026-10-05, docs/sheet-ids-sku-rows/PLAN.md). A SKU edit in a channel scope of the product
+  // sheet belongs to this listing only (this channel, this market); the Shared scope edits Product.sku. Read both through
+  // apps/api/src/services/listings/channel-sku.ts, never directly.
+  // channelSku: the SKU Nexus sends here. NULL = the product's own SKU (Product.sku).
+  channelSku     String?
+  // liveChannelSku: the SKU the channel holds for this listing now. Written only when the channel confirms it (an
+  // accepted publish, a pull, an import); a Delete clears it. NULL = the channel holds nothing Nexus knows of.
+  liveChannelSku String?
+
   // ── PHASE 15: Analytics Grouping Key ────────────────────────────
   // For Amazon: ASIN (groups FBA/FBM under single ASIN for analytics)
   // For eBay: ItemID (groups variations under single listing)
@@ -1865,6 +1874,8 @@ model ChannelListing {
   @@index([validationStatus])
   @@index([channel, marketplace, listingStatus])
   @@index([workspaceId])
+  @@index([channelSku])
+  @@index([liveChannelSku])
 }
 
 // ── PES.5: Listing aliases ─────────────────────────────────────────────────

@@ -25,18 +25,40 @@ export interface ListingSkuUse {
   productSku: string
 }
 
-/** G4 — which of these SKUs an extra listing of this business already uses (case and surrounding spaces ignored). */
-export async function skusUsedByListings(skus: readonly string[]): Promise<ListingSkuUse[]> {
+/** A client that can read raw SQL: the global one, or the caller's transaction. */
+type RawReader = Pick<Prisma.TransactionClient, '$queryRaw'>
+
+/**
+ * G4 — which of these SKUs an extra listing of this business already uses (case and surrounding spaces ignored).
+ * `db`: the caller's transaction, when it has one.
+ */
+export async function skusUsedByListings(skus: readonly string[], db: RawReader = prisma): Promise<ListingSkuUse[]> {
   const wanted = [...new Set(skus.map((sku) => sku.trim().toLowerCase()).filter(Boolean))]
   if (wanted.length === 0) return []
-  if (!(await availableRequirements()).has('listing-alias-sku')) return []
-  const rows = await prisma.$queryRaw<Array<{ key: string; listing_sku: string; label: string; product_sku: string }>>`
+  if (!(await availableRequirements(db)).has('listing-alias-sku')) return []
+  const rows = await db.$queryRaw<Array<{ key: string; listing_sku: string; label: string; product_sku: string }>>`
     SELECT lower(btrim(a.sku)) AS key, a.sku AS listing_sku, a.label, p.sku AS product_sku
     FROM "ProductListingAlias" a JOIN "Product" p ON p.id = a."productId"
     WHERE a."workspaceId" = ${workspaceIdForQuery()} AND lower(btrim(a.sku)) = ANY(${wanted}::text[])`
   return skus.flatMap((sku) => rows
     .filter((row) => row.key === sku.trim().toLowerCase())
     .map((row) => ({ sku, listingSku: row.listing_sku, label: row.label, productSku: row.product_sku })))
+}
+
+/**
+ * G4, the other direction (a listing's own SKU, e.g. a channel SKU) — another live product of this business whose
+ * SKU this is (case and surrounding spaces ignored), or null. `exceptProductId`: the listing's own product, which may
+ * of course carry its own SKU.
+ */
+export async function productUsingSku(sku: string, exceptProductId: string | null, db: RawReader = prisma): Promise<{ id: string; sku: string } | null> {
+  const key = sku.trim().toLowerCase()
+  if (!key) return null
+  const [row] = await db.$queryRaw<Array<{ id: string; sku: string }>>`
+    SELECT p.id, p.sku FROM "Product" p
+    WHERE p."workspaceId" = ${workspaceIdForQuery()} AND p."deletedAt" IS NULL AND lower(btrim(p.sku)) = ${key}
+      AND p.id IS DISTINCT FROM ${exceptProductId}::text
+    ORDER BY p.sku LIMIT 1`
+  return row ?? null
 }
 
 /** G4 — the sentence a refused SKU gets. */
