@@ -56,18 +56,23 @@ function account(overrides: Record<string, unknown> = {}) {
   return { id: SELLER, channelType: 'EBAY', isActive: true, authStatus: 'connected', grantedScopes: FULL_SCOPES, ...overrides }
 }
 
-/** A stand-in for the seller side of eBay's Notification API. */
+/**
+ * A stand-in for the seller side of eBay's Notification API: each account sees its own list
+ * (starting from `subscriptions`), and a subscription it creates is its own.
+ */
 function fakeSeller(subscriptions: object[] = [], overrides: Partial<Record<'get' | 'create' | 'enable', () => Response>> = {}) {
-  const state = { subscriptions: [...subscriptions] as any[], requests: [] as string[] }
-  m.transport.mockImplementation(async (url: string, init: RequestInit) => {
+  const state = { byAccount: new Map<string, any[]>(), requests: [] as string[] }
+  const listOf = (connectionId: string) => state.byAccount.get(connectionId) ?? state.byAccount.set(connectionId, [...subscriptions]).get(connectionId)!
+  m.transport.mockImplementation(async (url: string, init: RequestInit, connectionId: string) => {
     const method = init.method ?? 'GET'
     state.requests.push(`${method} ${url.replace(API, '')}`)
-    if (method === 'GET' && url === `${API}/subscription?limit=100`) return overrides.get?.() ?? json({ subscriptions: state.subscriptions, total: state.subscriptions.length })
+    if (method === 'GET' && url === `${API}/subscription?limit=100`) return overrides.get?.() ?? json({ subscriptions: listOf(connectionId), total: listOf(connectionId).length })
     if (method === 'POST' && url === `${API}/subscription`) {
       if (overrides.create) return overrides.create()
       const body = JSON.parse(String(init.body))
-      state.subscriptions.push({ subscriptionId: 'sub-created', ...body })
-      return new Response(null, { status: 201, headers: { Location: `${API}/subscription/sub-created` } })
+      const subscriptionId = connectionId === SELLER ? 'sub-created' : `sub-${connectionId}`
+      listOf(connectionId).push({ subscriptionId, ...body })
+      return new Response(null, { status: 201, headers: { Location: `${API}/subscription/${subscriptionId}` } })
     }
     if (method === 'POST' && /\/subscription\/[^/]+\/enable$/.test(url)) return overrides.enable?.() ?? new Response(null, { status: 204 })
     throw new Error(`Unexpected ${method} ${url}`)
@@ -297,10 +302,20 @@ describe('every account of every active business, after the app-level setup', ()
     m.findUnique.mockImplementation(async ({ where }: any) => account({ id: where.id }))
     fakeSeller()
     const report = await reconcileEbaySellersForSetup(setup, 'this_business')
-    expect(report.accounts.map(a => [a.connectionId, a.status, a.signInName])).toEqual([['own-1', 'created', 'seller_one'], ['own-2', 'subscribed', null]])
+    expect(report.accounts.map(a => [a.connectionId, a.status, a.subscriptionId, a.signInName])).toEqual([['own-1', 'created', 'sub-own-1', 'seller_one'], ['own-2', 'created', 'sub-own-2', null]])
     expect(m.factory.mock.calls.map(([id]) => id)).not.toContain('shared-in')
     expect(sellerReportFailed(report)).toBe(false)
-    expect(summariseSellerReport(report)).toBe('sellers: created=1 subscribed=1')
+    expect(summariseSellerReport(report)).toBe('sellers: created=2')
+  })
+
+  it('two accounts reported with the same subscription: the second is a failure, never "subscribed"', async () => {
+    m.list.mockResolvedValue([{ id: 'own-1' }, { id: 'own-2' }])
+    m.findUnique.mockImplementation(async ({ where }: any) => account({ id: where.id }))
+    fakeSeller([{ subscriptionId: 's-same', topicId: 'ORDER_CONFIRMATION', destinationId: DEST, status: 'ENABLED', payload: subPayload }])
+    const report = await reconcileEbaySellersForSetup(setup, 'this_business')
+    expect(report.accounts.map(a => [a.connectionId, a.status])).toEqual([['own-1', 'subscribed'], ['own-2', 'failed']])
+    expect(report.accounts[1].reason).toMatch(/two eBay accounts/)
+    expect(sellerReportFailed(report)).toBe(true)
   })
 
   it('the nightly scope visits every active business, each in its own context', async () => {
@@ -333,6 +348,7 @@ describe('every account of every active business, after the app-level setup', ()
     fakeSeller()
     const report = await reconcileEbaySellersForSetup(setup, 'every_business')
     expect(report.accounts.map(a => [a.connectionId, a.status])).toEqual([['own-b', 'created']])
+    expect(report.accounts[0].subscriptionId).toBe('sub-own-b')
     expect(report.businessErrors).toEqual(['database unavailable'])
     expect(sellerReportFailed(report)).toBe(true)
     expect(summariseSellerReport(report)).toBe('sellers: created=1 business_errors=1')

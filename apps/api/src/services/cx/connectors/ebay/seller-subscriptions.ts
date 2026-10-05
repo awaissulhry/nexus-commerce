@@ -226,6 +226,23 @@ export async function inspectEbaySellerSubscription(
   }
 }
 
+/**
+ * eBay's subscription records name no seller, so "this one is ours" rests on eBay listing, for a
+ * seller's token, only that seller's subscriptions. If two accounts ever report the same
+ * subscription, that rest is gone: the later one is a failure to look at, never "subscribed".
+ */
+function refuseSharedSubscription<T extends { connectionId: string; status: string; subscriptionId?: string; reason?: string }>(
+  seen: Map<string, string>, result: T,
+): T {
+  if (!result.subscriptionId) return result
+  const owner = seen.get(result.subscriptionId)
+  if (owner && owner !== result.connectionId) {
+    return { ...result, status: 'failed', reason: `eBay reported the same ${EBAY_ORDER_TOPIC} subscription for two eBay accounts; Nexus cannot tell whose it is. Check it at eBay before relying on order notices.` }
+  }
+  seen.set(result.subscriptionId, result.connectionId)
+  return result
+}
+
 /** This business's own active eBay accounts. An account another business shares in is its owner's to subscribe. */
 async function ownEbayAccounts(): Promise<Array<{ id: string; signInName: string | null }>> {
   return (await listActiveConnections('EBAY')).filter(isOwnConnection).map(row => ({ id: row.id, signInName: row.ebaySignInName ?? null }))
@@ -275,6 +292,7 @@ export async function reconcileEbaySellersForSetup(
   }
   const accounts: EbaySellerReconcileReport['accounts'] = []
   const businessErrors: string[] = []
+  const seen = new Map<string, string>()
   const visit = scope === 'every_business' ? visitEveryActiveBusiness : (work: () => Promise<void>) => work()
   await visit(async () => {
     let own: Awaited<ReturnType<typeof ownEbayAccounts>>
@@ -288,7 +306,7 @@ export async function reconcileEbaySellersForSetup(
       return
     }
     for (const account of own) {
-      accounts.push({ ...await reconcileEbaySellerSubscriptions(account.id, { context }), signInName: account.signInName })
+      accounts.push({ ...refuseSharedSubscription(seen, await reconcileEbaySellerSubscriptions(account.id, { context })), signInName: account.signInName })
     }
   })
   return { accounts, ...(businessErrors.length ? { businessErrors } : {}) }
