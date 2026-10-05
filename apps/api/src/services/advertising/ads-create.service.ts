@@ -29,6 +29,7 @@ import {
   type AdsRegion,
 } from './ads-api-client.js'
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
+import { patchDynamicBidding } from './dynamic-bidding-write.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
@@ -1162,28 +1163,6 @@ export interface PlacementBiddingResult {
   /** 4e (review 5.9) — Amazon's error when the live push failed (not a refusal: the local copy and history are written). */
   error?: string
 }
-/**
- * CM-6 — store a placement write without writing back the rest of `dynamicBidding`.
- *
- * `updatePlacementBidding` reads the campaign, then spends seconds on the gate, Amazon's read and the PUT. Writing the
- * whole JSON from that first read put back any Target ACoS, bid automation, bid algorithm, guardrail or CPC ceiling
- * saved in those seconds — the detail page and the bulk modal send `/automation` beside `/placements`, and rank-defend
- * writes placements every 15 minutes. One `jsonb_set` sets only `placementBidding`, inside the UPDATE, on the row as it
- * is when the UPDATE runs: a concurrent writer that committed first is kept. A row with no settings yet (or settings
- * that are not an object) starts from `{}`. The other columns (sync stamp, bidding strategy) go in the same transaction.
- */
-async function writePlacementBidding(
-  campaignId: string,
-  adjustments: Array<{ placement: string; percentage: number }>,
-  columns: Record<string, unknown>,
-): Promise<void> {
-  const placementJson = JSON.stringify(adjustments)
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`UPDATE "Campaign" SET "dynamicBidding" = jsonb_set(CASE WHEN jsonb_typeof("dynamicBidding") = 'object' THEN "dynamicBidding" ELSE '{}'::jsonb END, '{placementBidding}', ${placementJson}::jsonb, true) WHERE id = ${campaignId}`
-    await tx.campaign.update({ where: { id: campaignId }, data: columns as never })
-  })
-}
-
 export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true } })
   if (!c) throw new Error('campaign not found')
@@ -1307,8 +1286,10 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   }
 
   // G.4 — the local copy becomes what was actually sent (merged onto Amazon's current array on a live push).
-  // CM-6 — and ONLY that key is written, into the row as it is now (`writePlacementBidding`).
-  await writePlacementBidding(input.campaignId, adjustments, { ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) })
+  // CM-6 — and ONLY that key is written, into the row as it is now. The copy read at the top is seconds old here (the
+  // gate, Amazon's read and the PUT ran in between); writing it back whole put back a Target ACoS, bid automation,
+  // algorithm, guardrail or CPC ceiling saved meanwhile (`patchDynamicBidding`).
+  await patchDynamicBidding(input.campaignId, { set: { placementBidding: adjustments } }, { ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) })
 
   /**
    * HX.2 — placement writes join the audit spine.

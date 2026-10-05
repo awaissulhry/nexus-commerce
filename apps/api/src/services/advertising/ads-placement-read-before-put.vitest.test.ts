@@ -50,8 +50,11 @@ const TOP = 'PLACEMENT_TOP', PP = 'PLACEMENT_PRODUCT_PAGE', REST = 'PLACEMENT_RE
 const LOCAL = [{ placement: TOP, percentage: 50 }, { placement: PP, percentage: 0 }]
 const pmap = (arr: Array<{ placement: string; percentage: number }>) => Object.fromEntries(arr.map((x) => [x.placement, x.percentage]))
 const sentArray = () => (h.updateCampaign.mock.calls[0][2] as { placementBidding: Array<{ placement: string; percentage: number }> }).placementBidding
-// the jsonb_set's first value is the placement array, as JSON
-const storedArray = () => JSON.parse(h.executeRaw.mock.calls[0][1] as string) as Array<{ placement: string; percentage: number }>
+// the keys the raw UPDATE merges into dynamicBidding, as JSON: only `placementBidding`
+const storedSet = () => (h.executeRaw.mock.calls[0] as unknown[]).slice(1)
+  .map((v) => { try { return JSON.parse(String(v)) as unknown } catch { return null } })
+  .find((v): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)) as { placementBidding: Array<{ placement: string; percentage: number }> }
+const storedArray = () => storedSet().placementBidding
 const auditRow = () => (h.actionLogCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data
 
 beforeEach(() => {
@@ -83,6 +86,7 @@ describe('updatePlacementBidding — read Amazon before every placement PUT (G.4
     expect(pmap(sentArray())).toEqual({ [TOP]: 80, [PP]: 40 })
     // the local copy becomes what was sent, and the result says what was sent
     expect(pmap(storedArray())).toEqual({ [TOP]: 80, [PP]: 40 })
+    expect(Object.keys(storedSet())).toEqual(['placementBidding'])
     expect(r).toMatchObject({ ok: true, mode: 'live' })
     expect(pmap(r.adjustments)).toEqual({ [TOP]: 80, [PP]: 40 })
     // drift is logged and kept on the audit row

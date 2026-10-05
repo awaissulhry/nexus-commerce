@@ -721,7 +721,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (n > 0) db.maxWritesPerDay = n
       else delete db.maxWritesPerDay
     }
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never, ...boundsData, ...budgetData } })
+    // CM-6 — only the guardrail keys this request names go into `dynamicBidding` (set, or removed when cleared), merged
+    // into the row as it is now: writing `db` whole put back a placement (or an automation / CPC ceiling edit) saved
+    // since the read above.
+    const guardKeys = (['maxBidChangePct', 'maxWritesPerDay'] as const).filter((k) => b[k] !== undefined)
+    const { patchDynamicBidding } = await import('../services/advertising/dynamic-bidding-write.js')
+    await patchDynamicBidding(id, {
+      set: Object.fromEntries(guardKeys.filter((k) => k in db).map((k) => [k, db[k]])),
+      remove: guardKeys.filter((k) => !(k in db)),
+    }, { ...boundsData, ...budgetData })
 
     // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
     // AD_BUDGET_UPDATE whose payloads are euros).
