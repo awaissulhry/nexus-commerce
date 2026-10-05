@@ -7,7 +7,8 @@
  *   - only a call that names both `channel` and `market` / `marketplace`;
  *   - `*`, `EU`, `ALL` (a scope, not a market) are left to the tool;
  *   - `EBAY_IT` is read as IT; eBay's `GB` site as Nexus's `UK`;
- *   - a channel with no Marketplace row at all is not checked (nothing to check against).
+ *   - a market the business already has listings in counts, even without a Marketplace row;
+ *   - a channel with no Marketplace row and no listing is not checked (nothing to check against).
  */
 import prisma from '../../db.js'
 import { getTool } from './tool-registry.js'
@@ -60,11 +61,20 @@ export async function marketRefusal(
     take(tool, args, '')
   }
   if (!pairs.length) return null
-  const rows = await prisma.marketplace.findMany({
-    where: { channel: { in: [...new Set(pairs.map((p) => p.channel))] } },
-    select: { channel: true, code: true, isActive: true },
-    orderBy: [{ isActive: 'desc' }, { code: 'asc' }],
-  })
+  const channels = [...new Set(pairs.map((p) => p.channel))]
+  const [marketRows, listed] = await Promise.all([
+    prisma.marketplace.findMany({
+      where: { channel: { in: channels } },
+      select: { channel: true, code: true, isActive: true },
+      orderBy: [{ isActive: 'desc' }, { code: 'asc' }],
+    }),
+    // A market the business already lists in counts too, even without a Marketplace row.
+    prisma.channelListing.findMany({ where: { channel: { in: channels } }, distinct: ['channel', 'marketplace'], select: { channel: true, marketplace: true } }),
+  ])
+  const rows = [...marketRows]
+  for (const l of listed) {
+    if (l.marketplace && !rows.some((r) => r.channel === l.channel && r.code.toUpperCase() === l.marketplace.toUpperCase())) rows.push({ channel: l.channel, code: l.marketplace, isActive: true })
+  }
   const problems: string[] = []
   for (const pair of pairs) {
     const own = rows.filter((row) => row.channel === pair.channel)
