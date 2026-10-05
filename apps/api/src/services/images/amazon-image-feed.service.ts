@@ -41,6 +41,7 @@ import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
 import { computeExactMirror } from './amazon-exact-mirror.js'
 import { marketplaceCodeToId } from '../../utils/marketplace-code.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
+import { listingSendSku } from '../listings/listing-send-sku.js'
 
 /**
  * M3 — publish mode. 'exact-mirror' (default) sends the full desired state
@@ -86,6 +87,11 @@ export interface AmazonImageFeedOutput {
   skus: string[]
   skippedNoAsin: string[]
   skippedNoImages: string[]
+  /**
+   * S3 (per-channel SKU) — variations left out because their listing here has two seller SKUs on record, so Nexus cannot
+   * tell which one Amazon holds; each with the plain reason. The rest of the feed is sent.
+   */
+  skippedSkuConflicts: Array<{ sku: string; reason: string }>
   dryRun: boolean
 }
 
@@ -294,6 +300,33 @@ function resolveSlot(
 
 // ── Feed submission ────────────────────────────────────────────────────
 
+/**
+ * S3 (per-channel SKU) — per product, the seller SKU Amazon holds for its one primary listing on this market
+ * (`listingSendSku`): the product SKU unless the listing has its own; `refusal` when two SKUs are on record. A product
+ * with no listing here, or with several (more than one account), is left out: its message keeps the product SKU, as
+ * before. Legacy ProductVariation ids match no listing and are left out too.
+ */
+async function amazonSellerSkus(productIds: string[], marketplace: string): Promise<Map<string, { sku: string | null; refusal: string | null }>> {
+  const out = new Map<string, { sku: string | null; refusal: string | null }>()
+  if (!productIds.length) return out
+  const listings = await prisma.channelListing.findMany({
+    where: { productId: { in: productIds }, channel: 'AMAZON', marketplace, aliasKey: '' },
+    select: {
+      productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
+      platformAttributes: true, flatFileSnapshot: true, product: { select: { sku: true } },
+      offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    },
+  })
+  for (const productId of new Set(listings.map((l) => l.productId))) {
+    const mine = listings.filter((l) => l.productId === productId)
+    if (mine.length !== 1) continue
+    const productSku = mine[0].product?.sku ?? ''
+    const held = listingSendSku({ ...mine[0], channel: 'AMAZON' }, productSku, productSku)
+    out.set(productId, { sku: held.sku, refusal: held.refusal })
+  }
+  return out
+}
+
 export async function submitAmazonImageFeed(
   input: AmazonImageFeedInput,
 ): Promise<AmazonImageFeedOutput> {
@@ -324,14 +357,25 @@ export async function submitAmazonImageFeed(
 
   const skippedNoAsin: string[] = []
   const skippedNoImages: string[] = []
+  const skippedSkuConflicts: Array<{ sku: string; reason: string }> = []
   const operations: Parameters<typeof submitAmazonListingsBatch>[0]['operations'] = []
   const includedSkus: string[] = []
+  const sellerSkus = await amazonSellerSkus(resolved.map((v) => v.variationId), mkt)
 
   for (const v of resolved) {
     if (!v.amazonAsin) {
       skippedNoAsin.push(v.sku)
       continue
     }
+    // S3 (per-channel SKU) — the message names the seller SKU Amazon holds for this product's listing here (the product
+    // SKU unless the listing has its own). The job keeps the product SKU (`includedSkus`): the poll reads results by it.
+    // Two SKUs on record: this variation is left out with the reason (never a guess); the rest of the feed is sent.
+    const seller = sellerSkus.get(v.variationId)
+    if (seller?.refusal) {
+      skippedSkuConflicts.push({ sku: v.sku, reason: seller.refusal })
+      continue
+    }
+    const sku = seller?.sku ?? v.sku
     const filled = v.slots.map((s) => ({ slot: s.slot, url: s.url }))
     if (mode === 'exact-mirror') {
       const plan = computeExactMirror(filled, taxLite)
@@ -342,7 +386,7 @@ export async function submitAmazonImageFeed(
       }
       operations.push({
         type: 'image',
-        sku: v.sku,
+        sku,
         productType,
         slots: plan.slots,
         deleteSlots: plan.deleteSlots,
@@ -355,13 +399,17 @@ export async function submitAmazonImageFeed(
       }
       operations.push({
         type: 'image',
-        sku: v.sku,
+        sku,
         productType,
         slots: filled,
         slotToAttribute: taxonomy.slotToAttribute,
       })
     }
     includedSkus.push(v.sku)
+  }
+
+  if (skippedSkuConflicts.length) {
+    logger.warn('[amazon-image-feed] left out: no single seller SKU on record', { productId, marketplace: mkt, skipped: skippedSkuConflicts })
   }
 
   if (operations.length === 0) {
@@ -372,12 +420,14 @@ export async function submitAmazonImageFeed(
         marketplace: mkt,
         status: 'DONE',
         skus: [],
-        errorMessage: `No variants with ASINs + images found. Skipped no-ASIN: [${skippedNoAsin.join(', ')}], no-images: [${skippedNoImages.join(', ')}]`,
+        errorMessage: skippedSkuConflicts.length
+          ? `Nothing was sent. Skipped no-ASIN: [${skippedNoAsin.join(', ')}], no-images: [${skippedNoImages.join(', ')}], no single seller SKU: [${skippedSkuConflicts.map(s => s.sku).join(', ')}]. ${skippedSkuConflicts.map(s => s.reason).join(' ')}`
+          : `No variants with ASINs + images found. Skipped no-ASIN: [${skippedNoAsin.join(', ')}], no-images: [${skippedNoImages.join(', ')}]`,
       },
     })
     return {
       feedId: null, feedDocumentId: null, jobId: job.id,
-      skus: [], skippedNoAsin, skippedNoImages,
+      skus: [], skippedNoAsin, skippedNoImages, skippedSkuConflicts,
       // Nothing was submitted — there was nothing to submit. Reporting the caller's request here
       // would claim a live submission happened on a path that never calls Amazon at all.
       dryRun: true,
@@ -413,6 +463,8 @@ export async function submitAmazonImageFeed(
       marketplaceIds: [marketplaceId],
       sellerId,
       operations,
+      // S3 — the push lock finds these products' listings even when a message names a listing's own SKU.
+      productIds: [...sellerSkus.keys()],
       /*
        * 🔴 Forwarded, not spread conditionally.
        *
@@ -462,6 +514,7 @@ export async function submitAmazonImageFeed(
     skus: includedSkus,
     skippedNoAsin,
     skippedNoImages,
+    skippedSkuConflicts,
     dryRun: feedResult.dryRun,
   }
 }

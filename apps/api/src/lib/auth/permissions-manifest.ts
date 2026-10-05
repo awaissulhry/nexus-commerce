@@ -225,6 +225,9 @@ export const ENTRIES: Entry[] = [
   RW(F.adminView, F.jobsManage, pfx('/api/cockpit/')),
 
   // ── S2 coverage: listings under /api/listings ──────────────────
+  // Item ID control (step I1): checking, linking and clearing a listing's channel id is listing recovery — the
+  // permission Claude's link-channel-id / unlink-channel-id also require. Before the /api/listings catch-all below.
+  P(F.listingsRecover, (m, p) => pfx('/api/listings/')(m, p) && has('/channel-id/')(m, p)),
   P(F.listingsPublish, (m, p) => pfx('/api/listings')(m, p) && (has('/bulk-action')(m, p) || has('/cascade')(m, p))),
   RW(F.listingsView, F.listingsEdit, pfx('/api/listings')),
   P(F.marketingPublish, pfx('/api/image-publish-jobs')),

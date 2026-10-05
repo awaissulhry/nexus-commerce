@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import {
-  SHOPIFY_SKU_STORES, differsFromProduct, legacyChannelSku, legacyChannelSkus, liveChannelSku, wantedChannelSku,
+  SHOPIFY_SKU_STORES, differsFromProduct, legacyChannelSku, legacyChannelSkus, legacySkuIsLive, liveChannelSku, wantedChannelSku,
   type ChannelSkuListing,
 } from './channel-sku.pure.js'
 
@@ -136,6 +136,112 @@ describe('liveChannelSku — what the channel holds', () => {
 
   it('a conflict in the old stores is a conflict here too', () => {
     expect(liveChannelSku(amazon({ offers: [offer('A')], platformAttributes: { sku: 'B' } }), 'P')?.conflict?.code).toBe('CONFLICTING_SKUS')
+  })
+})
+
+describe('eBay (S4) — an extra listing\'s own SKU is WANTED, never LIVE (eBay publish never sent it)', () => {
+  const alias = { sku: 'AL-1', productId: 'root' }
+  const ebay = (facts: Partial<ChannelSkuListing> = {}): ChannelSkuListing => ({ channel: 'EBAY', productId: 'root', aliasKey: 'al1', alias, ...LIVE, ...facts })
+
+  it('eBay\'s old store is wanted-only (S5: Shopify\'s too); Amazon\'s and Etsy\'s are read as live', () => {
+    expect(legacySkuIsLive({ channel: 'EBAY' })).toBe(false)
+    expect(legacySkuIsLive({ channel: 'ebay' })).toBe(false)
+    expect(legacySkuIsLive({ channel: 'SHOPIFY' })).toBe(false)
+    for (const channel of ['AMAZON', 'ETSY']) expect(legacySkuIsLive({ channel })).toBe(true)
+  })
+
+  it('wanted = channelSku ?? the alias SKU (alias main row) ?? Product.sku', () => {
+    expect(wantedChannelSku(ebay({ channelSku: 'OWN' }), 'P')).toEqual({ sku: 'OWN', source: 'channel' })
+    expect(wantedChannelSku(ebay(), 'P')).toEqual({ sku: 'AL-1', source: 'alias' })
+    expect(wantedChannelSku(ebay({ productId: 'child' }), 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(wantedChannelSku(ebay({ aliasKey: '', alias: null }), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('live = liveChannelSku ?? Product.sku: the alias SKU is never read as what eBay holds', () => {
+    expect(liveChannelSku(ebay(), 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(liveChannelSku(ebay({ channelSku: 'OWN' }), 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(liveChannelSku(ebay({ liveChannelSku: ' HELD ', channelSku: 'OWN' }), 'P')).toEqual({ sku: 'HELD', source: 'live' })
+    expect(liveChannelSku(ebay({ aliasKey: '', alias: null }), ' P ')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('a still-draft eBay row holds nothing on eBay; no product SKU and nothing confirmed is NO_SKU, never the alias SKU', () => {
+    expect(liveChannelSku(ebay({ ...DRAFT }), 'P')).toBeNull()
+    expect(liveChannelSku(ebay(), '')?.conflict?.code).toBe('NO_SKU')
+  })
+
+  it('the backfill\'s reading of the old stores is unchanged (the alias SKU, as the wanted value)', () => {
+    expect(legacyChannelSku(ebay(), 'P')).toEqual({ sku: 'AL-1', source: 'alias' })
+  })
+
+  it('Amazon still reads its old stores as live (parity); Shopify\'s are wanted-only too (S5, below)', () => {
+    expect(liveChannelSku(amazon({ offers: [offer('O')] }), 'P')).toEqual({ sku: 'O', source: 'offer' })
+    expect(liveChannelSku({ channel: 'SHOPIFY', ...LIVE, platformAttributes: { sku: 'SH' } }, 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(liveChannelSku({ channel: 'SHOPIFY', ...LIVE, productId: 'root', aliasKey: 'al1', alias }, 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+})
+
+/**
+ * S5 — Shopify's old stores are WANTED values only (`legacySkuIsLive`): the native path (`platformAttributes.sku`) is what
+ * the Shopify sheet's SKU column saves and the next Publish sends, and the override bag (`overrideData.listing_sku`)
+ * holds older sheet edits. Nothing in them proves what Shopify holds, so live = the confirmed `liveChannelSku`, else the
+ * product SKU. wanted = channelSku ?? the override-bag edit ?? the native SKU / alias SKU ?? Product.sku.
+ */
+describe('S5 — Shopify: the old stores are wanted only; live is the confirmed SKU or the product SKU', () => {
+  const shopify = (facts: Partial<ChannelSkuListing> = {}): ChannelSkuListing => ({ channel: 'SHOPIFY', productId: 'p1', aliasKey: '', ...LIVE, ...facts })
+  const edit = (sku: string) => ({ overrideData: { [SHOPIFY_SKU_STORES.overrideKeys[0]]: sku } })
+
+  it('parity: no own SKU anywhere → the product SKU, wanted and live', () => {
+    expect(wantedChannelSku(shopify(), 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(liveChannelSku(shopify(), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('an edit only in the override bag: wanted, never live', () => {
+    expect(wantedChannelSku(shopify(edit('SH-EDIT')), 'P')).toEqual({ sku: 'SH-EDIT', source: 'shopify' })
+    expect(liveChannelSku(shopify(edit('SH-EDIT')), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('the native SKU (the sheet\'s SKU column): wanted while no edit is pending, never live', () => {
+    expect(wantedChannelSku(shopify({ platformAttributes: { sku: 'SH-NATIVE' } }), 'P')).toEqual({ sku: 'SH-NATIVE', source: 'shopify' })
+    expect(liveChannelSku(shopify({ platformAttributes: { sku: 'SH-NATIVE' } }), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('an edit AND a native SKU: the edit is wanted (no conflict); live is still the product SKU', () => {
+    const listing = shopify({ platformAttributes: { sku: 'SH-NATIVE' }, ...edit('SH-EDIT') })
+    expect(wantedChannelSku(listing, 'P')).toEqual({ sku: 'SH-EDIT', source: 'shopify' })
+    expect(liveChannelSku(listing, 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('the columns win: channelSku over every old store (wanted), the confirmed liveChannelSku (live)', () => {
+    const listing = shopify({ channelSku: 'OWN', liveChannelSku: ' LIVE ', platformAttributes: { sku: 'SH-NATIVE' }, ...edit('SH-EDIT') })
+    expect(wantedChannelSku(listing, 'P')).toEqual({ sku: 'OWN', source: 'channel' })
+    expect(liveChannelSku(listing, 'P')).toEqual({ sku: 'LIVE', source: 'live' })
+    // channelSku is never what Shopify holds.
+    expect(liveChannelSku(shopify({ channelSku: 'OWN' }), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('a still-draft holds nothing on Shopify; it wants its edit. No product SKU and nothing confirmed: NO_SKU, never an old store', () => {
+    const draft = shopify({ ...DRAFT, platformAttributes: { sku: 'SH-NATIVE' }, ...edit('SH-EDIT') })
+    expect(liveChannelSku(draft, 'P')).toBeNull()
+    expect(wantedChannelSku(draft, 'P')).toEqual({ sku: 'SH-EDIT', source: 'shopify' })
+    expect(liveChannelSku(shopify({ platformAttributes: { sku: 'SH-NATIVE' } }), '')?.conflict?.code).toBe('NO_SKU')
+  })
+
+  it('an extra listing whose own SKU disagrees with the native SKU: a conflict for wanted (an edit settles it); live is not touched by it', () => {
+    const alias = { aliasKey: 'al1', alias: { sku: 'AL', productId: 'p1' }, platformAttributes: { sku: 'SH' } }
+    expect(wantedChannelSku(shopify(alias), 'P').conflict).toMatchObject({ code: 'CONFLICTING_SKUS', candidates: [{ sku: 'SH' }, { sku: 'AL' }] })
+    expect(wantedChannelSku(shopify({ ...alias, ...edit('E') }), 'P')).toEqual({ sku: 'E', source: 'shopify' })
+    expect(liveChannelSku(shopify(alias), 'P')).toEqual({ sku: 'P', source: 'product' })
+  })
+
+  it('blank values are not SKUs, and the old stores\' listing (matching back) still reads every store', () => {
+    expect(wantedChannelSku(shopify({ platformAttributes: { sku: '  ' }, ...edit(' ') }), 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(legacyChannelSkus(shopify(edit('SH-EDIT')))).toEqual([{ sku: 'SH-EDIT', source: 'shopify', key: 'sku' }])
+  })
+
+  it('the other channels are unchanged by the Shopify rule (an Amazon `sku` key and an Etsy override bag)', () => {
+    expect(liveChannelSku(amazon({ platformAttributes: { sku: 'PA' } }), 'P')).toEqual({ sku: 'PA', source: 'attributes' })
+    expect(liveChannelSku({ channel: 'ETSY', ...edit('X') }, 'P')).toEqual({ sku: 'P', source: 'product' })
+    expect(wantedChannelSku({ channel: 'ETSY', ...edit('X') }, 'P')).toEqual({ sku: 'P', source: 'product' })
   })
 })
 

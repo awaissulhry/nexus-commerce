@@ -25,6 +25,7 @@ import { object } from './studio-publication-plan.js'
 import { readAmazonPublication } from './studio-publication-amazon.js'
 import { readEbayPublication } from './studio-publication-ebay.js'
 import { settlePublicationRecords, type PublicationRecordContext } from './studio-publication-records.js'
+import { confirmLiveChannelSku } from '../listings/channel-sku.js'
 
 export const PUBLICATION_KIND = 'studio-publication'
 export const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
@@ -199,6 +200,38 @@ async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: Publ
   return drafts.map(row => row.id)
 }
 
+/**
+ * S3 (per-channel SKU) — Amazon accepted these rows under the seller SKU each one's journal names (the SKU that was
+ * sent), so that is the SKU Amazon holds for them now (`ChannelListing.liveChannelSku`, `confirmLiveChannelSku`). Every
+ * row this publication got accepted, live or draft; idempotent. S4 — eBay the same: an accepted eBay publication (Trading
+ * or Inventory) records the SKU each journal names, the SKU the row was sent under (`ebayPublishSku`), as the SKU eBay
+ * holds now.
+ *
+ * S5 — Shopify too: its studio publication journals each variant under the SKU the native publisher sent, and its
+ * result is VERIFIED only after Shopify read every variant back with that SKU (shopify/content-publisher.ts), so an
+ * ACCEPTED row's journal SKU is the SKU Shopify holds. Only rows Shopify now maps to a variant (`variantId`): a grouped
+ * family's main row is the product's content owner and holds no SKU on Shopify. Etsy has no studio publication.
+ */
+const CONFIRMS_SENT_SKU: ReadonlySet<string> = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
+/** The results under which `settlePublicationRecords` accepts a row (a refused or unknown result accepts none). */
+const ACCEPTING_RESULTS: ReadonlySet<string> = new Set(['ACCEPTED', 'VERIFIED', 'PARTIAL'])
+async function confirmAcceptedSellerSkus(tx: Prisma.TransactionClient, context: PublicationRecordContext, result: StudioPublishResult): Promise<void> {
+  if (!CONFIRMS_SENT_SKU.has(context.channel) || !ACCEPTING_RESULTS.has(result.status)) return
+  const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
+    channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
+  select: { channelListingId: true, payload: true } })
+  let rows = accepted ?? []
+  if (context.channel === 'SHOPIFY' && rows.length) {
+    const variants = await tx.channelListing.findMany({ where: { id: { in: rows.map(row => row.channelListingId) } }, select: { id: true, platformAttributes: true } })
+    const mapped = new Set(variants.filter(listing => { const id = object(listing.platformAttributes).variantId; return (typeof id === 'string' || typeof id === 'number') && String(id).trim() !== '' }).map(listing => listing.id))
+    rows = rows.filter(row => mapped.has(row.channelListingId))
+  }
+  for (const row of rows) {
+    const sku = object(row.payload).sku
+    if (typeof sku === 'string' && sku.trim()) await confirmLiveChannelSku(tx, row.channelListingId, sku)
+  }
+}
+
 /** New listings — the rows a publication created Inactive (`inactiveProductIds`), with Amazon's product type and FBA fact. */
 function createdInactive(data: Record<string, any>): Map<string, { productType: string | null; fba: boolean }> {
   const ids: string[] = Array.isArray(data?.inactiveProductIds) ? data.inactiveProductIds.filter((id: unknown): id is string => typeof id === 'string') : []
@@ -258,6 +291,7 @@ export async function storeResult(id: string, data: Record<string, any>, userId:
     if (stored.count && data.captureVersion === 1) {
       const context = recordContext(id, data, userId)
       await settlePublicationRecords(tx, context, result)
+      await confirmAcceptedSellerSkus(tx, context, result)
       promoted = await promoteAcceptedDrafts(tx, context, data)
     }
     return stored

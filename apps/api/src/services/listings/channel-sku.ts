@@ -81,22 +81,43 @@ const equalTo = (sku: string, ignoreCase: boolean) => {
   return (value: unknown) => typeof value === 'string' && (ignoreCase ? value.trim().toLowerCase() : value.trim()) === want
 }
 
+/** One listing that may hold one of the asked SKUs (`listingsThatMayHoldSkus`). */
+export interface ChannelSkuHolder {
+  /** The asked SKU this listing may hold: trimmed as asked (lower-cased when `ignoreCase`). */
+  sku: string
+  listingId: string
+  productId: string
+  channelConnectionId: string | null
+  marketplace: string
+}
+
 /**
- * The listings on one connected account that MAY hold `sku` in any store (the two columns, offers, the Amazon and
- * Shopify attribute keys, the flat-file snapshot, an alias's SKU): a wide database prefilter, one statement. The pure
- * rules then decide what each row really holds, so there is one rule, not a SQL copy of it. Products in the trash are
- * left out.
+ * The listings that MAY hold one of `skus` in any store (the two columns, offers — inactive too —, the Amazon and
+ * Shopify attribute keys, the flat-file snapshot, an alias's SKU): a wide database prefilter, ONE statement that filters
+ * in SQL and returns only ids. The pure rules then decide what each row really holds, so there is one rule, not a SQL
+ * copy of it. One connected account when `connectionId` is given, else every account of this business (S8: a SKU that
+ * arrives without its account, e.g. a feed report). Products in the trash are left out; at most `limit` (SKU, listing)
+ * pairs, by listing id.
+ *
+ * Not for a per-write hot path: the JSON stores cannot use an index. The write guards match the indexed columns only.
  */
-async function listingsThatMayHold(tx: Db, args: {
-  connectionId: string; sku: string; ignoreCase: boolean
-  channel?: string | null; marketplace?: string | null; exceptProductId?: string | null
-}): Promise<ChannelSkuListingRow[]> {
-  const key = args.ignoreCase ? args.sku.trim().toLowerCase() : args.sku.trim()
-  if (!key) return []
+export async function listingsThatMayHoldSkus(tx: Db, args: {
+  skus: ReadonlyArray<string | null | undefined>
+  ignoreCase?: boolean
+  connectionId?: string | null
+  channel?: string | null
+  marketplace?: string | null
+  exceptProductId?: string | null
+  limit?: number
+}): Promise<ChannelSkuHolder[]> {
+  const keys = [...new Set(args.skus
+    .filter((s): s is string => typeof s === 'string' && !!s.trim())
+    .map(s => args.ignoreCase ? s.trim().toLowerCase() : s.trim()))]
+  if (!keys.length) return []
   // The two new columns are written trimmed, so the exact match can use their (connection, SKU) indexes.
   const column = (name: 'channelSku' | 'liveChannelSku') => args.ignoreCase
-    ? Prisma.sql`lower(btrim(cl.${Prisma.raw(`"${name}"`)})) = ${key}` : Prisma.sql`cl.${Prisma.raw(`"${name}"`)} = ${key}`
-  const same = (expr: Prisma.Sql) => args.ignoreCase ? Prisma.sql`lower(btrim(${expr})) = ${key}` : Prisma.sql`btrim(${expr}) = ${key}`
+    ? Prisma.sql`lower(btrim(cl.${Prisma.raw(`"${name}"`)})) = s.key` : Prisma.sql`cl.${Prisma.raw(`"${name}"`)} = s.key`
+  const same = (expr: Prisma.Sql) => args.ignoreCase ? Prisma.sql`lower(btrim(${expr})) = s.key` : Prisma.sql`btrim(${expr}) = s.key`
   const holds = [
     column('liveChannelSku'),
     column('channelSku'),
@@ -107,19 +128,31 @@ async function listingsThatMayHold(tx: Db, args: {
     ...SHOPIFY_SKU_STORES.overrideKeys.map(k => same(Prisma.sql`cl."overrideData" ->> ${k}::text`)),
     same(Prisma.sql`a.sku`),
   ]
-  const rows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT cl.id FROM "ChannelListing" cl
-    JOIN "Product" p ON p.id = cl."productId" AND p."deletedAt" IS NULL
-    LEFT JOIN "ProductListingAlias" a ON a.id = cl."aliasId"
-    WHERE cl."workspaceId" = ${workspaceIdForQuery()} AND cl."channelConnectionId" = ${args.connectionId}
+  const rows = await tx.$queryRaw<Array<{ sku: string; listing_id: string; product_id: string; connection_id: string | null; marketplace: string }>>`
+    SELECT DISTINCT s.key AS sku, cl.id AS listing_id, cl."productId" AS product_id, cl."channelConnectionId" AS connection_id, cl.marketplace
+    FROM unnest(${keys}::text[]) AS s(key)
+    JOIN "ChannelListing" cl ON cl."workspaceId" = ${workspaceIdForQuery()}
+      ${args.connectionId ? Prisma.sql`AND cl."channelConnectionId" = ${args.connectionId}` : Prisma.empty}
       ${args.channel ? Prisma.sql`AND cl.channel = ${args.channel}` : Prisma.empty}
       ${args.marketplace ? Prisma.sql`AND cl.marketplace = ${args.marketplace}` : Prisma.empty}
       ${args.exceptProductId ? Prisma.sql`AND cl."productId" <> ${args.exceptProductId}` : Prisma.empty}
-      AND (${Prisma.join(holds, ' OR ')})
-    ORDER BY cl.id
-    LIMIT 500`
-  if (!rows.length) return []
-  return tx.channelListing.findMany({ where: { id: { in: rows.map(r => r.id) } }, select: CHANNEL_SKU_LISTING_SELECT, orderBy: { id: 'asc' } })
+    JOIN "Product" p ON p.id = cl."productId" AND p."deletedAt" IS NULL
+    LEFT JOIN "ProductListingAlias" a ON a.id = cl."aliasId"
+    WHERE (${Prisma.join(holds, ' OR ')})
+    ORDER BY listing_id, sku
+    LIMIT ${args.limit ?? 500}`
+  return rows.map(r => ({ sku: r.sku, listingId: r.listing_id, productId: r.product_id, channelConnectionId: r.connection_id, marketplace: r.marketplace }))
+}
+
+/** The listings on ONE connected account that may hold `sku` (`listingsThatMayHoldSkus`), loaded for the pure rules. */
+async function listingsThatMayHold(tx: Db, args: {
+  connectionId: string; sku: string; ignoreCase: boolean
+  channel?: string | null; marketplace?: string | null; exceptProductId?: string | null
+}): Promise<ChannelSkuListingRow[]> {
+  if (!args.connectionId) return []
+  const held = await listingsThatMayHoldSkus(tx, { ...args, skus: [args.sku] })
+  if (!held.length) return []
+  return tx.channelListing.findMany({ where: { id: { in: held.map(r => r.listingId) } }, select: CHANNEL_SKU_LISTING_SELECT, orderBy: { id: 'asc' } })
 }
 
 /**

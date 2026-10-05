@@ -39,6 +39,21 @@ export interface OwnershipCheck {
 
 const norm = (s: string) => s.trim().toLowerCase()
 
+/** GetItem's words for an item that ended on eBay ('Ended', 'Completed'): it can be relisted (a new Item ID), not revised. */
+export function isEndedEbayStatus(status: string | null | undefined): boolean {
+  const s = norm(status ?? '')
+  return s === 'ended' || s === 'completed'
+}
+
+/**
+ * The Nexus listing status an eBay item reads as, from GetItem's status: Active → ACTIVE, Ended or Completed → ENDED.
+ * Null for anything else, absent included: Nexus then does not know whether the item is live, and records nothing.
+ */
+export function nexusStatusForEbayItem(status: string | null | undefined): 'ACTIVE' | 'ENDED' | null {
+  if (norm(status ?? '') === 'active') return 'ACTIVE'
+  return isEndedEbayStatus(status) ? 'ENDED' : null
+}
+
 export function checkItemIdOwnership(args: {
   /** SKUs eBay reports on the target ItemID ('' entries = SKU-less variations). */
   liveSkus: string[]
@@ -46,10 +61,15 @@ export function checkItemIdOwnership(args: {
   familySkus: string[]
   /** GetItem SellingStatus.ListingStatus, e.g. 'Active' | 'Completed' | 'Ended'. */
   listingStatus?: string | null
+  /**
+   * Item ID control (2026-10-05): a person linking an item from the product sheet (or Claude's link-channel-id) may link
+   * an item that ended on eBay — the rows then read Ended and Relist is offered. The old re-link repair never does.
+   */
+  acceptEnded?: boolean
 }): OwnershipCheck {
   const status = (args.listingStatus ?? '').trim()
-  // A dead listing is exactly what caused this incident — never re-link onto one.
-  if (status && norm(status) !== 'active') {
+  // A dead listing is exactly what caused this incident — never re-link onto one (unless the caller records it as Ended).
+  if (status && norm(status) !== 'active' && !(args.acceptEnded === true && isEndedEbayStatus(status))) {
     return {
       verdict: 'rejected',
       reason: `eBay reports this listing as "${status}", not Active. Re-linking a family to an ended listing is the fault being repaired — refusing.`,
@@ -93,7 +113,8 @@ export function checkItemIdOwnership(args: {
   }
   return {
     verdict: 'verified',
-    reason: `eBay confirms all ${matchedSkus.length} SKU(s) on this listing belong to this family.`,
+    reason: `eBay confirms all ${matchedSkus.length} SKU(s) on this listing belong to this family.`
+      + (status && isEndedEbayStatus(status) ? ` eBay reports the item as "${status}": it has ended.` : ''),
     matchedSkus,
     foreignSkus,
   }

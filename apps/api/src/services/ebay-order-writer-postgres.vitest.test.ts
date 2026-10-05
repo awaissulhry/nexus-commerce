@@ -748,4 +748,58 @@ describe.skipIf(!serverUrl)('transactional eBay order writer on real PostgreSQL'
     expect(await effects('D7-1')).toEqual({ 'D7-LINE-777': 'unlinked' })
     expect(await levelOf(other.id)).toBe(5)
   })
+
+  // S6 — one inbound match (services/listings/channel-sku-inbound.ts): a listing may carry its own eBay SKU on its account.
+  const ebayListing = (productId: string, account: string, skus: { channelSku?: string; liveChannelSku?: string }, marketplace = 'IT', workspaceId = W) =>
+    q(`INSERT INTO "ChannelListing" (id,"workspaceId","productId","channelMarket",channel,region,marketplace,"channelConnectionId","listingStatus","isPublished","channelSku","liveChannelSku","updatedAt")
+       VALUES ($1,$2,$3,$4,'EBAY',$5,$5,$6,'ACTIVE',true,$7,$8,now())`, [randomUUID(), workspaceId, productId, `EBAY_${marketplace}`, marketplace, account, skus.channelSku ?? null, skus.liveChannelSku ?? null])
+
+  it('S6: master SKU as before; the listing\'s own SKU and the SKU eBay still holds after a rename take THAT product\'s stock; another account\'s SKU and a SKU two products hold stay unlinked, the latter with the reason', async () => {
+    const tag = randomUUID().slice(0, 8)
+    const plain = await product('S6-PLAIN', 5), own = await product('S6-OWN', 5), renamed = await product('S6-NEW', 5)
+    const otherAccount = await product('S6-OTHERACC', 5), ambA = await product('S6-AMB-A', 5), ambB = await product('S6-AMB-B', 5)
+    await ebayListing(own.id, conn.x, { channelSku: `S6-OWN-EBAY-${tag}` })
+    await ebayListing(renamed.id, conn.x, { channelSku: `S6-OLD-${tag}`, liveChannelSku: `S6-OLD-${tag}` })
+    await ebayListing(otherAccount.id, conn.y, { channelSku: `S6-Y-${tag}` })
+    await ebayListing(ambA.id, conn.x, { channelSku: `S6-AMB-${tag}` })
+    await ebayListing(ambB.id, conn.x, { channelSku: `S6-AMB-${tag}` }, 'DE')
+    const lines = [plain.sku, `S6-OWN-EBAY-${tag}`, `S6-OLD-${tag}`, `S6-Y-${tag}`, `S6-AMB-${tag}`].map(sku => ({ sku, quantity: 1 }))
+    await ingest(ebayOrder(`S6-EBAY-${tag}`, lines), conn.x)
+    const rows = await itemRows(`S6-EBAY-${tag}`)
+    expect(rows.map(row => row.productId)).toEqual([plain.id, own.id, renamed.id, null, null])
+    // The order line keeps the marketplace's own SKU text.
+    expect((await q(`SELECT i.sku FROM "OrderItem" i JOIN "Order" o ON o.id=i."orderId" WHERE o."channelOrderId"=$1 ORDER BY i."externalLineItemId"`, [`S6-EBAY-${tag}`])).map(row => row.sku))
+      .toEqual(lines.map(line => line.sku))
+    expect(rows.map(row => row.ebayMetadata.stockEffect)).toEqual(['own_movement', 'own_movement', 'own_movement', 'unlinked', 'unlinked'])
+    expect(rows[3].ebayMetadata.unlinkedReason).toBeUndefined()
+    expect(rows[4].ebayMetadata.unlinkedReason).toBe(`The eBay SKU S6-AMB-${tag} matches more than one product (${[ambA, ambB].sort((x, y) => (x.id < y.id ? -1 : 1)).map(p => p.sku).join(', ')}). `
+      + 'Nexus did not pick one, so this line is not linked to a product. Give each product its own SKU on this eBay account.')
+    expect(await Promise.all([plain, own, renamed, otherAccount, ambA, ambB].map(p => levelOf(p.id)))).toEqual([4, 4, 4, 5, 5, 5])
+    // The same SKU read through its own account links it.
+    await ingest(ebayOrder(`S6-EBAY-Y-${tag}`, [{ sku: `S6-Y-${tag}`, quantity: 1 }]), conn.y)
+    expect((await itemRows(`S6-EBAY-Y-${tag}`)).map(row => row.productId)).toEqual([otherAccount.id])
+  })
+
+  it('S6: 🔴 a listing SKU of another business never matches — its account, its product', async () => {
+    const tag = randomUUID().slice(0, 8)
+    const b = await business(`s6${tag}`, [{ code: 'S6-MAIN', isDefault: true }])
+    const foreign = await b.product(`S6-FOREIGN-P-${tag}`)
+    await ebayListing(foreign.id, b.connectionId, { channelSku: `S6-FOREIGN-${tag}` }, 'IT', b.id)
+    await ingest(ebayOrder(`S6-EBAY-F-${tag}`, [{ sku: `S6-FOREIGN-${tag}`, quantity: 1 }, { sku: foreign.sku, quantity: 1 }]), conn.x)
+    expect((await itemRows(`S6-EBAY-F-${tag}`)).map(row => row.productId)).toEqual([null, null])
+    // Positive control: in its own business, through its own account, the listing SKU names it.
+    await b.ingest(ebayOrder(`S6-EBAY-F2-${tag}`, [{ sku: `S6-FOREIGN-${tag}`, quantity: 1 }]))
+    expect((await itemRows(`S6-EBAY-F2-${tag}`)).map(row => row.productId)).toEqual([foreign.id])
+  })
+
+  it('S6 parity: an order for a trashed product\'s master SKU links to it and takes its stock, exactly as before', async () => {
+    const trashed = await product('S6-TRASHED', 5)
+    await q(`UPDATE "Product" SET "deletedAt" = now() WHERE id = $1`, [trashed.id])
+    const tag = randomUUID().slice(0, 8)
+    await ingest(ebayOrder(`S6-EBAY-T-${tag}`, [{ sku: trashed.sku, quantity: 2 }]), conn.x)
+    const rows = await itemRows(`S6-EBAY-T-${tag}`)
+    expect(rows.map(row => [row.productId, row.ebayMetadata.stockEffect])).toEqual([[trashed.id, 'own_movement']])
+    expect(await movementRows(`S6-EBAY-T-${tag}`)).toEqual([{ productId: trashed.id, change: -2, reason: 'ORDER_PLACED' }])
+    expect(await levelOf(trashed.id)).toBe(3)
+  })
 })

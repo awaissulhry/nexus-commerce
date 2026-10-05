@@ -226,6 +226,9 @@ describe('the API’s command receipts', () => {
       '/api/claude/pause',
       '/api/claude/resume',
       '/api/listing-wizard/:id/submit',
+      // Item ID control (step I1) — Link and Clear on the product sheet's eBay Item ID cell.
+      '/api/listings/:id/channel-id/link',
+      '/api/listings/:id/channel-id/unlink',
       '/api/pim/attach-to-parent',
       '/api/pim/category-workspace/EBAY/site-assignments',
       '/api/pim/promote-to-parent',
@@ -249,6 +252,7 @@ describe('the API’s command receipts', () => {
     expect(callers).toEqual(expect.arrayContaining([
       path.join('app', 'settings', 'ai', 'claude', 'claudeApi.ts'),
       path.join('app', 'fleet', 'approvals', 'grid', 'PlanSteps.tsx'),
+      path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'channel', 'channelIdControl.tsx'),
     ]))
     for (const file of callers) {
       expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\bsendCommand\b/)

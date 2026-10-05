@@ -41,6 +41,8 @@ import { prisma } from '@nexus/database'
 import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { logger } from '../../utils/logger.js'
+import { channelSkuProblem, setChannelSku } from './channel-sku.js'
+import { listingSendSku } from './listing-send-sku.js'
 
 /**
  * Where the operator continues after a recovery: the product studio on the recovered channel · market (the Owner's (a),
@@ -105,11 +107,19 @@ export async function previewRecovery(
 
   const listing = await prisma.channelListing.findFirst({
     where: whereCoordinate(req),
-    select: { externalListingId: true, listingStatus: true },
+    select: {
+      externalListingId: true, listingStatus: true,
+      // S3 — the seller-SKU facts (`listingSendSku`): the SKU Amazon holds for THIS listing.
+      aliasKey: true, channelSku: true, liveChannelSku: true, isPublished: true, platformAttributes: true, flatFileSnapshot: true,
+      offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    },
   })
 
   const oldAsin = listing?.externalListingId ?? null
-  const oldSku = product.sku
+  // S3 (per-channel SKU) — on Amazon, the SKU Amazon holds for this listing (the product SKU unless it has its own); the
+  // delete below names it. Other channels allow no delete here and keep the product SKU.
+  const held = req.channel === 'AMAZON' && listing ? listingSendSku({ ...listing, channel: 'AMAZON' }, product.sku, product.sku) : null
+  const oldSku = held?.sku ?? product.sku
 
   const consequences: RecoveryPreview['consequences'] = {
     reviewsPreserved: false,
@@ -148,6 +158,12 @@ export async function previewRecovery(
       `newSku "${req.newSku}" matches the current SKU. Pick the appropriate "same SKU" action instead.`,
     )
   }
+  // S3 — two seller SKUs on record for this listing: no delete, since Nexus cannot tell which one Amazon holds.
+  if (held?.refusal && req.action !== 'REPUBLISH_IN_PLACE') consequences.blockers.push(held.refusal)
+  // S3 — the new SKU becomes this listing's own SKU: it must be a SKU Nexus can store (checked before anything is deleted).
+  const newSkuProblem = (req.action === 'SAME_ASIN_NEW_SKU' || req.action === 'FULL_RESET') && req.newSku?.trim()
+    ? channelSkuProblem(req.newSku.trim()) : null
+  if (newSkuProblem) consequences.blockers.push(`newSku "${req.newSku!.trim()}": ${newSkuProblem}`)
 
   // Per-action consequence shape.
   switch (req.action) {
@@ -341,6 +357,8 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
         data: {
           listingStatus: 'ENDED',
           isPublished: false,
+          // S3 — Amazon no longer holds a SKU for this listing.
+          liveChannelSku: null,
           // For NEW_ASIN_* actions, clear the ASIN so the wizard's
           // publish path doesn't try to attach to the old catalog item.
           externalListingId:
@@ -359,7 +377,9 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       throw new Error(`Channel ${req.channel} not supported by recovery flow.`)
     }
 
-    // ── Step 3: rename Product.sku for SAME_ASIN_NEW_SKU + FULL_RESET.
+    // ── Step 3: SAME_ASIN_NEW_SKU + FULL_RESET — the new SKU becomes THIS listing's own SKU (S3, the Owner's rule
+    // 2026-10-05: a SKU change for one channel and market belongs to that listing; the Shared scope owns Product.sku).
+    // The recreate then sends it (`wantedChannelSku`); other channels and markets keep theirs.
     if (req.action === 'SAME_ASIN_NEW_SKU' || req.action === 'FULL_RESET') {
       const newSku = req.newSku?.trim()
       if (!newSku) throw new Error('newSku required for this action.')
@@ -372,10 +392,11 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
           `SKU ${newSku} is already in use by another product (${existing.id}).`,
         )
       }
-      await prisma.product.update({
-        where: { id: req.productId },
-        data: { sku: newSku },
-      })
+      const target = await prisma.channelListing.findFirst({ where: whereCoordinate(req), select: { id: true } })
+      if (!target) throw new Error('The listing of this recovery is gone, so its new SKU was not saved.')
+      await prisma.$transaction(tx => setChannelSku(tx, {
+        listingId: target.id, sku: newSku, actorId: req.initiatedBy ?? null, reason: `Listing recovery (${req.action})`,
+      }))
       await pushStep('renamed_sku')
     }
 

@@ -46,6 +46,7 @@ import { normalizeMarketplaceCode } from '../utils/marketplace-code.js'
 import { mirrorListingIssues, type MirrorIssueInput, type MirrorMode } from './listing-issues.service.js'
 import type { ChannelVerdict } from './gateway/vocabulary.js'
 import type { PerSkuResult } from './feed-report-types.js'
+import { listingAccounts, listingAnswersToSku, listingsAnsweringToSkus, productForChannelSkuOnAccounts } from './listings/listing-sku-holders.js'
 
 /** Who produced the issue. Scopes the resolve sweep — one source never closes another's. */
 export type IssueSource =
@@ -187,10 +188,12 @@ export interface RecordFeedIssuesArgs {
 /**
  * A finished feed report → issues on each rejected SKU's listing.
  *
- * The join is SKU → Product → the ChannelListing for this channel+marketplace. It is
- * done in ONE query for the whole feed rather than per SKU: the P1.3 follow-up was
- * exactly this defect on the claim check, caught by the profiles-ON gate, and a feed
- * can carry hundreds of SKUs.
+ * The join is SKU → the ChannelListings for this channel+marketplace that answer to it: S8 — a listing's own channel SKU
+ * (the SKU Nexus sends or the channel confirmed, and the old stores, through the resolver: `listingsAnsweringToSkus`),
+ * and, for a listing WITHOUT its own SKU, its product's SKU as before. A listing with its own SKU no longer answers to
+ * its product's SKU: on the channel that SKU is not this listing's. It is done in a fixed number of queries for the whole
+ * feed rather than per SKU: the P1.3 follow-up was exactly this defect on the claim check, caught by the profiles-ON
+ * gate, and a feed can carry hundreds of SKUs.
  *
  * Returns what happened, including the SKUs it could not place — a SKU with no listing
  * on this marketplace is a real answer worth logging, not a silent skip.
@@ -214,11 +217,13 @@ export async function recordFeedReportIssues(
   // client applies the business profile — raw SQL is invisible to it and would read
   // zero rows while the listing sat right there.
   let listings: Array<{ id: string; product: { sku: string } }> = []
+  let ownSku = new Map<string, Array<{ id: string }>>()
   try {
     listings = await prisma.channelListing.findMany({
-      where: { channel, marketplace: args.marketplace, product: { sku: { in: skus } } },
+      where: { channel, marketplace: args.marketplace, product: { sku: { in: skus } }, channelSku: null, liveChannelSku: null },
       select: { id: true, product: { select: { sku: true } } },
     }) as Array<{ id: string; product: { sku: string } }>
+    ownSku = await listingsAnsweringToSkus(prisma, { skus, channel, marketplace: args.marketplace })
   } catch (err: any) {
     logger.warn('[listing-issues] feed report: could not resolve listings', {
       marketplace: args.marketplace, skus: skus.length, error: err?.message,
@@ -231,11 +236,13 @@ export async function recordFeedReportIssues(
   // SKU would keep the last one and drop the rest, so the rejection lands on every
   // listing that carries the SKU.
   const listingsBySku = new Map<string, string[]>()
-  for (const l of listings) {
-    const arr = listingsBySku.get(l.product.sku) ?? []
-    arr.push(l.id)
-    listingsBySku.set(l.product.sku, arr)
+  const place = (sku: string, id: string) => {
+    const arr = listingsBySku.get(sku) ?? []
+    if (!arr.includes(id)) arr.push(id)
+    listingsBySku.set(sku, arr)
   }
+  for (const l of listings) place(l.product.sku, l.id)
+  for (const [sku, rows] of ownSku) for (const row of rows) place(sku, row.id)
 
   const unmatchedSkus: string[] = []
   let placed = 0
@@ -365,10 +372,12 @@ export async function recordSuppressionIssues(args: {
 export async function recordNotificationIssues(args: {
   sellerSku: string
   marketplaceId: string
+  /** The Amazon seller the notification names (`SellerId`): which account's listing it is about. */
+  sellerId?: string | null
   issues: Array<{ code?: unknown; message?: unknown; severity?: unknown; attributeNames?: unknown }>
   occurredAt?: Date | null
   prisma?: PrismaClient
-}): Promise<{ listings: number; issues: number } | null> {
+}): Promise<{ listings: number; issues: number; ambiguous?: string[] } | null> {
   const prisma = args.prisma ?? (prismaDefault as unknown as PrismaClient)
   // The canonical map — src/utils/marketplace-code.ts, normalised through by 38 call
   // sites. A second copy here is how AMEN7PMS3EDWL was Ireland in one file and
@@ -378,32 +387,85 @@ export async function recordNotificationIssues(args: {
     logger.warn('[listing-issues] notification: unknown marketplaceId', { marketplaceId: args.marketplaceId })
     return null
   }
-  let listing: { id: string } | null = null
+  let found: { listingIds: string[]; ambiguous?: string[] }
   try {
-    listing = await prisma.channelListing.findFirst({
-      where: { channel: 'AMAZON', marketplace, product: { sku: args.sellerSku } },
-      select: { id: true },
-    })
+    found = await amazonListingsForNotification(prisma, { sku: args.sellerSku, marketplace, sellerId: args.sellerId ?? null })
   } catch (err: any) {
     logger.warn('[listing-issues] notification: lookup failed', { sku: args.sellerSku, error: err?.message })
     return null
   }
-  if (!listing) return { listings: 0, issues: 0 }
+  if (found.ambiguous) {
+    // Two products answer to this SKU on the seller's account: filing on either would be a guess. The identity audit
+    // names the collision; here it is reported, not placed.
+    logger.warn('[listing-issues] notification: SKU names more than one product — not placed', {
+      sku: args.sellerSku, marketplace, productIds: found.ambiguous,
+    })
+    return { listings: 0, issues: 0, ambiguous: found.ambiguous }
+  }
+  if (!found.listingIds.length) return { listings: 0, issues: 0 }
 
-  const result = await recordListingIssues({
-    listingId: listing.id,
-    source: 'amazon-notification',
-    occurredAt: args.occurredAt ?? null,
-    prisma,
-    issues: (args.issues ?? []).map((i) => ({
-      code: String(i.code ?? 'UNKNOWN'),
-      message: String(i.message ?? ''),
-      severity: String(i.severity ?? 'ERROR'),
-      attributeNames: resolveIssueAttributes(i.attributeNames, String(i.message ?? '')),
-      categories: [],
-    })),
+  const issues = (args.issues ?? []).map((i) => ({
+    code: String(i.code ?? 'UNKNOWN'),
+    message: String(i.message ?? ''),
+    severity: String(i.severity ?? 'ERROR'),
+    attributeNames: resolveIssueAttributes(i.attributeNames, String(i.message ?? '')),
+    categories: [],
+  }))
+  let listings = 0
+  let open = 0
+  for (const listingId of found.listingIds) {
+    const result = await recordListingIssues({ listingId, source: 'amazon-notification', occurredAt: args.occurredAt ?? null, prisma, issues })
+    if (result) { listings++; open += result.open }
+  }
+  return listings ? { listings, issues: open } : null
+}
+
+/**
+ * S8 — the Amazon listings a `LISTINGS_ITEM_ISSUES_CHANGE` is about: by ACCOUNT and SKU, through the resolver
+ * (`productForChannelSku`: confirmed SKU → own SKU → old stores → product SKU), never "the first listing of a product
+ * with that SKU". The account is the seller the notification names; when no account of this business carries that
+ * seller id, every account this business lists on in that market is asked. Two products → `ambiguous` (not placed).
+ * Then, of the matched product's listings on that account and market, those that answer to the SKU (one SKU may name
+ * a primary and an extra listing). A listing no account names is matched as before (product SKU), so an unattributed
+ * listing keeps its issues.
+ */
+async function amazonListingsForNotification(prisma: PrismaClient, input: {
+  sku: string
+  marketplace: string
+  sellerId: string | null
+}): Promise<{ listingIds: string[]; ambiguous?: string[] }> {
+  const sku = String(input.sku ?? '').trim()
+  if (!sku) return { listingIds: [] }
+  const named = input.sellerId
+    ? await prisma.channelConnection.findMany({
+        where: { externalAccountId: input.sellerId, channelType: { equals: 'AMAZON', mode: 'insensitive' } },
+        select: { id: true },
+      })
+    : []
+  const connectionIds = named.length
+    ? named.map((c) => c.id)
+    : await listingAccounts(prisma, { channel: 'AMAZON', marketplace: input.marketplace })
+
+  const match = await productForChannelSkuOnAccounts(prisma, { channel: 'AMAZON', sku, marketplace: input.marketplace, connectionIds })
+  if (match) {
+    if ('productIds' in match) return { listingIds: [], ambiguous: match.productIds }
+    const { CHANNEL_SKU_LISTING_SELECT } = await import('./listings/channel-sku.js')
+    const rows = await prisma.channelListing.findMany({
+      where: { productId: match.productId, channel: 'AMAZON', marketplace: input.marketplace, channelConnectionId: { in: match.connectionIds } },
+      select: CHANNEL_SKU_LISTING_SELECT,
+      orderBy: { id: 'asc' },
+    })
+    const listingIds = rows.filter((row) => listingAnswersToSku(row, row.product?.sku, sku)).map((row) => row.id)
+    if (listingIds.length) return { listingIds }
+  }
+
+  // A listing no account names (older rows): the product-SKU rule as before.
+  const unattributed = await prisma.channelListing.findFirst({
+    where: { channel: 'AMAZON', marketplace: input.marketplace, channelConnectionId: null, channelSku: null, liveChannelSku: null, product: { sku } },
+    select: { id: true },
+    orderBy: { id: 'asc' },
   })
-  return result ? { listings: 1, issues: result.open } : null
+  return { listingIds: unattributed ? [unattributed.id] : [] }
 }
 
 

@@ -17,12 +17,41 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *
  * Safety: one revise per listing; DB writes only after eBay's ack; variations
  * whose specifics can't be derived are skipped and reported.
+ *
+ * S4 (per-channel SKU) — a candidate names its PRODUCT by Product.sku (the
+ * caller's rows); the variation is sent under the SKU that product's row on
+ * this item wants (`ebayRowsOnItem`: its own SKU, else Product.sku as before),
+ * and its membership is keyed by that SKU (the one eBay then holds).
  */
 
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
 import { parseLiveVariations, type LiveVariation } from './ebay-membership-reconcile.service.js'
+import { confirmLiveChannelSku } from './listings/channel-sku.js'
+import { ebayRowsOnItem, type EbayRowOnItem } from './listings/ebay-send-sku.js'
+
+/**
+ * S4 — each candidate under the SKU its product's row on this item wants. A candidate whose SKU names no product keeps
+ * its SKU (as before). Returns the candidates to send and, per sent SKU, its product and row.
+ */
+async function sendSkusOf(itemId: string, market: string, connectionId: string, candidates: NewVariationInput[]) {
+  const named = [...new Set(candidates.map((c) => c.sku).filter(Boolean))]
+  const products = named.length
+    ? await prisma.product.findMany({ where: { sku: { in: named }, deletedAt: null }, select: { id: true, sku: true } })
+    : []
+  const productBySku = new Map(products.map((p) => [p.sku, p]))
+  const onItem = await ebayRowsOnItem(prisma as never, { itemId, marketplace: market, accountId: connectionId, products })
+  const rowBySendSku = new Map<string, EbayRowOnItem>()
+  const sent = candidates.map((c) => {
+    const product = productBySku.get(c.sku)
+    const row = product ? onItem.get(product.id) : undefined
+    if (!row) return c
+    rowBySendSku.set(row.wanted, row)
+    return { ...c, sku: row.wanted }
+  })
+  return { candidates: sent, rowBySendSku }
+}
 
 export interface NewVariationInput {
   sku: string
@@ -115,6 +144,9 @@ export async function addVariationsToListing(
     if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
   }
   const market = marketplace.toUpperCase()
+  // S4 — each candidate under the SKU its row on this item wants (its own, else Product.sku as before).
+  const resolved = await sendSkusOf(itemId, market, ctx.connectionId, candidates)
+  candidates = resolved.candidates
   const getXml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ItemID>${escapeXml(itemId)}</ItemID>
@@ -164,13 +196,22 @@ export async function addVariationsToListing(
       connectionId: ctx.connectionId,
     })
     ebayAck = res.ack
+    // S4 — eBay took them (not a dry run): each added row's SKU is the SKU eBay holds for it now.
+    if (res.raw && ['Success', 'Warning'].includes(res.ack)) {
+      for (const a of additions) {
+        const listingId = resolved.rowBySendSku.get(a.sku)?.listingId
+        if (listingId) await confirmLiveChannelSku(prisma as never, listingId, a.sku)
+      }
+    }
 
     // Link the new variations to the pool + memberships (fan-out live).
+    // S4 — a variation sent under its row's own SKU links to that row's product; any other by its product SKU (as before).
     const products = await prisma.product.findMany({
-      where: { sku: { in: additions.map((a) => a.sku) }, deletedAt: null },
+      where: { OR: [{ sku: { in: additions.map((a) => a.sku) } }, { id: { in: [...resolved.rowBySendSku.values()].map((r) => r.productId) } }], deletedAt: null },
       select: { id: true, sku: true, parentId: true },
     })
     const productIdBySku = new Map(products.map((p) => [p.sku, p.id]))
+    for (const [sku, row] of resolved.rowBySendSku) productIdBySku.set(sku, row.productId)
     const existing = await prisma.sharedListingMembership.findFirst({
       where: { marketplace: market, itemId },
       select: { parentSku: true },
@@ -219,6 +260,8 @@ export async function addVariationsToListing(
       select: { id: true, sku: true, parentId: true },
     })
     const healIdBySku = new Map(healProducts.map((p) => [p.sku, p.id]))
+    // S4 — a live variation under its row's own SKU belongs to that row's product.
+    for (const [sku, row] of resolved.rowBySendSku) healIdBySku.set(sku, row.productId)
     const anyMembership = await prisma.sharedListingMembership.findFirst({
       where: { marketplace: market, itemId },
       select: { parentSku: true },

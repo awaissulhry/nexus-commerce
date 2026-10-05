@@ -12,6 +12,7 @@ import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.j
 import { guardedColourGraphql, withColourSyncLock } from './colour-products/sync-work.js'
 import { listingSendPriceNow } from '../pim/follower-price.js'
 import { priceRefusalFor } from '../price-bounds.service.js'
+import { CHANNEL_SKU_UNRESOLVED, listingSendSku } from '../listings/listing-send-sku.js'
 
 /** Activated native families use named accounts and exact IDs; SKU searches never choose a variant. */
 export async function syncNativeShopifyOffer(item: any) {
@@ -59,6 +60,11 @@ async function syncNativeOffer(item: any, observedListing?: Awaited<ReturnType<t
     return 'Shopify family content synchronised and read back.'
   }
   if (!mapping.variantId || !mapping.inventoryItemId || !mapping.shopifyProductId) throw new Error('Only a sellable child variant can receive a price or stock update. The family is a content owner.')
+  // S5 (per-channel SKU) — the variant is found by its stored id; the SKU it must still carry is the one Shopify holds for
+  // THIS listing (`listingSendSku`): its confirmed `liveChannelSku` — so a listing whose own SKU Shopify confirmed is not
+  // refused — else the product SKU (as before). A Shopify sheet SKU not yet sent is never expected. No SKU at all: refused.
+  const held = listingSendSku({ ...listing, channel: 'SHOPIFY' }, item.product.sku, item.product.sku)
+  if (held.sku === null) throw Object.assign(new Error(held.refusal ?? 'This Shopify listing has no single SKU. Nothing was sent.'), { code: CHANNEL_SKU_UNRESOLVED })
   const admin = await shopifyAdmin(listing.channelConnectionId)
   const gql = mapping.shopifyColourProductId ? guardedColourGraphql(admin.graphql) : admin.graphql
   const variantId = toGid('ProductVariant', mapping.variantId), inventoryItemId = toGid('InventoryItem', mapping.inventoryItemId), productId = toGid('Product', mapping.shopifyProductId)
@@ -67,7 +73,7 @@ async function syncNativeOffer(item: any, observedListing?: Awaited<ReturnType<t
   const query = `query NexusOffer($id:ID!,$location:ID!) { productVariant(id:$id) { id sku price product { id identity:metafield(namespace:"nexus",key:"family_id") { value } } inventoryItem { id inventoryLevel(locationId:$location) { quantities(names:["available"]) { name quantity } } } } }`
   const read = async () => (await gql(query, { id: variantId, location: locationId })).productVariant
   const remote = await read()
-  if (!remote || remote.sku !== item.product.sku || remote.product.id !== productId || remote.inventoryItem.id !== inventoryItemId
+  if (!remote || remote.sku !== held.sku || remote.product.id !== productId || remote.inventoryItem.id !== inventoryItemId
     || expectedColourIdentity && remote.product.identity?.value !== expectedColourIdentity) throw new Error('The Shopify variant identity changed. Reconcile the family before syncing.')
   if (item.syncType === 'PRICE_UPDATE') {
     // Round 6 — the price as the price door queued it (`payload.price`), as every other dispatcher sends it: a follower's

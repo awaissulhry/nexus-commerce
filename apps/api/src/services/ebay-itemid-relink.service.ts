@@ -26,6 +26,7 @@ import {
   checkItemIdOwnership,
   checkSellerOwnership,
   combineOwnership,
+  isEndedEbayStatus,
   parseListingStatus,
   parseSellerUserId,
   parseTopLevelSku,
@@ -40,6 +41,14 @@ export interface RelinkInput {
   apply?: boolean
   /** Required to write when the verdict is 'unverifiable'. */
   acknowledgeUnverifiable?: boolean
+  /**
+   * Item ID control (2026-10-05, identity-fix): the SKUs this family holds on THIS listing's channel, market and account
+   * (`channel-sku.ts`: each row's live and wanted channel SKU), compared with the item's SKUs instead of `Product.sku`.
+   * Omitted: the old rule (the family's product SKUs and the pooled shared-variation SKUs).
+   */
+  familySkus?: string[]
+  /** Identity-fix: an item eBay reports as Ended or Completed is not refused (the caller records it as ENDED). */
+  acceptEnded?: boolean
 }
 
 export interface RelinkResult {
@@ -52,6 +61,8 @@ export interface RelinkResult {
   foreignSkus: string[]
   liveTitle?: string
   liveStatus?: string | null
+  /** The SKUs eBay reports on the item (its variations', else its own), as eBay writes them. */
+  liveSkus?: string[]
   /** I4 / G2 — the seller eBay names for the item, and the seller recorded for the account (null = none recorded). */
   seller?: { item: string | null; account: string | null }
   before: {
@@ -106,15 +117,18 @@ export async function relinkEbayItemId(
   })
   if (!root) return { ...base, itemId, verdict: 'invalid', reason: `No product with SKU "${input.parentSku}".` }
 
-  const kids = await prisma.product.findMany({ where: { parentId: root.id, deletedAt: null }, select: { sku: true } })
-  const familySkus = [root.sku, ...kids.map((k) => k.sku)]
-  // Shell listings pool other products' SKUs through memberships — those are
-  // legitimately "this family's" SKUs for ownership purposes.
-  const pooled = await prisma.sharedListingMembership.findMany({
-    where: { parentSku: root.sku, marketplace },
-    select: { sku: true },
-  })
-  for (const p of pooled) if (p.sku) familySkus.push(p.sku)
+  const familySkus = input.familySkus ? [...input.familySkus] : []
+  if (!input.familySkus) {
+    const kids = await prisma.product.findMany({ where: { parentId: root.id, deletedAt: null }, select: { sku: true } })
+    familySkus.push(root.sku, ...kids.map((k) => k.sku))
+    // Shell listings pool other products' SKUs through memberships — those are
+    // legitimately "this family's" SKUs for ownership purposes.
+    const pooled = await prisma.sharedListingMembership.findMany({
+      where: { parentSku: root.sku, marketplace },
+      select: { sku: true },
+    })
+    for (const p of pooled) if (p.sku) familySkus.push(p.sku)
+  }
 
   // ── current state, for the report and the diff ──
   const cl = await prisma.channelListing.findFirst({
@@ -193,7 +207,7 @@ export async function relinkEbayItemId(
   const account = await prisma.channelConnection.findFirst({ where: { id: ctx.connectionId }, select: { externalAccountId: true } })
   const seller = { item: parseSellerUserId(raw), account: account?.externalAccountId ?? null }
   const check = combineOwnership(
-    checkItemIdOwnership({ liveSkus, familySkus, listingStatus: liveStatus }),
+    checkItemIdOwnership({ liveSkus, familySkus, listingStatus: liveStatus, acceptEnded: input.acceptEnded === true }),
     checkSellerOwnership({ itemSeller: seller.item, accountSeller: seller.account }),
   )
   const result: RelinkResult = {
@@ -205,6 +219,7 @@ export async function relinkEbayItemId(
     foreignSkus: check.foreignSkus,
     liveTitle,
     liveStatus,
+    liveSkus: liveSkus.map((s) => s.trim()).filter(Boolean),
     seller,
   }
 
@@ -221,15 +236,17 @@ export async function relinkEbayItemId(
   }
 
   // ── repair BOTH stores together ──
+  // The status eBay reports (an ended item only reaches here when the caller accepted it): never ACTIVE for an ended item.
+  const written = isEndedEbayStatus(liveStatus) ? 'ENDED' : 'ACTIVE'
   await prisma.$transaction(async (tx) => {
     if (cl) {
       await tx.channelListing.update({
         where: { id: cl.id },
-        data: { externalListingId: itemId, listingStatus: 'ACTIVE' },
+        data: { externalListingId: itemId, listingStatus: written },
       })
       result.changes.push(
         `ChannelListing(${region}): externalListingId ${cl.externalListingId ?? 'NULL'} → ${itemId}` +
-        (cl.listingStatus && cl.listingStatus !== 'ACTIVE' ? `, listingStatus ${cl.listingStatus} → ACTIVE` : ''),
+        (cl.listingStatus && cl.listingStatus !== written ? `, listingStatus ${cl.listingStatus} → ${written}` : ''),
       )
     } else {
       result.changes.push(`No ${region} ChannelListing for ${root.sku} — nothing to update there.`)

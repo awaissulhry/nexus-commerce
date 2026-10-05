@@ -34,6 +34,7 @@ import { resolveByShopifyId } from "../services/shopify-locations.service.js";
 // applyStockMovement now lives behind the ChannelStockEvent service
 // (CS.2 — drift threshold + auto-apply / review-needed gating).
 import { logger } from "../utils/logger.js";
+import { matchInboundSku, shopifyVariantListingStore } from "../services/listings/channel-sku-inbound.js";
 
 interface ShopifyWebhookPayload {
   id: string;
@@ -315,7 +316,7 @@ function mapShopifyOrderStatus(financial?: string, fulfillment?: string | null):
   return 'PENDING';
 }
 
-export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleOrderCreate(payload: ShopifyWebhookPayload, context?: { connectionId?: string | null }): Promise<void> {
   const order = payload as any;
   const shopifyOrderId = String(order.id);
 
@@ -376,9 +377,14 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
       for (const item of order.line_items) {
         const sku = item.sku || item.title || `shopify-line-${item.id}`;
         const externalLineItemId = String(item.id);
-        const product = sku
-          ? await prisma.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sku }) }, select: { id: true } })
-          : null;
+        // S6 — the one inbound match: this store's listings (own SKU, also one renamed in Nexus that Shopify
+        // still holds), the master SKU, then the line's variant id against the variant a listing records.
+        const match = await matchInboundSku(prisma, {
+          channel: 'SHOPIFY', channelConnectionId: context?.connectionId, sku,
+          fallbacks: [shopifyVariantListingStore(prisma, context?.connectionId, item.variant_id)],
+        });
+        const product = match.productId ? { id: match.productId } : null;
+        if (match.problem) logger.warn('[ShopifyWebhooks] order line not linked to a product', { shopifyOrderId, externalLineItemId, sku, reason: match.problem.sentence });
         await prisma.orderItem.upsert({
           where: {
             orderId_externalLineItemId: workspaceKey({
@@ -533,7 +539,7 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
 /**
  * Process order update webhook
  */
-export async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleOrderUpdate(payload: ShopifyWebhookPayload, context?: { connectionId?: string | null }): Promise<void> {
   const order = payload as any;
   const shopifyOrderId = String(order.id);
 
@@ -553,7 +559,7 @@ export async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise
       // Webhook arrived before order/create finished or was missed.
       // Defer to the create handler shape so we do reservation work too.
       logger.info('[ShopifyWebhooks] update arrived for unknown order — falling through to create flow', { shopifyOrderId });
-      await handleOrderCreate(payload);
+      await handleOrderCreate(payload, context);
       return;
     }
 

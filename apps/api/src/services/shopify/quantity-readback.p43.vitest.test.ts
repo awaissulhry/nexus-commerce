@@ -337,3 +337,43 @@ describe('A-36 readBackShopifyQuantities → ChannelDrift', () => {
     expect(recorded()).toEqual([expect.objectContaining({ compared: ['price'], differing: [{ field: 'price', ours: 49.9, theirs: 55 }] })])
   })
 })
+
+// ── S7 — the listing's own SKU ──────────────────────────────────────────────
+describe('S7: the Shopify read-back reads each listing under the SKU Shopify knows it by', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    m.loadChannelPolicies.mockResolvedValue(new Map())
+    m.shopifyAdmin.mockResolvedValue({ graphql: vi.fn(), domain: 'shop.myshopify.com' })
+    m.findFirst.mockResolvedValue(null)
+    m.createOutboundRow.mockResolvedValue({ id: 'q-1' })
+    m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'L', variantId: 'v1' })
+  })
+  const onePage = (rows: unknown[]) => { m.findMany.mockResolvedValueOnce(rows).mockResolvedValue([]) }
+  const readAs = () => m.readShopifyAvailable.mock.calls.map(([, row]) => row.product?.sku)
+
+  it('parity: a listing without its own SKU is read, reported and healed under its product SKU, exactly as before', async () => {
+    onePage([listing({ channel: 'SHOPIFY' })])
+    const r = await readBackShopifyQuantities()
+    expect(readAs()).toEqual(['SKU-1'])
+    expect(r.mismatches).toEqual([expect.objectContaining({ listingId: 'cl-1', productId: 'p-1', sku: 'SKU-1', shopifyQty: 2, intendedQty: 5 })])
+    expect(m.createOutboundRow).toHaveBeenCalledOnce()
+  })
+
+  it('a listing with its own confirmed SKU (liveChannelSku) is read and reported under it; the heal still names ITS listing', async () => {
+    // S5 — cl-2 also has a sheet SKU not yet sent (the native SKU column): only the confirmed SKU is what Shopify holds.
+    onePage([listing({ channel: 'SHOPIFY', liveChannelSku: 'SKU-1-SHOP' }), listing({ id: 'cl-2', channel: 'SHOPIFY', liveChannelSku: 'SKU-1-NATIVE', platformAttributes: { sku: 'SKU-1-NEXT' } })])
+    const r = await readBackShopifyQuantities()
+    expect(readAs()).toEqual(['SKU-1-SHOP', 'SKU-1-NATIVE'])
+    expect(r.mismatches.map((x) => [x.listingId, x.sku])).toEqual([['cl-1', 'SKU-1-SHOP'], ['cl-2', 'SKU-1-NATIVE']])
+    expect(m.createOutboundRow.mock.calls.map(([, args]) => (args as any).data.channelListingId)).toEqual(['cl-1', 'cl-2'])
+  })
+
+  it('S5 — a sheet SKU not yet sent (the native SKU column), or an extra listing\'s own SKU, is not what Shopify holds: read under the product SKU', async () => {
+    onePage([listing({ channel: 'SHOPIFY', platformAttributes: { sku: 'SKU-1-NEXT' } }),
+      listing({ id: 'cl-2', channel: 'SHOPIFY', aliasKey: 'al-1', alias: { sku: 'SKU-1-ALIAS', productId: 'p-1' }, platformAttributes: { sku: 'SKU-1-NATIVE' } })])
+    const r = await readBackShopifyQuantities()
+    expect(readAs()).toEqual(['SKU-1', 'SKU-1'])
+    expect(r).toMatchObject({ checked: 2, unreadable: 0 })
+  })
+})

@@ -73,6 +73,20 @@ const productBarcodes = (p: string) => sql`(VALUES (${barcodeSql(sql`${Prisma.ra
 const LIVE_LISTING = sql`"ChannelListing" cl JOIN "Product" p ON p.id = cl."productId" AND p."deletedAt" IS NULL`
 const PA = sql`cl."platformAttributes"`
 
+/** S8 — a listing's own channel SKU, trimmed: the confirmed `liveChannelSku`, else `channelSku`; null when it has none. */
+const OWN_SKU = (alias: string) => sql`COALESCE(${nonEmpty(sql`${Prisma.raw(alias)}."liveChannelSku"`)}, ${nonEmpty(sql`${Prisma.raw(alias)}."channelSku"`)})`
+
+/**
+ * The seller SKU of listing `cl` (product `p`), as one row `seller`: its own SKU (`OWN_SKU`), else the old rule — the one
+ * active offer's SKU, else the product SKU; two different active offers name none (NULL). The same order as
+ * `identitySellerSku` (listing-claim-identity.ts), which the channel sweep links by.
+ */
+const SELLER_SKU = sql`
+      SELECT COALESCE(${OWN_SKU('cl')}, CASE WHEN count(DISTINCT o.sku) > 1 THEN NULL WHEN count(DISTINCT o.sku) = 1 THEN min(o.sku)
+        WHEN btrim(p.sku) <> '' THEN p.sku END) AS seller
+      FROM "Offer" o WHERE o."channelListingId" = cl.id AND o."isActive" AND btrim(o.sku) <> ''
+    `
+
 /** One SQL per check, each returning: key, sku, product_id, listing_id, channel, market, facts. */
 type CheckSql = (ws: string) => Prisma.Sql
 
@@ -272,18 +286,23 @@ const CHECK_SQL: Record<string, CheckSql> = {
     JOIN "Product" o ON o."workspaceId" = ${ws} AND o."deletedAt" IS NULL AND lower(btrim(o.sku)) = lower(btrim(a.sku))
     WHERE a."workspaceId" = ${ws} AND ${nonEmpty(sql`a.sku`)} IS NOT NULL`,
 
-  // An offer's SKU is another product's listing's seller SKU on the same account and market. A listing's seller SKUs
-  // are its active offers' SKUs, or its product's SKU when it has no active offer (listing-claim-identity.ts).
+  // An offer's SKU is another product's listing's seller SKU on the same account and market. A listing's seller SKU is
+  // its own (S8: the confirmed liveChannelSku, else channelSku); without one, its active offers' SKUs, or its product's
+  // SKU when it has no active offer (listing-claim-identity.ts, identitySellerSku).
   'offer-sku-equals-other-listing-sku': (ws) => sql`
     WITH seller AS (
       SELECT l.id AS listing_id, l.channel, l.marketplace, l."channelConnectionId" AS account, l."productId" AS product_id,
-        lower(btrim(o2.sku)) AS sku_key
+        lower(${OWN_SKU('l')}) AS sku_key
+      FROM "ChannelListing" l
+      WHERE l."workspaceId" = ${ws} AND ${OWN_SKU('l')} IS NOT NULL
+      UNION
+      SELECT l.id, l.channel, l.marketplace, l."channelConnectionId", l."productId", lower(btrim(o2.sku))
       FROM "Offer" o2 JOIN "ChannelListing" l ON l.id = o2."channelListingId"
-      WHERE o2."workspaceId" = ${ws} AND o2."isActive" AND ${nonEmpty(sql`o2.sku`)} IS NOT NULL
+      WHERE o2."workspaceId" = ${ws} AND o2."isActive" AND ${nonEmpty(sql`o2.sku`)} IS NOT NULL AND ${OWN_SKU('l')} IS NULL
       UNION
       SELECT l.id, l.channel, l.marketplace, l."channelConnectionId", l."productId", lower(btrim(lp.sku))
       FROM "ChannelListing" l JOIN "Product" lp ON lp.id = l."productId"
-      WHERE l."workspaceId" = ${ws} AND NOT EXISTS (
+      WHERE l."workspaceId" = ${ws} AND ${OWN_SKU('l')} IS NULL AND NOT EXISTS (
         SELECT 1 FROM "Offer" o3 WHERE o3."channelListingId" = l.id AND o3."isActive" AND ${nonEmpty(sql`o3.sku`)} IS NOT NULL)
     )
     SELECT DISTINCT o.sku || ' ' || o.id || ' ' || s.listing_id AS key, p.sku, p.id AS product_id, cl.id AS listing_id,
@@ -306,18 +325,16 @@ const CHECK_SQL: Record<string, CheckSql> = {
     JOIN "Product" o ON o."workspaceId" = ${ws} AND o."deletedAt" IS NULL AND o.id <> p.id AND lower(btrim(o.sku)) = lower(btrim(s.alias))
     WHERE s."workspaceId" = ${ws}`,
 
-  // #12 — the seller SKU the channel shows differs from the one Nexus would send (listing-claim-identity.ts). A variation
-  // row of a multi-SKU item counts only when it is linked to a variation's listing (else it was linked to the family).
+  // #12 — the seller SKU the channel shows differs from Nexus's for that listing: its own (S8: the confirmed
+  // liveChannelSku, else channelSku), else the one Nexus would send by the old rule (listing-claim-identity.ts,
+  // identitySellerSku). A variation row of a multi-SKU item counts only when it is linked to a variation's listing (else
+  // it was linked to the family).
   'channel-sku-differs': (ws) => sql`
     SELECT p.sku || ' ' || cl.id || ' ' || h.id AS key, p.sku, p.id AS product_id, cl.id AS listing_id, cl.channel, cl.marketplace AS market,
       jsonb_build_object('channelSku', h."sellerSku", 'nexusSku', s.seller, 'externalId', h."externalId") AS facts
     FROM "ChannelHeldId" h
     JOIN ${LIVE_LISTING} ON cl.id = h."listingId"
-    CROSS JOIN LATERAL (
-      SELECT CASE WHEN count(DISTINCT o.sku) > 1 THEN NULL WHEN count(DISTINCT o.sku) = 1 THEN min(o.sku)
-        WHEN btrim(p.sku) <> '' THEN p.sku END AS seller
-      FROM "Offer" o WHERE o."channelListingId" = cl.id AND o."isActive" AND btrim(o.sku) <> ''
-    ) s
+    CROSS JOIN LATERAL (${SELLER_SKU}) s
     WHERE h."workspaceId" = ${ws} AND h."endedAt" IS NULL AND h."matchState" = 'LINKED' AND h."sellerSku" <> ''
       AND (h."parentExternalId" IS NULL OR p."parentId" IS NOT NULL)
       AND s.seller IS DISTINCT FROM h."sellerSku"`,
@@ -359,11 +376,7 @@ const CHECK_SQL: Record<string, CheckSql> = {
     SELECT p.sku || ' ' || cl.id AS key, p.sku, p.id AS product_id, cl.id AS listing_id, cl.channel, cl.marketplace AS market,
       jsonb_build_object('accountId', cl."channelConnectionId", 'sellerSku', s.seller) AS facts
     FROM ${LIVE_LISTING}
-    CROSS JOIN LATERAL (
-      SELECT CASE WHEN count(DISTINCT o.sku) > 1 THEN NULL WHEN count(DISTINCT o.sku) = 1 THEN min(o.sku)
-        WHEN btrim(p.sku) <> '' THEN p.sku END AS seller
-      FROM "Offer" o WHERE o."channelListingId" = cl.id AND o."isActive" AND btrim(o.sku) <> ''
-    ) s
+    CROSS JOIN LATERAL (${SELLER_SKU}) s
     WHERE cl."workspaceId" = ${ws} AND cl."listingStatus" = 'ACTIVE' AND cl."channelConnectionId" IS NOT NULL
       AND EXISTS (SELECT 1 FROM "ChannelAccountGrant" g WHERE g."connectionId" = cl."channelConnectionId" AND g."revokedAt" IS NULL)
       AND NOT EXISTS (SELECT 1 FROM "ChannelListingClaim" k WHERE k."connectionId" = cl."channelConnectionId"

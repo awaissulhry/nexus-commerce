@@ -23,7 +23,7 @@ import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
-import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
+import { wantedChannelSku } from '../listings/channel-sku.pure.js'
 import { CONTENT_ROOTS, OUT_OF_SCOPE_ROOTS, STRUCTURE_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { languageTag } from './market-languages.js'
 import { effectiveFulfilment } from './matrix-cells.js'
@@ -91,16 +91,14 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const saleWindows = await readSaleWindows(prisma as never, listings.filter(l => !l.externalListingId).map(l => l.id))
   const identityProducts = products.some(product => product.id === parent.id) ? products : [parent, ...products]
+  // S3 (per-channel SKU) — THE seller-SKU rule (`wantedChannelSku`, channel-sku.pure.ts): the listing's own SKU when set;
+  // else the one active offer or stored identity; else the product SKU. Its refusals are word for word the ones this
+  // rule had (more than one active offer, two identities, an alias with none of its own). The alias is the destination's.
   const sellerSkus = new Map(identityProducts.map(product => {
     const listing = listings.find(l => l.productId === product.id)
-    const offers = [...new Set(listing?.offers.filter(o => o.isActive).map(o => o.sku) ?? [])]
-    if (offers.length > 1) throw new Error(`${product.sku} has multiple seller SKUs. Select its offer before publishing.`)
-    const pa = object(listing?.platformAttributes)
-    const ff = object(listing?.flatFileSnapshot)
-    const identities = [...new Set([...offers, ...[...AMAZON_LISTING_SKU_KEYS.platformAttributes.map(k => pa[k]), ...AMAZON_LISTING_SKU_KEYS.flatFileSnapshot.map(k => ff[k])].filter((v): v is string => typeof v === 'string' && !!v.trim())])]
-    if (identities.length > 1) throw new Error(`${product.sku}: conflicting Amazon seller SKUs. Reconcile this listing's identity before publishing.`)
-    if (!identities.length && facts.destination.aliasKey) throw new Error(`${product.sku}: this alias needs its own Amazon seller SKU before publishing.`)
-    return [product.id, identities[0] ?? product.sku]
+    const wanted = wantedChannelSku({ ...(listing ?? {}), channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
+    if (wanted.sku === null) throw new Error(wanted.conflict.sentence)
+    return [product.id, wanted.sku]
   }))
   if (new Set(sellerSkus.values()).size !== identityProducts.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
@@ -281,7 +279,7 @@ async function newListingQuantity(input: { sku: string; product: PublicationProd
   ])
   let euRows: Awaited<ReturnType<typeof readEuIntentRows>> | null = null, euRowsError: string | null = null
   if (AMAZON_EU_SHARED_MARKETS.has(input.marketplace.toUpperCase())) {
-    try { euRows = await readEuIntentRows(prisma, product.id) } catch (error) { euRowsError = error instanceof Error ? error.message : String(error) }
+    try { euRows = await readEuIntentRows(prisma, product.id, input.sku) } catch (error) { euRowsError = error instanceof Error ? error.message : String(error) }
   }
   return amazonSendQuantity({ sku: input.sku, listing: listing ? { ...listing, syncPaused: false } : null, marketplace: input.marketplace,
     product: { id: product.id, fulfillmentMethod: product.fulfillmentMethod ?? null }, ledger: input.ledger,

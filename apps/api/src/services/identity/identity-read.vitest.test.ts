@@ -97,7 +97,8 @@ beforeAll(async () => {
     await listing('sShopify', 'FAM-S', 'SHOPIFY', 'GLOBAL', '500', {
       platformAttributes: { shopifyProductId: '500', variantId: 'gid://shopify/ProductVariant/5001', inventoryItemId: '9001' },
     })
-    await listing('mEtsy', 'FAM-M', 'ETSY', 'GLOBAL', '7700001')
+    // S8 — this listing carries its own channel SKU: the read shows it as the listing's seller SKU.
+    await listing('mEtsy', 'FAM-M', 'ETSY', 'GLOBAL', '7700001', { channelSku: 'FAM-M-ETSY' })
     await db.product.update({ where: { id: ids['FAM-GONE'] }, data: { deletedAt: new Date() } })
     await db.skuAlias.create({ data: { productId: ids['FAM-M'], alias: 'fam-medium', raw: 'FAM-Medium' } })
     for (const sku of ['FAM-S', 'FAM-M']) {
@@ -165,7 +166,7 @@ describe('I3 — product-identity', () => {
     // Shopify ids in their short form, however they are stored.
     expect(byId[listings.rootShopify].ids).toEqual({ shopifyProductId: '500' })
     expect(byId[listings.sShopify].ids).toEqual({ shopifyProductId: '500', shopifyVariantId: '5001', shopifyInventoryItemId: '9001' })
-    expect(byId[listings.mEtsy]).toMatchObject({ ids: { etsyListingId: '7700001' } })
+    expect(byId[listings.mEtsy]).toMatchObject({ ids: { etsyListingId: '7700001' }, sellerSku: 'FAM-M-ETSY' })
     expect(byId[listings.mEtsy]).not.toHaveProperty('account')
 
     expect(data.extraListings).toEqual([{ id: ids.alias, onProductSku: 'FAM-ROOT', channel: 'EBAY', market: 'IT', account: expect.objectContaining({ accountId: accounts.ebay }), label: 'second listing', position: 2, status: 'ACTIVE' }])

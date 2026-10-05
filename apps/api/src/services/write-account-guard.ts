@@ -37,7 +37,10 @@ export interface WriteTarget {
   listingIds?: ReadonlyArray<string | null | undefined>
   /** Products whose listing on this channel (and marketplace) the write is for. */
   productIds?: ReadonlyArray<string | null | undefined>
-  /** Seller SKUs (the product SKU; for shared eBay listings the variant SKU). */
+  /**
+   * Seller SKUs: the product SKU, or a listing's own channel SKU (S8: `channelSku` / confirmed `liveChannelSku`, per
+   * market); for shared eBay listings the variant SKU.
+   */
   skus?: ReadonlyArray<string | null | undefined>
   /** eBay ItemIDs. */
   itemIds?: ReadonlyArray<string | null | undefined>
@@ -49,6 +52,14 @@ const CHANNEL_NAME: Record<GuardedChannel, string> = { EBAY: 'eBay', AMAZON: 'Am
 
 const clean = (values?: ReadonlyArray<string | null | undefined>): string[] =>
   [...new Set((values ?? []).filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim()))]
+
+/**
+ * S8 — listings whose own channel SKU is one of `skus`: the SKU Nexus sends (`channelSku`) or the one the channel
+ * confirmed (`liveChannelSku`). Both columns are written trimmed and indexed per account; no JSON store is read.
+ */
+export function ownSkuIn(skus: string[]): Prisma.ChannelListingWhereInput {
+  return { OR: [{ channelSku: { in: skus } }, { liveChannelSku: { in: skus } }] }
+}
 
 /** 'EBAY_IT' | 'IT' | 'APJ6JRA9NG5V4' → 'IT'; null when it cannot be read. */
 export function marketplaceCodeOf(value: string | null | undefined): string | null {
@@ -85,7 +96,13 @@ export async function ownersOfWriteTarget(channel: GuardedChannel, target: Write
   if (listingIds.length) or.push({ id: { in: listingIds } })
   if (itemIds.length) or.push({ externalListingId: { in: itemIds } })
   if (productIds.length) or.push({ AND: [{ productId: { in: productIds } }, inMarket] })
-  if (skus.length) or.push({ AND: [{ product: { sku: { in: skus } } }, inMarket] })
+  if (skus.length) {
+    or.push({ AND: [{ product: { sku: { in: skus } } }, inMarket] })
+    // S8 — a listing's own channel SKU (per market), in the same statement: without it, a write naming a listing's own
+    // SKU found no owner and was never refused. A hot path (every guarded write): the indexed columns only, never the
+    // JSON stores. A SKU only an old store holds is matched once the backfill copies it into these columns.
+    or.push({ AND: [ownSkuIn(skus), inMarket] })
+  }
   const listings = await prisma.channelListing.findMany({
     where: { channel, channelConnectionId: { not: null }, OR: or },
     select: { channelConnectionId: true },
@@ -162,6 +179,14 @@ export async function assertWriteAccountPerSku(
       select: { channelConnectionId: true, product: { select: { sku: true } } },
     })
     for (const row of listings) add(row.product?.sku, row.channelConnectionId)
+    // S8 — and every listing whose own channel SKU is one of them: the indexed columns only, a few columns back.
+    const own = await prisma.channelListing.findMany({
+      where: { channel, channelConnectionId: { not: null }, AND: [ownSkuIn(wanted), ...(code ? [{ OR: [{ marketplace: code }, { region: code }] }] : [])] },
+      select: { channelConnectionId: true, channelSku: true, liveChannelSku: true },
+    })
+    for (const row of own) {
+      for (const sku of new Set([row.channelSku, row.liveChannelSku])) if (sku && wanted.includes(sku)) add(sku, row.channelConnectionId)
+    }
     if (channel === 'EBAY') {
       const members = await prisma.sharedListingMembership.findMany({
         where: { channelConnectionId: { not: null }, sku: { in: wanted }, ...(code ? { marketplace: code } : {}) },

@@ -48,6 +48,7 @@ import { priceDrift, priceDriftMessage } from '../price-readback.service.js'
 import { shopifyAdmin } from './admin-client.js'
 import { readShopifyAvailable, type LinkedListingRow } from './listing-write.service.js'
 import { recordChannelReadback } from '../channel-drift.service.js'
+import { reportedSkuOf } from '../listings/reported-sku.js'
 
 export const SHOPIFY_QTY_READBACK = 'shopify-qty-readback'
 
@@ -134,6 +135,9 @@ async function candidates(take: number, after?: string) {
       fulfillmentMethod: true, syncPaused: true, offerClosedAt: true, followMasterQuantity: true,
       sourceLocationCodes: true, channelConnectionId: true, platformAttributes: true,
       externalListingId: true, listingStatus: true, syncLocked: true,
+      // S7 — the facts the listing's own SKU is read from (`reportedSkuOf`).
+      channel: true, aliasKey: true, channelSku: true, liveChannelSku: true, isPublished: true, overrideData: true,
+      alias: { select: { sku: true, productId: true } },
       product: { select: { id: true, sku: true } },
     },
     orderBy: { id: 'asc' },
@@ -163,7 +167,15 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
     for (const listing of page) {
       const accountId = listing.channelConnectionId as string
       const productId = listing.productId as string
-      const sku = listing.product?.sku ?? ''
+      // S7 — the SKU Shopify knows this listing by: its own (or its extra listing's own) SKU, else the product SKU, as
+      // before. The write path finds a variant without stored ids by this SKU, so the read uses it too.
+      const answer = reportedSkuOf(listing, listing.product?.sku ?? '')
+      const sku = answer.sku ?? ''
+      if (answer.sku === null && listing.product?.sku) {
+        result.unreadable++
+        logger.warn(`[${SHOPIFY_QTY_READBACK}] listing has no single SKU — not read`, { listingId: listing.id, reason: answer.conflict.sentence })
+        continue
+      }
       try {
         if (!clients.has(accountId)) {
           clients.set(accountId, await shopifyAdmin(accountId).catch((err) => {
@@ -177,7 +189,7 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
         const row: LinkedListingRow = {
           id: listing.id,
           syncType: 'QUANTITY_UPDATE',
-          product: listing.product ? { id: listing.product.id, sku: listing.product.sku ?? '' } : null,
+          product: listing.product ? { id: listing.product.id, sku } : null,
           channelListing: listing as never,
         }
         const live = await readShopifyAvailable(client.graphql, row)

@@ -61,6 +61,7 @@ import { readAmazonOfferFacts, type AmazonOfferFacts } from './amazon/offer-fact
 import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amazonPurchasableOffer, amazonSellerBoundsRefusal } from './amazon/offer-attributes.js'
 import { PURCHASABLE_OFFER_LEAVES } from './amazon/offer-fields.js'
 import { amazonSendQuantity, readEuIntentRows, routedSendCeiling } from './amazon/send-quantity.js'
+import { CHANNEL_SKU_UNRESOLVED, listingSendSku } from './listings/listing-send-sku.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -736,6 +737,18 @@ export class OutboundSyncService {
     return routedSendCeiling(productLedger, args);
   }
 
+  /**
+   * S5 (per-channel SKU) — the listing as the queue loaded it (every column) plus its extra listing's own SKU, the one
+   * store of the channel-SKU rules (`listingSendSku`) a column read does not carry, where that store counts as what the
+   * channel holds (Etsy). Read only for an extra listing.
+   */
+  private async channelSkuFacts(channelListing: any): Promise<any> {
+    const alias = channelListing?.aliasKey && channelListing?.aliasId
+      ? await prisma.productListingAlias.findUnique({ where: { id: channelListing.aliasId }, select: { sku: true, productId: true } })
+      : null;
+    return { ...channelListing, alias };
+  }
+
   private async pushLockListings(queueItem: any, channel: string): Promise<PushLockListing[]> {
     if (queueItem.channelListingId) {
       const listing = await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId } });
@@ -1121,7 +1134,8 @@ export class OutboundSyncService {
       errorCode: pushRefusal.code, retryable: false };
 
     const { product, payload, id: queueId } = queueItem;
-    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    // S3 (per-channel SKU) — what this lane named before; the listing's own seller SKU replaces it below.
+    let sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     // P1.3 — the seller of the account this row was created for (never the default seller).
     const destination = await this.destinationOf(queueItem);
     if (!destination.connectionId) {
@@ -1142,10 +1156,13 @@ export class OutboundSyncService {
         .findUnique({
           where: { id: queueItem.channelListingId },
           // The offer facts' reader (`readAmazonOfferFacts`, job lane) reads the price columns and the platform bag; the
-          // send quantity reads the stock columns. Never `overrideData`: a value saved there was never sent.
+          // send quantity reads the stock columns. Never `overrideData`: a value saved there was never sent. S3 — the
+          // seller-SKU facts (`listingSendSku`): the two SKU columns, the draft facts, the offers and the flat-file mirror.
           select: {
             platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true,
             salePrice: true, sourceLocationCodes: true, price: true, priceOverride: true, followMasterPrice: true, followMasterQuantity: true,
+            productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
+            flatFileSnapshot: true, offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
           },
         })
         .catch(() => null);
@@ -1165,6 +1182,14 @@ export class OutboundSyncService {
           ? `This row asks for ${requestedMarket}, but its listing is on ${listingMarket}, so nothing was sent.`
           : null;
     if (marketRefusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: marketRefusal, error: marketRefusal, errorCode: "AMAZON_MARKET_UNRESOLVED", retryable: false };
+    // S3 (per-channel SKU) — every call below names the seller SKU Amazon holds for THIS listing (`listingSendSku`): the
+    // product SKU for a listing with none of its own (as before), its own SKU otherwise. A row with no listing, or a
+    // still-draft listing, names what it named before. Two SKUs on record: nothing is sent (never a guess).
+    if (cl) {
+      const held = listingSendSku({ ...cl, channel: "AMAZON" }, product?.sku, sku);
+      if (held.sku === null) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false };
+      sku = held.sku;
+    }
     // MX.1 (D-MX4) — a PRICE push that carries no sale (a legacy producer) takes the listing's STORED sale + window, so
     // `buildAmazonListingPatch`'s `op:replace` on purchasable_offer re-emits it instead of wiping it (report 19 §5.9).
     let saleWindow: { start: string | null; end: string | null } | null = null;
@@ -1229,7 +1254,7 @@ export class OutboundSyncService {
         let euRows: Awaited<ReturnType<typeof readEuIntentRows>> | null = null;
         let euRowsError: string | null = null;
         if (process.env.NEXUS_EU_SHARED_QTY_GUARD !== '0' && product?.id && AMAZON_EU_SHARED_MARKETS.has(String(cl?.marketplace ?? '').toUpperCase())) {
-          try { euRows = await readEuIntentRows(prisma, product.id); } catch (guardErr) { euRowsError = guardErr instanceof Error ? guardErr.message : String(guardErr); }
+          try { euRows = await readEuIntentRows(prisma, product.id, sku); } catch (guardErr) { euRowsError = guardErr instanceof Error ? guardErr.message : String(guardErr); }
         }
         const sent = amazonSendQuantity({
           sku, listing: cl, product: { id: product?.id ?? null, fulfillmentMethod: product?.fulfillmentMethod ?? null }, ledger,
@@ -1443,7 +1468,8 @@ export class OutboundSyncService {
     }
 
     const { product, payload, id: queueId } = queueItem;
-    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    // S4 (per-channel SKU) — what this lane named before; the SKU eBay holds for the listing replaces it below.
+    let sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
 
     // FCF.2 / 1.4 — defensive pool cap (defence-in-depth). The cascade now
     // queues reserved-adjusted available, but a stale/pre-fix or manually
@@ -1460,7 +1486,9 @@ export class OutboundSyncService {
       ? await prisma.channelListing
           .findUnique({
             where: { id: queueItem.channelListingId },
-            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true, channelConnectionId: true },
+            // S4 — plus the channel-SKU facts (`listingSendSku`): the two SKU columns and the draft facts.
+            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true, channelConnectionId: true,
+              productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true },
           })
           .catch(() => null)
       : null;
@@ -1484,6 +1512,15 @@ export class OutboundSyncService {
     if (marketRefusal || !marketplaceId) {
       const refusal = marketRefusal ?? "This eBay row names no eBay market, so nothing was sent.";
       return { success: false, queueId, channel: "EBAY", status: "FAILED", message: refusal, error: refusal, errorCode: "EBAY_MARKET_UNRESOLVED", retryable: false };
+    }
+    // S4 (per-channel SKU) — every Inventory API call below (inventory_item/{sku}, offer?sku=, the bulk quantity update)
+    // names the SKU eBay HOLDS for THIS listing (`listingSendSku`): the product SKU for a listing with none of its own (as
+    // before), its own confirmed SKU otherwise. eBay never received an extra listing's alias SKU, so it is not named here
+    // (it is the wanted SKU, Publish's to send). A row with no listing, or a still-draft listing, names what it named before.
+    if (cl) {
+      const held = listingSendSku({ ...cl, channel: "EBAY" }, product?.sku, sku);
+      if (held.sku === null) return { success: false, queueId, channel: "EBAY", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false };
+      sku = held.sku;
     }
     // SC.1 — pause guard (listing + channel-market policy), re-checked at
     // dispatch time like the Amazon lane.
@@ -1617,6 +1654,8 @@ export class OutboundSyncService {
     // P0.7 → P1.3 — the row now goes to its own account; this stays as a consistency check (the listing
     // or SKU must belong to that account), refused and terminal if not.
     try {
+      // S4 — a row with a listing is checked by that listing (its own SKU included); a row without one names the product
+      // SKU, the only SKU it can send (no listing → no own SKU).
       await assertWriteAccount("EBAY", connection.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [product?.sku], marketplace: marketplaceId });
     } catch (err) {
       if (!isWrongAccountWriteError(err)) throw err;
@@ -2263,7 +2302,8 @@ export class OutboundSyncService {
       errorCode: pushRefusal.code, retryable: false };
 
     const { product, payload, channelListing, id: queueId, syncType } = queueItem;
-    const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    // S5 (per-channel SKU) — what this lane named before; the SKU Shopify holds for the listing replaces it below.
+    let sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
 
     // PD.4 — Shopify publish-mode gate. Shopify used to write live the instant
     // creds existed (no mode switch — accidental-live risk). Only 'live' writes;
@@ -2308,6 +2348,15 @@ export class OutboundSyncService {
       const error = `This Shopify listing belongs to another Shopify account than the one this change was queued for. Nothing was sent.`;
       return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
     }
+    // S5 (per-channel SKU) — the variant is found by its stored ids; its SKU (the identity read-back, and the lookup when
+    // no ids are stored) is the one Shopify holds for THIS listing (`listingSendSku`): its confirmed `liveChannelSku`, else
+    // the product SKU (as before). A Shopify sheet SKU not yet sent (the native SKU column, the override bag) is never
+    // named. No listing, or a still-draft: what this lane named before. No SKU at all: nothing is sent.
+    if (channelListing) {
+      const held = listingSendSku({ ...channelListing, channel: "SHOPIFY" }, product?.sku, sku);
+      if (held.sku === null) return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false };
+      sku = held.sku;
+    }
     const work: LinkedListingWork = {};
     if (syncType === "PRICE_UPDATE" || payload?.price != null) {
     // P4.4c — the operator's own pricing floor and ceiling (Product.minPrice /
@@ -2329,7 +2378,7 @@ export class OutboundSyncService {
     }
     const t0 = Date.now();
     try {
-      const message = await syncShopifyLinkedListing(queueItem, destination.connectionId, work);
+      const message = await syncShopifyLinkedListing(channelListing ? { ...queueItem, sku } : queueItem, destination.connectionId, work);
       writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
       return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS", message };
     } catch (error) {
@@ -2434,7 +2483,9 @@ export class OutboundSyncService {
       errorCode: pushRefusal.code, retryable: false };
 
     const { product, payload, channelListing, id: queueId, syncType } = queueItem;
-    const sku = channelListing?.sku ?? product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+    // S5 (per-channel SKU) — what this lane named before (it read `channelListing.sku`, a field the listing does not
+    // have, so it always named the product SKU); the SKU Etsy holds for the listing replaces it below.
+    let sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
 
     // P4.6a — the Etsy publish gate. The channel gateway applies it too; this reports it as a
     // SKIPPED row with the switch names rather than as a failure, which is what the Shopify lane
@@ -2467,6 +2518,20 @@ export class OutboundSyncService {
     if (!listingId) {
       const error = "This product has no Etsy listing id, so there is nothing on Etsy to change. Nothing was sent.";
       return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false };
+    }
+
+    // S5 (per-channel SKU) — the Etsy offering is found by SKU: the one Etsy holds for THIS listing (`listingSendSku`),
+    // the product SKU for a listing with none of its own (exactly as before), its own SKU otherwise. No listing, or a
+    // still-draft: what this lane named before. Two SKUs on record: no stock or price is sent (never a guess).
+    let offeringSku: string | null = product?.etsySku ?? product?.sku ?? null;
+    if (channelListing) {
+      const held = listingSendSku({ ...await this.channelSkuFacts(channelListing), channel: "ETSY" }, product?.sku, sku);
+      if (held.sku === null) {
+        if (!isContent) return { success: false, queueId, channel: "ETSY", status: "FAILED", message: held.refusal, error: held.refusal, errorCode: CHANNEL_SKU_UNRESOLVED, retryable: false };
+      } else if (held.source !== "product" && held.source !== "fallback") {
+        sku = held.sku;
+        offeringSku = held.sku;
+      }
     }
 
     // 2026-10-01 (Owner) — a STOCK row also needs Etsy order import: the switch on AND this account activated. Without
@@ -2516,7 +2581,6 @@ export class OutboundSyncService {
       } else {
         const { writeEtsyInventory } = await import("./etsy/inventory-write.service.js");
         const changes: Array<{ sku?: string | null; quantity?: number; price?: number }> = [];
-        const offeringSku = channelListing?.sku ?? product?.etsySku ?? product?.sku ?? null;
         let priceCurrency: string | undefined;
         if (isPrice) {
           // 2026-09-30 — a price row with no usable price is refused by name. It used to reach the writer as "no

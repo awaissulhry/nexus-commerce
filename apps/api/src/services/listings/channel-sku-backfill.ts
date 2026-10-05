@@ -3,8 +3,11 @@
  * The script `apps/api/scripts/backfill-channel-sku.ts` runs this once per business; it is here so it can be tested.
  *
  * For each listing of a live product in the CURRENT business whose old stores hold exactly one SKU that differs from
- * `Product.sku` (`legacyChannelSku`): `channelSku` is set to it when empty and, when the listing is not a draft (so the
- * channel holds it), `liveChannelSku` too. A listing whose old stores disagree is left empty and listed; so is an
+ * `Product.sku` (`wantedChannelSku` / `liveChannelSku` with the two columns left out): `channelSku` is set to it when
+ * empty and, when the listing is not a draft (so the channel holds it), `liveChannelSku` too — except on eBay and Shopify,
+ * whose old stores hold values Nexus wants, not values the channel is known to hold (`legacySkuIsLive`; eBay: an extra
+ * listing's own SKU was never sent; Shopify: the sheet's SKU column and older sheet edits): there only `channelSku`.
+ * A listing whose old stores disagree is left empty and listed; so is an
  * Amazon alias with no SKU of its own. A column that already has a value is never overwritten, so a second run writes
  * nothing. Dry run unless `apply`. Values are copied as the channel has them (no character rule: they are already live).
  *
@@ -15,7 +18,7 @@ import type { Prisma } from '@prisma/client'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { CHANNEL_SKU_LISTING_SELECT } from './channel-sku.js'
-import { legacyChannelSku, type ChannelSkuProblem } from './channel-sku.pure.js'
+import { liveChannelSku, wantedChannelSku, type ChannelSkuAnswer, type ChannelSkuProblem } from './channel-sku.pure.js'
 
 export interface ChannelSkuBackfillCounts {
   /** Listings looked at (live products only). */
@@ -71,19 +74,28 @@ export async function backfillChannelSkus(db: Prisma.TransactionClient, options:
       const counts = (report.byChannel[listing.channel] ??= emptyCounts())
       counts.listings++
       const productSku = listing.product?.sku ?? ''
-      const answer = legacyChannelSku(listing, productSku)
-      if (answer.conflict) {
-        if (answer.conflict.code === 'ALIAS_NEEDS_OWN_SKU') counts.needsOwnSku++
+      // What the old stores alone say (the two columns left out): the SKU Nexus sends, and — not for a draft — the SKU
+      // the channel holds. One answer for Amazon and Etsy. On eBay (S4) and Shopify (S5) the old stores are wanted values
+      // only (`legacySkuIsLive`), so the held answer is the product SKU: they fill `channelSku`, never `liveChannelSku`.
+      const old = { ...listing, channelSku: null, liveChannelSku: null }
+      const wanted = wantedChannelSku(old, productSku)
+      const held = isStillDraftListing(listing) ? null : liveChannelSku(old, productSku)
+      // A held answer with no SKU at all (no product SKU) says nothing about the old stores: the wanted answer decides.
+      const conflict = wanted.conflict ?? (held?.conflict?.code === 'NO_SKU' ? undefined : held?.conflict)
+      if (conflict) {
+        if (conflict.code === 'ALIAS_NEEDS_OWN_SKU') counts.needsOwnSku++
         else counts.conflicts++
         report.problems.push({ listingId: listing.id, productSku, channel: listing.channel, marketplace: listing.marketplace,
-          code: answer.conflict.code, candidates: answer.conflict.candidates.map(c => c.sku), sentence: answer.conflict.sentence })
+          code: conflict.code, candidates: conflict.candidates.map(c => c.sku), sentence: conflict.sentence })
         continue
       }
-      const own = answer.source !== 'product' && answer.sku !== productSku.trim() ? answer.sku : null
-      if (!own) { counts.followsProduct++; continue }
+      const ownSku = (answer: ChannelSkuAnswer | null) => answer?.sku && answer.source !== 'product' && answer.sku !== productSku.trim() ? answer.sku : null
+      const ownWanted = ownSku(wanted)
+      const ownHeld = ownSku(held)
+      if (!ownWanted && !ownHeld) { counts.followsProduct++; continue }
       const data: { channelSku?: string; liveChannelSku?: string } = {}
-      if (!listing.channelSku?.trim()) data.channelSku = own
-      if (!listing.liveChannelSku?.trim() && !isStillDraftListing(listing)) data.liveChannelSku = own
+      if (ownWanted && !listing.channelSku?.trim()) data.channelSku = ownWanted
+      if (ownHeld && !listing.liveChannelSku?.trim()) data.liveChannelSku = ownHeld
       if (!data.channelSku && !data.liveChannelSku) { counts.alreadySet++; continue }
       if (apply) {
         const written = await db.channelListing.updateMany({

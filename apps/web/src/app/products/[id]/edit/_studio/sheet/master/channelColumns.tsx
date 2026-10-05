@@ -6,8 +6,7 @@ import { EbayPolicyEditor, isEbayPolicyField } from '../EbayPolicyInput'
 import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { CascadeCell } from '../channel/CascadeCell'
-import { asinColumnDef } from '../channel/AsinCell'
-import { LISTING_ASIN_KEY } from '../channel/stockCells'
+import { isListingIdKey, listingIdColumnDef } from '../channel/ListingIdCell'
 import { stockColumnDef } from '../channel/stockColumns'
 import { isCellEditable } from '../channel/rows'
 import { channelCellDrawsRequired, channelCellMark, channelCellProvenance } from '../channel/channelCellProvenance'
@@ -222,7 +221,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
      * theme: each owns the renderer, the setter, the text and the editor, and clears this builder's formula selector.
      */
     ...(col.kind === 'stockControl' ? stockColumnDef(col, { tracker, scope: data.scope }) : {}),
-    ...(col.key === LISTING_ASIN_KEY ? asinColumnDef(col, data.scope.marketplace) : {}),
+    ...(isListingIdKey(col.key) ? listingIdColumnDef(col, data.scope) : {}),
   }))
   const rank = new Map(orderColumnKeys(gridColumns as never, viewCtx).map((k, i) => [k, i]))
   const ordered = fields

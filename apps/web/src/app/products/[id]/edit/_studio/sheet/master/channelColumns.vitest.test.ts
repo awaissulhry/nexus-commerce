@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { CellSaveTracker } from '@/design-system/grid'
 import { buildChannelColumns, type BuildChannelColumnsOptions } from './channelColumns'
 import { channelCellProvenance } from '../channel/channelCellProvenance'
+import { AsinCell, ItemIdCell } from '../channel/ListingIdCell'
 import { GALE_AMAZON_DE_DERIVED } from '../../../../../../../../../../docs/fixtures/vt1/fixtures'
 
 const base = { key: 'title', label: 'German title', writeField: 'name', group: 'Content', kind: 'longtext',
@@ -280,5 +281,21 @@ describe('the Variation theme cell: the icon and its words agree', () => {
   })
   it('a theme that follows the Shared product wears no mark', () => {
     expect(render({}).html).not.toContain('nds-cell-prov')
+  })
+})
+
+/** Item ID control (step I1) — both id keys use the one channel id cell: the ASIN on Amazon, the Item ID on eBay. */
+describe('the channel id columns', () => {
+  const id = (key: string, channel: string) => setup([{ ...base, key, writeField: key, label: key, kind: 'text', editable: false, width: 168 }], undefined,
+    { data: { scope: { channel, marketplace: 'IT', label: `${channel} · IT` } } } as BuildChannelColumnsOptions)[0]
+  it('the ASIN on Amazon and the Item ID on eBay: their own renderer, never the grid\'s editor or the formula selector', () => {
+    const asin = id('listing_asin', 'AMAZON'), item = id('listing_item_id', 'EBAY')
+    expect(asin.cellRenderer).toBe(AsinCell)
+    expect(item.cellRenderer).toBe(ItemIdCell)
+    for (const def of [asin, item]) {
+      expect(def.editable).toBe(false)
+      expect(def.cellEditorSelector).toBeUndefined()
+      expect((def.valueSetter as Function)({ data: { values: {} }, newValue: 'x' })).toBe(false)
+    }
   })
 })

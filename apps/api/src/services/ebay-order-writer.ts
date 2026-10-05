@@ -31,6 +31,7 @@ import { StockLocationUnresolved } from './default-stock-location.js'
 import { PooledProductError } from './stock-pool/pool-guard.js'
 import { recordOrderItem } from './sales-aggregate.service.js'
 import { orderRestorePending } from './order-cancellation/index.js'
+import { matchInboundSku, type InboundSkuMatch } from './listings/channel-sku-inbound.js'
 
 type Tx = Prisma.TransactionClient
 
@@ -313,33 +314,43 @@ async function ebaySellerRelation(tx: Tx, workspaceId: string, a: string, b: str
 }
 
 /**
- * Resolve an eBay SKU to a Nexus product, inside the transaction: the eBay variant listing's SKU,
- * then Product.sku, then the legacy ProductVariation.sku. D7: the listing lookup no longer matches
- * the eBay LINE id against any channel's listing id — that linked a sale to an unrelated product.
+ * Resolve an eBay SKU to a Nexus product, inside the transaction (S6: the one inbound match). In order: this eBay
+ * account's listings (the SKU eBay confirmed, the listing's own SKU, the old stores); the eBay variant listings of
+ * this seller (the importing account and its verified siblings); the master SKU; the legacy ProductVariation.sku.
+ * Two or more products at one step: not linked, with the reason. D7: the eBay LINE id is never matched against any
+ * channel's listing id — that linked a sale to an unrelated product.
  */
-async function productForSku(tx: Tx, sku: string, connectionId: string): Promise<string | null> {
-  // A sibling is supported only with positive evidence of the same immutable seller/environment.
-  const accounts = await tx.channelConnection.findMany({ where: { channelType: 'EBAY' },
-    select: { id: true, externalAccountId: true, connectionMetadata: true } })
-  const identityOf = (row: typeof accounts[number]) => { try { return ebaySellerIdentity(row) } catch { return null } }
-  const importing = accounts.find(row => row.id === connectionId)
-  const identity = importing ? identityOf(importing) : null
-  const accountIds = accounts.filter(row => {
-    if (row.id === connectionId) return true
-    const sibling = identityOf(row)
-    return identity && sibling && identity.userId === sibling.userId && identity.environment === sibling.environment
-  }).map(row => row.id)
-  // eBay sync also writes channel-less listings; both forms need the same account fence.
-  const listings = await tx.variantChannelListing.findMany({ where: { externalSku: sku,
-    channelConnectionId: { in: accountIds }, OR: [{ channel: 'EBAY' }, { channel: null }] },
-    select: { variant: { select: { productId: true } } } })
-  const products = [...new Set(listings.map(listing => listing.variant.productId))]
-  if (products.length) return products.length === 1 ? products[0] : null
-  const product = await tx.product.findFirst({ where: { sku }, select: { id: true } })
-  if (product) return product.id
-  const variations = await tx.productVariation.findMany({ where: { sku }, select: { productId: true } })
-  const legacyProducts = [...new Set(variations.map(variation => variation.productId))]
-  return legacyProducts.length === 1 ? legacyProducts[0] : null
+async function productForSku(tx: Tx, sku: string, connectionId: string): Promise<InboundSkuMatch> {
+  return matchInboundSku(tx, {
+    channel: 'EBAY',
+    channelConnectionId: connectionId,
+    sku,
+    accountStores: [{
+      name: 'ebayVariantListing',
+      find: async () => {
+        // A sibling is supported only with positive evidence of the same immutable seller/environment.
+        const accounts = await tx.channelConnection.findMany({ where: { channelType: 'EBAY' },
+          select: { id: true, externalAccountId: true, connectionMetadata: true } })
+        const identityOf = (row: typeof accounts[number]) => { try { return ebaySellerIdentity(row) } catch { return null } }
+        const importing = accounts.find(row => row.id === connectionId)
+        const identity = importing ? identityOf(importing) : null
+        const accountIds = accounts.filter(row => {
+          if (row.id === connectionId) return true
+          const sibling = identityOf(row)
+          return identity && sibling && identity.userId === sibling.userId && identity.environment === sibling.environment
+        }).map(row => row.id)
+        // eBay sync also writes channel-less listings; both forms need the same account fence.
+        const listings = await tx.variantChannelListing.findMany({ where: { externalSku: sku,
+          channelConnectionId: { in: accountIds }, OR: [{ channel: 'EBAY' }, { channel: null }] },
+          select: { variant: { select: { productId: true } } } })
+        return listings.map(listing => listing.variant.productId)
+      },
+    }],
+    fallbacks: [{
+      name: 'variationSku',
+      find: async () => (await tx.productVariation.findMany({ where: { sku }, select: { productId: true } })).map(variation => variation.productId),
+    }],
+  })
 }
 
 /** Seen = what the database holds for this order after the locks, never an in-memory list. */
@@ -379,6 +390,8 @@ async function noticeUnreadableParts(tx: Tx, args: { problems: EbayOrderProblem[
 /** One line waiting for its stock effect: a new line of this read, or (R6) a stock_blocked line taken again. */
 interface PendingLine {
   line: NormalizedEbayLine; sku: string; productId: string | null; effect: EbayLineStockEffect; poolRefusalCode?: string; stockBlock?: { code: string; reason: string }
+  /** S6 — why an unlinked line has no product (its SKU names several), kept on the line. */
+  unlinkedReason?: string
   /** R6 — an existing line recorded stock_blocked, taken again now (its OrderItem id). */
   retryOf?: { orderItemId: string; metadata: Record<string, unknown> }
 }
@@ -481,6 +494,7 @@ async function takePendingLinesInTx(tx: Tx, args: { pending: PendingLine[]; orde
         ...(line.fulfillmentStatus ? { fulfillmentStatus: line.fulfillmentStatus } : {}),
         ...(entry.poolRefusalCode ? { poolRefusalCode: entry.poolRefusalCode } : {}),
         ...(entry.stockBlock ? { stockBlockedCode: entry.stockBlock.code } : {}),
+        ...(entry.unlinkedReason ? { unlinkedReason: entry.unlinkedReason } : {}),
       },
     }, select: { id: true } })
     lines.push({ lineItemId: line.lineItemId, orderItemId: created.id, productId: entry.productId, stockEffect: entry.effect })
@@ -630,12 +644,14 @@ export async function writeEbayOrderInTx(tx: Tx, input: { order: NormalizedEbayO
       sku = line.legacyItemId ? `EBAY-ITEM-${line.legacyItemId}` : `EBAY-LINE-${line.lineItemId}`
       logger.warn('eBay line item has no sku and no unambiguous membership — recorded without product link', { orderId: order.orderId, lineItemId: line.lineItemId, legacyItemId: line.legacyItemId })
     }
+    const match = membershipProductId ? null : await productForSku(tx, sku, connectionId)
     const productId = membershipProductId
       ? (await tx.product.findUnique({ where: { id: membershipProductId }, select: { id: true } }))?.id ?? null
-      : await productForSku(tx, sku, connectionId)
+      : match?.productId ?? null
+    const unlinkedReason = match?.problem?.sentence
     if (productId) stats.itemsLinked++
-    else logger.warn('Could not link eBay line item to a Nexus product', { sku, lineItemId: line.lineItemId, orderId: order.orderId })
-    pending.push({ line, sku, productId, effect: !productId ? 'unlinked' : status === 'CANCELLED' ? 'arrived_cancelled' : 'own_movement' })
+    else logger.warn('Could not link eBay line item to a Nexus product', { sku, lineItemId: line.lineItemId, orderId: order.orderId, ...(unlinkedReason ? { reason: unlinkedReason } : {}) })
+    pending.push({ line, sku, productId, effect: !productId ? 'unlinked' : status === 'CANCELLED' ? 'arrived_cancelled' : 'own_movement', ...(unlinkedReason ? { unlinkedReason } : {}) })
   }
 
   const { lines, movements, poolChanged } = await takePendingLinesInTx(tx, { pending, orderId: dbOrder.id, channelOrderId: order.orderId, workspaceId, actor, stats })

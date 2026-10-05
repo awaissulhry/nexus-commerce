@@ -16,7 +16,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { MAX_RESULT_BYTES } from '../../lib/pagination/cursor.js'
-import { sellerSkuForClaim } from '../listing-claim-identity.js'
+import { identitySellerSku } from '../listing-claim-identity.js'
 import { availableRequirements, barcodeSql, shopifyIdSql } from './identity-audit.service.js'
 import { ebayIndexItemMatchSql } from '../advertising/ebay-listing-index-reads.js'
 
@@ -60,6 +60,8 @@ interface ListingRow {
   shopify_variant_id: string | null
   shopify_inventory_item_id: string | null
   shopify_colour_product_id: string | null
+  channel_sku: string | null
+  live_channel_sku: string | null
 }
 
 /** The ids a listing carries, named for its channel. */
@@ -130,7 +132,8 @@ export async function readProductIdentity(productId: string, filters: IdentityFi
         cl."externalListingId" AS external_listing_id, cl."externalParentId" AS external_parent_id,
         cl."platformAttributes"->>'shopifyProductId' AS shopify_product_id, cl."platformAttributes"->>'variantId' AS shopify_variant_id,
         cl."platformAttributes"->>'inventoryItemId' AS shopify_inventory_item_id,
-        cl."platformAttributes"->>'shopifyColourProductId' AS shopify_colour_product_id
+        cl."platformAttributes"->>'shopifyColourProductId' AS shopify_colour_product_id,
+        cl."channelSku" AS channel_sku, cl."liveChannelSku" AS live_channel_sku
       FROM "ChannelListing" cl JOIN "Product" p ON p.id = cl."productId"
       WHERE cl."workspaceId" = ${ws} AND cl."productId" = ANY(${familyIds}::text[]) ${listingFilter}
       ORDER BY cl.channel, cl.marketplace, cl."aliasKey", (cl."productId" <> ${root.id}), p.sku, cl.id
@@ -255,7 +258,8 @@ export async function readProductIdentity(productId: string, filters: IdentityFi
         status: l.listing_status,
         draft: l.listing_status === 'DRAFT',
         ids: listingIds(l),
-        sellerSku: sellerSkuForClaim({ product: { sku: skuOf.get(l.product_id) ?? null }, offers: own.map((o) => ({ ...o, fulfillmentMethod: String(o.fulfillmentMethod) })) }),
+        // S8 — the listing's own SKU first: the same seller SKU the identity audit compares (listing-claim-identity.ts).
+        sellerSku: identitySellerSku({ channelSku: l.channel_sku, liveChannelSku: l.live_channel_sku, product: { sku: skuOf.get(l.product_id) ?? null }, offers: own }),
         offers: own.map((o) => ({ fulfillment: String(o.fulfillmentMethod), sku: o.sku, active: o.isActive })),
         claim: claim ? { accountId: claim.connectionId, market: claim.marketplace, sellerSku: claim.sellerSku } : null,
       })

@@ -16,6 +16,7 @@ import { createPlan } from '../../fba-inbound-v2.service.js'
 import { listPackingOptions, listPlacementOptions, listTransportationOptions } from '../../../clients/amazon-fba-inbound-v2.client.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
+import { amazonAccountIdFor, amazonSkusInMarket } from '../../listings/reported-sku.js'
 
 const PLAN_MAX_SKUS = 50
 const NOT_YET = 'Nothing changes until a person approves this in Nexus.'
@@ -31,7 +32,8 @@ const text = (max: number, what: string) => z.string().trim().min(1).max(max).de
 interface FbaPlan {
   marketplace: { code: string; marketplaceId: string }
   name: string
-  lines: Array<{ productId: string; sku: string; quantity: number; ownStock: number }>
+  /** `sku` is the Amazon seller SKU sent (the listing's own in this market, else the product SKU); `productSku` is Nexus's. */
+  lines: Array<{ productId: string; sku: string; productSku: string; quantity: number; ownStock: number }>
   shipment: { id: string; reference: string | null } | null
 }
 
@@ -54,7 +56,18 @@ async function planFba(args: Record<string, unknown>): Promise<FbaPlan | Refusal
   const products = await prisma.product.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, sku: true, totalStock: true } })
   if (products.length !== ids.length) return { error: PRODUCT_NOT_FOUND }
   const byId = new Map(products.map((p) => [p.id, p]))
-  const lines = asked.map((l) => ({ productId: l.productId, sku: byId.get(l.productId)!.sku, quantity: l.quantity, ownStock: byId.get(l.productId)!.totalStock ?? 0 }))
+  // S7 — the seller SKU Amazon knows each product by in this market, on the account the plan is created with: its main
+  // listing's own SKU; no listing there → the product SKU, as before. No single SKU: refused, never a guess.
+  const amazonSkus = await amazonSkusInMarket(prisma, { accountId: await amazonAccountIdFor(), marketplace: market.code, products })
+  for (const l of asked) {
+    const amazon = amazonSkus.get(l.productId)
+    if (amazon && amazon.ok === false && amazon.code === 'CONFLICT') return { error: `${amazon.sentence} Nothing was sent to Amazon.` }
+  }
+  const lines = asked.map((l) => {
+    const product = byId.get(l.productId)!
+    const amazon = amazonSkus.get(l.productId)
+    return { productId: l.productId, sku: amazon && amazon.ok === true ? amazon.sku : product.sku, productSku: product.sku, quantity: l.quantity, ownStock: product.totalStock ?? 0 }
+  })
   const name = typeof args.name === 'string' && args.name.trim() ? args.name.trim() : `Inbound ${market.code} ${new Date().toISOString().slice(0, 10)}`
   return { marketplace: { code: market.code, marketplaceId: market.marketplaceId }, name, lines, shipment }
 }
@@ -65,7 +78,7 @@ const planFbaShipment: AgentTool = {
   input: z.object({
     marketplace: z.preprocess(upper, z.string().min(2).max(20)).describe('the Amazon market the stock goes to, e.g. IT'),
     lines: z.array(z.object({
-      productId: z.string().trim().min(1).max(64).describe('Nexus product id (its SKU is the Amazon seller SKU)'),
+      productId: z.string().trim().min(1).max(64).describe('Nexus product id (its Amazon listing\'s seller SKU in that market is sent)'),
       quantity: z.coerce.number().int().min(1).max(10_000).describe('units to send'),
     })).min(1).max(PLAN_MAX_SKUS).describe(`the products, 1 to ${PLAN_MAX_SKUS}`),
     sourceAddress: z.object({
@@ -105,7 +118,7 @@ const planFbaShipment: AgentTool = {
       preview: {
         marketplace: plan.marketplace.code,
         name: plan.name,
-        lines: plan.lines.map((l) => ({ sku: l.sku, quantity: l.quantity, ownStockNow: l.ownStock })),
+        lines: plan.lines.map((l) => ({ sku: l.sku, ...(l.sku !== l.productSku ? { productSku: l.productSku } : {}), quantity: l.quantity, ownStockNow: l.ownStock })),
         from: { city: address.city, countryCode: address.countryCode },
         ...(plan.shipment ? { shipment: plan.shipment } : {}),
         totals: { skus: plan.lines.length, units: plan.lines.reduce((n, l) => n + l.quantity, 0) },

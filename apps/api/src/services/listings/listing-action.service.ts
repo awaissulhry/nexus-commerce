@@ -46,6 +46,8 @@ import { ebayInventoryListingActions } from './listing-action-adapters/ebay-inve
 import { shopifyListingActions } from './listing-action-adapters/shopify.js'
 import { etsyListingActions } from './listing-action-adapters/etsy.js'
 import { amazonMarket, readFbaUnits, readListingDeletions, usesPanEu } from './listing-deletions.js'
+import { CHANNEL_SKU_LISTING_SELECT } from './channel-sku.js'
+import { listingSendSku } from './listing-send-sku.js'
 import type { ActionContext, ActionListing, AdapterRowResult, ListingActionAdapter } from './listing-action-adapters/types.js'
 import { object } from './listing-action-adapters/types.js'
 
@@ -270,6 +272,21 @@ interface FamilyRead {
   states: Map<string, SellingStateRead>
 }
 
+/** S3/S4/S5 — the channels whose rows carry the SKU the channel holds for them (`listingSendSku`). */
+const SKU_HELD_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'])
+
+/**
+ * S5 — does this action name the row's SKU on the channel? Amazon and eBay: every action (as S3/S4 planned them).
+ * Shopify: Pause (its variant is found by its stored id, else by SKU, and its stock is written under that SKU); End,
+ * Relist and Delete change the whole product by its id, and Resume only queues the stock (each push resolves it again).
+ * Etsy: none (one listing state for the whole listing).
+ */
+function namesSku(action: ListingAction, channel: string): boolean {
+  if (channel === 'SHOPIFY') return action === 'pause'
+  if (channel === 'ETSY') return false
+  return true
+}
+
 async function readFamily(familyId: string, destination: ListingActionDestination): Promise<FamilyRead> {
   const products = await prisma.product.findMany({
     where: { deletedAt: null, OR: [{ id: familyId }, { parentId: familyId }] },
@@ -283,7 +300,8 @@ async function readFamily(familyId: string, destination: ListingActionDestinatio
   const rows = (await prisma.channelListing.findMany({
     where: { productId: { in: products.map(p => p.id) }, channel: destination.channel, marketplace: destination.marketplace,
       channelConnectionId: destination.accountId, aliasKey: destination.aliasKey },
-    select: { id: true, productId: true, externalListingId: true, listingStatus: true, isPublished: true, offerClosedAt: true,
+    // S3 — plus the channel-SKU facts (`listingSendSku`): the Amazon adapter names the seller SKU Amazon holds for the row.
+    select: { ...CHANNEL_SKU_LISTING_SELECT, id: true, productId: true, externalListingId: true, listingStatus: true, isPublished: true, offerClosedAt: true,
       offerCloseReason: true, offerActive: true, fulfillmentMethod: true, platformAttributes: true,
       followMasterQuantity: true, quantity: true, quantityOverride: true, publishAction: true, publishActionAt: true },
   })).filter(row => productOf.has(row.productId))
@@ -292,8 +310,16 @@ async function readFamily(familyId: string, destination: ListingActionDestinatio
   const listings = new Map<string, ActionListing>()
   for (const row of rows) {
     const product = productOf.get(row.productId)!
+    // S3 (per-channel SKU) — Amazon: the seller SKU Amazon holds for this row: the product SKU for a row with none of its
+    // own (as before), its own SKU otherwise; a draft keeps the product SKU. No single SKU on record: the plan refuses the
+    // row where the action names the SKU (`namesSku`). S4 — eBay the same way, under the eBay rule (`liveChannelSku`: its
+    // confirmed SKU, else the product SKU; an extra listing's alias SKU was never sent to eBay). S5 — Shopify and Etsy the
+    // same way: the SKU the channel holds (Shopify: the confirmed SKU, else the product SKU — a sheet edit is not one).
+    const held = SKU_HELD_CHANNELS.has(destination.channel)
+      ? listingSendSku({ ...row, channel: destination.channel }, product.sku, product.sku) : { sku: product.sku, refusal: null }
     listings.set(row.productId, {
-      id: row.id, productId: row.productId, sku: product.sku, isParent: row.productId === familyId && hasChildren,
+      id: row.id, productId: row.productId, sku: held.sku ?? product.sku, isParent: row.productId === familyId && hasChildren,
+      ...(held.refusal ? { skuRefusal: held.refusal } : {}),
       externalListingId: row.externalListingId, listingStatus: row.listingStatus, isPublished: row.isPublished,
       offerClosedAt: row.offerClosedAt, offerCloseReason: row.offerCloseReason, offerActive: row.offerActive,
       fulfillmentMethod: row.fulfillmentMethod, productFulfillmentMethod: product.fulfillmentMethod ?? null, platformAttributes: row.platformAttributes,
@@ -386,6 +412,9 @@ function planFor(action: ListingAction, family: FamilyRead, destination: Listing
     const deleted = states.get(product.id)!.deleted
     if (deleted) { row(action === 'delete' ? 'skip' : 'refused', deletedPublishSkip(deleted)); continue }
     if (!listing || state === 'not_listed') { row('skip', `Not on ${destinationLabel(destination)} yet. Publish creates it.`); continue }
+    // S3 — a row with no single SKU on record is never sent: a guess could change another listing's offer. S5 — only where
+    // the action names the SKU on the channel; a Shopify product status or an Etsy listing state names none.
+    if (listing.skuRefusal && namesSku(action, destination.channel)) { row('refused', listing.skuRefusal); continue }
     const facts = capabilityFacts(listing, family, extra)
     if (action === 'delete') {
       const capability = deleteOffered(state, family.model, facts, label)

@@ -16,6 +16,7 @@ import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import { readColourProductSettings, type ColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
 import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
 
 /** The most Shopify products one Find reads (a group plus the products holding the family's SKUs). */
 export const FIND_PRODUCT_LIMIT = 100
@@ -24,7 +25,10 @@ const productGid = /^gid:\/\/shopify\/Product\/\d+$/
 const findBodySchema = z.object({ sourceProductId: z.string().regex(productGid, 'Choose a Shopify product.').optional() }).strict()
 const skuKey = (sku: string | null | undefined) => (sku ?? '').trim().toLocaleUpperCase('en')
 
-/** The Shopify products holding any of these SKUs. Shopify's search is loose, so only exact SKUs count. */
+/**
+ * The Shopify products holding any of these SKUs. Shopify's search is loose, so only exact SKUs count. S5 — the callers
+ * pass each size under the SKU Shopify knows it by (`withListingSkus`), so a listing with its own SKU is found by it.
+ */
 export async function productsWithSkus(gql: ShopifyGraphql, skus: readonly string[]): Promise<string[]> {
   const ids = new Set<string>(), wanted = [...new Set(skus.map(skuKey).filter(Boolean))]
   const quote = (sku: string) => `"${sku.replace(/["\\]/g, '\\$&')}"`
@@ -71,12 +75,18 @@ export async function colourProductsView(destination: Destination, plan: ColourP
   }
 }
 
+/**
+ * The family's colour plan on this destination. S5 — each size under the SKU Shopify knows it by (its listing's own SKU,
+ * else the product SKU: `withListingSkus`); `skuProblems` names a size whose listing has no single SKU — a caller that
+ * calls Shopify refuses on it.
+ */
 export async function planFor(destination: Destination) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination),
     select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true } })
   const colourNames = Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!]))
-  const [settings, { plan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
-  return { rows, settings, plan }
+  const [settings, { plan: familyPlan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
+  const { plan, problems: skuProblems } = await withListingSkus(destination, familyPlan)
+  return { rows, settings, plan, skuProblems }
 }
 
 export async function readColourProducts(productId: string, scope: ContentScope) {
@@ -93,8 +103,9 @@ export async function findColourProducts(productId: string, scope: ContentScope,
 }
 
 async function findDestination(destination: Destination, input: z.infer<typeof findBodySchema>) {
-  const { rows, settings, plan } = await planFor(destination)
+  const { rows, settings, plan, skuProblems } = await planFor(destination)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) return colourProductsView(destination, plan, settings)
+  if (skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems), 409)
   const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const linked = linkedProducts(rows)
   const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...(input.sourceProductId ? [input.sourceProductId] : [])])

@@ -1,4 +1,3 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R4.3 — Amazon FBM returns report ingest + FBA mirror.
  *
@@ -31,6 +30,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { fetchSpApiReport } from '../sp-api-reports.service.js'
+import { matchInboundSku } from '../listings/channel-sku-inbound.js'
 
 export interface AmazonReturnRow {
   /** Amazon order id (e.g. 123-1234567-1234567). Required. */
@@ -96,7 +96,7 @@ function buildChannelReturnId(row: AmazonReturnRow, isFba: boolean): string | nu
  */
 export async function ingestAmazonReturnRow(
   row: AmazonReturnRow,
-  opts: { isFba: boolean; marketplace?: string },
+  opts: { isFba: boolean; marketplace?: string; connectionId?: string | null },
 ): Promise<IngestResult> {
   const sku = row.sku?.toString().trim()
   const orderId = row['order-id']?.toString().trim()
@@ -119,14 +119,20 @@ export async function ingestAmazonReturnRow(
   // Resolve local Order (best-effort; orphan creates are fine).
   const order = await prisma.order.findFirst({
     where: { channel: 'AMAZON', channelOrderId: orderId },
-    select: { id: true },
+    select: { id: true, channelConnectionId: true, marketplace: true },
   })
 
-  // Resolve local Product by SKU.
-  const product = await prisma.product.findUnique({
-    where: { workspace_sku: workspaceKey({ sku: sku }) },
-    select: { id: true },
+  // S6 — the SKU through the one inbound match, on the Amazon account and market of the order it returns (a
+  // listing's own SKU, also one renamed in Nexus that Amazon still holds; then the master SKU). Without the order:
+  // the master SKU only, as before. Several products: not linked, with the reason.
+  const match = await matchInboundSku(prisma, {
+    channel: 'AMAZON',
+    channelConnectionId: opts.connectionId ?? order?.channelConnectionId,
+    marketplace: order?.marketplace,
+    sku,
   })
+  const product = match.productId ? { id: match.productId } : null
+  if (match.problem) logger.warn('amazon-returns: return line not linked to a product', { channelReturnId, sku, reason: match.problem.sentence })
 
   const { status, refundStatus, refunded } = mapAmazonStatus(row.status)
   const returnDate = row['return-date']
@@ -193,6 +199,7 @@ export async function ingestAmazonReturnRow(
           isFba: opts.isFba,
           fulfillmentCenter: row['fulfillment-center-id'] ?? null,
           mirroredOrder: !!order,
+          ...(match.problem ? { unlinkedReason: match.problem.sentence } : {}),
         } as any,
       },
     })
