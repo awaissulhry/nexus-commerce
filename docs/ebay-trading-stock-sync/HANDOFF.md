@@ -25,3 +25,12 @@ Worktree /private/tmp/fix-ebay-trading-stock-sync (branch fix/ebay-trading-stock
 - Follow-ups (not this PR): saveOfferIds lookup not scoped by account/marketplace; retryQueueItem keeps isDead; failing-
   listings retry rows have cl=null; batching 4 per ItemID.
 - Risk to tell the Owner: business A Trading listings without membership will START receiving real stock (today they die).
+## Research 2 (cross-business propagation) done
+- Propagation works ~1–2 s (StockLevel trigger → StockPoolTask → notify → worker → recascade → queue per listing, aliases
+  included; tests stock-pool-sku-e2e test 5).
+- Gaps: (1) routing = PR 1 here; (2) eBay orders arrive by 5-min poll (Owner decision: schedule/notifications cost);
+  (3) failed push never healed while pool static; (4) Trading fan-out rows name no account (multi-account only);
+  (5) Trading readback primary account only; (6) lent warehouse deactivation queues no task; (7) failed pool task waits
+  2 min; (8) claims rollback (conditional); (9) lender 30 s hold by design.
+- PR 2 building in /private/tmp/fix-stock-heal-and-pool-triggers (branch fix/stock-heal-and-pool-triggers): gaps 3, 6, 7
+  (+5 if small). Merge PR 1 first.
