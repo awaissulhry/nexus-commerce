@@ -12,6 +12,7 @@
  * `failed`, the reason travels with it, and the review view shows it as
  * something the model got wrong rather than hiding it.
  */
+import { offListMessage } from '@nexus/shared/off-list-message'
 import type { CellConstraint } from './constraints.js'
 
 export type ViolationKind =
@@ -109,7 +110,9 @@ export function validateDraftValue(value: unknown, c: CellConstraint): Violation
         out.push({
           kind: 'off_list',
           severity: 'warn',
-          message: `"${s}" is not in the channel's list — it may be rejected at publish`,
+          // E3 — the one off-list sentence the sheet and the publish checks use (`@nexus/shared/off-list-message`).
+          message: offListMessage({ field: c.label, values: [s], channel: c.channel,
+            allowed: c.options.map((o) => c.optionLabels?.[o] ?? o) }),
         })
       }
     } else if (c.deprecatedOptions?.includes(hit)) {

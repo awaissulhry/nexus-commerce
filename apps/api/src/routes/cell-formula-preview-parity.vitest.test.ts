@@ -99,7 +99,8 @@ describe('#782 preview parity — the option check runs on both scopes', () => {
         expect(b.ok).toBe(true)
         expect(b.value).toBe('maybe')
         expect(b.error).toBeNull()
-        expect(b.warnings.join(' ')).toContain('"maybe" is not in the list')
+        // E3 — the one off-list sentence: Amazon's list on the channel scope, the column's own options on Shared.
+        expect(b.warnings.join(' ')).toContain(name === 'master' ? '"maybe" is not one of this column\'s options. Saved as it is.' : '"maybe" is not on Amazon\'s list. Saved as it is.')
       })
 
       it('a NON-SELECT column has no list, so nothing is refused', async () => {

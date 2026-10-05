@@ -89,6 +89,13 @@ describe('product-aware channel requirements', () => {
     expect(check(conditional, { battery: 'no', battery_type: 'Other' }).issues).toEqual([])
     expect(check(conditional, { battery: 'yes', battery_type: 'Other' }).issues).toContainEqual(expect.objectContaining({ fieldKey: 'battery_type', required: false, message: expect.stringContaining('Lithium') }))
   })
+  it('E3 — an enum miss is the one off-list sentence: the value, Amazon, and the allowed values', () => {
+    const conditional = { ...schema, allOf: [{ if: { required: ['battery'], properties: { battery: { contains: { properties: { value: { const: 'yes' } } } } } },
+      then: { properties: { battery_type: attribute({ enum: ['Lithium', 'Alkaline'] }) } } }] }
+    const issue = check(conditional, { battery: 'yes', battery_type: 'Other' }).issues.find(i => i.fieldKey === 'battery_type')!
+    expect(issue.message).toMatch(/: "Other" is not on Amazon's list\. Amazon may refuse it\. Allowed: Lithium, Alkaline\.$/)
+    expect(issue.message).not.toContain('must be equal to one of the allowed values')
+  })
   it('retains schema-owned selectors on measure envelopes', () => {
     const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'TEST', schemaDefinition: { properties: {
       weight: { type: 'array', items: { type: 'object', properties: { value: { type: 'number' }, unit: { enum: ['kg'] }, marketplace_id: { const: 'market-it' }, language_tag: { enum: ['it_IT', 'en_GB'], default: 'it_IT' } } } },

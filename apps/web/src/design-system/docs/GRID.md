@@ -151,7 +151,10 @@ results, a refused cell stays `.nds-cell-is-refused` with its reason on hover; *
 **A sheet** (`editors/sheet.ts`): `longTextEditor({maxLength})` (AG's large-text popup), `sheetClassRules(validation,
 inherited)` → `.nds-cell-is-invalid` (a channel WILL refuse — red tint + corner triangle) · `.nds-cell-is-warned`
 (accepted, a channel MAY reject — amber) · `.nds-cell-is-inherited` (the value is the parent's; edit to pin);
-`selectValidation(options, 'strict' | 'open', required)` — an off-list value on a strict list WARNS, never blocks;
+`selectValidation(options, 'strict' | 'open', required, words?)` — an off-list value on a strict list WARNS, never blocks,
+with THE off-list sentence (`offListSentence`, the same words as `@nexus/shared/off-list-message`): `Season: "X" is not on
+eBay's list. eBay may refuse it. Allowed: …` when `words.channel` names the list's channel, `… is not one of this column's
+options. Allowed: …` otherwise;
 `lengthValidation(caps: LengthCaps, required)` — `LengthCaps` carries BOTH units (`characters`, `bytes`), because
 Amazon declares them independently: 1,061 fields declare both with 14 distinct ratios, so no rule that picks a unit
 up front is right on every field; `evaluateLengthCaps` decides which one binds and both the cell mark and this

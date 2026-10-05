@@ -308,7 +308,7 @@ it('validates and saves eBay category options on an additional-account alias wit
   const after = await sheet('EBAY', 'ebay-b')
   const flagged = after.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-1').values[column.key]
   expect(flagged.value).toBe('Unlisted colour')
-  expect(JSON.stringify(flagged)).toMatch(/unaccepted value|allowed values/)
+  expect(JSON.stringify(flagged)).toMatch(/is not on eBay's list|unaccepted value|allowed values/)
   // The sibling alias is untouched.
   expect(after.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-2').values[column.key].value).toBe('Black')
 })

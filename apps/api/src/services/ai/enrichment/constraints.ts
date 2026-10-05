@@ -32,6 +32,10 @@ export interface CellConstraint {
   capFrom?: string
   /** Closed list, when the channel publishes one. */
   options?: string[]
+  /** Option code → the word the sheet shows for it; the off-list warning names the allowed values in these words. */
+  optionLabels?: Record<string, string>
+  /** E3 — the channel whose list `options` is, on a channel-scope run (`AMAZON`); absent on Shared. */
+  channel?: string
   /** `strict` = off-list warns (never blocks); `open` = anything goes. */
   mode?: 'strict' | 'open'
   /** Coordinates that require a value here. */
@@ -204,7 +208,7 @@ export function isDefaultDraftKey(key: string): boolean {
  *  - with no `only` list, anything outside `DEFAULT_DRAFT_KEYS`. The default
  *    run is narrow and descriptive; widening is an explicit act.
  */
-export function draftableConstraints(columns: SheetColumn[], only?: string[]): CellConstraint[] {
+export function draftableConstraints(columns: SheetColumn[], only?: string[], channel?: string | null): CellConstraint[] {
   const wanted = only && only.length > 0 ? new Set(only) : null
   const out: CellConstraint[] = []
   for (const c of columns) {
@@ -227,6 +231,8 @@ export function draftableConstraints(columns: SheetColumn[], only?: string[]): C
       maxBytes: c.maxBytes,
       capFrom: c.capFrom,
       options: c.options,
+      ...(c.optionLabels ? { optionLabels: c.optionLabels } : {}),
+      ...(channel ? { channel } : {}),
       mode: c.mode,
       requiredBy: c.requiredBy,
       deprecatedOptions: c.deprecatedOptions,

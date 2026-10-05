@@ -1,3 +1,7 @@
+## One off-list sentence for every sheet cell — 2026-10-05
+
+`sheet.ts`: `offListSentence` (new) — `Season: "X" is not on eBay's list. eBay may refuse it. Allowed: …` for a channel's list, `Season: "X" is not one of this column's options. Allowed: …` otherwise; `selectValidation` takes optional `words` (`field`, `channel`, `optionLabels`). `sheetColumn.ts`: `sheetValidationFor` names the column and its option words, and takes optional `{ channelList: true }` (the channel named by `listChannelOf`, new). Was `"X" is not in the channel's list — it may be rejected at publish`. Mirrored from the web app.
+
 ## Partial update says when Publish sends no field — 2026-10-05
 
 `publishAction.ts`: optional `PublishActionValue.partialNote` replaces the Partial update hint in the tooltip and the screen-reader sentence; `sendModeEditorOptions` notes a Partial update choice's `warning` as "The default. <warning>" (`sendModeDefaultNote`, exported from `grid/renderers`). Absent = unchanged. Mirrored from the web app.

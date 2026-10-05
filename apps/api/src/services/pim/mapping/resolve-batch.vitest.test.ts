@@ -507,7 +507,9 @@ describe('Shared gender reaches Amazon as the code and the market word', () => {
     result = await cells()
     expect(result.department).toMatchObject({ value: 'herr', provenance: 'override', autoCorrected: null, errors: [] })
     expect(result.target_gender).toMatchObject({ value: 'men', provenance: 'override', autoCorrected: null })
-    expect(result.target_gender.errors.join(' ')).toMatch(/unaccepted value/)
+    // E3 — the one off-list sentence: the value, whose list, what the channel may do.
+    expect(result.target_gender.errors.join(' ')).toMatch(/: "men" is not on Amazon's list\. Amazon may refuse it\. Allowed: /)
+    expect(result.target_gender.findings).toContainEqual(expect.objectContaining({ rule: 'offList' }))
   })
 })
 

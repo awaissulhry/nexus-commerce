@@ -1,3 +1,11 @@
+## Words: one off-list sentence for every sheet cell — 2026-10-05
+
+Product sheet consistency wave 3, E3 (`docs/product-sheet-consistency/wave3/plan-W3-names.md` item 5). Mirrored in Factory (`sheet.ts`, `sheetColumn.ts`), except the tests and `GRID.md`.
+
+- **`offListSentence`** (`grid/editors/sheet.ts`, new): THE off-list sentence, the same words as `@nexus/shared/off-list-message` (the server's readiness, publish checks, formula warnings and AI drafts say it too; `sheet.vitest.test.ts` pins the two equal). Channel list: `Season: "Tutte le stagioni" is not on eBay's list. eBay may refuse it. Allowed: Estate, Inverno, … (12 in all)`; the column's own list: `Season: "X" is not one of this column's options. Allowed: …`. At most 8 allowed values, then how many in all. No final full stop (the DS punctuation rule).
+- **`selectValidation`**: new optional fourth argument `words` (`OffListWords`: `field`, `channel`, `optionLabels`). Its off-list warning was `"X" is not in the channel's list — it may be rejected at publish`, on Shared lists too.
+- **`sheetValidationFor`**: a select column's warning names the column (`label`) and its options in the cell's words (`optionLabels`); new optional third argument `{ channelList: true }` says the options are a channel's list, named from the column's coordinates (`listChannelOf`, new: the one channel every key of `channels` shares). Without it (the Shared scope, Cell details) the sentence speaks of the column's own options. `SheetColumnLike` gains optional `label`, `optionLabels`, `channels`.
+
 ## Words: Partial update says when Publish sends no field — 2026-10-05
 
 Product sheet consistency wave 2, "Shopify + Etsy honest words" (D5, D13). Mirrored in Factory (`publishAction.ts` and its test).

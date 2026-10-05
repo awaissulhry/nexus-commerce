@@ -36,8 +36,17 @@ export interface SheetColumnLike {
    * without a declared branch failing closed to the length rule.
    */
   kind: string
+  /** The header's words — the off-list sentence names the column by them (E3). */
+  label?: string
   options?: string[]
+  /** Option code → the word the cell shows; the off-list sentence lists the allowed values in these words. */
+  optionLabels?: Record<string, string>
   mode?: 'strict' | 'open'
+  /**
+   * Each coordinate's own facts, by coordinate label (`eBay · IT`). Read here only for WHOSE list the options are: a
+   * column every coordinate of which is one channel's carries that channel's list (`listChannelOf`).
+   */
+  channels?: Record<string, unknown>
   requiredBy: string[]
   maxLength?: number | null
   maxBytes?: number | null
@@ -60,8 +69,14 @@ export interface SheetColumnLike {
  * `applies` is the caller's — master answers it through `validationApplies`, the channel through
  * `columnApplies` — because the two row shapes are not the same object and this module knows
  * neither. What it guarantees is that both scopes gate the SAME validation the SAME way.
+ *
+ * E3 (2026-10-05) — an off-list value on a strict list reads as THE off-list sentence (`offListSentence`), naming the
+ * column. By default the list is the column's own, whichever channels supplied it — the Shared scope, where a column
+ * unions several channels' lists: "is not one of this column's options". `channelList: true` (a channel scope's
+ * columns) says the options are the channel's list, named from the column's coordinates (`listChannelOf`): "is not on
+ * eBay's list. eBay may refuse it."
  */
-export function sheetValidationFor<T>(col: SheetColumnLike, applies: (row: T) => boolean): SheetValidation<T> {
+export function sheetValidationFor<T>(col: SheetColumnLike, applies: (row: T) => boolean, opts: { channelList?: boolean } = {}): SheetValidation<T> {
   const required = col.requiredBy.length > 0
   /**
    * 🔴 VT.2 — a variation-theme cell has NO cell-level validation, and the reason is not "nothing to
@@ -81,7 +96,9 @@ export function sheetValidationFor<T>(col: SheetColumnLike, applies: (row: T) =>
       ? /* AM.1: an array or a {value, unit} — length rules would read `String(array).length`. */
         shapeValidation<T>(col, required)
       : col.kind === 'select'
-      ? selectValidation<T>(col.options ?? [], col.mode ?? 'open', required)
+      ? selectValidation<T>(col.options ?? [], col.mode ?? 'open', required, {
+          field: col.label, optionLabels: col.optionLabels, channel: opts.channelList ? listChannelOf(col) : null,
+        })
       : col.kind === 'boolean'
       ? { validate: v => {
           const value = parseScalarValue(col, v)
@@ -93,6 +110,16 @@ export function sheetValidationFor<T>(col: SheetColumnLike, applies: (row: T) =>
   return {
     validate: (v, d, key) => (applies(d) ? base.validate(v, d, key) : { level: null }),
   }
+}
+
+/**
+ * E3 — the channel whose list a column's options are: the name every one of its coordinates shares (`eBay · IT` and
+ * `eBay · DE` → `eBay`). Null when the column has no coordinate facts (a Nexus field, a Matrix cell) or its
+ * coordinates are more than one channel's.
+ */
+export function listChannelOf(col: Pick<SheetColumnLike, 'channels'>): string | null {
+  const names = new Set(Object.keys(col.channels ?? {}).map((coordinate) => coordinate.split(' · ')[0]!.trim()).filter(Boolean))
+  return names.size === 1 ? [...names][0]! : null
 }
 
 /**

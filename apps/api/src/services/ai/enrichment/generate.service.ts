@@ -259,7 +259,7 @@ export async function runEnrichment(input: RunEnrichmentInput): Promise<RunEnric
     ...(input.scope.channel ? { onlyChannels: [input.scope.channel] } : {}),
   })
   const constraints = applicableConstraints(
-    draftableConstraints(columnSet.columns, input.columns),
+    draftableConstraints(columnSet.columns, input.columns, input.scope.channel),
     input.scope,
   )
   if (constraints.length === 0) {
