@@ -37,6 +37,8 @@ export const NEVER_IN_BULK: Readonly<Record<string, string>> = {
   'cancel-purchase-order': 'Cancelling a purchase order cannot be undone, so each one is approved on its own.',
   // Taking something off sale, or removing it.
   'close-listing': 'Closing an offer takes it off sale on the marketplace, so each one is approved on its own.',
+  'end-listing': 'Ending a listing takes it off sale on the marketplace, and on eBay its relist gets a new item number, so each one is approved on its own.',
+  'relist-listing': 'Relisting puts a listing on sale again, on eBay under a new item number that may cost a fee, so each one is approved on its own.',
   'unlink-channel-id': 'Unlinking a channel id cuts the product off from its live listing, so each one is approved on its own.',
   'remove-draft-listings': 'Removing draft listings deletes them, so each request is approved on its own.',
   'discard-new-products': 'Discarding new products removes them from the catalog, so each request is approved on its own.',

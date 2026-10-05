@@ -166,6 +166,9 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-shopify-content': 'full',
       'publish-listing': 'partial',
       'send-customer-message': 'none',
+      'end-listing': 'partial',
+      'relist-listing': 'partial',
+      'delete-listing': 'none',
     })
   })
 
@@ -371,6 +374,9 @@ describe('C1 — every registered tool keeps the contract', () => {
       // L9 — a close and a reopen are each other's undo; a first publish is undone by closing its listings.
       'close-listing': { before: { listingIds: ['l1'], closed: false }, after: { listingIds: ['l1'], closed: true } },
       'reopen-listing': { before: { listingIds: ['l1'], closed: true }, after: { listingIds: ['l1'], closed: false } },
+      // Phase 3 (T1) — an End and a Relist are each other's undo (the family SKU confirms the inverse); a Delete has none.
+      'end-listing': { before: { listingIds: ['l1'], ended: false, familySku: 'FAM-1' }, after: { listingIds: ['l1'], ended: true, familySku: 'FAM-1' } },
+      'relist-listing': { before: { listingIds: ['l1'], ended: true, familySku: 'FAM-1' }, after: { listingIds: ['l1'], ended: false, familySku: 'FAM-1' } },
       // L11 — a photo from a link is removed again while unused; a removal adds the stored file back.
       'add-photo-from-url': { before: { productId: 'p1', photoId: 'i1', url: 'https://res.example.test/p1/1.png', label: null, present: false }, after: { productId: 'p1', photoId: 'i1', url: 'https://res.example.test/p1/1.png', label: null, present: true } },
       'remove-unused-photo': { before: { productId: 'p1', photoId: 'i1', url: 'https://res.example.test/p1/1.png', label: 'side', present: true }, after: { productId: 'p1', photoId: 'i1', url: 'https://res.example.test/p1/1.png', label: 'side', present: false } },

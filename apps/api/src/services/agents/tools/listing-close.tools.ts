@@ -3,8 +3,9 @@
  * offer of THE listing-action engine (`services/listings/listing-close.service.ts` → listing-action.service.ts), the
  * same rules as the product sheet's Status column: Amazon removes this market's offer (FBA too, with the warning; the
  * FBA quantity is never touched), eBay and Shopify show quantity 0 held by Nexus (eBay only with the out-of-stock
- * control on; a Shopify variant that sells out of stock is not paused), Etsy goes inactive. Reversible only (d5): a
- * permanent end or delete stays a click in Nexus. The listing stays in Nexus. Each is the other's undo. The tool
+ * control on; a Shopify variant that sells out of stock is not paused), Etsy goes inactive. Reversible only (d5): End,
+ * Relist and Delete are their own tools (listing-lifecycle.tools.ts; reopen-listing on an Ended listing points to
+ * relist-listing). The listing stays in Nexus. Each is the other's undo. The tool
  * names are kept; the plan → approval → run flow and the 250-listing cap are unchanged.
  */
 

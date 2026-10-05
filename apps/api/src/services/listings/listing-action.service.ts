@@ -349,11 +349,16 @@ interface Plan {
   send: Map<string, ActionListing>
 }
 
+/** A Resume of an Ended row (Claude's reopen-listing names its own door instead: relist-listing). */
+export const ENDED_USE_RELIST = 'Ended — use Relist.'
+/** A Relist of an Inactive row (Claude's relist-listing names its own door instead: reopen-listing). */
+export const NOT_ENDED_USE_RESUME = 'Not ended — use Resume offer.'
+
 const SKIP_WORDS: Record<ListingAction, Partial<Record<SellingState, string>>> = {
   pause: { paused: 'Already inactive.', ended: 'Ended — nothing to pause.' },
-  resume: { active: 'Not inactive.', ended: 'Ended — use Relist.' },
+  resume: { active: 'Not inactive.', ended: ENDED_USE_RELIST },
   end: { ended: 'Already ended.' },
-  relist: { active: 'Not ended.', paused: 'Not ended — use Resume offer.', mixed: 'Not ended.' },
+  relist: { active: 'Not ended.', paused: NOT_ENDED_USE_RESUME, mixed: 'Not ended.' },
   delete: {},
 }
 
