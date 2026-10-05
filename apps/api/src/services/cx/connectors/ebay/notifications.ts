@@ -116,8 +116,9 @@ export function describeEbayNotificationError(operation: string, status: number,
 
 /**
  * How eBay delivers a topic to us. `application`: one subscription made with the app token.
- * `user`: one subscription per seller, made with that seller's own token (S3, deferred).
- * `portal`: configured in eBay's developer portal, never through this API.
+ * `user`: one subscription per seller, made with that seller's own token
+ * (`seller-subscriptions.ts`, never the app token). `portal`: configured in eBay's developer
+ * portal, never through this API.
  */
 export type EbayTopicDelivery = 'application' | 'user' | 'portal'
 
@@ -136,12 +137,15 @@ export interface EbayTopicWish {
  * The topics P2.3 names, as topic IDs.
  *
  * Topic existence and handler readiness are different. v1 (plan S1, 2026-09-26) subscribes
- * AUTHORIZATION_REVOCATION only: its handler passed the written C8 check in
+ * AUTHORIZATION_REVOCATION: its handler passed the written C8 check in
  * docs/channel-connections/PLAN-EBAY-NOTIFICATIONS.md, and processing stays held behind
  * NEXUS_ENABLE_EBAY_INBOUND_PROCESSING. Account deletion is configured in eBay's developer
- * portal and its erasure executor is not built. ORDER_CONFIRMATION is per-seller and deferred:
- * the 5-minute order poll already takes the stock. ITEM_PRICE_REVISION and ITEM_AVAILABILITY
- * are buy-side item topics a seller has no use for, so they are gone.
+ * portal and its erasure executor is not built. ORDER_CONFIRMATION (GAP2 phase 2, 2026-10-06) is
+ * ready and per-seller: each eBay account is subscribed with its own sign-in
+ * (`seller-subscriptions.ts`), only when the Owner names it in the armed list; a stored order
+ * notice stays held behind NEXUS_ENABLE_EBAY_ORDER_NOTICES, and the 5-minute poll stays as the
+ * safety net. ITEM_PRICE_REVISION and ITEM_AVAILABILITY are buy-side item topics a seller has
+ * no use for, so they are gone.
  */
 export const EBAY_DESIRED_TOPICS: EbayTopicWish[] = [
   {
@@ -158,7 +162,7 @@ export const EBAY_DESIRED_TOPICS: EbayTopicWish[] = [
     delivery: 'application',
   },
   // eBay release 1.6.6 (2025-12-01): developer.ebay.com/develop/api/notification/release-notes
-  { topicId: 'ORDER_CONFIRMATION', purpose: 'A buyer completed checkout — pull the order.', evidence: 'documented', delivery: 'user', handlerMissing: true },
+  { topicId: 'ORDER_CONFIRMATION', purpose: 'A buyer completed checkout and payment cleared — read that one order and take its stock.', evidence: 'documented', delivery: 'user' },
 ]
 
 export const EBAY_NOTIFICATION_SETUP_SWITCH = 'NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP'
@@ -178,27 +182,45 @@ export interface EbayNotificationSetupGate {
  * from before it became opt-in (571371bfc), and this release makes a topic ready, so that
  * stale value would create the destination and subscription at the first 03:55 run. Setup
  * also needs `NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS`, a variable no release before this one
- * read, naming each topic the Owner arms (v1: `AUTHORIZATION_REVOCATION`). Naming topics,
- * not a boolean, means a later release that makes another topic ready does not arm it.
- * Every entry must be a ready application-level topic, or nothing is armed.
+ * read, naming each topic the Owner arms (`AUTHORIZATION_REVOCATION`, `ORDER_CONFIRMATION`).
+ * Naming topics, not a boolean, means a later release that makes another topic ready does
+ * not arm it. Every entry must be a ready application-level or per-seller (USER) topic, or
+ * nothing is armed. A portal topic is never armed. Which token a topic is subscribed with
+ * follows its delivery: `armedApplicationTopics` (the app token) and `armedSellerTopics`
+ * (each seller's own token).
  */
 export function ebayNotificationSetupGate(env: NodeJS.ProcessEnv = process.env): EbayNotificationSetupGate {
   const refuse = (reason: string): EbayNotificationSetupGate => ({ armed: false, topics: [], reason })
   if (env[EBAY_NOTIFICATION_SETUP_SWITCH] !== '1') return refuse(`${EBAY_NOTIFICATION_SETUP_SWITCH} is not exactly 1.`)
   const entries = [...new Set((env[EBAY_NOTIFICATION_ARMED_TOPICS] ?? '').split(',').map(entry => entry.trim()).filter(Boolean))]
   if (!entries.length) {
-    return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names no topic. The Owner arms setup by naming each topic (v1: AUTHORIZATION_REVOCATION).`)
+    return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names no topic. The Owner arms setup by naming each topic (AUTHORIZATION_REVOCATION, ORDER_CONFIRMATION).`)
   }
   for (const entry of entries) {
     const name = /^[A-Z][A-Z0-9_]{0,63}$/.test(entry) ? entry : 'an entry that is not a topic id'
     const wish = EBAY_DESIRED_TOPICS.find(topic => topic.topicId === entry)
     if (!wish) return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names ${name}, which Nexus does not subscribe.`)
-    if (wish.delivery !== 'application') {
-      return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names ${name}, which is ${wish.delivery === 'portal' ? "set up in eBay's developer portal" : 'a per-seller USER topic'} and never subscribed with the application token.`)
+    if (wish.delivery === 'portal') {
+      return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names ${name}, which is set up in eBay's developer portal and never subscribed through the Notification API.`)
     }
     if (wish.handlerMissing) return refuse(`${EBAY_NOTIFICATION_ARMED_TOPICS} names ${name}, which has no ready handler.`)
   }
   return { armed: true, topics: entries, reason: null }
+}
+
+function armedByDelivery(gate: EbayNotificationSetupGate, delivery: EbayTopicDelivery): string[] {
+  if (!gate.armed) return []
+  return gate.topics.filter(topicId => EBAY_DESIRED_TOPICS.find(wish => wish.topicId === topicId)?.delivery === delivery)
+}
+
+/** Armed topics subscribed once, with the application token. */
+export function armedApplicationTopics(gate: EbayNotificationSetupGate = ebayNotificationSetupGate()): string[] {
+  return armedByDelivery(gate, 'application')
+}
+
+/** Armed per-seller (USER) topics: one subscription per eBay account, made with that seller's own token. */
+export function armedSellerTopics(gate: EbayNotificationSetupGate = ebayNotificationSetupGate()): string[] {
+  return armedByDelivery(gate, 'user')
 }
 
 /** Refused before the app token is fetched: nothing reached eBay. */
@@ -232,37 +254,75 @@ export interface EbaySubscription {
   payload?: { format?: string; deliveryProtocol?: string; schemaVersion?: string }
 }
 
+/**
+ * Who a Notification API call is made as. `app`: the application token (topics, destinations,
+ * config, application-level subscriptions). `{ connectionId }`: one eBay account, with THAT
+ * seller's own token, which the gateway takes from the token service for exactly that account.
+ * A per-seller call never carries the app token or another seller's token.
+ */
+export type NotificationCaller = 'app' | { connectionId: string }
+
+/** A Notification API answer that was not the expected one; `errorIds` are eBay's own. */
+export class EbayNotificationHttpError extends Error {
+  constructor(message: string, readonly status: number, readonly errorIds: number[]) {
+    super(message)
+    this.name = 'EbayNotificationHttpError'
+  }
+}
+
+export interface NotificationAnswer<T> { status: number; body: T | null; text: string; location: string | null; errorIds: number[] }
+
 async function notificationApi<T>(
   environment: EbayEnvironment,
   method: 'GET' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
-): Promise<{ status: number; body: T | null; text: string; location: string | null }> {
+  caller: NotificationCaller = 'app',
+): Promise<NotificationAnswer<T>> {
   // The one choke point for writes: no POST or PUT without the Owner's arming, checked
-  // before the app token is fetched. Reads (the status route) are unaffected.
+  // before any token is fetched. Reads (the status route) are unaffected. A per-seller write
+  // also needs a per-seller topic in the armed list: arming AUTHORIZATION_REVOCATION alone
+  // never lets a seller's token write.
   if (method !== 'GET') {
     const gate = ebayNotificationSetupGate()
     if (!gate.armed) throw new EbayNotificationNotArmedError(gate.reason)
+    if (caller !== 'app' && !armedSellerTopics(gate).length) {
+      throw new EbayNotificationNotArmedError(`${EBAY_NOTIFICATION_ARMED_TOPICS} names no per-seller topic.`)
+    }
   }
-  const { ebayAppToken } = await import('./client.js')
   const { ebayTransport } = await import('../../../gateway/ebay.js')
-  const token = await ebayAppToken(environment)
-  // Through the gateway as an app-level call, like the public-key lookup beside it, so
-  // the channel-gateway ratchet stays at zero.
-  const res = await ebayTransport(null, { appLevel: true })(`${EBAY_API_BASE[environment]}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
+  const url = `${EBAY_API_BASE[environment]}${path}`
+  const jsonHeaders = { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) }
+  const init = { method, ...(body ? { body: JSON.stringify(body) } : {}) }
+  let res: Response
+  let token: string | null = null
+  if (caller === 'app') {
+    const { ebayAppToken } = await import('./client.js')
+    token = await ebayAppToken(environment)
+    // Through the gateway as an app-level call, like the public-key lookup beside it, so
+    // the channel-gateway ratchet stays at zero.
+    res = await ebayTransport(null, { appLevel: true })(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...jsonHeaders } })
+  } else {
+    // No Authorization header on purpose: the gateway authorises the call with the token of
+    // `connectionId` (account state, rate bucket and call ledger included). /commerce/notification
+    // is kind `setup` there, so it is sent in every publish mode.
+    res = await ebayTransport(caller.connectionId)(url, { ...init, headers: jsonHeaders })
+  }
   const raw = await res.text()
   let parsed: T | null = null
   try { parsed = raw ? (JSON.parse(raw) as T) : null } catch { parsed = null }
   // `text` feeds error messages only; eBay may echo what we sent, so secrets are removed here.
-  return { status: res.status, body: parsed, text: redactNotificationText(raw, [token]), location: res.headers.get('location') }
+  return { status: res.status, body: parsed, text: redactNotificationText(raw, [token]), location: res.headers.get('location'), errorIds: ebayErrorIds(raw) }
+}
+
+/**
+ * One Notification API call made as one eBay account (`seller-subscriptions.ts`). The same
+ * choke point as every other call: a write needs the Owner's arming before anything is sent.
+ */
+export function sellerNotificationCall<T>(
+  connectionId: string, environment: EbayEnvironment, method: 'GET' | 'POST', path: string, body?: unknown,
+): Promise<NotificationAnswer<T>> {
+  return notificationApi<T>(environment, method, path, body, { connectionId })
 }
 
 /**
@@ -277,7 +337,7 @@ export async function getEbayTopics(environment: EbayEnvironment = 'production')
 }
 
 /** Bound traversal without ever treating an incomplete catalogue as success. */
-async function notificationCollection<T>(environment: EbayEnvironment, resource: string, key: string): Promise<T[]> {
+async function notificationCollection<T>(environment: EbayEnvironment, resource: string, key: string, caller: NotificationCaller = 'app'): Promise<T[]> {
   const pathname = `/commerce/notification/v1/${resource}`
   let next: unknown = `${pathname}?limit=100`
   const visited = new Set<string>()
@@ -289,8 +349,8 @@ async function notificationCollection<T>(environment: EbayEnvironment, resource:
       throw new Error('eBay notification pagination returned an unsafe or repeated URL.')
     }
     visited.add(url.href)
-    const res = await notificationApi<Record<string, unknown>>(environment, 'GET', `${url.pathname}${url.search}`)
-    if (res.status !== 200) throw new Error(describeEbayNotificationError(`get ${key}`, res.status, res.text))
+    const res = await notificationApi<Record<string, unknown>>(environment, 'GET', `${url.pathname}${url.search}`, undefined, caller)
+    if (res.status !== 200) throw new EbayNotificationHttpError(describeEbayNotificationError(`get ${key}`, res.status, res.text), res.status, res.errorIds)
     const batch = res.body?.[key] ?? (res.body?.total === 0 ? [] : null)
     if (!Array.isArray(batch)) throw new Error(`eBay ${key} returned an unreadable collection.`)
     rows.push(...batch)
@@ -303,7 +363,7 @@ async function notificationCollection<T>(environment: EbayEnvironment, resource:
 }
 
 /** A creation response has no body: eBay identifies the new resource in Location. */
-function createdResourceId(location: string | null, environment: EbayEnvironment, resource: 'destination' | 'subscription'): string | null {
+export function createdResourceId(location: string | null, environment: EbayEnvironment, resource: 'destination' | 'subscription'): string | null {
   if (!location) return null
   try {
     const url = new URL(location, EBAY_API_BASE[environment])
@@ -347,6 +407,28 @@ export async function getEbaySubscriptions(environment: EbayEnvironment = 'produ
   return notificationCollection<EbaySubscription>(environment, 'subscription', 'subscriptions')
 }
 
+/** The subscriptions eBay holds for ONE seller, read with that seller's own token. */
+export async function getEbaySellerSubscriptions(connectionId: string, environment: EbayEnvironment = 'production'): Promise<EbaySubscription[]> {
+  return notificationCollection<EbaySubscription>(environment, 'subscription', 'subscriptions', { connectionId })
+}
+
+/**
+ * The payloads a topic may be subscribed with: not deprecated, JSON over HTTPS, with a schema
+ * version. eBay's catalogue defines no ordering or default format, so only an explicitly
+ * supported entry is used.
+ */
+export function usableTopicPayloads(topic: EbayTopic): Array<{ schemaVersion: string }> {
+  return (topic.supportedPayloads ?? []).filter((p): p is typeof p & { schemaVersion: string } =>
+    !p.deprecated && !!p.schemaVersion && p.deliveryProtocol === 'HTTPS' && Array.isArray(p.format) && p.format.includes('JSON'),
+  )
+}
+
+/** An existing subscription whose payload is one of the topic's usable JSON/HTTPS schemas. */
+export function subscriptionPayloadUsable(subscription: EbaySubscription, payloads: Array<{ schemaVersion: string }>): boolean {
+  return subscription.payload?.format === 'JSON' && subscription.payload?.deliveryProtocol === 'HTTPS' &&
+    payloads.some(payload => payload.schemaVersion === subscription.payload?.schemaVersion)
+}
+
 export interface SubscribeOutcome {
   topicId: string
   status: 'created' | 'already_exists' | 'enabled' | 'not_offered' | 'refused' | 'failed'
@@ -380,9 +462,7 @@ export async function subscribeEbayTopic(
   // notification type and would have been refused outright for one of them. eBay
   // advertises compatible versions in `getTopics`. The catalogue defines no ordering
   // or default format; choose an explicitly supported JSON/HTTPS entry.
-  const payloads = (topic.supportedPayloads ?? []).filter((p) =>
-    !p.deprecated && p.schemaVersion && p.deliveryProtocol === 'HTTPS' && Array.isArray(p.format) && p.format.includes('JSON'),
-  )
+  const payloads = usableTopicPayloads(topic)
   const schemaVersion = payloads[0]?.schemaVersion
   const format = 'JSON'
   if (!schemaVersion) {
@@ -402,8 +482,7 @@ export async function subscribeEbayTopic(
   }
   const already = existing.find((s) => s.topicId === topicId && s.destinationId === destinationId)
   if (already) {
-    if (already.payload?.format !== 'JSON' || already.payload?.deliveryProtocol !== 'HTTPS' ||
-        !payloads.some(payload => payload.schemaVersion === already.payload?.schemaVersion)) {
+    if (!subscriptionPayloadUsable(already, payloads)) {
       return { topicId, status: 'failed', subscriptionId: already.subscriptionId, detail: 'The existing subscription payload is not compatible with the advertised JSON/HTTPS schemas; repair it before enabling.' }
     }
     if ((already.status ?? '').toUpperCase() === 'ENABLED') {
@@ -440,15 +519,29 @@ export interface EbayNotificationSetupResult {
   catalogue: string[]
   /** Topics we asked for that eBay's catalogue does not contain — wrong names. */
   notOffered: string[]
+  /** Application-level topics, subscribed with the app token. */
   perTopic: SubscribeOutcome[]
+  /**
+   * The armed per-seller (USER) topics, as eBay's catalogue lists them. Each eBay account is
+   * subscribed to them separately, with its own token (`seller-subscriptions.ts`); a topic
+   * eBay does not offer is in `notOffered` instead.
+   */
+  sellerTopics?: EbayTopic[]
   /** eBay's alert-email config: already there, or set by this run. Never the address. */
   alertEmail?: 'present' | 'set'
   error?: string
 }
 
-/** Configuration presence is not successful reconciliation. */
+/**
+ * Configuration presence is not successful reconciliation. With only per-seller topics armed
+ * there is no application-level subscription: success is then the destination being there and
+ * every armed per-seller topic being offered by eBay. The sellers' own subscriptions are
+ * reported per account beside this (`reconcileEbaySellersForSetup`).
+ */
 export function ebayNotificationSetupSucceeded(result: EbayNotificationSetupResult): boolean {
-  return result.configured && result.armed && !result.error && !!result.destinationId && result.perTopic.length > 0 &&
+  const sellerTopics = result.sellerTopics ?? []
+  return result.configured && result.armed && !result.error && !!result.destinationId &&
+    (result.perTopic.length > 0 || sellerTopics.length > 0) && !(result.notOffered ?? []).length &&
     result.perTopic.every(topic => ['created', 'enabled', 'already_exists'].includes(topic.status))
 }
 
@@ -473,10 +566,13 @@ export async function ensureEbayAlertEmail(environment: EbayEnvironment): Promis
 }
 
 /**
- * Create the destination if it is missing, then reconcile every ARMED topic.
+ * Create the destination if it is missing, then reconcile every ARMED application topic.
  *
  * Idempotent. It never deletes: an existing subscription on our destination is left
  * alone, and a disabled one is enabled rather than recreated. Unarmed, it makes no call.
+ * Armed per-seller topics are only checked against eBay's catalogue here; they are
+ * subscribed per account with each seller's own token, never the app token. The destination
+ * is created when only a per-seller topic is armed, because a seller subscription needs it.
  */
 export async function setupEbayNotifications(options: {
   environment?: EbayEnvironment
@@ -488,7 +584,7 @@ export async function setupEbayNotifications(options: {
 
   const base: EbayNotificationSetupResult = {
     configured: false, armed: false, environment, endpoint, destinationId: null,
-    catalogue: [], notOffered: [], perTopic: [],
+    catalogue: [], notOffered: [], perTopic: [], sellerTopics: [],
   }
 
   if (!endpoint || !verificationToken) {
@@ -502,11 +598,13 @@ export async function setupEbayNotifications(options: {
   if (tokenError) return { ...base, error: tokenError }
   base.configured = true
 
-  // The gate admits only ready application-level topics, so `wanted` needs no other filter.
+  // The gate admits only ready application-level and per-seller topics. Only the application
+  // ones are subscribed here; the per-seller ones are subscribed per account.
   const gate = ebayNotificationSetupGate()
   if (!gate.armed) return { ...base, error: new EbayNotificationNotArmedError(gate.reason).message }
   base.armed = true
-  const wanted = gate.topics
+  const wanted = armedApplicationTopics(gate)
+  const wantedPerSeller = armedSellerTopics(gate)
 
   try {
     const catalogue = await getEbayTopics(environment)
@@ -540,7 +638,8 @@ export async function setupEbayNotifications(options: {
       }
     }
 
-    const existing = await getEbaySubscriptions(environment)
+    // Read only when an application topic is armed: per-seller subscriptions are read per seller.
+    const existing = wanted.length ? await getEbaySubscriptions(environment) : []
 
     const perTopic: SubscribeOutcome[] = []
     for (const topicId of wanted) {
@@ -550,8 +649,12 @@ export async function setupEbayNotifications(options: {
         perTopic.push({ topicId, status: 'failed', detail: err instanceof Error ? err.message : String(err) })
       }
     }
+    const sellerTopics = wantedPerSeller.map(topicId => offered.get(topicId)).filter((topic): topic is EbayTopic => !!topic)
 
-    const notOffered = perTopic.filter((r) => r.status === 'not_offered').map((r) => r.topicId)
+    const notOffered = [
+      ...perTopic.filter((r) => r.status === 'not_offered').map((r) => r.topicId),
+      ...wantedPerSeller.filter(topicId => !offered.has(topicId)),
+    ]
     if (notOffered.length) {
       // The loud case on purpose. A topic id we believe in that eBay has never heard of
       // is how `marketplace.order.created` sat in the receiver for weeks looking handled.
@@ -563,7 +666,7 @@ export async function setupEbayNotifications(options: {
     return {
       configured: true, armed: true, environment, endpoint,
       destinationId: destination.destinationId,
-      catalogue: [...offered.keys()], notOffered, perTopic, alertEmail,
+      catalogue: [...offered.keys()], notOffered, perTopic, sellerTopics, alertEmail,
     }
   } catch (err) {
     return { ...base, error: err instanceof Error ? err.message : String(err) }
@@ -587,6 +690,11 @@ export async function sendEbayTestNotice(environment: EbayEnvironment, topicId: 
   if (!gate.armed) return { ok: false, topicId, error: new EbayNotificationNotArmedError(gate.reason).message }
   if (!gate.topics.includes(topicId)) {
     return { ok: false, topicId, error: `eBay notification setup is not armed for this topic (armed: ${gate.topics.join(', ')}). No eBay call was made.` }
+  }
+  // A per-seller subscription is not visible with the app token; testing it would need that
+  // seller's token, which this application-level test does not use.
+  if (!armedApplicationTopics(gate).includes(topicId)) {
+    return { ok: false, topicId, error: `${topicId} is subscribed per seller; this test covers application-level topics only. No eBay call was made.` }
   }
   const { endpoint } = ebayNotificationConfig()
   if (!endpoint) return { ok: false, topicId, error: 'EBAY_NOTIFICATION_ENDPOINT_URL is not set. No eBay call was made.' }
