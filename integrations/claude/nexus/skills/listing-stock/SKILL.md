@@ -1,6 +1,6 @@
 ---
 name: listing-stock
-description: Explain and change how much each listing shows on each channel, market and account in Nexus, and where that number comes from - own warehouses or another business's shared stock, which warehouses feed which markets, follow or a fixed number, buffers, holds, Amazon's one EU quantity and FBA - then propose pins, follow, buffers, holds, push now, warehouse feeds, stock-sync policies or a stock-source switch as requests a person approves. Use when the person asks why a listing shows a quantity, wants a listing to show more, less, a fixed number or zero, to hold or release the stock sync, about overselling, stock drift with a channel, shared stock, or which warehouse feeds a market. Counting and correcting the warehouse numbers themselves is stock-count.
+description: Explain and change how much each listing shows on each channel, market and account in Nexus, and where that number comes from - own warehouses or another business's shared stock, which warehouses feed which markets, follow or a fixed number, buffers, holds, Amazon's one EU quantity and FBA - then propose pins, follow, buffers, holds, push now, a retry of a failed push, an Amazon FBA/FBM switch, warehouse feeds, stock-sync policies or a stock-source switch as requests a person approves. Use when the person asks why a listing shows a quantity, wants a listing to show more, less, a fixed number or zero, to hold or release the stock sync, about overselling, stock drift with a channel, shared stock, or which warehouse feeds a market. Counting and correcting the warehouse numbers themselves is stock-count.
 ---
 
 # Listing stock
@@ -67,13 +67,15 @@ A sale of 3 reserved at A → eBay IT 9 and Amazon EU 6, both re-sent; the Shopi
 | Hold the stock sync | `set-listing-stock` `pause-sync` · `bulk-listing-stock` `PAUSE` | nothing sent; it also keeps price and sale changes in Nexus until release |
 | Release it | `resume-sync` · `RESUME` | recomputed and sent at once, held prices too |
 | Send again now | `set-listing-stock` `push-now` | queued at once; refused while held or uncounted |
+| Retry a failed push | `set-listing-stock` `retry-sync` | the cell's newest failed quantity or price push is sent again; refused where none failed; what reaches the channel cannot be called back |
+| Switch Amazon fulfilment (FBA, FBM) | `set-listing-stock` `set-fulfilment` + `method`, on `AMAZON:` cells (EU: `AMAZON:EU`) | Amazon is sent nothing (the offer itself is converted in Seller Central); from then on Nexus sends no quantity (FBA) or the stock (FBM); FBA → FBM refused while FBA units, an active FBA offer or an Amazon FBA code remain |
 | A channel, market or account | `set-stock-policy` `channel`, `marketplace` (`*` = every market), `accountId` (left out = every account), `pushesPaused`, `newListingDefaultMode` (FOLLOW or PAUSED) | holds or releases every listing there; how new listings start |
 | What a warehouse feeds | `set-stock-policy` `locationCode`, `feeds` (`[]` = every channel and market) | every product stocked there recomputed and queued |
 | Own stock ↔ shared stock | `set-stock-source` `productIds` (≤50; a parent brings its variations unless `withVariations: false`), `to` own or pool, `lender` (as shared-stock names it) | preview per listing `showsNow` → `willShow`; joining shared stock turns fixed numbers to follow (a fixed 0 stays); all or none; only an owner can approve |
 | Shared eBay variants | `bulk-listing-stock` with `productIds`, `only: "shared"`: EXCLUDE, INCLUDE, PIN (+ `quantity`), FOLLOW, BUFFER | the eBay items' totals change |
 
 - `until` (bulk-listing-stock PIN, ZERO_PIN, PAUSE, EXCLUDE): ISO date and time, 1 minute to 1 year ahead; then it follows, resumes or is included again by itself.
-- **Which tool.** `set-listing-stock`: one family per call, cells read in listing-matrix (so only the account it shows), up to 250 targets; the only way to pin a chosen number on a listing or to push now; undo with `revert-listing-change` within 24 hours, once. `bulk-listing-stock`: many families or any account (`listingIds` ≤250 from listing-coordinates or channel-price-stock, or `productIds` ≤50 narrowed by `channel` and `marketplace`), end times, shared eBay variants; at most 250 rows after the Amazon EU expansion; its undo cannot type back a fixed number it replaced (set that again with set-listing-stock). `set-stock-policy`: a whole channel, market or account, or a warehouse's feeds. `set-stock-source`: where a product's units come from.
+- **Which tool.** `set-listing-stock`: one family per call, cells read in listing-matrix (so only the account it shows), up to 250 targets; the only way to pin a chosen number on a listing, push now, retry a failed push or switch fulfilment; undo with `revert-listing-change` within 24 hours, once. `bulk-listing-stock`: many families or any account (`listingIds` ≤250 from listing-coordinates or channel-price-stock, or `productIds` ≤50 narrowed by `channel` and `marketplace`), end times, shared eBay variants; at most 250 rows after the Amazon EU expansion; its undo cannot type back a fixed number it replaced (set that again with set-listing-stock). `set-stock-policy`: a whole channel, market or account, or a warehouse's feeds. `set-stock-source`: where a product's units come from.
 - **Amazon EU.** A quantity change (pin, follow, buffer, zero) on any EU market covers every open EU market of that SKU and account (one EU line in the preview); a closed market is never reopened. A `set-listing-stock` hold on an EU market holds every EU market. To stop selling in one EU market only, use `close-listing` (Pause offer), never a quantity.
 
 ## 4. Traps
@@ -96,8 +98,8 @@ No Claude tool; a person does it in Nexus or on the channel:
 
 | Action | Where |
 |---|---|
-| Switch fulfilment (FBA, FBM) | Product studio › Matrix tab › Stock › Set fulfilment… (FBA → FBM is refused while FBA units are on hand: convert the offer in Seller Central first) |
-| Retry a failed push | Matrix › Sync › Retry, or Stock › Control Tower › Retry failed |
+| eBay fulfilment (MCF) | Product studio › Matrix tab › Stock › Set fulfilment… (`set-fulfilment` takes Amazon cells only) |
+| Convert an Amazon offer between FBA and FBM | Seller Central |
 | Apply or ignore channel drift | Stock › Channel drift |
 | Find or switch Shopify locations; a product's Shopify stock location | Stock › Shopify Locations; the product's Review Shopify synchronisation › Inventory location |
 | eBay out-of-stock option | eBay's own account settings |

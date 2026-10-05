@@ -5,7 +5,7 @@ description: Set a business's advertising strategy per market in Nexus, for Amaz
 
 # Ads strategy
 
-The strategy is the settings Nexus holds: read them fresh every time, never from memory, never from another business. Nexus has no per-market strategy record and no per-market target field: to give a market one target ACoS, set the same target on every campaign of that market. Amounts are minor units of each campaign's own currency; never convert, never add markets together.
+The strategy is the settings Nexus holds: read them fresh every time, never from memory, never from another business. Nexus has no per-market strategy record and no per-market target field: to give a market one target ACoS, set the same target on every campaign of that market (`set-campaign-target-acos` with `market` does it in one request). Amounts are minor units of each campaign's own currency; never convert, never add markets together.
 
 ## Ground rules
 
@@ -24,8 +24,9 @@ eBay, per market:
 4. `ads-overview` (`channel: "ebay"`): pacing against the monthly ceilings, findings (rates above break-even, missing costs, unpromoted listings, campaigns without a rule), `writes` (live or sandbox).
 5. `ad-campaigns` (`channel: "ebay"`, `market`): `fundingModel`, `adRateStrategy`, `bidPercentage` (the campaign rate), `dailyBudgetCents`, `rulesBased`, `automation` (posture, protected, rules), `account`.
 6. `list-automations` (`area: "ebay-ads"`): E1 rules and `caps.spendCeilings` (monthly cap, kill switch); `levelReason` names the eBay dial when it holds rules back.
+7. `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `market`, `campaignId`): each promoted listing's ad rate and break-even rate, a Priority campaign's ad groups, its keywords and bids.
 
-Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, its budget baseline, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, per-listing rates and break-even, keywords and ad groups.
+Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, its budget baseline, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, eBay search terms.
 
 ## 2. Show one table per market
 
@@ -39,7 +40,7 @@ The goal in the person's words (for example launch, grow, defend, profit) and th
 
 | Field | Set with | Unit |
 |---|---|---|
-| Campaign `targetAcos` | no Claude tool (§7) | fraction 0–1 (0.3 = 30 %); the screen takes a percent |
+| Campaign `targetAcos` | `set-campaign-target-acos` `targetAcosPct` | typed as a percent above 0 to 100 (30 = 30 %), like the screen; stored and read (`ad-campaigns`) as a fraction 0–1 (0.3) |
 | Business default `targetAcosPct` | `tune-ad-engine` `account-target-acos` | whole percent 1–500; `null` clears |
 | Rule `bid_apply` `value` (`op: targetAcos` / `curBidTargetAcos`) | `save-ad-rule` | percent (30 = 30 %); blank uses the business default |
 | Rule `bid_to_target_acos.targetAcos`, `set_campaign_target_acos.targetAcos` | `save-ad-rule` | fraction |
@@ -51,13 +52,14 @@ The goal in the person's words (for example launch, grow, defend, profit) and th
 | eBay `ratePct` | `set-ebay-ad-rates`, `promote-ebay-listings` | percent 2–100, one decimal |
 | eBay policy `rateCapPct`/`rateFloorPct`; `bidCapCents`/`bidFloorCents` | `tune-ad-engine` `ebay-campaign-policy` | percent; cents |
 
-What reads which target: Nexus's target-ACoS bid rules use their own `value`, else the business default; a campaign's `targetAcos` is its declared goal (shown in Nexus, read by the external bidding engine), not read by those rules. eBay has no target ACoS: an `acos_pct` condition in a market-scoped rule is the proxy.
+What reads which target: Nexus's target-ACoS bid rules use their own `value`, else the business default; a campaign's `targetAcos` is its declared goal (shown in Nexus, read by the external bidding engine when it runs), not read by those rules, auto-bid or autopilot. eBay has no target ACoS: an `acos_pct` condition in a market-scoped rule is the proxy.
 
 ## 5. Propose ONE change plan
 
 | To | Tool |
 |---|---|
 | Business default target ACoS | `tune-ad-engine` (`setting: "account-target-acos"`, `accountTargetAcos: { targetAcosPct }`) |
+| Campaign target ACoS (one per market, or per campaign) | `set-campaign-target-acos` (`market` = every Amazon campaign there, or `campaignIds`; `targetAcosPct`; `why`). Nexus only: nothing is sent to Amazon. A person approves it in Nexus, or the person who asked confirms it in Claude when the business allows that; it never runs by rule. Show the list: campaign, now → target |
 | Market or campaign daily spend ceiling | `set-ad-guardrail` (`kind: "spend-ceiling"`, `op: "set"`, `grain: "MARKET"` + `scopeId` market code, or `"CAMPAIGN"` + campaign id, `dailyCapCents`) |
 | Market bid floor / ceiling | `set-ad-guardrail` (`kind: "bid-policy"`, `grain: "MARKET"`, `scopeId`, `minBidCents`, `maxBidCents`) |
 | Protect a brand term from negation | `set-ad-guardrail` (`kind: "protected-term"`, `op: "set"`, `term`, `matchType` EXACT · PREFIX · CONTAINS, optional `marketplace`) |
@@ -87,9 +89,8 @@ What reads which target: Nexus's target-ACoS bid rules use their own `value`, el
 
 | Setting | Where |
 |---|---|
-| Campaign target ACoS (the per-market target, campaign by campaign) | Ads › Rules & Automation › Apply Rules: tick the market's campaigns, Target ACoS (typed as a percent). Give the person the list: campaign, now → target. |
 | A campaign's own bid bounds, pins, CPC ceiling | Ads › Rules & Automation › Control Room (guardrails) |
-| Which campaigns a budget rule acts on (it reaches none until assigned) | Apply Rules; harvest destinations: Keyword Harvest |
+| Which campaigns a budget rule acts on (it reaches none until assigned) | Ads › Rules & Automation › Apply Rules; harvest destinations: Keyword Harvest |
 | Creating budget pools, budget schedules, rank plans, coverage sets; monthly budget plans (A8) | Ads › Rules & Automation |
 | Amazon Ads connection mode and enabling its writes | Nexus's Amazon Ads connection (an operator's step) |
 | eBay dial, kill switch, monthly ceiling (that screen sets the EBAY_IT ceiling only today) | Ads › eBay › Rules & Automation |

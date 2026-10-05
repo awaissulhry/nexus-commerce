@@ -36,7 +36,7 @@ Read with the list-product skill. The business's own markets, languages and acco
 | Text per market language | `set-content` (shared text, per language) or `set-listing-content` (this listing's own text; its `language` must be one of the market's) | A language with no text is left out of what is sent, never filled from another language: a create then lacks title/bullets and Amazon refuses. BE needs nl and fr. Limits come per product type and market from `product-content`; over-limit text is saved with a warning and blocks the publish. Keywords go out as one string joined by spaces. |
 | Photos | `media-plan` (`destination` for the Amazon layout) → `add-photo-from-url` → `arrange-photos` | `arrange-photos` needs the family on the media plan (a person switches it on the Media page). Layout: MAIN + PT01–PT08 per ASIN (9); long edge under 500 px is an error, under 1000 px a warning (no zoom). Off the plan: the product gallery, 1 to 9 photos. |
 | Price | master price, or `set-listing-price` `set-price` on `AMAZON:<M>` from `listing-matrix` | Required in PLN, SEK, GBP, TRY markets. On a draft it is stored and sent by the first publish. Must sit inside the product's floor/ceiling (`set-price-bounds`) and Amazon's min/max. |
-| Fulfilment (FBA/FBM) | no tool: a person sets the Amazon sheet's Fulfillment method column, or Set fulfilment… on the product studio's Matrix | Without one, a new variation or single blocks the publish. |
+| Fulfilment (FBA/FBM) | `set-listing-stock` `action: "set-fulfilment"`, `method` FBA or FBM, targets `AMAZON:<M>` from `listing-matrix` (the EU markets share one: `AMAZON:EU`); or a person in the Amazon sheet's Fulfillment method column | Without one, a new variation or single blocks the publish. It sends Amazon nothing: it sets what Nexus sends. |
 | Stock (FBM) | the first publish sends what the stock sync works out: following the stock (with buffer and routed locations) or a pin (`set-listing-stock`) | 0 is allowed. Needs a stock location routed to the market (`set-stock-policy` `locationCode` + `feeds`) and no stock-sync hold there. FBA rows send no quantity. |
 | How a new row starts | the product sheet's Status column (Active / Inactive / Not listed): a person | Default Active. An Inactive create is made without this market's offer. |
 
@@ -75,8 +75,8 @@ Nexus re-checks in-flight publications every 2 minutes (Amazon is asked after 2,
 | `only listing attributes (attr_<attribute>) are set here` | key has quantity/price/fulfil/stock, or is title/description/bullets/keywords | price/stock/content tools; an Amazon attribute with such a word in its name (e.g. a package quantity): a person in the product sheet |
 | `is not a variation theme Amazon accepts…` / `Amazon has deprecated <THEME> here` | wrong theme | pick one of the codes the refusal lists |
 | `Set the Amazon variation theme in Information before publishing.` | family without theme | `set-listing-fields` `variationTheme` |
-| `<SKU>: choose a fulfillment method before publishing.` | no FBA/FBM | a person (section 2) |
-| `Amazon fulfils this product (FBA), but this listing is set to FBM.` | FBA stock or code on an FBM row | a person chooses FBA |
+| `<SKU>: choose a fulfillment method before publishing.` | no FBA/FBM | `set-listing-stock` `set-fulfilment` (section 2) |
+| `Amazon fulfils this product (FBA), but this listing is set to FBM.` | FBA stock or code on an FBM row | `set-listing-stock` `set-fulfilment` `method: "FBA"`, or a person chooses FBA |
 | `<SKU> is fulfilled by Amazon (FBA): its quantity is Amazon's, and this first publish would send one.` | FBA row would carry a quantity | a person publishes it from the Nexus studio |
 | `this first publish in <M> would set Amazon's one EU quantity to <n>, but its live EU listings hold …` | EU rows disagree | align the one EU quantity (`listing-matrix` `AMAZON:EU`, `set-listing-stock` there), then review again |
 | `Amazon <M> sells in <CUR>, and this listing follows the master price in <EUR>. Nexus does not convert it.` / `has no price of its own for Amazon <M>` | no market price | `set-listing-price` `set-price` |
@@ -98,11 +98,12 @@ Nexus re-checks in-flight publications every 2 minutes (Amazon is asked after 2,
 | `Sending is off: publishing to Amazon is …` | server publish mode | a person (server setting); nothing is sent until then |
 | `the studio's review changed since it was approved` | Nexus or Amazon moved | review again, ask again |
 
-## 5. What Claude cannot do on Amazon (a person does it in Nexus)
+## 5. Delete, fulfilment, and what only a person does on Amazon
 
-- **Delete** a listing in one market: product sheet Action column → Delete, then Publish (typed confirmation; cannot be undone; FBA units stay at Amazon and still pay storage). Amazon has **no End**. Listing a deleted row again: its Status Active or Inactive, then Publish.
+Claude can **delete** a listing in one market with `delete-listing` (`listingIds` of one family on that market and account, `confirmSku` = the family SKU the person typed; always a person's approval; cannot be undone; FBA units stay at Amazon and still pay storage). Amazon has **no End**: `end-listing` and `relist-listing` refuse it. Claude can also **switch fulfilment** FBA ↔ FBM with `set-listing-stock` `set-fulfilment`: Amazon is sent nothing (the offer itself is converted in Seller Central), and FBA → FBM is refused while FBA units, an active FBA offer or an Amazon FBA code remain. Only a person:
+
+- **Listing a deleted row again**: its Status Active or Inactive, then Publish.
 - **Status before the first publish** (Active / Inactive / Not listed): product sheet Status column. Claude can only pause or resume a live offer afterwards (`close-listing` / `reopen-listing`).
-- **Fulfilment switch** FBA ↔ FBM: Fulfillment method column or the Matrix's Set fulfilment…; FBA → FBM is refused while Amazon holds FBA units.
 - **Photos on a live listing** (Media page, Publish photos) and **switching a family to the media plan**.
 - **Offer fields other than price and sale** (min/max seller price, MAP, offer start/end, pricing rule, handling time, restock date, list price): the product sheet's Amazon offer cells, sent by Publish.
 - **Full update** of a live listing: Action column. Claude publishes changed field groups only.

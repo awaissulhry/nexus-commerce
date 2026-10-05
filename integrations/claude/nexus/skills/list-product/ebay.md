@@ -35,9 +35,9 @@ Read what is missing: `listing-issues` (`productId`, `channel: "EBAY"`, `market`
 
 | Need | How | Notes |
 |---|---|---|
-| Category | `set-listing-fields` `values: {categoryId}` on the main row | No tool searches eBay categories or loads a category's details: ask the person for the category id of that site. If the review says "Nexus has not loaded eBay's details for category N yet", a person opens the product's eBay sheet in the product studio, which loads them by itself or with **Load eBay fields**. The category's item-specific keys appear in `product-content` only after that. |
-| Item specifics | `set-listing-fields` `values` (keys as `product-content` lists them), or `set-listing-content` `attributes` | A missing required one, or one value over 65 characters, blocks the publish. A value off eBay's list only warns in Nexus (the preview says so), but eBay's own check may still refuse it: prefer the listed `options`. |
-| Condition | `values.conditionId` on the main row, from the category's `options` | Required for a new listing. |
+| Category | Find it with `ebay-categories` (`market` + `query`: eBay's suggested categories for some words, with `leaf`), then `set-listing-fields` `values: {categoryId}` on the main row | A listing needs a leaf category; each site has its own ids. `ebay-categories` reads only and stores nothing: a category Nexus has not loaded is read live from eBay. If the review says "Nexus has not loaded eBay's details for category N yet", a person opens the product's eBay sheet in the product studio, which loads them by itself or with **Load eBay fields**. The category's item-specific keys appear in `product-content` only after that. |
+| Item specifics | `set-listing-fields` `values` (keys as `product-content` lists them), or `set-listing-content` `attributes`. Before the category is loaded: `ebay-categories` `categoryId` (optional `specific`, `valueSearch`) lists them with their allowed values | A missing required one, or one value over 65 characters, blocks the publish. A value off eBay's list only warns in Nexus (the preview says so), but eBay's own check may still refuse it: prefer the listed `options`. |
+| Condition | `values.conditionId` on the main row, from the category's `options` (or `ebay-categories` `categoryId` → `conditions`) | Required for a new listing. |
 | Business policies | `paymentPolicyId`, `returnPolicyId`, `fulfillmentPolicyId` | Blank: the account's default, else this site's first policy, read from eBay at publish. No policy of a kind for the site: refused, and the seller creates one on eBay (Account › Business policies). |
 | Item location | `itemLocationCountry` plus `itemPostalCode` or `itemLocation` (city) | Blank: the eBay account's location. |
 | Title, description | the listing-content skill (`set-listing-content` `pin`, or the shared text) | Title at most 80 characters, subtitle 55. A longer title is saved with a warning, then blocks the publish. Only the main row's title and description are sent. |
@@ -87,7 +87,7 @@ Everything else needs a person's **Full update** (product sheet: Action column =
 | "eBay needs the item location country and a postal code or city…" | `itemLocationCountry` plus `itemPostalCode` or `itemLocation` on the main row. |
 | "eBay does not take Best Offer on a listing with variations" | `bestOffer: false` on the main row. |
 | "Nexus cannot send a video with a new eBay listing yet" | Clear `videoId` on the main row. |
-| "Ended on the channel. Set Active to relist it first." | A person relists it (Status Active in the sheet); eBay gives the relisted item a NEW Item ID. |
+| "Ended on the channel. Set Active to relist it first." | `relist-listing` (or a person: Status Active in the sheet, then Publish); eBay gives the relisted item a NEW Item ID. |
 | "A previous publication still needs a result (<id>)" | `publication-status` on that id; wait for the sweep. |
 | "This business has no eBay account with this id" | The account is another business's: use one of this business's own (`listing-coordinates` `accounts`). |
 | `unlink-channel-id`, then `publish-listing` | Allowed; say the effect plainly before asking. Unlinked rows are drafts again, so the publish CREATES A NEW eBay item with a new Item ID, while the old item stays live on eBay, no longer updated by Nexus (it can oversell) until it is ended there or linked again (`link-channel-id`). |
@@ -99,12 +99,11 @@ Everything else needs a person's **Full update** (product sheet: Action column =
 
 | Action | Where |
 |---|---|
-| End, relist (new Item ID) or delete an eBay listing | Product sheet: Status column (Ended, Active), Action column (Delete, on the main row); then Publish in the product studio. |
 | Full update of a live item | Action column = Full update on the main row, then Publish. |
-| Choose an eBay category, load its details | The product's eBay sheet in the product studio. |
+| Choose a category in the sheet's picker; load its details into Nexus for the sheet's cells and the review | The product's eBay sheet in the product studio (**Load eBay fields**). `ebay-categories` reads them but stores nothing. |
 | Set the eBay variation theme | The sheet's Variation theme column. |
 | Add a second listing (alias) | The product's eBay sheet. |
 | Mark a publication checked after its 12 tries | The publish run in Nexus (**Mark as checked**). |
 | Out-of-stock option, business policies, EU product-safety data | The seller, on eBay. |
 
-Claude can pause and resume a live listing: `close-listing` (quantity 0 held, only while the item's own out-of-stock control is on; the item and its number stay) and `reopen-listing` (sends the current stock). Nothing is ended or deleted from here.
+Claude can pause and resume a live listing: `close-listing` (quantity 0 held, only while the item's own out-of-stock control is on; the item and its number stay) and `reopen-listing` (sends the current stock). It can also end, relist and delete one, each with `confirmSku` (the family SKU the person typed) and always a person's approval: `end-listing` (the whole item, every variation; the Item ID is kept), `relist-listing` (an Ended item, under a NEW Item ID; eBay may charge an insertion fee) and `delete-listing` (Trading: ended, then Nexus forgets the Item ID; Inventory: withdrawn and this site's offers deleted; cannot be undone).
