@@ -35,6 +35,24 @@ export async function amazonLocale(code: string | null | undefined): Promise<str
   return languageTag((await marketLanguages('AMAZON', market))[0], market)
 }
 
+/** Amazon's North American markets: their English is US English. */
+const NORTH_AMERICA = new Set(['US', 'CA', 'MX', 'BR'])
+const CATALOGUE_AMAZON_REGION: Record<string, string> = Object.fromEntries(
+  MARKET_CATALOGUE.filter((m) => m.channel === 'AMAZON').map((m) => [m.code, m.region]),
+)
+
+/**
+ * W3 PR-A — the locale of the English copy of a market's product-type definitions (`CategorySchema` channel
+ * `AMAZON_EN`), or null when the market's own download is already English (UK, IE, US). EU markets read British
+ * English (Owner decision 2, 2026-10-05), North America US English. Whether the market is English comes from the same
+ * authority as its own download's locale (`amazonLocale`).
+ */
+export async function amazonEnglishLocale(code: string | null | undefined): Promise<string | null> {
+  const market = (code || 'US').toUpperCase()
+  if (/^en_/i.test(await amazonLocale(market))) return null
+  return NORTH_AMERICA.has(market) || CATALOGUE_AMAZON_REGION[market] === 'NA' ? languageTag('en', 'US') : languageTag('en', 'UK')
+}
+
 export function amazonMarketplaceId(code: string | null | undefined): string {
   if (!code) {
     return process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'

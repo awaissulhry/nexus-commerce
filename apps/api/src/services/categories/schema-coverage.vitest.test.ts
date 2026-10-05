@@ -135,7 +135,7 @@ describe('fillSchemaTargets — sequential, one failure never stops the run', ()
     )
     expect(results.map(r => `${r.target.productType}:${r.outcome}`)).toEqual(['COAT:failed', 'GLOVES:added', 'OUTERWEAR:refreshed', 'PANTS:refreshed', '177104:added', 'SUIT:skipped'])
     expect(results[0].error).toBe('Access to requested resource is denied')
-    expect(counts).toEqual({ AMAZON: { added: 1, refreshed: 2, failed: 1, skipped: 1 }, EBAY: { added: 1, refreshed: 0, failed: 0, skipped: 0 } })
+    expect(counts).toEqual({ AMAZON: { added: 1, refreshed: 2, failed: 1, skipped: 1, englishStored: 0, englishFailed: 0 }, EBAY: { added: 1, refreshed: 0, failed: 0, skipped: 0, englishStored: 0, englishFailed: 0 } })
     // Missing → the ordinary caching read (not forced); cached → the forced refresh.
     expect(getSchema).toHaveBeenCalledWith({ channel: 'AMAZON', marketplace: 'BE', productType: 'GLOVES' })
     expect(getSchema.mock.calls.every(c => c.length === 1)).toBe(true)
@@ -147,6 +147,37 @@ describe('fillSchemaTargets — sequential, one failure never stops the run', ()
     const { results } = await fillSchemaTargets([target('OUTERWEAR', 'cached'), target('COAT', 'missing')], { service: { getSchema, refreshSchema } as never, throttleMs: 0 })
     expect(results.map(r => r.outcome)).toEqual(['already', 'added'])
     expect(refreshSchema).not.toHaveBeenCalled(); expect(getSchema).toHaveBeenCalledTimes(1)
+  })
+
+  // W3 PR-A — Amazon's English copy: after every added or refreshed Amazon pair (the refresh itself is asked NOT to
+  // fetch it, so it is fetched and counted once), never for eBay, and a failed copy never fails the pair.
+  it('fetches the English copy after an added or refreshed Amazon pair and counts it, without failing the pair', async () => {
+    const getSchema = vi.fn(async () => ({})); const refreshSchema = vi.fn(async () => ({}))
+    const refreshEnglishCopy = vi.fn(async (q: { productType: string }) => q.productType === 'PANTS' ? 'failed' as const : 'stored' as const)
+    const { results, counts } = await fillSchemaTargets(
+      [target('COAT', 'missing'), target('PANTS', 'cached'), target('177104', 'missing', 'EBAY', 'IT')],
+      { service: { getSchema, refreshSchema, refreshEnglishCopy }, refreshCached: true, throttleMs: 0 },
+    )
+    expect(results.map(r => `${r.target.productType}:${r.outcome}:${r.english ?? '-'}`)).toEqual(['COAT:added:stored', 'PANTS:refreshed:failed', '177104:added:-'])
+    expect(refreshEnglishCopy.mock.calls).toEqual([
+      [{ channel: 'AMAZON', marketplace: 'BE', productType: 'COAT' }, { onlyIfMissing: false }],
+      [{ channel: 'AMAZON', marketplace: 'BE', productType: 'PANTS' }, { onlyIfMissing: false }],
+    ])
+    expect(refreshSchema.mock.calls).toEqual([[{ channel: 'AMAZON', marketplace: 'BE', productType: 'PANTS' }, { englishCopy: false }]])
+    expect(counts.AMAZON).toEqual({ added: 1, refreshed: 1, failed: 0, skipped: 0, englishStored: 1, englishFailed: 1 })
+  })
+
+  it('an `already` Amazon pair downloads a MISSING English copy only within the budget; a present copy costs none', async () => {
+    const getSchema = vi.fn(async () => ({})); const refreshSchema = vi.fn(async () => ({}))
+    const refreshEnglishCopy = vi.fn(async (q: { productType: string }) => q.productType === 'OUTERWEAR' ? 'present' as const : 'stored' as const)
+    const { results, counts } = await fillSchemaTargets(
+      [target('OUTERWEAR', 'cached'), target('PANTS', 'cached'), target('SUIT', 'stale'), target('COAT', 'cached')],
+      { service: { getSchema, refreshSchema, refreshEnglishCopy }, englishIfMissing: 2, throttleMs: 0 },
+    )
+    expect(results.map(r => `${r.target.productType}:${r.outcome}:${r.english ?? '-'}`)).toEqual(['OUTERWEAR:already:present', 'PANTS:already:stored', 'SUIT:already:stored', 'COAT:already:-'])
+    expect(refreshEnglishCopy.mock.calls.every(([, opts]) => opts?.onlyIfMissing === true)).toBe(true)
+    expect(getSchema).not.toHaveBeenCalled(); expect(refreshSchema).not.toHaveBeenCalled()
+    expect(counts.AMAZON).toMatchObject({ englishStored: 2, englishFailed: 0 })
   })
 })
 

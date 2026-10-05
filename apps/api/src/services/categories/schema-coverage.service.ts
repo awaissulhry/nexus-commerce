@@ -23,7 +23,7 @@
  */
 import type { PrismaClient } from '@prisma/client'
 import { categorySchemaMarket } from './category-schema-coordinate.js'
-import type { CategorySchemaService } from './schema-sync.service.js'
+import type { CategorySchemaService, EnglishCopyOutcome } from './schema-sync.service.js'
 import { BUNDLED_AMAZON_PRODUCT_TYPES } from '../listing-wizard/product-types.constants.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
@@ -212,8 +212,13 @@ export async function collectSchemaTargets(client: PrismaClient): Promise<Schema
 }
 
 export type FillOutcome = 'added' | 'refreshed' | 'already' | 'failed' | 'skipped'
-export interface FillResult { target: SchemaTarget; outcome: FillOutcome; error?: string }
-export interface FillCounts { added: number; refreshed: number; failed: number; skipped: number }
+/** `english` — W3 PR-A: what became of the pair's Amazon English copy, when one was asked for. */
+export interface FillResult { target: SchemaTarget; outcome: FillOutcome; error?: string; english?: EnglishCopyOutcome }
+/**
+ * `englishStored` / `englishFailed` — W3 PR-A: Amazon English copies downloaded and kept / not kept (a failed call, or
+ * a reply not in English). The nightly summary prints both: the production proof that Amazon answers in English.
+ */
+export interface FillCounts { added: number; refreshed: number; failed: number; skipped: number; englishStored: number; englishFailed: number }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
@@ -221,12 +226,18 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
  * Sequential, throttled. A missing pair is fetched through the ordinary cache path (`getSchema`, which stores it); a
  * cached or stale one is force-refreshed only when `refreshCached` is set, else reported `already`. One failure is
  * logged with its coordinate and the loop continues.
+ *
+ * W3 PR-A — Amazon's English copy (`refreshEnglishCopy`): fetched after every added or refreshed Amazon pair, and, for
+ * an `already` Amazon pair, only when it has none and `englishIfMissing` still allows a download (each one that reaches
+ * Amazon uses one). A failed English copy never fails the pair; it is counted in `englishFailed`.
  */
 export async function fillSchemaTargets(
   targets: readonly SchemaTarget[],
   deps: {
-    service: Pick<CategorySchemaService, 'getSchema' | 'refreshSchema'>
+    service: Pick<CategorySchemaService, 'getSchema' | 'refreshSchema'> & Partial<Pick<CategorySchemaService, 'refreshEnglishCopy'>>
     refreshCached?: boolean
+    /** How many English copies an `already` Amazon pair may download in this run (default none). */
+    englishIfMissing?: number
     skip?: (target: SchemaTarget) => boolean
     throttleMs?: number
     label?: string
@@ -235,17 +246,33 @@ export async function fillSchemaTargets(
   const results: FillResult[] = []
   const counts: Partial<Record<CoverageChannel, FillCounts>> = {}
   const throttleMs = deps.throttleMs ?? 300
+  let englishBudget = deps.englishIfMissing ?? 0
+  const english = async (query: { channel: CoverageChannel; marketplace: string; productType: string }, count: FillCounts, onlyIfMissing: boolean) => {
+    if (query.channel !== 'AMAZON' || !deps.service.refreshEnglishCopy) return undefined
+    const outcome = await deps.service.refreshEnglishCopy(query, { onlyIfMissing })
+    if (outcome === 'stored') count.englishStored++
+    if (outcome === 'failed') count.englishFailed++
+    return outcome
+  }
   for (const target of targets) {
-    const count = (counts[target.channel] ??= { added: 0, refreshed: 0, failed: 0, skipped: 0 })
+    const count = (counts[target.channel] ??= { added: 0, refreshed: 0, failed: 0, skipped: 0, englishStored: 0, englishFailed: 0 })
     if (deps.skip?.(target)) { count.skipped++; results.push({ target, outcome: 'skipped' }); continue }
     const adding = target.status === 'missing'
-    if (!adding && !deps.refreshCached) { results.push({ target, outcome: 'already' }); continue }
     const query = { channel: target.channel, marketplace: target.marketplace, productType: target.productType }
+    if (!adding && !deps.refreshCached) {
+      const outcome = englishBudget > 0 ? await english(query, count, true) : undefined
+      results.push({ target, outcome: 'already', ...(outcome ? { english: outcome } : {}) })
+      // Only a copy that reached Amazon uses the budget and the throttle.
+      if (outcome === 'stored' || outcome === 'failed') { englishBudget--; if (throttleMs > 0) await sleep(throttleMs) }
+      continue
+    }
     try {
       if (adding) await deps.service.getSchema(query)
-      else await deps.service.refreshSchema(query)
+      else await deps.service.refreshSchema(query, { englishCopy: false })
       if (adding) count.added++; else count.refreshed++
-      results.push({ target, outcome: adding ? 'added' : 'refreshed' })
+      if (target.channel === 'AMAZON' && deps.service.refreshEnglishCopy && throttleMs > 0) await sleep(throttleMs)
+      const outcome = await english(query, count, false)
+      results.push({ target, outcome: adding ? 'added' : 'refreshed', ...(outcome ? { english: outcome } : {}) })
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
       count.failed++
@@ -309,7 +336,7 @@ export async function schemaCoverageReport(client: PrismaClient, input: { channe
  */
 export async function downloadMissingSchemas(
   client: PrismaClient,
-  service: Pick<CategorySchemaService, 'getSchema' | 'refreshSchema'>,
+  service: Pick<CategorySchemaService, 'getSchema' | 'refreshSchema'> & Partial<Pick<CategorySchemaService, 'refreshEnglishCopy'>>,
   input: { channel?: unknown; market?: unknown; productTypes?: unknown },
 ) {
   const { channel, market } = requestScope(input)
@@ -324,7 +351,9 @@ export async function downloadMissingSchemas(
 
   const plan = planSchemaDownload(channel, await collectSchemaCoverage(client, { channel, market }), listed as string[] | undefined)
   if (plan.notInUse.length) throw new CoverageRequestError('Only rule sets in use in this market can be downloaded', { notInUse: plan.notInUse })
-  const { results } = await fillSchemaTargets(plan.targets, { service, label: 'categories/schema/download' })
+  // W3 PR-A — an `already` Amazon pair without its English copy downloads it, within what the cap leaves.
+  const englishIfMissing = Math.max(0, MAX_DOWNLOADS_PER_REQUEST - plan.targets.filter(t => t.status === 'missing').length)
+  const { results } = await fillSchemaTargets(plan.targets, { service, englishIfMissing, label: 'categories/schema/download' })
   return {
     channel, market, remaining: plan.remaining,
     results: results.map(r => ({ productType: r.target.productType, outcome: r.outcome, ...(r.error ? { error: r.error } : {}) })),

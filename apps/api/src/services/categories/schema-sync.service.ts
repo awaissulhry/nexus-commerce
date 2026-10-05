@@ -1,4 +1,4 @@
-import { categorySchemaMarket } from './category-schema-coordinate.js'
+import { AMAZON_ENGLISH_CHANNEL, categorySchemaMarket } from './category-schema-coordinate.js'
 import { languageTag } from '../pim/market-languages.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 // CategorySchemaService — fetch + cache live category schemas from
@@ -23,7 +23,7 @@ import type { PrismaClient } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { toInventoryCondition } from '../ebay-condition.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
-import { amazonMarketplaceId, amazonLocale } from './marketplace-ids.js'
+import { amazonMarketplaceId, amazonLocale, amazonEnglishLocale } from './marketplace-ids.js'
 import { extractEnumLabels } from './enum-labels.js'
 import { downloadAmazonSchema, schemaFingerprint } from './schema-document.js'
 import { optionModeFrom } from '@nexus/shared/attributes'
@@ -31,6 +31,8 @@ import type { ChannelSpec } from '../pim/channel-specs/types.js'
 import { diffChannelSpecs, READINESS_CHANGES } from '../pim/channel-specs/spec-diff.js'
 import { ebaySpecFromCache } from '../pim/channel-specs/ebay.js'
 import { etsyTaxonomySpec } from '../pim/channel-specs/etsy.js'
+import { isEnglishLocale } from '../pim/channel-specs/amazon-english.js'
+import { logger } from '../../utils/logger.js'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -76,6 +78,13 @@ interface AmazonProductTypeMeta {
   }>
 }
 
+/**
+ * W3 PR-A — what became of one English copy request (`refreshEnglishCopy`): `stored` (downloaded in English and kept),
+ * `present` (onlyIfMissing, and a copy exists — no call), `notNeeded` (the market's own download is English, or not
+ * Amazon — no call), `failed` (logged; the previous copy and the market row are untouched).
+ */
+export type EnglishCopyOutcome = 'stored' | 'present' | 'notNeeded' | 'failed'
+
 export class CategorySchemaService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -87,8 +96,11 @@ export class CategorySchemaService {
    * marketplace, productType). On cache miss or expiry, hits the
    * provider and caches the result. Throws if the provider isn't
    * configured (e.g. local dev without SP-API creds).
+   *
+   * W3 PR-A — a FORCED Amazon refresh also refreshes the English copy (`refreshEnglishCopy`) unless `englishCopy` is
+   * false (the coverage loop asks for it itself, to count the outcome). A plain cache miss does not fetch it.
    */
-  async getSchema(query: SchemaQuery, opts: { force?: boolean } = {}) {
+  async getSchema(query: SchemaQuery, opts: { force?: boolean; englishCopy?: boolean } = {}) {
     // LX.F2 R-LX-20 — one authority for the stored coordinate (eBay's `EBAY_` prefix, Etsy's GLOBAL,
     // the upper-casing) instead of this expression's own copy of all three rules.
     query = { ...query, marketplace: categorySchemaMarket(query.channel, query.marketplace ?? (query.channel === 'EBAY' ? 'IT' : null)) }
@@ -98,7 +110,9 @@ export class CategorySchemaService {
     }
 
     if (query.channel === 'AMAZON') {
-      return this.fetchAndCacheAmazon(query)
+      const stored = await this.fetchAndCacheAmazon(query)
+      if (opts.force && opts.englishCopy !== false) await this.refreshEnglishCopy(query)
+      return stored
     }
     if (query.channel === 'EBAY') {
       return this.fetchAndCacheEbay(query)
@@ -107,9 +121,85 @@ export class CategorySchemaService {
     throw new Error(`Unsupported channel: ${query.channel}`)
   }
 
-  /** Force-refresh — bypasses cache, always hits the provider. */
-  async refreshSchema(query: SchemaQuery) {
-    return this.getSchema(query, { force: true })
+  /** Force-refresh — bypasses cache, always hits the provider. Amazon: with the English copy unless `englishCopy: false`. */
+  async refreshSchema(query: SchemaQuery, opts: { englishCopy?: boolean } = {}) {
+    return this.getSchema(query, { ...opts, force: true })
+  }
+
+  /**
+   * W3 PR-A (docs/product-sheet-consistency/wave3/plan-W3-amazon.md) — Amazon gives option names and help text only
+   * in the language of the download, so a non-English market (IT, DE, …) has no English names. This downloads the
+   * SAME marketplace and product type a second time with an English locale (`amazonEnglishLocale`: en_GB for EU,
+   * en_US for North America) through the same SP-API client, and keeps it as a second `CategorySchema` row under the
+   * pseudo-channel `AMAZON_EN` — display names only; every rule stays on the `AMAZON` row.
+   *
+   *  - stored only when Amazon's reply says its locale is English (Amazon documents the locale as presentation only;
+   *    a reply in the market's language is counted `failed`, not stored);
+   *  - a failure is logged and returns `failed`: the previous English copy and the market row are never touched;
+   *  - after a store, older English copies of the coordinate are deleted (the newest one is all a reader needs);
+   *  - `onlyIfMissing` answers `present` without a call when a copy exists.
+   * Never throws.
+   */
+  async refreshEnglishCopy(query: SchemaQuery, opts: { onlyIfMissing?: boolean } = {}): Promise<EnglishCopyOutcome> {
+    if (query.channel !== 'AMAZON') return 'notNeeded'
+    const marketplace = categorySchemaMarket('AMAZON', query.marketplace)
+    const coordinate = { channel: AMAZON_ENGLISH_CHANNEL, marketplace, productType: query.productType }
+    try {
+      const locale = await amazonEnglishLocale(marketplace)
+      if (!locale) return 'notNeeded'
+      if (opts.onlyIfMissing) {
+        const existing = await this.prisma.categorySchema.findFirst({ where: { ...coordinate, isActive: true }, select: { id: true } })
+        if (existing) return 'present'
+      }
+      const sp = await this.amazonClient(query)
+      const marketplaceId = query.marketplaceId ?? amazonMarketplaceId(marketplace)
+      const envelope = (await sp.callAPI({
+        operation: 'getDefinitionsProductType',
+        endpoint: 'productTypeDefinitions',
+        version: '2020-09-01',
+        path: { productType: query.productType },
+        query: { marketplaceIds: [marketplaceId], requirements: 'LISTING', requirementsEnforced: 'ENFORCED', locale },
+      })) as AmazonProductTypeMeta
+      if (!envelope?.schema?.link?.resource) throw new Error(`Amazon getDefinitionsProductType returned no schema link for ${query.productType}`)
+      if (!isEnglishLocale(envelope.locale)) {
+        logger.warn('schema-sync: Amazon did not answer in English; no English copy stored', { ...coordinate, asked: locale, answered: envelope.locale ?? null })
+        return 'failed'
+      }
+      const schemaDefinition = await downloadAmazonSchema(envelope.schema)
+      if (envelope.propertyGroups) schemaDefinition.__propertyGroups = envelope.propertyGroups
+      schemaDefinition.__schemaProvenance = {
+        scope: 'marketplace', marketplaceId,
+        providerVersion: envelope.productTypeVersion?.version ?? null,
+        checksum: envelope.schema.checksum,
+        requirements: envelope.requirements ?? 'LISTING',
+        locale: envelope.locale,
+      }
+      const schemaVersion = schemaFingerprint(schemaDefinition)
+      const data = { schemaDefinition: schemaDefinition as any, isActive: true, fetchedAt: new Date(), expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS) }
+      const stored = await this.prisma.categorySchema.upsert({
+        where: { channel_marketplace_productType_schemaVersion: workspaceKey({ ...coordinate, schemaVersion }) },
+        create: { ...coordinate, schemaVersion, ...data },
+        update: data,
+      })
+      // Older copies only: a concurrent refresh that stored a newer one keeps it.
+      await this.prisma.categorySchema.deleteMany({ where: { ...coordinate, id: { not: stored.id }, fetchedAt: { lt: stored.fetchedAt } } })
+      return 'stored'
+    } catch (error) {
+      logger.warn('schema-sync: English copy refresh failed; the previous copy is kept', {
+        ...coordinate, error: error instanceof Error ? error.message : String(error),
+      })
+      return 'failed'
+    }
+  }
+
+  /** The SP-API client of a market download: the named account's, else the configured one. */
+  private async amazonClient(query: SchemaQuery) {
+    if (!query.accountId && !(await this.amazon.isConfigured())) {
+      throw new Error(
+        'Connect or verify your Amazon Seller account in Settings → Channels.',
+      )
+    }
+    return query.accountId ? await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(query.accountId) : await (this.amazon as any).getClient()
   }
 
   // VL.1 — in-memory wire→English enum-label cache per (marketplace, productType).
@@ -258,13 +348,7 @@ export class CategorySchemaService {
   }
 
   private async fetchAndCacheAmazon(query: SchemaQuery) {
-    if (!query.accountId && !(await this.amazon.isConfigured())) {
-      throw new Error(
-        'Connect or verify your Amazon Seller account in Settings → Channels.',
-      )
-    }
-
-    const sp = query.accountId ? await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(query.accountId) : await (this.amazon as any).getClient()
+    const sp = await this.amazonClient(query)
     const marketplaceId = query.marketplaceId ?? amazonMarketplaceId(query.marketplace)
 
     const envelope = (await sp.callAPI({
