@@ -133,7 +133,7 @@ beforeAll(async () => {
   app.addHook('preHandler', (_request, _reply, done) => withWorkspace(business, done))
   await app.register(advertisingRoutes, { prefix: '/api' })
   await app.ready()
-  for (const id of ['add-c', 'neg-c', 'undo-c', 'cp-c', 'cp2-c']) await seedCampaign(id)
+  for (const id of ['add-c', 'neg-c', 'undo-c', 'cp-c', 'cp2-c', 'pre-c']) await seedCampaign(id)
   await inside(() => database.client.amazonAdsConnection.create({
     data: { profileId: 'P-IT-TEST', marketplace: 'IT', region: 'EU', mode: 'production', isActive: true, writesEnabledAt: new Date() } as never,
   }))
@@ -263,5 +263,37 @@ describe('the Budget Manager control plane, while the account is halted', () => 
     const { manual, rows } = await drain()
     expect(manual).toEqual([false, false, false])
     expect(rows.every((r) => r.syncStatus === 'SKIPPED')).toBe(true)
+  })
+})
+
+describe('the screen pre-check (CM-10, #365) agrees with dispatch, while the account is halted', () => {
+  const patch = async (url: string, payload: object) => {
+    gate.seen = []
+    const res = await app.inject({ method: 'PATCH', url: `/api${url}`, payload })
+    return { status: res.statusCode, body: res.json() as Record<string, unknown>, manual: gate.seen.map((c) => c.manual === true) }
+  }
+
+  it('his bid, budget, ad-group bid and product-ad edits pass the pre-check AND dispatch', async () => {
+    const bid = await patch('/advertising/ad-targets/pre-c-t1', { bidCents: 2, applyImmediately: true })
+    expect(bid.status).toBe(200)
+    expect(bid.body).toMatchObject({ ok: true, error: null })
+    expect(bid.manual).toEqual([true]) // the pre-check asked the gate as a person
+    const budget = await patch('/advertising/campaigns/pre-c', { dailyBudget: 22, applyImmediately: true })
+    expect([budget.body.ok, budget.manual]).toEqual([true, [true]])
+    const group = await patch('/advertising/ad-groups/pre-c-g', { defaultBidCents: 30, applyImmediately: true })
+    expect([group.body.ok, group.manual]).toEqual([true, [true]])
+    const { rows, manual } = await drain()
+    expect(manual).toEqual([true, true, true])
+    expect(rows.every((r) => r.syncStatus === 'SUCCESS')).toBe(true)
+  })
+
+  it('without the person mark the same pre-check refuses at once, in the gate\'s words, and writes nothing', async () => {
+    gate.seen = []
+    const r = await inside(() => updateAdTargetWithSync({ adTargetId: 'pre-c-t2', patch: { bidCents: 40 }, actor: 'user:owner-test', askGate: true }))
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('Not sent to Amazon: ads automation is stopped (halted: test)')
+    expect(gate.seen.map((c) => c.manual === true)).toEqual([false])
+    const t2 = await inside(() => database.client.adTarget.findUniqueOrThrow({ where: { id: 'pre-c-t2' }, select: { bidCents: true } }))
+    expect(t2.bidCents).toBe(60)
   })
 })

@@ -24,7 +24,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegion } from '../services/advertising/ads-api-client.js'
+import { testConnection, adsMode, listPortfolios, createPortfolio, v3ErrorText, type AdsRegion } from '../services/advertising/ads-api-client.js'
 // D2b — the conditions in the Budget tab's own words. Static, and from a module with no imports:
 // a dynamic import of the budget-grid service resolved mid-evaluation through a circular chain and
 // threw "Cannot access 'conditionsTextOf' before initialization" on prod.
@@ -146,6 +146,17 @@ function actorFromHeaders(headers: Record<string, unknown>): AdsActor {
   const raw = headers['x-actor-id']
   if (typeof raw === 'string' && raw.length > 0) return `user:${raw}` as AdsActor
   return 'user:anonymous' as AdsActor
+}
+
+/**
+ * CM-8 — a person's add, answered by what reached Amazon: 200 created or already there; 202 saved in Nexus only (the
+ * campaign is not on Amazon yet); 403 refused by the write gate; 502 Amazon refused it or gave no id. `error` carries
+ * the reason for every answer that is not 200, so a screen that reads only `error` (or only the status) is told too.
+ */
+function personAddReply<T extends { ok?: boolean; outcome?: string; reason?: string | null }>(reply: { status: (code: number) => unknown }, r: T): T & { error?: string } {
+  if (r.ok) return r
+  reply.status(r.outcome === 'local' ? 202 : r.outcome === 'refused' ? 403 : 502)
+  return { ...r, error: r.reason ?? 'It did not reach Amazon.' }
 }
 
 const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -4486,8 +4497,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
     if (!result.ok) {
+      // CM-8 — Amazon's own words for the screen, beside the raw answer.
+      const said = v3ErrorText(result.rawResponse)
+      const why = (result.rawResponse as { error?: unknown } | null)?.error
       return reply.code(502).send({
         error: 'amazon_rejected',
+        reason: said ? `Amazon refused it: ${said}` : typeof why === 'string' ? why : 'Amazon did not take it, and gave no reason.',
         details: result.rawResponse,
       })
     }
@@ -4722,6 +4737,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         id: t.id, text: t.expressionValue, kind: t.kind, matchType: t.expressionType, bidCents: t.bidCents, status: t.status,
         isNegative: t.isNegative, negativeLevel: t.negativeLevel, createdAt: t.createdAt,
+        // CM-25 — null = Amazon has never taken it; the Negatives tab says so instead of showing it live.
+        externalTargetId: t.externalTargetId,
         campaignId: t.adGroup.campaign.id, campaignName: t.adGroup.campaign.name, externalCampaignId: t.adGroup.campaign.externalCampaignId,
         marketplace: t.adGroup.campaign.marketplace, adGroupId: t.adGroup.id, externalAdGroupId: t.adGroup.externalAdGroupId, adGroupName: t.adGroup.name,
         impressions: impr, clicks: clk, spendCents: spendC, salesCents: salesC, orders: ord,
@@ -4756,8 +4773,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: b.externalAdGroupId }, select: { id: true } })
     if (!ag) { reply.status(404); return { error: 'ad_group_not_found_for_externalAdGroupId' } }
     const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    // 1e — a person's own add (isPersonCreate).
-    try { return await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, manual: true } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
+    try { return personAddReply(reply, await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
@@ -6517,26 +6534,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createCampaignLocal } = await import('../services/advertising/ads-create.service.js')
     try { return await createCampaignLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
+  // CM-8 — these four are a person's adds from the campaign screens: `requireAmazon` (nothing kept unless Amazon took
+  // it), answered by personAddReply — 200 only when Amazon holds it.
   fastify.post('/advertising/adgroups/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.campaignId || !b?.name || b?.defaultBidEur == null) { reply.status(400); return { error: 'campaignId, name, defaultBidEur required' } }
     const { createAdGroupLocal } = await import('../services/advertising/ads-create.service.js')
-    // 1e — a person's own add from a screen (isPersonCreate).
-    try { return await createAdGroupLocal({ ...b, manual: true } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createAdGroupLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/keywords/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.keywordText || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, keywordText, matchType, bidEur required' } }
     const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    // 1e — a person's own add from a screen (isPersonCreate).
-    try { return await createKeywordLocal({ ...b, manual: true } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createKeywordLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/product-ads/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || (!b?.sku && !b?.asin)) { reply.status(400); return { error: 'adGroupId + sku|asin required' } }
     const { createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
-    // 1e — a person's own add from a screen (isPersonCreate).
-    try { return await createProductAdLocal({ ...b, manual: true } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 / 1e — a person's add (personAddReply; isPersonCreate passes a halt).
+    try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // ── AME.14: autonomy & guardrails control center ────────────────────
   // Single pane: global kill state, rule posture (enabled / dry-run / off),
@@ -6888,8 +6907,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
-    // 1e — a person's own add from a screen (isPersonCreate).
-    try { return await createTargetLocal({ ...b, manual: true } as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
+    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/negative-targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
@@ -10113,6 +10132,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // CM-10 — a refusal is answered now, not put back in silence later
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10194,6 +10214,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10230,6 +10251,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10282,6 +10304,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // CM-10
     })
     if (!result.ok && result.error === 'not_found') { reply.code(404); return result }
     return result

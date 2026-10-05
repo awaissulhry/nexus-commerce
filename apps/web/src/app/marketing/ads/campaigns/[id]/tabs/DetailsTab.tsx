@@ -31,6 +31,7 @@ import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
 import { changedPlacementLanes } from '../../../_shared/placementLanes'
 import { assignablePortfolios, isLocalOnlyPortfolio, type PortfolioOption } from '../../../_shared/portfolioPicker'
+import { adsWrite } from '../../../_shared/adsWrite'
 import '../../campaigns-ds.css'
 
 interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string; targetAcos?: number | null }
@@ -172,11 +173,14 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
   }, [])
   const goTo = (id: string) => { refs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }); setActive(id) }
 
+  // CM-11 — what this save's writes answered: the server's reasons for what did not change, and how many are on their
+  // way to Amazon. A 200 with `ok:false` (Sponsored Brands/Display, a bound, the write gate) is a refusal, not a save.
+  const outcome = useRef<{ refused: string[]; queued: number }>({ refused: [], queued: 0 })
   async function patch(path: string, body: Record<string, unknown>): Promise<boolean> {
-    try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${campaignId}${path}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      return r.ok
-    } catch { return false }
+    const r = await adsWrite(`/api/advertising/campaigns/${campaignId}${path}`, body)
+    if (!r.ok) outcome.current.refused.push(r.reason ?? 'Not changed.')
+    else if (r.outcome === 'queued') outcome.current.queued++
+    return r.ok
   }
 
   async function save() {
@@ -192,6 +196,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
       if (minCents != null && maxCents != null && minCents > maxCents) return fail('Min Bid is above Max Bid.')
     }
     setSaving(true)
+    outcome.current = { refused: [], queued: 0 }
     // CM-12 — one call after the other. `/placements`, `/automation` and `/guardrails` each read the campaign's
     // settings and write them back; sent together, the last one to finish put back what the others had just saved.
     const calls: Array<() => Promise<boolean>> = []
@@ -229,12 +234,16 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     for (const call of calls) results.push(await call())
     setSaving(false)
     const ok = results.length === 0 || results.every(Boolean)
+    const { refused, queued } = outcome.current
     // A custom bid rule has nowhere to be stored yet, so choosing it changes nothing — said, not toasted as saved.
     const customNote = 'A custom bid rule cannot be saved yet, so the bid algorithm was not changed.'
     setToast(customNotSaved && !results.length ? customNote
-      : `${ok ? 'Campaign saved' : 'Some changes could not be saved (write-gate / non-live)'}${customNotSaved ? `. ${customNote}` : ''}`)
-    setTimeout(() => setToast(null), 3200)
-    if (ok && results.length) onSaved?.()
+      : `${ok
+        ? `Campaign saved${queued ? ' — Amazon gets the change in a few minutes' : ''}`
+        : `${refused.length === results.length ? 'Not saved' : 'Partly saved'} — ${refused.join(' · ')}`}${customNotSaved ? `. ${customNote}` : ''}`)
+    setTimeout(() => setToast(null), ok ? 3200 : 9000)
+    // A refused field was never written: reloading shows its old value again, beside what did save.
+    if (results.length) onSaved?.()
   }
 
   const reg = (id: string) => (el: HTMLElement | null) => { refs.current[id] = el }

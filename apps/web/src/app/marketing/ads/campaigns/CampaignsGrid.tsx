@@ -29,6 +29,7 @@ import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
+import { readWrite, reasonText } from '../_shared/adsWrite'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
 
@@ -204,21 +205,18 @@ const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new
  * two, and `entity_orphaned` (AX2.0) is a refusal we must not paint as success.
  */
 type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
+// CM-26 — the one reader (_shared/adsWrite.ts): `error` is the server's own reason, in words.
 async function patchWrite(url: string, body: Record<string, unknown>): Promise<{ outcome: WriteOutcome; error?: string }> {
   try {
     const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string | null; outboundQueueId?: string | null }
-    if (!r.ok || j?.ok === false) {
-      return { outcome: j?.error === 'entity_orphaned' ? 'refused' : 'error', error: j?.error ?? `HTTP ${r.status}` }
-    }
-    return { outcome: j?.outboundQueueId ? 'queued' : 'applied' }
+    const w = readWrite(r.status, await r.json().catch(() => ({})))
+    return w.ok ? { outcome: w.outcome } : { outcome: w.outcome, error: w.reason ?? undefined }
   } catch (e) { return { outcome: 'error', error: (e as Error).message } }
 }
-/** Back-compat boolean wrapper: a refusal is NOT a success. */
-async function patchJson(url: string, body: Record<string, unknown>): Promise<boolean> {
-  const r = await patchWrite(url, body)
-  return r.outcome === 'applied' || r.outcome === 'queued'
-}
+/** A refusal is NOT a success. */
+const wrote = (r: { outcome: WriteOutcome }) => r.outcome === 'applied' || r.outcome === 'queued'
+/** CM-26 — a failure toast names what was not changed and the server's reason (it used to guess "write-gate / non-live"). */
+const notChanged = (name: string, r: { error?: string }) => `Not changed · ${name} — ${reasonText(r.error)}`
 const AMZ_PLACEMENT: Record<string, string> = { TOS: 'PLACEMENT_TOP', PP: 'PLACEMENT_PRODUCT_PAGE', ROS: 'PLACEMENT_REST_OF_SEARCH' }
 
 const STRAT_OPTIONS: Array<{ value: string; label: string }> = [
@@ -1215,9 +1213,9 @@ export function CampaignsGrid() {
     if (targets.length === 0) return
     setApplying(true)
     const base = getBackendUrl()
-    let ok = 0; let fail = 0; const patched: Record<string, Partial<Camp>> = {}
+    let ok = 0; let fail = 0; const patched: Record<string, Partial<Camp>> = {}; const reasons: string[] = []
     for (const c of targets) {
-      const calls: Array<Promise<boolean>> = []
+      const calls: Array<Promise<{ outcome: WriteOutcome; error?: string }>> = []
       const opt: Partial<Camp> = {}
       // 1) status / budget / strategy — gated PATCH (pushes to Amazon for live markets)
       if (ch.status || ch.budget || ch.strategy) {
@@ -1230,31 +1228,35 @@ export function CampaignsGrid() {
           const next = nextDailyBudget(num(c.dailyBudget), ch.budget.mode, ch.budget.value).value
           body.dailyBudget = next; opt.dailyBudget = String(next)
         }
-        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}`, body))
+        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}`, body))
       }
       // 2) bid automation / target ACoS — local automation settings (dynamicBidding)
       if (ch.automation != null || ch.acos !== undefined) {
         const body: Record<string, unknown> = {}
         if (ch.automation != null) { body.bidAutomation = ch.automation; opt.bidAutomation = ch.automation }
         if (ch.acos !== undefined) { body.targetAcos = ch.acos; opt.targetAcos = ch.acos }
-        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
+        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
       }
       // 3) bid multiplier — placement bidding. CM-18: only the chosen placement is sent (`partial`); the server keeps
       // the other two as they are now, not as this list's copy had them.
       if (ch.multiplier) {
         const cur = c.placements ?? { tos: null, pdp: null, ros: null }
-        calls.push(patchJson(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }], partial: true }))
+        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }], partial: true }))
         const npl = { tos: cur.tos, pdp: cur.pdp, ros: cur.ros }
         const slot = ch.multiplier.placement === 'TOS' ? 'tos' : ch.multiplier.placement === 'PP' ? 'pdp' : 'ros'
         npl[slot] = ch.multiplier.value
         opt.placements = npl
       }
       const results = await Promise.all(calls)
-      if (results.length > 0 && results.every(Boolean)) { ok++; patched[c.id] = opt } else fail++
+      if (results.length > 0 && results.every(wrote)) { ok++; patched[c.id] = opt } else {
+        fail++
+        const bad = results.find((r) => !wrote(r))
+        if (bad) reasons.push(`${c.name}: ${reasonText(bad.error)}`)
+      }
     }
     setRows((rs) => rs.map((x) => (patched[x.id] ? { ...x, ...patched[x.id] } : x)))
     setApplying(false); setSel(new Set())
-    setApplyMsg(`Applied to ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate / non-live / not yet deployed)` : ''}`)
+    setApplyMsg(`Applied to ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} not changed — ${reasons[0] ?? 'no reason given'}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
     setTimeout(() => setApplyMsg(''), 6000)
   }
   const applyAdjustBudget = () => {
@@ -1268,17 +1270,14 @@ export function CampaignsGrid() {
   const applyBulkStatus = async (status: 'ENABLED' | 'PAUSED' | 'ARCHIVED') => {
     setApplying(true)
     const targets = rows.filter((c) => sel.has(c.id))
-    let ok = 0; let fail = 0; const done = new Set<string>()
+    let ok = 0; let fail = 0; const done = new Set<string>(); const reasons: string[] = []
     for (const c of targets) {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, applyImmediately: true, reason: `Ad Manager bulk ${status}` }) })
-        const j = await r.json().catch(() => ({}))
-        if (r.ok && j?.ok !== false) { ok++; done.add(c.id) } else fail++
-      } catch { fail++ }
+      const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { status, applyImmediately: true, reason: `Ad Manager bulk ${status}` })
+      if (wrote(r)) { ok++; done.add(c.id) } else { fail++; reasons.push(`${c.name}: ${reasonText(r.error)}`) }
     }
     setRows((rs) => rs.map((x) => (done.has(x.id) ? { ...x, status } : x)))
     setApplying(false); setBulkConfirm(null); setSel(new Set())
-    setApplyMsg(`${status === 'ENABLED' ? 'Enabled' : status === 'PAUSED' ? 'Paused' : 'Archived'} ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate or non-live)` : ''}`)
+    setApplyMsg(`${status === 'ENABLED' ? 'Enabled' : status === 'PAUSED' ? 'Paused' : 'Archived'} ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} not changed — ${reasons[0]}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
     setTimeout(() => setApplyMsg(''), 5000)
   }
   // P2b — load portfolios (real names) for the bulk-assign picker.
@@ -1297,31 +1296,28 @@ export function CampaignsGrid() {
     // CM-21 — a portfolio belongs to one market. The menu only offers one when the selection shares a market.
     if (portfolioId != null && sharedMarket(targets.map((c) => c.marketplace)).mixed) return
     setApplying(true)
-    let ok = 0; let fail = 0; const done = new Set<string>()
+    let ok = 0; let fail = 0; const done = new Set<string>(); const reasons: string[] = []
     for (const c of targets) {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portfolioId, applyImmediately: true, reason: 'Ad Manager bulk portfolio assign' }) })
-        const j = await r.json().catch(() => ({}))
-        if (r.ok && j?.ok !== false) { ok++; done.add(c.id) } else fail++
-      } catch { fail++ }
+      const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { portfolioId, applyImmediately: true, reason: 'Ad Manager bulk portfolio assign' })
+      if (wrote(r)) { ok++; done.add(c.id) } else { fail++; reasons.push(`${c.name}: ${reasonText(r.error)}`) }
     }
     setRows((rs) => rs.map((x) => (done.has(x.id) ? { ...x, portfolioId: portfolioId ?? null } : x)))
     setApplying(false); setSel(new Set())
-    setApplyMsg(`Assigned ${ok} campaign${ok !== 1 ? 's' : ''} to ${name}${fail ? ` · ${fail} failed (write-gate or non-live)` : ''}`)
+    setApplyMsg(`Assigned ${ok} campaign${ok !== 1 ? 's' : ''} to ${name}${fail ? ` · ${fail} not changed — ${reasons[0]}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
     setTimeout(() => setApplyMsg(''), 5000)
   }
   // P3 — single-campaign writes (operator actions), same gated endpoints as bulk.
   const toast = (m: string) => { setApplyMsg(m); setTimeout(() => setApplyMsg(''), 5000) }
   const setCampaignStatus = async (c: Camp, status: 'ENABLED' | 'PAUSED' | 'ARCHIVED') => {
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { status, applyImmediately: true, reason: `Ad Manager status ${status}` })
-    if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, status } : x)))
-    toast(ok ? `${STATUS_PILL[status]?.label ?? status} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { status, applyImmediately: true, reason: `Ad Manager status ${status}` })
+    if (wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, status } : x)))
+    toast(wrote(r) ? `${STATUS_PILL[status]?.label ?? status} · ${c.name}` : notChanged(c.name, r))
   }
   const setCampaignStrategy = async (c: Camp, biddingStrategy: string) => {
     setStrategyModal(null)
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { biddingStrategy, applyImmediately: true, reason: 'Ad Manager bidding strategy' })
-    if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, biddingStrategy } : x)))
-    toast(ok ? `Bidding strategy → ${STRAT_LABEL[biddingStrategy] ?? biddingStrategy} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { biddingStrategy, applyImmediately: true, reason: 'Ad Manager bidding strategy' })
+    if (wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, biddingStrategy } : x)))
+    toast(wrote(r) ? `Bidding strategy → ${STRAT_LABEL[biddingStrategy] ?? biddingStrategy} · ${c.name}` : notChanged(c.name, r))
   }
   /**
    * U13 — the Bid Automation column's switch, which until 2026-08-20 was a painted pill on every
@@ -1337,21 +1333,21 @@ export function CampaignsGrid() {
   const setCampaignBidAutomation = async (c: Camp, bidAutomation: boolean) => {
     setBusyAuto((b) => new Set(b).add(c.id))
     setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAutomation } : x)))
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAutomation })
-    if (!ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAutomation: !bidAutomation } : x)))
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAutomation })
+    if (!wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAutomation: !bidAutomation } : x)))
     setBusyAuto((b) => { const n = new Set(b); n.delete(c.id); return n })
-    toast(ok
+    toast(wrote(r)
       ? `Bid automation ${bidAutomation ? 'on' : 'off'} · ${c.name}`
-      : `Failed · ${c.name} — bid automation unchanged`)
+      : `${notChanged(c.name, r)} (bid automation unchanged)`)
   }
   const setCampaignPlacements = async (c: Camp, pl: { tos: number | null; pdp: number | null; ros: number | null }) => {
     setMultiplierModal(null)
     // CM-18 — only the lanes changed in the dialog; a lane left alone is not re-sent from this row's copy.
     const adjustments = changedPlacementLanes(c.placements ?? {}, pl)
     if (adjustments.length === 0) { toast(`Bid multiplier unchanged · ${c.name}`); return }
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments, partial: true })
-    if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, placements: pl } : x)))
-    toast(ok ? `Bid multiplier updated · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/placements`, { adjustments, partial: true })
+    if (wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, placements: pl } : x)))
+    toast(wrote(r) ? `Bid multiplier updated · ${c.name}` : notChanged(c.name, r))
   }
   /**
    * C1 — the bid algorithm PERSISTS now, in `dynamicBidding.bidAlgorithm` through the same
@@ -1367,11 +1363,11 @@ export function CampaignsGrid() {
     setBidRuleMenu(null)
     const prev = c.bidAlgorithm ?? null
     setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm } : x)))
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAlgorithm })
-    if (!ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm: prev } : x)))
-    toast(ok
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAlgorithm })
+    if (!wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm: prev } : x)))
+    toast(wrote(r)
       ? `Bid algorithm → ${BID_ALGOS.find((a) => a.value === bidAlgorithm)?.label ?? bidAlgorithm} · ${c.name} (stored locally — Amazon has no such field)`
-      : `Failed · ${c.name} — bid algorithm unchanged`)
+      : `${notChanged(c.name, r)} (bid algorithm unchanged)`)
   }
   /**
    * ADX G2 — persists to Campaign.minBidCents / maxBidCents, which ads-write-gate.ts
@@ -1432,9 +1428,9 @@ export function CampaignsGrid() {
     setEditPop(null)
     const t = readTargetAcosPercent(pctStr); if (!t.ok) return
     const frac = t.fraction
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { targetAcos: frac })
-    if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, targetAcos: frac } : x)))
-    toast(ok ? (frac == null ? `Target ACoS unset · ${c.name}` : `Target ACoS → ${(frac * 100).toFixed(2)}% · ${c.name}`) : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { targetAcos: frac })
+    if (wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, targetAcos: frac } : x)))
+    toast(wrote(r) ? (frac == null ? `Target ACoS unset · ${c.name}` : `Target ACoS → ${(frac * 100).toFixed(2)}% · ${c.name}`) : notChanged(c.name, r))
   }
   // PR 1c (CM-7) — the value as typed, to the cent. It was rounded to whole euros (€12.34 → €12.00)
   // and an empty box wrote €1.00; the popover now keeps Apply off for those.
@@ -1442,9 +1438,9 @@ export function CampaignsGrid() {
     setEditPop(null)
     const b = readDailyBudget(valStr); if (!b.ok) return
     const v = b.value
-    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { dailyBudget: v, applyImmediately: true, reason: 'Ad Manager daily budget' })
-    if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, dailyBudget: String(v) } : x)))
-    toast(ok ? `Daily budget → ${eur(v)} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { dailyBudget: v, applyImmediately: true, reason: 'Ad Manager daily budget' })
+    if (wrote(r)) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, dailyBudget: String(v) } : x)))
+    toast(wrote(r) ? `Daily budget → ${eur(v)} · ${c.name}` : notChanged(c.name, r))
   }
   /**
    * 🔴 C4 — the trailing `?? 'LEGACY_FOR_SALES'` is gone. It made a campaign with NO bidding
@@ -1489,7 +1485,7 @@ export function CampaignsGrid() {
 
   const applyAll = async () => {
     setApplying(true)
-    let ok = 0; let fail = 0
+    let ok = 0; let fail = 0; const reasons: string[] = []
     const applied: Record<string, { biddingStrategy?: string; dailyBudget?: string }> = {}
     for (const d of diffs) {
       const e = edits[d.c.id]
@@ -1498,11 +1494,8 @@ export function CampaignsGrid() {
       if (e.biddingStrategy && e.biddingStrategy !== origStrat) body.biddingStrategy = e.biddingStrategy
       const bud = e.dailyBudget != null ? readDailyBudget(e.dailyBudget) : null
       if (bud?.ok && bud.value !== num(d.c.dailyBudget)) body.dailyBudget = bud.value
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${d.c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        const j = await r.json().catch(() => ({}))
-        if (r.ok && j?.ok !== false) { ok++; applied[d.c.id] = e } else fail++
-      } catch { fail++ }
+      const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${d.c.id}`, body)
+      if (wrote(r)) { ok++; applied[d.c.id] = e } else { fail++; reasons.push(`${d.c.name}: ${reasonText(r.error)}`) }
     }
     // optimistic local update for the rows that succeeded
     setRows((rs) => rs.map((x) => {
@@ -1511,7 +1504,7 @@ export function CampaignsGrid() {
       return { ...x, biddingStrategy: a.biddingStrategy ?? x.biddingStrategy, dailyBudget: bud?.ok ? String(bud.value) : x.dailyBudget }
     }))
     setApplying(false); setEdits({}); setShowApply(false)
-    setApplyMsg(`Applied ${ok} change${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} failed (write-gate or non-live market)` : ''}`)
+    setApplyMsg(`Applied ${ok} change${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} not changed — ${reasons[0]}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
     setTimeout(() => setApplyMsg(''), 5000)
   }
 

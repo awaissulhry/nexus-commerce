@@ -14,6 +14,7 @@ import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitiv
 import { Modal, Tabs } from '@/design-system/components'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsAdd, addSummary } from '../../../../../_shared/adsWrite'
 import '../../../../campaigns-ds.css'
 
 interface Prod { id: string; sku?: string | null; asin?: string | null; name?: string | null; imageUrl?: string | null; amazon?: boolean }
@@ -85,13 +86,19 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
   const submit = async () => {
     if (!added.length || submitting) return
     setSubmitting(true); setMsg(null)
-    const outcomes = await Promise.allSettled(added.map((p) =>
-      fetch(`${getBackendUrl()}/api/advertising/product-ads/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId, sku: p.sku ?? null, asin: p.asin ?? null, productId: p.id && !p.sku && !p.asin ? null : p.id }) })
-        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`) })))
-    const ok = outcomes.filter((r) => r.status === 'fulfilled').length
+    // CM-8 — "added" means Amazon holds the ad: each answer says so, or says why not (the write gate's or Amazon's words).
+    const results = await Promise.all(added.map((p) =>
+      adsAdd('/api/advertising/product-ads/create', { adGroupId, sku: p.sku ?? null, asin: p.asin ?? null, productId: p.id && !p.sku && !p.asin ? null : p.id })))
+    const sum = addSummary(results, 'product ad')
     setSubmitting(false)
-    if (ok === added.length) { onAdded?.(); onClose() }
-    else { setMsg(`${ok}/${added.length} added — some failed (write-gate / non-live).`); if (ok) onAdded?.() }
+    if (sum.allAdded) { onAdded?.(); onClose() }
+    else {
+      // What Amazon took leaves the list; what it did not stays, to fix or send again.
+      const sent = added.filter((_, i) => results[i]!.added || results[i]!.savedOnly)
+      setAdded((prev) => prev.filter((x) => !sent.includes(x)))
+      setMsg(sum.text)
+      if (sum.anyAdded) onAdded?.()
+    }
   }
 
   // Product name + primary-code(copy) · secondary line, shared by both panes. The search

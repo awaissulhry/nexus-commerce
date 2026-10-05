@@ -16,12 +16,12 @@ import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS } from '../.
 import { pickMetricFilters } from '../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
-import { getBackendUrl } from '@/lib/backend-url'
 import { ColumnNA, naCell } from '../../../_shared/RuleColumnCells'
 import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
-import { Listbox } from '@/design-system/components'
+import { Listbox, useToast } from '@/design-system/components'
+import { adsWriteMany, eachSummary, type EachResult } from '../../../_shared/adsWrite'
 
 interface AdGroupRow {
   id: string
@@ -51,6 +51,13 @@ const cvrOf = (r: AdGroupRow) => { const c = num(r.clicks); return c ? (num(r.or
 export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: CampaignDetailData | null; campaignId: string; onRefresh?: () => void }) {
   const rows = useMemo<AdGroupRow[]>(() => (campaign?.adGroups as AdGroupRow[] | undefined) ?? [], [campaign])
   const [showCreate, setShowCreate] = useState(false)
+  // CM-11 — every write's answer is read and shown: what changed, and the server's reason for what did not. A refused
+  // value was never written, so the refresh below shows the old one again.
+  const { toast } = useToast()
+  const report = useMemo(() => (res: EachResult) => {
+    const s = eachSummary(res, 'ad group')
+    toast(s.text, s.tone, { duration: res.failed.length ? 9000 : 4000 })
+  }, [toast])
 
   // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
   const tot = (vr: typeof rows) => vr.reduce(
@@ -116,16 +123,17 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
       { key: 'defaultBid', initial: (r) => (num(r.defaultBidCents) / 100).toFixed(2), render: (v, set) => <div className="h10-edit-money"><span className="cur">€</span><input inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} aria-label="Default bid" /></div> },
     ],
     onApply: async (edits) => {
-      await Promise.all(edits.map((e) => {
+      const res = await adsWriteMany(edits.map((e) => {
         const body: Record<string, unknown> = { applyImmediately: false, reason: 'Edit Groups inline' }
         if (e.values.__first != null) body.name = e.values.__first
         if (e.values.status != null) body.status = e.values.status
         if (e.values.defaultBid != null) body.defaultBidCents = Math.round(parseFloat(e.values.defaultBid) * 100)
-        return fetch(`${getBackendUrl()}/api/advertising/ad-groups/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return { id: e.id, path: `/api/advertising/ad-groups/${e.id}`, body }
       }))
       onRefresh?.()
+      report(res)
     },
-  }), [onRefresh])
+  }), [onRefresh, report])
 
   // Bulk actions (H10): shown when ad groups are selected. Enable/Archive/Pause patch each
   // selected group's status; Adjust Bid opens a modal to set a new default bid for all.
@@ -134,7 +142,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
-    try { await bulkPatch('ad-groups', ids, body); clear(); onRefresh?.() } finally { setBulkBusy(false) }
+    try { const res = await bulkPatch('ad-groups', ids, body); clear(); onRefresh?.(); report(res) } finally { setBulkBusy(false) }
   }
 
   return (

@@ -13,7 +13,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search, ChevronDown, MoreVertical, RefreshCw, Settings, Download, Filter, Info, ChevronRight, Pencil, Pause, Play, Copy, Archive } from 'lucide-react'
 import { Button, FilterChip, TokenChip, ToolbarButton, Toggle } from '@/design-system/primitives'
-import { DataGrid, Listbox, Menu, Pagination, type Column } from '@/design-system/components'
+import { DataGrid, Listbox, Menu, Pagination, ToastProvider, useToast, type Column } from '@/design-system/components'
+import { adsWrite, eachSummary, type WriteResult } from '../../ads/_shared/adsWrite'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
@@ -121,7 +122,23 @@ const metricValue = (x: Row, metric: string): number | null => {
   }
 }
 
+/** CM-11 — every write here reports its answer (a toast); ads routes get no DS ToastProvider from the shell. */
 export function CampaignsTable({ initial }: { initial: Base[] }) {
+  return <ToastProvider><CampaignsTableView initial={initial} /></ToastProvider>
+}
+
+function CampaignsTableView({ initial }: { initial: Base[] }) {
+  const { toast } = useToast()
+  /** CM-11 — what one or many writes answered, with the server's reason for what did not change. */
+  const report = (results: Array<{ id: string; r: WriteResult }>, noun: string) => {
+    if (!results.length) return
+    const s = eachSummary({
+      done: results.filter((x) => x.r.ok).map((x) => x.id),
+      queued: results.filter((x) => x.r.outcome === 'queued').length,
+      failed: results.filter((x) => !x.r.ok).map((x) => ({ id: x.id, reason: x.r.reason ?? 'Not changed.' })),
+    }, noun)
+    toast(s.text, s.tone, { duration: s.tone === 'success' ? 4000 : 9000 })
+  }
   const [raw, setRaw] = useState<Base[]>(initial)
   const [metrics, setMetrics] = useState<Record<string, V1>>({})
   const [tab, setTab] = useState('SP')
@@ -185,7 +202,7 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   }, [days])
   useEffect(() => { for (const id of expanded) { if (!groups[`${id}:${days}`]) void fetchGroups(id) } }, [expanded, days, groups, fetchGroups])
   const toggleExpand = (id: string) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const patchAdGroup = async (g: AdGroup, parentId: string) => { setBusy(g.id); try { await fetch(`${getBackendUrl()}/api/advertising/ad-groups/${g.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: g.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }) }); await fetchGroups(parentId) } finally { setBusy(null) } }
+  const patchAdGroup = async (g: AdGroup, parentId: string) => { setBusy(g.id); try { const r = await adsWrite(`/api/advertising/ad-groups/${g.id}`, { status: g.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); await fetchGroups(parentId); report([{ id: g.id, r }], 'ad group') } finally { setBusy(null) } }
   useEffect(() => { if (!menu) return; const close = () => setMenu(null); window.addEventListener('scroll', close, true); window.addEventListener('resize', close); return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) } }, [menu])
 
   const rows: Row[] = useMemo(() => raw.map((b) => {
@@ -285,16 +302,17 @@ export function CampaignsTable({ initial }: { initial: Base[] }) {
   const lastRow = Math.min(curPage * pageSize, filtered.length)
 
   const toggleSort = (k: string) => { if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); else { setSortKey(k); setSortDir('desc') } }
-  const patch = (id: string, body: Record<string, unknown>) => fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  const toggleActive = async (b: Base) => { setBusy(b.id); try { await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' }); void refetch() } finally { setBusy(null) } }
+  // CM-11 — the answer is read: a refusal (200 with ok:false, or a 4xx) is reported with its reason, never as done.
+  const patch = async (id: string, body: Record<string, unknown>) => ({ id, r: await adsWrite(`/api/advertising/campaigns/${id}`, body) })
+  const toggleActive = async (b: Base) => { setBusy(b.id); try { report([await patch(b.id, { status: b.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' })], 'campaign'); void refetch() } finally { setBusy(null) } }
   // PR 1c (CM-7) — the Ad Manager's rule (`ads/_shared/budgetInput.ts`): to the cent, and an empty,
   // non-number or below-€1.00 box sends nothing. It used to send €0.00 or €0.50; now the box stays
   // open with the reason beside it, and Esc closes it.
-  const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const read = readDailyBudget(v); if (!read.ok) return; setBusy(b.id); try { await patch(b.id, { dailyBudget: read.value }); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
-  const bulkStatus = async (s: string) => { await Promise.all([...sel].map((id) => patch(id, { status: s }))); setSel(new Set()); void refetch() }
-  const bulkArchive = async () => { if (typeof window !== 'undefined' && !window.confirm(`Archive ${sel.size} campaign${sel.size === 1 ? '' : 's'}? They will stop delivering.`)) return; await Promise.all([...sel].map((id) => patch(id, { status: 'ARCHIVED' }))); setSel(new Set()); void refetch() }
+  const saveBudget = async (b: Base) => { const v = edit[b.id]; if (v == null) return; const read = readDailyBudget(v); if (!read.ok) return; setBusy(b.id); try { report([await patch(b.id, { dailyBudget: read.value })], 'campaign'); setEdit((e) => { const x = { ...e }; delete x[b.id]; return x }); void refetch() } finally { setBusy(null) } }
+  const bulkStatus = async (s: string) => { report(await Promise.all([...sel].map((id) => patch(id, { status: s }))), 'campaign'); setSel(new Set()); void refetch() }
+  const bulkArchive = async () => { if (typeof window !== 'undefined' && !window.confirm(`Archive ${sel.size} campaign${sel.size === 1 ? '' : 's'}? They will stop delivering.`)) return; report(await Promise.all([...sel].map((id) => patch(id, { status: 'ARCHIVED' }))), 'campaign'); setSel(new Set()); void refetch() }
   const openMenu = (e: { currentTarget: HTMLElement; stopPropagation: () => void }, id: string) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ id, x: Math.min(r.left, window.innerWidth - 232), y: r.bottom + 4 }) }
-  const archive = async (b: Base) => { setMenu(null); if (typeof window !== 'undefined' && !window.confirm(`Archive “${b.name}”? It will stop delivering — find it again with the Archived filter.`)) return; setBusy(b.id); try { await patch(b.id, { status: 'ARCHIVED' }); void refetch() } finally { setBusy(null) } }
+  const archive = async (b: Base) => { setMenu(null); if (typeof window !== 'undefined' && !window.confirm(`Archive “${b.name}”? It will stop delivering — find it again with the Archived filter.`)) return; setBusy(b.id); try { report([await patch(b.id, { status: 'ARCHIVED' })], 'campaign'); void refetch() } finally { setBusy(null) } }
 
   const statusBadge = (b: Base) => {
     if (b.status === 'PAUSED') return <span className="az-badge paused">Paused</span>

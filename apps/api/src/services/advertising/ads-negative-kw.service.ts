@@ -280,6 +280,17 @@ const itemErrors = (raw: unknown, key: string): unknown[] => {
   return Array.isArray(list) ? list : []
 }
 
+/**
+ * CM-25 — a standing row Nexus held without Amazon's id was just sent: Amazon's id goes on THAT row, so the next add
+ * finds it as a negative Amazon holds (and no caller that records its own row makes a second one). Returns the id.
+ */
+async function healNegativeRow(rowId: string | null, externalId: string | null): Promise<string | null> {
+  if (rowId && externalId) {
+    await prisma.adTarget.updateMany({ where: { id: rowId, externalTargetId: null }, data: { externalTargetId: externalId } })
+  }
+  return externalId
+}
+
 // ── The pipeline ─────────────────────────────────────────────────────
 
 /** What the pipeline did, before a caller decides what to record. */
@@ -309,12 +320,18 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, scope, text, matchType } = job
   const invalid = keywordTextRefusal(text, matchType) ?? await protectedRefusal(text, matchType, campaign)
   if (invalid) return { kind: 'refused', refusal: invalid }
+  const pushable = !!campaign.externalCampaignId && (scope !== 'AD_GROUP' || !!adGroup?.externalAdGroupId)
+  let heal: string | null = null
   if (!job.pushing) {
     const standing = await prisma.adTarget.findFirst({
       where: standingNegativeWhere({ scope, adGroupId: adGroup?.id, campaignId: campaign.id, keywordText: text, matchType }),
+      // CM-25 — the row Amazon holds first: it is the one that answers "already there".
+      orderBy: { externalTargetId: { sort: 'asc', nulls: 'last' } },
       select: { id: true, externalTargetId: true },
     })
-    if (standing) return { kind: 'exists', adTargetId: standing.id, externalTargetId: standing.externalTargetId }
+    // CM-25 — a row without Amazon's id is not a negative Amazon holds: when it can be sent, it is (and given the id).
+    if (standing && (standing.externalTargetId || !pushable)) return { kind: 'exists', adTargetId: standing.id, externalTargetId: standing.externalTargetId }
+    heal = standing?.id ?? null
   }
   const converting = await convertingRefusal(text, job.protectConverting)
   if (converting) return { kind: 'refused', refusal: converting }
@@ -343,10 +360,12 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
       })
       // A sandbox stub id is not an Amazon id.
       if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
-      const errors = itemErrors(r.rawResponse, 'negativeKeywords')
+      let errors = itemErrors(r.rawResponse, 'negativeKeywords')
+      // CM-25 — when sending a row Nexus held, a refusal may mean Amazon already has it: ask before failing.
       const externalId = r.externalId
-        ?? (errors.length ? null : await readBackNegativeId(ctx, campaign.externalCampaignId, adGroup!.externalAdGroupId!, text, matchType))
-      return { kind: 'sent', mode: 'live', externalId, rawResponse: r.rawResponse, errors }
+        ?? (errors.length && !heal ? null : await readBackNegativeId(ctx, campaign.externalCampaignId, adGroup!.externalAdGroupId!, text, matchType))
+      if (externalId) errors = []
+      return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, externalId), rawResponse: r.rawResponse, errors }
     }
 
     const body = { campaignNegativeKeywords: [{ campaignId: campaign.externalCampaignId, keywordText: text, matchType, state: 'ENABLED' }] }
@@ -365,7 +384,8 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
     // `keywordId`. Measured 2026-08-14: three `protezioni` negatives were created at Amazon while reading only
     // `keywordId` returned null for all three, so the local rows had no external id (NEG.4's split-brain state).
     const ok = block?.success?.[0]
-    return { kind: 'sent', mode: 'live', externalId: ok?.keywordId ?? ok?.negativeKeywordId ?? ok?.campaignNegativeKeywordId ?? null, rawResponse: response, errors: itemErrors(response, 'campaignNegativeKeywords') }
+    const externalId = ok?.keywordId ?? ok?.negativeKeywordId ?? ok?.campaignNegativeKeywordId ?? null
+    return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, externalId), rawResponse: response, errors: itemErrors(response, 'campaignNegativeKeywords') }
   } catch (error) {
     return { kind: 'threw', error }
   }
@@ -379,13 +399,18 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   if (!isAsin(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_an_asin', reason: `"${asin}" is not an ASIN (B0 and 8 letters or digits): a negative product target names one product.` } }
   const invalid = await protectedRefusal(asin, null, campaign)
   if (invalid) return { kind: 'refused', refusal: invalid }
+  let heal: string | null = null
   if (!job.pushing) {
     // H.5 — a negative product target is identified by ad group + ASIN.
     const standing = await prisma.adTarget.findFirst({
       where: { adGroupId: adGroup.id, kind: 'PRODUCT', isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: asin, mode: 'insensitive' } },
+      orderBy: { externalTargetId: { sort: 'asc', nulls: 'last' } },
       select: { id: true, externalTargetId: true },
     })
-    if (standing) return { kind: 'exists', adTargetId: standing.id, externalTargetId: standing.externalTargetId }
+    // CM-25 — as for a keyword: a row without Amazon's id is sent, when it can be.
+    const pushable = !!campaign.externalCampaignId && !!adGroup.externalAdGroupId
+    if (standing && (standing.externalTargetId || !pushable)) return { kind: 'exists', adTargetId: standing.id, externalTargetId: standing.externalTargetId }
+    heal = standing?.id ?? null
   }
   if (!campaign.externalCampaignId || !adGroup.externalAdGroupId) return { kind: 'draft' }
   const gate = await checkAdsWriteGate({
@@ -398,7 +423,7 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   try {
     const r = await sendNegativeProductTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled' })
     if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
-    return { kind: 'sent', mode: 'live', externalId: r.externalId, rawResponse: r.rawResponse, errors: itemErrors(r.rawResponse, 'negativeTargetingClauses') }
+    return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, r.externalId), rawResponse: r.rawResponse, errors: itemErrors(r.rawResponse, 'negativeTargetingClauses') }
   } catch (error) {
     return { kind: 'threw', error }
   }
@@ -425,7 +450,8 @@ export async function mirrorNegativeRow(m: {
   const where: Prisma.AdTargetWhereInput = m.kind === 'KEYWORD'
     ? standingNegativeWhere({ scope: m.level, adGroupId: m.adGroupId, campaignId: m.campaignId ?? '', keywordText: m.expressionValue, matchType: toNegativeMatch(m.expressionType) })
     : { adGroupId: m.adGroupId, kind: 'PRODUCT', isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: m.expressionValue, mode: 'insensitive' } }
-  const existing = await prisma.adTarget.findFirst({ where, select: { id: true, externalTargetId: true } })
+  // CM-25 — the row Amazon holds first, so a second id-less row is never given the same Amazon id.
+  const existing = await prisma.adTarget.findFirst({ where, orderBy: { externalTargetId: { sort: 'asc', nulls: 'last' } }, select: { id: true, externalTargetId: true } })
   if (existing) {
     if (!existing.externalTargetId && m.externalTargetId) {
       await prisma.adTarget.update({ where: { id: existing.id }, data: { externalTargetId: m.externalTargetId } })
