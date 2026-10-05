@@ -10547,6 +10547,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, connection: conn }
   })
 
+  // ── Ads wave 4a: read an account's data, or stop (isActive only) ─────
+  // "Read this market's data" on Settings → Advertising. Writes `isActive` and nothing
+  // else: mode, writesEnabledAt and the campaign allowlist stay as they are, so a reading
+  // account cannot spend. Stopping is refused while writes are on. The why is in
+  // ads-read-switch.service.ts.
+  fastify.post('/advertising/connection/set-active', async (request, reply) => {
+    const { setAdsProfileReading } = await import('../services/advertising/ads-read-switch.service.js')
+    const result = await setAdsProfileReading(
+      (request.body ?? {}) as { profileId?: unknown; isActive?: unknown },
+      actorFromHeaders(request.headers as Record<string, unknown>),
+    )
+    // `=== false`, not `!`: apps/api compiles without strictNullChecks, and only equality narrows the union.
+    if (result.ok === false) return reply.code(result.status).send({ error: result.error, message: result.message })
+    return result
+  })
+
   // ── APS.5b — saved product sets ───────────────────────────────────────
   //
   // A named, reusable product selection, scoped to channel + marketplace.

@@ -414,6 +414,9 @@ export const ENTRIES: Entry[] = [
   P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/rank-release/enabled-orphans'),
   P(F.adsCampaignsManage, (m, p) => !isRead(m) && /^\/api\/advertising\/rank-release\/enabled-orphans\/[^/]+\/release$/.test(p)),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
+  // Ads wave 4a — which Amazon Ads accounts Nexus reads is part of connecting the account (ads.connect, as the
+  // /api/amazon-ads/auth sign-in): named on its own so it never falls through to ads.campaigns.manage below.
+  P(F.adsConnect, (m, p) => !isRead(m) && p === '/api/advertising/connection/set-active'),
   P(F.adsAutomationManage, has('/autopilot')),
   // R16 — a person's per-business engine switch (the Control Room lever drawer): ads.automation.manage, named on its own
   // so no reorder of the broader rules below can hand it a weaker permission.

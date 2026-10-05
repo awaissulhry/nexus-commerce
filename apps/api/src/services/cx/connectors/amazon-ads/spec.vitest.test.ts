@@ -147,9 +147,10 @@ describe('discoverScopes — the account\'s real reach', () => {
     const [scope] = await amazonAdsSpec.discoverScopes!(handle())
     expect(scope.label).toBe('XAVIA · IT')
     expect(scope.metadata).toMatchObject({ marketplace: 'IT', marketplaceStringId: 'MP_IT', accountId: 'ENTITY1', currencyCode: 'EUR' })
-    // Discovery measures PRESENCE at the channel. Whether we write to a profile is the
-    // operator's mode/writes decision and lives in the write gate — never inferred here.
-    expect(scope.isActive).toBe(true)
+    // Ads wave 4d — discovery says nothing about whether Nexus READS or SPENDS in a profile:
+    // those are the operator's decisions (the row's isActive / mode / writesEnabledAt). Saying
+    // `true` here made the heartbeat rewrite every profile "active" every 15 minutes.
+    expect(scope.isActive).toBeUndefined()
   })
 
   it('returns nothing rather than throwing when every region refuses', async () => {

@@ -2,15 +2,19 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  BarChart3, CheckCircle2, AlertCircle, Loader2, Shield,
+  BarChart3, CheckCircle2, AlertCircle, Loader2,
   Trash2, RefreshCw, Zap, Lock, Rocket, Undo2, ListChecks,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
 import Link from '@/lib/workspaces/Link'
-import { Banner } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Banner, useActionConfirm } from '@/design-system/components'
+import { Button, Pill } from '@/design-system/primitives'
 import { accountDisplayName } from '@/design-system/lib'
+import { commandKeyFor, sendCommand } from '@/lib/command-key'
+import {
+  ADS_ACCOUNT_STATE_LABEL, adsAccountStateOf, adsAccountStateTone, canOfferPromote, nextStepText, readActionFor, readConfirmImpact,
+} from './adsReadState'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 
@@ -29,26 +33,14 @@ interface AdsConnection {
   lastError: string | null
 }
 
-function StatusBadge({ mode, writesEnabledAt }: { mode: string; writesEnabledAt: string | null }) {
-  if (mode === 'production' && writesEnabledAt) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-        <Zap className="h-3 w-3" /> Live + writes enabled
-      </span>
-    )
-  }
-  if (mode === 'production') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-        <Shield className="h-3 w-3" /> Live (read-only)
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-      Sandbox
-    </span>
-  )
+/**
+ * Ads wave 4a — one state per account, from the fields every ads job reads (adsReadState.ts): "Live · writes on",
+ * "Reading only" or "Not read". It replaced a badge that called a reading account "Sandbox" and a production account
+ * without writes "Live (read-only)"; a row's mode is shown beside it as a plain fact.
+ */
+function AccountStatePill({ conn }: { conn: AdsConnection }) {
+  const state = adsAccountStateOf(conn)
+  return <Pill tone={adsAccountStateTone(state)} size="sm">{ADS_ACCOUNT_STATE_LABEL[state]}</Pill>
 }
 
 export default function AdvertisingSettingsPage() {
@@ -61,6 +53,9 @@ export default function AdvertisingSettingsPage() {
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null) // MM — profileId being promoted/allowlisted
+  // Ads wave 4a — the reading switch: one confirmation, then one keyed command per press.
+  const readConfirm = useActionConfirm()
+  const [readNotice, setReadNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
 
   const fetchConnections = useCallback(async () => {
     setLoading(true)
@@ -162,6 +157,34 @@ export default function AdvertisingSettingsPage() {
     } finally { setBusyAction(null) }
   }
 
+  // Ads wave 4a — "Read this market's data" / "Stop reading": sets only whether Nexus reads the account. Mode, writes
+  // and the campaign allowlist stay as they are, so reading never turns into spending (the confirmation says so).
+  const handleSetReading = async (conn: AdsConnection, action: 'read' | 'stop') => {
+    if (!(await readConfirm.ask(readConfirmImpact(conn, action)))) return
+    setBusyAction(conn.profileId)
+    setReadNotice(null)
+    try {
+      const { response, body } = await sendCommand<{ message?: string; error?: string }>(
+        commandKeyFor(`ads-read:${conn.profileId}`),
+        `${getBackendUrl()}/api/advertising/connection/set-active`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: conn.profileId, isActive: action === 'read' }) },
+      )
+      if (!response.ok) {
+        setReadNotice({ tone: 'danger', text: body?.message ?? body?.error ?? `Could not change reading (${response.status}).` })
+      } else {
+        setReadNotice({
+          tone: 'success',
+          text: action === 'read'
+            ? `Nexus now reads ${conn.marketplace}. Its data arrives with the next sync runs. Writes stay off.`
+            : `Nexus stopped reading ${conn.marketplace}. Writes stay off.`,
+        })
+      }
+      await fetchConnections()
+    } catch {
+      setReadNotice({ tone: 'danger', text: 'No answer from the server. Press again: the same press is never applied twice.' })
+    } finally { setBusyAction(null) }
+  }
+
   // MM.2 — allowlist every campaign in a marketplace in one shot (vs per-campaign).
   const handleBulkAllowlist = async (profileId: string, marketplace: string, enabled: boolean) => {
     if (enabled && !confirm(`Allowlist ALL ${marketplace} campaigns for live writes? Combined with the connection being live, the rank engine + manual edits can then change their bids/budgets on Amazon.`)) return
@@ -204,12 +227,17 @@ export default function AdvertisingSettingsPage() {
         </div>
       )}
 
+      {readNotice && (
+        <Banner tone={readNotice.tone} onDismiss={() => setReadNotice(null)}>{readNotice.text}</Banner>
+      )}
+      {readConfirm.element}
+
       {/* Existing connections */}
       {loading ? (
         <Card><div className="py-8 text-center text-tertiary text-sm flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div></Card>
       ) : connections.length > 0 ? (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider">Active Connections</h2>
+          <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider">Amazon Ads accounts</h2>
           {connections.map((conn) => (
             <Card key={conn.id}>
               <div className="flex items-start justify-between gap-4">
@@ -218,11 +246,12 @@ export default function AdvertisingSettingsPage() {
                     <span className="font-medium text-primary text-sm truncate">
                       {accountDisplayName({ channel: 'AMAZON_ADS', label: conn.accountLabel ?? '' })}
                     </span>
-                    <StatusBadge mode={conn.mode} writesEnabledAt={conn.writesEnabledAt} />
+                    <AccountStatePill conn={conn} />
                   </div>
                   <div className="text-xs text-tertiary space-x-3">
                     <span>Region: {conn.region}</span>
                     <span>Marketplace: {conn.marketplace}</span>
+                    <span>Mode: {conn.mode}</span>
                   </div>
                   {conn.lastError && (
                     <div className="flex items-center gap-1 text-xs text-danger-strong">
@@ -236,14 +265,8 @@ export default function AdvertisingSettingsPage() {
                       {testResult.message}
                     </div>
                   )}
-                  {/* MM.1 — make the 3-step go-live path explicit */}
-                  <div className="text-xs text-tertiary">
-                    {conn.mode !== 'production'
-                      ? 'Next: Promote to production →'
-                      : !conn.writesEnabledAt
-                        ? 'Next: Enable writes →'
-                        : 'Live · then allowlist this market’s campaigns so the engine can change their bids'}
-                  </div>
+                  {/* MM.1 + ads wave 4a — what is true now and the next step: read, then (only to spend) promote, enable writes */}
+                  <div className="text-xs text-tertiary">{nextStepText(conn)}</div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
                   <button
@@ -254,8 +277,20 @@ export default function AdvertisingSettingsPage() {
                     {testing === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     Test
                   </button>
-                  {/* MM.1 — promote sandbox → production (precondition for Enable writes), or demote back */}
-                  {conn.mode !== 'production' ? (
+                  {/* Ads wave 4a — read this account's data, or stop (never while writes are on) */}
+                  {readActionFor(conn) === 'read' && (
+                    <Button variant="primary" size="xs" disabled={busyAction === conn.profileId} onClick={() => handleSetReading(conn, 'read')}>
+                      Read this market’s data
+                    </Button>
+                  )}
+                  {readActionFor(conn) === 'stop' && (
+                    <Button variant="secondary" size="xs" disabled={busyAction === conn.profileId} onClick={() => handleSetReading(conn, 'stop')}>
+                      Stop reading
+                    </Button>
+                  )}
+                  {/* MM.1 — promote sandbox → production (precondition for Enable writes), or demote back.
+                      Ads wave 4a: offered once the account is read — read first, then (only to spend) promote. */}
+                  {conn.mode !== 'production' ? (canOfferPromote(conn) && (
                     <button
                       onClick={() => handleSetMode(conn.profileId, conn.marketplace, 'production')}
                       disabled={busyAction === conn.profileId}
@@ -263,7 +298,7 @@ export default function AdvertisingSettingsPage() {
                     >
                       {busyAction === conn.profileId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />} Promote to production
                     </button>
-                  ) : (
+                  )) : (
                     <button
                       onClick={() => handleSetMode(conn.profileId, conn.marketplace, 'sandbox')}
                       disabled={busyAction === conn.profileId}

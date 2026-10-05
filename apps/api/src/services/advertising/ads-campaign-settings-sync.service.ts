@@ -172,8 +172,10 @@ async function recordCampaignDrift(
 export async function syncCampaignSettingsFromAmazon(
   opts?: { profileId?: string },
 ): Promise<{ profiles: number; campaigns: number; updated: number; racedOut: number; placementsFilled: number; archived: number; driftFound: number; sampleShape?: unknown; errors: string[] }> {
+  // Ads wave 4a — the sweep reads the accounts Nexus reads (isActive), like every other read job. It used to read every
+  // row, so an account recorded "Not read" (the reconcile creates new ones inactive) was still called nightly.
   const conns = await prisma.amazonAdsConnection.findMany({
-    where: opts?.profileId ? { profileId: opts.profileId } : {},
+    where: opts?.profileId ? { profileId: opts.profileId } : { isActive: true },
     select: { profileId: true, region: true, marketplace: true },
   })
   let campaigns = 0, updated = 0, racedOut = 0, placementsFilled = 0, archived = 0, driftFound = 0

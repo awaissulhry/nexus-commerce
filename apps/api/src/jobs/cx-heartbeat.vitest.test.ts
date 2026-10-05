@@ -328,13 +328,33 @@ describe('runHeartbeatFor — ok', () => {
     expect(scopeUpserts[0]).toMatchObject({
       where: { connectionId_kind_externalId: { connectionId: row.id, kind: 'marketplace', externalId: 'A1F83G8C2ARO7P' } },
       create: { connectionId: row.id, kind: 'marketplace', externalId: 'A1F83G8C2ARO7P', label: 'UK', region: null, isActive: true },
-      update: { label: 'UK', region: null, isActive: true },
+      update: { label: 'UK', region: null },
     })
+    // Ads wave 4d — a scope whose connector did not measure `isActive` keeps the stored value on update.
+    expect((scopeUpserts[0] as { update: Record<string, unknown> }).update).not.toHaveProperty('isActive')
 
     discoverScopes.mockRejectedValueOnce(new Error('participations 500'))
     const r2 = await runHeartbeatFor(seedRow())
     expect(r2.ok).toBe(true)
     expect(scopeUpserts).toHaveLength(2)
+  })
+
+  it('writes isActive on update only when discovery measured it (ads wave 4d)', async () => {
+    fakeSpec.discoverScopes = discoverScopes
+    registerChannel(fakeSpec)
+    heartbeat.mockResolvedValue({ ok: true, latencyMs: 1 })
+    discoverScopes.mockResolvedValueOnce([
+      // Measured (Amazon SP-API participation): written either way.
+      { kind: 'marketplace', externalId: 'MEASURED_OFF', label: 'Off', isActive: false },
+      // Not measured (an Amazon Ads profile): the operator's stored value stays.
+      { kind: 'profile', externalId: 'NOT_MEASURED', label: 'Ads · UK' },
+    ])
+    await runHeartbeatFor(seedRow())
+    const [measured, unmeasured] = scopeUpserts as Array<{ create: Record<string, unknown>; update: Record<string, unknown> }>
+    expect(measured.update.isActive).toBe(false)
+    expect(measured.create.isActive).toBe(false)
+    expect(unmeasured.update).not.toHaveProperty('isActive')
+    expect(unmeasured.create.isActive).toBe(true)
   })
 })
 
