@@ -150,6 +150,8 @@ export interface SheetColumn {
   optionLabels?: Record<string, string>
   /** W3-4 — other accepted spellings per code (the market's name when the label is English); never shown. */
   optionAliases?: Record<string, string[]>
+  /** W3-3 — names this column was shown under before (a dictionary field's content-language label); a header paste still lands by them. Never shown. */
+  formerNames?: string[]
   /** `strict` = the channel accepts only the list (an off-list value WARNS, never blocks). */
   mode?: 'strict' | 'open'
   /** Which coordinates require this field. Empty = required by none. */
@@ -544,6 +546,7 @@ interface Draft {
   options?: string[]
   optionLabels?: Record<string, string>
   optionAliases?: Record<string, string[]>
+  formerNames?: string[]
   /** `true` while every contributor with options closes the list. */
   allStrict: boolean
   hasOptions: boolean
@@ -684,6 +687,9 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       storage,
       options: field.options && field.options.length > 0 ? field.options : undefined,
       optionLabels: field.optionLabels,
+      // W3-3 — a dictionary field's English names keep its content-language names as accepted spellings.
+      optionAliases: field.optionAliases,
+      formerNames: field.formerNames,
       declaredScope: field.scope,
       familyRules: field.familyRules,
       validation: field.validation,
@@ -845,6 +851,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       options,
       optionLabels: d.optionLabels,
       ...(options && d.optionAliases ? { optionAliases: d.optionAliases } : {}),
+      ...(d.formerNames?.length ? { formerNames: d.formerNames } : {}),
       mode: options ? (d.allStrict ? 'strict' : 'open') : undefined,
       requiredBy: d.requiredBy,
       maxLength: d.cap.maxLength,
