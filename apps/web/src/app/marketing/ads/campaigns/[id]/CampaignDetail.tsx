@@ -41,6 +41,11 @@ export interface CampaignDetailData {
   targetingType?: string | null
   adProduct?: string | null
   portfolioId?: string | null
+  /** Settings stored beside Amazon's placement bids: `targetAcos` (a fraction), `bidAlgorithm`, … */
+  dynamicBidding?: Record<string, unknown> | null
+  /** The campaign's own bid bounds, in cents, enforced by the write gate. */
+  minBidCents?: number | null
+  maxBidCents?: number | null
   impressions?: number
   clicks?: number
   spend?: number
