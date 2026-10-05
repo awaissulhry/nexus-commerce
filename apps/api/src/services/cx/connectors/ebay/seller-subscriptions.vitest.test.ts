@@ -325,6 +325,19 @@ describe('every account of every active business, after the app-level setup', ()
     expect(m.transport).not.toHaveBeenCalled()
   })
 
+  it('one business whose accounts cannot be listed does not stop the next; the report fails', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    m.workspaces.mockResolvedValue([{ id: 'ws-a' }, { id: 'ws-b' }])
+    m.list.mockRejectedValueOnce(new Error('database unavailable')).mockResolvedValueOnce([{ id: 'own-b', ebaySignInName: 'seller_b' }])
+    m.findUnique.mockImplementation(async ({ where }: any) => account({ id: where.id }))
+    fakeSeller()
+    const report = await reconcileEbaySellersForSetup(setup, 'every_business')
+    expect(report.accounts.map(a => [a.connectionId, a.status])).toEqual([['own-b', 'created']])
+    expect(report.businessErrors).toEqual(['database unavailable'])
+    expect(sellerReportFailed(report)).toBe(true)
+    expect(summariseSellerReport(report)).toBe('sellers: created=1 business_errors=1')
+  })
+
   it('a failed seller fails the report; reconnect needed does not', async () => {
     expect(sellerReportFailed({ accounts: [{ connectionId: 'a', topicId: 'ORDER_CONFIRMATION', status: 'reconnect_needed', signInName: null }] })).toBe(false)
     expect(sellerReportFailed({ accounts: [{ connectionId: 'a', topicId: 'ORDER_CONFIRMATION', status: 'failed', signInName: null }] })).toBe(true)

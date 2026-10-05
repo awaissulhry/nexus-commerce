@@ -253,6 +253,8 @@ export interface EbaySellerReconcileReport {
   /** Why no account was visited, when none was. */
   skipped?: string
   accounts: Array<EbaySellerSubscriptionResult & { signInName: string | null }>
+  /** Businesses whose accounts could not be listed; the others still ran. */
+  businessErrors?: string[]
 }
 
 /**
@@ -272,13 +274,24 @@ export async function reconcileEbaySellersForSetup(
     topic: (setup.sellerTopics ?? []).find(topic => topic.topicId === EBAY_ORDER_TOPIC),
   }
   const accounts: EbaySellerReconcileReport['accounts'] = []
+  const businessErrors: string[] = []
   const visit = scope === 'every_business' ? visitEveryActiveBusiness : (work: () => Promise<void>) => work()
   await visit(async () => {
-    for (const account of await ownEbayAccounts()) {
+    let own: Awaited<ReturnType<typeof ownEbayAccounts>>
+    try {
+      own = await ownEbayAccounts()
+    } catch (err) {
+      // One business's read failing must not stop the others; the run still reports it as failed.
+      const message = err instanceof Error ? err.message : String(err)
+      logger.error('[ebay-seller-subscriptions] could not list the eBay accounts of a business', { error: message })
+      businessErrors.push(message.slice(0, 200))
+      return
+    }
+    for (const account of own) {
       accounts.push({ ...await reconcileEbaySellerSubscriptions(account.id, { context }), signInName: account.signInName })
     }
   })
-  return { accounts }
+  return { accounts, ...(businessErrors.length ? { businessErrors } : {}) }
 }
 
 /** The status route: each of this business's eBay accounts, read only. */
@@ -298,10 +311,11 @@ export function summariseSellerReport(report: EbaySellerReconcileReport): string
   if (report.skipped) return `sellers: skipped (${report.skipped})`
   const counts = new Map<string, number>()
   for (const account of report.accounts) counts.set(account.status, (counts.get(account.status) ?? 0) + 1)
-  return `sellers: ${report.accounts.length ? [...counts].map(([status, n]) => `${status}=${n}`).join(' ') : 'no eBay account'}`
+  const errors = report.businessErrors?.length ? ` business_errors=${report.businessErrors.length}` : ''
+  return `sellers: ${report.accounts.length ? [...counts].map(([status, n]) => `${status}=${n}`).join(' ') : 'no eBay account'}${errors}`
 }
 
 /** A seller outcome the nightly run must not report as success. "Reconnect needed" is the Owner's step, not a fault. */
 export function sellerReportFailed(report: EbaySellerReconcileReport): boolean {
-  return report.accounts.some(account => account.status === 'failed' || account.status === 'not_offered')
+  return !!report.businessErrors?.length || report.accounts.some(account => account.status === 'failed' || account.status === 'not_offered')
 }
