@@ -143,4 +143,26 @@ describe('mergeOntoAmazonPlacements (G.4 — merge onto Amazon before the PUT)',
     // without resend the same call would carry Amazon's 50 — the re-push would deliver nothing
     expect(pmap(mergeOntoAmazonPlacements([p(TOP, 80)], [p(TOP, 80)], [p(TOP, 50)]).adjustments)).toEqual({ [TOP]: 50 })
   })
+
+  // CM-18 — a screen sends only the lanes the operator changed (`partial`).
+  it('partial: a lane left out is never removed — it keeps Amazon\'s value even when the local copy has it above 0', () => {
+    // local Top 50 / Product 25; rank-defend moved Top to 70 on Amazon since; the operator changed only Rest
+    const out = mergeOntoAmazonPlacements([p(REST, 30)], [p(TOP, 50), p(PP, 25)], [p(TOP, 70), p(PP, 25)], { partial: true })
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 70, [PP]: 25, [REST]: 30 })
+    // the same request without `partial` removes Product (the full-array contract the engines and undo keep)
+    expect(pmap(mergeOntoAmazonPlacements([p(REST, 30)], [p(TOP, 50), p(PP, 25)], [p(TOP, 70), p(PP, 25)]).adjustments)).toEqual({ [TOP]: 0, [PP]: 0, [REST]: 30 })
+  })
+
+  it('partial: a listed lane is set even at the local copy\'s value, and 0 clears it', () => {
+    // the operator typed Top 50 = the local copy, while the console moved it to 60: his 50 goes out
+    const out = mergeOntoAmazonPlacements([p(TOP, 50), p(PP, 0)], [p(TOP, 50), p(PP, 25)], [p(TOP, 60), p(PP, 25)], { partial: true })
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 50, [PP]: 0 })
+  })
+
+  it('partial merged onto the local copy alone (no Amazon read): untouched lanes keep the stored value', () => {
+    const local = [p(TOP, 50), p(PP, 25), p(AB, 10)]
+    const out = mergeOntoAmazonPlacements([p(PP, 40)], local, local, { partial: true })
+    expect(pmap(out.adjustments)).toEqual({ [TOP]: 50, [PP]: 40, [AB]: 10 })
+    expect(out.drift).toEqual([])
+  })
 })

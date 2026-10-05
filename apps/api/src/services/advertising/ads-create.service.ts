@@ -29,6 +29,7 @@ import {
   type AdsRegion,
 } from './ads-api-client.js'
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
+import { patchDynamicBidding } from './dynamic-bidding-write.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
@@ -1150,6 +1151,12 @@ export interface PlacementBiddingInput {
   resend?: boolean
   /** 1e (CM-10) — a person's own edit from a screen (isPersonEdit, with a `user:` actor): passes the halt and autonomy OFF. Set only by the routes. */
   manual?: boolean
+  /**
+   * CM-18 — `adjustments` lists only the lanes a person changed. Every listed lane is set (0 clears it); a lane left out
+   * is not touched: it keeps Amazon's current value on a live push, the stored value otherwise. Without it, a lane left
+   * out while stored above 0 is removed — the full-array contract the engines and undo send.
+   */
+  partial?: boolean
 }
 /**
  * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
@@ -1181,6 +1188,9 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   // D1 — snapshot the prior placement bias so a mis-firing change can be rolled back.
   // G.4 — the local copy until Amazon's current array is read before a live push; then that array.
   let priorAdjustments = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
+  // CM-18 — a partial write: the lanes it leaves out keep the stored value, until a live push merges onto Amazon's instead.
+  const requested = adjustments
+  if (input.partial) adjustments = mergeOntoAmazonPlacements(requested, priorAdjustments, priorAdjustments, { partial: true }).adjustments
   let drift: Array<{ placement: string; local: number; amazon: number }> = []
   let mode = 'local'
   // AR — placement writes go inline (not via the queued+stamped worker path), so a
@@ -1245,7 +1255,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
             // are unknown, not empty. `placementBidding` itself is left out when no lane is set.
             if (cur?.dynamicBidding) {
               const amazonNow = cur.dynamicBidding.placementBidding ?? []
-              const merged = mergeOntoAmazonPlacements(adjustments, priorAdjustments, amazonNow, { resend: input.resend })
+              const merged = mergeOntoAmazonPlacements(requested, priorAdjustments, amazonNow, { resend: input.resend, partial: input.partial })
               drift = merged.drift
               if (drift.length) logger.warn('[AX2.2] placement drift: Amazon differs from the local copy', { campaignId: input.campaignId, drift })
               adjustments = merged.adjustments
@@ -1291,8 +1301,10 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
   }
 
   // G.4 — the local copy becomes what was actually sent (merged onto Amazon's current array on a live push).
-  const db = { ...((c.dynamicBidding as Record<string, unknown>) ?? {}), placementBidding: adjustments }
-  await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })
+  // CM-6 — and ONLY that key is written, into the row as it is now. The copy read at the top is seconds old here (the
+  // gate, Amazon's read and the PUT ran in between); writing it back whole put back a Target ACoS, bid automation,
+  // algorithm, guardrail or CPC ceiling saved meanwhile (`patchDynamicBidding`).
+  await patchDynamicBidding(input.campaignId, { set: { placementBidding: adjustments } }, { ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) })
 
   /**
    * HX.2 — placement writes join the audit spine.

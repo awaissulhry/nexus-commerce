@@ -2741,7 +2741,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const before = typeof db.targetAcos === 'number' ? db.targetAcos : null
     if (b.targetAcos == null) delete db.targetAcos
     else db.targetAcos = b.targetAcos
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+    // CM-6 — only `targetAcos` (set, or removed when cleared), merged into the row as it is now: writing `db` whole put
+    // back a placement (or another setting) saved since the read above.
+    const { patchDynamicBidding } = await import('../services/advertising/dynamic-bidding-write.js')
+    await patchDynamicBidding(id, b.targetAcos == null ? { remove: ['targetAcos'] } : { set: { targetAcos: b.targetAcos } })
     const actorRaw = (request.headers as Record<string, unknown>)['x-actor-id']
     await prisma.advertisingActionLog.create({
       data: {

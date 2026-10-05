@@ -27,7 +27,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import {
-  IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus,
+  IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { SPONSORED_PRODUCTS, adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
@@ -172,14 +172,8 @@ async function keepPersonBidThroughRestore(
 
 export type AdEntityType = 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
 
-export type AdSyncType =
-  | 'AD_BID_UPDATE'
-  | 'AD_BUDGET_UPDATE'
-  | 'AD_ENTITY_STATE_UPDATE'
-  | 'AD_BIDDING_STRATEGY_UPDATE'
-  | 'AD_CAMPAIGN_NAME_UPDATE'
-  | 'AD_CAMPAIGN_PORTFOLIO_UPDATE'
-  | 'AD_PORTFOLIO_UPDATE'
+// 1a (CM-4) — one list for the writer, the ads drain and the generic queue processors (ad-mutation-state.ts).
+export type { AdSyncType }
 
 export interface FieldChange {
   field: string
@@ -499,7 +493,7 @@ export async function dispatchPayloadFromMutations(
     where: { outboundQueueId },
     select: {
       entityType: true, entityId: true, externalEntityId: true, marketplace: true,
-      field: true, intendedValue: true, previousValue: true, actor: true,
+      field: true, intendedValue: true, previousValue: true, actor: true, state: true,
     },
     orderBy: { field: 'asc' },
   })
@@ -510,7 +504,10 @@ export async function dispatchPayloadFromMutations(
     entityId: head.entityId,
     externalId: head.externalEntityId,
     marketplace: head.marketplace,
-    fieldChanges: rows.map((r) => ({
+    // 1a (CM-5) — a field a newer write replaced is never sent (supersedeOlderWrites). Typed rows that are all
+    // superseded still answer a payload (with no changes), never null: null means "pre-ZD.1 row, read the JSON blob",
+    // and that blob holds the old values.
+    fieldChanges: rows.filter((r) => r.state !== 'SUPERSEDED').map((r) => ({
       field: r.field, oldValue: r.previousValue, newValue: r.intendedValue,
     })),
     actor: head.actor,
@@ -735,6 +732,63 @@ export async function claimEntityWrite(
 
 /** Namespace for ads entity-write advisory locks. */
 const ADS_LOCK_CLASS = 4242
+
+/** 1a (CM-5) — the states of a newer write that make an older write to the same field pointless to send. */
+const SUPERSEDING_STATES = ['PENDING', 'IN_FLIGHT', 'APPLIED'] as const
+
+/**
+ * 1a (CM-5) — a newer write to the same field wins; the older one is never sent.
+ *
+ * A write that failed with a retryable error (429, 5xx) went back to PENDING and was sent again later, after a newer
+ * write to the same field had landed: Amazon then held the OLDER value while Nexus showed the newer one, and the next
+ * sync pulled the older value into Nexus, so the latest edit was lost. Two writes queued close together (a person and a
+ * rule, or two edits inside the grace window) were both sent, the older one for nothing.
+ *
+ * The worker calls this right after it claimed the queue row (its typed rows are IN_FLIGHT, so no other dispatch of
+ * them runs). Each of the row's fields with a NEWER write for the same entity and field that is queued, being sent or
+ * applied is marked SUPERSEDED and left out of the dispatch (`dispatchPayloadFromMutations`). A newer write that failed
+ * or was cancelled supersedes nothing: this one is then still the latest intent that can land. Newer = created later;
+ * the local copy is written in the same order, so the newest write is the value Nexus shows.
+ *
+ * `typed: false` — a row from before ZD.1 without typed rows; nothing is decided here.
+ */
+export async function supersedeOlderWrites(
+  outboundQueueId: string,
+): Promise<{ typed: boolean; superseded: string[]; remaining: number }> {
+  const mine = await prisma.adMutation.findMany({
+    where: { outboundQueueId },
+    select: { id: true, entityType: true, entityId: true, field: true, state: true, createdAt: true },
+  })
+  if (!mine.length) return { typed: false, superseded: [], remaining: 0 }
+  const live = mine.filter((m) => (IN_FLIGHT_STATES as readonly string[]).includes(m.state))
+  if (!live.length) return { typed: true, superseded: [], remaining: 0 }
+  const head = live[0]!
+  const newer = await prisma.adMutation.findMany({
+    where: {
+      entityType: head.entityType,
+      entityId: head.entityId,
+      field: { in: live.map((m) => m.field) },
+      state: { in: [...SUPERSEDING_STATES] },
+      createdAt: { gt: new Date(Math.min(...live.map((m) => m.createdAt.getTime()))) },
+      NOT: { outboundQueueId },
+    },
+    select: { field: true, createdAt: true },
+  })
+  const superseded: string[] = []
+  for (const m of live) {
+    if (!newer.some((n) => n.field === m.field && n.createdAt > m.createdAt)) continue
+    const moved = await prisma.adMutation.updateMany({
+      where: { id: m.id, state: { in: [...IN_FLIGHT_STATES] } },
+      data: {
+        state: 'SUPERSEDED',
+        settledAt: new Date(),
+        lastError: 'superseded: a newer write to this field replaced it before it was sent',
+      },
+    })
+    if (moved.count) superseded.push(m.field)
+  }
+  return { typed: true, superseded, remaining: live.length - superseded.length }
+}
 
 async function legacyRowWithNoMutations(
   tx: { adMutation: { count: (a: unknown) => Promise<number> } },

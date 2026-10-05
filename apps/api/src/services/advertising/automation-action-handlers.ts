@@ -33,6 +33,7 @@
 
 import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-rule.service.js'
 import prisma from '../../db.js'
+import { patchDynamicBidding } from './dynamic-bidding-write.js'
 // KT-P6 — the ≤3¢ suppression convention has ONE declaration, in the KT.6 blast radius.
 import { KT6_SUPPRESSION_CENTS } from './kt6-bid-action.js'
 import { logger } from '../../utils/logger.js'
@@ -1563,7 +1564,9 @@ ACTION_HANDLERS.set_campaign_target_acos = async (action, context, meta): Promis
   const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as Record<string, unknown>
   db.targetAcos = targetAcos
-  await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+  // CM-6 — only `targetAcos`, merged into the row as it is now: writing `db` whole put back a placement (or another
+  // setting) saved since the read above.
+  await patchDynamicBidding(id, { set: { targetAcos } })
   return { type: action.type, ok: true, output: { campaignId: id, targetAcos } }
 }
 
