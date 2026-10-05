@@ -34,7 +34,8 @@ const contracts = () => transferContracts('IT', { allowIncompleteSchema: true })
 const languages = new Map([[JSON.stringify(['EBAY', 'IT']), ['it']]])
 const media = (...ids: string[]) => ({ und: { _productMedia: { version: 1, items: ids.map(assetId => ({ assetId })) } } })
 const OUTSIDE = 'https://example.invalid/outside/legacy.jpg'
-const BECOMES = /Image URLs lists? becomes? (its|their) listing/
+/** The review's line for a file that sets eBay Image URLs (`buildTransferPlan`). */
+const BECOMES = /Image URLs lists? (is|are) set\. A list whose every address is a photo of the media library becomes/
 let account: string
 let sequence = 0
 
@@ -133,12 +134,12 @@ it('the eBay workbook\'s restated Image columns (a channel file) plan nothing ei
   expect(reviewed.warnings.filter(w => BECOMES.test(w) || /already sends|could not be read/.test(w))).toEqual([])
 }, 120_000)
 
-it('a different list is set: it becomes the listing\'s own Product media (library photos by address); the review shows the list it replaces', async () => {
+it('a different list of library photos is set: it becomes the listing\'s own Product media in its order, nothing is added to the library; the review shows the list it replaces', async () => {
   const f = await family()
   const reviewed = await plan([photoRow(f.follows, [f.p1.url, f.p2.url])])
   expect(reviewed.issues).toEqual([])
   expect(cellOf(reviewed, f.follows)).toMatchObject({ verdict: 'changed', before: [f.p2.url, f.p1.url], beforeState: 'inherited', after: [f.p1.url, f.p2.url], afterState: 'stored' })
-  expect(reviewed.warnings).toContainEqual('EBAY IT: the Image URLs list becomes its listing\'s Product media. A photo of the media library is used from the library; any other address is added to it.')
+  expect(reviewed.warnings).toContainEqual('EBAY IT: an Image URLs list is set. A list whose every address is a photo of the media library becomes the listing\'s Product media, in that order; a list with any other address stays the listing\'s Image URLs list until it is saved in Product media.')
   await apply(reviewed)
   const stored = await attributes(f.follows)
   expect(stored).not.toHaveProperty('imageUrls')
@@ -148,6 +149,12 @@ it('a different list is set: it becomes the listing\'s own Product media (librar
   expect(cellOf(await plan([photoRow(f.follows, [f.p1.url, f.p2.url])]), f.follows)).toMatchObject({ verdict: 'unchanged', beforeState: 'stored' })
   // Exact addresses: the same photos in another order, or a list that leaves one out, is a change.
   expect(cellOf(await plan([photoRow(f.own, [f.p1.url, f.p2.url])]), f.own)).toMatchObject({ verdict: 'changed', before: [f.p1.url] })
+  // A list with an address outside the media library replaces the listing's Product media and stays its Image URLs list:
+  // nothing is added to the library, and a re-import of it restates it.
+  await apply(await plan([photoRow(f.own, [OUTSIDE, f.p2.url])]))
+  expect(await attributes(f.own)).toEqual({ categoryId: '1001', imageUrls: [OUTSIDE, f.p2.url] })
+  expect(await scoped(() => prisma.productImage.count({ where: { productId: { in: [f.root, f.own] } } }))).toBe(3)
+  expect(cellOf(await plan([photoRow(f.own, [OUTSIDE, f.p2.url])]), f.own)).toMatchObject({ verdict: 'unchanged', beforeState: 'stored' })
 }, 120_000)
 
 it('blank, CLEAR and INHERIT keep their rules: they are not compared with the photos Publish sends', async () => {

@@ -3124,7 +3124,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
 
     // ── AM.1 — platformAttributes path writes (eBay item specifics, listing settings) ──
-    /** Owner 2026-10-05 — the eBay listings whose Image URLs list this write sets: moved into Product media after it. */
+    /** Owner 2026-10-05 — the eBay listings whose Image URLs list this write sets: settled into Product media after it. */
     const photoListingIds: string[] = []
     if (platformPatchByCoord.size > 0) {
       const entries = [...platformPatchByCoord.values()]
@@ -3295,8 +3295,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
       throw txErr
     }
-    // Owner 2026-10-05 — Product media is the one photo source: an Image URLs list written above becomes the listing's
-    // Product media in this same transaction, before readiness, the cache and the answer's version read it.
+    // Owner 2026-10-05 — Product media is the one photo source: an Image URLs list of library photos written above becomes
+    // the listing's Product media in this same transaction, before readiness, the cache and the answer's version read it.
     await settleWrittenPhotos(photoListingIds)
 
     // Phase 13d — process master-data cascades after the bulk

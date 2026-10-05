@@ -132,10 +132,11 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
     const { ebayPhotoReader } = await import('./catalog-transfer-export.js')
     const read = await ebayPhotoReader(products, photoListings, db)
     for (const listing of photoListings) {
-      // The export's language: the market's first. A market without languages is compared as before (the stored value).
-      let locale: string
+      // The export's language: the market's first. A market without languages is skipped: compared as before (the stored value).
+      let locale: string | undefined
       try { locale = marketLanguages('EBAY', listing.marketplace, markets.map(m => ({ ...m, languages: m.languages ?? [] })))[0] } catch { continue }
-      const photos = read(listing, locale ?? 'und')
+      if (!locale) continue
+      const photos = read(listing, locale)
       if (photos) ebayPhotos.set(listing.id, photos)
     }
   }
@@ -357,9 +358,10 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       channelFacts.price = { outcome: outcome.outcome, version: outcome.version }
     }
     // Owner 2026-10-05 — Product media is the one photo source: an eBay Image URLs list this file set (the field's write
-    // removed the listing's Product media) becomes its Product media in this transaction, after the channel facts above
-    // used the reviewed version. Library photos by address; other addresses are added to the library. Every caller of this
-    // writer gets it (file import, product sheet import, assortment copies).
+    // removed the listing's Product media) is settled in this transaction, after the channel facts above used the reviewed
+    // version: a list of media-library photos becomes its Product media in that order; a list with any other address stays
+    // the Image URLs list. Only the listing is written. Every caller of this writer gets it (file import, product sheet
+    // import, assortment copies).
     if (id.channel === 'EBAY' && target.cells.some(c => c.verdict === 'changed' && c.action === 'SET' && Array.isArray(c.after) && c.field.replace(/^attr_/, '') === 'imageUrls')) {
       // Open sheets hear it after the commit; an event that cannot be sent never fails the import.
       await settleAndAnnounce(tx, [entityId])

@@ -407,7 +407,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
   const stats = { alreadyEmpty: 0, clearUnchecked: 0 }
   /** B2 — per channel · market, the file values that equal what Nexus already sends (they keep following Shared). */
   const followsShared = new Map<string, number>()
-  /** Owner 2026-10-05 — per channel · market, the eBay Image URLs lists this file sets: they become Product media. */
+  /** Owner 2026-10-05 — per channel · market, the eBay Image URLs lists this file sets (the review says what becomes of them). */
   const photoLists = new Map<string, number>()
   const familyFor = (sku: string, visiting = new Set<string>()): string | null => {
     if (visiting.has(sku)) throw new Error('Parent relationships contain a cycle')
@@ -839,7 +839,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     }
     if (issues.length === groupIssueStart) targets.push(target)
   }
-  for (const [market, n] of photoLists) warnings.add(`${market}: ${n === 1 ? 'the Image URLs list becomes its listing\'s' : `${n} Image URLs lists become their listings'`} Product media. A photo of the media library is used from the library; any other address is added to it.`)
+  for (const [market, n] of photoLists) warnings.add(`${market}: ${n === 1 ? 'an Image URLs list is' : `${n} Image URLs lists are`} set. A list whose every address is a photo of the media library becomes the listing's Product media, in that order; a list with any other address stays the listing's Image URLs list until it is saved in Product media.`)
   for (const [market, n] of followsShared) warnings.add(`${market}: ${n} ${n === 1 ? 'value equals' : 'values equal'} what Nexus already sends; ${n === 1 ? 'it keeps' : 'they keep'} following Shared.`)
   return { targets, issues, warnings: [...warnings], ...(policy || exclusions.length ? { exclusions } : {}), stats }
 }

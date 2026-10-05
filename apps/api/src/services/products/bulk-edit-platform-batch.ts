@@ -29,9 +29,9 @@ export const setsImageUrls = (channel: string, sets: ChannelValueMutation['platf
   channel === 'EBAY' && sets.some(set => !set.remove && Array.isArray(set.value) && set.path.length === 1 && set.path[0] === 'imageUrls')
 
 /**
- * Owner 2026-10-05 — Product media is the one photo source: the eBay listings whose write set an Image URLs list move it
- * into their Product media in the SAME transaction (`settleListingsPhotos`: library photos by address, other addresses
- * added to the library). Open sheets hear it after the commit (`settleAndAnnounce`).
+ * Owner 2026-10-05 — Product media is the one photo source: the eBay listings whose write set an Image URLs list are
+ * settled in the SAME transaction (`settleAndAnnounce`): a list of media-library photos becomes the listing's Product
+ * media in that order; a list with any other address stays the Image URLs list. Open sheets hear it after the commit.
  */
 export async function settleWrittenPhotos(listingIds: string[]) {
   if (listingIds.length) await settleAndAnnounce(prisma, listingIds)
@@ -87,8 +87,8 @@ export async function writePlatformBatch(units: BulkSaveUnit[], plan: PlatformBu
   // A partial match is undone before the row path identifies each stale owner with its exact current-version receipt.
   if (written.length !== patches.length) throw new UnsupportedPlatformBatch('An original listing token no longer matches.')
   const versions = new Map(written.map(row => [row.id, row.version]))
-  // Owner 2026-10-05 — an Image URLs list becomes the listing's Product media here; the token each row answers is read
-  // back after it (the move bumps the listing's version).
+  // Owner 2026-10-05 — an Image URLs list of library photos becomes the listing's Product media here; the token each row
+  // answers is read back after it (a settle bumps the listing's version).
   const photoIds = changed.filter(row => setsImageUrls(plan.coordinate.channel, (plan.mutations.get(row.id) ?? []).flatMap(mutation => mutation.platform))).map(row => row.listing!.id)
   if (photoIds.length) {
     await settleWrittenPhotos(photoIds)
