@@ -34,6 +34,7 @@ import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatr
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
+import { ebayMarkdownBenefit } from '../services/ebay-markdown-benefit.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -1975,10 +1976,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       }
 
       const originalPrice = Number(listing.price)
-      const markdownPrice =
-        body.discountType === 'PERCENTAGE'
-          ? Math.max(0, originalPrice * (1 - body.discountValue / 100))
-          : Math.max(0, body.discountValue)
+      // Only a discount eBay takes is saved: a whole 5–80 %, or a new price whose amount off is on eBay's list.
+      const discount = ebayMarkdownBenefit({ discountType: body.discountType, discountValue: body.discountValue, price: originalPrice, currency: '' })
+      if (!discount.ok) return reply.code(400).send({ error: `eBay would refuse this markdown: ${discount.reason}` })
+      const markdownPrice = discount.markdownPrice
       // P4.4a — `Marketplace.currency` IS a real field, and always was: a
       // required column that already holds PLN for Poland, SEK for Sweden and
       // TRY for Turkey. The comment that used to sit here said the opposite,

@@ -12,7 +12,8 @@ import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.ser
 import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, transactionMustRestart } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
-import { nativeFieldValueError, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldValueError, nativeWriteValue, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
+import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 import { writeChannelOverrideMerge } from '../pim/channel-value-write.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver } from '../pim/reference-values.service.js'
@@ -972,6 +973,22 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     return null
   }
 
+  /**
+   * Wave 2 D4 (Owner decision 9) — a product not on Shopify yet is created with the Status column's choice: its "Shopify
+   * status" is read-only. Product id → it is on Shopify at this destination (its listing there has a Shopify id). Read once.
+   */
+  let shopifyOnChannel: Map<string, boolean> | null = null
+  const onShopify = async (productId: string): Promise<boolean> => {
+    if (!shopifyOnChannel) {
+      const ids = [...new Set(changes.map(change => change?.id).filter((id): id is string => typeof id === 'string'))]
+      const rows = await prisma.channelListing.findMany({ where: { productId: { in: ids }, channel: 'SHOPIFY', marketplace: primaryContext?.marketplace ?? 'GLOBAL',
+        channelConnectionId: (primaryContext as { accountId?: string } | null)?.accountId ?? connFor.get('SHOPIFY') ?? null, aliasKey: (primaryContext as { aliasKey?: string } | null)?.aliasKey ?? '' },
+        select: { productId: true, externalListingId: true } })
+      shopifyOnChannel = new Map(ids.map(id => [id, rows.some(row => row.productId === id && !!row.externalListingId)]))
+    }
+    return shopifyOnChannel.get(productId) === true
+  }
+
   for (const raw of changes) {
     // AM.1 — a SLOT write (`bulletPoints[3]`, `attr_material[2]`, `amazon_bulletPoints[3]`) is
     // validated as its BASE field and lands as ONE array write: the slot index rides along, and the
@@ -1160,9 +1177,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         if (c.cascade) { errors.push({ id: c.id, field: c.field, error: 'Shopify fields belong to exact product or variant rows. Select the intended rows explicitly instead of cascading a parent value.' }); continue }
         // S1 item 6 — a weight typed or pasted as g / kg / oz / lb is stored in Shopify's unit code (KILOGRAMS); same number.
         if (!field.definition && field.id === 'weight') value = normalizeShopifyWeight(value)
-        const raw = value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
         const store = storeFor(c.id, c.field.replace(/^attr_/, ''))
         const translation = store?.kind === 'platformAttributes' && store.path[0] === '_shopifyInformationLocales'
+        // Wave 2 D3 — a cleared theme template is '' (the store's default template, as Shopify reads it), never null.
+        const typed = value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
+        const raw = !field.definition && !translation ? nativeWriteValue(field.id, typed) : typed
+        if (!field.definition && !translation && field.id === 'status' && primaryContext?.channel === 'SHOPIFY' && !await onShopify(c.id)) {
+          errors.push({ id: c.id, field: c.field, error: SHOPIFY_STATUS_FROM_STATUS_COLUMN }); continue
+        }
         const error = field.reason ?? (field.definition && raw !== null ? shopifyDefinitionApplicability(field.definition, rowCategoryById.get(c.id)) : null) ?? (translation && raw === null ? null : field.definition ? validateShopifyField(field.definition, raw) : nativeFieldValueError(field.id as NativeEdit['field'], raw))
         if (error) { errors.push({ id: c.id, field: c.field, error }); continue }
         if (field.definition && field.currency && raw !== null && JSON.parse(raw).currency_code !== field.currency) { errors.push({ id: c.id, field: c.field, error: `Use this Shopify store’s ${field.currency} currency.` }); continue }

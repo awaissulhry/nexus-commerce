@@ -48,7 +48,9 @@ describe('legacy eBay workbook import identities and values', () => {
     set(input.sheet, 2, 'Image 2', 'https://example.com/2.jpg')
     const result = parse(input), rows = result.rows.filter(r => r.row === 2)
     expect(result.issues).toEqual([])
-    expect(rows.find(r => r.field === 'sharedSkuListing')?.value).toBe(false)
+    // Wave 2 — the Shared-SKU switch is not imported (Publish does not use it); its reason is the exclusion.
+    expect(rows.some(r => r.field === 'sharedSkuListing')).toBe(false)
+    expect(result.exclusions.find(e => e.row === 2 && e.field === 'Shared-SKU (Trading API)')?.message).toMatch(/^Publish here does not use this\./)
     expect(rows.find(r => r.field === 'packageWeight')?.value).toEqual({ value: 0, unit: 'KILOGRAM' })
     expect(rows.find(r => r.field === 'material')?.value).toBe('Poliestere, Nylon')
     expect(rows.find(r => r.field === 'features')?.value).toEqual(['Ventilato', 'Impermeabile'])
@@ -96,15 +98,32 @@ describe('legacy eBay workbook import identities and values', () => {
   it('refuses an unconfirmed delete, an unknown column and a broken value with source addresses', () => {
     const input = fixture()
     set(input.sheet, 2, 'Action', 'end')
-    set(input.sheet, 3, 'Shared-SKU (Trading API)', 'maybe')
+    set(input.sheet, 3, 'Title', 'T'.repeat(81))
     input.sheet.getCell(1, headers.length + 1).value = 'Unknown column'
     input.sheet.getCell(4, headers.length + 1).value = 'x'
     const result = parse(input)
-    expect(result.issues.map(i => i.field)).toEqual(['presence', 'Shared-SKU (Trading API)'])
-    expect(result.issues[1]).toMatchObject({ row: 3, source: { sheet: 'ebay_it', column: 'I' } })
+    expect(result.issues.map(i => i.field)).toEqual(['presence', 'Title'])
+    expect(result.issues[1]).toMatchObject({ row: 3, message: 'Use at most 80 characters', source: { sheet: 'ebay_it', column: 'G' } })
     expect(result.rows.some(r => r.row === 2)).toBe(false)
     // A column eBay's category does not declare is the seller's own item specific, kept with a warning.
     expect(result.rows.find(r => r.row === 4 && r.field === 'itemSpecifics.Unknown column')?.value).toBe('x')
+  })
+  // Wave 2 (2026-10-05) — a column Publish fixes or does not use is read-only on the sheet, and a file cannot set it either:
+  // each populated cell is excluded with the column's reason (the ledger still accounts for every cell).
+  it('does not import Duration, Handling Days or the Shared-SKU switch: each cell is excluded with its reason', () => {
+    const input = fixture(), col = headers.length + 1
+    input.sheet.getCell(1, col).value = 'Duration'
+    input.sheet.getCell(1, col + 1).value = 'Handling Days'
+    input.sheet.getCell(2, col).value = 'Days_7'
+    input.sheet.getCell(2, col + 1).value = '3'
+    const result = parse(input)
+    expect(result.issues).toEqual([])
+    expect(result.rows.filter(r => ['listingDuration', 'handlingTime', 'sharedSkuListing'].includes(r.field))).toEqual([])
+    const reason = (field: string) => result.exclusions.find(e => e.row === 2 && e.field === field)?.message
+    expect(reason('Duration')).toBe('eBay fixed-price listings run until cancelled. Publish always sends GTC. Not imported. File value: Days_7')
+    expect(reason('Handling Days')).toBe('eBay takes the handling time from the listing\'s shipping policy. Change it in that policy on eBay. Not imported. File value: 3')
+    expect(reason('Shared-SKU (Trading API)')).toBe('Publish here does not use this. It only steered the old eBay flat-file page. To sell the same SKUs on another eBay listing, add a listing alias. Not imported. File value: 1')
+    expect(result.ledger.filter(e => e.row === 2 && ['Duration', 'Handling Days', 'Shared-SKU (Trading API)'].includes(e.header)).map(e => e.outcome)).toEqual(['excluded', 'excluded', 'excluded'])
   })
   it('refuses formulas, error cells, duplicate headers and extra worksheets', () => {
     for (const value of [{ formula: '1+1', result: 2 }, { error: '#REF!' }] as ExcelJS.CellValue[]) {

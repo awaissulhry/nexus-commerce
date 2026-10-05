@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { informationGroups, informationRegistry, informationSheetValue, SHOPIFY_FIELD_NOT_SWITCHED_ON, SHOPIFY_WEIGHT_UNITS, mediaMoves, mediaOrderEditSchema, moveMedia, nativeFieldError, nativeFieldValueError, nativeValuesEqual,
-  normalizeShopifyWeight, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit } from './shopify-information.js'
+  normalizeShopifyWeight, shopifyStatusLabel, SHOPIFY_STATUS_LABEL, shopifyWeightGrams, shopifyWeightSymbol, shopifyWeightUnit,
+  nativeWriteValue, shopifyTemplateSuffixInput, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT } from './shopify-information.js'
 import { emptyShopifyLinkedDraft, linkedDraftSignature, shopifyLinkedDraftSchema, type ShopifyStoreSchema } from './shopify-linked-products.js'
 const productId = 'gid://shopify/Product/1', variantId = 'gid://shopify/ProductVariant/11'
 const schema: ShopifyStoreSchema = { definitions: [], metaobjectDefinitions: [], types: [], locales: [], revision: '1' }
@@ -9,6 +10,19 @@ describe('Shopify Information field identities', () => {
     const labels = Object.fromEntries(informationRegistry(schema).map(f => [f.id, f.label]))
     expect(labels).toMatchObject({ title: 'Name', descriptionHtml: 'Description', sku: 'SKU', cost: 'Cost',
       'seo.title': 'SEO title', 'seo.description': 'SEO description', handle: 'URL handle', templateSuffix: 'Theme template', vendor: 'Brand', harmonizedSystemCode: 'HS code' })
+  })
+  // Wave 2 D4 — Shopify's own status is "Shopify status" (the sheet's Status column is another control); its codes read
+  // in Title Case while the stored value stays Shopify's code.
+  it('names Shopify\'s status "Shopify status", keeps Shopify\'s own name, and reads its codes in Title Case', () => {
+    const status = informationRegistry(schema).find(f => f.id === 'status')!
+    expect(status).toMatchObject({ label: 'Shopify status', channelLabel: 'Status', type: 'status' })
+    expect(SHOPIFY_STATUS_LABEL).toEqual({ ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' })
+    expect(['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'].map(shopifyStatusLabel)).toEqual(['Active', 'Draft', 'Archived', 'Unlisted'])
+    expect(shopifyStatusLabel('SCHEDULED')).toBe('SCHEDULED')
+    expect(shopifyStatusLabel('constructor')).toBe('constructor')
+    // The value Shopify takes is still its code: a word is refused.
+    expect(nativeFieldValueError('status', 'ACTIVE')).toBeNull()
+    expect(nativeFieldValueError('status', 'Active')).toBe('Choose a Shopify product status.')
   })
   it('declares native attributes without inventing store metafields', () => {
     const fields = informationRegistry(schema)
@@ -147,5 +161,28 @@ describe('Shopify weight units (product sheet consistency, S1 item 6)', () => {
   it('refuses a handle with capitals with Shopify\'s reason', () => {
     expect(nativeFieldValueError('handle', 'moss-jacket')).toBeNull()
     expect(nativeFieldValueError('handle', 'Moss-Jacket')).toBe('Use lowercase letters, numbers and separating hyphens.')
+  })
+})
+
+/* Wave 2 D3 (Owner decision 11, A) — the theme template: "nexus" for a product Nexus creates; cleared = the store's default. */
+describe('the theme template', () => {
+  it('a cleared template is stored as \'\' (Shopify reads the default template as \'\'), and sent as null', () => {
+    expect(nativeWriteValue('templateSuffix', null)).toBe('')
+    expect(nativeWriteValue('templateSuffix', 'custom')).toBe('custom')
+    // Every other field keeps its null (a clear).
+    expect(nativeWriteValue('seo.title', null)).toBeNull()
+    expect([shopifyTemplateSuffixInput(''), shopifyTemplateSuffixInput(null), shopifyTemplateSuffixInput('nexus')]).toEqual([null, null, 'nexus'])
+  })
+  it('no value and \'\' are both the default template: valid, and equal', () => {
+    expect(nativeFieldValueError('templateSuffix', null)).toBeNull()
+    expect(nativeFieldValueError('templateSuffix', '')).toBeNull()
+    expect(nativeFieldValueError('templateSuffix', 'not valid!')).toBe('Enter a template suffix, or leave it empty for the default template.')
+    expect(nativeValuesEqual('templateSuffix', null, '')).toBe(true)
+    expect(nativeValuesEqual('templateSuffix', 'nexus', '')).toBe(false)
+    expect(nativeValuesEqual('seo.title', null, '')).toBe(false)
+  })
+  it('says what a new product uses and how to choose the store\'s default', () => {
+    expect(SHOPIFY_NEXUS_TEMPLATE).toBe('nexus')
+    expect(SHOPIFY_TEMPLATE_HINT).toBe('New products use the Nexus template (nexus). Clear it to use the store\'s default template.')
   })
 })

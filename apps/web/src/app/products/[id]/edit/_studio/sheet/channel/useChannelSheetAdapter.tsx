@@ -39,6 +39,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { withSheetGroups } from '../sheetGroups';
+import { useHeaderPaste } from '../headerPaste';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
 import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
@@ -963,6 +964,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* 2026-10-01 — the media column joins the sheet's groups (Images, on eBay and Amazon) and every column carries its
        group's colour (`../sheetGroups`). */
     const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
+    const headerPaste = useHeaderPaste<ChannelSheetRow>(gridColumns.map(column => ({ colId: column.key, headerName: column.label })), (message, tone) => toast(message, tone));
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
         data: scopePage, gridColumns, formulaWiring, accountId, productLevelOnly, aliasLabelOf,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth: authLive,
@@ -1393,6 +1395,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             loading: loading,
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
+            processDataFromClipboard: headerPaste.processDataFromClipboard,
+            defaultColDef: headerPaste.defaultColDef,
             rowData: visibleRows,
             columnDefs: allColumnDefs,
             getDataPath: getDataPath,

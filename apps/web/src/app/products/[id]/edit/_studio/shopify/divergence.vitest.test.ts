@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { decodeSheetCells, encodeSheetCells } from '@nexus/shared/sheet-cell-wire'
 import { informationRegistry } from '@nexus/shared/shopify-information'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
-import { ShopifyDivergenceBanner, shopifyPanelSave, shopifyRawValue } from './ShopifyDraftCell'
+import { ShopifyDivergenceBanner, shopifyPanelFooter, shopifyPanelSave, shopifyRawValue } from './ShopifyDraftCell'
 
 const schema = { revision: 'synthetic-1', currency: 'EUR', metaobjectDefinitions: [], types: [], locales: [{ locale: 'en', primary: true }],
   definitions: [
@@ -38,7 +38,7 @@ const read = () => decodeSheetCells(JSON.parse(JSON.stringify(encodeSheetCells(s
 describe('the Shopify pop-up names a preserved pin and the value Shopify receives', () => {
   it('shows the kept draft value AND the shared publish value with the conflict note', () => {
     const html = banner(label.type, sheet().rows[0].values[label.id] as Cell)
-    expect(html).toContain('Publishing uses the shared value')
+    expect(html).toContain('Shopify receives the shared value')
     expect(html).toContain('<dt>Saved draft, kept here</dt><dd>Saved separate label</dd>')
     expect(html).toContain('<dt>Shopify receives</dt><dd>Shared source</dd>')
     expect(html).toContain(note)
@@ -74,7 +74,7 @@ describe('Shopify keeps its own value', () => {
     expect(html()).toContain('<dt>Shared value, shown here</dt><dd>Shared value</dd>')
     expect(html()).toContain('<dt>Shopify has</dt><dd>Own value</dd>')
     expect(html()).toContain(keeps)
-    expect(html()).not.toContain('Publishing uses the shared value')
+    expect(html()).not.toContain('Shopify receives the shared value')
   })
 })
 
@@ -91,5 +91,15 @@ describe('reading or cancelling the pop-up writes nothing', () => {
     expect(shopifyPanelSave({ ...base, field: label, value: 'Own label', baseline: 'Saved separate label', current: 'Another tab' })).toMatchObject({ kind: 'refuse' })
     expect(shopifyPanelSave({ ...base, field: label, value: 'Own label', baseline: 'Saved separate label', current: undefined })).toMatchObject({ kind: 'refuse' })
     expect(shopifyPanelSave({ ...base, field: label, value: 'Own label', baseline: 'Saved separate label', current: 'Saved separate label', hasSession: false })).toMatchObject({ kind: 'refuse' })
+  })
+})
+
+/* Wave 2 D5 — the pop-up's footer says what sends the value: Publish refuses a product already on Shopify. */
+describe('the pop-up footer names what sends the value', () => {
+  it('a row already on Shopify: Review and synchronize… sends it, never Publish', () => {
+    expect(shopifyPanelFooter({ shopify: { productId: 'family', listingId: 'listing-1' } })).toBe('Saves in Nexus · Review and synchronize… sends it to Shopify')
+  })
+  it('a row not on Shopify yet: Publish creates it', () => {
+    expect(shopifyPanelFooter({})).toBe('Saves in Nexus · Publish to send it to Shopify')
   })
 })

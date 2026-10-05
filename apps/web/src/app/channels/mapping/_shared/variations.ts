@@ -113,13 +113,15 @@ export function derivationSentence(view: VariationRuleView): string | null {
 }
 
 /**
- * The Theme row's hint — `Amazon only · the product type's enum, 50 values on DE` (canvas). The
- * count is `options.length` from the wire; it is not a constant, because the enum is per product
- * type and per market (measured on this catalogue: 50 on AMAZON·DE·OUTERWEAR).
+ * The Theme row's hint — `22 themes Amazon accepts on DE`. The count is the wire's options that are
+ * NOT deprecated; it is not a constant, because the enum is per product type and per market. Wave 2
+ * A4: the server offers only the themes Amazon accepts, plus the one in use even when Amazon
+ * deprecated it — that one is shown under its own flag and is not counted as accepted.
  */
 export function themeHintText(view: VariationRuleView): string | null {
   if (!view.theme) return null
-  return `Amazon only · the product type’s enum, ${view.theme.options.length} values on ${view.market}`
+  const accepted = view.theme.options.filter((o) => !o.deprecated).length
+  return `${accepted} ${accepted === 1 ? 'theme' : 'themes'} Amazon accepts on ${view.market}`
 }
 
 /** The Theme listbox's own option text: the enum code and the localized label the wire derived. */

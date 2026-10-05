@@ -32,7 +32,8 @@ vi.mock('../../db.js', () => ({
 vi.mock('./studio-stock.js', async (importOriginal) => ({ ...await importOriginal<typeof import('./studio-stock.js')>(), attachStudioStock: async () => ({ ms: 0 }) }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: (...a: unknown[]) => getStudioColumns(...a) }))
 vi.mock('./product-category-context.js', () => ({ productCategoryContext: async () => ({ connectionId: 'account', categories: ['177104'], defaults: {} }) }))
-vi.mock('./mapping/index.js', () => ({ resolveChannelValues: async () => ({ byProduct: {}, categoryByProduct: {}, missingProductIds: [], meta: {} }) }))
+const resolveChannelValues = vi.fn()
+vi.mock('./mapping/index.js', () => ({ resolveChannelValues: (...a: unknown[]) => resolveChannelValues(...a) }))
 
 import { getStudioSheet } from './studio-sheet.service.js'
 
@@ -48,7 +49,8 @@ const listing = (productId: string, over: Record<string, unknown> = {}) => ({
 })
 
 beforeEach(() => {
-  for (const m of [productFindFirst, productFindMany, channelListingFindMany, aliasFindMany, getStudioColumns, marketplaceFindMany]) m.mockReset()
+  for (const m of [productFindFirst, productFindMany, channelListingFindMany, aliasFindMany, getStudioColumns, marketplaceFindMany, resolveChannelValues]) m.mockReset()
+  resolveChannelValues.mockResolvedValue({ byProduct: {}, categoryByProduct: {}, missingProductIds: [], meta: {} })
   productFindFirst.mockResolvedValue({ id: PARENT, parentId: null })
   productFindMany.mockResolvedValue([
     { id: PARENT, sku: 'REGAL', isParent: true, parentId: null, productType: 'OUTERWEAR', name: 'Master title',
@@ -136,5 +138,54 @@ describe('build shape v2 — the Nexus product status leaves the Shared sheet (O
     channelListingFindMany.mockResolvedValue([listing('child'), listing(PARENT)])
     const ebay = await getStudioSheet({ productId: PARENT, scope: 'channel', channel: 'EBAY', market: 'IT', locale: 'it' })
     expect(ebay.columns.map(c => c.key)).toContain('status')
+  })
+})
+
+// Wave 2 (C6) — eBay takes condition, policies, … once per listing, from the main row: the variation row shows that value,
+// read-only, with the reason. Wiring through the sheet (the rule itself: `ebay-listing-level.vitest.test.ts`). Fake SKUs.
+describe('eBay listing fields on variation rows show the main row\'s value', () => {
+  const field = (key: string, label: string) => ({ key, writeField: key, label, group: 'Offer', kind: 'text', storage: 'listing', scope: 'global', requiredBy: [],
+    editable: true, defaultVisible: true, channels: { 'eBay · IT': { key, attribute: key, path: [], store: { kind: 'platformAttributes', path: [key] } } } })
+  const mapped = (value: unknown) => ({ value, status: 'mapped', warnings: [], errors: [], mappingErrors: [], provenance: 'override', sourceOwner: 'channel', required: true })
+  beforeEach(() => {
+    getStudioColumns.mockResolvedValue({ columns: [title, field('conditionId', 'Condition'), field('paymentPolicyId', 'Payment policy')], coordinates: [EBAY_IT] })
+    channelListingFindMany.mockResolvedValue([
+      listing(PARENT, { platformAttributes: { conditionId: 'NEW', paymentPolicyId: 'pay-main' } }),
+      listing('child', { platformAttributes: { conditionId: 'USED_EXCELLENT', paymentPolicyId: 'pay-main' } }),
+    ])
+    resolveChannelValues.mockResolvedValue({ byProduct: {
+      [PARENT]: { conditionId: mapped('NEW'), paymentPolicyId: mapped('pay-main') },
+      child: { conditionId: mapped('USED_EXCELLENT'), paymentPolicyId: mapped('pay-main') },
+    }, categoryByProduct: {}, missingProductIds: [], meta: {} })
+  })
+  const read = (extra: Record<string, unknown> = {}) => getStudioSheet({ productId: PARENT, scope: 'channel', channel: 'EBAY', market: 'IT', locale: 'it', ...extra })
+
+  it('the variation row: the main row\'s value, read-only, the reason and its own different value; the main row marked', async () => {
+    const sheet = await read()
+    const main = sheet.rows.find(row => row.id === PARENT)!, child = sheet.rows.find(row => row.id === 'child')!
+    expect(child.values.conditionId).toMatchObject({ value: 'NEW', editable: false, writable: false, resettable: false,
+      writeBlockedReason: 'eBay takes this once per listing, from the main row REGAL. Change it there. This row also has "USED_EXCELLENT", which eBay does not get.' })
+    expect(child.values.paymentPolicyId).toMatchObject({ value: 'pay-main', editable: false, writeBlockedReason: 'eBay takes this once per listing, from the main row REGAL. Change it there.' })
+    expect(main.values.conditionId).toMatchObject({ value: 'NEW', editable: true, writable: true, mapped: { listingLevel: { productId: PARENT, sku: 'REGAL' } } })
+    expect(child.values.conditionId.mapped).not.toHaveProperty('listingLevel')
+    // Not a listing-level field: the title stays the row's own.
+    expect(child.values.name.editable).toBe(true)
+  })
+
+  it('a reader that judges rows by their own values (rowOwnValues) still gets each row\'s own', async () => {
+    const child = (await read({ rowOwnValues: true })).rows.find(row => row.id === 'child')!
+    expect(child.values.conditionId).toMatchObject({ value: 'USED_EXCELLENT', editable: true })
+  })
+
+  it('an Inventory-model listing (offer ids) keeps condition per variation; the payment policy is still the main row\'s', async () => {
+    channelListingFindMany.mockResolvedValue([
+      listing(PARENT, { platformAttributes: { conditionId: 'NEW', paymentPolicyId: 'pay-main' } }),
+      listing('child', { platformAttributes: { conditionId: 'USED_EXCELLENT', paymentPolicyId: 'pay-own', offerId: 'offer-fake-1' } }),
+    ])
+    const sheet = await read()
+    const child = sheet.rows.find(row => row.id === 'child')!
+    expect(child.values.conditionId).toMatchObject({ value: 'USED_EXCELLENT', editable: true })
+    expect(child.values.paymentPolicyId).toMatchObject({ value: 'pay-main', editable: false })
+    expect(sheet.rows.find(row => row.id === PARENT)!.values.conditionId.mapped).not.toHaveProperty('listingLevel')
   })
 })

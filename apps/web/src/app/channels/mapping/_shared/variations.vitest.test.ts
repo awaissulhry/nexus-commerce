@@ -77,11 +77,12 @@ describe('no count is computed on the page', () => {
     ])
   })
 
-  it('sizes the theme enum from the wire, not from a constant', () => {
-    expect(themeHintText(CANVAS_AMAZON_DE_OUTERWEAR))
-      .toBe('Amazon only · the product type’s enum, 50 values on DE')
-    expect(themeHintText(RULE_AMAZON_IT_AUTO_ACCESSORY))
-      .toBe('Amazon only · the product type’s enum, 3 values on IT')
+  it('counts the themes Amazon accepts from the wire, not from a constant (wave 2 A4)', () => {
+    // 50 options on the canvas fixture, 28 deprecated; 3 on IT, 1 deprecated. A deprecated one is never counted.
+    expect(themeHintText(CANVAS_AMAZON_DE_OUTERWEAR)).toBe('22 themes Amazon accepts on DE')
+    expect(themeHintText(RULE_AMAZON_IT_AUTO_ACCESSORY)).toBe('2 themes Amazon accepts on IT')
+    expect(themeHintText({ ...RULE_AMAZON_IT_AUTO_ACCESSORY, theme: { ...RULE_AMAZON_IT_AUTO_ACCESSORY.theme!, options: RULE_AMAZON_IT_AUTO_ACCESSORY.theme!.options.slice(0, 2) } }))
+      .toBe('1 theme Amazon accepts on IT')
     expect(themeHintText(SHOPIFY_DROPPED_AND_COLLIDING)).toBeNull()
   })
 

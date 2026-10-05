@@ -35,6 +35,7 @@ import { EBAY_POLICY_FIELD, EBAY_POLICY_KINDS, ebayLocationKnownMissing, ebayMar
 import { EbaySendingOff, ebayFieldLabel, ebayProblems, ebayRenameRefusal, ebayVariationRenames, stripSku, type EbayProblems } from './studio-publication-ebay-problems.js'
 import { ebaySendsLive } from './studio-publication-ebay-verify.js'
 import { ebayTradingPackage } from './ebay-packages.js'
+import { ebayQuantityLimitInvalid, parseEbayQuantityLimit } from '../ebay-quantity-limit.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -234,13 +235,24 @@ export function ebayPackageXml(pa: Record<string, any>, sku: string): string {
 
 /**
  * E1 (2026-10-04) — Max per buyer as eBay takes it (`QuantityRestrictionPerBuyer`): a whole number, 1 or more. Blank (null,
- * '') is not set: nothing is sent. `problem` names a value that is set but cannot be sent.
+ * '') is not set: nothing is sent. `problem` names a value that is set but cannot be sent. Wave 2: the rule itself is the
+ * one every eBay publisher uses (`../ebay-quantity-limit.ts`).
  */
 export function ebayQuantityLimit(value: unknown): { limit: number | null; problem: string | null } {
-  if (value == null || (typeof value === 'string' && !value.trim())) return { limit: null, problem: null }
+  const { limit, invalid } = parseEbayQuantityLimit(value)
+  return { limit, problem: invalid ? `${ebayQuantityLimitInvalid(value, ebayFieldLabel('quantityLimitPerBuyer'))} Fix it on this listing's main row, or leave it blank.` : null }
+}
+
+/**
+ * Wave 2 (Owner decision 7, 2026-10-05) — the VAT rate as eBay takes it (`VATDetails.VATPercent`): a number from 0 to 100.
+ * Blank (null, '') is not set: nothing is sent (a blank cell sent <VATPercent>0</VATPercent>). `problem` names a value that
+ * is set but cannot be sent.
+ */
+export function ebayVatRate(value: unknown): { rate: number | null; problem: string | null } {
+  if (value == null || (typeof value === 'string' && !value.trim())) return { rate: null, problem: null }
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN
-  if (Number.isSafeInteger(n) && n >= 1) return { limit: n, problem: null }
-  return { limit: null, problem: `${ebayFieldLabel('quantityLimitPerBuyer')}: eBay takes a whole number, 1 or more (this row has ${JSON.stringify(value)}). Fix it on this listing's main row, or leave it blank.` }
+  if (Number.isFinite(n) && n >= 0 && n <= 100) return { rate: n, problem: null }
+  return { rate: null, problem: `${ebayFieldLabel('vatRate')}: eBay takes a number from 0 to 100 (this row has ${JSON.stringify(value)}). Fix it on this listing's main row, or leave it blank.` }
 }
 
 type BestOfferField = 'bestOfferFloor' | 'bestOfferCeiling'
@@ -298,10 +310,13 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
     xml = xml.replace(/    <Variations>[\s\S]*?<\/Variations>/, `    <StartPrice>${variant.price}</StartPrice><Quantity>${variant.quantity}</Quantity>${variant.ean ? `<ProductListingDetails><EAN>${escapeXml(variant.ean)}</EAN></ProductListingDetails>` : ''}`)
   }
   const limit = ebayQuantityLimit(settings.quantityLimitPerBuyer).limit
+  const vat = ebayVatRate(settings.vatRate).rate
   const extra = [
     settings.subtitle != null ? `<SubTitle>${escapeXml(String(settings.subtitle))}</SubTitle>` : '',
-    settings.handlingTime != null ? `<DispatchTimeMax>${Number(settings.handlingTime)}</DispatchTimeMax>` : '',
-    settings.vatRate != null ? `<VATDetails><VATPercent>${Number(settings.vatRate)}</VATPercent></VATDetails>` : '',
+    // Wave 2 (Owner decision 6) — no <DispatchTimeMax>: eBay takes the handling time from the listing's shipping policy. A
+    // live listing keeps eBay's (a Full update names it among the fields eBay keeps, `FULL_KEPT_ROOTS`).
+    // Wave 2 (decision 7) — only a VAT rate eBay can take; blank (or a value named by the review) sends nothing.
+    vat != null ? `<VATDetails><VATPercent>${vat}</VATPercent></VATDetails>` : '',
     single && settings.bestOffer != null ? `<BestOfferDetails><BestOfferEnabled>${settings.bestOffer === true}</BestOfferEnabled></BestOfferDetails>` : '',
     // E1 — the Best Offer prices go with Best Offer on a single-SKU listing only, and only when they can be sent.
     single && settings.bestOffer === true ? ebayBestOfferXml(settings, input.currency, input.variations[0]?.price) : '',
@@ -442,8 +457,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     // E1 (2026-10-04) — product safety (GPSR) and parts compatibility have no sheet cell and no publisher: a saved value is
     // said in the review and blocks nothing (it blocked a new listing with no cell to clear it).
     if (mainRow) for (const key of ['compatibility', 'regulatory']) if (filled(pa[key])) problems.note(`${ebayFieldLabel(key)}: Nexus does not send this to eBay; the saved value is not sent.`)
-    // #36 — eBay takes ONE package per listing (item level): every row must hold the main row's package, or none. The main
-    // row's is checked; a variation's that cannot be read counts as a different package (named once, below).
+    // #36 — eBay takes ONE package per listing (item level), the main row's. The main row's is checked; a variation's own
+    // is never sent, and one that differs (or cannot be read) is said once, in a note below (wave 2, C6).
     if (!itemId) {
       if (mainRow) packages.set(product.id, problems.attempt(() => ebayPackageXml(pa, product.sku), { ...at, field: 'package' }) ?? '')
       else { try { packages.set(product.id, ebayPackageXml(pa, product.sku)) } catch { packages.set(product.id, 'unreadable') } }
@@ -519,7 +534,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   }
   const shared = problems.attempt(() => buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency))
   const differing = products.filter(p => p.id !== parent.id && (packages.get(p.id) ?? '') !== '' && packages.get(p.id) !== (packages.get(parent.id) ?? ''))
-  if (differing.length) problems.add(`eBay takes one package type, weight and size for the whole listing. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds' : 'hold'} a different package than the main row: make them the same as the main row, or leave them blank.`, { field: 'package' })
+  // Wave 2 (C6) — a note, not a refusal: a variation's own package is never sent (eBay takes the main row's, above).
+  if (differing.length) problems.note(`${ebayFieldLabel('package')}: eBay takes one package for the whole listing, from the main row. ${differing.map(p => p.sku).join(', ')} ${differing.length === 1 ? 'holds a different package; it is' : 'hold a different package; they are'} not sent, and eBay takes the main row's package.`)
   if (!options.problems || !shared) problems.throwIfAny()
   return { shared: shared!, itemId, parentListing, settings, galleries, variants, identities, media: onPlan ? { channelValues } : null }
 }
@@ -613,8 +629,8 @@ const EBAY_EU_MARKETS: ReadonlySet<string> = new Set(['IT', 'DE', 'FR', 'ES', 'A
 export const EBAY_EU_SAFETY_NOTE = 'eBay asks EU sellers for the manufacturer and EU responsible person. Nexus does not send them yet; add them in eBay Seller Hub.'
 
 /**
- * E1 (2026-10-04) — the main-row offer fields a Trading listing sends besides its price: Max per buyer and the Best Offer
- * prices. A value Nexus cannot send refuses a NEW listing by name. On a live listing it is not sent and the review says
+ * E1 (2026-10-04) — the main-row offer fields a Trading listing sends besides its price: Max per buyer, the VAT rate (wave
+ * 2) and the Best Offer prices. A value Nexus cannot send refuses a NEW listing by name. On a live listing it is not sent and the review says
  * so (eBay keeps its own): it never newly refuses a live listing. 0, '' and null are not set, and say nothing.
  */
 function ebayOfferChecks(input: { settings: Record<string, any>; shared: AddFixedPriceItemInput; single: boolean; itemId: string | null
@@ -623,6 +639,8 @@ function ebayOfferChecks(input: { settings: Record<string, any>; shared: AddFixe
   const say = (field: string, message: string, kept: string) => itemId ? problems.note(`${message} ${kept}`) : problems.add(message, { ...main, field })
   const limit = ebayQuantityLimit(settings.quantityLimitPerBuyer)
   if (limit.problem) say('quantityLimitPerBuyer', limit.problem, 'Nexus does not send it; eBay keeps the limit it holds.')
+  const vat = ebayVatRate(settings.vatRate)
+  if (vat.problem) say('vatRate', vat.problem, 'Nexus does not send it; eBay keeps the VAT rate it holds.')
   const offerFields: BestOfferField[] = ['bestOfferFloor', 'bestOfferCeiling']
   if (settings.bestOffer === true && single) {
     for (const problem of ebayBestOfferPrices(settings, shared.variations[0]?.price).problems)

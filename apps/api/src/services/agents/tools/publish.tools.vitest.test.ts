@@ -168,7 +168,8 @@ describe('publish-review', () => {
     expect(answer.data).toMatchObject({ destination: { channel: 'SHOPIFY', accountId: ids.shopify }, visibility: 'DRAFT', locations: [{ name: 'Warehouse' }] })
     expect(fixture.shopRead).not.toHaveBeenCalled()
     expect(fixture.shopSave).not.toHaveBeenCalled()
-    expect(fixture.shopPreview).toHaveBeenCalledWith(ids.product, { accountId: ids.shopify, listingId: undefined, market: 'GLOBAL' }, true)
+    // Wave 2 D4 — facts without Status choices decide no create status: the review reads the Status column, as the send does.
+    expect(fixture.shopPreview).toHaveBeenCalledWith(ids.product, { accountId: ids.shopify, listingId: undefined, market: 'GLOBAL' }, true, {})
     expect(await counts()).toEqual(before)
   })
 

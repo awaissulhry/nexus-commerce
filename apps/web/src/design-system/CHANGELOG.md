@@ -12,6 +12,12 @@
 - **`useGridShortcuts(containerRef, shortcuts)`** (`grid/hooks`, G8): single keys (A, R, Enter, Escape, X…) bound only while focus is inside that grid; never with Ctrl/⌘/Alt, while typing (inputs, selects, contenteditable, comboboxes), in an open cell editor, in a menu inside the grid or while a modal outside it is open; Enter/Space stay a focused button's; an auto-repeat runs only shortcuts that ask for it. Returns the hint list (`key`, `keyLabel`, `label`, `disabled`, `reason`) for a `Kbd` legend. The filter is `matchGridShortcut` (pure, tested in node).
 - Catalog: `#change-value-example`, `#countdown-example` (Components › Countdown), `#row-verbs-example` with `#grid-shortcuts-example` (a small approvals grid: two verbs, a held verb, a countdown status, a click that opens the row, the A/R/Enter/Esc legend).
 
+## Words: Partial update says when Publish sends no field — 2026-10-05
+
+Product sheet consistency wave 2, "Shopify + Etsy honest words" (D5, D13). Mirrored in Factory (`publishAction.ts` and its test).
+
+- **`publishAction.ts`**: `PublishActionValue.partialNote` (optional) — on a row where Publish sends none of the fields (a product already on Shopify, Etsy) the Partial update cell's tooltip and screen-reader sentence say that note instead of "Publish sends only the fields you changed." Absent = unchanged. `sendModeEditorOptions`: a Partial update choice with a `warning` notes "The default. <warning>" (`sendModeDefaultNote`, exported from `grid/renderers` for the Shared scope's editor); without one it keeps `SEND_MODE_DEFAULT_NOTE`.
+
 ## Words: the translation marks say the fact, not an action the sheet cannot do — 2026-10-04
 
 Shared Cell details (`docs/shared-cell-details/PLAN.md`, "Words fixed in the same PR"). One change in `provenanceTooltip` for both sheet scopes — the Shared scope's per-page `tooltip` override is gone. Mirrored in Factory (`provenance.ts`), except the tests and the `/design/language-axis` page.

@@ -25,6 +25,7 @@ import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
 import { ebayTransport } from './gateway/ebay.js'
 import { ebayFixedPriceOfferOf } from './ebay-price-readback.service.js'
+import { ebayQuantityLimitInvalid, offerQuantityLimit, parseEbayQuantityLimit } from './ebay-quantity-limit.js'
 import { confirmVariationPrices, type WrittenVariationPrice } from './ebay-variation-price-confirmation.js'
 import { ebayListingLanguage } from './gateway/channels.js'
 import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
@@ -647,18 +648,38 @@ export function buildBestOfferTerms(
 }
 
 /**
- * EFX P9f — per-listing cap on how many units one buyer may purchase
- * (eBay offer field `quantityLimitPerBuyer`). Operator override via the sheet's
- * quantity_limit_per_buyer column; falls back to our historical default of 10
- * when the cell is blank or not a valid ≥1 integer. Floors at 1.
+ * EFX P9f — per-listing cap on how many units one buyer may purchase (eBay offer field `quantityLimitPerBuyer`), from the
+ * row's quantity_limit_per_buyer. Wave 2 (2026-10-05): the one eBay rule (`ebay-quantity-limit.ts`) — a whole number,
+ * 1 or more; blank is null; a value eBay cannot take is null and a warning. It no longer invents 10: the offer then
+ * carries eBay's current limit (`offerQuantityLimit`), so a blank cell keeps eBay's value.
  */
-export function resolveQuantityLimitPerBuyer(row: Record<string, unknown>): number {
+export function resolveQuantityLimitPerBuyer(row: Record<string, unknown>, warnings?: string[]): number | null {
   const raw = row.quantity_limit_per_buyer
-  if (raw == null || raw === '') return 10
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n < 1) return 10
-  return Math.floor(n)
+  const { limit, invalid } = parseEbayQuantityLimit(raw)
+  if (invalid && warnings) {
+    const w = `${ebayQuantityLimitInvalid(raw)} Not sent.`
+    if (!warnings.includes(w)) warnings.push(w)
+  }
+  return limit
 }
+
+/**
+ * Wave 2 (2026-10-05) — the Max per buyer an offer body carries (see `offerQuantityLimit`): ours when set; for an offer
+ * eBay already holds, eBay's current limit (updateOffer replaces the whole offer), read once per SKU through the gateway
+ * unless the offer search already returned it; none for a new offer. `unreadStatus` = eBay's offer could not be read, so
+ * the caller must not send (a body without the limit would remove it).
+ */
+async function offerLimitFor(input: {
+  ours: number | null; offerId: string | null; known: Record<string, any> | null
+  send: EbaySend; apiBase: string; headers: Record<string, string>
+}): Promise<{ body: { quantityLimitPerBuyer?: number } } | { unreadStatus: number }> {
+  if (input.ours != null || !input.offerId) return { body: offerQuantityLimit(input.ours, null) }
+  if (input.known) return { body: offerQuantityLimit(null, input.known) }
+  const res = await input.send(`${input.apiBase}/sell/inventory/v1/offer/${encodeURIComponent(input.offerId)}`, { headers: input.headers })
+  if (!res.ok) return { unreadStatus: res.status }
+  return { body: offerQuantityLimit(null, await res.json().catch(() => null)) }
+}
+const OFFER_LIMIT_UNREAD = (status: number) => `Max per buyer is blank here, so Nexus keeps the limit eBay holds, but eBay's offer could not be read (${status}). This offer was not changed; publish again.`
 
 /**
  * EFX P9d — map the sheet's shared `video_id` cell onto the eBay Inventory API
@@ -1833,7 +1854,10 @@ export async function pushVariationGroup(
   if (parentRow.best_offer_enabled && opts?.warningsSink) {
     opts.warningsSink.push('Best Offer (Trattativa) isn’t supported on multi-variation eBay listings — it was ignored for this family.')
   }
-  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow)
+  // Wave 2 — the main row's Max per buyer for this market; a value eBay cannot take is named and not sent.
+  const limitWarnings: string[] = []
+  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow, limitWarnings)
+  for (const w of limitWarnings) sinkWarn(w)
 
   // Seed from Step-1 errors: if any inventory_item PUT already failed, skip
   // publish_by_group — eBay would reject it because the group's variantSKUs
@@ -1885,10 +1909,11 @@ export async function pushVariationGroup(
       // merchantLocationKey (top-level, not inside listingPolicies) tells eBay
       // the seller's location so it can resolve Item.Country for the listing.
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
-      quantityLimitPerBuyer,
+      // Max per buyer: added below, once the offer is known (wave 2 — a blank cell keeps eBay's limit).
     }
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
+    let knownOffer: Record<string, any> | null = null
     if (!offerId) {
       const getOfferRes = await send(
         `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
@@ -1898,9 +1923,21 @@ export async function pushVariationGroup(
         // CX — the FIXED_PRICE offer of this market; none (or several) → a fixed-price offer is created, and eBay
         // refuses a duplicate. `offers[0]` rewrote the auction offer whenever eBay listed it first.
         const od = await getOfferRes.json() as { offers?: unknown }
-        offerId = ebayFixedPriceOfferOf(od.offers, marketplaceId)?.offerId ?? null
+        knownOffer = ebayFixedPriceOfferOf(od.offers, marketplaceId)
+        offerId = knownOffer?.offerId ?? null
       }
     }
+
+    const limit = await offerLimitFor({ ours: quantityLimitPerBuyer, offerId, known: knownOffer, send, apiBase, headers })
+    if ('unreadStatus' in limit) {
+      const msg = OFFER_LIMIT_UNREAD(limit.unreadStatus)
+      const idx = results.findIndex(r => r.sku === sku)
+      if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
+      else results.push({ sku, market: mp, status: 'ERROR', message: msg })
+      anyOfferFailed = true
+      continue
+    }
+    Object.assign(offerBody, limit.body)
 
     if (offerId) {
       const upd = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
@@ -2292,7 +2329,7 @@ export async function pushOffersOnly(
   // EFX P9a/P9f — shared (parent-level) offer terms, resolved once for the family.
   const offerWarnings: string[] = []
   const bestOfferTerms = buildBestOfferTerms(parentRow, currency, offerWarnings)
-  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow)
+  const quantityLimitPerBuyer = resolveQuantityLimitPerBuyer(parentRow, offerWarnings)
   if (offerWarnings.length > 0) console.warn('[ebay-push] offers-only best-offer:', offerWarnings.join(' | '))
 
   const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
@@ -2342,6 +2379,7 @@ export async function pushOffersOnly(
     }
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
+    let knownOffer: Record<string, any> | null = null
     if (!offerId) {
       const getRes = await send(
         `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
@@ -2350,12 +2388,19 @@ export async function pushOffersOnly(
       if (getRes.ok) {
         // CX — the FIXED_PRICE offer of this market; none or several → refused below (never `offers[0]`).
         const od = await getRes.json() as { offers?: unknown }
-        offerId = ebayFixedPriceOfferOf(od.offers, marketplaceId)?.offerId ?? null
+        knownOffer = ebayFixedPriceOfferOf(od.offers, marketplaceId)
+        offerId = knownOffer?.offerId ?? null
       }
     }
 
     if (!offerId) {
       results.push({ sku, market: mp, status: 'ERROR', message: `No existing offer for ${sku} on ${mp} — run Full Publish first` })
+      continue
+    }
+    // Wave 2 — updateOffer replaces the whole offer: a blank Max per buyer carries eBay's current limit.
+    const limit = await offerLimitFor({ ours: quantityLimitPerBuyer, offerId, known: knownOffer, send, apiBase, headers })
+    if ('unreadStatus' in limit) {
+      results.push({ sku, market: mp, status: 'ERROR', message: OFFER_LIMIT_UNREAD(limit.unreadStatus) })
       continue
     }
 
@@ -2376,7 +2421,7 @@ export async function pushOffersOnly(
         ...(bestOfferEligible ? { bestOfferTerms } : {}),
       },
       ...(merchantLocationKey ? { merchantLocationKey } : {}),
-      quantityLimitPerBuyer,
+      ...limit.body,
     }
 
     const upd = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
@@ -2742,7 +2787,7 @@ export function buildFlatRow(
     // EFX P9b — eBay merchantLocationKey (shared). Blank falls back to the
     // account-configured default location at push time.
     merchant_location_key: (firstAttrs.merchantLocationKey as string | undefined) ?? '',
-    // EFX P9f — per-listing max qty per buyer (shared). Blank = default of 10.
+    // EFX P9f — per-listing max qty per buyer (shared). Blank = not set: the push keeps eBay's limit (wave 2).
     quantity_limit_per_buyer:
       (firstAttrs.quantityLimitPerBuyer as number | undefined) != null
         ? (firstAttrs.quantityLimitPerBuyer as number)
@@ -2914,7 +2959,7 @@ export function packSharedFields(row: Record<string, unknown>): {
       videoId: ((row.video_id as string) ?? '').trim(),
       // EFX P9b — merchantLocationKey (blank = account default at push).
       merchantLocationKey: (row.merchant_location_key as string) ?? '',
-      // EFX P9f — quantityLimitPerBuyer override; null when blank (push uses 10).
+      // EFX P9f — quantityLimitPerBuyer override; null when blank (the push keeps eBay's limit, wave 2).
       quantityLimitPerBuyer:
         row.quantity_limit_per_buyer != null && row.quantity_limit_per_buyer !== ''
           ? Number(row.quantity_limit_per_buyer)

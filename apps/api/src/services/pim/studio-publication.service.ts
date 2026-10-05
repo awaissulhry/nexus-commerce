@@ -27,7 +27,7 @@ import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
   SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
-import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, type ListingDeletion } from '@nexus/shared/listing-actions'
+import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
 import type { PublishCreateRow, StartAsTarget } from '@nexus/shared/publish-plan'
 import { verifyNewEbayListing } from './studio-publication-ebay-verify.js'
 import { readFbaUnits } from '../listings/listing-deletions.js'
@@ -141,7 +141,8 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
     if (target === 'inactive' && !familyMain && (scope.channel === 'AMAZON' || scope.channel === 'EBAY')) inactive.add(product.id)
   }
   const mainTarget = isNew(parent.id) && !held.has(parent.id) ? targetOf(parent.id) : null
-  const createStatus = scope.channel === 'SHOPIFY' && (mainTarget === 'active' || mainTarget === 'inactive') ? (mainTarget === 'active' ? 'ACTIVE' as const : 'DRAFT' as const) : null
+  // Wave 2 D4 — the one rule the sheet's "Shopify status" cell and the Media tab read too (`shopifyCreateStatus`).
+  const createStatus = scope.channel === 'SHOPIFY' ? shopifyCreateStatus(mainTarget) : null
   return { held, relist, inactive, startsAs, createStatus, choiceIds, deleted: (productId: string) => deletions.has(productId) }
 }
 
@@ -182,14 +183,20 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
     else if (scope.channel === 'SHOPIFY') {
       if (facts.excluded) throw new Error('This Shopify family has excluded variants. Review the family selection before publishing.')
       const { previewContentSync } = await import('../shopify/content-sync.service.js')
-      const preview = await previewContentSync(productId, { accountId: scope.accountId, listingId: scope.listingId, market: scope.marketplace }, true)
+      // Publish's own create status when it decided one (its Status choices, "New listings start as"; null = it holds the
+      // product itself): the review reads no other. Facts without choices leave it to the Status column, as the send does.
+      const decided = creates.createStatus !== null || creates.held.has(facts.parent.id)
+      const preview = await previewContentSync(productId, { accountId: scope.accountId, listingId: scope.listingId, market: scope.marketplace }, true,
+        decided ? { createStatus: creates.createStatus } : {})
       if (preview.remote || facts.listings.some(listing => listing.externalListingId))
-        issues.push({ severity: 'error', message: 'Change-only publishing for existing Shopify products is not available yet. Shopify remains gated while its linked products are prepared.' })
+        issues.push({ severity: 'error', message: SHOPIFY_EXISTING_NOT_YET })
       for (const message of preview.errors) issues.push({ severity: 'error', message })
       locations = preview.locations.filter(l => l.isActive).map(({ id, name }) => ({ id, name }))
       if (!locations.length) issues.push({ severity: 'error', message: 'This Shopify store has no active inventory location.' })
       // New listings — a product Shopify does not hold yet is created with the main row's Status (Active or a Draft).
-      visibility = String(!preview.remote && creates.createStatus ? creates.createStatus : preview.changes.newProductStatus)
+      // (Held by Not listed: nothing is created, so there is no visibility to name.)
+      const status = !preview.remote ? creates.createStatus ?? preview.changes.newProductStatus : preview.changes.newProductStatus
+      visibility = status ? String(status) : undefined
       const products = facts.products.map(product => {
         const variants = preview.variants.filter(variant => variant.id === product.id)
         if (variants.length > 1 || (!variants.length && product.id !== facts.parent.id)) throw new Error(`${product.sku}: the Shopify variant identity is unavailable.`)

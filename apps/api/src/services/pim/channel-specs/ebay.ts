@@ -90,11 +90,26 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
 // E1 (2026-10-04) — Nexus publishes fixed-price eBay listings only, so the list offers only that. A stored AUCTION shows
 // as off the list (it can be cleared) and publish still refuses it with its reason.
 const LISTING_FORMATS = ['FIXED_PRICE']
-const LISTING_DURATIONS = ['GTC', 'DAYS_1', 'DAYS_3', 'DAYS_5', 'DAYS_7', 'DAYS_10', 'DAYS_30']
+// Wave 2 (Owner decision 1, 2026-10-05) — every Trading publish sends GTC (`ebay-trading-api.service.ts`): a fixed-price
+// listing runs until cancelled. The column shows GTC, read-only (`EBAY_FIXED_VALUES`), whatever the listing stores.
+const LISTING_DURATIONS = ['GTC']
 const WEIGHT_UNITS = ['KILOGRAM', 'GRAM', 'POUND', 'OUNCE']
 const LENGTH_UNITS = ['CENTIMETER', 'METER', 'INCH', 'FEET']
 // E1 — the one package list publish knows (`ebay-packages.ts`); the column is strict: a type outside it cannot be sent.
 const PACKAGE_TYPES = EBAY_PACKAGE_TYPES
+
+// Wave 2 (Owner decision 8, 2026-10-05) — each listing setting says what a BLANK cell does at Publish, in true words for the
+// Trading publish (new listing, Partial update, Full update) and the Inventory photo publish. A field Publish fixes or
+// does not use carries its reason instead (`editHeldReason`: read-only, never a "Blank:" sentence).
+const BLANK_NONE = 'Blank: Publish sends none. A live listing keeps eBay\'s value.'
+const BLANK_POLICY = 'Blank: Publish uses this eBay account\'s default policy.'
+const BLANK_LOCATION = 'Blank: Publish uses the eBay account\'s location. A live listing keeps eBay\'s, unless a Full update sends the account\'s.'
+/** Wave 2 — the held columns' reasons (read-only on the sheet; the eBay workbook import does not import them). */
+export const EBAY_HELD_REASONS = {
+  listingDuration: 'eBay fixed-price listings run until cancelled. Publish always sends GTC.',
+  handlingTime: 'eBay takes the handling time from the listing\'s shipping policy. Change it in that policy on eBay.',
+  sharedSkuListing: 'Publish here does not use this. It only steered the old eBay flat-file page. To sell the same SKUs on another eBay listing, add a listing alias.',
+} as const
 
 export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const marketplace = String(input.marketplace).toUpperCase()
@@ -113,43 +128,47 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     }),
     listing('quantity', 'Quantità disponibile', 'Available quantity', { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),
     listing('title', 'Titolo', 'Title', { kind: 'text', maxLength: 80, requirement: 'required', masterKey: 'name', channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }),
-    listing('subtitle', 'Sottotitolo', 'Subtitle', { kind: 'text', maxLength: 55, channelStore: pa('subtitle') }),
+    listing('subtitle', 'Sottotitolo', 'Subtitle', { kind: 'text', maxLength: 55, channelStore: pa('subtitle'), helpText: 'Blank: Publish sends none. A live listing keeps eBay\'s subtitle, unless a Full update removes it.' }),
     listing('description', 'Descrizione', 'Description', { kind: 'longtext', requirement: 'required', masterKey: 'description', channelStore: { kind: 'listingColumn', column: 'description', followFlag: 'followMasterDescription' } }),
     listing('conditionId', 'Condizione', 'Condition', {
       kind: 'select', requirement: 'required', mode: 'strict',
       options: conditions.length > 0 ? conditions.map((c) => c.value) : ['NEW', 'NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING'],
       optionLabels: conditions.length > 0 ? Object.fromEntries(conditions.map((c) => [c.value, c.label])) : undefined,
       channelStore: pa('conditionId'),
+      helpText: 'Blank: Publish refuses a new listing without one. A live listing keeps eBay\'s condition.',
     }),
-    listing('categoryId', 'Categoria', 'Category', { kind: 'text', requirement: 'required', channelStore: pa('categoryId'), helpText: 'The eBay category this listing is filed under. eBay needs one per site; Publish refuses without it.' }),
-    listing('listingFormat', 'Formato', 'Listing format', { kind: 'select', mode: 'strict', options: LISTING_FORMATS, channelStore: pa('listingFormat') }),
-    listing('listingDuration', 'Durata', 'Listing duration', { kind: 'select', mode: 'strict', options: LISTING_DURATIONS, channelStore: pa('listingDuration') }),
-    listing('bestOffer', 'Proposta d\'acquisto', 'Best offer', { kind: 'boolean', channelStore: pa('bestOffer') }),
+    listing('categoryId', 'Categoria', 'Category', { kind: 'text', requirement: 'required', channelStore: pa('categoryId'), helpText: 'The eBay category this listing is filed under. eBay needs one per site. Blank: a variation row uses the main row\'s; Publish refuses a main row without one.' }),
+    listing('listingFormat', 'Formato', 'Listing format', { kind: 'select', mode: 'strict', options: LISTING_FORMATS, channelStore: pa('listingFormat'), helpText: 'Nexus publishes fixed-price listings only. Blank: Publish sends a fixed-price listing.' }),
+    listing('listingDuration', 'Durata', 'Listing duration', { kind: 'select', mode: 'strict', options: LISTING_DURATIONS, channelStore: pa('listingDuration'), editHeldReason: EBAY_HELD_REASONS.listingDuration }),
+    listing('bestOffer', 'Proposta d\'acquisto', 'Best offer', { kind: 'boolean', channelStore: pa('bestOffer'), helpText: BLANK_NONE }),
     // CHMAP M7 (B3) — the floor is eBay's autoDeclinePrice and the ceiling its autoAcceptPrice (`ebay-variation-push.service.ts`).
-    listing('bestOfferFloor', 'Rifiuto automatico sotto', 'Best offer auto-decline below', { kind: 'number', channelStore: pa('bestOfferFloor'), helpText: 'Offers below this are declined automatically (eBay autoDeclinePrice). Must be below the auto-accept price.' }),
-    listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: 'Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price.' }),
+    listing('bestOfferFloor', 'Rifiuto automatico sotto', 'Best offer auto-decline below', { kind: 'number', channelStore: pa('bestOfferFloor'), helpText: `Offers below this are declined automatically (eBay autoDeclinePrice). Must be below the auto-accept price. ${BLANK_NONE}` }),
+    listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: `Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price. ${BLANK_NONE}` }),
     // E1 (2026-10-04) — publish already sent the stored value (`QuantityRestrictionPerBuyer`) with no column to see or edit it.
-    listing('quantityLimitPerBuyer', 'Quantità massima per acquirente', 'Max per buyer', { kind: 'number', channelStore: pa('quantityLimitPerBuyer'), helpText: 'The most units one buyer may buy from this listing: a whole number, 1 or more. Blank: Publish sends no limit, and a live listing keeps the limit eBay holds.' }),
-    listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
-    listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
+    listing('quantityLimitPerBuyer', 'Quantità massima per acquirente', 'Max per buyer', { kind: 'number', channelStore: pa('quantityLimitPerBuyer'), helpText: 'The most units one buyer may buy from this listing: a whole number, 1 or more. Publish sends it (an eBay Inventory listing gets it when its photos are published). Blank: no limit is sent, and a live listing keeps the limit eBay holds.' }),
+    // Wave 2 (Owner decision 6) — not sent (eBay takes it from the shipping policy): read-only and blank (`EBAY_FIXED_VALUES`).
+    listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime'), editHeldReason: EBAY_HELD_REASONS.handlingTime }),
+    listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: `Two-letter country code for the item location. The legacy eBay workbook labels this field Location. ${BLANK_LOCATION}` }),
     // #30 (2026-09-30) — the city and postal code publish already reads (`studio-publication-ebay.ts`, `settings.itemLocation`
     // / `settings.itemPostalCode`) had no column, so a new listing on an account with no default location could not be published.
-    listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: 'City or town where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account\'s default location.' }),
-    listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: 'Postal code where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account\'s default location.' }),
-    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'strict', options: [...PACKAGE_TYPES], channelStore: pa('packageType') }),
-    listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] } }),
-    listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: 'Uses the shared package dimension unit.' }),
-    listing('packageWidth', 'Larghezza del pacco', 'Package width', { kind: 'number', channelStore: pa('packageWidth'), helpText: 'Uses the shared package dimension unit.' }),
-    listing('packageHeight', 'Altezza del pacco', 'Package height', { kind: 'number', channelStore: pa('packageHeight'), helpText: 'Uses the shared package dimension unit.' }),
-    listing('dimensionUnit', 'Unità delle dimensioni', 'Package dimension unit', { kind: 'select', mode: 'strict', options: LENGTH_UNITS, channelStore: pa('dimensionUnit'), helpText: 'Applies to package length, width and height together.' }),
-    listing('vatRate', 'Aliquota IVA', 'VAT rate (%)', { kind: 'number', channelStore: pa('vatRate') }),
-    listing('videoId', 'Video', 'Video id', { kind: 'text', channelStore: pa('videoId') }),
+    listing('itemLocation', 'Località dell’oggetto', 'Item location (city)', { kind: 'text', channelStore: pa('itemLocation'), helpText: `City or town where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account's default location. ${BLANK_LOCATION}` }),
+    listing('itemPostalCode', 'CAP dell’oggetto', 'Item location postal code', { kind: 'text', channelStore: pa('itemPostalCode'), helpText: `Postal code where the item is. eBay needs a postal code or a city, with the country, to create a listing. It overrides the account's default location. ${BLANK_LOCATION}` }),
+    listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'strict', options: [...PACKAGE_TYPES], channelStore: pa('packageType'), helpText: BLANK_NONE }),
+    listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] }, helpText: BLANK_NONE }),
+    listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
+    listing('packageWidth', 'Larghezza del pacco', 'Package width', { kind: 'number', channelStore: pa('packageWidth'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
+    listing('packageHeight', 'Altezza del pacco', 'Package height', { kind: 'number', channelStore: pa('packageHeight'), helpText: `Uses the shared package dimension unit. ${BLANK_NONE}` }),
+    listing('dimensionUnit', 'Unità delle dimensioni', 'Package dimension unit', { kind: 'select', mode: 'strict', options: LENGTH_UNITS, channelStore: pa('dimensionUnit'), helpText: 'Applies to package length, width and height together. Blank: a package length, width or height cannot be sent without it.' }),
+    // Wave 2 (Owner decision 7) — blank sends nothing (it sent <VATPercent>0</VATPercent>).
+    listing('vatRate', 'Aliquota IVA', 'VAT rate (%)', { kind: 'number', channelStore: pa('vatRate'), helpText: `A number from 0 to 100. ${BLANK_NONE}` }),
+    listing('videoId', 'Video', 'Video id', { kind: 'text', channelStore: pa('videoId'), helpText: BLANK_NONE }),
     listing('imageUrls', 'Immagini', 'Image URLs', { kind: 'text', shape: 'list', cardinality: { min: 1, max: 24 }, channelStore: pa('imageUrls'), helpText: 'The listing\'s picture URLs, in order — the Images tab publishes them; this column reads the same store.' }),
-    listing('paymentPolicyId', 'Regola di pagamento', 'Payment policy', { kind: 'text', channelStore: pa('paymentPolicyId') }),
-    listing('returnPolicyId', 'Regola di restituzione', 'Return policy', { kind: 'text', channelStore: pa('returnPolicyId') }),
-    listing('fulfillmentPolicyId', 'Regola di spedizione', 'Shipping policy', { kind: 'text', channelStore: pa('fulfillmentPolicyId') }),
-    listing('descriptionThemeId', 'Tema della descrizione', 'Description theme', { kind: 'text', channelStore: pa('descriptionThemeId') }),
-    listing('sharedSkuListing', 'Inserzione a SKU condiviso', 'Shared-SKU listing', { kind: 'boolean', channelStore: pa('sharedSkuListing') }),
+    listing('paymentPolicyId', 'Regola di pagamento', 'Payment policy', { kind: 'text', channelStore: pa('paymentPolicyId'), helpText: BLANK_POLICY }),
+    listing('returnPolicyId', 'Regola di restituzione', 'Return policy', { kind: 'text', channelStore: pa('returnPolicyId'), helpText: BLANK_POLICY }),
+    listing('fulfillmentPolicyId', 'Regola di spedizione', 'Shipping policy', { kind: 'text', channelStore: pa('fulfillmentPolicyId'), helpText: BLANK_POLICY }),
+    listing('descriptionThemeId', 'Tema della descrizione', 'Description theme', { kind: 'text', channelStore: pa('descriptionThemeId'), helpText: 'Blank: Publish uses the default description theme, or the plain description when there is none.' }),
+    // Wave 2 (Owner decision 4) — only the old flat-file page read it: read-only with the reason.
+    listing('sharedSkuListing', 'Inserzione a SKU condiviso', 'Shared-SKU listing', { kind: 'boolean', channelStore: pa('sharedSkuListing'), editHeldReason: EBAY_HELD_REASONS.sharedSkuListing }),
     // VT.1 (2026-09-13, D-VT3): the SHEET no longer serves this as a raw column - the engine-owned Variation
     // theme column does, and the exclusion lives in `sheet-columns.service.ts` where the sheet is built. The spec
     // still declares the field because the mapping engine's field catalogue reads this walk too (dropping it here

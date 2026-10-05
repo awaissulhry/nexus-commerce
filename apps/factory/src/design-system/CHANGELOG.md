@@ -1,3 +1,7 @@
+## Partial update says when Publish sends no field — 2026-10-05
+
+`publishAction.ts`: optional `PublishActionValue.partialNote` replaces the Partial update hint in the tooltip and the screen-reader sentence; `sendModeEditorOptions` notes a Partial update choice's `warning` as "The default. <warning>" (`sendModeDefaultNote`, exported from `grid/renderers`). Absent = unchanged. Mirrored from the web app.
+
 ## The translation marks say the fact only — 2026-10-04
 
 `provenanceTooltip`: `outdated` drops "Compare with the source; translate again or mark reviewed"; `ai` / `aiStale` with a source (a machine translation) read "Translated by machine and not reviewed yet" / "Translated by machine from an older value — {from} has changed since"; without one (an AI draft) they keep their sentences. Mirrored from the web app.

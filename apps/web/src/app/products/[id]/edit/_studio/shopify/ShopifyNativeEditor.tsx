@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { shopifyWeightSymbol, type InformationField, type InformationInventory } from '@nexus/shared/shopify-information'
+import { SHOPIFY_TEMPLATE_HINT, shopifyStatusLabel, shopifyWeightSymbol, type InformationField, type InformationInventory } from '@nexus/shared/shopify-information'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { Field } from '@/design-system/components'
 import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
@@ -42,7 +42,8 @@ export function ShopifyNativeEditor({ path, schema, field, value, disabled, onCh
     : null
   if (choices) return <Field label={field.label}><Select size="sm" disabled={disabled} value={value ?? ''} onChange={e => onChange(e.target.value || null)}><option value="">Not set</option>
     {value && !choices.some(c => c.name === value) && <option value={value}>{value} (current)</option>}
-    {choices.map(c => <option key={c.name} value={c.name}>{field.type === 'boolean' || field.type === 'inventory_policy' ? c.description : c.name}</option>)}
+    {/* A Shopify status reads in Title Case (Active); the value saved stays Shopify's code (ACTIVE). */}
+    {choices.map(c => <option key={c.name} value={c.name}>{field.type === 'boolean' || field.type === 'inventory_policy' ? c.description : field.id === 'status' ? shopifyStatusLabel(c.name) : c.name}</option>)}
   </Select></Field>
   if (field.id === 'category') return <div className={styles.stack}><p>{value ?? 'No category'}</p><Button size="sm" disabled={disabled} onClick={() => setPicker(true)}>Choose category</Button>
     <p className={styles.hint}>Existing category metafields are preserved. Shopify will reject a category that conflicts with them.</p>
@@ -64,7 +65,7 @@ export function ShopifyNativeEditor({ path, schema, field, value, disabled, onCh
       </Select></Field></div>)}</div>
   }
   const hint = field.id === 'handle' ? 'The old URL will redirect to the new handle. Shopify is checked for collisions before synchronization.'
-    : field.id === 'templateSuffix' ? 'Use the suffix of a product template in this store’s theme. Empty selects the default template.'
+    : field.id === 'templateSuffix' ? SHOPIFY_TEMPLATE_HINT
     : field.type === 'money' ? schema.currency : undefined
   return <Field label={field.label} hint={hint}>{field.type === 'multi_line_text_field'
     ? <Textarea rows={5} disabled={disabled} value={value ?? ''} onChange={e => onChange(e.target.value)} />

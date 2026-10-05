@@ -45,7 +45,7 @@ export const STATUS_COLUMN = 'publish:status'
 export const STATUS_COLUMN_LABEL = 'Status'
 /** "[clock Inactive] now Not listed" / "[Not listed] deleted 24 Oct" — the widest content, plus padding. */
 export const STATUS_COLUMN_WIDTH = 200
-export const STATUS_COLUMN_TIP = 'Is it on this channel and market: Active, Inactive, or Ended (eBay, Shopify). Change it here (Enter on a cell, or Action ▾ for the ticked rows); Publish sends the change. A row not on the channel ("new", or deleted) chooses what Publish does: Active or Inactive creates it, Not listed leaves it out.'
+export const STATUS_COLUMN_TIP = 'Is it on this channel and market: Active, Inactive, or Ended (eBay, Shopify). Change it here (Enter on a cell, or Action ▾ for the ticked rows); Publish sends the change. A row not on the channel ("new", or deleted) chooses what Publish does: Active or Inactive creates it, Not listed leaves it out. A choice a channel cannot take is held, with the reason.'
 
 export const ENDED_NEEDS_DELETE = 'Your role cannot end or delete listings.'
 export const STATUS_READ_FAILED = 'The selling state could not be read. Reload the sheet to try again.'

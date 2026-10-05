@@ -1,6 +1,6 @@
 import { shopifyJson } from '@nexus/shared/shopify-linked-products'
 import { informationDraftFieldError } from '@nexus/shared/shopify-information-editing'
-import { nativeFieldValueError, shopifyWeightSymbol, type InformationField, type NativeEdit } from '@nexus/shared/shopify-information'
+import { nativeFieldValueError, shopifyStatusLabel, shopifyWeightSymbol, type InformationField, type NativeEdit } from '@nexus/shared/shopify-information'
 
 /** The sheet's draft check; native content capability comes from its actual write route. */
 export function informationDraftCellError(field: InformationField, value: string | null, baseline: string | null, hasContentAddress: boolean): string | null {
@@ -13,6 +13,8 @@ export function informationValueLabel(type: string, raw: string | null | undefin
   if (raw === undefined) return 'Unavailable'
   if (raw === null) return 'Not set'
   if (raw === '') return 'Empty'
+  // Shopify status (D4): Title Case words; the stored value stays Shopify's code (ACTIVE reads "Active").
+  if (type === 'status') return shopifyStatusLabel(raw)
   try {
     if (type.startsWith('list.') && !type.includes('_reference')) {
       const values = shopifyJson.parse(raw)

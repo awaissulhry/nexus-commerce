@@ -111,3 +111,25 @@ describe('a Shopify weight reads as its symbol', () => {
     expect(informationDraftCellError(handle, 'Moss-Jacket', 'moss-jacket', false)).toBe('Use lowercase letters, numbers and separating hyphens.')
   })
 })
+/* Wave 2 D4 — "Shopify status" reads in Title Case; the stored value stays Shopify's code. */
+describe('a Shopify status reads in Title Case', () => {
+  it.each([['ACTIVE', 'Active'], ['DRAFT', 'Draft'], ['ARCHIVED', 'Archived'], ['UNLISTED', 'Unlisted']])('%s', (code, words) => {
+    expect(informationValueLabel('status', code)).toBe(words)
+  })
+  it('an unknown code is shown as Shopify wrote it; no value keeps its words; the field is "Shopify status"', () => {
+    expect(informationValueLabel('status', 'SCHEDULED')).toBe('SCHEDULED')
+    expect(informationValueLabel('status', null)).toBe('Not set')
+    const status = fields.find(f => f.id === 'status')!
+    expect(status.label).toBe('Shopify status')
+    expect(informationDraftCellError(status, 'ACTIVE', 'DRAFT', false)).toBeNull()
+  })
+})
+/* Wave 2 D3 (Owner decision 11, A) — clearing the theme template is the store's default template, never "Enter a value". */
+describe('the theme template can be cleared', () => {
+  it('no value and \'\' are both the store\'s default template; a bad suffix still says why', () => {
+    const template = fields.find(f => f.id === 'templateSuffix')!
+    expect(informationDraftCellError(template, null, 'nexus', false)).toBeNull()
+    expect(informationDraftCellError(template, '', 'nexus', false)).toBeNull()
+    expect(informationDraftCellError(template, 'not valid!', 'nexus', false)).toBe('Enter a template suffix, or leave it empty for the default template.')
+  })
+})

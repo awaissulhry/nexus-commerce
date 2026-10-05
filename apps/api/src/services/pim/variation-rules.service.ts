@@ -32,6 +32,7 @@ import {
   dropsForTheme,
   marketplaceIdFor,
   normaliseStoredTheme,
+  offeredThemes,
   themeSegments,
   type ThemeSchemaFacts,
   type ThemeTieBreak,
@@ -757,7 +758,8 @@ function resolveAmazon(input: ResolveVariationInput): VariationThemeCell {
     }))
   }
 
-  const items = classifyThemes(facts).map((t) => {
+  // Wave 2 A4 — only the themes Amazon accepts, plus this cell's own theme even when Amazon deprecated it.
+  const items = offeredThemes(classifyThemes(facts), code).map((t) => {
     const labels = themeSegments(t.code).map((segment) => {
       const bound = bindSegmentToAttribute(segment, properties)
       return attributeTitle(bound?.attribute ?? null, properties) ?? humanise(bound?.attribute ?? segment)

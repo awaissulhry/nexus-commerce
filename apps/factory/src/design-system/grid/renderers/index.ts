@@ -118,7 +118,7 @@ export {
 export { SellingStatusCell, SellingStatusView, SellingStatePill, type SellingStatusViewProps } from './SellingStatusCell'
 export {
   publishActionModel, sendModeEditorOptions, SEND_MODE_WORD, SEND_MODE_TONE, SEND_MODE_HINT, SEND_MODE_GROUP,
-  SEND_MODE_DEFAULT_NOTE, SEND_MODE_REFUSED_FALLBACK,
+  SEND_MODE_DEFAULT_NOTE, SEND_MODE_REFUSED_FALLBACK, sendModeDefaultNote,
   // A row not on the channel (new, or deleted by Nexus) reads Full update: sent whole (simplify, 2026-10-04).
   NEW_ROW_SENT_WHOLE, NEW_ROW_LEFT_OUT_HINT, DELETED_ROW_LEFT_OUT_HINT, NEW_ROW_FULL_NOTE,
   type SendMode, type PublishActionValue, type PublishActionKind, type PublishActionModel, type SendModeChoiceLike,

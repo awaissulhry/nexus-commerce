@@ -13,7 +13,7 @@ import { languageLabel } from '../../scopes'
 import type { StudioCellValue } from './types'
 import { offerDraftCellWords, pendingPublishOf } from './offerDrafts'
 import { fallbackLanguage, languageTextName } from '../languages'
-import { attentionCause, channelCellProvenance, contentTransformsOf, mappingErrorWords, SHOPIFY_DRAFT_WORDS, type ChannelCellVerdictOptions } from './channelCellProvenance'
+import { attentionCause, channelCellProvenance, contentTransformsOf, mappingErrorWords, SHOPIFY_DRAFT_WORDS, shopifyKeepsOwnValue, type ChannelCellVerdictOptions } from './channelCellProvenance'
 
 export interface ValueSourceDescription {
   kind: ValueSourceKind
@@ -50,12 +50,18 @@ export function describeValueSource(cell: StudioCellValue | undefined, member: C
           const words = mappingErrorWords(cell, drawsRequired)!
           return marked('warning', `${words.label}: ${words.description}`)
         }
-        case 'divergence': return marked('warning', `Publishes another value: ${cell!.divergence!.note}`)
+        /* D5: a product Shopify already holds keeps its own value while the cell follows Shared — nothing publishes it. The
+           server's note already says so ("Shopify keeps 2 kg. …"): it then stands alone, never after the same words. */
+        case 'divergence': {
+          const note = cell!.divergence!.note
+          if (!shopifyKeepsOwnValue(cell)) return marked('warning', `Publishes another value: ${note}`)
+          return marked('warning', /^Shopify keeps\b/.test(note.trim()) ? note : `Shopify keeps another value: ${note}`)
+        }
         default: return marked('warning', provenanceTooltip('attention', null))
       }
     case 'pending':
       /* Amazon sheet gaps (D4=B) — an offer change saved in Nexus that Publish sends: never drawn as a live value. A Shopify
-         edit Shopify does not have yet waits for Review synchronization. */
+         edit Shopify does not have yet waits for Review and synchronize…. */
       return marked('pending', waiting ? offerDraftCellWords(waiting).description : SHOPIFY_DRAFT_WORDS)
     /* The fact only (2026-10-04, honest words): the sheet has no per-cell "translate again" or "review" for a translation
        on any scope, so these no longer advise one — the mark's sentence says the same (`provenanceTooltip`). */

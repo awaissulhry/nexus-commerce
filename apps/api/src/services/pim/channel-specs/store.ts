@@ -1,5 +1,5 @@
 import { normalizeLanguage } from '../content-language.js'
-import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
+import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
 import { shopifyDefinitionApplicability, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
 
@@ -61,6 +61,9 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     // Shopify's handle rule, the one Publish checks (`nativeFieldValueError`): capitals are refused, never lowered (decision 12).
     handle: { validation: { pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } },
     tags: { validation: { uniqueItems: true }, maxLength: 255 },
+    // Wave 2 D3 (Owner decision 11, A) — a product Nexus creates uses the Nexus template: the default rule supplies it, so
+    // the sheet shows it as the inherited value and the create sends it (a stored value wins; cleared = the store's default).
+    templateSuffix: { defaultRule: { source: '', transforms: [{ type: 'default', value: SHOPIFY_NEXUS_TEMPLATE }] }, helpText: SHOPIFY_TEMPLATE_HINT },
   }
   const fields = informationRegistry(schema).flatMap(info => {
     const key = shopifyMappingFieldKey(info, accountId ?? '')

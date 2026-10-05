@@ -21,8 +21,15 @@ export interface InformationField {
 }
 type Core = [string, string, InformationGroup, 'PRODUCT' | 'PRODUCTVARIANT', string, string?]
 const P = 'PRODUCT', V = 'PRODUCTVARIANT'
-/** Confirmed Nexus equivalents, independent of editable mapping rules and store definitions. */
-const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', harmonizedSystemCode: 'HS code' }
+/**
+ * Confirmed Nexus equivalents, independent of editable mapping rules and store definitions. `status` is "Shopify status"
+ * (D4): the sheet's own Status column (the Publish group) is another control, so the two never share a header.
+ */
+const nexusLabels: Record<string, string> = { title: 'Name', vendor: 'Brand', harmonizedSystemCode: 'HS code', status: 'Shopify status' }
+/** Shopify's product status codes as people read them (D4). The stored and sent value stays Shopify's code. */
+export const SHOPIFY_STATUS_LABEL: Readonly<Record<string, string>> = { ACTIVE: 'Active', DRAFT: 'Draft', ARCHIVED: 'Archived', UNLISTED: 'Unlisted' }
+/** A Shopify product status code in words ("ACTIVE" → "Active"); a code Nexus does not know stays as Shopify wrote it. */
+export const shopifyStatusLabel = (code: string): string => Object.prototype.hasOwnProperty.call(SHOPIFY_STATUS_LABEL, code) ? SHOPIFY_STATUS_LABEL[code] : code
 /** Native fields describe the connector capabilities. Custom fields come only from the selected store. */
 const core: Core[] = [
   ['title', 'Title', 'General', P, 'single_line_text_field'],
@@ -172,6 +179,8 @@ export const nativeEditAddress = (edit: Pick<NativeEdit, 'ownerId' | 'field' | '
 export type MediaOrderEdit = z.infer<typeof mediaOrderEditSchema>
 /** Money comparison is decimal-string based; never round through a JavaScript number. */
 export function nativeValuesEqual(field: string, a: string | null | undefined, b: string | null | undefined): boolean {
+  // The theme template: no value and '' both mean the store's default template.
+  if (nativeEmptyClearFields.includes(field) && a !== undefined && b !== undefined) return (a ?? '') === (b ?? '')
   if (a == null || b == null) return a === b
   if (field === 'tags') {
     try {
@@ -196,6 +205,21 @@ export interface InformationMedia { id: string; alt: string; type: string; statu
 export interface InformationRow { id: string; productId: string; title: string; handle: string; kind: 'PRODUCT' | 'PRODUCTVARIANT'; image: string | null; values: Record<string, string | null>; fields: ShopifyFieldSnapshot[]; media: InformationMedia[]; locale?: string; translations?: Record<string, InformationTranslationValue> }
 export interface InformationSnapshot { currency: string; timezone: string; rows: InformationRow[] }
 export const nativeNullableFields: readonly string[] = ['compareAtPrice', 'seo.title', 'seo.description', 'harmonizedSystemCode', 'countryCodeOfOrigin', 'cost', 'category']
+
+/**
+ * Wave 2 D3 (Owner decision 11, option A) — the theme template. A product Nexus creates uses the Nexus template unless the
+ * listing says otherwise: the field's default rule supplies `SHOPIFY_NEXUS_TEMPLATE`, and the create sends the resolved
+ * value (a stored one wins). Clearing it stores '' — the store's default template, as Shopify reads it back — and '' is
+ * sent to Shopify as null. A product already on Shopify shows and keeps Shopify's own value.
+ */
+export const SHOPIFY_NEXUS_TEMPLATE = 'nexus'
+export const SHOPIFY_TEMPLATE_HINT = 'New products use the Nexus template (nexus). Clear it to use the store\'s default template.'
+/** Fields a cleared cell stores as '' (not null): the theme template's '' is the store's default template. */
+export const nativeEmptyClearFields: readonly string[] = ['templateSuffix']
+/** The value a writer stores for a native field: a cleared theme template is '' (the store's default template). */
+export const nativeWriteValue = (field: string, raw: string | null): string | null => raw === null && nativeEmptyClearFields.includes(field) ? '' : raw
+/** The theme template Shopify is sent: '' (the store's default) goes as null. */
+export const shopifyTemplateSuffixInput = (value: string | null | undefined): string | null => value ? value : null
 /** Inventory verification checks intended quantity changes; Shopify owns the companion state. */
 export function nativeEditVerified(edit: NativeEdit, actual: string | null | undefined): boolean {
   if (edit.field !== 'inventory') return nativeValuesEqual(edit.field, actual, edit.nextValue)
@@ -219,7 +243,7 @@ export function nativeFieldValueError(key: NativeEdit['field'], raw: string | nu
   if (!field || field[5]) return field?.[5] ?? 'This Shopify field is unavailable.'
   const edit = { field: key, nextValue: raw, value: baseline }
   if (edit.field === 'inventory') return inventoryEditError(edit.value, raw)
-  if (raw === null) return nativeNullableFields.includes(edit.field) ? null : 'Enter a value for this field.'
+  if (raw === null) return nativeNullableFields.includes(edit.field) || nativeEmptyClearFields.includes(edit.field) ? null : 'Enter a value for this field.'
   if (raw.length > 60000) return 'This value is too long.'
   if (field[4] === 'money' && !/^\d+(\.\d{1,4})?$/.test(raw)) return 'Enter a nonnegative decimal amount with up to four decimal places.'
   if (field[4] === 'boolean' && !['true', 'false'].includes(raw)) return 'Choose True or False.'

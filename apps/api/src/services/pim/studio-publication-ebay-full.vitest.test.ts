@@ -85,6 +85,14 @@ describe('ebayFullRevision', () => {
     expect(full.xml).toContain('<ListingDetails><BestOfferAutoAcceptPrice currencyID="EUR">15.00</BestOfferAutoAcceptPrice><MinimumBestOfferPrice currencyID="EUR">10.00</MinimumBestOfferPrice></ListingDetails>')
     expect(full.keptRoots).toEqual(['VATDetails'])
   })
+  it('wave 2: a stored handling time and a blank VAT send nothing; eBay keeps its own, and the review names both', () => {
+    const raw = getItem('<ConditionID>1000</ConditionID><DispatchTimeMax>2</DispatchTimeMax><Quantity>5</Quantity>', '<ListingStatus>Active</ListingStatus><QuantitySold>2</QuantitySold>')
+    const full = ebayFullRevision({ shared: input([{ sku: 'ONE', colour: 'Black', price: 20, quantity: 1 }]) as any,
+      settings: { handlingTime: 3, vatRate: '' }, itemId: '456', single: true, ...read(raw) })
+    expect(full.xml).not.toContain('<DispatchTimeMax>')
+    expect(full.xml).not.toContain('<VATDetails>')
+    expect(full.keptRoots).toEqual(['VATDetails', 'DispatchTimeMax'])
+  })
 
   it.each([
     ['one product here, variations on eBay', true, multiLive],

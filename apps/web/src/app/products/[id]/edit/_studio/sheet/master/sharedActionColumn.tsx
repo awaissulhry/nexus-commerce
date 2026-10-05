@@ -27,13 +27,13 @@
 import { SEND_MODES, type PublishActionCell, type SendMode } from '@nexus/shared/publish-actions'
 import {
   SelectPanelEditor, composeCellTooltip, roundTripClassRules, saveNote, waitingSetPhrase,
-  NEW_ROW_SENT_WHOLE, SEND_MODE_DEFAULT_NOTE, SEND_MODE_GROUP, SEND_MODE_REFUSED_FALLBACK, SEND_MODE_TONE, SEND_MODE_WORD,
+  NEW_ROW_SENT_WHOLE, SEND_MODE_GROUP, SEND_MODE_REFUSED_FALLBACK, SEND_MODE_TONE, SEND_MODE_WORD, sendModeDefaultNote,
   type ColDef, type SelectPanelOption,
 } from '@/design-system/grid'
 import type { ActionImpact } from '@/design-system/grid/actions/registry'
 import { isClearKey } from '../sheetReset'
 import { SKIP_CELL, operationToast, type PublishActionWriteOutcome, type PublishCellInput } from '../usePublishActions'
-import { ACTION_COLUMN, DELETE_NEEDS_DELETE, actionEditorChoices, parseSendInput } from '../channel/actionColumn'
+import { ACTION_COLUMN, DELETE_NEEDS_DELETE, actionEditorChoices, actionPartialNote, parseSendInput } from '../channel/actionColumn'
 import { actionMenuEntries, type ActionMenuEntry, type ActionMenuRow } from '../channel/channelActions'
 import { samePublishCellValue, type PublishCellReadState } from '../channel/statusColumn'
 import { marketLabel, sendWaitingOf } from '../../SellingSummary'
@@ -61,6 +61,25 @@ const sentence = (text: string) => { const t = text.trim(); return !t ? '' : /[.
 const n = (count: number) => count.toLocaleString('en')
 const plural = (count: number, one: string, many: string) => `${n(count)} ${count === 1 ? one : many}`
 const QUIET_HINT = 'Publish sends only the fields you changed.'
+
+/**
+ * What Partial update does across a product's markets ON the channel, where some market's Partial update carries the
+ * channel scope's own note (D5, D13: a product already on Shopify — `SHOPIFY_EXISTING_NOT_YET` —, Etsy —
+ * `ETSY_FIELDS_NOT_SENT`): the note alone when every market shares it; otherwise each note after the markets it applies
+ * to, then "Other markets: Publish sends only the fields you changed.". Null when no market has a note (the usual hint).
+ */
+export function sharedPartialHint(listed: readonly PublishActionCell[]): string | null {
+  const byNote = new Map<string, string[]>()
+  let plain = 0
+  for (const cell of listed) {
+    const note = actionPartialNote(cell)
+    if (note) byNote.set(note, [...(byNote.get(note) ?? []), marketLabel(cell)])
+    else plain += 1
+  }
+  if (!byNote.size) return null
+  if (!plain && byNote.size === 1) return [...byNote.keys()][0]
+  return [...[...byNote].map(([note, markets]) => `${markets.join(', ')}: ${sentence(note)}`), plain ? `Other markets: ${QUIET_HINT}` : null].filter(Boolean).join(' ')
+}
 
 // ── Markets not on the channel (new, or deleted by Nexus) ─────────────────────────────────────────
 
@@ -130,7 +149,9 @@ export function sharedActionValue(cells: readonly PublishActionCell[], read: Pub
     const listed = listedCells.length
     const where = total <= 1 ? '' : listed === total ? ` on every market (${n(total)})` : ` on ${n(listed)} of ${n(total)} markets`
     const asideWords = [gone, fresh].filter(Boolean).join(' · ') || null
-    const quietValue = quiet(`Action: ${SEND_MODE_WORD.partial}${where}. ${QUIET_HINT}${asideWords ? ` ${sentence(asideWords)}` : ''}`, composeCellTooltip(`${SEND_MODE_WORD.partial}${where}: ${QUIET_HINT}`, lines), null)
+    // A product already on Shopify, or on Etsy: Publish sends none of those markets' fields — said, never "only the fields you changed".
+    const hint = sharedPartialHint(listedCells) ?? QUIET_HINT
+    const quietValue = quiet(`Action: ${SEND_MODE_WORD.partial}${where}. ${hint}${asideWords ? ` ${sentence(asideWords)}` : ''}`, composeCellTooltip(`${SEND_MODE_WORD.partial}${where}: ${hint}`, lines), null)
     return asideWords ? { ...quietValue, aside: asideWords } : quietValue
   }
   const by = waiting.by ? waitingSetPhrase(waiting.by, now) : ''
@@ -165,7 +186,8 @@ export function sharedActionEditorOptions(input: readonly PublishActionCell[], c
     if (mode === 'partial' && gone.length === total) return { ...base, heldReason: sharedDeletedRefusal(gone[0]), note: sharedDeletedRefusal(gone[0]) }
     if (mode === 'partial') {
       const skipped = gone.length ? ` ${n(gone.length)} deleted ${gone.length === 1 ? 'market stays' : 'markets stay'} as ${gone.length === 1 ? 'it is' : 'they are'}: set ${gone.length === 1 ? 'its' : 'their'} Status in ${gone.length === 1 ? 'its' : 'their'} own sheet.` : ''
-      return { ...base, note: `${waiting ? `Clears ${plural(waiting.count, 'waiting value', 'waiting values')}. ` : ''}${SEND_MODE_DEFAULT_NOTE}${skipped}` }
+      const note = sendModeDefaultNote(sharedPartialHint(cells.filter(cell => !cell.create)))
+      return { ...base, note: `${waiting ? `Clears ${plural(waiting.count, 'waiting value', 'waiting values')}. ` : ''}${note}${skipped}` }
     }
     let allowed = 0
     let waitingHere = 0

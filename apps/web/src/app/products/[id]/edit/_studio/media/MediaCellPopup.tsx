@@ -47,6 +47,8 @@ export interface PlanMediaPopupProps {
   onOpenMediaPage(): void
   /** A change not yet saved, or a save on its way (switching scope or leaving the page asks first). */
   onDirtyChange?(dirty: boolean): void
+  /** The row is already on Shopify (the channel sheet's `row.shopify`): its save line names Review and synchronize…, not Publish. */
+  onShopify?: boolean
 }
 
 /**
@@ -55,7 +57,7 @@ export interface PlanMediaPopupProps {
  * photo in the same panel — no dialog on a dialog. Enter or a click outside saves ONE change; Esc cancels.
  */
 export function PlanMediaPopup(props: PlanMediaPopupProps) {
-  const { productId, rowProductId, title, address, locale, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange } = props
+  const { productId, rowProductId, title, address, locale, canEdit, anchor, initial, onApply, onSaved, onClose, reporter, onOpenMediaPage, onDirtyChange, onShopify } = props
   const data = useMediaPopupData(productId)
   const language = locale === 'und' ? null : locale
   // Layers from the read the pop-up opened with (what a save may overwrite); the library from the latest read.
@@ -197,7 +199,7 @@ export function PlanMediaPopup(props: PlanMediaPopupProps) {
   return <CellPanel anchor={anchor} label={`Product media: ${title}`} onSave={save} onCancel={() => { if (!busy) close() }}
     footer={<>
       <span className="nds-editor-keyhint">{busy ? <><Spinner size={12} /> Saving…</> : EDITOR_KEY_HINT_PANEL}</span>
-      <span className={styles.muted}>{base ? model.saveLine(base, draft ?? { skuOnly: base.skuOnly }) : ''}</span>
+      <span className={styles.muted}>{base ? model.saveLine(base, draft ?? { skuOnly: base.skuOnly }, { onShopify }) : ''}</span>
     </>}>
     <div ref={root} className={styles.popup} data-cell-editor="product-media" onKeyDownCapture={onKeyCapture} aria-busy={busy || data.state.status === 'loading'}>
       <PopupHead context={context} title={title} />

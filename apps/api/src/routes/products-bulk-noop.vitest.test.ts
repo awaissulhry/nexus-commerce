@@ -172,6 +172,36 @@ describe('Shopify and Etsy store information saves', () => {
       expect(productUpdate).not.toHaveBeenCalled()
     } finally { columns.mockRestore(); category.mockRestore() }
   })
+  /* Wave 2 D3 + D4 — the theme template's clear stores '' (the store's default template); the Shopify status of a product
+     not on Shopify yet is read-only (the Status column's choice creates it). */
+  describe('Shopify theme template and status', () => {
+    const coordinate = { channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify · GLOBAL', inMarket: false }
+    const write = async (key: string, value: string | null, externalListingId: string | null) => {
+      const spec = shopifyProductSpec(null, 'store-outlet'), field = spec.fields.find(f => f.shopifyField?.id === key)!
+      const built = sheetColumns.buildSheetColumns({ fields: [], specs: [{ coordinate, spec }], coordinates: [coordinate], scopeKind: 'channel' })
+      const columns = vi.spyOn(sheetColumns, 'getSheetColumns').mockResolvedValue({ ...built, coordinates: [coordinate] } as never)
+      const category = vi.spyOn(categoryContext, 'productCategoryContext').mockResolvedValue({ categories: [], byRow: new Map(), defaults: {} } as never)
+      namedConnection.mockResolvedValue({ id: 'store-outlet', channelType: 'SHOPIFY', isActive: true })
+      channelListingFindMany.mockResolvedValue([listingRow({ channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-outlet', externalListingId, platformAttributes: { keep: false } })])
+      try {
+        return await patch({ changes: [{ id: PRODUCT_ID, field: `attr_${field.key}`, value, target: 'channel', intent: 'set' }], marketplaceContexts: [{ channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'store-outlet' }], expectedVersion: 19 })
+      } finally { columns.mockRestore(); category.mockRestore() }
+    }
+    const persisted = () => JSON.parse(executeRaw.mock.calls.find(args => args[0].join('').includes('"platformAttributes" ='))![1])
+    it('a cleared theme template is stored as \'\' (the store\'s default template), not refused', async () => {
+      const result = await write('templateSuffix', null, null)
+      expect(result.statusCode, result.body).toBe(200)
+      expect(persisted().templateSuffix).toBe('')
+    })
+    it('the Shopify status of a product not on Shopify yet is refused with the reason; on Shopify it is saved', async () => {
+      const refused = await write('status', 'ACTIVE', null)
+      expect(refused.json().errors).toEqual([expect.objectContaining({ error: "A product not on Shopify yet is created with the Status column's choice. Change it there." })])
+      expect(executeRaw).not.toHaveBeenCalled()
+      const saved = await write('status', 'ACTIVE', '10')
+      expect(saved.statusCode, saved.body).toBe(200)
+      expect(persisted().status).toBe('ACTIVE')
+    })
+  })
   it.each(['SHOPIFY', 'ETSY'] as const)('refuses legacy %s title mutations until an explicit content address is supplied', async channel => {
     const coordinate = { channel, marketplace: 'GLOBAL', label: `${channel === 'SHOPIFY' ? 'Shopify' : 'Etsy'} · GLOBAL`, inMarket: false }
     const spec = channel === 'SHOPIFY' ? shopifyProductSpec() : etsyProductSpec()

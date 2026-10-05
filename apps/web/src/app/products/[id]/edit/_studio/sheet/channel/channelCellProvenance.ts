@@ -254,8 +254,20 @@ export interface ChannelCellFromContext {
   now?: number
 }
 
-/** Words for a Shopify edit Shopify does not have yet — the mark's sentence and Cell details' description. */
-export const SHOPIFY_DRAFT_WORDS = 'Saved in Nexus — not sent to Shopify yet. Review synchronization to send it'
+/**
+ * Words for a Shopify edit Shopify does not have yet — the mark's sentence and Cell details' description. Review and
+ * synchronize… (the sheet's menu) sends it; Publish does not update a product already on Shopify (D5).
+ */
+export const SHOPIFY_DRAFT_WORDS = 'Saved in Nexus — not sent to Shopify yet. Use Review and synchronize… to send it'
+
+/**
+ * A Shopify cell that follows the Shared product on a product Shopify already holds while Shopify keeps another value
+ * (the API's `liveSharedDivergence`): nothing publishes the value shown, so its divergence is not "publishes another
+ * value" (D5). A saved draft against a sharing rule is pinned, so it is never this. The pop-up's banner and Cell details
+ * read this one rule.
+ */
+export const shopifyKeepsOwnValue = (cell: Pick<StudioCellValue, 'divergence' | 'shopifyWrite' | 'pinned' | 'inherited'> | undefined): boolean =>
+  !!cell?.divergence && !!cell.shopifyWrite && cell.pinned === false && cell.inherited === true
 
 /** The sentence an `attention` cell carries — the server's or the sheet's own words, verbatim. */
 export function attentionSentence(cell: StudioCellValue, drawsRequired = false, now?: number): string | null {

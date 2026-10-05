@@ -121,6 +121,8 @@ export const SHOPIFY_LINKED_REFUSED = 'This family is several Shopify products (
 export const SHOPIFY_PAUSE_CHECK = 'Nexus checks each variant first. A variant that sells when out of stock ("Continue selling when out of stock" in Shopify) is not paused, because quantity 0 would not stop its sales.'
 export const ETSY_NO_END = 'Etsy has no End here. Set Inactive to pause the listing.'
 export const ETSY_DELETE_NOT_YET = 'Deleting Etsy listings from Nexus is not available yet. Set Inactive, or delete it in Etsy.'
+/** D13 (decision 12): while Etsy publishing is off on the server, an Etsy Status change is held with this reason. */
+export const ETSY_PUBLISHING_OFF = 'Etsy publishing is turned off, so Publish cannot change this. Change it in Etsy.'
 
 export interface CapabilityFacts {
   /** Amazon: this row's offer is fulfilled by Amazon. */
@@ -380,6 +382,21 @@ export function newListingDefault(channel: string, options: { shopifyActive?: bo
   return 'not_listed'
 }
 
+/**
+ * Wave 2 D4 (Owner decisions 9, 10) — the ONE rule for the status a product Shopify does not hold yet is created with:
+ * the Status column's choice of its main row on that Shopify store (`newListingChoice`). Active creates it ACTIVE,
+ * Inactive creates it as a DRAFT, Not listed creates nothing (null). Publish, the sheet's "Shopify status" cell and the
+ * Media tab's "Create reviewed product" read it; a stored Shopify status never decides a create.
+ */
+export type ShopifyCreateStatus = 'ACTIVE' | 'DRAFT'
+export function shopifyCreateStatus(target: NewListingTarget | null | undefined): ShopifyCreateStatus | null {
+  return target === 'active' ? 'ACTIVE' : target === 'inactive' ? 'DRAFT' : null
+}
+/** The "Shopify status" cell of a row not on Shopify yet: read-only, it shows the Status column's create value. */
+export const SHOPIFY_STATUS_FROM_STATUS_COLUMN = 'A product not on Shopify yet is created with the Status column\'s choice. Change it there.'
+/** The Media tab's "Create reviewed product" when the Status column says Not listed: nothing is created. */
+export const SHOPIFY_CREATE_NOT_LISTED = 'This product\'s Status is Not listed for this Shopify store, so Nexus does not create it. Set its Status to Active or Inactive first.'
+
 export interface NewListingChoiceInput {
   channel: string
   /** This row's own stored choice (`sellingTarget` on a row not on the channel), or null. */
@@ -475,6 +492,15 @@ export function statusOptionsFor(state: SellingState, model: ListingModel, facts
     const capability = listingActionCapability(model, action, facts, channelLabel)
     return { target, offered: capability.offered, action, reason: capability.reason, warning: capability.warning, checkedAtSend: capability.checkedAtSend }
   })
+}
+
+/**
+ * PURE. The same Status choices with every CHANGE held with `reason` (a channel Publish cannot send to now, e.g. Etsy
+ * while Etsy publishing is off): a choice that would send something is refused; the row's current value (no action) and
+ * a choice already refused keep what they say.
+ */
+export function holdStatusChanges(options: StatusOption[], reason: string): StatusOption[] {
+  return options.map(option => option.offered && option.action ? { ...option, offered: false, reason, warning: null, checkedAtSend: null } : option)
 }
 
 // ── The wire shapes (API ↔ web) ──────────────────────────────────────────────────────────────────

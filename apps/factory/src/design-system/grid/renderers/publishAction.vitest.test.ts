@@ -91,3 +91,27 @@ describe('a row not on the channel: Full update, sent whole', () => {
     expect(options[2].note).toBe('Already deleted on Amazon · IT. To keep it off, leave its Status Not listed.')
   })
 })
+
+/** Where Partial update sends no field (a product already on Shopify, Etsy — 2026-10-05): it says so. */
+describe('Partial update with its own note', () => {
+  const note = 'Publish does not send Etsy listing fields yet. They stay in Nexus.'
+  it('the cell: the note replaces "only the fields you changed" in the tooltip and the screen-reader sentence', () => {
+    const model = publishActionModel({ mode: 'partial', partialNote: note }, now)
+    expect(model).toMatchObject({ kind: 'default', label: 'Partial update', pill: null, editable: true })
+    expect(model.tooltip).toBe(`Partial update: ${note}`)
+    expect(model.ariaLabel).toBe(`Action: Partial update. ${note}`)
+    // Blank or absent = the usual hint; a waiting value and a lock are unchanged by it.
+    expect(publishActionModel({ mode: 'partial', partialNote: '  ' }, now).ariaLabel).toBe('Action: Partial update. Publish sends only the fields you changed.')
+    expect(publishActionModel({ mode: 'delete', setAt: today, setByName: 'Awais', partialNote: note }, now).tooltip).not.toContain(note)
+    expect(publishActionModel({ mode: 'partial', partialNote: note, lockedReason: 'No role.' }, now).tooltip).toBe('No role.')
+  })
+  it('the editor: a Partial update choice with a warning notes "The default." and the warning', () => {
+    const options = sendModeEditorOptions([
+      { mode: 'partial', offered: true, reason: null, warning: note },
+      { mode: 'full', offered: false, reason: 'Publishing to Etsy from the product sheet is not available yet.' },
+      { mode: 'delete', offered: false, reason: 'Deleting Etsy listings from Nexus is not available yet. Set Inactive, or delete it in Etsy.' },
+    ], null, now)
+    expect(options[0]).toMatchObject({ value: 'partial', note: `The default. ${note}` })
+    expect(options[0].heldReason).toBeUndefined()
+  })
+})
