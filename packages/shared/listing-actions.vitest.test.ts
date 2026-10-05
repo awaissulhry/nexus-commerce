@@ -3,10 +3,11 @@ import {
   ACTION_TARGET_STATE, actionsFor, agoText, AMAZON_FBA_DELETE_WARNING, deleteDoneSentence, deletedOn, deletedPublishSkip, deleteOffered,
   familySellingState, fbaDeleteWarning, LISTING_ACTION_PERMISSION, listingActionCapability, SELLING_STATE_LABEL, sellingStateOf,
   SHEET_PAUSE_REASON, statusChangeAction, statusOptionsFor, type ListingDeletion,
-  EBAY_NEW_INACTIVE_CHECK, EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN, ETSY_PUBLISH_NOT_YET, NEW_LISTING_ALIAS, NEW_LISTING_SENTENCE,
+  EBAY_NEW_INACTIVE_CHECK, EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_DRAFT, ETSY_NEW_ROW_SENTENCE,
+  ETSY_NEW_VARIATION_ACTIVE, ETSY_VARIATION_CANNOT_HIDE, NEW_LISTING_ALIAS, NEW_LISTING_SENTENCE,
   newListingChoice, newListingDefault, newListingOptions, NOT_LISTED_MAIN_WARNING, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION, STATUS_TARGET_LABEL,
   AMAZON_REMOVED_ELSEWHERE, deletedShort, isNewListingRow, newListingSentence, NOT_ON_CHANNEL_KEEPS_NUMBER, RELIST_SENTENCE,
-  ETSY_PUBLISHING_OFF, holdStatusChanges, shopifyCreateStatus, SHOPIFY_STATUS_FROM_STATUS_COLUMN, SHOPIFY_CREATE_NOT_LISTED,
+  ETSY_PUBLISHING_OFF, holdStatusChanges, etsyCreateState, shopifyCreateStatus, SHOPIFY_STATUS_FROM_STATUS_COLUMN, SHOPIFY_CREATE_NOT_LISTED,
   ALREADY_UNLINKED, alreadyRemoved, deletedStatusReason, removedMark, setBeforeRemoval, sharedRemovedRefusal, UNLINKED_NOT_LISTED, unlinkWords,
 } from './listing-actions.js'
 
@@ -136,7 +137,7 @@ describe('the Status column', () => {
       ['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
     expect(holdStatusChanges(statusOptionsFor('paused', 'etsy'), ETSY_PUBLISHING_OFF).map(o => [o.target, o.offered, o.reason])).toEqual([
       ['active', false, ETSY_PUBLISHING_OFF], ['inactive', true, null]])
-    // A row not on Etsy: its choices were refused already, with their own reason.
+    // A row not on Etsy: its choices change no Status (Publish creates the listing), so none is held.
     const fresh = statusOptionsFor('draft', 'etsy')
     expect(holdStatusChanges(fresh, ETSY_PUBLISHING_OFF)).toEqual(fresh)
   })
@@ -234,9 +235,24 @@ describe('New listings: the Status of a row not on the channel', () => {
     expect(choices(newListingOptions('shopify', { isVariation: true }))).toEqual({ active: SHOPIFY_NEW_VARIATION, inactive: SHOPIFY_NEW_VARIATION, not_listed: SHOPIFY_NEW_VARIATION })
     expect(newListingOptions('shopify', { shopifyLinked: true }).every(o => !o.offered && o.reason === SHOPIFY_LINKED_REFUSED)).toBe(true)
   })
-  it('Etsy refuses every choice; a row with no listing in an alias destination too', () => {
-    expect(newListingOptions('etsy').every(o => !o.offered && o.reason === ETSY_PUBLISH_NOT_YET)).toBe(true)
-    expect(ETSY_PUBLISH_NOT_YET).toBe('Publishing to Etsy from Nexus is not available yet.')
+  it('Etsy (E1, Owner D1 = A), a listing not on Etsy yet: Inactive creates an Etsy draft, Not listed; Active waits for photos', () => {
+    expect(choices(newListingOptions('etsy'))).toEqual({ active: ETSY_NEW_ACTIVE_NEEDS_PHOTO, inactive: 'ok', not_listed: 'ok' })
+    expect(newListingOptions('etsy').find(o => o.target === 'inactive')!.sentence).toBe(ETSY_NEW_DRAFT)
+    expect(newListingOptions('etsy', { isMain: true }).find(o => o.target === 'not_listed')!.warning).toBe(NOT_LISTED_MAIN_WARNING)
+    expect(ETSY_NEW_ACTIVE_NEEDS_PHOTO).toBe('Etsy needs at least 1 photo to go live; photos come in a later Nexus update.')
+    expect(ETSY_NEW_DRAFT).toBe('Starts on Etsy as a draft when Publish sends it: buyers cannot buy a draft.')
+    expect(newListingOptions('etsy', { noRecord: true, alias: true }).every(o => !o.offered && o.reason === NEW_LISTING_ALIAS)).toBe(true)
+  })
+  it('Etsy, a new variation of a listing already on Etsy: Active joins the listing, Inactive is refused (one variation cannot be hidden) — never the photo refusal', () => {
+    const variation = newListingOptions('etsy', { isVariation: true, listingOnChannel: true })
+    expect(choices(variation)).toEqual({ active: 'ok', inactive: ETSY_VARIATION_CANNOT_HIDE, not_listed: 'ok' })
+    expect(variation.find(o => o.target === 'active')!.sentence).toBe(ETSY_NEW_VARIATION_ACTIVE)
+    expect(ETSY_NEW_VARIATION_ACTIVE).toBe('Joins the Etsy listing when Publish sends it; it sells while the listing is active.')
+    expect(ETSY_VARIATION_CANNOT_HIDE).toBe('Nexus cannot hide one variation of an Etsy listing yet. Choose Active to add it, or Not listed to leave it out.')
+    // The fact is Etsy's: another channel's choices do not change with it.
+    expect(newListingOptions('amazon', { listingOnChannel: true })).toEqual(newListingOptions('amazon'))
+  })
+  it('a row with no listing in an alias destination refuses every choice; a row with one there does not', () => {
     expect(newListingOptions('amazon', { noRecord: true, alias: true }).every(o => !o.offered && o.reason === NEW_LISTING_ALIAS)).toBe(true)
     expect(newListingOptions('amazon', { alias: true }).every(o => o.offered)).toBe(true)
   })
@@ -245,12 +261,28 @@ describe('New listings: the Status of a row not on the channel', () => {
     const deleted = { at: '2026-10-04T10:00:00.000Z', where: 'Amazon · IT', oldReference: null, relistChosenAt: null }
     expect(statusOptionsFor('not_listed', 'amazon', { deleted }).map(o => o.target)).toEqual(['active', 'inactive', 'not_listed'])
   })
-  it('ND2 A defaults: Amazon and eBay Active, Shopify Inactive (unless its Shopify status is ACTIVE), other channels Not listed', () => {
+  it('ND2 A defaults: Amazon and eBay Active, Shopify Inactive (unless its Shopify status is ACTIVE), Etsy Inactive (a new variation of a listing on Etsy: Active), other channels Not listed', () => {
     expect(newListingDefault('AMAZON')).toBe('active')
     expect(newListingDefault('EBAY')).toBe('active')
     expect(newListingDefault('SHOPIFY')).toBe('inactive')
     expect(newListingDefault('SHOPIFY', { shopifyActive: true })).toBe('active')
-    expect(newListingDefault('ETSY')).toBe('not_listed')
+    expect(newListingDefault('ETSY')).toBe('inactive')
+    expect(newListingDefault('ETSY', { listingOnChannel: true })).toBe('active')
+    expect(newListingDefault('AMAZON', { listingOnChannel: false })).toBe('active')
+    expect(newListingDefault('WOOCOMMERCE')).toBe('not_listed')
+    // Through the choice: a variation of a listing on Etsy nobody chose for joins it for sale; a new Etsy listing is a draft.
+    const etsy = { channel: 'ETSY', own: null, main: null, isVariation: true, includedByDefault: true }
+    expect(newListingChoice({ ...etsy, listingOnChannel: true })).toEqual({ target: 'active', source: 'default' })
+    expect(newListingChoice(etsy)).toEqual({ target: 'inactive', source: 'default' })
+  })
+  it('Etsy\'s cell sentence says E1 sends nothing (one constant); Not listed and every other channel keep theirs', () => {
+    expect(ETSY_NEW_ROW_SENTENCE).toBe('Not on Etsy yet. Publish shows what Nexus would send; sending to Etsy comes in a later Nexus update.')
+    expect(newListingSentence({ target: 'inactive', source: 'default' }, { channel: 'ETSY' })).toBe(ETSY_NEW_ROW_SENTENCE)
+    expect(newListingSentence({ target: 'active', source: 'own' }, { channel: 'ETSY' })).toBe(ETSY_NEW_ROW_SENTENCE)
+    expect(newListingSentence({ target: 'inactive', source: 'main' }, { channel: 'ETSY' })).toBe(`${ETSY_NEW_ROW_SENTENCE} (It follows the main product's choice; set this row to choose for it.)`)
+    expect(newListingSentence({ target: 'not_listed', source: 'own' }, { channel: 'ETSY' })).toBe(NEW_LISTING_SENTENCE.not_listed)
+    expect(newListingSentence({ target: 'inactive', source: 'default' }, { channel: 'AMAZON' })).toBe(NEW_LISTING_SENTENCE.inactive)
+    expect(newListingSentence({ target: 'inactive', source: 'default' })).toBe(NEW_LISTING_SENTENCE.inactive)
   })
   it('the choice: own, else the main row\'s for a variation, else not listed when Publish would leave it out, else the default', () => {
     const base = { channel: 'AMAZON', own: null, main: null, isVariation: true, includedByDefault: true }
@@ -282,6 +314,17 @@ describe('the status a new Shopify product is created with', () => {
   it('says where the choice is made, and why nothing is created', () => {
     expect(SHOPIFY_STATUS_FROM_STATUS_COLUMN).toBe('A product not on Shopify yet is created with the Status column\'s choice. Change it there.')
     expect(SHOPIFY_CREATE_NOT_LISTED).toBe('This product\'s Status is Not listed for this Shopify store, so Nexus does not create it. Set its Status to Active or Inactive first.')
+  })
+})
+
+/* Etsy (E1, Owner D1 = A) — the same rule for a new Etsy listing: the main row's Inactive creates an Etsy draft. */
+describe('how a new Etsy listing starts', () => {
+  it('Inactive → draft, Active → active (refused by Publish until photos are sent), Not listed (or no choice) → nothing is created', () => {
+    expect(etsyCreateState('inactive')).toBe('draft')
+    expect(etsyCreateState('active')).toBe('active')
+    expect(etsyCreateState('not_listed')).toBeNull()
+    expect(etsyCreateState(null)).toBeNull()
+    expect(etsyCreateState(undefined)).toBeNull()
   })
 })
 

@@ -177,10 +177,16 @@ export async function cancelWaitingChildren(batchId: string, now = new Date()): 
   return cancelled
 }
 
+/** "Nothing was sent." once, then the reason — a refusal that already ends with those words (Etsy's claim refusal, an
+ *  Amazon SKU move) does not say them twice. */
+export function notSentMessage(reason: string): string {
+  return `Nothing was sent. ${reason.replace(/\s*Nothing was sent\.\s*$/, '')}`.trim()
+}
+
 /** A child the submit refused before anything was claimed: NOT_SENT, with the reason. Only while it is still PREVIEW. */
 async function markNotSent(row: ChildRow, reason: string, now: Date, extra: Record<string, unknown> = {}): Promise<boolean> {
   const moved = await prisma.bulkOperation.updateMany({ where: { id: row.id, status: 'PREVIEW' },
-    data: { status: 'NOT_SENT', completedAt: now, summary: json({ message: `Nothing was sent. ${reason}`, notSent: true, ...extra }) } })
+    data: { status: 'NOT_SENT', completedAt: now, summary: json({ message: notSentMessage(reason), notSent: true, ...extra }) } })
   if (moved.count) announcePublication(row.id, row, object(row.changes), 'NOT_SENT', { terminal: true })
   return moved.count === 1
 }
@@ -342,7 +348,7 @@ async function recordUnreviewed(batchId: string, pair: ReviewPair, userId: strin
     aliasKey: null, batchId }
   const changes = { kind: PUBLICATION_KIND, productId: pair.familyId, scope: pair.scope, batch: { batchId }, reviewFailed: true, ...(part === 'lifecycle' ? { part } : {}) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'NOT_SENT', kind: PUBLICATION_KIND, ...row, productCount: 0, changeCount: 0, completedAt: now,
-    summary: json({ message: `Nothing was sent. ${reason}`, notSent: true, notReviewed: true }), changes: json(changes) } })
+    summary: json({ message: notSentMessage(reason), notSent: true, notReviewed: true }), changes: json(changes) } })
   announcePublication(id, row, changes, 'NOT_SENT', { terminal: true })
 }
 

@@ -4,6 +4,7 @@ import { assertPublishAllowed, assertPushAllowed, type PushLockListing } from '@
 import { ENDED_FIRST } from '@nexus/shared/publish-actions'
 import prisma from '../../db.js'
 import { resolveConnection } from '../connection-resolver.service.js'
+import { etsyShopLabel } from '../etsy/shop-label.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from './workspace-destination.js'
 import { readExcludedListingIds } from './variation-excluded.js'
 import { resolveBatch } from './mapping/resolve-batch.service.js'
@@ -78,7 +79,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   // D10 (build shape v2, Owner 2026-10-04) — row rules, not one lock for the family. A row ON the channel receives its
   // content (Partial and Full update) while it is paused, its offer closed or its stock sync held: content never carries
   // stock or the offer. A row the channel ENDED is skipped (relist it first); a discontinued or released identity is
-  // skipped with the lock's own sentence. eBay and Shopify change a whole listing, so one skipped row skips the family.
+  // skipped with the lock's own sentence. eBay, Shopify and Etsy change a whole listing, so one skipped row skips the family.
   // A row NOT on the channel yet is created whole, with its stock and offer: the create keeps the old locks (a closed
   // Amazon offer is skipped; any other lock refuses the family).
   const onChannel = (productId: string) => !!listings.find(l => l.productId === productId)?.externalListingId
@@ -89,7 +90,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     if (rule) rowSkips.set(p.id, rule)
     else if (!onChannel(p.id) && closed.has(`${p.id}|${scope.marketplace}`)) rowSkips.set(p.id, 'Offer closed — not sent')
   }
-  const wholeListing = ['EBAY', 'SHOPIFY'].includes(scope.channel) ? [...rowSkips.values()][0] : undefined
+  const wholeListing = ['EBAY', 'SHOPIFY', 'ETSY'].includes(scope.channel) ? [...rowSkips.values()][0] : undefined
   const skipped = selected.filter(p => wholeListing || rowSkips.has(p.id))
     .map(p => ({ productId: p.id, sku: p.sku, reason: rowSkips.get(p.id) ?? wholeListing! }))
   const included = selected.filter(p => !skipped.some(skip => skip.productId === p.id))
@@ -104,8 +105,10 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   if (selected.length && !included.length) error(`Nothing of this family can be sent here: ${skipped[0].reason}`)
   if (unstarted) issues.push({ severity: 'warning', message: `No variant had an eBay row here yet, so all ${selected.length - 1} variants are included. Publishing starts their eBay rows.` })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
-  // Audit P12 — say WHICH account and where (the studio footer says the same).
-  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error(`Reconnect ${account.displayName?.trim() || 'this account'} in Settings → Channels before publishing.`)
+  // Audit P12 — say WHICH account and where (the studio footer says the same). An Etsy account by its shop's name: its
+  // displayName is the login name, a code (`etsyShopLabel`).
+  const accountName = scope.channel === 'ETSY' ? etsyShopLabel(account) : account.displayName?.trim() || 'this account'
+  if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error(`Reconnect ${accountName} in Settings → Channels before publishing.`)
   // Publish's lock for a CREATE: a paused still-draft may be sent (Publish is what makes it live); any other lock refuses.
   for (const listing of listings.filter(l => !l.externalListingId && included.some(p => p.id === l.productId))) {
     const refusal = assertPublishAllowed(listing)
@@ -131,7 +134,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const itemLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayItemLevel(field.store)).map(field => field.key) : [])
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
-      if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
+      if (existing && ['AMAZON', 'EBAY', 'ETSY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
       if (listingLevelKeys.has(field) && row.productId !== reporterOf(field)) continue
       if (itemLevelKeys.has(field) && row.productId !== parent.id) continue

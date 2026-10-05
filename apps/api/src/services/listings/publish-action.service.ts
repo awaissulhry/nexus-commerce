@@ -251,12 +251,13 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
     const readRow = (row: ListingRow, product: FamilyProduct, noRecord: boolean) => {
       const { state, reason, deleted } = read.states.get(product.id) ?? { state: 'not_listed' as const, reason: null, deleted: null }
       const facts: CapabilityFacts = { isFba: read.isFba.get(row.id) ?? false, shopifyLinked: read.shopifyLinked, deleted: deleted ?? null,
-        isMain: product.isParent, isVariation: !!product.parentId, noRecord, alias: d.aliasKey !== '', onChannel: !!row.externalListingId }
+        isMain: product.isParent, isVariation: !!product.parentId, noRecord, alias: d.aliasKey !== '', onChannel: !!row.externalListingId,
+        listingOnChannel: group.some(other => !!other.externalListingId) }
       const choice = isNewListingRow(state, facts) ? choices.get(product.id) : undefined
       out.push({ row, product, model: read.model, state, reason, facts, channelLabel: channelName(d.channel), noRecord, alias,
         deleted: deleted ? { ...deleted, sentence: deletedShort(deleted) } : null,
         create: choice ? { target: choice.target, source: choice.source, defaultTarget: choice.defaultTarget, noRecord,
-          sentence: newListingSentence(choice, { includedByDefault: choice.includedByDefault, deleted: choice.deleted }) } : null })
+          sentence: newListingSentence(choice, { includedByDefault: choice.includedByDefault, deleted: choice.deleted, channel: d.channel }) } : null })
     }
     for (const row of group) readRow(row, productOf.get(row.productId)!, false)
     const listed = new Set(group.map(row => row.productId))

@@ -20,7 +20,7 @@ vi.mock('../channel-delist.service.js', async original => ({ ...(await original<
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
+import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_PUBLISHING_OFF, ETSY_VARIATION_CANNOT_HIDE, NEW_LISTING_ALIAS,
   RELIST_SENTENCE, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
 import { DELETE_EBAY_VARIATION, ETSY_FIELDS_NOT_SENT, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
 import { clearWaitingValues, parsePublishActionBody, readPublishActions, SHARED_DELETED, writePublishActions, type PublishActionActor } from './publish-action.service.js'
@@ -331,15 +331,33 @@ describe('New listings: control before the first publish', () => {
     // eBay creates a family never started here whole (audit P4): its variations read Active.
     const ebay = await readPublishActions(f.root, at('EBAY', 'IT', ids.ebay), { newRows: true })
     expect(ebay.map(c => [c.sku, c.create?.target]).sort()).toEqual([['NL-READ', 'active'], ['NL-READ-M', 'active'], ['NL-READ-S', 'active']])
-    // Shopify: a Draft product by default; a variation follows the main row; Etsy cannot be published from Nexus yet.
+    // Shopify: a Draft product by default; a variation follows the main row. Etsy: an Etsy draft by default (Inactive);
+    // Active waits for photos (E1, Owner D1 = A).
     const shopify = await readPublishActions(f.root, at('SHOPIFY', 'GLOBAL', ids.shopify), { newRows: true })
     expect(shopify.find(c => c.sku === 'NL-READ')!.create!.target).toBe('inactive')
     expect(shopify.find(c => c.sku === 'NL-READ-S')!.statusOptions.every(o => !o.offered && o.reason === SHOPIFY_NEW_VARIATION)).toBe(true)
     const etsy = await readPublishActions(f.root, at('ETSY', 'IT', ids.etsy), { newRows: true })
-    expect(etsy.find(c => c.sku === 'NL-READ')!.statusOptions.every(o => !o.offered && o.reason === 'Publishing to Etsy from Nexus is not available yet.')).toBe(true)
+    expect(etsy.find(c => c.sku === 'NL-READ')!.create).toMatchObject({ target: 'inactive', source: 'default', defaultTarget: 'inactive', noRecord: true })
+    expect(etsy.find(c => c.sku === 'NL-READ')!.statusOptions.map(o => [o.target, o.offered ? 'ok' : o.reason]))
+      .toEqual([['active', ETSY_NEW_ACTIVE_NEEDS_PHOTO], ['inactive', 'ok'], ['not_listed', 'ok']])
+    expect(etsy.find(c => c.sku === 'NL-READ')!.create!.sentence).toBe(ETSY_NEW_ROW_SENTENCE)
     // Only a read that asks for them, on one destination named exactly.
     expect(await readPublishActions(f.root, at('AMAZON', 'FR', ids.amazon))).toEqual([])
     expect(await readPublishActions(f.root, { channel: 'AMAZON' }, { newRows: true })).toEqual([])
+  }))
+
+  it('Etsy: a new variation of a listing already on Etsy joins it for sale by default; Inactive is refused (one variation cannot be hidden); no photo refusal', () => scoped(async () => {
+    const f = await family('NL-ETSY', ['S', 'M', 'L'])
+    await listing(f.root, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
+    await listing(f.children.S, 'ETSY', 'IT', ids.etsy, { externalListingId: '9000000001' })
+    await listing(f.children.M, 'ETSY', 'IT', ids.etsy, { externalListingId: null, listingStatus: 'DRAFT', isPublished: false })
+    const cells = await readPublishActions(f.root, at('ETSY', 'IT', ids.etsy), { newRows: true })
+    const m = cells.find(c => c.sku === 'NL-ETSY-M')!
+    expect(m.create).toMatchObject({ target: 'active', source: 'default', defaultTarget: 'active', sentence: ETSY_NEW_ROW_SENTENCE })
+    // A variation with no row here is left out until someone chooses for it, as on every channel.
+    expect(cells.find(c => c.sku === 'NL-ETSY-L')!.create).toMatchObject({ target: 'not_listed', source: 'default', noRecord: true })
+    expect(m.statusOptions.map(o => [o.target, o.offered ? 'ok' : o.reason])).toEqual([['active', 'ok'], ['inactive', ETSY_VARIATION_CANNOT_HIDE], ['not_listed', 'ok']])
+    expect(m.statusOptions.find(o => o.target === 'active')).toMatchObject({ sentence: ETSY_NEW_VARIATION_ACTIVE })
   }))
 
   it('a Status choice on a row with no listing starts the whole family on the sheet\'s own account, with the choice stored', () => scoped(async () => {

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
+const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn(), connection: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) },
   // Delete and relist: no row here was deleted by Nexus (the facts read the delete records of draft-shaped rows).
   channelListingSnapshot: { findMany: async () => [] } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
-vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: async () => ({ displayName: 'Selected account', authStatus: 'connected' }) }))
+vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: m.connection }))
 vi.mock('./variation-excluded.js', () => ({ readExcludedListingIds: m.excluded }))
 vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: m.resolve }))
 vi.mock('./market-languages.js', () => ({ marketLanguages: m.languages }))
@@ -18,6 +18,7 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b', li
 beforeEach(() => {
   vi.clearAllMocks(); m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
   m.closed.mockResolvedValue(new Set())
+  m.connection.mockResolvedValue({ displayName: 'Selected account', authStatus: 'connected' })
   m.languages.mockResolvedValue(['it', 'en'])
   m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent' }, { id: 'excluded', sku: 'EXCLUDED', parentId: 'parent' }, { id: 'parent', sku: 'PARENT', isParent: true }])
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
@@ -39,7 +40,7 @@ it('makes changed mapping results invalidate the reviewed saved revision', async
   expect(after.revision).not.toBe(before.revision)
   expect(after.issues).toContainEqual(expect.objectContaining({ sku: 'CHILD', field: 'title', severity: 'error' }))
 })
-it.each(['AMAZON', 'EBAY'])('keeps new-listing offer requirements but does not block existing %s content on price or stock cells', async channel => {
+it.each(['AMAZON', 'EBAY', 'ETSY'])('keeps new-listing offer requirements but does not block existing %s content on price or stock cells', async channel => {
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', externalListingId: 'existing' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
   m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: {
     price: { value: null, sourceOwner: { label: 'Pricing' }, errors: ['Missing price'] },
@@ -49,6 +50,16 @@ it.each(['AMAZON', 'EBAY'])('keeps new-listing offer requirements but does not b
   const facts = await readPublicationFacts('parent', { ...scope, channel })
   expect(facts.issues.filter(i => i.productId === 'parent').map(i => i.field)).toEqual(['title', 'title'])
   expect(facts.issues.filter(i => i.productId === 'child').map(i => i.field)).toEqual(['price', 'quantity', 'title', 'price', 'quantity', 'title'])
+})
+it('names the account to reconnect: an Etsy shop by its name (its displayName is the login code), other channels as before', async () => {
+  const reconnect = (name: string) => `Reconnect ${name} in Settings → Channels before publishing.`
+  m.connection.mockResolvedValue({ displayName: 'a1b2c3d4e5f6g7h8', accountLabel: null, ebayStoreName: null, authStatus: 'needs_reauth',
+    identity: { username: 'a1b2c3d4e5f6g7h8', storeName: 'Fake Etsy Shop', extra: { shopName: 'Fake Etsy Shop' } } })
+  const etsy = await readPublicationFacts('parent', { ...scope, channel: 'ETSY', marketplace: 'GLOBAL' })
+  expect(etsy.issues).toContainEqual({ severity: 'error', message: reconnect('Fake Etsy Shop') })
+  expect(etsy.issues.some(issue => issue.message.includes('a1b2c3d4e5f6g7h8'))).toBe(false)
+  m.connection.mockResolvedValue({ displayName: 'Store B', authStatus: 'needs_reauth' })
+  expect((await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).issues).toContainEqual({ severity: 'error', message: reconnect('Store B') })
 })
 it('skips and names a closed Amazon product before resolving its fields, retaining the open child and parent identity', async () => {
   m.closed.mockResolvedValue(new Set(['parent|IT']))
@@ -195,6 +206,14 @@ describe('D10: paused rows still get content, ended rows are skipped', () => {
     const facts = await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })
     expect(facts.products).toEqual([])
     expect(facts.skipped.map(s => s.productId)).toEqual(['parent', 'child'])
+    expect(facts.issues.filter(i => i.severity === 'error').map(i => i.message)).toEqual(['Nothing of this family can be sent here: Ended on the channel. Set Active to relist it first.'])
+  })
+  it('Etsy changes a whole listing too: one ended variation skips every row, and the review says nothing can be sent', async () => {
+    rows({ listingStatus: 'ENDED' })
+    const facts = await readPublicationFacts('parent', { ...scope, channel: 'ETSY' })
+    expect(facts.products).toEqual([])
+    expect(facts.skipped).toEqual([{ productId: 'parent', sku: 'PARENT', reason: 'Ended on the channel. Set Active to relist it first.' },
+      { productId: 'child', sku: 'CHILD', reason: 'Ended on the channel. Set Active to relist it first.' }])
     expect(facts.issues.filter(i => i.severity === 'error').map(i => i.message)).toEqual(['Nothing of this family can be sent here: Ended on the channel. Set Active to relist it first.'])
   })
   it('a discontinued identity is skipped with the lock\'s own sentence', async () => {

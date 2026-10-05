@@ -4,9 +4,11 @@ import { compileAmazonChanges, type AmazonChangePlan } from './studio-publicatio
 import { compileEbayChanges, type EbayChangePlan } from './studio-publication-ebay-changes.js'
 import { ebayPublicationRequest } from './studio-publication-ebay.js'
 import { compileEbayInventoryChanges, type EbayInventoryChangePlan } from './studio-publication-ebay-inventory-changes.js'
+import { compileEtsyChanges } from './studio-publication-etsy-changes.js'
+import type { EtsyChangePlan } from './studio-publication-etsy-types.js'
 import type { EbayInventoryDestination } from '../live-read/ebay-inventory.js'
 
-export type PublicationChangePlan = AmazonChangePlan | EbayChangePlan | EbayInventoryChangePlan
+export type PublicationChangePlan = AmazonChangePlan | EbayChangePlan | EbayInventoryChangePlan | EtsyChangePlan
 /** The exact eBay Inventory send: one whole-group PUT built from the fresh live group (PE P3.4). */
 export interface EbayInventorySend {
   kind: 'ebay-inventory-send'; destination: EbayInventoryDestination; groupKey: string; group: Record<string, unknown>
@@ -58,6 +60,13 @@ export function compileSelection(plan: PublicationChangePlan, selectedIds: strin
     selection.products = prepared.products
     selection.payload = { format: 'json', content: sortedJson({ operation: 'PUT inventory_item_group', groupKey: prepared.groupKey, body: prepared.group,
       ...(prepared.items ? { items: Object.fromEntries(Object.entries(prepared.items).map(([sku, body]) => [sku, { operation: 'PUT inventory_item (availability echoed fresh)', body }])) } : {}) }) }
+    return { prepared, selection }
+  }
+  if (plan.kind === 'etsy-changes') {
+    // E1 — the Etsy calls a send would make, in order (paths keep the literal {shop_id}: the shop is read at send).
+    const prepared = compileEtsyChanges(plan, selection.selectedIds)
+    selection.products = prepared.products
+    selection.payload = { format: 'json', content: sortedJson(prepared.request) }
     return { prepared, selection }
   }
   const prepared = plan.kind === 'amazon-changes' ? compileAmazonChanges(plan, selection.selectedIds) : compileEbayChanges(plan, selection.selectedIds)

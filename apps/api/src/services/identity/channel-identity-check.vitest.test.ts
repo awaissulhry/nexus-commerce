@@ -5,8 +5,9 @@
  *
  * Proven: per listing coordinate of a family — held (eBay: Active, and the account's own seller), foreign (another
  * seller), unverifiable (no seller recorded for the account), ended, and not-readable with its reason (no account, no
- * channel id, a channel whose live read is not built); missing and extra SKUs; nothing is read for a listing that cannot
- * be; at most five coordinates a call; the hourly limit per business.
+ * channel id, a channel whose live read is not built); Etsy: only an active listing is held, each other Etsy state is
+ * ended in its own words, another shop's listing is foreign; missing and extra SKUs; nothing is read for a listing that
+ * cannot be; at most five coordinates a call; the hourly limit per business.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -26,6 +27,7 @@ vi.mock('../live-read/index.js', () => ({
 }))
 
 import { callTool, type UserPrincipal } from '../agents/call-tool.js'
+import { ETSY_OTHER_SHOP } from '../live-read/etsy.js'
 import { __toolRateTest } from '../agents/tool-rate.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -62,6 +64,9 @@ beforeAll(async () => {
     await listing('CIC-ROOT', 'EBAY', 'ES', ids.ebayIt, null)
     await product('CIC-SOLO')
     await listing('CIC-SOLO', 'EBAY', 'IT', ids.ebayIt, '410000000009')
+    ids.etsy = (await db.channelConnection.create({ data: { channelType: 'ETSY', isActive: true, externalAccountId: 'test-etsy' } })).id
+    await product('CIC-ETSY')
+    await listing('CIC-ETSY', 'ETSY', 'GLOBAL', ids.etsy, '9000000001')
   })
 }, 120_000)
 
@@ -105,6 +110,31 @@ describe('I8 — channel-identity-check', () => {
     expect((await check({ productId: ids['CIC-SOLO'] })).data.checks).toEqual([expect.objectContaining({ verdict: 'foreign', reason: expect.stringContaining('test-seller-b') })])
     live.answer = () => read({ raw: { xml: ebayXml('Completed', 'test-seller-a') } })
     expect((await check({ productId: ids['CIC-SOLO'] })).data.checks).toEqual([expect.objectContaining({ verdict: 'ended', reason: expect.stringContaining('"Completed"') })])
+  })
+
+  it('Etsy: only an active listing is held; every other Etsy state is ended in its own words; another shop\'s listing is foreign', async () => {
+    const etsyCheck = async (raw: Json | null, extra: Json = {}) => {
+      live.answer = () => read({ source: 'etsy-listing', raw, ...extra })
+      return (await check({ productId: ids['CIC-ETSY'] })).data.checks[0] as Json
+    }
+    expect(await etsyCheck({ ownShop: true, state: 'active', documents: null })).toMatchObject({ channel: 'ETSY', externalId: '9000000001', verdict: 'held',
+      reason: 'The account holds this item and it is live.', status: 'active' })
+    for (const [state, words] of [['draft', 'The account holds this listing as an Etsy draft: it has not been live yet.'],
+      ['inactive', 'The account holds this listing, but it is deactivated on Etsy: buyers cannot buy it.'],
+      ['sold_out', 'The account holds this listing, but it is sold out on Etsy: buyers cannot buy it until it has stock and is renewed.'],
+      ['expired', 'The listing expired on Etsy (its listing period ended without a renewal): buyers cannot buy it.'],
+      ['removed', 'Etsy removed this listing: buyers cannot see it.'],
+      ['edit', 'The item is no longer live on the channel.']]) {
+      expect(await etsyCheck({ ownShop: true, state, documents: null })).toMatchObject({ verdict: 'ended', status: state, reason: `${words} Etsy says "${state}".` })
+    }
+    const otherShop = { revision: null, errors: [{ scope: 'item', reason: ETSY_OTHER_SHOP }] }
+    expect(await etsyCheck({ ownShop: false, state: null, documents: null }, otherShop)).toMatchObject({ verdict: 'foreign', reason: 'Another seller lists this item: it is not this account\'s.' })
+    expect(await etsyCheck({ ownShop: null, state: 'active', documents: null })).toMatchObject({ verdict: 'unverifiable',
+      reason: 'The item was read, but it cannot be proven which seller lists it. Etsy did not say which shop holds this listing.' })
+    expect(await etsyCheck({ ownShop: true, state: null, documents: null })).toMatchObject({ verdict: 'not-readable', reason: 'Etsy did not say whether this listing is live.' })
+    expect(await etsyCheck(null, { revision: null, errors: [{ scope: 'item', reason: 'Etsy could not read this resource (HTTP 500).' }] }))
+      .toMatchObject({ verdict: 'not-readable', reason: 'Etsy could not read this resource (HTTP 500).' })
+    expect(live.reads.every((r) => r.channel === 'ETSY' && r.marketplace === 'GLOBAL' && r.accountId === ids.etsy)).toBe(true)
   })
 
   it('reads at most five listings a call and says how many it left; a deleted or unknown product is not found', async () => {

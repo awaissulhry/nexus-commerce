@@ -38,6 +38,7 @@ vi.mock('../../pim/studio-publication-plan.js', async () => {
 vi.mock('../../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'live' }))
 vi.mock('../../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => 'live' }))
+vi.mock('../../etsy-publish-gate.service.js', async original => ({ ...(await original<Record<string, unknown>>()), getEtsyPublishMode: () => 'live' }))
 vi.mock('../../shopify/content-workspace.service.js', () => ({ getContentWorkspace: fixture.shopRead, saveContentWorkspace: fixture.shopSave }))
 vi.mock('../../shopify/content-sync.service.js', () => ({ previewContentSync: fixture.shopPreview, synchronizeContent: vi.fn() }))
 vi.mock('../../pim/studio-publication-amazon.js', () => ({
@@ -64,6 +65,16 @@ vi.mock('../../pim/studio-publication-ebay-changes.js', () => ({
   prepareEbayChanges: async (_facts: any, publication: any) => ({ kind: 'ebay-changes', publication, remoteRevision: 'remote-1',
     changes: publication.products.flatMap((p: any) => [change(p, 'title', 'DIFFERS'), change(p, 'pictures', 'SAME')]) }),
   compileEbayChanges: (plan: any) => plan.publication,
+}))
+// E1 — the Etsy adapter's own suites prove its payload; here a new Etsy listing is one create line, Etsy never read.
+vi.mock('../../pim/studio-publication-etsy.js', () => ({
+  prepareEtsyPublication: async (facts: any) => ({ kind: 'etsy', marketplace: 'GLOBAL', listingId: null, products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })),
+    ownerProductId: facts.parent.id, create: { state: 'draft', price: 10, quantity: 1 }, live: null, liveRevision: null }),
+}))
+vi.mock('../../pim/studio-publication-etsy-changes.js', () => ({
+  prepareEtsyChanges: (_facts: any, publication: any) => ({ kind: 'etsy-changes', publication, remoteRevision: 'new', products: publication.products,
+    ownerProductId: publication.ownerProductId, createWrites: {}, changes: [{ ...change(publication.products[0], '__create__', 'SEND'), channel: { state: 'absent' } }] }),
+  compileEtsyChanges: vi.fn(),
 }))
 // The ASIN read after an Amazon promotion calls Amazon; here it reads nothing.
 vi.mock('../../amazon/listing-asin-fill.service.js', () => ({ fillAmazonListingAsins: async () => ({ dryRun: false, rows: [], counts: {} }) }))
@@ -197,6 +208,24 @@ describe('publish-review', () => {
       await inside(A, () => fixture.database.client.channelConnection.delete({ where: { id: second.id } }))
     }
     expect((await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })).error).toBe('TEST-SKU-L3 on Etsy GLOBAL: This business has no active Etsy account. Connect one in Nexus first.')
+  })
+
+  it('E1: an Etsy review is never ready (Nexus sends nothing to Etsy yet) and names the shop, never its login code', async () => {
+    const identity = { username: 'a1b2c3d4e5f6g7h8', storeName: 'Test Etsy shop', extra: { shopName: 'Test Etsy shop' } }
+    const etsy = await inside(A, () => fixture.database.client.channelConnection.create({ data: { channelType: 'ETSY', isActive: true, displayName: 'a1b2c3d4e5f6g7h8',
+      externalAccountId: '90000001', identity } }))
+    try {
+      fixture.facts.mockImplementation(async (_productId: string, scope: Json) => ({ ...factsFor(scope), account: { displayName: 'a1b2c3d4e5f6g7h8', accountLabel: null, identity } }))
+      const before = await counts()
+      const answer = await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })
+      expect(answer.ok, answer.error).toBe(true)
+      expect(answer.data).toMatchObject({ destination: { channel: 'ETSY', market: 'GLOBAL', accountId: etsy.id, accountLabel: 'Test Etsy shop' }, accountLabel: 'Test Etsy shop',
+        mode: 'live', action: 'create', ready: false, notReadyBecause: 'Sending to Etsy comes in the next Nexus update.', issueCounts: { errors: 0 }, changeCounts: { SEND: 1 } })
+      expect(JSON.stringify(answer.data)).not.toContain('a1b2c3d4e5f6g7h8')
+      expect(await counts()).toEqual(before)
+    } finally {
+      await inside(A, () => fixture.database.client.channelConnection.delete({ where: { id: etsy.id } }))
+    }
   })
 
   it('another business\'s product is not found', async () => {

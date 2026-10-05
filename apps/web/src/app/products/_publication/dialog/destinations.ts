@@ -69,8 +69,11 @@ export const EMPTY_ENTRY: DestinationEntry = Object.freeze({
   plan: null, familySku: null, canDelete: true, lifecycleIds: [], selectionError: null, ticksAt: 0,
 }) as DestinationEntry
 
-/** Amazon and eBay send only the ticked fields; the other channels send the whole product. */
-export const isSparse = (review: Pick<StudioPublishReview, 'scope'> | null | undefined) => !!review && ['AMAZON', 'EBAY'].includes(review.scope.channel)
+/**
+ * Amazon, eBay and Etsy send only the ticked fields; the other channels send the whole product. Etsy is change-only like
+ * eBay: only a sparse review shows its field list and the exact request it would send.
+ */
+export const isSparse = (review: Pick<StudioPublishReview, 'scope'> | null | undefined) => !!review && ['AMAZON', 'EBAY', 'ETSY'].includes(review.scope.channel)
 
 export type DestinationState =
   | { kind: 'not_checked' }

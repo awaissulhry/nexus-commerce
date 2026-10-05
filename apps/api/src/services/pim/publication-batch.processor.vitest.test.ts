@@ -21,7 +21,7 @@ vi.mock('./publication-batch.service.js', async original => ({ ...await original
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { BATCH_HEARTBEAT_MS, BATCH_KIND, LIFECYCLE_KIND, LIFECYCLE_LEASE_MS, runPublicationBatch } from './publication-batch.processor.js'
+import { BATCH_HEARTBEAT_MS, BATCH_KIND, LIFECYCLE_KIND, LIFECYCLE_LEASE_MS, notSentMessage, runPublicationBatch } from './publication-batch.processor.js'
 import { LIFECYCLE_UNKNOWN } from '@nexus/shared/publish-plan'
 import { runPublicationBatchResumeTick } from '../../jobs/publication-batch-resume.job.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
@@ -68,6 +68,13 @@ const statuses = async (ids: string[]) => (await prisma.bulkOperation.findMany({
 beforeAll(async () => { await scoped(() => prisma.bulkOperation.count()) }, 120_000)
 afterAll(async () => { await fixture.database?.close?.() })
 beforeEach(() => { fixture.published.length = 0; fixture.dispatched.length = 0 })
+
+describe('notSentMessage (pure)', () => {
+  it('says "Nothing was sent." once, even when the refusal already ends with it', () => {
+    expect(notSentMessage('Sending to Etsy comes in the next Nexus update. Nothing was sent.')).toBe('Nothing was sent. Sending to Etsy comes in the next Nexus update.')
+    expect(notSentMessage('The review expired.')).toBe('Nothing was sent. The review expired.')
+  })
+})
 
 describe('publication batch sender', () => {
 

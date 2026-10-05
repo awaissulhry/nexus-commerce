@@ -142,7 +142,7 @@ const AI_DRAFTS = new Set([
  * and for the other business. Each is run for real in its own suite.
  */
 const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
-  'publish-listing': 'the studio review reads the channel; Etsy, the channel aimed at here, has no publisher yet (publish-listing.tools test)',
+  'publish-listing': 'the studio review reads the channel; Etsy, the channel aimed at here, sends nothing yet (publish-listing.tools test)',
   'set-listing-fields': 'its writer checks an attribute against the channel category schema, which is not seeded here (listing-create.tools test)',
   'close-listing': 'a close needs a channel\'s own state (eBay\'s out-of-stock option, an Amazon offer, the Etsy gate) (listing-close.tools test)',
   'reopen-listing': 'a reopen needs a closed listing and its channel (listing-close.tools test)',
@@ -296,7 +296,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),
   'media-plan': (ids) => ({ productId: ids.productId }),
-  // L3 — the studio's review on Etsy (no channel read: Etsy has no publisher yet) and a publication's stored result.
+  // L3 — the studio's review on Etsy (no channel read: Etsy is read only while sending to Etsy is on) and a publication's stored result.
   'publish-review': (ids) => ({ productId: ids.productId, channel: 'ETSY', market: 'GLOBAL' }),
   'publication-status': (ids) => ({ publicationId: ids.publicationId }),
   // L6 — drafts on the Etsy shop, an untouched draft removed, a family's listing leaving one variation out.

@@ -218,7 +218,7 @@ export function notListedHeld(channel: string, familyId: string, cells: readonly
   const main = cellOf(familyId)
   if (leftOut(main)) {
     const family = products.some(p => p.productId !== familyId)
-    const whole = channel === 'EBAY' || channel === 'SHOPIFY'
+    const whole = channel === 'EBAY' || channel === 'SHOPIFY' || channel === 'ETSY'
     return products.filter(p => whole || p.productId === familyId || !!cellOf(p.productId)?.create)
       .map(p => ({ productId: p.productId, sku: p.sku, ...words(cellOf(p.productId), family ? NOT_LISTED_MAIN_HELD : NOT_LISTED_LEFT_OUT) }))
   }
