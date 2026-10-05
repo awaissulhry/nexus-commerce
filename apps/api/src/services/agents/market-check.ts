@@ -55,7 +55,7 @@ export async function marketRefusal(
     ;(args.steps as unknown[]).forEach((step, index) => {
       const s = (step ?? {}) as { tool?: unknown; args?: unknown }
       const stepTool = typeof s.tool === 'string' ? toolNamed(s.tool) : undefined
-      if (stepTool && s.args && typeof s.args === 'object' && !Array.isArray(s.args)) take(stepTool, s.args as Record<string, unknown>, `step ${index + 1}: `)
+      if (stepTool && s.args && typeof s.args === 'object' && !Array.isArray(s.args)) take(stepTool, s.args as Record<string, unknown>, `Step ${index + 1}: `)
     })
   } else {
     take(tool, args, '')
@@ -80,9 +80,10 @@ export async function marketRefusal(
     const own = rows.filter((row) => row.channel === pair.channel)
     if (!own.length || own.some((row) => sameMarket(pair.channel, row.code.toUpperCase(), pair.code))) continue
     const codes = own.map((row) => (row.isActive ? row.code : `${row.code} (inactive)`)).join(', ')
-    problems.push(`${pair.where}there is no ${NAMES[pair.channel]} market ${pair.code} in this business. Its ${NAMES[pair.channel]} markets: ${codes}.`)
+    // "not found", as every refusal of something this business does not hold says it (one wording for Claude).
+    problems.push(`${pair.where}${NAMES[pair.channel]} market ${pair.code} not found in this business. Its ${NAMES[pair.channel]} markets: ${codes}.`)
   }
   if (!problems.length) return null
   const text = problems.slice(0, 5).join(' ') + (problems.length > 5 ? ` And ${problems.length - 5} more.` : '')
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)} business-overview lists every market with its code. ${tool.readOnly ? 'Nothing was read.' : 'Nothing was queued.'}`
+  return `${text} business-overview lists every market with its code. ${tool.readOnly ? 'Nothing was read.' : 'Nothing was queued.'}`
 }
