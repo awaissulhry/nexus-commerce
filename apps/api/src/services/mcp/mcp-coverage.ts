@@ -88,6 +88,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   catalog: { part: '02', feature: 1, also: 'the eBay catalog import is the ids part, 04 (#9)' },
   categories: { part: '09', feature: 62 },
   'cell-formula': { part: '09', feature: 63 },
+  'channel-id': { part: '04', feature: 9, also: 'covered: the product sheet\'s eBay Item ID cell (#340) — check is channel-identity-check, link is link-channel-id, unlink is unlink-channel-id (the same rules); the cell runs as the signed-in person, Claude\'s tools through the Approvals page' },
   'channel-mapping-sets': { part: '09', feature: 63 },
   'channel-mapping': { part: '09', feature: 63 },
   'channel-publish': { part: '02', feature: 3 },
