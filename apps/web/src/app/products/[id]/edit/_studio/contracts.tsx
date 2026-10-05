@@ -50,6 +50,7 @@ import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness,
 import { decodeReadiness } from '@nexus/shared/readiness-wire'
 import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
+import { renamedStudioRecord } from './sheet/identitySkuEdit'
 import {
   channelServesMarket,
   localeForMarketChange,
@@ -205,6 +206,18 @@ export function useStudioProduct(): StudioProduct {
   const v = useContext(ProductCtx)
   if (!v) throw new Error('useStudioProduct() outside <StudioStateProvider>')
   return v
+}
+
+/**
+ * S11 — a Shared SKU rename the server confirmed (the product sheet's first column): the studio's header, the Publish
+ * window and every other reader of `useStudioProduct()` / `useStudioFamily()` show the new SKU at once, without a second
+ * read of the record. A reload reads the record again and drops these.
+ */
+export type StudioSkuRenamed = (renames: ReadonlyArray<{ productId: string; to: string }>) => void
+const NO_SKU_RENAME: StudioSkuRenamed = () => undefined
+const SkuRenamedCtx = createContext<StudioSkuRenamed | null>(null)
+export function useStudioSkuRenamed(): StudioSkuRenamed {
+  return useContext(SkuRenamedCtx) ?? NO_SKU_RENAME
 }
 
 /* ── the open record (PES.4's drawer) ────────────────────────────────────────────────────── */
@@ -628,6 +641,11 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     return () => { scopeChangeGuards.current.delete(guard) }
   }, [])
   const canChangeEditor = useCallback(() => [...scopeChangeGuards.current].every(guard => guard()), [])
+  /* S11 — renamed SKUs, for the record this provider was given (a new record from a reload drops them). */
+  const [renamedSkus, setRenamedSkus] = useState<{ base: StudioProduct; skus: Record<string, string> } | null>(null)
+  const onSkuRenamed = useCallback<StudioSkuRenamed>((renames) => setRenamedSkus(prev => ({ base: product,
+    skus: { ...(prev?.base === product ? prev.skus : {}), ...Object.fromEntries(renames.map(r => [r.productId, r.to])) } })), [product])
+  const shownRecord = useMemo(() => renamedStudioRecord(product, family, renamedSkus?.base === product ? renamedSkus.skus : {}), [product, family, renamedSkus])
   const router = useRouter()
   const pathname = usePathname()
   const search = useSearchParams()
@@ -1097,9 +1115,10 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   }, [marketplacesFailed, discoveryRetry, discoveryRetrying, accountHealth, accountName, scope])
 
   return (
-    <ProductCtx.Provider value={product}>
+    <ProductCtx.Provider value={shownRecord.product}>
+      <SkuRenamedCtx.Provider value={onSkuRenamed}>
       <DiscoveryCtx.Provider value={discovery}>
-      <FamilyCtx.Provider value={family}>
+      <FamilyCtx.Provider value={shownRecord.family}>
       <ScopeCtx.Provider value={scopeValue}>
         <RecordCtx.Provider value={recordValue}>
           <SaveActionsCtx.Provider value={saveActions}>
@@ -1117,6 +1136,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
       </ScopeCtx.Provider>
       </FamilyCtx.Provider>
     </DiscoveryCtx.Provider>
+      </SkuRenamedCtx.Provider>
     </ProductCtx.Provider>
   )
 }

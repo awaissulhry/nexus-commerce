@@ -136,8 +136,30 @@ beforeAll(async () => {
     // 3. The Shopify SKU column.
     await product('SH-DRAFT'); await listing('shDraft', 'SH-DRAFT', 'SHOPIFY', 'GLOBAL', { ...DRAFT, platformAttributes: { sku: 'SH-OLD-COPY' } })
     await product('SH-HELD'); await listing('shHeld', 'SH-HELD', 'SHOPIFY', 'GLOBAL', { liveChannelSku: 'SH-HELD-LIVE', channelSku: 'SH-HELD-LIVE' })
+    // S11 follow-up: the product-SKU rule on a rename; one product whose existing SKU already breaks it.
+    await product('RULE-1'); await listing('rule1DE', 'RULE-1', 'AMAZON', 'DE', DRAFT)
+    await product('OLD SKU/1')
     // Shared stock: P-POOL sells from the lender's stock (a SKU link).
     await product('P-POOL')
+    // F2 (browser check 2026-10-05): rename then undo puts every listing back. Held on Amazon and eBay, a draft, a draft
+    // with its own SKU; and a product whose listing's own SKU is the NEW SKU but whose old store (an offer) names another.
+    await product('UN-1')
+    await listing('un1DE', 'UN-1', 'AMAZON', 'DE')
+    await listing('un1IT', 'UN-1', 'AMAZON', 'IT')
+    await listing('un1EB', 'UN-1', 'EBAY', 'IT')
+    await listing('un1FR', 'UN-1', 'AMAZON', 'FR', DRAFT)
+    await listing('un1SH', 'UN-1', 'SHOPIFY', 'GLOBAL', { ...DRAFT, channelSku: 'UN-1-SHOP' })
+    // F7: an extra listing (alias) on eBay IT — its main row (the family root's) and a variation's row, both drafts — and
+    // another extra listing that holds a SKU already.
+    await product('AL-1', { isParent: true }); await product('AL-1-S', { parentId: pid['AL-1'] })
+    await listing('al1EB', 'AL-1', 'EBAY', 'IT')
+    for (const [key, label, sku] of [['alias1', 'Second listing', 'AL-1-EB2'], ['alias2', 'Third listing', 'AL-1-EB3']]) {
+      lid[key] = (await db().productListingAlias.create({ data: { productId: pid['AL-1'], channel: 'EBAY', marketplace: 'IT', channelConnectionId: acc.EBAY, label, position: key === 'alias1' ? 1 : 2, sku } as never })).id
+    }
+    await listing('al1Main', 'AL-1', 'EBAY', 'IT', { ...DRAFT, aliasId: lid.alias1, aliasKey: lid.alias1, channelSku: 'AL-1-EB2' })
+    await listing('al1Var', 'AL-1-S', 'EBAY', 'IT', { ...DRAFT, aliasId: lid.alias1, aliasKey: lid.alias1 })
+    await product('UN-2')
+    await listing('un2DE', 'UN-2', 'AMAZON', 'DE', { channelSku: 'UN-2N' }, [{ sku: 'UN-2-OFFER', isActive: true }])
   })
   // Another business: the same SKUs are legal there, and its listings are never read.
   await inside(B, async () => {
@@ -166,7 +188,7 @@ describe('S9 — a SHARED SKU rename keeps the channels in step (no refusal)', (
     const out = await rename([['R-1', 'R-1N']], { dryRun: true })
     expect(out).toMatchObject({ dryRun: true, wouldUpdate: 1, errors: [] })
     expect(out.skuRenames).toEqual([expect.objectContaining({ productId: pid['R-1'], from: 'R-1', to: 'R-1N',
-      summary: 'Amazon · DE, Amazon · IT and eBay · IT keep R-1; the draft follows R-1N. Shopify · GLOBAL keeps its own SKU R-1-SHOP.' })])
+      summary: 'Amazon · DE, Amazon · IT and eBay · IT keep R-1; the draft follows R-1N. Shopify keeps its own SKU R-1-SHOP.' })])
     expect(await productSku('R-1')).toBe('R-1')
     expect(await row('r1DE')).toEqual(before)
   })
@@ -176,7 +198,7 @@ describe('S9 — a SHARED SKU rename keeps the channels in step (no refusal)', (
     const out = await rename([['R-1', 'R-1N']])
     expect(out).toMatchObject({ success: true, updated: 1 })
     expect(out.errors ?? []).toEqual([])
-    expect(out.skuRenames?.[0].summary).toBe('Amazon · DE, Amazon · IT and eBay · IT keep R-1; the draft follows R-1N. Shopify · GLOBAL keeps its own SKU R-1-SHOP.')
+    expect(out.skuRenames?.[0].summary).toBe('Amazon · DE, Amazon · IT and eBay · IT keep R-1; the draft follows R-1N. Shopify keeps its own SKU R-1-SHOP.')
     expect(await productSku('R-1')).toBe('R-1N')
     for (const name of ['r1DE', 'r1IT', 'r1EB']) expect(await row(name)).toMatchObject({ channelSku: 'R-1', liveChannelSku: 'R-1' })
     expect((await row('r1DE')).version).toBe(versions.de + 1)
@@ -220,6 +242,34 @@ describe('S9 — a SHARED SKU rename keeps the channels in step (no refusal)', (
     expect(swap.errors).toEqual([{ id: pid['S-A'], field: 'sku', error: 'S-B stays the SKU of S-B2 on Amazon · DE after its rename in this save. One SKU names one product: choose another SKU.' }])
     expect([await productSku('S-A'), await productSku('S-B')]).toEqual(['S-A', 'S-B2'])
     expect((await row('sbDE')).channelSku).toBe('S-B')
+  })
+
+  it('F2 — rename then undo: every listing is back as it was (its own SKU null where it was null); the undo says they follow again', async () => {
+    const names = ['un1DE', 'un1IT', 'un1EB', 'un1FR', 'un1SH']
+    const sku = async (name: string) => { const r = await row(name); return r.channelSku }
+    const before = Object.fromEntries(await Promise.all(names.map(async n => [n, await sku(n)])))
+    expect(before).toEqual({ un1DE: null, un1IT: null, un1EB: null, un1FR: null, un1SH: 'UN-1-SHOP' })
+    const out = await rename([['UN-1', 'UN-1N']])
+    expect(out.errors ?? []).toEqual([])
+    for (const name of ['un1DE', 'un1IT', 'un1EB']) expect(await row(name)).toMatchObject({ channelSku: 'UN-1', liveChannelSku: 'UN-1' })
+    pid['UN-1N'] = pid['UN-1']
+    const undo = await rename([['UN-1N', 'UN-1']])
+    expect(undo.errors ?? []).toEqual([])
+    expect(await productSku('UN-1N')).toBe('UN-1')
+    expect(undo.skuRenames?.[0].summary).toBe('No channel holds UN-1N: the draft follows UN-1. Amazon · DE, Amazon · IT and eBay · IT follow the Shared SKU UN-1 again. Shopify keeps its own SKU UN-1-SHOP.')
+    expect(undo.skuRenames?.[0].listings.filter(l => l.outcome === 'rejoins').map(l => l.listingId).sort()).toEqual([lid.un1DE, lid.un1IT, lid.un1EB].sort())
+    // Every own SKU is back as it was; what the channel holds stays recorded (it holds UN-1, as before the rename).
+    expect(Object.fromEntries(await Promise.all(names.map(async n => [n, await sku(n)])))).toEqual(before)
+    for (const name of ['un1DE', 'un1IT', 'un1EB']) expect((await row(name)).liveChannelSku).toBe('UN-1')
+    const history = await inside(A, () => db().channelListingOverride.findMany({ where: { channelListingId: lid.un1EB, fieldName: 'channelSku' }, orderBy: { createdAt: 'asc' } }))
+    expect(history.map(h => [h.previousValue, h.newValue])).toEqual([[null, 'UN-1'], ['UN-1', null]])
+  })
+
+  it('F2 — a listing whose own SKU is the NEW SKU keeps it when following would send something else (its old store)', async () => {
+    const out = await rename([['UN-2', 'UN-2N']])
+    expect(out.errors ?? []).toEqual([])
+    expect(out.skuRenames?.[0].summary).toBe('Amazon · DE keeps its own SKU UN-2N.')
+    expect(await row('un2DE')).toMatchObject({ channelSku: 'UN-2N' })
   })
 
   it('a product connected to shared stock: refused in one plain sentence that says what to do, the rest of the save stored', async () => {
@@ -320,6 +370,30 @@ describe('S9 — a listing\'s own SKU in a channel scope (`channel_sku`)', () =>
     expect((await row('wCross')).channelSku).toBe('CROSS-1')
   })
 
+  it('F7 — an extra listing\'s main row and its variation rows take their own SKU like any listing row; the extra listing\'s SKU follows its main row', async () => {
+    const onAlias = (name: string, sku: string | null, extra: { reset?: boolean } = {}) =>
+      save({ changes: [{ id: pid[name], field: 'channel_sku', value: sku, target: 'channel', ...(extra.reset ? { intent: 'reset' as const } : {}) }],
+        marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId: acc.EBAY, aliasKey: lid.alias1 }] })
+    const aliasSku = async (key: string) => (await inside(A, () => db().productListingAlias.findUniqueOrThrow({ where: { id: lid[key] } }))).sku
+    // The main row: its own SKU, and the extra listing's SKU with it.
+    expect((await onAlias('AL-1', 'AL-1-EB2X')).errors ?? []).toEqual([])
+    expect(await row('al1Main')).toMatchObject({ channelSku: 'AL-1-EB2X' })
+    expect(await aliasSku('alias1')).toBe('AL-1-EB2X')
+    // A variation row of the extra listing: its own SKU; the extra listing's SKU is its main row's, untouched.
+    expect((await onAlias('AL-1-S', 'AL-1-S-EB2')).errors ?? []).toEqual([])
+    expect(await row('al1Var')).toMatchObject({ channelSku: 'AL-1-S-EB2' })
+    expect(await aliasSku('alias1')).toBe('AL-1-EB2X')
+    // The primary listing on the same account is another listing: never written.
+    expect((await row('al1EB')).channelSku).toBeNull()
+    // Another extra listing's SKU is refused by name; nothing written.
+    expect((await onAlias('AL-1', 'AL-1-EB3')).errors).toEqual([{ id: pid['AL-1'], field: 'channel_sku', error: 'AL-1-EB3 is already the SKU of another listing in this business. Choose another SKU for this listing.' }])
+    expect(await aliasSku('alias1')).toBe('AL-1-EB2X')
+    // Following the Shared SKU: the extra listing has no SKU of its own any more.
+    expect((await onAlias('AL-1', null, { reset: true })).errors ?? []).toEqual([])
+    expect(await row('al1Main')).toMatchObject({ channelSku: null })
+    expect(await aliasSku('alias1')).toBeNull()
+  })
+
   it('setChannelSku is the one writer: a move Publish cannot carry is refused there too, recovery may allow it', async () => {
     const write = (liveMove?: 'allow') => inside(A, () => db().$transaction(tx => setChannelSku(tx as never, { listingId: lid.wEtsy, sku: 'W-ETSY-MOVE', actorId: null, ...(liveMove ? { liveMove } : {}) })))
     await expect(write()).rejects.toMatchObject({ code: 'LIVE_SKU_HELD' })
@@ -350,5 +424,39 @@ describe('S9 — the Shopify SKU column is the listing\'s own SKU', () => {
   it('a listing Shopify holds takes a new SKU: Publish renames it in place', async () => {
     expect((await column('shHeld', 'SH-HELD', 'SH-HELD-NEW')).errors ?? []).toEqual([])
     expect((await row('shHeld')).channelSku).toBe('SH-HELD-NEW')
+  })
+})
+
+describe('S11 follow-up — a Shared rename is refused on the server when the new SKU breaks the product-SKU rule', () => {
+  const CHARS = 'Use only letters, numbers, dots (.), hyphens (-) and underscores (_). No spaces.'
+  it('characters and length: refused with the sheet\'s own sentence, nothing renamed, the listings untouched', async () => {
+    for (const [to, sentence] of [['RULE 1', CHARS], ['RULE/1', CHARS], ['R'.repeat(101), 'A SKU can have up to 100 characters. This one has 101.']] as const) {
+      const out = await rename([['RULE-1', to]])
+      expect(out.errors).toEqual([{ id: pid['RULE-1'], field: 'sku', error: sentence }])
+      expect(out.skuRenames ?? []).toEqual([])
+      expect(await productSku('RULE-1')).toBe('RULE-1')
+    }
+    expect((await row('rule1DE')).channelSku).toBeNull()
+  })
+
+  it('a preview (dry run, as Claude\'s set-product-sku asks) carries the same refusal', async () => {
+    const out = await rename([['RULE-1', 'RULE 1']], { dryRun: true })
+    expect(out).toMatchObject({ dryRun: true, wouldUpdate: 0, errors: [{ id: pid['RULE-1'], field: 'sku', error: CHARS }] })
+  })
+
+  it('only a NEW value is checked: an existing SKU that breaks the rule is kept, sent back unchanged, or renamed to a valid one', async () => {
+    const same = await rename([['OLD SKU/1', 'OLD SKU/1']])
+    expect(same.errors ?? []).toEqual([])
+    expect(await productSku('OLD SKU/1')).toBe('OLD SKU/1')
+    const fixed = await rename([['OLD SKU/1', 'OLD-SKU-1']])
+    expect(fixed.errors ?? []).toEqual([])
+    expect(await productSku('OLD SKU/1')).toBe('OLD-SKU-1')
+  })
+
+  it('the other changes of the save are still stored', async () => {
+    const out = await save({ changes: [{ id: pid['RULE-1'], field: 'sku', value: 'RULE 1' }, { id: pid['RULE-1'], field: 'brand', value: 'Rule brand' }] })
+    expect(out.errors).toEqual([{ id: pid['RULE-1'], field: 'sku', error: CHARS }])
+    const product = await inside(A, () => db().product.findUniqueOrThrow({ where: { id: pid['RULE-1'] } }))
+    expect(product).toMatchObject({ sku: 'RULE-1', brand: 'Rule brand' })
   })
 })

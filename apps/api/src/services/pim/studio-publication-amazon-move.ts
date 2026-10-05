@@ -24,6 +24,7 @@ import type { FbaUnits } from '@nexus/shared/listing-actions'
 import { amazonMoveConfirmSentence, amazonMoveSentence, bothSkusSell, DELETE_OLD_SKU_AGAIN, fbaMoveWarning } from '@nexus/shared/publish-actions'
 import type { HistorySkuMove } from '@nexus/shared/publication-history'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { channelPlace } from '@nexus/shared/channel-label'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { object, type PublicationFacts } from './studio-publication-plan.js'
@@ -55,7 +56,7 @@ const RUNNING_LEASE_MS = 10 * 60_000
 /** A delete Amazon did not confirm is tried again by the sweep this many times, then left to a person. */
 const MAX_DELETE_TRIES = 5
 
-const where = (marketplace: string) => `Amazon · ${String(marketplace).toUpperCase()}`
+const where = (marketplace: string) => channelPlace('AMAZON', marketplace)
 
 // ── Review ───────────────────────────────────────────────────────────────────────────────────────────
 
@@ -83,13 +84,15 @@ export async function fbaUnitsUnderSku(marketplaceId: string, sku: string): Prom
 }
 
 /** The review's words for each moved row, and the typed confirmation the review needs (null when nothing moves). */
-export async function amazonMoveReview(facts: Pick<PublicationFacts, 'scope' | 'parent'>, prepared: Pick<AmazonPublication, 'marketplaceId' | 'moves'> | null) {
+export async function amazonMoveReview(facts: Pick<PublicationFacts, 'scope' | 'parent'>, prepared: { marketplaceId: string | null; moves?: AmazonPublication['moves'] } | null) {
   const rows = new Map<string, StudioPublishSkuMove>()
   const moves = prepared?.moves ?? []
   if (!moves.length) return { rows, confirm: null as StudioPublishConfirm | null }
   const here = where(facts.scope.marketplace)
   for (const move of moves) {
-    const warning = move.fba ? fbaMoveWarning(await fbaUnitsUnderSku(prepared!.marketplaceId, move.from), move.to, move.from) : null
+    // No marketplace identifier (a review that could not be prepared): the warning names no count.
+    const units = prepared!.marketplaceId ? await fbaUnitsUnderSku(prepared!.marketplaceId, move.from) : null
+    const warning = move.fba ? fbaMoveWarning(units, move.to, move.from) : null
     rows.set(move.productId, { from: move.from, to: move.to, kind: 'create-delete', sentence: amazonMoveSentence(move.to, move.from, here), warning })
   }
   const confirm: StudioPublishConfirm = { kind: 'type', expected: facts.parent.sku, token: 'DELETE', sentence: amazonMoveConfirmSentence(moves, here) }

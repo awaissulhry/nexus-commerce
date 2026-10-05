@@ -147,8 +147,9 @@ const setProductSku: AgentTool = {
     `Rename a product's SKU in Nexus (the Shared SKU). ${NEXUS_ONLY} Always waits for a person to approve it in Nexus. `
     + 'Every listing a channel holds keeps the SKU it has there (the old one), so nothing on a channel changes; draft '
     + 'listings follow the new SKU and Publish lists them under it. The preview names which listings keep the old SKU. '
-    + 'Refused when another product, an extra listing or another product\'s listing of this business uses the SKU, and '
-    + 'when the product shares stock with another business (disconnect it first).',
+    + 'Refused when another product, an extra listing or another product\'s listing of this business uses the SKU, when '
+    + 'the new SKU breaks the product-SKU rule (at most 100 characters; letters, numbers, dots, hyphens and underscores only), '
+    + 'and when the product shares stock with another business (disconnect it first).',
   async handler(args): Promise<ToolResult> {
     const plan = await planSku(args, 'Nothing was queued.')
     if ('error' in plan) return { ok: false, error: plan.error }

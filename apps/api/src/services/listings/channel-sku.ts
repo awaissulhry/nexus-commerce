@@ -13,7 +13,7 @@
  * workspace and connection filter on every raw read. Nothing here calls a channel.
  */
 import { Prisma } from '@prisma/client'
-import { channelLabel } from '@nexus/shared/channel-label'
+import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
 import { PRODUCT_SKU_MAX_LENGTH, PRODUCT_SKU_PATTERN } from '@nexus/shared/product-create'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
@@ -286,7 +286,10 @@ export async function setChannelSku(tx: Db, input: {
   const productSku = listing.product?.sku?.trim() || null
   const draft = isStillDraftListing(listing)
   const held = draft ? null : liveChannelSku(listing, productSku)
-  const follows = wantedChannelSku({ ...listing, channelSku: null }, productSku).sku
+  // F7 — an extra listing's MAIN row: its own SKU and the extra listing's SKU (`ProductListingAlias.sku`) are one value,
+  // kept in step below; following the product SKU leaves neither.
+  const aliasMain = !!listing.aliasKey && !!listing.alias && listing.alias.productId === listing.productId
+  const follows = wantedChannelSku({ ...listing, channelSku: null, ...(aliasMain ? { alias: { ...listing.alias!, sku: null } } : {}) }, productSku).sku
   // "Follow" (null). On a draft an old store still names another SKU for: store the product SKU itself. On a listing the
   // channel holds under another SKU than the one it would then send: that is a MOVE, stored explicitly — Publish moves a
   // held listing only to a SKU of its own (S10), so a bare "follow" would send the new SKU without moving the old one.
@@ -299,7 +302,8 @@ export async function setChannelSku(tx: Db, input: {
     if (problem) throw new ChannelSkuError(400, problem, 'INVALID_SKU')
   }
   if (input.liveMove !== 'allow' && held) {
-    const moving = held.sku === null || wantedChannelSku({ ...listing, channelSku: value }, productSku).sku !== held.sku
+    const after = { ...listing, channelSku: value, ...(aliasMain ? { alias: { ...listing.alias!, sku: value && value !== productSku ? value : null } } : {}) }
+    const moving = held.sku === null || wantedChannelSku(after, productSku).sku !== held.sku
     const refusal = moving ? liveChannelSkuMoveRefusal(listing, productSku, value, await channelSkuMoveFacts(tx, listing)) : null
     if (refusal) throw new ChannelSkuError(409, refusal, 'LIVE_SKU_HELD')
   }
@@ -322,13 +326,26 @@ export async function setChannelSku(tx: Db, input: {
     const holder = holders.find(other => LEVELS.some(level => matchAt(other, level, equal)))
     if (holder) {
       const where = channelLabel(holder.channel)
-      throw new ChannelSkuError(409, `${value} is already the SKU of ${holder.product?.sku ?? 'another product'} on this ${where} account (${where} ${holder.marketplace}). `
+      throw new ChannelSkuError(409, `${value} is already the SKU of ${holder.product?.sku ?? 'another product'} on this ${where} account (${channelPlace(holder.channel, holder.marketplace)}). `
         + 'Within one channel account a SKU names one product: choose another SKU.', 'SKU_TAKEN')
     }
+  }
+  // F7 (browser check 2026-10-05) — an extra listing's MAIN row: its own SKU IS the extra listing's SKU
+  // (`ProductListingAlias.sku`, the store orders, imports and the uniqueness checks read), so the two stay in step. Its
+  // product's own SKU, or none (follow), leaves the extra listing without a SKU of its own.
+  const aliasSku = aliasMain && value && value !== productSku ? value : null
+  if (aliasMain && aliasSku) {
+    // An archived listing gives its SKU up to a live one (as a new listing's SKU does); a live one keeps it.
+    const other = await tx.productListingAlias.findFirst({ where: { sku: aliasSku, id: { not: listing.aliasKey! }, status: { not: 'ARCHIVED' } }, select: { id: true } })
+    if (other) throw new ChannelSkuError(409, `${aliasSku} is already the SKU of another listing in this business. Choose another SKU for this listing.`, 'SKU_TAKEN')
   }
   if (input.dryRun) return { listingId: listing.id, channelSku: value, previous, version: listing.version, changed: true }
   const written = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: { channelSku: value, version: { increment: 1 } } })
   if (written.count !== 1) throw new ChannelSkuError(409, VERSION_CONFLICT, 'VERSION_CONFLICT')
+  if (aliasMain && (listing.alias!.sku?.trim() || null) !== aliasSku) {
+    if (aliasSku) await tx.productListingAlias.updateMany({ where: { sku: aliasSku, status: 'ARCHIVED' }, data: { sku: null } })
+    await tx.productListingAlias.updateMany({ where: { id: listing.aliasKey! }, data: { sku: aliasSku } })
+  }
   await tx.channelListingOverride.create({ data: { channelListingId: listing.id, fieldName: 'channelSku', previousValue: previous, newValue: value,
     changedBy: input.actorId, reason: input.reason ?? (typed ? 'Own SKU for this listing' : 'Follows the product SKU again') } })
   return { listingId: listing.id, channelSku: value, previous, version: listing.version + 1, changed: true }

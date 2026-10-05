@@ -25,6 +25,8 @@ import { GridDensityProvider } from '../hooks/useGridDensity'
 import { GridToastBoundary } from './GridToastBoundary'
 import { useGridHostTop } from '../hooks/useGridHostTop'
 
+export { UNSAVED_ROW_CLASS, isUnsavedRowData } from './unsavedRow'
+
 export interface GridSheetProps {
   toolbar?: ReactNode
   children: ReactNode
@@ -126,6 +128,14 @@ export interface GridSheetStatusProps {
   lastSavedAt?: string | null
   /** Optional live progress. Its cached snapshot updates this strip without re-rendering the grid host. */
   source?: GridSheetStatusSource
+  /**
+   * The strip's START slot, bottom left before the row count (2026-10-05, Add rows): controls that add to the sheet —
+   * the product sheet's "Rows to add" count and its "Add rows" button or menu. It never shrinks; the tallies and the
+   * note after it do. At phone width (≤ 760 px) a part marked `GRID_SHEET_STATUS_WIDE` (the count) leaves the strip,
+   * so only the button shows in the 36 px footer. It sits OUTSIDE the strip's live region: a screen reader announces the
+   * tallies and the note as they change, never the controls (their count, their menu) as status text.
+   */
+  start?: ReactNode
   children?: ReactNode
 }
 
@@ -134,6 +144,13 @@ export interface GridSheetStatusSource {
   getSnapshot: () => Pick<GridSheetStatusProps, 'pending' | 'refused' | 'warned' | 'saving' | 'lastSavedAt'>
 }
 
+/**
+ * Mark a part of the status strip's `start` slot that leaves the strip at phone width (≤ 760 px): the 36 px footer then
+ * keeps only the action itself (2026-10-05, Add rows — "Rows to add" goes, "Add rows" stays).
+ */
+export const GRID_SHEET_STATUS_WIDE = 'nds-grid-sheet-status-wide'
+
+
 const NO_LIVE_STATUS = {}
 const noStatusSubscription = () => () => undefined
 const noLiveStatus = () => NO_LIVE_STATUS
@@ -141,9 +158,9 @@ const noLiveStatus = () => NO_LIVE_STATUS
 /** The strip under a sheet: what is on it, what is unsaved, what the server said. */
 export const GridSheetStatus = memo(function GridSheetStatus({ source, ...props }: GridSheetStatusProps) {
   const live = useSyncExternalStore(source?.subscribe ?? noStatusSubscription, source?.getSnapshot ?? noLiveStatus, source?.getSnapshot ?? noLiveStatus)
-  const { rows, selected = 0, pending = 0, refused = 0, warned = 0, saving = false, lastSavedAt, children } = { ...props, ...live }
-  return (
-    <div className="nds-grid-footstrip nds-grid-sheet-status" role="status" aria-live="polite">
+  const { rows, selected = 0, pending = 0, refused = 0, warned = 0, saving = false, lastSavedAt, start, children } = { ...props, ...live }
+  const tallies = (
+    <>
       <span>
         <b>{rows.toLocaleString('en-GB')}</b> {rows === 1 ? 'row' : 'rows'}
         {selected > 0 && (
@@ -180,6 +197,15 @@ export const GridSheetStatus = memo(function GridSheetStatus({ source, ...props 
       <span className="nds-grid-footstrip-grow" />
       {children}
       {lastSavedAt && !saving && pending === 0 && <span className="nds-cell-muted">Saved {new Date(lastSavedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}{warned > 0 && <> with <b>{warned}</b> {warned === 1 ? 'warning' : 'warnings'}</>}</span>}
+    </>
+  )
+  // No start slot: the strip itself is the live region, exactly as before (every sheet without one is unchanged).
+  if (start == null || start === false) return <div className="nds-grid-footstrip nds-grid-sheet-status" role="status" aria-live="polite">{tallies}</div>
+  // Add rows, browser check 2026-10-05 (F12): the start slot's controls sit BESIDE the live region, never inside it.
+  return (
+    <div className="nds-grid-footstrip nds-grid-sheet-status">
+      <div className="nds-grid-sheet-status-start">{start}</div>
+      <div className="nds-grid-sheet-status-live" role="status" aria-live="polite">{tallies}</div>
     </div>
   )
 })

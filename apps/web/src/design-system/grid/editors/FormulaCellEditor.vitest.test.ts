@@ -100,6 +100,18 @@ describe('Option A (Owner, 2026-09-26) — the value editor opens under its cell
     expect(html).toContain('Shift+Enter adds a line.')
   })
 
+  it('a host\'s line about what the edit reaches: under the field, its tone named by an icon, read with the field', () => {
+    const plain = render({})
+    expect(plain).not.toContain('nds-formula-notice')
+    const warn = render({ cellContext: { maxLength: 100, notice: { tone: 'warning', text: 'This SKU is for Amazon · DE only.' } } })
+    expect(warn).toContain('nds-formula-notice warn')
+    expect(warn).toContain('This SKU is for Amazon · DE only.')
+    expect(String(capture.input['aria-describedby'])).toMatch(/-notice /)
+    const info = render({ cellContext: { notice: { tone: 'info', text: 'Changes the SKU on every channel.' } } })
+    expect(info).toContain('class="nds-formula-notice"')
+    expect(info).toContain('Changes the SKU on every channel.')
+  })
+
   it('draws no Cancel / Apply: the foot is the key line (and the counter)', () => {
     const html = render({})
     expect(html).toContain('nds-formula-foot')

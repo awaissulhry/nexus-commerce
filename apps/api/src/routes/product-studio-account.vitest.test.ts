@@ -19,6 +19,7 @@ vi.mock('../services/pim/listing-alias.service.js', () => ({ createAlias: mocks.
 import routes from './product-studio.routes.js'
 import { AmbiguousConnectionError, NoConnectionError } from '../services/connection-resolver.service.js'
 import { AliasScopeMismatchError } from '../services/pim/listing-alias.service.js'
+import { COMMAND_SCOPE_ROUTES } from '../lib/command-idempotency.js'
 
 let app: FastifyInstance
 beforeAll(async () => { app = Fastify(); await app.register(multipart); await app.register(routes); await app.ready() })
@@ -115,5 +116,37 @@ describe('Studio account coordinates', () => {
     const stale = await app.inject({ method: 'PATCH', url: '/products/p/aliases/alias-b', payload: { accountId: 'a', label: 'Wrong account' } })
     expect(stale.statusCode).toBe(409)
     expect(stale.json().error).toBe('LISTING_SCOPE_MISMATCH')
+  })
+})
+
+// Add rows R3 (2026-10-05) — the sheet's empty "Listing (alias)" row sends the SKU typed into it.
+describe('a new listing alias from an empty sheet row', () => {
+  it('passes the SKU through, as the new listing\'s channel SKU too', async () => {
+    mocks.createAlias.mockResolvedValue({ id: 'alias-n', sku: 'IT-FAM-2' })
+    const created = await app.inject({ method: 'POST', url: '/products/p/aliases', payload: { channel: 'ebay', marketplace: 'it', accountId: 'b', sku: 'IT-FAM-2' } })
+    expect(created.statusCode).toBe(201)
+    expect(mocks.createAlias).toHaveBeenCalledWith(expect.objectContaining({ productId: 'p', channel: 'EBAY', marketplace: 'IT', accountId: 'b', sku: 'IT-FAM-2', channelSku: true }))
+  })
+  it('creates a SKU-less alias as before when no SKU is sent (the ⋯ menu)', async () => {
+    await app.inject({ method: 'POST', url: '/products/p/aliases', payload: { channel: 'EBAY', marketplace: 'IT', accountId: 'b' } })
+    const input = mocks.createAlias.mock.calls[0][0]
+    expect(input).not.toHaveProperty('sku')
+    expect(input).not.toHaveProperty('channelSku')
+  })
+  it('refuses a SKU that is not text', async () => {
+    const result = await app.inject({ method: 'POST', url: '/products/p/aliases', payload: { channel: 'EBAY', marketplace: 'IT', accountId: 'b', sku: 42 } })
+    expect(result.statusCode).toBe(400)
+    expect(mocks.createAlias).not.toHaveBeenCalled()
+  })
+  it('answers a channel-SKU refusal with its status and its own sentence (the row shows it)', async () => {
+    const refusal = Object.assign(new Error('TAKEN-1 is already the SKU of OTHER on this eBay account (eBay · IT). Within one channel account a SKU names one product: choose another SKU.'),
+      { statusCode: 409, code: 'SKU_TAKEN' })
+    mocks.createAlias.mockRejectedValueOnce(refusal)
+    const result = await app.inject({ method: 'POST', url: '/products/p/aliases', payload: { channel: 'EBAY', marketplace: 'IT', accountId: 'b', sku: 'TAKEN-1' } })
+    expect(result.statusCode).toBe(409)
+    expect(result.json()).toEqual({ error: 'SKU_TAKEN', message: refusal.message })
+  })
+  it('keeps one variation or alias per typed SKU when the answer is lost and the row sends again (Idempotency-Key)', () => {
+    expect(COMMAND_SCOPE_ROUTES).toEqual(expect.arrayContaining(['/api/products/:id/aliases', '/api/catalog/products/:parentId/children']))
   })
 })

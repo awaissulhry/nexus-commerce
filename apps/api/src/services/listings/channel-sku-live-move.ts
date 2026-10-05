@@ -14,13 +14,13 @@
  *   - Etsy: refused (`etsySkuMoveSentence`, the review's Etsy line); any other channel: refused.
  * Keeping the SKU the channel holds is always allowed.
  */
-import { channelLabel } from '@nexus/shared/channel-label'
+import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
 import { amazonMainRowMove, EBAY_INVENTORY_SKU_MOVE, etsySkuMoveSentence } from '@nexus/shared/publish-actions'
 import { liveChannelSku, wantedChannelSku, type ChannelSkuListing } from './channel-sku.pure.js'
 
-/** "Amazon · DE", "eBay · IT (extra listing)": where a listing sells, in the words the sheet uses. */
+/** "Amazon · DE", "eBay · IT (extra listing)", "Shopify": where a listing sells, in the words the sheet uses (`channelPlace`). */
 export function listingPlace(listing: { channel: string; marketplace?: string | null; aliasKey?: string | null }): string {
-  const where = `${channelLabel(listing.channel) || listing.channel} · ${listing.marketplace ?? ''}`.trim()
+  const where = channelPlace(listing.channel, listing.marketplace)
   return listing.aliasKey ? `${where} (extra listing)` : where
 }
 

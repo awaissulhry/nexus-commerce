@@ -169,6 +169,9 @@ describe('I10 — set-product-sku', () => {
       .toMatchObject({ effect: 'Renames FIX-LIVE to FIX-LIVE-2 in Nexus. eBay · IT keeps FIX-LIVE.' })
     expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-LIVE' })).toMatchObject({ ok: false, error: expect.stringContaining('already used by another product') })
     expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX-OLD' })).toMatchObject({ ok: false, error: expect.stringContaining('already has this SKU') })
+    // S11 follow-up — the writer's product-SKU rule, the same sentence the product sheet shows.
+    expect(await preview('set-product-sku', { productId: ids['FIX-OLD'], sku: 'FIX OLD/2' }))
+      .toMatchObject({ ok: false, error: expect.stringContaining('Use only letters, numbers, dots (.), hyphens (-) and underscores (_). No spaces.') })
   }, TIMEOUT)
 
   it('S9: the rename runs after approval — the held eBay listing keeps the old SKU, and no other product may take it then', async () => {

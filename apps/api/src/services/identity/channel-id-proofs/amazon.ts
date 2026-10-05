@@ -9,6 +9,7 @@
  *   row on it; until then the cell reads "Lists on B0X at Publish", never as live. Clear removes it.
  *   A live offer: refused with Amazon's reason and the way to do it (Owner D4 = A). Nothing is sent to Amazon here.
  */
+import { channelPlace } from '@nexus/shared/channel-label'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { CHANNEL_SKU_LISTING_SELECT } from '../../listings/channel-sku.js'
@@ -22,7 +23,7 @@ export { SUGGESTED_ASIN_KEY, suggestedAsinOf, takesSuggestedAsin } from './amazo
 export const ASIN_PATTERN = /^[A-Z0-9]{10}$/
 export const normalizeAsin = (raw: string | null | undefined) => String(raw ?? '').replace(/\s+/g, '').toUpperCase()
 
-export const amazonMarket = (market: string) => `Amazon · ${String(market).toUpperCase()}`
+export const amazonMarket = (market: string) => channelPlace('AMAZON', market)
 /** What the cell says of a draft row's suggested ASIN. */
 export const listsOnSentence = (asin: string) => `Lists on ${asin} at Publish`
 

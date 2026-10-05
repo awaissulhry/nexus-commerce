@@ -21,6 +21,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Button } from '@/components/ui/Button'
@@ -1399,7 +1400,9 @@ function AddVariantRow({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(
+      // One Idempotency-Key per new variant (the API keeps receipts for this route): a resend after a lost answer never adds it twice.
+      const sent = await sendCommand<any>(
+        commandKeyFor(`variation-create:${parentId}`),
         `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(parentId)}/children`,
         {
           method: 'POST',
@@ -1412,7 +1415,9 @@ function AddVariantRow({
           }),
         },
       )
-      const json = await res.json().catch(() => ({}))
+      const res = sent.response
+      const json = sent.body ?? {}
+      if (sent.conflict) throw new Error(commandConflictMessage(sent.conflict, 'new variant request'))
       if (!res.ok) {
         throw new Error(json?.error ?? `HTTP ${res.status}`)
       }
@@ -2099,7 +2104,9 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
       // serialize the calls so a partial failure leaves the UI
       // pointing at the SKU that errored.
       for (const v of variants) {
-        const childRes = await fetch(
+        // One Idempotency-Key per variant (the API keeps receipts for this route): a resend after a lost answer never adds it twice.
+        const sent = await sendCommand<any>(
+          commandKeyFor(`variation-create:${productId}:${v.sku.trim()}`),
           `${getBackendUrl()}/api/catalog/products/${productId}/children`,
           {
             method: 'POST',
@@ -2112,8 +2119,9 @@ function PromotePanel({ onPromoted }: { onPromoted: () => void }) {
             }),
           },
         )
+        const childRes = sent.response
         if (!childRes.ok) {
-          const j = await childRes.json().catch(() => ({}))
+          const j = sent.body ?? {}
           setError(
             `Variant ${v.sku} failed: ${
               j?.error?.message ?? j?.error ?? `HTTP ${childRes.status}`

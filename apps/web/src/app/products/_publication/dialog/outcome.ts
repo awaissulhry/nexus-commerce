@@ -11,7 +11,7 @@ import type { StudioPublicationStatus, StudioPublishResult } from '@nexus/shared
 import { publicationStatusMeta, publishFullTime } from '@/design-system/grid/renderers/publishStatus'
 import type { SheetStatus } from '@/design-system/grid/toolbars/SheetStatus'
 import type { Tone } from '@/design-system/primitives/tone'
-import { channelLabel } from '@nexus/shared/channel-label'
+import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
 
 /** The payload of `publication.status_changed`, as the invalidation channel carries it in `meta`. */
 export interface PublicationStatusEvent {
@@ -68,9 +68,9 @@ export function publicationEventMatches(event: PublicationStatusEvent, destinati
     && event.aliasKey === destination.aliasKey
 }
 
-/** "Amazon · IT" — the destination as every publish message names it. */
+/** "Amazon · IT", "Shopify" — the destination as every publish message names it (`channelPlace`: GLOBAL is the name alone). */
 export function destinationLabel(channel: string, marketplace: string): string {
-  return `${channelLabel(channel)} · ${marketplace}`
+  return channelPlace(channel, marketplace)
 }
 
 /** The counts a stored `BulkOperation.summary` carries (step 1's `publicationSummary`). */

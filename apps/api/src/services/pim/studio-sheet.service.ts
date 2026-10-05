@@ -78,6 +78,7 @@ import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
 import { completenessFor, decimalToNumber, listedState, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
+import { readSheetSkuStores, sheetRowSku, type StudioRowSku } from './studio-sheet-sku.js'
 import { categoryFieldValue, channelCategoryField } from './mapping/category-mapping.service.js'
 
 // ────────────────────────────────────────────────────────────────────
@@ -328,6 +329,11 @@ export interface StudioRow {
   listing: SheetListing | null
   /** Channel scope only: the Matrix coordinate and cells the Mode / Qty / Buffer columns show and write (`studio-stock.ts`). */
   stock?: StudioRowStock
+  /**
+   * S11 — channel scope only: the first column's SKU (the SKU Publish sends for this row's listing), whether it differs
+   * from the Shared SKU, and whether it can be edited here (`studio-sheet-sku.ts`). The Shared scope's is `sku`.
+   */
+  skuFacts?: StudioRowSku
   readiness: SheetReadiness
   completeness: MasterCompleteness
 }
@@ -1307,6 +1313,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
   const mediaPlan = await sheetMediaPlan(rootId)
   // Amazon sheet gaps (D4=B, D3) — the offer columns' rule (draft over live, holds, Publish words) and the real fulfilment code.
   const offerCells = coordinate?.channel === 'AMAZON' ? await (await import('./amazon-offer-cells.js')).loadAmazonOfferCells({ listingIds: listingRows.map((l) => l.id), keys: columns.map((c) => c.key), canEditPrice: input.canEditPrice !== false }) : null
+  // S11 — the first column's SKU stores for every listing of this coordinate (`studio-sheet-sku.ts`).
+  const skuStores = coordinate ? await readSheetSkuStores(prisma, listingRows.map((l) => l.id), coordinate.channel) : null
 
   for (const projection of projections) {
     mark('preRows')
@@ -1769,6 +1777,10 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         aliasId: projection.id,
         values: { ...values, ...relationshipValues({ parentId: product.parentId, isParent }, product.parentId ? root.sku : null) },
         listing,
+        // S11 — the first column's SKU facts (channel scope only).
+        ...(coordinate ? { skuFacts: sheetRowSku({ channel: coordinate.channel, marketplace: coordinate.marketplace, productSku: product.sku,
+          listing: listingRow ? { ...listingRow, ...skuStores?.get(listingRow.id) } : null,
+          alias: projection.id ? { id: projection.id, label: projection.label } : null, band: product.parentId === null }) } : {}),
         readiness,
         completeness: completenessFor(columns, rowShape, plainValues),
       })

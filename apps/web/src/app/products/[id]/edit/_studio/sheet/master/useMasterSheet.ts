@@ -28,6 +28,7 @@ import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
+import type { SkuRename } from '../identitySkuEdit'
 
 export interface UseMasterSheetOptions {
   locales?: string[] | null
@@ -54,6 +55,8 @@ export interface UseMasterSheetOptions {
    * reports; the adapter says it, because the toast provider belongs to the route.
    */
   onRefused?: (refusals: ReadonlyArray<{ rowId: string; colId: string; reason?: string }>) => void
+  /** S11 — the server renamed product SKUs in a save, and says what each rename did on the channels (`skuRenames[]`). */
+  onSkuRenames?: (renames: SkuRename[]) => void
 }
 
 export interface MasterSheetState {
@@ -123,6 +126,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       const result = await commitMasterRow(req, { sheet: sheetRef.current, bulkSend, opts: {
         onWriteStart: (id, rowId) => optsRef.current.onWriteStart?.(id, rowId),
         onWriteEnd: (...args) => { completed = args },
+        onSkuRenames: (renames) => optsRef.current.onSkuRenames?.(renames),
       }, locale, market, onVariationThemeSaved: () => optsRef.current.onVariationThemeSaved?.() })
       if (completed) {
         if (result.unreachable) unsettledWrites.current.set(req.rowId, completed[0])

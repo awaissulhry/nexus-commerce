@@ -82,6 +82,72 @@ export interface AmazonSkuMove {
   fba: boolean
 }
 
+type MoveFacts = Pick<PublicationFacts, 'parent' | 'products' | 'listings' | 'destination'>
+
+/**
+ * S3 (per-channel SKU) — THE seller-SKU rule (`wantedChannelSku`, channel-sku.pure.ts): the listing's own SKU when set;
+ * else the one active offer or stored identity; else the product SKU. Its refusals are word for word the ones this rule
+ * had (more than one active offer, two identities, an alias with none of its own). The alias is the destination's.
+ * Throws the refusal by name.
+ */
+export function amazonSellerSkus(facts: MoveFacts): Map<string, string> {
+  const { parent, products, listings } = facts
+  const identityProducts = products.some(product => product.id === parent.id) ? products : [parent, ...products]
+  const sellerSkus = new Map(identityProducts.map(product => {
+    const listing = listings.find(l => l.productId === product.id)
+    const wanted = wantedChannelSku({ ...(listing ?? {}), channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
+    if (wanted.sku === null) throw new Error(wanted.conflict.sentence)
+    return [product.id, wanted.sku]
+  }))
+  if (new Set(sellerSkus.values()).size !== identityProducts.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
+  return sellerSkus
+}
+
+/**
+ * S10 (per-channel SKU, Owner D2 = A) — a row Amazon holds under another seller SKU than the one this publication sends
+ * (its own SKU, set in the channel view) MOVES: NEW is created whole on the same ASIN, and OLD is deleted here once
+ * Amazon accepts NEW. A family's main row cannot move (its variations hang under the old parent SKU), and NEW cannot be
+ * created on the same product while Nexus does not know the ASIN: both are refused by name (thrown). A listing Amazon
+ * holds under two SKUs names no OLD: the resolver's sentence refuses it. Only a row with its OWN SKU (`channelSku`, the
+ * one writer: a channel-scope SKU edit) moves; a row without one publishes exactly as before (parity). `fba` is the
+ * listing's own fulfilment (`effectiveFulfilment`, the rule the row builder reads first).
+ */
+export function amazonSkuMoves(facts: MoveFacts, sellerSkus: ReadonlyMap<string, string>): AmazonSkuMove[] {
+  const { parent, products, listings } = facts
+  const moves: AmazonSkuMove[] = []
+  for (const product of products) {
+    const listing = listings.find(l => l.productId === product.id)
+    if (!listing || isStillDraftListing(listing) || !listing.channelSku?.trim()) continue
+    const held = liveChannelSku({ ...listing, channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
+    const to = sellerSkus.get(product.id)!
+    if (!held || held.sku === to) continue
+    if (held.sku === null) throw new Error(held.conflict.sentence)
+    if (product.id === parent.id && (product.isParent || products.length > 1)) throw new Error(amazonMainRowMove(held.sku, to))
+    const asin = listing.externalListingId?.trim()
+    if (!asin) throw new Error(amazonMoveNoAsin(held.sku, to))
+    const fulfillment = effectiveFulfilment({ activeOfferMethod: listing.offers?.find(o => o.isActive)?.fulfillmentMethod, typed: listing.fulfillmentMethod,
+      platformAttributes: listing.platformAttributes, productMethod: product.fulfillmentMethod })?.method
+    moves.push({ productId: product.id, listingId: listing.id, from: held.sku, to, asin, fba: fulfillment === 'FBA' })
+  }
+  return moves
+}
+
+/**
+ * Browser check 2026-10-05 (F5) — the moves of a review whose Amazon publication could not be prepared (a problem the
+ * review lists already: a variation axis that binds to nothing, a schema Nexus cannot read, …). Nothing can be sent until
+ * those are fixed, but the review still says what Publish WILL do to each row (create NEW, then delete OLD) and still
+ * asks for the typed confirmation: hiding the move behind an unrelated problem read as a Partial update. The move's own
+ * refusal (a family's main row, no ASIN, two SKUs), when there is one, is returned as a sentence; it never throws.
+ */
+export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<PublicationFacts, 'scope'>): Promise<{ marketplaceId: string | null; moves: AmazonSkuMove[]; refusal: string | null }> {
+  let moves: AmazonSkuMove[] = []
+  let refusal: string | null = null
+  try { moves = amazonSkuMoves(facts, amazonSellerSkus(facts)) }
+  catch (error) { refusal = error instanceof Error ? error.message : String(error) }
+  const marketplaceId = moves.length ? await configuredAmazonMarketplaceId(facts.scope.marketplace).catch(() => null) : null
+  return { marketplaceId: marketplaceId ?? null, moves, refusal }
+}
+
 /** Sources whose values the Amazon builder does not take from the sheet cells (price, stock, photos, channel reads). */
 const NOT_FROM_CELLS = ['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data']
 
@@ -110,36 +176,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const saleWindows = await readSaleWindows(prisma as never, listings.filter(l => !l.externalListingId).map(l => l.id))
-  const identityProducts = products.some(product => product.id === parent.id) ? products : [parent, ...products]
-  // S3 (per-channel SKU) — THE seller-SKU rule (`wantedChannelSku`, channel-sku.pure.ts): the listing's own SKU when set;
-  // else the one active offer or stored identity; else the product SKU. Its refusals are word for word the ones this
-  // rule had (more than one active offer, two identities, an alias with none of its own). The alias is the destination's.
-  const sellerSkus = new Map(identityProducts.map(product => {
-    const listing = listings.find(l => l.productId === product.id)
-    const wanted = wantedChannelSku({ ...(listing ?? {}), channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
-    if (wanted.sku === null) throw new Error(wanted.conflict.sentence)
-    return [product.id, wanted.sku]
-  }))
-  if (new Set(sellerSkus.values()).size !== identityProducts.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
-  // S10 (per-channel SKU, Owner D2 = A) — a row Amazon holds under another seller SKU than the one this publication sends
-  // (its own SKU, set in the channel view) MOVES: NEW is created whole on the same ASIN, and OLD is deleted here once
-  // Amazon accepts NEW. A family's main row cannot move (its variations hang under the old parent SKU), and NEW cannot be
-  // created on the same product while Nexus does not know the ASIN: both are refused by name. A listing Amazon holds
-  // under two SKUs names no OLD: the resolver's sentence refuses it. Only a row with its OWN SKU (`channelSku`, the one
-  // writer: a channel-scope SKU edit) moves; a row without one publishes exactly as before (parity).
-  const moves: AmazonSkuMove[] = []
-  for (const product of products) {
-    const listing = listings.find(l => l.productId === product.id)
-    if (!listing || isStillDraftListing(listing) || !listing.channelSku?.trim()) continue
-    const held = liveChannelSku({ ...listing, channel: 'AMAZON', aliasKey: facts.destination.aliasKey ?? '' }, product.sku)
-    const to = sellerSkus.get(product.id)!
-    if (!held || held.sku === to) continue
-    if (held.sku === null) throw new Error(held.conflict.sentence)
-    if (product.id === parent.id && (product.isParent || products.length > 1)) throw new Error(amazonMainRowMove(held.sku, to))
-    const asin = listing.externalListingId?.trim()
-    if (!asin) throw new Error(amazonMoveNoAsin(held.sku, to))
-    moves.push({ productId: product.id, listingId: listing.id, from: held.sku, to, asin, fba: false })
-  }
+  const sellerSkus = amazonSellerSkus(facts)
+  const moves = amazonSkuMoves(facts, sellerSkus)
   const moveOf = (productId: string) => moves.find(move => move.productId === productId)
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
   let variationInput: Awaited<ReturnType<typeof loadStoredVariationProjection>>['input'] | undefined

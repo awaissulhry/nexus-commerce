@@ -143,6 +143,18 @@ describe('the review of one Publish', () => {
     expect(publishPlanCounts(plan, { lifecycle: [lifecycleOf(plan, 'PP-MIX-L').id, lifecycleOf(plan, 'PP-MIX-X').id] })).toMatchObject({ inactive: 2, delete: 0 })
   }))
 
+  it('S11 follow-up — an End or Delete row is named by the SKU the channel holds for that listing, not the product SKU', () => scoped(async () => {
+    const f = await family('PP-OWN', ['L', 'M'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    const lL = await listing(f.children.L, 'AMAZON', 'IT', ids.amazon)
+    const lM = await listing(f.children.M, 'AMAZON', 'IT', ids.amazon, { channelSku: 'PP-OWN-M-IT', liveChannelSku: 'PP-OWN-M-IT' })
+    await writePublishActions(f.root, { listingIds: [lL, lM], change: { column: 'send', mode: 'delete' } }, owner())
+    const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
+    expect(plan.destinations[0].lifecycle.map(r => [r.listingId, r.sku, r.action])).toEqual([[lL, 'PP-OWN-L', 'delete'], [lM, 'PP-OWN-M-IT', 'delete']])
+    // The typed confirmation stays the family SKU (one phrase for the whole Publish).
+    expect(plan.confirm).toEqual({ expected: 'PP-OWN', rows: 2 })
+  }))
+
   it('eBay End holds every row\'s content: no review is made (no channel read), the End row says what eBay does', () => scoped(async () => {
     const f = await family('PP-END', ['M', 'S'])
     const root = await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '1234' })

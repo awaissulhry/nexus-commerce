@@ -153,7 +153,8 @@ describe('the channel adapter wires the one cell (source read — the hook canno
     // P2 — the grid columns come from the read's columns, kept by content (`stableColumns`).
     expect(src).toContain('withSlotListColumns(withProductMediaColumn(stableColumns)')
     expect(src).toContain('const stableColumns = useMemo(() => data?.columns ?? [], [columnsKey])')
-    expect(src).toContain('refusalReason.current = (key, row) => isSlotListKey(key) ? slotListRefusal(key, row,')
+    // Add rows — an empty row's cells say their own reason first (`newRowRefusal`); every other row's the slot list's.
+    expect(src).toContain('return fresh !== undefined ? fresh : isSlotListKey(key) ? slotListRefusal(key, row,')
     expect(src).toContain('visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns)')
     expect(src).toContain('setPendingWrites(prior => queuePendingEdit(prior, next))')
   })

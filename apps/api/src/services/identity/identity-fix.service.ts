@@ -133,7 +133,7 @@ export async function planUnlink(listingId: string): Promise<UnlinkPlan> {
         liveQuantity: 0, live: false, sharedVariations: 0, suggested: { sellerSku: facts.sellerSku } }
     }
   }
-  if (!coordinate.externalId) throw new IdentityFixRefusal(`The ${coordinate.channel} ${coordinate.market} listing of ${coordinate.root.sku} carries no channel id: nothing to unlink.`)
+  if (!coordinate.externalId) throw new IdentityFixRefusal(`${where(coordinate)} carries no channel id: nothing to unlink.`)
   if (coordinate.channel === 'SHOPIFY' && holdsColourProduct(coordinate.rows)) throw new IdentityFixRefusal(COLOUR_CLEAR_REFUSED)
   const sharedVariations = coordinate.channel === 'EBAY'
     ? await prisma.sharedListingMembership.count({ where: { parentSku: coordinate.root.sku, marketplace: coordinate.market, itemId: coordinate.externalId, status: 'ACTIVE' } })

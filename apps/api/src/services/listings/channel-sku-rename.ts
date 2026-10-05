@@ -9,7 +9,11 @@
  *     any channel desyncs: stock, price, orders and Delete keep naming OLD there;
  *   - a STILL-DRAFT that sends OLD today (it follows the product SKU, or an old store / its own SKU equals OLD): it
  *     follows NEW, so the next Publish lists NEW — the Owner's flow "Delete → change SKU → Publish lists NEW";
- *   - its own SKU (not OLD), or no single SKU on record: untouched.
+ *   - its own SKU (not OLD), or no single SKU on record: untouched;
+ *   - its own SKU IS NEW, and following the product it would send exactly NEW (`wantedChannelSku` with no own SKU): its
+ *     own SKU is cleared, so it follows the product again — nothing sent changes, and what the channel holds
+ *     (`liveChannelSku`) is kept. An undo (NEW → OLD after OLD → NEW) so puts every listing back as it was; one whose
+ *     old store would send something else keeps its own SKU (browser check 2026-10-05, F2).
  * The checks: NEW may not be another product's SKU (case ignored), nor a channel SKU another product's listing holds or
  * wants in this business (S2's rule, the other direction), nor clash with another rename of the same save (the same NEW
  * twice, or a SKU another renamed product's listings keep). The shared-stock guard of the database still refuses the
@@ -18,6 +22,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { newProductProblems } from '@nexus/shared/product-create'
 import { workspaceContext, workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { stockPoolConnectedRefusal } from '../../lib/stock-pool-refusal.js'
 import { availableRequirements } from '../identity/identity-audit.service.js'
@@ -31,9 +36,10 @@ export interface SkuRename { productId: string; from: string; to: string }
 
 /**
  * What the rename does to one listing: `keeps` (the channel holds it; it keeps the SKU it sends), `follows` (a
- * still-draft that sent OLD; it follows NEW), `own` (a still-draft with a SKU of its own), `unclear` (no single SKU).
+ * still-draft that sent OLD; it follows NEW), `rejoins` (its own SKU is NEW and it would send NEW following the
+ * product: it follows the product again), `own` (a still-draft with a SKU of its own), `unclear` (no single SKU).
  */
-export type SkuRenameOutcome = 'keeps' | 'follows' | 'own' | 'unclear'
+export type SkuRenameOutcome = 'keeps' | 'follows' | 'rejoins' | 'own' | 'unclear'
 
 export interface SkuRenameListing {
   listingId: string
@@ -45,8 +51,8 @@ export interface SkuRenameListing {
   /** The SKU this listing sends after the rename; null when it has no single SKU. */
   sku: string | null
   previousChannelSku: string | null
-  /** The columns the rename writes on this listing; empty = nothing to write. */
-  write: { channelSku?: string; liveChannelSku?: string }
+  /** The columns the rename writes on this listing; empty = nothing to write. `channelSku: null` = follows the product again. */
+  write: { channelSku?: string | null; liveChannelSku?: string }
 }
 
 export interface SkuRenamePlan extends SkuRename {
@@ -69,17 +75,22 @@ export function planListingRename(listing: SkuRenameListingFacts, from: string, 
     version: listing.version, previousChannelSku: text(listing.channelSku) }
   const before = wantedChannelSku(listing, from)
   const held = liveChannelSku(listing, from)
+  const own = text(listing.channelSku)
+  // Its own SKU is NEW, and following the product it would send exactly NEW: it follows again (nothing sent changes).
+  const rejoins = own !== null && own === text(to) && wantedChannelSku({ ...listing, channelSku: null }, to).sku === own
   if (held === null) {
+    if (rejoins) return { ...base, outcome: 'rejoins', sku: own, write: { channelSku: null } }
     // A still-draft: never on the channel. One that sends OLD today follows NEW; its own SKU (not OLD) stays.
     if (before.sku !== from) return { ...base, outcome: before.sku === null ? 'unclear' : 'own', sku: before.sku, write: {} }
     const after = wantedChannelSku(listing, to)
     return { ...base, outcome: 'follows', sku: to, write: after.sku === to ? {} : { channelSku: to } }
   }
   // The channel holds it: it keeps sending what it sends today, and the SKU the channel holds is recorded.
-  const own = text(listing.channelSku)
   const write: SkuRenameListing['write'] = {}
-  if (!own && before.sku) write.channelSku = before.sku
+  if (rejoins) write.channelSku = null
+  else if (!own && before.sku) write.channelSku = before.sku
   if (!text(listing.liveChannelSku) && held.sku) write.liveChannelSku = held.sku
+  if (rejoins) return { ...base, outcome: 'rejoins', sku: own, write }
   const sku = own ?? before.sku
   return { ...base, outcome: sku === null ? 'unclear' : 'keeps', sku, write }
 }
@@ -92,6 +103,7 @@ export function skuRenameSummary(plan: Pick<SkuRenamePlan, 'from' | 'to' | 'list
   const keepOld = plan.listings.filter(l => l.outcome === 'keeps' && l.sku === plan.from)
   const keepOwn = plan.listings.filter(l => (l.outcome === 'keeps' || l.outcome === 'own') && l.sku !== plan.from)
   const follows = plan.listings.filter(l => l.outcome === 'follows')
+  const rejoins = plan.listings.filter(l => l.outcome === 'rejoins')
   const unclear = plan.listings.filter(l => l.outcome === 'unclear')
   const drafts = follows.length === 1 ? `the draft follows ${plan.to}` : `drafts follow ${plan.to}`
   const parts: string[] = []
@@ -99,6 +111,7 @@ export function skuRenameSummary(plan: Pick<SkuRenamePlan, 'from' | 'to' | 'list
     const kept = `${places(keepOld)} ${new Set(keepOld.map(listingPlace)).size === 1 ? 'keeps' : 'keep'} ${plan.from}`
     parts.push(follows.length ? `${kept}; ${drafts}.` : `${kept}.`)
   } else if (follows.length) parts.push(`No channel holds ${plan.from}: ${drafts}.`)
+  if (rejoins.length) parts.push(`${places(rejoins)} ${new Set(rejoins.map(listingPlace)).size === 1 ? 'follows' : 'follow'} the Shared SKU ${plan.to} again.`)
   for (const listing of keepOwn) parts.push(`${listingPlace(listing)} keeps its own SKU ${listing.sku}.`)
   if (unclear.length) parts.push(`${places(unclear)}: no single SKU on record, left as ${unclear.length === 1 ? 'it is' : 'they are'}.`)
   parts.push(...plan.parentGaps)
@@ -266,9 +279,22 @@ export async function applySkuRenamePlan(db: Db, plan: SkuRenamePlan, actorId: s
     if (channelSku !== undefined) {
       await db.channelListingOverride.create({ data: { channelListingId: listing.listingId, fieldName: 'channelSku', previousValue: listing.previousChannelSku,
         newValue: channelSku, changedBy: actorId,
-        reason: listing.outcome === 'keeps' ? `Keeps ${channelSku}: the product SKU was renamed ${plan.from} → ${plan.to}` : `Follows the product SKU ${plan.to}` } })
+        reason: listing.outcome === 'keeps' ? `Keeps ${channelSku}: the product SKU was renamed ${plan.from} → ${plan.to}`
+          : listing.outcome === 'rejoins' ? `Follows the Shared SKU ${plan.to} again: the product SKU was renamed ${plan.from} → ${plan.to}` : `Follows the product SKU ${plan.to}` } })
     }
   }
+}
+
+/**
+ * S11 follow-up — the product-SKU rule on a SHARED rename (the same rule the product sheet checks before it sends, and the
+ * one a new product follows: `@nexus/shared/product-create` — trimmed, at most 100 characters, letters, numbers, dots,
+ * hyphens and underscores). Only a NEW value is checked: a product whose existing SKU already breaks the rule keeps it,
+ * and a save that sends that same SKU is not refused. Null = the rename may go ahead.
+ */
+export function productSkuRuleRefusal(from: string | null | undefined, to: string): string | null {
+  const next = to.trim()
+  if (typeof from === 'string' && next === from.trim()) return null
+  return newProductProblems({ sku: next }).sku ?? null
 }
 
 /**

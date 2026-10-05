@@ -26,3 +26,14 @@ export function channelLabel(channel: string): string {
   if (!channel) return ''
   return CHANNEL_LABELS[channel.toUpperCase()] ?? channel.charAt(0).toUpperCase() + channel.slice(1).toLowerCase()
 }
+
+/**
+ * Where a listing sells, in the words the product sheet uses: "Amazon · IT", "eBay · IT". A channel that sells the same
+ * listing everywhere (Shopify, Etsy: market GLOBAL, or none named) is its name alone — "Shopify", never "Shopify ·
+ * GLOBAL". The one place word for sentences about a listing (SKU renames and moves, channel id checks).
+ */
+export function channelPlace(channel: string, marketplace?: string | null): string {
+  const name = channelLabel(channel) || String(channel ?? '')
+  const market = String(marketplace ?? '').trim().toUpperCase()
+  return market && market !== 'GLOBAL' ? `${name} · ${market}` : name
+}

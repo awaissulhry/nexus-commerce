@@ -220,6 +220,9 @@ describe('the API’s command receipts', () => {
       '/api/advertising/automation/engine-switch/:key',
       // MCP full control C6 — "Keep only these N steps" on a plan, in the approvals drawer (grid/PlanSteps.tsx).
       '/api/agent/fleet/approvals/:id/plan-amend',
+      // Add rows (R2) — the SKU typed into an empty product-sheet row creates a variation (also the studio's "Add child",
+      // the list wizard's new variants and the legacy catalog editor).
+      '/api/catalog/products/:parentId/children',
       '/api/categories/schema/download',
       // C8 / C5 — Undo on Claude's activity page; Claude's Pause and Resume.
       '/api/claude/changes/:id/undo',
@@ -232,6 +235,8 @@ describe('the API’s command receipts', () => {
       '/api/pim/attach-to-parent',
       '/api/pim/category-workspace/EBAY/site-assignments',
       '/api/pim/promote-to-parent',
+      // Add rows (R3) — the SKU typed into an empty "Listing (alias)" row creates a listing alias.
+      '/api/products/:id/aliases',
       // S10 — "Delete the old SKU again" in Publish history after a SKU move.
       '/api/products/:id/studio-publication/:reviewId/delete-old-sku',
       '/api/products/bulk-save',
@@ -255,6 +260,9 @@ describe('the API’s command receipts', () => {
       path.join('app', 'settings', 'ai', 'claude', 'claudeApi.ts'),
       path.join('app', 'fleet', 'approvals', 'grid', 'PlanSteps.tsx'),
       path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'channel', 'channelIdControl.tsx'),
+      // Add rows: the family's add-child call and the listing-alias call.
+      path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'master', 'familyOps.ts'),
+      path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'channel', 'useChannelSheet.ts'),
     ]))
     for (const file of callers) {
       expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\bsendCommand\b/)

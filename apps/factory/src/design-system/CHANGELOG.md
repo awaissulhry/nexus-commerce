@@ -13,6 +13,10 @@
 
 `shapeFormat.ts`: new `unitChoiceLabels(units)` — unit codes read as symbols (`KILOGRAM` → "kg"; the value stays the code); the measure tooltip and unit warning list symbols. `MeasureEditor`: the unit list shows them. `slotListColumnDef`: optional `headerName` (absent = `label`). Mirrored from the web app.
 
+## Cell editor: a host's line about what the edit reaches — 2026-10-05
+
+`FormulaCellEditor`: optional `CellEditorContext.notice` (`{ text, tone?: 'info' | 'warning' }`) — one line under the field while typing, its tone named by an icon, read with the field (`aria-describedby`). Absent = unchanged. `grid.css`: `.nds-formula-notice` and `.warn`. Web uses it for the product sheet's editable SKU column.
+
 ## An unlinked row is never listed as new — 2026-10-05
 
 `sellingStatus.ts`: optional `NewListingCellFacts.deleted.unlinked` — "unlinked 5 Oct" (`UNLINKED_MARK`) instead of "lists again", the word alone as the screen-reader head, `NEW_CHOICE_UNLINKED` in the editor. `publishAction.ts`: optional `PublishActionValue.unlinked` — drawn quiet with `UNLINKED_ROW_LEFT_OUT_HINT`. Both exported from `grid/renderers`. Absent = unchanged. Mirrored from the web app.

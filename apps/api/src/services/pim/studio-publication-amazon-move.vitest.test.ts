@@ -29,7 +29,8 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { merchantQuantityEntries } from '../../lib/amazon-fba-boundary.js'
 import { readPublicationFacts } from './studio-publication-plan.js'
-import { prepareAmazonPublication } from './studio-publication-amazon.js'
+import { amazonMovesWithoutPublication, prepareAmazonPublication } from './studio-publication-amazon.js'
+import { skuMoveRows } from './studio-publication.service.js'
 import { amazonMoveReview, deleteOldSkuAgain, finishAmazonMoves, historySkuMoves, recoverAmazonMoves, SKU_MOVE_MARKER } from './studio-publication-amazon-move.js'
 import { PUBLICATION_KIND } from './studio-publication-settle.js'
 
@@ -138,6 +139,43 @@ describe('the review: the move, its FBA note, and the typed confirmation', () =>
       warning: 'rv-new starts with no FBA units; Amazon\'s 14 FBA units stay under rv-old (12 sellable, 2 on the way), read 2 hours ago. Once rv-old is deleted they cannot sell until you list rv-old here again, and Amazon still charges storage.' })
     expect(review.confirm).toEqual({ kind: 'type', expected: 'rv-fam', token: 'DELETE',
       sentence: 'This Publish deletes rv-old on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.' })
+  })
+})
+
+describe('F5 — a review that cannot be prepared still says the move (browser check 2026-10-05)', () => {
+  it('a family whose publication fails for another reason: the moved row still reads "Move to NEW", with the typed confirmation', async () => {
+    const id = await scoped(async () => {
+      const parent = await product('gt-fam', { isParent: true })
+      const moved = await product('gt-fam-L', { parentId: parent })
+      // Another variation Publish would create, with no fulfilment method anywhere: the publication refuses it by name.
+      const unready = await product('gt-fam-M', { parentId: parent, fulfillmentMethod: null })
+      await liveRow(parent, 'IT'); await liveRow(moved, 'IT', { channelSku: 'gt-fam-L-IT' })
+      await liveRow(unready, 'IT', { externalListingId: null, listingStatus: 'DRAFT', isPublished: false, fulfillmentMethod: null })
+      return { parent, moved }
+    })
+    const facts = await scoped(() => readPublicationFacts(id.parent, { channel: 'AMAZON', marketplace: 'IT', accountId: account }))
+    await expect(scoped(() => prepareAmazonPublication(facts))).rejects.toThrow()
+    const found = await scoped(() => amazonMovesWithoutPublication(facts))
+    expect(found).toMatchObject({ marketplaceId: 'TEST_MARKET_IT', refusal: null, moves: [expect.objectContaining({ productId: id.moved, from: 'gt-fam-L', to: 'gt-fam-L-IT', fba: false })] })
+    // What the review builds from it when the publication is missing (`prepared` null).
+    const review = await scoped(() => skuMoveRows(facts, null, null))
+    expect(review.rows.get(id.moved)).toEqual({ from: 'gt-fam-L', to: 'gt-fam-L-IT', kind: 'create-delete',
+      sentence: 'Creates gt-fam-L-IT on Amazon · IT as a new offer, then deletes gt-fam-L there.', warning: null })
+    expect(review.confirm).toMatchObject({ kind: 'type', expected: 'gt-fam', token: 'DELETE' })
+    expect(review.issues).toEqual([])
+  })
+
+  it('a move that cannot be made is said by name, never hidden: the family\'s main row', async () => {
+    const parent = await scoped(async () => {
+      const pid = await product('gt-main', { isParent: true }); const child = await product('gt-main-S', { parentId: pid })
+      await liveRow(pid, 'IT', { channelSku: 'gt-main-IT' }); await liveRow(child, 'IT')
+      return pid
+    })
+    const facts = await scoped(() => readPublicationFacts(parent, { channel: 'AMAZON', marketplace: 'IT', accountId: account }))
+    const review = await scoped(() => skuMoveRows(facts, null, null))
+    expect(review.rows.size).toBe(0)
+    expect(review.confirm).toBeNull()
+    expect(review.issues).toEqual([{ severity: 'error', message: expect.stringContaining('Nexus cannot move a family\'s main listing on Amazon to a new SKU yet (gt-main → gt-main-IT)') }])
   })
 })
 

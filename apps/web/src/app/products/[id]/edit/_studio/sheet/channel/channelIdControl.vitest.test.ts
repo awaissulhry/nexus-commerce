@@ -177,3 +177,12 @@ describe('the words are the API\'s', () => {
     }
   })
 })
+
+describe('the dialog names its place like the rest of the sheet', () => {
+  it('uses the shared place words: "eBay · IT", "Amazon · DE", and just "Etsy" / "Shopify"', () => {
+    expect(CHANNEL_ID_WORDS.EBAY.subtitle('JKT', 'IT')).toMatch(/^JKT on eBay · IT\. /)
+    expect(CHANNEL_ID_WORDS.AMAZON.subtitle('JKT-L', 'DE')).toMatch(/^JKT-L on Amazon · DE\. /)
+    expect(CHANNEL_ID_WORDS.ETSY.subtitle('JKT', 'GLOBAL')).toMatch(/^JKT on Etsy\. /)
+    expect(CHANNEL_ID_WORDS.SHOPIFY.subtitle('JKT', 'GLOBAL')).toMatch(/^JKT on Shopify\. /)
+  })
+})

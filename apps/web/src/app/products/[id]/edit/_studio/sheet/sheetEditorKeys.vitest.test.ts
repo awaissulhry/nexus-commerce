@@ -77,6 +77,8 @@ import { CellSaveTracker } from '@/design-system/grid'
 import { buildMasterColumns } from './master/columns'
 import { buildChannelColumns, type BuildChannelColumnsOptions } from './master/channelColumns'
 import type { SheetColumn } from './master/types'
+import { identitySkuColumnDef } from './identitySkuColumn'
+import { IDENTITY_SKU_COLUMN } from './identitySkuEdit'
 
 /* ── 1. the editors the builders can mount ─────────────────────────────────────────────────────────────────── */
 
@@ -150,6 +152,15 @@ function allMountable(): Mountable[] {
       const row = { id: 'p1', rowId: 'p1', rowKind: 'variant', isParent: false, productType: null, values: {} }
       for (const def of defs as Def[]) out.push(...editorsOf(def, label, [row]))
     }
+  }
+  /* S11 — the first column (each scope's tree column) is editable too: its editor and keys are enumerated like any column's. */
+  const skuFacts = { wanted: 'OLD', source: 'product', live: null, liveConfirmed: false, differs: false, editable: true, reason: null }
+  for (const [label, scope, data] of [
+    ['master · first column', { kind: 'shared' }, { id: 'p1', sku: 'OLD' }],
+    ['EBAY · first column', { kind: 'channel', channel: 'EBAY', marketplace: 'IT' }, { id: 'p1', rowId: 'p1', sku: 'OLD', skuFacts }],
+  ] as const) {
+    const def = { ...identitySkuColumnDef<{ id: string; sku: string }>({ scope: () => scope, tracker: new CellSaveTracker(), rowIdOf: (r) => r.id }), colId: IDENTITY_SKU_COLUMN }
+    out.push(...editorsOf(def as Def, label, [data]))
   }
   return out
 }
@@ -332,6 +343,12 @@ describe('the sheet mounts only editors this file has a case for', () => {
   it('both builders, every branch: each editor has a key case or a written reason', () => {
     const missing = [...new Set(MOUNTABLE().filter((m) => !(nameOf(m.editor) in CASES)).map((m) => `${nameOf(m.editor)} (${m.builder} · ${m.column})`))]
     expect(missing, 'A popup editor the sheet can mount has no Enter/Tab case in sheetEditorKeys.vitest.test.ts').toEqual([])
+  })
+  it('S11 — the first column\'s editor is enumerated in both scopes, with its own keys', () => {
+    const first = MOUNTABLE().filter((m) => m.column === IDENTITY_SKU_COLUMN)
+    expect([...new Set(first.map((m) => m.builder))].sort()).toEqual(['EBAY · first column', 'master · first column'])
+    for (const m of first) expect(nameOf(m.editor)).toBe('FormulaCellEditor')
+    expect(distinctCases().filter((m) => m.column === IDENTITY_SKU_COLUMN).length).toBe(2)
   })
   it('the enumeration reaches the editors that carry a choice (a builder change that hides one fails here)', () => {
     const names = new Set(MOUNTABLE().map((m) => nameOf(m.editor)))

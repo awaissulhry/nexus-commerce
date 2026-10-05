@@ -12,7 +12,7 @@ import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.ser
 import { activeDatabaseTransaction, afterDatabaseCommitBatch, inDatabaseTransaction, insideSavepoint, inSavepoint, transactionMustRestart } from '../../lib/database-context.js'
 import { ChannelSkuError, setChannelSku } from '../listings/channel-sku.js'
 import { SHOPIFY_SKU_STORES } from '../listings/channel-sku.pure.js'
-import { SkuRenameConflict, applySkuRenamePlan, planSkuRenames, skuRenameClashes, skuRenameRefusal, type SkuRenamePlan } from '../listings/channel-sku-rename.js'
+import { SkuRenameConflict, applySkuRenamePlan, planSkuRenames, productSkuRuleRefusal, skuRenameClashes, skuRenameRefusal, type SkuRenamePlan } from '../listings/channel-sku-rename.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, nativeWriteValue, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -1654,6 +1654,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (masterSkuChanges.length > 0) {
     const tx = activeDatabaseTransaction()!
     const current = await prisma.product.findMany({ where: { id: { in: masterSkuChanges.map((v) => v.id) } }, select: { id: true, sku: true } })
+    // S11 follow-up — a NEW product SKU follows the product-SKU rule (the sheet's own check, so an import through this
+    // writer and Claude's set-product-sku get the same refusal); a SKU the product already has is never refused.
+    for (const v of [...masterSkuChanges]) {
+      const refusal = productSkuRuleRefusal(current.find((p) => p.id === v.id)?.sku, String(v.value))
+      if (!refusal) continue
+      errors.push({ id: v.id, field: 'sku', error: refusal })
+      validated.splice(validated.indexOf(v), 1)
+      masterSkuChanges.splice(masterSkuChanges.indexOf(v), 1)
+    }
     skuRenamePlans = await planSkuRenames(tx, masterSkuChanges.flatMap((v) => {
       const from = current.find((p) => p.id === v.id)?.sku
       return from ? [{ productId: v.id, from, to: String(v.value) }] : []

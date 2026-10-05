@@ -4,9 +4,12 @@ import { loadReferenceChoices, isReferenceField as isPickerReference } from './r
 import { loadEbayPolicies, policyLists } from './ebayPolicies'
 import { wholeListWriteField } from './channel/provenance'
 import { shopifyFactsState } from '../shopify/draftHistory'
+import { IDENTITY_SKU_COLUMN, identitySkuRecovered, type IdentitySkuFacts } from './identitySkuEdit'
 
 type RecoveryCell = { shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite; value: unknown; pinned?: boolean; follows?: boolean | null; writeTarget?: string; writeField?: string; source?: string | null }
-type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell> }
+type RecoveryRow = { id: string; version: number; aliasId?: string | null; productType?: string | null; listing?: { id: string; version?: number } | null; values: Record<string, RecoveryCell>
+  /** S11 — the first column: the product SKU (Shared) and the listing's SKU facts (channel). */
+  sku?: string; skuFacts?: IdentitySkuFacts | null }
 export type RecoveryScope = { channel: string; market: string; locale?: string; accountId?: string }
 
 /** A recovery read must address the same product, alias, account, market and language as the write. */
@@ -23,6 +26,8 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
   const values = Object.fromEntries(Object.entries(row.values).filter(([, cell]) => cell && Object.prototype.hasOwnProperty.call(cell, 'value')).map(([key, cell]) => [key, cell.value]))
   const matches: Record<string, boolean | null> = {}
   for (const cell of request.cells) {
+    // S11 — the first column is not a value cell: the row's SKU (Shared) or its listing's SKU facts (channel).
+    if (cell.colId === IDENTITY_SKU_COLUMN) { matches[cell.colId] = identitySkuRecovered(row, channel, cell.value, cell.intent); continue }
     const stored = row.values[cell.colId]
     if (!stored || !Object.prototype.hasOwnProperty.call(stored, 'value')) { matches[cell.colId] = null; continue }
     const reset = cell.intent === 'reset' || cell.intent === 'reset-list'

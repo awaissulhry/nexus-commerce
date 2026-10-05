@@ -37,6 +37,23 @@ Product sheet consistency wave 3, "One name for one thing" (W3-6). Mirrored in F
 - **`unitChoiceLabels(units)`** (`grid/renderers/shapeFormat.ts`, new): a channel's unit codes as people choose them — `KILOGRAM` reads "kg", `CENTIMETER` "cm"; the value stays the code, stored and sent unchanged. Two codes with one symbol keep their code beside it ("kg (KILOGRAM)"). **`MeasureEditor`**'s unit list, **`shapeTooltipLine`** ("1.2 kg · units: kg, g, lb, oz") and **`shapeValidation`**'s unit warning ("\"lbs\" is not one of the channel's units (kg, g)") show the symbols; they showed the codes.
 - **`slotListColumnDef`**: optional `headerName` — the header when it says more than the list's name (the sheets' required mark, "Bullet points *"). Absent = `label`, as before; the editor and the tooltip keep `label`.
 
+## Sheet footer start slot and the unsaved row — 2026-10-05
+
+Add rows R1 (`docs/sheet-ids-sku-rows/PLAN.md`, C-add-rows.md). `grid.css` mirrored in Factory; `GridSheet.tsx` is web only (Factory has no grid hosts).
+
+- **`GridSheetStatus start`** (optional): the status strip's START slot, bottom left before the row count — the product sheet's "Rows to add" count and its "Add rows" button or menu. It never shrinks and a hairline sets it apart from the tallies. Absent = the strip's markup is unchanged.
+- **`GRID_SHEET_STATUS_WIDE`** (`nds-grid-sheet-status-wide`): marks a part of the start slot that leaves the 36 px footer at phone width (≤ 760 px), so only the action shows.
+- **`UNSAVED_ROW_CLASS`** (`nds-row-unsaved`, apply with `rowClassRules`; `grid/hosts/unsavedRow.ts`): a row the person added and has not saved — a DASHED `--nds-warning-strong` bar at the row's start edge (the inactive row's solid bar means "does not sell"), its other cells muted (`nds-cell-full-strength` opts a cell out). Never a whole-row tint. The words ("Not saved") are the host's, in the row's identity cell.
+- **`isUnsavedRowData(data)`**: such a row's data carries `unsaved: true`. **`isExportedRow`** (`grid/export`): the CSV export leaves an unsaved row out, as it leaves out pinned rows and footers (it is not a record). Every other row exports as before.
+- Catalog: `#sheet-footer-start-example` (web).
+- **Live region** (browser check, same day): with a `start` slot the strip is no longer the live region itself — the start slot sits beside a `.nds-grid-sheet-status-live` (`role="status"`, `aria-live="polite"`) that holds the tallies, the note and "Saved", so a screen reader never announces the Add rows controls as status text. Without a `start` slot the strip is unchanged (it stays the live region). CSS mirrored in Factory.
+
+## Cell editor: a host's line about what the edit reaches — 2026-10-05
+
+Sheet Item IDs + per-channel SKU (S11, the product sheet's editable first column). Mirrored in Factory (`FormulaCellEditor.tsx`, its test, `grid.css`).
+
+- **`CellEditorContext.notice`** (optional `{ text, tone?: 'info' | 'warning' }`): one line under the value editor's field while typing, naming what the edit reaches — the product sheet's SKU column says "This SKU is for Amazon · DE only. Other channels and markets keep GALE-M. To change it everywhere, edit it in the Shared view." in a channel scope, and what a rename does on the Shared scope. An icon carries the tone (AlertTriangle / Info, never the colour alone); the line is part of the field's `aria-describedby`, so it is heard with the field. Absent = no line; every existing editor is unchanged. CSS: `.nds-formula-notice` (`--nds-text-2`), `.warn` (`--nds-warning-text`), both themes. Catalog: `#formula-editor-example` (Gloves' Title).
+
 ## Words: an unlinked row is never listed as new — 2026-10-05
 
 Sheet Item IDs + per-channel SKU, step S10 item 6 (`docs/sheet-ids-sku-rows/PLAN.md`, I1's unlink trap). Mirrored in Factory (`sellingStatus.ts`, `publishAction.ts`, `renderers/index.ts` and their tests), except `sellingStatus.shared.vitest.test.ts`.

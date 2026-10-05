@@ -62,6 +62,8 @@ export function FormulaEditorExample() {
       aiDraft: row.id === 'two' && field === 'brand' ? { value: 'Nexus Moto', accept: async () => setNotice('Sample: the AI draft would be applied.'), reject: async () => setNotice('Sample: the AI draft would be dismissed.') } : null,
       history: row.id === 'one' && field === 'title' ? async () => [{ value: 'Jacket (old)', when: '24 Sept', who: 'Sample' }] : undefined,
       inherited: row.id === 'three' && field === 'manufacturer' ? { from: 'Atlas parent', value: 'Atlas Ltd' } : null,
+      // 2026-10-05 — a host's line about what the edit reaches (the product sheet's SKU column says where a SKU applies).
+      notice: row.id === 'two' && field === 'title' ? { tone: 'warning' as const, text: 'Sample: this value is for one channel and market only. To change it everywhere, edit it in the Shared view.' } : null,
     }),
   }), [])
   const columns = useMemo<ColDef<ExampleRow>[]>(() => FIELDS.map(f => ({
@@ -84,7 +86,8 @@ export function FormulaEditorExample() {
   }, [])
   return <div id="formula-editor-example">
     <p>Try the real cell editor with sample rows. It opens under the cell: Enter saves, Tab saves and moves right, Esc cancels.
-      Gloves&apos; Brand has an AI draft (✦), Jacket&apos;s Title has history and a counter, Boots&apos; Manufacturer follows another row.
+      Gloves&apos; Brand has an AI draft (✦), Jacket&apos;s Title has history and a counter, Boots&apos; Manufacturer follows another row,
+      and Gloves&apos; Title shows a warning line under the field (a host&apos;s sentence about what the edit reaches).
       Double-click Manufacturer and type <code>=</code>, then click Brand in that row.
       For Title, insert Brand and use Add text to append “ Jacket”, or try <code>=$brand &amp; " Jacket"</code> or <code>=upper($brand)</code>. Copy or fill down to use each row’s brand.</p>
     <p>This sample accepts only the example formulas and changes sample data in this page. Product formulas use the server evaluator.</p>

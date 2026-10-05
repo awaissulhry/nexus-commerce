@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { gridSelection, useGridLifetime, type GridApi } from '@/design-system/grid'
+import { gridSelection, isUnsavedRowData, useGridLifetime, type GridApi } from '@/design-system/grid'
 import { useToast } from '@/design-system/components'
 import { useStudioRecord } from '../contracts'
 import { isRevealAnchor } from '../drawer'
@@ -88,7 +88,8 @@ export function useProductSheetInteraction<Row extends ProductSheetRowIdentity>(
       : api?.getSelectedNodes().flatMap(node => node.data ? [node.data] : []) ?? [])
   }, [lifetime.getApi])
   const clearSelection = useCallback(() => lifetime.getApi()?.deselectAll(), [lifetime.getApi])
-  const rowSelection = useMemo(() => gridSelection<Row>(), [])
+  // Add rows — an empty row the person added is not a record yet: no checkbox, never in a selection (nor in Action or Publish).
+  const rowSelection = useMemo(() => gridSelection<Row>({ isRowSelectable: (node) => !node.rowPinned && !isUnsavedRowData(node.data) }), [])
   return {
     apiRef: lifetime.apiRef, gridReady: lifetime.gridApi, getGridApi: lifetime.getApi,
     bindGridApi: lifetime.bind, releaseGrid: lifetime.onGridPreDestroyed,

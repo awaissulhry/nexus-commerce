@@ -7,6 +7,7 @@
  * (this channel, market and account: `channel-sku.ts`) on the item — or it is the family's main row and the item proved
  * this family's. A row holding ANOTHER item moves to this one only on its own proven SKU; otherwise it is kept as it is.
  */
+import { channelPlace } from '@nexus/shared/channel-label'
 import prisma from '../../../db.js'
 import { CHANNEL_SKU_LISTING_SELECT } from '../../listings/channel-sku.js'
 import { liveChannelSku, wantedChannelSku, type ChannelSkuListing } from '../../listings/channel-sku.pure.js'
@@ -74,8 +75,11 @@ export const CHANNEL_WORDS: Readonly<Record<string, ChannelWords>> = {
 }
 export const wordsOf = (channel: string): ChannelWords => CHANNEL_WORDS[String(channel).toUpperCase()] ?? { channel, name: channel, noun: 'item', idLabel: 'id' }
 
-/** "the EBAY IT listing of JKT" — the place a sentence names. */
-export const where = (c: Pick<Coordinate, 'channel' | 'market' | 'root'>) => `the ${c.channel} ${c.market} listing of ${c.root.sku}`
+/**
+ * "The eBay · IT listing of JKT", "The Shopify listing of JKT" — the place a sentence names, at the START of the sentence
+ * (every caller begins with it), in the sheet's place words (`channelPlace`; browser check 2026-10-05, F4).
+ */
+export const where = (c: Pick<Coordinate, 'channel' | 'market' | 'root'>) => `The ${channelPlace(c.channel, c.market)} listing of ${c.root.sku}`
 export const lower = (s: string) => s.trim().toLowerCase()
 export const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}

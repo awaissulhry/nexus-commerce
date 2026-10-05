@@ -170,6 +170,8 @@ describe('Etsy Listing ID: proven as this account\'s shop, by this family\'s cha
   it('refuses only what cannot work, in plain sentences: not a number, another family\'s, not found, another shop, a draft, no SKU of the family', async () => {
     const check = (externalId: string) => inside(() => checkChannelId(ids.eRoot, { externalId }, etsyDeps))
     expect(await check('12ab')).toMatchObject({ ok: false, refusal: expect.stringContaining('an Etsy Listing ID is a number') })
+    // F4 (browser check 2026-10-05): the place in the sheet's words — Etsy sells one listing everywhere, so no "· GLOBAL".
+    expect((await check('12ab')).refusal).toMatch(/^The Etsy listing of ETY-JKT: an Etsy Listing ID is a number/)
     expect(await check('2000000099')).toMatchObject({ ok: false, verdict: 'rejected', refusal: expect.stringContaining('already linked to another product here (ETY-OTHER)') })
     expect(await check('2000000404')).toMatchObject({ ok: false, refusal: expect.stringContaining('Etsy has no listing 2000000404 that this account can read') })
     etsyListings.set('2000000005', { shop: '777', state: 'active', skus: ['OWN-ETY-S'] })
@@ -267,6 +269,7 @@ describe('Shopify Product ID, one product per family: a product of this store, m
   it('refuses: not in this store (another store\'s product), another Nexus identity, another family\'s product, no SKU of the family, this family\'s colour product', async () => {
     const check = (externalId: string) => inside(() => checkChannelId(ids.sRoot, { externalId }, shopifyDeps()))
     expect(await check('8404')).toMatchObject({ ok: false, refusal: expect.stringContaining('(alpha.myshopify.com) has no product 8404. A product of another store is never linked here.') })
+    expect((await check('8404')).refusal).toMatch(/^The Shopify listing of SHP-JKT: /)
     shopifyProducts.set('8002', product('ACTIVE', `${B}:someone`))
     expect(await check('8002')).toMatchObject({ ok: false, refusal: expect.stringContaining('carries another Nexus identity') })
     expect(await check('8099')).toMatchObject({ ok: false, refusal: expect.stringContaining('already linked to another product here (SHP-OTHER)') })

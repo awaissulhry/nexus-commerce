@@ -123,7 +123,7 @@ export interface FamilyOps {
     variantAttributes?: Record<string, string>
     copyFromProductId?: string
     copyGroups?: string[]
-  }): Promise<AddVariationResult>
+  }, /** The Idempotency-Key slot of this intent (`commandKeyFor`); default: one per parent. */ slot?: string): Promise<AddVariationResult>
   /** Hard deletion is refused while alias or remote listing records remain. */
   deleteVariant(parentId: string, childId: string): Promise<DeleteVariantResult>
   /** 409s when children exist unless `force` — and `force` ORPHANS every one of them. */
@@ -167,8 +167,11 @@ export const familyOps: FamilyOps = {
   reparent: (productId, newParentId, expectedParentId) => post<ReparentResult>('/api/pim/reparent', { productId, newParentId, expectedParentId }),
 
   // 🔴 /api/catalog, not /api/products — same prefix trap as the delete below.
-  addVariation: (parentId, body) =>
-    post<AddVariationResult>(`/api/catalog/products/${encodeURIComponent(parentId)}/children`, body),
+  // Keyed (the API keeps receipts for this route): a resend after a lost answer never adds the child twice. Add rows
+  // passes its row's own slot, so each empty row is one intent.
+  addVariation: (parentId, body, slot) =>
+    post<AddVariationResult>(`/api/catalog/products/${encodeURIComponent(parentId)}/children`, body,
+      { slot: slot ?? `variation-create:${parentId}`, what: 'new variation request' }),
 
   // 🔴 /api/catalog, not /api/products. See the header — the handler's own comment is wrong.
   deleteVariant: (parentId, childId) =>

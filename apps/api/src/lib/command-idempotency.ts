@@ -56,6 +56,10 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/listings/:id/channel-id/unlink': 'channel-id-unlink',
   // S10 — one "Delete the old SKU again" press, one try of the old SKU's delete.
   '/api/products/:id/studio-publication/:reviewId/delete-old-sku': 'delete-old-sku',
+  // Add rows (R2, R3) — one SKU typed into an empty sheet row, one new variation or one new listing alias, even when the
+  // answer is lost and the row sends again (the row keeps its key while the outcome is unknown).
+  '/api/catalog/products/:parentId/children': 'variation-create',
+  '/api/products/:id/aliases': 'alias-create',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

@@ -24,6 +24,7 @@ import { directBulkSend, nothingSaved, type BulkSend } from '../bulkOperation'
 import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
+import { sharedWriteField, skuRenamesOf } from '../identitySkuEdit'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -64,7 +65,7 @@ export interface MasterCommitContext {
    */
   bulkSend?: BulkSend
   /** Only the write callbacks; this function has no business with the rest of the options. */
-  opts: Pick<UseMasterSheetOptions, 'onWriteStart' | 'onWriteEnd'>
+  opts: Pick<UseMasterSheetOptions, 'onWriteStart' | 'onWriteEnd' | 'onSkuRenames'>
   locale: string
   /**
    * 🔴 The marketplace the sheet was READ with — NOT `sheet.scope.marketplace`.
@@ -148,7 +149,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           contentAddress: req.row?.values?.[c.colId]?.contentAddress,
           contentVersion: req.row?.values?.[c.colId]?.contentVersion,
           // The server told us the field name; never re-derive it from the column key.
-          field: byKey.get(c.colId)?.writeField ?? c.colId,
+          // S11 — the first column (the tree column) is the product SKU (`sharedWriteField`).
+          field: sharedWriteField(c.colId, byKey.get(c.colId)?.writeField),
           // 🔴 On the MASTER scope a `reset` really is "store nothing here", because the layer
           // above is the parent and `resolveAttributes` falls through to it the moment this row
           // holds no value of its own. That is a fact about THIS scope, not about resets: a
@@ -192,7 +194,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
         batchReason = body?.error || body?.message || errors[0]?.error || `Refused (HTTP ${res.status})`
         for (const c of bulk) {
-          const field = byKey.get(c.colId)?.writeField ?? c.colId
+          const field = sharedWriteField(c.colId, byKey.get(c.colId)?.writeField)
           const mine = errors.find(e => e.id === req.rowId && (e.field === field || e.field === c.colId))
           cells[c.colId] = { ok: false, reason: mine?.error || batchReason }
         }
@@ -200,7 +202,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         // A 200 can still carry per-cell refusals beside a partial success.
         const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
         for (const c of bulk) {
-          const field = byKey.get(c.colId)?.writeField ?? c.colId
+          const field = sharedWriteField(c.colId, byKey.get(c.colId)?.writeField)
           const mine = errors.find((e) => e.id === req.rowId && (e.field === field || e.field === c.colId))
           /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
           const warning = mine ? undefined : saveWarningFor(body, req.rowId, [field, c.colId])
@@ -220,6 +222,9 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         version = versionFromBody(body) ?? version
         // The translation the save moved hands its new token to every cell writing to it.
         adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
+        // S11 — a product SKU renamed: the answer says what each rename did on the channels.
+        const renames = skuRenamesOf(body)
+        if (renames.length) ctx.opts.onSkuRenames?.(renames)
       }
     }
 

@@ -77,7 +77,9 @@ describe.each([['channel', read('channel', 'useChannelSheetAdapter.tsx')], ['mas
   it('uses the shared header paste, its processor and its default column', () => {
     expect(src).toContain("import { useHeaderPaste } from '../headerPaste';")
     expect(src).toMatch(/const headerPaste = useHeaderPaste<\w+>\(/)
-    expect(src).toContain('processDataFromClipboard: headerPaste.processDataFromClipboard,')
+    // Add rows — the grid's paste is the header-aware one, behind the empty rows' own (a paste on an empty row's SKU).
+    expect(src).toContain('newRowsPaste(newRows.store, headerPaste.processDataFromClipboard)')
+    expect(src).toContain('processDataFromClipboard: pasteIntoNewRows,')
     expect(src).toMatch(/defaultColDef: headerPaste\.defaultColDef,|\.\.\.headerPaste\.defaultColDef/)
     expect(src).not.toContain('sheetPasteProcessor')
   })
