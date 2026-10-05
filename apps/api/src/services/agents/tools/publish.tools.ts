@@ -254,6 +254,31 @@ const publicationStatus: AgentTool = {
   },
 }
 
+/**
+ * N4 — a publish in words. The studio's review already knows, per row, whether a new listing starts active or inactive
+ * and which rows are held (blocked, deleted and left Not listed, or Not listed): the preview used to drop all of it.
+ */
+export function publishStory(d: { product: { sku: string }; channel: string; market: string }, review: StudioPublishReview, plan: PublishPlan, euSiblings: boolean) {
+  const where = `${channelLabel(d.channel)} ${d.market}`
+  const creates = review.rows.filter((r) => r.startsAs).slice(0, 60).map((r) => ({ sku: r.sku, startsAs: r.startsAs!, ...(r.relist ? { relist: true } : {}) }))
+  const held = review.rows.filter((r) => r.blocked || r.deleted || r.notListed).slice(0, 60)
+    .map((r) => ({ sku: r.sku, why: clip(r.blocked ?? (r.deleted ? 'deleted from the channel and left Not listed' : 'its Status is Not listed')) }))
+  const active = creates.filter((c) => c.startsAs === 'active').length
+  const parts: string[] = []
+  if (creates.length) {
+    parts.push(`creates ${creates.length} listing${creates.length === 1 ? '' : 's'} on ${where} (${active} active, ${creates.length - active} inactive) `
+      + 'with the price, quantity and fulfilment Nexus holds for them (listing-matrix shows them)')
+  }
+  const fieldsSent = plan.selected.filter((c) => groupOf(c.field) !== 'create').length
+  if (fieldsSent) parts.push(`sends ${fieldsSent} changed field${fieldsSent === 1 ? '' : 's'} to ${where}`)
+  if (held.length) parts.push(`leaves ${held.length} row${held.length === 1 ? '' : 's'} out (held)`)
+  const summary = `${d.product.sku}: ${plan.publish} — ${parts.length ? parts.join('; ') : `nothing to send to ${where}`}.`
+  const warning = d.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(d.market) && plan.publish === 'first publish' && !euSiblings
+    ? `Amazon keeps ONE quantity per SKU for every EU market (${[...AMAZON_EU_SHARED_MARKETS].join(', ')}): this first publish in ${d.market} sets it for all of them.`
+    : null
+  return { summary, creates, held, warning }
+}
+
 // ── publish-listing (L5) ─────────────────────────────────────────────────────────────────────────────
 
 /** The field groups a publish may name (d4). Stock, price and fulfilment are not among them: a re-publish never sends them;
@@ -527,6 +552,7 @@ const publishListing: AgentTool = {
     const built = await publishPlanFor(d, review, fields, args.location as string | undefined)
     if (built.refusal) return { ok: false, error: `${d.product.sku} on ${channelLabel(d.channel)} ${d.market}: ${built.refusal} Nothing was queued.` }
     const { plan } = built
+    const story = publishStory(d, review, plan, built.euQuantity.length > 0)
     return {
       ok: true,
       preview: {
@@ -534,6 +560,11 @@ const publishListing: AgentTool = {
         productId: d.product.id,
         sku: d.product.sku,
         destination: built.destination,
+        // N4 — in words, for Claude and the approver: what this creates or sends, how new listings start, what stays.
+        summary: story.summary,
+        ...(story.creates.length ? { creates: story.creates } : {}),
+        ...(story.held.length ? { held: story.held } : {}),
+        ...(story.warning ? { warning: story.warning } : {}),
         publish: plan.publish,
         publishMode: review.mode,
         fields,
