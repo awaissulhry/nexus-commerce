@@ -183,6 +183,20 @@ describe('P4 — business-overview', () => {
     expect(await inside(A, () => database.client.brandSettings.count())).toBe(before)
   })
 
+  it('N2 — each market\'s channel id, each account with its listings per market, and how tools take a market', async () => {
+    await inside(A, async () => {
+      const product = await database.client.product.create({ data: { sku: 'TEST-SKU-P4-N2', name: 'TEST-SKU-P4-N2', basePrice: '10.00' } as never })
+      for (const channelConnectionId of [ids.aOwn, null]) {
+        await database.client.channelListing.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId, listingStatus: 'ACTIVE' } as never })
+      }
+    })
+    const overview = await data(everything(), 'business-overview')
+    expect(overview.markets).toEqual([expect.objectContaining({ channel: 'EBAY', code: 'IT', siteId: 'EBAY_IT' })])
+    expect(overview.accounts.EBAY).toEqual([{ id: ids.aOwn, label: 'Alpha eBay', primary: true, health: expect.any(String), listingsByMarket: { IT: 1 } }])
+    expect(overview.accounts.listingsWithoutAccount).toEqual({ EBAY: { IT: 1 } })
+    expect(overview.marketCodes).toContain('AMAZON:EU is the ONE quantity')
+  })
+
   it('shows the company and legal details once they are set', async () => {
     await inside(A, () => database.client.brandSettings.create({ data: { companyName: 'Alpha P4 Srl', piva: '01234567890', contactEmail: 'shop@example.test', signatureBlockText: 'not shown' } }))
     const overview = await data(everything(), 'business-overview')

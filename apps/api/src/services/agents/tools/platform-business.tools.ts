@@ -19,6 +19,8 @@ import { readBrandSettings } from '../../settings/brand-settings.service.js'
 import { listConnectionEvents } from '../../cx/events.service.js'
 import { HEALTH_CHANNELS, callsForTrace, channelHealth, type Metric } from '../../cx/channel-health.service.js'
 import { connectionLabel } from '../../connection-label.js'
+import { ebayMarketplaceId } from '../../ebay-account-defaults.js'
+import { AMAZON_EU_SHARED_MARKETS } from '../../amazon-eu-quantity-guard.js'
 import type { AgentTool } from '../tool-types.js'
 import { capped, personName, safeTextOrNull, safeValue } from './claude-safe.js'
 
@@ -40,6 +42,32 @@ const BRAND_FIELDS = [
 /** At most this many markets are listed; the rest are counted. */
 const MARKET_CAP = 60
 
+/** N2 — how tools take a market, in one place, so Claude never guesses a code. */
+const MARKET_CODES =
+  'Listing, publish, price and stock tools take the market code as listed in markets (IT, DE, UK …; GLOBAL for Shopify '
+  + 'and Etsy) with the channel; eBay\'s own site id (EBAY_IT, EBAY_GB) only where a tool says so (eBay ads). Matrix keys '
+  + 'are CHANNEL:CODE (EBAY:IT); AMAZON:EU is the ONE quantity Amazon keeps for every market marked sharesEuQuantity. '
+  + 'accountId is an id from accounts.'
+
+type ListingCount = { channel: string; marketplace: string; channelConnectionId: string | null; _count: { _all: number } }
+
+/** N2 — each live account per channel, with how many listings it holds per market; listings with no account apart. */
+function accountsByChannel(rows: AccountRow[], counts: ListingCount[]) {
+  const byChannel: Record<string, Array<Record<string, unknown>>> = {}
+  for (const row of rows) {
+    const markets: Record<string, number> = {}
+    for (const c of counts) if (c.channelConnectionId === row.id) markets[c.marketplace] = (markets[c.marketplace] ?? 0) + c._count._all
+    ;(byChannel[row.channel] ??= []).push({ id: row.id, label: row.label, primary: row.isPrimary, health: row.health, listingsByMarket: markets })
+  }
+  const loose: Record<string, Record<string, number>> = {}
+  for (const c of counts) {
+    if (c.channelConnectionId) continue
+    const markets = (loose[c.channel] ??= {})
+    markets[c.marketplace] = (markets[c.marketplace] ?? 0) + c._count._all
+  }
+  return { ...byChannel, ...(Object.keys(loose).length ? { listingsWithoutAccount: loose } : {}) }
+}
+
 const businessOverview: AgentTool = {
   name: 'business-overview',
   title: 'Business overview',
@@ -47,8 +75,10 @@ const businessOverview: AgentTool = {
   description:
     'The business this connection works in: its name; its settings (country, currency, time zone, main market); its '
     + 'company and legal details (company name, address, VAT and tax ids, contact details, website, logo); the markets '
-    + 'it sells on, with currency and content languages; and how many channel accounts are connected per channel. '
-    + 'Read only.',
+    + 'it sells on — each with the exact code tools take, currency, content languages, eBay\'s site id or Amazon\'s '
+    + 'marketplace id, and whether it shares Amazon\'s one EU quantity; how many channel accounts are connected per '
+    + 'channel; and each account (its id for accountId, name, primary or not) with how many listings it holds per '
+    + 'market. Read it before naming a market or an account. Read only.',
   input: z.object({}),
   requires: [F.settingsView],
   riskTier: 'low',
@@ -63,9 +93,17 @@ const businessOverview: AgentTool = {
       readBrandSettings(),
       prisma.marketplace.findMany({
         orderBy: [{ isActive: 'desc' }, { channel: 'asc' }, { code: 'asc' }],
-        select: { channel: true, code: true, name: true, currency: true, language: true, languages: true, isActive: true },
+        select: { channel: true, code: true, name: true, currency: true, language: true, languages: true, isActive: true, marketplaceId: true },
       }),
       prisma.channelConnection.groupBy({ by: ['channelType'], where: { isActive: true }, _count: { _all: true } }),
+    ])
+    const [{ accounts: accountRows }, listingCounts] = await Promise.all([
+      listAccountRows({ includeDisconnected: false }),
+      prisma.channelListing.groupBy({
+        by: ['channel', 'marketplace', 'channelConnectionId'],
+        where: { product: { deletedAt: null } },
+        _count: { _all: true },
+      }),
     ])
     const brandOut: Record<string, unknown> = {}
     for (const field of BRAND_FIELDS) {
@@ -94,11 +132,17 @@ const businessOverview: AgentTool = {
           currency: m.currency,
           languages: m.languages.length ? m.languages : [m.language],
           active: m.isActive,
+          // N2 — the ids the channel itself uses, and Amazon's one EU quantity.
+          ...(m.channel === 'EBAY' ? { siteId: ebayMarketplaceId(m.code) } : {}),
+          ...(m.channel === 'AMAZON' && m.marketplaceId ? { marketplaceId: m.marketplaceId } : {}),
+          ...(m.channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(m.code.toUpperCase()) ? { sharesEuQuantity: true } : {}),
         })),
         ...(listed.more ? { moreMarkets: listed.more } : {}),
         connectedAccounts: Object.fromEntries(
           accounts.sort((a, b) => a.channelType.localeCompare(b.channelType)).map((row) => [row.channelType, row._count._all]),
         ),
+        accounts: accountsByChannel(accountRows, listingCounts),
+        marketCodes: MARKET_CODES,
       },
     }
   },

@@ -52,6 +52,7 @@ import { confirmByCode, prepareConfirm } from '../agents/claude-confirm.service.
 import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
 import { oauthIssuer } from '../oauth/oauth-config.js'
 import { BUSINESS_ARGUMENT, type McpPrincipal } from './mcp-auth.js'
+import { marketRefusal } from '../agents/market-check.js'
 
 /** The run of every call Claude makes; `via` and `oauthGrantId` say which connection. */
 export const MCP_AGENT_KEY = 'claude'
@@ -291,6 +292,12 @@ export async function runToolForClaude(
       try {
         // Every change from Claude is stored as a request, even when the tool's policy needs no approval (forceAsk
         // only ever tightens the gate). C5 — the business's rule then says who decides it: a person, or the rule.
+        // N1 — first: a market this business does not have is refused with the codes it has.
+        const wrongMarket = await marketRefusal(tool, toolArgs)
+        if (wrongMarket) {
+          await finish({ status: 'failed', ok: false, errorMessage: wrongMarket })
+          return refused(principal, wrongMarket)
+        }
         const outcome = await runOrQueueTool(tool.name, toolArgs, principal, run.id, { forceAsk: !tool.readOnly, rule: claudeGateRule(principal) })
         await finish(ending(outcome))
         return answer(outcome, principal)
