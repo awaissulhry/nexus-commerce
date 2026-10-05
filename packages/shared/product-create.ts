@@ -44,7 +44,7 @@ export function newProductProblems(input: { sku?: unknown; name?: unknown; kind?
   else if (sku.length > PRODUCT_SKU_MAX_LENGTH) problems.sku = `A SKU can have up to ${PRODUCT_SKU_MAX_LENGTH} characters. This one has ${sku.length}.`
   else if (!PRODUCT_SKU_PATTERN.test(sku)) problems.sku = 'Use only letters, numbers, dots (.), hyphens (-) and underscores (_). No spaces.'
   const name = typeof input.name === 'string' ? input.name.trim() : ''
-  if (!name) problems.name = 'Enter a name.'
+  if (!name) problems.name = 'Enter a title.'
   else if (name.length > PRODUCT_NAME_MAX_LENGTH) problems.name = `A name can have up to ${PRODUCT_NAME_MAX_LENGTH} characters. This one has ${name.length}.`
   if (!NEW_PRODUCT_KINDS.includes(input.kind as NewProductKind)) problems.kind = 'Choose Single product or Product with variations.'
   if (input.familyId !== undefined && input.familyId !== null && typeof input.familyId !== 'string') problems.familyId = 'Choose a product family from the list, or none.'

@@ -21,6 +21,8 @@ import { AMAZON_EU_SHARED_MARKETS, detectEuIntentConflict, EU_GUARD_REMEDY, type
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../stock-pool/sync-ledgers.js'
 import { resolveIntendedQuantity, routedAvailable } from '../sync-control-core.js'
+import { sharesAmazonSellerSku } from '../listings/listing-send-sku.js'
+import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 
 export interface SendQuantityListing {
@@ -157,12 +159,27 @@ export function amazonSendQuantity(input: SendQuantityInput): SendQuantity {
 
 type Db = Pick<Prisma.TransactionClient, 'channelListing' | 'stockLevel' | 'offer' | 'stockPoolLink' | '$queryRaw' | '$queryRawUnsafe' | 'syncChannelPolicy'>
 
-/** The job's sibling read for the EU guard: every published, not ended Amazon row of the product. */
-export async function readEuIntentRows(db: Pick<Prisma.TransactionClient, 'channelListing'>, productId: string): Promise<EuIntentRow[]> {
-  const siblings = await db.channelListing.findMany({
+/** The seller-SKU facts of a sibling row (`sharesAmazonSellerSku`); the Amazon rule reads no alias or Shopify store. */
+const SIBLING_SKU_SELECT = {
+  aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
+  platformAttributes: true, flatFileSnapshot: true,
+  offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+  product: { select: { sku: true } },
+} satisfies Prisma.ChannelListingSelect
+
+/**
+ * The job's sibling read for the EU guard: every published, not ended Amazon row of the product. With `sku` (S3,
+ * per-channel SKU), only the rows that sell under that seller SKU on Amazon (`sharesAmazonSellerSku`): Amazon keeps one
+ * EU quantity per seller SKU, so two markets with different seller SKUs hold two quantities, and the same SKU is one
+ * shared quantity as before. A row whose SKU cannot be told counts as sharing it (fail closed). Without `sku`, every row.
+ */
+export async function readEuIntentRows(db: Pick<Prisma.TransactionClient, 'channelListing'>, productId: string, sku?: string | null): Promise<EuIntentRow[]> {
+  const rows = await db.channelListing.findMany({
     where: { productId, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true },
+    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true, ...SIBLING_SKU_SELECT },
   })
+  const bySku = typeof sku === 'string' && sku.trim() ? sku.trim() : null
+  const siblings = bySku ? rows.filter((sib) => sharesAmazonSellerSku(sib, sib.product?.sku, bySku)) : rows
   return siblings.map((sib) => ({
     marketplace: sib.marketplace, followMasterQuantity: sib.followMasterQuantity, quantityOverride: sib.quantityOverride,
     quantity: sib.quantity, syncPaused: sib.syncPaused, isFba: sib.fulfillmentMethod === 'FBA',
@@ -176,6 +193,7 @@ export async function loadAmazonSendQuantity(db: Db, input: { listingId: string;
     select: {
       id: true, productId: true, marketplace: true, quantity: true, followMasterQuantity: true, stockBuffer: true, sourceLocationCodes: true,
       fulfillmentMethod: true, platformAttributes: true, syncPaused: true, offerClosedAt: true, channelConnectionId: true,
+      ...SIBLING_SKU_SELECT,
       product: { select: { id: true, sku: true, fulfillmentMethod: true } },
     },
   })
@@ -187,13 +205,17 @@ export async function loadAmazonSendQuantity(db: Db, input: { listingId: string;
     loadSyncLedgers(db as never, [productId]),
     loadChannelPolicies(db as never),
   ])
+  // S3 — the seller SKU this quantity goes to: the one Amazon holds for the listing, or, for a draft Publish is about
+  // to create, the one it will be created under. With no single SKU on record the guard reads every sibling (fail closed).
+  const skuFacts = { ...listing, channel: 'AMAZON' }
+  const sellerSku = (liveChannelSku(skuFacts, listing.product?.sku) ?? wantedChannelSku(skuFacts, listing.product?.sku)).sku
   let euRows: EuIntentRow[] | null = null
   let euRowsError: string | null = null
   if (AMAZON_EU_SHARED_MARKETS.has(String(listing.marketplace ?? '').toUpperCase())) {
-    try { euRows = await readEuIntentRows(db, productId) } catch (err) { euRowsError = err instanceof Error ? err.message : String(err) }
+    try { euRows = await readEuIntentRows(db, productId, sellerSku) } catch (err) { euRowsError = err instanceof Error ? err.message : String(err) }
   }
   const result = amazonSendQuantity({
-    sku: listing.product?.sku ?? input.listingId,
+    sku: sellerSku ?? listing.product?.sku ?? input.listingId,
     listing,
     product: { id: listing.product?.id ?? productId, fulfillmentMethod: listing.product?.fulfillmentMethod ?? null },
     ledger: ledgers.get(productId),

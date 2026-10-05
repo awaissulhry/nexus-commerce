@@ -2,7 +2,9 @@
  * MCP full control L8 — stock and price per listing and market (plan section 02, step 8), through the Matrix door, the
  * same door the Studio Matrix page uses (`runMatrixVerb`, `writeMatrixCells`, `revertMatrixOperation`):
  *
- *   set-listing-stock     pin a quantity, follow the stock again, set a buffer, hold or release the stock sync, push now.
+ *   set-listing-stock     pin a quantity, follow the stock again, set a buffer, hold or release the stock sync, push now,
+ *                         retry a failed push (the Matrix's Sync › Retry), or set an Amazon listing's fulfilment to FBA or
+ *                         FBM (the Matrix's Set fulfilment…; Amazon is never called — it changes what Nexus sends it).
  *   set-listing-price     set a price, adjust prices by a percentage, copy prices from another market, or set a sale.
  *   revert-listing-change put back a Matrix operation one of them ran (the undo of both).
  *
@@ -20,13 +22,15 @@
 
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import type { MatrixVerbParams, MatrixVerbTarget, VerbPreview, MatrixWriteOutcome } from '@nexus/shared/matrix-contract'
+import { MATRIX_COPY, type MatrixVerbParams, type MatrixVerbTarget, type VerbChange, type VerbPreview, type VerbRefusal, type MatrixWriteOutcome, type SyncCell } from '@nexus/shared/matrix-contract'
+import { followQty } from '@nexus/shared/matrix-preview'
 import prisma from '../../../db.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 const matrixWrite = () => import('../../pim/matrix-write.service.js')
 const matrixRead = () => import('../../pim/matrix.service.js')
+const fulfilmentWrite = () => import('../../pim/fulfillment-method.service.js')
 
 const targetsInput = z.array(z.object({
   rowId: z.string().trim().min(1).max(64).describe('the row: a product id from listing-matrix (rowId)'),
@@ -53,25 +57,35 @@ const doorFor = (productId: string, ctx: ToolContext, actor?: string) => ({ prod
 export const HOLD_HOLDS_PRICES = 'Holding the stock sync also holds price and sale changes on these listings: they are kept in Nexus and sent '
   + 'when the stock sync is released.'
 
+/** Retry sends a push again; once it reached the channel it cannot be called back (the Matrix keeps nothing to put back). */
+export const RETRY_SENDS_AGAIN = 'Retry sends the failed push to the channel again; what reaches the channel cannot be called back.'
+
+/** The fulfilment write is Nexus's own (`fulfillment-method.service.ts`): Amazon is never called by it. */
+export const FULFILMENT_NOT_SENT = 'Nothing is sent to Amazon by this change: the offer itself is converted in Seller Central. It changes '
+  + 'what Nexus sends Amazon from now on.'
+
 /**
  * N4 — the Matrix preview in words for the Approvals card (which reads `summary` and `warning`, not a list of cells):
- * what it changes and where, how many targets were refused, Amazon's one EU quantity, and what a hold also holds.
+ * what it changes and where, how many targets were refused, Amazon's one EU quantity, what a hold also holds, that a
+ * retry cannot be called back, and what a fulfilment change does on Amazon (`also`: the per-listing sentences).
  */
-export function matrixStory(sku: string, preview: Pick<VerbPreview, 'verb' | 'changes' | 'refusals' | 'notices'>) {
+export function matrixStory(sku: string, preview: Pick<VerbPreview, 'verb' | 'changes' | 'refusals' | 'notices'>, also: readonly string[] = []) {
   const keys = [...new Set(preview.changes.map((c) => c.coordinateKey))]
   const summary = `${sku}: ${preview.verb} — ${preview.changes.length} change${preview.changes.length === 1 ? '' : 's'} on `
     + `${keys.slice(0, 6).join(', ')}${keys.length > 6 ? ` and ${keys.length - 6} more` : ''}`
     + `${preview.refusals.length ? `; ${preview.refusals.length} refused (see refused)` : ''}.`
-  const warnings = [...preview.notices, ...(preview.verb === 'pause-sync' ? [HOLD_HOLDS_PRICES] : [])]
+  const byVerb = preview.verb === 'pause-sync' ? [HOLD_HOLDS_PRICES] : preview.verb === 'retry-sync' ? [RETRY_SENDS_AGAIN]
+    : preview.verb === 'set-fulfilment' ? [FULFILMENT_NOT_SENT] : []
+  const warnings = [...preview.notices, ...byVerb, ...also]
   return { summary, ...(warnings.length ? { warning: warnings.join(' ') } : {}) }
 }
 
 /** The Matrix preview, as a person reads it in Nexus: each change and each refusal, by SKU and coordinate. */
-function previewOf(tool: string, family: { id: string; sku: string }, preview: VerbPreview, extra: Record<string, unknown>) {
+function previewOf(tool: string, family: { id: string; sku: string }, preview: VerbPreview, extra: Record<string, unknown>, also: readonly string[] = []) {
   return {
     action: tool,
     family: { productId: family.id, sku: family.sku },
-    ...matrixStory(family.sku, preview),
+    ...matrixStory(family.sku, preview, also),
     ...extra,
     verb: preview.verb,
     changes: preview.changes,
@@ -80,8 +94,15 @@ function previewOf(tool: string, family: { id: string; sku: string }, preview: V
   }
 }
 
+type Family = { id: string; sku: string }
+/**
+ * A verb's own check after the door's preview, where the door decides more at commit than its preview says: each change
+ * that would be refused moves to the refusals with the door's sentence, and `also` says what the rest does.
+ */
+type Vet = (family: Family, preview: VerbPreview, ctx: ToolContext) => Promise<{ preview: VerbPreview; also: string[] }>
+
 /** The dry run of a Matrix verb: the door's own preview; refused when it changes nothing. */
-async function previewVerbFor(tool: string, args: Record<string, unknown>, ctx: ToolContext, params: MatrixVerbParams | { error: string }, extra: Record<string, unknown> = {}): Promise<ToolResult> {
+async function previewVerbFor(tool: string, args: Record<string, unknown>, ctx: ToolContext, params: MatrixVerbParams | { error: string }, extra: Record<string, unknown> = {}, vet?: Vet): Promise<ToolResult> {
   const family = await familyRoot(String(args.productId))
   if (!family) return { ok: false, error: PRODUCT_NOT_FOUND }
   if ('error' in params) return { ok: false, error: `${family.sku}: ${params.error}` }
@@ -94,15 +115,17 @@ async function previewVerbFor(tool: string, args: Record<string, unknown>, ctx: 
     if (sentence === null) throw error
     return { ok: false, error: sentence }
   }
+  const vetted = vet && preview.changes.length ? await vet(family, preview, ctx) : { preview, also: [] }
+  preview = vetted.preview
   if (!preview.changes.length) {
     const why = preview.refusals.slice(0, 10).map((r) => `${r.sku} ${r.coordinateKey}: ${r.reason}`).join(' · ')
     return { ok: false, error: `${family.sku}: nothing to change${why ? ` — ${why}` : ': every target already is as asked'}. Nothing was queued.` }
   }
-  return { ok: true, preview: previewOf(tool, family, preview, extra) }
+  return { ok: true, preview: previewOf(tool, family, preview, extra, vetted.also) }
 }
 
 /** The run: the approved changes, carried to the door, which re-verifies each and refuses any that moved since. */
-async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, params: MatrixVerbParams | { error: string }): Promise<ToolResult> {
+async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, params: MatrixVerbParams | { error: string }, vet?: Vet): Promise<ToolResult> {
   const family = await familyRoot(String(args.productId))
   if (!family) return { ok: false, error: PRODUCT_NOT_FOUND }
   if ('error' in params) return { ok: false, error: `${family.sku}: ${params.error}` }
@@ -119,6 +142,12 @@ async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, param
     return { ok: false, error: `${family.sku}: ${moved.slice(0, 10).map((c) => `${c.sku} ${c.coordinateKey}`).join(', ')} changed since it was approved. Nothing changed; ask Claude again.` }
   }
   const carried: VerbPreview = { verb: params.verb, changes: approved.changes as VerbPreview['changes'], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false }
+  // The verb's own check again, on what was approved: a guard that closed meanwhile (FBA units arrived, the failed push
+  // was sent by someone else) refuses the whole request before anything is written — never a part of an EU group.
+  const recheck = vet ? (await vet(family, carried, ctx)).preview.refusals : []
+  if (recheck.length) {
+    return { ok: false, error: `${family.sku}: ${recheck.slice(0, 10).map((r) => `${r.sku} ${r.coordinateKey}: ${r.reason}`).join(' · ')}. Nothing changed; ask Claude again.` }
+  }
   const out = await runMatrixVerb(doorFor(family.id, ctx), { params, targets: args.targets as MatrixVerbTarget[], commit: true, preview: carried }) as { operation: { id: string; applied: number; refused: number }; results: MatrixWriteOutcome[] }
   const refused = out.results.filter((r) => r.outcome === 'refused' || r.outcome === 'conflict')
   const summary = { operationId: out.operation.id, applied: out.operation.applied, refused: refused.map((r) => ({ rowId: r.rowId, coordinateKey: r.coordinateKey, reason: r.reason ?? r.outcome })) }
@@ -127,7 +156,7 @@ async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, param
     ok: true,
     data: summary,
     // C1 — the Matrix operation: it holds every touched cell's value from before, and its revert puts them back.
-    change: { before: { productId: family.id, operationId: out.operation.id, changes: approved.changes }, after: { productId: family.id, operationId: out.operation.id, reverted: false } },
+    change: { before: { productId: family.id, operationId: out.operation.id, verb: params.verb, changes: approved.changes }, after: { productId: family.id, operationId: out.operation.id, reverted: false } },
   }
 }
 
@@ -141,27 +170,171 @@ const MATRIX_UNDO: ToolUndo = {
   request(change) {
     const after = (change.after ?? {}) as { productId?: string; operationId?: string }
     if (!after.productId || !after.operationId) return { refusal: 'This change names no Matrix operation.' }
+    // A push (push-now, retry-sync) changes no cell the Matrix could put back: what it sent stays sent.
+    const verb = ((change.before ?? {}) as { verb?: unknown }).verb
+    if (verb === 'push-now' || verb === 'retry-sync') return { refusal: 'A push that was sent cannot be called back: the channel keeps what it received. Set the quantity again instead.' }
     return { tool: 'revert-listing-change', args: { productId: after.productId, operationId: after.operationId } }
   },
 }
 
 // ── set-listing-stock ────────────────────────────────────────────────────────────────────────────────
 
-const STOCK_ACTIONS = ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now'] as const
+const STOCK_ACTIONS = ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'retry-sync', 'set-fulfilment'] as const
+/** The methods Claude may set: Amazon's two. eBay's MCF stays with a person (the stock cascade then stops pushing that eBay listing). */
+const FULFILMENT_METHODS = ['FBA', 'FBM'] as const
 
 const stockInput = z.object({
   productId: z.string().trim().min(1).max(64).describe('Nexus product id: the family (parent) or one of its variations, as listing-matrix read it'),
-  action: z.enum(STOCK_ACTIONS).describe('pin-quantity (a fixed quantity), set-follow (follow the stock again), set-buffer, pause-sync (hold the stock sync), resume-sync (release it) or push-now'),
+  action: z.enum(STOCK_ACTIONS).describe('pin-quantity (a fixed quantity), set-follow (follow the stock again), set-buffer, pause-sync (hold the stock sync), '
+    + 'resume-sync (release it), push-now, retry-sync (send a failed push again) or set-fulfilment (FBA or FBM, Amazon listings only)'),
   quantity: z.coerce.number().int().min(0).max(1_000_000).optional().describe('pin-quantity: the quantity to pin'),
   buffer: z.coerce.number().int().min(0).max(1_000_000).optional().describe('set-buffer: units held back from the stock the listing follows'),
+  method: z.enum(FULFILMENT_METHODS).optional().describe('set-fulfilment: FBA (Amazon ships from its stock; the quantity is Amazon\'s) or FBM (the business ships; Nexus sends the stock)'),
   targets: targetsInput,
 })
 
 function stockParams(args: Record<string, unknown>): MatrixVerbParams | { error: string } {
   const action = String(args.action) as (typeof STOCK_ACTIONS)[number]
+  if (args.method !== undefined && action !== 'set-fulfilment') return { error: 'A method is given with set-fulfilment only.' }
   if (action === 'pin-quantity') return typeof args.quantity === 'number' ? { verb: action, value: args.quantity } : { error: 'pin-quantity needs a quantity.' }
   if (action === 'set-buffer') return typeof args.buffer === 'number' ? { verb: action, value: args.buffer } : { error: 'set-buffer needs a buffer.' }
+  if (action === 'set-fulfilment') {
+    if (args.method !== 'FBA' && args.method !== 'FBM') return { error: 'set-fulfilment needs a method: FBA or FBM.' }
+    const other = (args.targets as MatrixVerbTarget[]).filter((t) => !/^AMAZON:/i.test(t.coordinateKey))
+    if (other.length) return { error: `set-fulfilment changes Amazon listings only (AMAZON:… coordinates), not ${[...new Set(other.map((t) => t.coordinateKey))].slice(0, 5).join(', ')}. eBay's MCF is set by a person in the Matrix.` }
+    return { verb: 'set-fulfilment', method: args.method }
+  }
   return { verb: action } as MatrixVerbParams
+}
+
+/** The Matrix read the door reads, and the listing rows one change lands on (an Amazon EU cell: every open EU row of the SKU). */
+async function landingOf(familyId: string, ctx: ToolContext) {
+  const [{ getMatrixRead }, { locate, targetsOf }] = await Promise.all([matrixRead(), matrixWrite()])
+  const read = await getMatrixRead({ productId: familyId, accountId: null, canEditPrice: ctx.can(F.productsPriceEdit) })
+  return {
+    read,
+    async of(change: Pick<VerbChange, 'rowId' | 'coordinateKey'>) {
+      const hit = locate(read, change.rowId, change.coordinateKey)
+      const landed = hit?.cells.listingId ? await targetsOf(read, hit, hit.cells.version) : null
+      return hit && landed && !('conflict' in landed) ? { hit, targets: landed.targets } : null
+    },
+  }
+}
+
+const refusalOf = (c: VerbChange, reason: string): VerbRefusal => ({ rowId: c.rowId, sku: c.sku, coordinateKey: c.coordinateKey, kind: 'guard', reason })
+const listed = (xs: readonly string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+
+/** What the stock a listing takes would be once Nexus may send it: the pinned number, or the stock it follows. */
+function stockWords(s: SyncCell | null): string {
+  if (!s) return 'the stock it follows'
+  if (s.mode === 'PINNED') return `its pinned quantity (${s.intended ?? s.held ?? '—'})`
+  const n = followQty(s)
+  return n == null ? 'the stock it follows (none is counted now, so nothing is sent until it is)' : `the stock it follows (${n} from ${s.routedLocations.join(', ') || 'no routed location'})`
+}
+
+/**
+ * PURE — what a fulfilment change does on Amazon, in words, for one change. The write sends Amazon nothing
+ * (`fulfillment-method.service.ts`); it changes what Nexus sends from now on, by the fail-closed FBA guard
+ * (`isFbaCoordinate`: the listing's method, an FBA code, the product's FBA mark, FBA units, an active FBA offer):
+ *   - FBA: no quantity is sent to these listings; Amazon keeps the last one Nexus sent until the offer is converted. A
+ *     product marked FBM becomes marked FBA, which closes the guard on every Amazon listing of the SKU (`others`).
+ *   - FBM: a product marked FBA is cleared only when no other listing of it is FBA (`stillFba`); until then nothing is
+ *     sent. Cleared, the write pushes at once; a product that was not marked FBA gets its quantity at the next stock change.
+ */
+export function fulfilmentWords(input: {
+  sku: string
+  method: 'FBA' | 'FBM'
+  markets: readonly string[]
+  sync: SyncCell | null
+  /** `Product.fulfillmentMethod` now. */
+  productMark: string | null
+  /** FBA: the SKU's other Amazon inventory cells that Nexus still sends a quantity to (coordinate keys). */
+  others: readonly string[]
+  /** FBM: the SKU's other listings that are FBA (typed) or hold an active FBA offer (`CHANNEL MARKET`). */
+  stillFba: readonly string[]
+  /** The cell's method was derived (not set): a revert clears it again rather than setting the old method. */
+  derived: boolean
+}): string {
+  const where = `${input.sku} on Amazon ${input.markets.join(' ')}`
+  if (input.method === 'FBA') {
+    const held = input.sync && input.sync.kind !== 'FBA_EXCLUDED' && input.sync.held != null
+      ? ` Until the offer is converted in Seller Central, Amazon keeps the last quantity Nexus sent (${input.sync.held}).` : ''
+    const mark = input.productMark !== 'FBM' ? ''
+      : ` ${input.sku} itself becomes marked FBA${input.others.length ? `, so Nexus also stops sending a quantity to ${listed(input.others)}` : ''}`
+        + `${input.derived ? '; a revert clears this listing\'s method but leaves that mark' : ''}.`
+    return `${where}: from now on Nexus sends no quantity — the quantity is Amazon's (the units at its fulfilment centres).${held}${mark}`
+  }
+  if (input.productMark === 'FBA' && input.stillFba.length) {
+    return `${where}: ${input.sku} stays marked FBA while ${listed(input.stillFba)} ${input.stillFba.length === 1 ? 'is' : 'are'} FBA, so Nexus still sends Amazon no quantity for it.`
+  }
+  const held = input.sync?.kind === 'PAUSED' ? ' Its stock sync is held: nothing is sent until it is released.' : ''
+  return input.productMark === 'FBA'
+    ? `${where}: ${input.sku} is no longer marked FBA, and Nexus sends Amazon ${stockWords(input.sync)} at once.${held}`
+    : `${where}: from now on Nexus sends Amazon ${stockWords(input.sync)} — at the next stock change, or at once with push-now.${held}`
+}
+
+/**
+ * set-fulfilment — the door's preview checks FBA units from the Matrix read only; its write (`setFulfillmentMethod`) also
+ * refuses an active FBA offer and a code Amazon set, per listing. Here every listing a change lands on is checked by the
+ * write's own guard (`fulfilmentRefusals`), and a change is kept only when ALL of them would be written — the door would
+ * otherwise write part of an Amazon EU group. Each kept change says what it does on Amazon.
+ */
+function vetFulfilment(method: 'FBA' | 'FBM'): Vet {
+  return async (family, preview, ctx) => {
+    const [landing, { fulfilmentRefusals }] = await Promise.all([landingOf(family.id, ctx), fulfilmentWrite()])
+    const rowIds = [...new Set(preview.changes.map((c) => c.rowId))]
+    const marks = new Map((await prisma.product.findMany({ where: { id: { in: rowIds } }, select: { id: true, fulfillmentMethod: true } })).map((p) => [p.id, p.fulfillmentMethod as string | null]))
+    const changes: VerbChange[] = []
+    const refusals = [...preview.refusals]
+    const also: string[] = []
+    for (const change of preview.changes) {
+      const landed = await landing.of(change)
+      if (!landed) { refusals.push(refusalOf(change, MATRIX_COPY.changedElsewhere)); continue }
+      const refused = await fulfilmentRefusals(landed.targets.map((t) => ({ listingId: t.id, method })))
+      const first = landed.targets.find((t) => refused.has(t.id))
+      if (first) { refusals.push(refusalOf(change, `${landed.targets.length > 1 ? `Amazon ${first.marketplace}: ` : ''}${refused.get(first.id)}`)); continue }
+      changes.push(change)
+      const { hit, targets } = landed
+      const ids = targets.map((t) => t.id)
+      const others = landing.read.coordinates
+        .filter((c) => c.channel === 'AMAZON' && c.key !== hit.coord.key)
+        .filter((c) => { const k = hit.row.cells[c.key]?.sync?.kind; return !!k && k !== 'FBA_EXCLUDED' && k !== 'CLOSED' })
+        .map((c) => c.key)
+      const stillFba = method === 'FBM' ? (await prisma.channelListing.findMany({
+        where: { productId: hit.row.id, id: { notIn: ids }, OR: [{ fulfillmentMethod: 'FBA' }, { offers: { some: { fulfillmentMethod: 'FBA', isActive: true } } }] },
+        select: { channel: true, marketplace: true },
+      })).map((l) => `${l.channel} ${l.marketplace}`) : []
+      also.push(fulfilmentWords({ sku: change.sku, method, markets: targets.map((t) => t.marketplace), sync: hit.cells.sync, productMark: marks.get(change.rowId) ?? null,
+        others, stillFba: [...new Set(stillFba)], derived: hit.cells.fulfilment?.source === 'derived' }))
+    }
+    return { preview: { ...preview, changes, refusals }, also }
+  }
+}
+
+/**
+ * retry-sync — the Sync cell reads a skipped push as failed too, but Retry sends only a FAILED or dead row
+ * (`newestFailedPush`, the door's own query). A change with no such row is refused here, as the door would at commit;
+ * the rest say which push goes out again.
+ */
+const vetRetry: Vet = async (family, preview, ctx) => {
+  const [landing, { newestFailedPush }] = await Promise.all([landingOf(family.id, ctx), matrixWrite()])
+  const changes: VerbChange[] = []
+  const refusals = [...preview.refusals]
+  const also: string[] = []
+  for (const change of preview.changes) {
+    const landed = await landing.of(change)
+    const row = landed ? await newestFailedPush(landed.targets.map((t) => t.id)) : null
+    if (!row) { refusals.push(refusalOf(change, landed ? 'Nothing to retry on this coordinate' : MATRIX_COPY.changedElsewhere)); continue }
+    changes.push(change)
+    also.push(`${change.sku} on ${change.coordinateKey}: its failed ${row.syncType === 'PRICE_UPDATE' ? 'price' : 'quantity'} push is sent again.`)
+  }
+  return { preview: { ...preview, changes, refusals }, also }
+}
+
+function stockVet(args: Record<string, unknown>): Vet | undefined {
+  if (args.action === 'retry-sync') return vetRetry
+  if (args.action === 'set-fulfilment' && (args.method === 'FBA' || args.method === 'FBM')) return vetFulfilment(args.method)
+  return undefined
 }
 
 const setListingStock: AgentTool = {
@@ -174,19 +347,24 @@ const setListingStock: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   openWorld: true,
-  // C1 — partly: revert puts every cell back, but a quantity already pushed was on the channel meanwhile.
+  // C1 — partly: revert puts every cell back (a fulfilment method too), but a quantity already pushed was on the channel
+  // meanwhile, and a push (push-now, retry-sync) cannot be called back at all.
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   undo: MATRIX_UNDO,
   description:
     'Change how listings take their stock, per listing and market, through the Nexus Matrix: pin a quantity, follow the '
-    + 'stock again, set a buffer, hold or release the stock sync, or push now. Targets are rows and coordinate keys from '
-    + 'listing-matrix. FBA quantities are never written; Amazon\'s EU markets share one quantity (AMAZON:EU); an eBay pin '
-    + 'to 0 needs the account\'s out-of-stock option ON (else eBay ends the item); a listing whose selling is paused '
-    + '(Inactive) takes no quantity — resume it in the product sheet\'s Status column. The preview is the Matrix\'s own. Waits '
-    + 'for a person to approve it in Nexus; a target that changed since is refused, and revert-listing-change puts it back.',
-  handler: (args, ctx) => previewVerbFor('set-listing-stock', args, ctx, stockParams(args)),
-  execute: (args, ctx) => runVerbFor(args, ctx, stockParams(args)),
+    + 'stock again, set a buffer, hold or release the stock sync, push now, retry a failed push (retry-sync), or set an '
+    + 'Amazon listing\'s fulfilment to FBA or FBM (set-fulfilment). Targets are rows and coordinate keys from '
+    + 'listing-matrix. FBA quantities are never written; Amazon\'s EU markets share one quantity and one fulfilment '
+    + '(AMAZON:EU); an eBay pin to 0 needs the account\'s out-of-stock option ON (else eBay ends the item); a listing whose '
+    + 'selling is paused (Inactive) takes no quantity — resume it in the product sheet\'s Status column. set-fulfilment '
+    + 'sends Amazon nothing (the offer is converted in Seller Central): it changes what Nexus sends — FBA means the '
+    + 'quantity is Amazon\'s — and FBA → FBM is refused while FBA units, an active FBA offer or an Amazon FBA code remain. '
+    + 'The preview is the Matrix\'s own. Waits for a person to approve it in Nexus; a target that changed since is refused, '
+    + 'and revert-listing-change puts it back (a push already sent cannot be called back).',
+  handler: (args, ctx) => previewVerbFor('set-listing-stock', args, ctx, stockParams(args), {}, stockVet(args)),
+  execute: (args, ctx) => runVerbFor(args, ctx, stockParams(args), stockVet(args)),
 }
 
 // ── set-listing-price ────────────────────────────────────────────────────────────────────────────────

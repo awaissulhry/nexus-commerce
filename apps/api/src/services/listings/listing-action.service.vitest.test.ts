@@ -230,6 +230,62 @@ describe('Amazon: pause = remove this market\'s offer (FBA too, with a warning);
   }))
 })
 
+describe('S3 (per-channel SKU) — every Amazon row is acted on under the SKU Amazon holds for it', () => {
+  const skuRow = (id: string) => prisma.channelListing.findUnique({ where: { id }, select: { channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true } })
+
+  it('Delete names each row\'s own seller SKU (the product SKU for a row with none), clears the live SKU and keeps the wanted one', () => scoped(async () => {
+    const f = await family('AMZ-OWN', ['S', 'M'])
+    const s = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon, { externalListingId: 'B0OWNS', channelSku: 'OWN-S-IT', liveChannelSku: 'OWN-S-IT' })
+    const m = await listing(f.children.M, 'AMAZON', 'IT', ids.amazon, { externalListingId: 'B0OWNM' })
+    const preview = await previewListingAction(f.root, 'delete', amazonScope(), USER)
+    // The plan rows still name the products (the sheet's rows).
+    expect(preview.rows.map(r => [r.sku, r.plan])).toEqual([['AMZ-OWN', 'skip'], ['AMZ-OWN-M', 'send'], ['AMZ-OWN-S', 'send']])
+    fixture.amazonLive.mockReset().mockResolvedValue({ read: 'ok', offers: [], fulfillmentChannels: ['DEFAULT'], instances: [], productType: 'COAT' })
+    fixture.amazonDelete.mockReset().mockResolvedValue({ success: true, outcome: 'SUCCESS', submissionId: 'sub-own' })
+    const result = await runListingAction(f.root, 'delete', { previewId: preview.previewId, confirm: 'DELETE' }, USER)
+    expect(result).toMatchObject({ status: 'DONE' })
+    expect(fixture.amazonDelete.mock.calls.map(([call]) => call.sku)).toEqual(['AMZ-OWN-M', 'OWN-S-IT'])
+    expect(fixture.amazonLive.mock.calls.map(([call]) => call.sku)).toEqual(['AMZ-OWN-M', 'OWN-S-IT'])
+    expect(await skuRow(s)).toEqual({ channelSku: 'OWN-S-IT', liveChannelSku: null, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    expect(await skuRow(m)).toEqual({ channelSku: null, liveChannelSku: null, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    // The audit names the SKU that was deleted.
+    expect(await prisma.channelListingSnapshot.findFirst({ where: { channelListingId: s, reason: 'delete' } })).toMatchObject({ payload: expect.objectContaining({ sku: 'OWN-S-IT' }) })
+  }))
+
+  it('a seller SKU held in an old store (an active offer) is the one deleted', () => scoped(async () => {
+    const f = await family('AMZ-OFF', ['S'])
+    const s = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon, { externalListingId: 'B0OFFS' })
+    await prisma.offer.create({ data: { channelListingId: s, sku: 'OFFER-S-IT', fulfillmentMethod: 'FBM', isActive: true } })
+    const preview = await previewListingAction(f.root, 'delete', amazonScope(), USER)
+    fixture.amazonLive.mockReset().mockResolvedValue({ read: 'ok', offers: [], fulfillmentChannels: ['DEFAULT'], instances: [], productType: 'COAT' })
+    fixture.amazonDelete.mockReset().mockResolvedValue({ success: true, outcome: 'SUCCESS', submissionId: 'sub-off' })
+    await runListingAction(f.root, 'delete', { previewId: preview.previewId, confirm: 'DELETE' }, USER)
+    expect(fixture.amazonDelete).toHaveBeenCalledExactlyOnceWith({ sellerId: 'TEST-SELLER', sku: 'OFFER-S-IT', marketplaceId: 'APJ6JRA9NG5V4' })
+  }))
+
+  it('a row with two seller SKUs on record is refused with the reason; nothing is sent for it', () => scoped(async () => {
+    const f = await family('AMZ-TWO', ['S', 'M'])
+    const s = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon, { externalListingId: 'B0TWOS' })
+    await listing(f.children.M, 'AMAZON', 'IT', ids.amazon, { externalListingId: 'B0TWOM' })
+    // One active offer per fulfilment method (FBM and FBA) under two different seller SKUs: Nexus cannot tell which to act on.
+    for (const [sku, method] of [['TWO-A', 'FBM'], ['TWO-B', 'FBA']] as const) await prisma.offer.create({ data: { channelListingId: s, sku, fulfillmentMethod: method, isActive: true } })
+    for (const action of ['delete', 'pause'] as const) {
+      const preview = await previewListingAction(f.root, action, amazonScope(), USER)
+      expect(preview.rows.find(r => r.sku === 'AMZ-TWO-S')).toMatchObject({ plan: 'refused', sentence: 'AMZ-TWO-S has multiple seller SKUs. Select its offer before publishing. Nothing was sent.' })
+      expect(preview.rows.find(r => r.sku === 'AMZ-TWO-M')).toMatchObject({ plan: 'send' })
+    }
+  }))
+
+  it('a still-draft row keeps the product SKU (nothing new is sent for a draft)', () => scoped(async () => {
+    const f = await family('AMZ-DRF', ['S'])
+    await listing(f.children.S, 'AMAZON', 'IT', ids.amazon, { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: true, channelSku: 'WANT-S-IT' })
+    const read = await readListingActionState(f.root, { channel: 'AMAZON', market: 'IT', accountId: ids.amazon })
+    expect(read.rows.find(r => r.sku === 'AMZ-DRF-S')).toMatchObject({ state: 'draft' })
+    const preview = await previewListingAction(f.root, 'delete', amazonScope(), USER)
+    expect(preview.rows.find(r => r.sku === 'AMZ-DRF-S')).toMatchObject({ plan: 'skip' })
+  }))
+})
+
 const getItem = (oos: 'true' | 'false' | null, skus: Array<[string, number]>) => ({ ack: 'Success', raw: `<Item><ItemID>111</ItemID>${oos === null ? '' : `<OutOfStockControl>${oos}</OutOfStockControl>`}<SellingStatus><ListingStatus>Active</ListingStatus></SellingStatus><Variations>${skus.map(([sku, qty]) => `<Variation><SKU>${sku}</SKU><Quantity>${qty}</Quantity><SellingStatus><QuantitySold>0</QuantitySold></SellingStatus></Variation>`).join('')}</Variations></Item>` })
 
 describe('eBay (Trading): pause = quantity 0 under the out-of-stock control, then the hold', () => {
@@ -631,4 +687,202 @@ describe('permissions', () => {
     expect(Object.fromEntries(registered.map(([method, url]) => [`${method} ${url}`, permissionForRoute(method, url)]))).toEqual(expected)
     await app.close()
   })
+})
+
+/**
+ * S3/S4 — an eBay alias SKU was never sent (eBay publish built from Product.sku), so an extra listing with no confirmed
+ * SKU still acts as its product SKU. S4 — eBay rows act on the SKU eBay holds (below); S5 — Shopify and Etsy too (below).
+ */
+describe('S3 — eBay rows keep acting on Product.sku (parity)', () => {
+  it('eBay (Trading): an extra listing with its own recorded SKU still acts as the product SKU', () => scoped(async () => {
+    const product = (await prisma.product.create({ data: { sku: 'EB-S3', name: 'EB-S3', basePrice: 10, fulfillmentMethod: 'FBM' } as never })).id
+    const alias = await prisma.productListingAlias.create({ data: { productId: product, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, label: 'Second', position: 1, sku: 'EB-S3-ALIAS' } })
+    const s = await listing(product, 'EBAY', 'IT', ids.ebay, { externalListingId: '931', aliasId: alias.id, aliasKey: alias.id })
+    const scope = { scope: { channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: alias.id } }
+    // A single-SKU item is paused whole (the hard-delete unpublish's own calls).
+    fixture.unpublish.mockReset().mockResolvedValue({ success: true, outcome: 'SUCCESS', evidence: { zeroed: ['931'] } })
+    const preview = await previewListingAction(product, 'pause', scope, USER)
+    expect(preview.rows).toEqual([expect.objectContaining({ sku: 'EB-S3', plan: 'send' })])
+    const result = await runListingAction(product, 'pause', { previewId: preview.previewId }, USER)
+    expect(result, JSON.stringify(result.rows)).toMatchObject({ status: 'DONE', rows: [{ sku: 'EB-S3', outcome: 'DONE' }] })
+    expect(JSON.stringify(result)).not.toContain('EB-S3-ALIAS')
+    expect(await prisma.channelListingSnapshot.findFirst({ where: { channelListingId: s, reason: 'pause' } })).toMatchObject({ payload: expect.objectContaining({ sku: 'EB-S3' }) })
+    expect(await row(s)).toMatchObject({ offerClosedAt: expect.any(Date) })
+  }))
+})
+
+/**
+ * S4 (per-channel SKU) — every eBay row is acted on under the SKU eBay HOLDS for it (`listingSendSku`): its own confirmed
+ * SKU, else the product SKU (parity). A wanted SKU eBay has not confirmed is never named, and another account's row with
+ * its own SKU is never involved.
+ */
+describe('S4 (per-channel SKU) — every eBay row is acted on under the SKU eBay holds for it', () => {
+  it('Trading pause: an own confirmed SKU is set to 0 under that SKU; a wanted-only SKU and a plain row under the product SKU', () => scoped(async () => {
+    const f = await family('EB-OWN', ['S', 'M', 'L'])
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '121' })
+    const s = await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '121', channelSku: 'OWN-S-IT', liveChannelSku: 'OWN-S-IT' })
+    const m = await listing(f.children.M, 'EBAY', 'IT', ids.ebay, { externalListingId: '121', channelSku: 'WANT-M-IT' })
+    await listing(f.children.L, 'EBAY', 'IT', ids.ebay, { externalListingId: '121' })
+    const other = await listing(f.children.S, 'EBAY', 'IT', ids.ebay2, { externalListingId: '122', liveChannelSku: 'OTHER-ACCOUNT-S' })
+    fixture.trading.mockReset().mockImplementation(async (call: string) => call === 'GetItem'
+      ? getItem('true', [['OWN-S-IT', 3], ['EB-OWN-M', 2], ['EB-OWN-L', 1]]) : { ack: 'Success', raw: '' })
+    const preview = await previewListingAction(f.root, 'pause', { ...ebayScope(), productIds: [f.children.S, f.children.M] }, USER)
+    // The plan rows still name the products (the sheet's rows).
+    expect(preview.rows.filter(r => r.plan === 'send').map(r => r.sku).sort()).toEqual(['EB-OWN-M', 'EB-OWN-S'])
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result, JSON.stringify(result.rows)).toMatchObject({ status: 'DONE' })
+    expect(fixture.trading.mock.calls.map(c => c[0])).toEqual(['GetItem', 'ReviseInventoryStatus'])
+    const xml = String(fixture.trading.mock.calls[1][1])
+    expect(xml).toContain('<SKU>OWN-S-IT</SKU>')
+    expect(xml).toContain('<SKU>EB-OWN-M</SKU>')
+    for (const absent of ['EB-OWN-S<', 'WANT-M-IT', 'EB-OWN-L', 'OTHER-ACCOUNT-S']) expect(xml).not.toContain(absent)
+    for (const id of [s, m]) expect(await row(id)).toMatchObject({ offerClosedAt: expect.any(Date) })
+    expect(await row(other)).toMatchObject({ offerClosedAt: null })
+    // The audit names the SKU eBay was sent.
+    expect(await prisma.channelListingSnapshot.findFirst({ where: { channelListingId: s, reason: 'pause' } })).toMatchObject({ payload: expect.objectContaining({ sku: 'OWN-S-IT' }) })
+  }))
+
+  it('Inventory delete: each offer is read by the SKU eBay holds; the group is withdrawn under the main row\'s SKU (the product SKU without one)', () => scoped(async () => {
+    const calls: Array<{ method: string; path: string; sku: string | null; body: any }> = []
+    fixture.ebaySend.mockReset().mockImplementation(async (_account: string, url: string, init: RequestInit = {}) => {
+      const u = new URL(url)
+      calls.push({ method: init.method ?? 'GET', path: u.pathname, sku: u.searchParams.get('sku'), body: typeof init.body === 'string' ? JSON.parse(init.body) : null })
+      if (init.method === 'DELETE') return new Response(null, { status: 204 })
+      if (u.pathname.endsWith('/offer') && u.searchParams.get('sku')) {
+        return new Response(JSON.stringify({ offers: [{ offerId: `OFF-${u.searchParams.get('sku')}`, marketplaceId: 'EBAY_IT', format: 'FIXED_PRICE' }] }), { status: 200 })
+      }
+      return new Response('{}', { status: 200 })
+    })
+    const withdrawKey = () => calls.find(c => c.path.endsWith('withdraw_by_inventory_item_group'))?.body?.inventoryItemGroupKey
+
+    const own = await family('EBI-OWN', ['S', 'M'])
+    await listing(own.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '991', channelSku: 'GRP-OWN', liveChannelSku: 'GRP-OWN' })
+    await listing(own.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '991', liveChannelSku: 'OWN-S-IT' })
+    await listing(own.children.M, 'EBAY', 'IT', ids.ebay, { externalListingId: '991', channelSku: 'WANT-M-IT', platformAttributes: { __offerIds: { EBAY_DE: 'OFF-M-DE' } } })
+    let preview = await previewListingAction(own.root, 'delete', ebayScope(), USER)
+    expect(preview).toMatchObject({ model: 'ebay-inventory' })
+    expect(await runListingAction(own.root, 'delete', { previewId: preview.previewId, confirm: 'DELETE' }, USER)).toMatchObject({ status: 'DONE' })
+    expect(withdrawKey()).toBe('GRP-OWN')
+    expect(calls.filter(c => c.sku).map(c => c.sku).sort()).toEqual(['EBI-OWN-M', 'OWN-S-IT'])
+    expect(calls.filter(c => c.method === 'DELETE').map(c => c.path).sort()).toEqual(['/sell/inventory/v1/offer/OFF-EBI-OWN-M', '/sell/inventory/v1/offer/OFF-OWN-S-IT'])
+
+    calls.length = 0
+    const plain = await family('EBI-PLAIN', ['S'])
+    await listing(plain.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '992' })
+    await listing(plain.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '992', platformAttributes: { __offerIds: { EBAY_IT: 'OFF-PLAIN-S' } } })
+    preview = await previewListingAction(plain.root, 'delete', ebayScope(), USER)
+    expect(await runListingAction(plain.root, 'delete', { previewId: preview.previewId, confirm: 'DELETE' }, USER)).toMatchObject({ status: 'DONE' })
+    expect(withdrawKey()).toBe('EBI-PLAIN')
+  }))
+
+  it('Inventory pause: the bulk quantity update names the SKU eBay holds', () => scoped(async () => {
+    const f = await family('EBI-PAUSE', ['S'])
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '993' })
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '993', liveChannelSku: 'OWN-PAUSE-S', platformAttributes: { __offerIds: { EBAY_IT: 'OFF-P-S' } } })
+    fixture.preference.mockReset().mockResolvedValue('ON')
+    const bodies: any[] = []
+    fixture.ebaySend.mockReset().mockImplementation(async (_account: string, url: string, init: RequestInit = {}) => {
+      if (url.includes('bulk_update_price_quantity')) {
+        const body = JSON.parse(String(init.body)); bodies.push(body)
+        return new Response(JSON.stringify({ responses: body.requests.map((r: any) => ({ sku: r.sku, statusCode: 200 })) }), { status: 200 })
+      }
+      return new Response('{}', { status: 200 })
+    })
+    const preview = await previewListingAction(f.root, 'pause', { ...ebayScope(), productIds: [f.children.S] }, USER)
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result, JSON.stringify(result.rows)).toMatchObject({ status: 'DONE', rows: [{ sku: 'OWN-PAUSE-S', outcome: 'DONE' }] })
+    expect(bodies).toEqual([{ requests: [{ sku: 'OWN-PAUSE-S', offers: [{ offerId: 'OFF-P-S', availableQuantity: 0 }] }] }])
+  }))
+})
+
+/**
+ * S5 — Shopify and Etsy rows carry the SKU the channel holds for them (`listingSendSku`): the confirmed `liveChannelSku`,
+ * else the product SKU. A Shopify old store — the sheet's SKU column (`platformAttributes.sku`) or an older edit in the
+ * override bag (`overrideData.listing_sku`) — is a wanted value that may never have been sent: never what an action
+ * looks for, so it never blocks one.
+ */
+describe('S5 — Shopify and Etsy rows act on the SKU the channel holds', () => {
+  it('parity: an edit only in the override bag (never sent) — paused under the product SKU, exactly as before', () => scoped(async () => {
+    const f = await family('SH-S5P', ['S'])
+    await listing(f.root, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9301', platformAttributes: { status: 'ACTIVE' } })
+    const s = await listing(f.children.S, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9301',
+      platformAttributes: variantAttrs('9301', '31'), overrideData: { listing_sku: 'SH-S5P-UNSENT' } })
+    const preview = await previewListingAction(f.root, 'pause', shopifyScope(), USER)
+    expect(preview.rows.find(r => r.sku === 'SH-S5P-S')).toMatchObject({ plan: 'send' })
+    const store = shopifyStore('9301', [{ id: '31', sku: 'SH-S5P-S', policy: 'DENY', qty: 4 }])
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result.rows.find(r => r.productId === f.children.S)).toMatchObject({ sku: 'SH-S5P-S', outcome: 'DONE' })
+    expect(store.sets).toEqual([expect.objectContaining({ inventoryItemId: 'gid://shopify/InventoryItem/310', quantity: 0 })])
+    expect(JSON.stringify(result)).not.toContain('SH-S5P-UNSENT')
+    expect(await row(s)).toMatchObject({ offerClosedAt: expect.any(Date) })
+  }))
+
+  it('an unsent sheet SKU (the native SKU column) does not block Pause: the variant, still under its product SKU, is paused', () => scoped(async () => {
+    const f = await family('SH-S5N', ['S'])
+    await listing(f.root, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9302', platformAttributes: { status: 'ACTIVE' } })
+    const s = await listing(f.children.S, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9302',
+      platformAttributes: { ...variantAttrs('9302', '32'), sku: 'SH-S5N-NEXT' } })
+    const preview = await previewListingAction(f.root, 'pause', shopifyScope(), USER)
+    const store = shopifyStore('9302', [{ id: '32', sku: 'SH-S5N-S', policy: 'DENY', qty: 6 }])
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result.rows.find(r => r.productId === f.children.S)).toMatchObject({ sku: 'SH-S5N-S', outcome: 'DONE' })
+    expect(store.sets).toEqual([expect.objectContaining({ inventoryItemId: 'gid://shopify/InventoryItem/320', quantity: 0, changeFromQuantity: 6 })])
+    expect(await row(s)).toMatchObject({ offerClosedAt: expect.any(Date) })
+  }))
+
+  it('🔴 no stored variant id and an unsent sheet SKU naming ANOTHER variant: looked up by the product SKU; the other variant is never written', () => scoped(async () => {
+    const f = await family('SH-S5X', ['S'])
+    await listing(f.root, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9305', platformAttributes: { status: 'ACTIVE' } })
+    await listing(f.children.S, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9305',
+      platformAttributes: { nexusFamilyId: 'fam', inventoryLocationId: 'gid://shopify/Location/1', sku: 'SH-S5X-OTHER' } })
+    const preview = await previewListingAction(f.root, 'pause', shopifyScope(), USER)
+    const store = shopifyStore('9305', [{ id: '36', sku: 'SH-S5X-S', policy: 'DENY', qty: 4 }, { id: '37', sku: 'SH-S5X-OTHER', policy: 'DENY', qty: 8 }])
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result.rows.find(r => r.productId === f.children.S)).toMatchObject({ sku: 'SH-S5X-S', outcome: 'DONE' })
+    expect(store.sets).toEqual([expect.objectContaining({ inventoryItemId: 'gid://shopify/InventoryItem/360', quantity: 0, changeFromQuantity: 4 })])
+    expect(store.qty.get('37')).toBe(8)
+  }))
+
+  it('own SKU confirmed (liveChannelSku) and no stored variant id: the variant is found by that SKU, never the product SKU', () => scoped(async () => {
+    const f = await family('SH-S5L', ['S'])
+    await listing(f.root, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9303', platformAttributes: { status: 'ACTIVE' } })
+    await listing(f.children.S, 'SHOPIFY', 'GLOBAL', ids.shopify, { externalListingId: '9303', liveChannelSku: 'SH-S5L-LIVE', channelSku: 'SH-S5L-WANT',
+      platformAttributes: { nexusFamilyId: 'fam', inventoryLocationId: 'gid://shopify/Location/1' } })
+    const preview = await previewListingAction(f.root, 'pause', shopifyScope(), USER)
+    // Shopify also holds a variant under the product SKU: it is not this listing's and is never touched.
+    const store = shopifyStore('9303', [{ id: '33', sku: 'SH-S5L-S', policy: 'DENY', qty: 9 }, { id: '34', sku: 'SH-S5L-LIVE', policy: 'DENY', qty: 2 }])
+    const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+    expect(result.rows.find(r => r.productId === f.children.S)).toMatchObject({ sku: 'SH-S5L-LIVE', outcome: 'DONE' })
+    expect(store.sets).toEqual([expect.objectContaining({ inventoryItemId: 'gid://shopify/InventoryItem/340', quantity: 0, changeFromQuantity: 2 })])
+    expect(store.qty.get('33')).toBe(9)
+  }))
+
+  it('an extra listing whose own SKU disagrees with the native one is not refused: neither is what Shopify holds (the product SKU)', () => scoped(async () => {
+    // One product (no variations): its extra listing's own SKU belongs to it (the alias's main row).
+    const f = await family('SH-S5C', [])
+    const alias = await prisma.productListingAlias.create({ data: { productId: f.root, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: ids.shopify, label: 'Second', position: 1, sku: 'SH-S5C-AL' } })
+    await listing(f.root, 'SHOPIFY', 'GLOBAL', ids.shopify, { aliasKey: alias.id, aliasId: alias.id, externalListingId: '9304',
+      platformAttributes: { ...variantAttrs('9304', '35'), sku: 'SH-S5C-NATIVE' } })
+    const scope = { scope: { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: ids.shopify, aliasKey: alias.id } }
+    const pause = await previewListingAction(f.root, 'pause', scope, USER)
+    expect(pause.rows.find(r => r.productId === f.root)).toMatchObject({ plan: 'send' })
+    const store = shopifyStore('9304', [{ id: '35', sku: 'SH-S5C', policy: 'DENY', qty: 3 }])
+    const result = await runListingAction(f.root, 'pause', { previewId: pause.previewId }, USER)
+    expect(result.rows.find(r => r.productId === f.root)).toMatchObject({ sku: 'SH-S5C', outcome: 'DONE' })
+    expect(store.sets).toEqual([expect.objectContaining({ quantity: 0, changeFromQuantity: 3 })])
+  }))
+
+  it('Etsy: the row names the SKU Etsy holds (its own, confirmed); the listing state change itself names none', () => scoped(async () => {
+    const f = await family('ETSY-S5', ['S'])
+    await listing(f.root, 'ETSY', 'GLOBAL', ids.etsy, { externalListingId: '323456789' })
+    await listing(f.children.S, 'ETSY', 'GLOBAL', ids.etsy, { externalListingId: '323456789', liveChannelSku: 'ETSY-S5-OWN' })
+    const preview = await previewListingAction(f.root, 'pause', etsyScope(), USER)
+    vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', 'true'); vi.stubEnv('ETSY_PUBLISH_MODE', 'live')
+    try {
+      fixture.etsy.mockReset().mockResolvedValue({ sent: true })
+      const result = await runListingAction(f.root, 'pause', { previewId: preview.previewId }, USER)
+      expect(result.rows.find(r => r.productId === f.children.S)).toMatchObject({ sku: 'ETSY-S5-OWN', outcome: 'DONE' })
+      expect(fixture.etsy).toHaveBeenCalledExactlyOnceWith({ accountId: ids.etsy, listingId: '323456789', change: { state: 'inactive' } })
+    } finally { vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', 'false') }
+  }))
 })

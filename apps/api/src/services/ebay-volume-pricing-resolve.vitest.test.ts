@@ -69,3 +69,29 @@ describe('VP.3 — passesFilters', () => {
     expect(passesFilters(base(), {})).not.toBeNull()
   })
 })
+
+/**
+ * S4 (per-channel SKU) — the resolved list names each product by the SKU eBay holds for its ACTIVE listing on this
+ * marketplace: the product SKU (parity), or the listing's own confirmed SKU. A wanted SKU eBay has not confirmed is not
+ * named (eBay never received it). The push sends this list as eBay's inventory references.
+ */
+describe('S4 — resolveSkusByRule names the SKU eBay holds', async () => {
+  const { resolveSkusByRule } = await import('./ebay-volume-pricing-resolve.service.js')
+  const listing = (over: Record<string, unknown> = {}) => ({ price: null, productId: 'p', aliasKey: '', channelSku: null, liveChannelSku: null,
+    listingStatus: 'ACTIVE', isPublished: true, externalListingId: '123', ...over })
+  const product = (sku: string, over: Record<string, unknown> = {}) => ({ sku, basePrice: 50, brand: 'Xavia', costPrice: null, weightedAvgCostCents: null, channelListings: [listing(over)] })
+  const db = (products: unknown[]) => ({ product: { findMany: async () => products }, categoryClosure: { findMany: async () => [] } }) as never
+
+  it('parity: no own SKU → the product SKU; an own confirmed SKU → that SKU; a wanted-only SKU → the product SKU', async () => {
+    const result = await resolveSkusByRule(db([product('VP-PLAIN'), product('VP-OWN', { liveChannelSku: 'VP-OWN-EB', channelSku: 'VP-OWN-EB' }), product('VP-WANT', { channelSku: 'VP-WANT-EB' })]),
+      { marketplace: 'IT' })
+    expect(result.skus).toEqual(['VP-OWN-EB', 'VP-PLAIN', 'VP-WANT'])
+  })
+
+  it('the listing read asks for the SKU facts of the ACTIVE eBay listing on this marketplace', async () => {
+    let args: any = null
+    await resolveSkusByRule({ product: { findMany: async (a: unknown) => { args = a; return [] } }, categoryClosure: { findMany: async () => [] } } as never, { marketplace: 'IT' })
+    expect(args.select.channelListings).toMatchObject({ where: { channel: 'EBAY', marketplace: 'IT', listingStatus: 'ACTIVE' },
+      select: { channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true } })
+  })
+})

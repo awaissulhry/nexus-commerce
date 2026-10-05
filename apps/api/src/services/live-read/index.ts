@@ -17,6 +17,8 @@ import { readEbayInventoryListing } from './ebay-inventory.js'
 import { readEbayTradingListing } from './ebay-trading.js'
 import { readAmazonListing, type AmazonListingRead } from './amazon.js'
 import type { ServerLiveRead } from './types.js'
+import { reportedSkuOf } from '../listings/reported-sku.js'
+import type { ChannelSkuAnswer } from '../listings/channel-sku.pure.js'
 
 export interface LiveReadScope { channel: string; marketplace: string; accountId: string; aliasKey?: string }
 const WINDOW_MS = 30_000
@@ -34,15 +36,24 @@ async function readNow(productId: string, scope: LiveReadScope): Promise<ServerL
   const d = await resolveWorkspaceDestination({ productId, channel: scope.channel, marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: scope.aliasKey })
   const products = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ id: d.familyId }, { parentId: d.familyId }] }, select: { id: true, sku: true, parentId: true } })
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: scope.channel, marketplace: scope.marketplace,
-    channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' }, include: { offers: true } })
+    channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' }, include: { offers: true, alias: { select: { sku: true, productId: true } } } })
   const parent = products.find(p => p.id === d.familyId)!
   const children = products.filter(p => p.parentId === d.familyId && listings.some(l => l.productId === p.id))
   const destination = { productId: d.familyId, channel: scope.channel as LiveReadChannel, marketplace: scope.marketplace, accountId: d.accountId, aliasKey: d.aliasKey ?? '' }
+  // S7 — the SKU the channel knows each product's listing here by: its own SKU (the Amazon rule reads the one active
+  // offer, then the stored identity, as Publish does), else the product SKU. No single SKU: not read, said plainly.
+  const skuAnswers = new Map<string, ChannelSkuAnswer>(products.map(p => {
+    const listing = listings.find(l => l.productId === p.id)
+    return [p.id, listing ? reportedSkuOf({ ...listing, channel: scope.channel }, p.sku) : { sku: p.sku, source: 'product' }]
+  }))
+  const unclear = [parent, ...children].map(p => skuAnswers.get(p.id)?.conflict).find(Boolean)
+  const skuOf = (p: { id: string; sku: string }) => skuAnswers.get(p.id)?.sku ?? p.sku
   if (scope.channel === 'EBAY') {
     const itemId = listings.find(l => l.productId === parent.id)?.externalListingId ?? listings.find(l => l.externalListingId)?.externalListingId
     if (!itemId) return notReadable(destination, 'This listing is not on eBay yet.')
+    if (unclear) return notReadable(destination, unclear.sentence)
     const reads = ebayInventoryReads(d.accountId, scope.marketplace, itemId)
-    const expectedSkus = children.map(p => p.sku)
+    const expectedSkus = children.map(skuOf)
     const inventory = listings.some(l => Object.keys(object(object(l.platformAttributes).__offerIds)).length > 0)
     // The Inventory read finds the group by the family's parent SKU — the main listing's group, never an alias's.
     if (inventory && d.aliasKey) return notReadable(destination, 'This alias uses the eBay Inventory API. Nexus reads Inventory listings by the family\'s SKUs, which belong to the main listing, so it cannot read this alias.')
@@ -51,17 +62,14 @@ async function readNow(productId: string, scope: LiveReadScope): Promise<ServerL
       : readEbayTradingListing({ ...destination, expectedSkus, itemId }, { getItem: reads.getItem })
   }
   if (scope.channel === 'AMAZON') {
+    if (unclear) return notReadable(destination, unclear.sentence)
     const marketplaceId = await configuredAmazonMarketplaceId(scope.marketplace)
     if (!marketplaceId) return notReadable(destination, `No Amazon marketplace is configured for ${scope.marketplace}.`)
     const [language] = await marketLanguages('AMAZON', scope.marketplace)
     const sellerId = await getAmazonSellerId(d.accountId)
     const client = new AmazonSpApiClient({ id: d.accountId, region: await getAmazonRegion(d.accountId) })
-    // The seller SKU: a single active offer's SKU, else the product SKU (the publish builder refuses real ambiguity).
-    const sellerSku = (productId: string, fallback: string) => {
-      const offers = [...new Set(listings.filter(l => l.productId === productId).flatMap(l => l.offers.filter(o => o.isActive).map(o => o.sku)))]
-      return offers.length === 1 ? offers[0] : fallback
-    }
-    return readAmazonListing({ ...destination, expectedSkus: children.map(p => sellerSku(p.id, p.sku)), parentSku: sellerSku(parent.id, parent.sku), marketplaceId,
+    // The seller SKU: the listing's own (S7, `reportedSkuOf` above), else the product SKU.
+    return readAmazonListing({ ...destination, expectedSkus: children.map(skuOf), parentSku: skuOf(parent), marketplaceId,
       languageTag: language ? languageTag(language, scope.marketplace) : '' }, {
       async listing(sku): Promise<AmazonListingRead> {
         const r = await client.getListingsItem({ sellerId, sku, marketplaceId, includedData: ['summaries', 'attributes', 'offers', 'fulfillmentAvailability'] })

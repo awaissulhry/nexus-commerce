@@ -38,6 +38,7 @@ import {
   releaseOpenOrder,
   resolveLocationByCode,
 } from './stock-level.service.js'
+import { amazonAccountIdFor, amazonMarketCode, amazonSkusInMarket, type AmazonSkuInMarket } from './listings/reported-sku.js'
 
 // Minimal slice of the SP-API client the MCF adapter needs — keeps the adapter
 // decoupled from the full client surface and lets tests pass a stub.
@@ -154,9 +155,9 @@ export async function createMCFShipment(
   }
 
   // Resolve item productIds + reserve at AMAZON-EU-FBA.
-  const itemsToShip = (args.items && args.items.length > 0
+  const itemsToShip: Array<{ sku: string; quantity: number; productId?: string | null }> = (args.items && args.items.length > 0
     ? args.items
-    : order.items.map((it) => ({ sku: it.sku, quantity: it.quantity }))
+    : order.items.map((it) => ({ sku: it.sku, quantity: it.quantity, productId: it.productId }))
   ).filter((it) => it.quantity > 0)
   if (itemsToShip.length === 0) {
     throw new Error('createMCFShipment: no items to ship')
@@ -167,11 +168,38 @@ export async function createMCFShipment(
     select: { id: true, sku: true },
   })
   const productBySku = new Map(products.map((p) => [p.sku, p]))
+  // S7 — an order line whose SKU is a channel's own SKU (not a product SKU) is named by the line's product.
+  const lineProductIds = [...new Set(itemsToShip.filter((it) => !productBySku.has(it.sku) && it.productId).map((it) => it.productId as string))]
+  const productById = new Map((lineProductIds.length ? await prisma.product.findMany({
+    where: { id: { in: lineProductIds } },
+    select: { id: true, sku: true },
+  }) : []).map((p) => [p.id, p]))
+  const productOf = (it: { sku: string; productId?: string | null }) => productBySku.get(it.sku) ?? (it.productId ? productById.get(it.productId) : undefined)
+
+  // S7 — Amazon is told the seller SKU it holds the item under in the fulfilling market: the product's Amazon listing's
+  // own (live) SKU there; no Amazon listing there → the product's master SKU (Product.sku). Never the source order line's
+  // SKU as such (an eBay or Shopify SKU names nothing at Amazon, or another item). Refused, before anything is held, only
+  // when the SKU cannot be told: the listing has no single seller SKU, or the market is unknown.
+  const marketplaceId = args.marketplaceId ?? DEFAULT_MARKETPLACE
+  const known = [...new Map(itemsToShip.map(productOf).filter((p): p is { id: string; sku: string } => !!p).map((p) => [p.id, p])).values()]
+  const market = known.length ? await amazonMarketCode(prisma, marketplaceId) : null
+  if (known.length && !market) {
+    throw new Error(`createMCFShipment: Amazon marketplace ${marketplaceId} is not a market Nexus knows, so the seller SKUs cannot be checked. Nothing was sent.`)
+  }
+  const amazonSkus = market ? await amazonSkusInMarket(prisma, { accountId: await amazonAccountIdFor(), marketplace: market, products: known }) : new Map<string, AmazonSkuInMarket>()
+  const sellerSkuOf = new Map<string, string>()
+  for (const p of known) {
+    const amazon = amazonSkus.get(p.id)
+    if (amazon && amazon.ok === false && amazon.code === 'CONFLICT') {
+      throw new Error(`createMCFShipment: ${amazon.sentence} Multi-Channel Fulfilment could ship the wrong item, so nothing was sent.`)
+    }
+    sellerSkuOf.set(p.id, amazon && amazon.ok === true ? amazon.sku : p.sku)
+  }
 
   const reservations: string[] = []
   try {
     const lines = itemsToShip.map((it) => {
-      const p = productBySku.get(it.sku)
+      const p = productOf(it)
       if (!p) throw new Error(`createMCFShipment: unknown SKU ${it.sku}`)
       return { productId: p.id, quantity: it.quantity }
     })
@@ -195,7 +223,6 @@ export async function createMCFShipment(
   // Generate idempotency key (operator-owned). Re-issued requests
   // with the same key get the same shipment back from Amazon.
   const sellerFulfillmentOrderId = `MCF-${orderId.slice(-12)}-${Date.now().toString(36)}`
-  const marketplaceId = args.marketplaceId ?? DEFAULT_MARKETPLACE
   const shippingSpeed = args.shippingSpeed ?? 'Standard'
 
   // Address from Order.shippingAddress (JSON). Defensive fallback —
@@ -228,7 +255,7 @@ export async function createMCFShipment(
       shippingSpeedCategory: shippingSpeed,
       destinationAddress: destination,
       items: itemsToShip.map((it, idx) => ({
-        sellerSku: it.sku,
+        sellerSku: sellerSkuOf.get(productOf(it)!.id)!,
         sellerFulfillmentOrderItemId: `${orderId.slice(-8)}-${idx}`,
         quantity: it.quantity,
       })),

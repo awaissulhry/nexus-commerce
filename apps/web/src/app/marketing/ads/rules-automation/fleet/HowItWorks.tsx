@@ -80,7 +80,7 @@ export function HowItWorks() {
             <strong>The rhythm.</strong> Every night at 04:45 UTC the{' '}
             <Term k="sweep">sweep</Term> runs the workers on fresh data. Every Monday at 05:15
             UTC the <Term k="council">council</Term> runs the whole pipeline — workers, director,
-            critic — and anything that survives lands in your approval inbox.
+            critic — and anything that survives lands on the Approvals page.
           </p>
           <p>
             <strong>The safety stack.</strong> Code does the math; the model does the judgment.

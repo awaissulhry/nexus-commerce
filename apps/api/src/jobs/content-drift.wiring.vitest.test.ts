@@ -88,3 +88,26 @@ it('🔴 R-LX-6 through the real resolver: a DE listing with no German text (and
   const built = await scoped(() => amazonContentOurs(deListing))
   expect((built as any).ours.content).toEqual({})
 })
+
+it('S7 — Amazon is read under the SKU it holds the listing by: parity (product SKU), an own SKU; no single SKU is a reason, never a guess', async () => {
+  // Parity: the fixture listing has no SKU of its own.
+  expect(((await scoped(() => amazonContentOurs(itListing))) as any).ours.sku).toBe('wiring-a')
+  const ids = await scoped(async () => {
+    const make = async (sku: string, data: Record<string, unknown>, offers: Array<[string, 'FBA' | 'FBM']> = []) => {
+      const product = await prisma.product.create({ data: { sku, name: sku, basePrice: 10, productType: 'COAT', fulfillmentMethod: 'FBM' } as never })
+      const listing = await prisma.channelListing.create({ data: { productId: product.id, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU',
+        channelConnectionId: account, listingStatus: 'ACTIVE', isPublished: true, ...data } })
+      for (const [offerSku, method] of offers) await prisma.offer.create({ data: { channelListingId: listing.id, sku: offerSku, fulfillmentMethod: method, isActive: true } })
+      return listing.id
+    }
+    return {
+      own: await make('wiring-own', { externalListingId: 'B0WIRING02', liveChannelSku: 'WIRING-OWN-IT' }),
+      twoOffers: await make('wiring-two', { externalListingId: 'B0WIRING03' }, [['WIRING-TWO-A', 'FBA'], ['WIRING-TWO-B', 'FBM']]),
+      disagree: await make('wiring-disagree', { externalListingId: 'B0WIRING04', platformAttributes: { seller_sku: 'WIRING-ATTR' } }, [['WIRING-OFFER', 'FBM']]),
+    }
+  })
+  expect(((await scoped(() => amazonContentOurs(ids.own))) as any).ours.sku).toBe('WIRING-OWN-IT')
+  expect(await scoped(() => amazonContentOurs(ids.twoOffers))).toEqual({ ok: false, reason: 'several active seller SKUs — the builder would refuse' })
+  expect(await scoped(() => amazonContentOurs(ids.disagree))).toEqual({ ok: false,
+    reason: 'no single seller SKU — wiring-disagree: conflicting Amazon seller SKUs. Reconcile this listing\'s identity before publishing.' })
+})

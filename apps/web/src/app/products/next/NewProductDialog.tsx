@@ -142,7 +142,8 @@ export function NewProductDialog({ open, onClose }: { open: boolean; onClose: ()
           <Input ref={skuRef} data-autofocus value={draft.sku} onChange={(e) => update({ sku: e.target.value })} disabled={busy}
             autoComplete="off" autoCapitalize="characters" spellCheck={false} />
         </Field>
-        <Field label="Name" required error={errors.name}>
+        {/* W3-6 — the product's name is its Title everywhere (the sheet, every channel, the catalogue). */}
+        <Field label="Title" required error={errors.name}>
           <Input ref={nameRef} value={draft.name} onChange={(e) => update({ name: e.target.value })} disabled={busy} autoComplete="off" />
         </Field>
         <Field label="Type" hint={KIND_HINT[draft.kind]} error={errors.kind}>

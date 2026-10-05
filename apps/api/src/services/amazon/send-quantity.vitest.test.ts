@@ -3,10 +3,20 @@
  * (`outbound-sync.service.ts` `syncToAmazon`, ~1160–1335) sends for the same listing: Publish used to send 7 where the
  * job sent 10 (pin 10, buffer 3, routed 50), and counted stock in a warehouse that does not serve the market.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// S3's loader case only: the product's ledger (50 routed to DE) and no channel policy. Every other case passes its ledger.
+vi.mock('../stock-pool/sync-ledgers.js', async (original) => {
+  const actual = await original<typeof import('../stock-pool/sync-ledgers.js')>()
+  const { syncLedgerOf: of } = await import('../sync-control-core.js')
+  return { ...actual, loadSyncLedgers: async (_db: unknown, ids: string[]) => new Map(ids.map(id => [id, {
+    productId: id, source: { kind: 'own' }, ledger: of([{ locationCode: 'WH-DE', available: 50, syncRoutes: ['AMAZON:DE'] }]),
+    quantity: 50, available: 50, uncountedIsZero: false, fbaBucket: 0 }])) }
+})
+vi.mock('../sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
 import { syncLedgerOf } from '../sync-control-core.js'
 import type { ProductLedger } from '../stock-pool/sync-ledgers.js'
-import { amazonSendQuantity, routedSendCeiling, type SendQuantityInput } from './send-quantity.js'
+import { amazonSendQuantity, loadAmazonSendQuantity, readEuIntentRows, routedSendCeiling, type SendQuantityInput } from './send-quantity.js'
 
 const ledger = (rows: Array<{ locationCode: string; available: number; syncRoutes: string[] }>, over: Partial<ProductLedger> = {}): ProductLedger => ({
   productId: 'p1', source: { kind: 'own' }, ledger: syncLedgerOf(rows), quantity: rows.reduce((s, r) => s + r.available, 0),
@@ -108,5 +118,62 @@ describe('the routed ceiling', () => {
       { locationCode: 'WH-DE', available: 40, syncRoutes: ['AMAZON:DE'] },
     ]), { channel: 'AMAZON', channelLabel: 'Amazon', marketplace: 'IT', sourceLocationCodes: [], stockBuffer: 2 })
     expect(c).toEqual({ available: 13, routedAvailable: 15, locationCodes: ['WH-IT', 'WH-ALL'], refusal: null })
+  })
+})
+
+/**
+ * S3 (per-channel SKU) — the EU sibling read is per seller SKU: Amazon keeps one EU quantity per seller SKU, so a
+ * market selling the product under another SKU holds another quantity. A fake reader (the rows the read selects).
+ */
+describe('S3 — the EU sibling read, per seller SKU', () => {
+  const LIVE = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0TEST' }
+  const sib = (marketplace: string, over: Record<string, unknown> = {}) => ({
+    marketplace, followMasterQuantity: true, quantityOverride: null, quantity: 5, syncPaused: false, fulfillmentMethod: 'FBM',
+    aliasKey: '', channelSku: null, liveChannelSku: null, platformAttributes: {}, flatFileSnapshot: null, offers: [], product: { sku: 'SKU-1' }, ...LIVE, ...over,
+  })
+  const reader = (rows: unknown[]) => ({ channelListing: { findMany: async () => rows } }) as never
+  const markets = (rows: Array<{ marketplace: string }>) => rows.map(r => r.marketplace)
+
+  it('parity: no SKU given → every row, as before', async () => {
+    const rows = [sib('IT'), sib('DE', { liveChannelSku: 'OWN-DE' })]
+    expect(markets(await readEuIntentRows(reader(rows), 'p1'))).toEqual(['IT', 'DE'])
+  })
+
+  it('parity: rows with no SKU of their own all sell under the product SKU', async () => {
+    expect(markets(await readEuIntentRows(reader([sib('IT'), sib('DE'), sib('FR')]), 'p1', 'SKU-1'))).toEqual(['IT', 'DE', 'FR'])
+  })
+
+  it('a row under another seller SKU is left out; the rows under that SKU are its own group', async () => {
+    const rows = [sib('IT'), sib('DE', { liveChannelSku: 'OWN-DE' }), sib('FR', { offers: [{ sku: 'OWN-DE', isActive: true, fulfillmentMethod: 'FBM' }] })]
+    expect(markets(await readEuIntentRows(reader(rows), 'p1', 'SKU-1'))).toEqual(['IT'])
+    expect(markets(await readEuIntentRows(reader(rows), 'p1', 'OWN-DE'))).toEqual(['DE', 'FR'])
+  })
+
+  it('a row whose SKU cannot be told is kept (fail closed)', async () => {
+    const rows = [sib('IT'), sib('DE', { platformAttributes: { sellerSku: 'X-1' }, flatFileSnapshot: { item_sku: 'X-2' } })]
+    expect(markets(await readEuIntentRows(reader(rows), 'p1', 'SKU-1'))).toEqual(['IT', 'DE'])
+  })
+
+  it('the shape the guard reads is unchanged', async () => {
+    expect(await readEuIntentRows(reader([sib('DE', { followMasterQuantity: false, quantityOverride: 0, fulfillmentMethod: 'FBA' })]), 'p1', 'SKU-1'))
+      .toEqual([{ marketplace: 'DE', followMasterQuantity: false, quantityOverride: 0, quantity: 5, syncPaused: false, isFba: true }])
+  })
+
+  it('loadAmazonSendQuantity reads the guard under the listing\'s own seller SKU and names it', async () => {
+    const own = { id: 'l-de', productId: 'p1', marketplace: 'DE', quantity: 4, followMasterQuantity: false, stockBuffer: 0, sourceLocationCodes: [],
+      fulfillmentMethod: 'FBM', platformAttributes: {}, syncPaused: false, offerClosedAt: null, channelConnectionId: 'amz', aliasKey: '',
+      channelSku: 'OWN-DE', liveChannelSku: 'OWN-DE', flatFileSnapshot: null, offers: [], ...LIVE, product: { id: 'p1', sku: 'SKU-1', fulfillmentMethod: 'FBM' } }
+    const db = (siblings: unknown[]) => ({
+      channelListing: { findUnique: async () => own, findMany: async () => siblings },
+      stockLevel: { aggregate: async () => ({ _sum: { quantity: 0 } }) },
+      offer: { findFirst: async () => null },
+    }) as never
+    // IT pinned at 0 under the product SKU is another quantity: no conflict for OWN-DE.
+    const apart = await loadAmazonSendQuantity(db([sib('IT', { followMasterQuantity: false, quantityOverride: 0 }), sib('DE', { liveChannelSku: 'OWN-DE', followMasterQuantity: false, quantityOverride: 4 })]), { listingId: 'l-de' })
+    expect(apart.code).not.toBe('EU_SHARED_QTY_CONFLICT')
+    // FR pinned at 0 under OWN-DE fights DE pinned at 4: refused, by the listing's own SKU.
+    const together = await loadAmazonSendQuantity(db([sib('DE', { liveChannelSku: 'OWN-DE', followMasterQuantity: false, quantityOverride: 4 }), sib('FR', { liveChannelSku: 'OWN-DE', followMasterQuantity: false, quantityOverride: 0 })]), { listingId: 'l-de' })
+    expect(together).toMatchObject({ code: 'EU_SHARED_QTY_CONFLICT' })
+    expect(together.refusal).toMatch(/^EU shared-quantity conflict for OWN-DE: /)
   })
 })

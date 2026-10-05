@@ -13,6 +13,8 @@
  *   number: every row of the item on this destination goes back to the inert draft shape and reads Not listed until its
  *   Status column lists it again (a new item number). The old item number stays on each row's audit record.
  * Every call goes through `callTradingApi` → the channel gateway (account state, rate bucket, ledger, publish mode).
+ * S4 (per-channel SKU) — a variation is named by the SKU eBay holds for its row (`ActionListing.sku`, `listingSendSku`):
+ * the product SKU unless the row has its own confirmed SKU.
  */
 import { deleteDoneSentence } from '@nexus/shared/listing-actions'
 import prisma from '../../../db.js'

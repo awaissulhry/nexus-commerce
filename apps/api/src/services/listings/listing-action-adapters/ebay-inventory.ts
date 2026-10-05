@@ -12,6 +12,8 @@
  *   shape (their saved offer id for this marketplace is forgotten) and read Not listed until their Status column lists
  *   them again (Active or Inactive, then Publish).
  * Every call goes through `ebaySend` → the channel gateway (account token, state, rate bucket, ledger, publish mode).
+ * S4 (per-channel SKU) — every SKU named here is the SKU eBay holds for the row (`ActionListing.sku`, `listingSendSku`):
+ * the product SKU unless the row has its own confirmed SKU.
  */
 import { deleteDoneSentence } from '@nexus/shared/listing-actions'
 import prisma from '../../../db.js'
@@ -105,8 +107,11 @@ export const ebayInventoryListingActions: ListingActionAdapter = {
     let res: Response
     try {
       if (isGroup) {
+        // S4 (per-channel SKU) — the group key eBay holds: the main row's SKU (`ActionListing.sku`, what eBay holds for
+        // it), which is the family's product SKU unless that row has its own.
+        const groupKey = family.find(row => row.isParent)?.sku ?? ctx.familySku
         res = await send(`/sell/inventory/v1/offer/${action === 'relist' ? 'publish_by_inventory_item_group' : 'withdraw_by_inventory_item_group'}`, {
-          method: 'POST', body: JSON.stringify({ inventoryItemGroupKey: ctx.familySku, marketplaceId }) })
+          method: 'POST', body: JSON.stringify({ inventoryItemGroupKey: groupKey, marketplaceId }) })
       } else {
         const row = targets[0] ?? family[0]
         const offerId = row ? await offerIdOf(row, ctx, api, marketplaceId, headers) : null

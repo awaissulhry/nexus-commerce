@@ -156,6 +156,8 @@ export async function liftHolds(targets: ActionListing[], ctx: ActionContext): P
  * After a confirmed Delete: the rows go back to the inert draft shape — DRAFT, not published, no channel id, stock sync
  * held (`draftListingFields`, pim/draft-listing.service.ts; `STILL_DRAFT_LISTING`, push-lock.ts) — on this exact
  * coordinate only, and their waiting pushes are cancelled. `extra` adds per-row fields (dead channel ids to forget).
+ * S3 (per-channel SKU) — the channel no longer holds a SKU for the row, so `liveChannelSku` is cleared; the row's own
+ * wanted SKU (`channelSku`) stays: listing it again sends that SKU.
  */
 export async function returnToDraft(ctx: ActionContext, rows: ActionListing[], extra?: (row: ActionListing) => Record<string, unknown>) {
   if (!rows.length) return
@@ -164,7 +166,7 @@ export async function returnToDraft(ctx: ActionContext, rows: ActionListing[], e
       where: { id: row.id, ...coordinate(ctx) },
       data: {
         listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: true,
-        offerActive: true, offerClosedAt: null, offerClosedBy: null, offerCloseReason: null,
+        offerActive: true, offerClosedAt: null, offerClosedBy: null, offerCloseReason: null, liveChannelSku: null,
         version: { increment: 1 },
         ...(extra?.(row) ?? {}),
       } as never,

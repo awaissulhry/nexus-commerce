@@ -60,6 +60,7 @@ import { FBA_INBOUND_TOOLS } from './tools/fba-inbound.tools.js'
 import { CHANNEL_CONTENT_TOOLS } from './tools/channel-content.tools.js'
 import { LISTING_STOCK_TOOLS } from './tools/listing-stock.tools.js'
 import { LISTING_CLOSE_TOOLS } from './tools/listing-close.tools.js'
+import { LISTING_LIFECYCLE_TOOLS } from './tools/listing-lifecycle.tools.js'
 import { PHOTO_TOOLS } from './tools/photos.tools.js'
 import { DATA_TRANSFER_TOOLS } from './tools/data-transfer.tools.js'
 import { EBAY_CATEGORY_TOOLS } from './tools/ebay-category.tools.js'
@@ -165,6 +166,8 @@ const ALL: AgentTool[] = [
   ...LISTING_STOCK_TOOLS,
   // MCP full control L9 — reversible close and reopen of live listings.
   ...LISTING_CLOSE_TOOLS,
+  // MCP full control, phase 3 (T1) — the product page's End, Relist and Delete, each approved by a person in Nexus.
+  ...LISTING_LIFECYCLE_TOOLS,
   // MCP full control L10/L11 — a family's photo plan.
   ...PHOTO_TOOLS,
   // MCP full control (09 §4, P-3) — catalog rows into the conversation, money filtered. The import half (P9) is on hold.

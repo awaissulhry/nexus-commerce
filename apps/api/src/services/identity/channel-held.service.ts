@@ -17,7 +17,7 @@
 import prisma from '../../db.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
-import { sellerSkuForClaim } from '../listing-claim-identity.js'
+import { identitySellerSku } from '../listing-claim-identity.js'
 import { shortShopifyId } from './identity-read.service.js'
 
 export type HeldChannel = 'EBAY' | 'AMAZON' | 'SHOPIFY' | 'ETSY'
@@ -79,18 +79,23 @@ type ListingRow = {
   marketplace: string
   externalListingId: string | null
   platformAttributes: unknown
+  channelSku: string | null
+  liveChannelSku: string | null
   product: { sku: string; parentId: string | null }
   offers: Array<{ sku: string; fulfillmentMethod: string; isActive: boolean }>
 }
 
-/** The listing of this account that carries an id: the one whose seller SKU is the channel's, else the family's own. */
+/**
+ * The listing of this account that carries an id: the one whose seller SKU is the channel's, else the family's own.
+ * The seller SKU is `identitySellerSku` (S8: the listing's own SKU first), the same order as the audit's #12 comparison.
+ */
 function pick(candidates: ListingRow[], item: HeldItem): ListingRow | null {
   if (!candidates.length) return null
   const inMarket = item.marketplace ? candidates.filter((c) => c.marketplace === item.marketplace) : candidates
   const pool = inMarket.length ? inMarket : candidates
   const sku = item.sellerSku?.trim()
   if (sku) {
-    const bySku = pool.find((c) => sellerSkuForClaim({ product: c.product, offers: c.offers.map((o) => ({ ...o, fulfillmentMethod: String(o.fulfillmentMethod) })) }) === sku)
+    const bySku = pool.find((c) => identitySellerSku(c) === sku)
     if (bySku) return bySku
   }
   return pool.find((c) => !c.product.parentId || c.product.parentId === c.productId) ?? pool[0]
@@ -128,6 +133,7 @@ export async function sweepAccount(connectionId: string, reader: HeldReader, now
     where: { channelConnectionId: connectionId, channel, product: { deletedAt: null } },
     select: {
       id: true, productId: true, marketplace: true, externalListingId: true, platformAttributes: true,
+      channelSku: true, liveChannelSku: true,
       product: { select: { sku: true, parentId: true } },
       offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
     },

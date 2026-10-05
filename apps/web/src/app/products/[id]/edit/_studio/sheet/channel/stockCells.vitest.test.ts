@@ -159,6 +159,23 @@ describe('patchStockRows — one Matrix read, only the rows that changed', () =>
     expect(a.listing!.externalListingId).toBe('B0DE00000X')
     expect(b.stock!.cells!.version).toBe(7)
   })
+  it('eBay (Item ID control): a moved Item ID refreshes its cell only on a listing the Matrix reads selling or ended', () => {
+    const ebay = (state: 'listed' | 'closed' | 'ended' | 'draft' | 'error') => {
+      const r = row('v1', {
+        listing: { id: 'L-EB-1', version: 3, externalListingId: '520000000001', listingStatus: 'ACTIVE', isPublished: true },
+        values: { stock_mode: value('FOLLOW'), stock_qty: value(12), stock_buffer: value(2), listing_item_id: value('520000000001') },
+        stock: { key: 'EBAY:IT', marketKey: 'EBAY:IT', cells: cells({ listingId: 'L-EB-1' }), coordinate: EU },
+      } as never)
+      patchStockRows([r], readOf([{ id: 'v1', cells: { 'EBAY:IT': cells({ listingId: 'L-EB-1', listing: { state, externalId: '520000000002', detail: null, published: true } }) } }]))
+      return r
+    }
+    for (const state of ['listed', 'closed', 'ended'] as const) expect(ebay(state).values.listing_item_id.value).toBe('520000000002')
+    for (const state of ['draft', 'error'] as const) {
+      const r = ebay(state)
+      expect(r.values.listing_item_id.value).toBeNull()
+      expect(r.listing!.externalListingId).toBe('520000000002') // the cell then reads "Not confirmed" with the held id
+    }
+  })
   it('a held row stays held, and a skipped row is reported, not patched', () => {
     const held = row('v1', { stock: { key: 'AMAZON:EU', marketKey: 'AMAZON:DE', cells: null, coordinate: EU } } as never)
     const busy = row('v2', { n: 2 })
@@ -189,7 +206,7 @@ describe('commitStockCells — one row through the door', () => {
     expect(de1.stock!.cells!.version).toBe(8)
     expect(de1.stock!.cells!.sync!.mode).toBe('PINNED')
     expect(stockEditPending(de1)).toBe(false)
-    expect(onFamilyChanged).toHaveBeenCalledWith([de2], ['stock_mode', 'stock_qty', 'stock_buffer', 'listing_asin'])
+    expect(onFamilyChanged).toHaveBeenCalledWith([de2], ['stock_mode', 'stock_qty', 'stock_buffer', 'listing_asin', 'listing_item_id'])
     expect(onStored).toHaveBeenCalledWith({ patched: [de1], columns: ['stock_qty', 'stock_mode', 'stock_buffer', 'listing_asin'] })
     expect(d.announce).toHaveBeenCalledWith('root', [{ listingId: 'L-IT-1', productId: 'v1', version: 8 }, { listingId: 'L-DE-1', productId: 'v1', version: 4 }], ['quantityMode', 'quantity'])
     // The sheet's own echo: every listing the write moved is already known.

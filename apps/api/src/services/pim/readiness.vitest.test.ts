@@ -45,6 +45,19 @@ describe('optional list readiness', () => {
   })
 })
 
+// W3-2 — Amazon IT's list shows English names and keeps Amazon IT's words as accepted spellings: a stored English name, a
+// stored market word or the code all count as on the list; anything else is still reported.
+describe('Amazon in English — readiness accepts both words', () => {
+  const regulation = col({ key: 'supplier_declared_dg_hz_regulation', kind: 'select', mode: 'strict', options: ['other', 'waste'],
+    optionLabels: { other: 'Other', waste: 'Waste' }, optionAliases: { other: ['Altro'], waste: ['Rifiuti'] } })
+  it.each(['other', 'Other', 'Altro', 'Rifiuti'])('%s is on the list', (value) => {
+    expect(run([regulation], { supplier_declared_dg_hz_regulation: val(value) }).issues).toEqual([])
+  })
+  it('a word that is neither is still reported', () => {
+    expect(run([regulation], { supplier_declared_dg_hz_regulation: val('Plutonio') }).issues).toHaveLength(1)
+  })
+})
+
 describe('GTIN mod-10 — added by the delegation', () => {
   // 5012345678900 is a real, hand-verified valid EAN-13:
   //   odd  positions 5+1+3+5+7+9  = 30

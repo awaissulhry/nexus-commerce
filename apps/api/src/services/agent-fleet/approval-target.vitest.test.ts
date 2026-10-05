@@ -289,7 +289,7 @@ const CASES: Case[] = [
     },
     target: null, // the service names a plan by its first step
     first: { label: 'Set master price', from: null, to: '2 changes' },
-    changeCount: 3,
+    changeCount: 2, // two kinds = two lines; the 3 steps are the plan's own count
     summary: 'Autumn prices — 3 changes: 2 × Set master price, 1 × Apply product content. 2 of them reach a marketplace or a buyer.',
   },
   {

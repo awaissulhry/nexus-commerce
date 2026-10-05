@@ -170,3 +170,37 @@ describe('P1.4 — content and price', () => {
     expect(mutations()).toHaveLength(0)
   })
 })
+
+/**
+ * S5 (per-channel SKU) — the caller names the SKU Shopify holds for the listing (`row.sku`, from `listingSendSku`). The
+ * variant is still found by its stored ids first; only the SKU it must carry, and the SKU it is looked up by when no ids
+ * are stored, change. Without `row.sku`: the product SKU, exactly as before.
+ */
+describe('S5 — the listing\'s own SKU', () => {
+  it('stored ids: a variant carrying the listing\'s own SKU is written (the product SKU alone would refuse it)', async () => {
+    shop.variants[0].sku = 'SKU-1-SHOP'
+    await expect(syncShopifyLinkedListing(row('QUANTITY_UPDATE'), 'shop-A', { quantity: 5 })).rejects.toThrow(/variant for SKU-1 changed/)
+    expect(mutations()).toEqual([])
+    const message = await syncShopifyLinkedListing({ ...row('QUANTITY_UPDATE'), sku: 'SKU-1-SHOP' }, 'shop-A', { quantity: 5 })
+    expect(message).toBe('Shopify stock set and read back: SKU-1-SHOP 3 → 5.')
+    expect(shop.stock.get(`gid://shopify/InventoryItem/22@${LOC}`)).toBe(5)
+  })
+
+  it('stored ids: the variant must carry the listing\'s SKU — a variant holding the product SKU is refused for an own-SKU listing', async () => {
+    await expect(syncShopifyLinkedListing({ ...row('PRICE_UPDATE'), sku: 'SKU-1-SHOP' }, 'shop-A', { price: 12 })).rejects.toThrow(/variant for SKU-1-SHOP changed/)
+    expect(mutations()).toEqual([])
+    expect(shop.variants[0].price).toBe('10.00')
+  })
+
+  it('no stored ids: looked up by the listing\'s own SKU, never by the product SKU another variant holds', async () => {
+    shop.variants.push({ id: 'gid://shopify/ProductVariant/12', sku: 'SKU-1-SHOP', price: '10.00', product: { id: 'gid://shopify/Product/34' }, inventoryItem: { id: 'gid://shopify/InventoryItem/23' } })
+    await syncShopifyLinkedListing({ ...row('PRICE_UPDATE', { inventoryLocationId: LOC }), sku: 'SKU-1-SHOP' }, 'shop-A', { price: 12 })
+    expect(shop.variants.map(v => [v.sku, v.price])).toEqual([['SKU-1', '10.00'], ['SKU-1-SHOP', '12.00']])
+    expect(shop.ops.find(o => o.query.includes('NexusVariantBySku'))?.variables).toEqual({ q: 'sku:"SKU-1-SHOP"' })
+  })
+
+  it('an empty `sku` is not a SKU: the product SKU, as before', async () => {
+    await syncShopifyLinkedListing({ ...row('QUANTITY_UPDATE'), sku: '' }, 'shop-A', { quantity: 4 })
+    expect(shop.stock.get(`gid://shopify/InventoryItem/22@${LOC}`)).toBe(4)
+  })
+})

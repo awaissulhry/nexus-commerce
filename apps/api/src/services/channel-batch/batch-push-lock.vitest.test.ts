@@ -63,3 +63,33 @@ it('Amazon cross-account closure belt refuses even an unlocked selected row',asy
  s.closed.mockResolvedValue(new Set(['product|IT']))
  await expect(submitAmazonListingsBatch(amazon)).rejects.toThrow('PUSH_OFFER_CLOSED');expect(s.sp).not.toHaveBeenCalled();expect(s.send).not.toHaveBeenCalled()
 })
+
+// S3 (per-channel SKU) — an operation may name a listing's own seller SKU, which the push-lock read cannot find by
+// product SKU: the caller names the products, so their listings' locks still hold. Without them the read is as before.
+it('S3 — Amazon: the push-lock read takes the products the caller names, beside the SKUs (as before without them)',async()=>{
+ await submitAmazonListingsBatch(amazon)
+ expect(s.read).toHaveBeenCalledExactlyOnceWith({channel:'AMAZON',skus:['SKU'],allowAbsent:true})
+ vi.clearAllMocks();s.read.mockImplementation(async()=>s.controls);s.closed.mockResolvedValue(new Set())
+ await submitAmazonListingsBatch({...amazon,operations:[{type:'stock',sku:'SKU-OWN-DE',quantity:2}],productIds:['product']})
+ expect(s.read).toHaveBeenCalledExactlyOnceWith({channel:'AMAZON',skus:['SKU-OWN-DE'],productIds:['product'],allowAbsent:true})
+})
+it('S3 — Amazon: a held listing found through its product refuses an own-SKU operation',async()=>{
+ s.controls=[{syncPaused:true,productId:'product',marketplace:'IT'}]
+ await expect(submitAmazonListingsBatch({...amazon,operations:[{type:'stock',sku:'SKU-OWN-DE',quantity:2}],productIds:['product']})).rejects.toThrow('PUSH_SYNC_PAUSED')
+ expect(s.sp).not.toHaveBeenCalled();expect(s.send).not.toHaveBeenCalled()
+})
+
+// S4 (per-channel SKU) — an eBay operation may name a listing's own SKU, which the push-lock read cannot find by product
+// SKU: the caller names the listing, and its lock still holds. Without a listing the read is by SKU, as before.
+it('S4 — eBay: the push-lock read takes the listing the caller names (by SKU, as before, without one)',async()=>{
+ await submitEbayParallelBatch({connectionId:'fixture',maxRetries:0,operations:[{type:'stock',sku:'SKU',quantity:2}]})
+ expect(s.read).toHaveBeenCalledExactlyOnceWith({channel:'EBAY',skus:['SKU']})
+ s.read.mockClear()
+ await submitEbayParallelBatch({connectionId:'fixture',maxRetries:0,operations:[{type:'stock',sku:'SKU-OWN-IT',listingId:'listing-1',quantity:2}]})
+ expect(s.read).toHaveBeenCalledExactlyOnceWith({channel:'EBAY',listingIds:['listing-1']})
+})
+it('S4 — eBay: a held listing named by the caller refuses an own-SKU operation',async()=>{
+ s.controls=[{syncPaused:true}]
+ const r=await submitEbayParallelBatch({connectionId:'fixture',maxRetries:0,operations:[{type:'price',sku:'SKU-OWN-IT',listingId:'listing-1',offerId:'offer',currency:'EUR',value:'2'}]})
+ expect(r.results[0]).toMatchObject({sku:'SKU-OWN-IT',status:'failed',attempts:0});expect(r.results[0].errorMessage).toMatch(/^PUSH_SYNC_PAUSED/);expect(s.send).not.toHaveBeenCalled()
+})

@@ -208,6 +208,24 @@ describe('shopify-content', { timeout: 30_000 }, () => {
     expect(text).not.toMatch(/token-|shopifyWrite|writeField|contentAddress|"price"/)
   })
 
+  // W3-6 — the real sheet keys Shopify's vendor column by the Shared field it links to (`brand`) and heads it "Vendor"
+  // (was "Brand"); "Brand" and "Vendor" both still name it.
+  it('"Brand" and "Vendor" both name the vendor, keyed as the sheet keys it', async () => {
+    const asTheSheetKeysIt = (input: { productId: string }) => {
+      const sheet = shopifySheet(input)
+      const rekey = (key: string) => key === 'vendor' ? 'brand' : key
+      return { ...sheet, columns: sheet.columns.map(c => c.key === 'vendor' ? { ...c, key: 'brand', writeField: 'attr_brand' } : c),
+        rows: sheet.rows.map(row => ({ ...row, values: Object.fromEntries(Object.entries(row.values).map(([key, value]) => [rekey(key), value])) })) }
+    }
+    shop.sheet = asTheSheetKeysIt
+    try {
+      for (const name of ['Brand', 'Vendor']) {
+        const data = await read('shopify-content', { product: family.sku, fields: [name] })
+        expect(data.fields.map((f: Data) => f.field), name).toEqual(['vendor'])
+      }
+    } finally { shop.sheet = shopifySheet }
+  })
+
   it('a product with no Shopify listing is answered without reading the store', async () => {
     const calls = shop.sheetCalls.length
     expect(await preview({ product: 'TEST-SKU-T11-NOSHOP' }, 'shopify-content')).toEqual({ ok: false, error: 'TEST-SKU-T11-NOSHOP has no Shopify listing yet: create the listing first.' })

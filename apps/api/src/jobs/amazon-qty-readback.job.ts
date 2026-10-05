@@ -26,6 +26,9 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { CHANNEL_SKU_LISTING_SELECT } from '../services/listings/channel-sku.js'
+import type { ChannelSkuListing } from '../services/listings/channel-sku.pure.js'
+import { amazonAccountIdFor, onAccount, reportedSkuOf } from '../services/listings/reported-sku.js'
 
 const JOB_NAME = 'amazon-qty-readback'
 const MP_IDS: Record<string, string> = {
@@ -158,6 +161,35 @@ export function amazonDriftRecords(
   return out
 }
 
+/** One of our listings, as the report keys it. */
+export interface OurReadbackRow { sku: string; quantity: number | null; price: number | null; channelListingId: string; productId: string }
+
+/**
+ * S7 — our listings keyed by the seller SKU Amazon knows each one by (`reportedSkuOf`: the listing's own SKU, else the
+ * product SKU — so a listing without its own SKU is keyed exactly as before). Keyed by the product SKU, a product's
+ * extra listing (alias) in the same market collided with its main listing and one of them was compared and healed in
+ * the other's name. A listing with no single SKU, and every listing that shares its SKU with another, is left out
+ * with a sentence: a report line is never laid on a guessed listing.
+ */
+export function keyReadbackRows(listings: Array<ChannelSkuListing & {
+  id: string; productId: string; quantity: number | null; price: unknown; product?: { sku: string | null } | null
+}>): { rows: OurReadbackRow[]; skipped: Array<{ channelListingId: string; reason: string }> } {
+  const skipped: Array<{ channelListingId: string; reason: string }> = []
+  const bySku = new Map<string, OurReadbackRow[]>()
+  for (const l of listings) {
+    const answer = reportedSkuOf(l, l.product?.sku ?? '')
+    if (answer.sku === null) { skipped.push({ channelListingId: l.id, reason: answer.conflict.sentence }); continue }
+    const row = { sku: answer.sku, quantity: l.quantity, price: l.price == null ? null : Number(l.price), channelListingId: l.id, productId: l.productId }
+    bySku.set(answer.sku, [...(bySku.get(answer.sku) ?? []), row])
+  }
+  const rows: OurReadbackRow[] = []
+  for (const [sku, group] of bySku) {
+    if (group.length === 1) { rows.push(group[0]); continue }
+    for (const row of group) skipped.push({ channelListingId: row.channelListingId, reason: `${sku} is the seller SKU of ${group.length} listings in this market. Nexus did not pick one.` })
+  }
+  return { rows, skipped }
+}
+
 export async function runAmazonQtyReadback(): Promise<string> {
   const { AmazonService } = await import('../services/marketplaces/amazon.service.js')
   const amazon = new AmazonService()
@@ -174,6 +206,10 @@ export async function runAmazonQtyReadback(): Promise<string> {
 
   const comparedProducts = new Set<string>()
   const mismatchedProducts = new Set<string>()
+  // S7 — the report is this account's (the same default chooser the SP-API client runs): only its listings, and
+  // unattributed older ones, are laid on it. No account resolves → every listing, as before.
+  const accountId = await amazonAccountIdFor()
+  let skuSkipped = 0
   for (const mp of readbackMarkets()) {
     let catalog
     try {
@@ -208,17 +244,20 @@ export async function runAmazonQtyReadback(): Promise<string> {
         // pinned FBM listings were never reconciled against Amazon at all.
         listingStatus: { notIn: ['ENDED', 'REMOVED'] },
         // canonical FBA exclusion — explicit FBM or unresolved-with-FBM-product
-        OR: [{ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: null, product: { fulfillmentMethod: { not: 'FBA' } } }],
+        AND: [
+          { OR: [{ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: null, product: { fulfillmentMethod: { not: 'FBA' } } }] },
+          onAccount(accountId),
+        ],
       },
-      select: { id: true, quantity: true, price: true, productId: true, product: { select: { sku: true } } },
+      select: { ...CHANNEL_SKU_LISTING_SELECT, quantity: true, price: true },
     })
-    const mine = ourRows.map((r) => ({
-      sku: r.product?.sku ?? '',
-      quantity: r.quantity,
-      price: r.price == null ? null : Number(r.price),
-      channelListingId: r.id,
-      productId: r.productId,
-    }))
+    // S7 — keyed by each listing's own seller SKU (else its product SKU, as before); ambiguous rows reported, not compared.
+    const keyed = keyReadbackRows(ourRows)
+    const mine = keyed.rows
+    if (keyed.skipped.length) {
+      skuSkipped += keyed.skipped.length
+      logger.warn(`[${JOB_NAME}] listings without one seller SKU were not compared`, { marketplace: mp, count: keyed.skipped.length, sample: keyed.skipped.slice(0, 10) })
+    }
 
     const diffs = diffReadback(catalog, mine, mp)
     compared += mine.length
@@ -349,6 +388,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
   const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} resolved=${resolved}`
     + ` | price: compared=${priceCompared} mismatches=${priceMismatches} logged=${priceLogged}${priceHealEnabled() ? '' : ' (heal off)'}`
     + ` | drift: recorded=${driftRecorded}`
+    + (skuSkipped ? ` | sku: notCompared=${skuSkipped}` : '')
     + ` [${marketSummaries.join(' ')}]`
   logger.info(`[${JOB_NAME}] ${summary}`)
   return summary

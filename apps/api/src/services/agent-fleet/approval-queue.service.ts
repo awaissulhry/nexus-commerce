@@ -393,7 +393,9 @@ function deciderOf(ap: ApprovalRow, state: QueueState, title: string): QueueDeci
   if (PENDING_STATES.has(state)) return null
   if (!ap.decidedBy && !ap.decidedAt && !ap.decisionVia) return null
   if (ap.decisionVia === 'auto') return { kind: 'rule', label: `Rule · ${title}` }
-  const name = ap.decidedBy ?? 'Someone'
+  // An older row decided without the decider's name: say so, never invent a person ("Someone").
+  if (!ap.decidedBy) return { kind: 'system', label: ap.decisionVia === 'claude-confirm' ? 'Code in Claude · name not recorded' : 'Name not recorded' }
+  const name = ap.decidedBy
   if (ap.decisionVia === 'claude-confirm') return { kind: 'claude-code', label: `${name}, code in Claude` }
   // A duplicate undo withdrawn by Nexus (approval-gate.service.ts askedFor): decidedBy is the control tool's name.
   if (state === 'rejected' && (ap.reason ?? '').startsWith('withdrawn')) return { kind: 'system', label: 'Nexus (withdrawn)' }

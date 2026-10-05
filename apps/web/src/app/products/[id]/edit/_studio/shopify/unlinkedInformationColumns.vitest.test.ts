@@ -16,7 +16,8 @@ describe('unlinked Shopify attribute discovery', () => {
   it('preserves local authoring and keeps unique store names separate without inventing values or mappings', () => {
     const next = withUnlinkedShopifyColumns(page, schema)!
     expect(next.columns.filter(c => c.key === 'name')).toHaveLength(1)
-    expect(next.columns.find(c => c.key === 'name')).toEqual({ ...title, label: 'Name', helpText: 'Shopify: Title.' })
+    // W3-6 — the name is "Title" on Shopify too (Shopify's own word, so no "Shopify: …" note).
+    expect(next.columns.find(c => c.key === 'name')).toEqual({ ...title, label: 'Title', helpText: undefined })
     expect(next.rows[0].values.name).toBe(page.rows[0].values.name)
     expect(next.columns).toHaveLength(1) // Definitions become columns through the authoritative API, with a writer.
     expect(page.columns).toEqual([title])

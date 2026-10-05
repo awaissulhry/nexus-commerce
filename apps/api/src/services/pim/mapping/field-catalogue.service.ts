@@ -41,6 +41,7 @@ import { amazonClassificationSpec } from '../channel-specs/amazon.js'
 import { loadEtsyProductSpec } from '../channel-specs/etsy-loader.js'
 import { loadAmazonSpec, loadAmazonEnglishLabels, loadEbaySpec, clearChannelSpecCache, type ChannelSpec } from '../channel-specs/index.js'
 import { englishLeafLabel } from '../sheet-columns.service.js'
+import { amazonInEnglish } from '../channel-specs/amazon-english.js'
 import {
   getMappingForMarketplace,
   getMappingForMarketplaceWithWarnings,
@@ -262,6 +263,9 @@ export async function getFieldCatalogue(input: {
     groups: [...classification.groups, ...(schemaSpec?.groups ?? [])],
   } : schemaSpec
   const specFields = new Map(spec?.fields.map((f) => [f.key, f]) ?? [])
+  // W3-2 — what this page SHOWS for an Amazon field: English option names (the market's kept as accepted spellings) and
+  // English help, as the sheet shows them. Rules are still derived from the field as Amazon declares it (`specFields`).
+  const shownFields = channel === 'AMAZON' && schemaSpec ? new Map(amazonInEnglish(schemaSpec).fields.map((f) => [f.key, f])) : null
   const englishLabels = channel === 'AMAZON' && productType ? await loadAmazonEnglishLabels(productType) : undefined
   const groups: CatalogueGroup[] = (spec?.groups ?? []).map((g) => ({
     key: g.key, label: g.label, description: null, order: g.order,
@@ -311,6 +315,7 @@ export async function getFieldCatalogue(input: {
       return
     }
     const cap = specFields.get(key)
+    const shown = shownFields?.get(key) ?? cap
     const owner = cap ? sourceOwner(cap) : null
     const rule = rules[key] ?? masterDefaultRule(cap, masterKeys, concepts)
     const described = describeRule(rule)
@@ -321,7 +326,7 @@ export async function getFieldCatalogue(input: {
       fieldKey: key,
       ...(cap ? { sheetKey: cap.managedBy ?? cap.masterKey ?? cap.key, managedBy: cap.managedBy, requiredInParent: cap.requiredInParent, shape: cap.shape, kind: cap.kind, cardinality: cap.cardinality, unitOptions: cap.unitOptions, channelStore: cap.channelStore, validation: cap.validation, shopifyField: cap.shopifyField, readOnlyReason: cap.readOnlyReason } : {}),
       label: seed.label ?? (cap ? englishLeafLabel(cap, englishLabels) : row?.label ?? key),
-      helpText: seed.helpText ?? cap?.helpText ?? row?.notes ?? null,
+      helpText: seed.helpText ?? shown?.helpText ?? row?.notes ?? null,
       group: grp?.key ?? UNGROUPED,
       groupOrder: grp?.order ?? 999,
       priority,
@@ -329,8 +334,8 @@ export async function getFieldCatalogue(input: {
       maxLength: cap?.maxLength ?? row?.maxLength ?? null,
       maxBytes: cap?.maxBytes ?? null,
       options: cap?.options ?? (Array.isArray(row?.allowedValues) ? (row!.allowedValues as string[]) : null),
-      optionLabels: cap?.optionLabels ?? null,
-      ...(cap?.optionAliases ? { optionAliases: cap.optionAliases } : {}),
+      optionLabels: shown?.optionLabels ?? null,
+      ...(shown?.optionAliases ? { optionAliases: shown.optionAliases } : {}),
       selectionOnly: cap?.mode === 'strict',
       editable: cap?.editable !== false,
       deprecatedOptions: cap?.deprecatedOptions ?? null,

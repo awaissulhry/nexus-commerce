@@ -139,3 +139,29 @@ describe('the store switch', () => {
     await expect(scoped(() => saveColourProductSettings(ids.account, { settings: { ...DEFAULT_COLOUR_PRODUCT_SETTINGS, method: 'app' }, expectedRevision: saved.revision }))).rejects.toThrow()
   })
 })
+
+/**
+ * S5 (per-channel SKU) — Find searches and matches each size under the SKU Shopify knows it by: its listing's own SKU on
+ * THIS store, else its product SKU (every case above). Another account's listing is never read.
+ */
+describe('S5 — Find uses the listing\'s own SKU on this store', () => {
+  it('a size with its own SKU is searched and matched by it (no SKU to write for it); another account\'s own SKU is not used', async () => {
+    await scoped(async () => {
+      for (const size of ['S', 'M']) await prisma.product.create({ data: { id: `p-BLACK-${size}`, sku: `GALE-JACKET-BLACK-MEN-${size}`, name: size, basePrice: 10, parentId: ids.fam } as never })
+      await prisma.channelListing.create({ data: { productId: 'p-BLACK-S', channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL',
+        channelConnectionId: ids.account, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true, externalListingId: '101', liveChannelSku: 'BLACK-S-OWN' } as never })
+      const other = (await prisma.channelConnection.create({ data: { channelType: 'SHOPIFY', accountLabel: 'other', isActive: true, isPrimary: false, externalAccountId: 'shop-2', authStatus: 'connected', managedBy: 'oauth' } as never })).id
+      await prisma.channelListing.create({ data: { productId: 'p-BLACK-M', channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL',
+        channelConnectionId: other, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true, externalListingId: '201', liveChannelSku: 'BLACK-M-ELSEWHERE' } as never })
+    })
+    state.store[0].variants.nodes.find((v: any) => v.id === `${BLACK}/v/S`).sku = 'BLACK-S-OWN'
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+    const black = (await byKey())['color:black'].proposal as any
+    expect(black).toMatchObject({ method: 'sku', shopifyProductId: BLACK, issues: [], skusToWrite: [{ shopifyVariantId: `${BLACK}/v/3XL`, sku: 'GALE-JACKET-BLACK-MEN-3XL' }] })
+    expect(black.variants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ productId: 'p-BLACK-S', sku: 'BLACK-S-OWN', shopifySku: 'BLACK-S-OWN', by: 'sku' }),
+      expect.objectContaining({ productId: 'p-BLACK-M', sku: 'GALE-JACKET-BLACK-MEN-M', by: 'sku' }),
+    ]))
+    expect(JSON.stringify(black)).not.toContain('ELSEWHERE')
+  })
+})

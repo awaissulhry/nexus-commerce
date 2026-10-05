@@ -26,7 +26,8 @@ import { WorkspaceScopeError } from './workspace-destination.js'
  * gated exactly as it is today.
  */
 
-export type SnapshotReason = 'pre-publish' | 'pre-restore' | 'manual'
+/** `unlink` (Item ID control, 2026-10-05): the record of a channel id unlink — accepted with it, read like an accepted Delete. */
+export type SnapshotReason = 'pre-publish' | 'pre-restore' | 'manual' | 'unlink'
 
 export interface SnapshotSummary {
   id: string

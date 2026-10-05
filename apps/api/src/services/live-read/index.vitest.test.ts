@@ -80,6 +80,26 @@ describe('readLiveListing', () => {
     expect(s.amazon).toHaveBeenCalledWith(expect.objectContaining({ marketplaceId: 'MKT-IT', languageTag: 'it_IT', parentSku: 'FAM', expectedSkus: ['SELLER-M'] }), expect.anything())
   })
 
+  it('S7 parity: listings without their own SKU are read under their product SKUs, as before', async () => {
+    await readLiveListing('family', { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' })
+    expect(s.amazon).toHaveBeenCalledWith(expect.objectContaining({ parentSku: 'FAM', expectedSkus: ['FAM-M', 'FAM-L'] }), expect.anything())
+  })
+
+  it('S7: a listing\'s own SKU (confirmed, or wanted while still a draft) is the SKU read, on Amazon and on eBay', async () => {
+    s.listings = [row('family'), row('m', { liveChannelSku: 'FAM-M-OWN', channelSku: 'FAM-M-NEXT' }), row('l', { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, channelSku: 'FAM-L-NEW' })]
+    await readLiveListing('family', { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' })
+    expect(s.amazon).toHaveBeenCalledWith(expect.objectContaining({ parentSku: 'FAM', expectedSkus: ['FAM-M-OWN', 'FAM-L-NEW'] }), expect.anything())
+    await readLiveListing('family', ebay)
+    expect(s.trading).toHaveBeenCalledWith(expect.objectContaining({ expectedSkus: ['FAM-M-OWN', 'FAM-L-NEW'] }), expect.anything())
+  })
+
+  it('🔴 S7: a listing with no single seller SKU is not read under a guess — an honest "could not read", no channel call', async () => {
+    s.listings = [row('family'), row('m', { offers: [{ sku: 'SELLER-M1', isActive: true }, { sku: 'SELLER-M2', isActive: true }] })]
+    const result = await readLiveListing('family', { channel: 'AMAZON', marketplace: 'IT', accountId: 'account' })
+    expect(s.amazon).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([{ scope: 'item', reason: 'FAM-M has multiple seller SKUs. Select its offer before publishing.' }])
+  })
+
   it('the web copy never carries the raw provider documents', async () => {
     const web = publicLiveRead(await readLiveListing('family', ebay))
     expect(web).not.toHaveProperty('raw')

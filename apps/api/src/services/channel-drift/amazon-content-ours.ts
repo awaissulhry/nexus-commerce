@@ -29,6 +29,7 @@ import { mappedAmazonRoots } from '../amazon/mapping-payload.js'
 import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
 import { configuredAmazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { CONTENT_ROOTS, STRUCTURE_ROOTS, OUT_OF_SCOPE_ROOTS, type ContentEntry, type NotCompared } from './amazon-content-compare.js'
+import { reportedSkuOf } from '../listings/reported-sku.js'
 
 /** The studio's owners whose values another builder sends (`studio-publication-amazon.ts`, `ownedKeys`). */
 const OTHER_BUILDERS = new Set(['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'])
@@ -46,11 +47,17 @@ export interface AmazonOurs {
   notCompared: NotCompared[]
 }
 
-/** The listing's seller SKU, by the studio's rule: one active offer SKU, else the product's (`studio-publication-amazon.ts`). */
-function sellerSku(listing: { offers: Array<{ sku: string; isActive: boolean }>; product: { sku: string } }): string | null {
-  const offers = [...new Set(listing.offers.filter(o => o.isActive).map(o => o.sku).filter(Boolean))]
-  if (offers.length > 1) return null
-  return offers[0] ?? listing.product.sku
+/**
+ * The seller SKU Amazon holds this listing under (S7, `reportedSkuOf`): its confirmed own SKU, else the studio's rule
+ * (one active offer SKU, then the stored identity, else the product's — `studio-publication-amazon.ts`). No single SKU
+ * is a reason, never a guess.
+ */
+function sellerSku(listing: Parameters<typeof reportedSkuOf>[0] & { product: { sku: string } }): { ok: true; sku: string } | { ok: false; reason: string } {
+  const answer = reportedSkuOf(listing, listing.product.sku)
+  if (!answer.conflict) return { ok: true, sku: answer.sku }
+  return { ok: false, reason: answer.conflict.code === 'MULTIPLE_ACTIVE_OFFERS'
+    ? 'several active seller SKUs — the builder would refuse'
+    : `no single seller SKU — ${answer.conflict.sentence}` }
 }
 
 export type OursResult = { ok: true; ours: AmazonOurs } | { ok: false; reason: string }
@@ -60,8 +67,9 @@ export async function amazonContentOurs(listingId: string): Promise<OursResult> 
     product: { include: { translations: true, parent: { include: { translations: true } } } } } })
   if (!listing || listing.channel !== 'AMAZON') return { ok: false, reason: 'not an Amazon listing' }
   if (!listing.channelConnectionId) return { ok: false, reason: 'the listing names no Amazon account' }
-  const sku = sellerSku(listing as never)
-  if (!sku) return { ok: false, reason: 'several active seller SKUs — the builder would refuse' }
+  const seller = sellerSku(listing)
+  if (seller.ok === false) return { ok: false, reason: seller.reason }
+  const sku = seller.sku
   const market = listing.marketplace.toUpperCase()
   const marketplaceId = await configuredAmazonMarketplaceId(market)
   if (!marketplaceId) return { ok: false, reason: `no Amazon marketplace id configured for ${market}` }

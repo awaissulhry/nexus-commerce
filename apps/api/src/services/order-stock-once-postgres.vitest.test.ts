@@ -423,12 +423,14 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
   it('14. MCF — an items override of 2 on an order line of 1: on COMPLETE 1 is taken and the other 1 given back', async () => {
     const p = await seedProduct(fbaId)
     const order = await seedOrder([{ ...p, quantity: 1 }])
+    const sent: string[][] = []
     const adapter = {
-      createFulfillmentOrder: async () => ({ amazonFulfillmentOrderId: `FO-${randomUUID()}`, raw: {} }),
+      createFulfillmentOrder: async (args: { items: Array<{ sellerSku: string }> }) => { sent.push(args.items.map((i) => i.sellerSku)); return { amazonFulfillmentOrderId: `FO-${randomUUID()}`, raw: {} } },
       getFulfillmentOrder: async () => ({ status: 'COMPLETE', raw: {} }),
       cancelFulfillmentOrder: async () => ({ raw: {} }),
     }
     const shipment = await inBusiness(() => mcf.createMCFShipment(adapter, { orderId: order, items: [{ sku: p.sku, quantity: 2 }] }))
+    expect(sent).toEqual([[p.sku]]) // S7: no Amazon listing in the fulfilling market → the product's master SKU
     expect(await level(p.productId, fbaId)).toEqual({ quantity: 10, reserved: 2, available: 8 })
     await inBusiness(() => mcf.syncMCFStatus(adapter, shipment.amazonFulfillmentOrderId))
     expect(await level(p.productId, fbaId)).toEqual({ quantity: 9, reserved: 0, available: 9 })
@@ -496,12 +498,14 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
   it('10. MCF — a fulfilment from FBA holds and takes the order units once; a cancelled one can be sent again', async () => {
     const p = await seedProduct(fbaId)
     const order = await seedOrder([{ ...p, quantity: 2 }])
+    const sent: string[][] = []
     const adapter = {
-      createFulfillmentOrder: async () => ({ amazonFulfillmentOrderId: `FO-${randomUUID()}`, raw: {} }),
+      createFulfillmentOrder: async (args: { items: Array<{ sellerSku: string }> }) => { sent.push(args.items.map((i) => i.sellerSku)); return { amazonFulfillmentOrderId: `FO-${randomUUID()}`, raw: {} } },
       getFulfillmentOrder: async () => ({ status: 'COMPLETE', raw: {} }),
       cancelFulfillmentOrder: async () => ({ raw: {} }),
     }
     const first = await inBusiness(() => mcf.createMCFShipment(adapter, { orderId: order }))
+    expect(sent).toEqual([[p.sku]]) // S7: no Amazon listing in the fulfilling market → the product's master SKU
     expect(await level(p.productId, fbaId)).toEqual({ quantity: 10, reserved: 2, available: 8 })
     await inBusiness(() => mcf.cancelMCFShipment(adapter, first.amazonFulfillmentOrderId))
     expect(await level(p.productId, fbaId)).toEqual({ quantity: 10, reserved: 0, available: 10 })

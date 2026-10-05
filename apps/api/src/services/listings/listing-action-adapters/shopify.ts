@@ -77,6 +77,8 @@ async function pauseVariants(graphql: ShopifyGraphql, targets: ActionListing[], 
   for (const row of targets) {
     const pa = object(row.platformAttributes)
     const stored = typeof pa.variantId === 'string' && pa.variantId ? (pa.variantId.startsWith('gid://') ? pa.variantId : `gid://shopify/ProductVariant/${pa.variantId}`) : null
+    // S5 — `row.sku` is the SKU Shopify holds for this listing (the engine's `listingSendSku`), so a variant with its own
+    // SKU is found, and the writer's identity read-back expects that SKU.
     const bySku = variants.filter(v => v.sku === row.sku)
     const variant = stored ? variants.find(v => v.id === stored) : bySku.length === 1 ? bySku[0] : undefined
     if (!variant?.inventoryItem?.id) { results.push(rowResult(row, 'FAILED', `This Shopify product has no single variant ${row.sku}. Nothing was sent.`)); continue }
@@ -89,7 +91,7 @@ async function pauseVariants(graphql: ShopifyGraphql, targets: ActionListing[], 
     try {
       // The exact ids just read, so the writer never looks the SKU up across the store.
       const answer = await syncShopifyLinkedListing({
-        id: `listing-action:${ctx.previewId}:${row.id}`, syncType: 'QUANTITY_UPDATE', product: { id: row.productId, sku: row.sku },
+        id: `listing-action:${ctx.previewId}:${row.id}`, syncType: 'QUANTITY_UPDATE', product: { id: row.productId, sku: row.sku }, sku: row.sku,
         channelListing: { id: row.id, offerClosedAt: row.offerClosedAt, listingStatus: row.listingStatus,
           platformAttributes: { ...pa, shopifyProductId: shortId(productId), variantId: shortId(variant.id), inventoryItemId: shortId(variant.inventoryItem.id) } },
       }, ctx.destination.accountId, { quantity: 0 })

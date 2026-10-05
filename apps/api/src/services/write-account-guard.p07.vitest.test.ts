@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
-  listings: [] as Array<{ id: string; channel: string; productId: string; marketplace: string; region: string; externalListingId: string | null; channelConnectionId: string | null; sku: string }>,
+  /** S8 — `channelSku` / `liveChannelSku`: a listing's own channel SKU (sent / confirmed), not its product's. */
+  listings: [] as Array<{ id: string; channel: string; productId: string; marketplace: string; region: string; externalListingId: string | null; channelConnectionId: string | null; sku: string; channelSku?: string | null; liveChannelSku?: string | null }>,
+  /** S8 — every channelListing.findMany argument, to pin the hot-path query shape. */
+  calls: [] as any[],
   members: [] as Array<{ itemId: string; sku: string; marketplace: string; channelConnectionId: string | null }>,
   fail: false,
   namesFail: false,
@@ -27,6 +30,8 @@ function matchListing(row: (typeof h.listings)[number], where: any): boolean {
   if (where.externalListingId?.in && !where.externalListingId.in.includes(row.externalListingId)) return false
   if (where.productId?.in && !where.productId.in.includes(row.productId)) return false
   if (where.product?.sku?.in && !where.product.sku.in.includes(row.sku)) return false
+  if (where.channelSku?.in && !where.channelSku.in.includes(row.channelSku)) return false
+  if (where.liveChannelSku?.in && !where.liveChannelSku.in.includes(row.liveChannelSku)) return false
   if (where.marketplace && typeof where.marketplace === 'string' && row.marketplace !== where.marketplace) return false
   if (where.region && typeof where.region === 'string' && row.region !== where.region) return false
   if (where.AND && !where.AND.every((w: any) => matchListing(row, w))) return false
@@ -36,10 +41,11 @@ function matchListing(row: (typeof h.listings)[number], where: any): boolean {
 vi.mock('../db.js', () => ({
   default: {
     channelListing: {
-      findMany: async ({ where }: any) => {
+      findMany: async (args: any) => {
         h.queries++
+        h.calls.push(args)
         if (h.fail) throw new Error('database unavailable')
-        return h.listings.filter((row) => matchListing(row, where)).map((row) => ({ channelConnectionId: row.channelConnectionId, product: { sku: row.sku } }))
+        return h.listings.filter((row) => matchListing(row, args.where)).map((row) => ({ channelConnectionId: row.channelConnectionId, product: { sku: row.sku }, channelSku: row.channelSku ?? null, liveChannelSku: row.liveChannelSku ?? null }))
       },
     },
     sharedListingMembership: {
@@ -64,7 +70,7 @@ import { assertWriteAccount, assertWriteAccountPerSku, marketplaceCodeOf, WrongA
 const listing = (id: string, owner: string | null, over: Partial<(typeof h.listings)[number]> = {}) =>
   h.listings.push({ id, channel: 'EBAY', productId: `p-${id}`, marketplace: 'IT', region: 'IT', externalListingId: `item-${id}`, channelConnectionId: owner, sku: `SKU-${id}`, ...over })
 
-beforeEach(() => { h.listings.length = 0; h.members.length = 0; h.fail = false; h.namesFail = false; h.queries = 0 })
+beforeEach(() => { h.listings.length = 0; h.members.length = 0; h.calls.length = 0; h.fail = false; h.namesFail = false; h.queries = 0 })
 
 describe('P0.7 — the rule', () => {
   it('a listing of account B, written through A: refused, naming both accounts', async () => {
@@ -174,6 +180,46 @@ function sourceFiles(dir: string): string[] {
     return name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.d.ts') ? [full] : []
   })
 }
+
+describe('S8 — a listing found by its own channel SKU (indexed columns only), not only by its product SKU', () => {
+  it('a write naming a listing\'s own SKU through another account: refused (before S8 nobody owned that SKU)', async () => {
+    listing('1', 'conn-B', { channel: 'AMAZON', sku: 'MASTER', channelSku: 'MASTER-IT' })
+    await expect(assertWriteAccount('AMAZON', 'conn-A', { skus: ['MASTER-IT'], marketplace: 'IT' })).rejects.toMatchObject({ code: 'WRONG_ACCOUNT_WRITE', detail: { ownerConnectionIds: ['conn-B'] } })
+    await expect(assertWriteAccount('AMAZON', 'conn-B', { skus: ['MASTER-IT'], marketplace: 'IT' })).resolves.toBeUndefined()
+    // Its own SKU is per market: in DE nothing names it, so nothing contradicts the write.
+    await expect(assertWriteAccount('AMAZON', 'conn-A', { skus: ['MASTER-IT'], marketplace: 'DE' })).resolves.toBeUndefined()
+  })
+  it('the SKU the channel confirmed (liveChannelSku) counts too', async () => {
+    listing('1', 'conn-B', { channel: 'AMAZON', sku: 'MASTER', liveChannelSku: 'MASTER-LIVE' })
+    await expect(assertWriteAccount('AMAZON', 'conn-A', { skus: ['MASTER-LIVE'] })).rejects.toBeInstanceOf(WrongAccountWriteError)
+  })
+  it('parity: the product SKU still finds the listing (a write that still names it is checked as before)', async () => {
+    listing('1', 'conn-B', { channel: 'AMAZON', sku: 'MASTER', channelSku: 'MASTER-IT' })
+    await expect(assertWriteAccount('AMAZON', 'conn-A', { skus: ['MASTER'] })).rejects.toBeInstanceOf(WrongAccountWriteError)
+  })
+  it('hot path: ONE statement, the own SKU matched in SQL on channelSku / liveChannelSku, only the account selected', async () => {
+    await assertWriteAccount('AMAZON', 'conn-A', { skus: ['X'], marketplace: 'IT' })
+    expect(h.calls).toHaveLength(1)
+    expect(h.calls[0].select).toEqual({ channelConnectionId: true })
+    expect(h.calls[0].where.OR).toContainEqual({ AND: [{ OR: [{ channelSku: { in: ['X'] } }, { liveChannelSku: { in: ['X'] } }] }, { OR: [{ marketplace: 'IT' }, { region: 'IT' }] }] })
+    expect(JSON.stringify(h.calls[0])).not.toMatch(/platformAttributes|flatFileSnapshot|overrideData/)
+  })
+  it('the batch form: an own SKU of another account refuses the batch and names it; its read selects three small columns', async () => {
+    listing('1', 'conn-A', { channel: 'AMAZON', sku: 'OURS' }); listing('2', 'conn-B', { channel: 'AMAZON', sku: 'THEIRS-MASTER', channelSku: 'THEIRS-OWN', liveChannelSku: 'THEIRS-LIVE' })
+    const refusal = await assertWriteAccountPerSku('AMAZON', 'conn-A', ['OURS', 'THEIRS-OWN'], 'IT').catch((e) => e)
+    expect(refusal).toBeInstanceOf(WrongAccountWriteError)
+    expect(refusal.message).toMatch(/SKU THEIRS-OWN belong to the Amazon account "Second shop"/)
+    await expect(assertWriteAccountPerSku('AMAZON', 'conn-B', ['THEIRS-OWN', 'THEIRS-LIVE'], 'IT')).resolves.toBeUndefined()
+    const own = h.calls.find((c) => JSON.stringify(c.where).includes('channelSku'))
+    expect(own.select).toEqual({ channelConnectionId: true, channelSku: true, liveChannelSku: true })
+    expect(JSON.stringify(h.calls)).not.toMatch(/platformAttributes|flatFileSnapshot|overrideData/)
+  })
+  it('only the asked SKUs are judged: a listing found by its own SKU does not bring its other SKU into the batch', async () => {
+    // SHARED-X is ours (a product SKU on A) and B's own SKU; B's confirmed old SKU was not asked, so it is not judged.
+    listing('1', 'conn-A', { channel: 'AMAZON', sku: 'SHARED-X' }); listing('2', 'conn-B', { channel: 'AMAZON', sku: 'B-MASTER', channelSku: 'SHARED-X', liveChannelSku: 'B-OLD' })
+    await expect(assertWriteAccountPerSku('AMAZON', 'conn-A', ['SHARED-X'], 'IT')).resolves.toBeUndefined()
+  })
+})
 
 describe('P0.7 — census: every primary-account eBay listing writer calls the guard', () => {
   const files = sourceFiles(SRC).map((f) => ({ file: relative(SRC, f), text: readFileSync(f, 'utf8') })).filter(({ text }) => PRIMARY_EBAY.test(text))

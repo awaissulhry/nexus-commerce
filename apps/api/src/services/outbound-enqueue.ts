@@ -27,20 +27,38 @@ import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordina
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { reserveSharedCoordinates, type BlockedCoordinate } from './outbound-rows.js'
+import { liveChannelSku, type ChannelSkuListing } from './listings/channel-sku.pure.js'
 // P1.3 — the claim check and the one way to create a queue row live in outbound-rows.ts (no queue import).
 export { reserveSharedCoordinates, createOutboundRow, createOutboundRows, createOutboundRowsAndReturn, type BlockedCoordinate } from './outbound-rows.js'
 
-/** Capture before deletion: Listings Items is keyed by seller SKU, never ASIN. */
+/**
+ * Capture before deletion: Listings Items is keyed by seller SKU, never ASIN.
+ *
+ * S8 — the SKU the channel HOLDS for this listing (`liveChannelSku`, listings/channel-sku.pure.ts): the confirmed
+ * `liveChannelSku`, else the old stores' one value (active offers in `offerScope`, the Amazon mirror keys, the flat-file
+ * snapshot; an extra listing's own SKU), else the product SKU. Null when it has no single SKU (two on record: naming a
+ * coordinate cannot choose one of two seller identities) or when it is still a Nexus draft (nothing on the channel).
+ * A listing without its own SKU and without old-store values gets the product SKU, as before.
+ */
 export function sellerSkuForDelist(
-  listing: { product: { sku: string | null }; offers?: Array<{ sku: string; fulfillmentMethod: string; isActive: boolean }> },
+  listing: Omit<ChannelSkuListing, 'channel' | 'offers'> & {
+    channel?: string | null
+    product: { sku: string | null }
+    offers?: ReadonlyArray<{ sku: string; fulfillmentMethod: string; isActive: boolean }> | null
+  },
   offerScope: 'FBM' | 'FBA' | 'all' = 'all',
 ): string | null {
-  const skus = [...new Set((listing.offers ?? [])
-    .filter(offer => offer.isActive && (offerScope === 'all' || offer.fulfillmentMethod === offerScope))
-    .map(offer => offer.sku).filter(sku => typeof sku === 'string' && sku.trim()))]
-  if (skus.length > 1) return null // Naming a coordinate cannot choose one of two seller identities.
-  return skus[0] ?? (listing.product.sku?.trim() ? listing.product.sku : null)
+  const offers = (listing.offers ?? []).filter(offer => offerScope === 'all' || offer.fulfillmentMethod === offerScope)
+  // A delete without a channel is an Amazon delete (the only one keyed by seller SKU).
+  return liveChannelSku({ ...listing, channel: listing.channel ?? 'AMAZON', offers }, listing.product.sku)?.sku ?? null
 }
+
+/** S8 — the listing facts `sellerSkuForDelist` reads, for a delete that captures its targets before deletion. */
+export const DELIST_SKU_SELECT = {
+  channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true,
+  platformAttributes: true, flatFileSnapshot: true, overrideData: true,
+  alias: { select: { sku: true, productId: true } },
+} as const satisfies Prisma.ChannelListingSelect
 
 export type DelistSkippedCoordinate = ListingCoordinate & { externalListingId: string | null; reason: string }
 
@@ -76,7 +94,8 @@ export async function enqueueDelistCascade(
       id: true, productId: true, channel: true, region: true, marketplace: true,
       channelConnectionId: true, aliasKey: true, externalListingId: true, externalParentId: true,
       fulfillmentMethod: true, product: { select: { sku: true, parentId: true } },
-      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
+      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+      ...DELIST_SKU_SELECT,
     },
   })
   const holdUntil = new Date(Date.now() + 5 * 60_000)

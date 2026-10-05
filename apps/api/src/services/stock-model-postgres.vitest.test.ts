@@ -150,7 +150,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>
 type AmazonState = 'shipped' | 'cancelled' | 'stale' | 'pending' | 'partial' | 'delivered'
 const AMAZON_STATUS: Record<AmazonState, string> = { shipped: 'Shipped', cancelled: 'Canceled', stale: 'Unshipped', pending: 'Pending', partial: 'PartiallyShipped', delivered: 'Delivered' }
 
-let amazon: { upsertOrder: (raw: unknown, summary: Record<string, unknown>) => Promise<void> }
+let amazon: { upsertOrder: (raw: unknown, summary: Record<string, unknown>, accountId?: string) => Promise<void> }
 let reconciler: typeof import('./reservation-reconcile.js')
 let cancellation: typeof import('./order-cancellation/index.js')
 let shopify: typeof import('../routes/shopify-webhooks.js')
@@ -164,11 +164,11 @@ async function readShopify(workspace: string, id: string, lines: Array<{ sku: st
 }
 const summary = () => ({ itemsUpserted: 0, itemsFailed: 0, fbmReservationsCreated: 0, fbmReservationsConsumed: 0, fbmInsufficientStock: 0 })
 /** One Amazon read of this order, through the real writer. `lines` are (sku, quantity) — the fixture's SKU is the product id. */
-async function readAmazon(workspace: string, id: string, lines: Array<{ sku: string; quantity: number; shipped?: number }>, state: AmazonState) {
+async function readAmazon(workspace: string, id: string, lines: Array<{ sku: string; quantity: number; shipped?: number }>, state: AmazonState, account?: string) {
   upstream.items.set(id, lines.map((line, i) => ({ OrderItemId: `${id}-L${i}`, SellerSKU: line.sku, QuantityOrdered: line.quantity,
     ...(line.shipped === undefined ? {} : { QuantityShipped: line.shipped }), ItemPrice: { Amount: String(10 * line.quantity), CurrencyCode: 'EUR' } })))
   await as(workspace, () => amazon.upsertOrder({ AmazonOrderId: id, PurchaseDate: '2026-09-25T00:00:00Z', LastUpdateDate: '2026-09-25T01:00:00Z',
-    OrderStatus: AMAZON_STATUS[state], FulfillmentChannel: 'MFN', MarketplaceId: 'APJ6JRA9NG5V4', OrderTotal: { Amount: '40', CurrencyCode: 'EUR' } }, summary()))
+    OrderStatus: AMAZON_STATUS[state], FulfillmentChannel: 'MFN', MarketplaceId: 'APJ6JRA9NG5V4', OrderTotal: { Amount: '40', CurrencyCode: 'EUR' } }, summary(), account))
   return (await q<{ id: string; status: string }>(`SELECT id,status::text FROM "Order" WHERE "workspaceId"=$1 AND channel='AMAZON' AND "channelOrderId"=$2`, [workspace, id]))[0]
 }
 const twoEach = (products: string[]) => products.map((sku) => ({ sku, quantity: 2 }))
@@ -1164,5 +1164,99 @@ describe.skipIf(!concurrentDatabaseUrl())('one stock model across channels (real
     const { applyStockMovement } = await import('./stock-movement.service.js')
     await as(f.borrower, () => applyStockMovement({ productId: f.own, locationId: f.ownLocation, change: 1, reason: 'RETURN_RESTOCKED', referenceType: 'Return', referenceId: returnId, actor: 'return-restock' }))
     expect(await counts()).toEqual({ warehouse: 10, shopify: 10, total: 10 })
+  })
+
+  // S6 — one inbound match (services/listings/channel-sku-inbound.ts): a listing may carry its own SKU per channel
+  // account and market. Products of the borrower sell from its own IT-MAIN stock; the lender is "another business".
+  const s6Product = async (f: Fixture, sku: string) => {
+    const id = randomUUID()
+    await q(`INSERT INTO "Product" (id,"workspaceId",sku,name,"basePrice","totalStock","updatedAt") VALUES ($1,$2,$3,$3,10,10,now())`, [id, f.borrower, sku])
+    await q(`INSERT INTO "StockLevel" (id,"workspaceId","locationId","productId",quantity,reserved,available,"lastUpdatedAt") VALUES ($1,$2,$3,$4,10,0,10,now())`, [randomUUID(), f.borrower, f.ownLocation, id])
+    return id
+  }
+  const s6Account = async (workspace: string, channelType: string) => {
+    const id = randomUUID()
+    await q(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","managedBy","externalAccountId","isActive","updatedAt") VALUES ($1,$2,$3,'oauth',$4,true,now())`, [id, workspace, channelType, `s6-${id}`])
+    return id
+  }
+  const s6Listing = (workspace: string, productId: string, account: string, channel: string, marketplace: string, data: { channelSku?: string; liveChannelSku?: string; platformAttributes?: unknown }) =>
+    q(`INSERT INTO "ChannelListing" (id,"workspaceId","productId","channelMarket",channel,region,marketplace,"channelConnectionId","listingStatus","isPublished","channelSku","liveChannelSku","platformAttributes","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$6,$7,'ACTIVE',true,$8,$9,$10::jsonb,now())`,
+    [randomUUID(), workspace, productId, `${channel}_${marketplace}`, channel, marketplace, account, data.channelSku ?? null, data.liveChannelSku ?? null, JSON.stringify(data.platformAttributes ?? {})])
+  const UNTOUCHED = { quantity: 10, reserved: 0, available: 10 }
+  const HELD_TWO = { quantity: 10, reserved: 2, available: 8 }
+  const ambiguityOf = async (tag: string, channel: string, a: string, b: string) => {
+    const skus = (await q<{ id: string; sku: string }>(`SELECT id, sku FROM "Product" WHERE id = ANY($1::text[]) ORDER BY id`, [[a, b]])).map((row) => row.sku)
+    return `The ${channel} SKU S6-AMB-${tag} matches more than one product (${skus.join(', ')}). Nexus did not pick one, so this line is not linked to a product. Give each product its own SKU on this ${channel} account.`
+  }
+
+  it('S6 Amazon: master SKU as before; the listing\'s own SKU and the SKU Amazon still holds after a rename hold THAT product; another account\'s or business\'s SKU and a SKU two products hold stay unlinked, the latter with the reason', async () => {
+    const f = await fixture(), tag = randomUUID().slice(0, 8)
+    const account = await s6Account(f.borrower, 'AMAZON'), otherAccount = await s6Account(f.borrower, 'AMAZON'), lenderAccount = await s6Account(f.lender, 'AMAZON')
+    const own = await s6Product(f, `S6-OWN-P-${tag}`), renamed = await s6Product(f, `S6-NEW-${tag}`), onOther = await s6Product(f, `S6-ONB-${tag}`)
+    const ambA = await s6Product(f, `S6-AMB-A-${tag}`), ambB = await s6Product(f, `S6-AMB-B-${tag}`)
+    await s6Listing(f.borrower, own, account, 'AMAZON', 'IT', { channelSku: `S6-OWN-${tag}` })
+    await s6Listing(f.borrower, renamed, account, 'AMAZON', 'IT', { channelSku: `S6-OLD-${tag}`, liveChannelSku: `S6-OLD-${tag}` })
+    await s6Listing(f.borrower, onOther, otherAccount, 'AMAZON', 'IT', { channelSku: `S6-B-${tag}` })
+    await s6Listing(f.borrower, ambA, account, 'AMAZON', 'IT', { channelSku: `S6-AMB-${tag}` })
+    await s6Listing(f.borrower, ambB, account, 'AMAZON', 'IT', { channelSku: `S6-AMB-${tag}` })
+    await s6Listing(f.lender, f.source, lenderAccount, 'AMAZON', 'IT', { channelSku: `S6-FOREIGN-${tag}` })
+    const skus = [f.own, `S6-OWN-${tag}`, `S6-OLD-${tag}`, `S6-B-${tag}`, `S6-AMB-${tag}`, `S6-FOREIGN-${tag}`, f.source]
+    const order = await readAmazon(f.borrower, `AMZ-S6-${tag}`, skus.map((sku) => ({ sku, quantity: 2 })), 'stale', account)
+    const items = await q<{ sku: string; productId: string | null; reason: string | null }>(
+      `SELECT sku, "productId", "amazonMetadata"->>'nexusUnlinkedReason' AS reason FROM "OrderItem" WHERE "orderId"=$1 ORDER BY "externalLineItemId"`, [order.id])
+    expect(items.map((i) => i.productId)).toEqual([f.own, own, renamed, null, null, null, null])
+    expect(items.map((i) => i.sku)).toEqual(skus)
+    expect(items.map((i) => i.reason)).toEqual([null, null, null, null, await ambiguityOf(tag, 'Amazon', ambA, ambB), null, null])
+    // FBM holds come from the matched products only.
+    for (const p of [f.own, own, renamed]) expect(await level(p)).toEqual(HELD_TWO)
+    for (const p of [onOther, ambA, ambB, f.source]) expect(await level(p)).toEqual(UNTOUCHED)
+    // Read through its own account, the other account's SKU names its product.
+    const second = await readAmazon(f.borrower, `AMZ-S6-B-${tag}`, [{ sku: `S6-B-${tag}`, quantity: 2 }], 'stale', otherAccount)
+    expect(await q(`SELECT "productId" FROM "OrderItem" WHERE "orderId"=$1`, [second.id])).toEqual([{ productId: onOther }])
+  })
+
+  it('S6 Shopify: master SKU as before; the listing\'s own SKU, the SKU Shopify still holds after a rename and the variant a listing records hold THAT product; another store\'s SKU and a SKU two products hold stay unlinked', async () => {
+    const f = await fixture(), tag = randomUUID().slice(0, 8)
+    const store = await s6Account(f.borrower, 'SHOPIFY'), otherStore = await s6Account(f.borrower, 'SHOPIFY')
+    const own = await s6Product(f, `S6-OWN-P-${tag}`), renamed = await s6Product(f, `S6-NEW-${tag}`), onOther = await s6Product(f, `S6-ONB-${tag}`)
+    const ambA = await s6Product(f, `S6-AMB-A-${tag}`), ambB = await s6Product(f, `S6-AMB-B-${tag}`), byVariant = await s6Product(f, `S6-VAR-${tag}`)
+    const variantId = 7_000_000 + Math.floor(Math.random() * 1_000_000)
+    await s6Listing(f.borrower, own, store, 'SHOPIFY', 'IT', { channelSku: `S6-OWN-${tag}` })
+    await s6Listing(f.borrower, renamed, store, 'SHOPIFY', 'IT', { liveChannelSku: `S6-OLD-${tag}` })
+    await s6Listing(f.borrower, onOther, otherStore, 'SHOPIFY', 'IT', { channelSku: `S6-B-${tag}` })
+    await s6Listing(f.borrower, ambA, store, 'SHOPIFY', 'IT', { channelSku: `S6-AMB-${tag}` })
+    await s6Listing(f.borrower, ambB, store, 'SHOPIFY', 'IT', { channelSku: `S6-AMB-${tag}` })
+    await s6Listing(f.borrower, byVariant, store, 'SHOPIFY', 'IT', { platformAttributes: { variantId: String(variantId) } })
+    const lines = [{ sku: f.own }, { sku: `S6-OWN-${tag}` }, { sku: `S6-OLD-${tag}` }, { sku: `S6-B-${tag}` }, { sku: `S6-AMB-${tag}` }, { sku: `S6-EDITED-IN-SHOPIFY-${tag}`, variant_id: variantId }]
+    const id = `SHOP-S6-${tag}`
+    await as(f.borrower, () => shopify.handleOrderCreate({ id, created_at: '2026-09-25T00:00:00Z', updated_at: '2026-09-25T01:00:00Z', financial_status: 'paid', fulfillment_status: null,
+      total_price: '40', currency: 'EUR', line_items: lines.map((line, i) => ({ id: `${id}-L${i}`, quantity: 2, price: '10', ...line })) } as never, { connectionId: store }))
+    const items = await q<{ sku: string; productId: string | null }>(`SELECT i.sku, i."productId" FROM "OrderItem" i JOIN "Order" o ON o.id = i."orderId"
+      WHERE o."workspaceId"=$1 AND o."channelOrderId"=$2 ORDER BY i."externalLineItemId"`, [f.borrower, id])
+    expect(items).toEqual(lines.map((line, i) => ({ sku: line.sku, productId: [f.own, own, renamed, null, null, byVariant][i] })))
+    for (const p of [f.own, own, renamed, byVariant]) expect(await level(p)).toEqual(HELD_TWO)
+    for (const p of [onOther, ambA, ambB]) expect(await level(p)).toEqual(UNTOUCHED)
+    // Without the store (an old replay with no account), only the master SKU matches, as before.
+    const bare = `SHOP-S6-BARE-${tag}`
+    await as(f.borrower, () => shopify.handleOrderCreate({ id: bare, created_at: '2026-09-25T00:00:00Z', updated_at: '2026-09-25T01:00:00Z', financial_status: 'paid', fulfillment_status: null,
+      total_price: '40', currency: 'EUR', line_items: lines.slice(0, 2).map((line, i) => ({ id: `${bare}-L${i}`, quantity: 1, price: '10', ...line })) } as never))
+    expect((await q(`SELECT i."productId" FROM "OrderItem" i JOIN "Order" o ON o.id = i."orderId" WHERE o."workspaceId"=$1 AND o."channelOrderId"=$2 ORDER BY i."externalLineItemId"`, [f.borrower, bare])).map((row) => row.productId))
+      .toEqual([f.own, null])
+  })
+
+  it('S6 parity: an Amazon or Shopify order for a trashed product\'s master SKU links to it and holds its stock, exactly as before', async () => {
+    const f = await fixture(), tag = randomUUID().slice(0, 8)
+    const account = await s6Account(f.borrower, 'AMAZON'), store = await s6Account(f.borrower, 'SHOPIFY')
+    const amazonTrashed = await s6Product(f, `S6-TRASH-A-${tag}`), shopifyTrashed = await s6Product(f, `S6-TRASH-S-${tag}`)
+    await q(`UPDATE "Product" SET "deletedAt" = now() WHERE id = ANY($1::text[])`, [[amazonTrashed, shopifyTrashed]])
+    const amazonOrder = await readAmazon(f.borrower, `AMZ-S6-T-${tag}`, [{ sku: `S6-TRASH-A-${tag}`, quantity: 2 }], 'stale', account)
+    expect(await q(`SELECT "productId" FROM "OrderItem" WHERE "orderId"=$1`, [amazonOrder.id])).toEqual([{ productId: amazonTrashed }])
+    expect(await level(amazonTrashed)).toEqual(HELD_TWO)
+    const id = `SHOP-S6-T-${tag}`
+    await as(f.borrower, () => shopify.handleOrderCreate({ id, created_at: '2026-09-25T00:00:00Z', updated_at: '2026-09-25T01:00:00Z', financial_status: 'paid', fulfillment_status: null,
+      total_price: '20', currency: 'EUR', line_items: [{ id: `${id}-L0`, sku: `S6-TRASH-S-${tag}`, quantity: 2, price: '10' }] } as never, { connectionId: store }))
+    expect(await q(`SELECT i."productId" FROM "OrderItem" i JOIN "Order" o ON o.id = i."orderId" WHERE o."workspaceId"=$1 AND o."channelOrderId"=$2`, [f.borrower, id])).toEqual([{ productId: shopifyTrashed }])
+    expect(await level(shopifyTrashed)).toEqual(HELD_TWO)
   })
 })

@@ -105,6 +105,33 @@ it('counts only publishes accepted after the listing\'s last accepted delete (de
   expect(field(relisted, 'brand')).toBeUndefined()
 })
 
+it('an accepted unlink is the same cutoff as an accepted delete: a relist after it starts a new history (Item ID control)', async () => {
+  await save('before-unlink', [value('brand', 'Old item brand'), value('item_name', 'Old item title')])
+  const before = await read()
+  expect(field(before, 'brand')).toEqual({ state: 'value', value: 'Old item brand' })
+  const unlinkRecord = (id: string, overrides: Partial<Prisma.ChannelListingSnapshotUncheckedCreateInput> = {}) => {
+    const at = new Date(Date.UTC(2026, 8, 25, 0, 0, sequence++))
+    // The record `runUnlink` writes: captured first (UNACCEPTED), accepted in the unlink's own transaction.
+    return prisma.channelListingSnapshot.create({ data: { id, channelListingId: 'baseline-listing-parent', channel: scope.channel, marketplace: scope.marketplace, aliasKey,
+      reason: 'unlink', outcome: 'ACCEPTED', acceptedAt: at, createdAt: at, label: 'before unlink-channel-id (remote-parent)',
+      payload: { kind: 'channel-id-unlink', evidence: { oldExternalListingId: 'remote-parent' } }, ...overrides } })
+  }
+  // An unlink that did not commit (its snapshot never accepted), or another listing's, ends nothing.
+  await unlinkRecord('unaccepted-unlink', { outcome: 'UNACCEPTED', acceptedAt: null })
+  await unlinkRecord('child-unlink', { channelListingId: 'baseline-listing-child' })
+  expect(field(await read(), 'brand')).toEqual({ state: 'value', value: 'Old item brand' })
+  // The accepted unlink ends the old item's history: the relist is reviewed as a new listing.
+  await unlinkRecord('the-unlink')
+  const after = await read()
+  expect([...after.values]).toEqual([])
+  expect(after.revision).not.toBe(before.revision)
+  // The relist's own accepted publish counts, alone.
+  await save('after-unlink', [value('item_name', 'Relisted after unlink')])
+  const relisted = await read()
+  expect(field(relisted, 'item_name')).toEqual({ state: 'value', value: 'Relisted after unlink' })
+  expect(field(relisted, 'brand')).toBeUndefined()
+})
+
 it('folds sparse accepted publishes per field and applies later request ordinals last', async () => {
   await save('first', [value('item_name', 'First title'), value('brand', 'Original brand')])
   await save('second', [], { payload: envelope([intent([value('item_name', 'Intermediate title')]), intent([value('item_name', 'Final title')])]) as Prisma.InputJsonValue })

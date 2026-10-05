@@ -157,3 +157,47 @@ it.each([{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD', 'WITHD
   }
   expect(state.writes).toEqual([])
 })
+
+/**
+ * S5 (per-channel SKU) — the variant is found by its stored id; the SKU it must still carry is the one Shopify holds for
+ * the listing (`listingSendSku`): its confirmed `liveChannelSku`, else the product SKU. A Shopify sheet SKU not yet sent
+ * — the native SKU column (`platformAttributes.sku`) or an edit in the override bag — is never expected, so it never
+ * blocks a stock or price push.
+ */
+describe('S5 — the SKU the variant must carry is the listing\'s live SKU', () => {
+  it('🔴 an unsent sheet SKU (the native SKU column) does not block stock or price: the variant under its product SKU is sent', async () => {
+    state.listing.platformAttributes.sku = 'BLUE-M-NEXT'
+    await syncNativeShopifyOffer(item)
+    expect(state.quantity).toBe(5)
+    await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: { price: 22 } })
+    expect(state.price).toBe('22.00')
+  })
+  it('parity: a SKU Shopify holds but Nexus never confirmed is refused, as today (only a confirmed SKU is expected)', async () => {
+    state.sku = 'BLUE-M-NEXT'; state.listing.platformAttributes.sku = 'BLUE-M-NEXT'
+    await expect(syncNativeShopifyOffer(item)).rejects.toThrow('identity changed')
+    expect(state.writes).toEqual([])
+  })
+  it('own SKU confirmed (liveChannelSku): price is sent, not refused', async () => {
+    state.sku = 'BLUE-M-LIVE'; state.listing.liveChannelSku = 'BLUE-M-LIVE'
+    await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE', payload: { price: 21 } })
+    expect(state.price).toBe('21.00')
+  })
+  it('parity: an edit only in the override bag is not what Shopify holds — the product SKU is still expected', async () => {
+    state.listing.overrideData = { listing_sku: 'BLUE-M-NEXT' }
+    await syncNativeShopifyOffer(item)
+    expect(state.quantity).toBe(5)
+    state.sku = 'BLUE-M-NEXT'
+    await expect(syncNativeShopifyOffer(item)).rejects.toThrow('identity changed')
+  })
+  it('a listing with its own confirmed SKU whose variant now carries the product SKU: refused, nothing written', async () => {
+    state.listing.liveChannelSku = 'BLUE-M-LIVE'
+    await expect(syncNativeShopifyOffer(item)).rejects.toThrow('identity changed')
+    expect(state.writes).toEqual([])
+  })
+  it('an extra listing\'s own SKU and a native SKU that disagree are no conflict: neither is what Shopify holds', async () => {
+    Object.assign(state.listing, { aliasKey: 'alias-1', alias: { sku: 'BLUE-M-AL', productId: 'child' } })
+    state.listing.platformAttributes.sku = 'BLUE-M-SHOP'
+    await syncNativeShopifyOffer({ ...item, channelListing: { id: 'listing' } })
+    expect(state.quantity).toBe(5)
+  })
+})

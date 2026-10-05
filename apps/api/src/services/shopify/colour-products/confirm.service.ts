@@ -30,6 +30,8 @@ import { loadColourPlan } from './family.js'
 import { claimedElsewhere, colourProductsView, gatherCandidates, linkedProducts, rowsWhere, type Destination } from './find.service.js'
 import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 import { colourIsPublished, readOnlineStorePublication } from './variants.js'
+import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
+import { confirmLiveChannelSku } from '../../listings/channel-sku.js'
 
 const productGid = /^gid:\/\/shopify\/Product\/\d+$/
 const locationGid = /^gid:\/\/shopify\/Location\/\d+$/
@@ -86,8 +88,10 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   // The names this confirm stores, and the plan they give (a blank or repeated name refuses below).
   const nameOf = (c: typeof input.colours[number]) => c.colourName ?? rowOf.get(c.valueKey)!.colourName ?? (rowOf.get(c.valueKey)!.proposal as StoredProposal).shopifyColourName ?? null
   const colourNames = { ...Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!])), ...Object.fromEntries(input.colours.flatMap(c => nameOf(c) ? [[c.valueKey, nameOf(c)!]] : [])) }
-  const { plan } = await loadColourPlan(destination.familyId, { colourNames })
+  // S5 — each size under the SKU Shopify knows it by (its listing's own SKU, else the product SKU), as Find matched it.
+  const { plan, problems: skuProblems } = await withListingSkus(destination, (await loadColourPlan(destination.familyId, { colourNames })).plan)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) throw new WorkspaceScopeError('This family has no colour to show as separate Shopify products. Nothing was changed.', 422)
+  if (skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems), 409)
 
   const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const publication = await readOnlineStorePublication(graphql)
@@ -191,7 +195,7 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
       if (!row || row.updatedAt.getTime() !== a.row.updatedAt.getTime()) throw new WorkspaceScopeError(`"${a.name}" changed while it was confirmed. Run Find again.`, 409)
       const ensured = await ensureDraftListings(tx, { channel: 'SHOPIFY', market: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', productIds, family: true })
       draftsCreated = ensured.filter(e => e.created).length
-      const listings = await tx.channelListing.findMany({ where: { productId: { in: productIds }, ...listingCoordinate(destination) } })
+      const listings = await tx.channelListing.findMany({ where: { productId: { in: productIds }, ...listingCoordinate(destination) }, include: { product: { select: { sku: true } } } })
       for (const v of a.variants) {
         const listing = listings.find(l => l.productId === v.productId)
         if (!listing) throw new WorkspaceScopeError(`The Shopify listing of ${v.sku} is missing.`, 409)
@@ -205,6 +209,9 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
           // A draft this confirm made real loses the pause that kept it inert (as a publish does); any other row keeps its own.
           ...(isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
         } })
+        // S5 — Shopify read this size back under its SKU above: when that is the listing's own SKU (or one was recorded
+        // before), it is the SKU Shopify holds now. A size under its product SKU writes nothing.
+        if (v.sku !== listing.product?.sku || listing.liveChannelSku) await confirmLiveChannelSku(tx, listing.id, v.sku)
       }
       await tx.shopifyColourProduct.update({ where: { id: a.row.id }, data: { state: 'LINKED', shopifyProductId: a.shopifyProductId, colourName: a.colourName, remoteStatus: back.status, checkedAt: new Date() } })
     })

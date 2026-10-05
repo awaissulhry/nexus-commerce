@@ -20,6 +20,8 @@ vi.mock('../channel-specs/index.js', () => ({
   loadAmazonEnglishLabels: async () => new Map(),
 }))
 import { getFieldCatalogue } from './field-catalogue.service.js'
+import { validateChannelValue } from './validate-channel-value.js'
+import { withEnglish } from '../channel-specs/amazon-english.js'
 
 const definition = JSON.parse(readFileSync(new URL('../channel-specs/__tests__/fixtures/amazon-it-outerwear.trimmed.json', import.meta.url), 'utf8'))
 const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: definition })
@@ -107,4 +109,44 @@ it.each(['SHOPIFY', 'ETSY'])('uses the %s core field contract in mapping without
     expect(c.fields.find(f => f.fieldKey === 'tags')).toMatchObject({ sheetKey: 'keywords', rule: { source: 'keywords' } })
     expect(c.fields.find(f => f.fieldKey === 'item_weight')).toMatchObject({ sheetKey: 'weightValue', rule: { source: 'weightValue' } })
   }
+})
+
+/**
+ * W3-2 — the mapping page shows Amazon's fields as the sheet does: English option names with the market's kept as
+ * accepted spellings, English help; before the English copy exists, the market's words led by one line. The rule a
+ * field gets is derived from the field as Amazon declares it, so it does not move.
+ */
+describe('Amazon in English on the mapping page (W3-2)', () => {
+  const listLeaf = (node: any): any => !node || typeof node !== 'object' ? null : Array.isArray(node.enum) ? node
+    : Object.values(node).reduce((found: any, child) => found ?? listLeaf(child), null)
+  const market = structuredClone(definition)
+  market.__schemaProvenance = { locale: 'it_IT' }
+  const copy = structuredClone(market)
+  copy.__schemaProvenance = { locale: 'en_GB' }
+  const leaf = listLeaf(copy.properties.supplier_declared_dg_hz_regulation)
+  leaf.enumNames = leaf.enum.map((code: string) => ({ other: 'Other', storage: 'Storage', not_applicable: 'Not applicable' } as Record<string, string>)[code] ?? code.toUpperCase())
+  leaf.description = 'Select the regulations that apply.'
+  const specOf = (def: unknown) => amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: def })
+
+  it('names options in English, accepts the market word, and derives the same rule as before', async () => {
+    mocks.amazon.mockResolvedValue(specOf(market))
+    const before = (await getFieldCatalogue({ channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR' })).fields
+    mocks.amazon.mockResolvedValue(withEnglish(specOf(market), specOf(copy)))
+    const after = (await getFieldCatalogue({ channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR' })).fields
+    const field = after.find(f => f.fieldKey === 'supplier_declared_dg_hz_regulation')!
+    expect(field).toMatchObject({ optionLabels: { other: 'Other', storage: 'Storage', not_applicable: 'Not applicable' }, helpText: 'Select the regulations that apply.' })
+    expect(field.optionAliases).toMatchObject({ other: ['Altro'], storage: ['Conservazione'], not_applicable: ['Non applicabile'] })
+    for (const typed of ['Altro', 'Other']) expect(validateChannelValue(field, typed).value).toBe('other')
+    // An off-list value is named in the words the page shows (W3-7's one sentence): Amazon's English names.
+    expect(validateChannelValue(field, 'Plutonio', 'AMAZON').errors[0]).toMatch(/Allowed: Other, Storage, .*Not applicable/)
+    // Only names moved: the rules, options and modes are the ones the raw definition gives.
+    expect(after.map(f => [f.fieldKey, f.rule, f.options, f.selectionOnly])).toEqual(before.map(f => [f.fieldKey, f.rule, f.options, f.selectionOnly]))
+  })
+
+  it('before the English copy: the market words, led by the line', async () => {
+    mocks.amazon.mockResolvedValue(withEnglish(specOf(market), null))
+    const field = (await getFieldCatalogue({ channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR' })).fields.find(f => f.fieldKey === 'supplier_declared_dg_hz_regulation')!
+    expect(field.optionLabels?.other).toBe('Altro')
+    expect(field.helpText).toBe("Amazon's English names are not downloaded yet. This shows Amazon's Italian words.")
+  })
 })

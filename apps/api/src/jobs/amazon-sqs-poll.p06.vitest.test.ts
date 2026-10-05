@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   cronRuns: [] as Array<{ name: string; workspace?: string }>,
   credentialOutcome: 'saved' as string,
   credentialBodies: [] as string[],
+  stockEvents: [] as Array<{ sku?: string; channelConnectionId?: string | null; workspace?: string }>,
 }))
 
 vi.mock('@aws-sdk/client-sqs', () => {
@@ -64,7 +65,15 @@ vi.mock('../services/amazon-orders.service.js', () => ({
   amazonOrdersService: { isConfigured: async () => true, syncNewOrders: h.syncNewOrders, backfillZeroTotals: vi.fn(async () => ({ repaired: 0 })) },
 }))
 vi.mock('../services/order-events.service.js', () => ({ publishOrderEvent: vi.fn() }))
-vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'A1', getAmazonRegion: async () => 'eu' }))
+vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'A1', getAmazonRegion: async () => 'eu',
+  // S7 — the account a seller id names (only A1 is connected, in ws-a).
+  amazonAccount: async (input: { sellerId?: string } = {}) => { if (input.sellerId === 'A1') return { id: 'conn-a' }; throw new Error('no such seller') } }))
+// S7 — the FBA notification's stock events, observed with the account they were recorded for.
+vi.mock('../services/channel-stock-event.service.js', async () => {
+  const { workspaceContext } = await import('../lib/workspace-context.js')
+  return { recordChannelStockEvent: vi.fn(async (input: { sku?: string; channelConnectionId?: string | null }) => {
+    h.stockEvents.push({ sku: input.sku, channelConnectionId: input.channelConnectionId, workspace: workspaceContext()?.workspaceId }); return {} }) }
+})
 vi.mock('../lib/cron/clustered.js', () => ({ default: { schedule: vi.fn(), validate: () => true }, schedulePlatform: vi.fn() }))
 vi.mock('../utils/cron-observability.js', async () => {
   const { workspaceContext } = await import('../lib/workspace-context.js')
@@ -270,5 +279,20 @@ describe('P6.1 — an app-credential message on the notifications queue', () => 
     await drain()
     expect(h.credentialBodies).toEqual([body])
     expect(deleted('c2')).toBe(false)
+  })
+})
+
+describe('S7 — an FBA inventory notification names the reporting account', () => {
+  it('each SKU is recorded with the account of the seller the notification names, so a listing\'s own seller SKU there can be matched', async () => {
+    h.stockEvents.length = 0
+    enqueue('s7', envelope('FBA_INVENTORY_AVAILABILITY_CHANGES', { SellerId: 'A1', FBAInventoryAvailabilityChanges: { Items: [
+      { SellerSku: 'OWN-SKU-IT', FulfillableQuantity: 3 }, { SellerSku: 'MASTER-SKU', FulfillableQuantity: 0 },
+    ] } }))
+    await drain()
+    expect(h.stockEvents).toEqual([
+      { sku: 'OWN-SKU-IT', channelConnectionId: 'conn-a', workspace: 'ws-a' },
+      { sku: 'MASTER-SKU', channelConnectionId: 'conn-a', workspace: 'ws-a' },
+    ])
+    expect(deleteIndex('s7')).toBeGreaterThan(recordIndex('s7'))
   })
 })

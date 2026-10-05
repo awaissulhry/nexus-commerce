@@ -6,7 +6,20 @@
 import { getTraceId } from '../utils/request-context.js'
 import type { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { sellerSkuForClaim } from './listing-claim-identity.js'
+import { claimSkuAnswer } from './listing-claim-identity.js'
+
+/**
+ * S8 — what the claim preflight reads of a listing: its coordinate and every fact `wantedChannelSku` reads (the claim is
+ * keyed on the SKU publish sends — `claimSkuAnswer`, listing-claim-identity.ts).
+ */
+const CLAIM_LISTING_SELECT = {
+  id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true,
+  channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
+  platformAttributes: true, flatFileSnapshot: true, overrideData: true,
+  product: { select: { sku: true } },
+  offers: { select: { sku: true, fulfillmentMethod: true, isActive: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+  alias: { select: { sku: true, productId: true } },
+} as const
 
 // Structural typing matching the repo's SharedFanoutDeps precedent — accepts
 // PrismaClient or a TransactionClient without fighting Prisma's generics.
@@ -86,13 +99,10 @@ export async function reserveSharedCoordinates(
     if (sharedNamed.size === 0) return { allowed: rows, blocked: [] }
   }
 
+  // S8 — every fact the channel-SKU resolver reads, so the claim names the SKU publish sends (the listing's own SKU).
   const listings = await (db as unknown as { channelListing: { findMany: (a: unknown) => Promise<Array<Record<string, unknown>>> } }).channelListing.findMany({
     where: { id: { in: listingIds } },
-    select: {
-      id: true, marketplace: true, channelConnectionId: true,
-      product: { select: { sku: true } },
-      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
-    },
+    select: CLAIM_LISTING_SELECT,
   })
   const byId = new Map(listings.map(l => [l.id as string, l]))
   const shared = await sharedConnectionIds(listings.map(l => l.channelConnectionId as string).filter(Boolean), grantReader)
@@ -105,8 +115,12 @@ export async function reserveSharedCoordinates(
     const connectionId = listing?.channelConnectionId as string | undefined
     if (!listing || !connectionId || !shared.has(connectionId)) continue
     const marketplace = (listing.marketplace as string) ?? 'DEFAULT'
-    const sellerSku = sellerSkuForClaim(listing as never)
-    const outcome = await claimCoordinate({ connectionId, marketplace, sellerSku, channelListingId: id })
+    const wanted = claimSkuAnswer(listing as never)
+    const sellerSku = wanted.sku
+    // No single SKU (two on record, an Amazon extra listing with none): refused with the resolver's own sentence.
+    const outcome = sellerSku
+      ? await claimCoordinate({ connectionId, marketplace, sellerSku, channelListingId: id })
+      : { result: 'blocked' as const, reason: wanted.conflict?.sentence, heldBy: undefined }
     if (outcome.result === 'blocked') {
       refusedListingIds.add(id)
       blocked.push({ channelListingId: id, sellerSku, marketplace, reason: outcome.reason ?? 'That coordinate belongs to another business profile.', heldByWorkspaceName: outcome.heldBy?.workspaceName })

@@ -41,6 +41,7 @@ import { detectEuIntentConflict, EU_GUARD_REMEDY } from './amazon-eu-quantity-gu
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { MARKETPLACE_ID_MAP } from './amazon/flat-file.service.js'
 import { readAmazonOfferLive, type AmazonOfferLiveRead } from './amazon/purchasable-offer.js'
+import { listingSendSku, sharesAmazonSellerSku } from './listings/listing-send-sku.js'
 import { logger } from '../utils/logger.js'
 
 export type { AmazonOfferLiveRead } from './amazon/purchasable-offer.js'
@@ -71,6 +72,12 @@ export interface MarketOfferResult {
 }
 
 
+/** The seller-SKU facts of a listing (`listingSendSku`, S3): the two SKU columns, the draft facts, the offers, the mirror. */
+const SELLER_SKU_SELECT = {
+  channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true, flatFileSnapshot: true,
+  offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] },
+}
+
 async function loadRow(t: MarketOfferTarget) {
   return prisma.channelListing.findFirst({
     where: whereCoordinate({ ...t, channel: 'AMAZON' }),
@@ -78,9 +85,21 @@ async function loadRow(t: MarketOfferTarget) {
       id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, fulfillmentMethod: true,
       offerClosedAt: true, offerCloseSnapshot: true, price: true,
       platformAttributes: true, followMasterQuantity: true, quantityOverride: true, syncPaused: true,
+      ...SELLER_SKU_SELECT,
       product: { select: { sku: true, fulfillmentMethod: true, productType: true } },
     },
   })
+}
+
+type OfferRow = NonNullable<Awaited<ReturnType<typeof loadRow>>>
+
+/**
+ * S3 (per-channel SKU) — the seller SKU Amazon holds for this listing: the product SKU unless it has its own (a draft:
+ * the product SKU, as before). `refusal` when two SKUs are on record: nothing is sent for that row.
+ */
+function sellerSkuOf(cl: OfferRow, productSku: string): { sku: string | null; refusal: string | null } {
+  const held = listingSendSku({ ...cl, channel: 'AMAZON' }, productSku, productSku)
+  return { sku: held.sku, refusal: held.refusal }
 }
 
 type OfferPatchResult = Awaited<ReturnType<typeof amazonSpApiClient.patchPurchasableOffer>>
@@ -179,13 +198,15 @@ export async function closeMarketOffers(opts: {
   for (const t of opts.targets) {
     try {
       const cl = await loadRow(t)
-      const sku = cl?.product?.sku ?? null
-      if (!cl || !sku) {
-        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_NO_LISTING' })
+      const productSku = cl?.product?.sku ?? null
+      if (!cl || !productSku) {
+        result.results.push({ productId: t.productId, sku: productSku, marketplace: t.marketplace, action: 'SKIPPED_NO_LISTING' })
         result.unchanged++
         processed++
         continue
       }
+      const held = sellerSkuOf(cl, productSku)
+      const sku = held.sku ?? productSku
       const fba = isFbaCoordinate(cl)
       if (fba && !opts.allowFba) {
         // Owner rule: FBA is Amazon-managed — never close it (outside the engine's Pause offer).
@@ -197,6 +218,13 @@ export async function closeMarketOffers(opts: {
       if (cl.offerClosedAt) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_ALREADY' })
         result.unchanged++
+        processed++
+        continue
+      }
+      if (!held.sku) {
+        // S3 — two seller SKUs on record: nothing is sent (a guess could close or reopen another listing's offer).
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: held.refusal ?? undefined })
+        result.failed++
         processed++
         continue
       }
@@ -293,13 +321,15 @@ export async function reopenMarketOffers(opts: {
   for (const t of opts.targets) {
     try {
       const cl = await loadRow(t)
-      const sku = cl?.product?.sku ?? null
-      if (!cl || !sku) {
-        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_NO_LISTING' })
+      const productSku = cl?.product?.sku ?? null
+      if (!cl || !productSku) {
+        result.results.push({ productId: t.productId, sku: productSku, marketplace: t.marketplace, action: 'SKIPPED_NO_LISTING' })
         result.unchanged++
         processed++
         continue
       }
+      const held = sellerSkuOf(cl, productSku)
+      const sku = held.sku ?? productSku
       const fba = isFbaCoordinate(cl)
       if (fba && !opts.allowFba) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
@@ -310,6 +340,13 @@ export async function reopenMarketOffers(opts: {
       if (!cl.offerClosedAt) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_NOT_CLOSED' })
         result.unchanged++
+        processed++
+        continue
+      }
+      if (!held.sku) {
+        // S3 — two seller SKUs on record: nothing is sent (a guess could close or reopen another listing's offer).
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: held.refusal ?? undefined })
+        result.failed++
         processed++
         continue
       }
@@ -376,10 +413,13 @@ export async function reopenMarketOffers(opts: {
 
       // Reopening forces FOLLOW and queues quantity. Check the shared number
       // for this account/alias before either the patch or any local mutation.
-      const euRows = await prisma.channelListing.findMany({
+      // S3 — per seller SKU: only the rows that sell under this SKU share its one EU quantity (a row whose SKU cannot be
+      // told counts as sharing it). Rows with no SKU of their own all sell under the product SKU, as before.
+      const siblingRows = await prisma.channelListing.findMany({
         where: { productId: t.productId, channel: 'AMAZON', channelConnectionId: t.channelConnectionId, aliasKey: t.aliasKey },
-        include: { product: { select: { fulfillmentMethod: true } } },
+        include: { product: { select: { fulfillmentMethod: true, sku: true } }, offers: SELLER_SKU_SELECT.offers },
       })
+      const euRows = siblingRows.filter(r => r.id === cl.id || sharesAmazonSellerSku(r, r.product?.sku, sku))
       const conflict = detectEuIntentConflict(euRows.map(r => ({
         marketplace: r.marketplace, quantity: r.quantity,
         followMasterQuantity: r.id === cl.id ? true : r.followMasterQuantity,

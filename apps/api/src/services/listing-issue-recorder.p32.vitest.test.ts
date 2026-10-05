@@ -352,4 +352,77 @@ describe('P3.2 — every channel error lands on its listing', () => {
       expect(mine.filter((r) => r.resolvedAt !== null).map((r) => r.code)).toEqual(['1'])
     })
   })
+
+  /**
+   * S8 — a listing may carry its own channel SKU (per channel AND market). Amazon names the SKU it holds, and the
+   * notification names the seller: the issue lands by ACCOUNT and SKU through the resolver, never on "the first listing
+   * of a product with that SKU".
+   */
+  describe('S8 — matched by account and the listing\'s own SKU', () => {
+    const OTHER = 'ws-p32-s8-other'
+    const issue = [{ code: '18028', message: 'The SKU is missing a required attribute.', severity: 'ERROR', attributeNames: ['item_name'] }]
+    const notify = (sellerSku: string, sellerId?: string) => inLegacy(() => recorder.recordNotificationIssues({
+      sellerSku, marketplaceId: 'APJ6JRA9NG5V4', ...(sellerId ? { sellerId } : {}), issues: issue, occurredAt: new Date('2026-10-05T10:00:00.000Z'),
+    }))
+    const notified = async (listingId: string) => (await issuesOn(listingId)).filter((r) => r.source === 'amazon-notification').length
+
+    beforeAll(async () => {
+      await q(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, 'Other', 'active', 'p32', $1, CURRENT_TIMESTAMP)`, [OTHER])
+      await q(`INSERT INTO "ChannelConnection" (id, "workspaceId", "channelType", "externalAccountId", "isActive", "updatedAt") VALUES
+        ('C-S8-A', $1, 'AMAZON', 'SELLER-S8-A', true, CURRENT_TIMESTAMP),
+        ('C-S8-B', $1, 'AMAZON', 'SELLER-S8-B', true, CURRENT_TIMESTAMP),
+        ('C-S8-X', $2, 'AMAZON', 'SELLER-S8-X', true, CURRENT_TIMESTAMP)`, [LEGACY, OTHER])
+      await q(`INSERT INTO "Product" ("workspaceId", id, sku, name, "basePrice", "updatedAt") VALUES
+        ($1, 'P-S8-OWN', 'S8-REC', 'Own SKU', 10, CURRENT_TIMESTAMP),
+        ($1, 'P-S8-PLAIN', 'S8-REC-PLAIN', 'Plain', 10, CURRENT_TIMESTAMP),
+        ($1, 'P-S8-AMB1', 'S8-AMB-1', 'Amb 1', 10, CURRENT_TIMESTAMP),
+        ($1, 'P-S8-AMB2', 'S8-AMB-2', 'Amb 2', 10, CURRENT_TIMESTAMP),
+        ($2, 'P-S8-FOREIGN', 'S8-FOREIGN', 'Foreign', 10, CURRENT_TIMESTAMP)`, [LEGACY, OTHER])
+      await q(`INSERT INTO "ChannelListing" ("workspaceId", id, "productId", "channelMarket", channel, region, marketplace, "channelConnectionId", "channelSku", "liveChannelSku", "listingStatus", "isPublished", "updatedAt") VALUES
+        ($1, 'L-S8-OWN-A', 'P-S8-OWN', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-A', 'S8-REC-IT', 'S8-REC-IT', 'ACTIVE', true, CURRENT_TIMESTAMP),
+        ($1, 'L-S8-OWN-B', 'P-S8-OWN', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-B', 'S8-REC-IT', 'S8-REC-IT', 'ACTIVE', true, CURRENT_TIMESTAMP),
+        ($1, 'L-S8-PLAIN', 'P-S8-PLAIN', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-A', NULL, NULL, 'ACTIVE', true, CURRENT_TIMESTAMP),
+        ($1, 'L-S8-AMB1', 'P-S8-AMB1', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-A', 'S8-AMB', 'S8-AMB', 'ACTIVE', true, CURRENT_TIMESTAMP),
+        ($1, 'L-S8-AMB2', 'P-S8-AMB2', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-B', 'S8-AMB', 'S8-AMB', 'ACTIVE', true, CURRENT_TIMESTAMP),
+        ($2, 'L-S8-FOREIGN', 'P-S8-FOREIGN', 'AMAZON_IT', 'AMAZON', 'IT', 'IT', 'C-S8-X', 'S8-REC-IT', 'S8-REC-IT', 'ACTIVE', true, CURRENT_TIMESTAMP)`, [LEGACY, OTHER])
+    })
+
+    it('a notification for a listing\'s own SKU lands on that account\'s listing only', async () => {
+      expect(await notify('S8-REC-IT', 'SELLER-S8-A')).toEqual({ listings: 1, issues: 1 })
+      expect([await notified('L-S8-OWN-A'), await notified('L-S8-OWN-B')]).toEqual([1, 0])
+    })
+
+    it('the product SKU no longer names a listing whose own SKU Amazon confirmed', async () => {
+      expect(await notify('S8-REC', 'SELLER-S8-A')).toEqual({ listings: 0, issues: 0 })
+    })
+
+    it('parity: a listing without its own SKU is found by its product SKU, as before', async () => {
+      expect(await notify('S8-REC-PLAIN', 'SELLER-S8-A')).toEqual({ listings: 1, issues: 1 })
+      expect(await notified('L-S8-PLAIN')).toBe(1)
+    })
+
+    it('two products answer to the SKU (no seller named): reported, placed nowhere; the seller decides it', async () => {
+      expect(await notify('S8-AMB')).toEqual({ listings: 0, issues: 0, ambiguous: ['P-S8-AMB1', 'P-S8-AMB2'] })
+      expect([await notified('L-S8-AMB1'), await notified('L-S8-AMB2')]).toEqual([0, 0])
+      expect(await notify('S8-AMB', 'SELLER-S8-B')).toEqual({ listings: 1, issues: 1 })
+      expect([await notified('L-S8-AMB1'), await notified('L-S8-AMB2')]).toEqual([0, 1])
+    })
+
+    it('another business\'s listing with the same own SKU never gets the issue', async () => {
+      await notify('S8-REC-IT')
+      const foreign = await q<{ n: number }>(`SELECT count(*)::int AS n FROM "ListingIssue" WHERE "listingId" = 'L-S8-FOREIGN'`)
+      expect(foreign.rows[0].n).toBe(0)
+    })
+
+    it('a feed report without a journal: an own SKU lands on its listings; the product SKU of an own-SKU listing does not', async () => {
+      const own = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'S8-REC-IT', status: 'error', issues: [{ code: '90220', severity: 'error', message: '“inner” è obbligatorio ma mancante.', attributeNames: [] }] }], marketplace: 'IT',
+      }))
+      expect(own).toEqual({ listings: 2, issues: 2, unmatchedSkus: [] })
+      const product = await inLegacy(() => recorder.recordFeedReportIssues({
+        perSku: [{ sku: 'S8-REC', status: 'error', issues: [{ code: '90221', severity: 'error', message: 'x', attributeNames: [] }] }], marketplace: 'IT',
+      }))
+      expect(product.unmatchedSkus).toEqual(['S8-REC'])
+    })
+  })
 })

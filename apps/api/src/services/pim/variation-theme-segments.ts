@@ -17,6 +17,7 @@
  */
 
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import { fieldNameFromKey } from '@nexus/shared/sheet-names'
 
 /** The theme string's segments. Amazon joins with `/`; a stray space or empty segment is dropped. */
 export function themeSegments(theme: string | null | undefined): string[] {
@@ -149,6 +150,17 @@ export function attributeTitle(attribute: string | null, properties: Record<stri
   if (!attribute) return null
   const node = (properties ?? {})[attribute] as { title?: unknown } | undefined
   return typeof node?.title === 'string' && node.title.trim() ? node.title.trim() : null
+}
+
+/**
+ * W3-2 (Owner decision 4, 2026-10-05) — the name an Amazon theme or axis is SHOWN under: the bound attribute (or the
+ * unbound segment) in English words through the sheet's naming table — "Color / Size", "Fit type" — never the market
+ * schema's title ("Colore / Taglia", `attributeTitle`). Amazon receives only the theme CODE, so this is display only.
+ * It changes the 09-13 rule "axes in the language of the market" for Amazon alone; eBay receives its axis names and
+ * keeps the market's.
+ */
+export function amazonAxisName(attributeOrSegment: string | null | undefined): string {
+  return fieldNameFromKey(String(attributeOrSegment ?? '').toLowerCase())
 }
 
 export interface ThemeMatch {

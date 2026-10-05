@@ -1,6 +1,7 @@
 import { normalizeLanguage } from '../content-language.js'
 import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey, SHOPIFY_INVENTORY_POLICY_LABEL, SHOPIFY_NEXUS_TEMPLATE, SHOPIFY_TEMPLATE_HINT, SHOPIFY_WEIGHT_UNITS } from '@nexus/shared/shopify-information'
 import { shopifyDefinitionApplicability, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { sheetName } from '@nexus/shared/sheet-names'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
 
 /** Store product information. Source references and scope are recorded in the audit. */
@@ -114,7 +115,8 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
       entry.helpText = `${translationLocale} translation. Clearing restores the primary-language value. Shopify translatability is verified against the created resource before synchronization.`
     }
     return info.id === 'inventory'
-      ? [{ key: 'availableQuantity', label: 'Available quantity' }, { key: 'onHandQuantity', label: 'On hand quantity' }]
+      // W3-6 — Shopify's two stock numbers, named as Shopify's admin names them: "Available", "On hand" (the sheet's naming table).
+      ? [{ key: 'availableQuantity', label: sheetName('availableQuantity', 'SHOPIFY')! }, { key: 'onHandQuantity', label: sheetName('onHandQuantity', 'SHOPIFY')! }]
         .map(quantity => ({ ...entry, ...quantity, englishLabel: quantity.label, attribute: quantity.key, kind: 'number' as const, channelStore: pa(quantity.key), editable: false,
           readOnlyReason: 'This draft has no Shopify inventory item or stocking locations. Publish it, then edit inventory by location in Shopify Information.' }))
       : [entry]

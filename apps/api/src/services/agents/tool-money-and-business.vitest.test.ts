@@ -144,6 +144,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-listing-fields': 'its writer checks an attribute against the channel category schema, which is not seeded here (listing-create.tools test)',
   'close-listing': 'a close needs a channel\'s own state (eBay\'s out-of-stock option, an Amazon offer, the Etsy gate) (listing-close.tools test)',
   'reopen-listing': 'a reopen needs a closed listing and its channel (listing-close.tools test)',
+  'end-listing': 'an End needs a live eBay or Shopify listing on its account (listing-lifecycle.tools test)',
+  'relist-listing': 'a Relist needs an Ended eBay or Shopify listing on its account (listing-lifecycle.tools test)',
+  'delete-listing': 'a Delete needs a listing on its account and the channel\'s gate (listing-lifecycle.tools test)',
   'add-photo-from-url': 'it fetches a web link and stores the file (Cloudinary), neither of which this suite has (photos-link.tools test)',
 }
 
@@ -435,6 +438,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // L9 — the seeded live eBay listing (its account's out-of-stock option cannot be read here: refused).
   'close-listing': (ids) => ({ listingIds: [ids.listingId] }),
   'reopen-listing': (ids) => ({ listingIds: [ids.listingId] }),
+  // Phase 3 (T1) — the same listing (it names no account here: refused before any engine read).
+  'end-listing': (ids) => ({ listingIds: [ids.listingId], confirmSku: 'MONEY-FAMILY' }),
+  'relist-listing': (ids) => ({ listingIds: [ids.listingId], confirmSku: 'MONEY-FAMILY' }),
+  'delete-listing': (ids) => ({ listingIds: [ids.listingId], confirmSku: 'MONEY-FAMILY' }),
   // L10 — the product's photo plan (seeded on the media plan): one gallery, no picture axis.
   'arrange-photos': (ids) => ({ productId: ids.productId, address: { layer: 'SHARED' }, ops: [{ op: 'axis', axis: null }] }),
   // L11 — a photo from a link (refused here: no web, no photo store), and the seeded unused photo removed.

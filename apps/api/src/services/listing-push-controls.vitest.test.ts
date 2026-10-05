@@ -15,7 +15,9 @@ it('matches physical SKU snapshot and product/variant identities without inventi
  expect(query.where.OR).toContainEqual({product:{OR:[{sku:{in:['seller']}},{variations:{some:{sku:{in:['seller']}}}}]}})
  expect(query.where.OR).toContainEqual({id:{in:['listing']}})
  expect(query.where.OR).toContainEqual({productId:{in:['product']}})
- expect(query).not.toHaveProperty('select'); expect(JSON.stringify(query)).not.toContain('channelSku')
+ // S8 — ChannelListing.channelSku now exists (a listing's own channel SKU): matched with liveChannelSku, in the same statement.
+ expect(query.where.OR).toContainEqual({OR:[{channelSku:{in:['seller']}},{liveChannelSku:{in:['seller']}}]})
+ expect(query).not.toHaveProperty('select')
 })
 it('recognizes numeric and GID Shopify identities carried in platform attributes', async () => {
  await readPushControls({channel:'SHOPIFY',externalIds:['gid://shopify/ProductVariant/123']})
@@ -31,4 +33,19 @@ it('refuses unreadable and absent controls; only an explicit creation lookup all
  s.find.mockResolvedValue([])
  await expect(readPushControls({channel:'AMAZON',skus:['SKU']})).rejects.toMatchObject({code:'PUSH_CONTROL_UNAVAILABLE'})
  await expect(readPushControls({channel:'AMAZON',skus:['SKU'],allowAbsent:true})).resolves.toEqual([])
+})
+it('S8 — a listing\'s own channel SKU is matched in the same statement, on the indexed columns only (no JSON store, no second read)', async () => {
+ await readPushControls({channel:'amazon',skus:[' OWN-IT ']})
+ expect(s.find).toHaveBeenCalledOnce()
+ const OR=s.find.mock.calls[0][0].where.OR
+ expect(OR).toContainEqual({OR:[{channelSku:{in:['OWN-IT']}},{liveChannelSku:{in:['OWN-IT']}}]})
+ // The own-SKU clause names no JSON store (the pre-existing eBay snapshot clause is the only JSON condition).
+ expect(JSON.stringify(OR.filter((c:any)=>!c.flatFileSnapshot))).not.toMatch(/platformAttributes|flatFileSnapshot|overrideData/)
+ // Parity: the product-SKU and snapshot matches stay.
+ expect(OR).toContainEqual({product:{OR:[{sku:{in:['OWN-IT']}},{variations:{some:{sku:{in:['OWN-IT']}}}}]}})
+ expect(OR).toContainEqual({flatFileSnapshot:{path:['sku'],equals:'OWN-IT'}})
+})
+it('S8 — no own-SKU clause without a SKU', async () => {
+ await readPushControls({channel:'EBAY',listingIds:['listing']})
+ expect(JSON.stringify(s.find.mock.calls[0][0])).not.toContain('channelSku')
 })

@@ -39,12 +39,15 @@ import {
 import { fetchMatrix, patchMatrix, type MatrixSource } from '../../matrix/source'
 import type { ChannelSheetRow, SheetColumn, StockControlCell, StudioCellValue } from './types'
 
-/** The three stock columns (API `STUDIO_STOCK_KEYS`) and the ASIN column (API `LISTING_ASIN_KEY`). */
+/** The three stock columns (API `STUDIO_STOCK_KEYS`), the ASIN column (API `LISTING_ASIN_KEY`) and eBay's Item ID (API `LISTING_ITEM_ID_KEY`). */
 export const STOCK_COLUMN_KEYS = ['stock_mode', 'stock_qty', 'stock_buffer'] as const
 export type StockColumnKey = (typeof STOCK_COLUMN_KEYS)[number]
 export const LISTING_ASIN_KEY = 'listing_asin'
+export const LISTING_ITEM_ID_KEY = 'listing_item_id'
+/** The Matrix listing states in which an eBay Item ID counts: selling (listed, paused) or ended. */
+const ITEM_ID_COUNTS: ReadonlySet<string> = new Set(['listed', 'closed', 'ended'])
 /** The cells a Matrix read refreshes on a sheet row. */
-export const STOCK_REFRESH_COLUMNS: readonly string[] = [...STOCK_COLUMN_KEYS, LISTING_ASIN_KEY]
+export const STOCK_REFRESH_COLUMNS: readonly string[] = [...STOCK_COLUMN_KEYS, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY]
 
 /** The Matrix cell behind each stock column, when the column itself does not say (`SheetColumn.matrixCell`). */
 export const STOCK_CELL_OF: Readonly<Record<StockColumnKey, StockControlCell>> = { stock_mode: 'syncMode', stock_qty: 'syncQty', stock_buffer: 'syncBuffer' }
@@ -329,6 +332,9 @@ export function patchStockRows(rows: Iterable<ChannelSheetRow>, read: MatrixRead
     if (asinMoved && row.listing) {
       row.listing.externalListingId = asin
       if (values[LISTING_ASIN_KEY]) values[LISTING_ASIN_KEY] = { ...values[LISTING_ASIN_KEY], value: asin }
+      // eBay's Item ID counts only on a listing the Matrix reads as selling or ended (the server's rule, `listingItemIdValue`);
+      // any other moved id reads "Not confirmed" until the sheet reads the row again.
+      if (values[LISTING_ITEM_ID_KEY]) values[LISTING_ITEM_ID_KEY] = { ...values[LISTING_ITEM_ID_KEY], value: asin && ITEM_ID_COUNTS.has(market?.listing?.state ?? '') ? asin : null }
     }
     row.values = values
     out.changed.push(row)

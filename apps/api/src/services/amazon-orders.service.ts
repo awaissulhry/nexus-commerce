@@ -40,6 +40,7 @@ import {
 } from './stock-level.service.js'
 import { InsufficientStockError, recascadeProduct } from './stock-movement.service.js'
 import { amazonAccount } from '../lib/amazon-sp-client.js'
+import { matchInboundSku } from './listings/channel-sku-inbound.js'
 
 const amazonService = new AmazonService()
 
@@ -946,7 +947,7 @@ export class AmazonOrdersService {
     const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = []
     for (const item of items) {
       try {
-        const created = await this.upsertOrderItem(order.id, item)
+        const created = await this.upsertOrderItem(order.id, item, { accountId, marketplace })
         createdItems.push(created)
         summary.itemsUpserted++
       } catch (err) {
@@ -1109,6 +1110,7 @@ export class AmazonOrdersService {
   private async upsertOrderItem(
     orderId: string,
     item: AmazonOrderItemRaw,
+    source: { accountId?: string | null; marketplace?: string | null } = {},
   ): Promise<{ productId: string | null; quantity: number; sku: string }> {
     // DA-RT.15 — SP-API's ItemPrice.Amount is the LINE TOTAL across
     // QuantityOrdered units, NOT per-unit. Downstream (sales-aggregate,
@@ -1124,22 +1126,24 @@ export class AmazonOrdersService {
     const sku = item.SellerSKU ?? item.ASIN ?? ''
     const externalLineItemId = item.OrderItemId
 
-    // Try to link to a local Product by SKU first, then by ASIN.
-    let productId: string | null = null
-    if (item.SellerSKU) {
-      const prod = await prisma.product.findUnique({
-        where: { workspace_sku: workspaceKey({ sku: item.SellerSKU }) },
-        select: { id: true },
-      })
-      productId = prod?.id ?? null
-    }
-    if (!productId && item.ASIN) {
-      const prod = await prisma.product.findFirst({
-        where: { amazonAsin: item.ASIN },
-        select: { id: true },
-      })
-      productId = prod?.id ?? null
-    }
+    // S6 — the seller SKU through the one inbound match (this Amazon account and market: a listing's own SKU,
+    // also one renamed in Nexus that Amazon still holds; then the master SKU), then the ASIN as before.
+    const asin = item.ASIN
+    const match = await matchInboundSku(prisma, {
+      channel: 'AMAZON',
+      channelConnectionId: source.accountId,
+      marketplace: source.marketplace,
+      sku: item.SellerSKU,
+      fallbacks: asin ? [{
+        name: 'asin',
+        label: `ASIN ${asin}`,
+        find: async () => {
+          const prod = await prisma.product.findFirst({ where: { amazonAsin: asin }, select: { id: true } })
+          return prod ? [prod.id] : []
+        },
+      }] : [],
+    })
+    const productId = match.productId
 
     const upserted = await prisma.orderItem.upsert({
       where: {
@@ -1169,6 +1173,11 @@ export class AmazonOrdersService {
     if (linkedProductId === null && productId) {
       await prisma.orderItem.updateMany({ where: { id: upserted.id, productId: null }, data: { productId } })
       linkedProductId = (await prisma.orderItem.findUnique({ where: { id: upserted.id }, select: { productId: true } }))?.productId ?? null
+    }
+    // S6 — a SKU that names more than one product stays unlinked (never a guess): the line keeps why.
+    if (linkedProductId === null && match.problem) {
+      await prisma.orderItem.updateMany({ where: { id: upserted.id, productId: null }, data: { amazonMetadata: { ...item, nexusUnlinkedReason: match.problem.sentence } as object } })
+      logger.warn('amazon-orders: line not linked to a product', { orderItemId: upserted.id, sku, reason: match.problem.sentence })
     }
 
     // F.1 — keep DailySalesAggregate current for the forecasting layer.

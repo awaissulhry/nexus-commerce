@@ -24,6 +24,7 @@ import {
 } from './types.js'
 import { ebayConditionName, toInventoryCondition } from '../../ebay-condition.js'
 import { englishEbayAspectLabel } from '../../ebay-aspect-names.js'
+import { sheetName } from '@nexus/shared/sheet-names'
 import { EBAY_ASPECT_VALUE_MAX } from '../../ebay-aspect-values.js'
 import { EBAY_PACKAGE_LABELS, EBAY_PACKAGE_TYPES } from '../ebay-packages.js'
 
@@ -144,11 +145,13 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     .map(c => ({ ...c, value: toInventoryCondition(c.value) }))
   const listingFields: ChannelFieldSpec[] = [
     // Step 2.2: sheet price edits now use writeChannelPrices; the temporary hold is lifted.
-    listing('price', 'Prezzo', 'Listing price', {
+    // W3-6 — the English names read the sheet's naming table: "Price", "Qty", "Video ID" (were "Listing price",
+    // "Available quantity", "Video id"). The Italian names are eBay's and stay.
+    listing('price', 'Prezzo', sheetName('price', 'EBAY')!, {
       kind: 'number', requirement: 'required',
       channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' },
     }),
-    listing('quantity', 'Quantità disponibile', 'Available quantity', { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),
+    listing('quantity', 'Quantità disponibile', sheetName('quantity', 'EBAY')!, { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),
     listing('title', 'Titolo', 'Title', { kind: 'text', maxLength: 80, requirement: 'required', masterKey: 'name', channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }),
     listing('subtitle', 'Sottotitolo', 'Subtitle', { kind: 'text', maxLength: 55, channelStore: pa('subtitle'), helpText: 'Blank: Publish sends none. A live listing keeps eBay\'s subtitle, unless a Full update removes it.' }),
     listing('description', 'Descrizione', 'Description', { kind: 'longtext', requirement: 'required', masterKey: 'description', channelStore: { kind: 'listingColumn', column: 'description', followFlag: 'followMasterDescription' } }),
@@ -185,7 +188,7 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('dimensionUnit', 'Unità delle dimensioni', 'Package dimension unit', { kind: 'select', mode: 'strict', options: LENGTH_UNITS, optionLabels: LENGTH_UNIT_LABELS, channelStore: pa('dimensionUnit'), helpText: 'Applies to package length, width and height together. Blank: a package length, width or height cannot be sent without it.' }),
     // Wave 2 (Owner decision 7) — blank sends nothing (it sent <VATPercent>0</VATPercent>).
     listing('vatRate', 'Aliquota IVA', 'VAT rate (%)', { kind: 'number', channelStore: pa('vatRate'), helpText: `A number from 0 to 100. ${BLANK_NONE}` }),
-    listing('videoId', 'Video', 'Video id', { kind: 'text', channelStore: pa('videoId'), helpText: BLANK_NONE }),
+    listing('videoId', 'Video', sheetName('videoId', 'EBAY')!, { kind: 'text', channelStore: pa('videoId'), helpText: BLANK_NONE }),
     listing('imageUrls', 'Immagini', 'Image URLs', { kind: 'text', shape: 'list', cardinality: { min: 1, max: 24 }, channelStore: pa('imageUrls'), helpText: 'The listing\'s picture URLs, in order — the Images tab publishes them; this column reads the same store.' }),
     listing('paymentPolicyId', 'Regola di pagamento', 'Payment policy', { kind: 'text', channelStore: pa('paymentPolicyId'), helpText: BLANK_POLICY }),
     listing('returnPolicyId', 'Regola di restituzione', 'Return policy', { kind: 'text', channelStore: pa('returnPolicyId'), helpText: BLANK_POLICY }),

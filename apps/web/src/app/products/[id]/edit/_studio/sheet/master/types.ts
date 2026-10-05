@@ -84,6 +84,10 @@ export interface SheetColumn {
   axis?: boolean
   options?: string[]
   optionLabels?: Record<string, string>
+  /** W3-4 / W3-3 — other spellings a code is accepted under (the content language's name beside an English one); never shown. */
+  optionAliases?: Record<string, string[]>
+  /** W3-3 — names the column was shown under before (a dictionary field's content-language label); a header paste still lands by them. */
+  formerNames?: string[]
   mode?: 'strict' | 'open'
   requiredBy: string[]
   /**
