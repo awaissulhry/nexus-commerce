@@ -110,7 +110,7 @@ async function persistCollection(input: Input, { workspace, product, listing }: 
     if (written.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')
     return (await snapshot(input, tx)).workspace
   }
-  // Owner 2026-10-05 — a saved photo of an old eBay Image URLs list joins the family's library (`addLibraryPhotos`, by its
+  // Owner 2026-10-05 — a saved photo of an old eBay Image URLs list joins this row's library (`addLibraryPhotos`, by its
   // address from this snapshot) and is saved by its new id; two addresses of one photo keep the first.
   if (collection?.items.some(item => isLegacyPhotoId(item.assetId))) {
     const urlOf = new Map(workspace.assets.map(asset => [asset.id, asset.url]))
@@ -123,11 +123,13 @@ async function persistCollection(input: Input, { workspace, product, listing }: 
     collection = { ...collection, items }
   }
   // Owner 2026-10-05 — one list at a time, the last save wins: a save or a reset on an eBay listing removes its old Image
-  // URLs list (a reset then follows the shared list).
+  // URLs list (a reset then follows the shared list). The old list applied to every language, so the list that replaces it
+  // does too ('und'; review 2026-10-05: a save in the 'de' view of the IT sheet left Italian on the Shared list).
   const { imageUrls: _old, ...attributes } = mediaObject(listing?.platformAttributes)
+  const locale = listing?.channel === 'EBAY' && legacyImageUrls(listing.platformAttributes) ? 'und' : input.locale
   const result = listing ? await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, productId: product.id, channel: input.scope, marketplace: input.market, channelConnectionId: input.accountId },
     data: { version: { increment: 1 }, platformAttributes: { ...(listing.channel === 'EBAY' ? attributes : mediaObject(listing.platformAttributes)),
-      _productMediaLocales: writeMediaCollection(mediaObject(listing.platformAttributes)._productMediaLocales, input.locale, collection) } as Prisma.InputJsonValue } })
+      _productMediaLocales: writeMediaCollection(mediaObject(listing.platformAttributes)._productMediaLocales, locale, collection) } as Prisma.InputJsonValue } })
     : await tx.product.updateMany({ where: { id: product.id, version: product.version, deletedAt: null }, data: {
       version: { increment: 1 }, localizedContent: writeMediaCollection(product.localizedContent, input.locale, collection) as Prisma.InputJsonValue } })
   if (result.count !== 1) throw new WorkspaceScopeError('Media changed while saving. Reload the gallery before retrying.')

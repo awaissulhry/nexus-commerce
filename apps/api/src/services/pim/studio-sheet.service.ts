@@ -958,18 +958,23 @@ function layerFor(source: string | null, hasAlias: boolean): CellLayer {
  *  listing, or the Shared product's photos it follows. */
 export type EbayPhotoSource = 'plan' | 'image-urls' | 'listing' | 'shared'
 
+/** Review 2026-10-05 (finding 9) — why a photo plan family's Image URLs cell takes no edit. */
+export const PHOTO_PLAN_IMAGE_URLS_REASON = 'This family uses the photo plan. Change its photos on the Media page.'
+
 /**
  * Owner 2026-10-05 — the eBay Image URLs cell is the photo addresses of the list the Product media cell shows (what
  * Publish sends; photos only, eBay takes no videos). The listing's own list (its Product media, or its old Image URLs
  * list) is the listing's value; Shared photos, or the photo plan's (kept on the family's main product), are inherited.
- * No mapping rule decides an eBay photo, so `mapped` is null. The cell stays editable: an edit writes Image URLs, which
- * then moves into Product media (one list at a time, the last save wins).
+ * No mapping rule decides an eBay photo, so `mapped` is null. Off the plan the cell stays editable: an edit writes Image
+ * URLs (one list at a time, the last save wins). On the plan it is read-only: Publish sends the plan's photos and ignores
+ * Image URLs, so an edit was saved and then snapped back to the plan's list (review finding 9).
  */
 export function ebayPhotoCell(cell: StudioCellValue, urls: string[], from: EbayPhotoSource, row: { hasAlias: boolean; rootId: string }): StudioCellValue {
   const own = from === 'image-urls' || from === 'listing'
   const source = own ? 'channelExplicit' : 'master'
   return { ...cell, value: urls, source, inheritedFrom: own ? null : row.rootId, inherited: !own, mapped: null,
-    layer: layerFor(source, row.hasAlias), pinned: own, follows: cell.follows === null ? null : !own }
+    layer: layerFor(source, row.hasAlias), pinned: own, follows: cell.follows === null ? null : !own,
+    ...(from === 'plan' ? { editable: false, writable: false, writeBlockedReason: PHOTO_PLAN_IMAGE_URLS_REASON } : {}) }
 }
 
 

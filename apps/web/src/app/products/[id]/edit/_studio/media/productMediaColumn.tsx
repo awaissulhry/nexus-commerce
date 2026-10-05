@@ -124,7 +124,7 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
     ? <GalleryMediaPopup key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'}
         context={context} contextLabel={contextLabel} channelLabel={channelLabel} canEdit={canEdit} anchor={selected.anchor} initial={selected.row.productMedia ?? []}
         onApply={applyToRow} onSaved={onSaved} onClose={closePlan} onDirtyChange={onDirtyChange} reporter={reporter} onOpenMediaPage={() => scope.setTab('images')} familyId={familyRoot}
-        fromImageUrls={selected.row.productMediaSource === 'image-urls'} />
+        imageUrlsNote={mediaSourceNote(selected.row) || undefined} />
     : null
   return { open, actions, element: planElement ?? galleryElement }
 }

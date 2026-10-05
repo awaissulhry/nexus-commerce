@@ -76,7 +76,7 @@ describe('the eBay Image URLs column shows the Product media cell\'s photos (Own
     // Photos only: eBay takes no videos (the cell shows the video; Publish refuses it by name).
     expect(row.values.imageUrls).toMatchObject({ value: [url('img-b'), url('img-a')], source: 'channelExplicit', inherited: false, layer: 'channel', pinned: true, follows: false, mapped: null })
     // Still a column the operator edits: an edit writes Image URLs, which then moves into Product media.
-    expect(row.values.imageUrls).toMatchObject({ editable: true, writeTarget: 'channelListing' })
+    expect(row.values.imageUrls).toMatchObject({ editable: true, writable: true, writeBlockedReason: null, writeTarget: 'channelListing' })
     expect(row.productMediaSource).toBeUndefined()
   })
 
@@ -93,6 +93,8 @@ describe('the eBay Image URLs column shows the Product media cell\'s photos (Own
     expect(row.values.imageUrls).toMatchObject({ value: [outside, url('img-a')], source: 'channelExplicit', layer: 'channel', pinned: true })
     expect(row.productMediaSource).toBe('image-urls')
     expect(row.productMedia!.map(item => item.preview)).toEqual([outside, url('img-a')])
+    // The photo outside the media library keeps its `url:` id (the web counts these in the cell's note); a library photo its own.
+    expect(row.productMedia!.map(item => item.id.startsWith('url:') ? 'url:' : item.id)).toEqual(['url:', 'img-a'])
   })
 
   it('the old list picks the editor\'s file for an address held twice (own files by sortOrder then id, not createdAt)', async () => {
@@ -106,13 +108,15 @@ describe('the eBay Image URLs column shows the Product media cell\'s photos (Own
     expect(row.productMedia!.map(item => item.id)).toEqual(['img-y'])
   })
 
-  it('a photo plan family: the plan row\'s photos (videos left out)', async () => {
+  it('a photo plan family: the plan row\'s photos (videos left out), read-only — Publish ignores Image URLs there (review finding 9)', async () => {
     plan.row = () => ({ set: { ref: 'common', label: 'Common', sharedBy: 1 }, items: [
       { id: 'img-a', type: 'IMAGE', preview: url('img-a'), alt: '' }, { id: 'vid-c', type: 'VIDEO', preview: url('poster-c'), alt: '' },
       { id: 'img-b', type: 'IMAGE', preview: url('img-b'), alt: '', muted: true }] })
     setUp({ images: [file('img-a', 0), file('img-b', 1)], platformAttributes: { imageUrls: ['https://elsewhere.test/ignored.jpg'] } })
     const row = (await read()).rows[0]
     expect(row.values.imageUrls).toMatchObject({ value: [url('img-a'), url('img-b')], source: 'master', inherited: true })
+    // An edit was saved and then snapped back to the plan's list: the cell now says where the photos change instead.
+    expect(row.values.imageUrls).toMatchObject({ editable: false, writable: false, writeBlockedReason: 'This family uses the photo plan. Change its photos on the Media page.' })
     expect(row.productMediaSource).toBeUndefined()
   })
 

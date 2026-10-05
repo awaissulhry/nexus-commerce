@@ -14,10 +14,20 @@ export type MediaRow = { id: string; name?: string | null; sku?: string; product
   /** Owner 2026-10-05 — eBay: the cell shows the listing's old Image URLs list (no Product media saved on it yet). */
   productMediaSource?: 'image-urls' }
 
-/** Owner 2026-10-05 — one list at a time, the last save wins: what an old eBay Image URLs list in the cell means. */
-export const IMAGE_URLS_NOTE = 'From the old Image URLs list. A save in Product media moves it into Product media.'
-/** The cell's source note, or '' when its list is Product media. */
-export const mediaSourceNote = (row: Pick<MediaRow, 'productMediaSource'>): string => row.productMediaSource === 'image-urls' ? IMAGE_URLS_NOTE : ''
+/** Owner 2026-10-05 — one list at a time, the last save wins: what an eBay Image URLs list in the cell means. */
+export const IMAGE_URLS_NOTE = 'From the Image URLs list. A save in Product media moves it into Product media.'
+/** The id the server gives a photo of an Image URLs list that is not in the media library (`LEGACY_PHOTO_PREFIX`, API). */
+const OUTSIDE_PHOTO_PREFIX = 'url:'
+/**
+ * The cell's source note, or '' when its list is Product media. Review 2026-10-05 — an Image URLs list stays as it is until
+ * every photo is in the media library, and only a save in Product media adds the others: the note counts them.
+ */
+export function mediaSourceNote(row: Pick<MediaRow, 'productMediaSource' | 'productMedia'>): string {
+  if (row.productMediaSource !== 'image-urls') return ''
+  const outside = (row.productMedia ?? []).filter(item => item.id.startsWith(OUTSIDE_PHOTO_PREFIX)).length
+  if (!outside) return IMAGE_URLS_NOTE
+  return `From the Image URLs list. ${outside === 1 ? '1 photo is' : `${outside} photos are`} not in the media library. Save the list in Product media to add ${outside === 1 ? 'it' : 'them'}.`
+}
 export interface MediaCellActions {
   canEdit(): boolean
   error(row: MediaRow): string | undefined
