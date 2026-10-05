@@ -1,3 +1,5 @@
+BEGIN;
+SET LOCAL lock_timeout='5s';
 -- Stock across business profiles in real time (Owner 2026-10-06: "make sure that the stock updates in real time
 -- across profiles").
 --
@@ -13,6 +15,9 @@
 --    - nexus_pool_pending_workspaces: a released task waits for its "retryAt".
 -- Additive only: the previous release never writes "retryAt", so for it every task reads exactly as before.
 
+-- One transaction with a 5 s lock_timeout (as 20260926s/t): the triggers on "Workspace" and "StockLocation" take an
+-- ACCESS EXCLUSIVE lock and every request reads "Workspace", so the release fails fast and is retried rather than
+-- queue traffic behind a long transaction. policyMigrationBody strips the BEGIN/COMMIT for the parity check.
 ALTER TABLE "StockPoolTask" ADD COLUMN IF NOT EXISTS "retryAt" TIMESTAMP(3);
 
 -- Shared stock between business profiles — the lending permission, the product links, the work
@@ -1293,3 +1298,4 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION nexus_pool_put_back(text, integer, text, text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_pool_put_back(text, integer, text, text, text, text) TO nexus_workspace_runtime;
+COMMIT;
