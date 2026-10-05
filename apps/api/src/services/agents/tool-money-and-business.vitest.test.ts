@@ -275,6 +275,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'restore-campaign': (ids) => ({ campaignId: ids.campaignId }),
   // A12 — the live-write allowlist (no money in it).
   'set-campaign-live-writes': (ids) => ({ campaignId: ids.campaignId, enabled: true }),
+  'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // A14/A15 — the eBay ad changes (they need money: refused for a person without it).
   'set-ebay-ad-rates': () => ({ ebayCampaignId: 'none', rates: [{ ebayItemId: '110000000001', ratePct: 5 }] }),
   'promote-ebay-listings': () => ({ ebayCampaignId: 'none', ads: [{ ebayItemId: '110000000001' }] }),

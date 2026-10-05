@@ -12,6 +12,7 @@ import { MUTATE_TOOLS } from './tools/mutate.tools.js'
 import { ADS_PROPOSE_TOOLS } from './tools/ads-propose.tools.js'
 import { ADS_READ_TOOLS } from './tools/ads-read.tools.js'
 import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
+import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -94,6 +95,8 @@ const ALL: AgentTool[] = [
   ...ADS_READ_TOOLS,
   // MCP full control A6–A12 — Claude's further Amazon ad changes (undo first), each approved by a person.
   ...ADS_CHANGE_TOOLS,
+  // Phase 3 T5 — campaign target ACoS (one target per market), Nexus only.
+  ...ADS_TARGET_ACOS_TOOLS,
   ...ADS_CREATE_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).

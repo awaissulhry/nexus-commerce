@@ -711,6 +711,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'restore-campaign': ['suppressedBy', 'basis', 'reach'],
   // A12 — the allowlist setting it starts from.
   'set-campaign-live-writes': ['liveWrites'],
+  // T5 — every campaign asked with the target it stores now and gets (basis), and the counts (a raise, a clear).
+  'set-campaign-target-acos': ['basis', 'totals'],
   // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
   'create-ad-campaign': ['plan', 'ceiling', 'reach'],
   // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
