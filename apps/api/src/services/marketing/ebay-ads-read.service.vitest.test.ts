@@ -3,7 +3,7 @@
  * `ebay-ads-read.service.ts` with no behaviour change (proven byte-equal against the code before the move on 15 route
  * calls when it was made). These arms keep it so:
  *   · the service answers what the console always read (window sums, the window before, daily points, the grid);
- *   · each of the three routes answers exactly the service's result;
+ *   · each of the three routes answers exactly the service's result (T4: and the campaign detail page's);
  *   · each campaign names its OWN eBay account (P4.5a), each market its currency, and the newest day of data is read.
  * PGlite with the production schema.
  */
@@ -24,6 +24,7 @@ import {
   ebayAdsTrend,
   ebayCampaignAccounts,
   ebayCampaignCensus,
+  ebayCampaignDetail,
   ebayMarketCurrencies,
   ebayPerformanceAsOf,
 } from './ebay-ads-read.service.js'
@@ -117,6 +118,24 @@ describe('the three routes answer exactly the service', () => {
       })
     }
   }
+})
+
+describe('GET /ebay-ads/campaigns/:id answers exactly the service (T4: moved for ebay-ad-details)', () => {
+  for (const [id, query] of [['eb-1', ''], ['eb-1', `?startDate=${WEEK.startDate}&endDate=${WEEK.endDate}`], ['eb-2', '?preset=last30'], ['eb-3', '']]) {
+    it(`GET /ebay-ads/campaigns/${id}${query}`, async () => {
+      const response = await app.inject({ method: 'GET', url: `/api/ebay-ads/campaigns/${id}${query}` })
+      expect(response.statusCode).toBe(200)
+      expect(response.payload).toBe(JSON.stringify(await inside(() => ebayCampaignDetail(id, Object.fromEntries(new URLSearchParams(query))))))
+    })
+  }
+  it('the page\'s ads with their own rate, and an unknown campaign is 404 (the service says null)', async () => {
+    const detail = await inside(() => ebayCampaignDetail('eb-1', WEEK))
+    expect(detail!.ads.map((a) => [a.listingId, a.status, a.bidPercentage]).sort()).toEqual([['L-1', 'ACTIVE', null], ['L-2', 'STALE', null]])
+    expect(detail!.campaign).toMatchObject({ id: 'eb-1', bidPercentage: 6.5, fundingModel: 'COST_PER_SALE' })
+    expect(await inside(() => ebayCampaignDetail('eb-missing', WEEK))).toBeNull()
+    const response = await app.inject({ method: 'GET', url: '/api/ebay-ads/campaigns/eb-missing' })
+    expect([response.statusCode, response.json()]).toEqual([404, { error: 'campaign not found' }])
+  })
 })
 
 describe('GET /ebay-ads/actions answers exactly the service (moved with the eBay change log, proven byte-equal on 6 calls)', () => {

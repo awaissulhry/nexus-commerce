@@ -93,6 +93,8 @@ interface Seeded {
   unusedId: string; matrixOpId: string; photoId: string
   /** Integration (I9 × P4): an eBay listing (of its own product) that names no account. */
   noAccountListingId: string
+  /** T4 — an eBay Priority campaign with an ad group, a keyword (its bid is money) and the keyword's fees. */
+  ebayCampaignId: string
   /** P9 — the product's SKU (an import names rows by SKU) and a finished bulk price job to undo. */
   sku: string; bulkJobId: string
 }
@@ -287,6 +289,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ad-search-terms': (ids) => ({ campaignId: ids.campaignId }),
   'ad-changes': (ids) => ({ campaignId: ids.campaignId }),
   'ad-recommendations': (ids) => ({ campaignId: ids.campaignId }),
+  // T4 — an eBay campaign's keywords: bids and fees are money.
+  'ebay-ad-details': (ids) => ({ view: 'keywords', campaignId: ids.ebayCampaignId }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),
@@ -710,6 +714,15 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       data: { productId: linkProduct.id, channelMarket: 'EBAY_IT', channel: 'EBAY', region: 'IT', marketplace: 'IT', title: `${mark} link listing`, price: '9.90', quantity: 1, listingStatus: 'ACTIVE' },
     })
     await db.connectionEvent.create({ data: { connectionId: connection.id, channelKey: 'ebay', type: 'heartbeat.ok', detail: { note: `${mark} heartbeat` } } })
+    // T4 — an eBay Priority campaign on that account: an ad group, a keyword with its bid, and the keyword's fees.
+    const ebayCampaign = await db.ebayCampaign.create({
+      data: { channelConnectionId: connection.id, marketplace: 'EBAY_IT', externalCampaignId: `${mark}-EBAY-CMP`, name: `${mark} eBay campaign`, fundingStrategy: 'COST_PER_CLICK', fundingModel: 'COST_PER_CLICK', status: 'RUNNING', startDate: new Date(), budgetCurrency: 'EUR' } as never,
+    })
+    const ebayAdGroup = await db.ebayAdGroup.create({ data: { campaignId: ebayCampaign.id, externalAdGroupId: `${mark}-EBAY-AG`, name: `${mark} eBay ad group`, status: 'ACTIVE', defaultBidCents: 3939 } })
+    await db.ebayKeyword.create({ data: { campaignId: ebayCampaign.id, adGroupId: ebayAdGroup.id, externalKeywordId: `${mark}-EBAY-KW`, text: `${mark.toLowerCase()} race jacket`, matchType: 'EXACT', bidCents: 4848, status: 'ACTIVE' } })
+    await db.ebayAdsDailyPerformance.create({
+      data: { marketplace: 'EBAY_IT', fundingModel: 'COST_PER_CLICK', entityType: 'KEYWORD', entityId: `${mark}-EBAY-KW`, date: yesterday, impressions: 222, clicks: 11, adFeesCents: 5252, salesCents: 6363, soldQty: 1, currency: 'EUR', reportedAt: new Date() },
+    })
     const traceId = `${mark}-TRACE-1`
     await db.outboundApiCallLog.create({ data: { channel: 'EBAY', operation: `${mark}-getItem`, success: true, latencyMs: 90, traceId } })
     // Integration (P4 + 07 O14): one company row — the name P4 reads and the identity an invoice needs (invented).
@@ -842,6 +855,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       scheduledId: scheduled.id, supplierId: supplier.id, purchaseOrderId: purchaseOrder.id, inboundShipmentId: inboundShipment.id,
       listingId: listing.id, planId: fbaPlan.id,
       unusedId: unused.id, matrixOpId: matrixOp.id, photoId: photo.id, noAccountListingId: noAccountListing.id,
+      ebayCampaignId: ebayCampaign.id,
       sku: product.sku, bulkJobId: bulkJob.id,
     }
   })

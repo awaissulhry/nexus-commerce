@@ -7,6 +7,9 @@
  *   ebayAdsTrend       GET /ebay-ads/trend      — the account's daily points
  *   ebayAdsCampaigns   GET /ebay-ads/campaigns  — the campaign grid
  *   ebayAdsActions     GET /ebay-ads/actions    — the audit trail (moved with the eBay gap of ad-changes)
+ *   ebayCampaignDetail GET /ebay-ads/campaigns/:id — one campaign's page: its ads (per-listing rate, break-even),
+ *                      ad groups, keywords (bid, status) and negatives, with listing and keyword metrics (moved for
+ *                      Claude's ebay-ad-details read, T4)
  *
  * The routes answer exactly what these return (proven byte-equal against the code before the move). The helpers the
  * other eBay routes share (factWhere, sumFields, toSums, derive, freshness) moved with them and are imported back.
@@ -19,6 +22,7 @@
 import prisma from '../../db.js'
 import { resolveRange, priorRange, bucketFor, type ResolvedRange } from '../ads-core/date-range.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
+import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
 
 export interface WindowQuery { preset?: string; startDate?: string; endDate?: string; marketplace?: string }
 
@@ -204,6 +208,129 @@ export async function ebayAdsCampaigns(q: WindowQuery) {
   }
 }
 
+/**
+ * GET /ebay-ads/campaigns/:id — one campaign's detail page (the web's EbayCampaignDetail): the campaign with its
+ * automation policy, its ads (each one's own rate, null = the campaign's; the listing's title, price, stock and
+ * break-even rate in the campaign's market), ad groups, keywords and negatives, and the listing and keyword metrics of
+ * the window. Null when the id names no campaign of this business (the route answers 404).
+ */
+export async function ebayCampaignDetail(id: string, q: WindowQuery) {
+  const c = await prisma.ebayCampaign.findUnique({
+    where: { id },
+    include: {
+      ads: { orderBy: { updatedAt: 'desc' } },
+      adGroups: { orderBy: { name: 'asc' } },
+      keywords: { orderBy: { text: 'asc' } },
+      negativeKeywords: { orderBy: { text: 'asc' } },
+      automationPolicy: true, // ER1
+    },
+  })
+  if (!c) return null
+  const r = resolveRange(q)
+  const short = EBAY_MARKETPLACE_SHORT[c.marketplace] ?? 'IT'
+  const listingIds = c.ads.map((a) => a.listingId).filter((x): x is string => !!x)
+
+  const [listingFacts, keywordFacts, index, economics] = await Promise.all([
+    prisma.ebayAdsDailyPerformance.groupBy({
+      by: ['entityId'],
+      where: { entityType: 'LISTING', entityId: { in: listingIds.length ? listingIds : ['−'] }, date: { gte: r.since, lte: r.until }, fundingModel: c.fundingModel ?? 'COST_PER_SALE' },
+      _sum: sumFields,
+    }),
+    prisma.ebayAdsDailyPerformance.groupBy({
+      by: ['entityId'],
+      where: { entityType: 'KEYWORD', date: { gte: r.since, lte: r.until } },
+      _sum: sumFields,
+    }),
+    prisma.ebayListingIndex.findMany({ where: { marketplace: short, itemId: { in: listingIds.length ? listingIds : ['−'] } }, select: { itemId: true, title: true, price: true, currency: true, quantity: true, endedAt: true } }),
+    prisma.ebayListingEconomics.findMany({ where: { marketplace: short, itemId: { in: listingIds.length ? listingIds : ['−'] } }, select: { itemId: true, breakEvenAdRatePct: true, dataStatus: true } }),
+  ])
+  const lf = new Map(listingFacts.map((f) => [f.entityId, derive(toSums(f))]))
+  const kf = new Map(keywordFacts.map((f) => [f.entityId, derive(toSums(f))]))
+  const idx = new Map(index.map((i) => [i.itemId, i]))
+  const eco = new Map(economics.map((e) => [e.itemId, e]))
+  const groupsById = new Map(c.adGroups.map((g) => [g.id, g]))
+
+  return {
+    window: { preset: r.preset, since: r.sinceStr, until: r.untilStr },
+    currency: c.budgetCurrency ?? 'EUR',
+    campaign: {
+      id: c.id,
+      externalCampaignId: c.externalCampaignId,
+      name: c.name,
+      marketplace: c.marketplace,
+      fundingModel: c.fundingModel ?? 'COST_PER_SALE',
+      targetingType: c.campaignTargetingType,
+      channels: c.channels,
+      status: c.status,
+      adRateStrategy: c.adRateStrategy,
+      dynamicAdRatePrefs: c.dynamicAdRatePrefs,
+      campaignCriterion: c.campaignCriterion,
+      isRulesBased: c.isRulesBased,
+      nexusManaged: c.nexusManaged,
+      bidPercentage: c.bidPercentage != null ? Number(c.bidPercentage.toString()) : null,
+      dailyBudgetCents: c.dailyBudget != null ? Math.round(Number(c.dailyBudget.toString()) * 100) : null,
+      budgetUpdatesToday: c.budgetUpdatesToday,
+      startDate: c.startDate,
+      endDate: c.endDate,
+      lastEntitySyncAt: c.lastEntitySyncAt,
+      // ER1 — per-campaign automation policy (null = INHERIT defaults)
+      automationPolicy: c.automationPolicy ? {
+        posture: c.automationPolicy.posture,
+        protected: c.automationPolicy.protected,
+        rateCapPct: c.automationPolicy.rateCapPct != null ? Number(c.automationPolicy.rateCapPct.toString()) : null,
+        rateFloorPct: c.automationPolicy.rateFloorPct != null ? Number(c.automationPolicy.rateFloorPct.toString()) : null,
+        bidCapCents: c.automationPolicy.bidCapCents,
+        bidFloorCents: c.automationPolicy.bidFloorCents,
+      } : null,
+    },
+    ads: c.ads.map((a) => ({
+      id: a.id,
+      listingId: a.listingId,
+      inventoryReference: a.inventoryReference,
+      adGroupId: a.adGroupId, // ER1
+      hiddenReason: a.hiddenReason, // ER1 — OOS auto-hide surfaced as state
+      productId: a.productId, // ER1 — deep link to Products
+      status: a.status,
+      bidPercentage: a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null,
+      createdVia: a.createdVia,
+      title: a.listingId ? idx.get(a.listingId)?.title ?? null : null,
+      priceCents: a.listingId && idx.get(a.listingId)?.price != null ? Math.round(Number(idx.get(a.listingId)!.price!.toString()) * 100) : null,
+      quantity: a.listingId ? idx.get(a.listingId)?.quantity ?? null : null,
+      listingEnded: a.listingId ? idx.get(a.listingId)?.endedAt != null : null,
+      breakEvenAdRatePct: a.listingId && eco.get(a.listingId)?.breakEvenAdRatePct != null ? Number(eco.get(a.listingId)!.breakEvenAdRatePct!.toString()) : null,
+      economicsStatus: a.listingId ? eco.get(a.listingId)?.dataStatus ?? null : null,
+      metrics: a.listingId ? lf.get(a.listingId) ?? derive(zeroSums) : derive(zeroSums),
+    })),
+    adGroups: c.adGroups.map((g) => ({
+      id: g.id,
+      externalAdGroupId: g.externalAdGroupId,
+      name: g.name,
+      status: g.status,
+      defaultBidCents: g.defaultBidCents,
+    })),
+    keywords: c.keywords.map((k) => ({
+      id: k.id,
+      adGroupId: k.adGroupId,
+      adGroupName: groupsById.get(k.adGroupId)?.name ?? null,
+      externalKeywordId: k.externalKeywordId,
+      text: k.text,
+      matchType: k.matchType,
+      bidCents: k.bidCents,
+      status: k.status,
+      metrics: kf.get(k.externalKeywordId) ?? derive(zeroSums),
+    })),
+    negativeKeywords: c.negativeKeywords.map((n) => ({
+      id: n.id,
+      adGroupId: n.adGroupId, // ER1 — campaign-level (null) vs group-level split
+      text: n.text,
+      matchType: n.matchType,
+      status: n.status,
+    })),
+    freshness: await freshness(),
+  }
+}
+export type EbayCampaignDetail = NonNullable<Awaited<ReturnType<typeof ebayCampaignDetail>>>
+
 /** GET /ebay-ads/actions — the eBay ad audit trail (CampaignAction), newest first, with each campaign named. */
 export interface EbayActionsQuery { limit?: string; entityId?: string; before?: string; actionType?: string }
 export async function ebayAdsActions(q: EbayActionsQuery) {
@@ -269,11 +396,14 @@ export async function ebayPendingProposals(take = 200) {
   return prisma.ebayAdsProposal.findMany({ where: { status: 'PENDING' }, orderBy: { createdAt: 'desc' }, take })
 }
 
-/** Every eBay campaign's market, status, budget currency and account: what the overview counts per market. */
+/**
+ * Every eBay campaign's name, market, status, funding model, budget currency and account: what the overview counts per
+ * market, and which campaigns ebay-ad-details opens.
+ */
 export async function ebayCampaignCensus(marketplace?: string) {
   return prisma.ebayCampaign.findMany({
     where: marketplace ? { marketplace } : {},
-    select: { id: true, externalCampaignId: true, marketplace: true, status: true, budgetCurrency: true, channelConnectionId: true },
+    select: { id: true, externalCampaignId: true, name: true, marketplace: true, status: true, fundingModel: true, budgetCurrency: true, channelConnectionId: true },
   })
 }
 
