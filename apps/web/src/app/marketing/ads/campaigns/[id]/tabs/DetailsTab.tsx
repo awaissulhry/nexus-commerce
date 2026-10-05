@@ -30,9 +30,12 @@ import { readDailyBudget } from '../../../_shared/budgetInput'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
 import { changedPlacementLanes } from '../../../_shared/placementLanes'
+import { assignablePortfolios, isLocalOnlyPortfolio, type PortfolioOption } from '../../../_shared/portfolioPicker'
 import '../../campaigns-ds.css'
 
-interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string }
+interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string; targetAcos?: number | null }
+/** The algorithms the API stores (`campaign-settings.service.ts` BID_ALGORITHMS). Custom has no store yet. */
+const STORED_ALGOS = new Set(['TARGET_ACOS', 'MAX_IMPRESSIONS', 'MAX_ORDERS'])
 type StratUI = 'DOWN' | 'UPDOWN' | 'FIXED'
 const STRAT_TO_UI: Record<string, StratUI> = { LEGACY_FOR_SALES: 'DOWN', AUTO_FOR_SALES: 'UPDOWN', MANUAL: 'FIXED' }
 const UI_TO_STRAT: Record<StratUI, string> = { DOWN: 'LEGACY_FOR_SALES', UPDOWN: 'AUTO_FOR_SALES', FIXED: 'MANUAL' }
@@ -99,10 +102,19 @@ const mdy = (v: string | null | undefined): string => {
   return m ? `${m[2]}/${m[3]}/${m[1]}` : String(v ?? '').slice(0, 10)
 }
 
+/** A typed amount: '' = empty, NaN = not a number. A decimal comma is read as a point. */
+const amount = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim().replace(',', '.')))
+/** Cents as the form shows them (euros, two decimals); '' when unset. */
+const centsText = (c: number | null | undefined): string => (c == null ? '' : (c / 100).toFixed(2))
+/** The form's Min/Max Bid as the cents `/guardrails` stores; null = no bound (box empty, or the limits switched off). */
+const boundCents = (on: boolean, v: string): number | null => (on && v.trim() !== '' ? Math.round(amount(v) * 100) : null)
+
 function buildInitial(c: CampaignDetailData | null): FormState {
-  const dyn = (c as unknown as { dynamicBidding?: DynBidding })?.dynamicBidding
+  const dyn = (c?.dynamicBidding ?? undefined) as DynBidding | undefined
   const stratRaw = c?.biddingStrategy ?? dyn?.strategy ?? 'LEGACY_FOR_SALES'
-  const tAcos = (c as unknown as { targetAcos?: number | null })?.targetAcos
+  // 🔴 CM-12 — the target lives in `dynamicBidding.targetAcos` (a fraction), the store the grid and the bid engines
+  // read. This read `campaign.targetAcos`, which the detail endpoint never returns, so the box was always empty.
+  const tAcos = dyn?.targetAcos ?? null
   return {
     name: c?.name ?? '',
     portfolioId: c?.portfolioId ?? '',
@@ -121,9 +133,14 @@ function buildInitial(c: CampaignDetailData | null): FormState {
      * two were entangled because neither had a store of its own. `dynamicBidding.bidAlgorithm`
      * has been that store since C1, and it is what both grids' Bid Rule column reads.
      */
-    algo: dyn?.bidAlgorithm ?? (tAcos != null ? 'TARGET_ACOS' : 'NONE'),
-    targetAcos: tAcos != null ? String(Math.round(num(tAcos) * 100)) : '',
-    minmaxOn: true, minBid: '', maxBid: '',
+    // CM-12 — no longer guessed from the target: a target ACoS is its own setting (the grid shows it in its own
+    // column), and "Target ACoS" shown as chosen when nobody chose it is the same fallback-as-setting the grid removed.
+    algo: dyn?.bidAlgorithm ?? 'NONE',
+    // Two decimals, as the grid shows it: a whole-percent round would show 26 for a stored 25.5.
+    targetAcos: tAcos != null ? String(Number((num(tAcos) * 100).toFixed(2))) : '',
+    // CM-12 — the campaign's real bid bounds (`Campaign.minBidCents/maxBidCents`, enforced by the write gate), which
+    // these boxes never loaded and Save never wrote.
+    minmaxOn: true, minBid: centsText(c?.minBidCents), maxBid: centsText(c?.maxBidCents),
   }
 }
 
@@ -163,18 +180,39 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
   }
 
   async function save() {
+    // CM-12 — refuse what cannot be saved before anything is sent, with the reason.
+    const fail = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4200) }
+    const acosChanged = form.targetAcos !== baseline.targetAcos
+    if (acosChanged && form.targetAcos.trim() !== '' && !(amount(form.targetAcos) >= 0)) return fail('Target ACoS must be a number (or empty for none).')
+    const minCents = boundCents(form.minmaxOn, form.minBid)
+    const maxCents = boundCents(form.minmaxOn, form.maxBid)
+    const boundsChanged = minCents !== boundCents(baseline.minmaxOn, baseline.minBid) || maxCents !== boundCents(baseline.minmaxOn, baseline.maxBid)
+    if (boundsChanged) {
+      if ((minCents != null && !(minCents >= 0)) || (maxCents != null && !(maxCents >= 0))) return fail('Min and Max Bid must be amounts (or empty for no limit).')
+      if (minCents != null && maxCents != null && minCents > maxCents) return fail('Min Bid is above Max Bid.')
+    }
     setSaving(true)
-    const calls: Array<Promise<boolean>> = []
-    if (form.name !== baseline.name && form.name.trim() !== '') calls.push(patch('', { name: form.name.trim(), applyImmediately: true, reason: 'Campaign Details name' }))
-    if (form.portfolioId !== baseline.portfolioId) calls.push(patch('', { portfolioId: form.portfolioId || null, applyImmediately: true, reason: 'Campaign Details portfolio' }))
-    if (form.dailyBudget !== baseline.dailyBudget && budgetRead.ok && budgetRead.value !== num(baseline.dailyBudget)) calls.push(patch('', { dailyBudget: budgetRead.value, applyImmediately: true, reason: 'Campaign Details daily budget' }))
-    if (form.strategy !== baseline.strategy) calls.push(patch('', { biddingStrategy: UI_TO_STRAT[form.strategy], applyImmediately: true, reason: 'Campaign Details bidding strategy' }))
-    if (form.neverExpire !== baseline.neverExpire || form.endDate !== baseline.endDate) calls.push(patch('', { endDate: form.neverExpire ? null : (form.endDate || null), applyImmediately: true, reason: 'Campaign Details end date' }))
+    // CM-12 — one call after the other. `/placements`, `/automation` and `/guardrails` each read the campaign's
+    // settings and write them back; sent together, the last one to finish put back what the others had just saved.
+    const calls: Array<() => Promise<boolean>> = []
+    let customNotSaved = false
+    if (form.name !== baseline.name && form.name.trim() !== '') calls.push(() => patch('', { name: form.name.trim(), applyImmediately: true, reason: 'Campaign Details name' }))
+    if (form.portfolioId !== baseline.portfolioId) calls.push(() => patch('', { portfolioId: form.portfolioId || null, applyImmediately: true, reason: 'Campaign Details portfolio' }))
+    if (form.dailyBudget !== baseline.dailyBudget && budgetRead.ok && budgetRead.value !== num(baseline.dailyBudget)) calls.push(() => patch('', { dailyBudget: budgetRead.value, applyImmediately: true, reason: 'Campaign Details daily budget' }))
+    if (form.strategy !== baseline.strategy) calls.push(() => patch('', { biddingStrategy: UI_TO_STRAT[form.strategy], applyImmediately: true, reason: 'Campaign Details bidding strategy' }))
+    if (form.neverExpire !== baseline.neverExpire || form.endDate !== baseline.endDate) calls.push(() => patch('', { endDate: form.neverExpire ? null : (form.endDate || null), applyImmediately: true, reason: 'Campaign Details end date' }))
     // CM-18 — only the lanes changed here; a lane left alone is not re-sent from this page's copy.
     const changedLanes = changedPlacementLanes(baseline, form)
-    if (changedLanes.length) calls.push(patch('/placements', { adjustments: changedLanes, partial: true }))
-    if (form.algo !== baseline.algo || form.targetAcos !== baseline.targetAcos) {
-      const isAcos = form.algo === 'TARGET_ACOS'
+    if (changedLanes.length) calls.push(() => patch('/placements', { adjustments: changedLanes, partial: true }))
+    // CM-12 — the algorithm saves as chosen, and the target only when it changed. Choosing Max Impressions or Max
+    // Orders sent `bidAlgorithm: null, targetAcos: null`, erasing what was stored.
+    const automation: Record<string, unknown> = {}
+    if (form.algo !== baseline.algo) {
+      if (form.algo === 'CUSTOM') customNotSaved = true // no custom bid rule can be stored yet (the Bid Rule list is empty)
+      else automation.bidAlgorithm = STORED_ALGOS.has(form.algo) ? form.algo : null
+    }
+    if (acosChanged) automation.targetAcos = form.targetAcos.trim() === '' ? null : amount(form.targetAcos) / 100
+    if (Object.keys(automation).length) {
       /**
        * 🔴 C4 — this used to send `bidAutomation: isAcos`, so choosing the Target ACoS algorithm
        * here — or merely editing the target percentage — silently switched **Bid Automation** on,
@@ -183,15 +221,18 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
        * The algorithm now writes `bidAlgorithm`, which is its own field, and `bidAutomation` is
        * left alone here: nothing but the switch itself should ever move it.
        */
-      calls.push(patch('/automation', {
-        bidAlgorithm: isAcos ? 'TARGET_ACOS' : null,
-        targetAcos: isAcos && form.targetAcos !== '' ? Number(form.targetAcos) / 100 : null,
-      }))
+      calls.push(() => patch('/automation', automation))
     }
-    const results = calls.length ? await Promise.all(calls) : []
+    // CM-12 — Min/Max Bid through the same endpoint the grid's Min/Max Bid cell uses.
+    if (boundsChanged) calls.push(() => patch('/guardrails', { minBidCents: minCents, maxBidCents: maxCents }))
+    const results: boolean[] = []
+    for (const call of calls) results.push(await call())
     setSaving(false)
     const ok = results.length === 0 || results.every(Boolean)
-    setToast(ok ? 'Campaign saved' : 'Some changes could not be saved (write-gate / non-live)')
+    // A custom bid rule has nowhere to be stored yet, so choosing it changes nothing — said, not toasted as saved.
+    const customNote = 'A custom bid rule cannot be saved yet, so the bid algorithm was not changed.'
+    setToast(customNotSaved && !results.length ? customNote
+      : `${ok ? 'Campaign saved' : 'Some changes could not be saved (write-gate / non-live)'}${customNotSaved ? `. ${customNote}` : ''}`)
     setTimeout(() => setToast(null), 3200)
     if (ok && results.length) onSaved?.()
   }
@@ -312,7 +353,8 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
             </div>
             <button type="button" className={`h10-cd-none ${form.algo === 'NONE' ? 'on' : ''}`} onClick={() => set('algo', 'NONE')}><span className="ic"><Ban size={18} /></span> None</button>
 
-            {form.algo === 'TARGET_ACOS' && (
+            {/* CM-12 — also shown when a target is stored under another algorithm: the bid engines read it either way. */}
+            {(form.algo === 'TARGET_ACOS' || baseline.targetAcos !== '') && (
               <Field className="cd-field s h10-cd-acosrev" label="Target ACoS" info={<InfoTip tip={TIPS.targetAcos} />}>
                 <Input inputMode="decimal" suffix="%" value={form.targetAcos} onChange={(e) => set('targetAcos', e.target.value)} fieldClassName="cd-pct-field" />
               </Field>
@@ -365,7 +407,7 @@ function AtomMark() {
  *  Opens a menu with "No Portfolio" + each portfolio; selecting sets the campaign's
  *  portfolioId (saved via PATCH; pushed to Amazon when the publish gate is live). */
 function PortfolioSelect({ value, onChange, marketplace, id }: { value: string; onChange: (v: string) => void; marketplace?: string; id?: string }) {
-  const [portfolios, setPortfolios] = useState<Array<{ portfolioId: string; name: string }>>([])
+  const [portfolios, setPortfolios] = useState<PortfolioOption[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let cancel = false
@@ -377,6 +419,16 @@ function PortfolioSelect({ value, onChange, marketplace, id }: { value: string; 
       .finally(() => { if (!cancel) setLoading(false) })
     return () => { cancel = true }
   }, [marketplace])
+  // CM-21 — only this market's portfolios that exist on Amazon can be chosen: one created in Nexus while writes were
+  // closed (`local-pf-…`) has no Amazon id. The campaign's current portfolio stays visible, named for what it is.
+  const options = useMemo(() => {
+    const list = assignablePortfolios(portfolios, marketplace ?? null).map((p) => ({ value: p.portfolioId, label: p.name }))
+    if (value && !list.some((o) => o.value === value)) {
+      const name = portfolios.find((p) => p.portfolioId === value)?.name ?? value
+      list.unshift({ value, label: isLocalOnlyPortfolio(value) ? `${name} (only in Nexus, not on Amazon)` : name })
+    }
+    return list
+  }, [portfolios, marketplace, value])
   // `emptyLabel` is the DS's clear ROW — the difference between a filter select and a form
   // one — so "No Portfolio" is a real option here rather than a button above the list.
   return (
@@ -388,7 +440,7 @@ function PortfolioSelect({ value, onChange, marketplace, id }: { value: string; 
       onChange={onChange}
       emptyLabel="No Portfolio"
       placeholder={loading ? 'Loading…' : 'Select a Portfolio'}
-      options={portfolios.map((p) => ({ value: p.portfolioId, label: p.name }))}
+      options={options}
     />
   )
 }

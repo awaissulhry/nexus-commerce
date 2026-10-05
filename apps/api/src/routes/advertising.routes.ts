@@ -104,6 +104,12 @@ import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { internalTokenMatches } from '../lib/auth/internal-token.js'
 
+/**
+ * CM-24 — the most targets (positives and negatives together) one ad-group read returns. A safety bound, far above
+ * what Amazon lets one ad group hold in practice; the read also returns the true total, so a page can say when it binds.
+ */
+const AD_GROUP_TARGETS_CAP = 5000
+
 /** AX-IE.3 — stable per-entity key, the only thing a re-upload is matched on. */
 const rowKey = (entity: string, externalId: string | null | undefined, localId: string): string =>
   buildRowKey({ entity, externalId, localId })
@@ -190,7 +196,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         include: {
           adGroups: {
             include: {
-              targets: { take: 100 },
+              // CM-24 — the Ad Groups tab shows how many targets each group has. It counted the rows of
+              // `targets: { take: 100 }`, negatives included, so a group never showed more than 100. A count
+              // of the positive targets (the rows the ad group's Targets tab lists) has no cap.
+              _count: { select: { targets: { where: { isNegative: false } } } },
               // PERF — the cockpit never renders per-ad-group product ads; we only
               // need their ids to allocate the campaign total across ad groups.
               // Selecting full rows (creativeJson, deliveryReasons…) for up to 500
@@ -232,9 +241,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
-      const adGroups = campaign.adGroups.map((g) => {
+      const adGroups = campaign.adGroups.map(({ _count, ...g }) => {
         const m = byAdGroup.get(g.id)!
-        return { ...g, impressions: m.impressions, clicks: m.clicks, spendCents: m.spendCents, salesCents: m.salesCents, ordersCount: m.orders, acos: m.acos, roas: m.roas }
+        return { ...g, targetCount: _count.targets, impressions: m.impressions, clicks: m.clicks, spendCents: m.spendCents, salesCents: m.salesCents, ordersCount: m.orders, acos: m.acos, roas: m.roas }
       })
 
       return {
@@ -309,7 +318,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: { id },
       include: {
         campaign: { select: { id: true, name: true, marketplace: true, type: true, status: true, externalCampaignId: true, dailyBudget: true } },
-        targets: { take: 200 },
+        // CM-24 — every target of the group, positives first, in a stable order. It was the first 200 rows in
+        // no order, positives and negatives mixed, so a big group lost keywords from both tabs without a word.
+        // The cap is only a safety bound; `targetsTotal` below lets the page say when it binds.
+        targets: { orderBy: [{ isNegative: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], take: AD_GROUP_TARGETS_CAP },
+        _count: { select: { targets: true } },
         productAds: { take: 200, select: { id: true, asin: true, sku: true, productId: true, status: true } },
       },
     })
@@ -384,6 +397,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         metrics: agMetrics,
         ads,
         targets: adGroup.targets,
+        targetsTotal: adGroup._count.targets,
         trend,
         windowDays,
         range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday },
@@ -9869,14 +9883,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const seen = new Set<string>()
       const out: Array<{ portfolioId: string; name: string; state?: string; marketplace: string }> = []
-      if (adsMode() === 'sandbox') {
+      const sandbox = adsMode() === 'sandbox'
+      // CM-21 — every connection, active or not, so a portfolio stored in Nexus is listed under its own profile's
+      // market. Only the active ones of the asked market are read live below.
+      const allConns = sandbox ? [] : await prisma.amazonAdsConnection.findMany({
+        select: { profileId: true, region: true, marketplace: true, isActive: true },
+      })
+      if (sandbox) {
         const list = await listPortfolios({ profileId: 'SANDBOX-PROFILE-IT-001', region: 'EU' })
         for (const pf of list) { seen.add(pf.portfolioId); out.push({ ...pf, marketplace: mk ?? 'IT' }) }
       } else {
-        const conns = await prisma.amazonAdsConnection.findMany({
-          where: { isActive: true, ...(mk ? { marketplace: mk } : {}) },
-          select: { profileId: true, region: true, marketplace: true },
-        })
+        const conns = allConns.filter((c) => c.isActive && (!mk || c.marketplace === mk))
         for (const c of conns) {
           const region = (c.region === 'NA' || c.region === 'FE' ? c.region : 'EU') as AdsRegion
           try {
@@ -9887,10 +9904,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
       }
-      // PA — include locally-created portfolios (gated; not yet on Amazon's live list).
+      // PA — include portfolios stored in Nexus that the live list did not return (created here while writes were
+      // closed, or synced from a market not read live). CM-21 — each under its own profile's market, filtered by `mk`.
       try {
-        const local = await prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true } })
-        for (const lp of local) { if (!seen.has(lp.externalPortfolioId)) { seen.add(lp.externalPortfolioId); out.push({ portfolioId: lp.externalPortfolioId, name: lp.name, marketplace: mk ?? 'IT' }) } }
+        const local = await prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true, profileId: true } })
+        const { storedPortfoliosForPicker } = await import('../services/advertising/ads-portfolio-picker.js')
+        out.push(...storedPortfoliosForPicker(local, {
+          seen, marketplace: mk,
+          marketOfProfile: new Map(allConns.map((c) => [c.profileId, c.marketplace])),
+          fallbackMarket: sandbox ? (mk ?? 'IT') : null,
+        }))
       } catch { /* local merge best-effort */ }
       return { portfolios: out }
     } catch (e) {

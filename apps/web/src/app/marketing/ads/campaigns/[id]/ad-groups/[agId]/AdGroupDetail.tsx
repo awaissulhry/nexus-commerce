@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
-import { Tabs } from '@/design-system/components'
+import { Banner, Tabs } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../../../campaigns-ds.css'
@@ -34,6 +34,8 @@ export interface AdGroupDetailData {
   metrics?: Record<string, unknown>
   ads?: Array<Record<string, unknown>>
   targets?: Array<Record<string, unknown>>
+  /** CM-24 — how many targets (positives and negatives) the group really has; `targets` stops at a safety bound. */
+  targetsTotal?: number
   dataThrough?: string | null
 }
 
@@ -122,6 +124,12 @@ export function AdGroupDetail({ campaignId, adGroupId }: { campaignId: string; a
       />
 
       <div className="h10-cd-body">
+        {/* CM-24 — the read stops at a safety bound; say so rather than show a part as the whole. */}
+        {ag?.targets && ag.targetsTotal != null && ag.targets.length < ag.targetsTotal && (
+          <Banner tone="warning" title="Not every target is shown">
+            {`This ad group has ${ag.targetsTotal.toLocaleString('en-US')} targets and negatives; the first ${ag.targets.length.toLocaleString('en-US')} are shown on these tabs.`}
+          </Banner>
+        )}
         {error
           ? <div className="h10-cd-error">Couldn’t load this ad group — {error}. <Button variant="link" size="sm" onClick={() => void load()}>Retry</Button></div>
           : loading && !ag

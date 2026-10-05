@@ -28,6 +28,7 @@ import { InfoTip } from './InfoTip'
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
+import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
 
@@ -1057,7 +1058,7 @@ export function CampaignsGrid() {
   const [bulkConfirm, setBulkConfirm] = useState<'ENABLED' | 'PAUSED' | 'ARCHIVED' | null>(null)
   // P2b — bulk assign selected campaigns to a portfolio (real names from /portfolios).
   const [portfolioMenu, setPortfolioMenu] = useState(false)
-  const [pfOptions, setPfOptions] = useState<Array<{ portfolioId: string; name: string }>>([])
+  const [pfOptions, setPfOptions] = useState<PortfolioOption[]>([])
   // P3 — per-row interactions (open a modal/menu for a single campaign)
   const [strategyModal, setStrategyModal] = useState<Camp | null>(null)
   const [multiplierModal, setMultiplierModal] = useState<Camp | null>(null)
@@ -1285,10 +1286,17 @@ export function CampaignsGrid() {
     fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' })
       .then((r) => r.json()).then((d) => setPfOptions(Array.isArray(d?.portfolios) ? d.portfolios : [])).catch(() => {})
   }, [])
+  // CM-21 — the menu offers only the portfolios of the selected campaigns' own market that exist on Amazon. The full
+  // list stays in `pfOptions`, which also names the portfolios in the filter.
+  const pickMarket = useMemo(() => sharedMarket(rows.filter((c) => sel.has(c.id)).map((c) => c.marketplace)), [rows, sel])
+  const assignable = useMemo(() => (pickMarket.market ? assignablePortfolios(pfOptions, pickMarket.market) : []), [pfOptions, pickMarket])
   // P2b — bulk assign selected campaigns to a portfolio (or clear) via the gated campaign PATCH.
   const applyBulkPortfolio = async (portfolioId: string | null, name: string) => {
-    setPortfolioMenu(false); setApplying(true)
+    setPortfolioMenu(false)
     const targets = rows.filter((c) => sel.has(c.id))
+    // CM-21 — a portfolio belongs to one market. The menu only offers one when the selection shares a market.
+    if (portfolioId != null && sharedMarket(targets.map((c) => c.marketplace)).mixed) return
+    setApplying(true)
     let ok = 0; let fail = 0; const done = new Set<string>()
     for (const c of targets) {
       try {
@@ -1978,10 +1986,14 @@ export function CampaignsGrid() {
             <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setPortfolioMenu(false)} />
             <div className="h10-menu" role="dialog" aria-label="Assign to portfolio" style={{ maxHeight: 320, overflowY: 'auto' }}>
               <button type="button" onClick={() => void applyBulkPortfolio(null, 'No portfolio')}>No portfolio</button>
-              {pfOptions.map((p) => (
-                <button type="button" key={p.portfolioId} onClick={() => void applyBulkPortfolio(p.portfolioId, p.name)}>{p.name}</button>
-              ))}
-              {pfOptions.length === 0 && <span className="sub" style={{ padding: '8px 11px' }}>No portfolios yet — create one first.</span>}
+              {pickMarket.mixed
+                ? <span className="sub" style={{ padding: '8px 11px' }}>These campaigns are in different markets. A portfolio holds one market&apos;s campaigns, so select campaigns from one market.</span>
+                : <>
+                  {assignable.map((p) => (
+                    <button type="button" key={p.portfolioId} onClick={() => void applyBulkPortfolio(p.portfolioId, p.name)}>{p.name}</button>
+                  ))}
+                  {assignable.length === 0 && <span className="sub" style={{ padding: '8px 11px' }}>{pickMarket.market ? `No portfolios on Amazon for ${pickMarket.market} yet — create one first.` : 'The market of these campaigns is not known, so no portfolio can be offered.'}</span>}
+                </>}
             </div>
           </>}
         </div>

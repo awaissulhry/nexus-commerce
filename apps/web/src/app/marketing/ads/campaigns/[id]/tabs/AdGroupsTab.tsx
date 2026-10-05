@@ -35,7 +35,8 @@ interface AdGroupRow {
   salesCents?: number
   ordersCount?: number
   lastSyncedAt?: string | null
-  targets?: unknown[]
+  /** CM-24 — how many positive targets the group has (the rows its Targets tab lists), counted without a cap. */
+  targetCount?: number
   productAds?: unknown[]
 }
 
@@ -53,7 +54,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
 
   // ER4 F2 — totals compute from the grid's FILTERED rows (function-form total)
   const tot = (vr: typeof rows) => vr.reduce(
-    (a, r) => ({ spend: a.spend + spendOf(r), sales: a.sales + salesOf(r), impr: a.impr + num(r.impressions), clicks: a.clicks + num(r.clicks), orders: a.orders + num(r.ordersCount), targets: a.targets + (r.targets?.length ?? 0) }),
+    (a, r) => ({ spend: a.spend + spendOf(r), sales: a.sales + salesOf(r), impr: a.impr + num(r.impressions), clicks: a.clicks + num(r.clicks), orders: a.orders + num(r.ordersCount), targets: a.targets + (r.targetCount ?? 0) }),
     { spend: 0, sales: 0, impr: 0, clicks: 0, orders: 0, targets: 0 },
   )
 
@@ -65,7 +66,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
   const columns: GridColumn<AdGroupRow>[] = useMemo(() => [
     { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'defaultBid', label: 'Default Bid', render: (r) => eur(num(r.defaultBidCents) / 100), sortValue: (r) => num(r.defaultBidCents), total: '' },
-    { key: 'target', label: 'Target', tip: 'Number of keyword/product targets in this ad group', render: (r) => <span className="h10-tgt">{int(r.targets?.length ?? 0)}<ExternalLink size={13} className="og" /></span>, sortValue: (r) => r.targets?.length ?? 0, total: (vr) => { const T = tot(vr); return int(T.targets) } },
+    { key: 'target', label: 'Target', tip: 'Number of keyword/product targets in this ad group', render: (r) => <span className="h10-tgt">{int(r.targetCount ?? 0)}<ExternalLink size={13} className="og" /></span>, sortValue: (r) => r.targetCount ?? 0, total: (vr) => { const T = tot(vr); return int(T.targets) } },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
     { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => <span className="h10-acos">{salesOf(r) ? `${acosOf(r).toFixed(2)}%` : '-%'}<i className="dot" /></span>, sortValue: acosOf, filterValue: acosOf, total: (vr) => { const T = tot(vr); return <span className="h10-acos">{T.sales ? `${((T.spend / T.sales) * 100).toFixed(2)}%` : '-%'}<i className="dot" /></span> } },
