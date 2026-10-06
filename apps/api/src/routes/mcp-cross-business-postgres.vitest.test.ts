@@ -990,6 +990,13 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
     channel: undefined, sku: undefined, categoryId: undefined, templateId: undefined, campaignIds: undefined, portfolioId: undefined,
     namePrefix: undefined, productToken: undefined, competitorTokens: undefined,
   },
+  // Ads playbook PB-3 — a change of the loop's product's playbook row in IT (from A: "Product not found"). The template
+  // fields, the capture's selectors and the values are left out; the channel is Amazon's.
+  'set-ads-playbook': {
+    channel: 'AMAZON', kind: 'playbook', op: undefined, market: 'IT', level: 'product', templateId: undefined, name: undefined, status: undefined,
+    doc: undefined, sections: undefined, categoryId: undefined, sku: undefined, values: undefined, recompute: undefined, campaignIds: undefined,
+    portfolioId: undefined, namePrefix: undefined, productToken: undefined, competitorTokens: undefined, expectVersion: undefined, reason: undefined,
+  },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.

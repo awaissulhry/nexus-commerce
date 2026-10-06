@@ -525,6 +525,31 @@ function strategyPart(p: Rec): Part {
   }
 }
 
+/** ADS PLAYBOOK PB-3 — a playbook change: each row field or section, from → to, the money in the market's currency. */
+function playbookPart(p: Rec): Part {
+  const t = rec(p.target)
+  const market = marketOf(t?.market)
+  const currency = marketLimitsOf(market)?.currency ?? null
+  const money = new Set(['dailyBudgetCents', 'baseBidCents'])
+  const show = (field: string, value: unknown): string => {
+    if (value === null || value === undefined) return 'not set'
+    if (money.has(field)) return num(value) === null ? EMPTY : currency ? adMoney(value, currency) ?? EMPTY : `${num(value)} cents`
+    if (field === 'enrolled') return value === true ? 'enrolled' : 'not enrolled'
+    if (typeof value === 'object') return 'set'
+    return plainValue(value)
+  }
+  const changes = recs(p.changes).map((c): QueueChange => ({ label: text(c.label) ?? text(c.field) ?? 'Change', from: show(text(c.field) ?? '', c.from), to: show(text(c.field) ?? '', c.to) }))
+  const label = text(t?.label) ?? (text(t?.name) ? `Template ${text(t?.name)}` : null)
+  const said = text(p.summary)
+  return {
+    channel: 'AMAZON',
+    market,
+    changes,
+    ...(said ? { summary: said } : {}),
+    ...(label ? { target: target('other', { name: `Ads playbook · ${label}`, href: `/marketing/ads/rules-automation/control-room${market ? `?market=${seg(market)}` : ''}` }) } : {}),
+  }
+}
+
 /* ── per tool: what the convention does not say ──────────────────────────────────────────────── */
 
 type Part = Partial<ResolvedRequest>
@@ -666,6 +691,7 @@ const READERS: Record<string, Reader> = {
 
   /* Amazon ads: names and amounts in the campaign's currency (the web card's describe()). */
   'set-ads-strategy': (p) => strategyPart(p),
+  'set-ads-playbook': (p) => playbookPart(p),
   'set-target-bid': (p, _a, _ctx, tool) => {
     const from = adMoney(p.currentBidCents, p.currency)
     const to = adMoney(num(p.effectiveBidCents) ?? p.proposedBidCents, p.currency)

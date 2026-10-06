@@ -58,7 +58,7 @@ export async function playbookVersions(
     take: limit,
     select: {
       id: true, kind: true, refId: true, version: true, market: true, level: true, scopeId: true, op: true, values: true, changes: true,
-      via: true, approvalId: true, actor: true, actorUserId: true, reason: true, createdAt: true,
+      direction: true, via: true, approvalId: true, actor: true, actorUserId: true, stepUpAt: true, reason: true, createdAt: true,
     },
   })
 }

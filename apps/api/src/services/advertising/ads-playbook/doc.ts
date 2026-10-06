@@ -49,6 +49,8 @@ export const SLOT_KEY = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'a slot ke
 const PCT = z.number().int().min(0).max(MAX_PLACEMENT_PCT)
 const FACTOR = z.number().positive().max(100)
 const TEXT = (max: number) => z.string().trim().min(1).max(max)
+/** The look-backs the ads strategy keeps for its harvest and negate groups (fields.ts COLUMN_CHECKS). */
+const WINDOW_DAYS = z.union([z.literal(30), z.literal(60), z.literal(90)])
 
 // ── Sections ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ export const SLOT = z.object({
   match: z.enum(MATCH_TYPES).optional(),
   intent: z.enum(INTENTS),
   rankRole: z.enum([...RANK_ROLES, 'none']).default('none'),
-  feeds: z.array(z.enum(FEEDS)).default([]),
+  feeds: z.array(z.enum(FEEDS)).max(FEEDS.length).default([]),
   /** AUTO slots only: each group on or off, and its bid as a factor of the slot's start bid. */
   autoGroups: z.partialRecord(z.enum(AUTO_GROUPS), z.object({ on: z.boolean(), factor: FACTOR.default(1) })).optional(),
   /** The words of the campaign name this slot adds ({parts} of the naming pattern): ['Exact', 'Brand']. */
@@ -105,7 +107,7 @@ const HARVEST_TO = z.union([
   z.object({ router: z.literal('intent'), brand: SLOT_KEY, competitor: SLOT_KEY, category: SLOT_KEY }).strict(),
 ])
 export const HARVEST_EDGE = z.object({
-  from: z.array(SLOT_KEY).min(1),
+  from: z.array(SLOT_KEY).min(1).max(30),
   to: HARVEST_TO,
   what: z.enum(['KEYWORD_EXACT', 'KEYWORD_PHRASE', 'ASIN_PRODUCT']),
   startBid: z.object({ mode: z.enum(HARVEST_BID_MODES), value: z.number().int().min(0).max(100_000).optional() }).strict()
@@ -163,14 +165,14 @@ export const RECIPE_FACTORS = z.object({
     minClicks: z.number().int().min(0).max(10_000),
     /** The harvest's ACoS ceiling as a factor of the phase's target; absent = none. */
     maxAcosFactor: FACTOR.optional(),
-    windowDays: z.number().int().min(1).max(365),
+    windowDays: WINDOW_DAYS,
   }).strict().optional(),
   negate: z.object({
     minClicks: z.number().int().min(1).max(10_000),
     /** The least spend before a term is negated, as a factor of the product's base bid. */
     minSpendFactor: FACTOR.optional(),
     maxOrders: z.number().int().min(0).max(100),
-    windowDays: z.number().int().min(1).max(365),
+    windowDays: WINDOW_DAYS,
   }).strict().optional(),
 }).strict()
 
@@ -228,12 +230,12 @@ export const OVERRIDES = z.object({
 export type Overrides = z.infer<typeof OVERRIDES>
 
 export const PRODUCT_TERMS = z.object({
-  brand: z.array(TEXT(80)).max(200).default([]),
-  category: z.array(z.object({ text: TEXT(80), exactAtStart: z.boolean().default(false) }).strict()).max(500).default([]),
-  competitor: z.array(TEXT(80)).max(500).default([]),
-  competitorAsins: z.array(z.string().trim().regex(/^B0[A-Z0-9]{8}$/i, 'an ASIN is B0 and 8 letters or digits')).max(500).default([]),
+  brand: z.array(TEXT(80)).max(250).default([]),
+  category: z.array(z.object({ text: TEXT(80), exactAtStart: z.boolean().default(false) }).strict()).max(250).default([]),
+  competitor: z.array(TEXT(80)).max(250).default([]),
+  competitorAsins: z.array(z.string().trim().regex(/^B0[A-Z0-9]{8}$/i, 'an ASIN is B0 and 8 letters or digits')).max(250).default([]),
   /** Written into every slot at build (negatives first). Amazon: a negative phrase has at most 4 words. */
-  negatives: z.array(z.object({ text: TEXT(80), match: z.enum(['EXACT', 'PHRASE']) }).strict()).max(500).default([]),
+  negatives: z.array(z.object({ text: TEXT(80), match: z.enum(['EXACT', 'PHRASE']) }).strict()).max(250).default([]),
 }).strict()
 export type ProductTerms = z.infer<typeof PRODUCT_TERMS>
 
@@ -245,12 +247,12 @@ export const PHASE_RECIPE = z.object({
   maxChangePct: z.number().int().min(1).max(100).optional(),
   harvestMinOrders: z.number().int().min(1).max(100).optional(),
   harvestMinClicks: z.number().int().min(0).max(10_000).optional(),
-  harvestMaxAcosPct: z.number().int().min(1).max(MAX_TARGET_PCT).optional(),
-  harvestWindowDays: z.number().int().min(1).max(365).optional(),
+  harvestMaxAcosPct: z.number().int().min(1).max(1000).optional(),
+  harvestWindowDays: WINDOW_DAYS.optional(),
   negateMinClicks: z.number().int().min(1).max(10_000).optional(),
   negateMinSpendCents: z.number().int().min(0).max(10_000_000).optional(),
   negateMaxOrders: z.number().int().min(0).max(100).optional(),
-  negateWindowDays: z.number().int().min(1).max(365).optional(),
+  negateWindowDays: WINDOW_DAYS.optional(),
 }).strict()
 export const PHASE_RECIPES = z.partialRecord(z.enum(PHASES), PHASE_RECIPE)
 export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
