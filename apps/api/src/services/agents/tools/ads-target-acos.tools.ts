@@ -27,14 +27,14 @@
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { setBidAutomation } from '../../advertising/campaign-settings.service.js'
 import { adsMode } from '../../advertising/ads-api-client.js'
-import { approvedRun, BY_RULE_WORDS, notRun, ruleFactsFor, ruleRefusal } from './ads-change-kit.js'
-import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
+import { approvedRun, BY_RULE_WORDS, notRun, ruleFactsFor, ruleRefusal, strategyFactsMoney } from './ads-change-kit.js'
+import { adKitLimits, limitFactsOf, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
-import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 /** The most campaigns one request sets (a list, or a market): the tool contract bounds every list to 250. */
 const MAX_CAMPAIGNS = 250
@@ -293,8 +293,6 @@ export const SET_CAMPAIGN_TARGET_ACOS_UNDO: ToolUndo = {
 const TOOL_NAME = 'set-campaign-target-acos'
 /** AA-W2-8 — its Claude limits: up to 50 campaigns a request; each move in points, a raise 0 by default. */
 const TARGET_LIMITS = adKitLimits({ maxItems: 50 }, STEP_POINT_LIMITS)
-const { targetAcosPct: _shownToWhoMaySetIt, ...FACTS_MONEY } = LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>
-const TARGET_TOOL_MONEY: Readonly<Record<string, FieldPermission>> = { ...FACTS_MONEY, limitsNote: FIELDS.financialsAdspendView }
 
 const setCampaignTargetAcos: AgentTool = {
   name: TOOL_NAME,
@@ -333,7 +331,7 @@ const setCampaignTargetAcos: AgentTool = {
   withinLimits: (preview, limits) => targetRefusal(preview) ?? ruleRefusal(preview, limits),
   // The ads strategy's facts and lines hold money (bid limits, budgets by rule, its ACoS target): hidden from a person
   // without ad spend. Not its own targetAcosPct: anyone who may set a campaign's target sees it, as before.
-  restrictedFields: TARGET_TOOL_MONEY,
+  restrictedFields: strategyFactsMoney(['targetAcosPct']),
   undo: SET_CAMPAIGN_TARGET_ACOS_UNDO,
   description:
     'Set the target ACoS of Amazon campaigns: the campaigns named (campaignIds), or every campaign of a market (market) '

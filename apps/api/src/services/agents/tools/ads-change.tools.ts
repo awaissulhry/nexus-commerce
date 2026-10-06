@@ -21,11 +21,16 @@
  *   restore-campaign (A8)           puts the remembered bids back — only a suppression a person set (`user:`), never an
  *                                   engine's
  *   set-campaign-live-writes (A12)  the per-campaign live-write allowlist (d2): only an allowlisted campaign takes a
- *                                   live write. A Nexus switch (no Amazon call), always asked, never run without a person
+ *                                   live write. A Nexus switch (no Amazon call); by rule only off, or on for a campaign
+ *                                   a Claude request created (AA-W2-9)
  *   undo-ad-change (A10)   puts back an ad change: an approved request's whole change set (changeSetId = its approval
  *                          id) or one recorded change (actionLogId, from ad-changes), through the rollback service;
  *                          negatives the request created are retired (archived at Amazon — that removes a block, it
- *                          stops no ad).
+ *                          stops no ad). AA-W2-9 — its own writes carry its approval as their change set, so it can be
+ *                          undone in turn (retired negatives are not created again).
+ *
+ * AA-W2-9 — suppress-campaign, restore-campaign, set-campaign-live-writes (on: only a campaign Claude created; off: a
+ * brake) and undo-ad-change are strategy-bound too, each on the same terms.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -38,11 +43,11 @@ import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { createHash } from 'node:crypto'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
-import { adGroupCampaigns, adGroupSuppressionCounts } from '../../advertising/ads-entity-lookup.service.js'
+import { adGroupCampaigns, adGroupDefaultBids, adGroupSuppressionCounts, highestAdGroupBidAbove } from '../../advertising/ads-entity-lookup.service.js'
 import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, strategyFactsMoney, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -97,8 +102,11 @@ async function campaignsOf(rows: Array<{ entityType: string; entityId: string }>
   return out
 }
 
-/** Where the restore lands: every campaign it touches must answer the same, or it is refused. */
-async function reachOfRestore(rows: UndoRow[], negatives: UndoNegative[]): Promise<{ reach: StoredReach } | { refused: Extract<LiveReach, { reach: 'refused' }> }> {
+/**
+ * The writes of a restore, one per campaign it touches, sorted. AA-W2-9 — the same writes the gate judges as a run by
+ * rule (ruleFactsFor).
+ */
+async function restoreWrites(rows: UndoRow[], negatives: UndoNegative[]): Promise<RuleWrite[]> {
   const campaignOf = await campaignsOf(rows, negatives)
   const byCampaign = new Map<string, { marketplace: string | null; changes: AdWriteIntent['changes'] }>()
   const add = (entityId: string, changes: AdWriteIntent['changes']) => {
@@ -110,14 +118,82 @@ async function reachOfRestore(rows: UndoRow[], negatives: UndoNegative[]): Promi
   }
   for (const r of rows) add(r.entityId, intentFieldsOf(r))
   for (const n of negatives) add(n.targetId, [{ field: 'status', valueCents: null }])
+  return [...byCampaign].sort(([a], [b]) => (a < b ? -1 : 1)).map(([campaignId, entry]) => ({ campaignId, marketplace: entry.marketplace, changes: entry.changes, label: `campaign ${campaignId}` }))
+}
+
+/** Where the restore lands: every campaign it touches must answer the same, or it is refused. */
+async function reachOfRestore(writes: readonly RuleWrite[]): Promise<{ reach: StoredReach } | { refused: Extract<LiveReach, { reach: 'refused' }> }> {
   const profiles = new Set<string>()
-  for (const [campaignId, entry] of [...byCampaign].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    const reach = await checkLiveReach({ campaignId, marketplace: entry.marketplace, changes: entry.changes })
+  for (const { label: _label, ...intent } of writes) {
+    const reach = await checkLiveReach(intent)
     if (reach.reach === 'refused') return { refused: reach }
     if (reach.reach === 'live') profiles.add(reach.profileId)
   }
   // Some of it live, some in sandbox: it is live (that is what reaches Amazon), on every profile named.
   return { reach: profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(',') } : { reach: 'sandbox' } }
+}
+
+/**
+ * AA-W2-9 — what an undo does, as the kit judges it: each bid, budget and placement it puts back, from the value stored
+ * NOW (a put-back that raises is a raise), and in words what no run by rule judges (`notJudged`: a status, an archive,
+ * another campaign setting, a negative keyword lifted) — such an undo waits for a person.
+ */
+async function undoItems(rows: UndoRow[], negatives: UndoNegative[]): Promise<{ items: KitItem[]; notJudged: string[] }> {
+  const ids = (type: string) => [...new Set(rows.filter((r) => r.entityType === type).map((r) => r.entityId))]
+  const targets = ids('AD_TARGET').length ? await prisma.adTarget.findMany({ where: { id: { in: ids('AD_TARGET') } }, select: { id: true, bidCents: true } }) : []
+  const groupBid = await adGroupDefaultBids(ids('AD_GROUP'))
+  const campaigns = ids('CAMPAIGN').length ? await prisma.campaign.findMany({ where: { id: { in: ids('CAMPAIGN') } }, select: { id: true, dailyBudget: true, dynamicBidding: true } }) : []
+  const bid = new Map<string, number>(targets.map((t) => [t.id, t.bidCents]))
+  const campaign = new Map(campaigns.map((c) => [c.id, c] as const))
+  const items: KitItem[] = []
+  const notJudged: string[] = []
+  const differs = (after: Record<string, unknown>, before: Record<string, unknown>, key: string) => key in before && after[key] !== before[key]
+  for (const r of rows) {
+    const before = (r.restores ?? {}) as Record<string, unknown>
+    const after = (r.wrote ?? {}) as Record<string, unknown>
+    if (r.actionType === 'update_placement_bidding') {
+      const back = Array.isArray(before.adjustments) ? (before.adjustments as Array<{ placement?: string; percentage?: number }>) : []
+      const now = ((campaign.get(r.entityId)?.dynamicBidding as { placementBidding?: Array<{ placement?: string; percentage?: number }> } | null)?.placementBidding) ?? []
+      for (const a of back) {
+        const from = now.find((n) => n.placement === a.placement)?.percentage ?? 0
+        if (typeof a.percentage === 'number' && a.percentage !== from) items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'placementPct', fromPct: from, toPct: a.percentage } })
+      }
+      continue
+    }
+    if (r.actionType.startsWith('bulksheet_create_')) { notJudged.push('archives what an import created (permanent at Amazon)'); continue }
+    if (differs(after, before, 'status')) notJudged.push(`puts back the status of ${r.entityType.toLowerCase().replace('_', ' ')} ${r.entityId}`)
+    if (r.entityType === 'CAMPAIGN') {
+      const c = campaign.get(r.entityId)
+      if (before.dailyBudget != null && after.dailyBudget !== before.dailyBudget && c) {
+        items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'dailyBudget', fromCents: Math.round(Number(c.dailyBudget) * 100), toCents: Math.round(Number(before.dailyBudget) * 100) } })
+      }
+      const other = ['dailyBudgetCurrency', 'biddingStrategy', 'endDate', 'name', 'portfolioId'].filter((key) => differs(after, before, key))
+      if (other.length) notJudged.push(`puts back ${other.join(', ')} of campaign ${r.entityId}`)
+    } else if (r.entityType === 'AD_GROUP') {
+      if (typeof before.defaultBidCents === 'number' && after.defaultBidCents !== before.defaultBidCents) {
+        items.push({ entity: { kind: 'adGroup', id: r.entityId }, change: { field: 'bid', fromCents: groupBid.get(r.entityId) ?? null, toCents: before.defaultBidCents } })
+      }
+    } else if (r.entityType === 'AD_TARGET') {
+      if (typeof before.bidCents === 'number' && after.bidCents !== before.bidCents) {
+        items.push({ entity: { kind: 'target', id: r.entityId }, change: { field: 'bid', fromCents: bid.get(r.entityId) ?? null, toCents: before.bidCents } })
+      }
+    } else {
+      notJudged.push(`puts back a ${r.entityType.toLowerCase().replace('_', ' ')}`)
+    }
+  }
+  if (negatives.length) notJudged.push(`lifts ${negatives.length === 1 ? 'a negative keyword' : `${negatives.length} negative keywords`} it created (a block removed)`)
+  return { items, notJudged }
+}
+
+/** AA-W2-9 — undo-ad-change's Claude limits: up to 50 items run by rule; a put-back raise, in % or points, 0 by default. */
+const UNDO_LIMITS = adKitLimits({ maxItems: 50 }, { ...STEP_PCT_LIMITS, ...STEP_POINT_LIMITS })
+
+/** AA-W2-9 — an undo doing something no run by rule judges waits for a person (pure, on the preview). */
+function undoRefusal(preview: unknown): string | null {
+  const notJudged = (preview as { notJudgedByRule?: unknown } | null | undefined)?.notJudgedByRule
+  if (!Array.isArray(notJudged)) return 'the preview does not say what of this undo a run by rule can judge; a person decides'
+  if (!notJudged.length) return null
+  return `it also ${notJudged[0]}${notJudged.length > 1 ? ` (and ${notJudged.length - 1} more)` : ''}, which a run by rule does not judge; a person decides`
 }
 
 const rowOut = (log: { id: string; actionType: string; entityType: string; entityId: string; payloadBefore: unknown; payloadAfter: unknown; createdAt: Date }): UndoRow => ({
@@ -144,7 +220,7 @@ async function negativesCreatedBy(changeSetId: string): Promise<UndoNegative[]> 
   return standing.map((t) => ({ targetId: t.id, keywordText: t.expressionValue }))
 }
 
-async function undoPreview(args: Record<string, unknown>): Promise<ToolResult> {
+async function undoPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const changeSetId = typeof args.changeSetId === 'string' ? args.changeSetId.trim() : ''
   const actionLogId = typeof args.actionLogId === 'string' ? args.actionLogId.trim() : ''
   if (!changeSetId && !actionLogId) {
@@ -160,7 +236,7 @@ async function undoPreview(args: Record<string, unknown>): Promise<ToolResult> {
       const log = await prisma.advertisingActionLog.findUnique({ where: { id: actionLogId } })
       if (!log) return { ok: false, error: 'Change not found.' }
       const rows = [rowOut(log)]
-      return finish({ mode: 'action', actionLogId }, rows, [], 1)
+      return finish({ mode: 'action', actionLogId }, rows, [], 1, ctx)
     }
     setId = single.changeSetId
   }
@@ -176,12 +252,17 @@ async function undoPreview(args: Record<string, unknown>): Promise<ToolResult> {
     const known = await prisma.advertisingActionLog.count({ where: { executionId: setId } })
     return { ok: false, error: known ? `Nothing of change set ${setId} is left to undo: it was undone already.` : 'Change set not found.' }
   }
-  return finish({ mode: 'set', changeSetId: setId }, inWindow.map(rowOut), negatives, inWindow.length)
+  return finish({ mode: 'set', changeSetId: setId }, inWindow.map(rowOut), negatives, inWindow.length, ctx)
 }
 
-async function finish(source: Record<string, unknown>, rows: UndoRow[], negatives: UndoNegative[], total: number): Promise<ToolResult> {
-  const reach = await reachOfRestore(rows, negatives)
+async function finish(source: Record<string, unknown>, rows: UndoRow[], negatives: UndoNegative[], total: number, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
+  const writes = await restoreWrites(rows, negatives)
+  const reach = await reachOfRestore(writes)
   if ('refused' in reach) return { ok: false, error: reachRefusal(reach.refused) }
+  // AA-W2-9 — what a run by rule is judged on: every row (not only the 50 shown) against the ads strategy where it lands
+  // and the tool's limits, the gate as the rule's write, and what no run by rule judges.
+  const { items, notJudged } = await undoItems(rows, negatives)
+  const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
     negatives.length ? `removes ${negatives.length === 1 ? 'the negative keyword' : `${negatives.length} negative keywords`} it created at Amazon (the block is lifted, no ad is stopped)` : '',
@@ -196,9 +277,32 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
       negatives,
       reach: reach.reach,
       reachNote: reachNote(reach.reach),
+      notJudgedByRule: notJudged,
+      ...rule,
       effect: `Undo ${parts.join(', and ')}. A bid or budget changed since by someone else is overwritten with the earlier value.`,
     },
   }
+}
+
+/** AA-W2-9 — the writes of an undo still standing (its change set, not reversed since). */
+async function undoWritesStanding(changeSetId: string): Promise<{ changeSetId: string; standing: number }> {
+  const standing = await prisma.advertisingActionLog.count({ where: { executionId: changeSetId, rolledBackAt: null } })
+  return { changeSetId, standing }
+}
+
+/**
+ * AA-W2-9 — undo of an undo: undo-ad-change of its own change set puts back what it reversed. Only while all of its
+ * writes still stand; the negative keywords it retired are not created again, and an undo that only retired negatives
+ * has nothing to put back here.
+ */
+export const UNDO_AD_CHANGE_UNDO: ToolUndo = {
+  current: (change) => undoWritesStanding(String((change.after as { changeSetId?: unknown } | null)?.changeSetId ?? '')),
+  request(change) {
+    const after = (change.after ?? {}) as { changeSetId?: unknown; standing?: unknown }
+    if (typeof after.changeSetId !== 'string' || !after.changeSetId) return { refusal: 'This undo does not name its own change set.' }
+    if (!(Number(after.standing) > 0)) return { refusal: 'This undo wrote nothing that can be put back (retired negative keywords are not created again): ask for them again.' }
+    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, why: 'undo of an undo: puts back what it reversed' } }
+  },
 }
 
 const undoAdChange: AgentTool = {
@@ -217,30 +321,40 @@ const undoAdChange: AgentTool = {
   readOnly: false,
   requiresApprovalDefault: true,
   openWorld: true,
-  // The undo of an undo is asking for the change again; nothing here re-applies it.
-  reversibility: 'none',
-  maxClaudeTrust: 'ask',
+  // AA-W2-9 — its own writes carry its approval as their change set, so undo-ad-change of it puts back what it reversed;
+  // the negative keywords it retired are not created again (partial).
+  reversibility: 'partial',
+  // AA-W2-9 — it may run by the business's rule, only inside its limits and the ads strategy: each bid, budget and
+  // placement it puts back is judged as a change of its own (a put-back that raises is a raise: 0 by default).
+  strategyBound: 'amazon-ads',
+  maxClaudeTrust: 'auto',
+  limits: UNDO_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? undoRefusal(preview),
+  undo: UNDO_AD_CHANGE_UNDO,
   description:
     'Put back an Amazon ad change: every write of an approved ad request (changeSetId = its approvalId) or one '
     + 'recorded change (actionLogId from ad-changes). Bids, budgets and placements return to the values before them '
     + 'through the rollback service (within 24 hours for a change set); negative keywords the request created are '
-    + 'retired. Nothing changes until a person approves it in Nexus. The preview lists every write it reverses and '
-    + 'where it lands (live or sandbox); refused, and not queued, when Amazon\'s write gate would refuse it. It is not '
-    + 'itself undone: to redo, ask for the change again.',
-  async handler(args) {
-    return undoPreview(args)
+    + `retired. Nothing changes until it is approved. ${BY_RULE_WORDS}: each value it puts back no larger a move than its `
+    + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
+    + 'negative keyword. The preview lists every write it reverses, where it lands (live or sandbox) and the ads '
+    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it. Its own writes '
+    + 'are a change set of their own: undo-change of it puts back what it reversed (retired negatives are not created again).',
+  async handler(args, ctx) {
+    return undoPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await undoPreview(args)
+    const fresh = await undoPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['source', 'rows', 'negatives'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { source: { mode: 'set' | 'action'; changeSetId?: string; actionLogId?: string }; rows: UndoRow[]; negatives: UndoNegative[]; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+    // AA-W2-9 — the reversal's own writes carry this request as their change set (F11): it can be undone in turn.
     const rollback = p.rows.length
       ? p.source.mode === 'set'
-        ? await rollbackByChangeSetId({ changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual })
-        : await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual })
+        ? await rollbackByChangeSetId({ changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
+        : await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
       : null
     let retired: { retired: number; refused: number; failed: number } | null = null
     if (p.negatives.length) {
@@ -263,9 +377,12 @@ const undoAdChange: AgentTool = {
       ...(rollback?.reason ? { note: rollback.reason } : {}),
       details: (rollback?.details ?? []).slice(0, ROWS_SHOWN),
       ...(retired ? { negatives: retired } : {}),
+      changeSetId: run.changeSetId,
     }
-    if (failed) return { ok: false, data, error: `Partly undone: ${data.reversed} write${data.reversed === 1 ? '' : 's'} put back, ${failed} not. The rest stays as it was; approve again to retry.` }
-    return { ok: true, data }
+    // AA-W2-9 — what undo-change of this undo compares and asks for (UNDO_AD_CHANGE_UNDO).
+    const change = { before: { changeSetId: run.changeSetId, undid: p.source }, after: await undoWritesStanding(run.changeSetId) }
+    if (failed) return { ok: false, data, change, error: `Partly undone: ${data.reversed} write${data.reversed === 1 ? '' : 's'} put back, ${failed} not. The rest stays as it was; approve again to retry.` }
+    return { ok: true, data, change }
   },
 }
 
@@ -888,7 +1005,7 @@ async function suppressionState(campaignId: string): Promise<{ campaignId: strin
   return { campaignId, suppressed: !!c?.bidsSuppressedAt, by: c?.bidsSuppressedAt ? (c.bidsSuppressedBy ?? null) : null }
 }
 
-async function suppressPreview(args: Record<string, unknown>): Promise<ToolResult> {
+async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const campaign = await campaignForChange(campaignId)
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
@@ -907,10 +1024,26 @@ async function suppressPreview(args: Record<string, unknown>): Promise<ToolResul
     adGroupSuppressionCounts(campaignId, floor),
   ])
   if (!targets && !groups.aboveFloor) return { ok: false, error: `Every bid of ${campaign.name} is already at the floor: there is nothing to lower.` }
-  const reach = await checkLiveReach({ campaignId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: floor }], isSuppression: true })
+  const intent = { campaignId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: floor }], isSuppression: true }
+  const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const bound = await alsoChangedBy(campaignId)
+  // AA-W2-9 — what a run by rule is judged on: the campaign as one change (its bids go down together, from the highest
+  // above the stop bid to it: a stop's low bid, which no lowest bid and no step binds), the ads strategy where it lands
+  // (a protected product's ads are never stopped by rule) and the gate as the rule's write (a stop passes a halt).
+  const [topTarget, topGroup] = await Promise.all([
+    prisma.adTarget.aggregate({ where: { adGroup: { campaignId }, isNegative: false, bidCents: { gt: floor }, suppressedFromBidCents: null }, _max: { bidCents: true } }),
+    highestAdGroupBidAbove(campaignId, floor),
+  ])
+  const highest = Math.max(topTarget._max.bidCents ?? 0, topGroup ?? 0)
+  const rule = await ruleFactsFor({
+    tool: 'suppress-campaign',
+    limits: SUPPRESS_LIMITS,
+    items: [{ entity: { kind: 'campaign', id: campaignId }, change: { field: 'bid', fromCents: highest, toCents: floor, forced: true } }],
+    writes: [{ ...intent, label: `campaign "${campaign.name}"` }],
+    approvalId: ctx?.approvalId,
+  })
   return {
     ok: true,
     preview: {
@@ -923,10 +1056,14 @@ async function suppressPreview(args: Record<string, unknown>): Promise<ToolResul
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...rule,
       effect: `Lowers every bid of ${campaign.name} to ${floorWords} — ${targets} target${targets === 1 ? '' : 's'} and ${groups.aboveFloor} ad group default${groups.aboveFloor === 1 ? '' : 's'} — so it stops winning auctions without being paused. Each bid is remembered; restore-campaign puts them back.`,
     },
   }
 }
+
+/** AA-W2-9 — suppress-campaign's Claude limits: the kit's alone (a stop only lowers: no raise to bound). */
+const SUPPRESS_LIMITS = adKitLimits({ maxItems: 1 })
 
 const suppressCampaign: AgentTool = {
   name: 'suppress-campaign',
@@ -939,7 +1076,14 @@ const suppressCampaign: AgentTool = {
   requiresApprovalDefault: true,
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'confirm',
+  // AA-W2-9 — a stop may run by the business's rule, only inside its limits and the ads strategy (never the campaign of
+  // a protected product), and only where the gate lets the rule's own write through. It only lowers: no raise limit.
+  strategyBound: 'amazon-ads',
+  maxClaudeTrust: 'auto',
+  limits: SUPPRESS_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
+  // A person who may stop a campaign without seeing ad spend sees its stop bid as before; the strategy's money is hidden.
+  restrictedFields: strategyFactsMoney(['stopBidCents']),
   undo: {
     current: (change) => suppressionState(String((change.after as { campaignId?: unknown } | null)?.campaignId ?? '')),
     request: (change) => {
@@ -950,16 +1094,17 @@ const suppressCampaign: AgentTool = {
   description:
     'Stop an Amazon Sponsored Products campaign the Nexus way: never paused — every keyword and target bid and every ad '
     + "group default bid goes to the stop bid the ads strategy sets for it (the 2-cent floor when it sets none; bids already "
-    + 'lower stay), and each bid is remembered. Nothing changes until a person approves '
-    + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set '
-    + 'it so. The preview counts what moves and where it lands (live at Amazon or sandbox). Refused, and not '
+    + 'lower stay), and each bid is remembered; restore-campaign brings it back in about a minute. Nothing changes until '
+    + 'it is approved: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the '
+    + `business set it so. ${BY_RULE_WORDS} — never the campaign of a product the strategy protects. The preview counts `
+    + 'what moves, where it lands (live at Amazon or sandbox) and the ads strategy\'s limits that apply. Refused, and not '
     + 'queued, when it is already suppressed or Amazon\'s write gate would refuse it (the live-write allowlist; a halt '
     + 'does not block lowering). restore-campaign (or undo-change) puts the bids back.',
-  async handler(args) {
-    return suppressPreview(args)
+  async handler(args, ctx) {
+    return suppressPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await suppressPreview(args)
+    const fresh = await suppressPreview(args, ctx)
     // W1-6 — the stop bid is material: a strategy change since the approval stops the run.
     const refusal = recheck(ctx, fresh, ['moves', 'reach', 'stopBidCents'])
     if (refusal) return notRun(refusal)
@@ -977,7 +1122,7 @@ const suppressCampaign: AgentTool = {
   },
 }
 
-async function restorePreview(args: Record<string, unknown>): Promise<ToolResult> {
+async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const campaign = await campaignForChange(campaignId)
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
@@ -1001,11 +1146,22 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
   const top = remembered.reduce<(typeof remembered)[number] | null>((best, t) => (!best || toCents(t) > toCents(best) ? t : best), null)
   const highest = top ? toCents(top) : 0
   const held = remembered.filter((t) => back.get(t.id)?.heldBy)
-  const reach = await checkLiveReach({ campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true })
+  const intent = { campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true }
+  const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const currency = campaignCurrency(campaign)
   const bound = await alsoChangedBy(campaignId)
+  // AA-W2-9 — what a run by rule is judged on: the campaign as one restart (its daily budget spends again, in full, in
+  // the month's forecast and the market's daily budget increase by rule), the bids it puts back (already held inside
+  // the ads strategy's band, W1-5) and the gate as the rule's write.
+  const rule = await ruleFactsFor({
+    tool: 'restore-campaign',
+    limits: RESTORE_LIMITS,
+    items: [{ entity: { kind: 'campaign', id: campaignId }, change: { field: 'status', from: 'LOW_BIDS', to: 'ENABLED', dailyBudgetCents: Math.round(Number(campaign.dailyBudget) * 100) } }],
+    writes: [{ ...intent, label: `campaign "${campaign.name}"` }],
+    approvalId: ctx?.approvalId,
+  })
   return {
     ok: true,
     preview: {
@@ -1021,14 +1177,32 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
       // Every remembered bid: a change to any of them (another suppression, a manual edit) stops the run. W1-5 — and a
       // held bid's value: a limit that moved after approval stops it too.
       basis: createHash('sha256').update(remembered.map((t) => `${t.id}:${t.bidCents}:${t.suppressedFromBidCents}${back.get(t.id)?.heldBy ? `:${toCents(t)}` : ''}`).join('|')).digest('base64url').slice(0, 32),
+      highestRestoredBidCents: highest,
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors } } : {}),
+      ...rule,
       effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${groups.ownFloors ? ` ${groups.ownFloors} ad group${groups.ownFloors === 1 ? ' stays' : 's stay'} at ${groups.ownFloors === 1 ? 'its' : 'their'} own floor (a product over its monthly cap in the ads strategy) until the 1st or until that cap is raised.` : ''}`,
     },
   }
+}
+
+/** AA-W2-9 — restore-campaign's Claude limits: the kit's, and the highest bid it may put back (0: every restore waits). */
+const RESTORE_LIMITS = adKitLimits({ maxItems: 1 }, {
+  maxRestoredBidCents: z.number().int().min(0).max(100_000).default(0)
+    .describe('the highest bid a restore may put back without a person, in minor units of the campaign\'s currency; 0 = every restore waits for a person'),
+})
+
+/** AA-W2-9 — the highest bid a restore puts back, within this tool's limit (0 by default: every restore waits). */
+function restoreRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const highest = Number((preview as { highestRestoredBidCents?: unknown } | null | undefined)?.highestRestoredBidCents)
+  if (!Number.isFinite(highest)) return 'the preview does not say the highest bid it puts back; a person decides'
+  const max = typeof limits.maxRestoredBidCents === 'number' ? limits.maxRestoredBidCents : 0
+  const currency = String((preview as { currency?: unknown }).currency ?? 'EUR')
+  if (highest <= max) return null
+  return `its highest restored bid is ${amountLabel(highest, currency)}, more than the ${amountLabel(max, currency)} this tool's limits let run without a person${max === 0 ? ' (0: every restore waits for a person)' : ''}; a person decides`
 }
 
 const restoreCampaign: AgentTool = {
@@ -1040,10 +1214,15 @@ const restoreCampaign: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  // AA-W2-9 — it may run by the business's rule, only inside its limits and the ads strategy (D-W2-1 = A; D-W2-6 = A:
+  // starting a campaign's spend is its own kind).
+  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'ask',
+  maxClaudeTrust: 'auto',
+  limits: RESTORE_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? restoreRefusal(preview, limits),
   undo: {
     current: (change) => suppressionState(String((change.after as { campaignId?: unknown } | null)?.campaignId ?? '')),
     request: (change) => {
@@ -1054,13 +1233,16 @@ const restoreCampaign: AgentTool = {
   description:
     'Put back the bids an Amazon Sponsored Products campaign had before it was suppressed (the no-pause stop), so it '
     + 'serves again. Only a suppression a person set is lifted here — never one an engine set (dayparting, the retail '
-    + 'guard, budget enforcement own theirs). Nothing changes until a person approves it in Nexus; it always waits for '
-    + 'a person (spend resumes). The preview lists the bids it restores in the campaign\'s currency and where it lands.',
-  async handler(args) {
-    return restorePreview(args)
+    + 'guard, budget enforcement own theirs). Nothing changes until it is approved; spend resumes. '
+    + `${BY_RULE_WORDS}: no bid put back above the highest its limits allow (0 by default: every restore waits for a `
+    + 'person), within the market\'s daily budget increase by rule (its daily budget spends again) and keeping the '
+    + 'month\'s spend forecast under its monthly cap. The preview lists the bids it restores in the campaign\'s currency, '
+    + 'where it lands and the ads strategy\'s limits that apply.',
+  async handler(args, ctx) {
+    return restorePreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await restorePreview(args)
+    const fresh = await restorePreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['suppressedBy', 'basis', 'reach'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { campaign: { id: string }; suppressedBy: string | null; reach: StoredReach; effect: string }
@@ -1078,7 +1260,40 @@ const restoreCampaign: AgentTool = {
 
 // ── set-campaign-live-writes (A12) ────────────────────────────────────────────────────────────────
 
-async function liveWritesPreview(args: Record<string, unknown>): Promise<ToolResult> {
+const LIVE_WRITES_TOOL = 'set-campaign-live-writes'
+/** AA-W2-9 — set-campaign-live-writes' Claude limits: on by rule at most this many a day, only Claude's own campaigns. */
+const LIVE_WRITES_LIMITS = adKitLimits({ maxItems: 1 }, {
+  maxCampaignsOnPerDay: z.number().int().min(0).max(50).default(0)
+    .describe('the most campaigns Claude may put on the live-write allowlist by rule in 24 hours; 0 = every one waits for a person (taking one off is never held)'),
+  allowAnyCampaign: z.boolean().default(false)
+    .describe('let a campaign Claude did not create go on the allowlist by rule; never by default'),
+})
+
+/**
+ * AA-W2-9 (D-W2-6 = A) — the request of this business that created the campaign, when a Claude request did
+ * (create-ad-campaign records `after.campaignId`); null for one a person or a sync made.
+ */
+async function createdByClaudeRequest(campaignId: string): Promise<{ approvalId: string; at: string } | null> {
+  const made = await prisma.agentChange.findFirst({
+    where: { toolName: 'create-ad-campaign', after: { path: ['campaignId'], equals: campaignId } },
+    orderBy: { executedAt: 'asc' },
+    select: { approvalId: true, executedAt: true },
+  })
+  return made ? { approvalId: made.approvalId, at: made.executedAt.toISOString() } : null
+}
+
+/** AA-W2-9 — campaigns put ON the allowlist by the business's rule in the last 24 hours (`excludeApprovalId`: this one). */
+async function allowlistedByRuleToday(excludeApprovalId?: string | null): Promise<number> {
+  const since = new Date(Date.now() - SET_WINDOW_MS)
+  const on = { path: ['enabled'], equals: true }
+  const [single, steps] = await Promise.all([
+    prisma.agentApproval.count({ where: { toolName: LIVE_WRITES_TOOL, decisionVia: 'auto', decidedAt: { gte: since }, args: on, ...(excludeApprovalId ? { id: { not: excludeApprovalId } } : {}) } }),
+    prisma.agentPlanStep.count({ where: { toolName: LIVE_WRITES_TOOL, status: { not: 'skipped' }, args: on, approval: { decisionVia: 'auto', decidedAt: { gte: since } }, ...(excludeApprovalId ? { approvalId: { not: excludeApprovalId } } : {}) } }),
+  ])
+  return single + steps
+}
+
+async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const enabled = args.enabled === true || args.enabled === 'true'
   const campaign = await campaignForChange(campaignId)
@@ -1088,6 +1303,12 @@ async function liveWritesPreview(args: Record<string, unknown>): Promise<ToolRes
   }
   const [profile, bound] = await Promise.all([adsProfileFor(campaign.marketplace).catch(() => null), alsoChangedBy(campaign.id)])
   const connectionLive = !!profile && profile.mode === 'production' && profile.writesEnabledAt != null
+  // AA-W2-9 — what a run by rule is judged on (on only: off is a brake): who made the campaign, how many were put on by
+  // rule today, and the ads strategy where it lands (the engines that would then write it hold it, C4).
+  const createdBy = enabled ? await createdByClaudeRequest(campaign.id) : null
+  const onByRuleToday = enabled ? await allowlistedByRuleToday(ctx?.approvalId) : 0
+  // A Nexus switch: no write for the gate to judge (the writes it lets through are judged when they write).
+  const facts = await ruleFactsFor({ tool: LIVE_WRITES_TOOL, limits: LIVE_WRITES_LIMITS, items: [{ entity: { kind: 'campaign', id: campaign.id }, change: { field: 'liveWrites', from: campaign.liveBidWritesEnabled, to: enabled }, nexusOnly: true }], writes: [], approvalId: ctx?.approvalId })
   return {
     ok: true,
     preview: {
@@ -1095,13 +1316,37 @@ async function liveWritesPreview(args: Record<string, unknown>): Promise<ToolRes
       campaign: { id: campaign.id, name: campaign.name, marketplace: campaign.marketplace },
       liveWrites: { from: campaign.liveBidWritesEnabled, to: enabled },
       connection: profile ? { profileId: profile.profileId, mode: profile.mode, writesEnabled: profile.writesEnabledAt != null } : null,
+      ...(enabled ? { createdBy, onByRuleToday } : {}),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...facts,
       effect: enabled
         ? `Puts ${campaign.name} on the live-write allowlist: approved changes${bound.automations.length ? ' and its rules and schedules' : ''} may then write its bids, budget and placements at Amazon${connectionLive ? '' : ' — once Amazon ads writes are live and its market\'s connection allows writes (today they would not reach Amazon)'}.`
         : `Takes ${campaign.name} off the live-write allowlist: no write reaches Amazon for it any more (bids already sent stay where they are; nothing is paused).`,
     },
   }
+}
+
+/**
+ * AA-W2-9 — off the allowlist is a brake: inside at any limit. On, by rule: only a campaign a Claude request created in
+ * this business (unless allowAnyCampaign), at most maxCampaignsOnPerDay a day (0 by default), inside the ads strategy.
+ */
+function liveWritesWithin(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as { liveWrites?: { to?: unknown }; createdBy?: unknown; onByRuleToday?: unknown }
+  if (p.liveWrites?.to === false) return null
+  const common = ruleRefusal(preview, limits)
+  if (common) return common
+  if (!p.createdBy && limits.allowAnyCampaign !== true) {
+    return 'only a campaign a Claude request created in this business goes on the live-write allowlist by rule (allowAnyCampaign is off); a person decides'
+  }
+  const max = typeof limits.maxCampaignsOnPerDay === 'number' ? limits.maxCampaignsOnPerDay : 0
+  const today = typeof p.onByRuleToday === 'number' ? p.onByRuleToday : Number.POSITIVE_INFINITY
+  if (today + 1 > max) {
+    return max === 0
+      ? 'this tool\'s limits let no campaign go on the live-write allowlist by rule (maxCampaignsOnPerDay 0); a person decides'
+      : `${today} campaign${today === 1 ? '' : 's'} went on the live-write allowlist by rule in the last 24 hours, and this tool's limits allow ${max} a day; a person decides`
+  }
+  return null
 }
 
 const setCampaignLiveWrites: AgentTool = {
@@ -1117,11 +1362,17 @@ const setCampaignLiveWrites: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  // AA-W2-9 (D-W2-1 = A, D-W2-6 = A) — it may run by the business's rule: off at any limit (a brake); on only for a
+  // campaign Claude itself created, inside its limits and the ads strategy.
+  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   // A Nexus switch: nothing is sent to Amazon by it (it decides what later writes may reach).
   openWorld: false,
   reversibility: 'full',
-  maxClaudeTrust: 'ask',
+  maxClaudeTrust: 'auto',
+  limits: LIVE_WRITES_LIMITS,
+  withinLimits: liveWritesWithin,
+  restrictedFields: strategyFactsMoney(),
   undo: {
     async current(change) {
       const campaignId = String((change.after as { campaignId?: unknown } | null)?.campaignId ?? '')
@@ -1139,13 +1390,16 @@ const setCampaignLiveWrites: AgentTool = {
     + 'write from an approved ad change, a rule or a schedule (d2); a person\'s own edit on the Nexus screens passes it. '
     + 'A campaign launched from the Nexus screens (the campaign wizards, a blueprint, an AI goal) is put on it the moment '
     + 'it exists; one made by create-ad-campaign or found by a sync starts off it. It is a Nexus switch and sends nothing '
-    + 'to Amazon itself. Nothing changes until a person approves it in Nexus; it always waits for a person. The preview '
-    + 'says whether its market\'s connection would let writes through today and which rules may then write to it.',
-  async handler(args) {
-    return liveWritesPreview(args)
+    + `to Amazon itself. Nothing changes until it is approved. ${BY_RULE_WORDS}: taking a campaign off (a brake) at any `
+    + 'limit; putting one on only for a campaign a Claude request created in this business, at most as many a day as its '
+    + 'limits allow (0 by default: each waits for a person), and never one a rule or schedule also moves. The preview '
+    + 'says whether its market\'s connection would let writes through today, which rules may then write to it, and who '
+    + 'created the campaign.',
+  async handler(args, ctx) {
+    return liveWritesPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await liveWritesPreview(args)
+    const fresh = await liveWritesPreview(args, ctx)
     if (!fresh.ok) return notRun(`Not run: ${fresh.error}`)
     const p = fresh.preview as { campaign: { id: string }; liveWrites: { from: boolean; to: boolean }; effect: string }
     const approved = (ctx.approvedPreview as { liveWrites?: { from?: unknown } } | undefined)?.liveWrites

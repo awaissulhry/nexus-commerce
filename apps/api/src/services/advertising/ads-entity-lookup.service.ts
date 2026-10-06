@@ -57,6 +57,22 @@ export async function adGroupSuppressionCounts(campaignId: string, floorCents: n
   return { aboveFloor, remembered, ownFloors }
 }
 
+/**
+ * ADS AUTONOMY AA-W2-9 — the highest ad group default bid above a stop bid that a suppression would floor (null: none),
+ * so a stop by rule is measured from the highest bid it lowers.
+ */
+export async function highestAdGroupBidAbove(campaignId: string, floorCents: number): Promise<number | null> {
+  const top = await prisma.adGroup.aggregate({ where: { campaignId, defaultBidCents: { gt: floorCents }, suppressedFromBidCents: null }, _max: { defaultBidCents: true } })
+  return top._max.defaultBidCents ?? null
+}
+
+/** AA-W2-9 — ad groups by Nexus id → their default bid now (an ad undo is judged from the value stored now). */
+export async function adGroupDefaultBids(ids: string[]): Promise<Map<string, number | null>> {
+  if (!ids.length) return new Map()
+  const groups = await prisma.adGroup.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, defaultBidCents: true } })
+  return new Map(groups.map((g) => [g.id, g.defaultBidCents]))
+}
+
 /** The rules' pending suggestions, the most recently re-proposed first (at most `take`). */
 export async function pendingRuleSuggestions(take = 500) {
   return prisma.adsRuleSuggestion.findMany({

@@ -5,10 +5,11 @@
  * the strategy narrows, never widens (Owner decision 2026-10-06).
  *
  *   where it lands   read from the change's arguments and, once its dry run has run, its preview — per tool (PLACES):
- *                    a target or a negative → its ad group; a budget, a placement, a stop → its campaign; a new
- *                    campaign → its products in its market; a suggestion → what it applies to; an ad undo → every
- *                    entity it puts back. An ad group or a campaign resolves through its products (the safer level
- *                    across them, resolve.ts), a product through product → parent → primary category → market.
+ *                    a target or a negative → its ad group; a budget, a placement, a stop, the allowlist → its
+ *                    campaign; a new campaign → its products in its market; a suggestion → what it applies to; an ad
+ *                    undo → every entity it puts back. An ad group or a campaign resolves through its products (the
+ *                    safer level across them, resolve.ts), a product through product → parent → primary category →
+ *                    market.
  *   fail closed      a change that reaches a whole market (a selection by market), or that Nexus cannot place more
  *                    exactly inside a market, takes the STRICTEST level any row of that market sets for its kind; one
  *                    it cannot place in any market (an id not found, a whole-account rule), the strictest of the
@@ -231,6 +232,7 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'set-campaign-budget': byCampaignArg,
   'suppress-campaign': byCampaignArg,
   'restore-campaign': byCampaignArg,
+  'set-campaign-live-writes': byCampaignArg,
   'set-campaign-target-acos': async (place, args) => {
     const ids = [...strs(args.campaignIds), ...list(args.targets).map((t) => str(obj(t).campaignId))]
     if (ids.length) await place.campaignIds(ids)

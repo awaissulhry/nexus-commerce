@@ -247,7 +247,8 @@ describe('A8 — suppress-campaign and restore-campaign (never a pause)', () => 
 
   it('suppress: counts what goes to the floor; approved, floors and remembers every bid as the approver, in one change set', async () => {
     expect((await preview('suppress-campaign', { campaignId: 'c-a8' })).preview).toMatchObject({ moves: { targets: 2, adGroups: 1 }, reach: { reach: 'sandbox' }, effect: expect.stringMatching(/without being paused/) })
-    expect(getTool('suppress-campaign')).toMatchObject({ requires: ['ads.bids.edit'], maxClaudeTrust: 'confirm', reversibility: 'full' })
+    // AA-W2-9 — strategy-bound: the business may let a stop run by rule, inside its limits and the ads strategy.
+    expect(getTool('suppress-campaign')).toMatchObject({ requires: ['ads.bids.edit'], maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', reversibility: 'full' })
     const asked = await ask('suppress-campaign', { campaignId: 'c-a8', why: 'the product is out of stock' })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { moved: 3 } })
     expect(await bids()).toEqual({ 's-1': [2, 55], 's-2': [2, 25] })
@@ -263,7 +264,7 @@ describe('A8 — suppress-campaign and restore-campaign (never a pause)', () => 
     const r = await preview('restore-campaign', { campaignId: 'c-a8' })
     expect(r.preview).toMatchObject({ suppressedBy: 'user:u-approver', restores: { targets: 2, adGroups: 1 }, currency: 'EUR', effect: expect.stringContaining('the highest EUR 0.55') })
     expect((r.preview as Row).bids).toEqual([{ targetId: 's-1', text: 'stop s-1', fromCents: 2, toCents: 55 }, { targetId: 's-2', text: 'stop s-2', fromCents: 2, toCents: 25 }])
-    expect(getTool('restore-campaign')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask' })
+    expect(getTool('restore-campaign')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads' })
     const asked = await ask('restore-campaign', { campaignId: 'c-a8' })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 3 } })
     expect(await bids()).toEqual({ 's-1': [55, null], 's-2': [25, null] })
@@ -356,7 +357,7 @@ describe('A12 — set-campaign-live-writes (the allowlist, d2)', () => {
   it('previews the switch and the connection; approved, flips it as the approver; undo flips it back', async () => {
     const r = await preview('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
     expect(r.preview).toMatchObject({ liveWrites: { from: false, to: true }, connection: { profileId: 'P-IT-TEST', mode: 'production', writesEnabled: true }, effect: expect.stringMatching(/^Puts Italy not allowlisted on the live-write allowlist/) })
-    expect(getTool('set-campaign-live-writes')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', openWorld: false, requires: ['ads.campaigns.manage', 'ads.automation.manage'] })
+    expect(getTool('set-campaign-live-writes')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', openWorld: false, requires: ['ads.campaigns.manage', 'ads.automation.manage'] })
     expect((await preview('set-campaign-live-writes', { campaignId: 'c-it', enabled: true })).error).toMatch(/already on the live-write allowlist/)
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { liveWrites: true } })
@@ -415,6 +416,33 @@ describe('AA-W2-8 — budgets and placements carry what a run by rule is judged 
     const [row] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-it'])
     expect(row.payload).toMatchObject({ actor: 'user:u-approver', reason: `Claude request ${asked.approvalId} (run by rule): rule cut` })
     expect(row.payload.manual).not.toBe(true)
+  })
+})
+
+/**
+ * ADS AUTONOMY AA-W2-9 — suppress-campaign, restore-campaign and set-campaign-live-writes may run by rule too. Their
+ * defaults: a stop has no raise to bound; a restore waits until the business sets the highest bid it may put back; on
+ * the allowlist none by default, and only a campaign Claude created; off the allowlist is a brake at any limit. The
+ * door-level runs are in claude-strategy.vitest.
+ */
+describe('AA-W2-9 — stop, restore and the allowlist carry what a run by rule is judged on', () => {
+  const tool = (name: string) => getTool(name)!
+  const judged = (name: string, p: unknown, limits: Record<string, unknown> = {}) => tool(name).withinLimits!(p, tool(name).limits!.parse(limits) as Record<string, unknown>)
+
+  it('the default limits', () => {
+    expect(tool('suppress-campaign').limits!.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false })
+    expect(tool('restore-campaign').limits!.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxRestoredBidCents: 0 })
+    expect(tool('set-campaign-live-writes').limits!.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxCampaignsOnPerDay: 0, allowAnyCampaign: false })
+  })
+
+  it('the allowlist: off is a brake, inside at any limit and without a strategy; on carries who made the campaign', async () => {
+    const off = (await preview('set-campaign-live-writes', { campaignId: 'c-pin', enabled: false })).preview as Row
+    expect(off).toMatchObject({ liveWrites: { from: true, to: false }, limitFacts: { action: 'allowlist' } })
+    expect(off).not.toHaveProperty('createdBy')
+    expect(judged('set-campaign-live-writes', off)).toBeNull()
+    const on = (await preview('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).preview as Row
+    expect(on).toMatchObject({ createdBy: null, onByRuleToday: 0, limitFacts: { this: { items: 1, writes: 0, raises: 0, cuts: 0 } } })
+    expect(judged('set-campaign-live-writes', on)).toMatch(/^there is no ads strategy for IT/)
   })
 })
 
