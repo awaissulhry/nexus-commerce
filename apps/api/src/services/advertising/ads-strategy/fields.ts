@@ -285,6 +285,8 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'recommendations (terms to graduate)',
       'the harvest preview and the fleet\'s harvest observations, when they name no thresholds',
       'the Keyword Harvest page, one market in view: the stricter of this and the saved harvest policy',
+      // AA-W2-7 — graduate-keyword (ads-propose.tools.ts).
+      'Claude\'s door: a new exact keyword runs by rule only for a term whose record over this window meets it where the term converted',
     ],
   },
   {
@@ -295,6 +297,8 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'harvest rules that set no thresholds of their own (harvest_and_negate)',
       'recommendations (wasteful terms to negate)',
       'the harvest preview and the fleet\'s negative observations, when they name no thresholds',
+      // AA-W2-7 — create-negative-keyword (ads-propose.tools.ts).
+      'Claude\'s door: a negative keyword runs by rule only for a term whose record over this window meets it in the ad group it lands in',
     ],
   },
   // The stop bid may be empty inside a set group: the existing 2¢ floor. W1-6: read as the stop BID only — every reader
