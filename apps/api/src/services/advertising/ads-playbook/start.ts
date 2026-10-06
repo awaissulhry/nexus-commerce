@@ -35,7 +35,9 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import { ARTIFACT_COMPILERS, previewArtifacts, type ArtifactCompiler, type ArtifactContext, type ArtifactPreviewLine, type StoredArtifactLink } from './artifacts.js'
 import { loadProductPlaybook } from './build-preview.js'
 import type { BuildRunOptions } from './build.js'
-import type { TemplateDoc } from './doc.js'
+import type { RankRole, TemplateDoc } from './doc.js'
+import { STOP_FLOOR_KIND } from './held.js'
+import { rankOffEffect } from './rank.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
 
 export type ApplyOp = 'start' | 'stop'
@@ -59,6 +61,8 @@ export interface StartCampaign {
         held: Array<{ text: string; rememberedCents: number; toCents: number; heldBy: string }>
         left: Array<{ text: string; bidCents: number; rememberedCents: number }> }
     | { does: 'floor'; floorCents: number; adGroups: number; targets: number }
+    /** STOP: at a person's floor with bids above it (a START that did not finish): floored again at that floor. */
+    | { does: 'refloor'; floorCents: number; adGroups: number; targets: number }
     | { does: 'held'; by: string }
     | { does: 'none'; why: string }
   /** Ad groups at their own floor (stock, a product's monthly cap): neither op lifts them. */
@@ -84,6 +88,15 @@ export interface StartPlan {
   campaigns: StartCampaign[]
   /** Slots it leaves as they are, and why (adopted, not at Amazon). */
   untouched: Array<{ slot: string; campaignId: string; name: string; why: string }>
+  /**
+   * START: campaigns whose hourly plan's floor a STOP took over (its STOP_FLOOR_KIND link, still held by the same
+   * approver), an adopted one too: their bids go back (nothing else of an adopted campaign moves).
+   */
+  heldFloors: Array<{ slot: string; campaignId: string; name: string; origin: 'built' | 'adopted'; status: string; dailyBudgetCents: number; bids: Extract<StartCampaign['bids'], { does: 'restore' }> }>
+  /** STOP: the campaigns whose hourly plan's floor the stop takes over when it switches the plans off (rank.ts). */
+  floorsTaken: Array<{ slot: string; campaignId: string; name: string; origin: 'built' | 'adopted' }>
+  /** START: STOP_FLOOR_KIND links whose floor is gone or no longer the stop's: dropped. */
+  staleFloorLinks: string[]
   /** Every linked slot (the artifacts' context). */
   slots: Array<{ key: string; campaignId: string; adGroupId: string | null; origin: 'built' | 'adopted' }>
   artifactLinks: StoredArtifactLink[]
@@ -100,6 +113,7 @@ export interface StartPlan {
 }
 
 const isPersonFloor = (by: string | null | undefined) => !!by && by.startsWith('user:')
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const cents = (value: unknown) => Math.round(Number(value ?? 0) * 100)
 const placementsOf = (dynamicBidding: unknown): Placement[] =>
   (((dynamicBidding as { placementBidding?: unknown } | null)?.placementBidding ?? []) as Placement[])
@@ -155,6 +169,15 @@ async function floorOf(campaignId: string): Promise<Extract<StartCampaign['bids'
   return { does: 'floor', floorCents: floor, adGroups, targets }
 }
 
+/** The bids still above a floor on a floored campaign (refloorCampaignBids moves them; an ad group's own floor stays). */
+async function aboveFloorOf(campaignId: string, floor: number): Promise<{ adGroups: number; targets: number }> {
+  const [adGroups, targets] = await Promise.all([
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: null, defaultBidCents: { gt: floor } } }),
+    prisma.adTarget.count({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, isNegative: false, bidCents: { gt: floor } } }),
+  ])
+  return { adGroups, targets }
+}
+
 /** The artifacts' context of an op. */
 function contextOf(plan: StartPlan, actor: AdsActor, changeSetId: string | null): ArtifactContext | null {
   if (!plan.doc || !plan.nameToken) return null
@@ -196,9 +219,20 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
 
   const campaigns: StartCampaign[] = []
   const untouched: StartPlan['untouched'] = []
+  const heldFloors: StartPlan['heldFloors'] = []
+  // The floors a STOP took over (rank.ts hands an hourly plan's floors to the approver who switches it off): START gives
+  // them back — only while the same approver still holds the floor. A link whose floor is gone or moved is dropped.
+  const stopLinks = args.op === 'start' ? await prisma.adsPlaybookLink.findMany({ where: { playbookId: row.id, kind: STOP_FLOOR_KIND }, select: { refId: true, updatedBy: true } }) : []
+  const holderOf = new Map(stopLinks.map((l) => [l.refId, l.updatedBy]))
+  const staleFloorLinks = stopLinks.filter((l) => { const c = rows.get(l.refId); return !c || !c.bidsSuppressedAt || c.bidsSuppressedBy !== l.updatedBy }).map((l) => l.refId)
   for (const link of mine) {
     const c = rows.get(link.refId)
     if (!c) continue
+    if (link.origin !== 'built' && args.op === 'start' && c.bidsSuppressedAt && holderOf.get(c.id) === c.bidsSuppressedBy && (!asked || asked.has(link.key))) {
+      heldFloors.push({ slot: link.key, campaignId: c.id, name: c.name, origin: 'adopted', status: String(c.status), dailyBudgetCents: cents(c.dailyBudget), bids: await restoreOf(c.id, c.bidsSuppressedFloorCents ?? SUPPRESSION_FLOOR_CENTS) })
+      warnings.push(`"${c.name}" (adopted) is at the floor its hourly plan set, which the playbook's stop holds: START gives its bids back (nothing else of it moves).`)
+      continue
+    }
     if (link.origin !== 'built') {
       untouched.push({ slot: link.key, campaignId: c.id, name: c.name, why: `adopted: it is the business's own campaign — its allowlist, bids and placements are left as they are${c.liveBidWritesEnabled ? '' : ' (off the live-write allowlist: the playbook\'s rules and hourly plans cannot write to it until a person puts it on)'}` })
       continue
@@ -233,17 +267,21 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     } else {
       // A campaign at a floor already keeps it: a person's (START lifts it), or an engine's — an hourly plan's floor is
       // handed to the stop when the plan is switched off (rank.ts), any other engine's stays its own (START never lifts it).
-      const bids: StartCampaign['bids'] = c.bidsSuppressedAt
-        ? { does: 'none', why: `at a floor already (${c.bidsSuppressedBy || 'an unrecorded actor'})` }
-        : await floorOf(c.id)
-      const floors = bids.does === 'floor' && (bids.adGroups > 0 || bids.targets > 0)
+      // A person's floor with bids above it (a START that did not finish) is floored again, at that floor.
+      const floor = c.bidsSuppressedFloorCents ?? SUPPRESSION_FLOOR_CENTS
+      const above = c.bidsSuppressedAt && isPersonFloor(c.bidsSuppressedBy) ? await aboveFloorOf(c.id, floor) : null
+      const bids: StartCampaign['bids'] = !c.bidsSuppressedAt ? await floorOf(c.id)
+        : above && (above.adGroups || above.targets) ? { does: 'refloor', floorCents: floor, ...above }
+          : { does: 'none', why: `at a floor already (${c.bidsSuppressedBy || 'an unrecorded actor'})` }
+      const floors = (bids.does === 'floor' || bids.does === 'refloor') && (bids.adGroups > 0 || bids.targets > 0)
+      if (bids.does === 'refloor') warnings.push(`"${c.name}" is at the floor with ${plural(bids.adGroups + bids.targets, 'bid')} above it (a start that did not finish): the stop floors ${bids.adGroups + bids.targets === 1 ? 'it' : 'them'} again first.`)
       campaigns.push({
         ...base, allowlist: c.liveBidWritesEnabled ? 'off' : 'already', bids, placements: { does: 'none', why: 'a stop leaves placements as they are (they multiply 2¢ bids)' },
         spends: status === 'ENABLED' && (floors || c.liveBidWritesEnabled),
       })
     }
   }
-  if (!campaigns.length && !problems.length) {
+  if (!campaigns.length && !heldFloors.length && !problems.length) {
     problems.push(mine.some((l) => l.origin === 'built')
       ? `no campaign the playbook built is at Amazon${asked ? ' among the slots asked' : ''}`
       : `the playbook built no campaign for ${product.sku} in ${market} yet (adopted campaigns are the business's own): build it first (apply-ads-playbook op build)`)
@@ -254,12 +292,14 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     op: args.op, market, product: { productId: product.id, sku: product.sku },
     playbook: { id: row.id, version: row.version, state: row.state, label: row.label },
     compiledTemplateVersion: resolved.template.value?.version ?? null,
-    doc, nameToken, campaigns, untouched,
+    doc, nameToken, campaigns, untouched, heldFloors, floorsTaken: [], staleFloorLinks,
     slots: mine.map((l) => ({ key: l.key, campaignId: l.refId, adGroupId: l.adGroupId, origin: l.origin === 'adopted' ? 'adopted' as const : 'built' as const })),
     artifactLinks, artifacts: [], artifactErrors: [],
-    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0))),
-    dailyBudgetCents: args.op === 'start' ? campaigns.filter((c) => c.spends).reduce((sum, c) => sum + c.dailyBudgetCents, 0) : 0,
-    spending: campaigns.filter((c) => c.spends).length,
+    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0)), ...heldFloors.map((h) => h.bids.highestCents)),
+    dailyBudgetCents: args.op === 'start'
+      ? [...campaigns.filter((c) => c.spends), ...heldFloors.filter((h) => h.status === 'ENABLED')].reduce((sum, c) => sum + c.dailyBudgetCents, 0)
+      : 0,
+    spending: campaigns.filter((c) => c.spends).length + heldFloors.filter((h) => h.status === 'ENABLED').length,
     warnings, problems,
   }
   // The artifacts: what each compiler would do (no writes).
@@ -268,6 +308,13 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     const lines = await previewArtifacts(ctx, artifactLinks, opts.compilers ?? ARTIFACT_COMPILERS)
     plan.artifacts = lines.lines
     plan.artifactErrors = lines.errors
+    // STOP: the hourly plans' floors it takes over (kept at the floor for the approver; START gives them back).
+    if (args.op === 'stop') {
+      const slotOf = new Map(plan.slots.map((x) => [x.campaignId, x]))
+      const effect = await rankOffEffect(ctx, ['performance', 'research'] as RankRole[], 'keep')
+      plan.floorsTaken = effect.heldAtFloor.filter((h) => slotOf.has(h.campaignId)).map((h) => ({ slot: slotOf.get(h.campaignId)!.key, campaignId: h.campaignId, name: h.name, origin: slotOf.get(h.campaignId)!.origin }))
+      for (const t of plan.floorsTaken.filter((x) => x.origin === 'adopted')) warnings.push(`"${t.name}" (adopted) stays at the floor its hourly plan set: the stop holds it, and only START gives its bids back.`)
+    }
   } else if (args.op === 'stop') plan.artifactErrors.push('the playbook does not compile, so its hourly plans and rules are not switched by this stop (its campaigns are floored and off the allowlist: nothing writes to them)')
   return { data: plan }
 }
@@ -283,6 +330,8 @@ export interface ApplyOutcome {
   left: Array<{ slot: string; text: string; bidCents: number; rememberedCents: number }>
   /** The artifacts the op switched (their compilers' words). */
   artifacts: string[]
+  /** STOP: the slots whose hourly plan's floor it took over (START gives those bids back). */
+  floorsHeld: string[]
   errors: string[]
   /** The row's state after the op. */
   state: string | null
@@ -328,7 +377,7 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
   const { setLiveWrites } = await import('../campaign-settings.service.js')
   const { restoreCampaignBids } = await import('../ads-bid-suppression.service.js')
   const { settleLaunchPortfolios, updatePlacementBidding } = await import('../ads-create.service.js')
-  const out: ApplyOutcome = { done: [], failed: [], left: [], artifacts: [], errors: [], state: plan.playbook.state }
+  const out: ApplyOutcome = { done: [], failed: [], left: [], artifacts: [], floorsHeld: [], errors: [], state: plan.playbook.state }
   for (const c of plan.campaigns) {
     const fail = (why: string) => out.failed.push({ slot: c.slot, campaignId: c.campaignId, why })
     let changed = false
@@ -360,22 +409,39 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
       fail((e as Error).message.slice(0, 200))
     }
   }
+  // The floors a STOP took over on the playbook's other campaigns (an adopted one's hourly plan): their bids back too.
+  for (const h of plan.heldFloors) {
+    try {
+      const left: Array<{ kind: 'adGroup' | 'target'; id: string; bidCents: number; rememberedCents: number }> = []
+      await restoreCampaignBids(h.campaignId, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, planned: { floorCents: h.bids.floorCents, left } })
+      for (const l of left) out.left.push({ slot: h.slot, text: `${l.kind} ${l.id}`, bidCents: l.bidCents, rememberedCents: l.rememberedCents })
+      const after = await prisma.campaign.findUnique({ where: { id: h.campaignId }, select: { bidsSuppressedAt: true } })
+      if (after?.bidsSuppressedAt) out.failed.push({ slot: h.slot, campaignId: h.campaignId, why: 'some of its bids were not taken: it stays at the floor the stop holds until START runs again' })
+      else out.done.push(h.slot)
+    } catch (e) { out.failed.push({ slot: h.slot, campaignId: h.campaignId, why: (e as Error).message.slice(0, 200) }) }
+  }
+  // A floor the stop held that is gone (given back) or no longer the stop's: its link is dropped.
+  const given = [...plan.staleFloorLinks, ...[...plan.campaigns, ...plan.heldFloors].map((c) => c.campaignId)]
+  const gone = given.length ? await prisma.campaign.findMany({ where: { id: { in: given } }, select: { id: true, bidsSuppressedAt: true } }) : []
+  const drop = [...new Set([...plan.staleFloorLinks, ...gone.filter((c) => !c.bidsSuppressedAt).map((c) => c.id)])]
+  if (drop.length) await prisma.adsPlaybookLink.deleteMany({ where: { playbookId: plan.playbook.id, kind: STOP_FLOOR_KIND, refId: { in: drop } } })
   // 4 — the portfolio read-back repair: off the allowlist the launch could not repair it; now it can.
   const builtIds = plan.campaigns.map((c) => c.campaignId)
   const portfolios = await settleLaunchPortfolios(builtIds)
   if (portfolios?.repairFailed) out.errors.push(`portfolio membership could not be set for ${portfolios.repairFailed} campaign(s): ${portfolios.errors.slice(0, 2).join('; ')}`)
-  // 5 — the artifacts on (hourly plans, harvest and isolation rules), never over a person's switch-off.
+  // 5 — the artifacts on (hourly plans, harvest and isolation rules), never over a person's switch-off — only once a
+  // campaign the playbook built runs: plans and rules never run over campaigns that all stayed at the floor.
+  const anyRuns = (await stillRunning(plan.playbook.id)).length > 0
   const ctx = contextOf(plan, run.actor, run.changeSetId)
-  if (ctx) {
+  if (ctx && anyRuns) {
     const s = await switchArtifacts(ctx, plan.artifactLinks, true, opts.compilers ?? ARTIFACT_COMPILERS)
     out.artifacts.push(...s.changed)
     out.errors.push(...s.errors)
   }
-  const anyRuns = (await stillRunning(plan.playbook.id)).length > 0
   out.state = anyRuns
     ? await record(plan, 'RUNNING', writer, `start: ${out.done.length} campaign(s) started${out.failed.length ? `, ${out.failed.length} not` : ''}`, out.errors)
     : plan.playbook.state
-  if (!anyRuns) out.errors.push('no campaign the playbook built runs after this start: the row\'s state is unchanged')
+  if (!anyRuns) out.errors.push('no campaign the playbook built runs after this start: its hourly plans and rules stay off and the row\'s state is unchanged')
   logger.info('[PB-5b] playbook start finished', { playbookId: plan.playbook.id, done: out.done.length, failed: out.failed.length, errors: out.errors.length })
   return out
 }
@@ -383,17 +449,23 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
 /** STOP, as planned and approved: the brake (never a pause, never an archive). */
 export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookApplyWriter, opts: { compilers?: readonly ArtifactCompiler[] } = {}): Promise<ApplyOutcome> {
   const { setLiveWrites } = await import('../campaign-settings.service.js')
-  const { suppressCampaignBids } = await import('../ads-bid-suppression.service.js')
-  const out: ApplyOutcome = { done: [], failed: [], left: [], artifacts: [], errors: [], state: plan.playbook.state }
+  const { refloorCampaignBids, suppressCampaignBids } = await import('../ads-bid-suppression.service.js')
+  const out: ApplyOutcome = { done: [], failed: [], left: [], artifacts: [], floorsHeld: [], errors: [], state: plan.playbook.state }
   for (const c of plan.campaigns) {
     const fail = (why: string) => out.failed.push({ slot: c.slot, campaignId: c.campaignId, why })
     let changed = false
     try {
-      // 1 — every bid to the floor, remembered again — while it is still on the allowlist (a run by rule needs it).
-      if (c.bids.does === 'floor') {
-        await suppressCampaignBids(c.campaignId, { actor: run.actor, reason: run.reason, floorCents: c.bids.floorCents, changeSetId: run.changeSetId, manual: run.manual })
+      // 1 — every bid to the floor, remembered again — while it is still on the allowlist (a run by rule needs it; a
+      // person's approval passes it). A person's floor with bids above it (a START that did not finish) is floored again.
+      if (c.bids.does === 'floor' || c.bids.does === 'refloor') {
+        const due = c.bids.adGroups + c.bids.targets
+        if (due && c.allowlist === 'already' && !run.manual) { fail('it is off the live-write allowlist, so a stop by rule cannot lower its bids: a person approves this stop'); continue }
+        const moved = c.bids.does === 'floor'
+          ? await suppressCampaignBids(c.campaignId, { actor: run.actor, reason: run.reason, floorCents: c.bids.floorCents, changeSetId: run.changeSetId, manual: run.manual })
+          : await refloorCampaignBids(c.campaignId, { actor: run.actor, reason: run.reason, floorCents: c.bids.floorCents, changeSetId: run.changeSetId, manual: run.manual })
         const after = await prisma.campaign.findUnique({ where: { id: c.campaignId }, select: { bidsSuppressedAt: true } })
-        if (!after?.bidsSuppressedAt) { fail('its bids could not be floored'); continue }
+        // Every lowering is a write the gate took (sent to Amazon, or kept in Nexus in sandbox): one it refused stays live.
+        if (!after?.bidsSuppressedAt || moved < due) { fail(`only ${moved} of its ${due} bids were lowered (the write gate refused the rest): it stays on the allowlist, and a stop again finishes it`); continue }
         changed = true
       }
       // 2 — off the allowlist: no engine, rule or schedule writes to it until START.
@@ -417,9 +489,24 @@ export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookAp
   }
   const ctx = contextOf(plan, run.actor, run.changeSetId)
   if (ctx) {
+    // The floors switching the hourly plans off hands to the approver (rank.ts): which ones, recorded, so START (and
+    // only START) gives them back — an adopted campaign's too.
+    const ids = plan.slots.map((x) => x.campaignId)
+    const before = new Map((await prisma.campaign.findMany({ where: { id: { in: ids }, bidsSuppressedAt: { not: null } }, select: { id: true, bidsSuppressedBy: true } })).map((c) => [c.id, c.bidsSuppressedBy]))
     const s = await switchArtifacts(ctx, plan.artifactLinks, false, opts.compilers ?? ARTIFACT_COMPILERS)
     out.artifacts.push(...s.changed)
     out.errors.push(...s.errors)
+    const taken = (await prisma.campaign.findMany({ where: { id: { in: [...before.keys()] }, bidsSuppressedBy: run.actor }, select: { id: true } })).filter((c) => before.get(c.id) !== run.actor)
+    for (const c of taken) {
+      const slot = plan.slots.find((x) => x.campaignId === c.id)!
+      try {
+        const mine = await prisma.adsPlaybookLink.findFirst({ where: { kind: STOP_FLOOR_KIND, refId: c.id }, select: { id: true } })
+        const data = { playbookId: plan.playbook.id, key: c.id, origin: slot.origin, compiledVersion: plan.playbook.version, updatedBy: run.actor }
+        if (mine) await prisma.adsPlaybookLink.update({ where: { id: mine.id }, data })
+        else await prisma.adsPlaybookLink.create({ data: { ...data, kind: STOP_FLOOR_KIND, refId: c.id } })
+        out.floorsHeld.push(slot.key)
+      } catch (e) { out.errors.push(`the floor of "${slot.key}" the stop holds was not recorded: ${(e as Error).message.slice(0, 160)}`) }
+    }
   } else out.errors.push('the playbook does not compile, so its hourly plans and rules were not switched off (its campaigns are floored and off the allowlist: nothing writes to them)')
   out.state = await record(plan, 'STOPPED', writer, `stop: ${out.done.length} campaign(s) floored and off the allowlist`, out.errors)
   logger.info('[PB-5b] playbook stop finished', { playbookId: plan.playbook.id, done: out.done.length, failed: out.failed.length, errors: out.errors.length })

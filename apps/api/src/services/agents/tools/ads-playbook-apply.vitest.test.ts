@@ -257,7 +257,10 @@ describe('PB-5b — START and STOP of the built playbook', () => {
     expect((await liveWrites()).every((c) => c.liveBidWritesEnabled)).toBe(true)
     expect(placements.calls.length).toBeGreaterThan(0)
     expect(await inside(() => db().adsPlaybookVersion.findFirst({ where: { refId: built.rowId, op: 'start' } }))).toMatchObject({ approvalId: startApproval, stepUpAt: expect.any(Date) })
-    expect(await inside(() => undoRequestFor({ approvalId: startApproval }))).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'stop', market: 'IT', productId: built.parent, slots: expect.arrayContaining(['auto', 'pat']) } } })
+    // A start of the whole playbook is undone whole: a stop of the playbook (its plans, their floors, its rules too).
+    const undo = await inside(() => undoRequestFor({ approvalId: startApproval })) as Row
+    expect(undo).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'stop', market: 'IT', productId: built.parent } } })
+    expect(undo.request.args).not.toHaveProperty('slots')
     expect((await preview('apply-ads-playbook', start())).error).toMatch(/^Nothing to start: every campaign the playbook built .* runs already/)
   })
 
@@ -270,7 +273,12 @@ describe('PB-5b — START and STOP of the built playbook', () => {
     expect(done).toMatchObject({ ok: true, status: 'executed', result: { op: 'stop', state: 'STOPPED' } })
     expect((await liveWrites()).every((c) => !c.liveBidWritesEnabled && c.bidsSuppressedAt)).toBe(true)
     expect((await inside(() => db().adsPlaybook.findUniqueOrThrow({ where: { id: built.rowId } }))).state).toBe('STOPPED')
-    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'start', slots: expect.arrayContaining(['auto']) } } })
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'start', market: 'IT' } } })
+    // 🔴 No door around the code: restore-campaign refuses a campaign the playbook built, and the undo of the stop's
+    // change set would raise its bids — refused too; both name apply-ads-playbook op start.
+    const one = (await inside(() => db().campaign.findFirstOrThrow({ where: { name: 'TESTAPA | IT | Auto' }, select: { id: true } }))).id
+    expect((await preview('restore-campaign', { campaignId: one })).error).toMatch(/is not restored here — it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
+    expect((await preview('undo-ad-change', { changeSetId: asked.approvalId })).error).toMatch(/^Not undone: it would raise the bids of "TESTAPA \| IT \| .*" — that campaign was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
     // The start's undo is refused now: the playbook moved since (it is stopped already).
     expect(await inside(() => undoRequestFor({ approvalId: startApproval }))).toMatchObject({ error: expect.stringMatching(/^Not undone: it has changed since this change ran/) })
   })

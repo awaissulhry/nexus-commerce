@@ -245,7 +245,7 @@ const START_HOW = 'A person with settings.security.manage approves it in Nexus w
 function campaignOpLine(op: ApplyOp, c: StartPlan['campaigns'][number]) {
   const bids = c.bids.does === 'restore'
     ? { does: 'restore', adGroups: c.bids.adGroups, targets: c.bids.targets, highestCents: c.bids.highestCents, ...(c.bids.held.length ? { held: c.bids.held.slice(0, 10) } : {}), ...(c.bids.left.length ? { left: c.bids.left.slice(0, 10), leftCount: c.bids.left.length } : {}) }
-    : c.bids.does === 'floor' ? { does: 'floor', floorCents: c.bids.floorCents, adGroups: c.bids.adGroups, targets: c.bids.targets }
+    : c.bids.does === 'floor' || c.bids.does === 'refloor' ? { does: c.bids.does, floorCents: c.bids.floorCents, adGroups: c.bids.adGroups, targets: c.bids.targets }
       : c.bids.does === 'held' ? { does: 'held', by: c.bids.by } : { does: 'none', why: c.bids.why }
   return {
     slot: c.slot, campaignId: c.campaignId, name: c.name, status: c.status, dailyBudgetCents: c.dailyBudgetCents,
@@ -268,9 +268,9 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   if (p.problems.length) return refuse(`Not queued: ${p.problems.join('; ')}.`)
   const acting = op === 'start'
     ? p.campaigns.filter((c) => c.allowlist === 'on' || c.bids.does === 'restore' || c.placements.does === 'apply')
-    : p.campaigns.filter((c) => c.allowlist === 'off' || c.bids.does === 'floor')
+    : p.campaigns.filter((c) => c.allowlist === 'off' || c.bids.does === 'floor' || c.bids.does === 'refloor')
   const switching = p.artifacts.some((l) => l.does === (op === 'start' ? 'enable' : 'disable'))
-  if (!acting.length && !switching) {
+  if (!acting.length && !switching && !p.heldFloors.length) {
     return refuse(op === 'start'
       ? `Nothing to start: every campaign the playbook built for ${p.product.sku} in ${p.market} runs already (on the allowlist, at its bids) and its hourly plans and rules are on.`
       : `Nothing to stop: every campaign the playbook built for ${p.product.sku} in ${p.market} is at the floor and off the allowlist already, and its hourly plans and rules are off.`)
@@ -299,11 +299,17 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   const effect = op === 'start'
     ? `Starts ${p.product.sku}'s playbook in ${p.market}: ${plural(acting.length, 'campaign')} it built ${acting.length === 1 ? 'goes' : 'go'} on the live-write allowlist with ${acting.length === 1 ? 'its' : 'their'} planned bids and placements back — `
       + `${plural(p.spending, 'campaign')} start${p.spending === 1 ? 's' : ''} spending at once`
-      + `${paused ? ` (${paused} paused at Amazon ${paused === 1 ? 'stays' : 'stay'} paused: a person enables ${paused === 1 ? 'it' : 'them'} in Nexus)` : ''}; `
+      + `${paused ? ` (${paused} paused at Amazon ${paused === 1 ? 'stays' : 'stay'} paused: a person enables ${paused === 1 ? 'it' : 'them'} in Nexus)` : ''}`
+      + `${p.heldFloors.length ? `, and ${plural(p.heldFloors.length, 'other campaign')} of the playbook ${p.heldFloors.length === 1 ? 'gets its' : 'get their'} bids back from the floor its stop held` : ''}; `
       + "then the playbook's hourly plans and rules are switched on. An engine's floor and an ad group's own floor (stock, a product's monthly cap) stay; a bid moved since the build stays where it is."
     : `Stops ${p.product.sku}'s playbook in ${p.market}: every bid of ${plural(acting.length, 'campaign')} it built goes to the ${SUPPRESSION_FLOOR_CENTS}-cent floor (remembered: START puts them back) and off the live-write allowlist, `
-      + "then the playbook's hourly plans and rules are switched off. Never a pause, never an archive: a START brings it back in about a minute."
-  const summary = { campaigns: acting.length, spending: p.spending, slots: acting.map((c) => c.slot), artifacts: p.artifacts.filter((l) => l.does !== 'keep').map((l) => `${l.kind}:${l.key}:${l.does}`) }
+      + "then the playbook's hourly plans and rules are switched off — the floors an hourly plan set stay, held by the stop, and only START gives them back. "
+      + 'Never a pause, never an archive: a START brings it back in about a minute.'
+  const summary = {
+    campaigns: acting.length, spending: p.spending, slots: acting.map((c) => c.slot), artifacts: p.artifacts.filter((l) => l.does !== 'keep').map((l) => `${l.kind}:${l.key}:${l.does}`),
+    ...(p.heldFloors.length ? { heldFloors: p.heldFloors.map((h) => h.slot) } : {}),
+    ...(p.floorsTaken.length ? { floorsTaken: p.floorsTaken.map((t) => t.slot) } : {}),
+  }
   return {
     plan: p,
     result: {
@@ -318,6 +324,10 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         campaigns,
         ...(op === 'start' ? { starts: summary } : { stops: summary }),
         untouched: p.untouched,
+        // START: the floors a stop holds on the playbook's other campaigns (an adopted one's hourly plan), given back.
+        ...(p.heldFloors.length ? { heldFloors: p.heldFloors.map((h) => ({ slot: h.slot, campaignId: h.campaignId, name: h.name, origin: h.origin, status: h.status, adGroups: h.bids.adGroups, targets: h.bids.targets, highestCents: h.bids.highestCents })) } : {}),
+        // STOP: the hourly plans' floors it takes over (kept at the floor; only START gives them back).
+        ...(p.floorsTaken.length ? { floorsTaken: p.floorsTaken } : {}),
         ...(op === 'start' ? { highestRestoredBidCents: p.highestRestoredBidCents, dailyBudgetCents: p.dailyBudgetCents } : {}),
         artifacts: p.artifacts,
         ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
@@ -325,7 +335,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         ...(op === 'start'
           ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
           : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
-        basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, artifacts: p.artifacts }),
+        basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -401,7 +411,7 @@ function highestBidRefusal(preview: unknown, highest: number, words: string, lim
 type ApplyAfter =
   | { op: 'build'; playbookId: string; applicationId: string }
   | { op: 'adopt'; playbookId: string; market: string; productId: string; bound: Array<{ slot: string; campaignId: string }>; unbound: Array<{ slot: string; campaignId: string }> }
-  | { op: 'start' | 'stop'; playbookId: string; market: string; productId: string; slots: string[]; state: string | null }
+  | { op: 'start' | 'stop'; playbookId: string; market: string; productId: string; slots: string[]; state: string | null; whole?: boolean }
 
 /**
  * Undo: a build is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt; a start is a
@@ -449,7 +459,8 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
     if (after.op === 'start' || after.op === 'stop') {
       if (!after.slots?.length) return { refusal: `This ${after.op} ${after.op === 'start' ? 'started' : 'stopped'} no campaign (each one was ${after.op === 'start' ? 'running' : 'stopped'} already): there is nothing of it to undo.` }
       const back = after.op === 'start' ? 'stop' : 'start'
-      return { tool: TOOL, args: { op: back, market: after.market, productId: after.productId, slots: after.slots, why: `undo of a playbook ${after.op}` } }
+      // A start or a stop of the whole playbook is undone whole (its hourly plans, their floors and its rules with it).
+      return { tool: TOOL, args: { op: back, market: after.market, productId: after.productId, ...(after.whole ? {} : { slots: after.slots }), why: `undo of a playbook ${after.op}` } }
     }
     return { refusal: 'This change does not record what it applied.' }
   },
@@ -563,6 +574,7 @@ const applyAdsPlaybook: AgentTool = {
         ...(out.failed.length ? { failed: out.failed } : {}),
         ...(out.left.length ? { leftAsTheyStand: out.left } : {}),
         ...(out.artifacts.length ? { artifactsSwitched: out.artifacts } : {}),
+        ...(out.floorsHeld.length ? { floorsHeld: out.floorsHeld, floorsHeldNote: 'Their hourly plans\' floors are the stop\'s now: they stay at the floor until START gives their bids back (restore-campaign refuses them).' } : {}),
         ...(out.errors.length ? { errors: out.errors } : {}),
         note: op === 'start'
           ? `${plural(moved, 'campaign')} started: on the live-write allowlist, planned bids and placements back; each bid write is sent to Amazon at once.`
@@ -570,7 +582,7 @@ const applyAdsPlaybook: AgentTool = {
       }
       const change = {
         before: { op, playbookId: p.playbook.id, state: p.playbook.state, slots: p.campaigns.map((c) => ({ slot: c.slot, campaignId: c.campaignId, allowlist: c.allowlist, bids: c.bids.does })) },
-        after: { op, playbookId: p.playbook.id, market: p.market, productId: p.product.productId, slots: out.done, state: out.state },
+        after: { op, playbookId: p.playbook.id, market: p.market, productId: p.product.productId, slots: out.done.filter((slot) => p.campaigns.some((c) => c.slot === slot)), state: out.state, ...(a.slots?.length ? {} : { whole: true }) },
       }
       if (!moved && out.failed.length) return { ok: false, error: `Not ${op === 'start' ? 'started' : 'stopped'}: ${out.failed.map((f) => `${f.slot}: ${f.why}`).join('; ')}`, data, change }
       return { ok: true, data, change }

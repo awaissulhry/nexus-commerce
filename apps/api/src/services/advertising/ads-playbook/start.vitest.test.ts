@@ -13,6 +13,9 @@
  *   again      a second START writes nothing
  *   stop       every bid to the floor (remembered again) BEFORE the artifacts are switched off, off the allowlist; the
  *              row STOPPED; a START after it puts the same bids back (an engine's floor is never lifted)
+ *   review     an adopted campaign's hourly-plan floor the stop takes over is recorded and given back by START (only
+ *              there); a stop after a half-done start floors the bids it put back first; a stop by rule never claims a
+ *              floor the gate would refuse; START switches nothing on when no built campaign runs
  *   rules      the playbook's own rule compiler records its stop (PLAYBOOK_STOP_METRIC), so the next START switches the
  *              rule on again — a person's switch-off after it still holds
  */
@@ -29,7 +32,7 @@ vi.mock('../../../db.js', async () => {
 })
 
 /** Every write that would reach Amazon (or open a campaign to the engines), in order. */
-const writes = vi.hoisted(() => ({ log: [] as Array<{ what: string; id: string; value?: unknown; actor?: string; manual?: boolean; changeSetId?: string | null }> }))
+const writes = vi.hoisted(() => ({ log: [] as Array<{ what: string; id: string; value?: unknown; actor?: string; manual?: boolean; changeSetId?: string | null }>, refuseAllowlist: false }))
 vi.mock('../ads-mutation.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   updateAdGroupWithSync: vi.fn(async (a: { adGroupId: string; patch: { defaultBidCents: number }; actor: string; manual?: boolean; changeSetId?: string | null }) => {
@@ -46,6 +49,7 @@ vi.mock('../ads-mutation.service.js', async (importOriginal) => ({
 vi.mock('../campaign-settings.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   setLiveWrites: vi.fn(async (campaignId: string, enabled: boolean, actor: string) => {
+    if (writes.refuseAllowlist) return { status: 404, error: 'campaign not found' }
     writes.log.push({ what: enabled ? 'allowlistOn' : 'allowlistOff', id: campaignId, actor })
     await database.client.campaign.update({ where: { id: campaignId }, data: { liveBidWritesEnabled: enabled } })
     return { value: { ok: true, campaignId, liveBidWritesEnabled: enabled } }
@@ -65,6 +69,7 @@ vi.mock('../ads-create.service.js', async (importOriginal) => ({
 import { planStart, runStart, runStop, type StartPlan } from './start.js'
 import { ARTIFACT_COMPILERS, type ArtifactCompiler } from './artifacts.js'
 import { ensureCompiledRule } from './rules.js'
+import { playbookHolds, STOP_FLOOR_KIND } from './held.js'
 import { plannedGiveBack } from '../ads-bid-suppression.service.js'
 
 const A = 'pb5b_start_alpha'
@@ -74,13 +79,16 @@ const db = () => database.client
 const writer = { via: 'claude', actor: 'user:u-approver', actorUserId: 'u-approver', approvalId: 'ap-start', updatedBy: 'claude:ap-start' }
 const run = { actor: 'user:u-approver' as const, reason: 'Claude request ap-start: start the test playbook', changeSetId: 'ap-start', manual: true }
 
-/** A compiler on the hook that records its switch in the same log as the writes. */
+/** The rank engine's own floor owner in these tests (rank.ts hands such floors to whoever switches the plan off). */
+const RANK_OWNER = 'automation:rank-plan-test'
+/** A compiler on the hook that records its switch in the same log as the writes; switched off, it hands rank's floors over as rank.ts does. */
 const switched: ArtifactCompiler = {
   kind: 'rankGroup',
   preview: async (ctx) => [{ kind: 'rankGroup', key: 'rank:performance', does: ctx.mode === 'stop' ? 'disable' : 'enable', summary: 'a test hourly plan' }],
   compile: async () => ({ links: [], errors: [] }),
   setEnabled: async (ctx, _links, enabled) => {
     writes.log.push({ what: enabled ? 'artifactsOn' : 'artifactsOff', id: ctx.playbookId, actor: ctx.actor })
+    if (!enabled) await database.client.campaign.updateMany({ where: { id: { in: ctx.slots.map((x) => x.campaignId) }, bidsSuppressedBy: RANK_OWNER }, data: { bidsSuppressedBy: ctx.actor } })
     return { changed: [`rank:performance ${enabled ? 'on' : 'off'}`], errors: [] }
   },
 }
@@ -257,6 +265,66 @@ describe('STOP', () => {
   it('refused slots: one the playbook holds no campaign for, and an adopted one', async () => {
     expect((await plan('stop', ['nope'])).problems).toEqual(['the playbook holds no live campaign for slot "nope"'])
     expect((await plan('start', ['exact-brand'])).problems[0]).toMatch(/^slot "exact-brand" was adopted, not built/)
+  })
+})
+
+describe('review fixes', () => {
+  it('🔴 an adopted campaign whose hourly plan\'s floor the stop takes over gets its bids back at START, and only there', async () => {
+    // The adopted campaign sits at a floor its hourly plan set (rank's own owner), its bids remembered.
+    await inA(async () => {
+      await db().campaign.update({ where: { id: ids['exact-brand'].campaign }, data: { bidsSuppressedAt: new Date(), bidsSuppressedBy: RANK_OWNER, bidsSuppressedFloorCents: 2 } })
+      await db().adGroup.update({ where: { id: ids['exact-brand'].group }, data: { defaultBidCents: 2, suppressedFromBidCents: 40 } })
+      await db().adTarget.update({ where: { id: ids['exact-brand'].target }, data: { bidCents: 2, suppressedFromBidCents: 55 } })
+    })
+    const stopped = await inA(async () => runStop(await plan('stop'), run, writer, { compilers }))
+    expect(stopped).toMatchObject({ state: 'STOPPED', floorsHeld: ['exact-brand'] })
+    expect(await inA(() => db().adsPlaybookLink.findFirst({ where: { kind: STOP_FLOOR_KIND, refId: ids['exact-brand'].campaign } }))).toMatchObject({ playbookId: seeded.rowId, origin: 'adopted', updatedBy: 'user:u-approver' })
+    expect(await inA(() => playbookHolds([ids['exact-brand'].campaign]))).toEqual(new Map([[ids['exact-brand'].campaign, 'held']]))
+    const p = await plan('start')
+    expect(p.heldFloors).toEqual([expect.objectContaining({ slot: 'exact-brand', origin: 'adopted', bids: expect.objectContaining({ adGroups: 1, targets: 1 }) })])
+    expect(p.warnings.join(' ')).toMatch(/\(adopted\) is at the floor its hourly plan set, which the playbook's stop holds: START gives its bids back/)
+    const started = await inA(() => runStart(p, run, writer, { compilers }))
+    expect(started.done).toContain('exact-brand')
+    // Its bids are back; nothing else of it moved (still off the allowlist: the business's own switch); the link is gone.
+    expect(await bidsOf('exact-brand')).toMatchObject({ group: [40, null], target: [55, null], floorBy: null, liveWrites: false })
+    expect(await inA(() => db().adsPlaybookLink.count({ where: { kind: STOP_FLOOR_KIND } }))).toBe(0)
+  })
+
+  it('🔴 a stop after a start that did not finish floors the bids it put back again, before the campaign leaves the allowlist', async () => {
+    // Half started: on the allowlist, still flagged at the floor, the target already at its planned bid (memory gone).
+    await inA(async () => {
+      await db().campaign.update({ where: { id: ids['broad-category'].campaign }, data: { bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-approver', bidsSuppressedFloorCents: 2, liveBidWritesEnabled: true } })
+      await db().adGroup.update({ where: { id: ids['broad-category'].group }, data: { defaultBidCents: 2, suppressedFromBidCents: 40 } })
+      await db().adTarget.update({ where: { id: ids['broad-category'].target }, data: { bidCents: 35, suppressedFromBidCents: null } })
+    })
+    writes.log.length = 0
+    const p = await plan('stop', ['broad-category'])
+    expect(p.campaigns[0]).toMatchObject({ allowlist: 'off', bids: { does: 'refloor', floorCents: 2, adGroups: 0, targets: 1 }, spends: true })
+    expect(p.warnings.join(' ')).toMatch(/a start that did not finish/)
+    const out = await inA(() => runStop(p, run, writer, { compilers }))
+    expect(out.done).toEqual(['broad-category'])
+    expect(writes.log.map((w) => w.what)).toEqual(['targetBid', 'allowlistOff'])
+    expect(await bidsOf('broad-category')).toMatchObject({ group: [2, 40], target: [2, 35], liveWrites: false })
+  })
+
+  it('a stop by rule does not claim a floor the write gate would refuse: a campaign off the allowlist waits for a person', async () => {
+    await inA(() => db().campaign.update({ where: { id: ids.pat.campaign }, data: { liveBidWritesEnabled: false } }))
+    const out = await inA(async () => runStop(await plan('stop', ['pat']), { ...run, manual: false }, writer, { compilers }))
+    expect(out.failed).toEqual([expect.objectContaining({ slot: 'pat', why: expect.stringMatching(/off the live-write allowlist, so a stop by rule cannot lower its bids/) })])
+    expect((await bidsOf('pat')).floorBy).toBeNull()
+  })
+
+  it('START switches the playbook\'s plans and rules on only once a campaign it built runs', async () => {
+    // Every built campaign off the allowlist, and the allowlist refuses them all: nothing starts, nothing is switched on.
+    await inA(() => db().campaign.updateMany({ where: { id: { in: ['exact-category', 'broad-category', 'auto', 'pat'].map((k) => ids[k].campaign) } }, data: { liveBidWritesEnabled: false } }))
+    writes.log.length = 0
+    writes.refuseAllowlist = true
+    try {
+      const out = await inA(async () => runStart(await plan('start'), run, writer, { compilers }))
+      expect(out.failed).toHaveLength(4)
+      expect(writes.log.map((w) => w.what)).not.toContain('artifactsOn')
+      expect(out.errors.join(' ')).toMatch(/no campaign the playbook built runs after this start: its hourly plans and rules stay off/)
+    } finally { writes.refuseAllowlist = false }
   })
 })
 

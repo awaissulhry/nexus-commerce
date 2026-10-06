@@ -191,7 +191,9 @@ export async function suppressCampaignBids(
  */
 export async function refloorCampaignBids(
   campaignId: string,
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null },
+  // PB-5b — `changeSetId` and `manual` (optional) as in suppressCampaignBids: a playbook STOP that floors again what a
+  // START left half done. Absent for every existing caller.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; manual?: boolean },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true } })
   if (!camp?.bidsSuppressedAt) return 0 // not suppressed → suppressCampaignBids owns this
@@ -213,7 +215,7 @@ export async function refloorCampaignBids(
       // Remember first, and only for an entity with no memory yet — an existing memory is
       // the pre-suppression bid and must survive every re-floor.
       if (g.suppressedFromBidCents == null) await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: g.defaultBidCents } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] refloor group threw — skipping', { adGroupId: g.id, error: (e as Error).message }) }
   }
@@ -227,7 +229,7 @@ export async function refloorCampaignBids(
     if (t.bidCents === want) continue
     try {
       if (t.suppressedFromBidCents == null) await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] refloor target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }
