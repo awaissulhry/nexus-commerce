@@ -4,9 +4,9 @@
  *
  * Scope (the Owner's rule 3, first layer): the ad groups of the playbook row's slot links (AdsPlaybookLink kind 'slot':
  * one campaign plays one slot of one playbook) whose campaign runs in the rule's market and is not archived, and whose
- * product ads are ALL this product family's (the row's product and its variations, read now). Everything left out is
- * named with its reason: a campaign that also advertises another product, one in another market, an archived one, a
- * slot the compiled rule does not know.
+ * product ads are ALL this product family's (the row's product with its parent's variants, read now: the same product
+ * the harvest's home is, ads-winner-lock.ts familyOfProducts). Everything left out is named with its reason: a
+ * campaign that also advertises another product, one in another market, an archived one, a slot the rule does not know.
  *
  * Winners: the search terms that meet the ads strategy's harvest bar in each scope ad group, over the strategy's own
  * window for that ad group (ads-harvest.service.ts homeWinners: the bar the harvest asks, the rule's fallbacks where the
@@ -17,9 +17,8 @@ import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
 import { homeWinners, searchTermTotals, winnerKey } from '../ads-harvest.service.js'
 import { loadProtectedTerms, type ProtectedTerm } from '../ads-negation-policy.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
-import { productFamily } from '../ads-strategy/load.js'
 import { openTermsStrategy, strategyMarketOf } from '../ads-strategy/terms.js'
-import { familyOnly, positivesIn, standingNegativesIn, type Positive } from '../ads-winner-lock.js'
+import { familyOfProducts, familyOnly, positivesIn, standingNegativesIn, type Positive } from '../ads-winner-lock.js'
 import { playbookLinks } from './load.js'
 import type { IsolationAction, IsolationSlot, ScopeGroup } from './isolation.js'
 
@@ -71,7 +70,7 @@ export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' |
   const market = strategyMarketOf(action.market)
   if (strategyMarketOf(row.market) !== market) return { refused: `The playbook is for ${row.market}, not ${action.market}: the rule is out of date, so nothing is kept apart.` }
 
-  const family = await productFamily(row.scopeId)
+  const family = await familyOfProducts([row.scopeId])
   const links = (await playbookLinks([row.id])).filter((l) => l.kind === 'slot')
   const campaigns = links.length
     ? await prisma.campaign.findMany({
@@ -108,5 +107,5 @@ export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' |
   // The protected terms that bind a negative in each campaign, as the write gate reads them (one read per campaign).
   const protections = new Map<string, ProtectedTerm[]>()
   for (const id of campaignIds) protections.set(id, await loadProtectedTerms({ marketplace: marketOf.get(id) ?? null, campaignId: id }))
-  return { inputs: { productId: row.scopeId, family, scope, excluded, positives, winners, standing, protections } }
+  return { inputs: { productId: row.scopeId, family: family.productIds, scope, excluded, positives, winners, standing, protections } }
 }

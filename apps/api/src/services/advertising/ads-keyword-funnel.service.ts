@@ -104,7 +104,7 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
   leftAlone: Array<{ text: string; adGroupId: string | null; why: string }>; excluded: Array<{ slot: string; campaignId: string; adGroupId: string | null; why: string }>
 } | { refused: string }> {
   const code = strategyMarketOf(market)
-  if (!code) return { refused: 'Name the market: isolation keeps one product\'s campaigns apart in one market.' }
+  if (!code) return { refused: 'Name a market (for example "IT"): isolation keeps one product\'s own playbook campaigns apart in one market, so nothing was planned.' }
   const product = await findLiveProduct({ productId })
   if (!product) return { refused: PRODUCT_NOT_FOUND }
   const rows = await prisma.adsPlaybook.findMany({

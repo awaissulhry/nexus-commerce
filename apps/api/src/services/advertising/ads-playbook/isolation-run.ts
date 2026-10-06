@@ -11,9 +11,10 @@
  *          (same playbook) and the owner keyword must still be live; else it is left alone, said. The converting
  *          guard is not asked (`protectConverting: null`): a negative here only sends a search to the product's own
  *          live keyword, and a search that wins where it runs is left there by the planner (winners stay).
- *   sync   `syncIsolationRule(playbookId, { enabled })` — the hook PB-5's apply calls at build/adopt (born off) and at
- *          start/stop: resolves the product's playbook, compiles the rule and saves it once (rules.ts: PROPOSE, a dry
- *          run, one run a day; a re-save never touches the autonomy level).
+ *   sync   `syncIsolationRule(playbookId, { enabled })` — the hook PB-5's apply calls: resolves the product's playbook,
+ *          compiles the rule and saves it once (rules.ts: PROPOSE, a dry run, one run a day). `enabled: true` is a
+ *          START: it switches the rule on, never over a switch-off made after the last start; `false` (build, adopt,
+ *          stop, a re-sync) leaves an existing rule's on/off and autonomy level as they are, and a new one is born off.
  *
  * Never compiled, never called: `sync_negatives_across_campaigns` (market-wide; it would cross products).
  */
@@ -222,18 +223,19 @@ export async function compileIsolationFor(playbookId: string): Promise<{ row: { 
 
 /**
  * PB-5's hook: compile the product's isolation rule and save it once (AdsPlaybookLink kind 'isolationRule', key
- * 'isolation'). `enabled`: false at build/adopt and stop, true at start; a template that turns every switch off keeps
- * it off. Nothing is written when the compile has problems.
+ * 'isolation'). `enabled: true` = a playbook START (rules.ts `start`: on, unless a person switched it off since the last
+ * start — then it stays off and `keptOff` says who); `false` = build, adopt or a re-sync (the rule keeps its own on/off;
+ * the playbook never switches a rule off). A template that turns every switch off is never started. Nothing is written
+ * when the compile has problems.
  */
-export async function syncIsolationRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<{ ruleId: string | null; created: boolean; changed: boolean; enabled: boolean; problems: string[]; warnings: string[] }> {
+export async function syncIsolationRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<{ ruleId: string | null; created: boolean; changed: boolean; enabled: boolean; keptOff?: string; problems: string[]; warnings: string[] }> {
   const out = await compileIsolationFor(playbookId)
   if ('problems' in out) return { ruleId: null, created: false, changed: false, enabled: false, problems: out.problems, warnings: [] }
   const { row, compiled } = out
   if (compiled.problems.length) return { ruleId: null, created: false, changed: false, enabled: false, problems: compiled.problems, warnings: compiled.warnings }
-  const enabled = opts.enabled && compiled.enabled
   const saved = await ensureCompiledRule({
     playbookId: row.id, kind: 'isolationRule', key: 'isolation', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
-    enabled, compiledVersion: row.version, actor: opts.actor ?? 'ads-playbook',
+    enabled: false, start: opts.enabled && compiled.enabled, compiledVersion: row.version, actor: opts.actor ?? 'ads-playbook',
   })
-  return { ...saved, enabled, problems: [], warnings: compiled.warnings }
+  return { ...saved, problems: [], warnings: compiled.warnings }
 }

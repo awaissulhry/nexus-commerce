@@ -169,6 +169,13 @@ describe('PB-7 — the compiled rule', () => {
     expect(await inA(() => syncIsolationRule(ids.rowA, { enabled: false, actor: 'user:test' }))).toMatchObject({ ruleId: first.ruleId, created: false, changed: false })
   })
 
+  it('a START switches it on; a later build or stop re-sync never switches it off (the playbook never does)', async () => {
+    const started = await inA(() => syncIsolationRule(ids.rowA, { enabled: true, actor: 'user:test' }))
+    expect(started).toMatchObject({ enabled: true, created: false })
+    expect(await inA(() => syncIsolationRule(ids.rowA, { enabled: false, actor: 'user:test' }))).toMatchObject({ ruleId: started.ruleId, enabled: true })
+    expect((await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: started.ruleId! } }))).enabled).toBe(true)
+  })
+
   it('a dry run lists the items an accept applies, and the shared campaign it leaves out', async () => {
     write.mockReset()
     const action = await inA(() => actionOf(ids.rowA))
@@ -179,6 +186,24 @@ describe('PB-7 — the compiled rule', () => {
     expect(output.items.length).toBeGreaterThan(0)
     expect(output.items.every((i) => [ids.gAexact, ids.gAphrase].includes(i.adGroupId))).toBe(true)
     expect(output.scope.excluded.map((e) => e.adGroupId)).toEqual([ids.gShared])
+  })
+
+  it('a variation\'s playbook keeps a campaign that also advertises a sibling variant: the same product, as a home is', async () => {
+    const rowV = await inA(async () => {
+      const c = db()
+      const parentA = (await c.product.findFirstOrThrow({ where: { sku: 'TEST-PB7-A' } })).id
+      const sibling = (await c.product.create({ data: { sku: 'TEST-PB7-A-V2', name: 'Test A v2', basePrice: '10.00', parentId: parentA, amazonAsin: 'B0TESTA002' } })).id
+      const row = await c.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.childA, label: 'TEST-PB7-A-V1 (IT)', enrolled: true, updatedBy: 'user:test' } })
+      const made = await c.campaign.create({ data: { name: 'TESTA V1 | IT | Broad', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-C-g-var', dailyBudget: '10.00', startDate: new Date(), targetingType: 'MANUAL' } as never })
+      await c.adGroup.create({ data: { id: 'g-var', campaignId: made.id, name: 'TESTA V1 | IT | Broad', externalAdGroupId: 'EXT-g-var', defaultBidCents: 30 } as never })
+      await c.adProductAd.create({ data: { adGroupId: 'g-var', productId: ids.childA, asin: 'B0TESTA001' } })
+      await c.adProductAd.create({ data: { adGroupId: 'g-var', productId: sibling, asin: 'B0TESTA002' } })
+      await c.adsPlaybookLink.create({ data: { playbookId: row.id, kind: 'slot', key: 'broad-category', refId: made.id, adGroupId: 'g-var', origin: 'adopted', compiledVersion: 1, updatedBy: 'user:test' } })
+      return row.id
+    })
+    const run = await inA(async () => isolateProduct({ action: await actionOf(rowV), actor: 'automation:test-rule-v', dryRun: true }))
+    if ('refused' in run) throw new Error(run.refused)
+    expect(run.scope).toMatchObject({ adGroups: 1, excluded: [] })
   })
 
   it('another business cannot compile this business\'s playbook', async () => {

@@ -18,8 +18,10 @@
  * group (the lock, L1); its owner keyword is live; it blocks no search term that WINS there (meets the ads strategy's
  * harvest bar for that ad group) unless that term's exact home wins too — the Owner's handover choice "proven" (lead
  * decision B): a winner keeps running where it wins until its own exact keyword has proved itself; it does not hit a
- * protected term (a protected term is never isolated); Amazon accepts its text. Thresholds are never here: the loader
- * marks the winners with the strategy's own bar.
+ * protected term (a protected term is never isolated); Amazon accepts its text. The lock, the protected terms and the
+ * text limits are the negative write service's own checks (ownKeywordRefusal, protectedTermHit, the text limits),
+ * asked here on the loaded facts so a card lists only what the write would take; the write service still decides each
+ * one. Thresholds are never here: the loader marks the winners with the strategy's own bar.
  *
  * Nothing here reads a database or calls Amazon. Every planned ad group is asserted in scope (a violation throws).
  */
@@ -211,7 +213,7 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
     if (blocked) {
       return leave(g.role === 'exact'
         ? `Not negated: it would block your own keyword "${blocked.text}" in this Exact slot; move that keyword to its brand slot first (the playbook's drift list names it).`
-        : `Not negated: ${blockedWords(blocked)}`)
+        : `Not negated: ${blockedWords(blocked, g.name)}`)
     }
     const hit = protectedTermHit(text, match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT', input.protections.get(g.campaignId) ?? [])
     if (hit) return leave(`Protected, never isolated: ${protectedTermRefusal(text, hit)}`)

@@ -6901,7 +6901,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // required and the actor is never taken from the body.
     const b = (request.body ?? {}) as { productId?: string; apply?: boolean; market?: string; marketplace?: string }
     const market = (b.market ?? b.marketplace)?.trim()
-    if (!b.productId || !market) { reply.status(400); return { error: 'productId and market required: isolation keeps one product\'s own campaigns apart in one market' } }
+    if (!b.productId) { reply.status(400); return { error: 'productId required' } }
+    if (!market) {
+      reply.status(400)
+      return { error: 'Name a market (for example "IT"): isolation keeps one product\'s own playbook campaigns apart in one market, so nothing was planned.', needs: 'market' }
+    }
     const { crossMatchNegations } = await import('../services/advertising/ads-keyword-funnel.service.js')
     try {
       const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market)

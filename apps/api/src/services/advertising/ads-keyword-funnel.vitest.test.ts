@@ -40,7 +40,7 @@ beforeEach(() => {
 
 describe('crossMatchNegations — inside one product\'s playbook in one market', () => {
   it('is refused without a market, and for a product that is not in a playbook there', async () => {
-    expect(await crossMatchNegations('p-child', false, 'user:u1', '')).toEqual({ refused: expect.stringMatching(/Name the market/) })
+    expect(await crossMatchNegations('p-child', false, 'user:u1', '')).toEqual({ refused: expect.stringMatching(/^Name a market/) })
     db.adsPlaybook.findMany.mockResolvedValue([{ id: 'row-own', scopeId: 'p-child', enrolled: false }, { id: 'row-parent', scopeId: 'p-parent', enrolled: true }] as never)
     expect(await crossMatchNegations('p-child', false, 'user:u1', 'DE')).toEqual({ refused: expect.stringMatching(/TEST-SKU-1 is not in an ads playbook in DE/) })
     expect(h.isolateProduct).not.toHaveBeenCalled()
