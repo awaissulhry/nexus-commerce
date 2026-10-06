@@ -59,6 +59,12 @@ export interface AdWriteEvidence {
    * refuses or rewrites his edit), and this says which limit and whose.
    */
   strategyWarning?: string
+  /**
+   * ADS AUTONOMY W3-1 — what this write carries out, when an engine produced it: `kind` recommendation and the id
+   * ad-recommendations gave it (`bid:<targetId>`, `budget:<campaignId>` …), so the Change Log and Claude's daily report
+   * can say "from the bid optimizer". A record for the reader only: no gate trusts it.
+   */
+  source?: { kind: string; id: string }
 }
 
 /**

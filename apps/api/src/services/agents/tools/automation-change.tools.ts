@@ -307,6 +307,8 @@ type DecideKind = 'amazon-ads' | 'ebay-ads'
  * approval: every write of its applies carries it) and the negatives its applies created, for undo-ad-change.
  */
 interface DecisionChange { kind: DecideKind; items: Array<{ id: string; status: string }>; changeSetId?: string; negatives?: Array<{ targetId: string }> }
+/** W3-1 — what an Amazon batch's applies wrote (before.actionLogIds): its undo reverses only them, not a plan's siblings. */
+interface DecisionBefore { kind: DecideKind; items: Array<{ id: string; status: string }>; actionLogIds?: string[] }
 
 /** The permission each Amazon suggestion family needs, on top of the tool's own (null when held). */
 function familyPermission(ctx: ToolContext) {
@@ -349,11 +351,13 @@ export const DECIDE_UNDO: ToolUndo = {
     if (after.kind === 'ebay-ads') return { refusal: 'An eBay proposal once decided cannot be put back: a rejected one is raised again by its rule; an applied one is rolled back in Nexus.' }
     if (!applied.length) return { tool: 'decide-automation-suggestions', args: { kind: after.kind, decisions: after.items.map((i) => ({ suggestionId: i.id, decide: 'restore' })) } }
     if (!after.changeSetId) return { refusal: `${applied.length} of these suggestions were applied: what they changed at Amazon is undone from the Change Log in Nexus.` }
+    // W3-1 — a batch that recorded its own writes is named by its id: in a change plan every step shares the plan's set.
+    const own = change.id && Array.isArray((change.before as DecisionBefore | null)?.actionLogIds)
     const dismissed = after.items.filter((i) => i.status === 'dismissed').length
     if (dismissed) {
       return { refusal: `${applied.length} of these suggestions were applied and ${dismissed} dismissed: put the applied ones back with undo-ad-change (changeSetId ${after.changeSetId}), and restore the dismissed ones with decide-automation-suggestions (decide: restore).` }
     }
-    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, why: 'undo of applied rule suggestions' } }
+    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, ...(own ? { changeId: change.id } : {}), why: 'undo of applied rule suggestions' } }
   },
 }
 
@@ -422,6 +426,7 @@ const decideSuggestions: AgentTool = {
     const kind = args.kind as DecideKind
     let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null; skipped?: true }>
     let set: Pick<DecisionChange, 'changeSetId' | 'negatives'> | null = null
+    let actionLogIds: string[] | null = null
     if (kind === 'ebay-ads') {
       const crud = await import('../../marketing/ebay-ads-rule-crud.service.js')
       const planned = await crud.planEbayProposalDecisions(decisions)
@@ -437,12 +442,19 @@ const decideSuggestions: AgentTool = {
       const byRule = ctx.decidedVia === 'auto'
       const approvalId = ctx.approvalId?.trim()
       const who = byRule ? 'run by rule' : ctx.userId ? `approved by user:${ctx.userId}` : 'approved'
+      // W3-1 — the writes of the change set before and after the applies: the difference is this batch's own (a plan's
+      // steps run one after another, so no sibling writes meanwhile).
+      const { writesOfChangeSet } = await import('../../advertising/rollback.service.js')
+      const earlier = approvalId ? new Set(await writesOfChangeSet(approvalId)) : null
       const out = await svc.applySuggestionDecisions(decisions, ctx.userId ?? null, {
         operatorApproved: !byRule,
         ...(approvalId ? { approval: { changeSetId: approvalId, reason: `${ctx.via === 'claude' ? 'Claude request' : 'Approved request'} ${approvalId} (${who})` } } : {}),
       })
       results = out.results
-      if (approvalId) set = { changeSetId: approvalId, negatives: out.negatives.map((targetId) => ({ targetId })) }
+      if (approvalId) {
+        set = { changeSetId: approvalId, negatives: out.negatives.map((targetId) => ({ targetId })) }
+        actionLogIds = (await writesOfChangeSet(approvalId)).filter((id) => !earlier!.has(id))
+      }
     }
     const before = kind === 'ebay-ads' ? 'PENDING' : 'pending'
     // A batch is recorded when any decision went through: those changed something, and undo must know them.
@@ -452,7 +464,7 @@ const decideSuggestions: AgentTool = {
       // AA-W2-10 — a suggestion its rule passed over is said as skipped (with why), never as decided.
       data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok && !r.skipped).length, skipped: results.filter((r) => r.skipped).length, ...(set ? { changeSetId: set.changeSetId } : {}) },
       change: {
-        before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })) },
+        before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })), ...(actionLogIds ? { actionLogIds } : {}) },
         after: { kind, items: results.map((r) => ({ id: r.suggestionId, status: r.status })), ...(set ?? {}) },
       },
     }
