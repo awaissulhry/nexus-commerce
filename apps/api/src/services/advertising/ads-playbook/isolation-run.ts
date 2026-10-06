@@ -7,8 +7,9 @@
  *          negative write service. A dry run lists `items` (≤ 200) and proposes nothing when nothing is planned; an
  *          accept applies ONLY the card's items, each planned again on today's data. Counts are honest: `added` is
  *          what reached Amazon, `local` what Nexus holds for a campaign not on Amazon yet.
- *   write  the third layer of the Owner's rule 3: right before each write the ad group's slot link is read again
- *          (same playbook) and the owner keyword must still be live; else it is left alone, said. The converting
+ *   write  the third layer of the Owner's rule 3: right before the writes each ad group must still advertise only this
+ *          product (familyOnly again), and before each write its slot link is read again (same playbook) and the owner
+ *          keyword must still be live; else it is left alone, said. The converting
  *          guard is not asked (`protectConverting: null`): a negative here only sends a search to the product's own
  *          live keyword, and a search that wins where it runs is left there by the planner (winners stay).
  *   sync   `syncIsolationRule(playbookId, { enabled })` — the hook PB-5's apply calls: resolves the product's playbook,
@@ -21,6 +22,7 @@
 import prisma from '../../../db.js'
 import type { ActionResult } from '../../automation-rule.service.js'
 import { writeNegativeKeyword } from '../ads-negative-kw.service.js'
+import { familyOnly, type ProductFamily } from '../ads-winner-lock.js'
 import { loadCatalog } from '../ads-strategy/load.js'
 import { strategyMarketOf } from '../ads-strategy/terms.js'
 import type { ProductTerms } from './doc.js'
@@ -29,7 +31,7 @@ import {
   type CompiledIsolationRule, type IsolationAction, type IsolationPlan, type LeftAlone, type PlannedNegative, type ScopeGroup,
 } from './isolation.js'
 import { loadIsolation, type Excluded } from './isolation-load.js'
-import { loadPlaybookIndex, PLAYBOOK_ROW_SELECT } from './load.js'
+import { loadPlaybookIndex, PLAYBOOK_ROW_SELECT, playbookLinks } from './load.js'
 import { resolveProduct } from './resolve.js'
 import { ensureCompiledRule } from './rules.js'
 
@@ -81,10 +83,13 @@ async function stillOwned(playbookId: string, add: PlannedNegative): Promise<str
   return live ? null : `Not written: its keyword "${add.owner.text}" is no longer live, so its searches would have nowhere to go.`
 }
 
-async function writeAll(playbookId: string, adds: readonly PlannedNegative[], actor: string): Promise<IsolationWritten> {
+async function writeAll(playbookId: string, adds: readonly PlannedNegative[], actor: string, family: ProductFamily): Promise<IsolationWritten> {
   const w: IsolationWritten = { added: 0, local: 0, alreadyStanding: 0, refused: [], failed: [], leftAlone: [], negativeIds: [] }
+  // Rule 3 again, just before the writes: an ad group that now also advertises another product gets none.
+  const owned = await familyOnly([...new Set(adds.map((a) => a.adGroupId))], family)
+  const foreign = new Map(owned.excluded.map((e) => [e.adGroupId, e.why]))
   for (const add of adds) {
-    const gone = await stillOwned(playbookId, add)
+    const gone = foreign.has(add.adGroupId) ? `Not written: ${foreign.get(add.adGroupId)}.` : await stillOwned(playbookId, add)
     if (gone) { w.leftAlone.push({ kind: add.kind, text: add.text, adGroupId: add.adGroupId, slot: add.slot, why: gone }); continue }
     const r = await writeNegativeKeyword({
       scope: 'AD_GROUP', adGroupId: add.adGroupId, keywordText: add.text, matchType: add.match, protectConverting: null, userId: actor,
@@ -117,7 +122,7 @@ export async function isolateProduct(args: { action: IsolationAction; actor: str
       .map((i) => ({ text: i.text, adGroupId: i.adGroupId, why: 'It is no longer due on today\'s data (already there, no longer this product\'s, or a winner there now), so it was left alone.' }))
   }
   chosen = chosen.slice(0, MAX_ISOLATION_ITEMS)
-  const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor)
+  const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor, inputs.family)
   return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written }
 }
 
@@ -222,6 +227,19 @@ export async function compileIsolationFor(playbookId: string): Promise<{ row: { 
 }
 
 /**
+ * The marketplace code the rule runs under (AutomationRule.scopeMarketplace, compared as stored with the run's context):
+ * the one this product's linked campaigns in the market carry (Campaign.marketplace; the most common when they differ),
+ * else the row's market. So its card is filed under its market, never "the whole account".
+ */
+async function scopeMarketplaceOf(playbookId: string, market: string): Promise<string> {
+  const links = (await playbookLinks([playbookId])).filter((l) => l.kind === 'slot')
+  const campaigns = links.length ? await prisma.campaign.findMany({ where: { id: { in: links.map((l) => l.refId) } }, select: { marketplace: true } }) : []
+  const counts = new Map<string, number>()
+  for (const c of campaigns) if (c.marketplace && strategyMarketOf(c.marketplace) === strategyMarketOf(market)) counts.set(c.marketplace, (counts.get(c.marketplace) ?? 0) + 1)
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? market
+}
+
+/**
  * PB-5's hook: compile the product's isolation rule and save it once (AdsPlaybookLink kind 'isolationRule', key
  * 'isolation'). `enabled: true` = a playbook START (rules.ts `start`: on, unless a person switched it off since the last
  * start — then it stays off and `keptOff` says who); `false` = build, adopt or a re-sync (the rule keeps its own on/off;
@@ -235,7 +253,8 @@ export async function syncIsolationRule(playbookId: string, opts: { enabled: boo
   if (compiled.problems.length) return { ruleId: null, created: false, changed: false, enabled: false, problems: compiled.problems, warnings: compiled.warnings }
   const saved = await ensureCompiledRule({
     playbookId: row.id, kind: 'isolationRule', key: 'isolation', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
-    enabled: false, start: opts.enabled && compiled.enabled, compiledVersion: row.version, actor: opts.actor ?? 'ads-playbook',
+    enabled: false, start: opts.enabled && compiled.enabled, scopeMarketplace: await scopeMarketplaceOf(row.id, row.market),
+    compiledVersion: row.version, actor: opts.actor ?? 'ads-playbook',
   })
   return { ...saved, problems: [], warnings: compiled.warnings }
 }

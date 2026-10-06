@@ -20,6 +20,7 @@ vi.mock('./ads-playbook/isolation-load.js', () => ({ loadIsolation: h.loadIsolat
 vi.mock('../../db.js', () => ({
   default: {
     adsPlaybookLink: { findFirst: vi.fn() },
+    adProductAd: { findMany: vi.fn() },
     adTarget: { findUnique: vi.fn() },
     automationRuleExecution: { findMany: vi.fn() },
   },
@@ -51,7 +52,7 @@ const scope = [
 const owner = (text: string) => ({ adTargetId: `t-${text}`, adGroupId: 'gx', text, match: 'EXACT', live: true })
 const inputs = (owners: string[] = ['test x', 'test y']) => ({
   inputs: {
-    productId: 'p1', family: ['p1'], scope, excluded: [{ slot: 'shared', campaignId: 'cs', adGroupId: 'gs', why: 'it also advertises TEST-OTHER, which is not this product' }],
+    productId: 'p1', family: { productIds: ['p1'], asins: [] }, scope, excluded: [{ slot: 'shared', campaignId: 'cs', adGroupId: 'gs', why: 'it also advertises TEST-OTHER, which is not this product' }],
     positives: new Map([['gx', owners.map(owner)]]), winners: new Map(), standing: new Set(), protections: new Map(),
   },
 })
@@ -63,6 +64,8 @@ beforeEach(() => {
   h.loadIsolation.mockResolvedValue(inputs())
   h.writeNegativeKeyword.mockResolvedValue(answer())
   db.adsPlaybookLink.findFirst.mockResolvedValue({ playbookId: 'pb-1', adGroupId: null } as never)
+  db.adProductAd.findMany.mockImplementation((async (args: { where: { adGroupId: { in: string[] } } }) =>
+    args.where.adGroupId.in.map((adGroupId) => ({ adGroupId, productId: 'p1', asin: null, sku: 'TEST-1', product: { sku: 'TEST-1' } }))) as never)
   db.adTarget.findUnique.mockResolvedValue({ isNegative: false, status: 'ENABLED', externalTargetId: 'EXT-O', adGroup: { campaign: { status: 'ENABLED' } } } as never)
   db.automationRuleExecution.findMany.mockResolvedValue([])
 })
@@ -132,6 +135,16 @@ describe('isolate_product_terms — an accepted card', () => {
 })
 
 describe('isolate_product_terms — the write\'s last layer', () => {
+  it('never writes into an ad group that now also advertises another product', async () => {
+    db.adProductAd.findMany.mockResolvedValue([
+      { adGroupId: 'gp', productId: 'p1', asin: null, sku: 'TEST-1', product: { sku: 'TEST-1' } },
+      { adGroupId: 'gp', productId: 'p-other', asin: null, sku: 'TEST-OTHER', product: { sku: 'TEST-OTHER' } },
+    ] as never)
+    const r = await run({ ...ACTION, items: [{ text: 'test x', match: 'EXACT', adGroupId: 'gp' }] })
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.output).toMatchObject({ skipped: 'left-alone', why: expect.stringMatching(/also advertises TEST-OTHER, which is not this product/) })
+  })
+
   it('never writes into a campaign that left the playbook since the plan', async () => {
     db.adsPlaybookLink.findFirst.mockResolvedValue({ playbookId: 'pb-other', adGroupId: null } as never)
     const r = await run({ ...ACTION, items: [{ text: 'test x', match: 'EXACT', adGroupId: 'gp' }] })

@@ -42,7 +42,7 @@ const inB = <T>(work: () => Promise<T>) => withWorkspace(scope(B), work)
 const db = () => database.client
 const ids = {
   rowA: '', rowB: '', childA: '', childB: '',
-  gAexact: 'g-a-exact', gAphrase: 'g-a-phrase', gAbrand: 'g-a-brand', gShared: 'g-shared', gBexact: 'g-b-exact', gBphrase: 'g-b-phrase',
+  gAexact: 'g-a-exact', gAphrase: 'g-a-phrase', gAbrand: 'g-a-brand', gShared: 'g-shared', gBexact: 'g-b-exact', gBphrase: 'g-b-phrase', gAde: 'g-a-de',
 }
 const actionOf = async (playbookId: string): Promise<IsolationAction> => {
   const out = await compileIsolationFor(playbookId)
@@ -84,8 +84,8 @@ beforeAll(async () => {
     ids.rowB = (await row(parentB, 'TESTB')).id
 
     /** One live campaign with one ad group, its product ads and its positive keywords, linked to a playbook slot. */
-    const campaign = async (adGroupId: string, name: string, products: Array<{ productId: string; asin: string }>, keywords: Array<[string, string]>, link: { playbookId: string; key: string; origin?: string }) => {
-      const made = await c.campaign.create({ data: { name, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-C-${adGroupId}`, dailyBudget: '10.00', startDate: new Date(), targetingType: 'MANUAL' } as never })
+    const campaign = async (adGroupId: string, name: string, products: Array<{ productId: string; asin: string }>, keywords: Array<[string, string]>, link: { playbookId: string; key: string; origin?: string }, marketplace = 'IT') => {
+      const made = await c.campaign.create({ data: { name, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace, externalCampaignId: `EXT-C-${adGroupId}`, dailyBudget: '10.00', startDate: new Date(), targetingType: 'MANUAL' } as never })
       await c.adGroup.create({ data: { id: adGroupId, campaignId: made.id, name, externalAdGroupId: `EXT-${adGroupId}`, defaultBidCents: 30 } as never })
       for (const p of products) await c.adProductAd.create({ data: { adGroupId, productId: p.productId, asin: p.asin } })
       for (const [text, match] of keywords) {
@@ -101,6 +101,8 @@ beforeAll(async () => {
     await campaign(ids.gShared, 'Test shared | IT | Broad', [...a, ...b], [['test x', 'BROAD']], { playbookId: ids.rowA, key: 'broad-category', origin: 'adopted' })
     await campaign(ids.gBexact, 'TESTB | IT | Exact | Category', b, [['test x', 'EXACT']], { playbookId: ids.rowB, key: 'exact-category' })
     await campaign(ids.gBphrase, 'TESTB | IT | Phrase | Category', b, [['test x', 'PHRASE']], { playbookId: ids.rowB, key: 'phrase-category' })
+    // A's own campaign in another market, linked to A's IT row: never in its IT scope.
+    await campaign(ids.gAde, 'TESTA | DE | Auto', a, [], { playbookId: ids.rowA, key: 'auto' }, 'DE')
     for (const g of [ids.gAphrase, ids.gShared, ids.gBphrase]) await searchTerm(g, 'test x', 0)
   })
 }, 180_000)
@@ -120,12 +122,16 @@ describe('PB-7 — two products, one keyword: each product\'s isolation stays in
     const all = calls()
     expect(all.length).toBeGreaterThan(0)
     expect(all.every((c) => [ids.gAexact, ids.gAphrase].includes(c.adGroupId))).toBe(true)
-    expect(all.filter((c) => [ids.gBexact, ids.gBphrase, ids.gShared, ids.gAbrand].includes(c.adGroupId))).toEqual([])
+    expect(all.filter((c) => [ids.gBexact, ids.gBphrase, ids.gShared, ids.gAbrand, ids.gAde].includes(c.adGroupId))).toEqual([])
     // The exact "test x" only into A's Phrase ad group; A's brand as a phrase into A's category slots.
     expect(all.filter((c) => c.keywordText === 'test x').map((c) => `${c.matchType}:${c.adGroupId}`)).toEqual([`EXACT:${ids.gAphrase}`])
     expect(all.filter((c) => c.matchType === 'PHRASE').map((c) => c.adGroupId).sort()).toEqual([ids.gAexact, ids.gAphrase].sort())
     expect(all.every((c) => c.userId === 'automation:test-rule' && c.protectConverting === null)).toBe(true)
-    expect(run.scope.excluded).toEqual([expect.objectContaining({ slot: 'broad-category', adGroupId: ids.gShared, why: expect.stringMatching(/also advertises TEST-PB7-B-V1, which is not this product/) })])
+    expect(run.scope.excluded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slot: 'broad-category', adGroupId: ids.gShared, why: expect.stringMatching(/also advertises TEST-PB7-B-V1, which is not this product/) }),
+      expect.objectContaining({ slot: 'auto', adGroupId: ids.gAde, why: 'its campaign runs in DE, not IT' }),
+    ]))
+    expect(run.scope.excluded).toHaveLength(2)
     expect(run.written).toMatchObject({ added: all.length, local: 0, refused: [], failed: [] })
     // B's "test x" is still B's own positive keyword, in both of B's campaigns.
     const bTargets = await inA(() => db().adTarget.findMany({ where: { adGroupId: { in: [ids.gBexact, ids.gBphrase] } }, select: { expressionValue: true, isNegative: true, status: true } }))
@@ -158,12 +164,35 @@ describe('PB-7 — two products, one keyword: each product\'s isolation stays in
   })
 })
 
+describe('PB-7 — a product that left its playbook, or a stopped playbook', () => {
+  for (const [what, data, why] of [
+    ['un-enrolled', { enrolled: false }, /no longer in its ads playbook/],
+    ['stopped', { state: 'STOPPED' }, /playbook is stopped/],
+  ] as const) {
+    it(`${what}: a dry run proposes nothing, with the reason; an accepted card is refused and writes nothing`, async () => {
+      await inA(() => db().adsPlaybook.update({ where: { id: ids.rowB }, data }))
+      try {
+        write.mockReset().mockResolvedValue(created())
+        const action = await inA(() => actionOf(ids.rowB))
+        const dry = await inA(() => runIsolation({ action: action as never, ruleId: 'test-rule-b', dryRun: true, preview: true }))
+        expect(dry).toMatchObject({ ok: true, output: { noChange: true, why: expect.stringMatching(why) } })
+        const accept = await inA(() => runIsolation({ action: { ...action, items: [{ text: 'test x', match: 'EXACT', adGroupId: ids.gBphrase }] } as never, ruleId: 'test-rule-b', dryRun: false }))
+        expect(accept).toMatchObject({ ok: false, error: expect.stringMatching(why) })
+        expect(write).not.toHaveBeenCalled()
+      } finally {
+        await inA(() => db().adsPlaybook.update({ where: { id: ids.rowB }, data: { enrolled: true, state: 'RUNNING' } }))
+      }
+    })
+  }
+})
+
 describe('PB-7 — the compiled rule', () => {
   it('saved once, off, a dry run, PROPOSE, linked to the playbook; the same sync again writes nothing', async () => {
     const first = await inA(() => syncIsolationRule(ids.rowA, { enabled: false, actor: 'user:test' }))
     expect(first).toMatchObject({ created: true, changed: true, enabled: false, problems: [] })
     const rule = await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: first.ruleId! } }))
-    expect(rule).toMatchObject({ domain: 'advertising', trigger: 'SCHEDULE', enabled: false, dryRun: true, autonomyLevel: 'PROPOSE', maxExecutionsPerDay: 1, name: 'TESTA (IT) — isolation' })
+    // Filed under its own market (its IT campaigns' code), not the whole account — the DE campaign does not move it.
+    expect(rule).toMatchObject({ domain: 'advertising', trigger: 'SCHEDULE', enabled: false, dryRun: true, autonomyLevel: 'PROPOSE', maxExecutionsPerDay: 1, name: 'TESTA (IT) — isolation', scopeMarketplace: 'IT' })
     expect((rule.actions as Array<Record<string, unknown>>)[0]).toMatchObject({ type: 'isolate_product_terms', playbookId: ids.rowA, market: 'IT', handover: 'proven' })
     expect(await inA(() => db().adsPlaybookLink.findFirst({ where: { playbookId: ids.rowA, kind: 'isolationRule' } }))).toMatchObject({ key: 'isolation', refId: first.ruleId })
     expect(await inA(() => syncIsolationRule(ids.rowA, { enabled: false, actor: 'user:test' }))).toMatchObject({ ruleId: first.ruleId, created: false, changed: false })
@@ -185,7 +214,7 @@ describe('PB-7 — the compiled rule', () => {
     const output = out.output as { items: Array<{ adGroupId: string }>; scope: { excluded: Array<{ adGroupId: string }> } }
     expect(output.items.length).toBeGreaterThan(0)
     expect(output.items.every((i) => [ids.gAexact, ids.gAphrase].includes(i.adGroupId))).toBe(true)
-    expect(output.scope.excluded.map((e) => e.adGroupId)).toEqual([ids.gShared])
+    expect(output.scope.excluded.map((e) => e.adGroupId).sort()).toEqual([ids.gAde, ids.gShared].sort())
   })
 
   it('a variation\'s playbook keeps a campaign that also advertises a sibling variant: the same product, as a home is', async () => {

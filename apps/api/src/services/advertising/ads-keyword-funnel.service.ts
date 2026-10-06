@@ -22,6 +22,7 @@ import { PRODUCT_NOT_FOUND } from '../agents/tools/live-product.js'
 import { findLiveProduct } from './ads-strategy/load.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 import { compileIsolationFor, isolateProduct } from './ads-playbook/isolation-run.js'
+import { playbookStanding, standingRefusal } from './ads-playbook/isolation-load.js'
 import type { ScopeGroup } from './ads-playbook/isolation.js'
 
 type MatchRole = 'AUTO' | 'BROAD' | 'PHRASE' | 'EXACT'
@@ -109,7 +110,7 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
   if (!product) return { refused: PRODUCT_NOT_FOUND }
   const rows = await prisma.adsPlaybook.findMany({
     where: { channel: 'AMAZON', market: code, level: 'PRODUCT', scopeId: { in: [product.id, ...(product.parentId ? [product.parentId] : [])] } },
-    select: { id: true, scopeId: true, enrolled: true },
+    select: { id: true, scopeId: true, market: true, channel: true, enrolled: true, state: true },
   })
   const own = rows.find((r) => r.scopeId === product.id)
   const parent = rows.find((r) => r.scopeId === product.parentId)
@@ -119,6 +120,9 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
   const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: { in: rows.map((r) => r.id) }, kind: 'slot' }, select: { playbookId: true } })
   const row = [own, parent].find((r) => r && links.some((l) => l.playbookId === r.id))
   if (!row) return { refused: `${product.sku}'s playbook in ${code} holds no campaign yet: there is nothing to keep apart.` }
+  // The row that holds the campaigns must itself be in (its own enrolled, else its parent's) and not stopped.
+  const standing = standingRefusal(await playbookStanding(row))
+  if (standing) return { refused: `${product.sku} in ${code}: ${standing}` }
   const compiled = await compileIsolationFor(row.id)
   if ('problems' in compiled) return { refused: compiled.problems.join('; ') }
   if (compiled.compiled.problems.length) return { refused: compiled.compiled.problems.join('; ') }

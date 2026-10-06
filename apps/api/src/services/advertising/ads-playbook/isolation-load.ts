@@ -18,7 +18,7 @@ import { homeWinners, searchTermTotals, winnerKey } from '../ads-harvest.service
 import { loadProtectedTerms, type ProtectedTerm } from '../ads-negation-policy.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
 import { openTermsStrategy, strategyMarketOf } from '../ads-strategy/terms.js'
-import { familyOfProducts, familyOnly, positivesIn, standingNegativesIn, type Positive } from '../ads-winner-lock.js'
+import { familyOfProducts, familyOnly, positivesIn, standingNegativesIn, type Positive, type ProductFamily } from '../ads-winner-lock.js'
 import { playbookLinks } from './load.js'
 import type { IsolationAction, IsolationSlot, ScopeGroup } from './isolation.js'
 
@@ -27,7 +27,7 @@ export interface Excluded { slot: string; campaignId: string; adGroupId: string 
 export interface IsolationInputs {
   /** The playbook row's product (a parent or a variation) and the family the scope is held to. */
   productId: string
-  family: string[]
+  family: ProductFamily
   scope: ScopeGroup[]
   excluded: Excluded[]
   positives: Map<string, Positive[]>
@@ -62,13 +62,37 @@ export async function scopeWinners(adGroupIds: readonly string[]): Promise<Map<s
   return out
 }
 
-/** One run's inputs, or why there is no run (the playbook row is gone, or is not a product's). */
+/**
+ * Is the product still in its playbook, and not stopped? Each from the row itself, else from its parent's row in the
+ * same market (resolve.ts: a product's own fields come from its row, else its parent's; Owner decision D-PB4).
+ */
+export async function playbookStanding(row: { scopeId: string; market: string; channel: string; enrolled: boolean | null; state: string | null }): Promise<{ enrolled: boolean; state: string | null }> {
+  let parentRow: { enrolled: boolean | null; state: string | null } | null = null
+  if (row.enrolled == null || row.state == null) {
+    const product = await prisma.product.findUnique({ where: { id: row.scopeId }, select: { parentId: true } })
+    parentRow = product?.parentId
+      ? await prisma.adsPlaybook.findFirst({ where: { channel: row.channel, market: row.market, level: 'PRODUCT', scopeId: product.parentId }, select: { enrolled: true, state: true } })
+      : null
+  }
+  return { enrolled: (row.enrolled ?? parentRow?.enrolled) === true, state: row.state ?? parentRow?.state ?? null }
+}
+
+/** Why a playbook row runs no isolation now (not enrolled, stopped), or null. */
+export function standingRefusal(s: { enrolled: boolean; state: string | null }): string | null {
+  if (!s.enrolled) return 'The product is no longer in its ads playbook (not enrolled), so nothing is kept apart.'
+  if (s.state === 'STOPPED') return 'The product\'s ads playbook is stopped, so nothing is kept apart until it starts again.'
+  return null
+}
+
+/** One run's inputs, or why there is no run (the playbook row is gone or not a product's, the product left it, it is stopped). */
 export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' | 'market' | 'slots'>): Promise<{ inputs: IsolationInputs } | { refused: string }> {
-  const row = await prisma.adsPlaybook.findUnique({ where: { id: action.playbookId }, select: { id: true, level: true, scopeId: true, market: true } })
+  const row = await prisma.adsPlaybook.findUnique({ where: { id: action.playbookId }, select: { id: true, level: true, scopeId: true, market: true, channel: true, enrolled: true, state: true } })
   if (!row) return { refused: 'The playbook this rule was compiled from is gone, so nothing is kept apart.' }
   if (row.level !== 'PRODUCT') return { refused: 'This rule names a market or category playbook; isolation runs only inside one product\'s own campaigns.' }
   const market = strategyMarketOf(action.market)
   if (strategyMarketOf(row.market) !== market) return { refused: `The playbook is for ${row.market}, not ${action.market}: the rule is out of date, so nothing is kept apart.` }
+  const standing = standingRefusal(await playbookStanding(row))
+  if (standing) return { refused: standing }
 
   const family = await familyOfProducts([row.scopeId])
   const links = (await playbookLinks([row.id])).filter((l) => l.kind === 'slot')
@@ -103,9 +127,9 @@ export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' |
   const ids = scope.map((g) => g.adGroupId)
   const marketOf = new Map(campaigns.map((c) => [c.id, c.marketplace]))
   const campaignIds = [...new Set(scope.map((g) => g.campaignId))]
-  const [positives, standing, winners] = await Promise.all([positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids)])
+  const [positives, standingNegatives, winners] = await Promise.all([positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids)])
   // The protected terms that bind a negative in each campaign, as the write gate reads them (one read per campaign).
   const protections = new Map<string, ProtectedTerm[]>()
   for (const id of campaignIds) protections.set(id, await loadProtectedTerms({ marketplace: marketOf.get(id) ?? null, campaignId: id }))
-  return { inputs: { productId: row.scopeId, family: family.productIds, scope, excluded, positives, winners, standing, protections } }
+  return { inputs: { productId: row.scopeId, family, scope, excluded, positives, winners, standing: standingNegatives, protections } }
 }

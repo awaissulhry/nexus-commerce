@@ -48,7 +48,7 @@ function plan(over: Partial<IsolationPlanInput> & { positives?: Positive[]; winn
   for (const p of over.positives ?? []) positives.set(p.adGroupId, [...(positives.get(p.adGroupId) ?? []), p])
   return planIsolation({
     action: { exactIntoResearch: true, phraseIntoBroadAndAuto: false, brandPhrase: null, handover: 'proven', ...over.action },
-    scope,
+    scope: over.scope ?? scope,
     positives,
     winners: new Map(Object.entries(over.winners ?? {}).map(([g, terms]) => [g, new Set(terms)])),
     standing: over.standing ?? new Set(),
@@ -122,8 +122,11 @@ describe('planIsolation — owners and exact into research', () => {
     expect(p.leftAlone).toEqual([expect.objectContaining({ adGroupId: 'g-auto', why: expect.stringMatching(/^Protected, never isolated/) })])
   })
 
-  it('phrase into Broad and Auto: a live phrase keyword, as a phrase, in the Broad and Auto slots only', () => {
-    const p = plan({ action: { exactIntoResearch: false, phraseIntoBroadAndAuto: true, brandPhrase: null, handover: 'proven' }, positives: [pos('g-phrase', 'test z', 'PHRASE')] })
+  it('phrase into Broad and Auto: a live phrase keyword, as a phrase, in the Broad slots of its own intent and Auto only', () => {
+    const withBrandBroad: ScopeGroup[] = [...scope, { adGroupId: 'g-broad-brand', campaignId: 'c-broad-brand', slot: 'broad-brand', role: 'research', match: 'BROAD', intent: 'BRAND' }]
+    const p = plan({ action: { exactIntoResearch: false, phraseIntoBroadAndAuto: true, brandPhrase: null, handover: 'proven' }, scope: withBrandBroad, positives: [pos('g-phrase', 'test z', 'PHRASE')] })
+    // A category phrase never reaches Broad | Brand: with the brand phrase negated in the category slots, "brand +
+    // category" searches would have nowhere left to go.
     expect(where(p, 'test z')).toEqual(['PHRASE:g-auto', 'PHRASE:g-broad'])
   })
 })
@@ -138,6 +141,15 @@ describe('planIsolation — winners stay (handover)', () => {
   it('proven: negated there once its exact home meets the bar too', () => {
     const p = plan({ positives: owner, winners: { 'g-phrase': ['test x'], 'g-exact': ['test x'] } })
     expect(where(p, 'test x')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])
+  })
+  it('proven needs a LIVE exact home: a paused one that won does not hand the search over', () => {
+    const brand = (live: boolean) => plan({
+      action: { exactIntoResearch: false, phraseIntoBroadAndAuto: false, brandPhrase: { terms: ['testa'] }, handover: 'proven' },
+      positives: [pos('g-brand', 'testa jacket', 'EXACT'), pos('g-brand', 'red testa jacket', 'EXACT', live)],
+      winners: { 'g-broad': ['red testa jacket'], 'g-brand': ['red testa jacket'] },
+    })
+    expect(where(brand(false), 'testa')).toEqual(['PHRASE:g-exact', 'PHRASE:g-phrase'])
+    expect(where(brand(true), 'testa')).toEqual(['PHRASE:g-broad', 'PHRASE:g-exact', 'PHRASE:g-phrase'])
   })
   it('landed: negated at once', () => {
     const p = plan({ action: { exactIntoResearch: true, phraseIntoBroadAndAuto: false, brandPhrase: null, handover: 'landed' }, positives: owner, winners: { 'g-phrase': ['test x'] } })

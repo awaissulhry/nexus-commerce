@@ -12,11 +12,12 @@
  *   brand phrase          the product's name token and brand terms → negative phrase in its category and competitor
  *                         slots (an Exact one too, unless the phrase would block a keyword there), while a live keyword
  *                         of its brand slots holds the term
- *   phrase into broad     each live phrase keyword of its Phrase slots → negative phrase in its Broad and Auto slots
+ *   phrase into broad     each live phrase keyword of its Phrase slots → negative phrase in its Broad slots of the SAME
+ *                         intent (category into Broad | Category, never Broad | Brand) and its Auto slots
  *
  * A negative is planned into an ad group only when ALL hold: the ad group is in scope; it blocks no keyword of that ad
  * group (the lock, L1); its owner keyword is live; it blocks no search term that WINS there (meets the ads strategy's
- * harvest bar for that ad group) unless that term's exact home wins too — the Owner's handover choice "proven" (lead
+ * harvest bar for that ad group) unless that term's LIVE exact home wins too — the Owner's handover choice "proven" (lead
  * decision B): a winner keeps running where it wins until its own exact keyword has proved itself; it does not hit a
  * protected term (a protected term is never isolated); Amazon accepts its text. The lock, the protected terms and the
  * text limits are the negative write service's own checks (ownKeywordRefusal, protectedTermHit, the text limits),
@@ -197,9 +198,9 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   const positivesOf = (g: ScopeGroup) => input.positives.get(g.adGroupId) ?? []
   const allPositives = scope.flatMap(positivesOf)
   const winnersIn = (adGroupId: string) => input.winners.get(adGroupId) ?? new Set<string>()
-  /** A term's exact homes in scope that meet the harvest bar there: it has proved itself where it belongs. */
+  /** A term's LIVE exact home in scope that meets the harvest bar there: it has proved itself where it belongs. */
   const proven = (term: string, notIn: string) => allPositives.some((p) =>
-    p.match === 'EXACT' && p.adGroupId !== notIn && normaliseNegTerm(p.text) === normaliseNegTerm(term) && winnersIn(p.adGroupId).has(normaliseNegTerm(term)))
+    p.match === 'EXACT' && p.live && p.adGroupId !== notIn && normaliseNegTerm(p.text) === normaliseNegTerm(term) && winnersIn(p.adGroupId).has(normaliseNegTerm(term)))
 
   const consider = (kind: IsolationKind, text: string, match: 'EXACT' | 'PHRASE', g: ScopeGroup, owner: Positive & { slot: string }) => {
     const key = isolationItemKey({ match, text, adGroupId: g.adGroupId })
@@ -254,9 +255,12 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   }
 
   if (action.phraseIntoBroadAndAuto) {
-    const broadAndAuto = research.filter((g) => g.match === 'BROAD' || !g.match)
+    // Only the Broad slots of the owner's own intent, and Auto: a category phrase negated in Broad | Brand (beside the
+    // brand phrase negated in the category slots) would leave "brand + category" searches nowhere to go.
+    const intentOf = new Map(scope.map((g) => [g.adGroupId, g.intent]))
     for (const owner of ownersIn(research.filter((g) => g.match === 'PHRASE'), 'PHRASE')) {
-      for (const g of broadAndAuto) consider('phraseIntoBroadAndAuto', owner.text, 'PHRASE', g, owner)
+      const intent = intentOf.get(owner.adGroupId)
+      for (const g of research.filter((r) => !r.match || (r.match === 'BROAD' && r.intent === intent))) consider('phraseIntoBroadAndAuto', owner.text, 'PHRASE', g, owner)
     }
   }
 

@@ -19,6 +19,7 @@ import prisma from '../../db.js'
 import { crossMatchNegations } from './ads-keyword-funnel.service.js'
 
 const db = vi.mocked(prisma, true)
+const row = (id: string, scopeId: string, enrolled: boolean | null, state: string | null) => ({ id, scopeId, market: 'DE', channel: 'AMAZON', enrolled, state })
 const ACTION = { type: 'isolate_product_terms', playbookId: 'row-own' }
 const add = (text: string, adGroupId: string) => ({ kind: 'exactIntoResearch', text, match: 'EXACT', adGroupId, campaignId: `c-${adGroupId}`, slot: 'phrase-category', owner: { adTargetId: 't1', adGroupId: 'gx', slot: 'exact-category', text }, why: `Kept apart: "${text}"` })
 const runOf = (written: Record<string, unknown> | null) => ({
@@ -32,7 +33,7 @@ const runOf = (written: Record<string, unknown> | null) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   h.findLiveProduct.mockResolvedValue({ id: 'p-child', sku: 'TEST-SKU-1', parentId: 'p-parent' })
-  db.adsPlaybook.findMany.mockResolvedValue([{ id: 'row-own', scopeId: 'p-child', enrolled: null }, { id: 'row-parent', scopeId: 'p-parent', enrolled: true }] as never)
+  db.adsPlaybook.findMany.mockResolvedValue([row('row-own', 'p-child', null, 'RUNNING'), row('row-parent', 'p-parent', true, 'RUNNING')] as never)
   db.adsPlaybookLink.findMany.mockResolvedValue([{ playbookId: 'row-parent' }] as never)
   h.compileIsolationFor.mockResolvedValue({ row: { id: 'row-parent', market: 'DE', version: 1 }, compiled: { action: ACTION, problems: [], warnings: [], enabled: true, name: 'x' } })
   h.isolateProduct.mockResolvedValue(runOf(null))
@@ -41,8 +42,16 @@ beforeEach(() => {
 describe('crossMatchNegations — inside one product\'s playbook in one market', () => {
   it('is refused without a market, and for a product that is not in a playbook there', async () => {
     expect(await crossMatchNegations('p-child', false, 'user:u1', '')).toEqual({ refused: expect.stringMatching(/^Name a market/) })
-    db.adsPlaybook.findMany.mockResolvedValue([{ id: 'row-own', scopeId: 'p-child', enrolled: false }, { id: 'row-parent', scopeId: 'p-parent', enrolled: true }] as never)
+    db.adsPlaybook.findMany.mockResolvedValue([row('row-own', 'p-child', false, 'RUNNING'), row('row-parent', 'p-parent', true, 'RUNNING')] as never)
     expect(await crossMatchNegations('p-child', false, 'user:u1', 'DE')).toEqual({ refused: expect.stringMatching(/TEST-SKU-1 is not in an ads playbook in DE/) })
+    expect(h.isolateProduct).not.toHaveBeenCalled()
+  })
+
+  it('is refused when the row that holds the campaigns is not enrolled itself, or is stopped', async () => {
+    db.adsPlaybook.findMany.mockResolvedValue([row('row-own', 'p-child', true, 'RUNNING'), row('row-parent', 'p-parent', false, 'RUNNING')] as never)
+    expect(await crossMatchNegations('p-child', true, 'user:u1', 'DE')).toEqual({ refused: expect.stringMatching(/TEST-SKU-1 in DE: .*not enrolled/) })
+    db.adsPlaybook.findMany.mockResolvedValue([row('row-own', 'p-child', null, null), row('row-parent', 'p-parent', true, 'STOPPED')] as never)
+    expect(await crossMatchNegations('p-child', true, 'user:u1', 'DE')).toEqual({ refused: expect.stringMatching(/playbook is stopped/) })
     expect(h.isolateProduct).not.toHaveBeenCalled()
   })
 
