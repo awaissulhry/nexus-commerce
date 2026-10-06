@@ -11,6 +11,7 @@ import { DRAFT_TOOLS } from './tools/draft.tools.js'
 import { MUTATE_TOOLS } from './tools/mutate.tools.js'
 import { ADS_PROPOSE_TOOLS } from './tools/ads-propose.tools.js'
 import { ADS_READ_TOOLS } from './tools/ads-read.tools.js'
+import { ADS_RECOMMENDATION_TOOLS } from './tools/ads-recommendations-apply.tools.js'
 import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
 import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
@@ -96,6 +97,8 @@ const ALL: AgentTool[] = [
   ...ADS_PROPOSE_TOOLS,
   // MCP full control A2 — advertising reads: overview, campaigns, targets, search terms, change log, recommendations.
   ...ADS_READ_TOOLS,
+  // Ads autonomy W3-1 — the engines' recommendations carried out by id (one change plan), and muted by id.
+  ...ADS_RECOMMENDATION_TOOLS,
   // MCP full control A6–A12 — Claude's further Amazon ad changes (undo first), each approved by a person.
   ...ADS_CHANGE_TOOLS,
   // Phase 3 T5 — campaign target ACoS (one target per market), Nexus only.

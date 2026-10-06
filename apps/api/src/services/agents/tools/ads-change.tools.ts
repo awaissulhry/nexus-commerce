@@ -31,6 +31,10 @@
  *
  * AA-W2-9 — suppress-campaign, restore-campaign, set-campaign-live-writes (on: only a campaign Claude created; off: a
  * brake) and undo-ad-change are strategy-bound too, each on the same terms.
+ *
+ * ADS AUTONOMY W3-1 — set-campaign-budget, bulk-ad-bid-change (per row) and suppress-campaign take an optional `source`
+ * (ads-change-source.ts): the engine recommendation the change carries out, kept in the preview and on the ads audit
+ * rows, and settled once the write ran.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -51,6 +55,7 @@ import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, re
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, withSource, type AdChangeSource } from './ads-change-source.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -418,6 +423,10 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
   const campaignId = String(args.campaignId ?? '')
   const proposed = Math.round(Number(args.dailyBudgetCents))
   if (!campaignId || !Number.isFinite(proposed) || proposed <= 0) return { ok: false, error: 'campaignId and a dailyBudgetCents above 0 are required' }
+  // W3-1 — a source names this campaign's own budget recommendation, or the request is refused.
+  const changeSource = sourceOf(args.source)
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.budget(campaignId))
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const campaign = await campaignForChange(campaignId)
   const refused = campaignRefusal(campaign, campaignId, 'budget')
   if (refused) return { ok: false, error: refused }
@@ -455,6 +464,7 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...rule,
+      ...sourcePreview(changeSource),
       effect: `Sets the daily budget of ${c.name} from ${amountLabel(current, currency)} to ${amountLabel(proposed, currency)}.`,
     },
   }
@@ -494,6 +504,7 @@ const setCampaignBudget: AgentTool = {
     campaignId: campaignIdArg,
     dailyBudgetCents: z.coerce.number().int().positive().describe('new daily budget in minor units (cents) of the campaign\'s own currency'),
     why: whyArg,
+    source: sourceArg,
   }),
   requires: [F.adsBudgetsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
@@ -528,6 +539,7 @@ const setCampaignBudget: AgentTool = {
     const p = fresh.preview as { campaign: { id: string }; currentBudgetCents: number; proposedBudgetCents: number; currency: string; reach: StoredReach; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+    const changeSource = sourceOf(args.source)
     const out = await updateCampaignWithSync({
       campaignId: p.campaign.id,
       patch: { dailyBudget: p.proposedBudgetCents / 100 },
@@ -536,8 +548,10 @@ const setCampaignBudget: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A — a person approved it: his own click
       confirmOwnLimits: run.confirmOwnLimits, // 4A — his approval is his "Send anyway" (the card warned him)
+      ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
     })
     if (!out.ok) return notRun(`Not run: the budget write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
+    await settleSources([changeSource], run.changeSetId)
     return {
       ok: true,
       data: {
@@ -743,7 +757,7 @@ async function loadTargets(ids: string[]): Promise<Map<string, BulkTarget>> {
 }
 
 interface BulkArgs {
-  bids?: Array<{ targetId: string; bidCents: number }>
+  bids?: Array<{ targetId: string; bidCents: number; source?: AdChangeSource }>
   campaignId?: string
   adGroupId?: string
   market?: string
@@ -776,7 +790,7 @@ async function askedBids(a: BulkArgs): Promise<{ asked: Array<{ targetId: string
   return { asked: rows.map((r) => ({ targetId: r.id, bidCents: Math.max(BULK_FLOOR_CENTS, Math.round(r.bidCents * (1 + Number(a.percent) / 100))) })) }
 }
 
-type BulkWrite = { targetId: string; fromCents: number; toCents: number }
+type BulkWrite = { targetId: string; fromCents: number; toCents: number; source?: AdChangeSource }
 
 /**
  * AA-W2-6 — bulk-ad-bid-change's Claude limits: the kit's (at most 50 targets in one request run by rule), with a raise
@@ -790,6 +804,14 @@ const BULK_BID_LIMITS = adKitLimits({ maxItems: 50 }, STEP_PCT_LIMITS)
  */
 async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<{ result: ToolResult; writes: BulkWrite[] }> {
   const a = args as BulkArgs
+  // W3-1 — each row's source names that target's own bid recommendation, or the whole request is refused.
+  const sourceByTarget = new Map<string, AdChangeSource>()
+  for (const row of a.bids ?? []) {
+    const rowSource = sourceOf(row.source)
+    const wrongSource = sourceRefusal(rowSource, recommendationIdFor.bid(row.targetId))
+    if (wrongSource) return { result: { ok: false, error: `Not queued: target ${row.targetId}: ${wrongSource}.` }, writes: [] }
+    if (rowSource) sourceByTarget.set(row.targetId, rowSource)
+  }
   const read = await askedBids(a)
   if ('refusal' in read) return { result: { ok: false, error: read.refusal }, writes: [] }
   const targets = await loadTargets(read.asked.map((t) => t.targetId))
@@ -866,7 +888,8 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
   }
   const bound = (await Promise.all([...new Set(going.map((g) => g.t.campaign.id))].slice(0, 10).map((id) => alsoChangedBy(id)))).flatMap((b) => b.automations).slice(0, 10)
   const counts = countBy(excluded)
-  const writes = going.map((g) => ({ targetId: g.t.id, fromCents: g.t.bidCents, toCents: g.to }))
+  const writes = going.map((g) => ({ targetId: g.t.id, fromCents: g.t.bidCents, toCents: g.to, ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)! } : {}) }))
+  const sourced = writes.filter((w) => w.source).length
   // AA-W2-6 — every row against the ads strategy of its own ad group (not only the 20 lines shown), counted as one run.
   const rule = opts.rule
     ? await ruleFactsFor({
@@ -884,7 +907,7 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       mode: a.bids?.length ? 'list' : 'selection',
       ...(a.percent != null ? { percent: a.percent } : {}),
       totals: { asked: read.asked.length, changing: going.length, excluded: counts },
-      changes: going.slice(0, LINES_SHOWN).map((g) => ({ targetId: g.t.id, text: g.t.text, campaignName: g.t.campaign.name, currency: campaignCurrency(g.t.campaign), fromCents: g.t.bidCents, toCents: g.to })),
+      changes: going.slice(0, LINES_SHOWN).map((g) => ({ targetId: g.t.id, text: g.t.text, campaignName: g.t.campaign.name, currency: campaignCurrency(g.t.campaign), fromCents: g.t.bidCents, toCents: g.to, ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)!.id } : {}) })),
       ...(going.length > LINES_SHOWN ? { moreChanges: going.length - LINES_SHOWN } : {}),
       excludedLines: excluded.slice(0, LINES_SHOWN).map((e) => ({ targetId: e.targetId, why: e.detail ? `${EXCLUSION_WORDS[e.why]}: ${e.detail}` : EXCLUSION_WORDS[e.why] })),
       byCurrency,
@@ -894,6 +917,8 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       reachNote: reachNote(reach),
       alsoChangedBy: bound,
       ...(rule ?? {}),
+      // W3-1 — how many rows carry out an engine's recommendation (each line names its id).
+      ...(sourced ? { sources: { recommendations: sourced }, sourceNote: `${sourced} of these bids carry out the bid optimizer's recommendations (each line names its id). Once they run they are not offered again until the data shows what the change did.` } : {}),
       effect: `Moves ${going.length} bid${going.length === 1 ? '' : 's'} (${Object.entries(byCurrency).map(([cur, v]) => `${v.deltaCents >= 0 ? '+' : '−'}${amountLabel(Math.abs(v.deltaCents), cur)} in total per click on ${v.targets}`).join('; ')})${excluded.length ? `; ${excluded.length} left as they are` : ''}.`,
     },
   } }
@@ -926,6 +951,7 @@ const bulkAdBidChange: AgentTool = {
     bids: z.array(z.object({
       targetId: z.string().trim().min(1).max(64).describe('Nexus ad target id (targetId in ad-targets)'),
       bidCents: z.coerce.number().int().min(1).max(100_000).describe('its new bid, in minor units of its campaign\'s currency'),
+      source: sourceArg,
     })).max(BULK_LIST_MAX).optional().describe(`targets with their new bids, at most ${BULK_LIST_MAX}; or leave it out and give a selection and percent (up to ${BULK_MAX})`),
     campaignId: z.string().trim().min(1).max(64).optional().describe('only targets of this campaign (Nexus id): the selection, or a filter on the list'),
     adGroupId: z.string().trim().min(1).max(64).optional().describe('only targets of this ad group (Nexus id)'),
@@ -975,13 +1001,15 @@ const bulkAdBidChange: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const out = await bulkUpdateAdTargetBids({
-      entries: going.map((g) => ({ adTargetId: g.targetId, bidCents: g.toCents })),
+      entries: going.map((g) => ({ adTargetId: g.targetId, bidCents: g.toCents, ...(g.source ? { evidence: withSource(null, g.source) } : {}) })),
       actor: run.actor,
       reason: run.reason,
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
+    // W3-1 — the recommendations of the rows that were written (or already held the bid) are settled.
+    await settleSources(going.filter((g, i) => out.outcomes[i]?.ok).map((g) => g.source), run.changeSetId)
     const ids = going.map((g) => g.targetId)
     const now = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true } })
     const sorted = (rows: Array<{ id: string; bidCents: number }>) => Object.fromEntries([...rows].sort((x, y) => (x.id < y.id ? -1 : 1)).map((r) => [r.id, r.bidCents]))
@@ -1007,6 +1035,10 @@ async function suppressionState(campaignId: string): Promise<{ campaignId: strin
 
 async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
+  // W3-1 — a source names this campaign's own retail-readiness recommendation, or the request is refused.
+  const changeSource = sourceOf(args.source)
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.retail(campaignId))
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const campaign = await campaignForChange(campaignId)
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
   const notSp = spOnlyRefusal(campaign)
@@ -1057,6 +1089,7 @@ async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolCon
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...rule,
+      ...sourcePreview(changeSource),
       effect: `Lowers every bid of ${campaign.name} to ${floorWords} — ${targets} target${targets === 1 ? '' : 's'} and ${groups.aboveFloor} ad group default${groups.aboveFloor === 1 ? '' : 's'} — so it stops winning auctions without being paused. Each bid is remembered; restore-campaign puts them back.`,
     },
   }
@@ -1068,7 +1101,7 @@ const SUPPRESS_LIMITS = adKitLimits({ maxItems: 1 })
 const suppressCampaign: AgentTool = {
   name: 'suppress-campaign',
   title: 'Stop a campaign (no pause)',
-  input: z.object({ campaignId: campaignIdArg, why: whyArg }),
+  input: z.object({ campaignId: campaignIdArg, why: whyArg, source: sourceArg }),
   requires: [F.adsBidsEdit],
   category: 'advertising',
   riskTier: 'high',
@@ -1111,9 +1144,11 @@ const suppressCampaign: AgentTool = {
     const p = fresh.preview as { campaign: { id: string }; reach: StoredReach; effect: string; stopBidCents: number }
     const run = approvedRun(ctx, String(args.why ?? '') || 'no-pause stop: bids floored instead of pausing')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: p.stopBidCents })
+    const changeSource = sourceOf(args.source)
+    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: p.stopBidCents, ...(changeSource ? { evidence: withSource(null, changeSource) } : {}) })
     const now = await suppressionState(p.campaign.id)
     if (!now.suppressed) return notRun('Not run: the campaign was not suppressed (it changed meanwhile). Nothing changed.')
+    await settleSources([changeSource], run.changeSetId)
     return {
       ok: true,
       data: { campaignId: p.campaign.id, moved, reach: p.reach, changeSetId: run.changeSetId, note: 'Bids floored and remembered; each lowered bid is sent to Amazon at once.' },

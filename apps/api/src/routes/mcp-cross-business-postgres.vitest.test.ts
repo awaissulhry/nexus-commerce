@@ -469,6 +469,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     const suggestion = await db.adsRuleSuggestion.create({
       data: { ruleId: automationRule.id, ruleName: `${canary}-AUTOMATION-RULE`, entityType: 'CAMPAIGN', entityId: campaign.id, entityName: `${canary}-SUGGESTION`, proposedAction: { type: 'bid_down', percent: 5 }, proposedKey: `${mark}-SUGGESTION` },
     })
+    // Ads autonomy W3-1 — a muted recommendation of its campaign: what mute-ad-recommendations unmutes.
+    await db.adsSuggestionMute.create({ data: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: `budget:${campaign.id}`, entityName: `${canary}-MUTED-RECOMMENDATION`, createdBy: 'user:mcp8' } })
     // R14 — a budget pool: what tune-ad-engine tunes.
     const budgetPool = await db.budgetPool.create({ data: { name: `${canary}-BUDGET-POOL`, totalDailyBudgetCents: 5000 } })
     // R15 — an assignment of a fleet worker: what steer-fleet runs or cancels.
@@ -807,6 +809,8 @@ const B_VALUES: Record<string, () => unknown> = {
   parentCategoryId: () => seeded.b.parentCategoryId,
   // R11 — decide-automation-suggestions decides suggestions by id.
   suggestionId: () => seeded.b.suggestionId,
+  // Ads autonomy W3-1 — apply-ad-recommendations carries recommendations out by id: B's rule suggestion is one.
+  recommendationId: () => `rule:${seeded.b.suggestionId}`,
   // R13 — set-ad-guardrail binds a scope: a campaign (its first grain) by id.
   scopeId: () => seeded.b.campaignId,
   // R14 — tune-ad-engine names the row it tunes by `subjectId` (its first setting, a budget pool).
@@ -972,6 +976,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'schedule-pickup': () => ({ date: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) }),
   // A7 — a selection (the campaign, ad group and market the loop names) moves by a percent.
   'bulk-ad-bid-change': { percent: 10 },
+  // Ads autonomy W3-1 — unmute the recommendation of B's campaign that B muted (its label is B's).
+  'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute' }),
   // The loop's campaignId is the Amazon campaign: read the Amazon log and recommendations (1b aims the eBay ones).
   'ad-changes': { channel: 'amazon' },
   'ad-recommendations': { channel: 'amazon' },
@@ -1158,9 +1164,15 @@ function probeArgs(tool: AgentTool): { probes: Probe[] } | { gaps: string[] } {
 }
 
 /** Every string the caller itself sent: an answer may repeat those. */
+/** Ads autonomy W3-1 — a recommendation id names its row after its prefix (`rule:<suggestionId>`): the caller sent that id. */
+const RECOMMENDATION_ID = /^(?:bid|budget|retail|rule):(.+)$/
+
 function sentStrings(value: unknown, into = new Set<string>()): Set<string> {
-  if (typeof value === 'string') into.add(value)
-  else if (Array.isArray(value)) value.forEach((item) => sentStrings(item, into))
+  if (typeof value === 'string') {
+    into.add(value)
+    const row = RECOMMENDATION_ID.exec(value)?.[1]
+    if (row) into.add(row)
+  } else if (Array.isArray(value)) value.forEach((item) => sentStrings(item, into))
   else if (value && typeof value === 'object') Object.values(value).forEach((item) => sentStrings(item, into))
   return into
 }

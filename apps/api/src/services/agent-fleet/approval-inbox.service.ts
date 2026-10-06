@@ -913,6 +913,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // R11 — each suggestion's status, its proposed change and the bid / budget there now: decided by someone else, or
   // the bid moved, and the approved batch is a different one.
   'decide-automation-suggestions': ['items'],
+  // Ads autonomy W3-1 — each recommendation from the state it was in (shown, muted, settled) to the one it gets.
+  'mute-ad-recommendations': ['changes'],
   // R12 — what the stop or resume changes (the halt, or which rules), and the state row it was planned from.
   'stop-automation': ['changes', 'ruleIds', 'basis'],
   'resume-automation': ['changes', 'ruleIds', 'basis'],

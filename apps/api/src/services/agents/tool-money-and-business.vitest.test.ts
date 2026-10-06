@@ -366,6 +366,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'turn-down-automation': (ids) => ({ automation: 'A1', rowId: ids.automationRuleId, level: 'OFF' }),
   // R11 — needs financials.adspend.view: a person without money is refused outright.
   'decide-automation-suggestions': (ids) => ({ kind: 'amazon-ads', decisions: [{ suggestionId: ids.automationRuleId, decide: 'dismiss' }] }),
+  // Ads autonomy W3-1 — need financials.adspend.view: a person without money is refused outright.
+  'apply-ad-recommendations': (ids) => ({ recommendationIds: [`budget:${ids.campaignId}`], why: 'money test apply' }),
+  'mute-ad-recommendations': (ids) => ({ recommendationIds: [`budget:${ids.campaignId}`], op: 'unmute', why: 'money test unmute' }),
   // R12 — stop the restock rule; resume the one switched off.
   'stop-automation': (ids) => ({ area: 'rules', domain: 'replenishment', ruleIds: [ids.replenishmentRuleId], reason: 'money test stop' }),
   'resume-automation': (ids) => ({ area: 'rules', domain: 'replenishment', ruleIds: [ids.pausedRuleId] }),
