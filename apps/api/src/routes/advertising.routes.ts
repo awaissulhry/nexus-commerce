@@ -163,8 +163,28 @@ function personActor(request: { authUser?: { id?: string }; headers: unknown }):
  */
 function personAddReply<T extends { ok?: boolean; outcome?: string; reason?: string | null }>(reply: { status: (code: number) => unknown }, r: T): T & { error?: string } {
   if (r.ok) return r
-  reply.status(r.outcome === 'local' ? 202 : r.outcome === 'refused' ? 403 : 502)
+  // 3A — past his own limits: 409 with the limits, so the screen asks "Send anyway".
+  reply.status(r.outcome === 'local' ? 202 : r.outcome === 'needs_confirmation' ? 409 : r.outcome === 'refused' ? 403 : 502)
   return { ...r, error: r.reason ?? 'It did not reach Amazon.' }
+}
+
+/**
+ * 3A (Owner decided 2026-10-06) — a person's write past one of HIS limits is answered 409 with `needsConfirmation`
+ * (the limits): the screen shows the warning and "Send anyway", which sends the same body again with
+ * `confirmOwnLimits: true`. Nothing was written.
+ */
+function ownLimitsReply<T extends { needsConfirmation?: unknown }>(reply: { code: (code: number) => unknown }, r: T): boolean {
+  if (!r?.needsConfirmation) return false
+  reply.code(409)
+  return true
+}
+
+/**
+ * 3A — a person's bid above his campaign's CPC ceiling (a clamp before): without his "Send anyway" it needs his
+ * confirmation; with it, the bid goes as he set it. Pure over clampBidsByCeiling's answer.
+ */
+function cpcCeilingLimits(clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }>) {
+  return clamps.map((c) => ({ adTargetId: c.adTargetId, limit: 'cpc_ceiling' as const, reason: `a bid of ${c.from}¢ is above your CPC ceiling of ${c.ceilingCents}¢` }))
 }
 
 const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -5044,6 +5064,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       planToken?: string; applyImmediately?: boolean; strict?: boolean; conflicts?: 'skip' | 'mine'
       // AX-ZD.6 — explicit override for a run that trips the blast-radius gate.
       acknowledgeBlastRadius?: boolean
+      // 3A — the review step's "Send anyway for these rows": the rows he confirmed, and only those rows run.
+      confirmOwnLimitsRows?: number[]
+      onlyRows?: number[]
     }
     const job = await prisma.importJob.findUnique({ where: { id } })
     if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
@@ -5137,6 +5160,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         applyImmediately: b.applyImmediately === true,
         strict: b.strict === true,
         conflicts: b.conflicts === 'mine' ? 'mine' : 'skip',
+        ...(Array.isArray(b.confirmOwnLimitsRows) ? { confirmOwnLimitsRows: b.confirmOwnLimitsRows.filter((n) => Number.isInteger(n)) } : {}),
+        ...(Array.isArray(b.onlyRows) ? { onlyRows: b.onlyRows.filter((n) => Number.isInteger(n)) } : {}),
       })
     } catch (e) {
       // Release the claim, or the job is wedged in APPLYING forever and no
@@ -5164,6 +5189,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applied: result.applied,
       skipped: result.skipped,
       failed: result.failed,
+      // 3A — rows past his own limits, nothing written: the review step lists them with "Send anyway for these rows".
+      needsConfirmation: result.needsConfirmation,
+      needsConfirmationRows: result.results.filter((r) => r.outcome === 'NEEDS_CONFIRMATION'),
       aborted: result.aborted,
       applyImmediately: b.applyImmediately === true,
       elapsedMs: Date.now() - started,
@@ -7172,7 +7200,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // CP.1 + P1.1 — Control Plane scenario commit: apply a batch of staged changes
   // through the gated + audited path, dispatched by entity type. ?dryRun=1 validates.
   fastify.post('/advertising/budget-manager/scenario/commit', async (request, reply) => {
-    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }> }
+    const b = request.body as { month?: string; dryRun?: boolean; /** 3A — "Send anyway" for the changes past his own limits. */ confirmOwnLimits?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }> }
     if (!Array.isArray(b?.changes) || b.changes.length === 0) { reply.status(400); return { error: 'changes[] required' } }
     const q = request.query as Record<string, string | undefined>
     const dryRun = !!b.dryRun || q.dryRun === '1'
@@ -7184,7 +7212,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // 1e — a person's commit from the Budget Manager screen (isPersonEdit): passes the halt and autonomy OFF; every other
     // check binds. The suppress case is a lowering write that already passes; the restore passes as his click.
     const manual = true
-    const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
+    // 3A — asked now (a refusal is answered at once), and a change past his own limits waits for his "Send anyway".
+    const askGate = true
+    const confirmOwnLimits = b.confirmOwnLimits === true
+    const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string; needsConfirmation?: unknown }> = []
     for (const c of b.changes) {
       const id = c?.entityId || c?.campaignId
       if (!id || !c?.kind) { results.push({ entityId: id ?? '?', kind: c?.kind ?? '?', ok: false, error: 'invalid change' }); continue }
@@ -7197,12 +7228,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         continue
       }
       try {
-        let ok = false; let error: string | undefined; let detail: string | undefined
+        let ok = false; let error: string | undefined; let detail: string | undefined; let needs: unknown
         switch (c.kind) {
           case 'budget': {
             if (c.budgetCents == null) { error = 'budgetCents required'; break }
-            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, manual, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
-            ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break
+            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
+            ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break
           }
           case 'limit': {
             if (!c.marketplace) { error = 'marketplace required'; break }
@@ -7211,20 +7242,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           case 'suppress': { const n = await suppressCampaignBids(id, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' }); ok = true; detail = `${n} entities floored`; break }
           case 'restore': { const n = await restoreCampaignBids(id, { actor, manual, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
           case 'campaignStatus': { if (!c.status) { error = 'status required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { status: c.status }, actor, manual, reason: `control plane: status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break }
           case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, manual, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break }
           case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, manual, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'biddingStrategy': { if (!c.biddingStrategy) { error = 'biddingStrategy required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { biddingStrategy: c.biddingStrategy }, actor, manual, reason: `control plane: bidding strategy → ${c.biddingStrategy}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'targetAcos': { if (c.targetAcos == null) { error = 'targetAcos required'; break } const camp = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } }); const db = { ...((camp?.dynamicBidding as Record<string, unknown>) ?? {}), targetAcos: c.targetAcos }; await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } }); ok = true; detail = `targetAcos ${Math.round(c.targetAcos * 100)}%`; break }
           case 'placement': { if (!c.placements) { error = 'placements required'; break } const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); const adj: Array<{ placement: string; percentage: number }> = []; if (c.placements.tos != null) adj.push({ placement: 'PLACEMENT_TOP', percentage: c.placements.tos }); if (c.placements.pdp != null) adj.push({ placement: 'PLACEMENT_PRODUCT_PAGE', percentage: c.placements.pdp }); if (c.placements.ros != null) adj.push({ placement: 'PLACEMENT_REST_OF_SEARCH', percentage: c.placements.ros }); const r = await updatePlacementBidding({ campaignId: id, adjustments: adj, actor, manual }); ok = !!r.ok; break }
           default: error = 'unknown kind'
         }
-        results.push({ entityId: id, kind: c.kind, ok, error, detail })
+        results.push({ entityId: id, kind: c.kind, ok, error, detail, ...(needs ? { needsConfirmation: needs } : {}) })
       } catch (e) { results.push({ entityId: id, kind: c.kind, ok: false, error: (e as Error)?.message }) }
     }
     const applied = results.filter((r) => r.ok).length
-    return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied, results }
+    // 3A — the changes waiting for his "Send anyway" are counted apart from the refused ones.
+    const waiting = results.filter((r) => r.needsConfirmation).length
+    return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied - waiting, needsConfirmation: waiting, results }
   })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
@@ -9443,6 +9476,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       endDate?: string | null
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits. */
+      confirmOwnLimits?: boolean
     }
     const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
     if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
@@ -9462,11 +9497,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10 — a refusal is answered now, not put back in silence later
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
       return result
     }
+    ownLimitsReply(reply, result)
     return result
   })
 
@@ -9523,6 +9560,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits. */
+      confirmOwnLimits?: boolean
     }
     // CM-15 — the Edit Groups rename goes through the audited updateAdGroupWithSync with the status and the default
     // bid, so it is queued for Amazon and logged. It was a local update here, which Amazon never saw and the v1 ingest
@@ -9544,7 +9583,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
     })
+    if (ownLimitsReply(reply, result)) return result
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
       return result
@@ -9565,13 +9606,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits (his CPC ceiling included). */
+      confirmOwnLimits?: boolean
     }
-    // CPC ceiling: clamp the requested bid before the audited write.
+    // CPC ceiling: his own setting. 3A — a bid above it is not clamped behind his back: it needs his "Send anyway",
+    // and with it the bid goes as he set it.
     let cpcClamp: { from: number; to: number; ceilingCents: number } | null = null
+    const cpcPast: Array<{ limit: 'cpc_ceiling'; reason: string }> = []
     if (body.bidCents != null) {
-      const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: id, bidCents: body.bidCents }])
-      body.bidCents = entries[0]!.bidCents
-      if (clamps[0]) cpcClamp = { from: clamps[0].from, to: clamps[0].to, ceilingCents: clamps[0].ceilingCents }
+      const { clamps } = await clampBidsByCeiling([{ adTargetId: id, bidCents: body.bidCents }])
+      if (clamps[0]) {
+        const limits = cpcCeilingLimits(clamps).map(({ limit, reason }) => ({ limit, reason }))
+        if (body.confirmOwnLimits !== true) {
+          reply.code(409)
+          const { needsConfirmationOutcome } = await import('../services/advertising/ads-mutation.service.js')
+          return needsConfirmationOutcome(limits)
+        }
+        cpcPast.push(...limits)
+        cpcClamp = null
+      }
     }
     const result = await updateAdTargetWithSync({
       adTargetId: id,
@@ -9581,6 +9634,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
+      ...(cpcPast.length ? { evidence: { sentPastOwnLimits: `sent past your CPC ceiling by ${actorFromHeaders(request.headers as Record<string, unknown>)}: ${cpcPast.map((l) => l.reason).join('; ')}` } } : {}),
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -9590,6 +9645,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return result
     }
+    if (ownLimitsReply(reply, result)) return result
     return cpcClamp ? { ...result, cpcClamp } : result
   })
 
@@ -9609,16 +9665,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { ok: false, error: 'too_many_entries' }
     }
-    // CPC ceiling: clamp each requested bid before the audited bulk write.
-    const { entries: clampedEntries, clamps } = await clampBidsByCeiling(body.entries)
+    // CPC ceiling: his own setting. 3A — a row above it needs his "Send anyway" (never a silent clamp); confirmed, it
+    // goes as he set it. Every other row of the batch is sent now.
+    const confirmOwnLimits = (body as { confirmOwnLimits?: boolean }).confirmOwnLimits === true
+    const { clamps } = await clampBidsByCeiling(body.entries)
+    const overCeiling = confirmOwnLimits ? [] : cpcCeilingLimits(clamps)
+    const held = new Set(overCeiling.map((c) => c.adTargetId))
     const result = await bulkUpdateAdTargetBids({
-      entries: clampedEntries,
+      entries: body.entries.filter((e) => !held.has(e.adTargetId)),
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // 3A — a row past his own limits is answered now, with the limits
+      confirmOwnLimits,
     })
-    return { ok: true, ...result, cpcClamps: clamps }
+    // 3A — the rows waiting for his "Send anyway": over his CPC ceiling, or past another of his own limits.
+    const sent = body.entries.filter((e) => !held.has(e.adTargetId))
+    const needsConfirmation = [
+      ...overCeiling.map((c) => ({ adTargetId: c.adTargetId, limits: [{ limit: c.limit, reason: c.reason }] })),
+      ...(result.outcomes ?? []).flatMap((o, i) => (o.needsConfirmation ? [{ adTargetId: sent[i]!.adTargetId, limits: o.needsConfirmation.limits }] : [])),
+    ]
+    return { ok: true, ...result, cpcClamps: [], ...(needsConfirmation.length ? { needsConfirmation } : {}) }
   })
 
   // AF.5 — product ad enable/pause toggle.

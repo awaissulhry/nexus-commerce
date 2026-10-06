@@ -33,7 +33,7 @@ import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { SPONSORED_PRODUCTS, adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
 import { marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
-import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, type EntityBoundsCampaign } from './ads-write-gate.js'
+import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -188,6 +188,25 @@ export interface MutationOutcome {
   /** AD.4 — id of the AdvertisingActionLog row this mutation wrote. */
   actionLogId: string | null
   error: string | null
+  /**
+   * 3A (Owner decided 2026-10-06) — a person's own write went past one of HIS limits: nothing was written; the screen
+   * shows the warning and "Send anyway", which sends the same write again with `confirmOwnLimits`.
+   */
+  needsConfirmation?: { limits: OwnLimit[] }
+}
+
+/** 3A — the answer to a person's write past his own limits: nothing written, his "Send anyway" decides. */
+export function needsConfirmationOutcome(limits: OwnLimit[]): MutationOutcome {
+  return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: ownLimitsSentence(limits), needsConfirmation: { limits } }
+}
+
+/** 3A — the action log's evidence for a write a person sent past his own limits ("sent past <limit> by <person>"). */
+function withSentPast(evidence: AdWriteEvidence | null | undefined, past: OwnLimit[], actor: AdsActor): AdWriteEvidence | null {
+  if (!past.length) return evidence ?? null
+  const seen = new Set<string>()
+  const unique = past.filter((l) => (seen.has(l.reason) ? false : (seen.add(l.reason), true)))
+  const line = sentPastSentence(unique, actor)
+  return { ...(evidence ?? {}), sentPastOwnLimits: evidence?.sentPastOwnLimits ? `${evidence.sentPastOwnLimits}; ${line}` : line }
 }
 
 /**
@@ -229,6 +248,10 @@ async function boundsRefused(args: {
   field: string
   intendedValueCents: number
   isSuppression: boolean
+  /** 3A — a person's own write: his bounds ask for confirmation instead of refusing; `past` collects what he confirmed. */
+  person?: boolean
+  confirmOwnLimits?: boolean
+  past?: OwnLimit[]
 }): Promise<MutationOutcome | null> {
   if (!args.campaign) return null
   const denial = await entityBoundsDenial({
@@ -239,6 +262,11 @@ async function boundsRefused(args: {
     isSuppression: args.isSuppression,
   })
   if (!denial) return null
+  if (args.person) {
+    const limit: OwnLimit = { limit: denial.deniedAt as OwnLimitKind, reason: denial.reason }
+    if (args.confirmOwnLimits) { args.past?.push(limit); return null }
+    return needsConfirmationOutcome([limit])
+  }
   logGateDeny(
     {
       queueId: null, marketplace: args.campaign.marketplace, payloadValueCents: args.intendedValueCents,
@@ -290,6 +318,9 @@ async function gateRefusedNow(args: {
   force?: boolean
   /** 1e — the route's person mark: the gate's halt / autonomy-OFF pass is decided there, the same as at dispatch. */
   manual?: boolean
+  /** 3A — the person's "Send anyway"; `past` collects the own limits it was confirmed past. */
+  confirmOwnLimits?: boolean
+  past?: OwnLimit[]
 }): Promise<MutationOutcome | null> {
   if (!args.askGate || !args.actor.startsWith('user:')) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -312,8 +343,15 @@ async function gateRefusedNow(args: {
     queueId: null,
     // 1e — what the worker hands the gate too (isPersonEdit off the queue row), so the two answers agree.
     manual: isPersonEdit(args.manual, args.actor),
+    confirmOwnLimits: args.confirmOwnLimits === true,
   })
-  if (gate.allowed !== false) return null
+  if (gate.allowed !== false) {
+    const past = (gate as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
+    if (past?.length) args.past?.push(...past)
+    return null
+  }
+  // 3A — his own limits: nothing written, his "Send anyway" decides.
+  if (gate.deniedAt === 'needs_confirmation') return needsConfirmationOutcome(gate.ownLimits ?? [])
   logGateDeny(
     {
       queueId: null, marketplace: args.marketplace ?? null, payloadValueCents: writeValueCents(args.changes),
@@ -419,6 +457,8 @@ interface EnqueueArgs {
   force?: boolean
   /** 1e — a person's own edit (`isPersonEdit`, already checked). Kept on the queue row's JSON, like `force`; the worker hands it to the gate. */
   manual?: boolean
+  /** 3A — the person confirmed "Send anyway" past his own limits; on the queue row's JSON, honoured by the gate only with `manual`. */
+  confirmOwnLimits?: boolean
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
@@ -465,6 +505,8 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         ...(args.force ? { force: true } : {}),
         // 1e — likewise the only record that a person made this edit (the typed rows have no column for it either).
         ...(args.manual ? { manual: true } : {}),
+        // 3A — and that he confirmed sending it past his own limits.
+        ...(args.manual && args.confirmOwnLimits ? { confirmOwnLimits: true } : {}),
       } as object,
       holdUntil,
       externalListingId: args.externalId,
@@ -1072,6 +1114,8 @@ export async function updateCampaignWithSync(args: {
   manual?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
+  /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
+  confirmOwnLimits?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -1183,18 +1227,23 @@ export async function updateCampaignWithSync(args: {
   if (changes.length === 0) {
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
+  // 3A — a person's own write past his own limits asks for his confirmation; `past` is what he confirmed it past.
+  const person = isPersonEdit(args.manual, args.actor)
+  const confirmOwnLimits = person && args.confirmOwnLimits === true
+  const past: OwnLimit[] = []
   // 4k — see boundsRefused: a budget outside the campaign's own bounds is refused before Nexus writes it.
   if (changes.some((c) => c.field === 'dailyBudget')) {
     const refused = await boundsRefused({
       entity: 'CAMPAIGN', entityId: args.campaignId, campaign: existing, field: 'dailyBudget',
       intendedValueCents: Math.round((args.patch.dailyBudget as number) * 100), isSuppression: false,
+      person, confirmOwnLimits, past,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'CAMPAIGN', entityId: args.campaignId,
     campaignId: existing.id, marketplace: existing.marketplace, changes,
-    manual: args.manual,
+    manual: args.manual, confirmOwnLimits, past,
   })
   if (atDispatch) return atDispatch
 
@@ -1230,7 +1279,8 @@ export async function updateCampaignWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
-    manual: isPersonEdit(args.manual, args.actor),
+    manual: person,
+    confirmOwnLimits,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1257,7 +1307,7 @@ export async function updateCampaignWithSync(args: {
     actor: args.actor,
     actionType: syncType,
     entityType: 'CAMPAIGN',
-    evidence: args.evidence ?? null,
+    evidence: withSentPast(args.evidence, past, args.actor),
     entityId: args.campaignId,
     payloadBefore,
     payloadAfter,
@@ -1297,6 +1347,8 @@ export async function updateAdGroupWithSync(args: {
   reversal?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
+  /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
+  confirmOwnLimits?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adGroup.findUnique({
@@ -1378,18 +1430,22 @@ export async function updateAdGroupWithSync(args: {
       error: belowFloor,
     }
   }
+  // 3A — see updateCampaignWithSync.
+  const confirmOwnLimits = person && args.confirmOwnLimits === true
+  const past: OwnLimit[] = []
   // 4k — see boundsRefused.
   if (changes.some((c) => c.field === 'defaultBid')) {
     const refused = await boundsRefused({
       entity: 'AD_GROUP', entityId: args.adGroupId, campaign: existing.campaign, field: 'defaultBid',
       intendedValueCents: args.patch.defaultBidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
+      person, confirmOwnLimits, past,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
     campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual,
+    manual: args.manual, confirmOwnLimits, past,
   })
   if (atDispatch) return atDispatch
 
@@ -1423,6 +1479,7 @@ export async function updateAdGroupWithSync(args: {
     applyImmediately: args.applyImmediately ?? false,
     force: args.force,
     manual: person,
+    confirmOwnLimits,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1446,7 +1503,7 @@ export async function updateAdGroupWithSync(args: {
     actor: args.actor,
     actionType: syncType,
     entityType: 'AD_GROUP',
-    evidence: args.evidence ?? null,
+    evidence: withSentPast(args.evidence, past, args.actor),
     entityId: args.adGroupId,
     payloadBefore,
     payloadAfter,
@@ -1470,6 +1527,8 @@ export async function updateProductAdWithSync(args: {
   manual?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
+  /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
+  confirmOwnLimits?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
@@ -1551,6 +1610,8 @@ export async function updateAdTargetWithSync(args: {
   reversal?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
+  /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
+  confirmOwnLimits?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1659,17 +1720,21 @@ export async function updateAdTargetWithSync(args: {
     }
   }
   // 4k — see boundsRefused. After the change clamp, so the bid judged is the bid that would be written.
+  // 3A — see updateCampaignWithSync.
+  const confirmOwnLimits = person && args.confirmOwnLimits === true
+  const past: OwnLimit[] = []
   if (changes.some((c) => c.field === 'bid')) {
     const refused = await boundsRefused({
       entity: 'AD_TARGET', entityId: args.adTargetId, campaign: existing.adGroup?.campaign, field: 'bid',
       intendedValueCents: args.patch.bidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
+      person, confirmOwnLimits, past,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual,
+    manual: args.manual, confirmOwnLimits, past,
   })
   if (atDispatch) return atDispatch
 
@@ -1701,6 +1766,7 @@ export async function updateAdTargetWithSync(args: {
     applyImmediately: args.applyImmediately ?? false,
     force: args.force,
     manual: person,
+    confirmOwnLimits,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1723,7 +1789,7 @@ export async function updateAdTargetWithSync(args: {
     actor: args.actor,
     actionType: args.actionType ?? syncType,
     entityType: 'AD_TARGET',
-    evidence: args.evidence ?? null,
+    evidence: withSentPast(args.evidence, past, args.actor),
     entityId: args.adTargetId,
     payloadBefore,
     payloadAfter,
@@ -1770,6 +1836,9 @@ export async function bulkUpdateAdTargetBids(args: {
   changeSetId?: string | null
   /** 1e — a person's own edit from a screen (see isPersonEdit). Set only by the bulk-bid route. */
   manual?: boolean
+  /** 3A — ask the gate now (a person's bulk edit), and his "Send anyway" past his own limits. */
+  askGate?: boolean
+  confirmOwnLimits?: boolean
 }): Promise<BulkBidOutcome> {
   const out: BulkBidOutcome = {
     applied: 0,
@@ -1790,6 +1859,8 @@ export async function bulkUpdateAdTargetBids(args: {
         applyImmediately: args.applyImmediately ?? false,
         changeSetId: args.changeSetId ?? null,
         manual: args.manual,
+        askGate: args.askGate,
+        confirmOwnLimits: args.confirmOwnLimits,
       })
       out.outcomes.push(outcome)
       if (outcome.ok && outcome.outboundQueueId) out.applied += 1

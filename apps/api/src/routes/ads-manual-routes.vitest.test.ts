@@ -236,7 +236,9 @@ describe('the Budget Manager control plane, while the account is halted', () => 
     })
     expect(commit.status).toBe(200)
     expect(commit.body).toMatchObject({ ok: true, applied: 3 })
-    expect(commit.manual).toEqual([true]) // the placement goes inline
+    // the budget asks the gate before writing (3A: past his own limits it would wait for "Send anyway"), and the
+    // placement goes inline — both as his
+    expect(commit.manual).toEqual([true, true])
     await endGraceHolds()
     const queued = await drain()
     expect(queued.manual).toEqual([true, true, true, true]) // budget + the restore of the ad group and both keywords
