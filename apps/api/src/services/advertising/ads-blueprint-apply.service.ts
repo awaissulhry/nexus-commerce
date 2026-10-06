@@ -477,7 +477,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       for (const g of c.adGroups) {
         const grp = await createAdGroupLocal({
           campaignId: camp.id, name: g.name,
-          defaultBidEur: bidEurFor(g.defaultBidCents, 50), userId: req.actor,
+          // CM-20 — `creationFlow`: this run created the campaign; its policies are the plan's warnings, not blocks.
+          defaultBidEur: bidEurFor(g.defaultBidCents, 50), userId: req.actor, creationFlow: true,
         })
         created.adGroups++
         if (floored && (g.defaultBidCents ?? 0) > SUPPRESSION_FLOOR_CENTS) {
@@ -522,7 +523,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           // AUTO: the four SP clauses; the Auto campaign was created with nothing.
           if (kind === 'PRODUCT' || kind === 'CATEGORY') {
             try {
-              const r = await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor, creationFlow: true })
               await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`${kind.toLowerCase()} target "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
@@ -540,7 +541,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             // written — bids and reporting hang off it — it just is not pushed;
             // the structural reconcile links it to Amazon's own clause.
             try {
-              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor, skipAmazon: true })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor, skipAmazon: true, creationFlow: true })
               await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`auto clause ${t.autoClause}: ${(e as Error).message.slice(0, 120)}`) }
@@ -553,7 +554,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           try {
             const r = await createKeywordLocal({
               adGroupId: grp.id, keywordText: t.expression,
-              matchType: mt, bidEur, userId: req.actor,
+              matchType: mt, bidEur, userId: req.actor, creationFlow: true,
             })
             await rememberTarget(r.id, plannedCents)
             created.targets++
@@ -562,7 +563,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
         for (const asin of g.asins) {
           try {
-            const ad = await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor })
+            const ad = await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor, creationFlow: true })
             // Count what reached AMAZON, not what reached our database. Counting
             // local rows is how a run with zero live product ads reported 200 of
             // them and looked like a success.

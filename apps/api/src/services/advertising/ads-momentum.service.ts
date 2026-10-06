@@ -11,24 +11,39 @@
 
 import prisma from '../../db.js'
 
-export interface MomentumEntity { id: string; label: string; status?: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number; acos: number | null }
+/**
+ * Units (AM-2 / AM-3 — the Dashboard used to guess them from the size of the number):
+ *  · `acos`     a FRACTION — spend ÷ sales, 0.38 = 38 %, 1.5 = 150 %. Null when nothing sold.
+ *  · `sharePct` a FRACTION despite its name — this placement's share of the day's placement sales,
+ *               0.62 = 62 %. Kept under its old name so no reader breaks; read it as a fraction.
+ */
+export interface MomentumEntity {
+  id: string; label: string; status?: string | null; impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number
+  /** FRACTION (spend ÷ sales); null when nothing sold. */
+  acos: number | null
+}
 export interface MomentumResult {
   date: string | null
   counts: { enabled: number; paused: number }
   campaigns: MomentumEntity[]
   keywords: MomentumEntity[]
   asins: MomentumEntity[]
+  /** `sharePct` is a FRACTION (0.62 = 62 %) of the day's placement sales. */
   placements: Array<{ placement: string; spendCents: number; salesCents: number; sharePct: number }>
 }
 
-async function latestDate(): Promise<Date | null> {
-  const row = await prisma.amazonAdsDailyPerformance.findFirst({ orderBy: { date: 'desc' }, select: { date: true } })
+/** AM-15 — `{ marketplace }` when the Dashboard picked one market, `{}` for every market. */
+type MarketWhere = { marketplace?: string }
+const marketWhere = (marketplace?: string | null): MarketWhere => (marketplace ? { marketplace } : {})
+
+async function latestDate(mw: MarketWhere = {}): Promise<Date | null> {
+  const row = await prisma.amazonAdsDailyPerformance.findFirst({ where: mw, orderBy: { date: 'desc' }, select: { date: true } })
   return row?.date ?? null
 }
 
-async function topByType(entityType: string, day: Date, take = 10) {
+async function topByType(entityType: string, day: Date, mw: MarketWhere = {}, take = 10) {
   return prisma.amazonAdsDailyPerformance.groupBy({
-    by: ['localEntityId'], where: { entityType, date: day, localEntityId: { not: null } },
+    by: ['localEntityId'], where: { entityType, date: day, localEntityId: { not: null }, ...mw },
     _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
     orderBy: { _sum: { sales7dCents: 'desc' } }, take,
   })
@@ -39,15 +54,21 @@ function toEntity(id: string, label: string, status: string | null, s: { impress
   return { id, label, status, impressions: s.impressions ?? 0, clicks: s.clicks ?? 0, spendCents, salesCents, orders: s.orders7d ?? 0, acos: salesCents > 0 ? spendCents / salesCents : null }
 }
 
-export async function getMomentum(opts: { date?: string } = {}): Promise<MomentumResult> {
-  const day = opts.date ? new Date(`${opts.date}T00:00:00.000Z`) : await latestDate()
+/**
+ * AM-15 — `marketplace` scopes every part of the answer (top movers, counts, placements, the latest day) to that
+ * market, the same column the Dashboard's trends filter on. Without it the Dashboard showed one market's spend beside
+ * every market's movers.
+ */
+export async function getMomentum(opts: { date?: string; marketplace?: string | null } = {}): Promise<MomentumResult> {
+  const mw = marketWhere(opts.marketplace)
+  const day = opts.date ? new Date(`${opts.date}T00:00:00.000Z`) : await latestDate(mw)
   if (!day || Number.isNaN(day.getTime())) return { date: null, counts: { enabled: 0, paused: 0 }, campaigns: [], keywords: [], asins: [], placements: [] }
 
   const [camp, kw, ad, enabled, paused, placeRows] = await Promise.all([
-    topByType('CAMPAIGN', day), topByType('AD_TARGET', day), topByType('PRODUCT_AD', day),
-    prisma.campaign.count({ where: { status: 'ENABLED' } }),
-    prisma.campaign.count({ where: { status: 'PAUSED' } }),
-    prisma.amazonAdsPlacementReport.groupBy({ by: ['placement'], where: { date: day }, _sum: { costMicros: true, sales7dCents: true } }),
+    topByType('CAMPAIGN', day, mw), topByType('AD_TARGET', day, mw), topByType('PRODUCT_AD', day, mw),
+    prisma.campaign.count({ where: { status: 'ENABLED', ...mw } }),
+    prisma.campaign.count({ where: { status: 'PAUSED', ...mw } }),
+    prisma.amazonAdsPlacementReport.groupBy({ by: ['placement'], where: { date: day, ...mw }, _sum: { costMicros: true, sales7dCents: true } }),
   ])
 
   const campIds = camp.map((r) => r.localEntityId!).filter(Boolean)

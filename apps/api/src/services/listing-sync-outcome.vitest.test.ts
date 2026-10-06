@@ -106,6 +106,24 @@ describe('recordListingSyncOutcome — the listing follows its queue', () => {
     expect(await listing(l.id)).toMatchObject({ syncStatus: 'FAILED', lastSyncStatus: 'FAILED', lastSyncError: 'The channel refused the price.', version: l.version })
   }))
 
+  it('2026-10-06 — a skip that ends the wait: PENDING → SKIPPED with the reason when nothing else waits; nothing was sent', () => scoped(async () => {
+    const l = await seed('outcome-skip-settles')
+    await row(l, 'SKIPPED', { errorCode: 'EBAY_SHARED_LISTING_OWNS_SKU' })
+    await recordListingSyncOutcome(prisma, { channelListingId: l.id, productId: l.productId, outcome: 'skipped', error: 'EBAY_SHARED_LISTING_OWNS_SKU: its shared stock sends the quantity.' })
+    expect(await listing(l.id)).toMatchObject({ syncStatus: 'PENDING', lastSyncStatus: 'SKIPPED', lastSyncError: 'EBAY_SHARED_LISTING_OWNS_SKU: its shared stock sends the quantity.', lastSyncedAt: null, version: l.version })
+  }))
+
+  it('2026-10-06 — a settling skip never overwrites what the listing already reads, and another waiting row keeps it PENDING', () => scoped(async () => {
+    const waits = await seed('outcome-skip-other-waits')
+    await row(waits, 'PENDING')
+    await recordListingSyncOutcome(prisma, { channelListingId: waits.id, productId: waits.productId, outcome: 'skipped', error: 'X: y' })
+    expect(await listing(waits.id)).toMatchObject({ lastSyncStatus: 'PENDING' })
+    const done = await seed('outcome-skip-after-success')
+    await prisma.channelListing.update({ where: { id: done.id }, data: { lastSyncStatus: 'SUCCESS', lastSyncError: null } })
+    await recordListingSyncOutcome(prisma, { channelListingId: done.id, productId: done.productId, outcome: 'skipped', error: 'X: y' })
+    expect(await listing(done.id)).toMatchObject({ lastSyncStatus: 'SUCCESS', lastSyncError: null })
+  }))
+
   it('a row with no listing records nothing and never throws', () => scoped(async () => {
     await expect(recordListingSyncOutcome(prisma, { channelListingId: null, productId: null, outcome: 'sent' })).resolves.toBeUndefined()
     await expect(recordListingSyncOutcome(prisma, { channelListingId: 'no-such-listing', outcome: 'failed' })).resolves.toBeUndefined()
@@ -133,6 +151,18 @@ describe('the backup dispatch loop records the outcome on the listing', () => {
     dispatch.mockRestore()
     expect((await prisma.outboundSyncQueue.findUniqueOrThrow({ where: { id: q.id } })).syncStatus).toBe('SKIPPED')
     expect(await listing(l.id)).toMatchObject({ syncStatus: 'PENDING', lastSyncStatus: 'PENDING', lastSyncedAt: null })
+  }))
+
+  it('2026-10-06 — a skip that ends the wait (an eBay Trading quantity the shared stock sends) reads SKIPPED with its reason', () => scoped(async () => {
+    const l = await seed('loop-settling-skip')
+    const q = await row(l, 'PENDING')
+    const dispatch = vi.spyOn(service, 'dispatchSync').mockResolvedValue({ success: true, queueId: q.id, channel: 'EBAY', status: 'SKIPPED',
+      message: 'eBay item 1 is a shared listing: its shared stock sends the quantity.', errorCode: 'EBAY_SHARED_LISTING_OWNS_SKU', retryable: false })
+    await service.processPendingSyncs()
+    dispatch.mockRestore()
+    expect((await prisma.outboundSyncQueue.findUniqueOrThrow({ where: { id: q.id } })).syncStatus).toBe('SKIPPED')
+    expect(await listing(l.id)).toMatchObject({ syncStatus: 'PENDING', lastSyncStatus: 'SKIPPED',
+      lastSyncError: 'EBAY_SHARED_LISTING_OWNS_SKU: eBay item 1 is a shared listing: its shared stock sends the quantity.', lastSyncedAt: null })
   }))
 
   it('a terminal failure: the listing reads FAILED with the error; a retryable one leaves it PENDING', () => scoped(async () => {

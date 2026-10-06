@@ -128,3 +128,8 @@
    value, so it comes back as a token. */
 .h10-rep-tbl .rep-mini { flex: none; border-color: var(--nds-note-warn-border); }
 .h10-rep-tbl .rep-mini:hover { background: var(--nds-note-warn-bg); }
+
+/* W2-B (CC-13, CC-14, CC-21) — the launch checks above Launch: DS Banners, stacked. Layout only. */
+.cb-checks { display: grid; gap: var(--nds-space-3); margin: var(--nds-space-3) 0; }
+.cb-checks ul { margin: 0; padding-left: var(--nds-space-5); }
+.cb-checks-wait { margin: var(--nds-space-3) 0; color: var(--nds-text-muted); }

@@ -561,6 +561,45 @@ DROP TRIGGER IF EXISTS nexus_stock_pool_level_changed ON "StockLevel";
 CREATE TRIGGER nexus_stock_pool_level_changed AFTER INSERT OR UPDATE OR DELETE ON "StockLevel"
   FOR EACH ROW EXECUTE FUNCTION nexus_stock_pool_level_changed();
 
+-- A lent warehouse that stops (or starts again) counting moves the pool number with no stock write:
+-- door 1 shows 0 for a lent location that is not an active WAREHOUSE. Switching it off, on, or to
+-- another type queues every borrower whose grant is on and lends it (Owner 2026-10-06: "the stock
+-- updates in real time across profiles"; before this, the borrowers kept the old number until the
+-- 30-minute drift check). A change that leaves it counting, or not counting, queues nothing.
+CREATE OR REPLACE FUNCTION nexus_stock_pool_location_changed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF (OLD.type = 'WAREHOUSE' AND OLD."isActive") IS NOT DISTINCT FROM (NEW.type = 'WAREHOUSE' AND NEW."isActive") THEN
+    RETURN NULL;
+  END IF;
+  INSERT INTO "StockPoolTask" (id, "workspaceId", kind, "productId", reason)
+  SELECT nexus_pool_id(), l."workspaceId", 'recascade', l."productId", 'location'
+  FROM "StockPoolGrant" g JOIN "StockPoolLink" l ON l."grantId" = g.id AND l.status = 'active'
+  WHERE g."ownerWorkspaceId" = NEW."workspaceId" AND g.status = 'active' AND NEW.id = ANY(g."locationIds");
+  RETURN NULL;
+END $$;
+
+DROP TRIGGER IF EXISTS nexus_stock_pool_location_changed ON "StockLocation";
+CREATE TRIGGER nexus_stock_pool_location_changed AFTER UPDATE OF "isActive", type ON "StockLocation"
+  FOR EACH ROW EXECUTE FUNCTION nexus_stock_pool_location_changed();
+
+-- A lending business that stops being active (or comes back) moves every pool it lends: a borrower
+-- product sells from a pool only while both businesses are active (nexus_pool_effective_link). So the
+-- change queues every borrower product linked through a grant that is on. (A borrowing business that
+-- stops is not queued: nothing of it is read or sent while it is not active.)
+CREATE OR REPLACE FUNCTION nexus_stock_pool_lender_changed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF (OLD.status = 'active') IS NOT DISTINCT FROM (NEW.status = 'active') THEN RETURN NULL; END IF;
+  INSERT INTO "StockPoolTask" (id, "workspaceId", kind, "productId", reason)
+  SELECT nexus_pool_id(), l."workspaceId", 'recascade', l."productId", 'lender'
+  FROM "StockPoolGrant" g JOIN "StockPoolLink" l ON l."grantId" = g.id AND l.status = 'active'
+  WHERE g."ownerWorkspaceId" = NEW.id AND g.status = 'active';
+  RETURN NULL;
+END $$;
+
+DROP TRIGGER IF EXISTS nexus_stock_pool_lender_changed ON "Workspace";
+CREATE TRIGGER nexus_stock_pool_lender_changed AFTER UPDATE OF status ON "Workspace"
+  FOR EACH ROW EXECUTE FUNCTION nexus_stock_pool_lender_changed();
+
 -- ── Wake the worker (Owner, 2026-10-01: "in real time") ─────────────────────────────────────
 -- Every statement that queues pool work signals 'nexus_stock_pool'. Postgres delivers it at COMMIT
 -- (never for a rolled-back write) and folds repeats in one transaction into one. The worker LISTENs on a
@@ -669,11 +708,14 @@ GRANT EXECUTE ON FUNCTION nexus_pool_grant_impact(text) TO nexus_workspace_runti
 -- ── Which businesses have pool work waiting ─────────────────────────────────────────────────
 -- For the worker that finds work no code of ours kicked (a lender's own sale, an import). It answers
 -- ONLY a caller with no business context (the worker's system context), and only with business ids.
+-- Work is waiting when a task is unclaimed and due (a failed task is released with a "retryAt" that
+-- grows with its attempts, pool-tasks.ts), or its claim is older than two minutes (a runner that died).
 CREATE OR REPLACE FUNCTION nexus_pool_pending_workspaces()
 RETURNS TABLE (workspace_id text) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT DISTINCT t."workspaceId" FROM "StockPoolTask" t
   WHERE NULLIF(current_setting('nexus.workspace_id', true), '') IS NULL
-    AND (t."claimedAt" IS NULL OR t."claimedAt" < CURRENT_TIMESTAMP - interval '2 minutes')
+    AND ((t."claimedAt" IS NULL AND (t."retryAt" IS NULL OR t."retryAt" <= CURRENT_TIMESTAMP))
+      OR t."claimedAt" < CURRENT_TIMESTAMP - interval '2 minutes')
 $$;
 REVOKE ALL ON FUNCTION nexus_pool_pending_workspaces() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexus_pool_pending_workspaces() TO nexus_workspace_runtime;

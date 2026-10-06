@@ -148,11 +148,15 @@ export interface GateContext {
   /**
    * True only for a person's own edit from a campaign-manager screen: the PATCH and placement routes set it, with a
    * `user:` actor (`isPersonEdit` in ads-mutation.service.ts). Nothing derives it from the actor string alone, which
-   * is free text. It passes the account halt and autonomy OFF, and nothing else: those two stop the MACHINE (the
-   * anomaly breaker, the Control Room's Stop, the dial — "refuse automation writes", schema AdsAutomationState), and
-   * the Owner's rule is that a brake may stop automation but not his own clicks. The deploy kill switch, the
-   * connection's mode and writes switch, Amazon's limits, the allowlist, pins, bounds, ceilings and the value cap
-   * all still bind.
+   * is free text. It passes the account halt and autonomy OFF: those stop the MACHINE (the anomaly breaker, the
+   * Control Room's Stop, the dial — "refuse automation writes", schema AdsAutomationState), and the Owner's rule is
+   * that a brake may stop automation but not his own clicks.
+   * CM-20 (Owner decided A, 2026-10-06) — for the same reason it passes the campaign's live-write allowlist and its
+   * pins: they stop automatic engines, rules, schedules and sweeps, not a person's own edits and adds. The deploy kill
+   * switch, the connection's mode and writes switch, Amazon's limits, the bounds, the spend ceilings, the day-move
+   * bound and the value cap all still bind.
+   * The create service sets it with `isPersonCreate` (the same test, for a bare person id), so a person's ADD is
+   * judged exactly as his edit — at the screen's pre-check, in the worker and on the add itself.
    */
   manual?: boolean
 }
@@ -163,7 +167,8 @@ const BID_FIELDS = new Set(['bid', 'defaultBid'])
 /** Normalise a keyword for protection matching — 5a: it lives with the one matcher now; re-exported for its readers. */
 export { normaliseTerm } from './ads-negation-policy.js'
 
-function maxWriteValueCents(): number {
+/** The per-write value cap (€500 unless NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS says otherwise); CC-14's launch checks warn with it. */
+export function maxWriteValueCents(): number {
   const v = Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)
   if (Number.isFinite(v) && v > 0) return v
   return 50_000 // €500 default
@@ -343,7 +348,14 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     if (unsupportedCampaign) {
       return { allowed: false, reason: unsupportedCampaign, deniedAt: 'ad_product_unsupported' }
     }
-    if (!campaign?.liveBidWritesEnabled) {
+    if (!campaign) {
+      return { allowed: false, reason: `campaign ${ctx.campaignId} was not found — refusing an unattributable write`, deniedAt: 'campaign_allowlist' }
+    }
+    // CM-20 (Owner decided A, 2026-10-06) — the allowlist and the pins stop automatic engines, rules, schedules and
+    // sweeps; a person's own edit or add (`ctx.manual`, set only with a `user:` actor) passes both. Everything below
+    // the pins (bounds, ceilings, the day-move bound) and above them (Amazon's limits, the connection) still binds.
+    const person = ctx.manual === true
+    if (!campaign.liveBidWritesEnabled && !person) {
       return {
         allowed: false,
         reason: `campaign ${ctx.campaignId} is not on the live-write allowlist (Campaign.liveBidWritesEnabled=false)`,
@@ -359,19 +371,16 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
      * narrower one ("not that far"). Report the bound first and an operator clearing it
      * would be told the wrong thing about why their campaign is quiet.
      *
-     * This binds EVERY write through the gate, including an operator's own PATCH from the
-     * Ad Manager — deliberately. The gate cannot reliably tell a person from an engine:
-     * `actor` is free text, and a third of the advertising audit log carried a NULL actor
-     * as recently as 2026-08-04 (see ads-create.service.ts). A pin that trusted that
-     * string would be honoured exactly as often as the string happened to be right, which
-     * is the decorative-control defect this phase exists to remove. Unpinning is one click
-     * and is itself audited.
+     * CM-20 (Owner decided A, 2026-10-06) — a pin binds every automatic write, and not a
+     * person's own edit or add. The person is never read from the free-text `actor` (a
+     * third of the audit log carried a NULL actor as recently as 2026-08-04): only from
+     * `ctx.manual`, which the routes set for a person's click with a `user:` actor (wave 1e).
      */
     const dimensions = dimensionsForWrite({
       fields: ctx.fields?.length ? ctx.fields : [ctx.field],
       dimension: ctx.dimension ?? null,
     })
-    const pinned = pinDenial(campaign, {
+    const pinned = person ? null : pinDenial(campaign, {
       dimensions,
       isSuppression: ctx.isSuppression,
       campaignId: ctx.campaignId,
@@ -676,26 +685,7 @@ async function spendCeilingDenial(args: {
     else if (c.grain === 'MARKET') campaignIds = (await prisma.campaign.findMany({ where: { marketplace: c.scopeId }, select: { id: true } })).map((x) => x.id)
     else campaignIds = (await prisma.adProductAd.findMany({ where: { product: { parentId: c.scopeId } }, select: { adGroup: { select: { campaignId: true } } } })).map((x) => x.adGroup.campaignId)
 
-    // Today's AUTHORISED budget increases inside the scope — our own ledger, in EUROS in the
-    // payloads (the one ads money field that is not cents; assuming cents inflates 100×).
-    // 4k — without this write's own row, which would count its increase twice (NULL-safe, as in the day-move bound).
-    const rows = await prisma.advertisingActionLog.findMany({
-      where: {
-        actionType: 'AD_BUDGET_UPDATE',
-        entityType: 'CAMPAIGN',
-        entityId: { in: campaignIds },
-        createdAt: { gte: midnightUtc },
-        rolledBackAt: null,
-        ...(args.queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: args.queueId } }] } : {}),
-      },
-      select: { payloadBefore: true, payloadAfter: true },
-    })
-    let usedCents = 0
-    for (const r of rows) {
-      const before = Number((r.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
-      const after = Number((r.payloadAfter as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
-      if (Number.isFinite(before) && Number.isFinite(after) && after > before) usedCents += Math.round((after - before) * 100)
-    }
+    const usedCents = await authorisedIncreasesTodayCents(campaignIds, midnightUtc, args.queueId ?? null)
     const cap = c.dailyCapCents as number
     if (usedCents + deltaCents > cap) {
       return {
@@ -706,6 +696,34 @@ async function spendCeilingDenial(args: {
     }
   }
   return null
+}
+
+/**
+ * Today's AUTHORISED budget increases across these campaigns, in cents — our own ledger, in EUROS in the payloads (the
+ * one ads money field that is not cents; assuming cents inflates 100×). 4k — without `queueId`'s own row, which would
+ * count its increase twice (NULL-safe, as in the day-move bound). Shared by the spend ceiling above and CC-14's launch
+ * warnings, so both read the ledger the same way.
+ */
+export async function authorisedIncreasesTodayCents(campaignIds: string[], since: Date, queueId: string | null = null): Promise<number> {
+  if (!campaignIds.length) return 0
+  const rows = await prisma.advertisingActionLog.findMany({
+    where: {
+      actionType: 'AD_BUDGET_UPDATE',
+      entityType: 'CAMPAIGN',
+      entityId: { in: campaignIds },
+      createdAt: { gte: since },
+      rolledBackAt: null,
+      ...(queueId ? { OR: [{ outboundQueueId: null }, { outboundQueueId: { not: queueId } }] } : {}),
+    },
+    select: { payloadBefore: true, payloadAfter: true },
+  })
+  let usedCents = 0
+  for (const r of rows) {
+    const before = Number((r.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+    const after = Number((r.payloadAfter as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+    if (Number.isFinite(before) && Number.isFinite(after) && after > before) usedCents += Math.round((after - before) * 100)
+  }
+  return usedCents
 }
 
 /**

@@ -142,7 +142,7 @@ const AI_DRAFTS = new Set([
  * and for the other business. Each is run for real in its own suite.
  */
 const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
-  'publish-listing': 'the studio review reads the channel; Etsy, the channel aimed at here, sends nothing yet (publish-listing.tools test)',
+  'publish-listing': 'the studio review of a new Etsy listing (no Etsy listing here), refused while Etsy publishing is off on this server (publish-listing.tools test)',
   'set-listing-fields': 'its writer checks an attribute against the channel category schema, which is not seeded here (listing-create.tools test)',
   'close-listing': 'a close needs a channel\'s own state (eBay\'s out-of-stock option, an Amazon offer, the Etsy gate) (listing-close.tools test)',
   'reopen-listing': 'a reopen needs a closed listing and its channel (listing-close.tools test)',
@@ -173,7 +173,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'insights-metric': () => ({ days: 30 }),
   'detect-anomalies': () => ({}),
   'set-price': (ids) => ({ productId: ids.productId, price: 25 }),
-  // L5 — its dry run is the studio review, which reads the channel live: aimed at Etsy, it is refused before any read.
+  // L5 — its dry run is the studio review: aimed at Etsy for a product with no Etsy listing (a create), refused here because Etsy publishing is off.
   'publish-listing': (ids) => ({ productId: ids.productId, channel: 'ETSY', marketplace: 'GLOBAL' }),
   // 07 O11 — an e-mail goes only to a Shopify, Etsy or own-shop buyer (an eBay buyer is refused).
   'send-customer-message': (ids) => ({ orderId: ids.messageOrderId, message: 'Your parcel ships today.' }),

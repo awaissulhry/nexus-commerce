@@ -96,3 +96,6 @@
 /* “No cap” is real text and was grey-400 — 2.36:1 on white, under even the 3:1
    non-text floor. The DS muted tier is 5.01:1. A conversion may only ever raise it. */
 .pf-grid .pf-nocap { color: var(--nds-text-muted); font-weight: 600; }
+
+/* AM-6 / AM-35 — the sentence that says which dates the money covers and which campaigns count. */
+.pf-window { margin: 0; font-size: 11px; line-height: 1.5; color: var(--nds-grey-600); }

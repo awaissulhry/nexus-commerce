@@ -25,10 +25,12 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { GOAL_PRESETS, DEFAULT_GUARDRAILS, type Goal } from './autopilot/presets.js'
+import { safeCampaignName } from '@nexus/shared/ads-campaign-name'
 import type { GoalProduct } from './ai-product-goal.service.js'
 
 export class MaterializeError extends Error {
-  constructor(message: string, public statusCode = 400) { super(message) }
+  /** CC-24 — true when nothing was created, so the goal's launch claim is let go and the goal can be launched again. */
+  constructor(message: string, public statusCode = 400, public releaseClaim = false) { super(message) }
 }
 
 export type ScaffoldRole = 'AUTO' | 'RESEARCH' | 'PERF' | 'PAT'
@@ -41,6 +43,8 @@ const AI_TARGET_GOAL: Record<string, Goal> = {
 }
 const ROLE_LABEL: Record<ScaffoldRole, string> = { AUTO: 'Auto', RESEARCH: 'Research', PERF: 'Performance', PAT: 'Products' }
 const BASE_BID_EUR = 0.75
+/** CC-14 — the ad group default bid every scaffold campaign is created with, for the launch checks. */
+export const GOAL_AD_GROUP_BID_CENTS = Math.round(BASE_BID_EUR * 100)
 // AT.2 smart defaults (mirrors the SPW auto-group multipliers).
 const AUTO_GROUPS: Array<{ key: string; mult: number }> = [
   { key: 'CLOSE_MATCH', mult: 1.0 }, { key: 'SUBSTITUTES', mult: 1.1 },
@@ -139,7 +143,8 @@ export function planGoalScaffold(goal: GoalLike, bidOpts?: ScaffoldBidOpts): Goa
       maxCampaignBudgetCents = Math.max(maxCampaignBudgetCents, budgetCents)
       campaigns.push({
         setLabel: set.label, role,
-        name: `[AI] ${goal.name}${multiSet ? ` · ${set.label}` : ''} · ${ROLE_LABEL[role]}`.slice(0, 128),
+        // CC-13 — " - ", not " · ": Amazon refuses the middle dot in names (safeCampaignName, also for one in the goal name).
+        name: safeCampaignName(`[AI] ${goal.name}${multiSet ? ` - ${set.label}` : ''} - ${ROLE_LABEL[role]}`),
         targetingType: role === 'AUTO' ? 'AUTO' : 'MANUAL',
         budgetCents,
         products: set.products,
@@ -188,6 +193,26 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
   if (!goal) throw new MaterializeError('goal not found', 404)
   if (goal.status === 'ARCHIVED') throw new MaterializeError('goal is archived', 400)
   if (goal.materializedAt) throw new MaterializeError('goal is already materialized', 409)
+  // CC-24 — claim the goal BEFORE anything is sent. `materializedAt` used to be set only at the end, so a retry during a
+  // run (a timeout, a second tab, the dashboard's Launch) or after one that stopped part-way built a second scaffold.
+  // The claim is the same column, set atomically; it is let go only when nothing was created.
+  const claimed = await prisma.adProductGoal.updateMany({ where: { id: goal.id, materializedAt: null, status: { not: 'ARCHIVED' } }, data: { materializedAt: new Date() } })
+  if (claimed.count !== 1) throw new MaterializeError('this goal is already being launched or was launched: its campaigns are not built twice', 409)
+  const release = () => prisma.adProductGoal.updateMany({ where: { id: goal.id }, data: { materializedAt: null } }).catch((e: unknown) => {
+    logger.error('[AIAD] goal claim not released', { goalId: goal.id, error: (e as Error).message })
+  })
+  try {
+    return await materializeClaimed(goal, userId)
+  } catch (e) {
+    if (e instanceof MaterializeError && e.releaseClaim) await release()
+    throw e
+  }
+}
+
+type GoalRow = NonNullable<Awaited<ReturnType<typeof prisma.adProductGoal.findUnique>>>
+
+async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
+  const goalId = goal.id
 
   // Same bid evidence the preview showed — resolveGoalBids at both ends, so they cannot differ.
   const { resolveGoalBids } = await import('./ai-goal-suggest.service.js')
@@ -201,6 +226,12 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
     marketplace: goal.marketplace, portfolioId: goal.portfolioId,
     targetAcosPct: goal.targetAcosPct, bidMinCents: goal.bidMinCents, bidMaxCents: goal.bidMaxCents,
   }, bidOpts)
+
+  // CC-13 / CC-14 — the checks the builder's preview showed, run again before anything is sent: a name this market
+  // already uses, or a bid or budget outside Amazon's range, refuses the launch (and lets the claim go).
+  const { goalLaunchPlan, launchChecks } = await import('./ads-launch-checks.service.js')
+  const checks = await launchChecks(goalLaunchPlan(scaffold, goal.portfolioId, GOAL_AD_GROUP_BID_CENTS))
+  if (checks.refusals.length) throw new MaterializeError(checks.refusals.join(' '), 400, true)
 
   const {
     createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal,
@@ -224,25 +255,26 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
       // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
       // skips every keyword/product-ad and the campaign lands empty on Amazon.
       try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) }
-      const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${ROLE_LABEL[pc.role]} Ad Group`, defaultBidEur: BASE_BID_EUR, userId })
+      // CM-20 — `creationFlow`: everything below belongs to the campaign created a moment ago.
+      const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${ROLE_LABEL[pc.role]} Ad Group`, defaultBidEur: BASE_BID_EUR, userId, creationFlow: true })
       const set = agBySet.get(pc.setLabel) ?? {}
       set[pc.role] = { campaignId: camp.id, adGroupId: ag.id }
       agBySet.set(pc.setLabel, set)
 
       for (const p of pc.products) {
-        try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) }
+        try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId, creationFlow: true }) }
         catch (e) { errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
       }
       for (const g of pc.autoGroups) {
-        try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: g.bidEur, userId }) }
+        try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: g.bidEur, userId, creationFlow: true }) }
         catch (e) { errors.push(`auto group ${g.key}: ${(e as Error).message}`) }
       }
       for (const kw of pc.seeds) {
-        try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId }) }
+        try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId, creationFlow: true }) }
         catch (e) { errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
       }
       for (const asin of pc.productTargets) {
-        try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId }) }
+        try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId, creationFlow: true }) }
         catch (e) { errors.push(`product target ${asin}: ${(e as Error).message}`) }
       }
       for (const nk of pc.negativeKeywords) {
@@ -259,7 +291,23 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
       logger.error('[AIAD] campaign create failed', { goalId, name: pc.name, error: (e as Error).message })
     }
   }
-  if (!refs.length) throw new MaterializeError(`no campaigns could be created: ${errors[0] ?? 'unknown error'}`, 500)
+  if (!refs.length) throw new MaterializeError(`no campaigns could be created: ${errors[0] ?? 'unknown error'}`, 500, true)
+  // CC-24 — from here campaigns exist: whatever happens next, the goal keeps its claim and names them, so a retry never
+  // builds a second scaffold beside them.
+  try {
+    return await finishMaterialize(goal, userId, scaffold, refs, agBySet, errors)
+  } catch (e) {
+    await prisma.adProductGoal.update({ where: { id: goal.id }, data: { campaignIds: refs as never } }).catch(() => {})
+    throw e
+  }
+}
+
+async function finishMaterialize(
+  goal: GoalRow, userId: string | undefined, scaffold: GoalScaffold, refs: GoalCampaignRef[],
+  agBySet: Map<string, Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>>, errors: string[],
+) {
+  const goalId = goal.id
+  const { settleLaunchPortfolios } = await import('./ads-create.service.js')
 
   // ── Harvest & Negate + Negative Targeting rules per scaffold (SPW-proven shape, propose-first) ──
   const linkedRuleIds: Array<{ module: 'harvest' | 'negate'; ruleId: string }> = []

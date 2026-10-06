@@ -5,6 +5,7 @@ vi.mock('./client.js', () => ({ ebayAppToken: calls.token }))
 vi.mock('../../../gateway/ebay.js', () => ({ ebayTransport: () => calls.transport }))
 const {
   EBAY_DESIRED_TOPICS, setupEbayNotifications, subscribeEbayTopic, createEbayDestination, ebayNotificationSetupGate, sendEbayTestNotice,
+  armedApplicationTopics, armedSellerTopics,
 } = await import('./notifications.js')
 
 beforeEach(() => {
@@ -20,7 +21,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 const wish = (topicId: string) => EBAY_DESIRED_TOPICS.find(topic => topic.topicId === topicId)
 
-describe('v1 scope: account revocation by subscription, account deletion by the developer portal', () => {
+describe('scope: account revocation (application), order confirmation (per seller), account deletion (developer portal)', () => {
   it('marks AUTHORIZATION_REVOCATION ready and application-level (the C8 check is written in the plan)', () => {
     expect(wish('AUTHORIZATION_REVOCATION')).toMatchObject({ delivery: 'application' })
     expect(wish('AUTHORIZATION_REVOCATION')?.handlerMissing).toBeFalsy()
@@ -28,8 +29,9 @@ describe('v1 scope: account revocation by subscription, account deletion by the 
   it('keeps MARKETPLACE_ACCOUNT_DELETION portal-only and its erasure handler unready', () => {
     expect(wish('MARKETPLACE_ACCOUNT_DELETION')).toMatchObject({ delivery: 'portal', handlerMissing: true })
   })
-  it('defers ORDER_CONFIRMATION: a per-seller USER topic with no ready handler', () => {
-    expect(wish('ORDER_CONFIRMATION')).toMatchObject({ delivery: 'user', handlerMissing: true })
+  it('marks ORDER_CONFIRMATION ready and per-seller (GAP2 phase 2): subscribed with each seller\'s own token', () => {
+    expect(wish('ORDER_CONFIRMATION')).toMatchObject({ delivery: 'user' })
+    expect(wish('ORDER_CONFIRMATION')?.handlerMissing).toBeFalsy()
   })
   it('drops the two buy-side item topics', () => {
     const ids = EBAY_DESIRED_TOPICS.map(topic => topic.topicId)
@@ -47,11 +49,13 @@ describe('the arming gate: setup needs the old switch AND an Owner-named topic l
     ['old switch with an empty list', '1', ''],
     ['old switch with only separators', '1', ' , ,'],
     ['a portal-only topic', '1', 'MARKETPLACE_ACCOUNT_DELETION'],
-    ['a per-seller USER topic', '1', 'ORDER_CONFIRMATION'],
     ['a dropped item topic', '1', 'ITEM_AVAILABILITY'],
-    ['one bad entry beside a good one', '1', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION'],
+    ['one bad entry beside a good one', '1', 'AUTHORIZATION_REVOCATION,MARKETPLACE_ACCOUNT_DELETION'],
+    ['a portal topic beside the per-seller topic', '1', 'ORDER_CONFIRMATION,MARKETPLACE_ACCOUNT_DELETION'],
     ['a lower-case topic id', '1', 'authorization_revocation'],
+    ['a lower-case per-seller topic id', '1', 'order_confirmation'],
     ['the list without the old switch', undefined, 'AUTHORIZATION_REVOCATION'],
+    ['the per-seller topic without the old switch', undefined, 'ORDER_CONFIRMATION'],
     ['the list with switch 0', '0', 'AUTHORIZATION_REVOCATION'],
     ['the list with switch true', 'true', 'AUTHORIZATION_REVOCATION'],
   ])('stays unarmed and makes no call: %s', async (_label, setup, armed) => {
@@ -85,28 +89,53 @@ describe('the arming gate: setup needs the old switch AND an Owner-named topic l
     } finally { delete revocation.handlerMissing }
   })
 
-  // S2 may make the order executor ready; that must still never arm a USER or portal topic.
-  it.each(['ORDER_CONFIRMATION', 'MARKETPLACE_ACCOUNT_DELETION'])('refuses to arm %s even once its handler is ready', topicId => {
+  it('refuses to arm ORDER_CONFIRMATION while its handler is not ready', () => {
     vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
-    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', topicId)
-    const topic = wish(topicId)!
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'ORDER_CONFIRMATION')
+    const order = wish('ORDER_CONFIRMATION')!
+    order.handlerMissing = true
+    try {
+      expect(ebayNotificationSetupGate()).toMatchObject({ armed: false, reason: expect.stringMatching(/no ready handler/) })
+    } finally { delete order.handlerMissing }
+  })
+
+  // A portal topic is never armed, even with a ready handler.
+  it('refuses to arm MARKETPLACE_ACCOUNT_DELETION even once its handler is ready', () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'MARKETPLACE_ACCOUNT_DELETION')
+    const topic = wish('MARKETPLACE_ACCOUNT_DELETION')!
     topic.handlerMissing = false
     try {
-      expect(ebayNotificationSetupGate()).toMatchObject({ armed: false, reason: expect.stringMatching(/never subscribed with the application token/) })
+      expect(ebayNotificationSetupGate()).toMatchObject({ armed: false, reason: expect.stringMatching(/developer portal/) })
     } finally { topic.handlerMissing = true }
   })
 
-  it('positive control: the old switch plus AUTHORIZATION_REVOCATION arms exactly that topic', () => {
+  it('positive control: the old switch plus AUTHORIZATION_REVOCATION arms exactly that topic, and no per-seller topic', () => {
     vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
     vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', ' AUTHORIZATION_REVOCATION , AUTHORIZATION_REVOCATION ')
     expect(ebayNotificationSetupGate()).toEqual({ armed: true, topics: ['AUTHORIZATION_REVOCATION'], reason: null })
+    expect(armedApplicationTopics()).toEqual(['AUTHORIZATION_REVOCATION'])
+    expect(armedSellerTopics()).toEqual([])
+  })
+
+  // GAP2 phase 2: a per-seller USER topic is armed ONLY by its name in the list.
+  it.each([
+    ['ORDER_CONFIRMATION', [], ['ORDER_CONFIRMATION']],
+    ['AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION', ['AUTHORIZATION_REVOCATION'], ['ORDER_CONFIRMATION']],
+  ])('arms the per-seller topic only when named: %s', (armed, application, seller) => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', armed)
+    expect(ebayNotificationSetupGate()).toMatchObject({ armed: true, reason: null })
+    expect(armedApplicationTopics()).toEqual(application)
+    expect(armedSellerTopics()).toEqual(seller)
   })
 })
 
 describe('never a portal or USER topic with the application token, even when armed', () => {
   beforeEach(() => {
     vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
-    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
+    // ORDER_CONFIRMATION armed and ready: still never sent with the application token.
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
   })
   const payload = { format: 'JSON', deliveryProtocol: 'HTTPS', schemaVersion: '1.0' }
   const states = (topicId: string) => [[], [{ topicId, destinationId: 'd', subscriptionId: 's', status: 'DISABLED', payload }]]

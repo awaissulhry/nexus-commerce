@@ -4,10 +4,10 @@ import {
   familySellingState, fbaDeleteWarning, LISTING_ACTION_PERMISSION, listingActionCapability, SELLING_STATE_LABEL, sellingStateOf,
   SHEET_PAUSE_REASON, statusChangeAction, statusOptionsFor, type ListingDeletion,
   EBAY_NEW_INACTIVE_CHECK, EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_DRAFT, ETSY_NEW_ROW_SENTENCE,
-  ETSY_NEW_VARIATION_ACTIVE, ETSY_VARIATION_CANNOT_HIDE, NEW_LISTING_ALIAS, NEW_LISTING_SENTENCE,
+  ETSY_NEW_VARIATION_ACTIVE, ETSY_NEW_VARIATION_INACTIVE, ETSY_VARIATION_HIDDEN_REASON, NEW_LISTING_ALIAS, NEW_LISTING_SENTENCE,
   newListingChoice, newListingDefault, newListingOptions, NOT_LISTED_MAIN_WARNING, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION, STATUS_TARGET_LABEL,
   AMAZON_REMOVED_ELSEWHERE, deletedShort, isNewListingRow, newListingSentence, NOT_ON_CHANNEL_KEEPS_NUMBER, RELIST_SENTENCE,
-  ETSY_PUBLISHING_OFF, holdStatusChanges, etsyCreateState, shopifyCreateStatus, SHOPIFY_STATUS_FROM_STATUS_COLUMN, SHOPIFY_CREATE_NOT_LISTED,
+  ETSY_PUBLISHING_OFF, ETSY_DRAFT_STATE, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE, holdStatusChanges, etsyCreateState, shopifyCreateStatus, SHOPIFY_STATUS_FROM_STATUS_COLUMN, SHOPIFY_CREATE_NOT_LISTED,
   ALREADY_UNLINKED, alreadyRemoved, deletedStatusReason, removedMark, setBeforeRemoval, sharedRemovedRefusal, UNLINKED_NOT_LISTED, unlinkWords,
 } from './listing-actions.js'
 
@@ -46,6 +46,34 @@ describe('capability table', () => {
     expect(listingActionCapability('etsy', 'end').reason).toMatch(/Etsy has no End/)
     expect(listingActionCapability('etsy', 'delete').offered).toBe(false)
   })
+  it('Etsy (D6): a variation pauses and resumes only its own row (its offering); the main row keeps the whole listing', () => {
+    expect(listingActionCapability('etsy', 'pause', { isVariation: true })).toMatchObject({ offered: true, reach: 'row' })
+    expect(listingActionCapability('etsy', 'resume', { isVariation: true })).toMatchObject({ offered: true, reach: 'row' })
+    expect(listingActionCapability('etsy', 'resume')).toMatchObject({ offered: true, reach: 'listing' })
+    expect(listingActionCapability('etsy', 'pause', { isMain: true })).toMatchObject({ offered: true, reach: 'listing' })
+    expect(listingActionCapability('etsy', 'end', { isVariation: true }).offered).toBe(false)
+    expect(listingActionCapability('etsy', 'delete', { isVariation: true }).offered).toBe(false)
+    // Every other channel keeps its own reach for a variation.
+    expect(listingActionCapability('ebay-trading', 'end', { isVariation: true })).toMatchObject({ reach: 'listing' })
+  })
+  it('Etsy (E3): a listing that is a draft on Etsy cannot be set live from Nexus yet and has nothing to pause — a variation too; other channels ignore the fact', () => {
+    expect(ETSY_DRAFT_NO_PAUSE).toBe('A draft on Etsy is not visible to buyers, so there is nothing to pause.')
+    // Review MINOR-4 — true for a draft made on etsy.com too (it may have photos): no claim about photos.
+    expect(ETSY_DRAFT_NO_LIVE).toBe('Nexus cannot set an Etsy draft live yet; going live comes in a later Nexus update.')
+    expect(ETSY_DRAFT_NO_LIVE).not.toMatch(/photo/i)
+    expect(listingActionCapability('etsy', 'resume', { etsyDraft: true })).toMatchObject({ offered: false, reason: ETSY_DRAFT_NO_LIVE })
+    expect(listingActionCapability('etsy', 'pause', { etsyDraft: true })).toMatchObject({ offered: false, reason: ETSY_DRAFT_NO_PAUSE })
+    expect(listingActionCapability('etsy', 'resume', { etsyDraft: true, isVariation: true })).toMatchObject({ offered: false, reason: ETSY_DRAFT_NO_LIVE })
+    expect(listingActionCapability('etsy', 'pause', { etsyDraft: true, isVariation: true })).toMatchObject({ offered: false, reason: ETSY_DRAFT_NO_PAUSE })
+    expect(listingActionCapability('etsy', 'end', { etsyDraft: true }).reason).toMatch(/Etsy has no End/)
+    expect(listingActionCapability('etsy', 'resume', { etsyDraft: false })).toMatchObject({ offered: true, reach: 'listing' })
+    expect(listingActionCapability('ebay-trading', 'resume', { etsyDraft: true })).toEqual(listingActionCapability('ebay-trading', 'resume'))
+    expect(listingActionCapability('amazon', 'pause', { etsyDraft: true })).toEqual(listingActionCapability('amazon', 'pause'))
+    // The Status column of a draft: Inactive is its current value; Active is refused (Nexus cannot set a draft live yet).
+    expect(statusOptionsFor('paused', 'etsy', { etsyDraft: true }).map(o => [o.target, o.offered, o.reason]))
+      .toEqual([['active', false, ETSY_DRAFT_NO_LIVE], ['inactive', true, null]])
+    expect(actionsFor('paused', 'etsy', { etsyDraft: true })).toEqual([])
+  })
   it('WooCommerce says why not', () => {
     expect(listingActionCapability('unsupported', 'pause', {}, 'WooCommerce').reason).toBe('Changing the status of WooCommerce listings from Nexus is not available yet.')
   })
@@ -72,6 +100,28 @@ describe('selling state', () => {
     expect(sellingStateOf({ ...base, listingStatus: 'ENDED' })).toEqual({ state: 'not_listed', reason: AMAZON_REMOVED_ELSEWHERE })
     expect(sellingStateOf({ ...base, channel: 'ETSY', listingStatus: 'ENDED' }).state).toBe('not_listed')
     expect(sellingStateOf({ ...base, listingStatus: 'INACTIVE' })).toMatchObject({ state: 'unknown', reason: expect.stringMatching(/never told/) })
+  })
+  it('Etsy (D6): an inactive listing and a listing-level hold read Inactive on Etsy; one hidden variation says the rest of the listing sells', () => {
+    const etsy = { ...base, channel: 'ETSY', externalListingId: '9000000001' }
+    const inactive = 'Inactive on Etsy: buyers cannot find or buy it.'
+    expect(sellingStateOf({ ...etsy, listingStatus: 'INACTIVE' })).toEqual({ state: 'paused', reason: inactive })
+    expect(sellingStateOf({ ...etsy, offerClosedAt: new Date(), offerCloseReason: SHEET_PAUSE_REASON })).toEqual({ state: 'paused', reason: inactive })
+    expect(ETSY_VARIATION_HIDDEN_REASON).toBe('etsy-variation-hidden')
+    expect(sellingStateOf({ ...etsy, offerClosedAt: new Date(), offerCloseReason: ETSY_VARIATION_HIDDEN_REASON }))
+      .toEqual({ state: 'paused', reason: 'Hidden on Etsy: buyers cannot buy this variation; the rest of the listing sells.' })
+    // E3 — a listing with a number that Nexus marks DRAFT is a draft on Etsy: Inactive (not Active), with the draft sentence.
+    expect(ETSY_DRAFT_STATE).toBe('A draft on Etsy: buyers cannot see it. Nexus cannot set an Etsy draft live yet; going live comes in a later Nexus update.')
+    expect(ETSY_DRAFT_STATE).not.toMatch(/photo/i)
+    expect(sellingStateOf({ ...etsy, listingStatus: 'DRAFT', isPublished: false })).toEqual({ state: 'paused', reason: ETSY_DRAFT_STATE })
+    expect(sellingStateOf({ ...etsy, listingStatus: 'draft', isPublished: true })).toEqual({ state: 'paused', reason: ETSY_DRAFT_STATE })
+    // Without a listing number it is still a row in Nexus only; the main row of a created draft reads Inactive.
+    expect(sellingStateOf({ ...etsy, listingStatus: 'DRAFT', isPublished: false, externalListingId: null }).state).toBe('draft')
+    expect(familySellingState(['paused', 'paused'])).toEqual({ state: 'paused', reason: null })
+    // A whole listing set inactive wins over a variation's own hold.
+    expect(sellingStateOf({ ...etsy, listingStatus: 'INACTIVE', offerClosedAt: new Date(), offerCloseReason: ETSY_VARIATION_HIDDEN_REASON }))
+      .toEqual({ state: 'paused', reason: inactive })
+    // The main row of a family with one variation hidden reads Mixed.
+    expect(familySellingState(['active', 'paused']).state).toBe('mixed')
   })
   it('reads Amazon\'s own words like the Matrix: BUYABLE and DISCOVERABLE are on the channel, and so is a DRAFT with a channel number', () => {
     expect(sellingStateOf({ ...base, listingStatus: 'BUYABLE' })).toEqual({ state: 'active', reason: null })
@@ -132,7 +182,7 @@ describe('the Status column', () => {
   })
   // Wave 2 D13 (decision 12) — Etsy publishing off: every change is held with the reason; the current value stays.
   it('holds every Status change with the reason, keeps the current value and what was refused already', () => {
-    expect(ETSY_PUBLISHING_OFF).toBe('Etsy publishing is turned off, so Publish cannot change this. Change it in Etsy.')
+    expect(ETSY_PUBLISHING_OFF).toBe('Sending to Etsy is not live on this server, so Publish cannot change this. Change it in Etsy.')
     expect(holdStatusChanges(statusOptionsFor('active', 'etsy'), ETSY_PUBLISHING_OFF).map(o => [o.target, o.offered, o.reason])).toEqual([
       ['active', true, null], ['inactive', false, ETSY_PUBLISHING_OFF]])
     expect(holdStatusChanges(statusOptionsFor('paused', 'etsy'), ETSY_PUBLISHING_OFF).map(o => [o.target, o.offered, o.reason])).toEqual([
@@ -243,12 +293,13 @@ describe('New listings: the Status of a row not on the channel', () => {
     expect(ETSY_NEW_DRAFT).toBe('Starts on Etsy as a draft when Publish sends it: buyers cannot buy a draft.')
     expect(newListingOptions('etsy', { noRecord: true, alias: true }).every(o => !o.offered && o.reason === NEW_LISTING_ALIAS)).toBe(true)
   })
-  it('Etsy, a new variation of a listing already on Etsy: Active joins the listing, Inactive is refused (one variation cannot be hidden) — never the photo refusal', () => {
+  it('Etsy, a new variation of a listing already on Etsy: Active joins the listing for sale, Inactive joins it hidden (D6) — never the photo refusal', () => {
     const variation = newListingOptions('etsy', { isVariation: true, listingOnChannel: true })
-    expect(choices(variation)).toEqual({ active: 'ok', inactive: ETSY_VARIATION_CANNOT_HIDE, not_listed: 'ok' })
+    expect(choices(variation)).toEqual({ active: 'ok', inactive: 'ok', not_listed: 'ok' })
     expect(variation.find(o => o.target === 'active')!.sentence).toBe(ETSY_NEW_VARIATION_ACTIVE)
+    expect(variation.find(o => o.target === 'inactive')!.sentence).toBe(ETSY_NEW_VARIATION_INACTIVE)
     expect(ETSY_NEW_VARIATION_ACTIVE).toBe('Joins the Etsy listing when Publish sends it; it sells while the listing is active.')
-    expect(ETSY_VARIATION_CANNOT_HIDE).toBe('Nexus cannot hide one variation of an Etsy listing yet. Choose Active to add it, or Not listed to leave it out.')
+    expect(ETSY_NEW_VARIATION_INACTIVE).toBe('Joins the Etsy listing hidden when Publish sends it: buyers cannot buy this variation until you set it Active.')
     // The fact is Etsy's: another channel's choices do not change with it.
     expect(newListingOptions('amazon', { listingOnChannel: true })).toEqual(newListingOptions('amazon'))
   })
@@ -275,11 +326,17 @@ describe('New listings: the Status of a row not on the channel', () => {
     expect(newListingChoice({ ...etsy, listingOnChannel: true })).toEqual({ target: 'active', source: 'default' })
     expect(newListingChoice(etsy)).toEqual({ target: 'inactive', source: 'default' })
   })
-  it('Etsy\'s cell sentence says E1 sends nothing (one constant); Not listed and every other channel keep theirs', () => {
-    expect(ETSY_NEW_ROW_SENTENCE).toBe('Not on Etsy yet. Publish shows what Nexus would send; sending to Etsy comes in a later Nexus update.')
+  it('Etsy\'s cell sentence: a listing not on Etsy says Publish creates it as a draft (E3, one constant); a new variation of a listing on Etsy says how it joins; Not listed and every other channel keep theirs', () => {
+    expect(ETSY_NEW_ROW_SENTENCE).toBe('Not on Etsy yet. Publish creates it on Etsy as a draft: buyers cannot see a draft.')
     expect(newListingSentence({ target: 'inactive', source: 'default' }, { channel: 'ETSY' })).toBe(ETSY_NEW_ROW_SENTENCE)
-    expect(newListingSentence({ target: 'active', source: 'own' }, { channel: 'ETSY' })).toBe(ETSY_NEW_ROW_SENTENCE)
+    // Review NIT-4 — an Active stored earlier on a listing not on Etsy reads the refusal the review gives, never "creates it as a draft".
+    expect(newListingSentence({ target: 'active', source: 'own' }, { channel: 'ETSY' })).toBe(ETSY_NEW_ACTIVE_NEEDS_PHOTO)
+    expect(newListingSentence({ target: 'active', source: 'main' }, { channel: 'ETSY' })).toBe(`${ETSY_NEW_ACTIVE_NEEDS_PHOTO} (It follows the main product's choice; set this row to choose for it.)`)
     expect(newListingSentence({ target: 'inactive', source: 'main' }, { channel: 'ETSY' })).toBe(`${ETSY_NEW_ROW_SENTENCE} (It follows the main product's choice; set this row to choose for it.)`)
+    expect(newListingSentence({ target: 'active', source: 'default' }, { channel: 'ETSY', listingOnChannel: true })).toBe(ETSY_NEW_VARIATION_ACTIVE)
+    expect(newListingSentence({ target: 'inactive', source: 'own' }, { channel: 'ETSY', listingOnChannel: true })).toBe(ETSY_NEW_VARIATION_INACTIVE)
+    expect(newListingSentence({ target: 'not_listed', source: 'own' }, { channel: 'ETSY', listingOnChannel: true })).toBe(NEW_LISTING_SENTENCE.not_listed)
+    expect(newListingSentence({ target: 'inactive', source: 'default' }, { channel: 'AMAZON', listingOnChannel: true })).toBe(NEW_LISTING_SENTENCE.inactive)
     expect(newListingSentence({ target: 'not_listed', source: 'own' }, { channel: 'ETSY' })).toBe(NEW_LISTING_SENTENCE.not_listed)
     expect(newListingSentence({ target: 'inactive', source: 'default' }, { channel: 'AMAZON' })).toBe(NEW_LISTING_SENTENCE.inactive)
     expect(newListingSentence({ target: 'inactive', source: 'default' })).toBe(NEW_LISTING_SENTENCE.inactive)

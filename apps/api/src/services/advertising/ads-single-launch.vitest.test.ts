@@ -93,14 +93,15 @@ const BODIES: Array<[string, (name: string) => SingleLaunchBody]> = [
     negKeywords: [{ text: 'cheap', matchType: 'PHRASE' }, { text: 'free' }], negProducts: [{ asin: 'B0TESTNEG1' }],
     addNegativeRule: true, attachRuleIds: ['rule-attach'], autoBidAdjust: true,
   })],
-  ['product targets', (name) => ({ market: 'UK', name, targetMode: 'product', productTargets: [{ asin: 'B0TESTPT01' }, { sku: 'TEST-SKU-1' }], biddingStrategy: 'fixed' })],
+  ['product targets', (name) => ({ market: 'UK', name, targetMode: 'product', products: [{ sku: 'TEST-SKU-1' }], productTargets: [{ asin: 'B0TESTPT01' }, { sku: 'TEST-SKU-1' }], biddingStrategy: 'fixed' })],
 ]
 
 describe('A11 — the route answers what singleLaunch returns', () => {
   BODIES.forEach(([label, body], i) => {
     it(label, async () => {
       const viaRoute = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: body(`route-${i}`), headers: { 'x-actor-id': 'u-parity' } })
-      const viaService = await inside(() => singleLaunch(body(`service-${i}`), 'user:u-parity' as never))
+      // CC-7 — the route's launch is the screen's: on the live-write allowlist at birth.
+      const viaService = await inside(() => singleLaunch(body(`service-${i}`), 'user:u-parity' as never, { allowlistAtBirth: true }))
       expect(viaRoute.statusCode).toBe(viaService.status)
       expect(norm(viaRoute.payload)).toBe(norm(JSON.stringify(viaService.body)))
       expect(await rowsOf(`route-${i}`)).toBe(await rowsOf(`service-${i}`))
@@ -135,7 +136,7 @@ describe('A11 — born suppressed (create-ad-campaign only)', () => {
   })
 
   it('without the option nothing is floored or flagged (the route\'s launch)', async () => {
-    const out = await inside(() => singleLaunch({ market: 'UK', name: 'Plain launch', keywords: [{ text: 'plain', bidEur: 0.8 }] }, 'user:u-approver' as never))
+    const out = await inside(() => singleLaunch({ market: 'UK', name: 'Plain launch', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'plain', bidEur: 0.8 }] }, 'user:u-approver' as never))
     const camp = await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: String(out.body.campaignId) }, include: { adGroups: { include: { targets: true } } } }))
     expect(camp).toMatchObject({ bidsSuppressedAt: null, bidsSuppressedBy: null })
     expect(camp.adGroups[0]).toMatchObject({ defaultBidCents: 75, suppressedFromBidCents: null, targets: [expect.objectContaining({ bidCents: 80, suppressedFromBidCents: null })] })
@@ -145,10 +146,117 @@ describe('A11 — born suppressed (create-ad-campaign only)', () => {
 describe('a new campaign is labelled with its market\'s currency (it was EUR for every market)', () => {
   it('the builder route labels a UK campaign GBP and an IT one EUR; Amazon reads the budget in the market\'s currency', async () => {
     for (const [market, currency] of [['UK', 'GBP'], ['IT', 'EUR'], ['DE', 'EUR']]) {
-      const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market, name: `Currency ${market}`, budgetEur: 12, keywords: [{ text: 'gloves' }] } })
+      const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market, name: `Currency ${market}`, budgetEur: 12, products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'gloves' }] } })
       expect(res.statusCode).toBe(200)
       const camp = await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: String(JSON.parse(res.payload).campaignId) } }))
       expect([market, camp.dailyBudgetCurrency, String(camp.dailyBudget)]).toEqual([market, currency, '12'])
     }
+  })
+})
+
+const campaignNamed = (name: string) => inside(() => database.client.campaign.findFirst({ where: { name }, select: { id: true, liveBidWritesEnabled: true } }))
+
+describe('CC-7 — the Single builder\'s campaign is on the live-write allowlist at birth, like every other builder\'s', () => {
+  it('the screen\'s route: allowlisted, and the answer says so and what became of the placement multipliers', async () => {
+    const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: {
+      market: 'IT', name: 'CC7 screen', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'cc7 jacket' }], placementBids: { tos: '40' },
+    } })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.payload)).toMatchObject({ ok: true, liveWrites: true, placement: { mode: 'sandbox', sent: false } })
+    expect(await campaignNamed('CC7 screen')).toMatchObject({ liveBidWritesEnabled: true })
+  })
+
+  it('create-ad-campaign (the same service, no option): still born off the allowlist until a person approves it', async () => {
+    const out = await inside(() => singleLaunch({ market: 'UK', name: 'CC7 claude', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'cc7 claude' }] }, 'user:u-approver' as never, { bornSuppressed: { floorCents: 2, by: 'user:u-asker' as never } }))
+    expect(out).toMatchObject({ status: 200, body: { liveWrites: false } })
+    expect(await campaignNamed('CC7 claude')).toMatchObject({ liveBidWritesEnabled: false })
+  })
+})
+
+describe('CC-21 — a launch that cannot serve is refused before anything is created', () => {
+  const launch = (payload: Record<string, unknown>) => app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market: 'IT', ...payload } })
+
+  it('no products: 400 with the reason, no campaign', async () => {
+    const res = await launch({ name: 'CC21 no products', keywords: [{ text: 'gloves' }] })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.payload)).toMatchObject({ ok: false, refusals: [expect.stringMatching(/^A campaign needs at least one product/)] })
+    expect(await campaignNamed('CC21 no products')).toBeNull()
+  })
+
+  it('a manual keyword campaign with no keywords, or a product-targeting one with no targets: 400, no campaign', async () => {
+    const noKw = await launch({ name: 'CC21 no keywords', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: '   ' }] })
+    expect(noKw.statusCode).toBe(400)
+    expect(JSON.parse(noKw.payload).error).toMatch(/needs at least one keyword/)
+    const noPt = await launch({ name: 'CC21 no targets', products: [{ sku: 'TEST-SKU-1' }], targetMode: 'product', productTargets: [] })
+    expect(noPt.statusCode).toBe(400)
+    expect(JSON.parse(noPt.payload).error).toMatch(/needs at least one product to target/)
+    expect(await campaignNamed('CC21 no keywords')).toBeNull()
+    expect(await campaignNamed('CC21 no targets')).toBeNull()
+  })
+
+  it('the review step\'s dry run answers the same refusals, and creates nothing', async () => {
+    const res = await launch({ name: 'CC21 preview', dryRun: true })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.payload)
+    expect(body).toMatchObject({ ok: true, dryRun: true })
+    expect(body.checks.refusals).toEqual([expect.stringMatching(/at least one product/), expect.stringMatching(/at least one keyword/)])
+    expect(await campaignNamed('CC21 preview')).toBeNull()
+  })
+})
+
+describe('CC-13 / CC-24 — one campaign per name in a market', () => {
+  it('a second launch with a name the market already uses is refused, whatever its case; nothing is created twice', async () => {
+    const body = { market: 'IT', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'name check' }] }
+    const first = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { ...body, name: 'CC13 Taken' } })
+    expect(first.statusCode).toBe(200)
+    const again = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { ...body, name: '  cc13 taken ' } })
+    expect(again.statusCode).toBe(400)
+    expect(JSON.parse(again.payload).error).toMatch(/IT already has a campaign named "CC13 Taken"/)
+    expect(await inside(() => database.client.campaign.count({ where: { name: { equals: 'cc13 taken', mode: 'insensitive' } } }))).toBe(1)
+  })
+
+  it('a name with the middle dot Amazon refuses is refused before launch', async () => {
+    const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market: 'IT', name: 'Gloves · Exact', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'dot' }] } })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.payload).error).toMatch(/contains "·", which Amazon refuses in names/)
+  })
+})
+
+describe('SP Super Wizard / Quick / Guided — the same checks on their shared launch route', () => {
+  const spw = (payload: Record<string, unknown>) => app.inject({ method: 'POST', url: '/advertising/campaign-builder/sp-super-wizard/launch', payload: { market: 'IT', ...payload } })
+  const camp = (name: string, extra: Record<string, unknown> = {}) => ({ id: name, name, kind: 'auto', bidEur: 0.5, budgetEur: 10, autoGroups: [], ...extra })
+
+  it('🔴 CC-21 — no products: 400 with the reason, and no campaign is created (it was created ENABLED, unable to serve)', async () => {
+    const res = await spw({ productGroupName: 'SPW empty', campaigns: [camp('SPW empty - SP - Auto')] })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.payload).error).toMatch(/^A campaign needs at least one product/)
+    expect(await campaignNamed('SPW empty - SP - Auto')).toBeNull()
+  })
+
+  it('CC-13 — two campaigns of one launch with one name are refused before anything is created', async () => {
+    const res = await spw({ products: [{ sku: 'TEST-SKU-1' }], campaigns: [camp('SPW Twin'), camp('spw twin', { kind: 'keyword' })] })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.payload).refusals).toEqual([expect.stringMatching(/^Two campaigns in this launch are named "SPW Twin"/)])
+    expect(await campaignNamed('SPW Twin')).toBeNull()
+  })
+
+  it('the review step\'s dry run answers the checks and creates nothing', async () => {
+    const res = await spw({ dryRun: true, products: [{ sku: 'TEST-SKU-1' }], campaigns: [camp('SPW preview', { bidEur: 0.01 })] })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.payload).checks).toEqual({ refusals: [expect.stringMatching(/bid of €0\.01 is below Amazon's minimum of €0\.02 in IT/)], warnings: [] })
+    expect(await campaignNamed('SPW preview')).toBeNull()
+  })
+})
+
+describe('CM-33 / CC-24 — every create route is a keyed command (one launch click, one run)', () => {
+  it('the launch, goal and add routes honour an Idempotency-Key', async () => {
+    const { COMMAND_SCOPE_ROUTES } = await import('../../lib/command-idempotency.js')
+    expect(COMMAND_SCOPE_ROUTES).toEqual(expect.arrayContaining([
+      '/api/advertising/campaign-builder/sp-super-wizard/launch', '/api/advertising/campaign-builder/single/launch',
+      '/api/advertising/ai-goals', '/api/advertising/ai-goals/:id/materialize', '/api/advertising/blueprints/replicate',
+      '/api/advertising/campaigns/create', '/api/advertising/adgroups/create', '/api/advertising/keywords/create',
+      '/api/advertising/product-ads/create', '/api/advertising/targets/create', '/api/advertising/negative-targets/create',
+      '/api/advertising/negative-keywords', '/api/advertising/sb-creatives/create',
+    ]))
   })
 })

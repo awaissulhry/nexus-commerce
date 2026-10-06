@@ -1,9 +1,13 @@
 /**
- * Stored ORDER_CONFIRMATION execution — DORMANT. Admission still quarantines this topic and its
- * subscription stays `handlerMissing`, so production cannot deliver a receipt here; this is the
- * executor that activation will need, proved locally first.
+ * Stored ORDER_CONFIRMATION execution. Notices arrive for the sellers subscribed to the topic (the
+ * per-seller subscription is set up by cx/connectors/ebay/notifications.ts). Admission routes a verified
+ * order notice to the business that owns its seller id and stores it on that seller's account, unless
+ * the account needs Reconnect (then it is quarantined). This runs it only when
+ * NEXUS_ENABLE_EBAY_ORDER_NOTICES=1 (ebay-processing-policy.ts); otherwise the receipt stays held.
+ * A read held for sign-in ends as a dead letter after EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS.
  *
- * One receipt names one order on one account. The order is read back with THAT account's own
+ * One receipt names one seller and one order on one account. A notice whose seller is not the
+ * account's seller is refused before any read. The order is read back with THAT account's own
  * token, once, before any lock or transaction (never a list, never a sweep of other accounts);
  * then the shared order writer and the receipt completion commit in one transaction.
  */
@@ -18,8 +22,21 @@ import { EbayOrderNoticeInvalid, parseEbayOrderNotice } from './ebay-order-notic
 import { MAX_INBOUND_ATTEMPTS } from './ledger.js'
 import type { EbayProcessingOutcome } from './ebay-processing.js'
 
+/**
+ * How long an order notice waits for its account's sign-in, measured on the database clock from the
+ * receipt's first arrival. A read held for sign-in gives its attempt back (a defer), so without this
+ * end the notice would be retried every 5 minutes for ever, writing a held call-ledger row each time.
+ * After it, the notice is dead-lettered: the 5-minute order check records the order after Reconnect.
+ */
+export const EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS = 6 * 60 * 60 * 1000
+const SIGNIN_END_REASON = 'The eBay account must be reconnected. Nexus stopped waiting for this order notice; after Reconnect the 5-minute eBay order check records the order.'
+const LAST_ATTEMPT_REASON = 'Nexus stopped retrying this eBay order notice. The 5-minute eBay order check still reads this order.'
+
 /** Static, owner-safe reasons: provider bodies and exception text never become the public error. */
 export function ebayOrderFailureOf(error: unknown): EbayInboundFailure {
+  if (error instanceof EbayOrderNoticeInvalid && error.reason === 'seller_mismatch') {
+    return { kind: 'dead_letter', reason: 'This eBay order notice is for a different eBay seller than its account. Nothing was changed.' }
+  }
   if (error instanceof EbayOrderNoticeInvalid || error instanceof EbayOrderInvalid) {
     return { kind: 'dead_letter', reason: 'The stored eBay order notice cannot be reconciled with its verified account and supported contract.' }
   }
@@ -40,6 +57,19 @@ export function ebayOrderFailureOf(error: unknown): EbayInboundFailure {
       : 'The eBay order could not be recorded yet. It will be read again.' }
 }
 
+/**
+ * The outcome actually recorded for this claim: a sign-in hold past its wait and a retry on the last
+ * allowed attempt both end in a dead letter, and their reason says so (never "will be read again").
+ */
+export async function ebayOrderClaimOutcome(claim: Pick<EbayInboundClaim, 'attempt' | 'createdAt'>, outcome: EbayInboundFailure): Promise<EbayInboundFailure> {
+  if (outcome.kind === 'defer' && outcome.code === 'AUTH_REQUIRED') {
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+    return clock.now.getTime() - claim.createdAt.getTime() >= EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS ? { kind: 'dead_letter', reason: SIGNIN_END_REASON } : outcome
+  }
+  if (outcome.kind === 'retry' && claim.attempt >= MAX_INBOUND_ATTEMPTS) return { kind: 'dead_letter', reason: LAST_ATTEMPT_REASON }
+  return outcome
+}
+
 /** Called by processEbayInbound with a claim it already owns. */
 export async function processEbayOrderClaim(claim: EbayInboundClaim): Promise<EbayProcessingOutcome> {
   try {
@@ -52,18 +82,25 @@ export async function processEbayOrderClaim(claim: EbayInboundClaim): Promise<Eb
     if (!account) throw new EbayOrderNoticeInvalid('account_missing')
     const identity = ebaySellerIdentity(account)
     if (claim.externalId !== `ebay:${identity.environment}:${notice.notificationId}`) throw new EbayOrderNoticeInvalid('envelope_invalid')
+    // As revocation does: the notice's seller must be this account's seller. Refused before any read.
+    if (identity.userId !== notice.userId) throw new EbayOrderNoticeInvalid('seller_mismatch')
     const order = normalizeEbayOrder(await fetchEbayOrderById(account.id, notice.orderId, { environment: identity.environment }))
     if (order.orderId !== notice.orderId) throw new EbayOrderNoticeInvalid('order_mismatch')
-    const completed = await commitEbayInbound(claim, (tx, stored) => {
+    const completed = await commitEbayInbound(claim, async (tx, stored) => {
       // The domain phase trusts only the receipt reloaded under its lock, not the claim handle.
-      if (stored.connectionId !== account.id || parseEbayOrderNotice(stored.payload).orderId !== order.orderId) throw new EbayOrderNoticeInvalid('envelope_invalid')
+      const reloaded = parseEbayOrderNotice(stored.payload)
+      if (stored.connectionId !== account.id || reloaded.orderId !== order.orderId || reloaded.userId !== notice.userId) throw new EbayOrderNoticeInvalid('envelope_invalid')
+      // commitEbayInbound holds this account row (lockOwnedEbayAccount): its seller cannot change before
+      // commit. A reconnect to another seller during the read is refused here, with nothing written.
+      const current = await tx.channelConnection.findUniqueOrThrow({ where: { id: account.id }, select: { externalAccountId: true, connectionMetadata: true } })
+      if (ebaySellerIdentity(current).userId !== notice.userId) throw new EbayOrderNoticeInvalid('seller_mismatch')
       return writeEbayOrderInTx(tx, { order, connectionId: account.id, actor: 'ebay-order-notice' })
     })
     if (!completed.committed) return { kind: 'not_claimed' }
     await afterEbayOrderCommit(completed.value!)
     return { kind: 'done' }
   } catch (error) {
-    const outcome = ebayOrderFailureOf(error)
+    const outcome = await ebayOrderClaimOutcome(claim, ebayOrderFailureOf(error))
     const saved = await finishEbayInbound(claim, outcome, raiseEbayFailureNotificationInTx)
     if (!saved) return { kind: 'not_claimed' }
     return { kind: outcome.kind === 'defer' ? 'deferred'

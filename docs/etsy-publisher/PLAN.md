@@ -121,6 +121,16 @@ assetId, URL, content hash and alt text; and each variation value's own photo (o
 - **D4 — Order of work.** A: build E1 → E3 now; photos and go-live (E4) after the PHOTO-CORE PR merges (recommended).
   B: wait for the photo core before E2.
 
+### E2 decisions (Owner, 2026-10-05: "B B")
+- **D5 = B:** the price/stock pushes send ONE inventory write per Etsy listing (not one per variation row). In E2.
+- **D6 = B:** one variation of a live Etsy listing can be hidden (Status Inactive → `is_enabled: false`) and shown
+  again (Active → `is_enabled: true`); a new variation may start hidden. In E2.
+
+### Parallel build (Owner, 2026-10-05: "A")
+- E3 (create as draft) is built stacked on E2 as soon as E2's review fixes land; E5a (live read + drift on the 4-hourly
+  sweep) is built at the same time in its own worktree; E5b (Claude tools) after E2 merges. Each PR has its own review
+  and its own "merge #N". About 6 agents at once at most (the Mac is shared).
+
 ## 6. Out of scope (park; ask before adding)
 - Delete on Etsy (Action Delete) — Etsy delete cannot be undone; Pause/Resume already exist.
 - Adopting the shop's listings that are not in Nexus (bulk import). Linking one family at a time already works.

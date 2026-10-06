@@ -51,6 +51,13 @@ describe('BullMQ worker — the listing follows the row', () => {
     expect(m.outcome).not.toHaveBeenCalled()
   })
 
+  it('2026-10-06 — a skip that ends the wait (an eBay Trading quantity the shared stock sends): the listing is told "skipped" with the reason', async () => {
+    vi.spyOn(service, 'processSingle').mockResolvedValue(answer({ status: 'SKIPPED', message: 'Its shared stock sends the quantity.', errorCode: 'EBAY_SHARED_LISTING_OWNS_SKU' }))
+    await processOutboundSyncJob(job)
+    expect(m.update.mock.calls[0][0].data).toMatchObject({ syncStatus: 'SKIPPED', errorCode: 'EBAY_SHARED_LISTING_OWNS_SKU' })
+    expect(m.outcome).toHaveBeenCalledWith(expect.anything(), { channelListingId: 'l1', productId: 'p1', outcome: 'skipped', error: 'EBAY_SHARED_LISTING_OWNS_SKU: Its shared stock sends the quantity.' })
+  })
+
   it('a non-retryable failure (dead-lettered): the listing is told "failed" with the error', async () => {
     vi.spyOn(service, 'processSingle').mockResolvedValue(answer({ success: false, status: 'FAILED', error: 'Price is not valid', retryable: false }))
     await processOutboundSyncJob(job)

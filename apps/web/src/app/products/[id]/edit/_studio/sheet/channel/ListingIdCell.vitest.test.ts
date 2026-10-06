@@ -12,8 +12,9 @@ import { describe, expect, it } from 'vitest'
 import { MATRIX_COPY } from '../../matrix/contract'
 import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, DRAFT_CHIP_LABEL, draftChipDetail } from '../../draftListing'
 import {
-  ASIN_COLUMN_MIN_WIDTH, ASIN_CONTROL_COPY, ASIN_COPY, AsinCell, asinCellModel, asinColumnDef, asinKeyIntent, CHANNEL_ITEM_ID_COPY, isListingIdKey, ITEM_ID_COLUMN_MIN_WIDTH, ITEM_ID_COPY,
-  ItemIdCell, itemIdCellModel, itemIdKeyIntent, listingIdCellModel, listingIdCellText, listingIdColumnDef, PARENT_ASIN_NOTE,
+  ASIN_COLUMN_MIN_WIDTH, ASIN_CONTROL_COPY, ASIN_COPY, AsinCell, asinCellModel, asinColumnDef, asinKeyIntent, CHANNEL_ITEM_ID_COPY, contentReadTime, DIFFERS_WHERE_TO_LOOK, ETSY_DIFFERS_NOT_SENT,
+  ETSY_LISTING_ID_COLUMN_MIN_WIDTH, isListingIdKey, ITEM_ID_COLUMN_MIN_WIDTH, ITEM_ID_COPY, ItemIdCell, itemIdCellModel, itemIdKeyIntent, listingIdCellModel, listingIdCellText,
+  listingIdColumnDef, PARENT_ASIN_NOTE,
 } from './ListingIdCell'
 import type { ChannelSheetRow, SheetColumn } from './types'
 
@@ -263,5 +264,104 @@ describe('Shopify Product ID cell', () => {
   it('a held id Shopify did not return is "Not confirmed", with that reason', () => {
     expect(itemIdCellModel(channelRow({ value: null, listing: { externalListingId: '7009' } }), 'GLOBAL', 'SHOPIFY')).toEqual({ kind: 'notConfirmed', itemId: '7009', label: 'Not confirmed', tooltip: S.notReturnedHover('7009'), editable: true })
     expect(listingIdCellText(channelRow({ value: null, listing: { externalListingId: '7009' } }), SHOPIFY)).toBe('')
+  })
+})
+
+/* ── E5: "Differs on Etsy" — Etsy's last content read differs from Nexus (the server's `listing.contentDrift`) ─────── */
+
+describe('Differs on Etsy (E5) — the main row\'s Listing ID, only when the stored read says so', () => {
+  const E = CHANNEL_ITEM_ID_COPY.ETSY
+  const READ_AT = '2026-10-06T08:20:00.000Z'
+  const EARLIER_AT = '2026-10-06T04:20:00.000Z'
+  const drift = (over: Record<string, unknown> = {}) => ({ source: 'etsy-content', checkedAt: READ_AT, differing: 2, lastRead: 2,
+    fields: [{ field: 'title', label: 'Title', foundAt: READ_AT }, { field: 'tags', label: 'Tags', foundAt: READ_AT }], ...over })
+  const etsyMain = (contentDrift: unknown, listing: Record<string, unknown> = {}) => channelRow({ value: '9000000001', listing: { externalListingId: '9000000001', contentDrift, ...listing } })
+  const render = (data: ChannelSheetRow, channel = 'ETSY') => renderToStaticMarkup(createElement(ItemIdCell, { data, market: 'GLOBAL', channel, node: { rowIndex: 0 },
+    api: { setFocusedCell: () => {} }, column: { getColId: () => 'listing_item_id' }, eGridCell: null } as never))
+  const T = contentReadTime(READ_AT)
+  const T_EARLIER = contentReadTime(EARLIER_AT)
+
+  it('a main row whose last Etsy read differs: the warning pill, and a hover that names the read\'s time and the two fields', () => {
+    const model = itemIdCellModel(etsyMain(drift()), 'GLOBAL', 'ETSY')
+    expect(model).toEqual({ kind: 'item', itemId: '9000000001', url: 'https://www.etsy.com/listing/9000000001', ended: false, editable: true, differs: 'Differs on Etsy',
+      tooltip: `${E.live('9000000001')} Etsy's last read (${T}) differs from Nexus in 2 fields: Title, Tags. ${DIFFERS_WHERE_TO_LOOK}` })
+    expect(T).toBe(new Date(READ_AT).toLocaleString())
+    const html = render(etsyMain(drift()))
+    expect(html).toContain('class="nds-pill warning">Differs on Etsy<')
+    // The id stays the cell's text (copy, export, filters): the mark is never part of it.
+    expect(listingIdCellText(etsyMain(drift()), ETSY)).toBe('9000000001')
+    // The column hover is the model's: the same path as every other hover of this cell.
+    expect((listingIdColumnDef({ ...ITEM_COL, label: 'Listing ID' } as SheetColumn, ETSY).tooltipValueGetter as (p: unknown) => unknown)({ data: etsyMain(drift()) })).toBe(model.tooltip)
+  })
+
+  it('(MINOR-9) the hover never says Publish sends Nexus\'s values: Etsy publishing may be off, or a line refused — it points to the publish review', () => {
+    const tooltip = itemIdCellModel(etsyMain(drift()), 'GLOBAL', 'ETSY').tooltip!
+    expect(tooltip).not.toMatch(/Publish sends/)
+    expect(DIFFERS_WHERE_TO_LOOK).toBe('Read live… shows Etsy\'s values; the publish review shows what Publish would send.')
+    expect(tooltip.endsWith(DIFFERS_WHERE_TO_LOOK)).toBe(true)
+  })
+
+  it('(MINOR-10) a difference an earlier read found and the last read did not compare is said apart, with ITS time — never as the last read\'s', () => {
+    const mixed = itemIdCellModel(etsyMain(drift({ differing: 2, lastRead: 1, fields: [
+      { field: 'title', label: 'Title', foundAt: READ_AT }, { field: 'property:513', label: 'Fake material', foundAt: EARLIER_AT },
+    ] })), 'GLOBAL', 'ETSY').tooltip!
+    expect(mixed).toBe(`${E.live('9000000001')} Etsy's last read (${T}) differs from Nexus in 1 field: Title. An earlier read found 1 more that the last read did not compare: Fake material (found ${T_EARLIER}). ${DIFFERS_WHERE_TO_LOOK}`)
+    // Only earlier finds left: the last read is not said to differ at all.
+    const onlyEarlier = itemIdCellModel(etsyMain(drift({ differing: 2, lastRead: 0, fields: [
+      { field: 'property:513', label: 'Fake material', foundAt: EARLIER_AT }, { field: 'translation:de', label: 'Translation (de)', foundAt: null },
+    ] })), 'GLOBAL', 'ETSY').tooltip!
+    expect(onlyEarlier).toBe(`${E.live('9000000001')} Etsy's last read (${T}) did not compare 2 fields that earlier reads found different from Nexus: Fake material (found ${T_EARLIER}), Translation (de). ${DIFFERS_WHERE_TO_LOOK}`)
+    expect(onlyEarlier).not.toContain('differs from Nexus in')
+  })
+
+  it('no difference recorded (null, absent, or a count of 0): no pill and the hover as before', () => {
+    for (const none of [null, undefined, drift({ differing: 0, lastRead: 0, fields: [] })]) {
+      const model = itemIdCellModel(etsyMain(none), 'GLOBAL', 'ETSY')
+      expect(model).toEqual({ kind: 'item', itemId: '9000000001', url: 'https://www.etsy.com/listing/9000000001', ended: false, tooltip: E.live('9000000001'), editable: true })
+      expect(render(etsyMain(none))).not.toContain('Differs on Etsy')
+    }
+  })
+
+  it('a variation row, a "Not confirmed" id and a draft never carry it (one Etsy listing: the mark is the main row\'s)', () => {
+    const variation = channelRow({ value: '9000000001', parentId: 'p', reason: 'Set on the main row: one Etsy listing carries the whole family.', listing: { externalListingId: '9000000001', contentDrift: drift() } })
+    expect(itemIdCellModel(variation, 'GLOBAL', 'ETSY')).toMatchObject({ kind: 'item', tooltip: 'Set on the main row: one Etsy listing carries the whole family.' })
+    expect(itemIdCellModel(variation, 'GLOBAL', 'ETSY')).not.toHaveProperty('differs')
+    expect(render(variation)).not.toContain('Differs on Etsy')
+    const held = channelRow({ value: null, listing: { externalListingId: '9000000001', lastSyncStatus: 'MISSING', contentDrift: drift() } })
+    expect(itemIdCellModel(held, 'GLOBAL', 'ETSY')).toMatchObject({ kind: 'notConfirmed', tooltip: E.missingHover('9000000001') })
+    expect(render(held)).not.toContain('Differs on Etsy')
+    expect(render(channelRow({ listing: { listingStatus: 'DRAFT', isPublished: false, contentDrift: drift() } }))).not.toContain('Differs on Etsy')
+  })
+
+  it('eBay and Shopify rows carrying a drift view are unchanged (Etsy only, E5 §7 Q1)', () => {
+    const ebay = ebayRow({ value: '520000000001', listing: { contentDrift: drift() } })
+    expect(itemIdCellModel(ebay, 'IT')).toEqual({ kind: 'item', itemId: '520000000001', url: 'https://www.ebay.it/itm/520000000001', ended: false, tooltip: ITEM_ID_COPY.live('520000000001'), editable: true })
+    expect(render(ebay, 'EBAY')).not.toContain('Differs')
+    const shopify = channelRow({ value: '7001', listing: { contentDrift: drift() } })
+    expect(itemIdCellModel(shopify, 'GLOBAL', 'SHOPIFY')).not.toHaveProperty('differs')
+    expect(render(shopify, 'SHOPIFY')).not.toContain('Differs')
+    expect(CHANNEL_ITEM_ID_COPY.EBAY.differs).toBeNull()
+    expect(CHANNEL_ITEM_ID_COPY.SHOPIFY.differs).toBeNull()
+  })
+
+  it('more fields than named: "and N more"; one field: "1 field"; a field Publish never sends says so', () => {
+    const many = itemIdCellModel(etsyMain(drift({ differing: 11, lastRead: 11, fields: Array.from({ length: 8 }, (_, i) => ({ field: `property:${200 + i}`, label: `Fake ${i}`, foundAt: READ_AT })) })), 'GLOBAL', 'ETSY')
+    expect(many.tooltip).toContain('differs from Nexus in 11 fields: Fake 0, Fake 1, Fake 2, Fake 3, Fake 4, Fake 5, Fake 6, Fake 7 and 3 more.')
+    const one = itemIdCellModel(etsyMain(drift({ differing: 1, lastRead: 1, fields: [{ field: 'photo_count', label: 'Photo count', foundAt: READ_AT }] })), 'GLOBAL', 'ETSY')
+    expect(one.tooltip).toBe(`${E.live('9000000001')} Etsy's last read (${T}) differs from Nexus in 1 field: Photo count. ${DIFFERS_WHERE_TO_LOOK} ${ETSY_DIFFERS_NOT_SENT.photo_count}`)
+    const styles = itemIdCellModel(etsyMain(drift({ differing: 1, lastRead: 1, fields: [{ field: 'styles', label: 'Styles', foundAt: READ_AT }] })), 'GLOBAL', 'ETSY')
+    expect(styles.tooltip).toMatch(/would send\. Etsy takes styles only when a listing is created\.$/)
+  })
+
+  it('an ended listing keeps its Ended words before the difference', () => {
+    const ended = itemIdCellModel(etsyMain(drift(), { listingStatus: 'ENDED' }), 'GLOBAL', 'ETSY')
+    expect(ended).toMatchObject({ ended: true, differs: 'Differs on Etsy' })
+    expect(ended.tooltip!.startsWith(E.endedHover('9000000001'))).toBe(true)
+  })
+
+  it('the Etsy column fits the id, the pill and the three cell actions; eBay and Shopify keep their width', () => {
+    expect(listingIdColumnDef({ ...ITEM_COL, label: 'Listing ID' } as SheetColumn, ETSY)).toMatchObject({ minWidth: ETSY_LISTING_ID_COLUMN_MIN_WIDTH, width: ETSY_LISTING_ID_COLUMN_MIN_WIDTH })
+    expect(listingIdColumnDef(ITEM_COL, EBAY)).toMatchObject({ minWidth: ITEM_ID_COLUMN_MIN_WIDTH, width: ITEM_ID_COLUMN_MIN_WIDTH })
+    expect(listingIdColumnDef(ITEM_COL, SHOPIFY)).toMatchObject({ minWidth: ITEM_ID_COLUMN_MIN_WIDTH })
   })
 })

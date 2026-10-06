@@ -47,6 +47,9 @@ import { PortfolioPicker } from '../../campaign-builder/sp-super-wizard/Portfoli
 import { AiGoalPreview } from './AiGoalPreview'
 import { marketChangeNote, useOnMarketChange } from '../../campaign-builder/marketChange'
 import './ai-goal.css'
+import { commandKeyFor, useCommandKey } from '@/lib/command-key'
+import { launchBlocked, readChecks, sendLaunch, type LaunchChecks } from '../../campaign-builder/launchChecks'
+import { LaunchChecksPanel } from '../../campaign-builder/LaunchChecksPanel'
 
 type TargetKey = 'impression' | 'sales' | 'roas' | 'liquidate' | 'rank'
 type BudgetMode = 'strict' | 'shared'
@@ -167,15 +170,17 @@ export function AiGoalBuilder() {
   // ── "what will be built": the server's pure scaffold plan, debounced ──
   const [scaffold, setScaffold] = useState<Scaffold | null>(null)
   const [scaffoldLoading, setScaffoldLoading] = useState(false)
+  // CC-13 / CC-14 — the preview also answers what would stop the launch (refusals) and what only warns.
+  const [checks, setChecks] = useState<LaunchChecks | null>(null)
   const payloadRef = useRef(payload); payloadRef.current = payload
   useEffect(() => {
-    if (!products.length) { setScaffold(null); return }
+    if (!products.length) { setScaffold(null); setChecks(null); return }
     let alive = true
     setScaffoldLoading(true)
     const t = setTimeout(() => {
       fetch(`${getBackendUrl()}/api/advertising/ai-goals/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadRef.current) })
-        .then((r) => r.json()).then((j) => { if (alive) setScaffold(j?.ok ? (j.scaffold as Scaffold) : null) })
-        .catch(() => { if (alive) setScaffold(null) }).finally(() => { if (alive) setScaffoldLoading(false) })
+        .then((r) => r.json()).then((j) => { if (alive) { setScaffold(j?.ok ? (j.scaffold as Scaffold) : null); setChecks(readChecks(j)) } })
+        .catch(() => { if (alive) { setScaffold(null); setChecks(null) } }).finally(() => { if (alive) setScaffoldLoading(false) })
     }, 600)
     return () => { alive = false; clearTimeout(t) }
   }, [payload, products.length])
@@ -184,21 +189,30 @@ export function AiGoalBuilder() {
   const valid = goalName.trim().length > 0 && !!market && products.length > 0 && (
     budgetMode === 'shared' ? Number(sharedBudget) >= 1 : products.every((p) => Number(p.budget) >= 1)
   )
+  // CC-24 — one Idempotency-Key per Launch press for the goal, and one per goal for building its campaigns: a press
+  // whose answer was lost is sent again with the same key and never makes a second goal or a second scaffold. A goal
+  // already made for these exact settings is not made again.
+  const goalKey = useCommandKey()
+  const madeGoal = useRef<{ id: string; payload: string } | null>(null)
   const launch = async () => {
     if (!valid || launching) return
     setLaunching(true); setLaunchPhase('create'); setLaunchResult({})
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Could not create the product goal')
-      const goalId = j?.goal?.id as string | undefined
+      let goalId = madeGoal.current?.payload === JSON.stringify(payload) ? madeGoal.current.id : undefined
+      if (!goalId) {
+        const made = await sendLaunch<{ goal?: { id?: string } }>(goalKey, `${getBackendUrl()}/api/advertising/ai-goals`, payload)
+        if (!made.ok) throw new Error(made.error)
+        goalId = made.body.goal?.id
+        if (!goalId) throw new Error('Could not create the product goal')
+        madeGoal.current = { id: goalId, payload: JSON.stringify(payload) }
+      }
       setLaunchPhase('materialize'); setLaunchResult({ goalId })
-      const m = await fetch(`${getBackendUrl()}/api/advertising/ai-goals/${goalId}/materialize`, { method: 'POST' })
-      const mj = await m.json().catch(() => ({}))
-      if (!m.ok || mj?.ok === false) {
+      const m = await sendLaunch<{ campaigns?: unknown[]; rules?: unknown[]; errors?: string[] }>(commandKeyFor(`ads-goal-materialize:${goalId}`), `${getBackendUrl()}/api/advertising/ai-goals/${goalId}/materialize`, {})
+      if (!m.ok) {
         setLaunchPhase('partial')
-        setLaunchResult({ goalId, message: mj?.error || 'The goal was saved, but building its campaigns failed. Retry from the dashboard — it shows as "Not launched".' })
+        setLaunchResult({ goalId, message: m.error || 'The goal was saved, but building its campaigns failed. Retry from the dashboard — it shows as "Not launched".' })
       } else {
+        const mj = m.body
         setLaunchPhase('done')
         setLaunchResult({ goalId, campaigns: Array.isArray(mj?.campaigns) ? mj.campaigns.length : 0, rules: Array.isArray(mj?.rules) ? mj.rules.length : 0, errors: Array.isArray(mj?.errors) ? mj.errors : [] })
       }
@@ -215,7 +229,7 @@ export function AiGoalBuilder() {
         <span className="sep" />
         <span className="crumb">New Product Goal</span>
         <span className="grow" />
-        <Button variant="primary" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
+        <Button variant="primary" disabled={!valid || launching || launchBlocked(checks)} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
       </header>
 
       <div className="h10-aig-body">
@@ -400,6 +414,7 @@ export function AiGoalBuilder() {
           <section className="h10-aig-sec">
             <h2>What will be built</h2>
             <div className="h10-aig-card">
+              <LaunchChecksPanel checks={checks} />
               <ScaffoldPreview scaffold={scaffold} loading={scaffoldLoading} hasProducts={products.length > 0} />
             </div>
           </section>
@@ -410,7 +425,7 @@ export function AiGoalBuilder() {
     <Button onClick={() => router.push(exitTo)}>Cancel</Button>
         <span className="grow" />
         {launchPhase === 'failed' && <span className="err">{launchResult.message}</span>}
-        <Button variant="primary" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
+        <Button variant="primary" disabled={!valid || launching || launchBlocked(checks)} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
       </footer>
 
       {showAddProducts && <AddProductsModal market={market} selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}

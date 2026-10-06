@@ -28,6 +28,10 @@ vi.mock('react', async importOriginal => ({
     harness.cleanups[at] = effect()
   },
 }))
+// The overflow mark is its own hook with its own tests (`lib/horizontal-overflow.vitest.test.ts`); here it would add a
+// layout effect and an observer to a harness that counts the reveal's.
+const overflowMarks = vi.hoisted(() => ({ calls: 0 }))
+vi.mock('./useHorizontalOverflow', () => ({ useHorizontalOverflow: () => { overflowMarks.calls += 1 } }))
 vi.stubGlobal('CSS', { escape: (value: string) => value })
 vi.stubGlobal('ResizeObserver', class {
   entry: { callback: () => void; observed: number; live: boolean }
@@ -113,5 +117,12 @@ describe('Tabs keeps the active tab in view', () => {
     labelsGrow(90)
     expect(harness.scrolls).toEqual([])
     expect(harness.observers).toEqual([])
+  })
+
+  it('every bar asks for the overflow mark — a host may scroll a strip that did not ask to (the subheader\'s tabs)', () => {
+    overflowMarks.calls = 0
+    render(tabs('IT'), 'IT', false)
+    render(tabs('IT'), 'IT')
+    expect(overflowMarks.calls).toBe(2)
   })
 })

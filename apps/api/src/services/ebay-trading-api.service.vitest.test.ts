@@ -50,6 +50,41 @@ describe('buildReviseInventoryStatusXml', () => {
     const xmlNeg = buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', quantity: -3 })
     expect(xmlNeg).toContain('<Quantity>0</Quantity>')
   })
+  it('a quantity-only request is byte-for-byte the one sent before StartPrice existed', () => {
+    expect(xml).toBe(`<?xml version="1.0" encoding="UTF-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <InventoryStatus>
+    <ItemID>110556677</ItemID>
+    <SKU>LNR-BLK-M</SKU>
+    <Quantity>7</Quantity>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>`)
+  })
+})
+
+// 2026-10-06 (Trading stock sync) — a Trading listing's price row: StartPrice in the market's currency, same InventoryStatus.
+describe('buildReviseInventoryStatusXml — StartPrice', () => {
+  it('a price alone: StartPrice with its currency and two decimals, no Quantity', () => {
+    const xml = buildReviseInventoryStatusXml({ itemId: '110556677', sku: 'LNR-BLK-M', price: 19.9, currency: 'EUR' })
+    expect(xml).toContain('<StartPrice currencyID="EUR">19.90</StartPrice>')
+    expect(xml).not.toContain('<Quantity>')
+  })
+  it('a quantity and a price in one InventoryStatus', () => {
+    const xml = buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', quantity: 2, price: 12.5, currency: 'GBP' })
+    expect(xml).toContain(`  <InventoryStatus>
+    <ItemID>1</ItemID>
+    <SKU>S</SKU>
+    <Quantity>2</Quantity>
+    <StartPrice currencyID="GBP">12.50</StartPrice>
+  </InventoryStatus>`)
+    expect(xml.match(/<InventoryStatus>/g)).toHaveLength(1)
+  })
+  it('refuses a request with nothing to change, a price that is not a positive number, or a price with no currency', () => {
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S' })).toThrow(/quantity or a price/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: 0, currency: 'EUR' })).toThrow(/positive number/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: Number.NaN, currency: 'EUR' })).toThrow(/positive number/)
+    expect(() => buildReviseInventoryStatusXml({ itemId: '1', sku: 'S', price: 10 })).toThrow(/currency/)
+  })
 })
 
 import { buildAddFixedPriceItemXml } from './ebay-trading-api.service.js'
@@ -305,5 +340,25 @@ describe('RT.2 — buildReviseInventoryStatusBatchXml', () => {
         entries: Array.from({ length: REVISE_INVENTORY_STATUS_MAX_ENTRIES + 1 }, (_, i) => ({ sku: `S${i}`, quantity: 1 })),
       }),
     ).toThrow()
+  })
+})
+
+// 2026-10-06 (Trading stock sync) — eBay's "this is an Inventory item" answer to a Trading revise (21919474).
+import { isEbayInventoryManagedRefusal, tradingErrorBlocks } from './ebay-trading-api.service.js'
+describe('isEbayInventoryManagedRefusal', () => {
+  it('the code decides; eBay\'s English and Italian words are recognised without it', () => {
+    expect(isEbayInventoryManagedRefusal(['21919474'], '')).toBe(true)
+    expect(isEbayInventoryManagedRefusal([], 'This operation is not allowed for inventory items.')).toBe(true)
+    expect(isEbayInventoryManagedRefusal([], 'operazione non consentita per gli oggetti del magazzino')).toBe(true)
+  })
+  it('another ReviseInventoryStatus refusal that names InventoryStatus is not one', () => {
+    expect(isEbayInventoryManagedRefusal(['21916585'], 'The SKU in InventoryStatus is not in this listing.')).toBe(false)
+  })
+})
+describe('tradingErrorBlocks', () => {
+  it('reads each error block\'s code, classification and words, and leaves warnings out', () => {
+    const raw = '<Errors><ShortMessage>Note</ShortMessage><ErrorCode>21917091</ErrorCode><SeverityCode>Warning</SeverityCode></Errors>'
+      + '<Errors><LongMessage>Internal error.</LongMessage><ErrorCode>10007</ErrorCode><SeverityCode>Error</SeverityCode><ErrorClassification>SystemError</ErrorClassification></Errors>'
+    expect(tradingErrorBlocks(raw)).toEqual([{ code: '10007', classification: 'SystemError', message: 'Internal error' }])
   })
 })

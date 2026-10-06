@@ -129,8 +129,8 @@ describe('CC-4 — the bid strategy becomes rules the engine runs', () => {
   it('🔴 Max Impressions / Max Orders / Custom create no rule at all (no more set_bid_strategy)', async () => {
     for (const strategy of ['maxImpressions', 'maxOrders', 'custom']) {
       const g = `NoEngine-${strategy}`
-      const res = await app.inject({ method: 'POST', url: SPW, payload: { market: 'DE', productGroupName: g, campaigns: spwCampaigns(g), automationMode: 'rule', bidConfig: { strategy, targetAcos: '30' } } })
-      expect(res.statusCode).toBe(200)
+      const res = await app.inject({ method: 'POST', url: SPW, payload: { market: 'DE', productGroupName: g, products: [{ sku: 'TEST-SKU-W2C' }], campaigns: spwCampaigns(g), automationMode: 'rule', bidConfig: { strategy, targetAcos: '30' } } })
+      expect(res.statusCode, res.payload).toBe(200)
       expect(await rulesNamed(g)).toHaveLength(0)
     }
     const stray = await inside(() => database.client.automationRule.findMany({ where: { description: { contains: 'Bid strategy from' } } }))
@@ -138,8 +138,8 @@ describe('CC-4 — the bid strategy becomes rules the engine runs', () => {
   })
 
   it('🔴 Single, Target ACoS 25 %: one rule for its campaign — 0.25 and the campaignId', async () => {
-    const res = await app.inject({ method: 'POST', url: SINGLE, payload: { market: 'IT', name: 'SingleAcos', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }], bidConfig: { strategy: 'targetAcos', targetAcos: '25' }, autoBidAdjust: true } })
-    expect(res.statusCode).toBe(200)
+    const res = await app.inject({ method: 'POST', url: SINGLE, payload: { market: 'IT', name: 'SingleAcos', products: [{ sku: 'TEST-SKU-W2C' }], budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }], bidConfig: { strategy: 'targetAcos', targetAcos: '25' }, autoBidAdjust: true } })
+    expect(res.statusCode, res.payload).toBe(200)
     const campaignId = JSON.parse(res.payload).campaignId
     const rules = await rulesNamed('SingleAcos — ')
     expect(rules).toHaveLength(1)
@@ -164,8 +164,8 @@ describe('CC-28 — a create from the screens is logged with the signed-in perso
   })
 
   it('Single: the same; without a session the x-actor-id header still names the person', async () => {
-    const signed = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-test-signed-in': 'u-owner' }, payload: { market: 'IT', name: 'ActorSingle', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
-    const header = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-actor-id': 'u-header' }, payload: { market: 'IT', name: 'ActorHeader', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
+    const signed = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-test-signed-in': 'u-owner' }, payload: { market: 'IT', name: 'ActorSingle', products: [{ sku: 'TEST-SKU-W2C' }], budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
+    const header = await app.inject({ method: 'POST', url: SINGLE, headers: { 'x-actor-id': 'u-header' }, payload: { market: 'IT', name: 'ActorHeader', products: [{ sku: 'TEST-SKU-W2C' }], budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }] } })
     const actorOf = async (res: { payload: string }) => (await inside(() => database.client.advertisingActionLog.findFirst({ where: { entityId: JSON.parse(res.payload).campaignId, actionType: 'create_campaign' } })))?.userId
     expect(await actorOf(signed)).toBe('user:u-owner')
     expect(await actorOf(header)).toBe('user:u-header')

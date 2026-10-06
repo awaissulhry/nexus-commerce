@@ -11,7 +11,10 @@
  *   publish-listing     (L5) publishes one product family to one channel, market and account THROUGH the studio — the
  *                       studio's review, its exact selection and its submit, run as the person who approves it — and only
  *                       the field groups named (d4: a re-publish never sends stock, price or fulfilment; a first
- *                       publish creates the listing with them).
+ *                       publish creates the listing with them). Etsy (E5b): a listing Etsy already holds, as the studio
+ *                       sends it (E2) — a variation Etsy does not hold goes with its price and stock (fields "all"), bound
+ *                       by the approval; a new Etsy listing is created as an Etsy draft (E3), its whole create request
+ *                       bound by the approval.
  *
  * All run in the caller's business (row-level security; no argument names a business), never take a channel's own id
  * (an ASIN, an eBay item number) as input, and resolve an account only among this business's own connections.
@@ -22,7 +25,6 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { blockingIssues, isPhotoChangeId, PUBLICATION_PHOTO_FIELDS, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
-import { ETSY_SEND_NOT_YET } from '@nexus/shared/publish-actions'
 import prisma from '../../../db.js'
 import { connectionLabel } from '../../connection-label.js'
 import { etsyShopLabel } from '../../etsy/shop-label.js'
@@ -35,6 +37,22 @@ import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 const studio = () => import('../../pim/studio-publication.service.js')
 
 const PUBLISH_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
+/*
+ * E5b — the Etsy sentences below are local on purpose: a shared constant a later PR deletes would leave this file
+ * importing a name the built package no longer has (review MAJOR-2). Since E3, a new Etsy listing is created through the
+ * studio as an Etsy draft, like any first publish; the studio refuses an Active create and a second create while one is open.
+ */
+/** E5b (Q7 = A) — Etsy replaces a listing's whole inventory in one write, so its variations go only with fields "all". */
+export const ETSY_VARIATIONS_ALL_ONLY = 'Etsy takes its variations as one whole inventory: name fields "all" to send them.'
+/** E5b — the undo of a first Etsy publish: it made an Etsy draft, which cannot be closed (there is nothing to pause), and Nexus cannot delete an Etsy listing. */
+export const ETSY_FIRST_PUBLISH_UNDO = 'A first Etsy publish makes an Etsy draft, which cannot be closed, and Nexus cannot delete an Etsy listing. '
+  + 'To take it back: delete the draft on etsy.com, then clear its Listing ID in Nexus (Clear in the product sheet\'s Listing ID cell, or unlink-channel-id). '
+  + 'If the create\'s result is UNVERIFIED and Nexus holds no Listing ID yet, first open that publish in Publish history and choose Mark as checked: '
+  + 'Nexus looks for the draft on Etsy and links it.'
+/** Photos do not go to Etsy yet (said in the studio's own words, kept here: see above). */
+export const ETSY_PHOTOS_NOT_SENT_YET = 'Photos are not sent to Etsy yet; they come in a later Nexus update.'
+/** An Etsy listing has no bullet points: naming only them sends nothing, and says why. */
+export const ETSY_NO_BULLETS = 'Etsy listings have no bullet points.'
 const ISSUE_CAP = 30
 const CHANGE_CAP = 60
 const ROW_CAP = 60
@@ -113,16 +131,13 @@ function trimmedReview(review: StudioPublishReview) {
   const rank: Record<string, number> = { SEND: 0, DIFFERS: 1, CANNOT_COMPARE: 2, SAME: 3 }
   const shownChanges = [...changes].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9)).slice(0, CHANGE_CAP)
   const issues = [...review.issues].sort((a, b) => Number(a.severity !== 'error') - Number(b.severity !== 'error')).slice(0, ISSUE_CAP)
-  // E1 — Nexus sends nothing to Etsy yet (publish-listing refuses it): an Etsy review is never ready, and says why.
-  const notSendable = review.scope.channel === 'ETSY' ? ETSY_SEND_NOT_YET : null
   return {
     mode: review.mode,
     action: review.action,
     accountLabel: review.accountLabel,
     aliasLabel: review.aliasLabel,
     // Ready: nothing blocks it. Only photos may be sent when every problem names a field other than the photos.
-    ready: errors.length === 0 && !notSendable,
-    ...(notSendable ? { notReadyBecause: notSendable } : {}),
+    ready: errors.length === 0,
     ...(review.photosOnly ? { photosOnly: true } : {}),
     ...(review.previousPublicationId ? { previousPublicationId: review.previousPublicationId } : {}),
     issueCounts: { errors: errors.length, warnings: review.issues.length - errors.length },
@@ -177,7 +192,9 @@ const publishReview: AgentTool = {
     + 'submitted from it — publishing is a separate change a person approves in Nexus. previousPublicationId names a '
     + 'publication at this destination still waiting for its result (publication-status reads it). Amazon EU merchant '
     + 'quantity is one number for every EU market. eBay\'s own check of a new eBay listing is not run here: it runs when '
-    + 'an approved publish-listing runs, and an eBay refusal there sends nothing.',
+    + 'an approved publish-listing runs, and an eBay refusal there sends nothing. Etsy (market GLOBAL) is read live only '
+    + 'while Etsy publishing is on in Nexus; while it is off, the review says so and nothing can be sent. A new Etsy listing '
+    + 'is one create line: it is created as an Etsy draft, not for sale.',
   async handler(args) {
     const productId = String(args.productId)
     const channel = String(args.channel)
@@ -213,6 +230,10 @@ const publishReview: AgentTool = {
 const PENDING = new Set(['PUBLISHING', 'SUBMITTED', 'UNVERIFIED'])
 const PENDING_NOTE = 'Pending — Nexus checks it again by itself every 2 minutes (the publication sweep), or when someone opens '
   + 'its result in the Nexus studio. Read it again later.'
+/** E5b review MINOR-3 — an Etsy result is final at once: the sweep never checks an Etsy UNVERIFIED again; a person does. */
+const ETSY_UNVERIFIED_NOTE = 'Not checked again by Nexus by itself: a person checks the listing on Etsy, then in Publish history '
+  + 'opens this publish and chooses Mark as checked (for a new listing, Nexus first looks for the draft on Etsy and links it). '
+  + 'Until then, a new publish of this listing is refused.'
 
 const publicationStatus: AgentTool = {
   name: 'publication-status',
@@ -231,14 +252,17 @@ const publicationStatus: AgentTool = {
     + 'not confirmed yet), PUBLISHING, ACCEPTED, VERIFIED, PARTIAL (some products rejected), FAILED or NOT_SUBMITTED, with '
     + 'each product\'s result. It only reads: it never asks the channel and changes nothing. A pending publication '
     + 'settles by itself (Nexus checks it again every 2 minutes) or when someone opens its result in the Nexus '
-    + 'studio; then this tool reports the settled result.',
+    + 'studio; then this tool reports the settled result. Etsy: a result is final at once; UNVERIFIED waits for a person '
+    + 'to check the listing on Etsy and mark the publication checked in Nexus.',
   async handler(args): Promise<ToolResult> {
     const id = String(args.publicationId)
     const stored = await (await studio()).readStoredPublication(id)
     if (!stored) return { ok: false, error: 'Publication not found' }
     const product = await prisma.product.findFirst({ where: { id: stored.productId }, select: { sku: true } })
     const status = stored.status === 'PREVIEW' ? 'NOT_SUBMITTED' : stored.status
-    const pending = PENDING.has(status)
+    // An Etsy UNVERIFIED is never swept (studio-publication-settle.ts `nextPublicationCheck`): it waits for a person.
+    const etsyUnverified = stored.scope?.channel === 'ETSY' && status === 'UNVERIFIED'
+    const pending = PENDING.has(status) && !etsyUnverified
     const result = stored.result
     const message = result?.message
       ?? (status === 'PUBLISHING' ? 'The channel is processing this publication.' : status === 'NOT_SUBMITTED' ? 'This review was never submitted: nothing was sent.' : null)
@@ -251,33 +275,72 @@ const publicationStatus: AgentTool = {
         destination: { channel: stored.scope?.channel ?? null, market: stored.scope?.marketplace ?? null, accountId: stored.scope?.accountId ?? null },
         submittedAt: stored.startedAt,
         status,
-        settled: !pending && status !== 'NOT_SUBMITTED',
+        settled: !pending && !etsyUnverified && status !== 'NOT_SUBMITTED',
         message: clip(message, 600),
         ...(result?.warnings?.length ? { warnings: result.warnings.slice(0, 10).map((w) => clip(w)) } : {}),
         results: (result?.results ?? []).slice(0, RESULT_CAP).map((r) => ({ sku: r.sku, status: r.status, message: clip(r.message), ...(r.reference ? { reference: r.reference } : {}) })),
         ...((result?.results.length ?? 0) > RESULT_CAP ? { moreResults: result!.results.length - RESULT_CAP } : {}),
-        ...(pending ? { next: PENDING_NOTE } : {}),
+        ...(pending ? { next: PENDING_NOTE } : etsyUnverified ? { next: ETSY_UNVERIFIED_NOTE } : {}),
       },
     }
   },
 }
 
 /**
+ * E3 — the variations an Etsy create sends, read from the create line's whole request (its inventory call): each SKU with
+ * its price (in the Etsy market's currency), quantity and on/off. All of them are in a draft. E5b review R2-2: the preview
+ * shows them, since the approval is bound to them.
+ */
+export function etsyCreateVariations(plan: PublishPlan, currency: string | null): EtsyAddedVariation[] {
+  const line = plan.selected.find((c) => groupOf(c.field) === 'create')
+  type Product = { sku?: unknown; offerings?: Array<{ price?: unknown; quantity?: unknown; is_enabled?: unknown }> }
+  const request = line?.current.state === 'value' ? line.current.value as { calls?: Array<{ fields?: unknown; body?: { products?: unknown } }> } | null : null
+  const inventory = request?.calls?.find((call) => Array.isArray(call.fields) && call.fields.includes('inventory'))
+  const products = Array.isArray(inventory?.body?.products) ? inventory!.body!.products as Product[] : []
+  return products.map((p) => {
+    const offer = p?.offerings?.[0] ?? {}
+    return { sku: typeof p?.sku === 'string' ? p.sku : '', price: { amount: typeof offer.price === 'number' ? offer.price : null, currency },
+      quantity: typeof offer.quantity === 'number' ? offer.quantity : null, enabled: offer.is_enabled !== false, inDraft: true }
+  })
+}
+
+/**
  * N4 — a publish in words. The studio's review already knows, per row, whether a new listing starts active or inactive
  * and which rows are held (blocked, deleted and left Not listed, or Not listed): the preview used to drop all of it.
+ * Etsy re-publish (E5b review MINOR-1): a row new on Etsy is a variation of the listing, not a listing, and it is added
+ * only when the variations line is sent: `etsyAdded` (the variations the send adds, with their price and stock) says it.
  */
-export function publishStory(d: { product: { sku: string }; channel: string; market: string }, review: StudioPublishReview, plan: PublishPlan, euSiblings: boolean) {
+export function publishStory(d: { product: { sku: string }; channel: string; market: string }, review: StudioPublishReview, plan: PublishPlan, euSiblings: boolean,
+  etsyAdded: EtsyAddedVariation[] = [], etsyCreated: EtsyAddedVariation[] | null = null) {
   const where = `${channelLabel(d.channel)} ${d.market}`
-  const creates = review.rows.filter((r) => r.startsAs).slice(0, 60).map((r) => ({ sku: r.sku, startsAs: r.startsAs!, ...(r.relist ? { relist: true } : {}) }))
+  const etsyRepublish = d.channel === 'ETSY' && plan.publish === 're-publish'
+  // E3 — an Etsy first publish is ONE listing, created as an Etsy draft whatever the rows' choices (an Active create is
+  // refused by the studio): its rows are the listing's variations, never listings of their own.
+  const etsyCreate = d.channel === 'ETSY' && plan.publish === 'first publish'
+  const creates = etsyRepublish ? []
+    : review.rows.filter((r) => r.startsAs).slice(0, 60).map((r) => ({ sku: r.sku, startsAs: etsyCreate ? 'draft' : r.startsAs!, ...(r.relist ? { relist: true } : {}) }))
   const held = review.rows.filter((r) => r.blocked || r.deleted || r.notListed).slice(0, 60)
     .map((r) => ({ sku: r.sku, why: clip(r.blocked ?? (r.deleted ? 'deleted from the channel and left Not listed' : 'its Status is Not listed')) }))
   const active = creates.filter((c) => c.startsAs === 'active').length
   const parts: string[] = []
-  if (creates.length) {
+  if (etsyCreate) {
+    const variations = (etsyCreated ?? etsyCreateVariations(plan, null)).length
+    parts.push(`creates 1 Etsy draft listing with ${variations} variation${variations === 1 ? '' : 's'} (not for sale; going live comes with photos later), `
+      + 'with the price and stock Nexus holds for them (createsVariations)')
+  } else if (creates.length) {
     parts.push(`creates ${creates.length} listing${creates.length === 1 ? '' : 's'} on ${where} (${active} active, ${creates.length - active} inactive) `
       + 'with the price, quantity and fulfilment Nexus holds for them (listing-matrix shows them)')
   }
-  const fieldsSent = plan.selected.filter((c) => groupOf(c.field) !== 'create').length
+  if (etsyAdded.length) {
+    const hidden = etsyAdded.filter((a) => !a.enabled).length
+    const count = `${etsyAdded.length} variation${etsyAdded.length === 1 ? '' : 's'}`
+    // E5b review R2-3 — inside an Etsy draft nothing is for sale: said so, never "for sale".
+    parts.push((etsyAdded.some((a) => a.inDraft)
+      ? `adds ${count} to the Etsy draft listing (not for sale; ${etsyAdded.length === 1 ? 'it sells' : 'they sell'} once the listing goes live${hidden ? `; ${hidden} hidden` : ''}) `
+      : `adds ${count} to the Etsy listing (${etsyAdded.length - hidden} for sale, ${hidden} hidden) `)
+      + 'with the price and stock Nexus holds for them (addsVariations)')
+  }
+  const fieldsSent = etsyCreate ? 0 : plan.selected.filter((c) => groupOf(c.field) !== 'create').length
   if (fieldsSent) parts.push(`sends ${fieldsSent} changed field${fieldsSent === 1 ? '' : 's'} to ${where}`)
   if (held.length) parts.push(`leaves ${held.length} row${held.length === 1 ? '' : 's'} out (held)`)
   const summary = `${d.product.sku}: ${plan.publish} — ${parts.length ? parts.join('; ') : `nothing to send to ${where}`}.`
@@ -293,8 +356,25 @@ export function publishStory(d: { product: { sku: string }; channel: string; mar
  * a first publish creates the listing with them (inside its create message). */
 export const FIELD_GROUPS = ['title', 'description', 'bullets', 'keywords', 'photos', 'attributes'] as const
 type FieldGroup = (typeof FIELD_GROUPS)[number]
-type Group = FieldGroup | 'create' | 'never'
+/** `variations`: Etsy's whole inventory (one replace), sent only with fields "all" — never a group a caller names (Q7 = A). */
+type SendGroup = FieldGroup | 'variations'
+type Group = SendGroup | 'create' | 'never'
 const NEVER_SENT = 'A re-publish never sends stock, price or fulfilment: set-listing-stock and set-listing-price change them.'
+/** E5b MAJOR-1 — a variation an Etsy send adds: it goes with the price, stock and on/off (Active or hidden) Nexus holds. */
+export interface EtsyAddedVariation {
+  sku: string
+  /** The price as Etsy is sent it, in the Etsy market's currency (Nexus never converts). */
+  price: { amount: number | null; currency: string | null }
+  quantity: number | null
+  enabled: boolean
+  /** The listing is an Etsy draft (a create, or a draft already on Etsy): nothing in it sells until it goes live. */
+  inDraft: boolean
+}
+/** E5b review R2-3 — how a variation joins: never "for sale" inside an Etsy draft. */
+export const ETSY_IN_DRAFT = 'added to the draft (not for sale; it sells once the listing goes live)'
+const etsyStartsAs = (v: EtsyAddedVariation) => (!v.enabled ? 'hidden' : v.inDraft ? ETSY_IN_DRAFT : 'for sale')
+/** What a preview shows for each such variation: what the approval binds. */
+const etsyVariationView = (v: EtsyAddedVariation) => ({ sku: v.sku, price: v.price, quantity: v.quantity, startsAs: etsyStartsAs(v) })
 const SENT_IN_CREATE = 'Sent inside the new listing: a first publish creates it with its price, quantity and (Amazon) fulfilment. '
   + 'After that, set-listing-stock and set-listing-price change them.'
 
@@ -311,9 +391,20 @@ export function groupOf(field: string): Group {
   return 'attributes'
 }
 
+/**
+ * The groups one reviewed field belongs to. Etsy (E5b): a translation line carries its title, description and tags
+ * together, so naming any of those groups sends it; the `inventory` line is the listing's variations (sent only with
+ * fields "all"). Every other field, and every other channel: its one group (`groupOf`).
+ */
+export function groupsOf(field: string, channel: string): Group[] {
+  if (channel === 'ETSY' && field.startsWith('translation:')) return ['title', 'description', 'keywords']
+  if (channel === 'ETSY' && field === 'inventory') return ['variations']
+  return [groupOf(field)]
+}
+
 type Fields = 'all' | 'photos' | FieldGroup[]
-const wantedGroups = (fields: Fields): Set<FieldGroup> =>
-  new Set(fields === 'all' ? FIELD_GROUPS : fields === 'photos' ? ['photos'] : fields)
+const wantedGroups = (fields: Fields): Set<SendGroup> =>
+  new Set<SendGroup>(fields === 'all' ? [...FIELD_GROUPS, 'variations'] : fields === 'photos' ? ['photos'] : fields)
 
 interface PublishPlan {
   publish: 'first publish' | 're-publish'
@@ -350,11 +441,19 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
     return plan
   }
   for (const change of changes) {
-    const group = groupOf(change.field)
+    const groups = groupsOf(change.field, channel)
+    const group = groups[0]
     const skip = (reason: string) => plan.notSent.push({ sku: change.sku, field: change.field, label: change.label, reason })
     if (group === 'never') { if (change.status !== 'SAME') skip(plan.publish === 'first publish' ? SENT_IN_CREATE : NEVER_SENT); continue }
     if (group === 'create') { if (change.selectable) plan.selected.push(change); else skip(change.reason); continue }
-    if (!wanted.has(group)) continue
+    if (!groups.some((g) => wanted.has(g as SendGroup))) {
+      // Etsy's variations differ but the fields named leave them out: said, never silently dropped — "all" when "all"
+      // would send them, else the studio's own reason (review MINOR-2).
+      if (group === 'variations' && change.status !== 'SAME') {
+        skip(change.selectable && (change.status === 'SEND' || change.status === 'DIFFERS') ? ETSY_VARIATIONS_ALL_ONLY : change.reason)
+      }
+      continue
+    }
     if (change.status === 'SAME') { plan.unchanged += 1; continue }
     if (change.selectable && (change.status === 'SEND' || change.status === 'DIFFERS')) plan.selected.push(change)
     else skip(change.reason)
@@ -366,6 +465,10 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
   }
   const blockers = blockingIssues(review.issues, ids)
   if (blockers.length) plan.refusal = blockers.map((i) => i.message).join(' ')
+  else if (!plan.selected.length && channel === 'ETSY' && [...wanted].every((g) => g === 'photos' || g === 'bullets')) {
+    // Etsy has no bullet points, and Nexus sends it no photos yet: naming only those sends nothing, said truly.
+    plan.refusal = [...(wanted.has('bullets') ? [ETSY_NO_BULLETS] : []), ...(wanted.has('photos') ? [ETSY_PHOTOS_NOT_SENT_YET] : [])].join(' ')
+  }
   else if (!plan.selected.length) {
     plan.refusal = plan.notSent.length
       ? `Nothing can be sent for the fields named: ${plan.notSent.slice(0, 5).map((n) => `${n.sku} ${n.label}: ${n.reason}`).join(' · ')}`
@@ -439,30 +542,83 @@ const canonical = (value: unknown) => JSON.stringify(value, (_key, entry) =>
   entry && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.keys(entry).sort().map((key) => [key, entry[key]])) : entry)
 
 /** What a person approves, as one hash: the destination, what is sent and what it replaces. A difference refuses the run. */
-function fingerprintOf(destination: Record<string, unknown>, review: StudioPublishReview, plan: PublishPlan, euQuantity: EuQuantity[], location: string | null) {
+function fingerprintOf(destination: Record<string, unknown>, review: StudioPublishReview, plan: PublishPlan, euQuantity: EuQuantity[], location: string | null,
+  etsyAdded: EtsyAddedVariation[] = []) {
   return createHash('sha256').update(canonical({
     destination, publish: plan.publish, mode: review.mode,
     send: plan.selected.map((c) => [c.id, c.status, c.current, c.channel]),
     ...(review.changes ? {} : { products: review.rows.map((r) => [r.productId, r.sku, r.title, r.existing]), visibility: review.visibility ?? null, location,
       overwrite: review.overwrite?.requiresConfirmation ?? false }),
     euQuantity,
+    // E5b MAJOR-1 — the price, stock and on/off of each variation an Etsy send adds: a change after the approval asks again.
+    ...(etsyAdded.length ? { etsyAdded } : {}),
   })).digest('hex')
+}
+
+/** The SKUs of an Etsy variations value (the `inventory` line: the structure, one product per SKU). */
+function etsySkusOf(value: StudioPublishValue): string[] {
+  const products = value.state === 'value' ? (value.value as { products?: Array<{ sku?: unknown }> } | null)?.products : null
+  return Array.isArray(products) ? products.map((p) => p?.sku).filter((sku): sku is string => typeof sku === 'string' && sku !== '') : []
+}
+
+/**
+ * E5b review MAJOR-1 — the variations an Etsy send ADDS (the variations line is sent and Etsy does not hold their SKU: new
+ * on Etsy, or dropped by Etsy). Each goes with the price and stock Nexus holds for it (the studio's inventory replace takes
+ * Nexus's offering for a SKU Etsy lacks), so a publish shows them and its approval is bound to them. They are read with the
+ * studio's own Etsy adapter on the same facts (never Etsy: its live reader is not called here); on/off also follows the
+ * row's Status choice (`startsAs`, a new variation set Inactive joins hidden). Nothing added: no read at all.
+ */
+async function etsyAddedVariations(d: Destination, review: StudioPublishReview, plan: PublishPlan): Promise<{ added: EtsyAddedVariation[]; refusal: string | null }> {
+  const line = d.channel === 'ETSY' ? plan.selected.find((c) => c.field === 'inventory') : undefined
+  if (!line) return { added: [], refusal: null }
+  const held = new Set(etsySkusOf(line.channel))
+  const skus = etsySkusOf(line.current).filter((sku) => !held.has(sku))
+  if (!skus.length) return { added: [], refusal: null }
+  const unread = (why: string) => ({ added: [], refusal: `Nexus could not read the price and stock of the variations this publish would add to Etsy (${why}). Review again.` })
+  let offerings: Map<string, { price?: unknown; quantity?: unknown; is_enabled?: unknown }>
+  let currency: string | null = null, inDraft = false
+  try {
+    const { readPublicationFacts } = await import('../../pim/studio-publication-plan.js')
+    const { prepareEtsyPublication } = await import('../../pim/studio-publication-etsy.js')
+    const facts = await readPublicationFacts(d.product.id, d.scope)
+    // The rows set Inactive, by product (the studio's own option): the adapter turns their offering off, matched by the
+    // channel SKU the inventory carries — never by the product SKU (review NIT-R2-1).
+    const inactiveProductIds = new Set(review.rows.filter((r) => r.startsAs === 'inactive').map((r) => r.productId))
+    const publication = await prepareEtsyPublication(facts, { readLive: async () => { throw new Error('Etsy is not read here') }, inactiveProductIds })
+    offerings = new Map((publication.inventory?.products ?? []).map((p) => [p.sku ?? '', p.offerings?.[0] ?? {}]))
+    currency = typeof facts.destination?.currency === 'string' ? facts.destination.currency : null
+    // Review R2-3 — the listing is a draft on Etsy (its main row: an Etsy Listing ID and DRAFT): nothing in it sells yet.
+    const main = (facts.listings as Array<{ productId: string; externalListingId?: string | null; listingStatus?: string | null }>).find((l) => l.productId === facts.parent.id)
+    inDraft = !!main?.externalListingId && String(main.listingStatus ?? '').toUpperCase() === 'DRAFT'
+  } catch (error) {
+    return unread(error instanceof Error ? error.message : String(error))
+  }
+  const added: EtsyAddedVariation[] = []
+  for (const sku of skus) {
+    const offer = offerings.get(sku)
+    if (!offer) return unread(`${sku} is not in the variations Nexus would send`)
+    added.push({ sku, price: { amount: typeof offer.price === 'number' ? offer.price : null, currency },
+      quantity: typeof offer.quantity === 'number' ? offer.quantity : null, enabled: offer.is_enabled !== false, inDraft })
+  }
+  return { added, refusal: null }
 }
 
 const publishInput = z.object({
   productId: z.string().trim().min(1).max(64).describe('Nexus product id: the family (parent), one of its variations or a single product'),
   channel: z.preprocess(upper, z.enum(PUBLISH_CHANNELS)).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
   marketplace: z.string().trim().toUpperCase().min(2).max(20).optional()
-    .describe('the market, e.g. DE or IT (GLOBAL for Shopify); optional when the product\'s listings on this channel are in one market'),
+    .describe('the market, e.g. DE or IT (GLOBAL for Shopify and Etsy); optional when the product\'s listings on this channel are in one market'),
   accountId: z.string().trim().min(1).max(64).optional()
     .describe('the Nexus account id (listing-coordinates names it); optional when the destination has one account'),
   listingId: z.string().trim().min(1).max(64).optional()
     .describe('a Nexus listing id from listing-coordinates, to publish a second listing (alias) of the family on this account and market'),
   fields: z.union([z.enum(['all', 'photos']), z.array(z.enum(FIELD_GROUPS)).min(1).max(FIELD_GROUPS.length)]).optional()
     .describe('what to send: "all" (default; every content field, and a new listing complete), "photos", or field groups: title, '
-      + 'description, bullets, keywords, photos, attributes. A re-publish never sends stock, price or fulfilment; a first publish '
-      + 'creates the listing with them. Amazon: a live listing\'s photos usually go through the photo review in Nexus (Images or '
-      + 'Media page), so "photos" may have nothing to send'),
+      + 'description, bullets, keywords, photos, attributes. A re-publish never sends stock, price or fulfilment (except Etsy, '
+      + 'below); a first publish creates the listing with them. Amazon: a live listing\'s photos usually go through the photo '
+      + 'review in Nexus (Images or Media page), so "photos" may have nothing to send. Etsy: its variations go only with "all", '
+      + 'and a variation Etsy does not hold yet goes with the price and stock Nexus holds for it; Etsy has no bullet points; '
+      + 'photos are not sent to Etsy yet'),
   location: z.string().trim().min(1).max(200).optional()
     .describe('Shopify only: the inventory location (an id from publish-review\'s locations); optional when the store has one'),
 })
@@ -474,7 +630,6 @@ async function publishDestination(args: Record<string, unknown>) {
   const product = await prisma.product.findFirst({ where: liveProduct(productId), select: { id: true, sku: true, parentId: true } })
   if (!product) return { error: PRODUCT_NOT_FOUND }
   const name = channelLabel(channel)
-  if (channel === 'ETSY') return { error: `${product.sku}: publishing to Etsy from Nexus is not available yet; nothing can be sent there.` }
   const rootId = product.parentId ?? product.id
   const family = await prisma.channelListing.findMany({
     where: { channel, product: { deletedAt: null, OR: [{ id: rootId }, { parentId: rootId }] } },
@@ -526,10 +681,15 @@ async function publishPlanFor(d: Destination, review: StudioPublishReview, field
   const plan = planPublish(review, d.channel, fields)
   const guards = !plan.refusal && d.channel === 'AMAZON' ? await amazonGuards(plan, d.market, d.account.id, d.aliasKey) : { refusal: null, euQuantity: [] as EuQuantity[] }
   const shop = d.channel === 'SHOPIFY' && !plan.refusal ? locationFor(review, named) : { location: null }
-  const refusal = plan.refusal ?? guards.refusal ?? shop.error ?? null
+  const etsy = !plan.refusal ? await etsyAddedVariations(d, review, plan) : { added: [] as EtsyAddedVariation[], refusal: null }
+  // An Etsy create: its variations as its request carries them (shown; the fingerprint binds the request itself).
+  const etsyCreated = d.channel === 'ETSY' && !plan.refusal && plan.publish === 'first publish'
+    ? etsyCreateVariations(plan, (await prisma.marketplace.findFirst({ where: { channel: 'ETSY', code: d.market }, select: { currency: true } }))?.currency ?? null)
+    : []
+  const refusal = plan.refusal ?? guards.refusal ?? shop.error ?? etsy.refusal ?? null
   const destination = { channel: d.channel, marketplace: d.market, accountId: d.account.id, accountLabel: d.account.label, ...(d.scope.listingId ? { listingId: d.scope.listingId } : {}) }
-  return { plan, refusal, euQuantity: guards.euQuantity, location: shop.location, destination,
-    fingerprint: fingerprintOf(destination, review, plan, guards.euQuantity, shop.location) }
+  return { plan, refusal, euQuantity: guards.euQuantity, location: shop.location, destination, etsyAdded: etsy.added, etsyCreated,
+    fingerprint: fingerprintOf(destination, review, plan, guards.euQuantity, shop.location, etsy.added) }
 }
 
 const publishListing: AgentTool = {
@@ -554,8 +714,9 @@ const publishListing: AgentTool = {
       return { ...after, closed: states.some((s) => s.closed) }
     },
     request(change) {
-      const after = (change.after ?? {}) as { publish?: string; listingIds?: string[] }
+      const after = (change.after ?? {}) as { publish?: string; listingIds?: string[]; destination?: { channel?: string } }
       if (after.publish !== 'first publish') return { refusal: 'A re-publish is put back by publishing the previous values (they are in this change), not by closing the listing.' }
+      if (after.destination?.channel === 'ETSY') return { refusal: ETSY_FIRST_PUBLISH_UNDO }
       if (!after.listingIds?.length) return { refusal: 'This publish names no listing to close.' }
       return { tool: 'close-listing', args: { listingIds: after.listingIds, reason: 'undo of a publish' } }
     },
@@ -565,9 +726,15 @@ const publishListing: AgentTool = {
     + 'approves it: a draft\'s first publish (the complete listing) or a re-publish of the field groups named (fields: '
     + '"all", "photos" or title, description, bullets, keywords, photos, attributes). A first publish creates the listing with '
     + 'its price, quantity and (Amazon) fulfilment method from what Nexus holds: set them first. A re-publish never sends '
-    + 'stock, price or fulfilment (set-listing-stock, set-listing-price). Amazon: a live listing\'s photos usually go through '
+    + 'stock, price or fulfilment (set-listing-stock, set-listing-price), except on Etsy (below). Amazon: a live listing\'s photos usually go through '
     + 'the photo review in Nexus (Images or Media page). Its preview is the studio\'s review: what is sent, what it replaces on the channel, what is not '
-    + 'sent and why. Refused: Etsy (no publisher yet), an existing Shopify product (its store fields go through set-shopify-content, '
+    + 'sent and why. Etsy: a re-publish sends the changed listing fields, attributes and translations; its variations go '
+    + 'only with fields "all", replacing Etsy\'s whole inventory, and each variation Etsy does not hold yet (new, or dropped '
+    + 'by Etsy) goes with the price and stock Nexus holds for it — the preview lists them (addsVariations) and the approval '
+    + 'is bound to them; photos are not sent to Etsy yet; nothing reaches Etsy while Etsy publishing is off in Nexus. A new '
+    + 'Etsy listing (fields "all") is created as an Etsy draft, not for sale (going live comes with photos later); the studio '
+    + 'refuses an Active create and a second create while one is still open. Refused: an existing Shopify product '
+    + '(its store fields go through set-shopify-content, '
     + 'and a person sends them with Review and synchronize in Nexus), anything the review blocks, an FBA '
     + 'quantity, and an Amazon EU first publish whose quantity differs from the SKU\'s other live EU markets (Amazon '
     + 'keeps one EU quantity). Waits for a person to approve it in Nexus; if the review changed since, nothing is sent.',
@@ -586,7 +753,7 @@ const publishListing: AgentTool = {
     const built = await publishPlanFor(d, review, fields, args.location as string | undefined)
     if (built.refusal) return { ok: false, error: `${d.product.sku} on ${channelLabel(d.channel)} ${d.market}: ${built.refusal} Nothing was queued.` }
     const { plan } = built
-    const story = publishStory(d, review, plan, built.euQuantity.length > 0)
+    const story = publishStory(d, review, plan, built.euQuantity.length > 0, built.etsyAdded, built.etsyCreated)
     return {
       ok: true,
       preview: {
@@ -609,6 +776,10 @@ const publishListing: AgentTool = {
         ...(plan.unchanged ? { unchanged: plan.unchanged } : {}),
         ...(d.channel === 'SHOPIFY' ? { products: review.rows.map((r) => r.sku).slice(0, 60), visibility: review.visibility ?? null, location: built.location } : {}),
         ...(built.euQuantity.length ? { euQuantity: built.euQuantity } : {}),
+        // E5b MAJOR-1 — each variation this Etsy send adds, with the price and stock it goes with (bound by the approval).
+        ...(built.etsyAdded.length ? { addsVariations: built.etsyAdded.map(etsyVariationView) } : {}),
+        // E5b review R2-2 — an Etsy create's variations, with the price and stock its approval binds.
+        ...(built.etsyCreated.length ? { createsVariations: built.etsyCreated.map(etsyVariationView) } : {}),
         ...(review.issues.some((i) => i.severity === 'warning') ? { warnings: review.issues.filter((i) => i.severity === 'warning').slice(0, 10).map((i) => clip(i.message)) } : {}),
         fingerprint: built.fingerprint,
         note: 'Runs the studio publish as the person who approves it. If the studio\'s review differs from this one by then, nothing is sent.'
@@ -636,7 +807,8 @@ const publishListing: AgentTool = {
       if (built.fingerprint !== approved.fingerprint) {
         return { ok: false, error: `${where}: the studio's review changed since it was approved (the channel or Nexus moved). Nothing was sent; ask Claude for a fresh publish.` }
       }
-      const sparse = d.channel === 'AMAZON' || d.channel === 'EBAY'
+      // The studio sends only the ticked changes of Amazon, eBay and Etsy (its selection token); Shopify goes whole.
+      const sparse = ['AMAZON', 'EBAY', 'ETSY'].includes(d.channel)
       const selection = sparse
         ? await (await studio()).previewStudioPublicationSelection(d.product.id, review.id, { selectedIds: built.plan.selected.map((c) => c.id) }, userId)
         : null

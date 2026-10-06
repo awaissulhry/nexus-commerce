@@ -84,14 +84,48 @@ describe('ebayAdsSummary / ebayAdsTrend / ebayAdsCampaigns — what the console 
     expect(it_.current).toMatchObject({ impressions: 1500, clicks: 50, adFeesCents: 900, salesCents: 9999, soldQty: 3 })
     expect(it_.prior).toMatchObject({ impressions: 300, clicks: 6, adFeesCents: 222, salesCents: 3333 })
     expect(it_.window).toMatchObject({ since: WEEK.startDate, until: TODAY, days: 7 })
+    expect(it_.currency).toBe('EUR')
     const all = await inside(() => ebayAdsSummary(WEEK))
-    expect(all.current).toMatchObject({ adFeesCents: 1455, salesCents: 14443 })
     expect(all.campaignCounts).toEqual({ RUNNING: 2, ENDED: 1 })
+  })
+
+  it('AM-21 — never adds GBP to EUR: across markets the money is one total per currency, the counts still add', async () => {
+    const all = await inside(() => ebayAdsSummary(WEEK))
+    // Was { adFeesCents: 1455, salesCents: 14443 }: 900 euro cents + 555 pence printed as one euro amount.
+    expect(all.currency).toBeNull()
+    expect(all.current).toMatchObject({ adFeesCents: null, salesCents: null, acosPct: null, avgCpcCents: null, impressions: 1700, clicks: 59, soldQty: 5 })
+    expect(all.byCurrency.map((c) => [c.currency, c.current.adFeesCents, c.current.salesCents, c.prior.adFeesCents])).toEqual([
+      ['EUR', 900, 9999, 222], ['GBP', 555, 4444, 0],
+    ])
+    expect(all.deltas.adFeesPct).toBeNull()
+    // AM-16 × AM-21 — the complete days the deltas compare are per currency too, never one mixed sum.
+    expect(all.byCurrency.map((c) => [c.currency, c.compared.adFeesCents])).toEqual([['EUR', 900], ['GBP', 555]])
+    const gb = await inside(() => ebayAdsSummary({ ...WEEK, marketplace: 'EBAY_GB' }))
+    expect([gb.currency, gb.current.adFeesCents]).toEqual(['GBP', 555])
+    // A market with no row in the window takes its currency from its older rows; none at all: EUR, every amount 0.
+    expect((await inside(() => ebayAdsSummary({ startDate: '2020-01-01', endDate: '2020-01-07', marketplace: 'EBAY_GB' }))).currency).toBe('GBP')
+    expect((await inside(() => ebayAdsSummary({ ...WEEK, marketplace: 'EBAY_FR' }))).currency).toBe('EUR')
+  })
+
+  it('AM-15 — the campaign count follows the market', async () => {
+    expect((await inside(() => ebayAdsSummary({ ...WEEK, marketplace: 'EBAY_IT' }))).campaignCounts).toEqual({ RUNNING: 1, ENDED: 1 })
+    expect((await inside(() => ebayAdsSummary({ ...WEEK, marketplace: 'EBAY_GB' }))).campaignCounts).toEqual({ RUNNING: 1 })
+  })
+
+  it('AM-21 — a trend over two currencies carries counts per day and no money', async () => {
+    const all = await inside(() => ebayAdsTrend(WEEK))
+    expect(all.currency).toBeNull()
+    expect(all.points.map((p) => [p.date, p.clicks, p.adFeesCents])).toEqual([
+      [ymd(dayBefore(4)), 10, null], [ymd(dayBefore(2)), 9, null], [ymd(dayBefore(1)), 40, null],
+    ])
+    const gb = await inside(() => ebayAdsTrend({ ...WEEK, marketplace: 'EBAY_GB' }))
+    expect([gb.currency, gb.points.map((p) => p.adFeesCents)]).toEqual(['GBP', [555]])
   })
 
   it('the trend has one point per reported day', async () => {
     const trend = await inside(() => ebayAdsTrend({ ...WEEK, marketplace: 'EBAY_IT' }))
     expect(trend.points.map((p) => [p.date, p.adFeesCents])).toEqual([[ymd(dayBefore(4)), 123], [ymd(dayBefore(1)), 777]])
+    expect(trend.currency).toBe('EUR')
   })
 
   it('the grid carries each campaign with its window metrics and ad counts', async () => {
@@ -102,6 +136,9 @@ describe('ebayAdsSummary / ebayAdsTrend / ebayAdsCampaigns — what the console 
     expect(byId['eb-2']).toMatchObject({ dailyBudgetCents: 1550, budgetCurrency: 'GBP', fundingModel: 'COST_PER_CLICK', metrics: { adFeesCents: 555 } })
     expect(byId['eb-3'].metrics).toMatchObject({ adFeesCents: 0, clicks: 0 })
     expect((await inside(() => ebayAdsCampaigns({ ...WEEK, marketplace: 'EBAY_GB' }))).campaigns.map((c) => c.id)).toEqual(['eb-2'])
+    // AM-21 — the grid's one currency only when its rows share one.
+    expect(grid.currency).toBeNull()
+    expect((await inside(() => ebayAdsCampaigns({ ...WEEK, marketplace: 'EBAY_GB' }))).currency).toBe('GBP')
   })
 })
 
@@ -175,5 +212,29 @@ describe('for the tools: accounts, currencies, freshness', () => {
     expect(await inside(() => ebayPerformanceAsOf('EBAY_FR'))).toBeNull()
     const census = await inside(() => ebayCampaignCensus('EBAY_IT'))
     expect(census.map((c) => [c.id, c.status, c.channelConnectionId]).sort()).toEqual([['eb-1', 'RUNNING', conn.primary], ['eb-3', 'ENDED', conn.primary]])
+  })
+})
+
+// AM-16 — the deltas compare COMPLETE days on both sides. A window running into today is compared on its days through
+// yesterday against the same number of days before them; before, the window before held one day more.
+describe('ebayAdsSummary — a window ending today compares complete days only', () => {
+  it('drops today from both sides of the change, and says so', async () => {
+    const { lastCompleteDay } = await import('../ads-core/date-range.js')
+    const shift = (ymdStr: string, n: number) => { const d = new Date(`${ymdStr}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return ymd(d) }
+    const last = lastCompleteDay()
+    const today = shift(last, 1)
+    await inside(async () => {
+      const perf = (date: string, adFeesCents: number) => database.client.ebayAdsDailyPerformance.create({ data: {
+        fundingModel: 'COST_PER_SALE', entityType: 'CAMPAIGN', currency: 'EUR', reportedAt: new Date(), marketplace: 'EBAY_ES',
+        entityId: 'EXT-eb-es', date: new Date(`${date}T00:00:00Z`), impressions: 10, clicks: 1, adFeesCents, salesCents: 0, soldQty: 0 } as never })
+      await perf(shift(last, -14), 1000) // only in an 8-day "window before"
+      await perf(shift(last, -10), 300)
+      await perf(shift(last, -2), 600)
+    })
+    const s = await inside(() => ebayAdsSummary({ startDate: shift(last, -6), endDate: today, marketplace: 'EBAY_ES' }))
+    expect(s.window).toMatchObject({ since: shift(last, -6), until: today, days: 8 })
+    expect(s.comparison).toEqual({ current: { since: shift(last, -6), until: last }, prior: { since: shift(last, -13), until: shift(last, -7) }, todayLeftOut: true })
+    expect(s.prior.adFeesCents).toBe(300)
+    expect(s.deltas.adFeesPct).toBe(100)
   })
 })

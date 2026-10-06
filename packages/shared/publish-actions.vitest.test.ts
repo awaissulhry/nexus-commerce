@@ -4,7 +4,7 @@ import {
   fillResultSentence, isRelistChoice, isStaleWaiting, needsTypedConfirm, parseSendMode, parseStatusTarget, publishPlanSummary,
   relistSentence, SEND_ORDER, sendModeOf, sendModeOptions, statusTargetOf, storedSendMode, storedStatusTarget,
   waitingMark, NEW_LISTING_SENT_WHOLE, SEND_MODE_LABEL, SEND_MODES, newRowId, parseNewRowId, isNewRowId, startedSentence, leftOutSentence,
-  SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, ETSY_FIELDS_NOT_SENT,
+  SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, FULL_ETSY_VARIATION, FULL_ETSY_WARNING, FULL_WARNING, ETSY_PHOTOS_NOT_SENT,
   amazonMoveConfirmSentence, amazonMoveSentence, AMAZON_MOVE_NEEDS_CONFIRM, channelSkuLengthProblem, CHANNEL_SKU_MAX_LENGTH, EBAY_INVENTORY_SKU_MOVE,
   ebayRenameSentence, etsySkuMoveSentence, fbaMoveWarning, oldSkuStaysDeleted, shopifyRenameSentence, DELETE_OLD_SKU_AGAIN, bothSkusSell,
 } from './publish-actions.js'
@@ -57,12 +57,26 @@ describe('Action column options', () => {
     // A Shopify row not on the channel is created whole: no such warning.
     expect(sendModeOptions('shopify', 'not_listed', row).find(o => o.mode === 'partial')!.warning).toBeNull()
   })
-  it('Etsy: Partial update warns that Publish sends no Etsy listing field yet', () => {
-    expect(ETSY_FIELDS_NOT_SENT).toBe('Publish does not send Etsy listing fields yet. They stay in Nexus.')
-    expect(sendModeOptions('etsy', 'active', row, 'Etsy').find(o => o.mode === 'partial')).toEqual({ mode: 'partial', offered: true, reason: null, warning: ETSY_FIELDS_NOT_SENT })
+  it('Etsy (E2) changes whole listings, like eBay Trading: Full update on the main row only; Partial update carries no warning', () => {
+    expect(FULL_ETSY_VARIATION).toBe('Etsy changes a whole listing. Choose Full update on the main row.')
+    for (const state of ['active', 'paused'] as const) {
+      const main = sendModeOptions('etsy', state, { isParent: true, isVariation: false }, 'Etsy')
+      expect(main.find(o => o.mode === 'partial')).toEqual({ mode: 'partial', offered: true, reason: null, warning: null })
+      expect(main.find(o => o.mode === 'full')).toEqual({ mode: 'full', offered: true, reason: null, warning: FULL_ETSY_WARNING })
+      expect(sendModeOptions('etsy', state, { isParent: false, isVariation: true }, 'Etsy').find(o => o.mode === 'full'))
+        .toEqual({ mode: 'full', offered: false, reason: FULL_ETSY_VARIATION, warning: null })
+    }
+    // Delete stays Etsy's own refusal; a row not on Etsy is still created whole.
+    expect(offered(sendModeOptions('etsy', 'active', { isParent: true, isVariation: false }, 'Etsy'))).toEqual(['partial', 'full'])
+    expect(sendModeOptions('etsy', 'not_listed', row, 'Etsy').find(o => o.mode === 'partial')!.reason).toBe(NEW_LISTING_SENT_WHOLE)
   })
-  it('Amazon and eBay: Partial update carries no warning', () => {
-    for (const model of ['amazon', 'ebay-trading', 'ebay-inventory'] as const)
+  it('Etsy (E3): a create is sent now, so the "waits for E3" words are gone; the photo pop-up\'s line stays', async () => {
+    const words = await import('./publish-actions.js') as Record<string, unknown>
+    for (const gone of ['ETSY_CREATE_NOT_YET', 'ETSY_CREATE_REVIEW_ONLY', 'ETSY_CREATE_SENDS_NOTHING']) expect(words[gone]).toBeUndefined()
+    expect(ETSY_PHOTOS_NOT_SENT).toBe('Photos are not sent to Etsy yet; they come in a later Nexus update.')
+  })
+  it('Amazon, eBay and Etsy: Partial update carries no warning', () => {
+    for (const model of ['amazon', 'ebay-trading', 'ebay-inventory', 'etsy'] as const)
       expect(sendModeOptions(model, 'active', row).find(o => o.mode === 'partial')!.warning).toBeNull()
   })
 })

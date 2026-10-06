@@ -1,3 +1,15 @@
+## Scrolling strips: the scrollbar gets a band below the tabs, never over them — 2026-10-05
+
+Owner (the Publish window's market tabs): "the scrollbar appears above or is layered above the text or the tab buttons". A macOS overlay scrollbar takes no room and is drawn over the bottom of the scroll box — the labels, the active underline, the focus ring. Mirrored in Factory (`Tabs.tsx`, `ScopeBar.tsx`, `GridToolbar.tsx`, `MediaBoard.tsx`, `components/index.ts`, `grid.css`, the new hook and `lib/horizontal-overflow.ts`, the tab / scope / media-board rules, the catalog example).
+
+- **`useHorizontalOverflow(ref, { enabled?, settleMs? })`** (`components`, new; rule in `lib/horizontal-overflow.ts`, tested): marks a strip `data-overflows="overlay" | "classic"` ONLY while it scrolls sideways (a scroll box, scrollbar not hidden, content wider); a classic bar also gets its measured height in `--nds-scrollbar-size`. Direct DOM writes, only on a change — no state, no re-render; follows the strip and its children (ResizeObserver + MutationObserver); first mark before paint. `settleMs` waits for a strip whose children fold after they render (the sheet toolbar: marking at once made it jump 14px and back on every load).
+- **The band: 14px (`--nds-space-14`), measured** in Chromium on macOS: a thin overlay thumb is 6px, 1px off the edge, and widens under the pointer to a 14px track. Every scrolling strip uses `scrollbar-width: thin`. A classic bar takes its own room, so it gets no band — only a fixed-height host grows by it.
+- **`Tabs`** — every strip (a host may scroll it: the subheader tabs, a page's `overflow-x`): 4px focus room + the 14px band below the tabs. md / lg keep the hairline where the active underline meets it (the border turns transparent, the same line is drawn above the band); `sm` has no hairline. A host that fixes its height around an `sm` strip must grow with it (`:has(> .nds-tabs[data-overflows])`) — none scrolls today.
+- **`ScopeBar` chips** (fixed 44px / the workspace scope's 40px floor): the band hangs below the chips and the bar grows at its bottom — chips, label and controls stay exactly where they were (with a classic bar they no longer squash upward). Wrapped (≤ 760px, ≤ 719px in the subheader): the chips' line grows instead and the label keeps to the chips.
+- **Sheet toolbar** (`.nds-grid-sheet .nds-toolbar`, 40px, scrolls at ≥ 1280px): grows by the band (overlay) or the bar's height (classic); controls stay centred in the same 40px.
+- **`MediaBoard slots`**: the band sits under the last row, off its frame and captions.
+- Unchanged when a strip fits: same boxes, measured before/after on every strip. Catalog: `#scrolling-tabs-example` (md + sm scrolling, sm fitting).
+
 ## Paste: a list member is found by its accepted spellings too — 2026-10-05
 
 `shapeValue.ts` (and its `.d.ts`): `parseShape`'s column may carry `optionAliases` (code → other spellings, never shown); a list member under one becomes its code through `optionCode`. Absent = unchanged. Mirrored from the web app.

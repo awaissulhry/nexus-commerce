@@ -21,7 +21,7 @@ vi.mock('./publication-batch.service.js', async original => ({ ...await original
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { BATCH_HEARTBEAT_MS, BATCH_KIND, LIFECYCLE_KIND, LIFECYCLE_LEASE_MS, notSentMessage, runPublicationBatch } from './publication-batch.processor.js'
+import { BATCH_HEARTBEAT_MS, BATCH_KIND, LIFECYCLE_KIND, LIFECYCLE_LEASE_MS, notSentMessage, runPublicationBatch, statusPairKey } from './publication-batch.processor.js'
 import { LIFECYCLE_UNKNOWN } from '@nexus/shared/publish-plan'
 import { runPublicationBatchResumeTick } from '../../jobs/publication-batch-resume.job.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
@@ -71,9 +71,38 @@ beforeEach(() => { fixture.published.length = 0; fixture.dispatched.length = 0 }
 
 describe('notSentMessage (pure)', () => {
   it('says "Nothing was sent." once, even when the refusal already ends with it', () => {
-    expect(notSentMessage('Sending to Etsy comes in the next Nexus update. Nothing was sent.')).toBe('Nothing was sent. Sending to Etsy comes in the next Nexus update.')
+    expect(notSentMessage('Creating a new Etsy listing from Nexus comes in the next Nexus update. Nothing was sent.')).toBe('Nothing was sent. Creating a new Etsy listing from Nexus comes in the next Nexus update.')
     expect(notSentMessage('The review expired.')).toBe('Nothing was sent. The review expired.')
   })
+})
+
+/** E2 — a batched Etsy review is sent from its selection (its token), as Amazon's and eBay's are: the review stage ticks it. */
+describe('the review stage', () => {
+  it('ticks an Etsy review\'s defaults, as Amazon\'s and eBay\'s', () => scoped(async () => {
+    const batchId = `batch-${++counter}`
+    const ETSY = { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy-a' }
+    await prisma.bulkOperation.create({ data: { id: batchId, userId: USER, status: 'QUEUED', kind: BATCH_KIND, productCount: 1, changeCount: 0, checkCount: 0,
+      nextCheckAt: new Date(Date.now() + BATCH_HEARTBEAT_MS),
+      changes: { kind: BATCH_KIND, stage: 'review', request: { families: ['family-etsy'], destinations: [ETSY] }, children: [], cancelRequestedAt: null } } as never })
+    const reviewId = `${batchId}-etsy`
+    const change = (id: string, status: string, selectedByDefault: boolean) => ({ id, status, selectable: status !== 'SAME', selectedByDefault })
+    const preview = async (familyId: string, scope: typeof ETSY, userId: string | null, options: { batchId: string; expiresInMs: number }) => {
+      const review = { id: reviewId, productId: familyId, scope, rows: [], issues: [], expiresAt: new Date(Date.now() + options.expiresInMs).toISOString(),
+        changes: [change('tags', 'SEND', true), change('title', 'DIFFERS', false), change('materials', 'SAME', false)] }
+      await prisma.bulkOperation.create({ data: { id: reviewId, userId, status: 'PREVIEW', productCount: 1, changeCount: 0, kind: 'studio-publication', productId: familyId,
+        channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: '', batchId: options.batchId,
+        expiresAt: new Date(Date.now() + options.expiresInMs),
+        changes: { kind: 'studio-publication', productId: familyId, scope, publicationKey: reviewId, changeVersion: 1, changePlan: { kind: 'etsy-changes' }, review } } as never })
+      return review as never
+    }
+    const selections: Array<{ id: string; ids: string[] }> = []
+    const select = async (_familyId: string, id: string, body: unknown) => { selections.push({ id, ids: (body as { selectedIds: string[] }).selectedIds }); return {} as never }
+    const presence = async () => ({ pairs: new Map([[statusPairKey('family-etsy', ETSY), { presence: 'listed' as const, familySku: 'FAKE-SKU-1' }]]), destinations: [ETSY] })
+    const summary = await runPublicationBatch(batchId, { preview, select, presence })
+    expect(summary).toMatchObject({ claimed: true, reviewed: 1, notSent: 0 })
+    // Nexus wins: SEND and every DIFFERS line are ticked; a SAME line is not.
+    expect(selections).toEqual([{ id: reviewId, ids: ['tags', 'title'] }])
+  }))
 })
 
 describe('publication batch sender', () => {

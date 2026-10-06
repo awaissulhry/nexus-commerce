@@ -237,6 +237,20 @@ export const agentPlanQueue: Queue = new Queue('agent-plan', {
   },
 })
 
+// eBay order notices, Phase 4 — "process this stored ORDER_CONFIRMATION now": queued by services/cx/ebay-order-notice-kick.ts,
+// run by workers/ebay-order-notice.worker.ts. One job per receipt, jobId "ebay-order-notice-<receiptId>", so a
+// redelivered notice adds nothing while its job is kept. The stored receipt and the minute inbound-retry sweep are the
+// durable record: a lost or failed job costs time, up to the sweep's pace (4 eBay receipts per business per minute),
+// never the order. attempts 1: the receipt's own claim decides who runs it and its own backoff decides the retries.
+export const ebayOrderNoticeQueue: Queue = new Queue('ebay-order-notice', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 export const adsSyncQueue: Queue = new Queue('ads-sync', {
   connection: redis.connection,
   defaultJobOptions,
@@ -416,6 +430,7 @@ export async function closeQueue() {
     await bulkJobQueue.close()
     await publicationBatchQueue.close()
     await adsSyncQueue.close()
+    await ebayOrderNoticeQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()
     if (_redis) await _redis.quit()

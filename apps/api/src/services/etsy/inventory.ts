@@ -223,10 +223,25 @@ export interface OfferingChange {
   offeringIndex?: number
   quantity?: number
   price?: number
+  /**
+   * E2 (D6, 2026-10-05) — show (`true`) or hide (`false`) the offering on Etsy: one variation of a live listing.
+   * Written on every product that carries the SKU. Absent = Etsy's own `is_enabled` is echoed, as always.
+   */
+  isEnabled?: boolean
 }
 
 export class EtsyOfferingNotFound extends Error {
   constructor(message: string) { super(message); this.name = 'EtsyOfferingNotFound' }
+}
+
+/**
+ * E2 (D6, review m4) — a hide that would leave the listing with no enabled offering. Checked on Etsy's own inventory as
+ * read just before the PUT (under the listing lock), so offerings hidden on etsy.com and variations only Etsy holds
+ * count. What Etsy does with a listing that has nothing enabled is not known (spec §7 Q9), so it is refused before the
+ * PUT: nothing was sent.
+ */
+export class EtsyLastOfferingRefusal extends Error {
+  constructor(message: string) { super(message); this.name = 'EtsyLastOfferingRefusal' }
 }
 
 /**
@@ -266,7 +281,7 @@ export interface EtsyQuantityClamp {
  */
 export function isEtsyInventoryRefusal(error: unknown): boolean {
   return error instanceof EtsyOfferingNotFound || error instanceof EtsyInventoryShapeError || error instanceof EtsyPriceRefusal
-    || error instanceof EtsyQuantityRefusal
+    || error instanceof EtsyQuantityRefusal || error instanceof EtsyLastOfferingRefusal
 }
 
 /**
@@ -449,10 +464,19 @@ export function applyOfferingChanges(
         }
         offering.price = change.price
       }
+      if (change.isEnabled !== undefined) {
+        if (typeof change.isEnabled !== 'boolean') {
+          throw new EtsyOfferingNotFound(`An on/off value of ${String(change.isEnabled)} is neither on nor off; nothing was sent.`)
+        }
+        offering.is_enabled = change.isEnabled
+      }
     }
   }
   if (changes.some((change) => change.price !== undefined)) assertPriceGroupsWhole(body, next)
   if (changes.some((change) => change.quantity !== undefined)) assertQuantityGroupsWhole(body, next)
+  if (changes.some((change) => change.isEnabled === false) && !next.products.some((p) => p.offerings.some((o) => o.is_enabled))) {
+    throw new EtsyLastOfferingRefusal('Etsy would have no variation left that buyers can buy on this listing, so none was hidden; nothing was sent.')
+  }
   return next
 }
 

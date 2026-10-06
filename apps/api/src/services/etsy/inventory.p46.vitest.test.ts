@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  applyOfferingChanges, ETSY_MAX_OFFERING_QUANTITY, EtsyInventoryShapeError, EtsyOfferingNotFound, EtsyQuantityRefusal, inventoryDrift,
+  applyOfferingChanges, ETSY_MAX_OFFERING_QUANTITY, EtsyInventoryShapeError, EtsyLastOfferingRefusal, EtsyOfferingNotFound, EtsyQuantityRefusal, inventoryDrift,
   isEtsyInventoryRefusal, moneyToNumber, toInventoryWrite, type EtsyQuantityClamp, type EtsyReadInventory,
 } from './inventory.js'
 
@@ -373,5 +373,114 @@ describe('P4.6c — inventoryDrift, the read-back', () => {
     expect(() => inventoryDrift(sent(), { products: [] })).toThrow('could not be confirmed')
     // POSITIVE CONTROL: a readable read-back of the same shape does not throw.
     expect(() => inventoryDrift(sent(), read())).not.toThrow()
+  })
+})
+
+/**
+ * E2 (D6, Owner 2026-10-05) — `OfferingChange.isEnabled`: hide or show ONE variation of a live listing. Only the named
+ * offering's `is_enabled` moves (on every product carrying the SKU); every price, quantity and other offering goes back
+ * as Etsy stated it; no price or quantity rule is asked for it; the read-back sees it.
+ */
+describe('E2 (D6) — isEnabled: hide or show one variation', () => {
+  it('hides only the offering it names; every other byte as Etsy stated it', () => {
+    const shown = read(); shown.products![1].offerings![0].is_enabled = true   // another offering stays enabled (review m4)
+    const body = toInventoryWrite(shown)
+    const next = applyOfferingChanges(body, [{ sku: 'RED-S', isEnabled: false }])
+    expect(next.products[0].offerings[0]).toEqual({ price: 19.99, quantity: 4, is_enabled: false, readiness_state_id: 7 })
+    expect(JSON.stringify(next.products[1])).toBe(JSON.stringify(body.products[1]))
+    expect(JSON.stringify({ ...next, products: null })).toBe(JSON.stringify({ ...body, products: null }))
+    // The record of what Etsy held is not touched.
+    expect(body.products[0].offerings[0].is_enabled).toBe(true)
+  })
+
+  it('shows a disabled offering again, leaving its quantity 0 and its price as Etsy holds them', () => {
+    const next = applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'BLU-S', isEnabled: true }])
+    expect(next.products[1].offerings[0]).toEqual({ price: 24.5, quantity: 0, is_enabled: true, readiness_state_id: null })
+    expect(next.products[0].offerings[0].is_enabled).toBe(true)
+  })
+
+  it('one SKU on several products: every one of them is switched', () => {
+    const height = (id: number) => ({ property_id: 100, property_name: 'Height', scale_id: null, scale_name: null, value_ids: [id], values: [String(id)] })
+    const material = (id: number) => ({ property_id: 300, property_name: 'Material', scale_id: null, scale_name: null, value_ids: [id], values: [`M${id}`] })
+    const shared: EtsyReadInventory = {
+      products: [
+        ...[1, 2].map((mat) => ({ sku: 'TEST-H3', is_deleted: false, property_values: [height(3), material(mat)],
+          offerings: [{ quantity: 5, is_enabled: true, is_deleted: false, price: money(500 + mat * 100) }] })),
+        { sku: 'TEST-H4', is_deleted: false, property_values: [height(4), material(1)], offerings: [{ quantity: 2, is_enabled: true, is_deleted: false, price: money(600) }] },
+      ],
+      price_on_property: [300], quantity_on_property: [100], sku_on_property: [100],
+    }
+    const next = applyOfferingChanges(toInventoryWrite(shared), [{ sku: 'TEST-H3', isEnabled: false }])
+    expect(next.products.map((p) => p.offerings[0].is_enabled)).toEqual([false, false, true])
+    expect(next.products.map((p) => p.offerings[0].price)).toEqual([6, 7, 6])
+  })
+
+  it('no price or quantity rule is asked: a listing with ONE price and ONE quantity for all variations still hides one', () => {
+    const one = read(); one.price_on_property = []; one.quantity_on_property = []
+    one.products![1].offerings![0].is_enabled = true   // another offering stays enabled (review m4)
+    const next = applyOfferingChanges(toInventoryWrite(one), [{ sku: 'RED-S', isEnabled: false }])
+    expect(next.products[0].offerings[0].is_enabled).toBe(false)
+  })
+
+  it('isEnabled with a quantity or a price in the same change applies both', () => {
+    const next = applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'BLU-S', isEnabled: true, quantity: 3 }])
+    expect(next.products[1].offerings[0]).toEqual({ price: 24.5, quantity: 3, is_enabled: true, readiness_state_id: null })
+  })
+
+  it('absent: Etsy\'s own on/off is echoed (the stock and price pushes never show or hide anything)', () => {
+    const next = applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'BLU-S', quantity: 3 }])
+    expect(next.products[1].offerings[0].is_enabled).toBe(false)
+  })
+
+  it('a SKU the listing does not hold is refused, as for any change', () => {
+    expect(() => applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'GREEN-XL', isEnabled: false }]))
+      .toThrow('Etsy has no product with SKU "GREEN-XL" on this listing; nothing was sent.')
+  })
+
+  it('a value that is not true or false is refused, nothing sent', () => {
+    const body = toInventoryWrite(read())
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', isEnabled: 'no' as unknown as boolean }])).toThrow(EtsyOfferingNotFound)
+    expect(() => applyOfferingChanges(body, [{ sku: 'RED-S', isEnabled: 'no' as unknown as boolean }])).toThrow(/nothing was sent/)
+  })
+
+  it('the same value Etsy holds changes nothing (the writer then sends nothing)', () => {
+    const body = toInventoryWrite(read())
+    expect(JSON.stringify(applyOfferingChanges(body, [{ sku: 'BLU-S', isEnabled: false }]))).toBe(JSON.stringify(body))
+  })
+
+  it('the read-back sees an on/off that did not land', () => {
+    const shown = () => { const inv = read(); inv.products![1].offerings![0].is_enabled = true; return inv }
+    const sent = applyOfferingChanges(toInventoryWrite(shown()), [{ sku: 'RED-S', isEnabled: false }])
+    expect(inventoryDrift(sent, shown())).toEqual([{ product: 'RED-S', offering: 1, field: 'is_enabled', sent: false, found: true }])
+    const landed = shown(); landed.products![0].offerings![0].is_enabled = false
+    expect(inventoryDrift(sent, landed)).toEqual([])
+  })
+})
+
+/**
+ * E2 (D6, review m4) — hiding the last enabled offering is refused on ETSY'S inventory (the writer's fresh read under the
+ * listing lock), so offerings already hidden on etsy.com and variations only Etsy holds are counted; Nexus rows are not.
+ */
+describe('E2 (D6, review m4) — never hide the last enabled offering', () => {
+  it('refused when the hide would leave no enabled offering (BLU-S is already off on Etsy)', () => {
+    expect(() => applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'RED-S', isEnabled: false }]))
+      .toThrow(EtsyLastOfferingRefusal)
+    expect(() => applyOfferingChanges(toInventoryWrite(read()), [{ sku: 'RED-S', isEnabled: false }])).toThrow(/nothing was sent/)
+    expect(isEtsyInventoryRefusal(new EtsyLastOfferingRefusal('x'))).toBe(true)
+  })
+
+  it('allowed while another offering stays enabled — one Nexus does not know of counts too', () => {
+    const inv = read()
+    inv.products!.push({ product_id: 113, sku: 'ETSY-ONLY', is_deleted: false,
+      offerings: [{ offering_id: 903, quantity: 1, is_enabled: true, is_deleted: false, price: money(2000), readiness_state_id: 7 }],
+      property_values: [{ property_id: 200, property_name: 'Colour', scale_id: null, scale_name: null, value_ids: [3], values: ['Green'] }] })
+    const next = applyOfferingChanges(toInventoryWrite(inv), [{ sku: 'RED-S', isEnabled: false }])
+    expect(next.products.map((p) => p.offerings[0].is_enabled)).toEqual([false, false, true])
+  })
+
+  it('a stock or price change never asks it, even on a listing with nothing enabled', () => {
+    const off = read(); off.products![0].offerings![0].is_enabled = false
+    expect(() => applyOfferingChanges(toInventoryWrite(off), [{ sku: 'RED-S', quantity: 2 }])).not.toThrow()
+    expect(() => applyOfferingChanges(toInventoryWrite(off), [{ sku: 'BLU-S', isEnabled: true }])).not.toThrow()
   })
 })

@@ -18,6 +18,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../_shell/CampaignDetailHeader'
+import { lastCompleteDays } from '../../_shell/DateRangePicker'
 import { DetailsTab } from './tabs/DetailsTab'
 import { AdGroupsTab } from './tabs/AdGroupsTab'
 import { SearchTermsTab } from './tabs/SearchTermsTab'
@@ -104,8 +105,7 @@ function CampaignDetailView({ id }: { id: string }) {
    * midnight, which is the previous day in Rome and would shift the range by one.
    */
   const [dateRange, setDateRange] = useState(() => {
-    const e = new Date(); e.setHours(0, 0, 0, 0)
-    const s = new Date(e); s.setDate(s.getDate() - 29)
+    const { start: s, end: e } = lastCompleteDays(30) // AM-16 — complete days, ending yesterday
     const day = (v: string | null): Date | null => {
       if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
       const [y, m, d] = v.split('-').map(Number)

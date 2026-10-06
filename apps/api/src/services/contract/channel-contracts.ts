@@ -25,7 +25,7 @@
  * NOT APPLICABLE (`NOT_APPLICABLE_CHANNELS`): out of the verdict, its reason stated in every run.
  */
 import type { GatewayChannel } from '../gateway/vocabulary.js'
-import { buildGetItemQuantitiesXml, parseGetItemQuantities, siteIdForMarket, tradingAnswerOk } from '../ebay-trading-api.service.js'
+import { buildGetItemQuantitiesXml, parseGetItemQuantities, siteIdForMarket, tradingAnswerOk, tradingErrorBlocks } from '../ebay-trading-api.service.js'
 import { readTransactionsPage } from '../amazon-financial-events.service.js'
 import { AMAZON_LISTING_READ_CHECK, EBAY_NOTIFICATION_READ_CHECKS } from './contract-read-checks.js'
 
@@ -151,16 +151,9 @@ const EBAY_NOT_VALIDATION: Record<string, string> = {
   '518': 'call usage limit reached', '10007': 'system error', '16100': 'system error: data unavailable',
 }
 
-/** The <Errors> blocks of a Trading answer that are errors (SeverityCode Warning is not). */
-function tradingErrors(text: string): Array<{ code: string; classification: string; message: string }> {
-  return [...text.matchAll(/<Errors>([\s\S]*?)<\/Errors>/g)].map((m) => m[1])
-    .filter((block) => (/<SeverityCode>([^<]*)<\/SeverityCode>/.exec(block)?.[1] ?? 'Error') !== 'Warning')
-    .map((block) => ({
-      code: /<ErrorCode>([^<]*)<\/ErrorCode>/.exec(block)?.[1]?.trim() ?? '',
-      classification: /<ErrorClassification>([^<]*)<\/ErrorClassification>/.exec(block)?.[1] ?? '',
-      message: (/<LongMessage>([^<]*)<\/LongMessage>/.exec(block)?.[1] ?? /<ShortMessage>([^<]*)<\/ShortMessage>/.exec(block)?.[1] ?? '').slice(0, 160).replace(/\.\s*$/, ''),
-    }))
-}
+// 2026-10-06 — the <Errors> blocks of a Trading answer that are errors: moved, unchanged, to the Trading client
+// (`tradingErrorBlocks`), which a Trading listing's stock row reads too.
+const tradingErrors = (text: string) => tradingErrorBlocks(text)
 
 const describeTradingError = (e: { code: string; classification: string; message: string }) =>
   `${e.code || 'no code'}${EBAY_NOT_VALIDATION[e.code] ? ` (${EBAY_NOT_VALIDATION[e.code]})` : ''}${e.classification ? ` [${e.classification}]` : ''}: ${e.message}`
