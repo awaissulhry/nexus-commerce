@@ -20,6 +20,7 @@ import { ColumnNA, naCell } from '../../../_shared/RuleColumnCells'
 import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
+import { ArchiveConfirm } from '../../../_shared/ArchiveConfirm'
 import { Listbox, useToast } from '@/design-system/components'
 import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../_shared/adsWrite'
 import { useAdsMarketplace } from '../../../_shell/MarketplaceContext'
@@ -148,6 +149,8 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
   // selected group's status; Adjust Bid opens a modal to set a new default bid for all.
   const [bulkBusy, setBulkBusy] = useState(false)
   const [adjustBid, setAdjustBid] = useState<{ ids: string[]; clear: () => void } | null>(null)
+  // An archive is permanent at Amazon: it waits for the person's confirm (ArchiveConfirm).
+  const [archiveAsk, setArchiveAsk] = useState<{ ids: string[]; clear: () => void } | null>(null)
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
@@ -176,13 +179,15 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
           <span className="h10-bulkrow">
             <Button variant="ghost" disabled={bulkBusy} onClick={() => setAdjustBid({ ids, clear })}>Adjust Bid</Button>
             <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</Button>
-            <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</Button>
+            <Button variant="ghost" disabled={bulkBusy} onClick={() => setArchiveAsk({ ids, clear })}>Archive</Button>
             <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</Button>
           </span>
         )}
     toolbarRight={<Button variant="primary" onClick={() => setShowCreate(true)}><Plus size={13} /> Add Group</Button>}
       />
       {showCreate && <CreateAdGroupModal campaignId={campaignId} campaign={campaign} currency={cur || undefined} onClose={() => setShowCreate(false)} onCreated={() => onRefresh?.()} />}
+      {archiveAsk && <ArchiveConfirm count={archiveAsk.ids.length} noun={['ad group', 'ad groups']} busy={bulkBusy} onCancel={() => setArchiveAsk(null)}
+        onConfirm={() => void patchEach(archiveAsk.ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, archiveAsk.clear).then(() => setArchiveAsk(null))} />}
       {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="ad group" bidLabel="Default Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { defaultBidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}
     </>
   )
