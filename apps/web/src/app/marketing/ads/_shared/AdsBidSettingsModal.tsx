@@ -16,7 +16,7 @@
  *   · Default ACoS target → `AdsAutomationState.defaultTargetAcosPct` (INTEGER percent — the
  *     0.3-vs-30 encoding trap is live in this codebase, so the field validates integers and
  *     the server rejects fractions). TWO readers: the bid optimiser, for every campaign without
- *     a target ACoS of its own (ads-target-acos-resolver.ts; above 100 % it is skipped), and
+ *     a target ACoS of its own and no rule or plan target (ads-target-acos-resolver.ts), and
  *     bid_apply's targetAcos/curBidTargetAcos ops, as fallback when the rule itself has no
  *     target. The copy names those readers exactly — a setting that doesn't say who reads it
  *     reads like it governs everything.
@@ -195,8 +195,8 @@ export function AdsBidSettingsModal({ open, onClose, markets = DEFAULT_MARKETS }
           <h4>Default ACoS target</h4>
           <p className="h10-bset-why">
             <span>Read by <b>two</b>{' '}things. Nexus&rsquo;s bid optimiser (auto-bid, autopilot plans, &ldquo;Optimise bids to
-            target ACOS&rdquo; rules) moves every campaign without a target ACoS of its own toward it, before profit data or
-            its flat 30%; above 100% it is skipped. And a Bid rule&rsquo;s target-ACoS action uses it when the rule itself
+            target ACOS&rdquo; rules) moves every campaign without a target ACoS of its own toward it, unless a rule or a plan
+            sets its own, before profit data or its flat 30%. And a Bid rule&rsquo;s target-ACoS action uses it when the rule itself
             doesn&rsquo;t set a target. Whole percent — 30 means 30%. With no default, such a rule refuses and says so.</span>
           </p>
           <div className="h10-bset-acts">

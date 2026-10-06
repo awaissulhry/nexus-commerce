@@ -33,6 +33,12 @@ export interface AppliedDecision {
 export async function applyPlanActions(opts: {
   planId: string; goal: Goal; marketplace: string; guardrails: Guardrails
   actions: ProposedAction[]; signals: CampaignSignals[]
+  /**
+   * W0 — the plan stores a target ACoS of its own (`guardrails.targetAcosPct`), rather than taking DEFAULT_GUARDRAILS'.
+   * Its target is then explicit and wins over the campaign's; otherwise it is only the fallback after the campaign's,
+   * the account default and profit data.
+   */
+  planSetsTargetAcos?: boolean
 }): Promise<{ applied: number; denied: number; decisions: AppliedDecision[] }> {
   const { planId, goal, marketplace, guardrails: g, actions, signals } = opts
   const sigById = new Map(signals.map((s) => [s.campaignId, s]))
@@ -53,13 +59,17 @@ export async function applyPlanActions(opts: {
     }
 
     // BID — delegate to the per-target optimizer at the plan's effective target ACoS, clamped to the bid band.
-    // W0 — the plan's target is the optimiser's flat fallback: the campaign's own target ACoS and the account default
-    // come first, so the decision records the target the bids actually moved toward.
+    // W0 — a target the plan stores is explicit and wins; a plan without one only falls back to its goal's default
+    // after the campaign's own target, the account default and profit data. The decision records the target the bids
+    // actually moved toward.
     if (acts.some((a) => a.module === 'bid')) {
       try {
         const s = sigById.get(campaignId)
         const targetAcos = effectiveTargetAcosPct(goal, g, { marginPct: s?.marginPct ?? null }) / 100
-        const preview = await previewBidOptimization({ campaignId, targetAcos, bayesian: true, profitMode: goal === 'PROFIT' })
+        const preview = await previewBidOptimization({
+          campaignId, bayesian: true, profitMode: goal === 'PROFIT',
+          ...(opts.planSetsTargetAcos ? { targetAcos, targetAcosFrom: "this plan's target" } : { fallbackTargetAcos: targetAcos }),
+        })
         const moved = preview.proposals
           .map((p) => ({ proposal: p, proposedBidCents: clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents) }))
           .filter((c) => c.proposedBidCents !== c.proposal.currentBidCents)
@@ -76,8 +86,8 @@ export async function applyPlanActions(opts: {
             module: 'bid', campaignId, action: 'BID_APPLY',
             after: { targets: changes.length, targetAcosPct: used?.targetAcosPct ?? null, targetSource: used?.source ?? 'mixed' },
             reason: used
-              ? `Optimised ${changes.length} keyword bids → ${used.targetAcosPct}% target ACoS (${used.source === 'flat' ? "this plan's target" : targetSourceWords(used.source)})`
-              : `Optimised ${changes.length} keyword bids → each ad group's profit-derived target ACoS (this plan's target where there is no profit data)`,
+              ? `Optimised ${changes.length} keyword bids → ${used.targetAcosPct}% target ACoS (${used.source === 'explicit' ? "this plan's target" : used.source === 'flat' ? "this plan's goal default" : targetSourceWords(used.source)})`
+              : `Optimised ${changes.length} keyword bids → each ad group's profit-derived target ACoS (this plan's goal default where there is no profit data)`,
             status: 'APPLIED',
             // any log id in the set is a handle to the whole set
             executionId: res.actionLogIds?.[0] ?? null,

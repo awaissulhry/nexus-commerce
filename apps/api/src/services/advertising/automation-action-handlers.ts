@@ -1556,8 +1556,9 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
 // ── set_campaign_target_acos ──────────────────────────────────────────
 // Update a campaign's target ACOS stored in dynamicBidding JSON, a fraction
 // (0.3 = 30%). The bid optimiser moves the campaign's bids toward it in every
-// mode, ahead of the account default and profit data; a value outside 0–1 is
-// skipped there, not converted (ads-target-acos-resolver.ts).
+// mode — after a rule's or plan's own target, ahead of the account default and
+// profit data; a value outside 0–5 is skipped there, not converted
+// (ads-target-acos-resolver.ts).
 ACTION_HANDLERS.set_campaign_target_acos = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   const targetAcos = Number(action.targetAcos ?? 0.3)

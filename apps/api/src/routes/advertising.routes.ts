@@ -936,8 +936,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Local automation settings stored in dynamicBidding (NOT pushed to Amazon).
   // targetAcos is the campaign's target ACoS, a fraction (0.3 = 30%): our bid
   // optimiser (auto-bid, autopilot, target-ACoS bid rules) moves this campaign's
-  // bids toward it, ahead of the account default and profit data, and skips a
-  // value outside 0–1 (ads-target-acos-resolver.ts). bidAutomation and
+  // bids toward it — after a rule's or plan's own target, ahead of the account
+  // default and profit data — and skips a value outside 0–5 (ads-target-acos-resolver.ts). bidAutomation and
   // bidAlgorithm are recorded only: no optimiser reads them yet.
   // Same read-modify-write pattern as /cpc-ceiling and /guardrails.
   fastify.patch('/advertising/campaigns/:id/automation', async (request, reply) => {
@@ -7265,8 +7265,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getAutomationState()
   })
   // SG.5 — account default ACoS target (INTEGER percent; null clears). Two readers:
-  // the bid optimiser, for every campaign without a target of its own (W0,
-  // ads-target-acos-resolver.ts; above 100 it is skipped), and bid_apply's
+  // the bid optimiser, for every campaign without a target of its own and no
+  // rule or plan target (W0, ads-target-acos-resolver.ts), and bid_apply's
   // targetAcos ops, as fallback when the rule carries no target.
   fastify.post('/advertising/automation/default-target-acos', async (request, reply) => {
     const b = (request.body ?? {}) as { pct?: number | null }

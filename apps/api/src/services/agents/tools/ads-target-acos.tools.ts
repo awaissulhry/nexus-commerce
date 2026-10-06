@@ -8,9 +8,9 @@
  *   unit      typed as a percent, like the screen (0.01–100; a list may put back any stored value, 0–500); STORED as a
  *             FRACTION in `Campaign.dynamicBidding.targetAcos` (25 % → 0.25), the unit every reader expects.
  *   read by   Nexus's bid optimiser (ads autonomy W0): auto-bid, autopilot plans and the target-ACoS bid rules move the
- *             campaign's keyword bids toward it, ahead of the business default (tune-ad-engine account-target-acos),
- *             profit data and a rule's own target; a target of 0 % or above 100 % is skipped there
- *             (ads-target-acos-resolver.ts). Their writes reach Amazon only on campaigns on the live-write allowlist.
+ *             campaign's keyword bids toward it — unless a rule or an autopilot plan sets a target of its own — ahead of
+ *             the business default (tune-ad-engine account-target-acos) and profit data; a target of 0 % is skipped
+ *             there (ads-target-acos-resolver.ts). Their writes reach Amazon only on campaigns on the live-write allowlist.
  *             Also the external bidding engine (services/bidding-engine, a separate service), when it runs, as its
  *             ACoS goal (`GET /api/internal/bidding/contexts`, bidding-bridge.service.ts; 30 % when unset; in live
  *             ads mode only allowlisted campaigns). Shown in Apply Rules, the bid grid ("Goal"), suggestions and
@@ -169,8 +169,8 @@ async function decide(args: Record<string, unknown>): Promise<{ result: ToolResu
   const firstSet = changing.filter((r) => r.fromPct == null).length
   const firstSetNotRaised = changing.filter((r) => r.fromPct == null && !(used(r.toPct) > used(r.fromPct))).length
   const cleared = changing.filter((r) => r.toPct == null).length
-  // W0 — a target Nexus's optimiser skips (0 %, or above 100 %: only a list can carry one, to put a stored value back).
-  const skippedByOptimiser = changing.filter((r) => r.toPct != null && (r.toPct <= 0 || r.toPct > 100)).length
+  // W0 — a target Nexus's optimiser skips: 0 % (only a list can carry one, to put a stored value back; 500 % is its top).
+  const skippedByOptimiser = changing.filter((r) => r.toPct != null && r.toPct <= 0).length
   const live = adsMode() === 'live'
   const engineSees = live ? changing.filter((r) => r.campaign.liveBidWritesEnabled).length : changing.length
 
@@ -188,7 +188,7 @@ async function decide(args: Record<string, unknown>): Promise<{ result: ToolResu
     raised ? `A higher target ACoS lets Nexus's auto-bid and the external bidding engine bid higher on ${plural(raised, 'campaign')} (an unset target counts as the ${ENGINE_FALLBACK_PCT}% fallback): ad spend can rise.` : null,
     firstSetNotRaised ? `${plural(firstSetNotRaised, 'campaign')} had no target ACoS: Nexus's bid optimiser moved ${firstSetNotRaised === 1 ? 'its' : 'their'} bids toward the business default or profit data (${ENGINE_FALLBACK_PCT}% without either), so where that was lower, bids can still rise.` : null,
     cleared ? `${plural(cleared, 'campaign')} ${cleared === 1 ? 'loses its' : 'lose their'} target: Nexus's bid optimiser then uses the business default, profit data or ${ENGINE_FALLBACK_PCT}%, the external bidding engine its ${ENGINE_FALLBACK_PCT}% fallback.` : null,
-    skippedByOptimiser ? `${plural(skippedByOptimiser, 'campaign')} ${skippedByOptimiser === 1 ? 'gets a target' : 'get targets'} of 0% or above 100%: Nexus's bid optimiser skips ${skippedByOptimiser === 1 ? 'it' : 'them'} and uses the business default, profit data or ${ENGINE_FALLBACK_PCT}%.` : null,
+    skippedByOptimiser ? `${plural(skippedByOptimiser, 'campaign')} ${skippedByOptimiser === 1 ? 'gets a target' : 'get targets'} of 0%: Nexus's bid optimiser skips ${skippedByOptimiser === 1 ? 'it' : 'them'} and uses the business default, profit data or ${ENGINE_FALLBACK_PCT}%.` : null,
   ].filter((w): w is string => !!w)
 
   const rules = (await prisma.automationRule.findMany({ where: { domain: 'advertising', enabled: true }, select: { id: true, name: true, actions: true }, orderBy: { name: 'asc' } }))
@@ -224,7 +224,7 @@ async function decide(args: Record<string, unknown>): Promise<{ result: ToolResu
         basis: createHash('sha256').update(rows.map((r) => `${r.campaign.id}:${r.fromFraction ?? '-'}:${fractionOf(r.toPct) ?? '-'}`).join('|')).digest('base64url').slice(0, 32),
         reachesAmazon: false,
         reachNote: 'Nexus only: nothing is sent to Amazon by this change.',
-        readBy: `Nexus's bid optimiser — auto-bid, autopilot plans and the target-ACoS bid rules, when they run — moves each campaign's keyword bids toward it, ahead of the business default target ACoS (tune-ad-engine account-target-acos), profit data and a rule's own target. The external bidding engine (a separate service), when it runs, reads it as its ACoS goal too. Both reach Amazon only on campaigns on the live-write allowlist${live ? `: ${engineSees} of these ${n}` : ' (in live ads mode)'}. Nexus shows it in Apply Rules, the bid grid ("Goal"), suggestions and ad-campaigns.`,
+        readBy: `Nexus's bid optimiser — auto-bid, autopilot plans and the target-ACoS bid rules, when they run — moves each campaign's keyword bids toward it, unless a rule or an autopilot plan sets a target of its own, ahead of the business default target ACoS (tune-ad-engine account-target-acos) and profit data. The external bidding engine (a separate service), when it runs, reads it as its ACoS goal too. Both reach Amazon only on campaigns on the live-write allowlist${live ? `: ${engineSees} of these ${n}` : ' (in live ads mode)'}. Nexus shows it in Apply Rules, the bid grid ("Goal"), suggestions and ad-campaigns.`,
         alsoChangedBy: rules,
         ...(rules.length ? { alsoChangedByNote: `${plural(rules.length, 'enabled ad rule')} can set a campaign's target ACoS (${RULE_ACTION}) and may change these again.` } : {}),
         ...(warnings.length ? { warnings } : {}),
@@ -287,8 +287,8 @@ const setCampaignTargetAcos: AgentTool = {
     + 'to give that market one target, with targetAcosPct in percent as the screen takes it (Ads › Rules & Automation › '
     + 'Apply Rules › Target ACoS). Nexus stores it as a fraction (25% → 0.25). Nexus only: nothing is sent to Amazon by '
     + 'this change, but Nexus\'s auto-bid now steers toward it: its bid optimiser (auto-bid, autopilot plans and the '
-    + 'target-ACoS bid rules) moves the campaign\'s keyword bids toward this target, ahead of the business default, profit '
-    + 'data and a rule\'s own target, and writes them to Amazon on campaigns on the live-write allowlist; the external '
+    + 'target-ACoS bid rules) moves the campaign\'s keyword bids toward this target, unless a rule or a plan sets its own, '
+    + 'ahead of the business default and profit data, and writes them to Amazon on campaigns on the live-write allowlist; the external '
     + 'bidding engine reads it too when it runs. Nothing changes until a person approves it '
     + 'in Nexus, or the person who asked confirms it in Claude when the business allows that. The preview lists every '
     + 'campaign from → to, what reads it, and warns when a higher target lets bids rise. Undo puts each earlier target back.',

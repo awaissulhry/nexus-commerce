@@ -2,11 +2,12 @@
  * Ads autonomy W0 — the target ACoS the Owner set steers Nexus's own bid optimiser (PGlite, production schema).
  *
  * Before: `previewBidOptimization` used the caller's flat target (30 % by default) or profit data, and auto-bid passed
- * neither the campaign's target nor the account default. Proven here, through the real reads: a campaign's own
- * `dynamicBidding.targetAcos` moves its proposals, the account default covers campaigns without one, profit data and the
- * caller's target come after; a stored value in the wrong unit is skipped and named, never converted; the Bayesian path
- * still runs and still says whose target it used; and every caller — auto-bid, a target-ACoS rule, an autopilot plan,
- * the previews — gets the same target for the same campaign. Made-up values only.
+ * neither the campaign's target nor the account default. Proven here, through the real reads, in the order the Owner
+ * set (a number someone configured beats a more general one): a caller's explicit target (a rule's, a plan's, a typed
+ * one) → the campaign's own `dynamicBidding.targetAcos` → the account default → profit data → the fallback. A stored
+ * value outside what the screens take (above 0, at most 500 %) is skipped and named, never converted; a launch target
+ * above 100 % is read; the Bayesian path still runs and says whose target it used; callers without a target of their
+ * own get the same target for the same campaign. Made-up values only.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -113,25 +114,41 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
   it('the account default covers every campaign without its own target; the campaign target still wins', async () => {
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     await inside(() => setDefaultTargetAcosPct(45, 'test'))
-    const out = await preview({ targetAcos: 0.2 })
+    const out = await preview()
     expect(of(out, 't-it')).toMatchObject({ targetAcosUsed: 0.4, targetSource: 'campaign' })
-    // 50 % > 45 %: ratio 0.9 → 60¢ × 0.9 = 54¢. The caller's 20 % comes after the Owner's numbers.
+    // 50 % > 45 %: ratio 0.9 → 60¢ × 0.9 = 54¢.
     expect(of(out, 't-uk')).toMatchObject({ proposedBidCents: 54, targetAcosUsed: 0.45, targetBasis: 'account', targetSource: 'account', reason: 'ACOS 50% > target 45% (account default) — lower' })
   })
 
-  it('a campaign storing 30 (a percent in the fraction field) is skipped, never read as 3,000 % or guessed as 30 %', async () => {
+  it("a caller's explicit target wins over the campaign's and the account default, and the reason names it", async () => {
+    await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
+    await inside(() => setDefaultTargetAcosPct(45, 'test'))
+    const out = await preview({ targetAcos: 0.2, targetAcosFrom: 'the target asked for' })
+    expect(out.targetAcos).toBe(0.2)
+    // 50 % > 20 %: ratio max(0.5, 0.4) = 0.5 → 45¢ × 0.5 ≈ 23¢.
+    expect(of(out, 't-it')).toMatchObject({ proposedBidCents: 23, targetAcosUsed: 0.2, targetBasis: 'explicit', targetSource: 'explicit', reason: 'ACOS 50% > target 20% (the target asked for) — lower' })
+    expect(of(out, 't-uk')).toMatchObject({ targetAcosUsed: 0.2, targetSource: 'explicit' })
+    // A fallback is not explicit: it comes last, so it never masks the campaign's target.
+    const fallback = await preview({ fallbackTargetAcos: 0.2 })
+    expect(of(fallback, 't-it')).toMatchObject({ targetAcosUsed: 0.4, targetSource: 'campaign' })
+  })
+
+  it('a launch target above 100 % is read; a campaign storing 30 (a percent in the fraction field) is skipped, never converted', async () => {
+    await inside(() => setBidAutomation('c-it', { targetAcos: 1.5 }))
+    // 50 % < 150 % with orders: ratio min(1.25, 3) → 45¢ × 1.25 ≈ 56¢.
+    expect(of(await preview(), 't-it')).toMatchObject({ proposedBidCents: 56, targetAcosUsed: 1.5, targetSource: 'campaign' })
     await storeRaw('c-it', 30)
     await inside(() => setDefaultTargetAcosPct(45, 'test'))
     expect(of(await preview(), 't-it')).toMatchObject({
       targetAcosUsed: 0.45, targetSource: 'account',
-      reason: 'ACOS 50% > target 45% (account default) [campaign target 30 skipped: not a fraction above 0 and at most 1] — lower',
+      reason: 'ACOS 50% > target 45% (account default) [campaign target 30 skipped: not a fraction above 0 and at most 5] — lower',
     })
-    // An account default above 100 % is skipped as well: the flat target answers, and both skips are named.
+    // An account default of 150 % is read too.
     await inside(() => setDefaultTargetAcosPct(150, 'test'))
-    expect(of(await preview(), 't-it')).toMatchObject({ targetAcosUsed: 0.3, targetSource: 'flat', reason: expect.stringContaining('account default 150 skipped') })
+    expect(of(await preview(), 't-it')).toMatchObject({ targetAcosUsed: 1.5, targetSource: 'account', reason: expect.stringContaining('campaign target 30 skipped') })
   })
 
-  it('profit mode: the Owner\'s target wins over profit data, which is only worked out for the ad groups left open', async () => {
+  it("profit mode: a configured target wins over profit data, which is only worked out for the ad groups left open", async () => {
     profit.byAdGroup = { 'g-c-it': 0.12, 'g-c-uk': 0.25 }
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     const out = await preview({ profitMode: true })
@@ -153,35 +170,48 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
   })
 })
 
-describe('W0 — every caller gets the same target for the same campaign', () => {
-  it('auto-bid, a target-ACoS rule, an autopilot plan, the previews and the recommendations', async () => {
+describe('W0 — every caller of the optimiser', () => {
+  it('without a target of its own, gets the same target for the same campaign', async () => {
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     await inside(() => setDefaultTargetAcosPct(45, 'test'))
     profit.byAdGroup = { 'g-c-it': 0.12, 'g-c-uk': 0.12 }
     const used = (out: Preview) => ({ it: of(out, 't-it').targetAcosUsed, uk: of(out, 't-uk').targetAcosUsed })
-
     const autoBid = await preview(AUTO_BID_OPTIMIZER_OPTIONS) // ads-auto-bid.service.ts and the A4 preview
-    const recommendations = await preview({ targetAcos: undefined }) // ads-recommendations.service.ts
-    const screen = await preview({ targetAcos: 0.25, profitMode: true }) // GET /advertising/bid-optimizer/preview
-    const autopilotSimulate = await preview({ profitMode: true, bayesian: true, mode: 'growth', targetAcos: 0.6 }) // ads-autopilot.service.ts
-    const autopilotPlan = await preview({ campaignId: 'c-it', targetAcos: 1.2, bayesian: true, profitMode: false }) // autopilot/apply.ts
+    const recommendations = await preview({}) // ads-recommendations.service.ts, with no ?targetAcos
+    const screen = await preview({ profitMode: true }) // GET /advertising/bid-optimizer/preview, with no ?targetAcos
+    const autopilotSimulate = await preview({ profitMode: true, bayesian: true, mode: 'growth' }) // ads-autopilot.service.ts, with none
+    const planWithoutTarget = await preview({ campaignId: 'c-it', fallbackTargetAcos: 0.48, bayesian: true }) // autopilot/apply.ts
     for (const out of [autoBid, recommendations, screen, autopilotSimulate]) expect(used(out)).toEqual({ it: 0.4, uk: 0.45 })
-    expect(of(autopilotPlan, 't-it').targetAcosUsed).toBe(0.4)
-
-    // A `bid_to_target_acos` rule with a target of its own (its dry run shows the proposals it would apply).
-    const rule = await inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', targetAcos: 0.2, campaignId: 'c-it', bayesian: true }, {} as never, { dryRun: true, ruleId: 'r-test' } as never))
-    expect(rule).toMatchObject({ ok: true, output: { dryRun: true, wouldChange: 1 } })
+    expect(of(planWithoutTarget, 't-it').targetAcosUsed).toBe(0.4)
+    // A `bid_to_target_acos` rule without a target of its own (its dry run shows the proposals it would apply).
+    const rule = await inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', campaignId: 'c-it', bayesian: true }, {} as never, { dryRun: true, ruleId: 'r-test' } as never))
     expect((rule.output as { sample: Array<{ targetId: string; targetAcosUsed: number; targetSource: string }> }).sample[0]).toMatchObject({ targetId: 't-it', targetAcosUsed: 0.4, targetSource: 'campaign' })
   })
 
-  it('an autopilot plan records the target its bids actually moved toward, not its own when the campaign has one', async () => {
+  it("with a target of its own (a rule's, a typed one), moves toward that one — 150 % included", async () => {
+    await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
+    const rule = await inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', targetAcos: 0.2, campaignId: 'c-it', bayesian: true }, {} as never, { dryRun: true, ruleId: 'r-test' } as never))
+    expect(rule).toMatchObject({ ok: true, output: { dryRun: true, wouldChange: 1 } })
+    expect((rule.output as { sample: Array<{ targetAcosUsed: number; targetSource: string; reason: string }> }).sample[0]).toMatchObject({ targetAcosUsed: 0.2, targetSource: 'explicit', reason: expect.stringContaining("(this rule's target)") })
+    const launch = await inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', targetAcos: 1.5, campaignId: 'c-it' }, {} as never, { dryRun: true, ruleId: 'r-test' } as never))
+    expect((launch.output as { sample: Array<{ targetAcosUsed: number }> }).sample[0]).toMatchObject({ targetAcosUsed: 1.5 })
+    // 30 stored in the fraction field is still refused, never read as 3,000 %.
+    expect(await inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', targetAcos: 30, campaignId: 'c-it' }, {} as never, { dryRun: true, ruleId: 'r-test' } as never)))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/^targetAcos must be a fraction above 0 and at most 5/) })
+    expect(of(await preview({ targetAcos: 0.25, profitMode: true }), 't-it')).toMatchObject({ targetAcosUsed: 0.25, targetSource: 'explicit' })
+  })
+
+  it('an autopilot plan: its own stored target wins; without one, its goal default comes last; the decision records which', async () => {
     const plan = { planId: 'plan-test', goal: 'BALANCED' as const, marketplace: 'IT', guardrails: DEFAULT_GUARDRAILS, signals: [], actions: [{ module: 'bid' as const, campaignId: 'c-it', action: 'BID_LOWER' as const, reason: 'test', priority: 60 }] }
-    // No campaign target: the plan's own (30 % at BALANCED with the default guardrails).
+    // No campaign target, no target of the plan's own: its goal default (30 % at BALANCED with the default guardrails).
     let out = await inside(() => applyPlanActions(plan))
-    expect(out.decisions[0]).toMatchObject({ status: 'APPLIED', after: { targets: 1, targetAcosPct: 30, targetSource: 'flat' }, reason: "Optimised 1 keyword bids → 30% target ACoS (this plan's target)" })
+    expect(out.decisions[0]).toMatchObject({ status: 'APPLIED', after: { targets: 1, targetAcosPct: 30, targetSource: 'flat' }, reason: "Optimised 1 keyword bids → 30% target ACoS (this plan's goal default)" })
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     out = await inside(() => applyPlanActions(plan))
     expect(out.decisions[0]).toMatchObject({ status: 'APPLIED', after: { targets: 1, targetAcosPct: 40, targetSource: 'campaign' }, reason: "Optimised 1 keyword bids → 40% target ACoS (this campaign's target ACoS)" })
+    // The plan stores its own target: it wins over the campaign's.
+    out = await inside(() => applyPlanActions({ ...plan, guardrails: { ...DEFAULT_GUARDRAILS, targetAcosPct: 25 }, planSetsTargetAcos: true }))
+    expect(out.decisions[0]).toMatchObject({ status: 'APPLIED', after: { targets: 1, targetAcosPct: 25, targetSource: 'explicit' }, reason: "Optimised 1 keyword bids → 25% target ACoS (this plan's target)" })
     expect(writes.entries.every((e) => e.adTargetId === 't-it')).toBe(true)
   })
 
