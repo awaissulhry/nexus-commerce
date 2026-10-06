@@ -6,14 +6,17 @@
  * services/advertising/ads-blueprint-apply.service.ts and refuses to run
  * unless a plan produced here says `allowed`.
  *
- * THE GATE. Replicating a structure is only safe for the parts that are about
- * the target product. A blueprint's `sharedTargets` — its positive CATEGORY and
- * COMPETITOR keywords — are by definition not about any one product. Create
- * them for a second jacket and the two jackets enter the same Amazon auction:
- * you bid against yourself, raise your own clearing price, and split one pool
- * of demand between two of your own ASINs. That is the failure this phase
- * exists to prevent, so a conflict is BLOCKING and the operator must resolve
- * each one explicitly — skip it, or accept it on the record.
+ * THE GATE. A blueprint's `sharedTargets` — its positive CATEGORY and
+ * COMPETITOR keywords — are not about any one product, so each is checked
+ * against what the market already buys. Owner rule (2026-10-06): isolation is
+ * PER PRODUCT. A term one of the SAME product's campaigns already buys (one
+ * whose ad group advertises one of the target's ASINs — its older campaigns
+ * outside this structure) would make the product bid against itself, so that
+ * clash is BLOCKING and the operator resolves each one explicitly — skip it, or
+ * accept it on the record. A term ANOTHER product's campaigns buy is allowed:
+ * the business has several products in one category that must be advertised on
+ * the same keywords. It is listed (`sharedWithOtherProducts`, one warning) and
+ * never blocks, never skips, never negates across products.
  *
  * Pure: no I/O, no Prisma. Unit-tested.
  */
@@ -33,6 +36,12 @@ export interface ExistingTarget {
   expression: string
   campaignName: string
   campaignId: string
+  /**
+   * The ASINs its ad group advertises. One shared with the target makes the
+   * clash the SAME product's (a conflict); none shared, or unknown, makes it
+   * another product's (listed, allowed).
+   */
+  asins?: readonly string[]
 }
 
 export interface PlannedTarget {
@@ -153,9 +162,15 @@ export interface StaleEditRef { kind: 'campaign' | 'adGroup' | 'target'; id: str
 
 export interface ApplyConflict {
   expression: string
-  /** Campaigns we already run that target this expression. */
+  /** The target product's own campaigns that already target this expression. */
   existing: Array<{ campaignName: string; campaignId: string }>
   resolution: 'UNRESOLVED' | 'SKIPPED' | 'ACCEPTED'
+}
+
+/** A gated keyword other products' campaigns also buy: allowed, listed so it is known. */
+export interface SharedWithOtherProducts {
+  expression: string
+  existing: Array<{ campaignName: string; campaignId: string }>
 }
 
 export interface ApplyPlan {
@@ -172,7 +187,10 @@ export interface ApplyPlan {
     /** What this replication commits per day if every campaign runs. */
     dailyBudgetTotal: number
   }
+  /** Clashes with the target product's OWN campaigns. Unresolved ones block. */
   conflicts: ApplyConflict[]
+  /** Gated keywords other products' campaigns also buy: never a blocker, never a conflict. */
+  sharedWithOtherProducts: SharedWithOtherProducts[]
   /** Reasons the plan may not be executed. Empty ⇒ allowed. */
   blockers: string[]
   allowed: boolean
@@ -299,6 +317,7 @@ export function applyNaming(name: string, rules: NamingRules | undefined): strin
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()
+const normAsin = (s: string): string => s.trim().toUpperCase()
 
 /** Word-boundary token match, so "aireonaut" is not the AIREON brand. */
 function hasProductToken(haystack: string, token: string): boolean {
@@ -536,7 +555,8 @@ export function applyEdits(
 /**
  * Build the plan for applying `doc` to one product, and decide whether it may
  * run. `existing` is every positive keyword we already target in this
- * marketplace — the self-competition surface to check against.
+ * marketplace, with the ASINs each one's ad group advertises — the
+ * self-competition surface to check against.
  */
 export function planApplication(
   doc: BlueprintDoc,
@@ -568,17 +588,23 @@ export function evaluatePlan(
   stale: StaleEditRef[] = [],
 ): ApplyPlan {
   const accept = new Set((opts.acceptSharedTargets ?? []).map(norm))
+  const ownAsins = new Set(target.asins.map(normAsin))
 
-  // Index what we already run, by keyword.
-  const existingBy = new Map<string, Array<{ campaignName: string; campaignId: string }>>()
+  // Index what we already run, by keyword: the target product's own campaigns
+  // apart from other products' (rule 3 — isolation is per product).
+  type Ref = { campaignName: string; campaignId: string }
+  const ownBy = new Map<string, Ref[]>()
+  const othersBy = new Map<string, Ref[]>()
   for (const e of existing) {
     const k = norm(e.expression)
-    const list = existingBy.get(k) ?? []
+    const into = (e.asins ?? []).some((a) => ownAsins.has(normAsin(a))) ? ownBy : othersBy
+    const list = into.get(k) ?? []
     list.push({ campaignName: e.campaignName, campaignId: e.campaignId })
-    existingBy.set(k, list)
+    into.set(k, list)
   }
 
   const conflicts = new Map<string, ApplyConflict>()
+  const sharedWithOthers = new Map<string, SharedWithOtherProducts>()
   let adGroups = 0, positives = 0, negatives = 0, productAds = 0, dailyBudgetTotal = 0
 
   for (const c of campaigns) {
@@ -599,7 +625,13 @@ export function evaluatePlan(
           : (t.gated ?? false)
         if (!gated) continue
         const key = norm(t.expression)
-        const clash = existingBy.get(key)
+        const others = othersBy.get(key)
+        // Another product's campaigns buy it too: allowed, only listed (once per campaign).
+        if (others?.length && !sharedWithOthers.has(key)) {
+          const byCampaign = new Map(others.map((r) => [r.campaignId, r]))
+          sharedWithOthers.set(key, { expression: t.expression, existing: [...byCampaign.values()] })
+        }
+        const clash = ownBy.get(key)
         if (!clash?.length) continue
         const accepted = accept.has(key)
         const prev = conflicts.get(key)
@@ -615,6 +647,7 @@ export function evaluatePlan(
 
   const conflictList = [...conflicts.values()].sort((a, b) => a.expression.localeCompare(b.expression))
   const unresolved = conflictList.filter((c) => c.resolution === 'UNRESOLVED')
+  const sharedList = [...sharedWithOthers.values()].sort((a, b) => a.expression.localeCompare(b.expression))
 
   const blockers: string[] = []
   const warnings: string[] = []
@@ -653,9 +686,16 @@ export function evaluatePlan(
     )
   }
 
+  if (sharedList.length) {
+    warnings.push(
+      `${sharedList.length} keyword(s) are also bought by your other products' campaigns `
+      + `(${sharedList.slice(0, 3).map((c) => `"${c.expression}"`).join(', ')}${sharedList.length > 3 ? ', …' : ''}): `
+      + 'allowed — different products may share a keyword, and Nexus never negates one product\'s terms in another\'s campaigns.',
+    )
+  }
   if (unresolved.length) {
     blockers.push(
-      `${unresolved.length} keyword(s) would make ${target.productToken} bid against campaigns you already run `
+      `${unresolved.length} keyword(s) would make ${target.productToken} bid against campaigns you already run for it `
       + `(${unresolved.slice(0, 3).map((c) => `"${c.expression}"`).join(', ')}${unresolved.length > 3 ? ', …' : ''}). `
       + 'Skip them or accept them explicitly.',
     )
@@ -766,6 +806,7 @@ export function evaluatePlan(
     campaigns,
     totals: { campaigns: campaigns.length, adGroups, positives, negatives, productAds, dailyBudgetTotal },
     conflicts: conflictList,
+    sharedWithOtherProducts: sharedList,
     blockers,
     allowed: blockers.length === 0,
     excluded,
