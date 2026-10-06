@@ -61,9 +61,10 @@ import {
 } from '../ads-manager-run.service.js'
 import { DANGER_NOTICES_PER_DAY, knownTimeZone, REPORT_TIME, RUNS_PER_DAY } from '../ads-manager-constants.js'
 import { readExpectedReport, writeExpectedReport, type ExpectedReport } from '../ads-manager-watchdog.service.js'
-import { watchModeOn, watchWeek, watchWeekSummary, type WatchWeek } from '../ads-watch-week.service.js'
+import { verdictMeaning, watchModeOn, watchWeek, watchWeekSummary, type WatchWeek } from '../ads-watch-week.service.js'
 import { logger } from '../../../utils/logger.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import type { RuleCheck } from '@nexus/shared/approval-queue'
 import { amazonOverview } from './ads-read.tools.js'
 
 const TOOL = 'report-ads-run'
@@ -594,8 +595,8 @@ const adsManagerRuns: AgentTool = {
     + 'comparable entities nothing changed — observed, not proof of cause; and a table per kind of ad action (would have '
     + 'run by rule, would have waited, agreed with an engine, conflicted with an engine, held by limits, outcome). '
     + 'Amounts are minor units of each campaign\'s own currency, never converted; a person without the ad-spend money '
-    + 'permission gets the same answer without them (a watched step\'s reason as the rule gave it, ruleWhy, may state an '
-    + 'amount: they read its check\'s words, meaning). Read only.',
+    + 'permission gets the same answer without them (a watched request\'s reason as the rule gave it, ruleWhy — in the '
+    + 'watch week and on each approval a run named — may state an amount: they read its check\'s words, meaning). Read only.',
   // W4-5 — the value a watched item would have set and a verdict's reason (WATCH_WEEK_MONEY, written out here: a tool
   // file reads no imported constant while it loads). Spend, sales and ACoS are restricted everywhere.
   restrictedFields: {
@@ -611,9 +612,10 @@ const adsManagerRuns: AgentTool = {
     const rows = await runsSince(since)
     const named = [...new Set(rows.flatMap((row) => (outputOf(row)?.approvals ?? []).map((a) => a.approvalId)))]
     const now = named.length
-      ? await prisma.agentApproval.findMany({ where: { id: { in: named } }, select: { id: true, status: true, reason: true } })
+      ? await prisma.agentApproval.findMany({ where: { id: { in: named } }, select: { id: true, status: true, reason: true, ruleVerdict: true } })
       : []
     const fateNow = new Map(now.map((row) => [row.id, fateOf(row)]))
+    const checkOf = new Map(now.map((row) => [row.id, ((row.ruleVerdict as { check?: RuleCheck | null } | null)?.check ?? null)]))
     const tally: Record<string, number> = {}
     const runs = rows.map((row) => {
       const out = outputOf(row)
@@ -621,7 +623,11 @@ const adsManagerRuns: AgentTool = {
       const approvals = (out?.approvals ?? []).map((a) => {
         const fate = fateNow.get(a.approvalId) ?? 'other'
         tally[fate] = (tally[fate] ?? 0) + 1
-        return { approvalId: a.approvalId, listedAs: a.listedAs, tool: a.tool, title: a.title, fate, meaning: FATE_WORDS[fate], whenReported: a.fate, byRule: a.byRule, watch: a.watch }
+        // W4-5 — a watched request's reason as the rule wrote it may state an amount (a limit's): it sits under the
+        // money key ruleWhy, as in the watch week; everyone reads it in its check's words (meaning).
+        const check = checkOf.get(a.approvalId) ?? null
+        const watch = a.watch ? { wouldRun: a.watch.wouldRun, check, meaning: verdictMeaning({ wouldRun: a.watch.wouldRun, check }), ruleWhy: a.watch.why } : null
+        return { approvalId: a.approvalId, listedAs: a.listedAs, tool: a.tool, title: a.title, fate, meaning: FATE_WORDS[fate], whenReported: a.fate, byRule: a.byRule, watch }
       })
       const status = row.status as RunStatus
       return {
