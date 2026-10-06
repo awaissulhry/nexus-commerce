@@ -1002,6 +1002,14 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'schedule-pickup': () => ({ date: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) }),
   // A7 — a selection (the campaign, ad group and market the loop names) moves by a percent.
   'bulk-ad-bid-change': { percent: 10 },
+  // T5 — the campaigns are named one way: by id (the loop also names B's market, and the tool refuses both at once,
+  // before any read), with a target to set.
+  'set-campaign-target-acos': { market: undefined, targetAcosPct: 25 },
+  // End, Relist and Delete take the family SKU the person typed: B's product is its own family. A getter, so B's SKU is
+  // read when the probe is built (after seeding).
+  'end-listing': { get confirmSku() { return seeded.b.sku } },
+  'relist-listing': { get confirmSku() { return seeded.b.sku } },
+  'delete-listing': { get confirmSku() { return seeded.b.sku } },
   // Ads autonomy W3-1 — unmute the recommendation of B's campaign that B muted (its label is B's).
   'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute' }),
   // W3-1 — undo-ad-change names a recorded write (and its set); `changeId` (one step of a plan's set) is left out: the
@@ -1034,6 +1042,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   },
   // W4-1 — the end of B's started run (start takes no runId; the loop names one).
   'report-ads-run': { op: 'finish' },
+  // W4-2 — the business's own expected report time (a time the schema cannot make up).
+  'set-ads-report-time': { time: '08:30', timeZone: 'Europe/Rome' },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // W3-2 — a cancel names the queued write alone (the loop's changeSetId is a recorded write's, which waits for nothing).
@@ -1069,7 +1079,11 @@ const LIVE_READS = new Set(['shopify-content', 'set-shopify-content', 'listing-l
  * control inside B), and from A the creation is legitimate (it queues A's own approval). They are held to "no trace of
  * B" like every tool.
  */
-const CREATES = new Set(['create-product'])
+const CREATES = new Set([
+  'create-product',
+  // W4-2 — the business's own expected report time names no row either: from A it is A's own setting, waiting in A.
+  'set-ads-report-time',
+])
 
 /** An argument named like an id. One with no B_VALUES entry fails the build: the loop would probe nothing. */
 const ID_NAME = /(^id$|Id$|Ids$|^skus?$)/
@@ -1224,7 +1238,8 @@ function traces(text: string, of: Seeded, canary: string, args: unknown = {}): s
  * B's canary. 'B-only' is the person who belongs to B alone. 'A' is everything given to business A.
  */
 type Tag = 'A' | 'B-control' | 'B-only'
-const answers: Array<{ tag: Tag; text: Promise<string> }> = []
+/** Each answer with what its caller sent (a path, a body): an answer may repeat those, as `traces` allows. */
+const answers: Array<{ tag: Tag; text: Promise<string>; sent: unknown }> = []
 const logLines: string[] = []
 
 let app: FastifyInstance
@@ -1239,8 +1254,18 @@ const tokens = {} as Record<'a' | 'aSecond' | 'bOwn' | 'bOnly', { access: string
 /** fetch that keeps a copy of every answer for the scans of test 6. */
 const recordingFetch = (tag: Tag) => async (input: string | URL, init?: RequestInit) => {
   const response = await fetch(input, init)
-  answers.push({ tag, text: response.clone().text().catch(() => '') })
+  answers.push({ tag, text: response.clone().text().catch(() => ''), sent: sentBody(init?.body) })
   return response
+}
+
+/** A JSON request body as its values (the MCP client sends JSON-RPC as a string). */
+function sentBody(body: unknown): unknown {
+  if (typeof body !== 'string') return body ?? {}
+  try {
+    return JSON.parse(body)
+  } catch {
+    return body
+  }
 }
 
 async function withClaude<T>(token: string, tag: Tag, work: (client: Client) => Promise<T>): Promise<T> {
@@ -1303,7 +1328,7 @@ async function postTo(target: string, tag: Tag, body: unknown, token: string, in
     body: JSON.stringify(body),
   })
   const text = await response.text()
-  answers.push({ tag, text: Promise.resolve(text) })
+  answers.push({ tag, text: Promise.resolve(text), sent: body })
   return { status: response.status, header: (name: string) => response.headers.get(name), text }
 }
 
@@ -1328,7 +1353,7 @@ async function inApp(tag: Tag, method: 'GET' | 'POST' | 'PATCH' | 'PUT', path: s
     },
     payload: payload === undefined ? undefined : JSON.stringify(payload),
   })
-  answers.push({ tag, text: Promise.resolve(response.body) })
+  answers.push({ tag, text: Promise.resolve(response.body), sent: { path, payload } })
   return response
 }
 
@@ -1868,6 +1893,11 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       for (const payload of [{ ids, decision: 'approve' }, { ids, decision: 'reject', reason: 'MCP.8' }]) {
         const bulk = await inApp('B-only', 'POST', '/api/agent/fleet/approvals/bulk-decide', sessions.bOnly, B, payload)
         expect({ decision: payload.decision, done: (bulk.json() as { done?: number }).done }).toEqual({ decision: payload.decision, done: 0 })
+        // Each id comes back as B sent it, with the words an id no business has gets: nothing says A holds it.
+        const nobodys = await inApp('B-only', 'POST', '/api/agent/fleet/approvals/bulk-decide', sessions.bOnly, B, { ...payload, ids: [`mcp8-no-such-${RUN}`] })
+        const why = (nobodys.json() as { skipped: Array<{ why: string }> }).skipped[0].why
+        expect(why).toMatch(/cannot find/)
+        expect((bulk.json() as { skipped?: unknown }).skipped).toEqual(ids.map((id) => ({ id, why })))
       }
 
       expect(await rowsOf('SELECT * FROM "AgentApproval" WHERE id = ANY($1::text[]) ORDER BY id', [[inA.waiting, inA.parked]])).toEqual(rowsBefore)
@@ -2143,14 +2173,16 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
 
   describe('6 — no trace of B outside B', () => {
     it('no B canary in any answer given outside B; nothing of A in any answer given to B', async () => {
-      const all = await Promise.all(answers.map(async ({ tag, text }) => ({ tag, text: await text })))
+      const all = await Promise.all(answers.map(async ({ tag, text, sent }) => ({ tag, text: await text, sent })))
       // Control: the scan finds a canary where one belongs (B reading its own rows through /mcp).
       expect(all.some(({ tag, text }) => tag === 'B-control' && text.toUpperCase().includes(B_CANARY))).toBe(true)
       expect(all.filter(({ tag }) => tag === 'A').length).toBeGreaterThan(40)
       const outsideB = all.filter(({ tag, text }) => tag !== 'B-control' && text.toUpperCase().includes(B_CANARY))
       expect(outsideB.map(({ tag, text }) => `${tag}: ${text.slice(0, 200)}`)).toEqual([])
-      const toB = all.filter(({ tag, text }) => tag !== 'A' && traces(text, seeded.a, A_CANARY).length > 0)
-      expect(toB.map(({ tag, text }) => `${tag}: ${traces(text, seeded.a, A_CANARY).join(', ')}`)).toEqual([])
+      // An id B sent itself may come back with "not found" (bulk-decide names each request it skipped, #329): the same
+      // answer as for an id no business has, so it tells B nothing. Anything else of A, or A's canary, is a trace.
+      const toB = all.filter(({ tag, text, sent }) => tag !== 'A' && traces(text, seeded.a, A_CANARY, sent).length > 0)
+      expect(toB.map(({ tag, text, sent }) => `${tag}: ${traces(text, seeded.a, A_CANARY, sent).join(', ')}`)).toEqual([])
     })
 
     it('no B canary in any log line written during the suite', () => {

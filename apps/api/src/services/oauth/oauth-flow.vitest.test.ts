@@ -12,17 +12,27 @@ import { createHash, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateSecret, generateSync } from 'otplib'
 import { formulaDatabase } from '../../test-support/formula-database.js'
-import { LEGACY_WORKSPACE_ID } from '../../lib/workspace-context.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 
 let database: Pick<Awaited<ReturnType<typeof formulaDatabase>>, 'client' | 'close'>
 vi.mock('../../db.js', () => ({
   default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
+}))
+// W4-2 — the e-mail that tells a person their connection was ended: recorded, never sent.
+const mail = vi.hoisted(() => ({ sent: [] as Array<{ to: string | string[]; subject: string }> }))
+vi.mock('../email/transport.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../email/transport.js')>()),
+  sendEmail: vi.fn(async (message: { to: string | string[]; subject: string }) => {
+    mail.sent.push(message)
+    return { ok: true, provider: 'resend', dryRun: false, messageId: `test-${mail.sent.length}` }
+  }),
 }))
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
 import { generateToken, hashToken } from '../../lib/auth/tokens.js'
 import { __clientTest, cimdUnreachable, registerClient, resolveClient } from './oauth-clients.js'
 import { mcpResourceFor } from './oauth-config.js'
+import { CONNECTION_REVOKED_NOTICE_TYPE } from './oauth-revoke-notice.js'
 import { logger } from '../../utils/logger.js'
 import {
   checkAuthorize,
@@ -84,6 +94,11 @@ async function connect(pkce = verifier()) {
   })
   return { url, tokens }
 }
+
+/** W4-2 — the person's "connection ended" notices, newest first, in the connection's business. */
+const revokedNotices = () => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, () =>
+  database.client.notification.findMany({ where: { userId, type: CONNECTION_REVOKED_NOTICE_TYPE }, orderBy: { createdAt: 'desc' } }))
+const revokedNoticeCount = async () => (await revokedNotices()).length
 
 async function expectOAuthError(work: Promise<unknown>, error: string) {
   await expect(work).rejects.toBeInstanceOf(OAuthError)
@@ -273,6 +288,7 @@ describe('MCP.5 — tokens', () => {
 
   it('a refresh token works once; a second use ends the whole connection', async () => {
     const { tokens } = await connect()
+    const told = await revokedNoticeCount()
     const next = await refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId })
     expect(await verifyAccessToken(next.access_token)).not.toBeNull()
     // W4-3 — the new access token made a call, so the second use is no retry (that case is below).
@@ -283,6 +299,17 @@ describe('MCP.5 — tokens', () => {
     expect(await verifyAccessToken(next.access_token)).toBeNull()
     const grant = await database.client.oAuthGrant.findFirst({ where: { userId, workspaceId: LEGACY_WORKSPACE_ID } })
     expect(grant?.revokeReason).toBe('refresh_reuse')
+    // W4-2 — the person hears it at once: one danger notice in their bell (in the connection's business) and one e-mail.
+    expect(await revokedNoticeCount()).toBe(told + 1)
+    const [notice] = await revokedNotices()
+    expect(notice).toMatchObject({ severity: 'danger', href: '/settings/security', workspaceId: LEGACY_WORKSPACE_ID, meta: { grantId: grant!.id, reason: 'refresh_reuse' } })
+    const email = (await database.client.userProfile.findUniqueOrThrow({ where: { id: userId } })).email
+    expect(mail.sent.at(-1)).toMatchObject({ to: [email], subject: expect.stringMatching(/ended your Claude connection/) })
+    // Presented once more, the connection is already ended: nothing is said again.
+    const sent = mail.sent.length
+    await expectOAuthError(refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId }), 'invalid_grant')
+    expect(await revokedNoticeCount()).toBe(told + 1)
+    expect(mail.sent).toHaveLength(sent)
   })
 
   it('a refresh cannot widen what the person approved', async () => {
@@ -583,6 +610,7 @@ describe('W4-3 — a refresh presented again within seconds by the same app, bef
     const lost = await refresh(tokens.refresh_token)
     const retried = await refresh(tokens.refresh_token)
     const before = await reuseRevocations()
+    const toldBefore = await revokedNoticeCount()
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
     try {
       const late = refresh(lost.refresh_token)
@@ -593,6 +621,9 @@ describe('W4-3 — a refresh presented again within seconds by the same app, bef
       expect(await reuseRevocations()).toBe(before + 1)
       const audit = await database.client.workspaceAudit.findFirst({ where: { action: 'oauth.revoked', targetId: (await grantRow()).id }, orderBy: { createdAt: 'desc' } })
       expect(audit?.metadata).toEqual({ reason: 'refresh_reuse', endedByRetry: true })
+      // W4-2 — and the person is told, once.
+      expect(await revokedNoticeCount()).toBe(toldBefore + 1)
+      expect((await revokedNotices())[0].meta).toMatchObject({ grantId: (await grantRow()).id, reason: 'refresh_reuse', endedByRetry: true })
       expect(warn).toHaveBeenCalledWith('[oauth] a refresh token a retry had ended was presented again: the connection was revoked', { grantId: (await grantRow()).id })
     } finally {
       warn.mockRestore()
