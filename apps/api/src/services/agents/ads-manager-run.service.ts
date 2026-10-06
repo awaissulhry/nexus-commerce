@@ -24,12 +24,15 @@
  * from); Claude writes only words and approval ids. What each approval Claude names became is read here too
  * (`namedApprovals`): the counts in the bell and the e-mail ("3 ran, 2 wait for you") are Nexus's, never Claude's lists.
  *
- * report-ads-run is a journal tool (tool-types.ts AgentTool.journal): it changes nothing of the business, so Claude's door
- * runs it at once — also without nexus.run, in the watch week and during a Pause.
+ * report-ads-run's start, finish and fail are journal entries (tool-types.ts AgentTool.journal): they change nothing of
+ * the business, so Claude's door runs them at once — also without nexus.run, in the watch week and during a Pause. A
+ * withdraw is a request a person approves. The journal is capped: no start while a run that started within 2 hours is
+ * open, at most RUNS_PER_DAY runs and DANGER_NOTICES_PER_DAY danger notices a business and operator day.
  *
- * One bell notice per finish or fail (danger when the run names a problem or failed: never deduped), and at most one
- * e-mail a day per business (the operator's day, Europe/Rome, as the Monday digest counts it), through the shared e-mail
- * transport (a dry run unless outbound e-mail is on). To the Monday ads digest's recipients (NEXUS_ADS_DIGEST_RECIPIENTS);
+ * One bell notice per finish or fail to each of the business's people — the figures only to those who may see its ad
+ * money — (danger when the run names a problem or failed, never deduped; a warning past the day's cap), and at most one
+ * e-mail a day per business (the operator's day, Europe/Rome, as the Monday digest counts it; one row taken atomically),
+ * through the shared e-mail transport (a dry run unless outbound e-mail is on). To the Monday ads digest's recipients (NEXUS_ADS_DIGEST_RECIPIENTS);
  * when that list is empty, to this business's own active people who may see its ad money (ads.view and
  * financials.adspend.view, or its owners) — one e-mail per business, never two businesses in one.
  *
@@ -43,20 +46,19 @@ import prisma from '../../db.js'
 import { workspaceContext } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 import { sendEmail } from '../email/transport.js'
-import { AUTOMATION_HREF, notifyAutomationDetailed } from '../advertising/ads-automation-notify.service.js'
+import { AUTOMATION_HREF } from '../advertising/ads-automation-notify.service.js'
 import { CLAUDE_ACTION_TOOLS } from '../advertising/ads-strategy/fields.js'
 import { campaignMarkets, loadIndex } from '../advertising/ads-strategy/load.js'
 import { strategyVersionOf } from '../advertising/ads-strategy/autonomy.js'
-import { autonomyOf, autoRunsInLastDay, ruleFrom } from './claude-trust.service.js'
-import { getTool } from './tool-registry.js'
 import type { ClaudeTrust } from './tool-types.js'
+import { ADS_MANAGER_AGENT_KEY, ADS_RUN_DAY_ZONE, ADS_RUN_NOTICE_TYPE, DANGER_NOTICES_PER_DAY, OPEN_RUN_MS, RUNS_PER_DAY } from './ads-manager-constants.js'
 
-/** The run record's agent key (AgentRun.agentKey): no charter, no agent definition, no fleet reader takes it. */
-export const ADS_MANAGER_AGENT_KEY = 'claude-ads-manager'
-/** The bell notice's type (Notification.type); `meta.runId` names the run, so an undo can withdraw it. */
-export const ADS_RUN_NOTICE_TYPE = 'claude-ads-run'
-/** The operator's clock for "one e-mail a day" — the Monday digest's (ads-weekly-digest.service.ts OPERATOR_TIMEZONE). */
-export const ADS_RUN_DAY_ZONE = 'Europe/Rome'
+// Claude's trust rules and the tool registry are imported where used: they load every tool, this module's own among
+// them, and this module must load first in any order a process takes (ads-manager-constants.ts).
+const trust = () => import('./claude-trust.service.js')
+const registry = () => import('./tool-registry.js')
+
+export { ADS_MANAGER_AGENT_KEY, ADS_RUN_DAY_ZONE, ADS_RUN_NOTICE_TYPE }
 /** W4-5 slot: the watch-week comparison is not built yet; `ads-manager-runs` says so where it will stand. */
 export const WATCH_WEEK_SLOT = {
   comparison: null,
@@ -75,7 +77,7 @@ export const RUN_STATUS_WORDS: Record<RunStatus, string> = {
 // ── What the start reads ───────────────────────────────────────────────────────────────────────────
 
 /** Every ad change tool the ads strategy knows by kind (fields.ts), once. */
-const AD_CHANGE_TOOLS = [...new Set(Object.values(CLAUDE_ACTION_TOOLS).flat())].sort()
+const adChangeTools = () => [...new Set(Object.values(CLAUDE_ACTION_TOOLS).flat())].sort()
 
 /**
  * The run's mode, as the business has set it (never as the run says):
@@ -100,14 +102,16 @@ export interface StartFacts {
 }
 
 export async function startFacts(now = new Date()): Promise<StartFacts> {
+  const [{ autonomyOf, autoRunsInLastDay, ruleFrom }, { getTool }] = await Promise.all([trust(), registry()])
+  const names = adChangeTools()
   const [rows, autonomy, used, markets] = await Promise.all([
-    prisma.agentTool.findMany({ where: { name: { in: AD_CHANGE_TOOLS } }, select: { name: true, claudeTrust: true, claudeLimits: true } }),
+    prisma.agentTool.findMany({ where: { name: { in: names } }, select: { name: true, claudeTrust: true, claudeLimits: true } }),
     autonomyOf(),
     autoRunsInLastDay(),
     campaignMarkets(),
   ])
   const levels: StartFacts['levels'] = { auto: [], watch: [], confirm: [], ask: [], off: [] }
-  for (const name of AD_CHANGE_TOOLS) {
+  for (const name of names) {
     const tool = getTool(name)
     if (!tool) continue
     const level = ruleFrom(tool, rows.find((row) => row.name === name) ?? null).level as ClaudeTrust
@@ -203,6 +207,7 @@ export async function namedApprovals(lists: Record<ListedAs, readonly string[]>)
     }
   }
   if (!order.length) return { items: [], missing: [] }
+  const { getTool } = await registry()
   const rows = await prisma.agentApproval.findMany({
     where: { id: { in: order.map((o) => o.approvalId) } },
     select: { id: true, toolName: true, status: true, reason: true, decisionVia: true, ruleVerdict: true },
@@ -397,31 +402,41 @@ async function digestRecipients(): Promise<string[]> {
   return read()
 }
 
-const mayReadAds = (roles: Array<{ role: { key: string; permissions: string[] } }>, money: boolean) => {
+type RoleRows = Array<{ role: { key: string; permissions: string[] } }>
+const mayReadAds = (roles: RoleRows, money: boolean) => {
   if (roles.some(({ role }) => role.key === OWNER_ROLE_KEY)) return true
   const held = expandPermissions(roles.flatMap(({ role }) => role.permissions))
   return held.has(F.adsView) && (!money || held.has(FIELDS.financialsAdspendView))
 }
 
+interface Person { userId: string; email: string; ads: boolean; money: boolean }
+
 /**
- * This business's own active people who may see its ads (ads.view, or an owner) — `money`: and its ad money
- * (financials.adspend.view), for an e-mail that states spend and sales. With business profiles on, the business's
- * members by their roles in it; with them off (one business), every active login by its roles. Never anyone of another
- * business.
+ * This business's own active people, each with whether they may see its ads (ads.view, or an owner) and its ad money
+ * (and financials.adspend.view). With business profiles on, the business's members by their roles in it; with them off
+ * (one business), every active login by its roles — the people the bell reaches. Never anyone of another business.
  */
-export async function adsPeople(opts: { money: boolean }): Promise<string[]> {
+async function businessPeople(): Promise<Person[]> {
   const roles = { select: { role: { select: { key: true, permissions: true } } } } as const
   if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
     const workspaceId = workspaceContext()?.workspaceId
-    if (!workspaceId) return []
+    if (!workspaceId) {
+      logger.warn('[ads-manager-run] no business in context; nobody is told')
+      return []
+    }
     const members = await prisma.workspaceMembership.findMany({
       where: { workspaceId, status: 'active', user: { status: 'active' } },
-      select: { user: { select: { email: true } }, roles },
+      select: { userId: true, user: { select: { email: true } }, roles },
     })
-    return [...new Set(members.filter((m) => mayReadAds(m.roles, opts.money)).map((m) => m.user.email).filter(Boolean))]
+    return members.map((m) => ({ userId: m.userId, email: m.user.email, ads: mayReadAds(m.roles, false), money: mayReadAds(m.roles, true) }))
   }
-  const people = await prisma.userProfile.findMany({ where: { status: 'active' }, select: { email: true, roleAssignments: roles } })
-  return [...new Set(people.filter((p) => mayReadAds(p.roleAssignments, opts.money)).map((p) => p.email).filter(Boolean))]
+  const people = await prisma.userProfile.findMany({ where: { status: 'active' }, select: { id: true, email: true, roleAssignments: roles } })
+  return people.map((p) => ({ userId: p.id, email: p.email, ads: mayReadAds(p.roleAssignments, false), money: mayReadAds(p.roleAssignments, true) }))
+}
+
+/** This business's own people who may see its ads — `money`: and its ad money, for an e-mail that states spend and sales. */
+export async function adsPeople(opts: { money: boolean }): Promise<string[]> {
+  return [...new Set((await businessPeople()).filter((p) => (opts.money ? p.money : p.ads)).map((p) => p.email).filter(Boolean))]
 }
 
 /** Who the day's report e-mail goes to: the Monday digest's list, else this business's own people who may see ad money. */
@@ -430,13 +445,20 @@ export async function reportRecipients(): Promise<{ to: string[]; source: 'diges
   return digest.length ? { to: digest, source: 'digest' } : { to: await adsPeople({ money: true }), source: 'business' }
 }
 
-/** Whether a report e-mail already went (or was rehearsed) on this operator day, in this business. */
-export async function emailedOn(day: string, now = new Date()): Promise<boolean> {
-  const recent = await runsSince(new Date(now.getTime() - 2 * 86_400_000), 100)
-  return recent.some((row) => {
-    const email = outputOf(row)?.email
-    return !!email && email.on === day && (email.status === 'sent' || email.status === 'dry-run')
-  })
+/**
+ * The day's one report e-mail is a row of its own (AgentMemory, one per business and operator day, its unique key):
+ * taking it is one insert that does nothing when the row is there, so two reports racing for the day's e-mail send one.
+ */
+const EMAIL_DAY = { scope: ADS_MANAGER_AGENT_KEY, entityType: 'report-email', key: 'sent' } as const
+
+/** Whether the day's report e-mail is taken (sent, rehearsed, or being sent) in this business. */
+export async function emailedOn(day: string): Promise<boolean> {
+  return (await prisma.agentMemory.count({ where: { ...EMAIL_DAY, entityId: day } })) > 0
+}
+
+async function claimEmailDay(day: string): Promise<boolean> {
+  const taken = await prisma.agentMemory.createMany({ data: [{ ...EMAIL_DAY, entityId: day, value: { at: new Date().toISOString() } }], skipDuplicates: true })
+  return taken.count === 1
 }
 
 /** Whether today's e-mail would go, and to how many (the dry run's answer; never the addresses). */
@@ -444,7 +466,7 @@ export async function emailPlan(wanted: boolean, now = new Date()): Promise<{ se
   const recipients = (await reportRecipients()).to.length
   if (!wanted) return { send: false, recipients, why: 'the run asked for no e-mail' }
   if (!recipients) return { send: false, recipients, why: 'no one to send it to: the Monday ads digest has no recipients and no one in this business may see its ad money' }
-  if (await emailedOn(operatorDay(now), now)) return { send: false, recipients, why: 'today\'s report e-mail already went (one a day)' }
+  if (await emailedOn(operatorDay(now))) return { send: false, recipients, why: 'today\'s report e-mail already went (one a day)' }
   return { send: true, recipients, why: null }
 }
 
@@ -452,31 +474,85 @@ export async function sendRunEmail(message: { subject: string; html: string; tex
   const { to } = await reportRecipients()
   if (!to.length) return { status: 'skipped', on: null, recipients: 0, why: 'no one to send it to: the Monday ads digest has no recipients and no one in this business may see its ad money' }
   const day = operatorDay(now)
-  if (await emailedOn(day, now)) return { status: 'skipped', on: null, recipients: to.length, why: 'today\'s report e-mail already went (one a day)' }
+  if (!(await claimEmailDay(day))) return { status: 'skipped', on: null, recipients: to.length, why: 'today\'s report e-mail already went (one a day)' }
+  const release = () => prisma.agentMemory.deleteMany({ where: { ...EMAIL_DAY, entityId: day } }).catch(() => undefined)
   try {
     const sent = await sendEmail({ to, subject: message.subject, html: message.html, text: message.text, tag: 'claude-ads-run' })
     if (sent.dryRun) return { status: 'dry-run', on: day, recipients: to.length, why: 'built and logged, nothing mailed: outbound e-mail is off' }
-    return sent.ok
-      ? { status: 'sent', on: day, recipients: to.length, why: null }
-      : { status: 'failed', on: null, recipients: to.length, why: sent.error ?? 'the e-mail could not be sent' }
+    if (sent.ok) return { status: 'sent', on: day, recipients: to.length, why: null }
+    await release()
+    return { status: 'failed', on: null, recipients: to.length, why: sent.error ?? 'the e-mail could not be sent' }
   } catch (error) {
     logger.warn('[ads-manager-run] e-mail failed', { error: String(error).slice(0, 140) })
+    await release()
     return { status: 'failed', on: null, recipients: to.length, why: 'the e-mail could not be sent' }
   }
 }
 
-/** One bell notice to the business's people (danger is never deduped: notifyAutomationDetailed). */
-export async function noticeRun(n: { runId: string; op: 'finish' | 'fail'; danger: boolean; title: string; body: string; waiting: number }) {
-  const severity = n.danger ? 'danger' : 'info'
-  const result = await notifyAutomationDetailed({
-    type: ADS_RUN_NOTICE_TYPE,
-    severity,
-    title: n.title,
-    body: n.body,
-    href: n.waiting > 0 ? '/fleet/approvals' : AUTOMATION_HREF,
-    meta: { runId: n.runId, op: n.op },
-  })
-  return { severity, created: result.created }
+export type NoticeSeverity = 'danger' | 'warn' | 'info'
+
+/**
+ * One bell notice to each of the business's people. The figures (spend, sales) only to those who may see its ad money;
+ * the others get the same notice without amounts (`plainBody`). Never deduped.
+ */
+export async function noticeRun(n: { runId: string; op: 'finish' | 'fail'; severity: NoticeSeverity; title: string; body: string; plainBody: string; waiting: number }) {
+  try {
+    const people = await businessPeople()
+    if (!people.length) return { severity: n.severity, created: 0 }
+    const href = n.waiting > 0 ? '/fleet/approvals' : AUTOMATION_HREF
+    await prisma.notification.createMany({
+      data: people.map((p) => ({
+        userId: p.userId, type: ADS_RUN_NOTICE_TYPE, severity: n.severity, title: n.title, body: p.money ? n.body : n.plainBody, href, meta: { runId: n.runId, op: n.op },
+      })),
+    })
+    return { severity: n.severity, created: people.length }
+  } catch (error) {
+    logger.warn('[ads-manager-run] notice failed', { error: String(error).slice(0, 140) })
+    return { severity: n.severity, created: 0 }
+  }
+}
+
+// ── The day's caps ─────────────────────────────────────────────────────────────────────────────────
+
+export interface DayCounts {
+  /** Runs recorded on this operator day (a start, or a report without one). */
+  runs: number
+  /** Danger notices the day's reports raised. */
+  dangerNotices: number
+  /** A run that started within OPEN_RUN_MS and reported no end. */
+  open: { runId: string; startedAt: Date } | null
+}
+
+/** The business's runs of this operator day, for the caps (RUNS_PER_DAY, DANGER_NOTICES_PER_DAY, OPEN_RUN_MS). */
+export async function dayCounts(now = new Date()): Promise<DayCounts> {
+  const day = operatorDay(now)
+  const recent = await runsSince(new Date(now.getTime() - 30 * 3600_000), 100)
+  const open = recent.find((r) => r.status === 'running' && r.createdAt.getTime() >= now.getTime() - OPEN_RUN_MS)
+  return {
+    runs: recent.filter((r) => operatorDay(r.createdAt) === day).length,
+    dangerNotices: recent.filter((r) => {
+      const out = outputOf(r)
+      return out?.notice?.severity === 'danger' && out.notice.created > 0 && !!out.reportedAt && operatorDay(new Date(out.reportedAt)) === day
+    }).length,
+    open: open ? { runId: open.id, startedAt: open.createdAt } : null,
+  }
+}
+
+/** Why a new run may not be recorded now, or null. */
+export function newRunRefusal(counts: DayCounts, op: 'start' | 'report'): string | null {
+  if (op === 'start' && counts.open) {
+    return `Run ${counts.open.runId} started at ${counts.open.startedAt.toISOString()} and is still open: report its end (finish or fail) with that runId first. Nothing was recorded.`
+  }
+  if (counts.runs >= RUNS_PER_DAY) {
+    return `This business recorded ${counts.runs} daily Claude ads runs today, the most a day (${RUNS_PER_DAY}); the next one starts tomorrow. Nothing was recorded.`
+  }
+  return null
+}
+
+/** The notice's severity: danger on a problem or a failure, but at most DANGER_NOTICES_PER_DAY a day (then a warning). */
+export function noticeSeverity(danger: boolean, counts: DayCounts): NoticeSeverity {
+  if (!danger) return 'info'
+  return counts.dangerNotices >= DANGER_NOTICES_PER_DAY ? 'warn' : 'danger'
 }
 
 /** The business's own name, for the e-mail's subject (the token's business: row-level security holds the rest). */

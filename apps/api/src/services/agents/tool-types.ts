@@ -224,6 +224,11 @@ export interface ToolResult {
    * and schedules it; nothing else can.
    */
   confirm?: { approvalId: string; planHash: string; code: string }
+  /**
+   * W4-1 — a journal tool's dry run only: this call is a journal entry (AgentTool.journal), so Claude's door runs it at
+   * once. Without it, a call of a journal tool is a request like any change (report-ads-run's withdraw).
+   */
+  journal?: true
 }
 
 export interface AgentTool {
@@ -301,10 +306,12 @@ export interface AgentTool {
   /**
    * ADS AUTONOMY W4-1 (lead decision 2026-10-06) — a journal tool: Claude's own record in Nexus of work it did (a run
    * record, a bell notice, at most a capped e-mail), never a change of the business — no product, listing, price, stock,
-   * ad, order or setting. After its dry run it runs at once (`execute`, approval-gate.service.ts `runJournal`), never
-   * stored as a request: for any connection with the write scope, also without nexus.run and during a Pause, as there is
-   * nothing for a person to approve. Turned off for Claude (level off) it is refused like any tool. An exact list holds
-   * the class (tool-contract.vitest.test.ts JOURNAL_TOOLS): closed world, ceiling ask (offered or not), never alwaysAsk.
+   * ad, order or setting. A call its dry run marks as a journal entry (ToolResult.journal) runs at once after it
+   * (`execute`, approval-gate.service.ts `runJournal`), never stored as a request: for any connection with the write
+   * scope, also without nexus.run and during a Pause, as there is nothing for a person to approve. Any other call of it
+   * (report-ads-run's withdraw) is a request a person approves, as any change. Turned off for Claude (level off) it is
+   * refused like any tool. An exact list holds the class (tool-contract.vitest.test.ts JOURNAL_TOOLS): closed world,
+   * ceiling ask (offered or not), never alwaysAsk.
    */
   journal?: true
   /**
