@@ -67,8 +67,9 @@ beforeEach(() => {
 describe('the market lists come from the connections', () => {
   it('🔴 IT/DE/FR/ES production + UK reading only: UK is read, the four are read and written', async () => {
     const lists = await adsMarketLists()
-    expect(lists.read).toEqual(['DE', 'ES', 'FR', 'IT', 'UK'])
-    expect(lists.write).toEqual(['DE', 'ES', 'FR', 'IT'])
+    // The Owner's order: the live four as the console always listed them, then the reading-only market.
+    expect(lists.read).toEqual(['IT', 'DE', 'ES', 'FR', 'UK'])
+    expect(lists.write).toEqual(['IT', 'DE', 'ES', 'FR'])
     const uk = lists.markets.find((m) => m.code === 'UK')!
     expect(uk).toMatchObject({ read: true, write: false, state: 'reading_only', mode: 'sandbox', writesEnabled: false })
     expect(uk.whyNoWrite).toContain(READING_ONLY_REASON)
@@ -79,9 +80,9 @@ describe('the market lists come from the connections', () => {
   it('with today\'s four accounts only, the lists are exactly the four', async () => {
     rows.splice(rows.findIndex((r) => r.marketplace === 'UK'), 1)
     const lists = await adsMarketLists()
-    expect(lists.read).toEqual(['DE', 'ES', 'FR', 'IT'])
-    expect(lists.write).toEqual(['DE', 'ES', 'FR', 'IT'])
-    expect(await adsReadMarkets()).toEqual(['DE', 'ES', 'FR', 'IT'])
+    expect(lists.read).toEqual(['IT', 'DE', 'ES', 'FR'])
+    expect(lists.write).toEqual(['IT', 'DE', 'ES', 'FR'])
+    expect(await adsReadMarkets()).toEqual(['IT', 'DE', 'ES', 'FR'])
   })
 
   it('an account switched off is not read, and not written even with writes on', () => {
@@ -113,6 +114,17 @@ describe('the market lists come from the connections', () => {
       new Map([['IT', { mode: 'production', writesEnabledAt: ON }]]),
     )
     expect(lists.read).toEqual(['IT'])
+  })
+
+  it('🔴 order: writable markets first (IT, DE, ES, FR, then any other writable one), then reading-only alphabetically', () => {
+    const on = { mode: 'production', writesEnabledAt: ON }
+    const row = (code: string, isActive = true) => ({ profileId: `p-${code}`, marketplace: code, isActive, mode: 'production', writesEnabledAt: ON })
+    const lists = adsMarketListsOf(
+      [row('UK'), row('SE'), row('FR'), row('BE'), row('ES'), row('DE'), row('IT'), row('NL', false)],
+      new Map([['IT', on], ['DE', on], ['ES', on], ['FR', on], ['UK', { mode: 'sandbox', writesEnabledAt: null }], ['SE', { mode: 'sandbox', writesEnabledAt: null }], ['BE', { mode: 'sandbox', writesEnabledAt: null }]]),
+    )
+    expect(lists.markets.map((m) => m.code)).toEqual(['IT', 'DE', 'ES', 'FR', 'BE', 'SE', 'UK', 'NL'])
+    expect(lists.read).toEqual(['IT', 'DE', 'ES', 'FR', 'BE', 'SE', 'UK'])
   })
 
   it('a `?market=` is checked against the read list', () => {

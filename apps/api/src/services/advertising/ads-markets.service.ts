@@ -62,11 +62,29 @@ export interface AdsMarketAccess {
 }
 
 export interface AdsMarketLists {
-  /** Markets whose data Nexus reads: write markets first, then reading-only, each alphabetical. */
+  /** Markets whose data Nexus reads, in `compareAdsMarkets` order (IT, DE, ES, FR first, then reading-only). */
   read: string[]
   /** Markets where Nexus may change ads. Always a subset of `read`. */
   write: string[]
   markets: AdsMarketAccess[]
+}
+
+/**
+ * The order every list and picker shows, so the Owner sees what he always saw: the markets Nexus writes in first, in
+ * the order the ads console has always listed the live four (IT, DE, ES, FR; another writable market after them,
+ * alphabetically), then the reading-only markets alphabetically, then markets Nexus does not read.
+ */
+export const LIVE_MARKET_ORDER: readonly string[] = ['IT', 'DE', 'ES', 'FR']
+
+export function compareAdsMarkets(a: { code: string; read: boolean; write: boolean }, b: { code: string; read: boolean; write: boolean }): number {
+  if (a.write !== b.write) return a.write ? -1 : 1
+  if (a.read !== b.read) return a.read ? -1 : 1
+  if (a.write) {
+    const ia = LIVE_MARKET_ORDER.indexOf(a.code)
+    const ib = LIVE_MARKET_ORDER.indexOf(b.code)
+    if (ia !== ib) return (ia === -1 ? LIVE_MARKET_ORDER.length : ia) - (ib === -1 ? LIVE_MARKET_ORDER.length : ib)
+  }
+  return a.code.localeCompare(b.code)
 }
 
 /** A stored marketplace (a code, `AMAZON_IT` or an Amazon marketplace id) as its two-letter code. */
@@ -120,7 +138,7 @@ export function adsMarketListsOf(
       whyNoWrite,
     }
   })
-  markets.sort((a, b) => (a.write === b.write ? (a.read === b.read ? a.code.localeCompare(b.code) : a.read ? -1 : 1) : a.write ? -1 : 1))
+  markets.sort(compareAdsMarkets)
   return {
     read: markets.filter((m) => m.read).map((m) => m.code),
     write: markets.filter((m) => m.write).map((m) => m.code),
@@ -136,34 +154,56 @@ async function connectionRows(): Promise<AdsMarketRow[]> {
 }
 
 /**
- * The markets whose ads data Nexus reads. One small query; what every read route validates `?market=` against and what
- * "all markets" means. Not cached: switching a market on or off takes effect on the next request.
+ * The operator's decision per market, as the write gate's resolver answers it. If the resolver cannot answer at all,
+ * each market's own active row says it (the resolver's legacy fallback), so a list never disappears because of it.
  */
-export async function adsReadMarkets(): Promise<string[]> {
-  const rows = await connectionRows()
-  const read = new Set(rows.filter((r) => r.isActive).map((r) => adsMarketCode(r.marketplace)).filter(Boolean))
-  return [...read].sort()
+async function decisionsFor(codes: string[], rows: readonly AdsMarketRow[]): Promise<{ decisions: Map<string, AdsMarketDecision | null>; profiles: Map<string, string | null> }> {
+  const decisions = new Map<string, AdsMarketDecision | null>()
+  const profiles = new Map<string, string | null>()
+  try {
+    const { adsProfilesForMarkets } = await import('./ads-profile-resolver.js')
+    const refs = await adsProfilesForMarkets(codes)
+    for (const code of codes) {
+      const ref = refs.get(code) ?? null
+      decisions.set(code, ref ? { mode: ref.mode, writesEnabledAt: ref.writesEnabledAt } : null)
+      profiles.set(code, ref?.profileId ?? null)
+    }
+  } catch {
+    for (const code of codes) {
+      const row = rows.find((r) => r.isActive && adsMarketCode(r.marketplace) === code) ?? null
+      decisions.set(code, row ? { mode: row.mode, writesEnabledAt: row.writesEnabledAt } : null)
+      profiles.set(code, row?.profileId ?? null)
+    }
+  }
+  return { decisions, profiles }
 }
 
-/** The full answer, with the write gate's decision and the currency per market. For GET /advertising/connections. */
-export async function adsMarketLists(): Promise<AdsMarketLists> {
+/**
+ * The full answer, with the write gate's decision per market and (unless `currency: false`) the currency. For
+ * GET /advertising/connections. Not cached: switching a market on or off takes effect on the next request.
+ */
+export async function adsMarketLists(opts: { currency?: boolean } = {}): Promise<AdsMarketLists> {
   const rows = await connectionRows()
   const codes = [...new Set(rows.map((r) => adsMarketCode(r.marketplace)).filter(Boolean))]
-  const { adsProfilesForMarkets } = await import('./ads-profile-resolver.js')
-  const refs = await adsProfilesForMarkets(codes)
-  const decisions = new Map<string, AdsMarketDecision | null>()
-  for (const code of codes) {
-    const ref = refs.get(code) ?? null
-    decisions.set(code, ref ? { mode: ref.mode, writesEnabledAt: ref.writesEnabledAt } : null)
-  }
-  const { adsProfileCurrency } = await import('./ads-profile-facts.service.js')
+  const { decisions, profiles } = await decisionsFor(codes, rows)
   const currencies = new Map<string, string | null>()
-  for (const code of codes) {
-    const profileId = refs.get(code)?.profileId ?? rows.find((r) => adsMarketCode(r.marketplace) === code)?.profileId
-    const found = profileId ? await adsProfileCurrency(profileId, code).catch(() => null) : null
-    currencies.set(code, found?.currencyCode ?? null)
+  if (opts.currency !== false) {
+    const { adsProfileCurrency } = await import('./ads-profile-facts.service.js')
+    for (const code of codes) {
+      const profileId = profiles.get(code) ?? rows.find((r) => adsMarketCode(r.marketplace) === code)?.profileId
+      const found = profileId ? await adsProfileCurrency(profileId, code).catch(() => null) : null
+      currencies.set(code, found?.currencyCode ?? null)
+    }
   }
   return adsMarketListsOf(rows, decisions, currencies)
+}
+
+/**
+ * The markets whose ads data Nexus reads, in the screens' order (IT, DE, ES, FR first, then reading-only markets):
+ * what every read route validates `?market=` against and what "all markets" means.
+ */
+export async function adsReadMarkets(): Promise<string[]> {
+  return (await adsMarketLists({ currency: false })).read
 }
 
 /**
