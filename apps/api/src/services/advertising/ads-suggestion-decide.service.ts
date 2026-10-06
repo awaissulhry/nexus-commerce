@@ -73,10 +73,21 @@ export async function staleRuleSentence(sug: { ruleId: string; ruleName: string 
   return null
 }
 
+/**
+ * AA-W2-10 — how an approval carries an apply out (Claude's decide-automation-suggestions). `operatorApproved`: a person
+ * decided it (in Nexus, or with his code in Claude); false when the business's rule decided it — a rule's run is not a
+ * person's write, so it does not take a placement lane the rank engine holds. `approval` (D7): the change set and the
+ * audit reason every write of the apply carries (the rule stays the writer).
+ */
+export interface ApplyAs {
+  operatorApproved?: boolean
+  approval?: { changeSetId: string; reason: string }
+}
+
 // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
 // automation halt + the handlers' own spend caps). The operator already approved, so we apply
 // the action directly rather than re-evaluating conditions — but only while its rule still stands behind it (4l).
-export async function applySuggestion(id: string, ov: ApplyOverride = {}, decidedBy = 'operator'): Promise<DecideResult> {
+export async function applySuggestion(id: string, ov: ApplyOverride = {}, decidedBy = 'operator', as: ApplyAs = {}): Promise<DecideResult & { negatives?: string[] }> {
   const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
   if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
   if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
@@ -118,9 +129,9 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   const handler = ACTION_HANDLERS[String(action.type)]
   if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
   // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
-  // D7 — true here because a person decides every apply (the Suggestions page, or Claude's decide-automation-suggestions
-  // at confirm at most). Revisit it before that tool may run by rule: a rule's run is not a person's write.
-  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: true })
+  // AA-W2-10 — the Suggestions page is always a person; an approval says who decided it (ApplyAs).
+  const approval = as.approval ? { ...as.approval, negatives: [] as string[] } : undefined
+  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) })
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
    *
@@ -131,12 +142,12 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
    * gets the server's own sentence to show.
    */
   if (result.ok === false) {
-    return { ok: false, refused: true, error: result.error ?? 'refused', result }
+    return { ok: false, refused: true, error: result.error ?? 'refused', result, ...(approval?.negatives.length ? { negatives: approval.negatives } : {}) }
   }
   await prisma.adsRuleSuggestion.update({
     where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy, appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
   })
-  return { ok: true, result }
+  return { ok: true, result, ...(approval?.negatives.length ? { negatives: approval.negatives } : {}) }
 }
 
 export async function dismissSuggestion(id: string, decidedBy = 'operator'): Promise<DecideResult> {
@@ -350,18 +361,35 @@ export async function planSuggestionDecisions(
 
 /**
  * The approved run: each decision through the same apply / dismiss / restore the Suggestions page uses. D7 — a decision
- * records the person who approved it (`user:<id>`), not the page's anonymous 'operator'. What an apply writes still
- * carries the rule's own actor and no change set: undo-ad-change cannot find it by the approval id (the Change Log can).
+ * records the person who approved it (`user:<id>`), not the page's anonymous 'operator'. AA-W2-10 — what an apply writes
+ * carries the rule's own actor, the approval's change set and an audit reason naming the request and who decided it
+ * (`as`): undo-ad-change finds the writes by the approval id, and the negatives an apply created are returned
+ * (`negatives`, their Nexus rows) for it to retire.
  */
-export async function applySuggestionDecisions(decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>, approverId: string | null = null): Promise<Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null }>> {
+export async function applySuggestionDecisions(
+  decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>,
+  approverId: string | null = null,
+  as: ApplyAs = {},
+): Promise<{ results: Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null }>; negatives: string[] }> {
   const decidedBy = approverId ? `user:${approverId}` : 'operator'
-  const out = []
+  const results = []
+  const negatives: string[] = []
   for (const d of decisions) {
-    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, {}, decidedBy) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
+    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, {}, decidedBy, as) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
+    for (const id of (result as { negatives?: string[] }).negatives ?? []) if (!negatives.includes(id)) negatives.push(id)
     const now = await prisma.adsRuleSuggestion.findUnique({ where: { id: d.suggestionId }, select: { status: true } })
-    out.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null })
+    results.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null })
   }
-  return out
+  return { results, negatives }
+}
+
+/** AA-W2-10 — what each suggestion would apply and where, for the limits its tool is judged on by rule (suggestion-limits.ts). */
+export async function suggestionSubjects(ids: string[]): Promise<Array<{ id: string; ruleId: string; entityType: string; entityId: string; proposedAction: unknown; proposedKey: string }>> {
+  if (!ids.length) return []
+  return prisma.adsRuleSuggestion.findMany({
+    where: { id: { in: [...new Set(ids)] } },
+    select: { id: true, ruleId: true, entityType: true, entityId: true, proposedAction: true, proposedKey: true },
+  })
 }
 
 /** The statuses of these suggestions now (undo compares them with what the decision left). */
