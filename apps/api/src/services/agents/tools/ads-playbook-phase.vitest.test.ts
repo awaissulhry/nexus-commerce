@@ -11,7 +11,8 @@
  *   by rule   only the move the check proposes, outside the hold; a raise only with allowPhaseUp, written without a code
  *             and said so
  *   slots     DEFEND floors the research slots (low bids, remembered, never paused); leaving it in a running playbook gives
- *             back only the floor it set — a raise — never an engine's, and never a built campaign's (only START does)
+ *             back only the floor it set — a raise — never an engine's, nor a stopped built campaign's (only START does);
+ *             a built campaign START started and left at the phase's floor is released here, with the code
  *   rank      a phase that switches an hourly plan off is a raise when the floors it set come back, a lowering when kept
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -47,6 +48,7 @@ import { callTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
+import { limitsTighten } from '../claude-trust.service.js'
 import { phaseItem } from './ads-playbook-apply.tools.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -220,6 +222,11 @@ describe('by rule: only the move the phase check proposes, outside the hold; a r
     const raising = { ...p, direction: 'raise', raises: ['Target'] }
     expect(judge(raising)).toMatch(/allowPhaseUp is off/)
     expect(judge(raising, { allowPhaseUp: true })).toBeNull()
+    // allowPhaseUp on is a LOOSENING of the tool's limits: only a person with settings.security.manage and a fresh code
+    // turns it on (claude-trust.service.ts mayRaise); off again is a free brake.
+    const tool = getTool('apply-ads-playbook')!
+    expect(limitsTighten(tool, { allowPhaseUp: false }, { allowPhaseUp: true })).toBe(false)
+    expect(limitsTighten(tool, { allowPhaseUp: true }, { allowPhaseUp: false })).toBe(true)
     const other = (await preview(phase('DEFEND'))).preview as Row
     expect(judge(other)).toMatch(/Nexus's phase check proposes PROFIT now, not DEFEND: a switch it does not propose is a person's own/)
     expect(judge({ op: 'phase', market: 'IT', phase: { to: 'PROFIT' } })).toMatch(/there is no phase check in this preview/)
@@ -260,11 +267,15 @@ describe('slots: a phase floors with low bids, and gives back only the floor it 
       // The budget engine took the Broad slot's floor over meanwhile.
       await db().campaign.update({ where: { id: campaigns['broad-category'] }, data: { bidsSuppressedBy: 'automation:budget-engine' } })
     })
-    // PB-5b — a campaign the playbook BUILT gets its bids back only through START (its own code gate): named, left.
-    await inside(() => db().adsPlaybookLink.updateMany({ where: { playbookId: pb.rowId, kind: 'slot', key: 'auto' }, data: { origin: 'built' } }))
-    const built = (await preview(phase('GROW'))).preview as Row
-    expect(built.slots.find((s: Row) => s.slot === 'auto')).toMatchObject({ does: 'report', direction: 'same', summary: expect.stringMatching(/stays at the floor: it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/) })
-    await inside(() => db().adsPlaybookLink.updateMany({ where: { playbookId: pb.rowId, kind: 'slot', key: 'auto' }, data: { origin: 'adopted' } }))
+    // PB-5b — a campaign the playbook BUILT that is not started (off the allowlist: stopped) gets its bids back only
+    // through START: named, left. Started (on the allowlist), the floor its phase held is the phase's to release.
+    await inside(async () => {
+      await db().adsPlaybookLink.updateMany({ where: { playbookId: pb.rowId, kind: 'slot', key: 'auto' }, data: { origin: 'built' } })
+      await db().campaign.update({ where: { id: campaigns.auto }, data: { liveBidWritesEnabled: false } })
+    })
+    const stopped = (await preview(phase('GROW'))).preview as Row
+    expect(stopped.slots.find((s: Row) => s.slot === 'auto')).toMatchObject({ does: 'report', direction: 'same', summary: expect.stringMatching(/stays at the floor: it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/) })
+    await inside(() => db().campaign.update({ where: { id: campaigns.auto }, data: { liveBidWritesEnabled: true } }))
     const p = (await preview(phase('GROW'))).preview as Row
     expect(p.slots.map((s: Row) => [s.slot, s.does, s.direction])).toEqual([['auto', 'restore', 'raise'], ['broad-category', 'report', 'same']])
     expect(p.slots[1].summary).toMatch(/held at the floor by automation:budget-engine: a floor an engine set is never lifted here/)

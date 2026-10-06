@@ -13,10 +13,11 @@
  *   slots      each slot as the phase says: `floor` lowers its campaign to the strategy's stop bid (suppressCampaignBids,
  *              its bids remembered; never a pause); `active` gives back a floor the LAST phase set, only once the playbook
  *              runs (before START, START does) and only a floor a person's request set (an engine's floor — the budget
- *              engine, the retail guard, an hourly plan, a stock floor — is left, named). A campaign the playbook BUILT, or
- *              one at a floor a playbook STOP holds, gets its bids back only through START (PB-5b held.ts: it needs the
- *              approver's code and starts the playbook's plans with it): the phase names it and leaves it. A slot the phase
- *              leaves active is never touched.
+ *              engine, the retail guard, an hourly plan, a stock floor — is left, named). A campaign the playbook BUILT
+ *              that is not started (off the live-write allowlist: never started, or stopped), or one at a floor a playbook
+ *              STOP holds, gets its bids back only through START (PB-5b held.ts): the phase names it and leaves it. A built
+ *              campaign START started and left at the floor the phase holds ("held by phase …", start.ts) is released
+ *              here, through the same code gate as a start. A slot the phase leaves active is never touched.
  *   rank       the playbook's own hourly plans per role, off / on / light (PB-8 previewRankPhase / applyRankPhase): on
  *              only once the playbook runs; switched off, what rank set is kept (floors handed to the approver) unless
  *              the request asks to give it back (`rankFloors: giveBack` — a raise, rankOffEffect says so). The Owner's
@@ -133,6 +134,8 @@ export interface SlotCampaign {
   floored: boolean
   floorBy: string | null
   dailyBudgetCents: number
+  /** On the live-write allowlist (a built campaign: START started it). */
+  liveWrites?: boolean
 }
 
 export interface SlotStep {
@@ -309,23 +312,25 @@ export async function planPhase(args: { market: string; productId?: string; sku?
   const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: row.id }, select: { kind: true, key: true, refId: true, adGroupId: true, origin: true } })
   const slotLinks = links.filter((l) => l.kind === 'slot')
   const slotCampaigns = slotLinks.length
-    ? await prisma.campaign.findMany({ where: { id: { in: slotLinks.map((l) => l.refId) } }, select: { id: true, name: true, status: true, marketplace: true, bidsSuppressedAt: true, bidsSuppressedBy: true, dailyBudget: true } })
+    ? await prisma.campaign.findMany({ where: { id: { in: slotLinks.map((l) => l.refId) } }, select: { id: true, name: true, status: true, marketplace: true, bidsSuppressedAt: true, bidsSuppressedBy: true, dailyBudget: true, liveBidWritesEnabled: true } })
     : []
   const campaigns = new Map(slotCampaigns.map((c) => [c.id, {
     campaignId: c.id, name: c.name, status: String(c.status), marketplace: c.marketplace, floored: !!c.bidsSuppressedAt,
     floorBy: c.bidsSuppressedAt ? c.bidsSuppressedBy ?? null : null, dailyBudgetCents: Math.round(Number(c.dailyBudget ?? 0) * 100),
+    liveWrites: c.liveBidWritesEnabled,
   } satisfies SlotCampaign]))
   const stops = await stopBidsFor(slotCampaigns.map((c) => ({ id: c.id, marketplace: c.marketplace })), channel)
   let slots = slotSteps({
     doc, from: fromEntry, to: entry, links: new Map(slotLinks.map((l) => [l.key, l.refId])), campaigns, running,
     stopBids: new Map([...stops].map(([id, s]) => [id, s.cents])),
   })
-  // PB-5b — a built campaign's floor, and one a STOP holds, go back only through START (its own code gate).
+  // PB-5b — a floor a STOP holds, and a built campaign not started (off the allowlist), go back only through START.
   const { playbookHolds, startOnlyRefusal } = await import('./held.js')
   const held = await playbookHolds(slots.filter((s) => s.does === 'restore' && s.campaignId).map((s) => s.campaignId!))
   slots = slots.map((s) => {
     const why = s.does === 'restore' && s.campaignId ? held.get(s.campaignId) : undefined
-    return why ? { ...s, does: 'report' as const, direction: 'same' as const, summary: `"${s.name}" stays at the floor: ${startOnlyRefusal('it', why)}.` } : s
+    const startOnly = why === 'held' || (why === 'built' && !campaigns.get(s.campaignId!)?.liveWrites)
+    return startOnly ? { ...s, does: 'report' as const, direction: 'same' as const, summary: `"${s.name}" stays at the floor: ${startOnlyRefusal('it', why!)}.` } : s
   })
   // Each write as Amazon's write gate would judge it now: a refused one is named and left out.
   const { checkLiveReach } = await import('../../agents/tools/ads-tool-guards.js')
@@ -462,7 +467,9 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
         out.floored.push({ slot: s.slot, campaignId: s.campaignId, moved })
       } else {
         if (!now?.bidsSuppressedAt || !isPersonFloor(now.bidsSuppressedBy ?? null)) { out.errors.push(`"${s.name}" is no longer at a floor a person's request set: left as it is`); continue }
-        if ((await playbookHolds([s.campaignId])).has(s.campaignId)) { out.errors.push(`"${s.name}" is now held for a playbook START: left at the floor`); continue }
+        const why = (await playbookHolds([s.campaignId])).get(s.campaignId)
+        const live = (await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { liveBidWritesEnabled: true } }))?.liveBidWritesEnabled
+        if (why === 'held' || (why === 'built' && !live)) { out.errors.push(`"${s.name}" is now held for a playbook START: left at the floor`); continue }
         const restored = await restoreCampaignBids(s.campaignId, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
         const after = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { bidsSuppressedAt: true } })
         if (after?.bidsSuppressedAt) out.errors.push(`"${s.name}": ${plural(restored, 'bid')} put back, some not; it stays at the floor until all are`)

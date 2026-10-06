@@ -18,6 +18,8 @@
  *              floor the gate would refuse; START switches nothing on when no built campaign runs
  *   rules      the playbook's own rule compiler records its stop (PLAYBOOK_STOP_METRIC), so the next START switches the
  *              rule on again — a person's switch-off after it still holds
+ *   phase      PB-9 — a slot the product's current phase floors (DEFEND's research slots) keeps its floor at START, named
+ *              "held by phase DEFEND"; the performance slot gets its bids back
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -353,5 +355,49 @@ describe('the playbook\'s own rules', () => {
       await db().advertisingActionLog.create({ data: { userId: 'user:owner-test', actionType: 'update_rule', entityType: 'RULE', entityId: ruleId, payloadBefore: { enabled: true }, payloadAfter: { enabled: false }, amazonResponseStatus: 'SUCCESS' } })
     })
     expect(await save(true)).toMatchObject({ enabled: false, keptOff: expect.stringContaining('user:owner-test') })
+  })
+})
+
+describe('PB-9 — a floor the current phase holds', () => {
+  it('DEFEND floors the research slots: START gives back only the performance slot; research stays at the floor, named', async () => {
+    const other = await inA(() => seedProductPlaybook(db(), { token: 'TESTPB5C', asinPrefix: 'B0TESTSC' }))
+    const slots: Record<string, { campaign: string; target: string }> = {}
+    await inA(async () => {
+      for (const slot of ['auto', 'broad-category', 'exact-category']) {
+        const c = await db().campaign.create({ data: {
+          name: `TESTPB5C | IT | ${slot}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: `AMZ-PB5C-${slot}`,
+          liveBidWritesEnabled: false, bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-asker', bidsSuppressedFloorCents: 2,
+        } })
+        const g = await db().adGroup.create({ data: { campaignId: c.id, name: `PB5C ${slot} group`, externalAdGroupId: `AMZ-PB5C-G-${slot}`, defaultBidCents: 2, suppressedFromBidCents: 40 } })
+        const t = await db().adTarget.create({ data: { adGroupId: g.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `pb5c ${slot} term`, externalTargetId: `AMZ-PB5C-T-${slot}`, bidCents: 2, suppressedFromBidCents: 50 } })
+        await db().adsPlaybookLink.create({ data: { playbookId: other.rowId, kind: 'slot', key: slot, refId: c.id, adGroupId: g.id, origin: 'built', compiledVersion: 1, updatedBy: 'user:test' } })
+        slots[slot] = { campaign: c.id, target: t.id }
+      }
+      await db().adsPlaybook.update({ where: { id: other.rowId }, data: { state: 'BUILT' } })
+      // The product's phase: DEFEND (its research slots, Auto and Broad, at the floor).
+      await db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: other.parent, label: `${other.skus.parent} (IT)`, goal: 'DEFEND', updatedBy: 'user:test' } })
+    })
+    const out = await inA(() => planStart({ op: 'start', market: 'IT', productId: other.parent }, { compilers: [] }))
+    if ('error' in out) throw new Error(out.error)
+    const by = Object.fromEntries(out.data.campaigns.map((c) => [c.slot, c]))
+    expect(by.auto).toMatchObject({ allowlist: 'on', bids: { does: 'held', by: 'phase DEFEND' }, spends: false })
+    expect(by['broad-category']).toMatchObject({ bids: { does: 'held', by: 'phase DEFEND' }, spends: false })
+    expect(by['exact-category']).toMatchObject({ bids: { does: 'restore', targets: 1 }, spends: true })
+    expect(out.data.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/"TESTPB5C \| IT \| auto" stays at the floor, held by phase DEFEND: the DEFEND phase floors slot "auto"/)]))
+    expect(out.data.spending).toBe(1)
+    const done = await inA(() => runStart(out.data, run, writer, { compilers: [] }))
+    expect(done.done.sort()).toEqual(['auto', 'broad-category', 'exact-category'])
+    const now = (slot: string) => inA(async () => ({
+      c: await db().campaign.findUniqueOrThrow({ where: { id: slots[slot].campaign } }),
+      t: await db().adTarget.findUniqueOrThrow({ where: { id: slots[slot].target } }),
+    }))
+    for (const slot of ['auto', 'broad-category']) {
+      const { c, t } = await now(slot)
+      expect(c).toMatchObject({ liveBidWritesEnabled: true, bidsSuppressedBy: 'user:u-asker' })
+      expect(t).toMatchObject({ bidCents: 2, suppressedFromBidCents: 50 })
+    }
+    const exact = await now('exact-category')
+    expect(exact.c).toMatchObject({ liveBidWritesEnabled: true, bidsSuppressedAt: null })
+    expect(exact.t).toMatchObject({ bidCents: 50, suppressedFromBidCents: null })
   })
 })
