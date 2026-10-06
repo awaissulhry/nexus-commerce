@@ -13,6 +13,9 @@
  *   by rule     what adds spend (a missing keyword) is refused by rule; a sync of negatives only is judged by the kit
  *   approved    the sync writes exactly the negatives approved, as the approver, in A's ad groups only; a keyword is born
  *               at the 2-cent floor with its planned bid remembered; the row records op sync; undo retires the negatives
+ *   START hook  giveBackSyncedBids gives exactly that remembered bid back on a running campaign, once (a re-run: nothing)
+ *   adopt       an adopt keeps each adopted slot's placements as its baseline (Nexus only): no placement drift after it,
+ *               only what changes later
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -43,7 +46,7 @@ vi.mock('../../outbound-destination.js', async (importOriginal) => ({
   resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
 }))
 /** The negative write service and the create service: spies that write the row a sandbox write would. */
-const spies = vi.hoisted(() => ({ negatives: [] as Array<Record<string, any>>, keywords: [] as Array<Record<string, any>> }))
+const spies = vi.hoisted(() => ({ negatives: [] as Array<Record<string, any>>, keywords: [] as Array<Record<string, any>>, bids: [] as Array<Record<string, any>> }))
 vi.mock('../../advertising/ads-negative-kw.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   writeNegativeKeyword: async (args: Record<string, any>) => {
@@ -59,7 +62,19 @@ vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => ({
     spies.keywords.push(args)
     const prisma = (await import('../../../db.js')).default as any
     const row = await prisma.adTarget.create({ data: { adGroupId: args.adGroupId, kind: 'KEYWORD', expressionType: args.matchType, expressionValue: args.keywordText, bidCents: Math.round(args.bidEur * 100) } })
+    // As the real create: its audit row carries the approval's change set.
+    await prisma.advertisingActionLog.create({ data: { userId: args.userId, actionType: 'create_keyword', entityType: 'AD_TARGET', entityId: row.id, payloadBefore: {}, payloadAfter: { keywordText: args.keywordText }, amazonResponseStatus: 'SUCCESS', executionId: args.changeSetId } })
     return { id: row.id, externalTargetId: null }
+  },
+}))
+/** A bid write: a spy that writes the bid in Nexus (nothing leaves the process). */
+vi.mock('../../advertising/ads-mutation.service.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  updateAdTargetWithSync: async (args: Record<string, any>) => {
+    spies.bids.push(args)
+    const prisma = (await import('../../../db.js')).default as any
+    await prisma.adTarget.update({ where: { id: args.adTargetId }, data: args.patch })
+    return { ok: true }
   },
 }))
 
@@ -263,6 +278,16 @@ describe('approved, a sync adds exactly what was approved — in A\'s own ad gro
     // Nothing is left for this sync to fix among what it took.
     const after = (await read({ productId: A.parent })).data.items as Row[]
     expect(after.filter((i) => [...negatives, keyword.key].includes(i.key))).toEqual([])
+
+    // START's hook (PB-5b calls it): exactly that keyword's remembered bid comes back on its running campaign, once.
+    const { giveBackSyncedBids, syncedBidsToGiveBack } = await import('../../advertising/ads-playbook/sync.js')
+    const due = await inside(() => syncedBidsToGiveBack(A.rowId))
+    expect(due).toEqual([expect.objectContaining({ text: 'test coat', bidCents: 2, rememberedCents: keyword.startBidCents, adGroupId: groups.A['broad-category'] })])
+    const given = await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START', changeSetId: 'start-1', manual: true }))
+    expect(given).toMatchObject({ given: [{ text: 'test coat', toCents: keyword.startBidCents }], left: [], failed: [] })
+    expect(spies.bids).toEqual([expect.objectContaining({ patch: { bidCents: keyword.startBidCents }, actor: 'user:u-approver', changeSetId: 'start-1', force: true })])
+    expect(await inside(() => db().adTarget.findFirstOrThrow({ where: { adGroupId: groups.A['broad-category'], expressionValue: 'test coat', isNegative: false }, select: { bidCents: true, suppressedFromBidCents: true } }))).toEqual({ bidCents: keyword.startBidCents, suppressedFromBidCents: null })
+    expect(await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START again', changeSetId: 'start-2' }))).toEqual({ given: [], left: [], failed: [] })
   })
 
   it('a sync that moved since approval is not run', async () => {
@@ -270,5 +295,44 @@ describe('approved, a sync adds exactly what was approved — in A\'s own ad gro
     const asked = await ask({ productId: A.parent })
     await inside(() => db().adsPlaybook.update({ where: { id: A.rowId }, data: { version: { increment: 1 } } }))
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/basis changed|moved/) })
+  })
+})
+
+describe('an adopt keeps what each adopted campaign holds as its placement baseline', () => {
+  it('no placement drift right after the adopt; a change after it is drift against what it held', async () => {
+    const C = await inside(() => seedProductPlaybook(db(), { token: 'TESTSYC', asinPrefix: 'B0TESTSC' }))
+    const campaignId = await inside(async () => {
+      const c = await db().campaign.create({ data: {
+        name: 'TESTSYC | IT | Broad | Category', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: 'EXT-C-broad',
+        targetingType: 'MANUAL', liveBidWritesEnabled: true, dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 30 }] },
+      } })
+      const g = await db().adGroup.create({ data: { campaignId: c.id, name: 'TESTSYC | IT | Broad | Category', externalAdGroupId: 'EXT-G-C-broad' } })
+      await db().adProductAd.create({ data: { adGroupId: g.id, asin: 'B0TESTSC01', sku: C.skus.v1, productId: C.v1, externalAdId: 'EXT-AD-C-1' } })
+      await db().adTarget.create({ data: { adGroupId: g.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test jacket', bidCents: 40, status: 'ENABLED', externalTargetId: 'EXT-T-C-1' } })
+      return c.id
+    })
+    const p = (await inside(() => callTool(claude, 'apply-ads-playbook', { op: 'adopt', market: 'IT', productId: C.parent }))).raw as Row
+    expect(p.preview).toMatchObject({ bindings: [{ slot: 'broad-category', campaignId }], placementBaseline: { 'broad-category': { top: 30, productPage: 0, restOfSearch: 0 } }, effect: expect.stringMatching(/keeps the placements its campaign holds now as its baseline \(broad-category\)/) })
+    const asked = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+      return runOrQueueTool('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: C.parent }, claude, run.id, { forceAsk: true })
+    })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { bound: 1 } })
+    const row = await inside(() => db().adsPlaybook.findUniqueOrThrow({ where: { id: C.rowId }, select: { overrides: true } }))
+    expect(row.overrides).toEqual({ adoptedPlacements: { 'broad-category': { top: 30, productPage: 0, restOfSearch: 0 } } })
+    const version = await inside(() => db().adsPlaybookVersion.findFirstOrThrow({ where: { refId: C.rowId, op: 'adopt' }, select: { changes: true } }))
+    expect(version.changes).toContainEqual(expect.objectContaining({ field: 'overrides.adoptedPlacements', label: 'Placements as adopted (drift baseline)' }))
+    const kindsNow = ((await read({ productId: C.parent })).data.items as Row[]).map((i) => i.kind)
+    expect(kindsNow).not.toContain('placement_differs')
+    expect(kindsNow).not.toContain('placement_baseline_missing')
+    await inside(() => db().campaign.update({ where: { id: campaignId }, data: { dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] } } }))
+    const moved = ((await read({ productId: C.parent })).data.items as Row[]).find((i) => i.kind === 'placement_differs')
+    expect(moved).toMatchObject({ slot: 'broad-category', says: expect.stringMatching(/when it was adopted they were 30\/0\/0 %/), fix: { tool: 'set-placement-multipliers', args: { topOfSearchPct: 30 } } })
+  })
+
+  it('a product adopted before a baseline was kept gets ONE item, with one keep', async () => {
+    const items = (await read({ productId: A.parent })).data.items as Row[]
+    expect(items.filter((i) => i.kind === 'placement_baseline_missing')).toEqual([expect.objectContaining({ slot: null, keep: expect.objectContaining({ tool: 'set-ads-playbook' }) })])
+    expect(items.filter((i) => i.kind === 'placement_differs')).toEqual([])
   })
 })

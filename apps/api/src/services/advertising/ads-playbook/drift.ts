@@ -16,8 +16,11 @@
  *                                                                         term that WINS where it is stays (Owner rule 2)
  *   a missing isolation, source or product negative                       adds it through the negative write service —
  *                                                                         lowers spend
- *   a placement that differs from the playbook in a slot the hourly       none: set-placement-multipliers (W2)
- *   plans do not own (never a performance slot: rank owns those)
+ *   a placement that differs from the baseline in a slot the hourly       none: set-placement-multipliers (W2)
+ *   plans do not own (never a performance slot: rank owns those). A
+ *   built slot's baseline is the playbook's placements; an adopted one's
+ *   is what its campaign held when it was adopted (adoptedPlacements) —
+ *   one adopted before that is listed once: no baseline yet, keep it
  *   a compiled artifact (harvest rule, isolation rule, rank group)        re-saves it (Nexus only)
  *   missing or changed against its compiled version (artifacts.ts)
  *   portfolio membership                                                  none: named
@@ -42,7 +45,7 @@ import { canonical } from './rules.js'
 
 export const DRIFT_KINDS = [
   'slot_missing', 'slot_paused', 'targeting_wrong', 'outside_campaign', 'product_ad_missing', 'product_ad_archived',
-  'positive_missing', 'positive_archived', 'positive_misplaced', 'negative_missing', 'placement_differs',
+  'positive_missing', 'positive_archived', 'positive_misplaced', 'negative_missing', 'placement_differs', 'placement_baseline_missing',
   'portfolio_membership', 'name_differs', 'artifact_missing', 'artifact_changed',
 ] as const
 export type DriftKind = (typeof DRIFT_KINDS)[number]
@@ -133,6 +136,8 @@ export interface DriftFacts {
   nameToken: string
   terms: ProductTerms
   skipSlots: readonly string[]
+  /** Each adopted slot's placements as its campaign held them when adopted (the product row's overrides): its baseline. */
+  adoptedPlacements: Readonly<Record<string, { top: number; productPage: number; restOfSearch: number }>>
   slots: readonly DriftSlotFacts[]
   campaigns: ReadonlyMap<string, DriftCampaign>
   /** Rule 3: the ad groups of the product's own scope (advertising nothing but this product). Only these get a write. */
@@ -213,6 +218,7 @@ export function findDrift(f: DriftFacts): DriftReport {
   const groupOf = (s: DriftSlotFacts) => s.link?.adGroupId ?? null
   const live = f.slots.filter((s) => s.link && f.campaigns.has(s.link.campaignId))
   const placementsDeferred = new Set<string>()
+  const noBaseline: Array<{ slot: string; live: DriftCampaign['placements'] }> = []
 
   // ── The slots and their campaigns ──────────────────────────────────────────────────────────
   for (const s of f.slots) {
@@ -272,9 +278,12 @@ export function findDrift(f: DriftFacts): DriftReport {
     // Placements: a slot the hourly plans do not own. A built slot holds none until START puts them on.
     if (slot.rankRole !== 'performance' && s.link.origin === 'built' && !c.liveWrites) placementsDeferred.add(slot.key)
     else if (slot.rankRole !== 'performance') {
-      const want = doc.placements[slot.key] ?? { top: 0, productPage: 0, restOfSearch: 0 }
-      const differs = PLACEMENT_KEYS.filter((k) => (want[k] ?? 0) !== (c.placements[k] ?? 0))
-      if (differs.length) {
+      // A built slot is held to the playbook's placements; an adopted one to what its campaign held when adopted.
+      const adopted = s.link.origin === 'adopted'
+      const want = adopted ? f.adoptedPlacements[slot.key] : doc.placements[slot.key] ?? { top: 0, productPage: 0, restOfSearch: 0 }
+      const differs = want ? PLACEMENT_KEYS.filter((k) => (want[k] ?? 0) !== (c.placements[k] ?? 0)) : []
+      if (!want) noBaseline.push({ slot: slot.key, live: { ...c.placements } })
+      else if (differs.length) {
         const person = latest(c.id, PLACEMENT_CHANGE)
         const fix: DriftFix = {
           by: 'tool', tool: 'set-placement-multipliers',
@@ -284,11 +293,13 @@ export function findDrift(f: DriftFacts): DriftReport {
         }
         items.push({
           key: keyOf('placement_differs', slot.key), kind: 'placement_differs', ...base,
-          says: `"${c.name}" (slot "${slot.key}", ${slot.rankRole === 'research' ? 'research' : 'no rank role'}) has placements ${c.placements.top}/${c.placements.productPage}/${c.placements.restOfSearch} % (top of search / product pages / rest of search); the playbook says ${want.top}/${want.productPage}/${want.restOfSearch} %.`,
+          says: `"${c.name}" (slot "${slot.key}", ${slot.rankRole === 'research' ? 'research' : 'no rank role'}) has placements ${c.placements.top}/${c.placements.productPage}/${c.placements.restOfSearch} % (top of search / product pages / rest of search); ${adopted ? 'when it was adopted they were' : 'the playbook says'} ${want.top}/${want.productPage}/${want.restOfSearch} %.`,
           fix,
           ...(person ? {
             byPerson: person,
-            keep: keepArgs({ overrides: { placements: { ...doc.placements, [slot.key]: { ...c.placements } } } }, `Writes these placements into this product's playbook (overrides.placements), so they are the playbook's from now on.`, `keep: placements of ${slot.key} as set by a person`),
+            keep: adopted
+              ? keepArgs({ overrides: { adoptedPlacements: { ...f.adoptedPlacements, [slot.key]: { ...c.placements } } } }, 'Writes these placements as this adopted campaign\'s baseline (overrides.adoptedPlacements), so they are not drift from now on.', `keep: placements of ${slot.key} as set by a person`)
+              : keepArgs({ overrides: { placements: { ...doc.placements, [slot.key]: { ...c.placements } } } }, `Writes these placements into this product's playbook (overrides.placements), so they are the playbook's from now on.`, `keep: placements of ${slot.key} as set by a person`),
             revert: fix,
           } : {}),
         })
@@ -296,6 +307,15 @@ export function findDrift(f: DriftFacts): DriftReport {
     }
   }
   if (placementsDeferred.size) notChecked.push(`Placements of ${[...placementsDeferred].map((k) => `"${k}"`).join(', ')}: a built campaign holds none until START puts them on.`)
+  // Adopted before the playbook kept a baseline: ONE item, one keep for all of them — never an alarm per slot.
+  if (noBaseline.length) {
+    items.push({
+      key: keyOf('placement_baseline_missing'), kind: 'placement_baseline_missing', slot: null,
+      says: `${noBaseline.length === 1 ? 'An adopted slot' : `${noBaseline.length} adopted slots`} (${noBaseline.map((x) => `"${x.slot}"`).join(', ')}) ${noBaseline.length === 1 ? 'has' : 'have'} no placement baseline yet (adopted before the playbook kept one), so ${noBaseline.length === 1 ? 'its placements are' : 'their placements are'} not compared. Keep sets it from what each campaign holds now.`,
+      fix: { by: 'none', note: 'Nothing to sync: keep sets the baseline, in Nexus only.' },
+      keep: keepArgs({ overrides: { adoptedPlacements: { ...f.adoptedPlacements, ...Object.fromEntries(noBaseline.map((x) => [x.slot, x.live])) } } }, 'Writes each adopted campaign\'s placements as they are now as its baseline (overrides.adoptedPlacements): only what changes after is drift.', 'keep: placement baselines of the adopted slots'),
+    })
+  }
 
   // ── Outside the playbook ────────────────────────────────────────────────────────────────────
   for (const o of f.outside) {

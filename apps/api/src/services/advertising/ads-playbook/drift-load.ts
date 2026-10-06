@@ -260,7 +260,7 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
   const facts: DriftFacts = {
     market, product: { productId: product.id, sku: product.sku },
     playbook: { id: row.id, version: row.version, state: row.state, scopeId: row.scopeId },
-    doc, nameToken, terms, skipSlots: resolved.skipSlots?.value ?? [], slots, campaigns,
+    doc, nameToken, terms, skipSlots: resolved.skipSlots?.value ?? [], adoptedPlacements: resolved.adoptedPlacements?.value ?? {}, slots, campaigns,
     scope: new Set(scope.map((g) => g.adGroupId)),
     empty: new Set(slots.filter((x) => x.link?.adGroupId && campaigns.has(x.link.campaignId) && String(campaigns.get(x.link.campaignId)!.status) !== 'ARCHIVED' && !productAds.has(x.link.adGroupId)).map((x) => x.link!.adGroupId!)),
     positives, winners, standing, protections,

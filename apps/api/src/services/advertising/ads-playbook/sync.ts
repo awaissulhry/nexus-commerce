@@ -9,7 +9,8 @@
  *                negative whose own keyword is no longer live.
  *   positives    a missing keyword or competitor ASIN of the product's terms, or a misplaced keyword in its right slot,
  *                created at Amazon's 2¢ floor with its planned bid remembered (the SP Super Wizard's launch does the
- *                same, with the same create service) — adds spend. The misplaced one stays where it is: sync never
+ *                same, with the same create service) — adds spend. It starts at the floor; START gives it its bid: in a
+ *                campaign still at the floor its own restore does, in one that runs `giveBackSyncedBids` below does. The misplaced one stays where it is: sync never
  *                removes, and a winner is never moved at all (drift offers no fix for it: Owner rule 2).
  *   productAds   a child listed in the market but not advertised in a slot — adds spend.
  *   slots        a slot with no live campaign is built through the playbook's build (build.ts: the SP Super Wizard's own
@@ -113,6 +114,69 @@ export async function planSync(args: SyncArgs): Promise<{ data: SyncPlan } | { s
     build: build ? { campaigns: build.campaigns.map((c) => [c.role, c.name, c.dailyBudget]), productAds: build.productAds, portfolio: build.portfolio } : null,
   })
   return { data: { drift: d as SyncPlan['drift'], chosen, parts, build, addsSpend, left, problems, basis } }
+}
+
+// ── START's hook: the bids a sync remembered ─────────────────────────────────────────────────────────────────────
+
+/** A keyword or product target a sync added at the floor, its planned bid remembered, where nothing floors it now. */
+export interface SyncedBid { adTargetId: string; campaignId: string; adGroupId: string; text: string; bidCents: number; rememberedCents: number }
+
+/**
+ * PB-10 — for START (PB-5b; a re-run of it is idempotent): the keywords and product targets a sync of this playbook
+ * created (its change sets: the row's version rows op sync, their create audit rows) that still remember a planned bid
+ * while neither their campaign nor their ad group is at a floor. A campaign still at the floor (built, not started) is
+ * START's own restore (restoreCampaignBids), not this. Read only.
+ */
+export async function syncedBidsToGiveBack(playbookId: string): Promise<SyncedBid[]> {
+  const sets = (await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync', approvalId: { not: null } }, select: { approvalId: true } })).map((v) => v.approvalId!)
+  if (!sets.length) return []
+  const made = await prisma.advertisingActionLog.findMany({ where: { executionId: { in: sets }, entityType: 'AD_TARGET', actionType: { in: ['create_keyword', 'create_target', 'push_target'] } }, select: { entityId: true } })
+  if (!made.length) return []
+  const rows = await prisma.adTarget.findMany({
+    where: {
+      id: { in: [...new Set(made.map((m) => m.entityId))] }, isNegative: false, status: { not: 'ARCHIVED' }, suppressedFromBidCents: { not: null },
+      adGroup: { bidsSuppressedAt: null, campaign: { bidsSuppressedAt: null, status: { not: 'ARCHIVED' } } },
+    },
+    select: { id: true, adGroupId: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, adGroup: { select: { campaignId: true } } },
+    orderBy: { id: 'asc' },
+  })
+  return rows.map((t) => ({ adTargetId: t.id, campaignId: t.adGroup.campaignId, adGroupId: t.adGroupId, text: t.expressionValue, bidCents: t.bidCents, rememberedCents: t.suppressedFromBidCents! }))
+}
+
+/**
+ * PB-10 — START gives back exactly those bids: each to the bid remembered, held inside the bounds that bind it today
+ * (giveBackBounds: the campaign's own bounds, bid policies, the strategy's band), as the approver, with the approval's
+ * change set. A bid that left the floor since (an engine or a person moved it) stays where it is, named, and its memory is
+ * cleared — so a re-run gives nothing again. It runs only inside an approved START (that needs the approver's code).
+ */
+export async function giveBackSyncedBids(playbookId: string, run: { actor: AdsActor; reason: string; changeSetId: string | null; manual?: boolean }): Promise<{
+  given: Array<{ adTargetId: string; text: string; toCents: number; heldBy?: string }>
+  left: Array<{ adTargetId: string; text: string; bidCents: number; rememberedCents: number }>
+  failed: Array<{ adTargetId: string; text: string; why: string }>
+}> {
+  const { SUPPRESSION_FLOOR_CENTS, giveBackBounds } = await import('../ads-bid-suppression.service.js')
+  const { clampBid } = await import('../ads-strategy/bids.js')
+  const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
+  const out: Awaited<ReturnType<typeof giveBackSyncedBids>> = { given: [], left: [], failed: [] }
+  const bids = await syncedBidsToGiveBack(playbookId)
+  const byCampaign = new Map<string, SyncedBid[]>()
+  for (const b of bids) byCampaign.set(b.campaignId, [...(byCampaign.get(b.campaignId) ?? []), b])
+  const forget = (id: string) => prisma.adTarget.update({ where: { id }, data: { suppressedFromBidCents: null } })
+  for (const [campaignId, list] of byCampaign) {
+    const boundsOf = await giveBackBounds(campaignId, list.map((b) => b.adGroupId))
+    for (const b of list) {
+      if (b.bidCents > SUPPRESSION_FLOOR_CENTS) { out.left.push({ adTargetId: b.adTargetId, text: b.text, bidCents: b.bidCents, rememberedCents: b.rememberedCents }); await forget(b.adTargetId); continue }
+      const c = clampBid(b.rememberedCents, boundsOf(b.adGroupId), { currentCents: b.bidCents, forced: true })
+      try {
+        const r = await updateAdTargetWithSync({ adTargetId: b.adTargetId, patch: { bidCents: c.cents }, actor: run.actor, reason: run.reason, applyImmediately: true, force: true, changeSetId: run.changeSetId, manual: run.manual })
+        if (r.ok || r.error === 'not_found') {
+          await forget(b.adTargetId)
+          if (r.ok) out.given.push({ adTargetId: b.adTargetId, text: b.text, toCents: c.cents, ...(c.held ? { heldBy: c.held.limit.source } : {}) })
+        } else out.failed.push({ adTargetId: b.adTargetId, text: b.text, why: r.error ?? 'not accepted' })
+      } catch (e) { out.failed.push({ adTargetId: b.adTargetId, text: b.text, why: (e as Error).message.slice(0, 200) }) }
+    }
+  }
+  return out
 }
 
 /** The rules and schedules the playbook compiled itself: a negative of its own sync is not "an engine also moves it". */

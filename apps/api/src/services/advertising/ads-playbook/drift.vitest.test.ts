@@ -3,8 +3,10 @@
  *
  *   slots          a slot with no campaign, or whose campaign a person archived (keep: skipSlots only for an optional
  *                  slot), paused, of the wrong targeting, a name that differs (a warning), the portfolio
- *   placements     drift only where the hourly plans do not own the slot; a person's own change offered as keep (into
- *                  the playbook's placements) or revert (set-placement-multipliers); a built slot before START unchecked
+ *   placements     drift only where the hourly plans do not own the slot: an adopted campaign against what it held when
+ *                  adopted, a built one against the playbook's; adopted before a baseline was kept: ONE item with one
+ *                  keep; a person's own change offered as keep or revert (set-placement-multipliers); a built slot before
+ *                  START unchecked
  *   ads, keywords  a child not advertised, a keyword the terms feed that is missing (with its planned bid), one a
  *                  person archived (keep: out of the terms), a term the product's own outside campaign holds (rule 2)
  *   misplaced      a brand keyword in the category slot goes to its right slot; one that wins stays (rule 2)
@@ -53,7 +55,9 @@ function facts(over: Partial<DriftFacts> = {}): DriftFacts {
     market: 'IT', product: { productId: 'p-1', sku: 'TEST-SKU' }, playbook: { id: 'pb-1', version: 4, state: 'RUNNING', scopeId: 'p-1' },
     doc, nameToken: 'TESTTOK',
     terms: { brand: ['testtok jacket'], category: [{ text: 'test jacket', exactAtStart: true }, { text: 'test coat', exactAtStart: false }], competitor: [], competitorAsins: ['B0TESTRIV1'], negatives: [{ text: 'test kids', match: 'PHRASE' }] },
-    skipSlots: [], slots, campaigns,
+    // Each adopted slot the hourly plans do not own, as its campaign held it when adopted.
+    skipSlots: [], adoptedPlacements: { auto: { top: 0, productPage: 0, restOfSearch: 0 }, 'broad-category': { top: 0, productPage: 0, restOfSearch: 0 }, pat: { top: 10, productPage: 15, restOfSearch: 0 } },
+    slots, campaigns,
     scope: new Set(keys.map((k) => `g-${k}`)), empty: new Set(), positives,
     archived: { positives: new Map(), negatives: new Map(), productAds: new Map() },
     standing, winners: new Map(), protections: new Map(),
@@ -99,7 +103,7 @@ describe('the slots and their campaigns', () => {
 })
 
 describe('placements: only where the hourly plans do not own the slot', () => {
-  it('a research slot off the playbook is drift (set-placement-multipliers); a performance slot never is', () => {
+  it('an adopted research slot off its adopted baseline is drift (set-placement-multipliers); a performance slot never is', () => {
     const f = facts()
     f.campaigns.set('c-broad-category', camp('c-broad-category', 'TESTTOK | IT | Broad | Category', { placements: { top: 30, productPage: 0, restOfSearch: 0 } }))
     f.campaigns.set('c-exact-category', camp('c-exact-category', 'TESTTOK | IT | Exact | Category', { placements: { top: 400, productPage: 0, restOfSearch: 0 } }))
@@ -107,6 +111,34 @@ describe('placements: only where the hourly plans do not own the slot', () => {
     expect(items.map((i) => i.slot)).toEqual(['broad-category'])
     expect(items[0]).toMatchObject({ fix: { by: 'tool', tool: 'set-placement-multipliers', args: { campaignId: 'c-broad-category', topOfSearchPct: 0, productPagesPct: 0, restOfSearchPct: 0 }, addsSpend: false } })
     expect(items[0].byPerson).toBeUndefined()
+    expect(items[0].says).toMatch(/when it was adopted they were 0\/0\/0 %/)
+  })
+
+  it('adopting never makes drift: the adopted baseline is what it held, whatever the playbook says', () => {
+    const f = facts({ adoptedPlacements: { auto: { top: 0, productPage: 0, restOfSearch: 0 }, 'broad-category': { top: 40, productPage: 5, restOfSearch: 0 }, pat: { top: 10, productPage: 15, restOfSearch: 0 } } })
+    f.campaigns.set('c-broad-category', camp('c-broad-category', 'TESTTOK | IT | Broad | Category', { placements: { top: 40, productPage: 5, restOfSearch: 0 } }))
+    expect(kinds(f)).not.toContain('placement_differs')
+  })
+
+  it('a built slot is held to the playbook\'s placements; keep writes them into the placements section', () => {
+    const f = facts()
+    f.slots = f.slots.map((s) => (s.slot.key === 'pat' ? { ...s, link: { ...s.link!, origin: 'built' } } : s))
+    f.campaigns.set('c-pat', camp('c-pat', 'TESTTOK | IT | PAT', { placements: { top: 10, productPage: 40, restOfSearch: 0 } }))
+    f.personal = new Map([['c-pat', [{ userId: 'user:u-owner', at: '2026-10-02T00:00:00.000Z', action: 'update_placement_bidding' }]]])
+    const item = one(f, 'placement_differs')!
+    expect(item.says).toMatch(/the playbook says 10\/15\/0 %/)
+    expect(item.keep).toMatchObject({ args: { values: { overrides: { placements: { pat: { top: 10, productPage: 40, restOfSearch: 0 } } } } } })
+  })
+
+  it('adopted before a baseline was kept: ONE item with one keep for all of them, never an alarm per slot', () => {
+    const f = facts({ adoptedPlacements: {} })
+    f.campaigns.set('c-broad-category', camp('c-broad-category', 'TESTTOK | IT | Broad | Category', { placements: { top: 30, productPage: 0, restOfSearch: 0 } }))
+    const r = findDrift(f)
+    expect(r.items.filter((i) => i.kind === 'placement_differs')).toEqual([])
+    const missing = r.items.filter((i) => i.kind === 'placement_baseline_missing')
+    expect(missing).toHaveLength(1)
+    expect(missing[0]).toMatchObject({ slot: null, fix: { by: 'none' }, says: expect.stringMatching(/^3 adopted slots \("auto", "broad-category", "pat"\) have no placement baseline yet/) })
+    expect(missing[0].keep).toMatchObject({ tool: 'set-ads-playbook', args: { values: { overrides: { adoptedPlacements: { auto: { top: 0 }, 'broad-category': { top: 30 }, pat: { top: 10, productPage: 15 } } } } } })
   })
 
   it("a person's own placement is offered as keep (written into the playbook) or revert — never put back by itself", () => {
@@ -115,7 +147,7 @@ describe('placements: only where the hourly plans do not own the slot', () => {
     f.personal = new Map([['c-pat', [{ userId: 'user:u-owner', at: '2026-10-02T00:00:00.000Z', action: 'update_placement_bidding' }]]])
     const item = one(f, 'placement_differs')!
     expect(item).toMatchObject({ slot: 'pat', byPerson: { userId: 'user:u-owner', action: 'update_placement_bidding' }, revert: { by: 'tool', tool: 'set-placement-multipliers' } })
-    expect(item.keep).toMatchObject({ tool: 'set-ads-playbook', args: { values: { overrides: { placements: { 'exact-category': { top: 25 }, pat: { top: 10, productPage: 40, restOfSearch: 0 } } } } } })
+    expect(item.keep).toMatchObject({ tool: 'set-ads-playbook', args: { values: { overrides: { adoptedPlacements: { auto: { top: 0 }, pat: { top: 10, productPage: 40, restOfSearch: 0 } } } } } })
   })
 
   it("only the change that explains the drift is a person's: a budget edit is not a placement, a rule's switch is not its settings", () => {

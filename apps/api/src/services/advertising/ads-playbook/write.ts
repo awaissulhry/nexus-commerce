@@ -203,7 +203,7 @@ const SECTION_LABEL: Record<SectionKey, string> = {
   harvest: 'Harvest flows', isolation: 'Isolation', rank: 'Hourly plans by rank role', phases: 'Phase table',
 }
 const FIELD_LABEL: Record<string, string> = {
-  templateId: 'Template', 'overrides.skipSlots': 'Slots left out', enrolled: 'Enrolled', nameToken: 'Name token',
+  templateId: 'Template', 'overrides.skipSlots': 'Slots left out', 'overrides.adoptedPlacements': 'Placements as adopted (drift baseline)', enrolled: 'Enrolled', nameToken: 'Name token',
   portfolioName: 'Portfolio', dailyBudgetCents: 'Daily budget', baseBidCents: 'Base bid', terms: 'Terms', phaseRecipes: 'Phase recipes',
   name: 'Name', status: 'Status',
 }
@@ -450,7 +450,15 @@ function mergeOverrides(current: Overrides | null, asked: Record<string, unknown
       else problems.push(`overrides.skipSlots: ${issues(parsed.error)}`)
       continue
     }
-    if (!(SECTIONS as readonly string[]).includes(key)) { problems.push(`overrides.${key}: not a section (${SECTIONS.join(', ')}, or skipSlots)`); continue }
+    if (key === 'adoptedPlacements') {
+      if (level !== 'PRODUCT') { problems.push('overrides.adoptedPlacements: only a product row adopts campaigns'); continue }
+      if (value === null) { delete out.adoptedPlacements; continue }
+      const parsed = OVERRIDES.shape.adoptedPlacements.safeParse(value)
+      if (parsed.success) out.adoptedPlacements = parsed.data
+      else problems.push(`overrides.adoptedPlacements: ${issues(parsed.error)}`)
+      continue
+    }
+    if (!(SECTIONS as readonly string[]).includes(key)) { problems.push(`overrides.${key}: not a section (${SECTIONS.join(', ')}, skipSlots or adoptedPlacements)`); continue }
     if (value === null) { delete out[key]; continue }
     const read = readSection(key as SectionKey, value)
     if ('value' in read) out[key] = read.value
@@ -545,7 +553,7 @@ async function planRow(args: ChangeArgs): Promise<PlanOutcome> {
   const was = before.values
   const field = (name: string, from: unknown, to: unknown) => { if (!same(from, to)) changes.push({ field: name, label: labelOf(name), from: from ?? null, to: to ?? null, direction: 'same' }) }
   field('templateId', was?.templateId, after?.templateId)
-  for (const key of [...SECTIONS, 'skipSlots'] as const) field(`overrides.${key}`, (was?.overrides as Record<string, unknown> | null)?.[key], (after?.overrides as Record<string, unknown> | null)?.[key])
+  for (const key of [...SECTIONS, 'skipSlots', 'adoptedPlacements'] as const) field(`overrides.${key}`, (was?.overrides as Record<string, unknown> | null)?.[key], (after?.overrides as Record<string, unknown> | null)?.[key])
   for (const key of ['enrolled', 'nameToken', 'portfolioName', 'dailyBudgetCents', 'baseBidCents', 'terms', 'phaseRecipes'] as const) field(key, was?.[key], after?.[key])
   const effect = noEffect()
   const rowsAfter = after ? [...rows.filter((r) => r.id !== current?.id), asRow(current, scope, market, channel, after)] : rows.filter((r) => r.id !== current?.id)
@@ -744,6 +752,11 @@ export interface PlaybookApplyRecord {
   compiledVersion: number
   compiledTemplateVersion: number | null
   reason?: string | null
+  /**
+   * PB-10 — an adopt: each adopted slot's placements as its campaign holds them (null: an unbound slot's taken out),
+   * merged into the row's overrides.adoptedPlacements in the same write — drift's baseline for that campaign.
+   */
+  adoptedPlacements?: Record<string, { top: number; productPage: number; restOfSearch: number } | null>
 }
 
 type Tx = Prisma.TransactionClient
@@ -762,19 +775,33 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
     const moved = row.version !== record.compiledVersion
     const version = row.version + 1
     const compiledVersion = moved ? record.compiledVersion : version
+    // PB-10 — an adopt's placement baselines, merged into the row's own overrides (nothing compiles from them).
+    const overridesWas = (row.overrides && typeof row.overrides === 'object' && !Array.isArray(row.overrides) ? row.overrides : {}) as Record<string, unknown>
+    const adoptedWas = (overridesWas.adoptedPlacements ?? {}) as Record<string, unknown>
+    let overrides: Record<string, unknown> | undefined
+    if (record.adoptedPlacements && Object.keys(record.adoptedPlacements).length) {
+      const adopted: Record<string, unknown> = { ...adoptedWas }
+      for (const [slot, p] of Object.entries(record.adoptedPlacements)) { if (p) adopted[slot] = p; else delete adopted[slot] }
+      const { adoptedPlacements: _was, ...rest } = overridesWas
+      overrides = Object.keys(adopted).length ? { ...rest, adoptedPlacements: adopted } : rest
+    }
     const updated = await db.adsPlaybook.updateMany({
       where: { id: row.id, version: row.version },
-      data: { state: record.state, compiledVersion, compiledTemplateVersion: record.compiledTemplateVersion, version, updatedBy: writer.updatedBy },
+      data: {
+        state: record.state, compiledVersion, compiledTemplateVersion: record.compiledTemplateVersion, version, updatedBy: writer.updatedBy,
+        ...(overrides ? { overrides: json(Object.keys(overrides).length ? overrides : null) } : {}),
+      },
     })
     if (updated.count !== 1) throw new Moved()
     const changes: PlaybookChange[] = [
       ...(row.state !== record.state ? [{ field: 'state', label: 'State', from: row.state, to: record.state, direction: 'same' as Direction }] : []),
       { field: 'compiledVersion', label: 'Compiled', from: row.compiledVersion, to: compiledVersion, direction: 'same' as Direction },
+      ...(overrides && !same(adoptedWas, overrides.adoptedPlacements ?? {}) ? [{ field: 'overrides.adoptedPlacements', label: labelOf('overrides.adoptedPlacements'), from: overridesWas.adoptedPlacements ?? null, to: overrides.adoptedPlacements ?? null, direction: 'same' as Direction }] : []),
     ]
     await db.adsPlaybookVersion.create({
       data: {
         kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
-        values: rowValuesOf({ ...row, state: record.state }) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
+        values: rowValuesOf({ ...row, state: record.state, ...(overrides ? { overrides: Object.keys(overrides).length ? overrides : null } : {}) } as typeof row) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
         direction: 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
         stepUpAt: null, reason: record.reason ?? null,
       },

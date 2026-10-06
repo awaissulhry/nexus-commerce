@@ -200,6 +200,7 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
     + `${p.unbinds.length ? `, and takes ${plural(p.unbinds.length, 'adopted slot')} off again (${p.unbinds.map((u) => u.slot).join(', ')})` : ''}. `
     + 'Nexus only: nothing is sent to Amazon by the links, and no bid, allowlist or rule of these campaigns changes. '
     + "The playbook's own hourly plans follow its slots (artifacts): created switched off, nothing runs until START; a campaign taken off a plan that is on leaves it at STOP; an hourly plan the playbook did not make is never touched."
+    + (Object.keys(p.placementBaseline).length ? ` Each adopted slot the hourly plans do not own keeps the placements its campaign holds now as its baseline (${Object.keys(p.placementBaseline).join(', ')}): drift shows only what changes after.` : '')
   return {
     plan: p,
     result: {
@@ -218,6 +219,7 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
         linked: p.linked,
         ...(p.portfolioId ? { portfolio: { portfolioId: p.portfolioId, does: 'link' } } : {}),
         warnings: p.warnings,
+        ...(Object.keys(p.placementBaseline).length ? { placementBaseline: p.placementBaseline } : {}),
         artifacts: artifacts.lines,
         ...(artifacts.errors.length ? { artifactErrors: artifacts.errors } : {}),
         basis: p.basis,

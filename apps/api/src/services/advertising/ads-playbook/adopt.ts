@@ -15,6 +15,10 @@
  *               portfolio link when every bound campaign shares one and no other playbook holds it (named otherwise),
  *               and the row's state DRAFT → BUILT (never lowered from RUNNING), with one version row (op adopt) — one
  *               transaction. `unbind` takes adopted links off again (the undo of an adopt).
+ *   baseline    PB-10 — each bound slot the hourly plans do not own (not a performance slot) keeps the placements its
+ *               campaign holds now as its baseline (the row's overrides.adoptedPlacements, in the same write; Nexus
+ *               only): adopting never makes placement drift, and drift shows only what changed after. An unbound slot's
+ *               baseline is taken out.
  */
 import { createHash } from 'node:crypto'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
@@ -35,6 +39,16 @@ export interface AdoptCandidate {
   adGroupId: string | null
   portfolioId: string | null
   shape: { targeting: Slot['targeting']; match?: Slot['match']; intent: Slot['intent'] }
+  /** PB-10 — its placements now (0 where none is set). */
+  placements?: Placements
+}
+
+type Placements = { top: number; productPage: number; restOfSearch: number }
+const PLACEMENT_FIELD: Record<string, keyof Placements> = { PLACEMENT_TOP: 'top', PLACEMENT_PRODUCT_PAGE: 'productPage', PLACEMENT_REST_OF_SEARCH: 'restOfSearch' }
+const placementsOf = (list: ReadonlyArray<{ placement: string; percentage: number }> | null | undefined): Placements => {
+  const out: Placements = { top: 0, productPage: 0, restOfSearch: 0 }
+  for (const p of list ?? []) { const f = PLACEMENT_FIELD[p.placement]; if (f && Number.isFinite(p.percentage)) out[f] = Math.round(p.percentage) }
+  return out
 }
 
 export interface SlotBinding { slot: string; campaignId: string; name: string; adGroupId: string | null; why: 'asked' | 'named' | 'shape' }
@@ -146,6 +160,8 @@ export interface AdoptPlan {
   portfolioId: string | null
   /** The slots already held (stay as they are). */
   linked: Array<{ slot: string; campaignId: string }>
+  /** PB-10 — each bound slot's placements as its campaign holds them (not a performance slot): its drift baseline. */
+  placementBaseline: Record<string, Placements>
   warnings: string[]
   /** Fingerprint of what is bound and unbound, and the row it is written against. */
   basis: string
@@ -174,7 +190,7 @@ async function candidatesOf(productId: string, market: string, productToken: str
     const role = blueprint.campaigns[i].role
     const shape = shapeOf(c.source, role, productToken, warnings)
     const own = groupsOf.get(c.id) ?? []
-    return { campaignId: c.id, name: c.source.name, adGroupId: own.length === 1 ? own[0] : null, portfolioId: c.portfolioId, shape }
+    return { campaignId: c.id, name: c.source.name, adGroupId: own.length === 1 ? own[0] : null, portfolioId: c.portfolioId, shape, placements: placementsOf(c.source.placementBidding) }
   })
 }
 
@@ -226,6 +242,9 @@ export async function planAdopt(args: {
   if (heldBy) warnings.push(`The campaigns share portfolio ${shared}, which another product's playbook holds: it is not linked to this one.`)
   const portfolioId = !hasPortfolio && !heldBy && shared && !shared.startsWith('local-pf-') ? shared : null
   const bindings = matched.bindings
+  const performance = new Set(doc.structure.slots.filter((s) => s.rankRole === 'performance').map((s) => s.key))
+  const placementBaseline: Record<string, Placements> = Object.fromEntries(bindings.filter((b) => !performance.has(b.slot))
+    .map((b) => [b.slot, candidates.find((c) => c.campaignId === b.campaignId)?.placements ?? { top: 0, productPage: 0, restOfSearch: 0 }]))
   return {
     data: {
       market, product: { productId: product.id, sku: product.sku },
@@ -237,7 +256,8 @@ export async function planAdopt(args: {
       portfolioId,
       linked: mine.filter((l) => linkedKeys.has(l.key)).map((l) => ({ slot: l.key, campaignId: l.refId })),
       warnings,
-      basis: basisOf({ row: [row.id, row.version], bindings: bindings.map((b) => [b.slot, b.campaignId]), unbinds: unbinds.map((u) => [u.slot, u.campaignId]), portfolioId }),
+      placementBaseline,
+      basis: basisOf({ row: [row.id, row.version], bindings: bindings.map((b) => [b.slot, b.campaignId]), unbinds: unbinds.map((u) => [u.slot, u.campaignId]), portfolioId, placementBaseline }),
     },
   }
 }
@@ -280,6 +300,7 @@ export async function applyAdopt(plan: AdoptPlan, writer: PlaybookApplyWriter & 
       const recorded = await recordPlaybookApply(plan.playbook.id, {
         op: 'adopt', state, compiledVersion: plan.playbook.version, compiledTemplateVersion: plan.compiledTemplateVersion,
         reason: `adopt: ${plan.bindings.length} bound, ${plan.unbinds.length} unbound`,
+        adoptedPlacements: { ...Object.fromEntries(plan.unbinds.map((u) => [u.slot, null])), ...(plan.placementBaseline ?? {}) },
       }, writer, tx)
       if (!recorded) throw new Error('the playbook row is gone')
     })

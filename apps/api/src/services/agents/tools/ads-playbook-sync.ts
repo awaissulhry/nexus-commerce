@@ -42,6 +42,7 @@ const itemOut = (i: Item) => ({
   key: i.key, kind: i.kind, slot: i.into?.slot ?? i.slot, says: i.says,
   ...(i.term ? { term: i.term } : {}), ...(i.match ? { match: i.match } : {}), ...(i.asin ? { asin: i.asin } : {}), ...(i.sku ? { sku: i.sku } : {}),
   ...(i.negative ? { of: i.negative.of } : {}), ...(i.startBidCents ? { startBidCents: i.startBidCents } : {}),
+  ...(i.fix.by === 'sync' && i.fix.part === 'positives' ? { startsAt: 'the floor; START gives it its bid' } : {}),
   ...(i.artifact ? { artifact: i.artifact.kind, parts: i.artifact.parts } : {}),
   ...(i.byPerson ? { byPerson: i.byPerson, reverted: true } : {}),
 })
@@ -84,7 +85,7 @@ export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approva
   const effect = `Syncs ${d.product.sku}'s playbook in ${d.market}, adding only: `
     + [
       n('negatives') ? `${plural(n('negatives'), 'negative')} (they lower spend)` : '',
-      n('positives') ? `${plural(n('positives'), 'keyword or product target')} at the 2-cent floor, each planned bid remembered` : '',
+      n('positives') ? `${plural(n('positives'), 'keyword or product target')} — each starts at the 2-cent floor with its planned bid remembered; START gives it its bid` : '',
       n('productAds') ? `${plural(n('productAds'), 'product ad')}` : '',
       build ? `${plural(build.campaigns.length, 'campaign')} for ${p.parts.slots.map((i) => i.slot).join(', ')} through the SP Super Wizard's launch (born at the floor, off the live-write allowlist; ${amountLabel(build.dailyBudgetCents, currency)} of daily budget)` : '',
       n('artifacts') ? `${plural(n('artifacts'), 'compiled part')} saved again in Nexus (switched off when new)` : '',
@@ -111,7 +112,7 @@ export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approva
         totals: { negatives: n('negatives'), positives: n('positives'), productAds: n('productAds'), slots: n('slots'), artifacts: n('artifacts') },
         ...(build ? { dailyBudgetCents: build.dailyBudgetCents } : {}),
         highestPlannedBidCents: highest,
-        startsSuppressed: { floorCents: 2, note: 'A keyword, a product target and a slot it adds start at the 2-cent floor with the planned bid remembered: START (or a person) gives it back.' },
+        startsSuppressed: { floorCents: 2, note: 'Starts at the floor; START gives it its bid. A keyword, a product target or a slot this sync adds starts at the 2-cent floor with its planned bid remembered; START (a re-run on a running playbook too, with the approver\'s code) puts exactly those bids back.' },
         left: {
           byPerson: p.left.byPerson.slice(0, MAX_LISTED).map((i) => ({ key: i.key, kind: i.kind, slot: i.slot, says: i.says, byPerson: i.byPerson, ...(i.keep ? { keep: i.keep } : {}), ...(i.revert ? { revert: i.revert } : {}) })),
           elsewhere: p.left.elsewhere.slice(0, MAX_LISTED).map((i) => ({ key: i.key, kind: i.kind, slot: i.slot, says: i.says, fix: i.fix })),
