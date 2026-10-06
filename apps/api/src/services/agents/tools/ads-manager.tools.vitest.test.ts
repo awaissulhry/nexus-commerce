@@ -81,6 +81,7 @@ vi.mock('../../email/transport.js', async (importOriginal) => ({
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
 import { runToolForClaude } from '../../mcp/mcp-tool-call.js'
+import { commitScheduledApproval, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
 import type { McpPrincipal } from '../../mcp/mcp-auth.js'
 import { ADS_MANAGER_AGENT_KEY, ADS_RUN_NOTICE_TYPE, reportRecipients } from '../ads-manager-run.service.js'
 
@@ -119,8 +120,28 @@ async function dryRun(who: UserPrincipal, tool: string, args: Record<string, unk
 }
 const record = (id: string, workspaceId = A) => inside(() => db().agentRun.findUnique({ where: { id } }), workspaceId)
 const notices = (runId: string) => inside(() => db().notification.findMany({ where: { type: ADS_RUN_NOTICE_TYPE, meta: { path: ['runId'], equals: runId } } }))
-/** No report ever waits as a request: it is a journal. */
+/** Only a withdraw of a report waits as a request: start, finish and fail are journal entries. */
 const reportRequests = () => inside(() => db().agentApproval.count({ where: { toolName: 'report-ads-run' } }))
+/** A person approves a request in Nexus and the sweep runs it. */
+async function approveAndRun(approvalId: string) {
+  const parked = await inside(() => scheduleApproval({ id: approvalId, actor: { ...person(EVERYTHING), via: 'app' } }))
+  expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+  await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  return inside(() => commitScheduledApproval(approvalId))
+}
+/** This business's runs (and their reports) move 26 hours back: a new operator day, the day's caps start again. */
+async function anotherDay() {
+  await inside(async () => {
+    const back = (at: Date | string) => new Date(new Date(at).getTime() - 26 * 3600_000)
+    for (const row of await db().agentRun.findMany({ where: { agentKey: ADS_MANAGER_AGENT_KEY } })) {
+      const out = row.output as Record<string, unknown> | null
+      await db().agentRun.update({
+        where: { id: row.id },
+        data: { createdAt: back(row.createdAt), ...(out && typeof out.reportedAt === 'string' ? { output: { ...out, reportedAt: back(out.reportedAt).toISOString() } as never } : {}) },
+      })
+    }
+  })
+}
 /** An approval of this business in a given state, hanging off a Claude call. */
 async function approvalOf(data: { toolName: string; status: string; decisionVia?: string; ruleVerdict?: unknown; reason?: string }, workspaceId = A) {
   return inside(async () => {
@@ -281,12 +302,16 @@ describe('W4-1 — a run, start to finish, on a watch-week connection (no nexus.
     expect(figures.last7Days.orders).toBe(7)
   })
 
-  it('withdraw (at once): the notice is taken back and the run marked withdrawn; no e-mail goes again', async () => {
+  it('withdraw is a request a person approves: then the notice is taken back and the run marked withdrawn; no e-mail goes again', async () => {
     const bell = (await notices(runId)).length
     expect(bell).toBeGreaterThan(0)
     const { isError, answer } = await report({ op: 'withdraw', runId })
     expect(isError, JSON.stringify(answer)).toBe(false)
-    expect(answer).toMatchObject({ runId, status: 'cancelled', noticesRemoved: bell })
+    expect(answer).toMatchObject({ status: 'waiting_for_approval', approvalId: expect.any(String) })
+    expect(await reportRequests()).toBe(1)
+    expect(await notices(runId)).toHaveLength(bell)
+    const ran = await approveAndRun(answer.approvalId)
+    expect(ran, ran.error).toMatchObject({ ok: true, status: 'executed' })
     expect(await notices(runId)).toEqual([])
     const row = await record(runId)
     expect(row).toMatchObject({ status: 'cancelled' })
@@ -309,18 +334,28 @@ describe('W4-1 — the journal\'s door: Pause, off, refusals', { timeout: TIMEOU
     expect(off.isError).toBe(true)
     expect(off.answer.error).toMatch(/turned off for Claude/)
     await inside(() => db().agentTool.deleteMany({ where: { name: 'report-ads-run' } }))
-    expect(await reportRequests()).toBe(0)
   })
 
-  it('a line with an amount or a percentage is refused; nothing is recorded', async () => {
+  it('a number next to a money or metric word, or a link, is refused; nothing is recorded; counts of other things are words', async () => {
     const runs = await inside(() => db().agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY } }))
-    for (const line of ['Spend was €40 yesterday', 'ACoS moved to 31%', 'cut 12.50 EUR of waste']) {
+    const figures = [
+      'Spend was €40 yesterday', 'ACoS moved to 31%', 'cut 12.50 EUR of waste', 'spent 12 euros on one term', 'ACoS 31 in IT',
+      'saved 45 cents a click', 'spend 1,200 this week', 'ACoS was 31 today', 'ROAS of about 3.5', '3 orders came in', 'bids at 0.80',
+    ]
+    for (const line of figures) {
       const refused = await report({ op: 'finish', markets: [{ market: 'IT', lines: [line] }] })
       expect(refused.isError, line).toBe(true)
-      expect(refused.answer.error).toMatch(/amount or a percentage/)
+      expect(refused.answer.error, line).toMatch(/amount or a percentage/)
+    }
+    for (const line of ['see https://example.test/x', 'details on www.example.test', 'look at example.com']) {
+      expect((await report({ op: 'finish', markets: [{ market: 'IT', lines: [line] }] })).answer.error, line).toMatch(/holds a link/)
     }
     expect((await report({ op: 'finish', problems: ['ACoS above 40 % in IT'] })).answer.error).toMatch(/amount or a percentage/)
+    expect((await report({ op: 'finish', nextFocus: 'Check budget 25 again' })).answer.error).toMatch(/amount or a percentage/)
     expect(await inside(() => db().agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY } }))).toBe(runs)
+    // The control: counts of other things are words, and the same report passes.
+    const plain = await dryRun(person(EVERYTHING), 'report-ads-run', { op: 'finish', markets: [{ market: 'IT', lines: ['Lowered bids on 2 terms', '3 campaigns hit their budget early'] }] })
+    expect(plain.result).toMatchObject({ ok: true })
   })
 
   it('a market, a run or an approval this business does not have is not found', async () => {
@@ -334,8 +369,48 @@ describe('W4-1 — the journal\'s door: Pause, off, refusals', { timeout: TIMEOU
   })
 })
 
-describe('W4-1 — the day\'s one e-mail, problems, other businesses', { timeout: TIMEOUT }, () => {
+describe('W4-1 — the day\'s caps', { timeout: TIMEOUT }, () => {
+  it(`no start while a run started in the last 2 hours is open; at most ${3} runs a day, with or without a start`, async () => {
+    await anotherDay()
+    const first = await report({ op: 'start' })
+    expect(first.answer, JSON.stringify(first.answer)).toMatchObject({ status: 'running' })
+    const second = await report({ op: 'start' })
+    expect(second.isError).toBe(true)
+    expect(second.answer.error).toMatch(new RegExp(`Run ${first.answer.runId} started at .* and is still open`))
+    expect((await report({ op: 'finish', runId: first.answer.runId })).answer).toMatchObject({ status: 'done' })
+    for (let i = 0; i < 2; i++) {
+      const next = await report({ op: 'start' })
+      expect(next.answer, JSON.stringify(next.answer)).toMatchObject({ status: 'running' })
+      expect((await report({ op: 'finish', runId: next.answer.runId })).answer).toMatchObject({ status: 'done' })
+    }
+    const fourth = await report({ op: 'start' })
+    expect(fourth.isError).toBe(true)
+    expect(fourth.answer.error).toMatch(/recorded 3 daily Claude ads runs today, the most a day \(3\)/)
+    expect((await report({ op: 'finish', markets: [] })).answer.error).toMatch(/the most a day/)
+  })
+
+  it('a problem makes it a danger notice, never deduped, at most 2 a day; then a warning', async () => {
+    await anotherDay()
+    const danger = () => inside(() => db().notification.count({ where: { type: ADS_RUN_NOTICE_TYPE, severity: 'danger', userId: ids.approver } }))
+    const before = await danger()
+    const args = { op: 'fail', problems: ['The search-term report was too old to judge'] }
+    const first = await report(args)
+    const second = await report(args)
+    expect(first.answer.runId).not.toBe(second.answer.runId)
+    expect(await danger()).toBe(before + 2)
+    const third = await report(args)
+    expect(third.answer).toMatchObject({ status: 'failed', notice: { severity: 'warn' } })
+    expect(await danger()).toBe(before + 2)
+    const warned = await inside(() => db().notification.findMany({ where: { type: ADS_RUN_NOTICE_TYPE, severity: 'warn', userId: ids.approver } }))
+    expect(warned).toEqual([expect.objectContaining({ title: 'Claude ads run failed · 1 problem · 0 ran by rule · 0 wait for you' })])
+    const failed = await inside(() => db().agentRun.findMany({ where: { agentKey: ADS_MANAGER_AGENT_KEY, status: 'failed' } }))
+    expect(failed.find((r) => r.id === third.answer.runId)).toMatchObject({ ok: false, errorMessage: 'The search-term report was too old to judge' })
+  })
+})
+
+describe('W4-1 — the day\'s one e-mail, the bell\'s figures, other businesses', { timeout: TIMEOUT }, () => {
   it('a report without a start is recorded too; the day\'s e-mail went already, so this one sends none', async () => {
+    await anotherDay()
     const sent = mail.sent.length
     const dry = await dryRun(person(EVERYTHING), 'report-ads-run', { op: 'finish', markets: [{ market: 'IT', lines: ['Nothing to change'] }] })
     expect((dry.result as { preview: { email: unknown } }).preview.email).toEqual({ send: false, recipients: 1, why: 'today\'s report e-mail already went (one a day)' })
@@ -345,17 +420,25 @@ describe('W4-1 — the day\'s one e-mail, problems, other businesses', { timeout
     expect(mail.sent).toHaveLength(sent)
   })
 
-  it('a problem makes it a danger notice, and a danger notice is never deduped', async () => {
-    const args = { op: 'fail', problems: ['The search-term report was too old to judge'] }
-    const first = await report(args)
-    const second = await report(args)
-    expect(first.answer.runId).not.toBe(second.answer.runId)
-    const rows = await inside(() => db().notification.findMany({ where: { type: ADS_RUN_NOTICE_TYPE, severity: 'danger', userId: ids.approver } }))
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({ title: 'Claude ads run failed · 1 problem · 0 ran by rule · 0 wait for you' })
-    const failed = await inside(() => db().agentRun.findMany({ where: { agentKey: ADS_MANAGER_AGENT_KEY, status: 'failed' } }))
-    expect(failed).toHaveLength(2)
-    expect(failed[0]).toMatchObject({ ok: false, errorMessage: 'The search-term report was too old to judge' })
+  it('two reports at once send one e-mail: the day\'s e-mail is taken once', async () => {
+    await anotherDay()
+    await inside(() => db().agentMemory.deleteMany({ where: { entityType: 'report-email' } }))
+    const sent = mail.sent.length
+    const both = await Promise.all([1, 2].map(() => report({ op: 'finish', markets: [{ market: 'IT', lines: ['Nothing to change'] }] })))
+    expect(both.map((b) => b.answer.status)).toEqual(['done', 'done'])
+    expect(both.map((b) => b.answer.email.status).sort()).toEqual(['sent', 'skipped'])
+    expect(mail.sent).toHaveLength(sent + 1)
+  })
+
+  it('the bell shows the figures only to people who may see the ad money', async () => {
+    const run = (await inside(() => db().agentRun.findMany({ where: { agentKey: ADS_MANAGER_AGENT_KEY, status: 'done' }, orderBy: { createdAt: 'desc' }, take: 1 })))[0]
+    const bell = await notices(run.id)
+    const mine = bell.find((n) => n.userId === ids.approver)!
+    const theirs = bell.find((n) => n.userId === ids.noMoney)!
+    expect(mine.body).toContain('€')
+    expect(theirs.body).not.toMatch(/€|\d/)
+    expect(theirs.body).toContain('The figures are shown to people who may see the ad spend.')
+    expect(theirs).toMatchObject({ title: mine.title, severity: mine.severity })
   })
 
   it('no digest list: the e-mail goes to this business\'s own people who may see its ad money, never another business\'s', async () => {

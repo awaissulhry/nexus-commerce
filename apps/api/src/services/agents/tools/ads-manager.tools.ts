@@ -12,12 +12,13 @@
  *                     ask: Claude never changes its own watchdog alone.
  *
  * The record lives in ads-manager-run.service.ts (one AgentRun per run; start answers with its runId).
- * report-ads-run is a journal tool (tool-types.ts AgentTool.journal, lead decision 2026-10-06): Claude's own record, no
- * change of the business, so Claude's door runs it at once — for any connection that may write, also without nexus.run,
- * in the watch week and during a Pause. Its ceiling is ask (offered or not); off, it is refused. The e-mail stays capped
- * at one a day and every figure stays Nexus's. Reversibility partial: withdraw (op withdraw, at once, or undo-change of
- * a report a business's own policy made wait) takes back the bell notice and marks the run withdrawn; a sent e-mail
- * stays sent.
+ * report-ads-run is a journal tool (tool-types.ts AgentTool.journal, lead decision 2026-10-06): start, finish and fail are
+ * Claude's own record, no change of the business, so Claude's door runs them at once — for any connection that may
+ * write, also without nexus.run, in the watch week and during a Pause. Its ceiling is ask (offered or not); off, it is
+ * refused. Capped: no start while a run started in the last 2 hours is open, RUNS_PER_DAY runs and
+ * DANGER_NOTICES_PER_DAY danger notices a day; one e-mail a day (taken atomically); every figure is Nexus's, and Claude's
+ * words carry no number next to a metric and no link. Reversibility partial: a withdraw — a request a person approves —
+ * takes the bell notice back and marks the run withdrawn; a sent e-mail stays sent.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -26,11 +27,14 @@ import prisma from '../../../db.js'
 import {
   approvalCounts,
   businessName,
+  dayCounts,
   emailPlan,
   FATE_WORDS,
   fateOf,
   namedApprovals,
+  newRunRefusal,
   noticeRun,
+  noticeSeverity,
   operatorDay,
   outputOf,
   recordFinish,
@@ -47,12 +51,14 @@ import {
   withdrawRun,
   type EmailOutcome,
   type NamedApproval,
+  type NoticeSeverity,
   type RunOutput,
   type RunState,
   type RunStatus,
   type StartFacts,
 } from '../ads-manager-run.service.js'
-import { knownTimeZone, readExpectedReport, TIME, writeExpectedReport, type ExpectedReport } from '../ads-manager-watchdog.service.js'
+import { DANGER_NOTICES_PER_DAY, knownTimeZone, REPORT_TIME, RUNS_PER_DAY } from '../ads-manager-constants.js'
+import { readExpectedReport, writeExpectedReport, type ExpectedReport } from '../ads-manager-watchdog.service.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { amazonOverview } from './ads-read.tools.js'
 
@@ -67,10 +73,20 @@ const ID = z.string().trim().min(1).max(64)
 const sentence = (max: number) => z.string().trim().min(1).max(max)
 
 /**
- * An amount or a percentage in Claude's words: €12, 12 €, 12.50 EUR, USD 3, 31%, 31 % — Nexus states every figure of a
- * report itself, so the words cannot misstate one. Counts ("3 campaigns", "2 wait") are words.
+ * Nexus states every figure of a report itself, so Claude's words cannot misstate one: a number next to a money or a
+ * metric word or symbol is refused — €12, 12 €, 12.50 EUR, "spent 12 euros", "45 cents", 31%, "ACoS 31", "ACoS above
+ * 40 %", "spend 1,200", "3 orders" — with up to two linking words between ("ACoS was 31", "spend of about 1,200").
+ * A count of other things ("3 campaigns", "2 wait", "bids on 2 terms") is words. So is no link: a URL or a domain is refused.
  */
-const FIGURE = /[€$£]\s?\d|\d\s?(?:[€$£%]|(?:EUR|USD|GBP|SEK|PLN|CHF)\b)|\b(?:EUR|USD|GBP|SEK|PLN|CHF)\s?\d|\bper ?cent\b/i
+const METRIC = '(?:euros?|eur|usd|gbp|sek|pln|chf|dollars?|pounds?|cents?|percent|per ?cent|pct|acos|tacos|roas|cpc|cpm|ctr|cvr|'
+  + 'spend|spends|spent|spending|sales|sale|sold|revenue|turnover|profit|margins?|budgets?|bids?|clicks?|orders?|impressions?|costs?)'
+const NUMBER = "\\d[\\d.,']*"
+const LINK = '(?:\\s*[:=~≈-]?\\s*(?:(?:of|at|to|is|was|were|now|by|from|about|around|over|under|above|below|near|hit|reached|only|just)\\s+){0,2})'
+const FIGURE = new RegExp(
+  `[€$£¥]\\s?\\d|\\d\\s?[€$£¥%]|\\b${METRIC}\\b${LINK}${NUMBER}|${NUMBER}\\s*[km]?\\s*\\b${METRIC}\\b`,
+  'i',
+)
+const LINK_URL = /\bhttps?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:com|net|org|io|it|de|fr|es|uk|eu|co|app|ai|shop|store|link|ly)\b/i
 
 const INPUT = z.object({
   op: z.preprocess(lower, z.enum(OPS))
@@ -163,6 +179,8 @@ interface ReportPlan {
   problems: string[]
   nextFocus: string | null
   danger: boolean
+  /** danger, but a warning past the day's cap of danger notices (DANGER_NOTICES_PER_DAY); info without a problem. */
+  severity: NoticeSeverity
   title: string
   email: { send: boolean; recipients: number; why: string | null }
 }
@@ -175,10 +193,11 @@ function wordsRefusal(a: Args): string | null {
     ...(a.problems ?? []).map((line) => ({ where: 'problems', line })),
     ...(a.nextFocus ? [{ where: 'nextFocus', line: a.nextFocus }] : []),
   ]
-  const hit = texts.find((t) => FIGURE.test(t.line))
-  return hit
-    ? `${hit.where}: "${hit.line.slice(0, 80)}" states an amount or a percentage. Nexus adds every figure of a report itself; write the line in words and leave the numbers out. Nothing was queued.`
-    : null
+  const hit = texts.find((t) => FIGURE.test(t.line) || LINK_URL.test(t.line))
+  if (!hit) return null
+  return LINK_URL.test(hit.line)
+    ? `${hit.where}: "${hit.line.slice(0, 80)}" holds a link. A report is words only; Nexus links what it names itself. Nothing was recorded.`
+    : `${hit.where}: "${hit.line.slice(0, 80)}" states an amount or a percentage (a number next to a money or metric word). Nexus adds every figure of a report itself; write the line in words and leave the numbers out. Nothing was recorded.`
 }
 
 /** The run a finish, fail or withdraw names, in this business; a refusal when it is not found or already over. */
@@ -212,6 +231,10 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
   const found = a.runId ? await runOf(a.runId, op) : null
   if (found && 'ok' in found) return found
   const run = found as Exclude<typeof found, Refusal>
+  const counts = await dayCounts(now)
+  // A report without a start is a new run: it counts against the day's runs.
+  const capped = run ? null : newRunRefusal(counts, 'report')
+  if (capped) return { ok: false, error: capped }
   const named = new Set<string>()
   for (const m of a.markets ?? []) {
     if (named.has(m.market)) return { ok: false, error: `markets: ${m.market} is named twice; give each market one entry. Nothing was queued.` }
@@ -229,15 +252,15 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
   if (approvals.missing.length) {
     return { ok: false, error: `Approval ${approvals.missing.slice(0, 5).join(', ')} not found in this business: name only the approval ids this run's own requests answered with. Nothing was queued.` }
   }
-  const counts = approvalCounts(approvals.items)
+  const tally = approvalCounts(approvals.items)
   const problems = a.problems ?? []
   const danger = op === 'fail' || problems.length > 0
   const head = op === 'fail' ? 'Claude ads run failed' : 'Claude ads run'
   const title = [
     head,
     ...(problems.length ? [plural(problems.length, 'problem')] : []),
-    `${counts.ranByRule} ran by rule`,
-    `${counts.waitingForYou} wait for you`,
+    `${tally.ranByRule} ran by rule`,
+    `${tally.waitingForYou} wait for you`,
   ].join(' · ')
   return {
     op,
@@ -246,10 +269,11 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
     started: run?.started ?? null,
     markets: (a.markets ?? []).map((m) => ({ market: m.market, lines: m.lines, figures: figures.get(m.market) ?? null })),
     approvals: approvals.items,
-    counts,
+    counts: tally,
     problems,
     nextFocus: a.nextFocus ?? null,
     danger,
+    severity: noticeSeverity(danger, counts),
     title,
     email: await emailPlan(a.email !== false, now),
   }
@@ -257,7 +281,7 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
 
 function reportPreview(p: ReportPlan) {
   const mismatches = p.approvals.filter((a) => a.mismatch).map((a) => `${a.approvalId}: ${a.mismatch}`)
-  const notice = `one ${p.danger ? 'danger' : 'info'} notice to the business's bell`
+  const notice = `one ${p.severity} notice to the business's bell${p.danger && p.severity !== 'danger' ? ` (a warning: the day had ${DANGER_NOTICES_PER_DAY} danger notices already)` : ''}`
   const mail = p.email.send ? `the day's e-mail to ${plural(p.email.recipients, 'recipient')}` : `no e-mail (${p.email.why})`
   return {
     action: TOOL,
@@ -273,7 +297,7 @@ function reportPreview(p: ReportPlan) {
     counts: p.counts,
     problems: p.problems,
     nextFocus: p.nextFocus,
-    notice: { severity: p.danger ? 'danger' : 'info', title: p.title },
+    notice: { severity: p.severity, title: p.title },
     email: p.email,
     totals: { markets: p.markets.length, ranByRule: p.counts.ranByRule, waitingForYou: p.counts.waitingForYou, wouldHaveRun: p.counts.wouldHaveRun, problems: p.problems.length },
     ...(mismatches.length ? { warnings: mismatches.slice(0, 10) } : {}),
@@ -284,10 +308,12 @@ function reportPreview(p: ReportPlan) {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
-function noticeBody(p: ReportPlan): string {
+/** The bell's text: with each market's figures for those who may see the ad money, without them (`money` false) for the rest. */
+function noticeBody(p: ReportPlan, money: boolean): string {
   const parts = [
     ...p.problems.slice(0, 3).map((problem) => `Problem: ${problem}`),
-    ...p.markets.map((m) => (m.figures ? figuresLine(m.figures) : m.market)),
+    ...p.markets.map((m) => (m.figures && money ? figuresLine(m.figures) : m.market)),
+    ...(!money && p.markets.some((m) => m.figures) ? ['The figures are shown to people who may see the ad spend.'] : []),
     ...(p.nextFocus ? [`Next: ${p.nextFocus}`] : []),
   ]
   const body = parts.join('\n')
@@ -375,19 +401,39 @@ async function withdrawPreview(runId: string | undefined): Promise<{ ok: true; p
   }
 }
 
-async function plan(args: Record<string, unknown>): Promise<{ ok: true; preview: unknown; report?: ReportPlan } | Refusal> {
-  const a = args as Args
-  if (a.op === 'start') {
-    if (a.runId) return { ok: false, error: 'start takes no runId: its own approvalId becomes the runId. Nothing was queued.' }
-    return { ok: true, preview: await startPreview() }
-  }
-  if (a.op === 'withdraw') return withdrawPreview(a.runId)
-  const report = await planReport(a)
-  if ('ok' in report) return report
-  return { ok: true, preview: reportPreview(report), report }
+/** A start may record a new run now, or why not: one is still open, or the day's runs are used up. */
+async function startRefusal(): Promise<Refusal | null> {
+  const refusal = newRunRefusal(await dayCounts(), 'start')
+  return refusal ? { ok: false, error: refusal } : null
 }
 
-/** C2 — undo: the report's bell notice taken back and the run marked withdrawn (op withdraw). */
+/**
+ * The dry run of one call. `journal`: start, finish and fail are journal entries (AgentTool.journal: Claude's door runs
+ * them at once); a withdraw is not — it takes a report back, so a person approves it.
+ */
+async function plan(args: Record<string, unknown>): Promise<{ ok: true; preview: unknown; journal: boolean } | Refusal> {
+  const a = args as Args
+  if (a.op === 'start') {
+    if (a.runId) return { ok: false, error: 'start takes no runId: the answer gives the new run its runId. Nothing was recorded.' }
+    const refused = await startRefusal()
+    if (refused) return refused
+    return { ok: true, preview: await startPreview(), journal: true }
+  }
+  if (a.op === 'withdraw') {
+    const withdraw = await withdrawPreview(a.runId)
+    return withdraw.ok === false ? withdraw : { ...withdraw, journal: false }
+  }
+  const report = await planReport(a)
+  if ('ok' in report) return report
+  return { ok: true, preview: reportPreview(report), journal: true }
+}
+
+/**
+ * C2 — undo: the report's bell notice taken back and the run marked withdrawn (op withdraw). undo-change reads an
+ * AgentChange, which only an approved run of this tool leaves: a withdraw a person approved (its undo is refused: a
+ * withdrawn report is not sent again), or a report a business's own tool policy made wait for a person. Its request is
+ * a withdraw, which waits for a person like any withdraw.
+ */
 export const REPORT_UNDO: ToolUndo = {
   async current(change) {
     return runStateOf((change.after as RunState).runId)
@@ -404,6 +450,8 @@ async function execute(args: Record<string, unknown>, ctx: ToolContext): Promise
   const a = args as Args
   const userId = ctx.userId ?? null
   if (a.op === 'start') {
+    const refused = await startRefusal()
+    if (refused) return refused
     const facts = await startFacts()
     // A journal runs at once (no approval: a fresh runId); a business whose own policy made it wait keeps the approvalId.
     const started = await recordStart(ctx.approvalId ?? null, facts, userId)
@@ -435,7 +483,10 @@ async function execute(args: Record<string, unknown>, ctx: ToolContext): Promise
   }
   // On record first: a notice or an e-mail that fails never loses the run.
   const recorded = await recordFinish(report.runId, report.op, output, userId)
-  const notice = await noticeRun({ runId: recorded.runId, op: report.op, danger: report.danger, title: report.title, body: noticeBody(report), waiting: report.counts.waitingForYou })
+  const notice = await noticeRun({
+    runId: recorded.runId, op: report.op, severity: report.severity, title: report.title,
+    body: noticeBody(report, true), plainBody: noticeBody(report, false), waiting: report.counts.waitingForYou,
+  })
   const email: EmailOutcome = report.email.send
     ? await sendRunEmail(await renderEmail(report, await businessName(workspaceIdForQuery()), recorded.runId, now), now)
     : { status: 'skipped', on: null, recipients: report.email.recipients, why: report.email.why }
@@ -453,31 +504,36 @@ const reportAdsRun: AgentTool = {
   category: 'advertising',
   description:
     'Report the daily Claude ads run to Nexus: the scheduled run\'s own record, Nexus only (nothing reaches Amazon). '
-    + 'It is a journal, not a change of the business, so it needs no approval: it runs at once, also on a connection '
-    + 'without "run by rule" and during a Pause (it changes no product, listing, price, stock, ad or order). '
-    + 'op start when the run begins: Nexus records it and answers with the runId and what the business set — the run\'s '
-    + 'mode (paused, act, watch or ask), each ad tool\'s level, the Pause, the daily cap and each market\'s strategy '
-    + 'version. op finish (or fail) when the run ends, with that runId: per market up to 5 lines in plain words — no '
-    + 'amounts or percentages, Nexus adds each market\'s figures itself from the read ads-overview answers from — the '
-    + 'approval ids this run asked for (ranByRule, waiting, wouldDo), problems and the next focus. Nexus reads what each '
-    + 'approval became and states the counts itself, sends one notice to the business\'s bell (a danger notice when there '
-    + 'is a problem or the run failed) and at most one e-mail a day (to the Monday ads digest\'s recipients, else to this '
-    + 'business\'s own people who may see its ad money). op withdraw takes a report\'s bell notice back and marks the run '
-    + 'withdrawn; an e-mail already sent stays in the inbox.',
+    + 'start, finish and fail are journal entries, not changes of the business, so they need no approval: they run at '
+    + 'once, also on a connection without "run by rule" and during a Pause (no product, listing, price, stock, ad or '
+    + 'order changes). op start when the run begins: Nexus records it and answers with the runId and what the business '
+    + 'set — the run\'s mode (paused, act, watch or ask), each ad tool\'s level, the Pause, the daily cap and each '
+    + 'market\'s strategy version. A start is refused while a run that started in the last 2 hours is still open, and '
+    + `after ${RUNS_PER_DAY} runs in a day. op finish (or fail) when the run ends, with that runId: per market up to 5 lines `
+    + 'in plain words — no amounts, percentages or numbers next to a metric (spend, sales, ACoS, bids, clicks, orders …) '
+    + 'and no links; Nexus adds each market\'s figures itself from the read ads-overview answers from — the approval ids '
+    + 'this run asked for (ranByRule, waiting, wouldDo), problems and the next focus. Nexus reads what each approval '
+    + 'became and states the counts itself, sends one notice to the business\'s bell (a danger notice when there is a '
+    + `problem or the run failed, at most ${DANGER_NOTICES_PER_DAY} a day) and at most one e-mail a day (to the Monday ads `
+    + 'digest\'s recipients, else to this business\'s own people who may see its ad money). op withdraw asks to take a '
+    + 'report\'s bell notice back and mark the run withdrawn: a person approves it in Nexus; an e-mail already sent stays '
+    + 'in the inbox.',
   surfaces: ['mcp'],
   input: INPUT,
   requires: [F.adsView, FIELDS.financialsAdspendView],
   riskTier: 'low',
   readOnly: false,
   openWorld: false,
-  // W4-1 — Claude's own record, no change of the business: it runs at once (AgentTool.journal); offered or not (ask).
+  // W4-1 — Claude's own record, no change of the business: start, finish and fail run at once (AgentTool.journal); a
+  // withdraw waits for a person. Offered or not (ask).
   journal: true,
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   undo: REPORT_UNDO,
   async handler(args): Promise<ToolResult> {
     const planned = await plan(args)
-    return planned.ok === false ? planned : { ok: true, preview: planned.preview }
+    if (planned.ok === false) return planned
+    return { ok: true, preview: planned.preview, ...(planned.journal ? { journal: true as const } : {}) }
   },
   execute,
 }
@@ -599,7 +655,7 @@ const setAdsReportTime: AgentTool = {
     + 'too, with or without this time. time null switches the missing-report check off. Nexus only. A person approves it '
     + 'in Nexus (Claude never changes its own watchdog alone); undo sets the time it replaced again.',
   input: z.object({
-    time: z.string().trim().regex(TIME, 'a time as HH:MM, 24-hour').nullable()
+    time: z.string().trim().regex(REPORT_TIME, 'a time as HH:MM, 24-hour').nullable()
       .describe('HH:MM, 24-hour, by which the day\'s report arrives (e.g. 08:30); null switches the missing-report check off'),
     timeZone: z.string().trim().min(1).max(64).optional().describe('an IANA time zone for the time (default Europe/Rome)'),
   }),

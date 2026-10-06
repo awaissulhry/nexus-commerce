@@ -155,9 +155,10 @@ export async function runOrQueueTool(
   const { tool, raw, visible } = call
   // C2 — a control tool (undo-change) is never queued itself: what it asks for is a NEW request through this gate.
   if (tool.control) return askedFor(name, raw, visible, principal, agentRunId, opts)
-  if (!requiresApproval) {
-    // W4-1 — a journal tool (AgentTool.journal) changes nothing of the business: its dry run passed, so it runs now.
-    if (tool.journal && tool.execute && raw.ok) return runJournal(principal, name, args)
+  // W4-1 — a journal entry (AgentTool.journal; its dry run says so, ToolResult.journal) changes nothing of the business:
+  // it runs now. Any other call of a journal tool is a request, as any change: it goes on below to be stored.
+  if (!requiresApproval && tool.journal && raw.journal === true && tool.execute && raw.ok) return runJournal(principal, name, args)
+  if (!requiresApproval && !tool.journal) {
     return {
       ok: raw.ok,
       mode: 'executed',

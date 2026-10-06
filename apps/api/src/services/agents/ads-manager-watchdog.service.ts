@@ -19,8 +19,11 @@
 
 import type { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
-import { ADS_MANAGER_AGENT_KEY } from './ads-manager-run.service.js'
+import { ADS_MANAGER_AGENT_KEY, knownTimeZone, REPORT_TIME, WATCHDOG_NOTICE_TYPE } from './ads-manager-constants.js'
 import { alertBusiness, type AlertOutcome } from './claude-alerts.service.js'
+
+// Read while loading: from the leaf (ads-manager-constants.ts), never from a module of the tool registry's cycle.
+export { knownTimeZone, WATCHDOG_NOTICE_TYPE }
 
 /** How late a report may be before the Owner hears of it. */
 export const REPORT_GRACE_MS = 30 * 60_000
@@ -28,7 +31,6 @@ export const REPORT_GRACE_MS = 30 * 60_000
 export const STUCK_AFTER_MS = 2 * 3600_000
 /** A started run older than this is no longer looked at (it was alerted, or it predates the watchdog). */
 const STUCK_LOOKBACK_MS = 26 * 3600_000
-export const WATCHDOG_NOTICE_TYPE = 'claude-ads-watchdog'
 const SETTINGS = { scope: ADS_MANAGER_AGENT_KEY, entityType: 'business', entityId: 'settings' } as const
 const EXPECTED_KEY = 'expectedReport'
 const STATE_KEY = 'watchdog'
@@ -41,16 +43,6 @@ export interface ExpectedReport {
   timeZone: string
 }
 
-export const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
-
-/** A time zone this runtime knows (Intl), or null. */
-export function knownTimeZone(timeZone: string): string | null {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
-  } catch {
-    return null
-  }
-}
 
 // ── The setting ────────────────────────────────────────────────────────────────────────────────────
 
@@ -67,7 +59,7 @@ async function writeMemory(key: string, value: unknown, by: string | null): Prom
 
 function expectedOf(value: unknown): ExpectedReport | null {
   const v = value as Partial<ExpectedReport> | null
-  return v && typeof v.time === 'string' && TIME.test(v.time) && typeof v.timeZone === 'string' && knownTimeZone(v.timeZone)
+  return v && typeof v.time === 'string' && REPORT_TIME.test(v.time) && typeof v.timeZone === 'string' && knownTimeZone(v.timeZone)
     ? { time: v.time, timeZone: v.timeZone }
     : null
 }

@@ -12,7 +12,7 @@
 import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { runWatchdogOnce, type WatchdogTick } from '../services/agents/ads-manager-watchdog.service.js'
+import type { WatchdogTick } from '../services/agents/ads-manager-watchdog.service.js'
 
 const JOB_NAME = 'claude-ads-run-watchdog'
 export const WATCHDOG_SCHEDULE = '40 * * * *'
@@ -24,6 +24,9 @@ const summaryOf = (tick: WatchdogTick) =>
 /** One tick in the business the caller is in. */
 export async function runAdsRunWatchdogTick(now = new Date()): Promise<WatchdogTick | null> {
   try {
+    // Loaded at the tick, not when the scheduler boots: the scheduler imports this job early, and the watchdog's module
+    // graph is no business of its boot (runtime/module-load-order.vitest.test.ts).
+    const { runWatchdogOnce } = await import('../services/agents/ads-manager-watchdog.service.js')
     const tick = await runWatchdogOnce(now)
     if (tick.expected || tick.missing || tick.stuck.length) {
       await recordCronRun(JOB_NAME, async () => summaryOf(tick)).catch(() => { /* the run log never breaks the job */ })
