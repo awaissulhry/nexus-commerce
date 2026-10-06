@@ -47,7 +47,7 @@ vi.mock('../../db.js', () => ({
     automationRule: { findUnique: vi.fn() },
     automationRuleExecution: { findMany: vi.fn() },
     adGroup: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
-    adTarget: { findFirst: vi.fn() },
+    adTarget: { findFirst: vi.fn(), findMany: vi.fn() },
     adProductAd: { count: vi.fn() },
   },
 }))
@@ -87,6 +87,7 @@ beforeEach(() => {
   db.adGroup.findMany.mockResolvedValue([{ campaignId: 'c1' }] as never)
   db.adGroup.findUnique.mockImplementation(((args: { where: { id: string } }) => Promise.resolve(BY_ID[args.where.id] ?? { defaultBidCents: 35 })) as never)
   db.adTarget.findFirst.mockResolvedValue(null as never) // dedupe: nothing exists
+  db.adTarget.findMany.mockResolvedValue([] as never) // PB-6a — no positive in the source (L1)
   db.adProductAd.count.mockResolvedValue(0 as never)
   h.createKeywordLocal.mockResolvedValue({ id: 't1', externalTargetId: 'ext-k1' })
   h.createTargetLocal.mockResolvedValue({ id: 'pt1', externalTargetId: 'ext-p1', mode: 'live' })
@@ -336,5 +337,106 @@ describe('HP1 — negate-in-source respects the same mapping', () => {
     expect(r.ok).toBe(true)
     expect(r.output?.skipped).toBe('source-ad-group-not-in-mappings')
     expect(h.createNegative).not.toHaveBeenCalled()
+  })
+})
+
+/** PB-6a (L1) — the source's isolation negative is never written over a keyword of the source itself. */
+describe('PB-6a — negate-in-source never over a positive of the source', () => {
+  it('a live EXACT keyword with the term in the source: the negative is refused by name, nothing sent', async () => {
+    db.adTarget.findMany.mockResolvedValue([{ id: 'own1', adGroupId: 'src1', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'Giacca moto uomo', status: 'ENABLED', externalTargetId: 'x-own' }] as never)
+    const r = await promote({ ...ACT, negateInSource: true }, CTX)
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.ok).toBe(true)
+    expect(String((r.output?.isolation as { refused?: string }).refused)).toMatch(/^own_keyword: .*exact keyword "Giacca moto uomo"/)
+  })
+})
+
+/**
+ * PB-6a — harvest_and_negate: the rule's half (`mode`), its bid, the card's items and the cadence. A made-up wizard rule
+ * with its own numbers: one source (src1 = EXT-SRC, automatic), EXACT lands in dst1. Two search terms: a converting one
+ * (3 orders, CPC 0.80) and a wasting one (0 orders, 20.00 spent).
+ */
+describe('PB-6a — harvest_and_negate keeps winners and runs only its own half', () => {
+  const harvest = (action: Record<string, unknown>, m: Record<string, unknown> = meta) =>
+    (ACTION_HANDLERS.harvest_and_negate as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Record<string, any> }>)(action, {}, m)
+  const RULE = {
+    type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents: 1000, minOrders: 2,
+    sources: [{ adGroupId: 'src1', campaignId: 'c1', harvestFrom: true, graduate: ['EXACT'], negate: ['EXACT'] }],
+    destinations: { EXACT: 'dst1' },
+  }
+  const row = (query: string, orders: number, clicks: number, costMicros: bigint) =>
+    ({ query, campaignId: 'EXT-C1', adGroupId: 'EXT-SRC', marketplace: 'IT', _sum: { impressions: 100, clicks, costMicros, orders7d: orders, sales7dCents: orders * 3000 } })
+
+  beforeEach(() => {
+    db.automationRule.findUnique.mockResolvedValue(null as never) // not drag-bound
+    db.amazonAdsSearchTerm.groupBy.mockResolvedValue([row('giacca moto uomo', 3, 10, 8_000_000n), row('giacca economica', 0, 25, 20_000_000n)] as never)
+    db.adGroup.findMany.mockImplementation(((args: { where: { id?: unknown; externalAdGroupId?: unknown } }) => Promise.resolve(
+      args.where.id ? [{ id: 'src1', externalAdGroupId: 'EXT-SRC' }]
+        : args.where.externalAdGroupId ? [{ id: 'src1', externalAdGroupId: 'EXT-SRC', campaign: AUTO_SP }] : [],
+    )) as never)
+  })
+
+  it('mode "harvest" graduates only; mode "negative" negates only (each stored rule ran both halves before)', async () => {
+    await harvest({ ...RULE, mode: 'harvest' })
+    expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
+    expect(h.createKeywordLocal.mock.calls[0][0]).toMatchObject({ adGroupId: 'dst1', keywordText: 'giacca moto uomo', matchType: 'EXACT' })
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled() // no waste negative, and the source keeps the new winner (handover: proven)
+
+    vi.clearAllMocks()
+    db.amazonAdsSearchTerm.groupBy.mockResolvedValue([row('giacca moto uomo', 3, 10, 8_000_000n), row('giacca economica', 0, 25, 20_000_000n)] as never)
+    db.adTarget.findMany.mockResolvedValue([] as never)
+    h.writeNegativeKeyword.mockResolvedValue({ outcome: 'created', mode: 'live', externalTargetId: 'neg-1', reachedAmazon: true, adTargetId: 'n1', refusal: null, error: null })
+    const neg = await harvest({ ...RULE, mode: 'negative' })
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+    expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1)
+    expect(h.writeNegativeKeyword.mock.calls[0][0]).toMatchObject({ keywordText: 'giacca economica', externalAdGroupId: 'EXT-SRC' })
+    expect(neg.output).toMatchObject({ mode: 'negative', negativesAdded: 1, keywordsGraduated: 0 })
+  })
+
+  it('no graduationBidEur → the term\'s CPC; a rule that names one keeps it', async () => {
+    await harvest({ ...RULE, mode: 'harvest' })
+    expect(h.createKeywordLocal.mock.calls[0][0].bidEur).toBe(0.8)
+    await harvest({ ...RULE, mode: 'harvest', graduationBidEur: 0.3 })
+    expect(h.createKeywordLocal.mock.calls[1][0].bidEur).toBe(0.3)
+  })
+
+  it('a dry run lists its items and writes nothing; an accepted card applies only its items', async () => {
+    const dry = await harvest(RULE, { ...meta, dryRun: true })
+    expect(dry.output).toMatchObject({ dryRun: true, noChange: false, wouldGraduate: 1, wouldNegate: 1 })
+    expect(dry.output?.items).toEqual([
+      { kind: 'negative', query: 'giacca economica', externalAdGroupId: 'EXT-SRC', step: 'negate' },
+      { kind: 'graduation', query: 'giacca moto uomo', externalAdGroupId: 'EXT-SRC', step: 'create' },
+    ])
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+
+    // The card (the proposal merges the output) with its graduation item only: the waste negative is not written.
+    const accepted = await harvest({ ...RULE, ...dry.output, items: [dry.output!.items[1]] })
+    expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(accepted.output).toMatchObject({ keywordsGraduated: 1, negativesAdded: 0 })
+
+    // An item today's data no longer holds is left alone, and said.
+    const gone = await harvest({ ...RULE, items: [{ kind: 'graduation', query: 'giacca vecchia', externalAdGroupId: 'EXT-SRC', step: 'create' }] })
+    expect(gone.output).toMatchObject({ skipped: 'no-longer-due' })
+    expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
+  })
+
+  it('a v2 rule\'s empty list is none: a source with graduate [] proposes no graduation', async () => {
+    const dry = await harvest({ ...RULE, v: 2, sources: [{ ...RULE.sources[0], graduate: [] }] }, { ...meta, dryRun: true })
+    expect(dry.output).toMatchObject({ wouldGraduate: 0, wouldNegate: 1 })
+    const v1 = await harvest({ ...RULE, sources: [{ ...RULE.sources[0], graduate: [] }] }, { ...meta, dryRun: true })
+    expect(v1.output).toMatchObject({ wouldGraduate: 1 })
+  })
+
+  it('cadenceDays: a sweep within the cadence holds the next one back; a held run does not count as a sweep', async () => {
+    db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'harvest_and_negate', ok: true, output: { wouldNegate: 1 } }] }] as never)
+    const held = await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })
+    expect(held.output).toMatchObject({ noChange: true, cadenceHeld: true })
+    expect(db.amazonAdsSearchTerm.groupBy).not.toHaveBeenCalled()
+
+    db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'harvest_and_negate', ok: true, output: { noChange: true, cadenceHeld: true } }] }] as never)
+    const swept = await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })
+    expect(swept.output).toMatchObject({ noChange: false })
   })
 })

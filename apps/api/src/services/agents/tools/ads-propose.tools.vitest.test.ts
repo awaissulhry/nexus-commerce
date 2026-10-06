@@ -324,3 +324,24 @@ describe('A5 — graduate-keyword: into the named or resolved ad group, executed
     expect(getTool('graduate-keyword')!.reversibility).toBe('partial')
   })
 })
+
+/**
+ * PB-6a (L2) — winners stay: graduate-keyword refuses a term that already lives as an exact keyword for the SAME product
+ * (an ad group in the market advertising what the destination advertises), and never refuses one another product holds:
+ * two products may buy the same keyword (the Owner's rule 3). Made-up ASINs.
+ */
+describe('PB-6a — graduate-keyword never creates a winner twice for one product', () => {
+  it('refuses a term at home for the same product; allows a term another product holds', async () => {
+    await inside(async () => {
+      for (const [adGroupId, asin] of [['g-c-it', 'B0TESTSAME'], ['g-c-pin', 'B0TESTSAME'], ['g-c-off', 'B0TESTOTHR']]) {
+        await database.client.adProductAd.create({ data: { adGroupId, asin } })
+      }
+    })
+    const same = await preview('graduate-keyword', { query: 'Pinned Jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(same.ok).toBe(false)
+    expect(same.error).toMatch(/already lives as an exact keyword in Italy pinned › group c-pin, which advertises the same product/)
+    const other = await preview('graduate-keyword', { query: 'winter jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(other.ok, other.error).toBe(true)
+    await inside(() => database.client.adProductAd.deleteMany({ where: { asin: { in: ['B0TESTSAME', 'B0TESTOTHR'] } } }))
+  })
+})

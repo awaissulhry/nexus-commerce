@@ -331,13 +331,15 @@ describe('the Keyword Harvest read', () => {
 
 describe('rules and the optimiser', () => {
   it('harvest_and_negate without numbers of its own reads the strategy; with them it keeps its own', async () => {
+    // PB-6a — a rule without sources opts no product in, so a run negates no ASIN (applyHarvest never did): the dry run
+    // no longer counts them. The protected one is still named.
     const bare = await handler('harvest_and_negate', {})
     expect(bare.output).toMatchObject({
-      dryRun: true, thresholdsFrom: 'strategy-and-defaults', wouldGraduate: 3, wouldNegate: 2, wouldNegateProduct: 2, protectedProducts: 1,
+      dryRun: true, thresholdsFrom: 'strategy-and-defaults', wouldGraduate: 3, wouldNegate: 2, wouldNegateProduct: 0, protectedProducts: 1,
       topProtected: [{ query: 'b0testv001', why: expect.stringContaining('TEST-T-V1') }],
     })
     const own = await handler('harvest_and_negate', { minOrders: 2 })
-    expect(own.output).toMatchObject({ thresholdsFrom: 'rule', wouldGraduate: 4, wouldNegate: 0, wouldNegateProduct: 2, protectedProducts: 1 })
+    expect(own.output).toMatchObject({ thresholdsFrom: 'rule', wouldGraduate: 4, wouldNegate: 0, wouldNegateProduct: 0, protectedProducts: 1 })
     expect(own.output!.strategy).toBeUndefined()
   })
 

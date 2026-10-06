@@ -44,6 +44,7 @@ import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
+import { sameProductHome } from '../../advertising/ads-winner-lock.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -526,6 +527,11 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
   }
   const notSp = spOnlyRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
+  // PB-6a (L2) — winners stay: a term already at home for this product is never created again elsewhere.
+  const home = await sameProductHome(query, group.id, campaign.marketplace)
+  if (home) {
+    return { ok: false, error: `"${query}" already lives as an exact keyword in ${home.campaign} › ${home.adGroup}, which advertises the same product, so it is not created again: a winner stays where it is.` }
+  }
 
   const metrics = await termMetrics(query, sourceExternalCampaignId)
   // The applyHarvest bid formula: observed CPC, floored (cents).
