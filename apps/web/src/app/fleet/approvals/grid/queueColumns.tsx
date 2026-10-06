@@ -43,6 +43,7 @@ import {
   stateMeta,
   statusText,
   targetCountText,
+  watchVerdictWords,
   whatSubline,
   whereText,
   whyText,
@@ -186,9 +187,15 @@ const WhyCell = memo(function WhyCell({ data: row, handlers }: Cell) {
   const error = handlers.current.actions.errors.get(row.id)
   if (error) return <span className="aqg-error aqg-clamp">{error}</span>
   const text = whyText(row)
-  if (!text) return <EmptyValue />
+  // AA-W2-5 — asked at Watch: what the business's rule said ("would have run alone" or why not), before the reason.
+  const watched = watchVerdictWords(row)
+  if (!text && !watched) return <EmptyValue />
   // Two lines, so a failure reason can be read in the row; the column's tooltip has all of it.
-  return <span className="aqg-why aqg-clamp">{text}</span>
+  return (
+    <span className="aqg-why aqg-clamp" title={watched?.why ?? undefined}>
+      {watched && <Pill tone={watched.tone} size="sm">{watched.label}</Pill>}{watched && text ? ' ' : null}{text}
+    </span>
+  )
 })
 
 const AskedCell = memo(function AskedCell({ data: row }: Cell) {

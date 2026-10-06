@@ -1,3 +1,11 @@
+## ActionConfirm: a button that names the action; an inline question with a title's room — 2026-10-06
+
+- **`ActionImpact.confirmLabel`** (`grid/actions/registry.ts`): the primary button's words ("Raise to Auto", "Stop now",
+  "Save 3 changes"); "Confirm" when absent, so every existing caller is unchanged. Asked by the Control Room rebuild's
+  review: every confirmation there said only "Confirm". Mirrored between Web and Factory (registry.ts, ActionConfirm.tsx).
+- **Inline `ActionConfirm`** (a drawer's `overlay`): the question line gets the size of a title and room under it; it ran
+  into "What this changes". Web and Factory components.css.
+
 ## StepUpModal joins the patterns; EditModeBar can hold Apply alone — 2026-10-06
 
 Ads autonomy W1-4 (the Control Room's Strategy tab, the Approvals page's code box for a request that raises).

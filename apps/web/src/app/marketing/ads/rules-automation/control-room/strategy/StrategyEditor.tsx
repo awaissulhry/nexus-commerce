@@ -50,10 +50,11 @@ export interface StrategyEditorProps {
 }
 
 const CLAUDE_CHOICES: ReadonlyArray<{ value: ClaudeLevel | ''; label: string }> = [
-  { value: '', label: 'Not limited here' },
+  { value: '', label: 'Same as Who acts' },
   { value: 'off', label: 'Off' },
-  { value: 'ask', label: 'Ask' },
-  { value: 'confirm', label: 'Confirm' },
+  { value: 'ask', label: 'Ask me' },
+  { value: 'confirm', label: 'Ask me + code' },
+  { value: 'watch', label: 'Ask me + watch' },
   { value: 'auto', label: 'Auto' },
 ]
 const WINDOWS: ReadonlyArray<{ value: Window; label: string }> = [
@@ -223,16 +224,17 @@ export function StrategyEditor(p: StrategyEditorProps) {
         </div>
       </Card>
 
-      <Card className={styles.wide} header="What Claude may do alone" headingLevel={3}
-        description="Per kind of ad action, here. The strategy only narrows: it can hold Claude below your rule for a tool (Settings › AI › Claude), never above it.">
+      <Card className={styles.wide} header="What Claude may do" headingLevel={3}
+        description="Per kind of ad change, here. The strategy can only hold Claude lower than its level in Who acts — never higher.">
         <div className={styles.fields}>
           <p className={styles.note}>
-            Off: not offered to Claude. Ask: a person approves each change in Nexus. Confirm: the person who asked types
-            their authenticator code in Claude. Auto: runs by your rule, inside its limits.
+            Off: not offered to Claude. Ask me: a person approves each change in Nexus. Ask me + code: the person who
+            asked types their authenticator code in Claude. Ask me + watch: a person approves each change, and Nexus
+            records whether Auto would have run it. Auto: runs by your rule, inside its limits.
           </p>
-          <ul className={styles.claudeList} aria-label="What Claude may do alone, per kind of ad action">
+          <ul className={styles.claudeList} aria-label="What Claude may do, per kind of ad change">
             <li className={`${styles.claudeRow} ${styles.claudeHeadRow}`} aria-hidden>
-              <span>Kind of change</span><span>Your rule</span><span>Here</span><span>Claude may</span>
+              <span>Kind of change</span><span>Level in Who acts</span><span>Here</span><span>Result</span>
             </li>
             {(effective?.claude ?? []).map((c) => {
               const own = draft.claude[c.action] ?? ''
@@ -241,17 +243,17 @@ export function StrategyEditor(p: StrategyEditorProps) {
               return (
                 <li key={c.action} className={styles.claudeRow}>
                   <span className={styles.claudeName}>{name}</span>
-                  <span className={styles.claudeRule}><span className={styles.claudeSub}>Your rule</span>{row.rule}</span>
+                  <span className={styles.claudeRule}><span className={styles.claudeSub}>Level in Who acts</span>{row.rule}</span>
                   <span className={styles.claudeChoice}>
-                    <Select size="sm" aria-label={`${name}: what Claude may do alone here`} value={own} disabled={disabled}
+                    <Select size="sm" aria-label={`${name}: Claude's level here`} value={own} disabled={disabled}
                       onChange={(e) => onDraft({ claude: { ...draft.claude, [c.action]: (e.target.value || undefined) as ClaudeLevel | undefined } })}>
                       {CLAUDE_CHOICES.map((o) => <option key={o.value} value={o.value}>{o.value === '' && row.inheritedLevel ? `Not set (inherits ${CLAUDE_LEVEL_SHORT[row.inheritedLevel]})` : o.label}</option>)}
                     </Select>
                   </span>
                   <span className={styles.claudeResult}>
-                    <span className={styles.claudeSub}>Claude may</span>
+                    <span className={styles.claudeSub}>Result</span>
                     {row.result}
-                    {row.noEffect && <span className={styles.claudeNote}>No effect here: your rule is already at or below it.</span>}
+                    {row.noEffect && <span className={styles.claudeNote}>No effect here: the level in Who acts is already at or below it.</span>}
                     {!own && row.inherited && <span className={styles.claudeNote}>{row.inherited}</span>}
                   </span>
                 </li>
@@ -294,5 +296,5 @@ export function StrategyEditor(p: StrategyEditorProps) {
  * effective view leaves this field out of its list, so its reader is named here, gated on the registry's answer.
  */
 function claudeReaders(notReadYet: readonly string[]): string[] {
-  return notReadYet.includes('claudeAutonomy') ? [] : ["Claude's door (every ad change Claude asks for)"]
+  return notReadYet.includes('claudeAutonomy') ? [] : ['Claude, on every ad change it asks for']
 }

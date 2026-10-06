@@ -163,6 +163,18 @@ export function whyText(row: Pick<QueueRow, 'note' | 'automation' | 'state' | 'd
 }
 
 /**
+ * ADS AUTONOMY AA-W2-5 (CR rebuild 3) — a request Claude asked for at Watch: what the business's rule said when it was
+ * asked, as a short label for the row. Null on every other request. A person still decides it either way.
+ */
+export function watchVerdictWords(row: Pick<QueueRow, 'ruleVerdict'>): { label: string; tone: 'success' | 'warning'; why: string | null } | null {
+  const v = row.ruleVerdict
+  if (!v) return null
+  return v.wouldRun
+    ? { label: 'Would have run alone', tone: 'success', why: null }
+    : { label: 'Outside your limits', tone: 'warning', why: v.why }
+}
+
+/**
  * ADS AUTONOMY W1-4 — what a request that raises asks of its approver, in plain words: the API's sentence without the
  * units its labels carry ("Highest bid (cents)" → "Highest bid"). Null when approving it needs no code.
  */

@@ -18,7 +18,9 @@ export type Level = 'MARKET' | 'CATEGORY' | 'PRODUCT'
 export type FieldKey =
   | 'goal' | 'goalNote' | 'target' | 'monthlySpendCapCents' | 'minBidCents' | 'maxBidCents' | 'maxChangePct'
   | 'maxActionsPerRun' | 'protect' | 'harvest' | 'negate' | 'stop' | 'claudeAutonomy' | 'reviewEveryDays'
-export type ClaudeActionKey = 'bid' | 'negative' | 'harvest' | 'placement' | 'budget' | 'target' | 'suggestion' | 'stop' | 'restore' | 'create' | 'rule' | 'undo'
+export type ClaudeActionKey =
+  | 'bid' | 'negative' | 'harvest' | 'placement' | 'budget' | 'target' | 'suggestion' | 'stop' | 'restore' | 'create' | 'rule' | 'undo'
+  | 'allowlist' | 'automation' | 'pause' | 'enable' | 'archive'
 
 /** The scope being edited: the market, or one category or product in it. */
 export type Scope = { level: 'MARKET' } | { level: 'CATEGORY' | 'PRODUCT'; id: string; label: string }
@@ -37,7 +39,7 @@ export const FIELD_LABEL: Record<FieldKey, string> = {
   harvest: 'Harvest a search term when',
   negate: 'Negate a search term when',
   stop: 'Temporary stop',
-  claudeAutonomy: 'What Claude may do alone',
+  claudeAutonomy: 'What Claude may do',
   reviewEveryDays: 'Claude reviews it every',
 }
 
@@ -55,7 +57,7 @@ export const FIELD_NOUN: Record<FieldKey, string> = {
   harvest: 'when a search term is harvested',
   negate: 'when a search term is negated',
   stop: 'the stop bid',
-  claudeAutonomy: 'what Claude may do alone',
+  claudeAutonomy: 'what Claude may do',
   reviewEveryDays: 'how often Claude reviews it',
 }
 
@@ -95,6 +97,13 @@ export const CLAUDE_ACTION_LABEL: Record<ClaudeActionKey, string> = {
   create: 'New campaigns',
   rule: 'Ads rules',
   undo: 'Undoing ad changes',
+  // AA-W2-9 / AA-W2-11 — the API's two newer kinds (CLAUDE_ACTION_TOOLS).
+  allowlist: 'Letting automation change its own new campaigns',
+  automation: 'Raising or tuning an automation',
+  // AA-W2-12 / AA-W2-13.
+  pause: 'Pausing ads',
+  enable: 'Turning paused ads back on',
+  archive: 'Archiving ads (for good)',
 }
 
 // ── Values ────────────────────────────────────────────────────────────────────────────────────────
@@ -161,7 +170,8 @@ export function valueText(field: FieldKey | 'targetAcosPct', value: unknown, cur
   }
 }
 
-export const CLAUDE_LEVEL_SHORT: Record<ClaudeLevel, string> = { off: 'Off', ask: 'Ask', confirm: 'Confirm', auto: 'Auto' }
+/** CR rebuild 3 — the Control Room's one level scale, with Claude's two ways of asking kept apart (claudeKinds.ts). */
+export const CLAUDE_LEVEL_SHORT: Record<ClaudeLevel, string> = { off: 'Off', ask: 'Ask me', confirm: 'Ask me + code', watch: 'Ask me + watch', auto: 'Auto' }
 
 /** A field's value in force from an effective-view entry (its value under its own column keys; a hidden key stays absent). */
 export function entryValue(field: FieldKey | 'targetAcosPct', entry: FieldEntry | undefined): unknown {
@@ -264,14 +274,15 @@ export function readByWords(readBy: readonly string[] | undefined): { storedOnly
   if (!readBy?.length) return { storedOnly: true, text: 'Stored only — no engine reads this yet', full: null }
   // The registry's sentences name the reader first; the rest (after ":" or "(") explains it. The full text is one tap away.
   // Each reader once: two entries for one engine (the budget engine reads a market's cap and a product's) read as one.
-  const shorts = [...new Set(readBy.map((r) => r.split(/[:(]/)[0].trim()).filter(Boolean))]
+  // "Claude's door" is the API's name for Claude's approval path: said plainly here.
+  const shorts = [...new Set(readBy.map((r) => r.split(/[:(]/)[0].trim().replace(/^Claude['’]s door$/, 'Claude, on every ad change it asks for')).filter(Boolean))]
   const shown = shorts.length > 2 ? `${shorts.slice(0, 2).join('; ')} and ${shorts.length - 2} more` : shorts.join('; ')
   return { storedOnly: false, text: `Read by ${shown}`, full: readBy.join(' · ') }
 }
 
 // ── What Claude may do alone ─────────────────────────────────────────────────────────────────────
 
-const LEVELS: readonly ClaudeLevel[] = ['off', 'ask', 'confirm', 'auto']
+const LEVELS: readonly ClaudeLevel[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 const rank = (level: ClaudeLevel) => LEVELS.indexOf(level)
 const distinct = (levels: ClaudeLevel[]) => [...new Set(levels)].map((l) => CLAUDE_LEVEL_SHORT[l]).join(' · ')
 

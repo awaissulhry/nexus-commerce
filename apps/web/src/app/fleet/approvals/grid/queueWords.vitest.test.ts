@@ -341,3 +341,15 @@ describe('polling stays light', () => {
     expect(appendPage(first, { rows: [row({ id: 'r2' }), row({ id: 'r3' })], nextCursor: null, total: 4 }).map((r) => r.id)).toEqual(['r0', 'r1', 'r2', 'r3'])
   })
 })
+
+describe('AA-W2-5 — a request asked at Watch says what the rule would have done', () => {
+  it('would have run alone, or outside the limits with the reason; nothing on other requests', async () => {
+    const { watchVerdictWords } = await import('./queueWords')
+    const base = { level: 'watch' as const, checkedAt: '2026-10-06T10:00:00.000Z', changes: 1 }
+    expect(watchVerdictWords({ ruleVerdict: { ...base, wouldRun: true, check: null, why: null } })).toEqual({ label: 'Would have run alone', tone: 'success', why: null })
+    expect(watchVerdictWords({ ruleVerdict: { ...base, wouldRun: false, check: 'limits', why: 'A bid raise above 15 %.' } }))
+      .toEqual({ label: 'Outside your limits', tone: 'warning', why: 'A bid raise above 15 %.' })
+    expect(watchVerdictWords({ ruleVerdict: null })).toBeNull()
+    expect(watchVerdictWords({})).toBeNull()
+  })
+})

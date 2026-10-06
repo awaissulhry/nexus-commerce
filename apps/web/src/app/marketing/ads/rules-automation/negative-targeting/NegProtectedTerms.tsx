@@ -22,7 +22,7 @@
  * NEG.5 — protected terms: what can never be negated, and the 132 that already contradict it.
  *
  * Absorbs the legacy `ProtectedTermsPanel`, which this page used to render below the inventory.
- * 🔴 That file is NOT deleted: `control-room/GuardrailsTab.tsx:197` mounts it too, deliberately
+ * 🔴 That file is NOT deleted: the Control Room's Limits tab (`control-room/LimitsTab.tsx`) mounts it
  * ("a second MOUNT and not a second copy", its own comment). Deleting it is a build break on a
  * page NEG.5 does not own. This section replaces it *here*; the Control Room keeps its copy.
  *

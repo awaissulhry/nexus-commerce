@@ -598,8 +598,8 @@ export function NegativeTargetingClient() {
       <NegAttention {...slotProps} />
 
       {/* NEG.5 absorbed the interim `<ProtectedTermsPanel />` that stood here. 🔴 Its FILE is not
-          deleted: `control-room/GuardrailsTab.tsx:197` mounts it too — deliberately, per its own
-          comment — so removing it is a build break on a page this session does not own. */}
+          deleted: the Control Room's Limits tab (`control-room/LimitsTab.tsx`) mounts it — so
+          removing it is a build break on a page this session does not own. */}
       <NegProtectedTerms {...slotProps} />
 
       <NegWastefulWords {...slotProps} />

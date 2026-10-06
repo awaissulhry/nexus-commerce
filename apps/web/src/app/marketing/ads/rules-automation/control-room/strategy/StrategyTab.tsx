@@ -366,9 +366,8 @@ export function StrategyTab() {
 
           {effectiveError && <Banner tone="danger" title="What is in force here could not be read." action={<Button size="sm" variant="secondary" onClick={() => void loadScope()}>Try again</Button>}>{effectiveError}</Banner>}
           {em && storedOnly > 0 && (
-            <Banner tone="info" title={`${storedOnly} of these settings are stored only for now.`}>
-              No engine reads them yet, so they move no bid and no budget. They are kept, versioned and shown, and Claude reads
-              them. Each one says whether something reads it.
+            <Banner tone="info" title={`${storedOnly} of these settings are saved, but no engine uses them yet.`}>
+              They move no bid and no budget. Claude reads them. Each one says whether something uses it.
             </Banner>
           )}
           {previewError?.moved && (

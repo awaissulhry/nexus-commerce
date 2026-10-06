@@ -1,0 +1,63 @@
+/*
+ * CR rebuild 6 — History's layout only, on design-system tokens. The controls inside are the design system's own
+ * (Card, MetricStrip, Banner, DataGrid, ChangeValue, Pill, Disclosure, KeyValue, Input, Listbox, Button).
+ *
+ * Light only, like the rest of the ads console (Operator decision 2026-08-05, _shared/shared-shell.css).
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* A row of controls (filters, buttons) that wraps on a phone. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.para {
+  margin: 0;
+}
+
+.muted {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+/* Table text that wraps instead of running off, with an optional muted line under it. */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* The Undo column holds a button: it keeps room for its header and the button, never "Un…". */
+.undoCol {
+  min-width: 128px;
+  white-space: nowrap;
+}
