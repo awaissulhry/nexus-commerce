@@ -6691,6 +6691,22 @@
       "fields": []
     },
     {
+      "name": "AdsPlaybookTemplate",
+      "fields": []
+    },
+    {
+      "name": "AdsPlaybook",
+      "fields": []
+    },
+    {
+      "name": "AdsPlaybookVersion",
+      "fields": []
+    },
+    {
+      "name": "AdsPlaybookLink",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

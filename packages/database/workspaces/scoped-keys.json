@@ -6008,6 +6008,51 @@
     },
     "relations": []
   },
+  "AdsPlaybookTemplate": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AdsPlaybook": {
+    "scalar": {},
+    "compound": {
+      "channel_market_level_scopeId": [
+        "channel",
+        "market",
+        "level",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
+  "AdsPlaybookVersion": {
+    "scalar": {},
+    "compound": {
+      "kind_refId_version": [
+        "kind",
+        "refId",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "AdsPlaybookLink": {
+    "scalar": {},
+    "compound": {
+      "kind_refId": [
+        "kind",
+        "refId"
+      ],
+      "playbookId_kind_key": [
+        "playbookId",
+        "kind",
+        "key"
+      ]
+    },
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},
