@@ -45,10 +45,13 @@ const MODE_LABEL: Record<AcosMode, string> = {
 /** Plain-English line for a single bid proposal. Pure. */
 export function describeBidProposal(p: BidProposal): AutopilotAction {
   const dir = p.proposedBidCents > p.currentBidCents ? 'Raise' : 'Lower'
+  // W0 — a target the Owner set (the campaign's, or the account default) is named as his.
   const why =
     p.targetBasis === 'bayesian' ? 'based on its smoothed conversion rate (sparse data)'
       : p.targetBasis === 'profit' ? 'to hit this product’s profit-based ACOS target'
-        : 'to move toward your ACOS target'
+        : p.targetBasis === 'campaign' ? 'to move toward this campaign’s target ACOS'
+          : p.targetBasis === 'account' ? 'to move toward your account’s default target ACOS'
+            : 'to move toward your ACOS target'
   return {
     kind: 'bid',
     scope: p.expression,

@@ -383,7 +383,9 @@ const A4: AutomationAdapter = {
   explain: (opts: ExplainOptions) => engineExplain(['ads-auto-bid'], ['automation:auto-bid'], opts),
   async runPreview(): Promise<PreviewOutcome> {
     const { previewBidOptimization } = await import('./ads-bid-optimizer.service.js')
-    const out = await previewBidOptimization()
+    // W0 — with the run's own options: the bare call was the flat-30 % view, not the bids auto-bid would set.
+    const { AUTO_BID_OPTIMIZER_OPTIONS } = await import('./ads-auto-bid.service.js')
+    const out = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
     return { kind: 'saved', subject: null, result: { targetAcos: out.targetAcos, profitMode: out.profitMode, bayesian: out.bayesian, proposals: out.proposals.slice(0, 100), total: out.proposals.length } }
   },
   // R16 — its per-business switch, under the env and the account dial (A3).

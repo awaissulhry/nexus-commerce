@@ -86,13 +86,15 @@ describe('T5 — set-campaign-target-acos: the preview', () => {
         { campaignId: 'c-uk', name: 'UK exact', marketplace: 'UK', fromPct: 30, toPct: 25 },
       ],
       changes: [
-        { label: 'Italy exact · target ACoS', fromLabel: 'none (the external engine uses 30%)', toLabel: '25%' },
+        { label: 'Italy exact · target ACoS', fromLabel: 'none (Nexus uses the business default, profit data or 30%)', toLabel: '25%' },
         { label: 'UK exact · target ACoS', fromLabel: '30%', toLabel: '25%' },
       ],
       totals: { changing: 2, raised: 0, lowered: 2, firstSet: 1, cleared: 0, unchanged: 0, archivedLeftOut: 0 },
-      readBy: expect.stringMatching(/^The external bidding engine .* Nexus's own bid rules, auto-bid and autopilot do not read it/),
+      // W0 — Nexus's own optimiser now bids toward it, ahead of the business default, profit data and a rule's target.
+      readBy: expect.stringMatching(/^Nexus's bid optimiser — auto-bid, autopilot plans and the target-ACoS bid rules, when they run — moves each campaign's keyword bids toward it, ahead of the business default/),
+      // Lower than the 30 % fallback, but the campaign had no target: what it moved toward before may have been lower.
+      warnings: ['1 campaign had no target ACoS: Nexus\'s bid optimiser moved its bids toward the business default or profit data (30% without either), so where that was lower, bids can still rise.'],
     })
-    expect(r.preview).not.toHaveProperty('warnings')
     expect(getTool(TOOL)).toMatchObject({ openWorld: false, reversibility: 'full', maxClaudeTrust: 'confirm', riskTier: 'high', requires: ['ads.automation.manage'] })
   })
 
@@ -117,6 +119,10 @@ describe('T5 — set-campaign-target-acos: the preview', () => {
     expect((await preview({ campaignIds: ['c-it', 'nope'], targetAcosPct: 25 })).error).toBe('Campaign not found: nope (use campaignId from ad-campaigns).')
     expect((await preview({ market: 'SE', targetAcosPct: 25 })).error).toBe('No Amazon campaign in market SE.')
     expect((await preview({ campaignIds: ['c-uk'], targetAcosPct: 30 })).error).toBe('UK exact already has a target ACoS of 30%: nothing would change.')
+    // W0 — a list may carry any stored value back (0–500); one Nexus's optimiser skips is named.
+    expect((await preview({ targets: [{ campaignId: 'c-uk', targetAcosPct: 150 }] })).preview).toMatchObject({
+      warnings: expect.arrayContaining(['1 campaign gets a target of 0% or above 100%: Nexus\'s bid optimiser skips it and uses the business default, profit data or 30%.']),
+    })
     expect((await preview({ targets: [{ campaignId: 'c-uk', targetAcosPct: 30 }], targetAcosPct: 30 })).error).toMatch(/not both/)
     await expect(inside(() => callTool(claude, TOOL, { campaignIds: ['c-it'], targetAcosPct: 101 }))).rejects.toThrow()
     await expect(inside(() => callTool(claude, TOOL, { campaignIds: ['c-it'], targetAcosPct: 0 }))).rejects.toThrow()

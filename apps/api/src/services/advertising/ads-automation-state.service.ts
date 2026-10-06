@@ -35,8 +35,9 @@ export interface AdsAutomationStateView {
   haltedBy: string | null
   maxHourlySpendCentsEur: number | null
   maxActionsPerHour: number | null
-  /** SG.5 — account default ACoS target, INTEGER percent (30 = 30%). ONE reader:
-   *  bid_apply's targetAcos/curBidTargetAcos ops, as fallback when the rule has no target. */
+  /** SG.5 — account default ACoS target, INTEGER percent (30 = 30%). Two readers: the bid optimiser, for every
+   *  campaign without a target of its own (ads-target-acos-resolver.ts; above 100 it is skipped), and bid_apply's
+   *  targetAcos/curBidTargetAcos ops, as fallback when the rule has no target. */
   defaultTargetAcosPct: number | null
   lastCheckedAt: string | null
   // Derived: env kill-switch OR halted OR autonomy=OFF.

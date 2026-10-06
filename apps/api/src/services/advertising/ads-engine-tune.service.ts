@@ -404,8 +404,16 @@ const accountTargetAcos: Spec = {
   },
   raises(b, a) {
     if (a.targetAcosPct == null) return []
-    if (b.targetAcosPct == null) return [`target-ACOS bid rules without a target of their own start bidding to ${a.targetAcosPct}%`]
-    return Number(a.targetAcosPct) > Number(b.targetAcosPct) ? [`a higher target ACOS lets bids rise (${b.targetAcosPct}% → ${a.targetAcosPct}%)`] : []
+    const out: string[] = []
+    // W0 — the bid optimiser reads it too, for every campaign without a target of its own, up to 100 % (a higher default
+    // is skipped there): ads-target-acos-resolver.ts.
+    const steers = (pct: unknown) => pct != null && Number(pct) > 0 && Number(pct) <= 100
+    if (steers(a.targetAcosPct) && !steers(b.targetAcosPct)) {
+      out.push(`the bid optimiser (auto-bid, autopilot plans, "Optimise bids to target ACOS" rules) moves every campaign without a target ACOS of its own toward ${a.targetAcosPct}%, instead of profit data or a flat 30%`)
+    }
+    if (b.targetAcosPct == null) out.push(`target-ACOS bid rules without a target of their own start bidding to ${a.targetAcosPct}%`)
+    else if (Number(a.targetAcosPct) > Number(b.targetAcosPct)) out.push(`a higher target ACOS lets bids rise (${b.targetAcosPct}% → ${a.targetAcosPct}%)`)
+    return out
   },
   async write(_loaded, before, after, actorUserId) {
     const { setDefaultTargetAcosPct } = await import('./ads-automation-state.service.js')
@@ -413,7 +421,7 @@ const accountTargetAcos: Spec = {
     await auditTune(actorUserId, 'ADS_AUTOMATION_STATE', 'default-target-acos', before, after)
     return null
   },
-  effect: () => 'Bid rules that move bids to a target ACOS and carry no target of their own use it from their next run.',
+  effect: () => 'From their next run, the bid optimiser (auto-bid, autopilot plans, "Optimise bids to target ACOS" rules) moves every campaign without a target ACOS of its own toward it (up to 100%; a higher default is skipped there), and bid rules that set a bid from a target ACOS and carry no target of their own use it.',
 }
 
 const breaker: Spec = {

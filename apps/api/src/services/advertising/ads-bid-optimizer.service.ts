@@ -18,6 +18,7 @@ import { bulkUpdateAdTargetBids, type AdsActor } from './ads-mutation.service.js
 import { adsActorOf } from './ads-actor.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
+import { readOwnerTargets, reachesSource, resolveTargetAcos, targetSourceNote, type TargetAcosInputs, type TargetAcosSource, type TargetAcosSubject } from './ads-target-acos-resolver.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
 import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledWhere } from './ads-settled-window.js'
@@ -78,9 +79,18 @@ export interface BidProposal {
   acos: number | null; spendCents: number; salesCents: number; clicks: number; reason: string
   // Apex C.2 — the target ACOS actually used for this target + where it came from.
   // Apex C.3 adds 'bayesian' when the decision used a shrunk CR (sparse-data path).
-  targetAcosUsed: number; targetBasis: 'flat' | 'profit' | 'bayesian'
+  // Ads autonomy W0 adds 'campaign' and 'account': the Owner's own targets (ads-target-acos-resolver.ts).
+  targetAcosUsed: number; targetBasis: TargetAcosSource | 'bayesian'
+  /** W0 — whose target it moved toward, on the Bayesian path too (where `targetBasis` says 'bayesian'). */
+  targetSource: TargetAcosSource
 }
 
+/**
+ * W0 — `targetAcos` is the CALLER's flat target (a rule's, an autopilot plan's, a preview's), the last source a
+ * keyword's target comes from: its campaign's own target ACoS and the account default come first, then profit data in
+ * profit mode (resolveTargetAcos, ads-target-acos-resolver.ts). So every caller gets the same target for a campaign the
+ * Owner set one on. The returned `targetAcos` is that flat fallback; each proposal says what it used and whose it is.
+ */
 export async function previewBidOptimization(
   opts: { targetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean; source?: BidMetricSource } = {},
 ): Promise<{ targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[] }> {
@@ -148,7 +158,7 @@ export async function previewBidOptimization(
     select: {
       id: true, expressionValue: true, expressionType: true, bidCents: true, spendCents: true,
       salesCents: true, clicks: true, ordersCount: true, adGroupId: true,
-      adGroup: { select: { campaign: { select: { marketplace: true } } } },
+      adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true } } } },
     },
   })
 
@@ -176,28 +186,43 @@ export async function previewBidOptimization(
   // prior carries the rest); the flat path needs MIN_CLICKS of its own signal.
   const clickFloor = bayesian ? 1 : MIN_CLICKS
 
+  // W0 — the Owner's own targets first: each campaign's target ACoS and the account default (read once per run, and not
+  // at all when there is no keyword to bid). Then profit data in profit mode, then the caller's flat target
+  // (ads-target-acos-resolver.ts).
+  const owner = targets.length
+    ? await readOwnerTargets([...new Set(targets.map((t) => t.adGroup?.campaignId).filter((id): id is string => !!id))])
+    : { byCampaign: new Map<string, unknown>(), accountDefaultPct: null }
+  const subjectOf = (t: (typeof targets)[number]): TargetAcosSubject => ({
+    adGroupId: t.adGroupId,
+    campaignTargetAcos: t.adGroup?.campaignId ? owner.byCampaign.get(t.adGroup.campaignId) : undefined,
+  })
+  const inputs: TargetAcosInputs = { accountDefaultPct: owner.accountDefaultPct, profitByAdGroup: null, flatTargetAcos }
+
   // Apex C.2 — when profitMode, resolve each ad group's profit-derived target
   // ACOS once (revenue-weighted across its advertised products) and use it
   // instead of the flat 30%. Falls back to flat per ad group with no profit data.
-  const acosByAdGroup = new Map<string, number>()
+  // W0 — only for the ad groups the Owner's targets leave open: a target he set wins over a derived one.
   if (profitMode) {
-    const adGroupIds = [...new Set(targets.map((t) => t.adGroupId))]
+    const acosByAdGroup = new Map<string, number>()
+    const adGroupIds = [...new Set(targets.filter((t) => reachesSource('profit', subjectOf(t), inputs)).map((t) => t.adGroupId))]
     for (const agId of adGroupIds) {
       const mkt = targets.find((t) => t.adGroupId === agId)?.adGroup?.campaign?.marketplace ?? null
       const r = await computeAdGroupTargetAcos(agId, { marketplace: mkt, mode: opts.mode })
       if (r.targetAcos != null) acosByAdGroup.set(agId, r.targetAcos)
     }
+    inputs.profitByAdGroup = acosByAdGroup
   }
 
   const proposals: BidProposal[] = []
   for (const t of targets) {
     if (t.clicks < clickFloor) continue
-    const fromProfit = profitMode && acosByAdGroup.has(t.adGroupId)
-    const targetAcos = fromProfit ? acosByAdGroup.get(t.adGroupId)! : flatTargetAcos
+    const resolved = resolveTargetAcos(subjectOf(t), inputs)
+    const targetAcos = resolved.targetAcos
+    const whose = targetSourceNote(resolved)
     const observedAcos = t.salesCents > 0 ? t.spendCents / t.salesCents : null
     let proposed = t.bidCents
     let reason = ''
-    let targetBasis: 'flat' | 'profit' | 'bayesian' = fromProfit ? 'profit' : 'flat'
+    let targetBasis: BidProposal['targetBasis'] = resolved.source
 
     if (bayesian && prior) {
       // Shrink CR toward the pool, derive an EXPECTED ACOS, and move toward
@@ -215,11 +240,11 @@ export async function previewBidOptimization(
       if (expAcos > targetAcos) {
         const ratio = Math.max(1 - MAX_DOWN, targetAcos / expAcos)
         proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}% — lower (${tag})`
+        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower (${tag})`
       } else if (expAcos < targetAcos) {
         const ratio = Math.min(1 + MAX_UP, targetAcos / expAcos)
         proposed = Math.round(t.bidCents * ratio)
-        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}% — raise (${tag})`
+        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise (${tag})`
       } else continue
     } else if (t.salesCents === 0) {
       // Spending with no sales → cut hard toward the floor.
@@ -228,15 +253,15 @@ export async function previewBidOptimization(
     } else if (observedAcos != null && observedAcos > targetAcos) {
       const ratio = Math.max(1 - MAX_DOWN, targetAcos / observedAcos)
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — lower`
+      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower`
     } else if (observedAcos != null && observedAcos < targetAcos && t.ordersCount >= 1) {
       const ratio = Math.min(1 + MAX_UP, targetAcos / observedAcos)
       proposed = Math.round(t.bidCents * ratio)
-      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${fromProfit ? ' (profit-derived)' : ''} — raise to capture volume`
+      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise to capture volume`
     } else continue
     const acos = observedAcos
     if (proposed === t.bidCents) continue
-    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis })
+    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis, targetSource: resolved.source })
   }
   proposals.sort((a, b) => Math.abs(b.deltaCents) - Math.abs(a.deltaCents))
   return { targetAcos: flatTargetAcos, profitMode, bayesian, proposals }
@@ -336,6 +361,8 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
       error: `this rule names ${(action.campaignIds as unknown[]).length} campaigns via \`campaignIds\`, which this action cannot honour (it reads \`campaignId\`); refused rather than run account-wide`,
     }
   }
+  // W0 — the rule's own target is the optimiser's flat fallback: a campaign's own target ACoS and the account default
+  // come first (resolveTargetAcos), so this rule and auto-bid never pull one keyword toward two targets.
   // Apex C.2 — a rule can opt into profit-native per-SKU target ACOS.
   const profitMode = action.profitMode === true || action.profitMode === 'true'
   const mode = typeof action.acosMode === 'string' ? (action.acosMode as AcosMode) : undefined

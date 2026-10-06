@@ -2722,10 +2722,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    *
    * Writes `Campaign.dynamicBidding.targetAcos` — the field five services READ and
    * `Campaign.targetAcosPct` is documented as a mistake. This is a LOCAL declaration: Amazon has
-   * no concept of it, nothing is synced, and today no engine acts on it unprompted — the bid
-   * optimizer runs flat-30%/profit targets and the bid rules carry their own `action.targetAcos`.
-   * What it changes immediately is the bidder derivation: `bidderByCampaign` reads this exact key,
-   * so the row flips to "Goal" the next load. The AIREON `30` trap is refused, never guessed:
+   * no concept of it and nothing is synced. Since ads autonomy W0 the bid optimiser (auto-bid,
+   * autopilot, the target-ACoS bid rules) moves this campaign's bids toward it, ahead of the
+   * account default, profit data and a rule's own target (ads-target-acos-resolver.ts). It also
+   * changes the bidder derivation: `bidderByCampaign` reads this exact key, so the row flips to
+   * "Goal" the next load. The AIREON `30` trap is refused, never guessed:
    * a value above 1 is a percentage in the wrong unit and the error says exactly that.
    */
   fastify.put('/advertising/campaigns/:id/goal', async (request, reply) => {
@@ -2752,7 +2753,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
         actionType: 'set_campaign_goal', entityType: 'CAMPAIGN', entityId: id,
         payloadBefore: { targetAcos: before }, payloadAfter: { targetAcos: b.targetAcos ?? null },
         amazonResponseStatus: 'SUCCESS',
-        evidence: { metric: 'operator_goal', note: 'Local declaration — read by the bidder derivation and the target-ACoS tooling; never pushed to Amazon; no engine acts on it unprompted.' },
+        evidence: { metric: 'operator_goal', note: 'Local declaration — never pushed to Amazon; the bid optimiser (auto-bid, autopilot, target-ACoS bid rules) moves this campaign\'s bids toward it.' },
       },
     }).catch(() => { /* an audit row must never fail the write it describes */ })
     return { ok: true, targetAcos: b.targetAcos ?? null }
