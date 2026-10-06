@@ -4,10 +4,13 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     exactly the readers that exist (W1-6: the budget engine, the retail guard, suppress-campaign and the
- *              engine guard's market caps); notReadYet lists every other field
+ *   honest     only the fields something acts on have readers (W1-6: the monthly market cap, the stop bid and the
+ *              actions per run; W1-7: harvest, negate, protect; W1-8: Claude's door reads what Claude may do alone), and
+ *              notReadYet lists every other field; a reader names where and how
+ *   stricter   the one order two harvest (or negate) groups are compared by, everywhere they meet
  *   money      every money field's value keys are stripped for a person without ad-spend money
- *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
+ *   names      every tool an action type narrows is a registered tool and knows where its change lands; no brake is
+ *              among them; the constants mirror their sources
  */
 import { describe, expect, it } from 'vitest'
 import { Prisma } from '@prisma/client'
@@ -15,14 +18,18 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { listTools } from '../../agents/tool-registry.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
+import { BRAKE_TOOLS, PLACES, actionOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
+  CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
   STRATEGY_FIELDS,
   STRATEGY_MONEY,
   fractionToPct,
+  harvestStricter,
+  negateStricter,
   notReadYet,
   pctToFraction,
 } from './fields.js'
@@ -57,17 +64,22 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: each field names exactly the engines and doors that act on it, and notReadYet the rest', () => {
+  it('is honest: the monthly market cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7) and what Claude may do alone (W1-8) have readers; every other field is stored and shown only', () => {
+    const read = ['monthlySpendCapCents', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy']
+    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(read)
+    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'claudeAutonomy')!.readBy).toEqual([CLAUDE_DOOR])
+    // Each reader says where it acts, in words a screen can show.
+    for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no engine, rule or schedule negates a protected product's ASIN; a person's own add, or a Claude request he approved, is warned/)
     // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts); the retail
     // guard (ads-retail-readiness.service.ts) and suppress-campaign (ads-change.tools.ts) floor at the stop bid; the
     // engine guard (ads-engine-guard.ts) counts a market's actions per run for the engines that name the market.
-    const readers = Object.fromEntries(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy]))
-    expect(readers).toEqual({
-      monthlySpendCapCents: ['budget engine (the market cap)'],
-      maxActionsPerRun: ['hourly bid plans (rank-defend)', 'budget engine', 'dayparting'],
-      stop: ['budget engine', 'retail guard', 'suppress-campaign'],
-    })
-    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((k) => !(k in readers)))
+    const readers = (key: string) => STRATEGY_FIELDS.find((f) => f.key === key)!.readBy.join(' | ')
+    expect(readers('monthlySpendCapCents')).toMatch(/^the budget engine .*every campaign of the market drops to its stop bid until the 1st \(a cap of 0 is no cap; category and product caps are not enforced yet\)$/)
+    expect(readers('stop')).toMatch(/^the budget engine: .* \| the retail guard: .* \| Claude's suppress-campaign: /)
+    expect(readers('maxActionsPerRun')).toMatch(/^the hourly bid plans \(rank-defend\): .* \| the budget engine .* \| dayparting /)
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
@@ -89,8 +101,36 @@ describe('the registry', () => {
     expect(STRATEGY_FIELDS.find((f) => f.key === 'stop')!.required).toEqual(['stopMethod'])
   })
 
+  it('two groups are compared in one order: more orders (clicks), then more clicks (spend), then the tighter ceiling', () => {
+    const h = (minOrders: number, minClicks: number, maxAcosPct: number | null) => ({ minOrders, minClicks, maxAcosPct })
+    expect(harvestStricter(h(3, 0, null), h(2, 9, 10))).toBe(true)
+    expect(harvestStricter(h(2, 5, null), h(2, 4, 10))).toBe(true)
+    expect(harvestStricter(h(2, 5, 30), h(2, 5, 40))).toBe(true)
+    expect(harvestStricter(h(2, 5, 40), h(2, 5, null))).toBe(true)
+    expect(harvestStricter(h(2, 5, null), h(2, 5, 40))).toBe(false)
+    expect(harvestStricter(h(2, 5, 40), h(2, 5, 40))).toBe(false)
+    const n = (minClicks: number, minSpendCents: number, maxOrders: number) => ({ minClicks, minSpendCents, maxOrders })
+    expect(negateStricter(n(20, 0, 5), n(10, 9999, 0))).toBe(true)
+    expect(negateStricter(n(10, 600, 5), n(10, 500, 0))).toBe(true)
+    expect(negateStricter(n(10, 500, 0), n(10, 500, 1))).toBe(true)
+    expect(negateStricter(n(10, 500, 1), n(10, 500, 1))).toBe(false)
+  })
+
   it('every tool an action type narrows is a registered tool', () => {
     const tools = new Set(listTools().map((t) => t.name))
     expect(Object.values(CLAUDE_ACTION_TOOLS).flat().filter((name) => !tools.has(name))).toEqual([])
+  })
+
+  it('W1-8 — each of those tools knows where its change lands; brakes are registered tools, none of them, never narrowed', () => {
+    const narrowed = Object.values(CLAUDE_ACTION_TOOLS).flat()
+    expect(Object.keys(PLACES).sort()).toEqual([...narrowed].sort())
+    const tools = new Set(listTools().map((t) => t.name))
+    for (const brake of BRAKE_TOOLS) {
+      expect(tools.has(brake), brake).toBe(true)
+      expect(narrowed, brake).not.toContain(brake)
+      expect(actionOfTool(brake), brake).toBeNull()
+    }
+    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const name of names) expect(actionOfTool(name)).toBe(action)
+    expect(actionOfTool('set-price')).toBeNull()
   })
 })

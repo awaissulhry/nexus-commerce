@@ -22,6 +22,12 @@
  * person who asked (decisionVia auto), through the normal undo window; the sweep's normal commit re-checks their
  * permissions and the preview, and — here — that the business still lets it run by rule. Everything is read fresh,
  * in the business the call is bound to (row-level security): one business's rule never applies in another.
+ *
+ * ADS AUTONOMY W1-8 — the ads strategy NARROWS the level of an ad change, never widens it: per kind of ad action and
+ * where the change lands (a market, a category, a product: advertising/ads-strategy/claude.ts), the lower of the
+ * tool's level here and the strategy's applies (`claudeRuleForChange`) — to refuse it (off), to decide who takes it,
+ * to confirm it in Claude and, at commit, to hand a change back that the strategy narrowed inside its window. Brakes
+ * are never narrowed. What a change cannot be placed for exactly takes the strictest row (fail closed).
  */
 
 import { z } from 'zod'
@@ -32,6 +38,8 @@ import { verifyStepUpCode } from '../../lib/auth/step-up.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { logger } from '../../utils/logger.js'
 import { recordControlChange } from '../agent-fleet/control-audit.service.js'
+import { strategyLevelFor, strategyMemo, type StrategyMemo, type StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
+import type { ClaudeActionType } from '../advertising/ads-strategy/fields.js'
 import { EXPIRY_HOURS } from './approval-gate.service.js'
 import { offeredOn } from './call-tool.js'
 import { bustPolicyCache } from './tool-policy.service.js'
@@ -141,6 +149,76 @@ export async function claudeRuleOf(toolName: string): Promise<ClaudeToolRule | n
   return ruleFrom(tool, row)
 }
 
+/** W1-8 — the ads strategy narrowed one change below the business's own level for its tool. */
+export interface StrategyNarrowed extends StrategyNarrowing {
+  /** The business's own level for the tool, before the strategy. */
+  business: ClaudeTrust
+}
+
+/** W1-8 — the rule for ONE change: its tool's rule here, at the strategy's lower level where the change lands. */
+export interface ClaudeChangeRule extends ClaudeToolRule {
+  narrowedBy?: StrategyNarrowed
+}
+
+/** The business's rule for a tool, narrowed (never widened) by the ads strategy for this one change. */
+async function narrowed(rule: ClaudeToolRule | null, args: unknown, preview: unknown, memo: StrategyMemo): Promise<ClaudeChangeRule | null> {
+  if (!rule || rule.level === 'off') return rule
+  const strategy = await strategyLevelFor(rule.tool, args, preview, memo)
+  if (!strategy || RANK[strategy.level] >= RANK[rule.level]) return rule
+  return { ...rule, level: strategy.level, narrowedBy: { ...strategy, business: rule.level } }
+}
+
+/**
+ * W1-8 — the rule for one change Claude asks for, read fresh: its tool's level in this business, lowered to the ads
+ * strategy's level where the change lands when that is lower. `preview` (after the dry run) places it more exactly.
+ */
+export async function claudeRuleForChange(toolName: string, args: unknown, preview?: unknown, memo: StrategyMemo = strategyMemo()): Promise<ClaudeChangeRule | null> {
+  return narrowed(await claudeRuleOf(toolName), args, preview, memo)
+}
+
+/** W1-8 — the rule for each change of a plan, in order: each tool's rule read once, each step narrowed on its own. */
+export async function claudeRulesForSteps(steps: Array<{ toolName: string; args?: unknown; preview?: unknown }>): Promise<Array<ClaudeChangeRule | null>> {
+  const names = [...new Set(steps.map((step) => step.toolName))]
+  const rules = new Map(await Promise.all(names.map(async (name) => [name, await claudeRuleOf(name)] as const)))
+  const memo = strategyMemo()
+  const out: Array<ClaudeChangeRule | null> = []
+  for (const step of steps) out.push(await narrowed(rules.get(step.toolName) ?? null, step.args ?? {}, step.preview, memo))
+  return out
+}
+
+const ACTION_WORDS: Record<ClaudeActionType, string> = {
+  bid: 'bid changes',
+  negative: 'negative keywords',
+  harvest: 'new exact keywords from search terms',
+  placement: 'placement adjustments',
+  budget: 'budget changes',
+  target: 'target ACoS changes',
+  suggestion: 'decisions on rule suggestions',
+  stop: 'stopping a campaign with low bids',
+  restore: "restoring a campaign's bids",
+  create: 'new campaigns',
+  rule: 'ads rules',
+  undo: 'undoing ad changes',
+}
+const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', auto: 'run by rule' }
+
+/**
+ * W1-8 — which strategy row narrowed a change, in one clause: what it allows here, the row (market, scope, label,
+ * version, the product whose number it is), why it is the strictest row when the change could not be placed exactly,
+ * and the business's own level.
+ */
+export function narrowedWhy(n: StrategyNarrowed): string {
+  const what = ACTION_WORDS[n.action]
+  const allows = n.level === 'off'
+    ? `turns ${what} off for Claude here`
+    : n.level === 'ask'
+      ? `lets Claude only ask for ${what} here`
+      : `lets Claude go no further than confirm in Claude for ${what} here`
+  const row = `${n.market}: ${n.row.scope} "${n.row.label}", version ${n.row.version}${n.row.product ? `, from ${n.row.product}` : ''}`
+  const basis = n.basis === 'scope' ? '' : `; ${n.unplaced}, so the strictest row of ${n.basis === 'market' ? n.market : 'the business'} applies`
+  return `the ads strategy ${allows} (${row}${basis}; the business's own level is ${LEVEL_WORDS[n.business]})`
+}
+
 /** The tools this business turned off for Claude: not offered, and refused by name. */
 export async function claudeOffTools(): Promise<Set<string>> {
   const rows = await prisma.agentTool.findMany({ where: { claudeTrust: 'off' }, select: { name: true } })
@@ -180,11 +258,16 @@ export async function autoRunsInLastDay(): Promise<number> {
   return single + steps
 }
 
+const CONFIRM_HOW = 'the person who asked types their authenticator code to approve it here (confirm-change), or a person approves it in Nexus'
 /** C7 — a change set to confirm: the person who asked confirms it in Claude with their code, or a person in Nexus. */
-export const CONFIRM_IN_CLAUDE =
-  'this business set it to "confirm in Claude": the person who asked types their authenticator code to approve it here (confirm-change), or a person approves it in Nexus'
+export const CONFIRM_IN_CLAUDE = `this business set it to "confirm in Claude": ${CONFIRM_HOW}`
 
 const A_PERSON = 'a person approves it in Nexus'
+
+/** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm. */
+export function narrowedDecision(n: StrategyNarrowed): string {
+  return n.level === 'confirm' ? `${narrowedWhy(n)}, so ${CONFIRM_HOW}` : `${narrowedWhy(n)}; ${A_PERSON}`
+}
 
 /**
  * Why a change Claude asked for, at level auto, may NOT run by the rule now — or null when it may. In this order: the
@@ -215,26 +298,32 @@ function limitsRefusal(tool: AgentTool, preview: unknown, rule: ClaudeToolRule):
 /**
  * C6 — why a plan may NOT run by the business's rule — or null when it may: every step's tool at auto, the connection's
  * nexus.run, no Pause, every step inside its tool's limits, and room under the daily cap for all its steps. `level` is
- * the lowest step's (ask when one waits for a person); `why` is absent only when every step is simply at ask.
+ * the lowest step's (ask when one waits for a person); `why` is absent only when every step is simply at ask. W1-8 —
+ * each step at its own level where it lands (the ads strategy narrows an ad step); `strategy` names the row that
+ * narrowed the step that decides.
  */
 export async function planRuleRefusal(
-  steps: Array<{ tool: AgentTool; preview: unknown }>,
+  steps: Array<{ tool: AgentTool; preview: unknown; args?: Record<string, unknown> }>,
   opts: { runScope: boolean },
-): Promise<{ level: ClaudeTrust; why?: string } | null> {
-  const names = [...new Set(steps.map((step) => step.tool.name))]
-  const rules = new Map(await Promise.all(names.map(async (name) => [name, await claudeRuleOf(name)] as const)))
-  const levelOf = (name: string): ClaudeTrust => rules.get(name)?.level ?? 'ask'
+): Promise<{ level: ClaudeTrust; why?: string; strategy?: StrategyNarrowed } | null> {
+  const rules = await claudeRulesForSteps(steps.map((step) => ({ toolName: step.tool.name, args: step.args, preview: step.preview })))
+  const levelOf = (index: number): ClaudeTrust => rules[index]?.level ?? 'ask'
   let lowest: { level: ClaudeTrust; index: number } | null = null
-  steps.forEach((step, index) => {
-    const level = levelOf(step.tool.name)
+  steps.forEach((_step, index) => {
+    const level = levelOf(index)
     if (level !== 'auto' && (!lowest || RANK[level] < RANK[lowest.level])) lowest = { level, index }
   })
   if (lowest) {
     const { level, index } = lowest as { level: ClaudeTrust; index: number }
-    const every = steps.every((step) => levelOf(step.tool.name) === level)
+    const every = steps.every((_step, i) => levelOf(i) === level)
     const named = `step ${index + 1} (${steps[index].tool.name})`
+    const strategy = rules[index]?.narrowedBy
+    if (strategy) {
+      const why = `${every ? '' : 'a plan runs by rule only when every step may: '}${named}: ${narrowedDecision(strategy)}`
+      return { level: level === 'confirm' ? 'confirm' : 'ask', why, strategy }
+    }
     if (level === 'confirm') {
-      return { level, why: every ? CONFIRM_IN_CLAUDE : `a plan runs by rule only when every step may: ${named} is set to confirm in Claude, so ${CONFIRM_IN_CLAUDE.replace(/^this business set it to "confirm in Claude": /, '')}` }
+      return { level, why: every ? CONFIRM_IN_CLAUDE : `a plan runs by rule only when every step may: ${named} is set to confirm in Claude, so ${CONFIRM_HOW}` }
     }
     return every ? { level: 'ask' } : { level: 'ask', why: `a plan runs by rule only when every step may: ${named} waits for a person` }
   }
@@ -244,7 +333,7 @@ export async function planRuleRefusal(
   const autonomy = await autonomyOf()
   if (autonomy.paused) return { level: 'auto', why: `changes that run by rule are paused in this business${autonomy.reason ? ` (${autonomy.reason})` : ''}; ${A_PERSON}` }
   for (const [index, step] of steps.entries()) {
-    const outside = limitsRefusal(step.tool, step.preview, rules.get(step.tool.name)!)
+    const outside = limitsRefusal(step.tool, step.preview, rules[index]!)
     if (outside) return { level: 'auto', why: `step ${index + 1} (${step.tool.name}): ${outside}` }
   }
   const used = await autoRunsInLastDay()
@@ -263,17 +352,17 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export async function autoPlanCommitRefusal(approvalId: string): Promise<string | null> {
   const autonomy = await autonomyOf()
   if (autonomy.paused) return 'changes that run by rule were paused in this business before it ran'
-  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, preview: true } })
+  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, preview: true, args: true } })
   for (const step of steps) {
-    const refusal = await autoPlanStepRefusal(step.toolName, step.preview)
+    const refusal = await autoPlanStepRefusal(step.toolName, step.preview, step.args)
     if (refusal) return `step ${step.position}: ${refusal}`
   }
   return null
 }
 
 /** C6 — one step of a plan run by rule, when it runs: still allowed by the rule (as `autoCommitRefusal`)? */
-export async function autoPlanStepRefusal(toolName: string, preview: unknown): Promise<string | null> {
-  return autoCommitRefusal(toolName, preview)
+export async function autoPlanStepRefusal(toolName: string, preview: unknown, args?: unknown): Promise<string | null> {
+  return autoCommitRefusal(toolName, preview, args)
 }
 
 /** After a rule scheduled a change: over the daily cap now (two at once)? Then the one just scheduled must not run. */
@@ -309,13 +398,15 @@ export async function withdrawRuleSchedule(approvalId: string, why: string): Pro
 
 /**
  * At commit, for a change a rule scheduled: why it must go back to a person instead of running — the business paused
- * Claude's rule-runs, lowered the tool's level or tightened its limits inside the window — or null.
+ * Claude's rule-runs, lowered the tool's level or tightened its limits inside the window, or (W1-8) the ads strategy
+ * now narrows it where it lands — or null.
  */
-export async function autoCommitRefusal(toolName: string, preview: unknown): Promise<string | null> {
+export async function autoCommitRefusal(toolName: string, preview: unknown, args?: unknown): Promise<string | null> {
   const autonomy = await autonomyOf()
   if (autonomy.paused) return 'changes that run by rule were paused in this business before it ran'
   const tool = getTool(toolName)
-  const rule = tool ? await claudeRuleOf(toolName) : null
+  const rule = tool ? await claudeRuleForChange(toolName, args ?? {}, preview) : null
+  if (rule?.narrowedBy) return narrowedWhy(rule.narrowedBy)
   if (!tool || !rule || rule.level !== 'auto') return `the business no longer lets Claude run ${toolName} by rule`
   const outside = limitsRefusal(tool, preview, rule)
   return outside ? `it is no longer inside the business's limits: ${outside}` : null

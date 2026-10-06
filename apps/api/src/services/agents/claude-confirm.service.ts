@@ -6,8 +6,9 @@
  *             its arguments; a plan already has both) — what Claude shows and what the code is bound to
  *   confirm   confirm-change {approvalId, planHash, code}, checked in this order, nothing spent on a refusal before the
  *             code: the approval in this business; the connection's nexus.run; only the person who asked for it in
- *             Claude; still waiting and not expired; set to `confirm` (every step of a plan at confirm or auto); the
- *             planHash, recomputed from what is stored; then the code, once (lib/auth/step-up.ts: lockout after wrong
+ *             Claude; still waiting and not expired; set to `confirm` (every step of a plan at confirm or auto) — W1-8:
+ *             at the ads strategy's level where each change lands when that is lower, read now; the planHash,
+ *             recomputed from what is stored; then the code, once (lib/auth/step-up.ts: lockout after wrong
  *             codes, a used code refused). Then scheduleApproval as that person (decisionVia claude-confirm): the normal
  *             undo window, the commit's re-check of the person and of the preview, the sweep.
  *
@@ -22,7 +23,7 @@ import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
 import type { GateOutcome } from './approval-gate.service.js'
 import type { UserPrincipal } from './call-tool.js'
 import { planHashOf } from './change-plan.service.js'
-import { CLAUDE_CHARTER, claudeRuleOf } from './claude-trust.service.js'
+import { CLAUDE_CHARTER, claudeRuleForChange, claudeRulesForSteps, narrowedWhy } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 import { PLAN_TOOL } from './tool-types.js'
 
@@ -97,12 +98,25 @@ export async function prepareConfirm(approvalId: string): Promise<{ summary: str
   return { summary, planHash }
 }
 
-/** Is every tool of this request set to confirm (a plan: each step at confirm or auto, one at confirm at least)? */
-async function setToConfirm(ap: { id: string; toolName: string }): Promise<boolean> {
-  if (ap.toolName !== PLAN_TOOL) return (await claudeRuleOf(ap.toolName))?.level === 'confirm'
-  const tools = await prisma.agentPlanStep.findMany({ where: { approvalId: ap.id }, distinct: ['toolName'], select: { toolName: true } })
-  const levels = await Promise.all(tools.map(async ({ toolName }) => (await claudeRuleOf(toolName))?.level ?? 'ask'))
-  return levels.length > 0 && levels.every((level) => level === 'confirm' || level === 'auto') && levels.includes('confirm')
+/**
+ * Why this request may not be confirmed in Claude, or null: every change of it set to confirm (a plan: each step at
+ * confirm or auto, one at confirm at least). W1-8 — each change at the ads strategy's level where it lands when that
+ * is lower, read now: a strategy narrowed since it was asked for leaves it to a person, and says which row.
+ */
+async function notSetToConfirm(ap: { id: string; toolName: string; args: unknown; preview: unknown }): Promise<string | null> {
+  const plain = `${ap.toolName} is not set to confirm in Claude in this business: a person approves it in Nexus.`
+  if (ap.toolName !== PLAN_TOOL) {
+    const rule = await claudeRuleForChange(ap.toolName, ap.args, ap.preview)
+    if (rule?.level === 'confirm') return null
+    return rule?.narrowedBy ? `Not confirmed here: ${narrowedWhy(rule.narrowedBy)}; a person approves it in Nexus.` : plain
+  }
+  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId: ap.id }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, args: true, preview: true } })
+  const rules = await claudeRulesForSteps(steps)
+  const levels = rules.map((rule) => rule?.level ?? 'ask')
+  if (levels.length > 0 && levels.every((level) => level === 'confirm' || level === 'auto') && levels.includes('confirm')) return null
+  const narrowed = rules.findIndex((rule, index) => rule?.narrowedBy && levels[index] !== 'confirm' && levels[index] !== 'auto')
+  if (narrowed >= 0) return `Not confirmed here: step ${steps[narrowed].position} (${steps[narrowed].toolName}): ${narrowedWhy(rules[narrowed]!.narrowedBy!)}; a person approves it in Nexus.`
+  return plain
 }
 
 const refuse = (error: string): GateOutcome => ({ ok: false, mode: 'error', error })
@@ -115,7 +129,7 @@ export async function confirmByCode(
 ): Promise<GateOutcome> {
   const ap = await prisma.agentApproval.findUnique({
     where: { id: input.approvalId },
-    select: { id: true, toolName: true, args: true, status: true, expiresAt: true, planHash: true, agentRun: { select: { userId: true, via: true } } },
+    select: { id: true, toolName: true, args: true, preview: true, status: true, expiresAt: true, planHash: true, agentRun: { select: { userId: true, via: true } } },
   })
   // Another business's approval is simply not there (row-level security), whatever else is wrong.
   if (!ap) return refuse(`Approval not found. ${NOTHING}`)
@@ -127,9 +141,8 @@ export async function confirmByCode(
   }
   if (ap.status !== 'pending') return refuse(`It is ${ap.status}: there is nothing to confirm. ${NOTHING}`)
   if (ap.expiresAt && ap.expiresAt.getTime() <= Date.now()) return refuse(`It expired before it was confirmed. Nothing changed; ask for it again. ${NOTHING}`)
-  if (!(await setToConfirm(ap))) {
-    return refuse(`${ap.toolName} is not set to confirm in Claude in this business: a person approves it in Nexus. ${NOTHING}`)
-  }
+  const notConfirm = await notSetToConfirm(ap)
+  if (notConfirm) return refuse(`${notConfirm} ${NOTHING}`)
   const expected = await storedHash(ap)
   if (!ap.planHash || ap.planHash !== expected || input.planHash !== ap.planHash) {
     return refuse(`The planHash does not match this request: confirm exactly what was shown (approval-status shows it). ${NOTHING}`)

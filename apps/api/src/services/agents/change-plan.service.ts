@@ -132,7 +132,7 @@ export async function queuePlan(
       refuse(`tool ${step.tool} is disabled`)
       continue
     }
-    const off = opts.rule ? await opts.rule.refusal(tool) : null
+    const off = opts.rule ? await opts.rule.refusal(tool, step.args ?? {}) : null
     if (off) {
       refuse(off)
       continue
@@ -199,7 +199,7 @@ export async function queuePlan(
     return created
   })
   const rule = opts.rule
-    ? await decideByRule(opts.rule, { approvalId: approval.id, tool: planTool, preview, steps: checked.map((c) => ({ tool: c.tool, preview: c.raw })) })
+    ? await decideByRule(opts.rule, { approvalId: approval.id, tool: planTool, preview, steps: checked.map((c) => ({ tool: c.tool, preview: c.raw, args: c.args })) })
     : undefined
   return {
     ok: true,
@@ -259,7 +259,7 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
   try {
     // C5 — a plan run by the rule stops running by it the moment the business pauses or lowers a step's level.
     if (auto) {
-      const ruleNow = await autoPlanStepRefusal(step.toolName, step.preview)
+      const ruleNow = await autoPlanStepRefusal(step.toolName, step.preview, step.args)
       if (ruleNow) {
         await end('skipped', { reason: `not run — ${ruleNow}` })
         await stepAudit(ap, step, 'rule_refused', ruleNow)

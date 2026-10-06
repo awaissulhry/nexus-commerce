@@ -50,7 +50,9 @@ export const harvestCandidatesBuilder: ObservationBuilder = {
       payload: {
         scope: marketplace ? `marketplace:${marketplace}` : 'account',
         windowDays: preview.windowDays,
-        thresholds: { minSpendCents: 1500, minOrders: 2 },
+        // W1-7 — the defaults where the ads strategy sets no harvest group; the strategy's groups, where they chose.
+        thresholds: { minSpendCents: preview.criteria?.defaults.minSpendCents ?? 1500, minOrders: preview.criteria?.defaults.minOrders ?? 2 },
+        ...(preview.criteria?.strategy.length ? { strategyThresholds: preview.criteria.strategy } : {}),
         counts: {
           graduationsTotal: scopedGrad.kept.length,
           graduationsTrimmed: Math.max(0, scopedGrad.kept.length - GRADUATIONS_CAP),
