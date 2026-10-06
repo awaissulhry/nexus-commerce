@@ -3,7 +3,7 @@
  *
  *   scope spend   a product's spend counts on EVERY cap it falls under (its own row, its parent's, its categories'),
  *                 never on the market's here; a product without spend adds nothing
- *   reached       a cap is reached at its spend or above; a cap of 0 is reached at once
+ *   reached       a cap is reached at its spend or above; a cap of 0 is no cap (as a €0 month in the Budget Manager)
  *   ad groups     an ad group holding ANY product under a reached cap is floored (the safer rule); it is given back
  *                 only when no reached cap covers it any more AND the floor is the deciding engine's own; a floor
  *                 another engine or a person set is never lifted, and an ad group already floored is not floored twice
@@ -34,10 +34,10 @@ describe('spendByScope — each product\'s spend on every category and product c
     expect(byScope.has('s-market')).toBe(false) // the market's cap is the budget engine's own campaign stop
   })
 
-  it('scopeCaps: reached at the cap or above; a cap of 0 is reached at once; the market cap is not a scope cap', () => {
-    const caps = scopeCaps([MARKET, HELMETS, PARENT, GLOVES], new Map([['s-parent', 3_000], ['s-helmets', 4_999]]))
+  it('scopeCaps: reached at the cap or above; a cap of 0 is no cap (never listed, never reached); the market cap is not a scope cap', () => {
+    const caps = scopeCaps([MARKET, HELMETS, PARENT, GLOVES], new Map([['s-parent', 3_000], ['s-helmets', 4_999], ['s-gloves', 50]]))
     expect(caps.map((c) => [c.strategyId, c.level, c.spendCents, c.reached])).toEqual([
-      ['s-helmets', 'category', 4_999, false], ['s-parent', 'product', 3_000, true], ['s-gloves', 'product', 0, true],
+      ['s-helmets', 'category', 4_999, false], ['s-parent', 'product', 3_000, true],
     ])
   })
 })

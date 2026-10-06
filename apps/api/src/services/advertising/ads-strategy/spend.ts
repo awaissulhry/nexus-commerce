@@ -7,6 +7,8 @@
  *              product falls under — its own row, its parent's, its categories' (as the resolver gives them). Whole
  *              days, never today, like the market's spend; an ad Nexus cannot tie to a product is counted on no cap
  *              and reported as unattributed.
+ *   no cap     a cap of 0 (or less) is no cap, as a market's is and as a €0 month is in the Budget Manager: it is
+ *              never listed, never reached and floors nothing
  *   floors     an ad group holding ANY product under a reached cap is floored (the safer rule: it also stops the other
  *              products sharing that ad group; the Owner can split ad groups). It stays floored until no reached cap
  *              covers it: on the 1st, or when the cap is raised or removed, or the product leaves the ad group.
@@ -30,6 +32,8 @@ export interface ScopeCap {
 }
 
 const scoped = (cap: CapInForce) => cap.source.level !== 'market'
+/** A category or product cap that is a cap: 0 (or less) is no cap. */
+const scopedCap = (cap: CapInForce) => scoped(cap) && cap.monthlySpendCapCents > 0
 
 /** Pure: each scope's spend — every product's spend added to every non-market cap it falls under. */
 export function spendByScope(
@@ -44,9 +48,9 @@ export function spendByScope(
   return out
 }
 
-/** Pure: every category and product cap of the market with its scope's spend, and whether it is reached. */
+/** Pure: every category and product cap of the market with its scope's spend, and whether it is reached (a cap of 0: none). */
 export function scopeCaps(caps: readonly CapInForce[], byScope: ReadonlyMap<string, number>): ScopeCap[] {
-  return caps.filter(scoped).map((cap) => {
+  return caps.filter(scopedCap).map((cap) => {
     const spendCents = byScope.get(cap.source.strategyId) ?? 0
     return {
       strategyId: cap.source.strategyId, level: cap.source.level as 'category' | 'product', scopeId: cap.source.scopeId,
@@ -127,7 +131,7 @@ export interface ScopeCapsThisMonth {
  * market holds no such cap.
  */
 export async function scopeCapsThisMonth(view: StrategyView, start: Date, end: Date): Promise<ScopeCapsThisMonth> {
-  const caps = view.empty ? [] : capRows(view.index).filter(scoped)
+  const caps = view.empty ? [] : capRows(view.index).filter(scopedCap)
   if (!caps.length) return { caps: [], reached: new Map(), unattributedCents: 0, spendThrough: null }
   const spend = await productSpendThisMonth(view.market, start, end)
   const each = await view.forEachProduct([...spend.byProduct.keys()])

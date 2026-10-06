@@ -157,6 +157,18 @@ describe('the preview — category and product caps', () => {
     expect(group(p, ids.person)).toMatchObject({ restore: false })
   })
 
+  it('a product cap of 0 is no cap: it floors nothing (an immediate stop is a stop, never a cap of 0)', async () => {
+    const zero = await inA(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.r, label: 'TEST-W16B-R (IT)', updatedBy: 'user:test', monthlySpendCapCents: 0 } }))
+    try {
+      const p = it_(await inA(() => computeBudgetEnforcement({ month })))
+      expect(p.scopeCaps.map((c) => c.label)).not.toContain('TEST-W16B-R (IT)')
+      expect(group(p, ids.uncapped)).toBeUndefined() // R spent 500 this month and holds a 0 cap: not floored
+      expect(p.adGroups.filter((g) => g.suppress).map((g) => g.id).sort()).toEqual([ids.mixed, ids.second].sort())
+    } finally {
+      await inA(() => db().adsStrategy.delete({ where: { id: zero.id } }))
+    }
+  })
+
   it('another business sees neither this business\'s spend nor its caps', async () => {
     const p = it_(await inB(() => computeBudgetEnforcement({ month })))
     expect(p.scopeCaps).toEqual([expect.objectContaining({ label: 'BRAVO-W16B (IT)', capCents: 1, spendCents: 0, reached: false })])
