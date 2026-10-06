@@ -120,7 +120,10 @@ describe('C3 — the server and every change tool name the business', () => {
       'To stop an ad for a while, lower its bids', 'Pause an ad (pause-ads) only when the person means a real pause',
       'Archive an ad (archive-ads) only when it is meant for good',
       // W1-8 — where the ads strategy lives, and that it only narrows.
-      'read it with ads-strategy, change', 'It only narrows what this business lets']) {
+      'read it with ads-strategy, change', 'It only narrows what this business lets',
+      // PB-11 — where the playbook lives, and that a start needs the approver's code.
+      'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
+      "a start needs the approver's authenticator code"]) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })
