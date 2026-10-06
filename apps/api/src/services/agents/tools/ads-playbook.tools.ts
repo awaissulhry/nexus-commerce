@@ -15,12 +15,32 @@
  * an approved apply compiles it in a later step. Money (the product's budget and base bid, the least budget per slot,
  * the recipes' targets and bids, the strategy's numbers) sits only under the keys PLAYBOOK_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
+ *
+ * ADS PLAYBOOK PB-3 — set-ads-playbook: Claude asks to change ONE template or ONE playbook row (a market, a category or a
+ * product in one market) through the one writer the Playbook section uses (ads-playbook/write.ts): set, capture a
+ * template from live campaigns, enroll or take out a product (its phase recipes made absolute at enrollment), remove.
+ * Nexus only. The preview judges each change by what it would make an enrolled product spend once applied; a change
+ * that adds no spend may run by the business's rule inside the tool's limits; a RAISE never does — a person with
+ * settings.security.manage approves it with their authenticator code, or the person who asked confirms it in Claude
+ * with theirs, and `execute` checks that again. Undo writes the previous version back through this tool.
  */
 import { z } from 'zod'
-import { FEATURES as F } from '@nexus/shared/permissions'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
+import prisma from '../../../db.js'
 import { PLAYBOOK_MONEY } from '../../advertising/ads-playbook/doc.js'
 import { PLAYBOOK_VIEWS, readPlaybook, type PlaybookReadArgs } from '../../advertising/ads-playbook/read.js'
-import type { AgentTool, FieldPermission } from '../tool-types.js'
+import {
+  applyPlaybookPlan,
+  PLAYBOOK_CHANGE_INPUT,
+  planPlaybookChange,
+  playbookStateNow,
+  undoArgsOf,
+  type PlaybookPreview,
+  type PlaybookState,
+} from '../../advertising/ads-playbook/write.js'
+import { stepUpApproval } from '../step-up-approval.js'
+import type { AgentTool, FieldPermission, ToolDoor, ToolUndo } from '../tool-types.js'
+import { notRun } from './ads-change-kit.js'
 
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
 const ID = z.string().trim().min(1).max(64)
@@ -77,4 +97,114 @@ const adsPlaybook: AgentTool = {
   },
 }
 
-export const ADS_PLAYBOOK_TOOLS: AgentTool[] = [adsPlaybook]
+// ── PB-3 — set-ads-playbook ──────────────────────────────────────────────────────────────────────────────────────
+
+/** Undo writes the previous version back through set-ads-playbook itself; refused once it moved since. */
+export const SET_ADS_PLAYBOOK_UNDO: ToolUndo = {
+  current: (change) => playbookStateNow(change.after as PlaybookState),
+  request(change) {
+    const before = change.before as PlaybookState | null
+    const after = change.after as PlaybookState | null
+    if (!before?.kind || !after?.kind) return { refusal: 'This change does not record the playbook it replaced.' }
+    return { tool: 'set-ads-playbook', args: undoArgsOf(before, after) }
+  },
+}
+
+/** The door a request came through, as the version row records it. */
+const VIA: Record<ToolDoor, string> = { claude: 'claude', app: 'assistant', fleet: 'fleet', system: 'system' }
+
+const setAdsPlaybook: AgentTool = {
+  name: 'set-ads-playbook',
+  title: 'Set the ads playbook',
+  category: 'automation',
+  riskTier: 'medium',
+  readOnly: false,
+  requiresApprovalDefault: true,
+  // Nexus only: nothing is sent to Amazon, and nothing reads a playbook until an approved apply compiles it.
+  openWorld: false,
+  // ads.automation.manage, and the ad-spend money a playbook holds (budgets, bids, recipes); a RAISE also needs
+  // settings.security.manage and a fresh authenticator code, checked when it is approved and again in `execute`.
+  requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
+  reversibility: 'full',
+  maxClaudeTrust: 'auto',
+  limits: z.object({
+    allowTemplateEdit: z.boolean().default(false)
+      .describe('once this tool may run by rule: let a change of a TEMPLATE run without a person (a template reaches every product that follows it)'),
+    markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([])
+      .describe('once this tool may run by rule: the markets where a playbook row may change without a person (empty: every market)'),
+  }),
+  withinLimits(preview, limits) {
+    const p = preview as Pick<PlaybookPreview, 'direction' | 'raises' | 'kind' | 'target'> | null
+    if (!p?.direction) return 'there is no preview of this playbook change to check'
+    if (p.direction === 'raise') return `it raises ${(p.raises ?? []).join(', ') || 'what a playbook may spend'}: a person with settings.security.manage decides, with their authenticator code`
+    if (p.kind === 'template' && !limits.allowTemplateEdit) return 'a template reaches every product that follows it: this business lets a person decide each template change'
+    const markets = (limits.markets as string[] | undefined) ?? []
+    const market = p.target && 'market' in p.target ? p.target.market : null
+    if (market && markets.length && !markets.includes(market)) return `this business lets the playbook change by rule only in ${markets.join(', ')}`
+    return null
+  },
+  undo: SET_ADS_PLAYBOOK_UNDO,
+  input: PLAYBOOK_CHANGE_INPUT,
+  description:
+    "Change the business's Amazon Ads playbook — HOW a product's ads are built and run — for ONE template or ONE playbook "
+    + 'row. kind template: set (a new one needs its whole doc; or some sections, a name, a status), capture (a template '
+    + 'captured from live campaigns: campaignIds, portfolioId or namePrefix, with market and productToken), remove (only '
+    + 'while no row names it; retire it otherwise). kind playbook: a market, a category or a product in one market (level; '
+    + 'a parent covers its variations): set its template, whole-section overrides (and on a product row the optional slots '
+    + 'it leaves out, its name token, portfolio, daily budget, base bid, terms and phase recipes); op enroll includes the '
+    + 'product (only into a playbook that compiles; its phase recipes are made absolute from its break-even ACoS, the '
+    + "market's target and its base bid — the preview says from what); op leave takes it out; op remove deletes a row that "
+    + 'owns nothing at Amazon. The preview lists every change from → to and judges each by what it would make an enrolled '
+    + 'product spend once applied (RAISE: enrolling, a higher budget or base bid, more terms or slots, higher start-bid '
+    + 'factors or placements, an isolation switch off). Nexus only: nothing reads a playbook yet and nothing at Amazon '
+    + 'moves; a later step compiles it on an approved apply. Waits for a person to approve it in Nexus. A change that adds '
+    + "no spend may run by the business's rule when the business allows it; a RAISE never does: a person with "
+    + 'settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in '
+    + 'Claude with theirs. Pass expectVersion (from ads-playbook) to refuse one that moved. Undo puts the previous version back.',
+  async handler(args) {
+    const planned = await planPlaybookChange(args)
+    return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: planned.plan.preview }
+  },
+  async execute(args, ctx) {
+    // One decision, re-checked against what was approved (the basis fingerprints the row, the changes and the recipes).
+    const planned = await planPlaybookChange(args)
+    if ('error' in planned) return notRun(`Not run: ${planned.error}`)
+    const { plan } = planned
+    const approved = (ctx.approvedPreview as { basis?: unknown } | undefined)?.basis
+    if (approved !== undefined && approved !== plan.preview.basis) {
+      return notRun('Not run: what you approved has moved since — the playbook, its template or the products it judges changed. Ask for it again with the values as they are now.')
+    }
+    const approvalId = ctx.approvalId?.trim()
+    if (!approvalId || !ctx.userId) return notRun('Not run: a playbook change runs only as an approved request, as the person who approved it.')
+    let stepUpAt: Date | null = null
+    if (plan.direction === 'raise') {
+      // A raise runs only when it was approved with a fresh authenticator code (never by rule, never by a plain approve).
+      const coded = await stepUpApproval(ctx)
+      if ('refusal' in coded) return notRun(coded.refusal)
+      stepUpAt = coded.at
+    }
+    const decision = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { decidedBy: true } })
+    const out = await applyPlaybookPlan(plan, {
+      via: VIA[ctx.via] ?? ctx.via,
+      actor: decision?.decidedBy ?? `user:${ctx.userId}`,
+      actorUserId: ctx.userId,
+      approvalId,
+      stepUpAt,
+      updatedBy: ctx.via === 'claude' ? `claude:${approvalId}` : `user:${ctx.userId}`,
+    })
+    if ('error' in out) return notRun(`Not run: ${out.error}`)
+    return {
+      ok: true,
+      data: {
+        id: out.id,
+        version: out.version,
+        direction: out.direction,
+        changed: out.changes.length,
+        note: 'Saved in Nexus; nothing is sent to Amazon, and nothing reads a playbook until an approved apply compiles it.',
+      },
+      change: { before: out.before, after: out.after },
+    }
+  },
+}
+
+export const ADS_PLAYBOOK_TOOLS: AgentTool[] = [adsPlaybook, setAdsPlaybook]

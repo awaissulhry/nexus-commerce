@@ -286,6 +286,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Ads playbook PB-2 — the seeded product's playbook in IT: its daily budget and base bid are money, and so are the
   // strategy's numbers shown beside it.
   'ads-playbook': (ids) => ({ market: 'IT', productId: ids.productId }),
+  // Ads playbook PB-3 — a product row's change: its budget and bids are money (a person without them is refused).
+  'set-ads-playbook': (ids) => ({ channel: 'AMAZON', kind: 'playbook', market: 'IT', level: 'product', productId: ids.productId, values: { nameToken: 'TESTTOKEN' } }),
   // Ads autonomy W1-3 — needs financials.adspend.view (targets, bids and caps are ad-spend money): a person without
   // money is refused outright. The seeded market strategy's highest bid lowered: a preview, nothing written.
   'set-ads-strategy': () => ({ channel: 'AMAZON', market: 'IT', level: 'market', values: { maxBidCents: 4242 } }),

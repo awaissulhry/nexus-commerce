@@ -30,7 +30,7 @@ export function templateDoc(): TemplateDoc {
     bids: { ladder: { auto: 1, 'broad-category': 0.9, 'exact-category': 1.3, 'exact-brand': 1.2, pat: 1.1 }, launch: 'floor' },
     placements: { 'exact-category': { top: 25, productPage: 0, restOfSearch: 0 }, pat: { top: 10, productPage: 15, restOfSearch: 0 } },
     harvest: defaultHarvest(slots),
-    isolation: DEFAULT_ISOLATION,
+    isolation: { ...DEFAULT_ISOLATION },
     rank: {
       roles: {
         performance: { windows: [{ days: [1, 2, 3, 4, 5], startHour: 8, endHour: 21, targetKey: 'test-own-top' }], baseline: 'test-rest' },

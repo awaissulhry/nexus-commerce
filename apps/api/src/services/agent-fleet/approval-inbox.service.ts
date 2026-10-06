@@ -921,6 +921,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Ads autonomy W1-3 — every field from → to with the value in force before and after (an inherited value that moved
   // is a different decision), raise or lower, the row's version, and `basis` (the row, its terms and its campaigns).
   'set-ads-strategy': ['changes', 'direction', 'version', 'basis'],
+  // ADS PLAYBOOK PB-3 — a playbook change: what it changes, raise or lower, the version it starts from, and its basis.
+  'set-ads-playbook': ['changes', 'direction', 'version', 'basis'],
   'tune-ad-engine': ['changes', 'raises', 'basis'],
   'steer-fleet': ['steer', 'changes', 'basis'],
   'save-price-rule': ['changes', 'bounds', 'basis'],

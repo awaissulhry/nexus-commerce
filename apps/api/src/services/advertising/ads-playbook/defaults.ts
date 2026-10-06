@@ -44,11 +44,11 @@ export function defaultHarvest(slots: readonly Slot[]): TemplateDoc['harvest'] {
   return { edges: edges as TemplateDoc['harvest']['edges'] }
 }
 
-export const DEFAULT_ISOLATION: TemplateDoc['isolation'] = {
+export const DEFAULT_ISOLATION: Readonly<TemplateDoc['isolation']> = Object.freeze({
   exactIntoResearch: true,
   brandPhraseIntoCategoryAndCompetitor: true,
   phraseIntoBroadAndAuto: false,
-}
+})
 
 /**
  * The design's starting phase table (§3.7). Every number is a factor or a count, never money; all editable. `weights`:
@@ -58,8 +58,8 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
   const research = Object.fromEntries(slots.filter((s) => s.rankRole === 'research').map((s) => [s.key, 'floor' as const]))
   const autos = new Set(slots.filter((s) => s.targeting === 'AUTO').map((s) => s.key))
   const clearWeights = Object.fromEntries(Object.entries(weights).map(([key, w]) => [key, autos.has(key) ? Math.min(w * 2, 1000) : w]))
-  const lenient = { minClicks: 25, maxOrders: 0, windowDays: 30 }
-  const normal = { minClicks: 15, maxOrders: 0, windowDays: 30 }
+  const lenient = { minClicks: 25, maxOrders: 0, windowDays: 30 } as const
+  const normal = { minClicks: 15, maxOrders: 0, windowDays: 30 } as const
   const phases: z.input<typeof PHASES_SECTION> = {
     LAUNCH: {
       recipe: { targetAcos: { from: 'breakEven', factor: 1.3, fallbackFactor: 1.5 }, harvest: { minOrders: 1, minClicks: 0, windowDays: 30 }, negate: lenient },

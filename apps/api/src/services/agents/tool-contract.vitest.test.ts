@@ -438,6 +438,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 2, values: { maxBidCents: 150, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: { bid: 'ask' } }, terms: { 'test term': false }, campaignTargets: { c1: 0.25 } },
         after: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 3, values: { maxBidCents: 120, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: null }, terms: { 'test term': { matchType: null } }, campaignTargets: { c1: null } },
       },
+      // Ads playbook PB-3 — a playbook row change: undo writes the previous version back (its overrides set back or cleared).
+      'set-ads-playbook': {
+        before: { kind: 'playbook', channel: 'AMAZON', market: 'IT', level: 'PRODUCT', scopeId: 'p1', version: 1, values: { templateId: 't1', overrides: null, enrolled: true, state: 'DRAFT', nameToken: 'TEST', portfolioName: null, dailyBudgetCents: 1000, baseBidCents: 30, terms: null, phaseRecipes: null } },
+        after: { kind: 'playbook', channel: 'AMAZON', market: 'IT', level: 'PRODUCT', scopeId: 'p1', version: 2, values: { templateId: 't1', overrides: { skipSlots: ['exact-brand'] }, enrolled: true, state: 'DRAFT', nameToken: 'TEST', portfolioName: null, dailyBudgetCents: 1200, baseBidCents: 30, terms: null, phaseRecipes: null } },
+      },
       // R14 — a raised pool budget: undo sets it back; a harvest scope given its own policy inherits again.
       'tune-ad-engine': {
         before: { setting: 'budget-pool', subjectId: 'p1', name: 'Pool', state: { totalDailyBudgetCents: 5000, strategy: 'STATIC', coolDownMinutes: 60, maxShiftPerRebalancePct: 20 } },

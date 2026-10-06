@@ -71,10 +71,10 @@ export type PlaybookReadResult = { data: Record<string, unknown> } | PlaybookRea
 export const PLAYBOOK_NOTE =
   'Nothing reads a playbook yet: no engine, rule or Claude change follows it, and nothing at Amazon moves because of it. '
   + 'A playbook is compiled only by an approved apply (build, adopt, start, sync, phase), which later steps add; until then it '
-  + "is stored and shown only. The numbers the engines obey are the ads strategy's (strategy, read-only here)."
+  + "is stored and shown only (set-ads-playbook changes it). The numbers the engines obey are the ads strategy's (strategy, read-only here)."
 const ENROLL_NOTE = 'A product is in only when its own row (or its parent\'s) says enrolled; a category or market playbook is a default for the products under it, never a build.'
 const CAPTURE_NOTE =
-  'A preview: nothing is saved. Slots, naming, budget shares, the bid ladder, placements, Auto groups and the hourly plans '
+  'A preview: nothing is saved (set-ads-playbook op capture saves it as a template). Slots, naming, budget shares, the bid ladder, placements, Auto groups and the hourly plans '
   + "by rank role come from the campaigns as they are today (bids at the 2¢ floor left out); harvest edges and the phase table "
   + "are the defaults for these slots. The product's terms, daily budget and base bid belong on its product row, never in a template."
 const MAX_LISTED = 100
@@ -269,10 +269,21 @@ async function templatesIn(channel: string, templateId: string | undefined): Pro
 
 // ── history ───────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A recorded change, its from → to under the field's own key (dailyBudgetCents, budget, …), so a money field's numbers
+ * are money to the filter and a section's inner money keys are too.
+ */
+function changeOut(change: unknown): Record<string, unknown> {
+  const c = (change ?? {}) as Record<string, unknown>
+  const last = typeof c.field === 'string' ? c.field.split('.').pop() ?? '' : ''
+  const name = /^[A-Za-z][A-Za-z0-9]*$/.test(last) ? last : 'value'
+  return { field: c.field ?? null, label: c.label ?? null, direction: c.direction ?? null, [name]: { from: c.from ?? null, to: c.to ?? null } }
+}
+
 const versionOut = (v: Awaited<ReturnType<typeof playbookVersions>>[number]) => ({
   kind: v.kind, refId: v.refId, version: v.version, ...(v.kind === 'playbook' ? { market: v.market, level: v.level, scopeId: v.scopeId } : {}),
-  op: v.op, via: v.via, approvalId: v.approvalId, actor: v.actor, reason: v.reason, at: iso(v.createdAt),
-  values: v.values ?? null, changes: Array.isArray(v.changes) ? v.changes : [],
+  op: v.op, direction: v.direction, via: v.via, approvalId: v.approvalId, actor: v.actor, stepUpAt: iso(v.stepUpAt), reason: v.reason, at: iso(v.createdAt),
+  values: v.values ?? null, changes: Array.isArray(v.changes) ? v.changes.map(changeOut) : [],
 })
 
 async function historyIn(market: string, scope: Scope, limit: number) {

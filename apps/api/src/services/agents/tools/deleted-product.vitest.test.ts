@@ -81,6 +81,8 @@ const CREATE_OR_EDIT = new Set([
   'save-price-rule',
   // Ads autonomy W1-3 — a strategy row's scope: given a product, the change is about that product's row.
   'set-ads-strategy',
+  // Ads playbook PB-3 — a playbook row's scope: given a product, the change is about that product's row.
+  'set-ads-playbook',
 ])
 /** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {
