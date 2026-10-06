@@ -782,7 +782,7 @@ const READERS: Record<string, Reader> = {
     }
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
-  'apply-ads-playbook': (p) => {
+  'apply-ads-playbook': (p, _a, ctx) => {
     // PB-9 — a phase switch: the phase, then each slot it floors or gives back and each hourly plan it switches.
     if (p.op === 'phase') {
       const phase = rec(p.phase)
@@ -795,6 +795,21 @@ const READERS: Record<string, Reader> = {
             .map((s) => ({ label: `Slot ${plainValue(s.slot)}`, from: s.does === 'floor' ? 'Active' : 'At the floor', to: s.does === 'floor' ? 'At the floor' : 'Bids given back' })),
           ...recs(p.rank).filter((r) => r.does === 'enable' || r.does === 'disable')
             .map((r) => ({ label: `Hourly plan ${plainValue(r.role)}`, from: r.does === 'enable' ? 'Off' : 'On', to: r.does === 'enable' ? 'On' : 'Off' })),
+        ],
+      }
+    }
+    // PB-6c — a term's own campaign (a hero): the term, the product and the market, and what it builds.
+    if (p.op === 'hero') {
+      const product = rec(p.product)
+      const market = marketOf(p.market)
+      return {
+        channel: 'AMAZON',
+        market,
+        target: productTarget({ id: text(product?.productId), sku: text(product?.sku) }, 1, ctx),
+        changes: [
+          { label: 'Own campaign for', from: null, to: `“${text(p.term) ?? '?'}” · ${text(product?.sku) ?? '?'} · Amazon ${market ?? '?'}` },
+          { label: 'Builds', from: null, to: '1 campaign, one exact keyword, at the 2-cent floor, off the allowlist' },
+          { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
         ],
       }
     }

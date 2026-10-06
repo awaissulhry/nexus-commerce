@@ -20,6 +20,9 @@
  *   drift      PB-10 — where what is live differs from what a product's playbook compiles to in one market (drift.ts,
  *              drift-load.ts): each item with what fixes it (apply-ads-playbook op sync, another tool, or nothing) and,
  *              for a change a person made himself, keep or revert; or, for a market, every enrolled product counted
+ *   winners    PB-6c — one product's search terms in one market (winners.ts): winning where they run (kept there),
+ *              declining or lost, and the next step for each in the Owner's order — bid (auto-bid is on it), placement
+ *              (a research slot), or a campaign of its own (apply-ads-playbook op hero) — read-only
  *
  * PB-9 — `effective` for an enrolled product also carries its `phaseCheck` (phase-check.ts), computed by Nexus: the phase
  * (the strategy's goal) and since when, the hold, each exit rule with its numbers (ad orders, ACoS against the target,
@@ -57,7 +60,7 @@ import {
   type TemplateRow,
 } from './resolve.js'
 
-export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build', 'drift'] as const
+export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build', 'drift', 'winners'] as const
 export type PlaybookViewName = (typeof PLAYBOOK_VIEWS)[number]
 
 export interface PlaybookReadArgs {
@@ -425,6 +428,28 @@ async function driftIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookRe
   }
 }
 
+// ── PB-6c — the winners ───────────────────────────────────────────────────────────────────────────
+
+const WINNERS_NOTE =
+  'A winning term stays where it runs (nothing is proposed for it). A declining or lost one gets the first step that '
+  + 'applies: bid (auto-bid already moves its bid toward the target), placement (a research slot or its own campaign: '
+  + 'set-placement-multipliers), or a campaign of its own (apply-ads-playbook op hero: born at the floor, off the '
+  + 'allowlist, waiting for a person; the term keeps running where it is until that campaign proves itself). Once that '
+  + 'campaign proves itself, the old exact keyword is proposed at low bids (never a negative). A floor or a pause '
+  + "is named and gets no step; an hourly plan's campaign and a performance slot are reported only. Both windows are "
+  + "settled (ending at the attribution lag); the bar is the ads strategy's harvest group, the target the one auto-bid "
+  + "steers by, the band the strategy's. Only this product's own campaigns are read."
+
+async function winnersIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookReadResult> {
+  if (!a.market) return fail(400, 'The winners are read for one product in one market: name the market.')
+  if (!a.productId && !a.sku) return fail(400, 'The winners are read for one product: name it (productId or sku).')
+  if (a.productId && a.sku) return fail(400, 'Name the product once: productId or sku, not both.')
+  const { winnerReview } = await import('./winners.js')
+  const out = await winnerReview({ market: a.market.trim().toUpperCase(), productId: a.productId, sku: a.sku })
+  if ('error' in out) return out
+  return { data: { channel, view: 'winners', ...out.data, note: WINNERS_NOTE } }
+}
+
 const linkOut = (l: { playbookId: string; kind: string; key: string; refId: string; adGroupId: string | null; origin: string; compiledVersion: number }) => ({
   playbookId: l.playbookId, kind: l.kind, key: l.key, refId: l.refId, adGroupId: l.adGroupId, origin: l.origin, compiledVersion: l.compiledVersion,
 })
@@ -446,6 +471,7 @@ export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookRead
   }
   if (view === 'build') return buildIn(args, channel)
   if (view === 'drift') return driftIn(args, channel)
+  if (view === 'winners') return winnersIn(args, channel)
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 20), 1), 100)
   if (view === 'history' && args.templateId) {
     const versions = await playbookVersions({ kind: 'template', refId: args.templateId }, limit)

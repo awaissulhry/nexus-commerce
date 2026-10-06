@@ -279,7 +279,7 @@ export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
 export const PLAYBOOK_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
   ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents',
-    // PB-9 — a phase check's ad sales and ACoS (ad performance is ad-spend money), its ACoS against the target, and the
+    // PB-6c — a term's ACoS in the winners view. PB-9 — a phase check's ad sales and ACoS (ad performance is ad-spend money), its ACoS against the target, and the
     // break-even ACoS beside them (it tells the margin).
     'salesCents', 'acosPct', 'acosToTargetPct', 'breakEvenAcosPct'].map((key) => [key, FIELDS.financialsAdspendView])),
 }

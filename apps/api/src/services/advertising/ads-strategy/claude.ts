@@ -55,11 +55,12 @@ const treatedAs = new Map<string, ClaudeActionType>()
  * op — an adopt only writes Nexus links). An op not listed, or no args, is the tool's kind in CLAUDE_ACTION_TOOLS.
  * PB-5b — an op that is several kinds at once lists them, its own kind first: every one narrows it (the strictest wins).
  * A playbook START puts campaigns on the allowlist and their planned bids back (restore and allowlist); its STOP is a stop.
+ * PB-6c — a hero creates one campaign: a create, as a build.
  */
 export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | readonly ClaudeActionType[] | null>>>> = {
-  // PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
+  // PB-6c — a hero creates one campaign (a create). PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
   // own (op sync-negatives). PB-9 — a phase switch is its own kind.
-  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
+  'apply-ads-playbook': { build: 'create', adopt: null, hero: 'create', start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */

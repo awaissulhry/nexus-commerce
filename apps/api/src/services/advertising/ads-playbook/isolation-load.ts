@@ -129,7 +129,13 @@ export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' |
   const ids = scope.map((g) => g.adGroupId)
   const marketOf = new Map(campaigns.map((c) => [c.id, c.marketplace]))
   const campaignIds = [...new Set(scope.map((g) => g.campaignId))]
-  const [positives, standingNegatives, winners, waiting] = await Promise.all([positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids), waitingSyncedTargets(row.id, 2)])
+  const heroGroups = scope.filter((g) => g.slot.startsWith('hero:')).map((g) => g.adGroupId)
+  const [positives, standingNegatives, winners, synced, heroAtFloor] = await Promise.all([
+    positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids), waitingSyncedTargets(row.id, 2),
+    // PB-6c — a term's own campaign still at the build's floor (its bid remembered, START not run) is no home either.
+    heroGroups.length ? prisma.adTarget.findMany({ where: { adGroupId: { in: heroGroups }, isNegative: false, suppressedFromBidCents: { not: null } }, select: { id: true } }) : Promise.resolve([]),
+  ])
+  const waiting = new Set([...synced, ...heroAtFloor.map((t) => t.id)])
   if (waiting.size) for (const list of positives.values()) for (const p of list) if (waiting.has(p.adTargetId)) p.waiting = true
   // The protected terms that bind a negative in each campaign, as the write gate reads them (one read per campaign).
   const protections = new Map<string, ProtectedTerm[]>()

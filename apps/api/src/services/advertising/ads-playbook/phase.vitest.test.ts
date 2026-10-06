@@ -107,6 +107,21 @@ describe('the slots', () => {
   })
 })
 
+describe('the slots — PB-6c: a term\'s own campaign (a hero) plays the Exact slot it is modelled on', () => {
+  it('a phase that floors that slot floors the hero too; leaving it gives the hero\'s phase floor back', () => {
+    const d = JSON.parse(JSON.stringify(doc)) as typeof doc
+    d.phases.DEFEND!.slots['exact-category'] = 'floor'
+    const camp = (extra = {}) => ({ campaignId: 'c-hero', name: 'Test hero', status: 'ENABLED', marketplace: 'IT', floored: false, floorBy: null, dailyBudgetCents: 300, ...extra })
+    const heroes = [{ key: 'hero:test cape', slot: 'exact-category' }]
+    const into = slotSteps({ doc: d, from: d.phases.GROW!, to: d.phases.DEFEND!, running: true, links: new Map([['hero:test cape', 'c-hero']]), campaigns: new Map([['c-hero', camp()]]), stopBids: new Map(), heroes })
+    expect(into.find((s) => s.slot === 'hero:test cape')).toMatchObject({ does: 'floor', direction: 'lower' })
+    const out = slotSteps({ doc: d, from: d.phases.DEFEND!, to: d.phases.GROW!, running: true, links: new Map([['hero:test cape', 'c-hero']]), campaigns: new Map([['c-hero', camp({ floored: true, floorBy: 'user:u-approver', phaseFloorBy: 'user:u-approver' })]]), stopBids: new Map(), heroes })
+    expect(out.find((s) => s.slot === 'hero:test cape')).toMatchObject({ does: 'restore', direction: 'raise' })
+    // Without the heroes named, a hero is no slot of the phase table: nothing moves it.
+    expect(slotSteps({ doc: d, from: d.phases.GROW!, to: d.phases.DEFEND!, running: true, links: new Map([['hero:test cape', 'c-hero']]), campaigns: new Map([['c-hero', camp()]]), stopBids: new Map() }).find((s) => s.slot === 'hero:test cape')).toBeUndefined()
+  })
+})
+
 describe('the hourly plans, by effect', () => {
   const facts = (floorBy: string | null) => ({
     campaigns: new Map([['c-exact', { id: 'c-exact', name: 'Test exact', status: 'ENABLED' }]]),

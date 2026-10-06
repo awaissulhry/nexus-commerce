@@ -1,7 +1,7 @@
 /**
  * ADS PLAYBOOK PB-5a — apply-ads-playbook: Claude asks to apply ONE product's playbook in ONE market (the playbook is the
- * business's own: ads-playbook reads it, set-ads-playbook changes it). Five ops: build and adopt (PB-5a), start and stop
- * (PB-5b), phase (PB-9).
+ * business's own: ads-playbook reads it, set-ads-playbook changes it). Six ops: build and adopt (PB-5a), start and stop
+ * (PB-5b), phase (PB-9), hero (PB-6c).
  *
  *   build   create the slots the product does not hold yet, through the SP Super Wizard's own launch (Owner rule 1;
  *           ads-playbook/build.ts) — each campaign ENABLED at Amazon's 2¢ floor with its planned bids remembered
@@ -31,6 +31,16 @@
  *           whole switch a raise — the same code gate as a start (spendGate) — and it runs by rule only when the Owner
  *           allowed raising phase moves (allowPhaseUp). It runs by rule only when Nexus's phase check proposes exactly
  *           this move outside the phase's hold (ads-playbook/phase-check.ts); a person may switch at any time.
+ *   hero    PB-6c — a declining or lost term's own campaign (ads-playbook/hero.ts, hero-build.ts; a winning term is
+ *           refused, rule 2): ONE campaign, ONE exact keyword, the product's own product ads and negatives, built by the
+ *           same build (the SP Super Wizard's launch) and born the same way — at the 2¢ floor, off the allowlist,
+ *           placements at START — linked as the slot `hero:<term>` (kind slot: START and STOP name it in `slots`, and the
+ *           held-campaign guards cover it). One per term per product per market. Its bid (the term's CPC) and budget
+ *           (its daily spend) are frozen in the approval and asked again only against the strategy's band and caps. The
+ *           term keeps running where it runs now: nothing is negated and no bid is lowered there; once the hero itself
+ *           meets the harvest bar, its old exact keyword is proposed at low bids (ads-playbook view winners) and the
+ *           isolation rule negates it in the research campaigns (handover B). Another product buying the term never
+ *           refuses it (rule 3). Spend is added only by the playbook's START (op start), as for every built slot.
  *
  * Like every ad change tool (ads-change-kit.ts): the preview says where it lands and a refusal is not queued; it runs only
  * as an approved request, as the approver, and refuses when what was approved moved. Strategy-bound (ads-autonomy-kit.ts):
@@ -38,8 +48,8 @@
  * strategy and this tool's limits — by default it does not (maxCampaigns 0: every build waits for a person). An adopt
  * only writes Nexus links: the strategy does not narrow it.
  *
- * Undo: a build — archive-ads of every campaign it made (buildRunId), permanent at Amazon; an adopt — the inverse adopt;
- * a start — a stop of the slots it started; a stop — a start of the slots it stopped (with the approver's code again);
+ * Undo: a build (a hero too) — archive-ads of every campaign it made (buildRunId), permanent at Amazon; an adopt — the
+ * inverse adopt; a start — a stop of the slots it started; a stop — a start of the slots it stopped (with the approver's code again);
  * a phase switch — a switch back to the phase before (its own recipe, slots, hourly plans and cadence).
  */
 import { createHash } from 'node:crypto'
@@ -53,6 +63,8 @@ import { previewArtifacts } from '../../advertising/ads-playbook/artifacts.js'
 import { buildRunCampaigns, inFlightRefusal, planBuild, startPlaybookBuild, type BuildPlan } from '../../advertising/ads-playbook/build.js'
 import { planStart, runStart, runStop, type ApplyOp, type StartPlan } from '../../advertising/ads-playbook/start.js'
 import { PHASES, PLAYBOOK_MONEY, SLOT_KEY } from '../../advertising/ads-playbook/doc.js'
+import { HERO_KEY } from '../../advertising/ads-playbook/hero.js'
+import { planHero, type HeroBuildPlan } from '../../advertising/ads-playbook/hero-build.js'
 import { phaseNow, planPhase, runPhase, type PhasePlan } from '../../advertising/ads-playbook/phase.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { marketCurrency } from '../../pim/market-currency.js'
@@ -68,17 +80,18 @@ const ID = z.string().trim().min(1).max(64)
 const MAX_SLOTS = 30
 
 const input = z.object({
-  op: z.enum(['build', 'adopt', 'start', 'stop', 'sync', 'sync-negatives', 'phase'])
-    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); phase: switch the product's playbook phase (its strategy numbers, slots, hourly plans and harvest cadence)"),
+  op: z.enum(['build', 'adopt', 'start', 'stop', 'sync', 'sync-negatives', 'phase', 'hero'])
+    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); phase: switch the product's playbook phase (its strategy numbers, slots, hourly plans and harvest cadence); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
-  slots: z.array(SLOT_KEY).max(MAX_SLOTS).optional().describe('build: only these missing slots (slot keys from ads-playbook view compile); default: every slot the product does not hold. start / stop: only these built slots; default: every slot the playbook built'),
+  slots: z.array(z.union([SLOT_KEY, HERO_KEY])).max(MAX_SLOTS).optional().describe('build: only these missing slots (slot keys from ads-playbook view compile); default: every slot the product does not hold. start / stop: only these built slots; default: every slot the playbook built. A campaign of its own for a term is named by its key, hero:<term>'),
   bind: z.array(z.object({
     slot: SLOT_KEY.describe('the slot key'),
     campaignId: ID.describe('the campaign that plays it, its Nexus id (campaignId in ad-campaigns)'),
   })).max(MAX_SLOTS).optional().describe('adopt: campaigns named for slots (the others are matched by name, then by shape)'),
   unbind: z.array(SLOT_KEY).max(MAX_SLOTS).optional().describe('adopt: slots whose adopted campaign is taken off the playbook again (the undo of an adopt)'),
+  term: z.string().trim().min(1).max(80).optional().describe('hero: the search term that gets a campaign of its own (one exact keyword); ads-playbook view winners names the ones whose next step it is'),
   phase: z.enum(PHASES).optional().describe("phase: the phase to switch to — LAUNCH, GROW, PROFIT, CLEAR_STOCK or DEFEND (the ads strategy's goal); ads-playbook view effective shows the phase check: where the product stands and what Nexus proposes"),
   rankFloors: z.enum(['keep', 'giveBack']).optional()
     .describe("phase: what an hourly plan the phase switches off does with the floors it set — keep (default: they stay at the floor, held by the approver) or giveBack (the bids come back: a raise)"),
@@ -529,6 +542,120 @@ async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ stepUpAt: D
   return 'refusal' in coded ? { refusal: coded.refusal } : { stepUpAt: coded.at, byRule: false }
 }
 
+/** PB-6c — a hero's campaign without its bid and budget (the frozen values carry them), for the basis. */
+const moneyless = (campaigns: HeroBuildPlan['campaigns']) => campaigns.map((c) => ({
+  ...c, dailyBudget: null, adGroups: c.adGroups.map((g) => ({ ...g, defaultBidCents: null, targets: g.targets.map((t) => ({ ...t, bidCents: null })) })),
+}))
+
+/** PB-6c — what a hero's preview says about where its term runs now (the winners view's entries for it). */
+const currentLines = (p: HeroBuildPlan) => p.hero.current.slice(0, 10).map((e) => ({
+  slot: e.slot, campaignId: e.campaignId, campaignName: e.campaignName, state: e.state, nextStep: e.nextStep, orders: e.current?.orders ?? 0,
+}))
+
+/** PB-6c — a hero, planned and judged: its preview, and the plan `execute` hands to the build. */
+async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>, frozen: { bidCents: number; dailyBudgetCents: number } | null = null): Promise<{ result: ToolResult; plan?: HeroBuildPlan }> {
+  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
+  if (!a.term?.trim()) return refuse('A hero is for one term: name it (term). ads-playbook view winners names the terms whose next step is a campaign of their own.')
+  const out = await planHero({ market: a.market, productId: a.productId, sku: a.sku, term: a.term, frozen })
+  if ('error' in out) return refuse(out.error)
+  const p = out.data
+  const h = p.hero.plan
+  if (!p.playbook) return refuse(`${p.product.sku} has no product playbook row in ${p.market}: set one (set-ads-playbook) and enroll it first.`)
+  if (a.expectVersion != null && a.expectVersion !== p.playbook.version) return refuse(MOVED_ROW)
+  if (!p.enrolled) return refuse(`${p.product.sku} is not enrolled in its playbook in ${p.market}: a person includes it first (set-ads-playbook op enroll).`)
+  if (p.playbook.state === 'STOPPED') return refuse(`${p.product.sku}'s playbook in ${p.market} is stopped: start it again before its terms get campaigns of their own.`)
+  if (!p.compiles) return refuse(`No campaign of its own for "${h.term}": ${p.problems.join('; ')}.`)
+  if (!p.allowed) return refuse(`The blueprint gate refuses this campaign — ${p.blockers.join(' ')}`)
+  // Rule 2 — a hero is for a declining or lost term: one that wins where it runs stays there, untouched.
+  const winning = p.hero.current.filter((e) => e.state === 'winning')
+  if (winning.length) return refuse(`"${h.term}" wins where it runs ("${winning[0].campaignName}"): the Owner's rule 2 keeps it there, so it gets no campaign of its own. A hero is for a declining or lost term (ads-playbook view winners).`)
+  if (!p.hero.current.some((e) => e.state === 'declining' || e.state === 'lost')) {
+    return refuse(`"${h.term}" is not declining or lost in ${p.product.sku}'s playbook campaigns in ${p.market} (it has not proven itself there, or the windows cannot be compared): a hero is for a declining or lost term (ads-playbook view winners).`)
+  }
+  const flying = await inFlightRefusal(p.market, p.nameToken!, p.playbook.id)
+  if (flying && !flying.stopped) return refuse(`A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build, then ask again.`)
+  let currency: string
+  try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
+
+  // Where it lands: asked as a creation (no campaign yet, no allowlist), held against its one daily budget.
+  const reach = liveReachOf(await checkAdsWriteGate({ marketplace: p.market, payloadValueCents: p.dailyBudgetCents }))
+  if (reach.reach === 'refused') return refuse(reachRefusal(reach))
+  const stored = storedReach(reach)
+  const facts = await buildLimitFacts({
+    tool: TOOL, action: 'create',
+    items: [{ entity: { kind: 'products', market: p.market, productIds: [p.product.productId] }, change: { field: 'dailyBudget', fromCents: null, toCents: p.dailyBudgetCents } }],
+    approvalId: ctx.approvalId ?? null,
+  })
+  const newMarket = !(await prisma.campaign.findFirst({ where: { marketplace: p.market }, select: { id: true } }))
+  const artifacts = await previewArtifacts({
+    playbookId: p.playbook.id, market: p.market, productId: p.product.productId, nameToken: p.nameToken!, doc: p.doc!,
+    slots: p.linked.map((l) => ({ key: l.key, campaignId: l.campaignId, adGroupId: null, origin: 'built', rankRole: p.doc!.structure.slots.find((s) => s.key === l.key)?.rankRole ?? 'none' })),
+    mode: 'build', actor: 'user:preview', changeSetId: null, compiledVersion: p.playbook.version,
+  }, [])
+  const floor = SUPPRESSION_FLOOR_CENTS
+  const campaigns = campaignLines(p)
+  const where = p.hero.current.length
+    ? p.hero.current.slice(0, 3).map((e) => `"${e.campaignName}" (${e.state})`).join(', ')
+    : `none of ${p.product.sku}'s playbook campaigns yet`
+  const effect = `Builds ONE Sponsored Products campaign of its own for "${h.term}" — ${p.product.sku}'s hero for this term in ${p.market} — through the SP Super Wizard's launch: `
+    + `one exact keyword, ${plural(p.productAds.length, 'ASIN')}, ${plural(h.negatives, 'negative')}, ${amountLabel(p.dailyBudgetCents, currency)} of daily budget. `
+    + `Born ENABLED with its bid at the ${floor}-cent floor (the planned bid remembered; suppressed, never paused), off the live-write allowlist and without placements: it serves next to nothing (not nothing) until START. `
+    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, its old places are closed — its old exact keyword to low bids (ads-playbook view winners proposes it; never a negative), the research campaigns by the playbook's isolation rule — each a request a person decides, never before.`
+  return {
+    plan: p,
+    result: {
+      ok: true,
+      preview: {
+        action: TOOL,
+        op: 'hero',
+        market: p.market,
+        product: p.product,
+        playbook: p.playbook,
+        currency,
+        term: h.term,
+        hero: {
+          key: h.key, intent: h.intent, modelSlot: h.modelSlot, ...(h.ownIntent ? {} : { modelNote: `no Exact slot for ${h.intent.toLowerCase()} terms: modelled on "${h.modelSlot}"` }),
+          keyword: { text: h.term, match: 'EXACT' }, negatives: h.negatives,
+          bidFrom: `${h.bidFrom === 'approved' ? 'the bid approved' : h.bidFrom === 'cpc' ? "the term's cost per click where it runs now (its settled window)" : "the playbook's start-bid ladder for its Exact slot (the term has no clicks yet)"}, clamped to the strategy's bid band at this product${p.slots[0]?.ladderBidCents != null ? ' (the band clamped it)' : ''}`,
+          budgetFrom: `${h.budgetFrom === 'approved' ? 'the daily budget approved' : h.budgetFrom === 'spend' ? "the term's own daily spend where it runs now" : h.budgetFrom === 'productBudget' ? "the product's daily budget (the term spends more, or the least per slot is above it)" : "the playbook's least budget per slot (the term spends less)"} — at least the least budget per slot, never above the product's daily budget, and held against every monthly cap of the strategy WITH the spend already in it (caps)`,
+        },
+        current: currentLines(p),
+        // The bid and budget a person approves: planned again as they are at execute (only the band and the caps asked again).
+        frozen: { bidCents: p.slots[0]?.startBidCents ?? 0, dailyBudgetCents: p.dailyBudgetCents },
+        caps: p.hero.caps,
+        keepsRunning: `"${h.term}" keeps running where it runs now: no negative, no lower bid, no pause anywhere (the Owner's rule 2: winners are never shuffled). Its old places are closed only after the hero proves itself, each by a request a person decides (ads-playbook view winners: "hero proven → old keyword to the floor").`,
+        campaigns,
+        dailyBudgetCents: p.dailyBudgetCents,
+        highestPlannedBidCents: p.highestPlannedBidCents,
+        productAds: p.productAds,
+        portfolio: p.portfolio,
+        acceptedShared: p.acceptedShared,
+        sharedWithOtherProducts: p.sharedWithOtherProducts,
+        startsSuppressed: { floorCents: floor, by: 'the person who asked', note: `Its bid starts at the ${floor}-cent floor and the bid planned is remembered: START puts it back.` },
+        liveWrites: false,
+        placements: 'deferred to START (a campaign off the allowlist is refused them)',
+        ...(newMarket ? { newMarket: true, newMarketNote: `NEW MARKET: the first campaign in ${p.market}.` } : {}),
+        warnings: [...p.warnings, ...(flying?.stopped ? [`An earlier build of this product (run ${flying.applicationId}) stopped without finishing: this one marks it FAILED.`] : [])],
+        artifacts: artifacts.lines,
+        ...(artifacts.errors.length ? { artifactErrors: artifacts.errors } : {}),
+        // The term's CPC and spend move every day: the basis holds the campaign's shape, never its bid or budget (frozen).
+        basis: hash({ row: [p.playbook.id, p.playbook.version], template: p.template, term: h.key, campaigns: moneyless(p.campaigns), productAds: p.productAds, portfolio: p.portfolio, linked: p.linked }),
+        reach: stored,
+        reachNote: reachNote(stored),
+        effect,
+        nextSteps: [
+          'ads-playbook view build (applicationId): follow the build',
+          `START puts it on the allowlist with its planned bid and placements back (apply-ads-playbook op start, slots ["${h.key}"])`,
+          `ads-playbook view winners: follow "${h.term}" in both places`,
+        ],
+        undoNote: UNDO_BUILD,
+        limitFacts: facts,
+        limitsNote: limitsNote(facts),
+      },
+    },
+  }
+}
+
 /** The door a request came through, as the version row records it. */
 const VIA: Record<ToolDoor, string> = { claude: 'claude', app: 'assistant', fleet: 'fleet', system: 'system' }
 
@@ -570,7 +697,7 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
   if (common) return common
   const currency = p.currency ?? 'EUR'
   if (p.op === 'start') return highestBidRefusal(preview, p.highestRestoredBidCents ?? 0, 'highest restored bid', limits, currency)
-  if (p.op !== 'build') return `op ${p.op} is not one this tool runs by rule; a person decides`
+  if (p.op !== 'build' && p.op !== 'hero') return `op ${p.op} is not one this tool runs by rule; a person decides`
   if (p.newMarket) return `it builds the first campaigns in ${p.market}: a person decides a new market`
   const n = p.campaigns?.length ?? 0
   const maxCampaigns = typeof limits.maxCampaigns === 'number' ? limits.maxCampaigns : 0
@@ -621,26 +748,27 @@ function phaseRefusal(preview: unknown, limits: Record<string, unknown>): string
   return restored > 0 ? highestBidRefusal(preview, restored, 'highest restored bid', limits, p.currency ?? 'EUR') : null
 }
 
-/** What a change of this tool recorded: the op, and its run (build), its links (adopt) or the slots it moved (start, stop). */
+/** What a change of this tool recorded: the op, and its run (build, hero: its key too), its links (adopt) or the slots it moved (start, stop). */
 type ApplyAfter =
-  | { op: 'build'; playbookId: string; applicationId: string }
+  | { op: 'build' | 'hero'; playbookId: string; applicationId: string; key?: string }
   | { op: 'adopt'; playbookId: string; market: string; productId: string; bound: Array<{ slot: string; campaignId: string }>; unbound: Array<{ slot: string; campaignId: string }> }
   | { op: 'start' | 'stop'; playbookId: string; market: string; productId: string; slots: string[]; state: string | null; whole?: boolean }
   | { op: 'phase'; playbookId: string; market: string; productId: string; phase: string; from: string | null }
   | SyncAfter
 
 /**
- * Undo: a build is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt; a start is a
+ * Undo: a build — a hero too — is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt; a start is a
  * stop of the slots it started, a stop a start of the slots it stopped — while the row's state is still what it left.
  */
 export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
   async current(change) {
     const after = (change.after ?? {}) as ApplyAfter
-    if (after.op === 'build') {
-      // A build stands while a campaign it made is not archived (one still running stands too: archive-ads waits for it).
+    if (after.op === 'build' || after.op === 'hero') {
+      // A build (a hero's too) stands while a campaign it made is not archived (one still running stands too: archive-ads waits for it).
       const run = await buildRunCampaigns(after.applicationId)
       const standing = 'refusal' in run ? /still running/.test(run.refusal) : run.campaignIds.length > 0
-      return standing ? { op: 'build', playbookId: after.playbookId, applicationId: after.applicationId } : { op: 'build', playbookId: after.playbookId, applicationId: after.applicationId, archived: true }
+      const same = { op: after.op, playbookId: after.playbookId, applicationId: after.applicationId, ...(after.key ? { key: after.key } : {}) }
+      return standing ? same : { ...same, archived: true }
     }
     if (after.op === 'adopt') {
       const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: after.playbookId, kind: 'slot' }, select: { key: true, refId: true } })
@@ -658,9 +786,9 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
   },
   request(change) {
     const after = (change.after ?? {}) as ApplyAfter
-    if (after.op === 'build') {
+    if (after.op === 'build' || after.op === 'hero') {
       return after.applicationId
-        ? { tool: 'archive-ads', args: { buildRunId: after.applicationId, why: 'undo of a playbook build: archived for good' } }
+        ? { tool: 'archive-ads', args: { buildRunId: after.applicationId, why: after.op === 'hero' ? 'undo of a playbook hero: archived for good' : 'undo of a playbook build: archived for good' } }
         : { refusal: 'This change does not name the build it started.' }
     }
     if (after.op === 'adopt') {
@@ -719,7 +847,11 @@ const applyAdsPlaybook: AgentTool = {
     + 'bids remembered; suppressed, never paused), off the live-write allowlist and without placements, so it spends next '
     + 'to nothing until a later START. The plan is the dry run of ads-playbook view compile, held to the blueprint gate '
     + '(only the product\'s own campaigns are kept apart; another product may buy the same keyword). It runs on its own '
-    + 'once approved: follow it with ads-playbook view build. op adopt binds campaigns the product already runs to its '
+    + 'once approved: follow it with ads-playbook view build. op hero builds ONE campaign of its own for a declining or lost term '
+    + '(term; ads-playbook view winners names the terms whose next step it is): one exact keyword, the product\'s own '
+    + 'product ads and negatives, born the same way as a build (2-cent floor, off the allowlist, placements at START) and '
+    + 'linked as the slot hero:<term>, at most one per term; op start with slots ["hero:<term>"] starts it. The term keeps '
+    + 'running where it runs now (nothing negated, no bid lowered) until the hero itself proves. op adopt binds campaigns the product already runs to its '
     + 'slots (bind names some; the rest match by name, then by shape): Nexus only, nothing at Amazon moves (the playbook\'s '
     + 'own hourly plans follow the slots, switched off until START; one another plan holds is never taken). op start '
     + 'makes the campaigns the playbook built spend: on the live-write allowlist, their planned bids back (never above '
@@ -755,6 +887,7 @@ const applyAdsPlaybook: AgentTool = {
     if (a.op === 'start' || a.op === 'stop') return (await startPreview(a, ctx)).result
     if (a.op === 'sync' || a.op === 'sync-negatives') return (await syncPreview(a as SyncArgsIn, ctx)).result
     if (a.op === 'phase') return (await phasePreview(a, ctx)).result
+    if (a.op === 'hero') return (await heroPreview(a, ctx)).result
     return a.op === 'adopt' ? (await adoptPreview(a)).result : (await buildPreview(a, ctx)).result
   },
   async execute(args, ctx) {
@@ -861,6 +994,41 @@ const applyAdsPlaybook: AgentTool = {
       }
       if (!moved && out.failed.length) return { ok: false, error: `Not ${op === 'start' ? 'started' : 'stopped'}: ${out.failed.map((f) => `${f.slot}: ${f.why}`).join('; ')}`, data, change }
       return { ok: true, data, change }
+    }
+
+    if (a.op === 'hero') {
+      // PB-6c — a hero runs as a build of one campaign (the same executor, the same launch), with the bid and budget
+      // the person approved (the term's CPC and spend have moved since): only the band and the caps are asked again.
+      const approved = (ctx.approvedPreview as { frozen?: { bidCents?: unknown; dailyBudgetCents?: unknown } } | undefined)?.frozen
+      const frozen = approved && typeof approved.bidCents === 'number' && typeof approved.dailyBudgetCents === 'number'
+        ? { bidCents: approved.bidCents, dailyBudgetCents: approved.dailyBudgetCents } : null
+      const fresh = await heroPreview(a, ctx, frozen)
+      if (!fresh.result.ok || !fresh.plan) return notRun(`Not run: ${fresh.result.error ?? 'it is no longer a valid campaign of its own'}`)
+      const refusal = recheck(ctx, fresh.result, ['op', 'basis', 'reach'])
+      if (refusal) return notRun(refusal)
+      const p = fresh.plan
+      const preview = fresh.result.preview as { reach: StoredReach; effect: string }
+      const run = approvedRun(ctx, a.why ?? preview.effect)
+      if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+      const requester = await requesterOf(ctx, run.actor)
+      const started = await startPlaybookBuild({ plan: p, actor: run.actor, requester, changeSetId: run.changeSetId, writer: writerOf(run.changeSetId) })
+      if ('refusal' in started) return notRun(`Not run: ${started.refusal}`)
+      if (started.alreadyRunning) return notRun(`Not run: a build of this product is already running (run ${started.applicationId}): follow it with ads-playbook view build.`)
+      return {
+        ok: true,
+        data: {
+          applicationId: started.applicationId,
+          status: 'RUNNING',
+          key: p.hero.plan.key,
+          reach: preview.reach,
+          changeSetId: run.changeSetId,
+          note: `Runs on its own; follow it with ads-playbook view build (applicationId ${started.applicationId}). Born at ${SUPPRESSION_FLOOR_CENTS}¢ and off the live-write allowlist — nothing spends until START. "${p.hero.plan.term}" keeps running where it runs now.`,
+        },
+        change: {
+          before: { op: 'hero', playbookId: p.playbook!.id, term: p.hero.plan.term, slots: p.linked },
+          after: { op: 'hero', playbookId: p.playbook!.id, applicationId: started.applicationId, key: p.hero.plan.key },
+        },
+      }
     }
 
     const fresh = await buildPreview(a, ctx)

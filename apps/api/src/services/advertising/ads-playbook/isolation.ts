@@ -14,6 +14,10 @@
  *                         of its brand slots holds the term
  *   phrase into broad     each live phrase keyword of its Phrase slots → negative phrase in its Broad slots of the SAME
  *                         intent (category into Broad | Category, never Broad | Brand) and its Auto slots
+ *   a hero                PB-6c — a term's own campaign (a hero, slot `hero:<term>`) owns its term in the research
+ *                         slots only once it proved itself (its exact keyword meets the harvest bar there); until then
+ *                         both run (the Owner's rule 2), said. Its OLD exact keyword is never negated here (L1 holds):
+ *                         the winners view proposes it at low bids instead (winners.ts)
  *
  * A negative is planned into an ad group only when ALL hold: the ad group is in scope; it blocks no keyword of that ad
  * group (the lock, L1); its owner keyword is live and not waiting for its bid (PB-10: one a sync added at the floor,
@@ -240,10 +244,24 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   const ownersIn = (groups: readonly ScopeGroup[], match: Positive['match']) =>
     groups.flatMap((g) => positivesOf(g).filter((p) => isHome(p) && p.match === match).map((p) => ({ ...p, slot: slotOf.get(p.adGroupId)! })))
   const research = scope.filter((g) => g.role === 'research')
+  const isHero = (g: Pick<ScopeGroup, 'slot'>) => g.slot.startsWith('hero:')
+  /** PB-6c — a hero owns its term only once its exact keyword meets the harvest bar there (handover B). */
+  const heroProven = (owner: Positive) => winnersIn(owner.adGroupId).has(normaliseNegTerm(owner.text))
+  const unproven = (owner: Positive & { slot: string }) =>
+    `Not negated yet: "${owner.text}" has its own campaign ("${owner.slot}"), which has not met the ads strategy's harvest bar there yet, so the term keeps running here too.`
 
   if (action.exactIntoResearch) {
-    for (const owner of ownersIn(scope.filter((g) => g.role === 'exact'), 'EXACT')) {
-      for (const g of research) consider('exactIntoResearch', owner.text, 'EXACT', g, owner)
+    const owners = ownersIn(scope.filter((g) => g.role === 'exact'), 'EXACT')
+    const heroIds = new Set(scope.filter(isHero).map((g) => g.adGroupId))
+    // A term another live exact keyword of the product owns is that keyword's to send home (as before PB-6c).
+    const ownedElsewhere = new Set(owners.filter((o) => !heroIds.has(o.adGroupId)).map((o) => normaliseNegTerm(o.text)))
+    for (const owner of owners) {
+      const waits = heroIds.has(owner.adGroupId) && !heroProven(owner)
+      if (waits && ownedElsewhere.has(normaliseNegTerm(owner.text))) continue
+      for (const g of research) {
+        if (waits) { plan.leftAlone.push({ kind: 'exactIntoResearch', text: owner.text, adGroupId: g.adGroupId, slot: g.slot, why: unproven(owner) }); continue }
+        consider('exactIntoResearch', owner.text, 'EXACT', g, owner)
+      }
     }
   }
 

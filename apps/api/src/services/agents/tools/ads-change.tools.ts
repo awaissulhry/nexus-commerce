@@ -788,7 +788,8 @@ const BULK_MAX = 500
 /** The most a written list may name (the tool contract bounds every list to 250). */
 const BULK_LIST_MAX = 250
 const LINES_SHOWN = 20
-const BULK_FLOOR_CENTS = 5
+/** The lowest bid this tool sets (PB-6c: the winners view proposes a superseded keyword at it, or the strategy's stop bid). */
+export const BULK_FLOOR_CENTS = 5
 
 type Exclusion = 'notFound' | 'notSponsoredProducts' | 'pinned' | 'belowFloor' | 'suppressed' | 'lowUnflagged' | 'unchanged' | 'outsideBounds' | 'refusedByGate'
 const EXCLUSION_WORDS: Record<Exclusion, string> = {

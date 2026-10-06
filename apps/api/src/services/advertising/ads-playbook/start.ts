@@ -38,7 +38,7 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import { ARTIFACT_COMPILERS, previewArtifacts, type ArtifactCompiler, type ArtifactContext, type ArtifactPreviewLine, type StoredArtifactLink } from './artifacts.js'
 import { loadProductPlaybook } from './build-preview.js'
 import type { BuildRunOptions } from './build.js'
-import type { RankRole, TemplateDoc } from './doc.js'
+import type { ProductTerms, RankRole, TemplateDoc } from './doc.js'
 import { STOP_FLOOR_KIND } from './held.js'
 import { rankOffEffect } from './rank.js'
 import { PHASE_FLOOR_KIND, phaseNow, recordPhaseFloor } from './phase.js'
@@ -228,6 +228,12 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
   // PB-9 — the slots the product's current phase floors (its strategy's goal): START leaves their floor in place.
   const phase = args.op === 'start' && doc ? await phaseNow(market, row.scopeId) : null
   const phaseFloors = new Set(Object.entries((phase && doc?.phases[phase]?.slots) || {}).filter(([, state]) => state === 'floor').map(([key]) => key))
+  // PB-6c — a term's own campaign (a hero) plays the Exact slot it is modelled on: the phase that floors it floors the hero.
+  if (phaseFloors.size && doc) {
+    const { isHeroKey, phaseSlotOf } = await import('./hero.js')
+    const terms = (resolved.product?.terms.value as ProductTerms | null) ?? null
+    for (const l of mine) if (isHeroKey(l.key) && phaseFloors.has(phaseSlotOf(l.key, doc, nameToken, terms))) phaseFloors.add(l.key)
+  }
   const heldByPhase = `phase ${phase}`
 
   const campaigns: StartCampaign[] = []

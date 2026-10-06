@@ -121,7 +121,8 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
   const brand = [...new Map([input.nameToken, ...input.terms.brand].map((t) => t.trim()).filter(Boolean).map((t) => [t.toLowerCase(), t])).values()]
   const competitor = [...new Map(input.terms.competitor.map((t) => t.trim()).filter(Boolean).map((t) => [t.toLowerCase(), t])).values()]
   for (const key of input.links.keys()) {
-    if (!slots.has(key)) warnings.push(`The slot "${key}" is linked but no longer in the playbook: its campaign is a home for terms, never a source or a destination`)
+    // PB-6c — a term's own campaign (a hero, `hero:<term>`) is no slot of the doc: a home for its term, by design.
+    if (!slots.has(key) && !key.startsWith('hero:')) warnings.push(`The slot "${key}" is linked but no longer in the playbook: its campaign is a home for terms, never a source or a destination`)
   }
 
   // Edges → per source: what it graduates, where each match type lands, its start bids and its edges' negateSource.

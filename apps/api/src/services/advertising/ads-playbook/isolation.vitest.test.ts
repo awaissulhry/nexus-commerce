@@ -202,3 +202,32 @@ describe('the scope assertion', () => {
     expect(() => assertInScope([{ adGroupId: 'g-phrase', owner, text: 'test x' }], scope)).not.toThrow()
   })
 })
+
+describe('planIsolation — PB-6c: a term\'s own campaign (a hero) owns its term in research only once it proved itself', () => {
+  const hero: ScopeGroup = { adGroupId: 'g-hero', campaignId: 'c-hero', slot: 'hero:test cape', role: 'exact', match: 'EXACT', intent: 'ANY' }
+  const withHero = [...scope, hero]
+
+  it('the hero not proven yet: it owns nothing in the research slots — both run, said', () => {
+    const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT')] })
+    expect(where(p, 'test cape')).toEqual([])
+    expect(p.leftAlone.filter((l) => l.text === 'test cape').map((l) => [l.kind, l.adGroupId])).toEqual([['exactIntoResearch', 'g-auto'], ['exactIntoResearch', 'g-broad'], ['exactIntoResearch', 'g-phrase']])
+    expect(p.leftAlone[0].why).toMatch(/^Not negated yet: "test cape" has its own campaign \("hero:test cape"\), which has not met the ads strategy's harvest bar there yet/)
+  })
+
+  it('the hero proven: negated exact in the research slots; its OLD exact keyword is never negated (L1 holds)', () => {
+    const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')], winners: { 'g-hero': ['test cape'] } })
+    expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])
+    expect(p.adds.map((a) => a.adGroupId)).not.toContain('g-exact')
+  })
+
+  it('a hero still at the build\'s floor (waiting for START) is no home, as a keyword a sync added at the floor', () => {
+    const p = plan({ scope: withHero, positives: [{ ...pos('g-hero', 'test cape', 'EXACT'), waiting: true }], winners: { 'g-hero': ['test cape'] } })
+    expect(where(p, 'test cape')).toEqual([])
+  })
+
+  it('a term another live exact keyword of the product owns is sent there as before, hero or not', () => {
+    const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')] })
+    expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])
+    expect(p.leftAlone.filter((l) => l.text === 'test cape' && /own campaign/.test(l.why))).toEqual([])
+  })
+})

@@ -179,16 +179,19 @@ export function slotSteps(args: {
   campaigns: ReadonlyMap<string, SlotCampaign>
   running: boolean
   stopBids: ReadonlyMap<string, number>
+  /** PB-6c — the product's own campaigns for a term (heroes): each link key with the slot it plays (hero.ts phaseSlotOf). */
+  heroes?: ReadonlyArray<{ key: string; slot: string }>
 }): SlotStep[] {
   const steps: SlotStep[] = []
-  for (const slot of args.doc.structure.slots) {
-    const campaignId = args.links.get(slot.key) ?? null
-    const was = args.from?.slots?.[slot.key] ?? 'active'
-    const want = args.to.slots?.[slot.key] ?? 'active'
+  const keys = [...args.doc.structure.slots.map((s) => ({ key: s.key, plays: s.key })), ...(args.heroes ?? []).map((h) => ({ key: h.key, plays: h.slot }))]
+  for (const { key, plays } of keys) {
+    const campaignId = args.links.get(key) ?? null
+    const was = args.from?.slots?.[plays] ?? 'active'
+    const want = args.to.slots?.[plays] ?? 'active'
     const c = campaignId ? args.campaigns.get(campaignId) : undefined
-    const base = { slot: slot.key, campaignId, name: c?.name ?? null, from: was, to: want }
+    const base = { slot: key, campaignId, name: c?.name ?? null, from: was, to: want }
     if (!c || c.status === 'ARCHIVED') {
-      if (want === 'floor' || was === 'floor') steps.push({ ...base, does: 'report', direction: 'same', summary: `Slot "${slot.key}" has no live campaign: nothing to ${want === 'floor' ? 'floor' : 'give back'}.` })
+      if (want === 'floor' || was === 'floor') steps.push({ ...base, does: 'report', direction: 'same', summary: `Slot "${key}" has no live campaign: nothing to ${want === 'floor' ? 'floor' : 'give back'}.` })
       continue
     }
     const by = c.floorBy ?? 'an unrecorded actor'
@@ -335,9 +338,14 @@ export async function planPhase(args: { market: string; productId?: string; sku?
     liveWrites: c.liveBidWritesEnabled, phaseFloorBy: phaseFloorOf.get(c.id) ?? null,
   } satisfies SlotCampaign]))
   const stops = await stopBidsFor(slotCampaigns.map((c) => ({ id: c.id, marketplace: c.marketplace })), channel)
+  // PB-6c — a term's own campaign (a hero) plays the Exact slot it is modelled on: floored or run with it.
+  const { isHeroKey, phaseSlotOf } = await import('./hero.js')
+  const heroTerms = (resolved.product?.terms.value ?? null) as Parameters<typeof phaseSlotOf>[3]
+  const heroToken = typeof resolved.product?.nameToken.value === 'string' ? resolved.product.nameToken.value : null
   let slots = slotSteps({
     doc, from: fromEntry, to: entry, links: new Map(slotLinks.map((l) => [l.key, l.refId])), campaigns, running,
     stopBids: new Map([...stops].map(([id, s]) => [id, s.cents])),
+    heroes: slotLinks.filter((l) => isHeroKey(l.key)).map((l) => ({ key: l.key, slot: phaseSlotOf(l.key, doc, heroToken, heroTerms) })),
   })
   // PB-5b — a floor a STOP holds, and a built campaign not started (off the allowlist), go back only through START.
   const { playbookHolds, startOnlyRefusal } = await import('./held.js')
