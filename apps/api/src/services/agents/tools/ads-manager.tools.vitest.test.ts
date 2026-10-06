@@ -293,7 +293,12 @@ describe('W4-1 — a run, start to finish, on a watch-week connection (no nexus.
     expect(run).toMatchObject({ status: 'done', mode: 'ask', counts: { ranByRule: 1 } })
     expect(run.approvals.find((a: { approvalId: string }) => a.approvalId === ids.waiting)).toMatchObject({ fate: 'expired', whenReported: 'waiting' })
     expect(data.fatesNow).toMatchObject({ ran: 1, expired: 1, declined: 1, waiting: 1 })
-    expect(data.watchWeek).toMatchObject({ comparison: null })
+    // W4-5 — the watch week: the request asked at watch is read back with its verdict (its preview names no entity).
+    expect(data.watchWeek).toMatchObject({
+      label: 'observed, not proof of cause', totalSteps: 1,
+      steps: [{ approvalId: ids.watched, tool: 'bulk-ad-bid-change', verdict: { wouldRun: true, meaning: 'would have run by rule' }, items: [] }],
+      table: [{ action: 'bid', steps: 1, wouldRun: 1 }],
+    })
     // A person without the money permissions reads the same runs without the figures.
     const without = new Set([...EVERYTHING].filter((p) => !p.startsWith('financials.')))
     const plain = ((await dryRun(person(without), 'ads-manager-runs', { days: 7 })).result as { data: Record<string, any> }).data

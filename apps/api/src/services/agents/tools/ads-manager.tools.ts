@@ -7,7 +7,10 @@
  *                     Claude's words per market and the approval ids it asked for; Nexus adds every number itself
  *                     (`amazonOverview`, the read ads-overview answers from), reads what each approval became, and sends
  *                     one bell notice and at most one e-mail a day. A line with an amount or a percentage is refused.
- *   ads-manager-runs  the runs of the last days, each approval's fate read again now (approved, declined, expired …).
+ *   ads-manager-runs  the runs of the last days, each approval's fate read again now (approved, declined, expired …),
+ *                     and W4-5's watch-week comparison (ads-watch-week.service.ts): each ad change asked at watch against
+ *                     what then happened to its entity, and the table per kind. The day's e-mail carries that table while
+ *                     watch mode is on.
  *   set-ads-report-time  W4-2 — by when the day's report is due (the watchdog, ads-manager-watchdog.service.ts). Ceiling
  *                     ask: Claude never changes its own watchdog alone.
  *
@@ -47,7 +50,6 @@ import {
   startFacts,
   startRequestOf,
   storeRunOutput,
-  WATCH_WEEK_SLOT,
   withdrawRun,
   type EmailOutcome,
   type NamedApproval,
@@ -59,6 +61,8 @@ import {
 } from '../ads-manager-run.service.js'
 import { DANGER_NOTICES_PER_DAY, knownTimeZone, REPORT_TIME, RUNS_PER_DAY } from '../ads-manager-constants.js'
 import { readExpectedReport, writeExpectedReport, type ExpectedReport } from '../ads-manager-watchdog.service.js'
+import { watchModeOn, watchWeek, watchWeekSummary, type WatchWeek } from '../ads-watch-week.service.js'
+import { logger } from '../../../utils/logger.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { amazonOverview } from './ads-read.tools.js'
 
@@ -330,7 +334,22 @@ async function approvalLink(workspaceId: string, approvalId: string): Promise<st
   }
 }
 
-async function renderEmail(p: ReportPlan, business: string | null, runId: string, now: Date) {
+/**
+ * W4-5 — the watch-week table for the day's e-mail, only while watch mode is on (null otherwise). A comparison that
+ * cannot be read never holds the e-mail back: it says so in one line.
+ */
+async function watchSection(now: Date): Promise<{ html: string; text: string } | null> {
+  try {
+    if (!(await watchModeOn(now))) return null
+    return watchWeekSummary(await watchWeek({ days: DAYS, now }))
+  } catch (error) {
+    logger.warn('[ads-manager-run] the watch-week comparison could not be read for the e-mail', { error: String(error).slice(0, 140) })
+    const text = 'Watch week: the comparison could not be read for this e-mail; ads-manager-runs has it.'
+    return { html: `<p style="margin:16px 0 0;color:#5b6573;font-size:13px">${esc(text)}</p>`, text }
+  }
+}
+
+async function renderEmail(p: ReportPlan, business: string | null, runId: string, now: Date, watch: { html: string; text: string } | null = null) {
   const workspaceId = workspaceIdForQuery()
   const subject = `Claude ads${business ? ` · ${business}` : ''} — ${p.counts.ranByRule} ran, ${p.counts.waitingForYou} wait for you${p.problems.length ? ` · ${plural(p.problems.length, 'problem')}` : ''}`
   const links = new Map<string, string | null>()
@@ -356,6 +375,7 @@ async function renderEmail(p: ReportPlan, business: string | null, runId: string
   ${group('Waits for you', p.approvals.filter((a) => a.fate === 'waiting' || a.fate === 'handed_back'))}
   ${group('Decided by a person', p.approvals.filter((a) => !a.byRule && (a.fate === 'ran' || a.fate === 'approved')))}
   ${group('Not run', p.approvals.filter((a) => !['ran', 'approved', 'waiting', 'handed_back'].includes(a.fate)))}
+  ${watch?.html ?? ''}
   ${p.nextFocus ? `<p style="margin:16px 0 0"><b>Next:</b> ${esc(p.nextFocus)}</p>` : ''}
   <p style="margin:20px 0 0;color:#8a93a1;font-size:12px">Run ${esc(runId)}. Every figure here is Nexus's own, read when the report was made; the words are Claude's.</p>
 </div>`
@@ -364,6 +384,7 @@ async function renderEmail(p: ReportPlan, business: string | null, runId: string
     ...p.problems.map((problem) => `Problem: ${problem}`),
     ...p.markets.flatMap((m) => [m.figures ? figuresLine(m.figures) : m.market, ...m.lines.map((line) => `  - ${line}`)]),
     ...p.approvals.map((a) => `${a.title ?? a.tool} (${a.approvalId}): ${FATE_WORDS[a.fate]}`),
+    ...(watch ? [watch.text] : []),
     ...(p.nextFocus ? [`Next: ${p.nextFocus}`] : []),
   ].join('\n')
   return { subject, html, text }
@@ -488,7 +509,7 @@ async function execute(args: Record<string, unknown>, ctx: ToolContext): Promise
     body: noticeBody(report, true), plainBody: noticeBody(report, false), waiting: report.counts.waitingForYou,
   })
   const email: EmailOutcome = report.email.send
-    ? await sendRunEmail(await renderEmail(report, await businessName(workspaceIdForQuery()), recorded.runId, now), now)
+    ? await sendRunEmail(await renderEmail(report, await businessName(workspaceIdForQuery()), recorded.runId, now, await watchSection(now)), now)
     : { status: 'skipped', on: null, recipients: report.email.recipients, why: report.email.why }
   await storeRunOutput(recorded.runId, { ...output, notice, email })
   return {
@@ -540,6 +561,16 @@ const reportAdsRun: AgentTool = {
 
 // ── ads-manager-runs ───────────────────────────────────────────────────────────────────────────────
 
+/** W4-5 — the comparison, or one sentence when it cannot be read now (the run history still answers). */
+async function watchWeekOrNote(days: number): Promise<WatchWeek | { unavailable: string }> {
+  try {
+    return await watchWeek({ days })
+  } catch (error) {
+    logger.warn('[ads-manager-runs] the watch-week comparison could not be read', { error: String(error).slice(0, 140) })
+    return { unavailable: 'Nexus could not read the watch-week comparison just now; the run history above is complete.' }
+  }
+}
+
 const adsManagerRuns: AgentTool = {
   name: 'ads-manager-runs',
   title: 'Daily ads runs',
@@ -555,8 +586,25 @@ const adsManagerRuns: AgentTool = {
     + 'reported a failure, withdrawn) and mode, per market the run\'s lines and the figures Nexus stated, each approval '
     + 'the run named with what it is now (ran, approved, waits for a person, declined, expired …) and what it was when '
     + 'reported, the problems, the next focus, and whether the bell notice and the e-mail went. A run that started and '
-    + 'never reported its end shows as started. Amounts are minor units of each market\'s own currency; a person without '
-    + 'the ad-spend money permission gets the same answer without them. Read only.',
+    + 'never reported its end shows as started. watchWeek (W4-5): every ad change asked at watch in the same days — the '
+    + 'entity, the action, the value it would have set, the verdict (would have run by rule, or would have waited and '
+    + 'why) and what a person did with the request; then, over the next 72 hours, what happened to the entity (an engine '
+    + 'moved it the same way, the opposite way or otherwise; a person or another request changed it; an engine suggested '
+    + 'it), and its spend, sales, clicks, orders and ACoS in the 3 and 7 days after against the days before, next to '
+    + 'comparable entities nothing changed — observed, not proof of cause; and a table per kind of ad action (would have '
+    + 'run by rule, would have waited, agreed with an engine, conflicted with an engine, held by limits, outcome). '
+    + 'Amounts are minor units of each campaign\'s own currency, never converted; a person without the ad-spend money '
+    + 'permission gets the same answer without them (a watched step\'s reason as the rule gave it, ruleWhy, may state an '
+    + 'amount: they read its check\'s words, meaning). Read only.',
+  // W4-5 — the value a watched item would have set and a verdict's reason (WATCH_WEEK_MONEY, written out here: a tool
+  // file reads no imported constant while it loads). Spend, sales and ACoS are restricted everywhere.
+  restrictedFields: {
+    wantedFromCents: FIELDS.financialsAdspendView,
+    wantedToCents: FIELDS.financialsAdspendView,
+    wantedFromPct: FIELDS.financialsAdspendView,
+    wantedToPct: FIELDS.financialsAdspendView,
+    ruleWhy: FIELDS.financialsAdspendView,
+  },
   async handler(args): Promise<ToolResult> {
     const days = Number((args as { days: number }).days)
     const since = new Date(Date.now() - days * 86_400_000)
@@ -604,8 +652,8 @@ const adsManagerRuns: AgentTool = {
         fatesNow: tally,
         // W4-2 — by when the watchdog expects the day's report (null: the missing-report check is off).
         expectedReport: await expectedNow(),
-        // W4-5 — the watch-week comparison stands here once built.
-        watchWeek: WATCH_WEEK_SLOT,
+        // W4-5 — each watched ad step against what then happened to its entity.
+        watchWeek: await watchWeekOrNote(days),
         ...(runs.length ? {} : { empty: `No daily Claude ads run reported in the last ${days} days.` }),
       },
     }

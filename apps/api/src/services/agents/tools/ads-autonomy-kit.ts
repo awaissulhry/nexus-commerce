@@ -24,6 +24,8 @@
  *   note     `limitsNote`: each limit, its value, this change's value, and where the limit comes from.
  *   watch    AA-W2-4 — `asWatched`: a stored preview as the watch level judges it (today also counts the watched changes
  *            that would have run; a watch the strategy set reads as auto when it is what holds the change).
+ *   wanted   W4-5 — each item's entity, direction and the value it would set (`wantedOf`): what the watch-week
+ *            comparison (agents/ads-watch-week.service.ts) reads back from a watched request that never ran.
  *
  * Live and sandbox are judged the same. The existing brakes stay in front of every check here: nexus.run, Pause, the
  * business's cap of runs by rule and the write gate (a gate refusal is refused at preview and never queued).
@@ -234,6 +236,52 @@ export interface LimitFacts {
   monthProjection?: Record<string, MonthProjection>
   /** AA-W2-4 — judged at watch (`asWatched`): "today" also counts the watched changes that would have run by rule. */
   watchedToday?: true
+  /**
+   * W4-5 — each item as the watch-week comparison reads it back (`wantedOf`): a watched request never runs, so its
+   * stored facts are the one place that says what it would have set. Absent on a preview stored before W4-5.
+   */
+  wanted?: WantedItem[]
+}
+
+/**
+ * W4-5 — one item of a change: its entity, which way it moves spend (`measure`), and the value it would set — money in
+ * minor units of its campaign's currency (never converted), a placement or a target ACoS in whole percent, a status,
+ * the live-write switch, or a negative's term. The values sit under their own keys (LIMIT_FACTS_MONEY hides them from
+ * a person without the ad-money permission).
+ */
+export interface WantedItem {
+  entity: string
+  field: KitChange['field']
+  direction: Direction
+  /** A bid or a daily budget; null: a new keyword or target (it had none). */
+  wantedFromCents?: number | null
+  wantedToCents?: number
+  wantedFromPct?: number | null
+  wantedToPct?: number
+  from?: string | boolean | null
+  to?: string | boolean
+  term?: string
+  matchType?: string | null
+}
+
+/** Pure: one item as the facts store it (`LimitFacts.wanted`). */
+export function wantedOf(entity: string, change: KitChange, direction: Direction = measure(change).direction): WantedItem {
+  const base = { entity, field: change.field, direction }
+  switch (change.field) {
+    case 'bid':
+    case 'dailyBudget':
+      return { ...base, wantedFromCents: change.fromCents, wantedToCents: change.toCents }
+    case 'placementPct':
+    case 'targetAcosPct':
+      return { ...base, wantedFromPct: change.fromPct, wantedToPct: change.toPct }
+    case 'status':
+    case 'liveWrites':
+      return { ...base, from: change.from, to: change.to }
+    case 'negative':
+      return { ...base, term: change.term, matchType: change.matchType ?? null }
+    case 'automation':
+      return base
+  }
 }
 
 /**
@@ -245,7 +293,9 @@ export const LIMIT_FACTS_MONEY: Readonly<Record<string, string>> = {
   ...Object.fromEntries(
     ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents',
       // AA-W2-8 — the strategy's ACoS target where a change lands.
-      'strategyTargetAcosPct']
+      'strategyTargetAcosPct',
+      // W4-5 — the value each item would set (`wanted`).
+      'wantedFromCents', 'wantedToCents', 'wantedFromPct', 'wantedToPct']
       .map((key) => [key, FIELDS.financialsAdspendView]),
   ),
 }
@@ -410,11 +460,13 @@ export async function buildLimitFacts(input: {
 
   const t = facts.this
   const entities = new Set<string>()
+  const wanted: WantedItem[] = []
   for (const item of input.items) {
     const key = entityKey(item.entity)
     entities.add(key)
     const scope = scopes.get(key)!
     const m = measure(item.change)
+    wanted.push(wantedOf(key, item.change, m.direction))
     // An item Nexus cannot place counts in the totals only (C1 refuses it).
     const day = scope.market ? (t.byMarket[scope.market] ??= { ...NO_RUNS, addedDailyCents: 0 }) : null
     if (day) day.changes++
@@ -456,6 +508,7 @@ export async function buildLimitFacts(input: {
   }
   t.entities = [...entities]
   t.markets = Object.keys(t.byMarket).sort()
+  if (wanted.length) facts.wanted = wanted
 
   // C4 — what an enabled rule or schedule also moves.
   const campaigns = new Map<string, string>()
