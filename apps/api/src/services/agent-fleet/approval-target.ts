@@ -783,6 +783,17 @@ const READERS: Record<string, Reader> = {
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
   'apply-ads-playbook': (p) => {
+    // PB-5b — a start or a stop: each built campaign it moves, from → to.
+    if (p.op === 'start' || p.op === 'stop') {
+      const start = p.op === 'start'
+      const floored = 'At the 2-cent floor, off the allowlist'
+      return {
+        channel: 'AMAZON',
+        market: marketOf(p.market),
+        changes: recs(p.campaigns).filter((c) => (start ? c.allowlist === 'on' || rec(c.bids)?.does === 'restore' || rec(c.placements)?.does === 'apply' : c.allowlist === 'off' || rec(c.bids)?.does === 'floor'))
+          .map((c) => ({ label: `Slot ${plainValue(c.slot)} · “${text(c.name) ?? '?'}”`, from: start ? floored : 'Running', to: start ? (c.paused ? 'Ready, stays paused' : 'Planned bids, on the allowlist') : floored })),
+      }
+    }
     if (p.op === 'adopt') {
       return {
         channel: 'AMAZON',

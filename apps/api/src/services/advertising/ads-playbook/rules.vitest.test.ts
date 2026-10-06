@@ -6,6 +6,8 @@
  *             compile again writes nothing
  *   re-sync   a changed compile changes the action and the name only — the on/off and the autonomy level stay his
  *   start     switches it on, never over a switch-off made after the last start (the start mark, or the change log)
+ *   stop      PB-5b — the playbook STOP's own switch-off (its row carries PLAYBOOK_STOP_METRIC) is no one's: the next
+ *             start switches the rule on again; a switch-off made after that stop still holds
  *   business  another business sees neither the rule nor the link, and its own save of the same key is its own
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -17,7 +19,7 @@ vi.mock('../../../db.js', () => ({
   default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
 }))
 
-import { ensureCompiledRule } from './rules.js'
+import { ensureCompiledRule, PLAYBOOK_STOP_METRIC } from './rules.js'
 
 const A = 'pb6a_rules_alpha'
 const B = 'pb6a_rules_bravo'
@@ -119,5 +121,51 @@ describe('PB-6a — ensureCompiledRule', () => {
     expect(await scopeOf()).toBe('TEST-MKT-1')
     expect(await inA(() => save({ key: 'harvest-scope', scopeMarketplace: 'TEST-MKT-2' }))).toMatchObject({ ruleId, changed: true })
     expect(await scopeOf()).toBe('TEST-MKT-2')
+  })
+
+  /** A switch of the rule as its writer records it: the playbook's STOP (artifacts.ts switchRulesOff) or a person. */
+  const switched = async (ruleId: string, enabled: boolean, by: 'stop' | 'person') => inA(async () => {
+    await db().automationRule.update({ where: { id: ruleId }, data: { enabled } })
+    await db().advertisingActionLog.create({ data: {
+      userId: by === 'stop' ? 'user:approver-test' : 'user:owner-test', actionType: 'update_rule', entityType: 'RULE', entityId: ruleId,
+      payloadBefore: { enabled: !enabled }, payloadAfter: { enabled }, amazonResponseStatus: 'SUCCESS',
+      ...(by === 'stop' ? { evidence: { metric: PLAYBOOK_STOP_METRIC, note: 'switched off by the playbook stop' } } : {}),
+    } })
+    await new Promise((r) => setTimeout(r, 5))
+  })
+
+  it('PB-5b — after the playbook\'s own stop the next start switches it on again', async () => {
+    const { ruleId } = await inA(() => save({ key: 'harvest-stop-1', start: true }))
+    await new Promise((r) => setTimeout(r, 5))
+    await switched(ruleId, false, 'stop')
+    const restarted = await inA(() => save({ key: 'harvest-stop-1', start: true }))
+    expect(restarted).toMatchObject({ ruleId, changed: true, enabled: true })
+    expect(restarted).not.toHaveProperty('keptOff')
+    // Stopped and started again: the same holds.
+    await switched(ruleId, false, 'stop')
+    expect(await inA(() => save({ key: 'harvest-stop-1', start: true }))).toMatchObject({ enabled: true })
+  })
+
+  it('PB-5b — a person who switches it on and off after the stop keeps it off; one made before the stop and undone does not', async () => {
+    const after = (await inA(() => save({ key: 'harvest-stop-2', start: true }))).ruleId
+    await new Promise((r) => setTimeout(r, 5))
+    await switched(after, false, 'stop')
+    await switched(after, true, 'person')
+    await switched(after, false, 'person')
+    expect(await inA(() => save({ key: 'harvest-stop-2', start: true }))).toMatchObject({ enabled: false, keptOff: expect.stringMatching(/^It stays off: user:owner-test switched it off/) })
+
+    const undone = (await inA(() => save({ key: 'harvest-stop-3', start: true }))).ruleId
+    await new Promise((r) => setTimeout(r, 5))
+    await switched(undone, false, 'person')
+    await switched(undone, true, 'person')
+    await switched(undone, false, 'stop')
+    expect(await inA(() => save({ key: 'harvest-stop-3', start: true }))).toMatchObject({ enabled: true })
+  })
+
+  it('PB-5b — a person\'s switch-off with no stop of the playbook after it still holds (as before)', async () => {
+    const { ruleId } = await inA(() => save({ key: 'harvest-stop-4', start: true }))
+    await new Promise((r) => setTimeout(r, 5))
+    await switched(ruleId, false, 'person')
+    expect(await inA(() => save({ key: 'harvest-stop-4', start: true }))).toMatchObject({ enabled: false, keptOff: expect.stringContaining('user:owner-test') })
   })
 })

@@ -741,6 +741,8 @@ export interface PlaybookApplyWriter {
   actorUserId?: string | null
   approvalId?: string | null
   updatedBy: string
+  /** PB-5b — a START approved with the approver's authenticator code: when the code was typed (the version row keeps it). */
+  stepUpAt?: Date | null
 }
 
 /** What an apply op made of the row: its state, and the row and template versions it compiled. */
@@ -764,7 +766,7 @@ export interface PlaybookApplyRecord {
 type Tx = Prisma.TransactionClient
 
 /**
- * PB-5a — record an apply (build, adopt; start, stop in PB-5b) on the PRODUCT row: its state and what it compiled, with
+ * PB-5a — record an apply (build, adopt; PB-5b: start, stop) on the PRODUCT row: its state and what it compiled, with
  * one AdsPlaybookVersion row (op = the apply's op; no money moves in the row, so it is `same`). Optimistic on the row's
  * version: unmoved since the plan → `compiledVersion` = the new version; moved since → the new state only, and
  * `compiledVersion` stays what was compiled (so the row honestly reads as newer than what was built). `tx`: inside the
@@ -807,7 +809,7 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
         kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
         values: rowValuesOf({ ...row, state: record.state, ...(overrides ? { overrides: Object.keys(overrides).length ? overrides : null } : {}) } as typeof row) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
         direction: 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
-        stepUpAt: null, reason: record.reason ?? null,
+        stepUpAt: writer.stepUpAt ?? null, reason: record.reason ?? null,
       },
     })
     return { version, compiledVersion, moved }

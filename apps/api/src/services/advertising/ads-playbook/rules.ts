@@ -14,11 +14,18 @@
  *             switched it on (`startedAt` in its action, kept by this writer; nothing here ever switches a rule off, so
  *             a started rule that is off was switched off by someone since), or the rule's change log
  *             (AdvertisingActionLog, update_rule) names `enabled: false` after that start. Then it stays off, said.
+ *             PB-5b — the playbook's own STOP switches its rules off (artifacts.ts) and records each one with the metric
+ *             PLAYBOOK_STOP_METRIC: those rows are no one's switch-off. After such a stop only a switch-off made since it
+ *             holds the rule off (someone switched it on and off again); else the next START switches it on again.
  *
  * Every read and write goes through the business-scoped client: a business never sees another's rule or link.
  */
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../../db.js'
+
+/** PB-5b — the evidence metric of the playbook STOP's own switch-off rows: a START passes over them (never a person's). */
+export const PLAYBOOK_STOP_METRIC = 'playbook_stop'
+const isPlaybookStop = (evidence: unknown) => (evidence as { metric?: unknown } | null)?.metric === PLAYBOOK_STOP_METRIC
 
 /** One JSON text per value, keys sorted: a stored action (jsonb reorders keys) compares equal to the same compile. */
 export function canonical(value: unknown): string {
@@ -79,11 +86,16 @@ export async function ensureCompiledRule(args: {
       let enabled = rule.enabled
       let keptOff: string | undefined
       if (args.start && !rule.enabled) {
-        const switchOff = (await tx.advertisingActionLog.findMany({
+        const switches = (await tx.advertisingActionLog.findMany({
           where: { entityType: 'RULE', entityId: rule.id, actionType: 'update_rule', ...(lastStart ? { createdAt: { gt: new Date(lastStart) } } : {}) },
-          orderBy: { createdAt: 'desc' }, take: 20, select: { userId: true, payloadAfter: true, createdAt: true },
-        })).find((row) => (row.payloadAfter as { enabled?: unknown } | null)?.enabled === false)
-        if (lastStart || switchOff) {
+          orderBy: { createdAt: 'desc' }, take: 20, select: { userId: true, payloadAfter: true, evidence: true, createdAt: true },
+        })).filter((row) => typeof (row.payloadAfter as { enabled?: unknown } | null)?.enabled === 'boolean')
+        // PB-5b — the playbook's own stop is no one's switch-off: a rule is on right before it, so only a switch-off made
+        // after the last such stop holds the rule off. Without one, as before: any switch-off since the last start.
+        const ownStop = switches.find((row) => isPlaybookStop(row.evidence))
+        const switchOff = switches.find((row) => !isPlaybookStop(row.evidence) && (row.payloadAfter as { enabled?: unknown }).enabled === false
+          && (!ownStop || row.createdAt > ownStop.createdAt))
+        if (switchOff || (lastStart && !ownStop)) {
           keptOff = `It stays off: ${switchOff?.userId ? `${switchOff.userId} switched it off` : 'it was switched off'} after the playbook last started it${lastStart ? ` (${lastStart})` : ''}. Switch it on yourself to run it again.`
         } else enabled = true
       }
