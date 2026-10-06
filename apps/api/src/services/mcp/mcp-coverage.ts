@@ -217,6 +217,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'settings-audit': { part: '09', feature: 78 },
   'settings-privacy': { excluded: 'privacy: personal-data export, account deletion, retention, consent, suppressions: never for Claude (09 §2)', feature: 58 },
   'settings-webhooks': { excluded: 'outgoing webhooks send business data to any address: never for Claude (09 §2)', feature: 57 },
+  'sheet-delete-rows': { part: '02', feature: 1, also: 'the product sheet\'s row delete: to the recycle bin with Undo, extra listings archived; the hard delete stays excluded (#13)' },
   'sheet-transfer': { part: '09', feature: 68 },
   'shopify-media': { part: '09', feature: 67 },
   'shopify-shadow-report': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },

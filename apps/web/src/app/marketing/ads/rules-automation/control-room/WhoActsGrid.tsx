@@ -79,7 +79,8 @@ const COLUMNS: ColDef<ActorRow>[] = [
   { colId: 'inForce', headerName: 'May do now', field: 'why', flex: 3, minWidth: 320, cellRenderer: InForceCell },
   // Claude's kinds have no runs of their own (each request is its own run): a dash, never a false "never".
   { colId: 'lastRun', headerName: 'Last run', field: 'lastRunAt', width: 110, valueFormatter: (p) => (p.data?.kind === 'claude' ? '—' : agoWords((p.value as string | null) ?? null)) },
-  { colId: 'week', headerName: 'Last 7 days', field: 'week', flex: 1, minWidth: 160 },
+  // Room for a busy engine's week ("670 runs · 10,474 changes · 1 failed") without cutting it.
+  { colId: 'week', headerName: 'Last 7 days', field: 'week', flex: 1.4, minWidth: 230, tooltipField: 'week' },
   { colId: 'problem', headerName: 'Problem', field: 'problem', flex: 1, minWidth: 140, cellRenderer: ProblemCell },
 ]
 

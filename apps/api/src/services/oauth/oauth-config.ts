@@ -24,6 +24,8 @@ export type McpScope = (typeof MCP_SCOPES)[number]
 export const ACCESS_TOKEN_SECONDS = 3600
 export const REFRESH_TOKEN_SECONDS = 30 * 24 * 3600
 export const CODE_SECONDS = 60
+/** W4-3 — how long after its first use the same app may present a refresh token again (a lost answer, two at once). */
+export const REFRESH_GRACE_SECONDS = 120
 
 /** Where Claude's hosted apps (web, Desktop, mobile, Cowork) return after sign-in. */
 const HOSTED_CALLBACKS = ['https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback']
