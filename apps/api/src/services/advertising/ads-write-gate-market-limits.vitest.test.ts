@@ -22,6 +22,8 @@ vi.mock('../../db.js', () => ({
     advertisingActionLog: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
     adProductAd: { findMany: vi.fn(async () => []) },
     adWriteRefusal: { create: vi.fn(async () => ({})) },
+    // W1-5 — no ads strategy row sets a bid field: the gate's strategy band adds nothing.
+    adsStrategy: { findFirst: vi.fn(async () => null) },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => mode }))

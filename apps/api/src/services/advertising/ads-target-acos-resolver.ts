@@ -11,7 +11,10 @@
  *             the Campaigns grid (PATCH /campaigns/:id/automation), the bid page's Goal (PUT /campaigns/:id/goal), the
  *             budget control plane, the `set_campaign_target_acos` rule action and Claude's set-campaign-target-acos.
  *             (`Campaign.targetAcosPct`, the integer column, has no writer: ads-guardrails.ts. It is not read.)
- *   (W1 puts product, category and market levels here, between `campaign` and `account`.)
+ *   strategy  W1-5 — the ads strategy's ACoS target for the keyword's AD GROUP (ads-strategy/bids.ts): its products'
+ *             product row (variation, then parent), else their primary category's (deepest first), else the market's;
+ *             the lowest across the ad group's products. A FRACTION, already checked (a TACoS target is never one).
+ *             After the campaign's own target (Owner decision 2026-10-06: the campaign's own target wins).
  *   account   `AdsAutomationState.defaultTargetAcosPct`, an INTEGER PERCENT (25 = 25 %). Written by the Suggestions bid
  *             settings (POST /automation/default-target-acos) and Claude's tune-ad-engine account-target-acos.
  *   profit    the ad group's profit-derived target (ads-target-acos.service.ts) — only when the caller runs in profit mode.
@@ -23,8 +26,12 @@
  */
 import prisma from '../../db.js'
 import { FALLBACK_TARGET_ACOS } from './ads-target-acos.service.js'
+// The strategy registry imports this file's constants: from the strategy modules only types and the cycle-free words.
+import type { StrategyTarget } from './ads-strategy/bids.js'
+import type { StrategySource } from './ads-strategy/resolve.js'
+import { strategyWords } from './ads-strategy/source-words.js'
 
-export type TargetAcosSource = 'explicit' | 'campaign' | 'account' | 'profit' | 'flat'
+export type TargetAcosSource = 'explicit' | 'campaign' | 'strategy' | 'account' | 'profit' | 'flat'
 
 /**
  * The highest target a fraction field holds: 5 (500 %). The automation writer clamps to it (applyAutomationPatch,
@@ -47,6 +54,8 @@ export interface TargetAcosInputs {
   explicitTargetAcos: unknown
   /** `AdsAutomationState.defaultTargetAcosPct`, as stored (unchecked); null when none is set. */
   accountDefaultPct: unknown
+  /** W1-5 — the ads strategy's ACoS target per ad group (strategyBidReader); absent or null: no strategy target. */
+  strategyByAdGroup?: ReadonlyMap<string, StrategyTarget> | null
   /** Profit-derived target per ad group (fractions); null when the caller is not in profit mode. */
   profitByAdGroup: ReadonlyMap<string, number> | null
   /** The caller's fallback, a fraction (30 % when it gave none). */
@@ -59,6 +68,8 @@ export interface ResolvedTargetAcos {
   source: TargetAcosSource
   /** Values a source holds that are not a target ACoS in its own unit and range, skipped on the way. */
   skipped: Array<{ source: TargetAcosSource; stored: unknown }>
+  /** W1-5 — with `strategy`: the strategy row that supplied it. */
+  strategy?: StrategySource
 }
 
 /** A source's answer: a fraction, null (nothing set for this subject), or a stored value it refuses to read. */
@@ -80,6 +91,7 @@ export function accountDefaultFraction(stored: unknown): Reading {
 export const TARGET_ACOS_SOURCES: ReadonlyArray<{ source: TargetAcosSource; read: (subject: TargetAcosSubject, inputs: TargetAcosInputs) => Reading }> = [
   { source: 'explicit', read: (_s, i) => targetFraction(i.explicitTargetAcos) },
   { source: 'campaign', read: (s) => targetFraction(s.campaignTargetAcos) },
+  { source: 'strategy', read: (s, i) => i.strategyByAdGroup?.get(s.adGroupId)?.targetAcos ?? null },
   { source: 'account', read: (_s, i) => accountDefaultFraction(i.accountDefaultPct) },
   { source: 'profit', read: (s, i) => i.profitByAdGroup?.get(s.adGroupId) ?? null },
   { source: 'flat', read: (_s, i) => i.flatTargetAcos },
@@ -90,11 +102,33 @@ export function resolveTargetAcos(subject: TargetAcosSubject, inputs: TargetAcos
   const skipped: ResolvedTargetAcos['skipped'] = []
   for (const { source, read } of TARGET_ACOS_SOURCES) {
     const r = read(subject, inputs)
-    if (typeof r === 'number') return { targetAcos: r, source, skipped }
+    if (typeof r === 'number') return answered(r, source, skipped, subject, inputs)
     if (r != null) skipped.push({ source, stored: r.refused })
   }
   // Unreachable while `flat` is last and always answers; kept so the function is total.
   return { targetAcos: FALLBACK_TARGET_ACOS, source: 'flat', skipped }
+}
+
+function answered(targetAcos: number, source: TargetAcosSource, skipped: ResolvedTargetAcos['skipped'], subject: TargetAcosSubject, inputs: TargetAcosInputs): ResolvedTargetAcos {
+  const strategy = source === 'strategy' ? inputs.strategyByAdGroup?.get(subject.adGroupId)?.source : undefined
+  return { targetAcos, source, skipped, ...(strategy ? { strategy } : {}) }
+}
+
+/**
+ * W1-5 — a target someone CONFIGURED, for a caller that has no fallback of its own (the `bid_apply` rule's target-ACoS
+ * ops): the caller's own number, the campaign's, the strategy's, the account default. Null when none is set: no profit
+ * data and no flat 30 % are guessed for it.
+ */
+export function configuredTargetAcos(subject: TargetAcosSubject, inputs: Omit<TargetAcosInputs, 'profitByAdGroup' | 'flatTargetAcos'>): ResolvedTargetAcos | null {
+  const all: TargetAcosInputs = { ...inputs, profitByAdGroup: null, flatTargetAcos: Number.NaN }
+  const skipped: ResolvedTargetAcos['skipped'] = []
+  for (const { source, read } of TARGET_ACOS_SOURCES) {
+    if (source === 'profit' || source === 'flat') break
+    const r = read(subject, all)
+    if (typeof r === 'number') return answered(r, source, skipped, subject, all)
+    if (r != null) skipped.push({ source, stored: r.refused })
+  }
+  return null
 }
 
 /**
@@ -127,6 +161,7 @@ export async function readOwnerTargets(campaignIds: string[]): Promise<{ byCampa
 const SOURCE_WORDS: Record<TargetAcosSource, string> = {
   explicit: 'its own target ACoS',
   campaign: "this campaign's target ACoS",
+  strategy: "the ads strategy's target ACoS",
   account: "the account's default target ACoS",
   profit: 'the profit-derived target ACoS',
   flat: 'a flat target ACoS',
@@ -141,11 +176,12 @@ export function targetSourceWords(source: TargetAcosSource): string {
  * The proposal's reason suffix: whose target (an explicit one in the caller's words, e.g. "this rule's target"), and
  * any stored value skipped on the way. Empty for a plain flat target, as it always read.
  */
-export function targetSourceNote(r: Pick<ResolvedTargetAcos, 'source' | 'skipped'>, explicitFrom = 'the target asked for'): string {
+export function targetSourceNote(r: Pick<ResolvedTargetAcos, 'source' | 'skipped' | 'strategy'>, explicitFrom = 'the target asked for'): string {
   const label = r.source === 'explicit' ? ` (${explicitFrom})`
     : r.source === 'campaign' ? ' (campaign target)'
-      : r.source === 'account' ? ' (account default)'
-        : r.source === 'profit' ? ' (profit-derived)' : ''
+      : r.source === 'strategy' ? ` (${r.strategy ? strategyWords(r.strategy) : 'ads strategy'})`
+        : r.source === 'account' ? ' (account default)'
+          : r.source === 'profit' ? ' (profit-derived)' : ''
   // Only the explicit, campaign and account sources can refuse a value.
   const skipped = r.skipped.map((s) => (s.source === 'account'
     ? `account default ${JSON.stringify(s.stored)} skipped: not a percent above 0 and at most ${MAX_ACCOUNT_DEFAULT_PCT}`

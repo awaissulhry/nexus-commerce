@@ -10,6 +10,7 @@ import {
   GOAL_PRESETS, DEFAULT_GUARDRAILS, effectiveTargetAcosPct,
 } from './presets.js'
 import { decideBid, decideBudget, decidePlacement, type ProposedAction } from './modules.js'
+import type { StrategyBidLimits } from '../ads-strategy/bids.js'
 
 export interface PlanModules {
   bid?: { on: boolean }
@@ -26,6 +27,11 @@ export interface ConductorInput {
   guardrails: Partial<Guardrails>
   modules: PlanModules
   signals: CampaignSignals[]
+  /**
+   * W1-5 — the ads strategy's bid limits per campaign (the safer value across all its products; strategyLimitsForPlan):
+   * they narrow the plan's bid band and its bid ramp. Absent for a campaign: the plan's own guardrails, as before.
+   */
+  strategyByCampaign?: ReadonlyMap<string, StrategyBidLimits>
 }
 
 export interface ConductorResult {
@@ -35,6 +41,19 @@ export interface ConductorResult {
 }
 
 const on = (mod: { on: boolean } | undefined): boolean => mod?.on !== false  // default ON
+
+/**
+ * W1-5 — the guardrails a campaign's BID decision runs under: the plan's bid band intersected with the ads strategy's
+ * (the stricter side wins; where they cross, the highest bid wins — it spends less), and the ramp the lower of the plan's
+ * and the strategy's largest bid change. Budgets keep the plan's own ramp: the strategy's largest change is a bid's.
+ */
+export function bidGuardrails(g: Guardrails, limits: StrategyBidLimits | undefined): Guardrails {
+  if (!limits) return g
+  const max = Math.min(g.bidMaxCents, limits.maxBidCents?.value ?? Number.POSITIVE_INFINITY)
+  const min = Math.min(max, Math.max(g.bidMinCents, limits.minBidCents?.value ?? Number.NEGATIVE_INFINITY))
+  const rampPct = Math.min(g.rampPct, limits.maxChangePct?.value ?? Number.POSITIVE_INFINITY)
+  return { ...g, bidMinCents: min, bidMaxCents: max, rampPct }
+}
 
 export function runConductorCycle(input: ConductorInput): ConductorResult {
   const g: Guardrails = { ...DEFAULT_GUARDRAILS, ...input.guardrails }
@@ -47,7 +66,7 @@ export function runConductorCycle(input: ConductorInput): ConductorResult {
   for (const s of input.signals) {
     const target = effectiveTargetAcosPct(input.goal, g, s)
     targetAcosByCampaign[s.campaignId] = target
-    if (on(m.bid)) { const a = decideBid(s, target, g, preset); if (a) actions.push(a) }
+    if (on(m.bid)) { const a = decideBid(s, target, bidGuardrails(g, input.strategyByCampaign?.get(s.campaignId)), preset); if (a) actions.push(a) }
     if (on(m.budget)) { const a = decideBudget(s, target, g, preset); if (a) actions.push(a) }
     if (on(m.placement)) { const a = decidePlacement(s, target, preset); if (a) actions.push(a) }
     // bid / budget / placement touch different fields → no same-field conflict within a campaign.

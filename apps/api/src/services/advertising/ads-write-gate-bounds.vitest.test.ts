@@ -36,6 +36,8 @@ vi.mock('../../db.js', () => ({
     advertisingActionLog: { get findMany() { return actionLogFindMany }, get findFirst() { return actionLogFindFirst } },
     adProductAd: { get findMany() { return productAdFindMany } },
     adWriteRefusal: { get create() { return refusalCreate } },
+    // W1-5 — no ads strategy row sets a bid field: the gate's strategy band adds nothing.
+    adsStrategy: { findFirst: async () => null },
   },
 }))
 // 5a — switchable, so a protected term can be shown refused in sandbox too. Live for every other case.

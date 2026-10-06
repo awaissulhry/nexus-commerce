@@ -19,6 +19,7 @@ import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { boundAutomationsFor, claudeActor, claudeReason, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
 
 // ── Running as an approved request ────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ const UNBLOCK: Record<string, string> = {
   campaign_allowlist: 'Only campaigns on the live-write allowlist take approved changes: ask for set-campaign-live-writes first.',
   authority_pin: 'Someone holds this by hand (a pin): it is lifted in Nexus, not here.',
   automation_halted: 'Ads automation is stopped: it is resumed in the Ads Control Room.',
-  entity_bounds: 'The campaign\'s own bid or budget bounds refuse this value: ask for a value inside them.',
+  entity_bounds: 'The campaign\'s own bid or budget bounds, a bid policy or the ads strategy\'s bid band refuse this value: ask for a value inside them.',
   connection: 'No production Amazon Ads connection with writes enabled serves this market.',
   connection_writes: 'Writes are not enabled for this Amazon Ads profile.',
   keyword_protected: 'The term is protected against negation.',
@@ -180,16 +181,20 @@ export async function alsoChangedBy(campaignId: string): Promise<{ automations: 
 }
 
 /**
- * The bid the mutation service will actually write for a requested one: the campaign's max-change-% guardrail
- * (`dynamicBidding.maxBidChangePct`, ads-mutation.service.ts updateAdTargetWithSync), applied to the current bid. The
- * same arithmetic, so the preview shows the value that lands.
+ * The bid the mutation service will actually write for a requested one: the largest change per action — the LOWER of
+ * the campaign's max-change-% guardrail (`dynamicBidding.maxBidChangePct`) and, W1-5, the ads strategy's largest bid
+ * change for the target's ad group — applied to the current bid (ads-mutation.service.ts updateAdTargetWithSync). The
+ * same function (stepClamp), so the preview shows the value that lands.
  */
-export function changeClampedBid(currentBidCents: number, wantedCents: number, dynamicBidding: unknown): number {
-  const pct = Number((dynamicBidding as { maxBidChangePct?: unknown } | null)?.maxBidChangePct)
-  if (!(currentBidCents > 0) || !Number.isFinite(pct) || pct <= 0) return wantedCents
-  const maxUp = Math.round(currentBidCents * (1 + pct / 100))
-  const maxDown = Math.round(currentBidCents * (1 - pct / 100))
-  return Math.max(5, Math.min(maxUp, Math.max(maxDown, wantedCents)))
+export function changeClampedBid(currentBidCents: number, wantedCents: number, dynamicBidding: unknown, strategy?: StrategyBidLimits | null): number {
+  return stepClamp(currentBidCents, wantedCents, dynamicBidding, strategy).cents
+}
+
+/** W1-5 — what moved a previewed bid off the one asked for, in words (the step clamp's answer, `stepClamp`). */
+export function stepClampWords(step: StepClamp, strategy?: StrategyBidLimits | null): string {
+  if (step.bandHeld) return limitWords(step.bandHeld.side, step.bandHeld.limit)
+  if (step.by === 'strategy' && strategy?.maxChangePct) return `the largest bid change ${step.pct} % (${strategyWords(strategy.maxChangePct.source)})`
+  return 'the campaign\'s max-change guardrail'
 }
 
 /** An approved run that could not run, as the gate expects it (ok:false; the request goes back to waiting). */

@@ -31,10 +31,11 @@ import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.servic
 import { createHash } from 'node:crypto'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { adGroupCampaigns, adGroupSuppressionCounts } from '../../advertising/ads-entity-lookup.service.js'
-import { restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
+import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import { alsoChangedBy, approvedRun, changeClampedBid, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, storedReach, type StoredReach } from './ads-change-kit.js'
+import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
@@ -627,10 +628,12 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
     kept.push({ t, wanted: ask.bidCents })
   }
   // The bid that lands: the CPC ceiling, then each campaign's max-change guardrail (as set-target-bid shows it).
+  // W1-5 — the largest change is the lower of the campaign's and the ads strategy's for the target's ad group.
   const { entries } = await clampBidsByCeiling(kept.map((k) => ({ adTargetId: k.t.id, bidCents: k.wanted })))
+  const strategy = kept.length ? await strategyBidReader().forAdGroups(kept.map((k) => ({ adGroupId: k.t.adGroupId, marketplace: k.t.campaign.marketplace }))) : new Map()
   const changing: Array<{ t: BulkTarget; to: number }> = []
   kept.forEach((k, i) => {
-    const to = changeClampedBid(k.t.bidCents, entries[i].bidCents, k.t.campaign.dynamicBidding)
+    const to = changeClampedBid(k.t.bidCents, entries[i].bidCents, k.t.campaign.dynamicBidding, strategy.get(k.t.adGroupId)?.limits)
     const verdict = suppressionOf({ id: k.t.id, bidCents: k.t.bidCents, suppressedFromBidCents: k.t.suppressedFromBidCents }, to)
     if (verdict === 'suppressed') return void excluded.push({ targetId: k.t.id, why: 'suppressed' })
     if (verdict === 'low-unflagged') return void excluded.push({ targetId: k.t.id, why: 'lowUnflagged' })
@@ -638,26 +641,29 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
     // 3A + 4A — the campaign's own min/max bid is HIS limit: the gate reports it (pastOwnLimits) and the card warns.
     changing.push({ t: k.t, to })
   })
-  // Live reach per campaign: bounds are an interval, so the lowest and the highest new bid answer for all between.
-  const byCampaign = new Map<string, Array<{ t: BulkTarget; to: number }>>()
-  for (const c of changing) byCampaign.set(c.t.campaign.id, [...(byCampaign.get(c.t.campaign.id) ?? []), c])
+  // Live reach per ad group: bounds are an interval, so the lowest and the highest new bid answer for all between.
+  // W1-5 — per AD GROUP (it was per campaign): the ads strategy's bid band is the one of each ad group's products, as
+  // the write itself is judged (ads-mutation.service.ts, the worker).
+  const groupKey = (t: BulkTarget) => `${t.campaign.id}|${t.adGroupId}`
+  const byGroup = new Map<string, Array<{ t: BulkTarget; to: number }>>()
+  for (const c of changing) byGroup.set(groupKey(c.t), [...(byGroup.get(groupKey(c.t)) ?? []), c])
   const profiles = new Set<string>()
-  const refusedCampaigns = new Map<string, string>()
+  const refusedGroups = new Map<string, string>()
   const pastOwnLimits: Array<{ limit: string; reason: string }> = [] // 3A + 4A — for the card's warning
-  for (const [campaignId, list] of [...byCampaign].sort(([x], [y]) => (x < y ? -1 : 1))) {
+  for (const [key, list] of [...byGroup].sort(([x], [y]) => (x < y ? -1 : 1))) {
     const values = [...new Set([Math.min(...list.map((l) => l.to)), Math.max(...list.map((l) => l.to))])]
     for (const value of values) {
-      const reach = await checkLiveReach({ campaignId, marketplace: list[0].t.campaign.marketplace, changes: [{ field: 'bid', valueCents: value }] })
-      if (reach.reach === 'refused') { refusedCampaigns.set(campaignId, reach.reason); break }
+      const reach = await checkLiveReach({ campaignId: list[0].t.campaign.id, adGroupId: list[0].t.adGroupId, marketplace: list[0].t.campaign.marketplace, changes: [{ field: 'bid', valueCents: value }] })
+      if (reach.reach === 'refused') { refusedGroups.set(key, reach.reason); break }
       if (reach.reach === 'live') {
         profiles.add(reach.profileId)
         for (const l of reach.pastOwnLimits ?? []) if (!pastOwnLimits.some((x) => x.reason === l.reason)) pastOwnLimits.push(l)
       }
     }
   }
-  const going = changing.filter((c) => !refusedCampaigns.has(c.t.campaign.id))
-  for (const c of changing.filter((x) => refusedCampaigns.has(x.t.campaign.id))) {
-    excluded.push({ targetId: c.t.id, why: 'refusedByGate', detail: refusedCampaigns.get(c.t.campaign.id) })
+  const going = changing.filter((c) => !refusedGroups.has(groupKey(c.t)))
+  for (const c of changing.filter((x) => refusedGroups.has(groupKey(x.t)))) {
+    excluded.push({ targetId: c.t.id, why: 'refusedByGate', detail: refusedGroups.get(groupKey(c.t)) })
   }
   if (!going.length) {
     const counts = countBy(excluded)
@@ -893,13 +899,19 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
     // W1-6b — what the restore gives back: not the ad groups floored on their own (a product over its monthly cap).
     prisma.adTarget.findMany({
       where: { adGroup: { campaignId, bidsSuppressedAt: null }, suppressedFromBidCents: { not: null } },
-      select: { id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true },
+      select: { id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, adGroupId: true },
       orderBy: { id: 'asc' },
     }),
     adGroupSuppressionCounts(campaignId, SUPPRESSION_FLOOR_CENTS),
   ])
-  const highest = Math.max(0, ...remembered.map((t) => t.suppressedFromBidCents as number))
-  const reach = await checkLiveReach({ campaignId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true })
+  // W1-5 — the bid each target goes back to, as the run decides it: the remembered bid, held inside the campaign's own
+  // bounds, the bid policies and the ads strategy band of its ad group (it was refused above them: a silent stop).
+  const back = await restoreBidsFor(campaignId, remembered.map((t) => ({ ...t, suppressedFromBidCents: t.suppressedFromBidCents as number })))
+  const toCents = (t: (typeof remembered)[number]) => back.get(t.id)?.cents ?? (t.suppressedFromBidCents as number)
+  const top = remembered.reduce<(typeof remembered)[number] | null>((best, t) => (!best || toCents(t) > toCents(best) ? t : best), null)
+  const highest = top ? toCents(top) : 0
+  const held = remembered.filter((t) => back.get(t.id)?.heldBy)
+  const reach = await checkLiveReach({ campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true })
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const currency = campaignCurrency(campaign)
@@ -912,15 +924,19 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
       suppressedBy: campaign.bidsSuppressedBy,
       currency,
       restores: { targets: remembered.length, adGroups: groups.remembered },
-      bids: remembered.slice(0, LINES_SHOWN).map((t) => ({ targetId: t.id, text: t.expressionValue, fromCents: t.bidCents, toCents: t.suppressedFromBidCents })),
-      // Every remembered bid: a change to any of them (another suppression, a manual edit) stops the run.
-      basis: createHash('sha256').update(remembered.map((t) => `${t.id}:${t.bidCents}:${t.suppressedFromBidCents}`).join('|')).digest('base64url').slice(0, 32),
+      bids: remembered.slice(0, LINES_SHOWN).map((t) => ({
+        targetId: t.id, text: t.expressionValue, fromCents: t.bidCents, toCents: toCents(t),
+        ...(back.get(t.id)?.heldBy ? { rememberedCents: t.suppressedFromBidCents, heldBy: back.get(t.id)!.heldBy } : {}),
+      })),
+      // Every remembered bid: a change to any of them (another suppression, a manual edit) stops the run. W1-5 — and a
+      // held bid's value: a limit that moved after approval stops it too.
+      basis: createHash('sha256').update(remembered.map((t) => `${t.id}:${t.bidCents}:${t.suppressedFromBidCents}${back.get(t.id)?.heldBy ? `:${toCents(t)}` : ''}`).join('|')).digest('base64url').slice(0, 32),
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors } } : {}),
-      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}. The campaign serves again.${groups.ownFloors ? ` ${groups.ownFloors} ad group${groups.ownFloors === 1 ? ' stays' : 's stay'} at ${groups.ownFloors === 1 ? 'its' : 'their'} own floor (a product over its monthly cap in the ads strategy) until the 1st or until that cap is raised.` : ''}`,
+      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${groups.ownFloors ? ` ${groups.ownFloors} ad group${groups.ownFloors === 1 ? ' stays' : 's stay'} at ${groups.ownFloors === 1 ? 'its' : 'their'} own floor (a product over its monthly cap in the ads strategy) until the 1st or until that cap is raised.` : ''}`,
     },
   }
 }

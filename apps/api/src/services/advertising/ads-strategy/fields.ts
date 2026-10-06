@@ -14,10 +14,10 @@
  *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
  *   money        ad-spend money: hidden from a person without financials.adspend.view
  *   readBy       the engines and doors that ACT on it, each saying where it acts. Each W1 reader adds itself here, so a
- *                screen never claims a reader that does not exist (W1-6: the monthly market cap, the stop bid and the
- *                actions per run; W1-6b: category and product caps too; W1-7: the search-term thresholds and protection;
- *                W1-8: Claude's door, what Claude may do alone); a field with no reader is stored and shown only
- *                (`notReadYet`).
+ *                screen never claims a reader that does not exist (W1-5: the bid engines on the target, the lowest and
+ *                highest bid and the largest bid change; W1-6: the monthly market cap, the stop bid and the actions per
+ *                run; W1-6b: category and product caps too; W1-7: the search-term thresholds and protection; W1-8:
+ *                Claude's door, what Claude may do alone); a field with no reader is stored and shown only (`notReadYet`).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -204,12 +204,29 @@ export interface StrategyField {
 
 const ALL_LEVELS = STRATEGY_LEVELS
 
+/** The readers, named once, so every field one of them reads says it the same way (W1-5: the bid engines). */
+export const READERS = {
+  optimiser: 'the bid optimiser (auto-bid, bid recommendations, target-ACoS bid rules)',
+  bidRules: 'bid rules (bid_apply: their target-ACoS ops and bid limits)',
+  autopilot: 'autopilot plans (their bid apply, bid band and bid ramp)',
+  gate: "the write gate (refuses an engine's or a rule's bid outside it; a person's own edit, or a Claude request he approves, is warned and goes when he confirms)",
+  hourly: 'hourly bid plans (the base bid)',
+  restores: 'restores after a stop (and base-bid give-backs)',
+  stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",
+  claudePreview: "Claude's bid previews (the bid an approval writes)",
+} as const
+const TARGET_READERS = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
+const BAND_READERS = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
+const STEP_READERS = [READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot]
+
 export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'goal', label: 'Goal', columns: ['goal'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'any', money: false, readBy: [] },
   { key: 'goalNote', label: 'Why', columns: ['goalNote'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'never', money: false, readBy: [] },
-  { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: [] },
-  // The number Nexus's bid engines would steer by: the first ACoS target down the chain (a TACoS target is skipped).
-  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: [] },
+  // Read as an ACoS target only: a TACoS target is stored and shown, and the engines take the next ACoS target down.
+  { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: TARGET_READERS },
+  // The number Nexus's bid engines steer by: the first ACoS target down the chain (a TACoS target is skipped), after a
+  // rule's or plan's own number and the campaign's own target, before the account default.
+  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: TARGET_READERS },
   // W1-6: the budget engine stops a market at its MARKET row's cap; W1-6b: a category's or product's cap floors every ad
   // group holding a product under it (low bids until the 1st, both).
   {
@@ -219,9 +236,9 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       "the budget engine: when a category's or product's Sponsored Products spend this month reaches its cap, every ad group holding a product under it drops to its stop bid until the 1st, the products sharing that ad group included (a cap of 0 is no cap)",
     ],
   },
-  { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: [] },
-  { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: [] },
-  { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
+  { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: BAND_READERS },
+  { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: BAND_READERS },
+  { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: STEP_READERS },
   // W1-6: the engines whose guard (ads-engine-guard.ts) is told each campaign's market.
   {
     key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false,

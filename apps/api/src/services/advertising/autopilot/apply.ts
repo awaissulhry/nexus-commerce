@@ -9,7 +9,7 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
-import { previewBidOptimization, applyBidOptimization } from '../ads-bid-optimizer.service.js'
+import { previewBidOptimization, applyBidOptimization, holdToStrategy } from '../ads-bid-optimizer.service.js'
 import { commonTargetOf, targetSourceWords } from '../ads-target-acos-resolver.js'
 import { setSearchPlacement } from '../ads-top-of-search.service.js'
 import { updateCampaignWithSync } from '../ads-mutation.service.js'
@@ -60,8 +60,8 @@ export async function applyPlanActions(opts: {
 
     // BID — delegate to the per-target optimizer at the plan's effective target ACoS, clamped to the bid band.
     // W0 — a target the plan stores is explicit and wins; a plan without one only falls back to its goal's default
-    // after the campaign's own target, the account default and profit data. The decision records the target the bids
-    // actually moved toward.
+    // after the campaign's own target, the ads strategy's (W1-5), the account default and profit data. The decision
+    // records the target the bids actually moved toward.
     if (acts.some((a) => a.module === 'bid')) {
       try {
         const s = sigById.get(campaignId)
@@ -70,10 +70,12 @@ export async function applyPlanActions(opts: {
           campaignId, bayesian: true, profitMode: goal === 'PROFIT',
           ...(opts.planSetsTargetAcos ? { targetAcos, targetAcosFrom: "this plan's target" } : { fallbackTargetAcos: targetAcos }),
         })
-        const moved = preview.proposals
-          .map((p) => ({ proposal: p, proposedBidCents: clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents) }))
-          .filter((c) => c.proposedBidCents !== c.proposal.currentBidCents)
-        const changes = moved.map((c) => ({ targetId: c.proposal.targetId, proposedBidCents: c.proposedBidCents }))
+        // W1-5 — the plan's bid band and the ads strategy's band of each ad group both bind: the stricter wins.
+        const moved = holdToStrategy(preview.proposals.map((p) => {
+          const proposedBidCents = clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents)
+          return { ...p, proposedBidCents, deltaCents: proposedBidCents - p.currentBidCents }
+        })).map((p) => ({ proposal: p, proposedBidCents: p.proposedBidCents }))
+        const changes = moved.map((c) => ({ targetId: c.proposal.targetId, proposedBidCents: c.proposedBidCents, sources: c.proposal.sources }))
         if (changes.length) {
           const used = commonTargetOf(moved.map((c) => c.proposal))
           // SG.10 — one change set for the whole batch, so the operator's Undo reverses every

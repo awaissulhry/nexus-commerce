@@ -4,9 +4,10 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     only the fields something acts on have readers (W1-6: the monthly market cap, the stop bid and the
- *              actions per run; W1-7: harvest, negate, protect; W1-8: Claude's door reads what Claude may do alone), and
- *              notReadYet lists every other field; a reader names where and how
+ *   honest     only the fields something acts on have readers (W1-5: the target, the bid band and the largest change,
+ *              each reader named; W1-6: the monthly market cap, the stop bid and the actions per run; W1-7: harvest,
+ *              negate, protect; W1-8: Claude's door reads what Claude may do alone), and notReadYet lists every other
+ *              field; a reader names where and how
  *   stricter   the one order two harvest (or negate) groups are compared by, everywhere they meet
  *   money      every money field's value keys are stripped for a person without ad-spend money
  *   names      every tool an action type narrows is a registered tool and knows where its change lands; no brake is
@@ -25,6 +26,7 @@ import {
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
+  READERS,
   STRATEGY_FIELDS,
   STRATEGY_MONEY,
   fractionToPct,
@@ -64,20 +66,27 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: the monthly market cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7) and what Claude may do alone (W1-8) have readers; every other field is stored and shown only', () => {
-    const read = ['monthlySpendCapCents', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy']
+  it('is honest: the bid fields (W1-5), the monthly cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7) and what Claude may do alone (W1-8) have readers; every other field is stored and shown only', () => {
+    const read = ['target', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy']
     expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(read)
     expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
-    expect(STRATEGY_FIELDS.find((f) => f.key === 'claudeAutonomy')!.readBy).toEqual([CLAUDE_DOOR])
+    expect(notReadYet()).toEqual(['goal', 'goalNote', 'reviewEveryDays'])
+    // W1-5 — the bid fields, reader by reader.
+    const byKey = (key: string) => STRATEGY_FIELDS.find((f) => f.key === key)!.readBy
+    const target = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
+    const band = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
+    expect([byKey('target'), byKey('targetAcosPct'), byKey('minBidCents'), byKey('maxBidCents')]).toEqual([target, target, band, band])
+    expect(byKey('maxChangePct')).toEqual([READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot])
+    expect(byKey('claudeAutonomy')).toEqual([CLAUDE_DOOR])
     // Each reader says where it acts, in words a screen can show.
     for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
-    expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
-    expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no engine, rule or schedule negates a protected product's ASIN; a person's own add, or a Claude request he approved, is warned/)
+    expect(byKey('harvest').join(' ')).toMatch(/Keyword Harvest page.*stricter/)
+    expect(byKey('protect').join(' ')).toMatch(/no engine, rule or schedule negates a protected product's ASIN; a person's own add, or a Claude request he approved, is warned/)
     // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts; W1-6b: a
     // category's or product's cap floors the ad groups holding it, ads-strategy/spend.ts); the retail
     // guard (ads-retail-readiness.service.ts) and suppress-campaign (ads-change.tools.ts) floor at the stop bid; the
     // engine guard (ads-engine-guard.ts) counts a market's actions per run for the engines that name the market.
-    const readers = (key: string) => STRATEGY_FIELDS.find((f) => f.key === key)!.readBy.join(' | ')
+    const readers = (key: string) => byKey(key).join(' | ')
     expect(readers('monthlySpendCapCents')).toMatch(/^the budget engine .*every campaign of the market drops to its stop bid until the 1st \(a cap of 0 is no cap\) \| the budget engine: when a category's or product's .* every ad group holding a product under it drops to its stop bid until the 1st/)
     expect(readers('stop')).toMatch(/^the budget engine: .* \| the retail guard: .* \| Claude's suppress-campaign: /)
     expect(readers('maxActionsPerRun')).toMatch(/^the hourly bid plans \(rank-defend\): .* \| the budget engine .* \| dayparting /)

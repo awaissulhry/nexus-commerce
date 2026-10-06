@@ -96,7 +96,7 @@ describe('PUT /api/advertising/automation/strategy', () => {
     expect(stale.json()).toMatchObject({ code: 'version_moved' })
     const saved = await send('PUT', '/api/advertising/automation/strategy', change({ maxBidCents: 120 }, { expectVersion: 1 }))
     expect(saved.statusCode, saved.body).toBe(200)
-    expect(saved.json()).toMatchObject({ ok: true, version: 2, direction: 'lower', liveEffect: expect.stringContaining('no engine') })
+    expect(saved.json()).toMatchObject({ ok: true, version: 2, direction: 'lower', liveEffect: expect.stringContaining('Highest bid binds at once') })
     expect(await row()).toMatchObject({ maxBidCents: 120, version: 2, updatedBy: `user:${userId}` })
     const version = await inA(() => database.client.adsStrategyVersion.findFirstOrThrow({ where: { version: 2, level: 'MARKET' } }))
     expect(version).toMatchObject({ via: 'screen', actor: 'Rita Route', actorUserId: userId, approvalId: null, stepUpAt: null, direction: 'lower' })

@@ -16,6 +16,8 @@
  * write that fired on fewer than N days of data".
  */
 
+import type { WriteSources } from './ads-strategy/bids.js'
+
 export interface AdWriteEvidence {
   /** The RankTarget key or rule identity the decision was serving, e.g. 'own-top'. */
   targetKey?: string
@@ -46,6 +48,17 @@ export interface AdWriteEvidence {
   giveBackOf?: string
   /** 3A (Owner decided 2026-10-06) — "sent past <limit> by <person>": a person confirmed this write past his own limits. */
   sentPastOwnLimits?: string
+  /**
+   * ADS AUTONOMY W1-5 — which level supplied each number this write used (design §3.2): the target ACoS the bid moved
+   * toward (explicit, campaign, a strategy row, account, profit, flat) and the strategy's bid limits in force (lowest,
+   * highest, largest change), each with its row and version. `ad-changes` returns it with the rest of the evidence.
+   */
+  sources?: WriteSources
+  /**
+   * W1-5 — a PERSON's own edit that goes past an ads strategy limit: it was sent (the strategy warns a person, never
+   * refuses or rewrites his edit), and this says which limit and whose.
+   */
+  strategyWarning?: string
 }
 
 /**
@@ -57,7 +70,9 @@ export function packEvidence(e: AdWriteEvidence | null | undefined): AdWriteEvid
   if (!e) return null
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(e)) {
-    if (v !== undefined && v !== null && v !== '') out[k] = v
+    // W1-5 — an empty `sources` map is no provenance, like an empty string is no note.
+    const emptyMap = v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0
+    if (v !== undefined && v !== null && v !== '' && !emptyMap) out[k] = v
   }
   return Object.keys(out).length > 0 ? (out as AdWriteEvidence) : null
 }

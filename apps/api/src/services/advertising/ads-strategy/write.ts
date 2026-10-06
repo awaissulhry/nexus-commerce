@@ -21,11 +21,12 @@
  * names, and labels carry no amount: the strategy reads strip ad-spend money by key (fields.ts STRATEGY_MONEY).
  *
  * Live effect: only a field something reads acts (the registry's readBy); every other field is stored and shown only. What
- * acts at once, the plan says, from the registry and the change: a field an engine or a door reads (W1-6: the budget
- * engine reads the market's monthly cap and the stop bid; W1-8: Claude's door reads what Claude may do alone); a
- * protected term binds Nexus's write gate (no rule may negate it; removing one lets them again); a campaign's own target
- * ACoS cleared or put back changes what Nexus's bid optimiser aims at for that campaign today (without its own target:
- * the account default, profit data, else 30 %).
+ * acts at once, the plan says, from the registry and the change: a field an engine or a door reads (W1-5: the bid engines
+ * read the target, the bid band and the largest change; W1-6: the budget engine reads the market's monthly cap and the
+ * stop bid; W1-7: the search-term engines; W1-8: Claude's door reads what Claude may do alone); a protected term binds
+ * Nexus's write gate (no rule may negate it; removing one lets them again); a campaign's own target ACoS cleared or put
+ * back changes what Nexus's bid optimiser aims at for that campaign today (without its own target: this strategy's,
+ * else the account default, profit data, else 30 %).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -38,6 +39,7 @@ import type { RaiseWords } from '../../agents/claude-trust.service.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
 import {
   CLAUDE_ACTION_TYPES,
+  CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MARKET_SCOPE,
@@ -695,7 +697,7 @@ function previewOf(p: {
     ...readNow.map((f) => `${f.label} binds at once: read by ${f.readBy.join(', ')}.`),
     p.terms.add.length ? `${plural(p.terms.add.length, 'protected term')} ${p.terms.add.length === 1 ? 'binds' : 'bind'} at once: Nexus's write gate refuses to negate ${p.terms.add.length === 1 ? 'it' : 'them'} in ${p.market}.` : null,
     p.terms.remove.length ? `${plural(p.terms.remove.length, 'term')} ${p.terms.remove.length === 1 ? 'is' : 'are'} no longer protected at once: rules may negate ${p.terms.remove.length === 1 ? 'it' : 'them'} in ${p.market} again.` : null,
-    clears ? `Clearing ${plural(clears, "campaign's own target ACoS")} changes what Nexus's bid optimiser aims at for ${clears === 1 ? 'it' : 'them'} today: the account default, profit data or ${FALLBACK_TARGET_PCT} % (the strategy is not read yet).` : null,
+    clears ? `Clearing ${plural(clears, "campaign's own target ACoS")} changes what Nexus's bid optimiser aims at for ${clears === 1 ? 'it' : 'them'} today: this strategy's target ACoS where it sets one, else the account default, profit data or ${FALLBACK_TARGET_PCT} %.` : null,
     restores ? `${plural(restores, "campaign's own target ACoS")} ${restores === 1 ? 'is' : 'are'} put back: Nexus's bid optimiser aims at ${restores === 1 ? 'it' : 'them'} again.` : null,
   ].filter(Boolean).join(' ')
   const warnings = [

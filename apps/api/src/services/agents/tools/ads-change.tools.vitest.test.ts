@@ -283,6 +283,25 @@ describe('A8 — suppress-campaign and restore-campaign (never a pause)', () => 
     expect((await bids())['s-2']).toEqual([2, 99])
   })
 
+  it('W1-5 — remembered bids above the ads strategy\'s highest bid: the preview shows the held bids, and the run puts back exactly those (never a silent stop)', async () => {
+    const row = await inside(() => database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', maxBidCents: 50, updatedBy: 'user:test' } }))
+    try {
+      const r = await preview('restore-campaign', { campaignId: 'c-a8' })
+      const heldBy = 'the highest bid (ads strategy: Test market (IT), market, v1)'
+      expect((r.preview as Row).bids).toEqual([
+        { targetId: 's-1', text: 'stop s-1', fromCents: 2, toCents: 50, rememberedCents: 55, heldBy },
+        { targetId: 's-2', text: 'stop s-2', fromCents: 2, toCents: 50, rememberedCents: 99, heldBy },
+      ])
+      expect(r.preview).toMatchObject({ effect: expect.stringContaining('the highest EUR 0.50; 2 at a bid limit instead of the bid it had') })
+      const asked = await ask('restore-campaign', { campaignId: 'c-a8' })
+      expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 3 } })
+      expect(await bids()).toEqual({ 's-1': [50, null], 's-2': [50, null] })
+      expect((await sql('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = $1', ['c-a8']))[0]).toEqual({ at: null })
+    } finally {
+      await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
+  })
+
   it('W1-6 — the stop bid is the ads strategy\'s for the campaign\'s market; a bid already lower stays; a changed stop bid stops the run', async () => {
     const row = await inside(async () => {
       await database.client.campaign.create({ data: { id: 'c-a8s', name: 'Italy strategy stop', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-a8s', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })

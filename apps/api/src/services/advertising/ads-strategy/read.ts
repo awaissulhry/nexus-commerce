@@ -11,10 +11,11 @@
  *   history    the versions of a market's rows, or of one category's or product's, newest first
  *
  * Honest by construction: every field carries its `readBy` from the registry (fields.ts) — what acts on it today
- * (W1-6: the monthly market cap, the stop bid and the actions per run; W1-6b: category and product caps; W1-7: the
- * search-term thresholds and protection; W1-8: Claude's door reads what Claude may do alone). Until an engine reads a
- * field, only the older settings under `alsoInForce` bind. W1-6: a monthly cap also says how this month stands against
- * it (`thisMonth`: spend so far, the forecast, the cap where bids drop; W1-6b: a category's or product's own spend).
+ * (W1-5: the bid engines on the target, the bid band and the largest change; W1-6: the monthly market cap, the stop bid
+ * and the actions per run; W1-6b: category and product caps; W1-7: the search-term thresholds and protection; W1-8:
+ * Claude's door reads what Claude may do alone). Until an engine reads a field, only the older settings under
+ * `alsoInForce` bind. W1-6: a monthly cap also says how this month stands against it (`thisMonth`: spend so far, the
+ * forecast, the cap where bids drop; W1-6b: a category's or product's own spend).
  *
  * Money (targets, bids, caps, spend thresholds) sits ONLY under the keys in STRATEGY_MONEY, alone, so the money filter
  * removes exactly the money and keeps where it comes from. Free text written by people beside an older setting (a bid
@@ -86,7 +87,8 @@ const READ_BY_NOTE = (() => {
   const read = STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => `${f.key} (${f.readBy.join(', ')})`)
   return `${read.length ? `Read today: ${read.join('; ')}.` : 'Nothing acts on the strategy yet.'} Every field in notReadYet is stored and shown `
     + 'only: no engine or rule reads it, and every engine works as before. Until an engine reads a field, only the older '
-    + 'settings under alsoInForce bind; once it does, every limit binds and the stricter one wins.'
+    + 'settings under alsoInForce bind; once it does, every limit binds and the stricter one wins. Engines and rules are '
+    + "held to the strategy's bid limits; a person's own edit past one, or a Claude request he approves, is warned and goes when he confirms."
 })()
 const MONTH_NOTE =
   "Spend so far adds up Amazon's daily campaign reports: whole days up to spendThrough (yesterday's arrives early in the "
@@ -372,14 +374,17 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Recor
       entry.order = TARGET_ORDER
       entry.campaignOwn = older.campaignTarget ? { campaignId: older.campaignTarget.campaignId, name: older.campaignTarget.name, targetAcosPct: older.campaignTarget.pct } : null
       entry.accountDefault = { targetAcosPct: older.accountTargetPct }
-      // What Nexus's bid optimiser steers by today (the strategy is not read yet): for one campaign, its own target if
-      // it has one; for every other campaign, the account default, else profit data, else a flat 30 %.
+      // What Nexus's bid optimiser steers by today: for one campaign, its own target if it has one; for every other
+      // campaign, W1-5 this strategy's target (per ad group: the lowest across its products), else the account default,
+      // else profit data, else a flat 30 %.
       const others = older.campaignOwnScope ? '' : ' (campaigns without their own target; shadowedBy lists the others)'
       entry.today = older.campaignTarget
         ? { from: "the campaign's own target", targetAcosPct: older.campaignTarget.pct }
-        : older.accountTargetPct != null
-          ? { from: `the account default${others}`, targetAcosPct: older.accountTargetPct }
-          : { from: `profit data, else a flat 30 %${others}` }
+        : mine != null
+          ? { from: `this strategy${others}`, targetAcosPct: mine }
+          : older.accountTargetPct != null
+            ? { from: `the account default${others}`, targetAcosPct: older.accountTargetPct }
+            : { from: `profit data, else a flat 30 %${others}` }
     }
     entry.readBy = spec.readBy
     out.push(entry)

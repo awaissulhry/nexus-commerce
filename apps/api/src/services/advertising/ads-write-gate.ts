@@ -28,6 +28,7 @@ import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
+import { bidLimitsFor, strategyWords, type StrategyBidLimits, type StrategyLimit } from './ads-strategy/bids.js'
 
 export type GateDeniedAt =
   | 'env'
@@ -115,6 +116,12 @@ export interface GateContext {
   // ── ADX A1 ────────────────────────────────────────────────────────────────
   /** The single field being changed ('bid' | 'defaultBid' | 'dailyBudget' | …). */
   field?: string | null
+  /**
+   * ADS AUTONOMY W1-5 — the ad group a bid write lands in (its own id for an ad group's default bid), so the ads
+   * strategy's bid band is the one of ITS products (the safer value across them). Absent: the campaign's (all its
+   * products) — a new ad group, or a caller that does not know it.
+   */
+  adGroupId?: string | null
 
   // ── ACR.1.2b ──────────────────────────────────────────────────────────────
   /**
@@ -469,6 +476,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       field: ctx.field,
       intendedValueCents: ctx.intendedValueCents,
       isSuppression: ctx.isSuppression,
+      // W1-5 — the ads strategy's band of the write's ad group, one of HIS limits: it refuses an engine, a rule or a
+      // run a rule approved; a person's own write past it is one he confirms (3A, below), like his campaign's bounds.
+      adGroupId: ctx.adGroupId ?? null,
     })
     if (bounds && ownOrRefuse(bounds)) return bounds
 
@@ -574,12 +584,60 @@ export interface EntityBoundsCampaign {
   marketplace: string | null
 }
 
+/** One side of the bid bounds a write is held to, in cents, in the words its refusal names. */
+export interface BidBound {
+  value: number
+  source: string
+  /** The ads strategy row, when the strategy is the stricter source on this side. */
+  strategy?: StrategyLimit
+}
+
 /**
- * 4k (review 5.2) — the entity's own bounds: the bid floor and ceiling (campaign column, then bid policy) and the
- * budget floor and ceiling. Extracted from checkAdsWriteGate unchanged, because these are the only refusals that
- * depend on nothing but the entity and the new value — not the clock, the halt, the allowlist or today's ledger.
- * So the mutation layer asks them BEFORE Nexus writes its own copy, and a refused bid or budget changes nothing
- * anywhere; the gate still asks them at dispatch. Same answer in sandbox and live: they are the entity's rules.
+ * BID.S5 + ADS AUTONOMY W1-5 — the bid bounds a write is held to, per side. The campaign's own column, else the bid
+ * policies (LINE ?? PORTFOLIO ?? MARKET), AND the ads strategy's band for its ad group (`adGroupId`; the campaign's when
+ * absent): every limit binds and the stricter one wins — the lower highest bid, the higher lowest bid; on a tie the
+ * older source keeps its words. All of them are the Owner's own limits: a person's write past one is not refused but
+ * confirmed (3A, checkAdsWriteGate and the mutation layer). `strategy` passed in = already read for this write.
+ */
+export async function effectiveBidBounds(args: {
+  campaignId: string
+  campaign: EntityBoundsCampaign
+  adGroupId?: string | null
+  strategy?: StrategyBidLimits
+}): Promise<{ max: BidBound | null; min: BidBound | null; strategy: StrategyBidLimits }> {
+  const { campaignId, campaign } = args
+  // The campaign column stays the strongest word, so every pre-existing row behaves exactly as before; the policy
+  // walk runs only when a side is null on the campaign AND any policy rows exist. The refusal names its source — a
+  // bound whose origin is a mystery is a bound the operator clears in the wrong place.
+  let max: BidBound | null = campaign.maxBidCents != null ? { value: campaign.maxBidCents, source: `Campaign.maxBidCents on ${campaignId}` } : null
+  let min: BidBound | null = campaign.minBidCents != null ? { value: campaign.minBidCents, source: `Campaign.minBidCents on ${campaignId}` } : null
+  if (max == null || min == null) {
+    const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
+    if (max == null && policy.max) max = { value: policy.max.cents, source: policy.max.label }
+    if (min == null && policy.min) min = { value: policy.min.cents, source: policy.min.label }
+  }
+  // W1-5 — one indexed read when the market's strategy sets no bid field.
+  const strategy = args.strategy ?? await bidLimitsFor({ marketplace: campaign.marketplace, adGroupId: args.adGroupId, campaignId })
+  return { ...withStrategyBand({ max, min }, strategy), strategy }
+}
+
+/** W1-5 — bounds with the strategy band added: the lower highest bid and the higher lowest bid win (a tie keeps the older words). Pure. */
+export function withStrategyBand(b: { max: BidBound | null; min: BidBound | null }, strategy: StrategyBidLimits): { max: BidBound | null; min: BidBound | null } {
+  let { max, min } = b
+  const sMax = strategy.maxBidCents
+  const sMin = strategy.minBidCents
+  if (sMax && (max == null || sMax.value < max.value)) max = { value: sMax.value, source: strategyWords(sMax.source), strategy: sMax }
+  if (sMin && (min == null || sMin.value > min.value)) min = { value: sMin.value, source: strategyWords(sMin.source), strategy: sMin }
+  return { max, min }
+}
+
+/**
+ * 4k (review 5.2) — the entity's own bounds: the bid floor and ceiling (campaign column, then bid policy, and since W1-5
+ * the ads strategy's band) and the budget floor and ceiling. Extracted from checkAdsWriteGate unchanged, because these
+ * are the only refusals that depend on nothing but the entity and the new value — not the clock, the halt, the
+ * allowlist or today's ledger. So the mutation layer asks them BEFORE Nexus writes its own copy, and a refused bid or
+ * budget changes nothing anywhere; the gate still asks them at dispatch. Same answer in sandbox and live: they are the
+ * entity's rules.
  */
 export async function entityBoundsDenial(args: {
   campaignId: string
@@ -588,6 +646,10 @@ export async function entityBoundsDenial(args: {
   intendedValueCents: number | null | undefined
   /** ADX G1 / 2.2 — a lowering-only forced write (`isSuppressionWrite`): exempt from the bid MINIMUM only. */
   isSuppression?: boolean
+  /** W1-5 — the ad group the bid lands in: the strategy band is its products'. */
+  adGroupId?: string | null
+  /** W1-5 — the strategy limits, when the caller already read them for this write. */
+  strategy?: StrategyBidLimits
 }): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const { campaignId, campaign } = args
   if (!Number.isFinite(args.intendedValueCents ?? NaN)) return null
@@ -600,32 +662,22 @@ export async function entityBoundsDenial(args: {
   // ceiling (refuse the raise) and a floor (refuse the cut).
   //
   // BID.S5 — the bounds resolve at FOUR grains now, most specific first PER SIDE:
-  // the Campaign column ?? LINE ?? PORTFOLIO ?? MARKET (`AdBidPolicy`). The campaign
-  // column stays the strongest word, so every pre-existing row behaves exactly as
-  // before; the policy walk runs only when a side is null on the campaign AND any
-  // policy rows exist. The refusal names its source — a bound whose origin is a
-  // mystery is a bound the operator clears in the wrong place.
+  // the Campaign column ?? LINE ?? PORTFOLIO ?? MARKET (`AdBidPolicy`).
+  // W1-5 — and the ads strategy's band binds beside them: the stricter side wins (effectiveBidBounds). Engines clamp to
+  // the strategy band before they write (ads-strategy/bids.ts), so this refusal is the backstop, not their path.
   if (args.field && BID_FIELDS.has(args.field)) {
-    let effMax: { cents: number; source: string } | null =
-      campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: `Campaign.maxBidCents on ${campaignId}` } : null
-    let effMin: { cents: number; source: string } | null =
-      campaign.minBidCents != null ? { cents: campaign.minBidCents, source: `Campaign.minBidCents on ${campaignId}` } : null
-    if (effMax == null || effMin == null) {
-      const policy = await resolveBidPolicy(campaignId, campaign.portfolioId, campaign.marketplace)
-      if (effMax == null && policy.max) effMax = { cents: policy.max.cents, source: policy.max.label }
-      if (effMin == null && policy.min) effMin = { cents: policy.min.cents, source: policy.min.label }
-    }
-    if (effMax != null && v > effMax.cents) {
+    const { max: effMax, min: effMin } = await effectiveBidBounds({ campaignId, campaign, adGroupId: args.adGroupId, strategy: args.strategy })
+    if (effMax != null && v > effMax.value) {
       return {
         allowed: false,
-        reason: `bid ${v}¢ exceeds the ${effMax.cents}¢ ceiling (${effMax.source})`,
+        reason: `bid ${v}¢ exceeds the ${effMax.value}¢ ceiling (${effMax.source})`,
         deniedAt: 'entity_bounds',
       }
     }
-    if (effMin != null && v < effMin.cents && !args.isSuppression) {
+    if (effMin != null && v < effMin.value && !args.isSuppression) {
       return {
         allowed: false,
-        reason: `bid ${v}¢ is below the ${effMin.cents}¢ floor (${effMin.source})`,
+        reason: `bid ${v}¢ is below the ${effMin.value}¢ floor (${effMin.source})`,
         deniedAt: 'entity_bounds',
       }
     }

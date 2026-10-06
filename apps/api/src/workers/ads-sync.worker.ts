@@ -94,36 +94,41 @@ function estimatePayloadValueCents(payload: AdMutationPayload): number {
  * when the entity (or its parent chain) can't be found — the gate treats null
  * as a deny in live mode, so an unattributable write is never allowed through.
  */
-async function resolveCampaignId(payload: AdMutationPayload): Promise<string | null> {
+/**
+ * The campaign a write belongs to, and (W1-5) the ad group a bid lands in — the ad group itself for its default bid —
+ * from the same read, so the gate holds the bid to the ads strategy of that ad group's products.
+ */
+async function resolveWriteScope(payload: AdMutationPayload): Promise<{ campaignId: string | null; adGroupId: string | null }> {
+  const none = { campaignId: null, adGroupId: null }
   try {
     switch (payload.entityType) {
       case 'CAMPAIGN': {
         const c = await prisma.campaign.findUnique({ where: { id: payload.entityId }, select: { id: true } })
-        return c?.id ?? null
+        return { campaignId: c?.id ?? null, adGroupId: null }
       }
       case 'AD_GROUP': {
         const g = await prisma.adGroup.findUnique({ where: { id: payload.entityId }, select: { campaignId: true } })
-        return g?.campaignId ?? null
+        return { campaignId: g?.campaignId ?? null, adGroupId: g ? payload.entityId : null }
       }
       case 'AD_TARGET': {
         const t = await prisma.adTarget.findUnique({
           where: { id: payload.entityId },
-          select: { adGroup: { select: { campaignId: true } } },
+          select: { adGroupId: true, adGroup: { select: { campaignId: true } } },
         })
-        return t?.adGroup?.campaignId ?? null
+        return { campaignId: t?.adGroup?.campaignId ?? null, adGroupId: t?.adGroupId ?? null }
       }
       case 'PRODUCT_AD': {
         const a = await prisma.adProductAd.findUnique({
           where: { id: payload.entityId },
-          select: { adGroup: { select: { campaignId: true } } },
+          select: { adGroupId: true, adGroup: { select: { campaignId: true } } },
         })
-        return a?.adGroup?.campaignId ?? null
+        return { campaignId: a?.adGroup?.campaignId ?? null, adGroupId: a?.adGroupId ?? null }
       }
       default:
-        return null
+        return none
     }
   } catch {
-    return null
+    return none
   }
 }
 
@@ -455,7 +460,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   // through; in live mode it enforces env flag + per-connection
   // writesEnabledAt + value-cap.
   const payloadValueCents = estimatePayloadValueCents(payload)
-  const campaignId = await resolveCampaignId(payload)
+  const { campaignId, adGroupId } = await resolveWriteScope(payload)
   // ADX A1 — hand the gate the field and intended value so Campaign.minBidCents /
   // maxBidCents can bind this write. A payload carries one field in the common case;
   // when it carries several we surface the bid field, which is the bounded one.
@@ -475,10 +480,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   const gate = await checkAdsWriteGate({
     marketplace,
     payloadValueCents,
-    // 1a (CM-23) — a portfolio is not a campaign: resolveCampaignId answers null for it, and the gate refuses null as
+    // 1a (CM-23) — a portfolio is not a campaign: resolveWriteScope answers null for it, and the gate refuses null as
     // "unattributable", so every queued portfolio write was refused in live mode. Left out (undefined), the portfolio
     // write is gated like the Portfolios screen's own push (updatePortfolioById): mode, connection and value cap.
     campaignId: payload.entityType === 'PORTFOLIO' ? undefined : campaignId,
+    // W1-5 — the ads strategy's bid band is the one of this ad group's products.
+    adGroupId,
     field: bidChange?.field ?? budgetChange?.field ?? payload.fieldChanges[0]?.field ?? null,
     // ACR.1.2b — the authority pins need EVERY field, not the one representative field the
     // A1 bounds want. A payload carrying both a bid and a budget change would otherwise be

@@ -27,7 +27,8 @@ const MIN_DELTA_CENTS = 2
 /**
  * How auto-bid runs the optimiser: profit-native target ACOS + the Bayesian sparse-data path. Its preview (the
  * automation catalog's A4) runs the same, so what it shows is what a run would set. W0 — each keyword's target is its
- * campaign's own target ACoS, else the account default, else profit data, else 30 % (ads-target-acos-resolver.ts).
+ * campaign's own target ACoS, else (W1-5) the ads strategy's for its ad group, else the account default, else profit
+ * data, else 30 % (ads-target-acos-resolver.ts); the strategy's bid limits hold every proposal.
  */
 export const AUTO_BID_OPTIMIZER_OPTIONS = { profitMode: true, bayesian: true } as const
 
@@ -48,7 +49,7 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
   const preview = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
   const changes = preview.proposals
     .filter((p) => Math.abs(p.deltaCents) >= MIN_DELTA_CENTS)
-    .map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents }))
+    .map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources }))
   if (changes.length === 0) return { proposed: 0, applied: 0, dryRun: forceDry, guard: guard.report() }
 
   // 1d — whole campaigns, in the optimiser's order (biggest moves first), while the caps have room: a campaign is
@@ -74,7 +75,7 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
     type: 'ads-auto-bid',
     severity: 'info',
     title: forceDry ? `Auto-bid: ${changes.length} bid changes proposed` : `Auto-bid: ${res.applied} bid changes applied`,
-    body: `Target-ACOS optimization: each campaign's own target, else the account default, else profit data (${changes.length} candidates). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
+    body: `Target-ACOS optimization: each campaign's own target, else the ads strategy's, else the account default, else profit data (${changes.length} candidates). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
   }).catch(() => {})
   return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, guard: report }
 }

@@ -25,6 +25,16 @@ import { mutedKeys } from '../services/advertising/ads-suggestions.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import { isCampaignOutOfBudget } from '../services/advertising/delivery-reasons.js'
 import { settledWhere } from '../services/advertising/ads-settled-window.js'
+import { bidLimitsByCampaign, type StrategyBidLimits } from '../services/advertising/ads-strategy/bids.js'
+
+/**
+ * W1-5 — the ads strategy's bid limits for each of a plan's campaigns, in the plan's market (the safer value across all
+ * of a campaign's products): the conductor narrows the plan's bid band and bid ramp with them. Empty when the market's
+ * strategy sets no bid field (one indexed read).
+ */
+export function strategyLimitsForPlan(plan: { marketplace: string; campaignIds: unknown }): Promise<Map<string, StrategyBidLimits>> {
+  return bidLimitsByCampaign(plan.marketplace, Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [])
+}
 
 /** Assemble per-campaign signals from Campaign aggregates + AdTarget perf roll-up. */
 export async function gatherSignals(campaignIds: string[]): Promise<CampaignSignals[]> {
@@ -111,6 +121,7 @@ export async function runAutopilotOnce(): Promise<AutopilotTick> {
       guardrails: (plan.guardrails ?? {}) as Partial<Guardrails>,
       modules: (plan.modules ?? {}) as PlanModules,
       signals,
+      strategyByCampaign: await strategyLimitsForPlan(plan),
     })
     // Clear this plan's stale autopilot proposals; AUTO then applies, SUGGEST re-records proposals.
     await prisma.autopilotDecision.deleteMany({ where: { planId: plan.id, status: 'PROPOSED', source: 'autopilot' } })

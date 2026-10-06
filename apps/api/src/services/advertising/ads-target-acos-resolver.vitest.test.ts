@@ -17,9 +17,9 @@ const subject = (campaignTargetAcos: unknown, adGroupId = 'g1'): TargetAcosSubje
 const inputs = (over: Partial<TargetAcosInputs> = {}): TargetAcosInputs => ({ explicitTargetAcos: undefined, accountDefaultPct: null, profitByAdGroup: null, flatTargetAcos: 0.3, ...over })
 const all = { accountDefaultPct: 25, profitByAdGroup: new Map([['g1', 0.12]]), flatTargetAcos: 0.5 }
 
-describe('the order: explicit → campaign → account → profit → flat', () => {
-  it('lists the sources highest first; W1 inserts product / category / market between campaign and account', () => {
-    expect(TARGET_ACOS_SOURCES.map((s) => s.source)).toEqual(['explicit', 'campaign', 'account', 'profit', 'flat'])
+describe('the order: explicit → campaign → strategy → account → profit → flat', () => {
+  it('lists the sources highest first; W1-5 put the ads strategy (product / category / market) between campaign and account', () => {
+    expect(TARGET_ACOS_SOURCES.map((s) => s.source)).toEqual(['explicit', 'campaign', 'strategy', 'account', 'profit', 'flat'])
   })
 
   it("the caller's explicit target (a rule's, a plan's, a typed one) wins over the campaign's and everything after", () => {

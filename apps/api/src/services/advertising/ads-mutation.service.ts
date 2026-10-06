@@ -34,6 +34,7 @@ import { SPONSORED_PRODUCTS, adProductOf, adProductRefusal, type AdProductSource
 import { marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
+import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -193,6 +194,13 @@ export interface MutationOutcome {
    * shows the warning and "Send anyway", which sends the same write again with `confirmOwnLimits`.
    */
   needsConfirmation?: { limits: OwnLimit[] }
+  /**
+   * ADS AUTONOMY W1-5 — a person's own bid edit (or a Claude request he approved) that moves more than the ads
+   * strategy's largest bid change: sent (the step clamp never rewrites his edit, CM-19), and the sentence says whose
+   * limit. Also kept on the action log (`evidence.strategyWarning`). The strategy's bid band is one of his own limits
+   * and asks for his confirmation instead (`needsConfirmation`).
+   */
+  warnings?: string[]
 }
 
 /** 3A — the answer to a person's write past his own limits: nothing written, his "Send anyway" decides. */
@@ -207,6 +215,19 @@ function withSentPast(evidence: AdWriteEvidence | null | undefined, past: OwnLim
   const unique = past.filter((l) => (seen.has(l.reason) ? false : (seen.add(l.reason), true)))
   const line = sentPastSentence(unique, actor)
   return { ...(evidence ?? {}), sentPastOwnLimits: evidence?.sentPastOwnLimits ? `${evidence.sentPastOwnLimits}; ${line}` : line }
+}
+
+/**
+ * W1-5 — the evidence a bid write keeps: the caller's, plus the strategy limits that moved it (`sources`), plus the
+ * warning for a person's edit past the strategy's largest change. Null when there is nothing to say.
+ */
+function withStrategyEvidence(evidence: AdWriteEvidence | null | undefined, sources: WriteSources, warnings: string[]): AdWriteEvidence | null {
+  if (!Object.keys(sources).length && !warnings.length) return evidence ?? null
+  return {
+    ...(evidence ?? {}),
+    ...(Object.keys(sources).length ? { sources: { ...(evidence?.sources ?? {}), ...sources } } : {}),
+    ...(warnings.length ? { strategyWarning: warnings.join('; ') } : {}),
+  }
 }
 
 /**
@@ -252,6 +273,12 @@ async function boundsRefused(args: {
   person?: boolean
   confirmOwnLimits?: boolean
   past?: OwnLimit[]
+  /**
+   * W1-5 — the ad group the bid lands in (the ads strategy band is its products'), and the strategy limits if already
+   * read. The band is one of his own limits: a person's write past it asks for his confirmation like the bounds above.
+   */
+  adGroupId?: string | null
+  strategy?: StrategyBidLimits
 }): Promise<MutationOutcome | null> {
   if (!args.campaign) return null
   const denial = await entityBoundsDenial({
@@ -260,6 +287,8 @@ async function boundsRefused(args: {
     field: args.field,
     intendedValueCents: args.intendedValueCents,
     isSuppression: args.isSuppression,
+    adGroupId: args.adGroupId ?? null,
+    strategy: args.strategy,
   })
   if (!denial) return null
   if (args.person) {
@@ -321,6 +350,8 @@ async function gateRefusedNow(args: {
   /** 3A — the person's "Send anyway"; `past` collects the own limits it was confirmed past. */
   confirmOwnLimits?: boolean
   past?: OwnLimit[]
+  /** W1-5 — the ad group a bid lands in, as the worker hands it to the gate. */
+  adGroupId?: string | null
 }): Promise<MutationOutcome | null> {
   if (!args.askGate || !args.actor.startsWith('user:')) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -334,6 +365,7 @@ async function gateRefusedNow(args: {
     marketplace: args.marketplace ?? null,
     payloadValueCents: writeValueCents(args.changes),
     campaignId: args.campaignId ?? null,
+    adGroupId: args.adGroupId ?? null,
     field: bid?.field ?? budget?.field ?? args.changes[0]?.field ?? null,
     fields: args.changes.map((c) => c.field),
     intendedValueCents: bid ? cents(bid.newValue) : budget ? cents(budget.newValue, true) : null,
@@ -1433,19 +1465,19 @@ export async function updateAdGroupWithSync(args: {
   // 3A — see updateCampaignWithSync.
   const confirmOwnLimits = person && args.confirmOwnLimits === true
   const past: OwnLimit[] = []
-  // 4k — see boundsRefused.
+  // 4k — see boundsRefused. W1-5 — with the ads strategy band of this ad group's products.
   if (changes.some((c) => c.field === 'defaultBid')) {
     const refused = await boundsRefused({
       entity: 'AD_GROUP', entityId: args.adGroupId, campaign: existing.campaign, field: 'defaultBid',
       intendedValueCents: args.patch.defaultBidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
-      person, confirmOwnLimits, past,
+      person, confirmOwnLimits, past, adGroupId: args.adGroupId,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
     campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual, confirmOwnLimits, past,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: args.adGroupId,
   })
   if (atDispatch) return atDispatch
 
@@ -1667,19 +1699,33 @@ export async function updateAdTargetWithSync(args: {
     }
   }
 
+  // W1-5 — the ads strategy's bid limits for this target's ad group (the safer value across its products), read once
+  // for the step clamp and the bounds below. One indexed read when the market's strategy sets no bid field.
+  const campaignOfTarget = existing.adGroup?.campaign
+  const strategy: StrategyBidLimits = args.patch.bidCents != null && campaignOfTarget
+    ? await bidLimitsFor({ marketplace: campaignOfTarget.marketplace, adGroupId: existing.adGroup!.id, campaignId: campaignOfTarget.id })
+    : NO_LIMITS
+  const sources: WriteSources = {}
+  const warnings: string[] = []
+
   // Apex A.2a — clamp the requested bid to the campaign's max-change-% guardrail
   // (when set). Caps how far a single bid move can swing from the current bid, so a
   // runaway rule can't 10× a bid in one step.
   // Applied before the diff so the audit trail records the clamped value.
   // 1e (CM-19) — not to a person's own edit: it rewrote his bid without a word, and a
   // brake may stop automation, not second-guess his click. Engines and rules keep it.
-  if (!args.force && !person && args.patch.bidCents != null && existing.bidCents > 0) {
-    const guards = (existing.adGroup?.campaign?.dynamicBidding ?? {}) as { maxBidChangePct?: number }
-    const pct = Number(guards.maxBidChangePct)
-    if (Number.isFinite(pct) && pct > 0) {
-      const maxUp = Math.round(existing.bidCents * (1 + pct / 100))
-      const maxDown = Math.round(existing.bidCents * (1 - pct / 100))
-      args.patch.bidCents = Math.max(5, Math.min(maxUp, Math.max(maxDown, args.patch.bidCents)))
+  // W1-5 — the largest change is the LOWER of the campaign's and the ads strategy's (stepClamp, the same arithmetic as
+  // Claude's preview, ads-change-kit.ts); a bid asked for inside the strategy band stays inside it. A person's own edit
+  // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation).
+  if (!args.force && args.patch.bidCents != null && existing.bidCents > 0) {
+    if (!person) {
+      const step = stepClamp(existing.bidCents, args.patch.bidCents, campaignOfTarget?.dynamicBidding, strategy)
+      if (step.by === 'strategy' && step.cents !== args.patch.bidCents) Object.assign(sources, limitSources({ ...NO_LIMITS, maxChangePct: strategy.maxChangePct }))
+      if (step.bandHeld) Object.assign(sources, limitSources({ ...NO_LIMITS, [step.bandHeld.side === 'max' ? 'maxBidCents' : 'minBidCents']: step.bandHeld.limit }))
+      args.patch.bidCents = step.cents
+    } else if (strategy.maxChangePct && stepClamp(existing.bidCents, args.patch.bidCents, null, { ...NO_LIMITS, maxChangePct: strategy.maxChangePct }).cents !== args.patch.bidCents) {
+      const pct = Math.round((Math.abs(args.patch.bidCents - existing.bidCents) / existing.bidCents) * 100)
+      warnings.push(`a ${pct} % change (${existing.bidCents}¢ → ${args.patch.bidCents}¢) is more than the largest bid change ${strategy.maxChangePct.value} % (${strategyWords(strategy.maxChangePct.source)}); sent, because it is your own edit`)
     }
   }
 
@@ -1723,18 +1769,19 @@ export async function updateAdTargetWithSync(args: {
   // 3A — see updateCampaignWithSync.
   const confirmOwnLimits = person && args.confirmOwnLimits === true
   const past: OwnLimit[] = []
+  // W1-5 — with the ads strategy band read above (one of his own limits: a person confirms past it, 3A).
   if (changes.some((c) => c.field === 'bid')) {
     const refused = await boundsRefused({
       entity: 'AD_TARGET', entityId: args.adTargetId, campaign: existing.adGroup?.campaign, field: 'bid',
       intendedValueCents: args.patch.bidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
-      person, confirmOwnLimits, past,
+      person, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, strategy,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual, confirmOwnLimits, past,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null,
   })
   if (atDispatch) return atDispatch
 
@@ -1789,7 +1836,7 @@ export async function updateAdTargetWithSync(args: {
     actor: args.actor,
     actionType: args.actionType ?? syncType,
     entityType: 'AD_TARGET',
-    evidence: withSentPast(args.evidence, past, args.actor),
+    evidence: withStrategyEvidence(withSentPast(args.evidence, past, args.actor), sources, warnings),
     entityId: args.adTargetId,
     payloadBefore,
     payloadAfter,
@@ -1797,7 +1844,7 @@ export async function updateAdTargetWithSync(args: {
   })
 
   await enqueueBullMQJob(outboundQueueId, syncType)
-  return { ok: true, outboundQueueId, bidHistoryIds, actionLogId, error: null }
+  return { ok: true, outboundQueueId, bidHistoryIds, actionLogId, error: null, ...(warnings.length ? { warnings } : {}) }
 }
 
 // ── Bulk target bid update ─────────────────────────────────────────────
@@ -1805,6 +1852,8 @@ export async function updateAdTargetWithSync(args: {
 export interface BulkBidEntry {
   adTargetId: string
   bidCents: number
+  /** W1-5 — the measurement and the sources behind this bid (an engine's proposal); kept on its action log row. */
+  evidence?: AdWriteEvidence | null
 }
 
 export interface BulkBidOutcome {
@@ -1861,6 +1910,7 @@ export async function bulkUpdateAdTargetBids(args: {
         manual: args.manual,
         askGate: args.askGate,
         confirmOwnLimits: args.confirmOwnLimits,
+        evidence: entry.evidence ?? null,
       })
       out.outcomes.push(outcome)
       if (outcome.ok && outcome.outboundQueueId) out.applied += 1

@@ -9,6 +9,7 @@ import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../test-support/formula-database.js'
 import { withWorkspace } from '../lib/workspace-context.js'
 import type { ResolvedPermissions } from '../lib/auth/rbac.js'
+import { READERS } from '../services/advertising/ads-strategy/fields.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../db.js', () => ({
@@ -56,7 +57,8 @@ describe('GET /api/advertising/automation/strategy…', () => {
     const effective = await get(`/api/advertising/automation/strategy/effective?market=IT&productId=${productId}`)
     expect(effective.statusCode).toBe(200)
     const fields = effective.json().markets[0].fields as Array<Record<string, unknown>>
-    expect(fields.find((f) => f.field === 'minBidCents')).toMatchObject({ minBidCents: 1234, source: { level: 'product' }, readBy: [] })
+    // W1-5 — the bid engines read the lowest bid: the route says so, as the read tool does.
+    expect(fields.find((f) => f.field === 'minBidCents')).toMatchObject({ minBidCents: 1234, source: { level: 'product' }, readBy: expect.arrayContaining([READERS.gate, READERS.optimiser]) })
     expect(fields.find((f) => f.field === 'targetAcosPct')).toMatchObject({ targetAcosPct: 27, source: { level: 'market' } })
     const history = await get('/api/advertising/automation/strategy/history?market=IT&sku=TEST-W1-ROUTE&limit=5')
     expect(history.statusCode).toBe(200)

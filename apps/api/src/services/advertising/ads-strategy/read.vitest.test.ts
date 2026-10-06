@@ -7,7 +7,7 @@
  *              through the catalog (variation → parent → primary category → market), the safer value per ad group,
  *              and gives each ad group its ACoS target as a FRACTION with its source (the W0 resolver's slot)
  *   effective  every number with its source and chain; the older settings that also bind and which is stricter; the
- *              campaigns whose own target wins; Claude's levels; the campaign's market; honest readBy
+ *              campaigns whose own target wins; Claude's levels; the campaign's market; honest readBy (W1-5: the bids)
  *   rows       every row, the orphan flagged, the older settings at the same grains
  *   history    a recorded change under its field's own key
  *   refusals   one scope at a time; a deleted product is not found; views that do not take a scope say so
@@ -26,7 +26,7 @@ vi.mock('../../../db.js', () => ({
 
 import { openStrategy } from './effective.js'
 import { readStrategy, PRODUCT_NOT_FOUND } from './read.js'
-import { STRATEGY_MONEY } from './fields.js'
+import { READERS, STRATEGY_MONEY } from './fields.js'
 import { PRODUCT_NOT_FOUND as TOOL_PRODUCT_NOT_FOUND } from '../../agents/tools/live-product.js'
 import { callTool, type UserPrincipal } from '../../agents/call-tool.js'
 
@@ -159,20 +159,23 @@ describe('effective', () => {
   it('a product: each number with its source and chain, the older settings that also bind, the campaigns that keep their own target', async () => {
     const out = data(await inA(() => readStrategy({ market: 'it', productId: ids.v })))
     expect(out).toMatchObject({ channel: 'AMAZON', view: 'effective' })
-    expect(out.notReadYet).toContain('maxBidCents')
+    // W1-5 — the bid engines read the bid band and the target (W1-6 the caps); goal and why are stored and shown only.
+    expect(out.notReadYet).not.toContain('maxBidCents')
+    expect(out.notReadYet).toContain('goal')
     const m = out.markets[0]
     expect(m).toMatchObject({ market: 'IT', strategyRows: 4, scope: { kind: 'product', products: [{ productId: ids.v, sku: 'TEST-W1-V1', parentSku: 'TEST-W1-PARENT', category: 'Test leaf' }] } })
     const maxBid = fieldOf(m, 'maxBidCents')
     expect(maxBid).toMatchObject({
       maxBidCents: 121, source: { level: 'category', label: 'Test leaf (IT)', version: 1 },
-      alsoInForce: [{ setting: "the market's bid policy", maxBidCents: 160 }], stricter: { from: 'the strategy' }, readBy: [],
+      alsoInForce: [{ setting: "the market's bid policy", maxBidCents: 160 }], stricter: { from: 'the strategy' }, readBy: expect.arrayContaining([READERS.gate, READERS.optimiser, READERS.hourly]),
     })
     expect(maxBid.chain.map((c: Data) => [c.level, c.maxBidCents])).toEqual([['product', null], ['category', 121], ['market', 140]])
     expect(fieldOf(m, 'minBidCents')).toMatchObject({ minBidCents: 13, alsoInForce: [{ minBidCents: 8 }], stricter: { from: 'the strategy' } })
     expect(fieldOf(m, 'target')).toMatchObject({ targetKind: 'TACOS', targetPct: 11, source: { level: 'product' } })
     expect(fieldOf(m, 'targetAcosPct')).toMatchObject({
       targetAcosPct: 24, campaignOwn: null, accountDefault: { targetAcosPct: 28 },
-      today: { from: 'the account default (campaigns without their own target; shadowedBy lists the others)', targetAcosPct: 28 },
+      // W1-5 — the optimiser steers by the strategy now, where a campaign has no own target (before the account default).
+      today: { from: 'this strategy (campaigns without their own target; shadowedBy lists the others)', targetAcosPct: 24 },
     })
     expect(fieldOf(m, 'harvest')).toMatchObject({
       harvestMinOrders: 3, harvestMinClicks: 7, harvestMaxAcosPct: 44, harvestWindowDays: 60,
