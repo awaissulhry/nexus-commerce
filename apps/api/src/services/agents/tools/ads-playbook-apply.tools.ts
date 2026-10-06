@@ -407,7 +407,7 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
   const effect = `Builds ONE Sponsored Products campaign of its own for "${h.term}" — ${p.product.sku}'s hero for this term in ${p.market} — through the SP Super Wizard's launch: `
     + `one exact keyword, ${plural(p.productAds.length, 'ASIN')}, ${plural(h.negatives, 'negative')}, ${amountLabel(p.dailyBudgetCents, currency)} of daily budget. `
     + `Born ENABLED with its bid at the ${floor}-cent floor (the planned bid remembered; suppressed, never paused), off the live-write allowlist and without placements: it serves next to nothing (not nothing) until START. `
-    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, the playbook's harvest and isolation rules (when on) close it in the research campaigns — never before.`
+    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, the playbook's isolation rule (when on) proposes closing its old places — a negative exact in its old Exact keyword's ad group and in the research campaigns, each a card a person decides — never before.`
   return {
     plan: p,
     result: {
@@ -423,11 +423,11 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
         hero: {
           key: h.key, intent: h.intent, modelSlot: h.modelSlot, ...(h.ownIntent ? {} : { modelNote: `no Exact slot for ${h.intent.toLowerCase()} terms: modelled on "${h.modelSlot}"` }),
           keyword: { text: h.term, match: 'EXACT' }, negatives: h.negatives,
-          bidFrom: h.bidFrom === 'cpc' ? "the term's cost per click where it runs now, inside the strategy's band" : "the playbook's start-bid ladder for its Exact slot, inside the strategy's band (the term has no clicks yet)",
-          budgetFrom: h.budgetFrom === 'spend' ? "the term's own daily spend where it runs now" : h.budgetFrom === 'productBudget' ? "the product's daily budget (the term spends more than it)" : "the playbook's least budget per slot",
+          bidFrom: `${h.bidFrom === 'cpc' ? "the term's cost per click where it runs now" : "the playbook's start-bid ladder for its Exact slot (the term has no clicks yet)"}, clamped to the strategy's bid band at this product${p.slots[0]?.ladderBidCents != null ? ' (the band clamped it)' : ''}`,
+          budgetFrom: `${h.budgetFrom === 'spend' ? "the term's own daily spend where it runs now" : h.budgetFrom === 'productBudget' ? "the product's daily budget (the term spends more than it)" : "the playbook's least budget per slot (the term spends less)"} — at least the least budget per slot, at most the product's daily budget, and held against every monthly cap of the strategy at full spend`,
         },
         current: currentLines(p),
-        keepsRunning: `"${h.term}" keeps running where it runs now: no negative, no lower bid, no pause anywhere (the Owner's rule 2: winners are never shuffled).`,
+        keepsRunning: `"${h.term}" keeps running where it runs now: no negative, no lower bid, no pause anywhere (the Owner's rule 2: winners are never shuffled). Its old places are closed only after the hero proves itself, each by a card a person decides (ads-playbook view winners: "hero proven → old place to be closed").`,
         campaigns,
         dailyBudgetCents: p.dailyBudgetCents,
         highestPlannedBidCents: p.highestPlannedBidCents,

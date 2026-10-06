@@ -295,3 +295,78 @@ describe('approved, a hero is built by the playbook\'s build; the term keeps run
     expect((archive.preview as Row).totals).toMatchObject({ changing: 1 })
   })
 })
+
+describe('handover B — the term\'s old Exact keyword is closed only once its own campaign proves itself', () => {
+  type Hero = { campaignId: string; adGroupId: string; ext: string; extCampaign: string }
+  let heroG: Hero
+  const negativesIn = (adGroupId: string) => inside(() => db().adTarget.findMany({ where: { adGroupId, isNegative: true }, select: { expressionValue: true, expressionType: true } }))
+  const isolation = async (extra: { dryRun: boolean; items?: Array<{ text: string; match: string; adGroupId: string }> }) => {
+    const { compileIsolationFor, isolateProduct } = await import('../../advertising/ads-playbook/isolation-run.js')
+    return inside(async () => {
+      const c = await compileIsolationFor(A.rowId)
+      if ('problems' in c) throw new Error(c.problems.join('; '))
+      const run = await isolateProduct({ action: c.compiled.action, actor: 'automation:test-isolation', ...extra })
+      if ('refused' in run) throw new Error(run.refused)
+      return run
+    })
+  }
+  const lock = async (g: { adGroupId: string; campaignId: string }) => {
+    const { ownKeywordRefusal } = await import('../../advertising/ads-winner-lock.js')
+    return inside(() => ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: g.adGroupId, campaignId: g.campaignId }, 'test cape', 'EXACT'))
+  }
+
+  beforeAll(async () => {
+    await inside(async () => {
+      const link = await db().adsPlaybookLink.findFirstOrThrow({ where: { playbookId: A.rowId, kind: 'slot', key: 'hero:test cape' } })
+      const g = await db().adGroup.findUniqueOrThrow({ where: { id: link.adGroupId! }, select: { id: true, externalAdGroupId: true, campaign: { select: { id: true, externalCampaignId: true } } } })
+      heroG = { campaignId: g.campaign.id, adGroupId: g.id, ext: g.externalAdGroupId!, extCampaign: g.campaign.externalCampaignId! }
+      // What the real launch makes (the stand-in does not): the hero's product ad and its exact keyword, live.
+      await db().adProductAd.create({ data: { adGroupId: heroG.adGroupId, productId: A.v1, asin: 'B0TESTWA01' } })
+      await db().adTarget.create({ data: { adGroupId: heroG.adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test cape', bidCents: 30, externalTargetId: 'KW-WA-HERO' } })
+      // The term's old place: an exact keyword of A's Exact | Category, where it still sells.
+      await db().adTarget.create({ data: { adGroupId: exactA.adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test cape', bidCents: 45, externalTargetId: 'KW-WA-CAPE-OLD' } })
+      await searched(exactA, 'test cape', 5, { orders: 3, clicks: 20, costCents: 700, salesCents: 5000 }, 'KW-WA-CAPE-OLD')
+    })
+  })
+
+  it('the hero not proven yet: nothing closes its old place; the lock still refuses the negative there (both run)', async () => {
+    const run = await isolation({ dryRun: true })
+    expect(run.plan.adds.filter((a) => a.kind === 'heroHandover')).toEqual([])
+    expect(run.plan.adds.filter((a) => a.adGroupId === exactA.adGroupId)).toEqual([])
+    expect(run.plan.leftAlone).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'heroHandover', adGroupId: exactA.adGroupId, why: expect.stringMatching(/^Not closed yet/) })]))
+    expect(await lock(exactA)).toMatchObject({ deniedAt: 'own_keyword' })
+    const view = await winners(A.parent)
+    expect(entry(view, 'test cape')).toBeDefined()
+    expect(view.data.entries.filter((e: Row) => e.term === 'test cape').map((e: Row) => e.nextStep)).not.toContain('closeOldPlace')
+  })
+
+  it('the hero proven: ONE negative exact proposed in the old Exact ad group only; written through the write service; B untouched', async () => {
+    await inside(() => searched(heroG, 'test cape', 5, { orders: 6, clicks: 30, costCents: 900, salesCents: 9000 }, 'KW-WA-HERO'))
+    const run = await isolation({ dryRun: true })
+    const handover = run.plan.adds.filter((a) => a.kind === 'heroHandover')
+    expect(handover.map((a) => [a.match, a.text, a.adGroupId])).toEqual([['EXACT', 'test cape', exactA.adGroupId]])
+    expect(run.plan.adds.map((a) => a.adGroupId)).not.toContain(exactB.adGroupId)
+    // The lock sees the hero as the term's proven home: the old keyword is superseded — for A only, never for B.
+    expect(await lock(exactA)).toBeNull()
+    expect(await lock(exactB)).toMatchObject({ deniedAt: 'own_keyword' })
+
+    // The winners view says it: hero proven → old place to be closed, with the request that asks for it.
+    const view = await winners(A.parent)
+    const old = view.data.entries.find((e: Row) => e.term === 'test cape' && e.adGroupId === exactA.adGroupId)
+    expect(old).toMatchObject({
+      nextStep: 'closeOldPlace', heroOf: { key: 'hero:test cape', proven: true },
+      closeOldPlace: { negative: { text: 'test cape', match: 'EXACT', adGroupId: exactA.adGroupId }, request: { tool: 'create-negative-keyword', args: { externalAdGroupId: exactA.ext, keywordText: 'test cape', matchType: 'NEGATIVE_EXACT' } } },
+    })
+    expect(old.nextWhy).toMatch(/^hero proven → old place to be closed/)
+
+    // A person accepts the card: only its item is written, through the one negative write service.
+    const bBefore = await inside(() => db().adTarget.findMany({ where: { adGroupId: exactB.adGroupId }, select: { expressionValue: true, isNegative: true, bidCents: true } }))
+    const done = await isolation({ dryRun: false, items: handover.map((a) => ({ text: a.text, match: a.match, adGroupId: a.adGroupId })) })
+    expect(done.chosen).toHaveLength(1)
+    expect(done.written).toMatchObject({ refused: [], failed: [] })
+    expect((done.written!.added + done.written!.local)).toBe(1)
+    expect(await negativesIn(exactA.adGroupId)).toEqual([{ expressionValue: 'test cape', expressionType: expect.stringMatching(/EXACT/) }])
+    expect(await negativesIn(heroG.adGroupId)).toEqual([])
+    expect(await inside(() => db().adTarget.findMany({ where: { adGroupId: exactB.adGroupId }, select: { expressionValue: true, isNegative: true, bidCents: true } }))).toEqual(bBefore)
+  })
+})

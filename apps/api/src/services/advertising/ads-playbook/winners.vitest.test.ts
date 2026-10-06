@@ -104,7 +104,7 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
     expect(exact.ladder[1].why).toMatch(/placements move only on a research slot/)
     expect(exact.why).toMatch(/apply-ads-playbook op hero.*the term keeps running here until it proves itself/)
     expect(step(facts(off, { liveWrites: false }))).toBe('ownCampaign')
-    const twice = winnerLadder(facts({ ...off, hero: { exists: { key: 'hero:x', campaignName: 'T | IT | Hero | x' }, refusal: null } }, { research: false }))
+    const twice = winnerLadder(facts({ ...off, hero: { exists: { key: 'hero:x', campaignName: 'T | IT | Hero | x', proven: false }, refusal: null } }, { research: false }))
     expect(twice.nextStep).toBe('none')
     expect(twice.ladder[2].why).toMatch(/it has its own campaign already \("T \| IT \| Hero \| x"\)/)
     expect(winnerLadder(facts({ ...off, hero: { exists: null, refusal: 'it is an ASIN' } }, { research: false })).ladder[2]).toMatchObject({ open: false, why: 'it is an ASIN' })
@@ -114,5 +114,27 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
     const l = winnerLadder(facts({ autoBid: { on: false, why: 'off' } }, { research: false, hero: true }))
     expect(l.nextStep).toBe('placement')
     expect(l.ladder[2]).toMatchObject({ step: 'ownCampaign', open: false, why: "it is the term's own campaign already" })
+  })
+})
+
+describe('winnerLadder — PB-6c handover B: the old place of a term with its own campaign', () => {
+  const own = (proven: boolean) => ({ exists: { key: 'hero:x', campaignName: 'T | IT | Hero | x', proven }, refusal: null })
+  it('the hero proven → old place to be closed, whatever the old place\'s own state', () => {
+    for (const state of ['winning', 'declining', 'lost'] as const) {
+      const l = winnerLadder(facts({ state, hero: own(true) }, { research: false }))
+      expect(l).toMatchObject({ nextStep: 'closeOldPlace', ladder: [] })
+      expect(l.why).toMatch(/^hero proven → old place to be closed: its own campaign \("T \| IT \| Hero \| x"\) meets the harvest bar/)
+    }
+  })
+
+  it('the hero not proven yet: both run — a winning old place stays, a declining one keeps its ladder (never a second hero)', () => {
+    expect(winnerLadder(facts({ state: 'winning', hero: own(false) }))).toMatchObject({ nextStep: 'none', why: expect.stringMatching(/runs too until that campaign meets the harvest bar/) })
+    const l = winnerLadder(facts({ hero: own(false) }))
+    expect(l.nextStep).toBe('bid')
+    expect(l.ladder[2]).toMatchObject({ step: 'ownCampaign', open: false })
+  })
+
+  it('the hero itself is never an old place', () => {
+    expect(winnerLadder(facts({ state: 'winning', hero: { exists: null, refusal: null } }, { hero: true, research: false })).nextStep).toBe('none')
   })
 })

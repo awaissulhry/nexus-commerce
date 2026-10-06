@@ -9,7 +9,11 @@
  *                          still sells, under the bar now
  *                lost      it met the bar in the window before and sold nothing in this one
  *                unproven  it met the bar in neither (counted, not listed)
- *   next step    a winning term is kept where it is: no step. A declining or lost one, first that applies —
+ *   next step    closeOldPlace  PB-6c handover B — the term has its own campaign (a hero) and the hero proved itself
+ *                             (its exact keyword meets the harvest bar there): this old place is to be closed, a
+ *                             negative exact here (the playbook's isolation rule proposes it; the lock lets it, L1b).
+ *                             Until the hero proves, both run.
+ *                a winning term is kept where it is: no step. A declining or lost one, first that applies —
  *                bid          auto-bid is on it: switched on for this business and the account dial at AUTO, the
  *                             campaign on the live-write allowlist, not at a floor and held by no one else (a pin, an
  *                             hourly plan, a goal plan), the keyword that serves it live, not at a floor, its bid set by no
@@ -36,7 +40,7 @@
  */
 import prisma from '../../../db.js'
 import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
-import { meetsHarvest, searchTermTotals } from '../ads-harvest.service.js'
+import { homeWinners, meetsHarvest, searchTermTotals, winnerKey } from '../ads-harvest.service.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
 import { strategyBidReader } from '../ads-strategy/bids.js'
 import { openTermsStrategy, sourceLabel, strategyMarketOf, termsForAdGroups, type StrategyTerms } from '../ads-strategy/terms.js'
@@ -47,7 +51,7 @@ import type { Slot } from './doc.js'
 import { HERO_PREFIX, heroRefusal, isHeroKey } from './hero.js'
 
 export type WinnerState = 'winning' | 'declining' | 'lost' | 'unproven'
-export type WinnerStep = 'bid' | 'placement' | 'ownCampaign' | 'none'
+export type WinnerStep = 'closeOldPlace' | 'bid' | 'placement' | 'ownCampaign' | 'none'
 
 /** A term's search-term totals in one ad group over one window. */
 export interface TermResults { orders: number; clicks: number; costCents: number; salesCents: number }
@@ -99,11 +103,11 @@ export interface LadderFacts {
   /** The target ACoS auto-bid steers by (a number someone set); null when none is set. */
   targetAcosPct: number | null
   band: { minBidCents: number | null; maxBidCents: number | null }
-  /** The term's own campaign, when it has one; else why it cannot have one (null: it can). */
-  hero: { exists: { key: string; campaignName: string } | null; refusal: string | null }
+  /** The term's own campaign, when it has one (proven: its exact keyword meets the harvest bar there); else why it cannot have one (null: it can). */
+  hero: { exists: { key: string; campaignName: string; proven: boolean } | null; refusal: string | null }
 }
 
-export interface LadderRung { step: Exclude<WinnerStep, 'none'>; open: boolean; why: string }
+export interface LadderRung { step: Exclude<WinnerStep, 'none' | 'closeOldPlace'>; open: boolean; why: string }
 
 const HOLDER_WORDS: Record<NonNullable<LadderFacts['campaign']['holder']>, string> = {
   pinned: 'a pin holds its bids', hourlyPlan: 'an hourly plan holds its bids', goalPlan: 'a goal plan holds its bids',
@@ -131,7 +135,13 @@ function bidBlocker(f: LadderFacts): string | null {
  * own), with every rung and why it is open or closed. A winning term is kept where it is: no step.
  */
 export function winnerLadder(f: LadderFacts): { nextStep: WinnerStep; why: string; ladder: LadderRung[] } {
-  if (f.state === 'winning') return { nextStep: 'none', why: 'winning where it runs: it stays there — no bid, placement or move is proposed', ladder: [] }
+  const own = f.hero.exists
+  if (own && !f.campaign.hero && own.proven) {
+    return { nextStep: 'closeOldPlace', why: `hero proven → old place to be closed: its own campaign ("${own.campaignName}") meets the harvest bar, so a negative exact here sends its searches there (the playbook's isolation rule proposes it; a person decides). Until it is closed, both run`, ladder: [] }
+  }
+  if (f.state === 'winning') {
+    return { nextStep: 'none', why: own && !f.campaign.hero ? `winning where it runs: it stays there, and its own campaign ("${own.campaignName}") runs too until that campaign meets the harvest bar` : 'winning where it runs: it stays there — no bid, placement or move is proposed', ladder: [] }
+  }
   if (f.state === 'unproven') return { nextStep: 'none', why: 'it has not proven itself here: nothing to keep or repair', ladder: [] }
   const ladder: LadderRung[] = []
   const blocked = bidBlocker(f)
@@ -178,8 +188,14 @@ export interface WinnerEntry {
   placement?: { campaignId: string; otherTerms: number; tool: 'set-placement-multipliers' }
   /** ownCampaign: the request that asks for it. */
   ownCampaign?: { tool: 'apply-ads-playbook'; args: { op: 'hero'; market: string; productId: string; term: string } }
-  /** The term's own campaign, when it has one. */
-  heroOf?: { key: string; campaignId: string; campaignName: string }
+  /** The term's own campaign, when it has one (proven: it meets the harvest bar there). */
+  heroOf?: { key: string; campaignId: string; campaignName: string; proven: boolean }
+  /** closeOldPlace: the negative that closes this old place, and the request that asks for it outside the rule's card. */
+  closeOldPlace?: {
+    negative: { text: string; match: 'EXACT'; adGroupId: string; campaignId: string }
+    by: string
+    request: { tool: 'create-negative-keyword'; args: { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'NEGATIVE_EXACT'; scope: 'AD_GROUP'; why: string } } | null
+  }
 }
 
 export interface WinnerReview {
@@ -248,7 +264,7 @@ export async function winnerReview(args: { market: string; productId?: string; s
   // Scope: the slot links' campaigns in this market, their ad groups, this product family's only.
   const campaigns = await prisma.campaign.findMany({
     where: { id: { in: links.map((l) => l.refId) } },
-    select: { id: true, name: true, status: true, marketplace: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true, adGroups: { select: { id: true, status: true, externalAdGroupId: true } } },
+    select: { id: true, name: true, status: true, marketplace: true, externalCampaignId: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true, adGroups: { select: { id: true, status: true, externalAdGroupId: true } } },
   })
   const byId = new Map(campaigns.map((c) => [c.id, c]))
   const want = strategyMarketOf(market)
@@ -333,8 +349,19 @@ export async function winnerReview(args: { market: string; productId?: string; s
   ])
   const strategyByAdGroup = new Map([...strat].filter(([, v]) => v.target).map(([k, v]) => [k, v.target!]))
 
-  // The term's own campaigns (heroes), by term.
-  const heroes = new Map(links.filter((l) => isHeroKey(l.key)).map((l) => [l.key.slice(HERO_PREFIX.length), { key: l.key, campaignId: l.refId, campaignName: byId.get(l.refId)?.name ?? '?' }]))
+  // The term's own campaigns (heroes), by term: proven once their live exact keyword meets the harvest bar there (the
+  // bar the lock's L1b and the isolation ask: homeWinners, the harvest rules' fallbacks where the strategy sets none).
+  const heroLinks = links.filter((l) => isHeroKey(l.key))
+  const heroPositives = await positivesIn(heroLinks.map((l) => l.adGroupId).filter((id): id is string => !!id))
+  const liveHeroes = heroLinks.filter((l) => {
+    const home = l.adGroupId ? homeOf(l.key.slice(HERO_PREFIX.length), heroPositives.get(l.adGroupId) ?? []) : null
+    return !!home?.live && home.adGroupId === l.adGroupId
+  })
+  const heroWins = await homeWinners(liveHeroes.map((l) => ({ term: l.key.slice(HERO_PREFIX.length), adGroupId: l.adGroupId! })), { defaults: { ...HARVEST_DEFAULTS } })
+  const heroes = new Map(heroLinks.map((l) => {
+    const term = l.key.slice(HERO_PREFIX.length)
+    return [term, { key: l.key, campaignId: l.refId, campaignName: byId.get(l.refId)?.name ?? '?', proven: !!l.adGroupId && liveHeroes.includes(l) && heroWins.has(winnerKey(term, l.adGroupId)) }]
+  }))
 
   // One entry per ad group and term.
   type Pending = { g: Group & { ext: string }; term: string; key: string }
@@ -395,7 +422,7 @@ export async function winnerReview(args: { market: string; productId?: string; s
       targetAcosPct,
       band: { minBidCents: band?.minBidCents?.value ?? null, maxBidCents: band?.maxBidCents?.value ?? null },
       hero: {
-        exists: heroOf && heroOf.key !== p.g.slot ? { key: heroOf.key, campaignName: heroOf.campaignName } : null,
+        exists: heroOf && heroOf.key !== p.g.slot ? { key: heroOf.key, campaignName: heroOf.campaignName, proven: heroOf.proven } : null,
         refusal: heroRefusal(p.term, doc, new Set()),
       },
     })
@@ -410,6 +437,15 @@ export async function winnerReview(args: { market: string; productId?: string; s
       ...(step.nextStep === 'placement' ? { placement: { campaignId: c.id, otherTerms: Math.max(0, (clicked.get(c.id)?.size ?? 0) - (cur && cur.clicks > 0 ? 1 : 0)), tool: 'set-placement-multipliers' as const } } : {}),
       ...(step.nextStep === 'ownCampaign' ? { ownCampaign: { tool: 'apply-ads-playbook' as const, args: { op: 'hero' as const, market, productId: product.id, term: p.term } } } : {}),
       ...(heroOf && heroOf.key !== p.g.slot ? { heroOf } : {}),
+      ...(step.nextStep === 'closeOldPlace' ? {
+        closeOldPlace: {
+          negative: { text: p.term, match: 'EXACT' as const, adGroupId: p.g.adGroupId, campaignId: c.id },
+          by: "the playbook's isolation rule: a card a person decides (or Claude inside his limits for negatives); never at once",
+          request: c.externalCampaignId
+            ? { tool: 'create-negative-keyword' as const, args: { externalCampaignId: c.externalCampaignId, externalAdGroupId: p.g.ext, keywordText: p.term, matchType: 'NEGATIVE_EXACT' as const, scope: 'AD_GROUP' as const, why: `"${p.term}" has its own campaign, which proved itself: close its old place here` } }
+            : null,
+        },
+      } : {}),
     })
   }
   entries.sort((a, b) => ORDER[a.state] - ORDER[b.state] || (b.current?.orders ?? 0) - (a.current?.orders ?? 0) || a.term.localeCompare(b.term))

@@ -782,7 +782,22 @@ const READERS: Record<string, Reader> = {
     }
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
-  'apply-ads-playbook': (p) => {
+  'apply-ads-playbook': (p, _a, ctx) => {
+    // PB-6c — a term's own campaign (a hero): the term, the product and the market, and what it builds.
+    if (p.op === 'hero') {
+      const product = rec(p.product)
+      const market = marketOf(p.market)
+      return {
+        channel: 'AMAZON',
+        market,
+        target: productTarget({ id: text(product?.productId), sku: text(product?.sku) }, 1, ctx),
+        changes: [
+          { label: 'Own campaign for', from: null, to: `“${text(p.term) ?? '?'}” · ${text(product?.sku) ?? '?'} · Amazon ${market ?? '?'}` },
+          { label: 'Builds', from: null, to: '1 campaign, one exact keyword, at the 2-cent floor, off the allowlist' },
+          { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
+        ],
+      }
+    }
     // PB-5b — a start or a stop: each built campaign it moves, from → to.
     if (p.op === 'start' || p.op === 'stop') {
       const start = p.op === 'start'

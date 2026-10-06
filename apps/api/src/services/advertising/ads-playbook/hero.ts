@@ -19,21 +19,23 @@
  *   one         at most one hero per term per product per market (its link key)
  *
  * What it does NOT do (Owner rule 2): the term keeps running where it runs now — nothing is negated there, no bid is
- * lowered; only once the hero itself meets the harvest bar do the playbook's harvest and isolation rules close it in the
- * research campaigns (handover B, `proven`). Rule 3: another product buying the same term is never a reason to refuse.
+ * lowered; only once the hero itself meets the harvest bar does the playbook's isolation rule propose closing its old
+ * places (handover B, `proven`): a negative exact in its old Exact slot (the lock lets it, L1b) and in the research
+ * slots, each a card a person (or Claude inside his limits) decides. Rule 3: another product buying the same term is
+ * never a reason to refuse, and never gets a negative.
  */
 import { z } from 'zod'
 import { campaignNameProblem } from '@nexus/shared/ads-campaign-name'
 import type { PlannedCampaign } from '../../ads-core/ads-blueprint-apply.js'
 import { routeIntent, type Intent } from '../ads-harvest-route.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
-import { blockedPositive, type Positive } from '../ads-winner-lock.js'
+import { blockedPositive, HERO_PREFIX, heroLinkKey, type Positive } from '../ads-winner-lock.js'
 import { compilePlaybook, type CompiledSlot } from './compile.js'
 import type { ProductTerms, Slot, TemplateDoc } from './doc.js'
 
-/** The link key of a term's hero: `hero:` and the term as the harvest normalises it. */
-export const HERO_PREFIX = 'hero:'
-export const heroKey = (term: string): string => `${HERO_PREFIX}${normaliseNegTerm(term)}`
+/** The link key of a term's hero: `hero:` and the term as the harvest normalises it (the lock's own, L1b). */
+export { HERO_PREFIX }
+export const heroKey = heroLinkKey
 export const isHeroKey = (key: string): boolean => key.startsWith(HERO_PREFIX)
 /** A hero's link key, as a tool names it (START / STOP of one hero). */
 export const HERO_KEY = z.string().trim().regex(/^hero:\S.{0,99}$/, 'a hero key is "hero:" and its term')
