@@ -45,8 +45,8 @@ import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { ruleFrom } from '../claude-trust.service.js'
-import { adGroupStockRisk, productStockRisk, stockStepOf } from '../../advertising/ads-stock-risk.service.js'
-import { stockLoweredCents } from '../../advertising/ads-bid-suppression.service.js'
+import { adGroupStockRisk, chainStepBack, productStockRisk, stockSteppedCents, stockStepOf } from '../../advertising/ads-stock-risk.service.js'
+import { restoreCampaignBids, suppressAdGroupBids, suppressCampaignBids, restoreAdGroupBids } from '../../advertising/ads-bid-suppression.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -67,6 +67,9 @@ async function ask(tool: string, args: Record<string, unknown>) {
 }
 const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver))
 const sql = <T = Row>(text: string, params: unknown[] = []) => inside(async () => (await database.client.$queryRawUnsafe(text, ...params)) as T[])
+const halt = (halted: boolean) => inside(() => database.client.adsAutomationState.upsert({
+  where: { id: 'singleton' }, create: { id: 'singleton', autonomy: 'AUTO', halted, haltReason: halted ? 'test halt' : null }, update: { halted, haltReason: halted ? 'test halt' : null },
+}))
 const judge = (tool: string, p: unknown, limits: Record<string, unknown> = {}) => {
   const t = getTool(tool)!
   return t.withinLimits!(p, t.limits!.parse(limits) as Record<string, unknown>)
@@ -124,12 +127,15 @@ beforeAll(async () => {
     const fba = await db.stockLocation.create({ data: { type: 'AMAZON_FBA', code: 'TEST-FBA', name: 'Test FBA' } })
     fbaLevel = (await db.stockLevel.create({ data: { productId: product.LOW, locationId: fba.id, quantity: 4, reserved: 0, available: 4 } })).id
     await seedProduct('LOW2', 3, 1)
+    await seedProduct('LOW3', 3, 1)
     await campaign('c-out', { defaultBidCents: 40, targets: [['a', 60], ['b', 30]], products: ['OUT'] })
     await campaign('c-low', { defaultBidCents: 50, targets: [['a', 80]], products: ['LOW'] }, { dynamicBidding: { maxBidChangePct: 20 } })
     await campaign('c-mix', { defaultBidCents: 40, targets: [['a', 50]], products: ['OUT', 'OK'] })
     await campaign('c-ok', { defaultBidCents: 40, targets: [['a', 50]], products: ['OK'] })
     await campaign('c-nostep', { defaultBidCents: 40, targets: [['a', 50]], products: ['LOW2'] })
     await campaign('c-rt', { defaultBidCents: 40, targets: [['a', 70]], products: ['RT'] })
+    // Short, with a 20 % guardrail: a stepped ad group every existing stop must still floor.
+    await campaign('c-step2', { defaultBidCents: 50, targets: [['a', 80], ['b', 60]], products: ['LOW3'] }, { dynamicBidding: { maxBidChangePct: 20 } })
     // The retail guard already stopped this campaign; the budget engine floored this ad group on its own.
     await campaign('c-guard', { defaultBidCents: 2, targets: [['a', 2]], products: ['OUT'] }, { bidsSuppressedAt: new Date(), bidsSuppressedBy: 'automation:retail-guard', bidsSuppressedFloorCents: 2 })
     await campaign('c-eng', { defaultBidCents: 2, targets: [['a', 2]], products: ['OUT'] })
@@ -147,23 +153,33 @@ describe('the rules, pure', () => {
     expect(productStockRisk({ units: 15, unitsPerDay: 1, lowBelowDays: 10, restoreAtDays: 15 })).toMatchObject({ risk: 'ok', recovered: true })
     expect(productStockRisk({ units: 3, unitsPerDay: null, lowBelowDays: null, restoreAtDays: null })).toEqual({ risk: 'ok', daysOfCover: null, recovered: true })
     expect(productStockRisk({ units: 10, unitsPerDay: 3, lowBelowDays: 10, restoreAtDays: 15 }).daysOfCover).toBe(3.3)
+    // Shared stock: the other business's sales are not in the pace — judged only when the pool is out.
+    expect(productStockRisk({ units: 4, unitsPerDay: 1, lowBelowDays: 10, restoreAtDays: 15, pooled: true })).toEqual({ risk: 'shared', daysOfCover: null, recovered: true })
+    expect(productStockRisk({ units: 0, unitsPerDay: 1, lowBelowDays: 10, restoreAtDays: 15, pooled: true }).risk).toBe('out-of-stock')
   })
 
   it('an ad group: lowered as a whole only when every product is short', () => {
-    const r = (...risks: Array<'out-of-stock' | 'low-stock' | 'ok'>) => risks.map((risk) => ({ risk }))
+    const r = (...risks: Array<'out-of-stock' | 'low-stock' | 'shared' | 'ok'>) => risks.map((risk) => ({ risk }))
     expect(adGroupStockRisk(r('out-of-stock', 'out-of-stock'), 0)).toBe('out-of-stock')
     expect(adGroupStockRisk(r('out-of-stock', 'low-stock'), 0)).toBe('low-stock')
     expect(adGroupStockRisk(r('out-of-stock', 'ok'), 0)).toBe('mixed')
     expect(adGroupStockRisk(r('out-of-stock'), 1)).toBe('unknown')
     expect(adGroupStockRisk(r('ok'), 1)).toBe('ok')
     expect(adGroupStockRisk([], 0)).toBe('none')
+    expect(adGroupStockRisk(r('low-stock', 'shared'), 0)).toBe('shared')
+    expect(adGroupStockRisk(r('shared'), 0)).toBe('shared')
   })
 
-  it('a bid: to the floor, or one step down never below it; never up', () => {
-    expect(stockLoweredCents(60, 2, null)).toBe(2)
-    expect(stockLoweredCents(50, 2, 20)).toBe(40)
-    expect(stockLoweredCents(4, 3, 50)).toBe(3)
-    expect(stockLoweredCents(2, 3, null)).toBe(2)
+  it('a bid: one step down never below the lowest it may set; never up; back through the steps only while it still equals one', () => {
+    expect(stockSteppedCents(50, 5, 20)).toBe(40)
+    expect(stockSteppedCents(6, 5, 50)).toBe(5)
+    expect(stockSteppedCents(4, 5, 20)).toBe(4)
+    const step = (approvalId: string, from: number, to: number) => ({ approvalId, bids: new Map([['target:t1', { fromCents: from, toCents: to }]]) })
+    // Two steps (50 → 40 → 32), newest first: back to 50 from 32, to 50 from 40; a bid moved since is left.
+    expect(chainStepBack('target:t1', 32, [step('ap2', 40, 32), step('ap1', 50, 40)])).toEqual({ cents: 50, moved: false })
+    expect(chainStepBack('target:t1', 40, [step('ap1', 50, 40)])).toEqual({ cents: 50, moved: false })
+    expect(chainStepBack('target:t1', 45, [step('ap1', 50, 40)])).toEqual({ cents: null, moved: true })
+    expect(chainStepBack('target:t2', 45, [step('ap1', 50, 40)])).toEqual({ cents: null, moved: false })
     expect(stockStepOf({ maxBidChangePct: 20 }, 25)).toEqual({ pct: 20, by: 'campaign' })
     expect(stockStepOf({ maxBidChangePct: 30 }, 25)).toEqual({ pct: 25, by: 'strategy' })
     expect(stockStepOf(null, null)).toEqual({ pct: null, by: null })
@@ -253,29 +269,55 @@ describe('lower-ad-bids-for-stock', () => {
       { kind: 'target', id: 't-c-low-a', fromCents: 80, toCents: 64 },
     ] })
     expect(p.cover).toEqual({ highestDaysOfCover: 4 })
+    // A plain step: judged as a step (not a forced stop), said honestly — auto-bid holds it, a bound rule or plan may not.
+    expect(p).toMatchObject({ totals: { stepped: 1, floored: 0 }, limitFacts: { this: { cuts: 1, largestCutPct: 20 } }, stepNote: expect.stringMatching(/auto-bid leaves these keyword and target bids alone for 60 days/) })
     expect((await call('lower-ad-bids-for-stock', { adGroupIds: ['g-c-nostep'] })).error).toMatch(/no largest bid change is set to step by .*ask with lowerTo "floor"/)
     expect(((await call('lower-ad-bids-for-stock', { adGroupIds: ['g-c-nostep'], lowerTo: 'floor' })).preview as Row).adGroups[0]).toMatchObject({ how: 'floor', floorCents: 2 })
   })
 
-  it('approved: lowers as the approver in one change set, remembers every bid, owns the ad group\'s floor; a second lowering keeps the memory', async () => {
+  it('approved: a step is a plain lowering as the approver (no floor markers); out of stock later, the existing floor remembers the stepped bid', async () => {
     const asked = await ask('lower-ad-bids-for-stock', { adGroupIds: ['g-c-low'], why: 'stock running out' })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { lowered: 1, bidsMoved: 2, failed: 0, reach: { reach: 'sandbox' } } })
-    expect(await bids('g-c-low')).toEqual({ group: [40, 50], owner: 'user:u-approver', targets: { 't-c-low-a': [64, 80] } })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { lowered: 1, stepped: 1, floored: 0, bidsMoved: 2, failed: 0, reach: { reach: 'sandbox' } } })
+    // Nothing remembered on the rows, no owner: the request's change record keeps from → to.
+    expect(await bids('g-c-low')).toEqual({ group: [40, null], owner: null, targets: { 't-c-low-a': [64, null] } })
     const logs = await sql('SELECT "userId", "executionId", "entityType" FROM "AdvertisingActionLog" WHERE "executionId" = $1 ORDER BY "entityType"', [asked.approvalId])
     expect(logs).toEqual([
       { userId: 'user:u-approver', executionId: asked.approvalId, entityType: 'AD_GROUP' },
       { userId: 'user:u-approver', executionId: asked.approvalId, entityType: 'AD_TARGET' },
     ])
     const [queued] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['t-c-low-a'])
-    expect(queued.payload).toMatchObject({ manual: true, force: true, fieldChanges: [{ field: 'bid', oldValue: '80', newValue: '64' }] })
+    expect(queued.payload).toMatchObject({ manual: true, fieldChanges: [{ field: 'bid', oldValue: '80', newValue: '64' }] })
+    expect(queued.payload.force).not.toBe(true)
+    const [record] = await sql<{ before: Row }>('SELECT before FROM "AgentChange" WHERE "approvalId" = $1', [asked.approvalId])
+    expect(record.before.steps).toEqual([
+      { adGroupId: 'g-c-low', kind: 'adGroup', id: 'g-c-low', fromCents: 50, toCents: 40 },
+      { adGroupId: 'g-c-low', kind: 'target', id: 't-c-low-a', fromCents: 80, toCents: 64 },
+    ])
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({
       request: { tool: 'restore-ad-bids-after-stock', args: { adGroupIds: ['g-c-low'], evenIfStillShort: true } },
     })
-    // Its last units sell: out of stock now, so the floor — and the memory is still the bid before the first lowering.
+    // Its last units sell: out of stock now, so the existing floor — which remembers the stepped bids.
     await inside(() => database.client.stockLevel.update({ where: { id: fbaLevel }, data: { quantity: 0, available: 0 } }))
     const again = await ask('lower-ad-bids-for-stock', { adGroupIds: ['g-c-low'] })
-    expect(await approve(again.approvalId!)).toMatchObject({ ok: true, result: { lowered: 1, bidsMoved: 2 } })
-    expect(await bids('g-c-low')).toEqual({ group: [2, 50], owner: 'user:u-approver', targets: { 't-c-low-a': [2, 80] } })
+    expect(await approve(again.approvalId!)).toMatchObject({ ok: true, result: { lowered: 1, floored: 1, stepped: 0, bidsMoved: 2 } })
+    expect(await bids('g-c-low')).toEqual({ group: [2, 40], owner: 'user:u-approver', targets: { 't-c-low-a': [2, 64] } })
+  })
+
+  it('every existing stop still floors a stepped ad group, and gives it back to its stepped bids', async () => {
+    const asked = await ask('lower-ad-bids-for-stock', { adGroupIds: ['g-c-step2'] })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, result: { stepped: 1, bidsMoved: 3 } })
+    const stepped = { group: [40, null], owner: null, targets: { 't-c-step2-a': [64, null], 't-c-step2-b': [48, null] } }
+    expect(await bids('g-c-step2')).toEqual(stepped)
+    // A campaign stop (the retail guard; a monthly cap, a night or Min-bid window and suppress-campaign floor the same way).
+    await inside(() => suppressCampaignBids('c-step2', { actor: 'automation:retail-guard' }))
+    expect(await bids('g-c-step2')).toEqual({ group: [2, 40], owner: null, targets: { 't-c-step2-a': [2, 64], 't-c-step2-b': [2, 48] } })
+    await inside(() => restoreCampaignBids('c-step2', { actor: 'automation:retail-guard' }))
+    expect(await bids('g-c-step2')).toEqual(stepped)
+    // The budget engine's own ad-group floor (a product over its monthly cap).
+    await inside(() => suppressAdGroupBids('g-c-step2', { actor: 'automation:budget-manager-cron' }))
+    expect(await bids('g-c-step2')).toEqual({ group: [2, 40], owner: 'automation:budget-manager-cron', targets: { 't-c-step2-a': [2, 64], 't-c-step2-b': [2, 48] } })
+    await inside(() => restoreAdGroupBids('g-c-step2', { actor: 'automation:budget-manager-cron' }))
+    expect(await bids('g-c-step2')).toEqual(stepped)
   })
 
   it('a bid or the stock that moved after the person approved stops the run', async () => {
@@ -307,13 +349,31 @@ describe('restore-ad-bids-after-stock', () => {
     expect(p.effect).toMatch(/their stock back above every restart line\. Spend resumes/)
     const asked = await ask('restore-ad-bids-after-stock', { adGroupIds: ['g-c-low'] })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { gaveBack: 1, bidsRestored: 2 } })
+    // The floor's memory (the stepped bids) and then the step: back to the bids before the stock problem.
     expect(await bids('g-c-low')).toEqual({ group: [50, null], owner: null, targets: { 't-c-low-a': [80, null] } })
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'lower-ad-bids-for-stock', args: { adGroupIds: ['g-c-low'] } } })
   })
 
-  it('never an engine\'s floor; an undo gives back even while short, and never by rule', async () => {
+  it('a step gives back only the bids still at their stepped value; one an engine moved is left and named', async () => {
+    // Stock is back for the stepped ad group; an engine moved one of its keywords since the step.
+    await inside(() => database.client.product.update({ where: { id: product.LOW3 }, data: { totalStock: 100 } }))
+    await inside(() => database.client.adTarget.update({ where: { id: 't-c-step2-b' }, data: { bidCents: 55 } }))
+    const read = (await call('ad-stock-risk', { adGroupIds: ['g-c-step2'] })).data as Row
+    expect(read.adGroups[0]).toMatchObject({ risk: 'ok', stockStepsOnRecord: 1, suggestedTool: 'restore-ad-bids-after-stock' })
+    const p = (await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-step2'] })).preview as Row
+    expect(p).toMatchObject({ totals: { adGroups: 1, bids: 2, notGivenBack: 1 }, notGivenBack: [{ id: 't-c-step2-b', nowCents: 55 }], limitFacts: { this: { raises: 1, budgetIncreaseCents: 0 } } })
+    expect(p.changes.map((c: Row) => [c.fromCents, c.toCents])).toEqual([[40, 50], [64, 80]])
+    const asked = await ask('restore-ad-bids-after-stock', { adGroupIds: ['g-c-step2'] })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, result: { bidsRestored: 2 } })
+    expect(await bids('g-c-step2')).toEqual({ group: [50, null], owner: null, targets: { 't-c-step2-a': [80, null], 't-c-step2-b': [55, null] } })
+    // Given back once: nothing is left to give back.
+    expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-step2'] })).error).toMatch(/every bid a stock step lowered was moved since|its bids are back already/)
+  })
+
+  it('never an engine\'s floor nor under a campaign floor; an undo gives back even while short, and never by rule', async () => {
     expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-eng'] })).error).toMatch(/it was floored by automation:budget-manager-cron: only a floor a person set .* is given back here/)
-    expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-ok'] })).error).toMatch(/its bids are not floored on their own/)
+    expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-ok'] })).error).toMatch(/it was not lowered for stock: no floor of its own and no stock step on record/)
+    expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-guard'] })).error).toMatch(/its bids cannot serve until that floor is lifted, and the campaign's own restore leaves an ad group's own floor and its stock steps alone/)
     const lowered = await ask('lower-ad-bids-for-stock', { adGroupIds: ['g-c-out'] })
     await approve(lowered.approvalId!)
     expect((await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-out'] })).error).toMatch(/still out of stock: TEST-SKU-OUT/)
@@ -352,6 +412,20 @@ describe('the limits: a lowering may run by rule inside the strategy; a give-bac
       expect(judge('restore-ad-bids-after-stock', back, { maxRestoredBidCents: 100, minDaysOfCoverToRestore: 60 })).toMatch(/50 days of cover, fewer than the 60/)
       // The month and the daily budget: a give-back restarts its campaign's budget, counted once.
       expect(back.limitFacts.this).toMatchObject({ raises: 1, budgetIncreaseCents: 1200 })
+      // A halt: a give-back adds spend, so the halt refuses it by rule up front (a person's approval still passes, as his
+      // own click); a floor lets go, so a halt does not refuse it.
+      vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+      await halt(true)
+      try {
+        const halted = (await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-rt'] })).preview as Row
+        expect(halted.reach).toMatchObject({ reach: 'live' })
+        expect(halted.ruleGate).toMatch(/refuses it as a run by rule — ads automation is stopped/)
+        expect(judge('restore-ad-bids-after-stock', halted, { maxRestoredBidCents: 100 })).toMatch(/ads automation is stopped/)
+        expect(((await call('lower-ad-bids-for-stock', { adGroupIds: ['g-c-nostep'], lowerTo: 'floor' })).preview as Row).ruleGate).toBeNull()
+      } finally {
+        await halt(false)
+        vi.unstubAllEnvs()
+      }
       // An undo while stock is still short never runs by rule, whatever the limits.
       const undo = (await call('restore-ad-bids-after-stock', { adGroupIds: ['g-c-out'], evenIfStillShort: true })).preview
       expect(judge('restore-ad-bids-after-stock', undo, { maxRestoredBidCents: 10_000 })).toBe('it gives bids back while stock is still short (an undo); a person decides')

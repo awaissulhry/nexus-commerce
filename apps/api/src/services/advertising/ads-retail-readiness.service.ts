@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { suppressCampaignBids } from './ads-bid-suppression.service.js'
 import { adsActorOf } from './ads-actor.js'
 import { logger } from '../../utils/logger.js'
-import { sellableAvailable } from '../stock-pool/sync-ledgers.js'
+import { loadSyncLedgers, type ProductLedger } from '../stock-pool/sync-ledgers.js'
 import { stopBidsFor, strategySourceWords } from './ads-strategy/effective.js'
 
 export type Verdict = 'pause' | 'watch' | 'ok'
@@ -25,6 +25,8 @@ export interface ProductReadiness {
   /** ADS AUTONOMY W3-3 — the parts of `availableQty`: units at Amazon FBA (Amazon's number, read only) and in the ledger the product sells from (its own warehouses, or the pool it borrows from). */
   amazonFbaQty?: number
   warehouseQty?: number
+  /** W3-3 — its warehouse units are another business's shared pool (lent stock), which that business sells from too. */
+  pooled?: boolean
 }
 export interface CampaignReadiness {
   campaignId: string; name: string; marketplace: string | null; status: string
@@ -58,13 +60,15 @@ export async function productReadinessReader(productIds: readonly string[]): Pro
   const pMap = new Map(products.map((p) => [p.id, p]))
   // Shared stock — warehouse units come from the product's ledger (its own warehouses, or the pool it
   // sells from); Amazon-held units stay its own. A pooled product is not "out of stock" here.
-  const warehouseSellable = products.length ? await sellableAvailable(prisma, products.map((p) => p.id)) : new Map<string, number>()
+  // (W3-3: the ledgers themselves — sellableAvailable's numbers — so the stock-aware bids can tell a pooled product.)
+  const ledgers = products.length ? await loadSyncLedgers(prisma, products.map((p) => p.id)) : new Map<string, ProductLedger>()
 
   return function readiness(productId: string, marketplace: string | null): ProductReadiness {
     const p = pMap.get(productId)
     if (!p) return { productId, sku: null, asin: null, name: null, inStock: true, availableQty: 0, hasBuyBox: null, priceCompetitive: null }
     const held = p.stockLevels.filter((sl) => sl.location?.type !== 'WAREHOUSE')
-    const warehouse = warehouseSellable.get(p.id) ?? 0
+    const ledger = ledgers.get(p.id)
+    const warehouse = ledger?.available ?? 0
     const available = held.reduce((s, sl) => s + (sl.available ?? 0), 0) + warehouse
     const inStock = available > 0 || (p.totalStock ?? 0) > 0
     const cl = p.channelListings.find((x) => x.channel === 'AMAZON' && (!marketplace || x.marketplace === marketplace)) ?? p.channelListings.find((x) => x.channel === 'AMAZON')
@@ -72,7 +76,7 @@ export async function productReadinessReader(productIds: readonly string[]): Pro
     const bb = p.buyBoxHistory.find((x) => x.channel === 'AMAZON' && (!marketplace || x.marketplace === marketplace)) ?? p.buyBoxHistory[0]
     const hasBuyBox = bb ? bb.isOurOffer : null
     const amazonFbaQty = held.filter((sl) => sl.location?.type === 'AMAZON_FBA').reduce((s, sl) => s + (sl.available ?? 0), 0)
-    return { productId, sku: p.sku, asin: null, name: p.name, inStock, availableQty: available || (p.totalStock ?? 0), hasBuyBox, priceCompetitive, amazonFbaQty, warehouseQty: warehouse }
+    return { productId, sku: p.sku, asin: null, name: p.name, inStock, availableQty: available || (p.totalStock ?? 0), hasBuyBox, priceCompetitive, amazonFbaQty, warehouseQty: warehouse, pooled: ledger?.source.kind === 'pool' }
   }
 }
 

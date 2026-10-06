@@ -377,8 +377,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
-      'lower-ad-bids-for-stock': { before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }] }, after: { adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }] } },
-      'restore-ad-bids-after-stock': { before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }] }, after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }] } },
+      'lower-ad-bids-for-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 50, toCents: 40 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], stepAdGroupIds: ['g2'], steps: [{ kind: 'target', id: 't1', cents: 40 }] },
+      },
+      'restore-ad-bids-after-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
+      },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
