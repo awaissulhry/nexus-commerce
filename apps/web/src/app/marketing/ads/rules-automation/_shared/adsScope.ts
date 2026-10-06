@@ -338,13 +338,13 @@ export function adsScopeNeedsNormalising(
  * a "Last 30 days" label**. Nothing errors and nothing looks wrong.
  *
  * Two further mismatches hide in names that look shared:
- *   · the picker's `thisWeek` starts **Sunday** (`s.setDate(s.getDate() - s.getDay())`); the
- *     server's `wtd` starts **Monday** (ISO). Same idea, different week.
+ *   · the picker's `thisWeek` started **Sunday**; the server's `wtd` starts **Monday** (ISO). Since AM-36
+ *     the picker's weeks start Monday too, and `thisWeek` still travels as the explicit days it drew.
  *   · the picker resolves in the browser's **local** time; the server anchors to **Europe/Rome**.
  *     For a Rome operator these agree, which is exactly why the divergence would ship.
  *
  * ⚠ **The spec's "the three with no equivalent" is wrong. Measured here: 7 of the 15 picker keys
- * map; EIGHT do not** — `thisWeek` (Sunday≠Monday), `lastWeek`, `last3m`, `last12m` (`last_year` is
+ * map; EIGHT do not** — `thisWeek` (was Sunday≠Monday), `lastWeek`, `last3m`, `last12m` (`last_year` is
  * the previous calendar YEAR, not a trailing twelve months), `last18m`, `last24m`, `lastQuarter`
  * and `latest60`. `null` here means "no server preset produces this window", and the honest
  * treatment is explicit dates — never the nearest-looking key.

@@ -58,6 +58,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { readDailyBudget, readTargetAcosPercent } from './budgetInput'
 import { currencySymbol, formatMoney } from '../_shell/adsMarkets'
+import { eur as eurMoney } from '../campaigns/_grid/format'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -194,7 +195,8 @@ export function RangePopover({
           </div>
         )}
         <p className="n">{note}</p>
-        {bad && <p className="e" role="alert">Each end must be at least {formatMoney(floorCents / 100, currency)}, and Min must not exceed Max.</p>}
+        {/* AM-30 — euros in the console's one money format; CM-32 — another market in its own currency. */}
+        {bad && <p className="e" role="alert">Each end must be at least {currency === 'EUR' ? eurMoney(floorCents / 100) : formatMoney(floorCents / 100, currency)}, and Min must not exceed Max.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>

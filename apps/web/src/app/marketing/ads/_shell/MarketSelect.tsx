@@ -61,7 +61,7 @@ function multiLabel(codes: string[]): string {
  * three markets would fire three reads and show two states the operator never asked for.
  */
 export function MarketSelect({
-  markets, value, onChange, allowAll = false, disabled = false, brand, values, onValuesChange,
+  markets, value, onChange, allowAll = false, disabled = false, brand, values, onValuesChange, notYet,
 }: {
   /** Full connection list; non-launchable entries render disabled. */
   markets: AdsMarket[]
@@ -75,6 +75,11 @@ export function MarketSelect({
   /** HV.10 — present ⇒ multi-select. `[]` means "all markets". */
   values?: string[]
   onValuesChange?: (codes: string[]) => void
+  /**
+   * AM-26 — the page cannot filter by market yet. The control stays and says so: it reads "All markets", and its menu
+   * shows this reason in place of market rows that would do nothing when picked.
+   */
+  notYet?: string
 }) {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
@@ -94,16 +99,18 @@ export function MarketSelect({
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={notYet}
       >
         {brand}
-        <span className="chip">{multi ? multiLabel(values ?? []) : marketLabel(value)}</span>
+        <span className="chip">{notYet ? 'All markets' : multi ? multiLabel(values ?? []) : marketLabel(value)}</span>
         <ChevronDown size={13} />
       </button>
       {open && (
         <>
           <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />
           <div className="h10-menu" role="menu">
-            {allowAll && (
+            {/* AM-26 — with `notYet` the menu is "All markets" (current) plus the reason, and no market rows. */}
+            {(allowAll || notYet) && (
               <button
                 type="button"
                 className={(multi ? (draft.length === 0) : value === 'all') ? 'on' : ''}
@@ -112,7 +119,7 @@ export function MarketSelect({
                 All markets
               </button>
             )}
-            {markets.map((m) => (
+            {!notYet && markets.map((m) => (
               <button
                 type="button"
                 key={m.code}
@@ -129,8 +136,8 @@ export function MarketSelect({
                 <span className="sub">{m.launchable ? (m.note ? `${m.code} · ${m.note}` : m.code) : `${m.code} · ${m.whyNotShort ?? m.mode}`}</span>
               </button>
             ))}
-            {markets.length === 0 && <button type="button" disabled>No connected markets</button>}
-            {multi && (
+            {(notYet || markets.length === 0) && <button type="button" disabled>{notYet ?? 'No connected markets'}</button>}
+            {!notYet && multi && (
               // An explicit commit, because each change refetches the page. "None selected" is not
               // an empty result — it is every market, and the button says so rather than leaving
               // the operator to infer it from a blank grid.

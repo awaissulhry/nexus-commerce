@@ -360,11 +360,18 @@ export function ReportRunner({ reportId }: { reportId: string }) {
       <AdsPageHeader
         title={result?.title ?? 'Report'}
         subtitle={result ? `${result.applied.from} \u2192 ${result.applied.to}` : ''}
-        markets={[]}
-        market="all"
-        onMarketChange={() => {}}
+        /* AM-26 — the header's market picker was inert here (`markets={[]}`, a no-op change) beside the report's
+           real Markets filter. It is now the SAME fact: the markets this report has, bound to `params.marketplaces`,
+           so picking in either place moves both. `[]` is every market. */
+        markets={result?.options.marketplaces ?? []}
+        market={params.marketplaces.length === 1 ? params.marketplaces[0] : 'all'}
+        onMarketChange={(m) => patch({ marketplaces: m === 'all' ? [] : [m] })}
+        marketValues={params.marketplaces}
+        onMarketValuesChange={(codes) => patch({ marketplaces: codes })}
         showDataSync
         syncing={loading}
+        dataSyncLabel="Run again"
+        dataSyncTip="Runs this report again now, over the same dates and filters."
         onDataSync={() => setParams((p) => ({ ...p }))}
         /* R2 — the console's own range control, in the slot every other ads page puts it.
            This page had it switched OFF and hand-rolled two native <input type="date">

@@ -1,6 +1,13 @@
 /**
  * CBN.3.2 — shared grid formatters. Mirror the Ad Manager grid exactly (en-IE euros,
  * fraction ACoS) so every grid in the console renders numbers identically.
+ *
+ * 🔴 AM-30 — and every ads screen, not only the grids: ONE rendering per metric, at the Ad Manager's precision.
+ *   money  `eur`       €1,234.56   (2 decimals, thousands separated)
+ *   ACoS   `pct`       38.02%      (a FRACTION in, 2 decimals)
+ *   ROAS   `roasText`  2.31        (2 decimals)
+ * The Dashboard printed whole euros, "38%" and "2.3×"; Portfolios "38%"/"3.8%"; the report runner "38.5%" and "2.3".
+ * `_canvas/format.ts` now hands these out too, so the screens that import it agree without each changing.
  */
 export const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0)
 
@@ -69,6 +76,13 @@ export const NO_ACOS_SORT = Number.MAX_VALUE / 2
 /** `acosRank` for those grids: always a number; no ACoS at all is `NO_ACOS_SORT`. */
 export const acosSortNumber = (acosFraction: number | string | null | undefined, spend: number, sales: number): number =>
   acosRank(acosFraction, spend, sales) ?? NO_ACOS_SORT
+
+/** AM-30 — THE ROAS rendering (sales ÷ spend), the Ad Manager's: 2 decimals, no suffix. No value → "—". */
+export const roasText = (v: unknown): string => {
+  if (v == null || v === '') return '—'
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toFixed(2) : '—'
+}
 
 export const int = (v: unknown): string => num(v).toLocaleString()
 

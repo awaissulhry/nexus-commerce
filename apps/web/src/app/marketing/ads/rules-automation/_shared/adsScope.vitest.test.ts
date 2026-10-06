@@ -256,7 +256,7 @@ describe('DATE_PRESETS → RangePreset — one adapter, and a picker key never l
   })
 
   it('🔴 refuses the EIGHT with no equivalent — the spec said three', () => {
-    // thisWeek starts Sunday, the server's `wtd` starts Monday (ISO). `last12m` is a trailing
+    // thisWeek travels as explicit days (it started Sunday until AM-36; Monday now, like `wtd`). `last12m` is a trailing
     // twelve months; `last_year` is the previous calendar YEAR. The rest have no server preset at
     // all. Forwarding any of them hits `resolveRange`'s `default:` and returns SEVEN DAYS under
     // whatever label the operator picked.

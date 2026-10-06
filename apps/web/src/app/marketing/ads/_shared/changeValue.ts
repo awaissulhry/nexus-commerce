@@ -17,8 +17,8 @@
  * change row goes through THIS map — a second copy is how the drawer and the account-wide
  * Change Log came to lie identically.
  */
-
-import { currencySymbol } from '../_shell/adsMarkets'
+import { eur } from '../campaigns/_grid/format'
+import { formatMoney } from '../_shell/adsMarkets'
 
 const CENT_FIELDS = new Set(['bid', 'defaultBid'])
 const EUR_FIELDS = new Set(['dailyBudget'])
@@ -45,10 +45,12 @@ export function fmtChangeValue(v: string | null | undefined, field: string, curr
   return v
 }
 
-/** `€0.35` for EUR exactly as before; another currency by its own symbol; unknown → the bare number. */
+/**
+ * AM-30 — euros in the console's one money rendering (`eur`: €1,234.56); CM-32 — another currency in its own symbol
+ * (£12.50); unknown → the bare number, never a made-up euro sign.
+ */
 function money(n: number, currency: string | null): string {
-  if (currency === 'EUR') return `€${n.toFixed(2)}`
-  if (!currency) return n.toFixed(2)
-  const sym = currencySymbol(currency)
-  return sym.length === 1 ? `${sym}${n.toFixed(2)}` : `${n.toFixed(2)} ${sym}`
+  if (currency === 'EUR') return eur(n)
+  if (!currency) return n.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatMoney(n, currency)
 }

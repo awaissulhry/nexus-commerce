@@ -193,9 +193,12 @@ export function HealthClient() {
           <div className={`hl-tile-sub ${alerts == null ? 'muted' : (alerts.alerts ?? []).some((a) => a.severity === 'high') ? 'danger' : totalAlerts ? 'warn' : 'ok'}`}>{alerts == null ? 'not loaded' : `${alerts.alerts.filter((a) => a.severity === 'high').length} high · ${alerts.alerts.filter((a) => a.severity === 'medium').length} medium`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-retail')?.scrollIntoView({ behavior: 'smooth' })}>
-          <div className="hl-tile-k">Wasted spend (retail)</div>
+          {/* AM-32 — titled "Wasted spend", this showed a COUNT of campaigns with no unit, so it read as money. The
+              retail check has no money in it (it counts campaigns whose products cannot sell), so the tile says what
+              it counts. */}
+          <div className="hl-tile-k">Campaigns on unsellable products</div>
           <div className="hl-tile-v">{loading ? '…' : retail == null ? '—' : retail.summary?.pause ?? 0}</div>
-          <div className={`hl-tile-sub ${retail == null ? 'muted' : (retail.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail == null ? 'not loaded' : `${retail.summary?.pause ?? 0} pause · ${retail.summary?.watch ?? 0} watch`}</div>
+          <div className={`hl-tile-sub ${retail == null ? 'muted' : (retail.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail == null ? 'not loaded' : `${retail.summary?.pause ?? 0} all unsellable · ${retail.summary?.watch ?? 0} partly`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Automation</div>
