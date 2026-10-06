@@ -522,3 +522,81 @@ describe('AA-W2-8 — budgets, placements and target ACoS run by rule only insid
     expect((await call('set-campaign-target-acos', { campaignIds: ['c-off'], targetAcosPct: 29 })).answer).toMatchObject({ status: 'runs_by_rule' })
   })
 })
+
+/**
+ * AA-W2-9 — a stop, a restart, the live-write allowlist and an ad undo may run by rule too, each only inside its limits
+ * and the ads strategy: a stop never on a protected product's campaign; a restart waits until the business sets the
+ * highest bid one may put back, and its budget counts as a budget increase; on the allowlist only a campaign a Claude
+ * request created, and taking one off is a brake.
+ */
+describe('AA-W2-9 — stop, restore and the allowlist run by rule only inside the limits and the ads strategy', { timeout: TIMEOUT }, () => {
+  const room = { claudeMaxChangesPerDay: 20, claudeMaxRaisesPerDay: 5, claudeMaxBudgetIncreasePerDayCents: 1000 }
+  const market = (claudeAutonomy: Record<string, string>, extra: Record<string, unknown> = {}) => inside(() => db().adsStrategy.create({
+    data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy, ...room, ...extra, updatedBy: 'user:test' },
+  }))
+  async function setLimits(tool: string, limits: Record<string, unknown>) {
+    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits, code: code() }))
+    expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
+  }
+
+  it('a stop runs by rule; never the campaign of a product the strategy protects', async () => {
+    // A campaign of its own (no change by rule today), advertising P1.
+    await inside(async () => {
+      await db().campaign.create({ data: { id: 'c-w9-stop', name: 'Italy stop by rule', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-w9-stop', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+      await db().adGroup.create({ data: { id: 'g-w9-stop', campaignId: 'c-w9-stop', name: 'stop group', externalAdGroupId: 'EXT-g-w9-stop', defaultBidCents: 40 } })
+      await db().adTarget.create({ data: { id: 't-w9-stop', adGroupId: 'g-w9-stop', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'stop by rule', bidCents: 55, externalTargetId: 'EXT-t-w9-stop' } })
+      await db().adProductAd.create({ data: { adGroupId: 'g-w9-stop', productId: ids.p1, asin: 'B0TESTW9S1' } })
+    })
+    await setLevel('suppress-campaign', 'auto')
+    await market({ stop: 'auto' })
+    const guarded = await inside(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.p1, label: 'TEST-W18-P1 (IT)', protect: true, updatedBy: 'user:test' } }))
+    const held = (await call('suppress-campaign', { campaignId: 'c-w9-stop' })).answer
+    expect(held).toMatchObject({ status: 'waiting_for_approval' })
+    expect(held.trust.why).toMatch(/the ads strategy protects a product it advertises \(ads strategy: TEST-W18-P1 \(IT\).*\), so lowering its bid waits for a person/)
+    await inside(() => db().adsStrategy.delete({ where: { id: guarded.id } }))
+    const stop = (await call('suppress-campaign', { campaignId: 'c-w9-stop' })).answer
+    expect(stop).toMatchObject({ status: 'runs_by_rule' })
+    // One change: the campaign's bids go down together, from the highest (55) to the stop bid.
+    expect(((await approvalOf(stop.approvalId)).preview as Answer).limitFacts.this).toMatchObject({ items: 1, cuts: 1, raises: 0, largestCutPct: 96.36, highestNewBidCents: 2 })
+  })
+
+  it('a restore waits until the business sets the highest bid it may put back, and its budget counts as a budget increase', async () => {
+    await inside(async () => {
+      await db().campaign.update({ where: { id: 'c-off' }, data: { bidsSuppressedAt: new Date(), bidsSuppressedBy: `user:${ids.person}`, bidsSuppressedFloorCents: 2 } })
+      await db().adTarget.updateMany({ where: { adGroup: { campaignId: 'c-off' }, isNegative: false }, data: { bidCents: 2, suppressedFromBidCents: 40 } })
+    })
+    await setLevel('restore-campaign', 'auto')
+    const row = await market({ restore: 'auto' }, { claudeMaxBudgetIncreasePerDayCents: 5000 })
+    const byDefault = (await call('restore-campaign', { campaignId: 'c-off' })).answer
+    expect(byDefault).toMatchObject({ status: 'waiting_for_approval' })
+    expect(byDefault.trust.why).toMatch(/its highest restored bid is EUR 0\.40, more than the EUR 0\.00 this tool's limits let run without a person \(0: every restore waits for a person\)/)
+    await setLimits('restore-campaign', { maxRestoredBidCents: 50 })
+    // Its daily budget spends again: a budget increase the market's daily limit by rule must hold.
+    await inside(() => db().adsStrategy.update({ where: { id: row.id }, data: { claudeMaxBudgetIncreasePerDayCents: 1000, version: 2 } }))
+    const budget = (await call('restore-campaign', { campaignId: 'c-off' })).answer
+    expect(budget.trust.why).toMatch(/IT: .* and this adds EUR 20\.00 of daily budget, more than the EUR 10\.00 a day the ads strategy allows/)
+    await inside(() => db().adsStrategy.update({ where: { id: row.id }, data: { claudeMaxBudgetIncreasePerDayCents: 5000, version: 3 } }))
+    expect((await call('restore-campaign', { campaignId: 'c-off' })).answer).toMatchObject({ status: 'runs_by_rule' })
+  })
+
+  it('the allowlist: off is a brake and runs by rule; on only for a campaign a Claude request created, within the day\'s count', async () => {
+    await setLevel('set-campaign-live-writes', 'auto')
+    await market({ allowlist: 'auto' })
+    expect((await call('set-campaign-live-writes', { campaignId: 'c-pin', enabled: false })).answer).toMatchObject({ status: 'runs_by_rule' })
+    const notOurs = (await call('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).answer
+    expect(notOurs).toMatchObject({ status: 'waiting_for_approval' })
+    expect(notOurs.trust.why).toMatch(/only a campaign a Claude request created in this business goes on the live-write allowlist by rule \(allowAnyCampaign is off\)/)
+    // As create-ad-campaign records it: the campaign a Claude request made (made up here).
+    await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done' } })
+      const made = await db().agentApproval.create({ data: { agentRunId: run.id, toolName: 'create-ad-campaign', riskTier: 'high', args: {}, status: 'executed', decidedAt: new Date() } })
+      await db().agentChange.create({ data: { approvalId: made.id, toolName: 'create-ad-campaign', via: 'claude', reversibility: 'none', before: { campaignId: null }, after: { campaignId: 'c-off', name: 'Italy not allowlisted', market: 'IT' } } })
+    })
+    const zero = (await call('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).answer
+    expect(zero.trust.why).toMatch(/this tool's limits let no campaign go on the live-write allowlist by rule \(maxCampaignsOnPerDay 0\)/)
+    await setLimits('set-campaign-live-writes', { maxCampaignsOnPerDay: 1 })
+    const on = (await call('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).answer
+    expect(on).toMatchObject({ status: 'runs_by_rule' })
+    expect(((await approvalOf(on.approvalId)).preview as Answer)).toMatchObject({ createdBy: { approvalId: expect.any(String) }, onByRuleToday: 0 })
+  })
+})

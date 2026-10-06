@@ -75,7 +75,10 @@ export const MAX_KIT_ITEMS = 250
  *                `forced`: a stop's low bid (no lowest bid and no step binds it, as at the write gate).
  *   dailyBudget  a campaign's daily budget.
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
+ *                AA-W2-9 — `from` LOW_BIDS: a campaign stopped with low bids (a restore restarts it, its budget in full).
  *   negative     a new negative keyword or target (it only lowers spend).
+ *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
+ *                itself; every write it lets through is judged on its own).
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -83,6 +86,7 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
+  | { field: 'liveWrites'; from: boolean; to: boolean }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -136,6 +140,8 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
+    case 'liveWrites':
+      return { ...none, direction: 'same' }
   }
 }
 
@@ -336,6 +342,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
+  liveWrites: 'taking it off the live-write allowlist',
 }
 
 /**
@@ -518,6 +525,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
+  allowlist: 'putting a campaign on the live-write allowlist',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

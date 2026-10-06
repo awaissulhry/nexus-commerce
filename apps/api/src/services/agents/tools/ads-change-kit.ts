@@ -18,8 +18,9 @@
  */
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { boundAutomationsFor, checkLiveReach, claudeActor, claudeReason, type AdWriteIntent, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
-import type { ToolContext, ToolResult } from '../tool-types.js'
-import { buildLimitFacts, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
+import { FIELDS } from '@nexus/shared/permissions'
+import type { FieldPermission, ToolContext, ToolResult } from '../tool-types.js'
+import { buildLimitFacts, LIMIT_FACTS_MONEY, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
 import { logger } from '../../../utils/logger.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
@@ -125,6 +126,16 @@ export async function strategyFactsFor(tool: string, items: KitItem[], ctx?: Pic
     logger.warn('[agents/ads-change] the ads strategy could not be read for a change', { tool, error: error instanceof Error ? error.message : String(error) })
     return { limitsNote: ['The ads strategy could not be read for this change: it does not run by rule; a person decides.'] }
   }
+}
+
+/**
+ * AA-W2-9 — `restrictedFields` of a strategy-bound tool a person without ad-spend view may use: the money of its facts
+ * (LIMIT_FACTS_MONEY) and the lines that say it (`limitsNote`), less its own keys it already showed to anyone who may
+ * use it (`shown`: hiding them now would change what such a person sees of the change itself).
+ */
+export function strategyFactsMoney(shown: readonly string[] = []): Readonly<Record<string, FieldPermission>> {
+  const money = Object.fromEntries(Object.entries(LIMIT_FACTS_MONEY).filter(([key]) => !shown.includes(key))) as Record<string, FieldPermission>
+  return { ...money, limitsNote: FIELDS.financialsAdspendView }
 }
 
 /** The words every strategy-bound ad tool says about who decides (N3: honest about the rule, never "always a person"). */

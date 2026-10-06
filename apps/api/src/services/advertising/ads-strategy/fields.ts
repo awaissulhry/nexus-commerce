@@ -62,6 +62,8 @@ export const CLAUDE_ACTION_TOOLS = {
   create: ['create-ad-campaign'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
+  // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.
+  allowlist: ['set-campaign-live-writes'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
