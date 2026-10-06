@@ -98,6 +98,8 @@ import { invalidatePublishActions } from '../publishActionsApi';
 import { PublishActionFence, groupStaged, inactiveStatusMark, isInactiveCell, isWaitingCell, operationToast, publishCellKey, usePublishActions, waitingCountsOf, waitingStatusMark, waitingTotalOf, withoutSameNewChoice, type PublishActionWriteOutcome, type PublishCellInput, type StagedPublishCell } from '../usePublishActions';
 import { STATUS_COLUMN, statusCellValue, statusColumn, statusSheetColumn, type PublishCellReadState } from './statusColumn';
 import { ACTION_COLUMN, PublishActionMenu, actionCellValue, actionColumn, actionSheetColumn } from './actionColumn';
+import { useDeleteRows } from '../deleteRows/useDeleteRows';
+import { FamilySelectionVerbs } from '../master/FamilySelectionBar';
 import { isClearKey, selectedCells } from '../sheetReset';
 import type { PublishActionChange } from '@nexus/shared/publish-actions';
 import { ExpandSlot, SELLING_ROW_MARK_CLASS, UNSAVED_ROW_CLASS, isUnsavedRowData, publishActionModel, rowCarriesInactiveMark, sellingStatusModel, waitingWhen } from '@/design-system/grid';
@@ -928,8 +930,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }, [undo.gridProps, publishFence]);
     const fieldsBanner = useMissingFieldsBanner({ channel, market: marketplace, missing: data?.meta.schemaMissing ?? [], ready: !!data && !loading && auth.status !== 'loading',
         canLoad: auth.has(LOAD_FIELDS_PERMISSION), onLoaded: reload });
+    /* Delete rows (Owner 2026-10-06) — the same "Delete…" as the Shared view: a Main listing row deletes the product
+       everywhere (to the recycle bin), an extra listing's main row removes that listing only. The selection bar and every
+       row menu offer it. An archived listing shown alone leaves the page on every listing again. */
+    const deleteRows = useDeleteRows<ChannelSheetRow>({ productId, target: (row) => ({ productId: row.id, aliasId: row.aliasId }), onChanged: () => {
+        clearSelection(); reload(); refreshReadiness(); invalidatePublishActions(productId); if (selectedAlias !== null) setListing(undefined);
+    } });
+    const deleteVerbs = useMemo(() => [deleteRows], [deleteRows]);
     const verbs = useMemo(() => data
-        ? channelActions({
+        ? [...channelActions({
             accountSpecific: alternateAccount,
             channelConnectionId: data.scope.connectionId,
             channel,
@@ -941,8 +950,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             pickMarkets: async () => null,
             openRecord: (rowId: string) => record.open(rowId, lastDataCell.current ?? undefined),
             openRecordId: record.rowId,
-        })
-        : [], [data, channel, marketplace, permission, record.open, record.rowId, alternateAccount]);
+        }), deleteRows]
+        : [], [data, channel, marketplace, permission, record.open, record.rowId, alternateAccount, deleteRows]);
     const { press, problem, clearProblem, confirmElement } = useActionPress<ChannelSheetRow>();
     const isRecordRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'variant', []);
     const menuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: verbs, onSelect: press, isRecord: isRecordRow }), [verbs, press, isRecordRow]);
@@ -951,7 +960,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const studioProduct = useStudioProduct();
     const [publishListingScope, setPublishListingScope] = useState<StudioPublishScope | null>(null);
     const publishAccount = data?.scope.connectionId ?? accountId ?? null;
-    const bandVerbs = useMemo(() => listingBandActions({
+    const bandVerbs = useMemo(() => [...listingBandActions({
         listingCount: loadedData?.aliases.length ?? 0,
         shownAliasKey: selectedAlias,
         // The `listing=` that shows one listing alone: the alias id, or THIS page's product's own main record — a
@@ -961,7 +970,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         publishListing: (aliasId) => { if (publishAccount) setPublishListingScope(listingPublishScope({ channel, marketplace, accountId: publishAccount }, aliasId)); },
         publishRefusal: studioProduct.deletedAt ? 'This product is deleted, so it cannot be published.'
             : !publishAccount ? 'Choose an account for this market first.' : null,
-    }), [loadedData?.aliases.length, loadedData?.rows, selectedAlias, setListing, publishAccount, channel, marketplace, studioProduct.deletedAt, studioProduct.id]);
+    }), deleteRows], [loadedData?.aliases.length, loadedData?.rows, selectedAlias, setListing, publishAccount, channel, marketplace, studioProduct.deletedAt, studioProduct.id, deleteRows]);
     // A listing band the sheet read — never an empty "new listing" row that has no listing yet.
     const isBandRow = useCallback((r: ChannelSheetRow) => r.rowKind === 'parent' && !isUnsavedRowData(r), []);
     const bandMenuItems = useMemo(() => actionMenuItems<ChannelSheetRow>({ actions: bandVerbs, onSelect: press, isRecord: isBandRow }), [bandVerbs, press, isBandRow]);
@@ -1328,7 +1337,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             selected: selected.length,
             /* P8 — while rows are ticked: Action ▾ fills their Status or Action (it replaces "Mark paused / active").
                Broadcast and Open record stay where they were: the row menus and the drawer. */
-            selectionActions: <PublishActionMenu entries={actionEntries} selected={selected.length} onChoose={(change) => fillPublishCells(change, selected)} disabled={publishActions.status !== 'ready'}/>,
+            selectionActions: <FamilySelectionVerbs rows={selected} actions={deleteVerbs}>
+                <PublishActionMenu entries={actionEntries} selected={selected.length} onChoose={(change) => fillPublishCells(change, selected)} disabled={publishActions.status !== 'ready'}/>
+            </FamilySelectionVerbs>,
             onClearSelection: clearSelection,
             /* With no listing here, the alias count ("1 listing") counted the primary GROUP, not a listing — so it is left
                out, and the notice above the grid says what the first edit does. */
