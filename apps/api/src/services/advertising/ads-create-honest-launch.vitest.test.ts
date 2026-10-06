@@ -187,7 +187,7 @@ describe('CC-1 — Amazon\'s own auto groups are linked and set as asked', () =>
     const { linkAutoTargeting } = await import('./ads-create.service.js')
     const g = await autoAdGroup('a2')
     amz.targetUpdateAnswer = { ok: false, error: 'amazon_rejected: bid below the minimum' }
-    const r = await inside(() => linkAutoTargeting({ adGroupId: g, groups: [{ key: 'LOOSE_MATCH', enabled: false, bidEur: 0.01 }] }))
+    const r = await inside(() => linkAutoTargeting({ adGroupId: g, groups: [{ key: 'LOOSE_MATCH', enabled: false, bidEur: 0.1 }], creationFlow: true }))
     expect(r.ok).toBe(false)
     expect(r.links[0]).toMatchObject({ label: 'Loose match', ok: false, status: 'ENABLED', bidCents: 75 })
     expect(r.links[0].reason).toContain('bid below the minimum')
@@ -349,7 +349,7 @@ describe('CC-2 — the Single builder launch says what reached Amazon', () => {
 
   it('a campaign create that throws: 200 with ok false and the campaign listed as not made (it was a bare 500)', async () => {
     amz.script.campaigns = [{ throw: 'socket hang up' }]
-    const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market: 'IT', name: 'W2A single throws', keywords: [{ text: 'x' }] } })
+    const res = await app.inject({ method: 'POST', url: '/advertising/campaign-builder/single/launch', payload: { market: 'IT', name: 'W2A single throws', products: [{ sku: 'TEST-SKU-1' }], keywords: [{ text: 'x' }] } })
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.payload) as LaunchBody
     expect(body).toMatchObject({ ok: false, error: 'socket hang up', launch: { asked: 1, failed: 1, campaigns: [{ status: 'failed', campaignId: null, reason: 'socket hang up' }] } })
