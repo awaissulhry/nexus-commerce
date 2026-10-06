@@ -42,7 +42,7 @@ import { AppTopBar } from '@/app/_shared/AppTopBar'
  * That still governs their CONTENT. It no longer governs the chrome: since 2026-08-31 the bar
  * and rail are one dark surface on every route, so this list no longer needs to mark them.
  */
-const NO_RAIL_PREFIXES = ['/marketing/ads-console', '/marketing/ads', '/products/next']
+const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next']
 
 /**
  * The same family, for routes with a DYNAMIC segment.

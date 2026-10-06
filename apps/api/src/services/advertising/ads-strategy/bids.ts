@@ -9,8 +9,11 @@
  *            bounds and the bid policies (entityBoundsDenial), and the engines clamp to it first, so they are not refused
  *   step     the mutation layer's step clamp takes the lower of the campaign's largest change and the strategy's
  *
- * Who is bound: engines, rules, schedules and changes that run by rule. A person's own edit (`manual`) is WARNED, never
- * refused or rewritten (the ADS PERFECT lane's rule, PR #401: his own limits warn, never block his own edits).
+ * Who is bound: engines, rules, schedules and changes that run by rule are refused past the band (and clamp first). The
+ * band is one of the Owner's OWN limits (PR #401, 3A/4A: his own limits warn, never block his own edits): a person's own
+ * write past it, or a Claude request he approves, is warned and goes when he confirms ("Send anyway", or his approval
+ * after the card's warning). The largest change never rewrites a person's edit (CM-19): past it, his edit is sent with a
+ * warning. A restore puts back what was, inside every limit in force, for whoever restores.
  *
  * "No row → today's behaviour": a market without a row setting a bid field costs one indexed read and changes nothing.
  * Ad groups resolve the safer value across their products (resolve.ts); a market with only a market row needs no catalog.

@@ -28,7 +28,7 @@ import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
-import { NO_LIMITS, bidLimitsFor, limitWords, strategyWords, type StrategyBidLimits, type StrategyLimit } from './ads-strategy/bids.js'
+import { bidLimitsFor, strategyWords, type StrategyBidLimits, type StrategyLimit } from './ads-strategy/bids.js'
 
 export type GateDeniedAt =
   | 'env'
@@ -57,11 +57,43 @@ export type GateDeniedAt =
   | 'ad_product_unsupported'
   // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
   | 'market_limits'
+  // 3A (Owner decided 2026-10-06) — a PERSON's own write goes past one of HIS limits: it waits for his "Send anyway".
+  | 'needs_confirmation'
+
+/**
+ * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
+ * (`entity_bounds`), his spend ceilings, the daily budget-move limit and the per-change value cap. An engine, rule,
+ * schedule or sweep past one is refused, as always. A person's own write past one is not refused: the gate answers
+ * `needs_confirmation` with every limit it passes, and the same write sent again with `confirmOwnLimits` goes through
+ * (`pastOwnLimits` says which, for the action log). Amazon's own limits, the kill switch, the connection's mode and
+ * writes switch are never his to pass.
+ */
+export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling'
+export interface OwnLimit { limit: OwnLimitKind; reason: string }
+export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
+  entity_bounds: 'your bid or budget limit',
+  spend_ceiling: 'your spend ceiling',
+  budget_day_move: 'the daily budget-move limit',
+  value_cap: 'the per-change value cap',
+  cpc_ceiling: 'your CPC ceiling',
+}
+
+/** The sentence a person reads when his own write goes past his limits. Pure. */
+export function ownLimitsSentence(limits: OwnLimit[]): string {
+  const names = [...new Set(limits.map((l) => OWN_LIMIT_LABEL[l.limit]))]
+  return `This goes past ${names.join(' and ')}: ${limits.map((l) => l.reason).join('; ')}. It is your own limit, so you can send it anyway.`
+}
+
+/** The action log's line for a write a person sent past his limits ("sent past <limit> by <person>"). Pure. */
+export function sentPastSentence(limits: OwnLimit[], actor: string | null | undefined): string {
+  const names = [...new Set(limits.map((l) => OWN_LIMIT_LABEL[l.limit]))]
+  return `sent past ${names.join(' and ')} by ${actor || 'an unrecorded person'}: ${limits.map((l) => l.reason).join('; ')}`
+}
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
-  | { allowed: true; mode: 'live'; profileId: string }
-  | { allowed: false; reason: string; deniedAt: GateDeniedAt }
+  | { allowed: true; mode: 'live'; profileId: string; /** 3A — the person's own limits this write was confirmed past. */ pastOwnLimits?: OwnLimit[] }
+  | { allowed: false; reason: string; deniedAt: GateDeniedAt; /** 3A — with `needs_confirmation`: every own limit it passes. */ ownLimits?: OwnLimit[] }
 
 export interface GateContext {
   marketplace: string | null
@@ -165,8 +197,15 @@ export interface GateContext {
    * bound and the value cap all still bind.
    * The create service sets it with `isPersonCreate` (the same test, for a bare person id), so a person's ADD is
    * judged exactly as his edit — at the screen's pre-check, in the worker and on the add itself.
+   * 3A (Owner decided 2026-10-06) — past one of HIS limits (OwnLimitKind) his write is not refused: it needs his
+   * confirmation (`needs_confirmation`), then passes with `confirmOwnLimits`.
    */
   manual?: boolean
+  /**
+   * 3A — "Send anyway": the person saw the over-limit warning and confirmed. Honoured ONLY with `manual` (a person's own
+   * write); an engine passing it is still refused. Carried on the queue row to the worker, like `manual`.
+   */
+  confirmOwnLimits?: boolean
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -250,6 +289,13 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   const { getAutomationState } = await import('./ads-automation-state.service.js')
   const state = await getAutomationState()
   const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
+  // 3A — a person's write past one of his own limits is collected here instead of refused (see OwnLimitKind).
+  const own: OwnLimit[] = []
+  const ownOrRefuse = (d: Extract<GateDecision, { allowed: false }>): Extract<GateDecision, { allowed: false }> | null => {
+    if (ctx.manual !== true) return d
+    own.push({ limit: d.deniedAt as OwnLimitKind, reason: d.reason })
+    return null
+  }
   if (state.effectivelyStopped && !ctx.isSuppression && !personPasses) {
     const why = state.haltReason
       ? `halted: ${state.haltReason}`
@@ -413,11 +459,11 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       field: ctx.field,
       intendedValueCents: ctx.intendedValueCents,
       isSuppression: ctx.isSuppression,
-      // W1-5 — the ads strategy's band: its ad group's, and only warned (never refused) on a person's own edit.
+      // W1-5 — the ads strategy's band of the write's ad group, one of HIS limits: it refuses an engine, a rule or a
+      // run a rule approved; a person's own write past it is one he confirms (3A, below), like his campaign's bounds.
       adGroupId: ctx.adGroupId ?? null,
-      person,
     })
-    if (bounds) return bounds
+    if (bounds && ownOrRefuse(bounds)) return bounds
 
     /**
      * AUTO.A7 — per-SCOPE spend ceilings, at the one door every write passes.
@@ -447,7 +493,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         marketplace: campaign.marketplace,
         queueId: ctx.queueId ?? null,
       })
-      if (denial) return denial
+      if (denial && denial.allowed === false && ownOrRefuse(denial as Extract<GateDecision, { allowed: false }>)) return denial
     }
 
     /**
@@ -477,7 +523,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         queueId: ctx.queueId ?? null,
         marketplace: campaign.marketplace,
       })
-      if (denial) return denial
+      if (denial && denial.allowed === false && ownOrRefuse(denial as Extract<GateDecision, { allowed: false }>)) return denial
     }
 
     // WC — the campaign's maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
@@ -495,13 +541,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // through the gate sees only its slice.
   const cap = maxWriteValueCents()
   if (ctx.payloadValueCents > cap) {
-    return {
+    const overCap: Extract<GateDecision, { allowed: false }> = {
       allowed: false,
       reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
       deniedAt: 'value_cap',
     }
+    if (ownOrRefuse(overCap)) return overCap
   }
 
+  // 3A — a person's own write past his own limits: refused until he confirms; once he has, it goes, and says so.
+  if (own.length) {
+    if (ctx.confirmOwnLimits === true) return { allowed: true, mode: 'live', profileId: conn.profileId, pastOwnLimits: own }
+    return { allowed: false, reason: ownLimitsSentence(own), deniedAt: 'needs_confirmation', ownLimits: own }
+  }
   return { allowed: true, mode: 'live', profileId: conn.profileId }
 }
 
@@ -527,14 +579,13 @@ export interface BidBound {
  * BID.S5 + ADS AUTONOMY W1-5 — the bid bounds a write is held to, per side. The campaign's own column, else the bid
  * policies (LINE ?? PORTFOLIO ?? MARKET), AND the ads strategy's band for its ad group (`adGroupId`; the campaign's when
  * absent): every limit binds and the stricter one wins — the lower highest bid, the higher lowest bid; on a tie the
- * older source keeps its words. A person's own edit (`person`) is not held to the strategy (its limits warn him, they
- * never refuse his edit); `strategy` comes back either way, for that warning. `strategy` passed in = already read.
+ * older source keeps its words. All of them are the Owner's own limits: a person's write past one is not refused but
+ * confirmed (3A, checkAdsWriteGate and the mutation layer). `strategy` passed in = already read for this write.
  */
 export async function effectiveBidBounds(args: {
   campaignId: string
   campaign: EntityBoundsCampaign
   adGroupId?: string | null
-  person?: boolean
   strategy?: StrategyBidLimits
 }): Promise<{ max: BidBound | null; min: BidBound | null; strategy: StrategyBidLimits }> {
   const { campaignId, campaign } = args
@@ -550,7 +601,7 @@ export async function effectiveBidBounds(args: {
   }
   // W1-5 — one indexed read when the market's strategy sets no bid field.
   const strategy = args.strategy ?? await bidLimitsFor({ marketplace: campaign.marketplace, adGroupId: args.adGroupId, campaignId })
-  return { ...(args.person ? { max, min } : withStrategyBand({ max, min }, strategy)), strategy }
+  return { ...withStrategyBand({ max, min }, strategy), strategy }
 }
 
 /** W1-5 — bounds with the strategy band added: the lower highest bid and the higher lowest bid win (a tie keeps the older words). Pure. */
@@ -570,8 +621,6 @@ export function withStrategyBand(b: { max: BidBound | null; min: BidBound | null
  * allowlist or today's ledger. So the mutation layer asks them BEFORE Nexus writes its own copy, and a refused bid or
  * budget changes nothing anywhere; the gate still asks them at dispatch. Same answer in sandbox and live: they are the
  * entity's rules.
- *
- * W1-5 — `warnings`: a person's own edit past an ads strategy limit is sent, and the sentence lands here.
  */
 export async function entityBoundsDenial(args: {
   campaignId: string
@@ -582,12 +631,8 @@ export async function entityBoundsDenial(args: {
   isSuppression?: boolean
   /** W1-5 — the ad group the bid lands in: the strategy band is its products'. */
   adGroupId?: string | null
-  /** W1-5 — a person's own edit (`manual`): the strategy band warns, never refuses. */
-  person?: boolean
   /** W1-5 — the strategy limits, when the caller already read them for this write. */
   strategy?: StrategyBidLimits
-  /** W1-5 — collects the warning for a person's own edit past a strategy limit. */
-  warnings?: string[]
 }): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const { campaignId, campaign } = args
   if (!Number.isFinite(args.intendedValueCents ?? NaN)) return null
@@ -604,11 +649,7 @@ export async function entityBoundsDenial(args: {
   // W1-5 — and the ads strategy's band binds beside them: the stricter side wins (effectiveBidBounds). Engines clamp to
   // the strategy band before they write (ads-strategy/bids.ts), so this refusal is the backstop, not their path.
   if (args.field && BID_FIELDS.has(args.field)) {
-    const { max: effMax, min: effMin, strategy } = await effectiveBidBounds({
-      campaignId, campaign, adGroupId: args.adGroupId, person: args.person,
-      // A person's edit that collects no warning (the worker's dispatch check) does not need the strategy read at all.
-      strategy: args.strategy ?? (args.person && !args.warnings ? NO_LIMITS : undefined),
-    })
+    const { max: effMax, min: effMin } = await effectiveBidBounds({ campaignId, campaign, adGroupId: args.adGroupId, strategy: args.strategy })
     if (effMax != null && v > effMax.value) {
       return {
         allowed: false,
@@ -622,10 +663,6 @@ export async function entityBoundsDenial(args: {
         reason: `bid ${v}¢ is below the ${effMin.value}¢ floor (${effMin.source})`,
         deniedAt: 'entity_bounds',
       }
-    }
-    if (args.person && args.warnings) {
-      if (strategy.maxBidCents && v > strategy.maxBidCents.value) args.warnings.push(`bid ${v}¢ is above ${limitWords('max', strategy.maxBidCents)}; sent, because it is your own edit`)
-      if (strategy.minBidCents && v < strategy.minBidCents.value && !args.isSuppression) args.warnings.push(`bid ${v}¢ is below ${limitWords('min', strategy.minBidCents)}; sent, because it is your own edit`)
     }
   }
 

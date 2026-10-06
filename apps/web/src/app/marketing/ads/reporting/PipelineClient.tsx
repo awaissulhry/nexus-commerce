@@ -116,6 +116,7 @@ export function PipelineClient() {
         title="Ingest & job health"
         subtitle="Did every feed land, how late is it, and what failed. Lateness is judged against each feed's own cadence, not one global threshold."
         markets={[]} market="all" onMarketChange={() => {}}
+        marketNotYet="Not by market yet: this page shows every market's feeds together."
         showDateRange={false}
         showDataSync syncing={loading} onDataSync={reload}
       />

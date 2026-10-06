@@ -9,9 +9,10 @@
  *              refused by the gate with the strategy row named; another business's strategy holds nothing here
  *   step       the largest change is the lower of the campaign's and the strategy's, in the write and in Claude's preview;
  *              a step never stops a move into the band
- *   person     a person's own edit past a strategy limit is sent and warned (never refused, never rewritten)
+ *   person     the band is one of his own limits (PR #401, 3A): a person's own edit past it asks for his confirmation,
+ *              then goes and says so; past the largest change it is sent with a warning (never rewritten, CM-19)
  *   restore    a restore after a stop goes back to min(remembered, effective max) and says so, for the strategy and the
- *              campaign's own column alike; a person's restore is not held to the strategy
+ *              campaign's own column alike, whoever restores
  *   hourly     the base-bid directive is held inside the band and the run's hold log names it
  *   evidence   the write keeps which level supplied each number
  *   no rows    a market without a strategy row proposes exactly as before
@@ -206,10 +207,10 @@ describe('the band at the write gate agrees with the engines\' clamp', () => {
     expect(await deny('strat', 2, { isSuppression: true })).toBeNull()
   })
 
-  it("a person's own edit is warned, never refused", async () => {
-    const warnings: string[] = []
-    expect(await deny('mix', 70, { person: true, warnings })).toBeNull()
-    expect(warnings).toEqual(['bid 70¢ is above the highest bid 50¢ (ads strategy: TEST-W15-P2 (IT), product, v1, from TEST-W15-P2); sent, because it is your own edit'])
+  it('the band is the same for every writer at this check; a person\'s write past it is turned into a confirmation by 3A', async () => {
+    // entityBoundsDenial answers the same for everyone (entity_bounds); the gate and the mutation layer turn it into
+    // "needs your confirmation" for a person (see the step-clamp section below).
+    expect(await deny('mix', 70)).toMatchObject({ deniedAt: 'entity_bounds' })
   })
 
   it('a market without a bid field set costs one read and adds nothing', async () => {
@@ -246,13 +247,22 @@ describe('the step clamp: the lower of the campaign\'s and the strategy\'s large
     expect((await actionLog(out.actionLogId!)).evidence).toMatchObject({ sources: { maxBidCents: { level: 'product', value: 50 } } })
   })
 
-  it("an engine's bid outside the band is refused before anything is written; a person's is sent with the warning kept", async () => {
+  it("an engine's bid outside the band is refused before anything is written; a person's asks for his confirmation, then goes and says so", async () => {
+    const bid = async () => (await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-mix'] }, select: { bidCents: true } }))).bidCents
     const engine = await inA(() => updateAdTargetWithSync({ adTargetId: ids['t-mix'], patch: { bidCents: 66 }, actor: 'automation:test-engine' }))
     expect(engine).toMatchObject({ ok: false, error: expect.stringContaining('ceiling (ads strategy: TEST-W15-P2 (IT), product, v1') })
-    const person = await inA(() => updateAdTargetWithSync({ adTargetId: ids['t-mix'], patch: { bidCents: 70 }, actor: 'user:test-person', manual: true }))
-    expect(person).toMatchObject({ ok: true, warnings: [expect.stringContaining('largest bid change 10 %'), expect.stringContaining('above the highest bid 50¢')] })
-    expect(await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-mix'] }, select: { bidCents: true } }))).toEqual({ bidCents: 70 })
-    expect((await actionLog(person.actionLogId!)).evidence).toMatchObject({ strategyWarning: expect.stringContaining('sent, because it is your own edit') })
+    // His own limit (3A): nothing written until he sends it anyway.
+    const asked = await inA(() => updateAdTargetWithSync({ adTargetId: ids['t-mix'], patch: { bidCents: 70 }, actor: 'user:test-person', manual: true }))
+    expect(asked).toMatchObject({ ok: false, needsConfirmation: { limits: [{ limit: 'entity_bounds', reason: expect.stringContaining('ads strategy: TEST-W15-P2 (IT), product, v1') }] } })
+    expect(await bid()).toBe(60)
+    const sent = await inA(() => updateAdTargetWithSync({ adTargetId: ids['t-mix'], patch: { bidCents: 70 }, actor: 'user:test-person', manual: true, confirmOwnLimits: true }))
+    // The step is never rewritten for a person (CM-19): past the strategy's 10 %, it is sent with a warning.
+    expect(sent).toMatchObject({ ok: true, warnings: [expect.stringContaining('more than the largest bid change 10 % (ads strategy: TEST-W15-P2 (IT), product, v1')] })
+    expect(await bid()).toBe(70)
+    expect((await actionLog(sent.actionLogId!)).evidence).toMatchObject({
+      sentPastOwnLimits: expect.stringContaining('ads strategy: TEST-W15-P2 (IT), product, v1'),
+      strategyWarning: expect.stringContaining('sent, because it is your own edit'),
+    })
   })
 })
 
@@ -276,13 +286,13 @@ describe('restore after a stop: never a silent stop', () => {
     expect(await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-restde'] }, select: { bidCents: true } }))).toEqual({ bidCents: 100 })
   })
 
-  it("a person's restore is not held to the strategy (his own click)", async () => {
+  it("a person's Restore is held the same way: it puts back what was, inside the limits in force", async () => {
     await inA(async () => {
       await db().campaign.update({ where: { id: ids['c-rest'] }, data: { bidsSuppressedAt: new Date() } })
       await db().adTarget.update({ where: { id: ids['t-rest'] }, data: { bidCents: 2, suppressedFromBidCents: 120 } })
     })
-    await inA(() => restoreCampaignBids(ids['c-rest'], { actor: 'user:test-person', manual: true, reason: 'person restore' }))
-    expect(await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-rest'] }, select: { bidCents: true } }))).toEqual({ bidCents: 120 })
+    expect(await inA(() => restoreCampaignBids(ids['c-rest'], { actor: 'user:test-person', manual: true, reason: 'person restore' }))).toBe(1)
+    expect(await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-rest'] }, select: { bidCents: true, suppressedFromBidCents: true } }))).toEqual({ bidCents: 80, suppressedFromBidCents: null })
   })
 })
 

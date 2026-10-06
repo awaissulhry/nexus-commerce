@@ -31,9 +31,10 @@
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 import { graduationCeiling, type GraduationVerdict } from './ads-graduation.js'
 import { protectConvertingConfig } from './ads-protect-converting.js'
-import { resolveNegScope, NEG_MARKETS, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
+import { resolveNegScope, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
 
 /** Mirrors `RULE_TAB_ACTION_TYPES['negative-targeting']` — asserted equal by `_neg7-rules.mts`. */
 export const NEGATION_ACTION_TYPES = [
@@ -200,7 +201,7 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
   ])
 
   const scope = resolveNegScope(
-    { campaigns: campaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, portfolioId: c.portfolioId })), adGroups: negAdGroups.map((g) => ({ id: g.id, name: '', campaignId: g.campaignId })), products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
+    { readMarkets: await adsReadMarkets(), campaigns: campaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, portfolioId: c.portfolioId })), adGroups: negAdGroups.map((g) => ({ id: g.id, name: '', campaignId: g.campaignId })), products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
     req,
   )
 
@@ -488,4 +489,4 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
   }
 }
 
-export { NEG_MARKETS, NEG_MARKET_ALL }
+export { NEG_MARKET_ALL }

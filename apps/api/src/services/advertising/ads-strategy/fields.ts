@@ -177,7 +177,7 @@ export const READERS = {
   optimiser: 'the bid optimiser (auto-bid, bid recommendations, target-ACoS bid rules)',
   bidRules: 'bid rules (bid_apply)',
   autopilot: 'autopilot plans',
-  gate: "the write gate (refuses an engine's, a rule's or Claude's bid outside it; warns on a person's own edit)",
+  gate: "the write gate (refuses an engine's or a rule's bid outside it; a person's own edit, or a Claude request he approves, is warned and goes when he confirms)",
   hourly: 'hourly bid plans (the base bid)',
   restores: 'restores after a stop',
   stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",

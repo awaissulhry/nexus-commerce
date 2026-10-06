@@ -46,6 +46,8 @@ export interface AdWriteEvidence {
    * from the action log itself (ads-budget-giveback.ts).
    */
   giveBackOf?: string
+  /** 3A (Owner decided 2026-10-06) — "sent past <limit> by <person>": a person confirmed this write past his own limits. */
+  sentPastOwnLimits?: string
   /**
    * ADS AUTONOMY W1-5 — which level supplied each number this write used (design §3.2): the target ACoS the bid moved
    * toward (explicit, campaign, a strategy row, account, profit, flat) and the strategy's bid limits in force (lowest,

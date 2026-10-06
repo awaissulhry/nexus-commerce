@@ -73,8 +73,7 @@ import { resolveMaxBaseBidByCampaign } from './ads-placement-manual.js'
 // `ads-autopilot.service.ts:18`. So the import adds a name, not a behaviour.
 import { isGoalMode } from '../../jobs/ad-rank-defend.job.js'
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const PLC_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+// Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 
 /**
  * `all` is a legitimate scope here, unlike on the Keyword Tracker.

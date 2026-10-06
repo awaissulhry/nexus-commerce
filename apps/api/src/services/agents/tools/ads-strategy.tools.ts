@@ -58,8 +58,8 @@ const adsStrategy: AgentTool = {
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
     + "business's own Claude level per ad tool. view rows lists every strategy row of a market; view history the changes. "
     + "Each field's readBy names the engines and doors that act on it: the bid engines steer by its target ACoS (after a "
-    + "campaign's own target) and keep its lowest and highest bid and largest bid change (engines, rules and Claude's "
-    + "requests are held to them; a person's own edit is only warned); notReadYet lists the fields that are stored and "
+    + "campaign's own target) and keep its lowest and highest bid and largest bid change (engines and rules are held to "
+    + "them; a request a person approves that goes past the bid band is warned on its card first); notReadYet lists the fields that are stored and "
     + 'shown only, where every engine works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
     + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

@@ -26,6 +26,7 @@ import { BID_FLOOR_EUR, criteriaProblems, normalizeDecimalText, readRuleNumbers 
 import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, controlForRule, levelNote, levelRefusedNotice, levelToSend, noAnswerNotice, ruleLevel, saveFailed, saveRefusedNotice, scopeForSave, storedBelt, type RuleControl, type RuleLevel, type SaveNotice } from './ruleBuilderSave'
 import { Banner, Field, Listbox } from '@/design-system/components'
 import { Button, Checkbox, Input, Radio, RadioCard, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -659,6 +660,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [maxWrites, setMaxWrites] = useState('')
   const [maxExecs, setMaxExecs] = useState('10')
   const [scopeMarket, setScopeMarket] = useState('all')
+  // Ads wave 4c — the markets a rule can act in, from the connections.
+  const adsMarkets = useAdsMarketplace()
   /** 4h — the market the edited rule opened with: a locked rule's save sends the scope only when it changed. */
   const initialScope = useRef('all')
   // ── Placement guardrails (P4) — % modifier caps (Amazon allows 0–900%) ──
@@ -1890,7 +1893,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <div className="advblock">
                   <b>Marketplace</b>
                   <p>Limit this rule to a single marketplace — unscoped, it acts in every market. The campaign picker above offers only this market’s campaigns.</p>
-                  <Listbox width={260} options={ruleMarketOptions(scopeMarket)} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
+                  <Listbox width={260} options={ruleMarketOptions(scopeMarket, adsMarkets.writeMarkets, adsMarkets.readMarkets)} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
                 </div>
                 {isPlacement && (
                 <div className="advblock">

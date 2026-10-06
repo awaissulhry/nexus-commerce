@@ -56,7 +56,7 @@ describe('a market with no checked Amazon limits row', () => {
       const r = await checkAdsWriteGate({ marketplace, payloadValueCents: 50, campaignId: 'c1', field: 'bid', intendedValueCents: 50 })
       expect(r).toEqual({
         allowed: false, deniedAt: 'market_limits',
-        reason: `Nexus does not change ads in ${marketplace}: it has no checked list of Amazon's currency, bid and budget limits there, so nothing was sent to Amazon. Nexus changes ads in IT, DE, FR and ES only.`,
+        reason: `Nexus does not change ads in ${marketplace}: Amazon's bid and budget limits for this market are not known yet, so nothing was sent to Amazon. They are known for IT, DE, FR and ES only.`,
       })
     }
   })

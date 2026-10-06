@@ -56,6 +56,7 @@ import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { WriteBlockedTip, useWriteBlock } from '../../_shell/WriteBlocked'
 
 interface PreviewResponse {
   term: string
@@ -185,6 +186,9 @@ export function BidAction({
       }
     } catch (e) { setResult({ ok: false, text: (e as Error).message }); setConfirming(false) } finally { setLoading(false) }
   }, [market, term, bidCents, includeSuppressed, load])
+
+  // Ads wave 4c — a bid change in a market Nexus only reads is not proposed or sent: both buttons are off and say why.
+  const blocked = useWriteBlock([market])
 
   /**
    * KT.7 — apply the proposal. 🔴 This is the call that writes to Amazon.
@@ -390,20 +394,26 @@ export function BidAction({
               </div>
             ) : (
               /* Amber, not blue: this is the one control on the page that reaches Amazon. */
-              <Button variant="warning" block className="h10-kt7-go" onClick={() => setApplyConfirm(true)} disabled={loading}>
-                Apply this proposal — writes to Amazon
-              </Button>
+              <>
+                <Button variant="warning" block className="h10-kt7-go" onClick={() => setApplyConfirm(true)} disabled={loading || !!blocked}>
+                  Apply this proposal — writes to Amazon
+                </Button>
+                <WriteBlockedTip reason={blocked} />
+              </>
             )
           )}
 
           {!confirming ? (
-            <Button
-              variant="primary" block className="h10-kt6-go"
-              disabled={!p.canPropose || loading}
-              onClick={() => { setConfirming(true); setResult(null) }}
-            >
-              {refused ? 'Refused by the ceiling' : p.changing.targets === 0 ? 'Nothing to propose' : `Propose this change to ${p.changing.targets} target${p.changing.targets === 1 ? '' : 's'}`}
-            </Button>
+            <>
+              <Button
+                variant="primary" block className="h10-kt6-go"
+                disabled={!p.canPropose || loading || !!blocked}
+                onClick={() => { setConfirming(true); setResult(null) }}
+              >
+                {refused ? 'Refused by the ceiling' : p.changing.targets === 0 ? 'Nothing to propose' : `Propose this change to ${p.changing.targets} target${p.changing.targets === 1 ? '' : 's'}`}
+              </Button>
+              <WriteBlockedTip reason={blocked} />
+            </>
           ) : (
             /* A confirm step, positioned INSIDE the drawer's own flow rather than fixed — KT.4 paid
                for this: a fixed overlay inside a portalled drawer renders behind it. */

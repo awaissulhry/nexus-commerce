@@ -32,7 +32,6 @@ import { conditionsTextOf } from '../services/advertising/rule-conditions-text.j
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
 import { adsRefreshExpiry } from '../services/ads-core/ads-token-expiry.js'
 import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
-import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { PROFIT_UNKNOWN_REASON } from '../services/advertising/profit-coverage.js'
 import { getFxRate } from '../services/fx-rate.service.js'
 import {
@@ -164,8 +163,28 @@ function personActor(request: { authUser?: { id?: string }; headers: unknown }):
  */
 function personAddReply<T extends { ok?: boolean; outcome?: string; reason?: string | null }>(reply: { status: (code: number) => unknown }, r: T): T & { error?: string } {
   if (r.ok) return r
-  reply.status(r.outcome === 'local' ? 202 : r.outcome === 'refused' ? 403 : 502)
+  // 3A — past his own limits: 409 with the limits, so the screen asks "Send anyway".
+  reply.status(r.outcome === 'local' ? 202 : r.outcome === 'needs_confirmation' ? 409 : r.outcome === 'refused' ? 403 : 502)
   return { ...r, error: r.reason ?? 'It did not reach Amazon.' }
+}
+
+/**
+ * 3A (Owner decided 2026-10-06) — a person's write past one of HIS limits is answered 409 with `needsConfirmation`
+ * (the limits): the screen shows the warning and "Send anyway", which sends the same body again with
+ * `confirmOwnLimits: true`. Nothing was written.
+ */
+function ownLimitsReply<T extends { needsConfirmation?: unknown }>(reply: { code: (code: number) => unknown }, r: T): boolean {
+  if (!r?.needsConfirmation) return false
+  reply.code(409)
+  return true
+}
+
+/**
+ * 3A — a person's bid above his campaign's CPC ceiling (a clamp before): without his "Send anyway" it needs his
+ * confirmation; with it, the bid goes as he set it. Pure over clampBidsByCeiling's answer.
+ */
+function cpcCeilingLimits(clamps: Array<{ adTargetId: string; from: number; to: number; ceilingCents: number }>) {
+  return clamps.map((c) => ({ adTargetId: c.adTargetId, limit: 'cpc_ceiling' as const, reason: `a bid of ${c.from}¢ is above your CPC ceiling of ${c.ceilingCents}¢` }))
 }
 
 const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -202,12 +221,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // totals roll up PRODUCT_AD daily rows by ad group (no AD_GROUP daily grain).
   fastify.get('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
+    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string; fresh?: string }
     // DR.1 — Rome-anchored range (preset/custom) with windowDays back-compat.
     const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const windowDays = range.days
+    // CM-34 — `fresh=1`: the detail page re-reads right after its own save. The cached copy can be the one from before
+    // the save (another API instance's memory, or a flush still running), and the form then snapped back to old values.
+    const fresh = q.fresh === '1'
 
     const { cached } = await import('../services/advertising/ads-cache.js')
     const payload = await cached(`detail:${id}:${range.sinceStr}:${range.untilStr}`, 300, async () => {
@@ -282,9 +304,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday },
         },
       }
-    })
+    }, { refresh: fresh })
     if (!payload) { reply.code(404); return { error: 'not_found' } }
-    reply.header('Cache-Control', 'private, max-age=20')
+    reply.header('Cache-Control', fresh ? 'no-store' : 'private, max-age=20')
     return payload
   })
 
@@ -609,20 +631,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return r.value
   })
 
-  // ── GET /advertising/campaigns/:id/keyword-conflicts (RC3.2) ───────────
-  // Cross-product keyword-rank collisions: DIFFERENT products of ours bidding on
-  // the SAME keyword, fighting for the same Top-of-search slot. Returns, per
-  // contested keyword, every contender (mine + rivals) with bid/efficiency/ToS
-  // intent and a recommended champion. Read-only; resolutions are gated writes.
-  fastify.get('/advertising/campaigns/:id/keyword-conflicts', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const { marketplace } = request.query as { marketplace?: string }
-    const result = await detectKeywordConflicts(prisma, id, marketplace)
-    if (!result) { reply.status(404); return { error: 'campaign not found' } }
-    reply.header('Cache-Control', 'private, max-age=120')
-    return result
-  })
-
   // ── Product-family dayparting (RC2.T·product) ──────────────────────────
   // Resolve a campaign to its PARENT product family, the family's campaigns in
   // this market, and the family's roll-up order demand (when the product sells).
@@ -770,6 +778,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
     // AD_BUDGET_UPDATE whose payloads are euros).
     if (Object.keys(budgetData).length > 0) {
+      // CM-30 — these columns are the one store the Budget Manager reads too; its old per-month copies are dropped.
+      const { forgetOldMonthLimits } = await import('../services/advertising/ads-budget-manager.service.js')
+      await forgetOldMonthLimits(id).catch(() => 0)
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -1141,55 +1152,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor, rulesRewritten: rulesRewritten.length })
     return { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length }
-  })
-
-  // CB.5 — guided Campaign Builder launch. dryRun=true returns the PLAN (what would be
-  // created) without writing; dryRun=false creates SP campaigns + ad groups + product ads
-  // + keywords through the gated create primitives (real only on a live+gate-open market,
-  // local/sandbox otherwise; new campaigns are NOT auto-allowlisted, so their bids can't
-  // change until the operator opts them in). Preview-then-create per operator choice.
-  fastify.post('/advertising/campaign-builder/launch', async (request, reply) => {
-    const b = request.body as {
-      market?: string; productGroupName?: string; bidStrategy?: string; defaultBidEur?: number; dailyBudgetEur?: number
-      asins?: string[]; includeProductTarget?: boolean; keywords?: Array<{ text: string; match?: string; bid?: number }>; dryRun?: boolean
-    }
-    const market = b.market || 'IT'
-    const grp = (b.productGroupName || 'Guided campaign').trim()
-    const asins = (b.asins ?? []).filter(Boolean)
-    if (!asins.length) { reply.status(400); return { error: 'no products selected' } }
-    const bid = b.defaultBidEur ?? 0.45
-    const budget = b.dailyBudgetEur ?? 25
-    const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.bidStrategy === 'maxOrders' ? 'autoForSales' : 'legacyForSales'
-    const roles: Array<{ role: string; targeting: 'AUTO' | 'MANUAL'; keywords: boolean }> = [
-      { role: 'Auto', targeting: 'AUTO', keywords: false },
-      { role: 'Research', targeting: 'MANUAL', keywords: true },
-      { role: 'Performance', targeting: 'MANUAL', keywords: true },
-      ...(b.includeProductTarget ? [{ role: 'Product Target', targeting: 'MANUAL' as const, keywords: false }] : []),
-    ]
-    const kws = b.keywords ?? []
-    const plan = {
-      market,
-      campaigns: roles.map((r) => ({ name: `${grp} - SP - ${r.role}`, adGroup: `${grp} - SP - ${r.role} Ad Group`, targeting: r.targeting, productAds: asins.length, keywords: r.keywords ? kws.length : 0 })),
-      totalCampaigns: roles.length, totalProductAds: asins.length * roles.length, totalKeywords: kws.filter(() => true).length * roles.filter((r) => r.keywords).length,
-    }
-    if (b.dryRun) return { ok: true, dryRun: true, plan }
-
-    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
-    const created: Array<{ role: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
-    let mode = 'local'
-    for (const r of roles) {
-      try {
-        const camp = await createCampaignLocal({ name: `${grp} - SP - ${r.role}`, type: 'SP', marketplace: market, targetingType: r.targeting, dailyBudgetEur: budget, biddingStrategy })
-        mode = camp.mode
-        // CM-20 — `creationFlow`: these belong to the campaign this launch just created.
-        const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${grp} - SP - ${r.role} Ad Group`, defaultBidEur: bid, creationFlow: true })
-        for (const asin of asins) { try { await createProductAdLocal({ adGroupId: ag.id, asin, creationFlow: true }) } catch (e) { logger.warn('[CB-launch] product ad failed', { asin, error: (e as Error).message }) } }
-        if (r.keywords) for (const k of kws) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: k.text, matchType: ((k.match || 'Broad').toUpperCase() as 'EXACT' | 'PHRASE' | 'BROAD'), bidEur: k.bid ?? bid, creationFlow: true }) } catch (e) { logger.warn('[CB-launch] keyword failed', { kw: k.text, error: (e as Error).message }) } }
-        created.push({ role: r.role, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
-      } catch (e) { logger.error('[CB-launch] campaign create failed', { role: r.role, market, error: (e as Error).message }) }
-    }
-    logger.warn('[CB-launch] guided builder created campaigns', { market, grp, created: created.length, mode, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
-    return { ok: true, created, mode, plan }
   })
 
   // ── SPW.7: SP Super Wizard launch ───────────────────────────────────────
@@ -2096,45 +2058,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { campaignId: id, entries }
   })
 
-  // ── RC4.12: per-day Top-of-search impression-share + ACOS trend (sparklines) ──
-  fastify.get('/advertising/campaigns/:id/rank-trend', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const { windowDays } = request.query as { windowDays?: string }
-    const days = Math.max(7, Math.min(90, Number(windowDays) || 30))
-    const campaign = await prisma.campaign.findUnique({ where: { id }, select: { externalCampaignId: true } })
-    reply.header('Cache-Control', 'private, max-age=300')
-    if (!campaign) return { axis: [], is: [], acos: [], windowDays: days }
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - (days - 1)); since.setUTCHours(0, 0, 0, 0)
-    const axis: string[] = []
-    for (let i = 0; i < days; i++) { const d = new Date(since); d.setUTCDate(since.getUTCDate() + i); axis.push(d.toISOString().slice(0, 10)) }
-    const idx = new Map(axis.map((d, i) => [d, i]))
-    const is: (number | null)[] = new Array(days).fill(null)
-    const acos: (number | null)[] = new Array(days).fill(null)
-    // IS: avg Top-of-search impression share per day — sparse (Amazon only reports
-    // it when you actually compete at the top), so it's gappy by nature.
-    if (campaign.externalCampaignId) {
-      const isRows = await prisma.amazonAdsPlacementReport.groupBy({
-        by: ['date'],
-        where: { campaignId: campaign.externalCampaignId, placement: 'Top of Search on-Amazon', date: { gte: since } },
-        _avg: { topOfSearchIS: true },
-      })
-      for (const r of isRows) { const i = idx.get(r.date.toISOString().slice(0, 10)); if (i != null && r._avg.topOfSearchIS != null) is[i] = Number(r._avg.topOfSearchIS) }
-    }
-    // ACOS: the campaign's daily spend ÷ sales across all placements — far denser.
-    const acosRows = await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['date'],
-      where: { entityType: 'CAMPAIGN', localEntityId: id, date: { gte: since } },
-      _sum: { costMicros: true, sales7dCents: true },
-    })
-    for (const r of acosRows) {
-      const i = idx.get(r.date.toISOString().slice(0, 10)); if (i == null) continue
-      const cost = microsToCents(r._sum.costMicros ?? 0n)
-      const sales = r._sum.sales7dCents ?? 0
-      acos[i] = sales > 0 ? cost / sales : null
-    }
-    return { axis, is, acos, windowDays: days }
-  })
-
   // ── GET /advertising/fba-storage-age/:productId ─────────────────────
   fastify.get('/advertising/fba-storage-age/:productId', async (request, _reply) => {
     const { productId } = request.params as { productId: string }
@@ -2375,85 +2298,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const job = await prisma.amazonAdsReportJob.findUnique({ where: { id } })
     if (!job) return reply.code(404).send({ error: 'not_found' })
     return job
-  })
-
-  // ── Phase 5b: per-campaign v1 metrics (last N days) ──────────────────
-  // Returns campaign-level aggregates from AmazonAdsDailyPerformance for
-  // the requested window. Keyed by externalCampaignId so the campaigns
-  // page server component can merge into its existing campaign list.
-  fastify.get('/advertising/campaigns/v1-metrics', async (request, reply) => {
-    const query = request.query as { windowDays?: string; marketplace?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange(query)
-    const since = range.since
-    const windowDays = range.days
-
-    const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`v1metrics:${range.sinceStr}:${range.untilStr}:${query.marketplace ?? ''}`, 300, async () => {
-    const rows = await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
-      where: {
-        date: { gte: since, lte: range.until },
-        entityType: 'CAMPAIGN',
-        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
-      },
-      _sum: {
-        impressions: true,
-        clicks: true,
-        costMicros: true,
-        sales7dCents: true,
-        sales14dCents: true,
-        orders7d: true,
-        units7d: true,
-      },
-    })
-
-    // Shape: { [externalCampaignId]: { impressions, clicks, ... } }
-    const byCampaign: Record<string, {
-      impressions: number
-      clicks: number
-      costMicros: string
-      costUnits: number
-      salesCents: number
-      orders: number
-      units: number
-      currencyCode: string
-      adProduct: string
-      marketplace: string
-      acos: number | null
-      roas: number | null
-      ctr: number | null
-      cpc: number | null
-    }> = {}
-
-    for (const r of rows) {
-      const impressions = r._sum.impressions ?? 0
-      const clicks = r._sum.clicks ?? 0
-      const costMicros = r._sum.costMicros ?? 0n
-      const costUnits = Number(costMicros) / 1_000_000
-      const salesCents = adSalesCents(r._sum)
-      const orders = r._sum.orders7d ?? 0
-      const units = r._sum.units7d ?? 0
-      const acos = salesCents > 0 ? (costUnits * 100) / salesCents : null
-      const roas = costUnits > 0 ? salesCents / 100 / costUnits : null
-      const ctr = impressions > 0 ? clicks / impressions : null
-      const cpc = clicks > 0 ? costUnits / clicks : null
-      byCampaign[r.entityId] = {
-        impressions, clicks,
-        costMicros: costMicros.toString(),
-        costUnits,
-        salesCents, orders, units,
-        currencyCode: r.currencyCode,
-        adProduct: r.adProduct,
-        marketplace: r.marketplace,
-        acos, roas, ctr, cpc,
-      }
-    }
-
-    return { windowDays, count: Object.keys(byCampaign).length, byCampaign }
-    })
-    reply.header('Cache-Control', 'private, max-age=30')
-    return payload
   })
 
   // GET /api/advertising/insights — rule-based insight engine (Phase 8)
@@ -2712,282 +2556,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { windowDays, productAds: productAds.length, campaigns: campaignData, searchTerms, creatives, summary }
   })
 
-  // ── PC.1: product-centric ad roster ─────────────────────────────────
-  // One row per ADVERTISED product, aggregated from ProductProfitDaily (the
-  // true per-product windowed source: ad spend + revenue + true profit, no
-  // multi-product double-count). Headline metric is TACOS (spend÷revenue);
-  // ACOS lives in the per-campaign expand (product-ads). #campaigns/#markets
-  // come from the AdProductAd→Campaign structure. Returns a reconciliation
-  // remainder (account spend − Σ attributed) so nothing is silently dropped.
-  // GET /advertising/by-product?windowDays=&marketplace=&search=&sort=&dir=&limit=
-  fastify.get('/advertising/by-product', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; search?: string; sort?: string; dir?: string; limit?: string; compare?: string; mode?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange(q)
-    const windowDays = range.days
-    const since = range.since
-    const until = range.until
-    const dateFilterBP = { gte: since, lte: until }
-    const limit = Math.max(1, Math.min(1000, Number(q.limit ?? 300)))
-    const mkt = q.marketplace || undefined
-    // PC.8 — mode: advertised (default) | opportunity (selling but NOT
-    // advertised) | unmatched (handled separately below).
-    const mode = q.mode === 'opportunity' ? 'opportunity' : q.mode === 'unmatched' ? 'unmatched' : 'advertised'
-
-    // PC.8 — Unmatched ASINs: PRODUCT_AD rows with no local AdProductAd link.
-    if (mode === 'unmatched') {
-      const um = await prisma.amazonAdsDailyPerformance.groupBy({
-        by: ['entityId'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: null, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
-        orderBy: { _sum: { costMicros: 'desc' } },
-        take: limit,
-      })
-      const rows = um.map((r) => {
-        const adSpendCents = microsToCents(r._sum.costMicros)
-        const salesC = r._sum.sales7dCents ?? 0
-        return {
-          id: r.entityId, sku: undefined, name: r.entityId.replace(/^ASIN:/, ''), asin: r.entityId.replace(/^ASIN:/, ''),
-          photoUrl: null, photoCount: 0, adSpendCents, revenueCents: salesC, profitCents: 0,
-          units: r._sum.orders7d ?? 0, tacos: salesC > 0 ? Math.round((adSpendCents / salesC) * 1000) / 10 : null, marginPct: null,
-          campaignCount: 0, marketCount: 0, isParent: false, childCount: 0, unmatched: true,
-        }
-      })
-      reply.header('Cache-Control', 'private, max-age=60')
-      return { windowDays, mode, rows, totals: { adSpendCents: rows.reduce((s, r) => s + r.adSpendCents, 0), revenueCents: 0, profitCents: 0, products: rows.length }, marketplaces: [] }
-    }
-
-    // 1. Per-product ad metrics. PRIMARY source = PRODUCT_AD daily rows (PC.0):
-    // true per-product spend/sales/impr/clicks → ACOS. Falls back to
-    // ProductProfitDaily.advertisingSpendCents when PRODUCT_AD isn't ingested
-    // yet (zero-regression). Opportunity mode always uses ProductProfitDaily.
-    type AdAgg = { spendC: number; salesC: number; impr: number; clicks: number; orders: number }
-    const adByProduct = new Map<string, AdAgg>()
-    if (mode === 'advertised') {
-      // AME.2 — group by currencyCode so cross-marketplace spend/sales convert
-      // to the EUR base before summing (no-op while all ad data is EUR). AME.3
-      // — round micros→cents once per (ad,currency) bucket, not per daily row.
-      const perAd = await prisma.amazonAdsDailyPerformance.groupBy({
-        by: ['localEntityId', 'currencyCode'],
-        where: { entityType: 'PRODUCT_AD', localEntityId: { not: null }, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
-      })
-      if (perAd.length > 0) {
-        const adIds = perAd.map((r) => r.localEntityId).filter((x): x is string => !!x)
-        const adProds = await prisma.adProductAd.findMany({ where: { id: { in: adIds } }, select: { id: true, productId: true } })
-        const prodByAd = new Map(adProds.map((a) => [a.id, a.productId]))
-        const fxToEur = await buildEurRateMap(perAd.map((r) => r.currencyCode))
-        for (const r of perAd) {
-          const pid = r.localEntityId ? prodByAd.get(r.localEntityId) : null
-          if (!pid) continue
-          const rate = fxToEur.get(r.currencyCode) ?? 1
-          const cur = adByProduct.get(pid) ?? { spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }
-          cur.spendC += toEurCents(microsToCents(r._sum.costMicros), rate)
-          cur.salesC += toEurCents(r._sum.sales7dCents ?? 0, rate)
-          cur.impr += r._sum.impressions ?? 0
-          cur.clicks += r._sum.clicks ?? 0
-          cur.orders += r._sum.orders7d ?? 0
-          adByProduct.set(pid, cur)
-        }
-      }
-    }
-    // Product set. Advertised mode = UNION of PRODUCT_AD-advertised products
-    // (real spend/ACOS) and ProductProfitDaily-advertised products (fallback
-    // spend), so partial PRODUCT_AD ingestion never hides a product. Per-row we
-    // prefer PRODUCT_AD when present. Opportunity mode = selling-but-unadvertised.
-    let ids: string[]
-    let ppdByProduct: Map<string, { _sum: { advertisingSpendCents: number | null; grossRevenueCents: number | null; trueProfitCents: number | null; unitsSold: number | null } }>
-    if (mode === 'opportunity') {
-      const grouped = await prisma.productProfitDaily.groupBy({
-        by: ['productId'],
-        where: { date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-        having: { advertisingSpendCents: { _sum: { equals: 0 } }, grossRevenueCents: { _sum: { gt: 0 } } },
-        orderBy: { _sum: { grossRevenueCents: 'desc' } },
-        take: limit,
-      })
-      ids = grouped.map((g) => g.productId)
-      ppdByProduct = new Map(grouped.map((g) => [g.productId, g]))
-    } else if (adByProduct.size > 0) {
-      // PRODUCT_AD data exists → use ONLY that set (true per-product spend/ACOS,
-      // no double-count). Coverage grows daily as the advertised-product cron
-      // accumulates; products without PRODUCT_AD rows yet appear as they ingest.
-      ids = [...adByProduct.entries()].sort((a, b) => b[1].spendC - a[1].spendC).slice(0, limit).map(([pid]) => pid)
-      const ppd = await prisma.productProfitDaily.groupBy({
-        by: ['productId'],
-        where: { productId: { in: ids }, date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-        orderBy: { _sum: { grossRevenueCents: 'desc' } },
-      })
-      ppdByProduct = new Map(ppd.map((g) => [g.productId, g]))
-    } else {
-      // Fallback (no PRODUCT_AD yet): ProductProfitDaily.advertisingSpendCents.
-      const grouped = await prisma.productProfitDaily.groupBy({
-        by: ['productId'],
-        where: { date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true, unitsSold: true },
-        having: { advertisingSpendCents: { _sum: { gt: 0 } } },
-        orderBy: { _sum: { advertisingSpendCents: 'desc' } },
-        take: limit,
-      })
-      ids = grouped.map((g) => g.productId)
-      ppdByProduct = new Map(grouped.map((g) => [g.productId, g]))
-    }
-    if (ids.length === 0) {
-      reply.header('Cache-Control', 'private, max-age=60')
-      return { windowDays, mode, rows: [], totals: { adSpendCents: 0, revenueCents: 0, profitCents: 0, products: 0 }, unattributedSpendCents: 0, marketplaces: [] }
-    }
-
-    // 2. Variant identity (+ parentId) and parent identity, so we can ROLL UP
-    // each variant's ad metrics under its PARENT product (PCF.1). Standalone
-    // products (no parent) stay as their own row.
-    const { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } = await import('../services/product-read-cache.service.js')
-    const variants = await prisma.product.findMany({
-      where: { id: { in: ids }, deletedAt: null },
-      select: { id: true, sku: true, name: true, parentId: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
-    })
-    const variantById = new Map(variants.map((p) => [p.id, p]))
-    const parentIds = [...new Set(variants.map((v) => v.parentId).filter((x): x is string => !!x))]
-    const parents = parentIds.length ? await prisma.product.findMany({
-      where: { id: { in: parentIds } },
-      select: { id: true, sku: true, name: true, images: { select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY }, _count: { select: { children: true } } },
-    }) : []
-    const parentById = new Map(parents.map((p) => [p.id, p]))
-
-    // 3. #campaigns + #markets + asin from the ad structure (keyed by variant).
-    const ads = await prisma.adProductAd.findMany({
-      where: { productId: { in: ids } },
-      select: { productId: true, asin: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } },
-    })
-    const structByProduct = new Map<string, { campaigns: Set<string>; markets: Set<string>; asin: string | null }>()
-    for (const a of ads) {
-      if (!a.productId) continue
-      let s = structByProduct.get(a.productId)
-      if (!s) { s = { campaigns: new Set(), markets: new Set(), asin: a.asin }; structByProduct.set(a.productId, s) }
-      const c = a.adGroup?.campaign
-      if (c?.id && (!mkt || c.marketplace === mkt)) { s.campaigns.add(c.id); if (c.marketplace) s.markets.add(c.marketplace) }
-      if (!s.asin && a.asin) s.asin = a.asin
-    }
-
-    // 4. Roll up variant metrics under the parent (groupId = parentId ?? self).
-    interface Group { groupId: string; variants: Set<string>; spend: number; salesC: number; revenue: number; profit: number; units: number; impr: number; clicks: number; campaigns: Set<string>; markets: Set<string>; asin: string | null; hasPA: boolean }
-    const groups = new Map<string, Group>()
-    for (const pid of ids) {
-      const v = variantById.get(pid)
-      if (!v) continue
-      const groupId = (v.parentId && parentById.has(v.parentId)) ? v.parentId : pid
-      let g = groups.get(groupId)
-      if (!g) { g = { groupId, variants: new Set(), spend: 0, salesC: 0, revenue: 0, profit: 0, units: 0, impr: 0, clicks: 0, campaigns: new Set(), markets: new Set(), asin: null, hasPA: false }; groups.set(groupId, g) }
-      g.variants.add(pid)
-      const ad = adByProduct.get(pid), ppd = ppdByProduct.get(pid)
-      g.spend += ad ? ad.spendC : (ppd?._sum.advertisingSpendCents ?? 0)
-      g.salesC += ad?.salesC ?? 0
-      g.revenue += ppd?._sum.grossRevenueCents ?? 0
-      g.profit += ppd?._sum.trueProfitCents ?? 0
-      g.units += ppd?._sum.unitsSold ?? 0
-      g.impr += ad?.impr ?? 0
-      g.clicks += ad?.clicks ?? 0
-      if (ad) g.hasPA = true
-      const st = structByProduct.get(pid)
-      if (st) { st.campaigns.forEach((c) => g.campaigns.add(c)); st.markets.forEach((m) => g.markets.add(m)); if (!g.asin) g.asin = st.asin }
-    }
-
-    const searchLc = q.search?.toLowerCase()
-    let rows = [...groups.values()].flatMap((g) => {
-      const parent = parentById.get(g.groupId)
-      const identity = parent ?? variantById.get(g.groupId)
-      if (!identity) return []
-      if (searchLc && !identity.name.toLowerCase().includes(searchLc) && !identity.sku.toLowerCase().includes(searchLc)) return []
-      const isParentRow = !!parent
-      return [{
-        id: g.groupId,
-        sku: identity.sku,
-        name: identity.name,
-        asin: g.asin,
-        photoUrl: pickFaceImage(identity.images),
-        photoCount: identity.images.length,
-        adSpendCents: g.spend, adSalesCents: g.salesC, revenueCents: g.revenue, profitCents: g.profit,
-        units: g.units,
-        acos: g.hasPA && g.salesC > 0 ? Math.round((g.spend / g.salesC) * 1000) / 10 : null,
-        roas: g.hasPA && g.spend > 0 ? Math.round((g.salesC / g.spend) * 100) / 100 : null,
-        impressions: g.impr, clicks: g.clicks,
-        tacos: g.revenue > 0 ? Math.round((g.spend / g.revenue) * 1000) / 10 : null,
-        marginPct: g.revenue > 0 ? Math.round((g.profit / g.revenue) * 1000) / 10 : null,
-        campaignCount: g.campaigns.size,
-        marketCount: g.markets.size,
-        variantCount: g.variants.size,
-        isParent: isParentRow,           // expandable → its advertised variants
-        childCount: isParentRow ? g.variants.size : 0,
-        opportunity: mode === 'opportunity',
-      }]
-    })
-    // Re-sort by the requested key (rollup reorders vs the variant-level sort).
-    rows.sort((a, b) => b.adSpendCents - a.adSpendCents)
-    rows = rows.slice(0, limit)
-
-    // 5. Reconciliation: account ad spend (campaign-level) vs Σ attributed.
-    // AME.2 — per-currency so a future non-EUR marketplace converts to the EUR
-    // base before summing (no-op while all ad data is EUR).
-    const acctRows = await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['currencyCode'],
-      where: { entityType: 'CAMPAIGN', date: dateFilterBP, ...(mkt ? { marketplace: mkt } : {}) },
-      _sum: { costMicros: true },
-    })
-    const acctFx = await buildEurRateMap(acctRows.map((r) => r.currencyCode))
-    const accountSpendCents = acctRows.reduce(
-      (s, r) => s + toEurCents(microsToCents(r._sum.costMicros), acctFx.get(r.currencyCode) ?? 1),
-      0,
-    )
-    const attributedSpendCents = rows.reduce((s, r) => s + r.adSpendCents, 0)
-
-    // PC.5 — prior equal-length window totals for vs-period deltas.
-    let previousTotals: { adSpendCents: number; revenueCents: number; profitCents: number } | null = null
-    if (q.compare === 'true' || q.compare === '1') {
-      const prevSince = new Date(since); prevSince.setUTCDate(prevSince.getUTCDate() - windowDays)
-      const prev = await prisma.productProfitDaily.aggregate({
-        where: { date: { gte: prevSince, lt: since }, ...(mkt ? { marketplace: mkt } : {}) },
-        _sum: { advertisingSpendCents: true, grossRevenueCents: true, trueProfitCents: true },
-      })
-      previousTotals = {
-        adSpendCents: prev._sum.advertisingSpendCents ?? 0,
-        revenueCents: prev._sum.grossRevenueCents ?? 0,
-        profitCents: prev._sum.trueProfitCents ?? 0,
-      }
-    }
-
-    // Optional client-driven re-sort (default already spend desc).
-    const dir = q.dir === 'asc' ? 1 : -1
-    if (q.sort && q.sort !== 'spend') {
-      const key = q.sort as 'revenue' | 'profit' | 'tacos' | 'margin' | 'campaigns'
-      const val = (r: typeof rows[number]) => key === 'revenue' ? r.revenueCents : key === 'profit' ? r.profitCents : key === 'tacos' ? (r.tacos ?? -1) : key === 'margin' ? (r.marginPct ?? -999) : r.campaignCount
-      rows.sort((a, b) => (val(a) - val(b)) * dir)
-    }
-
-    // Distinct markets with ad spend in window — drives the filter dropdown.
-    const mktRows = await prisma.productProfitDaily.groupBy({
-      by: ['marketplace'],
-      where: { date: dateFilterBP, advertisingSpendCents: { gt: 0 } },
-    })
-    const marketplaces = mktRows.map((m) => m.marketplace).filter(Boolean).sort()
-
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      windowDays,
-      mode,
-      rows,
-      marketplaces,
-      totals: { adSpendCents: attributedSpendCents, revenueCents: rows.reduce((s, r) => s + r.revenueCents, 0), profitCents: rows.reduce((s, r) => s + r.profitCents, 0), products: rows.length },
-      previousTotals,
-      accountSpendCents,
-      unattributedSpendCents: Math.max(0, accountSpendCents - attributedSpendCents),
-      // Honest reconciliation (PCF.2): product spend can slightly EXCEED the
-      // campaign total because campaign reports lag T+2 for recent days + a
-      // small systematic variance between Amazon's advertised-product and
-      // campaign reports. Surface it as variance, not a hidden over-count.
-      overAttributedCents: Math.max(0, attributedSpendCents - accountSpendCents),
-    }
-  })
-
   // PCF.1 — variant children of a parent product (the expansion rows). Per-
   // variant ad spend/revenue/ACOS for one parent's advertised variants.
   // GET /advertising/by-product/variants?parentId=&windowDays=&marketplace=
@@ -3061,66 +2629,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     rows.sort((a, b) => b.adSpendCents - a.adSpendCents)
     reply.header('Cache-Control', 'private, max-age=60')
     return { rows }
-  })
-
-  // PCG.1 — a product's CAMPAIGNS (the expansion rows). Per-campaign the
-  // PRODUCT's own spend/sales/ACOS (from PRODUCT_AD, NOT the whole-campaign
-  // total which includes other products). If productId is a parent, includes
-  // all its children. Optional status filter.
-  // GET /advertising/by-product/campaigns?productId=&windowDays=&marketplace=&status=
-  fastify.get('/advertising/by-product/campaigns', async (request, reply) => {
-    const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string; preset?: string; startDate?: string; endDate?: string }
-    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange(q)
-    const since = range.since
-    const dateFilterBPC = { gte: since, lte: range.until }
-    const mkt = q.marketplace || undefined
-
-    // Resolve the product + its children (parent rows roll up variants).
-    const childRows = await prisma.product.findMany({ where: { parentId: q.productId }, select: { id: true } })
-    const productIds = [...new Set([q.productId, ...childRows.map((c) => c.id)])]
-
-    // Each AdProductAd = this product advertised in one campaign. Group its
-    // PRODUCT_AD perf by campaign → the product's spend/sales in that campaign.
-    const ads = await prisma.adProductAd.findMany({
-      where: { productId: { in: productIds } },
-      select: { id: true, adGroup: { select: { campaign: { select: { id: true, name: true, marketplace: true, status: true, dailyBudget: true, adProduct: true } } } } },
-    })
-    const adToCampaign = new Map<string, { id: string; name: string; marketplace: string | null; status: string; dailyBudget: unknown; adProduct: string | null }>()
-    for (const a of ads) { const c = a.adGroup?.campaign; if (c?.id) adToCampaign.set(a.id, c) }
-    const adIds = [...adToCampaign.keys()]
-    const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['localEntityId'],
-      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: dateFilterBPC, ...(mkt ? { marketplace: mkt } : {}) },
-      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
-    }) : []
-
-    interface CampAgg { id: string; name: string; marketplace: string | null; status: string; adProduct: string | null; dailyBudgetCents: number; spendC: number; salesC: number; impr: number; clicks: number; orders: number }
-    const byCampaign = new Map<string, CampAgg>()
-    for (const r of perAd) {
-      const c = r.localEntityId ? adToCampaign.get(r.localEntityId) : null
-      if (!c) continue
-      let g = byCampaign.get(c.id)
-      if (!g) { g = { id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct, dailyBudgetCents: Math.round(parseFloat(String(c.dailyBudget ?? '0')) * 100), spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }; byCampaign.set(c.id, g) }
-      g.spendC += microsToCents(r._sum.costMicros)
-      g.salesC += r._sum.sales7dCents ?? 0
-      g.impr += r._sum.impressions ?? 0
-      g.clicks += r._sum.clicks ?? 0
-      g.orders += r._sum.orders7d ?? 0
-    }
-    let rows = [...byCampaign.values()]
-    if (q.status) rows = rows.filter((c) => c.status === q.status)
-    if (mkt) rows = rows.filter((c) => c.marketplace === mkt)
-    const out = rows.map((c) => ({
-      id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct,
-      dailyBudgetCents: c.dailyBudgetCents,
-      adSpendCents: c.spendC, adSalesCents: c.salesC,
-      acos: c.salesC > 0 ? Math.round((c.spendC / c.salesC) * 1000) / 10 : null,
-      impressions: c.impr, clicks: c.clicks, orders: c.orders,
-    })).sort((a, b) => b.adSpendCents - a.adSpendCents)
-    reply.header('Cache-Control', 'private, max-age=60')
-    return { rows: out }
   })
 
   // PC.7 — bulk action on the campaigns behind selected products. Resolves
@@ -3373,6 +2881,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       preset?: string
       startDate?: string
       endDate?: string
+      /** AM-34 — '1' = the Ad Manager's "Refresh view": skip the 300-s read cache. */
+      fresh?: string
     }
     const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(query)
@@ -3495,8 +3005,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       roas: sp > 0 ? Math.round((sa / sp) * 100) / 100 : null,
       ctr:  im > 0 ? Math.round((cl / im) * 10000) / 100 : null,
     })
+    // AM-30 — the window's spend is its micros summed, then rounded ONCE (as the window before is, below, and as the
+    // campaign list rounds per campaign). Summing the per-day rounded cents drifted by up to half a cent per day.
     const curSummary = summarize(
-      rows.reduce((s, r) => s + r.adSpendCents, 0),
+      Math.round(perfByDay.reduce((s, p) => s + Number(p._sum.costMicros ?? 0n), 0) / 10_000),
       rows.reduce((s, r) => s + r.adSalesCents, 0),
       rows.reduce((s, r) => s + r.impressions, 0),
       rows.reduce((s, r) => s + r.clicks, 0),
@@ -3537,7 +3049,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return { windowDays, count: rows.length, rows, summary: curSummary, previous, compare: compareWindows, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
-    })
+    }, { refresh: query.fresh === '1' })
     reply.header('Cache-Control', 'private, max-age=60')
     return result
   })
@@ -4540,21 +4052,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.scope === 'AD_GROUP' && !body.externalAdGroupId) {
       return reply.code(400).send({ error: 'externalAdGroupId_required_for_AD_GROUP' })
     }
-    // Resolve profileId from marketplace if not explicitly given
-    let profileId = body.profileId
-    if (!profileId) {
-      const conn = await prisma.amazonAdsConnection.findFirst({
-        where: { marketplace: body.marketplace, isActive: true },
-        select: { profileId: true },
+    // CM-29 — the profile comes from the write gate's own resolver, so the negative goes to the profile the gate
+    // approves. A profileId in the body must be that same profile: a caller cannot point a write at another account.
+    const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+    const resolved = await adsClientContextFor(body.marketplace)
+    if (!resolved) {
+      return reply.code(404).send({
+        error: 'no_active_connection_for_marketplace',
+        marketplace: body.marketplace,
       })
-      if (!conn) {
-        return reply.code(404).send({
-          error: 'no_active_connection_for_marketplace',
-          marketplace: body.marketplace,
-        })
-      }
-      profileId = conn.profileId
     }
+    if (body.profileId && body.profileId !== resolved.profileId) {
+      return reply.code(400).send({
+        error: 'profile_not_for_marketplace',
+        reason: `That Amazon Ads profile does not serve ${body.marketplace} for this business, so nothing was sent to Amazon.`,
+      })
+    }
+    const profileId = resolved.profileId
     const { createNegative } = await import(
       '../services/advertising/ads-negative-kw.service.js'
     )
@@ -4841,19 +4355,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return { windowDays: range.days, count: rows.length, rows }
-  })
-
-  // ── POST /advertising/search-terms/promote — harvest a search term into a
-  // positive keyword. The search-term report carries EXTERNAL ad-group ids;
-  // resolve to the local AdGroup, then create the keyword (sandbox-safe).
-  fastify.post('/advertising/search-terms/promote', async (request, reply) => {
-    const b = request.body as { query?: string; externalAdGroupId?: string; matchType?: string; bidEur?: number }
-    if (!b?.query || !b?.externalAdGroupId || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'query, externalAdGroupId, matchType, bidEur required' } }
-    const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: b.externalAdGroupId }, select: { id: true } })
-    if (!ag) { reply.status(404); return { error: 'ad_group_not_found_for_externalAdGroupId' } }
-    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
-    try { return personAddReply(reply, await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
@@ -5563,6 +5064,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       planToken?: string; applyImmediately?: boolean; strict?: boolean; conflicts?: 'skip' | 'mine'
       // AX-ZD.6 — explicit override for a run that trips the blast-radius gate.
       acknowledgeBlastRadius?: boolean
+      // 3A — the review step's "Send anyway for these rows": the rows he confirmed, and only those rows run.
+      confirmOwnLimitsRows?: number[]
+      onlyRows?: number[]
     }
     const job = await prisma.importJob.findUnique({ where: { id } })
     if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
@@ -5656,6 +5160,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         applyImmediately: b.applyImmediately === true,
         strict: b.strict === true,
         conflicts: b.conflicts === 'mine' ? 'mine' : 'skip',
+        ...(Array.isArray(b.confirmOwnLimitsRows) ? { confirmOwnLimitsRows: b.confirmOwnLimitsRows.filter((n) => Number.isInteger(n)) } : {}),
+        ...(Array.isArray(b.onlyRows) ? { onlyRows: b.onlyRows.filter((n) => Number.isInteger(n)) } : {}),
       })
     } catch (e) {
       // Release the claim, or the job is wedged in APPLYING forever and no
@@ -5683,6 +5189,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applied: result.applied,
       skipped: result.skipped,
       failed: result.failed,
+      // 3A — rows past his own limits, nothing written: the review step lists them with "Send anyway for these rows".
+      needsConfirmation: result.needsConfirmation,
+      needsConfirmationRows: result.results.filter((r) => r.outcome === 'NEEDS_CONFIRMATION'),
       aborted: result.aborted,
       applyImmediately: b.applyImmediately === true,
       elapsedMs: Date.now() - started,
@@ -6637,26 +6146,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return personAddReply(reply, await createProductAdLocal({ ...(b as object), requireAmazon: true, manual: true, userId: personActor(request) } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // ── AME.14: autonomy & guardrails control center ────────────────────
-  // Single pane: global kill state, rule posture (enabled / dry-run / off),
-  // total daily-spend-cap exposure, recent auto-actions + rollback window.
+  // (Its GET /advertising/autonomy/status pane went with the old Rank Control page, its only reader — OC, 2026-10-06.)
   // pause-all is the one-click UI kill (disables every advertising rule);
   // resume re-enables the ids it returned. NEXUS_ADS_AUTOMATION_KILL is the
   // hard env-level stop that even blocks the evaluator.
-  fastify.get('/advertising/autonomy/status', async (_request, reply) => {
-    const rules = await prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { id: true, name: true, enabled: true, dryRun: true, trigger: true, maxDailyAdSpendCentsEur: true } })
-    const enabled = rules.filter((r) => r.enabled)
-    const live = enabled.filter((r) => !r.dryRun)
-    const dailyCapExposureCents = enabled.reduce((s, r) => s + (r.maxDailyAdSpendCentsEur ?? 0), 0)
-    const recent = await prisma.automationRuleExecution.findMany({ orderBy: { startedAt: 'desc' }, take: 20, select: { id: true, ruleId: true, status: true, startedAt: true, errorMessage: true } }).catch(() => [])
-    const now = Date.now()
-    reply.header('Cache-Control', 'private, max-age=15')
-    return {
-      killSwitch: process.env.NEXUS_ADS_AUTOMATION_KILL === '1',
-      rules: { total: rules.length, enabled: enabled.length, live: live.length, dryRun: enabled.length - live.length, disabled: rules.length - enabled.length },
-      dailyCapExposureCents,
-      recentExecutions: recent.map((e) => ({ ...e, rollbackAvailable: now - new Date(e.startedAt).getTime() < 24 * 3600 * 1000 })),
-    }
-  })
   // ── ADX N4 — the autonomy board ─────────────────────────────────────────────
   //
   // Ten rules act on their own and none of it was visible or adjustable from the UI:
@@ -7099,14 +6592,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const ag = t?.adGroup
           const camp = ag?.campaign
           if (ag?.externalAdGroupId && camp?.externalCampaignId && camp.marketplace) {
-            const conn = await prisma.amazonAdsConnection.findFirst({
-              where: { marketplace: camp.marketplace, isActive: true },
-              select: { profileId: true, region: true },
-            })
+            // CM-29 — the same resolver as the write gate.
+            const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+            const conn = await adsClientContextFor(camp.marketplace)
             if (conn) {
               const { getThemeBidRecommendations } = await import('../services/advertising/ads-api-client.js')
               const recs = await getThemeBidRecommendations(
-                { profileId: conn.profileId, region: (conn.region as 'EU' | 'NA' | 'FE') ?? 'EU' },
+                { profileId: conn.profileId, region: conn.region },
                 {
                   externalCampaignId: camp.externalCampaignId,
                   externalAdGroupId: ag.externalAdGroupId,
@@ -7278,16 +6770,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     await setDefaultTargetAcosPct(b.pct ?? null, actorFromHeaders(request.headers as Record<string, unknown>))
     return getAutomationState()
   })
-  fastify.post('/advertising/automation/guard/run', async () => {
-    const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
-    return runAnomalyGuardOnce()
-  })
-  // TD.1 — run the profit-native target-ACOS auto-bid pass on demand (respects
-  // the autonomy dial; SUGGEST = proposals only).
-  fastify.post('/advertising/automation/auto-bid/run', async () => {
-    const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
-    return runAutoBidOnce()
-  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
@@ -7323,12 +6805,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AME.11: Top-of-search placement optimizer ───────────────────────
-  fastify.get('/advertising/top-of-search', async (request, reply) => {
-    const q = request.query as { windowDays?: string; marketplace?: string; targetAcos?: string; targetIS?: string }
-    const { analyzeTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
-    reply.header('Cache-Control', 'private, max-age=60')
-    return analyzeTopOfSearch({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, marketplace: q.marketplace, targetAcos: q.targetAcos ? Number(q.targetAcos) : undefined, targetIS: q.targetIS ? Number(q.targetIS) : undefined })
-  })
   fastify.post('/advertising/top-of-search/apply', async (request, reply) => {
     const b = (request.body ?? {}) as { campaignId?: string; percentage?: number }
     if (!b.campaignId || b.percentage == null) { reply.status(400); return { error: 'campaignId and percentage required' } }
@@ -7647,8 +7123,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as { marketplace?: string; month?: string; campaignId?: string; minCents?: number | null; maxCents?: number | null }
     if (!b?.marketplace || !b?.campaignId) { reply.status(400); return { error: 'marketplace + campaignId required' } }
     const { setCampaignLimit, currentMonth } = await import('../services/advertising/ads-budget-manager.service.js')
-    try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
-    catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-30 — the campaign's own Min/Max Budget (the grid's store); a value the gate could never honour is a 400 with why.
+    try {
+      const r = await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null, createdBy: personActor(request) })
+      if (!r.ok) reply.status(r.status)
+      return r
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend do on the next run. AM-8 — `engine` says whether
   // that run applies (the engine's own gate + write mode + dial), so the Budget Manager never asserts it.
@@ -7720,7 +7200,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // CP.1 + P1.1 — Control Plane scenario commit: apply a batch of staged changes
   // through the gated + audited path, dispatched by entity type. ?dryRun=1 validates.
   fastify.post('/advertising/budget-manager/scenario/commit', async (request, reply) => {
-    const b = request.body as { month?: string; dryRun?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }> }
+    const b = request.body as { month?: string; dryRun?: boolean; /** 3A — "Send anyway" for the changes past his own limits. */ confirmOwnLimits?: boolean; changes?: Array<{ entityType?: 'campaign' | 'adgroup' | 'target'; entityId?: string; campaignId?: string; marketplace?: string; kind: string; budgetCents?: number; minCents?: number | null; maxCents?: number | null; bidCents?: number; status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'; targetAcos?: number; placements?: { tos?: number | null; pdp?: number | null; ros?: number | null } }> }
     if (!Array.isArray(b?.changes) || b.changes.length === 0) { reply.status(400); return { error: 'changes[] required' } }
     const q = request.query as Record<string, string | undefined>
     const dryRun = !!b.dryRun || q.dryRun === '1'
@@ -7732,7 +7212,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // 1e — a person's commit from the Budget Manager screen (isPersonEdit): passes the halt and autonomy OFF; every other
     // check binds. The suppress case is a lowering write that already passes; the restore passes as his click.
     const manual = true
-    const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string }> = []
+    // 3A — asked now (a refusal is answered at once), and a change past his own limits waits for his "Send anyway".
+    const askGate = true
+    const confirmOwnLimits = b.confirmOwnLimits === true
+    const results: Array<{ entityId: string; kind: string; ok: boolean; error?: string; detail?: string; needsConfirmation?: unknown }> = []
     for (const c of b.changes) {
       const id = c?.entityId || c?.campaignId
       if (!id || !c?.kind) { results.push({ entityId: id ?? '?', kind: c?.kind ?? '?', ok: false, error: 'invalid change' }); continue }
@@ -7745,43 +7228,39 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         continue
       }
       try {
-        let ok = false; let error: string | undefined; let detail: string | undefined
+        let ok = false; let error: string | undefined; let detail: string | undefined; let needs: unknown
         switch (c.kind) {
           case 'budget': {
             if (c.budgetCents == null) { error = 'budgetCents required'; break }
-            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, manual, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
-            ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break
+            const r = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: Math.max(100, c.budgetCents) / 100 }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: daily budget → €${(c.budgetCents / 100).toFixed(2)}` })
+            ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break
           }
           case 'limit': {
             if (!c.marketplace) { error = 'marketplace required'; break }
-            const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null }); ok = !!r.ok; break
+            const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null, createdBy: actor }); ok = r.ok; error = r.ok ? undefined : r.error; break
           }
           case 'suppress': { const n = await suppressCampaignBids(id, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' }); ok = true; detail = `${n} entities floored`; break }
           case 'restore': { const n = await restoreCampaignBids(id, { actor, manual, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
           case 'campaignStatus': { if (!c.status) { error = 'status required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { status: c.status }, actor, manual, reason: `control plane: status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'adgroupBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { defaultBidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: ad-group bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break }
           case 'adgroupStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdGroupWithSync({ adGroupId: id, patch: { status: c.status }, actor, manual, reason: `control plane: ad-group status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
-          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; break }
+          case 'targetBid': { if (c.bidCents == null) { error = 'bidCents required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: Math.max(2, Math.round(c.bidCents)) }, actor, manual, askGate, confirmOwnLimits, reason: `control plane: target bid → €${(c.bidCents / 100).toFixed(2)}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); detail = r.outboundQueueId ?? undefined; needs = r.needsConfirmation; break }
           case 'targetStatus': { if (!c.status) { error = 'status required'; break } const r = await updateAdTargetWithSync({ adTargetId: id, patch: { status: c.status }, actor, manual, reason: `control plane: target status → ${c.status}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'biddingStrategy': { if (!c.biddingStrategy) { error = 'biddingStrategy required'; break } const r = await updateCampaignWithSync({ campaignId: id, patch: { biddingStrategy: c.biddingStrategy }, actor, manual, reason: `control plane: bidding strategy → ${c.biddingStrategy}` }); ok = r.ok; error = r.ok ? undefined : (r.error ?? 'failed'); break }
           case 'targetAcos': { if (c.targetAcos == null) { error = 'targetAcos required'; break } const camp = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } }); const db = { ...((camp?.dynamicBidding as Record<string, unknown>) ?? {}), targetAcos: c.targetAcos }; await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } }); ok = true; detail = `targetAcos ${Math.round(c.targetAcos * 100)}%`; break }
           case 'placement': { if (!c.placements) { error = 'placements required'; break } const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js'); const adj: Array<{ placement: string; percentage: number }> = []; if (c.placements.tos != null) adj.push({ placement: 'PLACEMENT_TOP', percentage: c.placements.tos }); if (c.placements.pdp != null) adj.push({ placement: 'PLACEMENT_PRODUCT_PAGE', percentage: c.placements.pdp }); if (c.placements.ros != null) adj.push({ placement: 'PLACEMENT_REST_OF_SEARCH', percentage: c.placements.ros }); const r = await updatePlacementBidding({ campaignId: id, adjustments: adj, actor, manual }); ok = !!r.ok; break }
           default: error = 'unknown kind'
         }
-        results.push({ entityId: id, kind: c.kind, ok, error, detail })
+        results.push({ entityId: id, kind: c.kind, ok, error, detail, ...(needs ? { needsConfirmation: needs } : {}) })
       } catch (e) { results.push({ entityId: id, kind: c.kind, ok: false, error: (e as Error)?.message }) }
     }
     const applied = results.filter((r) => r.ok).length
-    return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied, results }
+    // 3A — the changes waiting for his "Send anyway" are counted apart from the refused ones.
+    const waiting = results.filter((r) => r.needsConfirmation).length
+    return { ok: results.length - applied === 0, dryRun, month, applied, failed: results.length - applied - waiting, needsConfirmation: waiting, results }
   })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
-  fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
-    const b = request.body as { brandTerms?: string[]; asins?: string[]; limit?: number }
-    if (!Array.isArray(b?.brandTerms)) { reply.status(400); return { error: 'brandTerms[] required' } }
-    const { suggestTargets } = await import('../services/advertising/ads-goal.service.js')
-    try { return await suggestTargets({ brandTerms: b.brandTerms, asins: b.asins, limit: b.limit }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
   fastify.post('/advertising/goals/apply', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.goalName) { reply.status(400); return { error: 'goalName required' } }
@@ -7878,11 +7357,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
     return analyzeRetailReadiness({ marketplace: q.marketplace, campaignId: q.campaignId })
-  })
-  fastify.post('/advertising/retail-readiness/apply', async (request, reply) => {
-    const b = request.body as { campaignIds?: string[]; marketplace?: string }
-    const { applyRetailGuard } = await import('../services/advertising/ads-retail-readiness.service.js')
-    try { return await applyRetailGuard({ campaignIds: b?.campaignIds, marketplace: b?.marketplace }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX2.12: Ads alerts (anomaly watch) ──────────────────────────────
@@ -9635,15 +9109,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await syncCampaignSettingsFromAmazon({ profileId: q.profileId }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  // B (on-open) — refresh ONE campaign's settings live from Amazon. The cockpit fires
-  // this when a campaign is opened so its placement bids / budget / strategy are bang
-  // up to date, without waiting for the ~20-min cron.
-  fastify.post('/advertising/campaigns/:id/refresh-settings', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const { syncOneCampaignSettings } = await import('../services/advertising/ads-campaign-settings-sync.service.js')
-    try { return await syncOneCampaignSettings(id) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
-
   fastify.get('/advertising/rank-plans', async (request, reply) => {
     const q = request.query as { marketplace?: string; enabled?: string }
     const where: Record<string, unknown> = {}
@@ -9652,34 +9117,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.enabled === '0' || q.enabled === 'false') where.enabled = false
     const items = await prisma.productRankPlan.findMany({ where, orderBy: { updatedAt: 'desc' } })
     return { items, count: items.length }
-  })
-  fastify.get('/advertising/rank-plans/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
-    if (!plan) { reply.status(404); return { error: 'not found' } }
-    return plan
-  })
-  fastify.post('/advertising/rank-plans', async (request, reply) => {
-    const b = request.body as Record<string, unknown>
-    if (!b?.productId || !b?.marketplace) { reply.status(400); return { error: 'productId, marketplace required' } }
-    const data = {
-      productId: b.productId as string,
-      parentAsin: (b.parentAsin as string | null) ?? null,
-      marketplace: b.marketplace as string,
-      windows: (b.windows as object) ?? [],
-      defaultTargetKey: (b.defaultTargetKey as string | null) ?? null,
-      timezone: (b.timezone as string) ?? 'Europe/Rome',
-      familyDailyBudgetCents: (b.familyDailyBudgetCents as number | null) ?? null,
-      familyAcosCapPct: (b.familyAcosCapPct as number | null) ?? null,
-      maxCampaigns: (b.maxCampaigns as number | null) ?? null,
-      leadTimeMinutes: (b.leadTimeMinutes as number) ?? 0,
-      excludeCampaignIds: (b.excludeCampaignIds as object) ?? [],
-      enabled: (b.enabled as boolean) ?? false,
-      manualOnly: (b.manualOnly as boolean) ?? false,
-      createdBy: (b.createdBy as string | null) ?? null,
-    }
-    // @@unique([productId, marketplace]) → one plan per family per market.
-    try { return await prisma.productRankPlan.create({ data: data as never }) } catch { reply.status(409); return { error: 'plan_exists_for_product_market' } }
   })
   fastify.patch('/advertising/rank-plans/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -9691,124 +9128,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (data.enabled === false) data.pausedAt = new Date()
     try { return await prisma.productRankPlan.update({ where: { id }, data }) } catch { reply.status(404); return { error: 'not found' } }
   })
-  fastify.delete('/advertising/rank-plans/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    try { await prisma.productRankPlan.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
-  })
 
-  // ── RD.2 — what this plan fans out to + is the mapping trustworthy? ─────
-  // resolveProductFamily is ASIN-centric (AdProductAd.productId is often null), so
-  // we surface per-campaign attribution health (ASIN-matched vs productId-linked)
-  // alongside the retail-readiness verdict (OOS / lost-buybox) so the operator can
-  // trust the campaign list this plan will actuate before arming it.
-  fastify.get('/advertising/rank-plans/:id/family', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
-    if (!plan) { reply.status(404); return { error: 'not found' } }
-    const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
-    const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
-    // RD.12 — manual scope + delivery recency, so the UI shows which campaigns this
-    // plan excludes and can tell "running recently" from "permanently paused".
-    const excludeSet = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
-    const since30 = new Date(Date.now() - 30 * 86400000)
-    const perf = fam.campaigns.length ? await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['localEntityId'],
-      where: { entityType: 'CAMPAIGN', localEntityId: { in: fam.campaigns.map((c) => c.id) }, date: { gte: since30 }, impressions: { gt: 0 } },
-      _max: { date: true }, _sum: { costMicros: true },
-    }) : []
-    const perfByCamp = new Map(perf.filter((p) => p.localEntityId).map((p) => [p.localEntityId as string, { lastDeliveredAt: p._max.date as Date | null, recentSpendCents: Math.round(Number(p._sum.costMicros ?? 0n) / 10000) }]))
-    // Attribution health: how reliably the family's ad rows link back to a Product.
-    const famAds = fam.asins.length ? await prisma.adProductAd.findMany({
-      where: { asin: { in: fam.asins }, adGroup: { campaign: { marketplace: plan.marketplace } } },
-      select: { productId: true, adGroup: { select: { campaign: { select: { id: true } } } } },
-    }) : []
-    const byCamp = new Map<string, { ads: number; matched: number }>()
-    for (const a of famAds) {
-      const cid = a.adGroup?.campaign?.id; if (!cid) continue
-      const e = byCamp.get(cid) ?? { ads: 0, matched: 0 }
-      e.ads += 1; if (a.productId) e.matched += 1
-      byCamp.set(cid, e)
-    }
-    // Retail-readiness verdicts (OOS / lost-buybox), filtered to family campaigns.
-    const readiness: Record<string, { verdict: string; reason: string; outOfStock: number; lostBuyBox: number }> = {}
-    try {
-      const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
-      const rr = await analyzeRetailReadiness({ marketplace: plan.marketplace })
-      for (const c of rr.campaigns) readiness[c.campaignId] = { verdict: c.verdict, reason: c.reason, outOfStock: c.outOfStock, lostBuyBox: c.lostBuyBox }
-    } catch { /* readiness best-effort */ }
-    const campaigns = fam.campaigns.map((c) => {
-      const att = byCamp.get(c.id) ?? { ads: 0, matched: 0 }
-      const pf = perfByCamp.get(c.id)
-      return {
-        id: c.id, name: c.name, status: c.status, marketplace: c.marketplace,
-        adProductAds: att.ads, productIdMatched: att.matched, asinOnly: att.ads - att.matched,
-        attributionPct: att.ads ? Math.round((att.matched / att.ads) * 100) : null,
-        readiness: readiness[c.id] ?? null,
-        excluded: excludeSet.has(c.id),
-        lastDeliveredAt: pf?.lastDeliveredAt ?? null,
-        recentSpendCents: pf?.recentSpendCents ?? 0,
-      }
-    })
-    const totalAds = [...byCamp.values()].reduce((s, e) => s + e.ads, 0)
-    const totalMatched = [...byCamp.values()].reduce((s, e) => s + e.matched, 0)
-    reply.header('Cache-Control', 'private, max-age=60')
-    return {
-      plan: { id: plan.id, productId: plan.productId, parentAsin: plan.parentAsin, marketplace: plan.marketplace },
-      family: { parentProductId: fam.parentProductId, parentName: fam.parentName, asins: fam.asins, productIds: fam.productIds, campaignCount: fam.campaigns.length },
-      campaigns,
-      attribution: { totalAdProductAds: totalAds, productIdMatched: totalMatched, overallPct: totalAds ? Math.round((totalMatched / totalAds) * 100) : null },
-      readinessSummary: { pause: campaigns.filter((c) => c.readiness?.verdict === 'pause').length, watch: campaigns.filter((c) => c.readiness?.verdict === 'watch').length },
-    }
-  })
-
-  // ── RD.3 — family demand by hour (product-anchored, per-market, date-range) ──
-  // The authoring feed for Rank Director: pick a PRODUCT → see when the whole
-  // VARIATION FAMILY actually sells (order demand, blended + sparse-shrunk toward
-  // the market prior), in the market's shopper-local time — even if a campaign has
-  // one ASIN. Returns a recommended rank-window plan (peak hours → push target,
-  // the rest → baseline) the operator one-clicks then tunes. Read-only.
-  fastify.get('/advertising/by-product/family-dayparting', async (request, reply) => {
-    const q = request.query as { productId?: string; marketplace?: string; from?: string; to?: string; preset?: string; windowDays?: string }
-    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
-    const marketplace = q.marketplace || 'IT'
-    const { resolveProductFamily, blendedFamilyDemand, recommendRankWindows } = await import('../services/advertising/ads-dayparting-refresh.service.js')
-    const fam = await resolveProductFamily({ parentProductId: q.productId, marketplace })
-    if (!fam.parentProductId || fam.productIds.length === 0) { reply.status(404); return { error: 'product family not found' } }
-    // Date range: explicit from/to (or a preset), else windowDays fallback. TZ note:
-    // the demand SQL buckets in Europe/Rome — correct for IT v1; multi-market needs
-    // the bucket TZ parameterised (tracked for expansion).
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange({ preset: q.preset, startDate: q.from, endDate: q.to, windowDays: q.windowDays })
-    const to = new Date(range.until.getTime() + 86_400_000) // include the until day (SQL uses < to)
-    const d = await blendedFamilyDemand(fam.productIds, marketplace, range.days, { from: range.since, to }, fam.skus)
-    // RD.10f — RAW actual demand is the default; smoothed (market-blended) is a toggle.
-    const recommended = recommendRankWindows(d.raw.weekdayProfile, d.raw.hourProfile)
-    reply.header('Cache-Control', 'private, max-age=120')
-    return {
-      marketplace, parentProductId: fam.parentProductId, parentName: fam.parentName,
-      productIds: fam.productIds, asins: fam.asins, campaignCount: fam.campaigns.length,
-      range: { from: range.sinceStr, to: range.untilStr, days: range.days, preset: range.preset },
-      demand: { totals: d.raw.totals, hourProfile: d.raw.hourProfile, weekdayProfile: d.raw.weekdayProfile, grid: d.raw.grid, hasData: d.hasData, familyOrders: d.familyOrders, timezone: d.timezone, metric: d.metric },
-      smoothed: { totals: d.totals, hourProfile: d.hourProfile, weekdayProfile: d.weekdayProfile, grid: d.grid, blended: d.blended, timezone: d.timezone, metric: d.metric },
-      recommended,
-    }
-  })
-
-  // ── RD.7 — per-plan actuation: live preview / apply-now / revert / bulk push ──
-  // run-now evaluates ONE plan: dryRun previews per-campaign decisions; live applies
-  // them through the write-gate (force bypasses manualOnly — the operator clicked
-  // apply). revert resets the family's PLACEMENT_TOP to the baseline. apply-across is
-  // an immediate bulk Top-of-Search set across every family campaign.
-  fastify.post('/advertising/rank-plans/:id/run-now', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const body = (request.body ?? {}) as { dryRun?: boolean }
-    const dryRun = body.dryRun === true || (request.query as { dryRun?: string })?.dryRun === '1'
-    const plan = await prisma.productRankPlan.findUnique({ where: { id }, select: { id: true } })
-    if (!plan) { reply.status(404); return { error: 'not found' } }
-    const { runRankDefendOnce } = await import('../jobs/ad-rank-defend.job.js')
-    // 1e — a live apply passes Run now's guard inside runRankDefendOnce (switch, scheduler arm flags, engine lock); refused = 409 + `skipped`.
-    try { const r = await runRankDefendOnce({ dryRun, onlyPlanId: id, force: !dryRun }); if (r.skipped) reply.status(409); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
+  // ── RD.7 — revert resets the family's PLACEMENT_TOP to the baseline. ──
+  // OC (2026-10-06): the old Rank Control page that made these plans is gone. What is left is what a person needs to keep
+  // control of a plan that may still run: the list, the switch (PATCH enabled) and this revert — the Hourly Bids page's
+  // "Product rank plans" section calls all three. Run-now, apply-across, copy-schedule, create, delete and the family
+  // read went with the page (the 15-minute run and the A10 preview call the job directly).
   fastify.post('/advertising/rank-plans/:id/revert', async (request, reply) => {
     const { id } = request.params as { id: string }
     const plan = await prisma.productRankPlan.findUnique({ where: { id } })
@@ -9824,57 +9149,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     let reverted = 0
     for (const c of scoped) { try { await applyTopOfSearch(c.id, pct); reverted++ } catch { /* best-effort */ } }
     return { ok: true, reverted, toPct: pct, campaigns: scoped.length }
-  })
-  fastify.post('/advertising/rank-plans/:id/apply-across', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const b = (request.body ?? {}) as { targetKey?: string; percentage?: number }
-    const plan = await prisma.productRankPlan.findUnique({ where: { id } })
-    if (!plan) { reply.status(404); return { error: 'not found' } }
-    let pct = typeof b.percentage === 'number' ? b.percentage : undefined
-    if (pct == null && b.targetKey) { const t = await prisma.rankTarget.findUnique({ where: { workspace_key: workspaceKey({ key: b.targetKey }) } }); pct = t?.biasPct ?? undefined }
-    if (pct == null) { reply.status(400); return { error: 'targetKey or percentage required' } }
-    const clamped = Math.max(0, Math.min(900, Math.round(pct)))
-    const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
-    const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
-    const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
-    const exApply = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
-    const scoped = fam.campaigns.filter((c) => !exApply.has(c.id))
-    let applied = 0
-    for (const c of scoped) { try { await applyTopOfSearch(c.id, clamped); applied++ } catch { /* best-effort */ } }
-    return { ok: true, applied, pct: clamped, campaigns: scoped.length }
-  })
-
-  // ── RG.4 — copy one schedule (windows + baseline) onto many products' plans ──
-  // Paint a rank schedule once, then bulk-apply it across other products in the same
-  // market. Upserts each target product's ProductRankPlan: sets windows + baseline,
-  // leaves guardrails + enabled untouched on existing plans (new plans land DISABLED
-  // so each is armed deliberately). The cron resolves each family live, so the same
-  // time-of-day rank shape fans across many products without per-window hand-editing.
-  fastify.post('/advertising/rank-plans/copy-schedule', async (request, reply) => {
-    const b = (request.body ?? {}) as { windows?: unknown; defaultTargetKey?: string | null; toProductIds?: string[]; marketplace?: string; fromPlanId?: string }
-    let windows = Array.isArray(b.windows) ? (b.windows as unknown[]) : undefined
-    let baseline = (b.defaultTargetKey ?? null) as string | null
-    const marketplace = b.marketplace
-    const toProductIds = Array.isArray(b.toProductIds) ? [...new Set(b.toProductIds.filter(Boolean))] : []
-    // Source can be inline (windows/baseline from the painter) or pulled from a plan.
-    if (!windows && b.fromPlanId) {
-      const src = await prisma.productRankPlan.findUnique({ where: { id: b.fromPlanId } })
-      if (src) { windows = (src.windows as unknown[]) ?? []; baseline = src.defaultTargetKey ?? baseline }
-    }
-    if (!marketplace || !toProductIds.length || !Array.isArray(windows)) { reply.status(400); return { error: 'marketplace, toProductIds[], windows required' } }
-    const prods = await prisma.product.findMany({ where: { id: { in: toProductIds } }, select: { id: true, amazonAsin: true } })
-    const asinOf = new Map(prods.map((p) => [p.id, p.amazonAsin]))
-    const results: { productId: string; planId: string; created: boolean }[] = []
-    for (const productId of toProductIds) {
-      const existing = await prisma.productRankPlan.findUnique({ where: { productId_marketplace: workspaceKey({ productId, marketplace }) } }).catch(() => null)
-      const plan = await prisma.productRankPlan.upsert({
-        where: { productId_marketplace: workspaceKey({ productId, marketplace }) },
-        create: { productId, marketplace, parentAsin: asinOf.get(productId) ?? null, windows: windows as never, defaultTargetKey: baseline, enabled: false },
-        update: { windows: windows as never, defaultTargetKey: baseline },
-      })
-      results.push({ productId, planId: plan.id, created: !existing })
-    }
-    return { ok: true, applied: results.length, created: results.filter((r) => r.created).length, updated: results.filter((r) => !r.created).length, results }
   })
 
   // RS.4 — preview the pure rank controller's next move for a given target +
@@ -9946,10 +9220,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
-    const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
-    try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
   // ── AX2.11: Dayparting intelligence (day-of-week conversion) ────────
   fastify.get('/advertising/dayparting-intel', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
@@ -9985,10 +9255,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { previewHarvest } = await import('../services/advertising/ads-harvest.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
     return previewHarvest({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, minSpendCents: q.minSpendCents ? Number(q.minSpendCents) : undefined, minOrders: q.minOrders ? Number(q.minOrders) : undefined })
-  })
-  fastify.post('/advertising/harvest/apply', async (request, reply) => {
-    const { applyHarvest } = await import('../services/advertising/ads-harvest.service.js')
-    try { return await applyHarvest((request.body ?? {}) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AD.2: Mutation routes ───────────────────────────────────────────
@@ -10057,10 +9323,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!marketplace) { reply.status(400); return { error: 'marketplace required: a portfolio belongs to one market' } }
     let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
     try {
-      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
+      // CM-29 — the same resolver as the write gate, so the portfolio is made in the profile the gate approves.
+      const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+      const conn = await adsClientContextFor(marketplace)
       if (conn) {
         profileId = conn.profileId
-        const region = (conn.region === 'NA' || conn.region === 'FE' ? conn.region : 'EU') as AdsRegion
+        const region: AdsRegion = conn.region
         const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
         const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
         if (gate.allowed) { const r = await createPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
@@ -10209,6 +9477,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       endDate?: string | null
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits. */
+      confirmOwnLimits?: boolean
     }
     const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
     if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
@@ -10228,11 +9498,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10 — a refusal is answered now, not put back in silence later
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
       return result
     }
+    ownLimitsReply(reply, result)
     return result
   })
 
@@ -10289,6 +9561,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits. */
+      confirmOwnLimits?: boolean
     }
     // CM-15 — the Edit Groups rename goes through the audited updateAdGroupWithSync with the status and the default
     // bid, so it is queued for Amazon and logged. It was a local update here, which Amazon never saw and the v1 ingest
@@ -10310,7 +9584,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
     })
+    if (ownLimitsReply(reply, result)) return result
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
       return result
@@ -10331,13 +9607,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
       reason?: string
       applyImmediately?: boolean
+      /** 3A — "Send anyway" past his own limits (his CPC ceiling included). */
+      confirmOwnLimits?: boolean
     }
-    // CPC ceiling: clamp the requested bid before the audited write.
+    // CPC ceiling: his own setting. 3A — a bid above it is not clamped behind his back: it needs his "Send anyway",
+    // and with it the bid goes as he set it.
     let cpcClamp: { from: number; to: number; ceilingCents: number } | null = null
+    const cpcPast: Array<{ limit: 'cpc_ceiling'; reason: string }> = []
     if (body.bidCents != null) {
-      const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: id, bidCents: body.bidCents }])
-      body.bidCents = entries[0]!.bidCents
-      if (clamps[0]) cpcClamp = { from: clamps[0].from, to: clamps[0].to, ceilingCents: clamps[0].ceilingCents }
+      const { clamps } = await clampBidsByCeiling([{ adTargetId: id, bidCents: body.bidCents }])
+      if (clamps[0]) {
+        const limits = cpcCeilingLimits(clamps).map(({ limit, reason }) => ({ limit, reason }))
+        if (body.confirmOwnLimits !== true) {
+          reply.code(409)
+          const { needsConfirmationOutcome } = await import('../services/advertising/ads-mutation.service.js')
+          return needsConfirmationOutcome(limits)
+        }
+        cpcPast.push(...limits)
+        cpcClamp = null
+      }
     }
     const result = await updateAdTargetWithSync({
       adTargetId: id,
@@ -10347,6 +9635,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
+      confirmOwnLimits: body.confirmOwnLimits === true, // 3A
+      ...(cpcPast.length ? { evidence: { sentPastOwnLimits: `sent past your CPC ceiling by ${actorFromHeaders(request.headers as Record<string, unknown>)}: ${cpcPast.map((l) => l.reason).join('; ')}` } } : {}),
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -10356,6 +9646,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return result
     }
+    if (ownLimitsReply(reply, result)) return result
     return cpcClamp ? { ...result, cpcClamp } : result
   })
 
@@ -10375,16 +9666,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(400)
       return { ok: false, error: 'too_many_entries' }
     }
-    // CPC ceiling: clamp each requested bid before the audited bulk write.
-    const { entries: clampedEntries, clamps } = await clampBidsByCeiling(body.entries)
+    // CPC ceiling: his own setting. 3A — a row above it needs his "Send anyway" (never a silent clamp); confirmed, it
+    // goes as he set it. Every other row of the batch is sent now.
+    const confirmOwnLimits = (body as { confirmOwnLimits?: boolean }).confirmOwnLimits === true
+    const { clamps } = await clampBidsByCeiling(body.entries)
+    const overCeiling = confirmOwnLimits ? [] : cpcCeilingLimits(clamps)
+    const held = new Set(overCeiling.map((c) => c.adTargetId))
     const result = await bulkUpdateAdTargetBids({
-      entries: clampedEntries,
+      entries: body.entries.filter((e) => !held.has(e.adTargetId)),
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
+      askGate: true, // 3A — a row past his own limits is answered now, with the limits
+      confirmOwnLimits,
     })
-    return { ok: true, ...result, cpcClamps: clamps }
+    // 3A — the rows waiting for his "Send anyway": over his CPC ceiling, or past another of his own limits.
+    const sent = body.entries.filter((e) => !held.has(e.adTargetId))
+    const needsConfirmation = [
+      ...overCeiling.map((c) => ({ adTargetId: c.adTargetId, limits: [{ limit: c.limit, reason: c.reason }] })),
+      ...(result.outcomes ?? []).flatMap((o, i) => (o.needsConfirmation ? [{ adTargetId: sent[i]!.adTargetId, limits: o.needsConfirmation.limits }] : [])),
+    ]
+    return { ok: true, ...result, cpcClamps: [], ...(needsConfirmation.length ? { needsConfirmation } : {}) }
   })
 
   // AF.5 — product ad enable/pause toggle.
@@ -10950,10 +10253,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           : daysToTokenExpiry <= 60 ? 'warning' : 'ok',
       }
     })
+    // Ads wave 4c (F3) — the one list of markets every ads screen uses: `read` (Nexus reads the account's data) and
+    // `write` (the write gate's own market checks pass), with each market's currency and why writes are off.
+    // Additive: the nine existing call sites read `items` and are untouched.
+    const { adsMarketLists } = await import('../services/advertising/ads-markets.service.js')
+    const markets = await adsMarketLists()
     reply.header('Cache-Control', 'private, max-age=30')
     return {
       items: withExpiry,
       count: withExpiry.length,
+      markets,
       adsMode: adsMode(),
       tokenExpiryAlerts: withExpiry.filter((c) => c.isActive && (c.tokenExpiryStatus === 'critical' || c.tokenExpiryStatus === 'expired')).length,
     }

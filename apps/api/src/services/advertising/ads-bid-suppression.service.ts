@@ -17,24 +17,26 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { isPersonEdit, updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
+import { updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
 import { deltaBidCents } from './ads-placement-math.js'
 import { effectiveBidBounds, withStrategyBand, type BidBound } from './ads-write-gate.js'
 import { NO_LIMITS, bidSideWords, clampBid, clampToStrategy, limitWords, strategyBidReader, strategyWords, type BidHoldLog, type StrategyBidLimits } from './ads-strategy/bids.js'
 
 /**
  * ADS AUTONOMY W1-5 — the bounds a give-back (a restore after a stop, a base-bid revert) is held to, per ad group: the
- * campaign's own bid bounds and the bid policies, and — for an engine, not a person's own click — the ads strategy band
- * of the ad group's products. Read once per campaign, only when there is something to give back.
+ * campaign's own bid bounds, the bid policies and the ads strategy band of the ad group's products — whoever restores
+ * (an engine, a rule, a person's Restore click or a Claude request he approved: a restore puts back what was, inside the
+ * limits in force today, rather than waiting for a confirmation). Read once per campaign, only when there is something
+ * to give back.
  */
-async function giveBackBounds(campaignId: string, adGroupIds: string[], person: boolean): Promise<(adGroupId: string) => { max: BidBound | null; min: BidBound | null }> {
+async function giveBackBounds(campaignId: string, adGroupIds: string[]): Promise<(adGroupId: string) => { max: BidBound | null; min: BidBound | null }> {
   const camp = await prisma.campaign.findUnique({
     where: { id: campaignId },
     select: { marketplace: true, portfolioId: true, minBidCents: true, maxBidCents: true, minBudgetCents: true, maxBudgetCents: true },
   })
   if (!camp) return () => ({ max: null, min: null })
   const base = await effectiveBidBounds({ campaignId, campaign: camp, strategy: NO_LIMITS })
-  const strategy = person || !adGroupIds.length
+  const strategy = !adGroupIds.length
     ? new Map<string, { limits: StrategyBidLimits }>()
     : await strategyBidReader().forAdGroups([...new Set(adGroupIds)].map((adGroupId) => ({ adGroupId, marketplace: camp.marketplace })))
   return (adGroupId) => withStrategyBand(base, strategy.get(adGroupId)?.limits ?? NO_LIMITS)
@@ -211,10 +213,9 @@ export async function refloorCampaignBids(
 export async function restoreBidsFor(
   campaignId: string,
   targets: ReadonlyArray<{ id: string; adGroupId: string; bidCents: number; suppressedFromBidCents: number }>,
-  person = false,
 ): Promise<Map<string, { cents: number; heldBy: string | null }>> {
   if (!targets.length) return new Map()
-  const boundsOf = await giveBackBounds(campaignId, targets.map((t) => t.adGroupId), person)
+  const boundsOf = await giveBackBounds(campaignId, targets.map((t) => t.adGroupId))
   return new Map(targets.map((t) => {
     const c = clampBid(t.suppressedFromBidCents, boundsOf(t.adGroupId), { currentCents: t.bidCents, forced: true })
     return [t.id, { cents: c.cents, heldBy: c.held ? `the ${bidSideWords(c.held.side)} (${c.held.limit.source})` : null }]
@@ -248,7 +249,7 @@ export async function restoreCampaignBids(
   const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, bidCents: true, adGroupId: true } })
   // W1-5 — held inside the bounds that bind this write (heldGiveBack): never refused into a silent stop.
   const boundsOf = groups.length || targets.length
-    ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)], isPersonEdit(opts.manual, opts.actor))
+    ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)])
     : null
   for (const g of groups) {
     try {
@@ -341,7 +342,7 @@ export async function revertBaseBidDelta(
   const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, bidCents: true, adGroupId: true } })
   // W1-5 — the baseline held inside the bounds that bind this write, like a restore (heldGiveBack): a refused revert
   // left the delta's bid in place and retried every run.
-  const boundsOf = groups.length || targets.length ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)], false) : null
+  const boundsOf = groups.length || targets.length ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)]) : null
   for (const g of groups) {
     try {
       const back = heldGiveBack(g.baseBidFromCents as number, g.defaultBidCents, boundsOf!(g.id), reason, opts.holds)

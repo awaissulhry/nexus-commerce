@@ -13,6 +13,8 @@ import { num, eur, int, METRIC_TIPS, acosRank, acosFilterValue } from '../../_gr
 import { pickMetricFilters } from '../../_grid/filters'
 import { SearchTermActionModal } from './SearchTermActionModal'
 import type { CampaignDetailData } from '../CampaignDetail'
+import { useAdsMarketplace } from '../../../_shell/MarketplaceContext'
+import { currencySymbol } from '../../../_shell/adsMarkets'
 
 interface STRow {
   query: string; matchType?: string | null
@@ -25,6 +27,8 @@ const spendOf = (r: STRow) => num(r.costUnits)
 const salesOf = (r: STRow) => num(r.salesCents) / 100
 
 export function SearchTermsTab({ campaign, dateRange }: { campaign: CampaignDetailData | null; dateRange: { start: Date; end: Date } }) {
+  // CM-32 — the bid box in the campaign's own currency.
+  const ads = useAdsMarketplace()
   const ext = campaign?.externalCampaignId ?? null
   const [rows, setRows] = useState<STRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -95,7 +99,7 @@ export function SearchTermsTab({ campaign, dateRange }: { campaign: CampaignDeta
         )}
         emptyLabel="No search-term data for this campaign in the selected date range."
       />
-      {action && <SearchTermActionModal mode={action} terms={selectedTerms} adGroups={agList} externalCampaignId={ext} marketplace={campaign?.marketplace ?? null} onClose={() => setAction(null)} onDone={() => setSelected(new Set())} />}
+      {action && <SearchTermActionModal mode={action} terms={selectedTerms} adGroups={agList} externalCampaignId={ext} marketplace={campaign?.marketplace ?? null} currency={currencySymbol((campaign as unknown as { dailyBudgetCurrency?: string | null } | null)?.dailyBudgetCurrency || ads.currencyOf(campaign?.marketplace ?? null)) || undefined} onClose={() => setAction(null)} onDone={() => setSelected(new Set())} />}
     </>
   )
 }

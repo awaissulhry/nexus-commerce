@@ -78,7 +78,7 @@ export const PRODUCT_NOT_FOUND = 'Product not found'
 const READ_BY_NOTE =
   "Each field's readBy names the engines and doors that act on it; notReadYet lists the fields that are stored and shown only. "
   + 'Until an engine reads a field, only the older settings under alsoInForce bind; once it does, every limit binds and the stricter one wins. '
-  + "Engines, rules and Claude's requests are held to the strategy's bid limits; a person's own edit past one is sent and warned."
+  + "Engines and rules are held to the strategy's bid limits; a person's own edit past one, or a Claude request he approves, is warned and goes when he confirms."
 const TARGET_ORDER =
   "a rule's or an autopilot plan's own target → the campaign's own target ACoS → this strategy (product, category, market) → "
   + 'the account default → profit data → 30 %'
