@@ -8,7 +8,7 @@
  * not_claimed), and the same executor reads the order and writes it (processEbayOrderClaim).
  *
  * Safe to run twice, late or never: a finished, leased or backed-off receipt is refused by its claim, and the minute
- * sweep still runs every receipt this worker did not. Only an ORDER_CONFIRMATION receipt is run here; any other
+ * sweep still runs every receipt this worker did not (at its own pace: 4 eBay receipts per business per minute). Only an ORDER_CONFIRMATION receipt is run here; any other
  * receipt stays with the sweep.
  */
 
@@ -25,7 +25,9 @@ export type EbayOrderNoticeNowOutcome = EbayProcessingOutcome | { kind: 'skipped
 
 /** One receipt, in the business the job carries (WorkspaceWorker binds it), exactly as the sweep runs it. */
 export async function processEbayOrderNoticeNow(receiptId: string): Promise<EbayOrderNoticeNowOutcome> {
-  // The sweep's context: the receipt's business and no actor (withIngressWorkspace), never the queuer's.
+  // The sweep's context: the receipt's business and no actor (withIngressWorkspace), never the queuer's. Row-level
+  // security on WebhookEvent already confines this read and the claim to that business; the explicit workspaceId
+  // filter below is a second layer.
   return withIngressWorkspace(workspaceIdForQuery(), async () => {
     const stored = await prisma.webhookEvent.findFirst({
       where: { id: receiptId, workspaceId: workspaceIdForQuery(), channel: 'EBAY', eventType: EBAY_ORDER_NOTICE_TOPIC },
@@ -54,6 +56,10 @@ export function initializeEbayOrderNoticeWorker() {
   worker.on('failed', (job, err) => {
     // The receipt's lease expires and the minute sweep claims it again; nothing is lost.
     logger.warn('[ebay-order-notice] job failed; the minute sweep will run the receipt', { jobId: job?.id, error: err.message })
+  })
+  // Redis connection errors: structured, and never the unhandled-'error' fallback.
+  worker.on('error', (error) => {
+    logger.error('[ebay-order-notice] worker error', { error: error instanceof Error ? error.message : String(error) })
   })
   return worker
 }
