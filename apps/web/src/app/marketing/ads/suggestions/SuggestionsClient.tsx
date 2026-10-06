@@ -443,8 +443,11 @@ function SuggestionsInner() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason: `undo from the Suggestions queue (suggestion ${s.id})` }),
       })
-      const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; reason?: string; error?: string } | null
-      if (r.ok && j?.ok !== false) {
+      const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; nothingToUndo?: boolean; reason?: string; error?: string } | null
+      // CM-22 — a change that left nothing to put back is "Nothing to undo", not "Change undone".
+      if (r.ok && j?.nothingToUndo) {
+        toast(j.reason ?? 'Nothing to undo.', 'info')
+      } else if (r.ok && j?.ok !== false && (j?.reversed ?? 0) > 0) {
         setItems((cur) => cur.map((x) => (x.id === s.id && x.undo ? { ...x, undo: { ...x.undo, rolledBack: true } } : x)))
         setBaselineKey((n) => n + 1)
         toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
@@ -639,8 +642,10 @@ function SuggestionsInner() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reason: `undo from the A.I. Bids queue (decision ${d.id})` }),
       })
-      const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; reason?: string; error?: string } | null
-      if (r.ok && j?.ok !== false) {
+      const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; nothingToUndo?: boolean; reason?: string; error?: string } | null
+      if (r.ok && j?.nothingToUndo) {
+        toast(j.reason ?? 'Nothing to undo.', 'info')
+      } else if (r.ok && j?.ok !== false && (j?.reversed ?? 0) > 0) {
         setAiItems((cur) => (cur ?? []).map((x) => (x.id === d.id && x.undo ? { ...x, undo: { ...x.undo, rolledBack: true } } : x)))
         toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
       } else {

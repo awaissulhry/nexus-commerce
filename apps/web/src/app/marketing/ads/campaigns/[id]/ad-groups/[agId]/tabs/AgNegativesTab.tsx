@@ -11,7 +11,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
-import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP, type EachResult } from '../../../../../_shared/adsWrite'
+import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../_grid/AdsDataGrid'
 import { STATUS_PILL } from '../../../../_grid/format'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
@@ -58,7 +58,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
     ],
     onApply: async (edits) => {
       const res = await adsWriteMany(edits.filter((e) => e.values.status).map((e) =>
-        ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { status: e.values.status, applyImmediately: false, reason: `Edit Negative ${noun}s` } })))
+        ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { status: e.values.status, ...SEND_NOW, reason: `Edit Negative ${noun}s` } })))
       onRefresh?.()
       report(res)
     },

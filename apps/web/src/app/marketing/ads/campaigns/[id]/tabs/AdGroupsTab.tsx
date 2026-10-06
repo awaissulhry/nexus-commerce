@@ -21,7 +21,7 @@ import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
 import { Listbox, useToast } from '@/design-system/components'
-import { adsWriteMany, eachSummary, type EachResult } from '../../../_shared/adsWrite'
+import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../_shared/adsWrite'
 
 interface AdGroupRow {
   id: string
@@ -127,7 +127,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
     ],
     onApply: async (edits) => {
       const res = await adsWriteMany(edits.map((e) => {
-        const body: Record<string, unknown> = { applyImmediately: false, reason: 'Edit Groups inline' }
+        const body: Record<string, unknown> = { ...SEND_NOW, reason: 'Edit Groups inline' }
         if (e.values.__first != null) body.name = e.values.__first
         if (e.values.status != null) body.status = e.values.status
         if (e.values.defaultBid != null) body.defaultBidCents = Math.round(parseFloat(e.values.defaultBid) * 100)
@@ -176,7 +176,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
         )}
     toolbarRight={<Button variant="primary" onClick={() => setShowCreate(true)}><Plus size={13} /> Add Group</Button>}
       />
-      {showCreate && <CreateAdGroupModal campaignId={campaignId} onClose={() => setShowCreate(false)} onCreated={() => onRefresh?.()} />}
+      {showCreate && <CreateAdGroupModal campaignId={campaignId} campaign={campaign} onClose={() => setShowCreate(false)} onCreated={() => onRefresh?.()} />}
       {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="ad group" bidLabel="Default Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { defaultBidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}
     </>
   )

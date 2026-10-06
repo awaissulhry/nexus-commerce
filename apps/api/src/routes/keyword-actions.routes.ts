@@ -334,7 +334,8 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
         error: r.reason ?? (r.expired
           ? `The ${r.windowHours ?? 24}-hour undo window for this change has closed. It can no longer be reversed in one action; the values before the change are in the change log.`
           : 'Nothing was reversed.'),
-        code: r.expired ? 'undo_window_closed' : 'undo_failed',
+        // CM-22 — a change that left nothing to put back says so ("Nothing to undo: …"), not "undo failed".
+        code: r.expired ? 'undo_window_closed' : r.nothingToUndo ? 'nothing_to_undo' : 'undo_failed',
         reversed: r.reversed, skipped: r.skipped, failed: r.failed,
       }
     }
