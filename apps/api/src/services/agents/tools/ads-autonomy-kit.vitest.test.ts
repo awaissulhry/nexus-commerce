@@ -294,6 +294,16 @@ describe('the common checks', () => {
     expect(stepRefusal(facts({ thisOver: RAISE }), { maxItems: 5 })).toBeNull() // a tool without step limits
   })
 
+  it('AA-W2-7 — a raise from 0 (no percent measures it): unbounded unless the strategy\'s highest bid holds it, never inside a raise step of 0', () => {
+    const unbounded = { raises: 1, raisesFromZero: 1, unboundedRaises: 1 }
+    expect(stepRefusal(facts({ thisOver: unbounded }), { ...BASE, maxRaisePct: 100 })).toBe('it raises 1 bid or budget from 0, which no percent measures, and the ads strategy sets no highest bid that bounds it: an unbounded raise, more than the 100 % this tool\'s limits let run without a person')
+    const capped = { raises: 1, raisesFromZero: 1, unboundedRaises: 0 }
+    expect(stepRefusal(facts({ thisOver: capped }), { ...BASE, maxRaisePct: 20 })).toBeNull()
+    expect(stepRefusal(facts({ thisOver: capped }), BASE)).toBe('it raises 1 bid from 0, and this tool\'s limits let no raise run without a person (0: every raise waits for a person)')
+    // A tool without a raise step (graduate-keyword: its starting-bid limit holds a new keyword).
+    expect(stepRefusal(facts({ thisOver: unbounded }), { maxItems: 5 })).toBeNull()
+  })
+
   it('month — a change that can add spend keeps the month under its cap, saying how the upper bound is made', () => {
     const p = projection({ afterCents: 100_100, capCents: 100_000, capFrom: 'ads strategy: Test market (IT), market, v2' })
     expect(monthRefusal(facts({ monthProjection: { IT: p } }))).toBe(
