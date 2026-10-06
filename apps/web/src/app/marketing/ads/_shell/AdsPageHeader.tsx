@@ -2,7 +2,7 @@
 
 /**
  * CBN.2d — shared Ad-console page header (Helium 10 Ads match): eyebrow + title +
- * subtitle on the left; Learn · Change Log · Data Sync · Date range · Market
+ * subtitle on the left; Learn · Change Log · Refresh view · Date range · Market
  * selector · Action ▾ on the right. Reused by every /marketing/ads page.
  *
  * The Change Log sits here rather than in the sidebar, and is OPT-IN per page rather than shown
@@ -20,7 +20,9 @@ import { Button, Spinner } from '@/design-system/primitives'
 import { DateRangePicker, lastCompleteDays } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
-import type { AdsMarket } from './MarketplaceContext'
+import { useAdsMarketplaceOptional, type AdsMarket } from './MarketplaceContext'
+import { ALL_MARKETS, READING_ONLY, readingOnlyDetail } from './adsMarkets'
+import { Banner } from '@/design-system/components/Banner'
 
 // AM-10 — the preset path that fed the Ad Manager graph (`RANGE_PRESETS` / `rangeBounds`, always "last 7 days") is
 // gone: the graph now draws the range this header's picker holds.
@@ -33,11 +35,19 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
   showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
-  allowAllMarkets = true, marketValues, onMarketValuesChange,
+  allowAllMarkets = true, marketValues, onMarketValuesChange, dataSyncLabel = 'Refresh view', dataSyncTip, marketNotYet, dateRangeNotYet,
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
   onDataSync?: () => void; syncing?: boolean
+  /**
+   * 🔴 AM-34 — ONE meaning per word. This button was "Data Sync" on every page while it did three different things:
+   * re-read Nexus's own copy (Ad Manager, Budget Manager, Reporting), start a real read from the channel (eBay Ad
+   * Manager), or nothing at all (eBay digest). A re-read is "Refresh view" (the default) and must read past the read
+   * cache; a page that really asks the channel names it ("Sync from eBay now"). `dataSyncTip` says what it does.
+   */
+  dataSyncLabel?: string
+  dataSyncTip?: string
   actions?: HeaderAction[]
   // optional: parent can observe the picked range; the header owns the state for now
   rangePreset?: string; onRangePreset?: (p: string) => void
@@ -68,6 +78,11 @@ export function AdsPageHeader({
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showDataSync?: boolean; showDateRange?: boolean
   /**
+   * AM-26 — the page cannot take a range from this picker (it has its own date control). The picker stays visible but
+   * does not open, shows `dateRange` (the range the page shows), and says this reason on hover and keyboard focus.
+   */
+  dateRangeNotYet?: string
+  /**
    * RA.SPINE S5 (additive; defaults `true`, so every existing page is byte-identical).
    *
    * The market picker was the one control here with no off switch, and that is a defect at eleven
@@ -87,6 +102,12 @@ export function AdsPageHeader({
    * they are reading, which is worse than a picker built from the wrong list.
    */
   showMarket?: boolean
+  /**
+   * 🔴 AM-26 — set on a page that cannot filter by market YET (its data has no market to filter on). The picker stays
+   * (the Owner keeps placeholder controls) but it no longer pretends: it reads "All markets", and its menu says why
+   * instead of listing markets that do nothing when picked. The text is the reason, in plain words.
+   */
+  marketNotYet?: string
   /**
    * 🔴 HV.10 — whether "All markets" is offered. Defaults TRUE, which is what this header
    * hardcoded, so every existing consumer is unchanged.
@@ -123,11 +144,39 @@ export function AdsPageHeader({
   // data, and every one of those is selectable-as-a-filter. Widen to the shared
   // AdsMarket shape with launchable:true so the extracted control behaves
   // exactly as this header did before.
-  const marketOptions: AdsMarket[] = markets.map((m) => ({
-    code: m, label: '', mode: 'production', writesEnabled: true, launchable: true,
-  }))
+  //
+  // Ads wave 4c — every option stays selectable (this is a filter, and a market Nexus only reads has data to show), but
+  // a reading-only market says so in its row, from the connections list.
+  const ads = useAdsMarketplaceOptional()
+  const marketOptions: AdsMarket[] = markets.map((m) => {
+    const known = channel === 'amazon' ? ads?.markets.find((x) => x.code === m) : undefined
+    const readingOnly = !!known && !known.launchable
+    return {
+      code: m, label: known?.label ?? '', mode: known?.mode ?? 'production', writesEnabled: known?.writesEnabled ?? true, launchable: true,
+      note: readingOnly ? 'reading only' : null,
+      whyNot: readingOnly ? known?.whyNot ?? null : null,
+    }
+  })
+
+  /**
+   * AM-28 — the operator's market choice is SHARED across the Amazon ads pages and remembered for this viewer: moving
+   * this control also moves the provider's `scopeMarket`, which the next ads page starts from. Only the operator's own
+   * move does this (never a deep link), and only for an Amazon market the console reads or "all markets" — an eBay
+   * page's market is not an Amazon scope.
+   */
+  const changeMarket = (m: string) => {
+    if (channel === 'amazon' && ads && (m === ALL_MARKETS || ads.readMarkets.includes(m))) ads.setScopeMarket(m)
+    onMarketChange(m)
+  }
+
+  // Ads wave 4c — a market Nexus only reads shows its data on every page, and says once, under the header, that its
+  // ads are not changed from here (each write control there is off with the same reason).
+  const readOnly = channel === 'amazon' && showMarket && ads && market && market !== ALL_MARKETS && ads.readMarkets.includes(market)
+    ? ads.writeAccess(market)
+    : null
 
   return (
+    <>
     <div className="h10-hdr">
       <div className="h10-hdr-l">
         <div className="eyebrow">Nexus Ads</div>
@@ -149,9 +198,9 @@ export function AdsPageHeader({
         {/* The spinning state is the DS Spinner, not `<RefreshCw className="spin">`: the only rule
             that animated that icon was `.h10-hbtn .spin`, so dropping `.h10-hbtn` would have left
             a silently motionless "spinner". */}
-        {showDataSync && <Button variant="ghost" onClick={onDataSync} disabled={syncing}>{syncing ? <Spinner size={14} /> : <RefreshCw size={14} />} Data Sync</Button>}
+        {showDataSync && <Button variant="ghost" onClick={onDataSync} disabled={syncing} title={dataSyncTip}>{syncing ? <Spinner size={14} /> : <RefreshCw size={14} />} {dataSyncLabel}</Button>}
 
-        {showDateRange && <DateRangePicker value={shownRange} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
+        {showDateRange && <DateRangePicker value={shownRange} disabledReason={dateRangeNotYet} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
         {/* market / account selector — shared with the campaign builders (APS.2a).
             `showMarket` is off only for a page that owns the control elsewhere — see the prop. */}
@@ -159,10 +208,11 @@ export function AdsPageHeader({
           <MarketSelect
             markets={marketOptions}
             value={market}
-            onChange={onMarketChange}
+            onChange={changeMarket}
             values={marketValues}
             onValuesChange={onMarketValuesChange}
             allowAll={allowAllMarkets}
+            notYet={marketNotYet}
             brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
           />
         )}
@@ -191,5 +241,9 @@ export function AdsPageHeader({
         ) : null}
       </div>
     </div>
+    {readOnly && !readOnly.canWrite && (
+      <Banner tone="info" title={READING_ONLY}>{readingOnlyDetail(readOnly.reason)}</Banner>
+    )}
+    </>
   )
 }

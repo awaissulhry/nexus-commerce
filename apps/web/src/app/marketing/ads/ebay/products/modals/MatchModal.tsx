@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
+import { money } from '../../../campaigns/_grid/format'
 import { Button, Input, Pill, Radio } from '@/design-system/primitives'
 
 // ── Match a listing to a catalog product (unlocks costs + break-evens) ──────
@@ -71,7 +72,7 @@ export function MatchModal(props: { open: boolean; onClose: () => void; itemId: 
                 <span style={{ flex: 1 }}>{c.name}</span>
                 <code>{c.sku}</code>
                 {c.suggested && <Pill tone="neutral">suggested</Pill>}
-                {c.costPriceCents != null && <Pill tone="success">cost €{(c.costPriceCents / 100).toFixed(2)}</Pill>}
+                {c.costPriceCents != null && <Pill tone="success">cost {money(c.costPriceCents)}</Pill>}
               </label>
             </li>
           ))}

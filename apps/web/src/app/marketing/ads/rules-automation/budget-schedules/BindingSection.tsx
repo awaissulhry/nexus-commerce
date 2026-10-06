@@ -55,6 +55,7 @@ import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SectionEmpty } from './SectionShell'
 import type { BindingResult, BindingCampaignRow, BspSlotProps } from './slot-contract'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 const eur = (c: number) => `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const eur0 = (c: number) => `€${Math.round(c / 100).toLocaleString('en-IE')}`
@@ -69,6 +70,8 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
   /** Lifts the fetched rows so the `campaign:` rail reads the same ones, with no second request. */
   onRows: (rows: BindingCampaignRow[]) => void
 }) {
+  // Ads wave 4c — the market filter offers every market Nexus reads.
+  const { readMarkets } = useAdsMarketplace()
   const [data, setData] = useState<BindingResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -223,7 +226,7 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
           },
           {
             key: 'marketplace', label: 'Market', kind: 'multiselect',
-            options: ['IT', 'DE', 'ES', 'FR'].map((m) => ({ value: m, label: m })),
+            options: readMarkets.map((m) => ({ value: m, label: m })),
             value: (r) => (r as BindingCampaignRow).marketplace,
           },
         ]}

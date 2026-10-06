@@ -57,14 +57,20 @@ function noteRedisResult(ok: boolean): void {
   if (consecutiveFailures >= 3) { skipUntil = Date.now() + 30_000; logger.warn('[ads-cache] Redis circuit OPEN — bypassing L2 30s (L1 memory still active)') }
 }
 
-export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
+/**
+ * CM-34 / AM-34 — `refresh: true` skips both tiers' READ and stores the fresh answer, so the next ordinary read sees it.
+ *  · A screen that has just saved asks for it: the flush after a write runs on the instance that took the write, after
+ *    its answer was sent, and another instance's L1 can still hold the old values for the whole TTL.
+ *  · A screen's "Refresh view" asks for it: without it a refresh re-read an answer up to `ttlSec` old.
+ */
+export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>, opts: { refresh?: boolean } = {}): Promise<T> {
   const k = cachePrefix() + key
   // L1 — instant, always available.
-  const m = memGet(k)
+  const m = opts.refresh ? undefined : memGet(k)
   if (m !== undefined) return m as T
 
   // L2 — Redis, if reachable.
-  if (!redisDisabled()) {
+  if (!opts.refresh && !redisDisabled()) {
     try {
       const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
       noteRedisResult(true)

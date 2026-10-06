@@ -25,7 +25,6 @@ import prisma from '../../../db.js'
 import { previewRollbackOfAction, rollbackByActionLogId, rollbackByChangeSetId } from '../../advertising/rollback.service.js'
 import { setLiveWrites } from '../../advertising/campaign-settings.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
-import { pinDenial } from '../../advertising/ads-authority-pins.js'
 import { bulkUpdateAdTargetBids, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
@@ -230,8 +229,8 @@ const undoAdChange: AgentTool = {
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const rollback = p.rows.length
       ? p.source.mode === 'set'
-        ? await rollbackByChangeSetId({ changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason })
-        : await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason })
+        ? await rollbackByChangeSetId({ changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual })
+        : await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual })
       : null
     let retired: { retired: number; refused: number; failed: number } | null = null
     if (p.negatives.length) {
@@ -273,13 +272,14 @@ async function campaignForChange(campaignId: string) {
 }
 type ChangeCampaign = NonNullable<Awaited<ReturnType<typeof campaignForChange>>>
 
-/** Not found, not SP, or held by a pin on this dimension: why a change to it is refused; null when it may go on. */
-function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, dimension: 'bids' | 'budget' | 'placement'): string | null {
+/**
+ * Not found or not SP: why a change to it is refused; null when it may go on. 4A (Owner decided 2026-10-06) — a pin
+ * no longer refuses it: a change tool writes only once a person approves it, and his approval counts as his own click,
+ * which a pin (like the allowlist) does not stop. `dimension` is kept for the callers.
+ */
+function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, _dimension: 'bids' | 'budget' | 'placement'): string | null {
   if (!campaign) return `campaign ${campaignId} not found`
-  const notSp = spOnlyRefusal(campaign)
-  if (notSp) return notSp
-  const pin = pinDenial(campaign, { dimensions: [dimension] })
-  return pin ? `authority pin: ${pin.reason}${campaign.pinNote ? ` (${campaign.pinNote})` : ''}` : null
+  return spOnlyRefusal(campaign)
 }
 
 const whyArg = z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit')
@@ -298,8 +298,8 @@ async function budgetPreview(args: Record<string, unknown>): Promise<ToolResult>
   const currency = campaignCurrency(c)
   const current = Math.round(Number(c.dailyBudget) * 100)
   if (proposed === current) return { ok: false, error: `The daily budget of ${c.name} is already ${amountLabel(current, currency)}.` }
-  if (c.minBudgetCents != null && proposed < c.minBudgetCents) return { ok: false, error: `${amountLabel(proposed, currency)} is below the campaign's own minimum budget (${amountLabel(c.minBudgetCents, currency)}).` }
-  if (c.maxBudgetCents != null && proposed > c.maxBudgetCents) return { ok: false, error: `${amountLabel(proposed, currency)} is above the campaign's own maximum budget (${amountLabel(c.maxBudgetCents, currency)}).` }
+  // 3A + 4A — the campaign's own min/max budget is HIS limit: not a refusal here. The gate (asked as the approver)
+  // reports it in `reach.pastOwnLimits`, the card warns before he approves, and approving sends it anyway.
   const reach = await checkLiveReach({ campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'dailyBudget', valueCents: proposed }] })
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
@@ -377,6 +377,8 @@ const setCampaignBudget: AgentTool = {
       actor: run.actor,
       reason: run.reason,
       changeSetId: run.changeSetId,
+      manual: run.manual, // 4A — a person approved it: his own click
+      confirmOwnLimits: run.confirmOwnLimits, // 4A — his approval is his "Send anyway" (the card warned him)
     })
     if (!out.ok) return notRun(`Not run: the budget write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
     return {
@@ -511,7 +513,7 @@ const setPlacementMultipliers: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const adjustments = PLACEMENTS.filter((pl) => p.proposed[pl.key] != null).map((pl) => ({ placement: pl.placement, percentage: p.proposed[pl.key] as number }))
-    const out = await updatePlacementBidding({ campaignId: p.campaign.id, adjustments, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId })
+    const out = await updatePlacementBidding({ campaignId: p.campaign.id, adjustments, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
     if (!out.ok) return notRun(`Not run: ${out.reason ? `Amazon's write gate refused it — ${out.reason}` : 'Amazon did not accept the new adjustments'}. Nothing changed.`)
     return {
       ok: true,
@@ -620,7 +622,7 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
       continue
     }
     if (spOnlyRefusal(t.campaign)) { excluded.push({ targetId: t.id, why: 'notSponsoredProducts' }); continue }
-    if (pinDenial(t.campaign, { dimensions: ['bids'] })) { excluded.push({ targetId: t.id, why: 'pinned' }); continue }
+    // 4A — a pin does not stop a change a person approves (his own click).
     if (!(ask.bidCents >= BULK_FLOOR_CENTS)) { excluded.push({ targetId: t.id, why: 'belowFloor' }); continue }
     kept.push({ t, wanted: ask.bidCents })
   }
@@ -633,9 +635,7 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
     if (verdict === 'suppressed') return void excluded.push({ targetId: k.t.id, why: 'suppressed' })
     if (verdict === 'low-unflagged') return void excluded.push({ targetId: k.t.id, why: 'lowUnflagged' })
     if (to === k.t.bidCents) return void excluded.push({ targetId: k.t.id, why: 'unchanged' })
-    if ((k.t.campaign.minBidCents != null && to < k.t.campaign.minBidCents) || (k.t.campaign.maxBidCents != null && to > k.t.campaign.maxBidCents)) {
-      return void excluded.push({ targetId: k.t.id, why: 'outsideBounds' })
-    }
+    // 3A + 4A — the campaign's own min/max bid is HIS limit: the gate reports it (pastOwnLimits) and the card warns.
     changing.push({ t: k.t, to })
   })
   // Live reach per campaign: bounds are an interval, so the lowest and the highest new bid answer for all between.
@@ -643,12 +643,16 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
   for (const c of changing) byCampaign.set(c.t.campaign.id, [...(byCampaign.get(c.t.campaign.id) ?? []), c])
   const profiles = new Set<string>()
   const refusedCampaigns = new Map<string, string>()
+  const pastOwnLimits: Array<{ limit: string; reason: string }> = [] // 3A + 4A — for the card's warning
   for (const [campaignId, list] of [...byCampaign].sort(([x], [y]) => (x < y ? -1 : 1))) {
     const values = [...new Set([Math.min(...list.map((l) => l.to)), Math.max(...list.map((l) => l.to))])]
     for (const value of values) {
       const reach = await checkLiveReach({ campaignId, marketplace: list[0].t.campaign.marketplace, changes: [{ field: 'bid', valueCents: value }] })
       if (reach.reach === 'refused') { refusedCampaigns.set(campaignId, reach.reason); break }
-      if (reach.reach === 'live') profiles.add(reach.profileId)
+      if (reach.reach === 'live') {
+        profiles.add(reach.profileId)
+        for (const l of reach.pastOwnLimits ?? []) if (!pastOwnLimits.some((x) => x.reason === l.reason)) pastOwnLimits.push(l)
+      }
     }
   }
   const going = changing.filter((c) => !refusedCampaigns.has(c.t.campaign.id))
@@ -660,7 +664,7 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
     return { result: { ok: false, error: `Nothing would change: ${Object.entries(counts).map(([k, n]) => `${n} ${EXCLUSION_WORDS[k as Exclusion]}`).join('; ')}.` }, writes: [] }
   }
   going.sort((x, y) => (x.t.id < y.t.id ? -1 : 1))
-  const reach: StoredReach = profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(',') } : { reach: 'sandbox' }
+  const reach: StoredReach = profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(','), ...(pastOwnLimits.length ? { pastOwnLimits } : {}) } : { reach: 'sandbox' }
   const byCurrency: Record<string, { targets: number; deltaCents: number }> = {}
   for (const g of going) {
     const cur = campaignCurrency(g.t.campaign)
@@ -762,6 +766,8 @@ const bulkAdBidChange: AgentTool = {
       actor: run.actor,
       reason: run.reason,
       changeSetId: run.changeSetId,
+      manual: run.manual, // 4A
+      confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
     const ids = going.map((g) => g.targetId)
     const now = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true } })
@@ -954,7 +960,7 @@ const restoreCampaign: AgentTool = {
     const p = fresh.preview as { campaign: { id: string }; suppressedBy: string | null; reach: StoredReach; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || 'restore after a no-pause stop')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const restored = await restoreCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId })
+    const restored = await restoreCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
     const now = await suppressionState(p.campaign.id)
     const change = { before: { campaignId: p.campaign.id, suppressed: true, by: p.suppressedBy, changeSetId: run.changeSetId }, after: now }
     if (now.suppressed) {

@@ -58,8 +58,6 @@ const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
 const BUDGET_ACTOR_PREFIX = 'automation:budget-'
 
-interface CampaignLimit { campaignId: string; minCents?: number | null; maxCents?: number | null }
-
 export interface CampaignDecision {
   id: string; name: string
   currentDailyCents: number
@@ -264,7 +262,6 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     const stopNow = caps.stopCapCents != null && mtd >= caps.stopCapCents
     const capReached = caps.stopCapCents != null ? stopNow : cap > 0 && mtd >= cap
     const cal = ((p?.calendar as unknown as Array<{ day: number; pct: number }>) ?? [])
-    const limByCamp = new Map(((p?.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
 
     // CORRECTIVE, not prescriptive. Pacing exists to stop a cap being breached, so it may
     // only act when the month is actually heading past it. Rewriting every daily budget to
@@ -293,7 +290,9 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
       }
     }
 
-    const camps = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+    // CM-30 — each campaign's own Min/Max Budget (the columns the grid and the Budget Manager both write, and the write
+    // gate enforces), not the per-month copy the plan used to keep: a target outside them was refused at the gate anyway.
+    const camps = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true, minBudgetCents: true, maxBudgetCents: true } })
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
     const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
@@ -311,9 +310,8 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
           ? campMtd / spendTotal
           : curTotal > 0 ? cur / curTotal : camps.length ? 1 / camps.length : 0
         let t = Math.round(todayTarget * share)
-        const lim = limByCamp.get(c.id)
-        const minC = lim?.minCents ?? FLOOR_CENTS
-        const maxC = lim?.maxCents ?? null
+        const minC = c.minBudgetCents ?? FLOOR_CENTS
+        const maxC = c.maxBudgetCents ?? null
         if (t < minC) { t = minC; clamp = 'min' }
         if (maxC != null && t > maxC) { t = maxC; clamp = 'max' }
         if (t < FLOOR_CENTS) { t = FLOOR_CENTS; clamp = 'floor' }

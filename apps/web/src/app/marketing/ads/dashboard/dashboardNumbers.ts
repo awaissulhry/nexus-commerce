@@ -21,11 +21,11 @@ export const marginText = (points: number | null | undefined): string =>
   points == null || !Number.isFinite(points) ? '—' : pct(points / 100, 0)
 
 /**
- * An ACoS FRACTION → "38%". With no ACoS, a row that spent says "no sales" (never "0%"), and a row
- * that spent nothing says "—".
+ * An ACoS FRACTION → "38.02%" — AM-30: the Ad Manager's 2 decimals (this read "38%" beside the grid's "38.02%").
+ * With no ACoS, a row that spent says "no sales" (never "0%"), and a row that spent nothing says "—".
  */
 export const acosText = (fraction: number | null | undefined, spendCents?: number | null): string => {
-  if (fraction != null && Number.isFinite(fraction)) return pct(fraction, 0)
+  if (fraction != null && Number.isFinite(fraction)) return pct(fraction)
   return (spendCents ?? 0) > 0 ? 'no sales' : '—'
 }
 
@@ -42,10 +42,11 @@ export interface ChartPoint { date: string | undefined; spend: number; acos: num
  */
 export function chartPoint(r: TrendRowIn): ChartPoint {
   const spendCents = r.adSpendCents != null && Number.isFinite(Number(r.adSpendCents)) ? Number(r.adSpendCents) : 0
-  const acosPoints = r.acos != null && Number.isFinite(Number(r.acos)) ? Math.round(Number(r.acos)) : null
+  // AM-30 — kept to the 2 decimals trends sends (it was rounded to whole points, so the tooltip read "38%").
+  const acosPoints = r.acos != null && Number.isFinite(Number(r.acos)) ? Math.round(Number(r.acos) * 100) / 100 : null
   return { date: r.date?.slice(5), spend: spendCents / 100, acos: acosPoints, noSales: acosPoints == null && spendCents > 0 }
 }
 
-/** The chart tooltip's ACoS line: "38%", "no sales", or "—" for a day with no spend. */
+/** The chart tooltip's ACoS line: "38.02%" (AM-30), "no sales", or "—" for a day with no spend. */
 export const chartAcosText = (points: number | null | undefined, noSales: boolean): string =>
-  points == null ? (noSales ? 'no sales' : '—') : `${points}%`
+  points == null ? (noSales ? 'no sales' : '—') : pct(points / 100)

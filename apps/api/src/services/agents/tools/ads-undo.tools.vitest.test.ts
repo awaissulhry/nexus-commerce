@@ -114,11 +114,16 @@ describe('A10 — undo-ad-change puts an approved ad request back', () => {
     await sql(`UPDATE "AdvertisingActionLog" SET "createdAt" = now() - interval '2 days' WHERE id = $1`, [old.actionLogId])
     expect(await preview('undo-ad-change', { changeSetId: 'set-old' })).toMatchObject({ ok: false, error: expect.stringMatching(/older than the 24-hour undo window/) })
 
+    // 4A — an approved undo is the person's own click: the allowlist no longer refuses it (c-off is off it)…
     const off = await inside(() => updateCampaignWithSync({ campaignId: 'c-off', patch: { dailyBudget: 22 }, actor: 'user:u-operator', changeSetId: 'set-off' }))
     expect(off.ok).toBe(true)
+    // …while a market Nexus does not send to still is (UK has no checked Amazon limits row).
+    const uk = await inside(() => updateCampaignWithSync({ campaignId: 'c-uk', patch: { dailyBudget: 18 }, actor: 'user:u-operator', changeSetId: 'set-uk' }))
+    expect(uk.ok).toBe(true)
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    expect(await preview('undo-ad-change', { changeSetId: 'set-off' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Not queued: .*live-write allowlist/) })
-    expect(await ask('undo-ad-change', { changeSetId: 'set-off' })).toMatchObject({ ok: false, mode: 'error' })
+    expect(await preview('undo-ad-change', { changeSetId: 'set-off' })).toMatchObject({ ok: true })
+    expect(await preview('undo-ad-change', { changeSetId: 'set-uk' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Not queued: .*does not change ads in UK/) })
+    expect(await ask('undo-ad-change', { changeSetId: 'set-uk' })).toMatchObject({ ok: false, mode: 'error' })
   })
 
   it('a change set that moved since it was approved is not run', async () => {

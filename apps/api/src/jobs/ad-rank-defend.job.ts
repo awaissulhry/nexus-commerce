@@ -687,7 +687,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
           // disarms itself (e.g. an ASIN match fanned out to a fleet) must reach the operator.
           try {
             const { notifyAutomation } = await import('../services/advertising/ads-automation-notify.service.js')
-            await notifyAutomation({ type: 'rank_plan_mistarget', severity: 'danger', title: 'Rank plan auto-paused — blast-radius guard', body: `A rank plan resolved to ${camps.length} campaigns (cap ${plan.maxCampaigns}) for ${plan.marketplace} and was auto-disabled before it could fan out. Re-scope the plan's product/ASIN match, then re-enable.`, href: '/marketing/ads-console/rank?mode=plan', meta: { planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, resolved: camps.length, max: plan.maxCampaigns } })
+            await notifyAutomation({ type: 'rank_plan_mistarget', severity: 'danger', title: 'Rank plan auto-paused — blast-radius guard', body: `A rank plan resolved to ${camps.length} campaigns (cap ${plan.maxCampaigns}) for ${plan.marketplace} and was switched off before it could fan out. It stays off. The Rank-defend engine is switched in the Control Room.`, href: '/marketing/ads/rules-automation/control-room', meta: { planId: plan.id, productId: plan.productId, marketplace: plan.marketplace, resolved: camps.length, max: plan.maxCampaigns } })
           } catch { /* notify is best-effort */ }
         }
         continue

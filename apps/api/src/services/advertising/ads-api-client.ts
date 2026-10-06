@@ -47,6 +47,7 @@ import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
 import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
 import { assertNegativeWriteAllowed } from './ads-negation-policy.js'
 import type { SdExpression } from './sd-target-expression.js'
+import { compactDayIn, isoDayIn } from './ads-local-day.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -1827,9 +1828,11 @@ export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInpu
 
 export type CreateDryRun = { ok: true; mode: 'dry-run'; externalId: null; rawResponse: { wouldSend: { method: string; path: string; body: unknown } } }
 
-const sdDate = (d: Date): string =>
-  `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-const isoDate = (d: Date): string => d.toISOString().slice(0, 10)
+// CC-26 — the start date is the calendar day in the ACCOUNT's time zone (`timeZone`, from ads-market-time.ts). It was
+// the UTC day (SB) and the server's local day (SD; the server runs in UTC), so from 00:00 to 02:00 Italian time Amazon
+// was sent yesterday's date.
+const sdDate = (d: Date, timeZone?: string | null): string => compactDayIn(d, timeZone)
+const isoDate = (d: Date, timeZone?: string | null): string => isoDayIn(d, timeZone)
 
 /** SD tactic: T00020 = contextual product/category targeting, T00030 = audiences (views/interests). */
 export type SdTactic = 'T00020' | 'T00030'
@@ -1842,6 +1845,8 @@ export interface CreateSdCampaignInput {
   tactic?: SdTactic
   costType?: 'cpc' | 'vcpm'
   startDate?: Date
+  /** CC-26 — the account's IANA time zone: `startDate` (default now) is sent as the calendar day there. */
+  timeZone?: string | null
   portfolioId?: string
   dryRun?: boolean
 }
@@ -1851,7 +1856,7 @@ export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampai
     budgetType: 'daily',
     budget: input.dailyBudget,
     costType: input.costType ?? 'cpc',
-    startDate: sdDate(input.startDate ?? new Date()),
+    startDate: sdDate(input.startDate ?? new Date(), input.timeZone),
     state: input.state ?? 'paused',
     tactic: input.tactic ?? 'T00020',
     ...(input.portfolioId ? { portfolioId: Number(input.portfolioId) } : {}),
@@ -2122,6 +2127,8 @@ export interface CreateSbCampaignInput {
   goal?: 'PAGE_VISIT' | 'BRAND_IMPRESSION_SHARE'
   kpi?: 'CLICKS' | 'IMPRESSIONS'
   startDate?: Date
+  /** CC-26 — the account's IANA time zone: `startDate` (default now) is sent as the calendar day there. */
+  timeZone?: string | null
   portfolioId?: string
   bidOptimization?: boolean
   dryRun?: boolean
@@ -2133,7 +2140,7 @@ export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampai
       budgetType: 'DAILY',
       budget: input.dailyBudget,
       costType: 'CPC',
-      startDate: isoDate(input.startDate ?? new Date()),
+      startDate: isoDate(input.startDate ?? new Date(), input.timeZone),
       state: (input.state ?? 'paused').toUpperCase(),
       brandEntityId: input.brandEntityId,
       goal: input.goal ?? 'PAGE_VISIT',

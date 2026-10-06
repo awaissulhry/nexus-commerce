@@ -15,7 +15,7 @@ import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
-import { eur, int, pct, latestReportLabel, acosRank } from '../../campaigns/_grid/format'
+import { eur, int, pct, latestReportLabel, acosRank, money } from '../../campaigns/_grid/format'
 import '../ebay.css'
 import {
   useEbayAdsFetch, EBAY_MARKETS, useWriteMode, SandboxBanner,
@@ -97,7 +97,7 @@ export function EbayProductsRollup() {
       key: 'breakeven', label: 'Break-even', tip: 'Max profitable General ad rate = contribution margin ÷ total sale amount. Click "add cost" to enter the unit cost right here — break-even computes immediately.',
       render: (r) => {
         if (r.breakEvenAdRatePct != null) {
-          return <Button variant="link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</Button>
+          return <Button variant="link" title={`Unit cost ${r.costPriceCents != null ? money(r.costPriceCents) : '€?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</Button>
         }
         if (r.economicsStatus === 'MISSING_PRICE') return <Pill tone="neutral">no price</Pill>
         if (r.groupKey === '~unmatched') return <Button size="sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</Button>

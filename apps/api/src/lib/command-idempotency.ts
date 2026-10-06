@@ -67,7 +67,6 @@ const COMMAND_SCOPES: Record<string, string> = {
   // instead of building the campaigns a second time.
   '/api/advertising/campaign-builder/sp-super-wizard/launch': 'ads-spw-launch',
   '/api/advertising/campaign-builder/single/launch': 'ads-single-launch',
-  '/api/advertising/campaign-builder/launch': 'ads-guided-launch',
   '/api/advertising/blueprints/replicate': 'ads-replicate',
   '/api/advertising/ai-goals': 'ads-goal-create',
   '/api/advertising/ai-goals/:id/materialize': 'ads-goal-materialize',
@@ -81,7 +80,6 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/advertising/negative-targets/create': 'ads-negative-target-create',
   '/api/advertising/negative-keywords': 'ads-negative-keyword-create',
   '/api/advertising/sb-creatives/create': 'ads-sb-creative-create',
-  '/api/advertising/search-terms/promote': 'ads-search-term-promote',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

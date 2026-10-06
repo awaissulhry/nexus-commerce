@@ -28,10 +28,9 @@ import { Button } from '@/design-system/primitives/Button'
 import { Input } from '@/design-system/primitives/Input'
 import { useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
 
 interface BidPolicy { grain: string; scopeId: string; label: string; minBidCents: number | null; maxBidCents: number | null; enabled: boolean }
-
-const DEFAULT_MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 /** '' ⇄ cents. Empty string = no bound; parse refuses negatives and NaN. */
 const toEur = (cents: number | null) => (cents == null ? '' : (cents / 100).toFixed(2))
@@ -42,11 +41,14 @@ const toCents = (s: string): number | null | 'invalid' => {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 'invalid'
 }
 
-export function AdsBidSettingsModal({ open, onClose, markets = DEFAULT_MARKETS }: {
+export function AdsBidSettingsModal({ open, onClose, markets: given }: {
   open: boolean
   onClose: () => void
   markets?: string[]
 }) {
+  // Ads wave 4c — a bid band per market Nexus reads (from the connections), not per one of a fixed four.
+  const { readMarkets } = useAdsMarketplace()
+  const markets = given ?? readMarkets
   const { toast } = useToast()
   const [band, setBand] = useState<Record<string, { min: string; max: string }>>({})
   const [saved, setSaved] = useState<Record<string, { min: string; max: string }>>({})

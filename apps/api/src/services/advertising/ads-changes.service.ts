@@ -35,6 +35,8 @@ export interface ChangeRow {
   /** The campaign this change belongs to, when one is resolvable. A bid change is on an
    *  AD_TARGET, but an operator reads it as "which campaign moved". */
   campaign: { id: string; name: string | null } | null
+  /** CM-32 — the campaign's market, so a screen prints its money in that market's currency. Null when unknown. */
+  marketplace?: string | null
   field: string
   oldValue: string | null
   newValue: string | null
@@ -620,11 +622,14 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
   ])]
   if (campIds.length) {
     try {
-      const camps = await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true } })
+      const camps = await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true, marketplace: true } })
       const byId = new Map(camps.map((c) => [c.id, c.name]))
+      const marketById = new Map(camps.map((c) => [c.id, c.marketplace]))
       for (const r of items) {
         if (r.entity.type === 'CAMPAIGN') r.entity.name = byId.get(r.entity.id) ?? null
         if (r.campaign) r.campaign.name = byId.get(r.campaign.id) ?? null
+        // CM-32 — the market of the campaign the change belongs to (its money is in that market's currency).
+        r.marketplace = marketById.get(r.campaign?.id ?? (r.entity.type === 'CAMPAIGN' ? r.entity.id : '')) ?? null
       }
     } catch { /* best-effort */ }
   }

@@ -55,8 +55,7 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 // id — see `bidderByCampaign` for the defect that cost.
 import { parseActor } from './ads-changes.service.js'
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const BID_MARKETS = ['IT', 'DE', 'FR', 'ES'] as const
+// Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 export const BID_MARKET_ALL = 'all'
 
 export type BidView = 'targets' | 'campaigns'

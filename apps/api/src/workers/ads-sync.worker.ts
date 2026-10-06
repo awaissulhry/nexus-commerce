@@ -495,6 +495,8 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // 1e (CM-10) — a person's own edit passes the account halt and autonomy OFF (nothing else). Read off the queue
     // row's JSON like `force` (its only record), and only with a `user:` actor.
     manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
+    // 3A — the person's "Send anyway" past his own limits, from the same JSON; the gate honours it only with `manual`.
+    confirmOwnLimits: (row.payload as { confirmOwnLimits?: unknown } | null)?.confirmOwnLimits === true,
     // 6.1 — a budget schedule's give-back is recognised from the action log: who writes, the value it
     // replaces, and which queue row is this write's own (its log row is not part of its history).
     actor: payload.actor ?? null,

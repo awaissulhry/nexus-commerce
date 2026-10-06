@@ -50,7 +50,8 @@ import {
   chooseViewPeriod,
   type KtPeriodReason,
 } from './keyword-tracker.service.js'
-import { SOV_MARKETS, SOV_DEFAULT_WEEKS } from './share-of-voice.service.js'
+import { SOV_DEFAULT_WEEKS } from './share-of-voice.service.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 
 /** One query's market impression share, in one marketplace, on the gate's chosen week. */
 export interface SovKeywordShareRow {
@@ -149,7 +150,8 @@ export function aggregateQueryShares(rows: readonly SqpShareInput[]): Map<string
 export async function keywordMarketShares(
   opts: { markets?: readonly string[]; now?: number; lookbackDays?: number } = {},
 ): Promise<SovKeywordShareResult> {
-  const markets = opts.markets ?? SOV_MARKETS
+  // Ads wave 4c (F3) — every market Nexus reads, not a fixed four.
+  const markets = opts.markets ?? (await adsReadMarkets())
   const now = opts.now ?? Date.now()
   // The page's own default window, so the engine reads the week the report would render.
   const lookbackDays = opts.lookbackDays ?? SOV_DEFAULT_WEEKS * 7
