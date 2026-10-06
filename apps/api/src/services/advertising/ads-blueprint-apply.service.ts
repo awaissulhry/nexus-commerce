@@ -321,6 +321,10 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
 
   // One run per product per market at a time. This is the guard that makes a
   // dropped connection safe: a browser that retries finds the run it lost.
+  // PB-5a — a playbook build of this product that stopped (a deploy killed it) is marked FAILED first, so it never holds
+  // this guard for ever.
+  const { settleStoppedBuilds } = await import('./ads-playbook/build.js')
+  await settleStoppedBuilds({ market: req.marketplace, productToken: req.target.productToken })
   const inFlight = await prisma.adBlueprintApplication.findFirst({
     where: { marketplace: req.marketplace, productToken: req.target.productToken, status: 'RUNNING' },
     orderBy: { createdAt: 'desc' },

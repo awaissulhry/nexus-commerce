@@ -16,7 +16,11 @@
  * funnel, the route and the MCP tools — comes through `writeNegativeKeyword` / `writeNegativeProductTarget`, or through
  * `createNegative`, the push-only wrapper whose callers record the row themselves. One order for all of them:
  *
- *   validate  Amazon's text limits, an ASIN is a product and not a keyword, protected terms (ads-negation-policy.ts)
+ *   validate  Amazon's text limits, an ASIN is a product and not a keyword, protected terms (ads-negation-policy.ts),
+ *             and PB-6a's own-keyword rule: a negative never blocks a positive where it lands (an exact negative the
+ *             EXACT keyword of its text, a phrase negative any keyword holding its words, a negative product target
+ *             the product target of its ASIN; campaign scope: in any ad group of the campaign) — refused by name for
+ *             everyone, a person included, with the keyword it would block (ads-winner-lock.ts ownKeywordRefusal)
  *   dedupe    a standing negative with this text and match type at this level: case-insensitive, both match-type
  *             spellings. An ARCHIVED one is absent, so a retired negative can be added again. A row whose retire
  *             failed (`retiredAt` set, still ENABLED) still stands: 5f decides on status, and so does this.
@@ -48,6 +52,7 @@ import { isPersonCreate } from './ads-mutation.service.js'
 import { assertNegativeWriteAllowed, isAsin, negativeKeywordTextProblem, protectedNegativeRefusal } from './ads-negation-policy.js'
 import { checkProtectConverting, normaliseNegTerm, type ProtectConvertingConfig } from './ads-protect-converting.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
+import { ownKeywordRefusal } from './ads-winner-lock.js'
 import { adProductOf } from '@nexus/shared/ads-ad-product'
 
 export type NegativeMatchType = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
@@ -346,6 +351,7 @@ interface KeywordJob {
 async function sendKeyword(job: KeywordJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, scope, text, matchType } = job
   const invalid = keywordTextRefusal(text, matchType) ?? await protectedRefusal(text, matchType, campaign)
+    ?? await ownKeywordRefusal({ scope, adGroupId: adGroup?.id ?? null, campaignId: campaign.id }, text, matchType === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT')
   if (invalid) return { kind: 'refused', refusal: invalid }
   const pushable = !!campaign.externalCampaignId && (scope !== 'AD_GROUP' || !!adGroup?.externalAdGroupId)
   let heal: string | null = null
@@ -426,6 +432,7 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   if (!isAsin(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_an_asin', reason: `"${asin}" is not an ASIN (B0 and 8 letters or digits): a negative product target names one product.` } }
   const confirmed = job.manual === true && job.confirmOwnLimits === true
   const invalid = await protectedRefusal(asin, null, campaign, { manual: job.manual, confirmOwnLimits: job.confirmOwnLimits })
+    ?? await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: adGroup.id, campaignId: campaign.id }, asin, 'PRODUCT')
   if (invalid) return { kind: 'refused', refusal: invalid }
   let heal: string | null = null
   if (!job.pushing) {

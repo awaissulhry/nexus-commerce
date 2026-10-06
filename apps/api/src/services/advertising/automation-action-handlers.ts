@@ -831,12 +831,39 @@ async function resolveRuleSweepScope(ruleId: string): Promise<{
 // strategy's harvest and negate thresholds wherever its market, a category or a product sets them, and these
 // defaults elsewhere. A rule that sets any of them keeps its own numbers WHOLE, as before: a rule's own numbers win
 // over the strategy (the Owner's control rule).
+// PB-6a — winners stay (the Owner's rule 2), for every stored rule as for a playbook's:
+//   · `mode` binds: 'harvest' graduates only, 'negative' negates waste only, absent or 'both' runs both (the wizard and
+//     AI-goal rules each wrote one of each, and each ran both halves with its own numbers);
+//   · `v: 2` lists are literal ([] = none); a stored v1 rule keeps "empty = EXACT";
+//   · the lock (applyHarvest's `rule`): a term at home among its product's ad groups is not created again, and its
+//     source is closed only once that home meets the harvest bar there (unless a source says `negateOnLanding`); a bid
+//     the rule does not name is the term's CPC inside the band (L1, never a negative over a keyword of its ad group,
+//     binds every writer in the negative write service);
+//   · a dry run lists its `items`, refused winners included; an accepted card (the proposal merges the output) applies
+//     only those whose step is still the card's;
+//   · `cadenceDays`: a rule that swept within that many days proposes nothing until then.
 ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<ActionResult> => {
   const ownNumbers = ['windowDays', 'minSpendCents', 'minOrders'].some((key) => typeof action[key] === 'number')
   const windowDays = typeof action.windowDays === 'number' ? action.windowDays : HARVEST_DEFAULTS.windowDays
   const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : HARVEST_DEFAULTS.minSpendCents
   const minOrders = typeof action.minOrders === 'number' ? action.minOrders : HARVEST_DEFAULTS.minOrders
-  const { previewHarvest, applyHarvest } = await import('./ads-harvest.service.js')
+  const { previewHarvest, applyHarvest, planRuleHarvest, harvestItemKey, planList } = await import('./ads-harvest.service.js')
+  const mode = action.mode === 'harvest' || action.mode === 'negative' ? action.mode : 'both'
+  const literal = action.v === 2
+  const items = Array.isArray(action.items) ? (action.items as Array<{ kind: string; query: string; externalAdGroupId: string; step?: string; why?: string }>) : null
+
+  // PB-6a — the cadence: a sweep within `cadenceDays` (a run that was not itself held back by it) holds this one back.
+  // An accepted card is never held back: a person decided it.
+  const cadenceDays = typeof action.cadenceDays === 'number' && action.cadenceDays > 0 ? action.cadenceDays : null
+  if (cadenceDays && !items) {
+    const recent = await prisma.automationRuleExecution.findMany({
+      where: { ruleId: meta.ruleId, startedAt: { gte: new Date(Date.now() - cadenceDays * 86400_000) } },
+      select: { actionResults: true }, take: 50,
+    })
+    const swept = recent.some((ex) => Array.isArray(ex.actionResults) && (ex.actionResults as Array<{ type?: string; output?: { cadenceHeld?: unknown } } | null>)
+      .some((r) => r?.type === action.type && r.output?.cadenceHeld == null))
+    if (swept) return { type: action.type, ok: true, output: { noChange: true, cadenceHeld: true, why: `This rule sweeps once every ${cadenceDays} day${cadenceDays === 1 ? '' : 's'}, and it swept within that time.` } }
+  }
 
   // AT.4b — if the rule carries wizard `sources` (per-ad-group harvest scope +
   // graduate/negate match types), scope harvesting to those ad groups and honor
@@ -844,11 +871,10 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   // "Auto harvest & negate" template). Scope uses live external ad-group ids, so a
   // rule whose campaigns are still gated/local resolves to [] and harvests nothing.
   const rawSources = (action as unknown as { sources?: unknown }).sources
-  const sources = Array.isArray(rawSources)
-    ? (rawSources as Array<{ adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean; graduateProduct?: boolean; negateProduct?: boolean }>)
-    : null
+  type RuleSource = { adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean; graduateProduct?: boolean; negateProduct?: boolean; destinations?: Record<string, string | null>; negateOnLanding?: boolean; bid?: { mode?: unknown; value?: unknown } }
+  const sources = Array.isArray(rawSources) ? (rawSources as RuleSource[]) : null
   let adGroupExternalIds: string[] | undefined
-  let plan: Record<string, { graduate?: string[]; negate?: string[]; graduateProduct?: boolean; negateProduct?: boolean }> | undefined
+  let plan: import('./ads-harvest.service.js').HarvestPlan | undefined
   if (sources && sources.length) {
     const localIds = sources.filter((s) => s.adGroupId).map((s) => s.adGroupId as string)
     const ags = localIds.length ? await prisma.adGroup.findMany({ where: { id: { in: localIds } }, select: { id: true, externalAdGroupId: true } }) : []
@@ -858,9 +884,26 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     // H.5 — forward the product flags (graduateProduct/negateProduct) so the engine harvests ASINs too.
     for (const s of sources) {
       const ext = s.adGroupId ? extById.get(s.adGroupId) : null
-      if (ext) plan[ext] = { graduate: s.graduate, negate: s.negate, graduateProduct: s.graduateProduct, negateProduct: s.negateProduct }
+      if (ext) {
+        plan[ext] = {
+          graduate: s.graduate, negate: s.negate, graduateProduct: s.graduateProduct, negateProduct: s.negateProduct,
+          ...(literal ? { literal: true } : {}),
+          ...(s.destinations && typeof s.destinations === 'object' ? { destinations: s.destinations } : {}),
+          ...(typeof s.negateOnLanding === 'boolean' ? { negateOnLanding: s.negateOnLanding } : {}),
+          ...(s.bid && typeof s.bid === 'object' ? { bid: s.bid } : {}),
+        }
+      }
     }
   }
+  // H.2 — destination map (matchType → destination local ad group) carried by the wizard rule, so a
+  // graduated keyword promotes into the campaign that hosts that match type instead of its source.
+  const rawDestinations = (action as unknown as { destinations?: Record<string, string> }).destinations
+  const destinations = rawDestinations && typeof rawDestinations === 'object' ? rawDestinations : undefined
+  // PB-6a (L2) — where a term's home is looked up: every ad group of the SAME product in its market (the products the
+  // rule's own sources advertise, with their sibling variants; a rule without sources: the term's own source's), plus
+  // a compiled rule's own slots. Never another product's ad groups (rule 3).
+  const homeScope = Array.isArray(action.homeScope) ? (action.homeScope as unknown[]).filter((id): id is string => typeof id === 'string') : undefined
+  const ownAdGroups = sources ? sources.map((s) => s.adGroupId).filter((id): id is string => typeof id === 'string' && !!id) : undefined
 
   // ACR.7b — a drag-bound rule sweeps only inside its binding. When the wizard ALSO scoped
   // it to specific ad groups, the binding still bounds the sweep: intersect, never widen.
@@ -871,54 +914,121 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       : sweep.adGroupExternalIds
   }
 
-  const preview = ownNumbers
-    ? await previewHarvest({ windowDays, minSpendCents, minOrders, adGroupExternalIds })
-    : await previewHarvest({ defaults: { ...HARVEST_DEFAULTS }, adGroupExternalIds })
+  const criteriaOpts = ownNumbers ? { windowDays, minSpendCents, minOrders } : { defaults: { ...HARVEST_DEFAULTS } }
+  const preview = await previewHarvest({ ...criteriaOpts, adGroupExternalIds })
   // W1-7 — which numbers chose the candidates, and the protected products' ASINs left out, said on every run.
   const criteria = { thresholdsFrom: ownNumbers ? 'rule' : 'strategy-and-defaults', ...(preview.criteria.strategy.length ? { strategy: preview.criteria.strategy } : {}) }
   const protectedOut = preview.protectedAsins.length
     ? { protectedProducts: preview.protectedAsins.length, topProtected: preview.protectedAsins.slice(0, 5).map((p) => ({ query: p.query, why: p.reason })) }
     : {}
+  /** A list said in full: its count, and its first five. */
+  const listed = <T,>(key: string, list: T[]) => (list.length ? { [key]: list.length, [`top${key[0].toUpperCase()}${key.slice(1)}`]: list.slice(0, 5) } : {})
+
+  // PB-6a — this rule's half, its sources' own lists, and the product flags (applyHarvest acts on a product candidate
+  // only where its row opts in, so a dry run no longer counts the others).
+  const wants = (ext: string, key: 'graduate' | 'negate') => planList(plan?.[ext], key).length > 0
+  let negatives = mode === 'harvest' ? [] : preview.negatives.filter((c) => wants(c.externalAdGroupId, 'negate'))
+  let graduations: Array<(typeof preview.graduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.graduations.filter((c) => wants(c.externalAdGroupId, 'graduate'))
+  let productNegatives = mode === 'harvest' ? [] : preview.productNegatives.filter((c) => plan?.[c.externalAdGroupId]?.negateProduct === true)
+  let productGraduations: Array<(typeof preview.productGraduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.productGraduations.filter((c) => plan?.[c.externalAdGroupId]?.graduateProduct === true)
+  const rule = { homeScope, ownAdGroups, criteria: criteriaOpts }
+
+  // PB-6a — an accepted card: only its items, each planned again on today's data and applied only when its step is the
+  // card's (a create never turns into a source negation, nor the reverse; a refused winner is never applied).
+  const notApplied: Array<{ query: string; externalAdGroupId: string; why: string }> = []
+  if (items) {
+    const wanted = new Set(items.map(harvestItemKey))
+    const named = <T extends { query: string; externalAdGroupId: string }>(kind: string, list: T[]) => list.filter((c) => wanted.has(harvestItemKey({ kind, ...c })))
+    const fresh = await planRuleHarvest({
+      negatives: named('negative', negatives), graduations: named('graduation', graduations),
+      productNegatives: named('productNegative', productNegatives), productGraduations: named('productGraduation', productGraduations),
+      plan, destinations, rule,
+    })
+    const today = new Map(fresh.items.map((i) => [harvestItemKey(i), i]))
+    const verb = { negate: 'negate it', create: 'create its keyword', handover: 'negate it in its source', refused: 'refuse it' } as const
+    const apply = new Map<string, 'negate' | 'create' | 'handover'>()
+    for (const i of items) {
+      const now = today.get(harvestItemKey(i))
+      const why = !now
+        ? 'It no longer meets the bar on today\'s data, or it is already where it should be, so it was left alone.'
+        : i.step === 'refused' || now.step === 'refused'
+          ? `Nothing can be done for it: ${now.why ?? i.why ?? 'it was refused'}`
+          : now.step !== i.step
+            ? `The card proposed to ${verb[i.step as keyof typeof verb] ?? i.step}; on today's data the rule would ${verb[now.step]}, so nothing was done. The next card proposes it again.`
+            : null
+      if (why) notApplied.push({ query: i.query, externalAdGroupId: i.externalAdGroupId, why })
+      else apply.set(harvestItemKey(i), now!.step as 'negate' | 'create' | 'handover')
+    }
+    const take = <T extends { query: string; externalAdGroupId: string }>(kind: string, list: T[]) =>
+      list.filter((c) => apply.has(harvestItemKey({ kind, ...c }))).map((c) => ({ ...c, step: apply.get(harvestItemKey({ kind, ...c })) as 'create' | 'handover' }))
+    negatives = take('negative', negatives); graduations = take('graduation', graduations)
+    productNegatives = take('productNegative', productNegatives); productGraduations = take('productGraduation', productGraduations)
+  }
+
   if (meta.dryRun) {
+    const planned = await planRuleHarvest({ negatives, graduations, productNegatives, productGraduations, plan, destinations, rule })
+    const steps = (step: string, kinds: string[]) => planned.items.filter((i) => i.step === step && kinds.includes(i.kind)).length
+    const refused = planned.items.filter((i) => i.step === 'refused').map((i) => ({ query: i.query, externalAdGroupId: i.externalAdGroupId, why: i.why }))
     return {
       type: action.type,
       ok: true,
       output: {
         dryRun: true,
+        mode,
         scoped: !!sources || sweep.scoped,
         ruleScope: sweep.scoped ? { adGroups: sweep.adGroupExternalIds.length, campaigns: sweep.campaignIds.length } : null,
-        // H.4 — nothing to harvest this tick → noChange, so the Suggestions generator skips an empty card.
-        noChange: preview.negatives.length === 0 && preview.graduations.length === 0 && preview.productNegatives.length === 0 && preview.productGraduations.length === 0,
-        wouldNegate: preview.negatives.length,
-        wouldGraduate: preview.graduations.length,
-        wouldGraduateProduct: preview.productGraduations.length,
-        wouldNegateProduct: preview.productNegatives.length,
-        topNegatives: preview.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
-        topGraduations: preview.graduations.slice(0, 5).map((g) => ({ query: g.query, orders: g.orders })),
+        // H.4 — nothing to harvest this tick → noChange, so the Suggestions generator skips an empty card. PB-6a — a
+        // winner the rule would refuse is listed (with why), so a card is never empty while winners wait.
+        noChange: planned.items.length === 0,
+        wouldNegate: steps('negate', ['negative']),
+        wouldGraduate: steps('create', ['graduation']),
+        wouldGraduateProduct: steps('create', ['productGraduation']),
+        wouldNegateProduct: steps('negate', ['productNegative']),
+        // PB-6a (L4) — terms whose home now meets the harvest bar: negated in their source, nothing created.
+        wouldHandOver: steps('handover', ['graduation', 'productGraduation']),
+        wouldRefuse: refused.length,
+        topNegatives: planned.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
+        topGraduations: planned.graduations.slice(0, 5).map((g) => ({ query: g.query, orders: g.orders })),
+        // PB-6a — what an accept applies: these, and only these, each at its step (≤ 200; the rest come on the next run).
+        itemCount: planned.items.length,
+        items: planned.items.slice(0, 200),
+        ...(planned.items.length > 200 ? { itemsLeftForNextRun: planned.items.length - 200 } : {}),
+        ...listed('refused', refused),
+        ...listed('keptHome', planned.keptHome),
+        ...listed('blockedOwnKeyword', planned.blockedOwnKeyword),
+        ...(planned.alreadyStanding ? { alreadyStanding: planned.alreadyStanding } : {}),
         ...criteria,
         ...protectedOut,
       },
     }
   }
-  // H.2 — destination map (matchType → destination local ad group) carried by the wizard rule, so a
-  // graduated keyword promotes into the campaign that hosts that match type instead of its source.
-  const destinations = (action as unknown as { destinations?: Record<string, string> }).destinations
+  if (items && !negatives.length && !graduations.length && !productNegatives.length && !productGraduations.length) {
+    return {
+      type: action.type, ok: true,
+      output: { skipped: 'no-longer-due', why: `none of the card's ${items.length} term${items.length === 1 ? '' : 's'} can be applied as proposed on today's data, so nothing was written`, ...listed('notApplied', notApplied), ...criteria },
+    }
+  }
+  const bid = typeof action.graduationBidEur === 'number' ? { bidEur: action.graduationBidEur } : {}
   const result = await applyHarvest({
-    negatives: preview.negatives,
-    graduations: preview.graduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
-    productNegatives: preview.productNegatives,
-    productGraduations: preview.productGraduations.map((g) => ({ ...g, bidEur: typeof action.graduationBidEur === 'number' ? action.graduationBidEur : 0.5 })),
+    negatives,
+    graduations: graduations.map((g) => ({ ...g, ...bid })),
+    productNegatives,
+    productGraduations: productGraduations.map((g) => ({ ...g, ...bid })),
     userId: `automation:${meta.ruleId}`,
     plan,
-    destinations: destinations && typeof destinations === 'object' ? destinations : undefined,
+    destinations,
     // NEG.0(a) — carry the rule's own toggle through. Absent means ON, in the service as here.
     protectConverting: (action as unknown as { protectConverting?: boolean }).protectConverting,
     protectDays: (action as unknown as { protectDays?: number }).protectDays,
+    rule,
   })
+  const keptHome = result.outcomes.filter((o) => o.refusal?.deniedAt === 'already_home').map((o) => ({ query: o.query, why: o.refusal!.reason }))
+  const blocked = result.negativeOutcomes.filter((o) => o.refusal?.deniedAt === 'own_keyword').map((o) => ({ query: o.query, why: o.reason }))
   return {
     type: action.type,
-    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated + result.productsGraduated + result.productNegativesAdded > 0,
+    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated + result.productsGraduated + result.productNegativesAdded + result.isolationNegativesAdded > 0,
     output: {
+      mode,
       negativesAdded: result.negativesAdded,
       keywordsGraduated: result.keywordsGraduated,
       isolationNegativesAdded: result.isolationNegativesAdded,
@@ -927,6 +1037,10 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       // A refusal that never leaves the service is the same silent skip in a different file.
       negativesProtected: result.negativesProtected,
       protectedTerms: result.protectedTerms.slice(0, 5),
+      ...listed('keptHome', keptHome),
+      ...listed('blockedOwnKeyword', blocked),
+      ...listed('notApplied', notApplied),
+      errorCount: result.errors.length,
       errors: result.errors.slice(0, 5),
       ...criteria,
       ...protectedOut,
@@ -1311,6 +1425,9 @@ ACTION_HANDLERS.add_negative_phrase = makeAddNegativeHandler('NEGATIVE_PHRASE')
 //   · an ASIN search term becomes a PRODUCT target (an asin expression), never a keyword.
 //   · `negateInSource` adds the source's isolation negative only AFTER the term landed in
 //     ANOTHER ad group (`isolateInSource`).
+// PB-6a — winners stay: a term that already lives as a keyword (or product target) of the SAME product in its market is
+// not created again, and the source is negated only once that home meets the harvest bar there (handover "proven");
+// a fresh landing keeps the term running where it converts until then.
 
 /** 5d — what an account-wide landing needs to know about the term's source ad group. */
 const HARVEST_SOURCE_SELECT = {
@@ -1366,17 +1483,23 @@ async function accountWideLanding(src: HarvestSource, asin: boolean): Promise<{ 
   return { refuse: `No harvest destination is set for ${kind}${market ? ` in ${market}` : ''}, and this search term came from an ad group in ${where}, which cannot take a ${what}. Nothing was created. Set a destination on the Keyword Harvest tab.` }
 }
 
-/** 5d — what a dry run says about the isolation negative: it can only follow a landing in another ad group. */
-function isolationPreview(srcId: string, asin: boolean, wouldLandIn: string[]): Record<string, unknown> {
+/**
+ * 5d — what a dry run says about the isolation negative. PB-6a (L4, handover "proven") — it follows only a home elsewhere
+ * that meets the harvest bar there; a term that would land elsewhere now keeps running in its source until then.
+ */
+function isolationPreview(srcId: string, asin: boolean, wouldLandIn: string[], provenHomeId: string | null): Record<string, unknown> {
   const matchType = asin ? 'PRODUCT' : 'NEGATIVE_EXACT'
-  if (wouldLandIn.some((id) => id !== srcId)) {
-    return { wouldNegate: true, adGroupId: srcId, matchType, when: 'only after the term has landed in another ad group' }
-  }
+  if (provenHomeId) return { wouldNegate: true, adGroupId: srcId, matchType, when: 'its home elsewhere meets the harvest bar there', homeAdGroupId: provenHomeId }
   return {
     wouldNegate: false, adGroupId: srcId, matchType,
-    reason: wouldLandIn.length ? 'The term would land only in the ad group it came from, so the source would not be negated.' : 'Nothing would be created, so the source would not be negated.',
+    reason: wouldLandIn.some((id) => id !== srcId)
+      ? KEEPS_RUNNING
+      : wouldLandIn.length ? 'The term would land only in the ad group it came from, so the source would not be negated.' : 'Nothing would be created, so the source would not be negated.',
   }
 }
+
+/** PB-6a (L4) — a term that lands elsewhere keeps running where it converts until its new keyword proves itself. */
+const KEEPS_RUNNING = 'The term lands in another ad group and keeps running in its source until the new keyword meets the harvest bar there; only then is the source negated.'
 
 /**
  * 5d (review 7.3, Owner decision D4) — the source's isolation negative, once the term LANDED at
@@ -1475,6 +1598,12 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
   const landedIn: string[] = [] // ad groups where the term is now confirmed at Amazon
   let confirmed = 0
   let failedWrites = 0
+  // PB-6a (L2) — the term's home among the SAME product's ad groups in its market (the source's products, with their
+  // sibling variants): it is never created again elsewhere. Another product's keyword is never a home (rule 3).
+  const { familyAdGroups, homeOf, positivesIn, productFamilyOf } = await import('./ads-winner-lock.js')
+  const productScope = await familyAdGroups(await productFamilyOf([src.id]), src.campaign?.marketplace ?? null)
+  const positives = [...(await positivesIn([...productScope, src.id, ...targets.map((t) => t.adGroupId)])).values()].flat()
+  const homes: Array<{ adGroupId: string }> = []
   for (const target of targets) {
     const agDefault = bidMode === 'adGroupDefault'
       ? await prisma.adGroup.findUnique({ where: { id: target.adGroupId }, select: { defaultBidCents: true } }).then((g) => (g?.defaultBidCents != null ? g.defaultBidCents / 100 : null))
@@ -1484,6 +1613,12 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
       // only on the keyword ticks. Named skips: the other types on the same mapping are still processed.
       if (asin !== (matchType === 'ASIN')) {
         outcomes.push({ adGroupId: target.adGroupId, matchType, skipped: asin ? 'an ASIN is a product, not a keyword: it is created only where the product type is ticked' : 'a product target needs an ASIN; this term is a keyword' })
+        continue
+      }
+      const home = homeOf(query, positives, asin ? undefined : (matchType as 'EXACT' | 'PHRASE'))
+      if (home) {
+        homes.push(home)
+        outcomes.push({ adGroupId: target.adGroupId, matchType, skipped: 'already-home', homeAdGroupId: home.adGroupId, why: `it already lives as ${asin ? 'a product target' : `a ${matchType.toLowerCase()} keyword`} in this product's campaigns${home.live ? '' : ' (not yet live at Amazon)'}, so it is not created again` })
         continue
       }
       if (wire?.dedupe) {
@@ -1523,11 +1658,22 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
     }
   }
 
-  // 4 — negate-in-source (5d): previewed in a dry run, written only after a landing in another ad group.
+  // 4 — negate-in-source (5d). PB-6a (L4, handover "proven"): only once the term's home elsewhere meets the harvest bar
+  // there (the ads strategy's harvest group for that ad group, else the harvest defaults); a fresh landing keeps the term
+  // running where it converts until then.
   let isolation: Record<string, unknown> | null = null
   let isolationFailed = false
   if (action.negateInSource === true) {
-    if (meta.dryRun) isolation = isolationPreview(src.id, asin, outcomes.filter((o) => o.wouldCreate === true).map((o) => String(o.adGroupId)))
+    const away = homes.filter((h) => h.adGroupId !== src.id)
+    const { homeWinners, winnerKey } = await import('./ads-harvest.service.js')
+    const winners = away.length ? await homeWinners(away.map((h) => ({ term: query, adGroupId: h.adGroupId })), { defaults: { ...HARVEST_DEFAULTS } }) : new Set<string>()
+    const proven = away.find((h) => winners.has(winnerKey(query, h.adGroupId)))?.adGroupId ?? null
+    if (meta.dryRun) {
+      isolation = isolationPreview(src.id, asin, outcomes.filter((o) => o.wouldCreate === true).map((o) => String(o.adGroupId)), proven)
+      // A handover alone is a change to propose: the negative it would create in the source.
+      if (proven) outcomes.push({ adGroupId: src.id, matchType: asin ? 'PRODUCT' : 'NEGATIVE_EXACT', wouldCreate: true, handover: true, why: 'its home elsewhere meets the harvest bar there, so the source is negated' })
+    } else if (proven) ({ isolation, failed: isolationFailed } = await isolateInSource({ srcId: src.id, query, asin, landedIn: [proven], ruleId: meta.ruleId, evidence, approval: meta.approval }))
+    else if (landedIn.some((id) => id !== src.id)) isolation = { adGroupId: src.id, matchType: asin ? 'PRODUCT' : 'NEGATIVE_EXACT', attempted: false, reason: KEEPS_RUNNING }
     else ({ isolation, failed: isolationFailed } = await isolateInSource({ srcId: src.id, query, asin, landedIn, ruleId: meta.ruleId, evidence, approval: meta.approval }))
   }
 

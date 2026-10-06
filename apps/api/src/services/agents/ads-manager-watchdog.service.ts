@@ -1,0 +1,223 @@
+/**
+ * ADS AUTONOMY W4-2 — the watchdog of the daily Claude ads run (agent-results/6 §8): the Owner hears it when a run
+ * never reported, or started and never ended. A routine on claude.ai shows green when its session merely started and
+ * stopped; Nexus is where the report lands, so Nexus is where its absence is noticed.
+ *
+ *   expected time   per business, a wall-clock time and a time zone ("08:00", "Europe/Rome") by which the day's run
+ *                   reports its end; none = the missing-report check is off (the default). Kept in AgentMemory (scope
+ *                   claude-ads-manager, key expectedReport): an existing business-scoped store, no migration. Set with
+ *                   the set-ads-report-time tool, which a person approves.
+ *   missing report  no finish or fail of a run by the expected time + 30 minutes, since the day before's deadline → one
+ *                   danger notice and one e-mail (claude-alerts.service.ts). A report that waits for a person in
+ *                   Approvals counts as arrived: the run did report.
+ *   started, no end the runs that started 2 hours ago or more and reported no end → one danger notice and one e-mail a
+ *                   tick, naming them all.
+ *
+ * Each alert is raised once (the alerted moments and runs are kept in AgentMemory key `watchdog`). The cron
+ * (jobs/claude-ads-run-watchdog.job.ts) runs hourly through lib/cron/clustered.ts, which runs it inside EACH business's
+ * own context with business profiles on: every read and write here is that business's only (row-level security).
+ */
+
+import type { Prisma } from '@nexus/database'
+import prisma from '../../db.js'
+import { ADS_MANAGER_AGENT_KEY, knownTimeZone, REPORT_TIME, WATCHDOG_NOTICE_TYPE } from './ads-manager-constants.js'
+import { alertBusiness, type AlertOutcome } from './claude-alerts.service.js'
+
+// Read while loading: from the leaf (ads-manager-constants.ts), never from a module of the tool registry's cycle.
+export { knownTimeZone, WATCHDOG_NOTICE_TYPE }
+
+/** How late a report may be before the Owner hears of it. */
+export const REPORT_GRACE_MS = 30 * 60_000
+/** How long a started run may go without reporting its end. */
+export const STUCK_AFTER_MS = 2 * 3600_000
+/** A started run older than this is no longer looked at (it was alerted, or it predates the watchdog). */
+const STUCK_LOOKBACK_MS = 26 * 3600_000
+const SETTINGS = { scope: ADS_MANAGER_AGENT_KEY, entityType: 'business', entityId: 'settings' } as const
+const EXPECTED_KEY = 'expectedReport'
+const STATE_KEY = 'watchdog'
+const HREF = '/settings/ai/claude'
+
+export interface ExpectedReport {
+  /** HH:MM, 24-hour, on the business's own clock. */
+  time: string
+  /** An IANA time zone (Europe/Rome). */
+  timeZone: string
+}
+
+
+// ── The setting ────────────────────────────────────────────────────────────────────────────────────
+
+async function memoryRow(key: string) {
+  return prisma.agentMemory.findFirst({ where: { ...SETTINGS, key }, select: { id: true, value: true, updatedAt: true } })
+}
+
+async function writeMemory(key: string, value: unknown, by: string | null): Promise<void> {
+  const row = await memoryRow(key)
+  const data = { value: value as Prisma.InputJsonValue, updatedBy: by }
+  if (row) await prisma.agentMemory.update({ where: { id: row.id }, data })
+  else await prisma.agentMemory.create({ data: { ...SETTINGS, key, ...data } })
+}
+
+function expectedOf(value: unknown): ExpectedReport | null {
+  const v = value as Partial<ExpectedReport> | null
+  return v && typeof v.time === 'string' && REPORT_TIME.test(v.time) && typeof v.timeZone === 'string' && knownTimeZone(v.timeZone)
+    ? { time: v.time, timeZone: v.timeZone }
+    : null
+}
+
+/** The business's expected report time, and when it was last set; null = the missing-report check is off. */
+export async function readExpectedReport(): Promise<(ExpectedReport & { setAt: Date }) | null> {
+  const row = await memoryRow(EXPECTED_KEY)
+  const expected = expectedOf(row?.value)
+  return expected && row ? { ...expected, setAt: row.updatedAt } : null
+}
+
+/** Set (or, with null, switch off) the expected report time. */
+export async function writeExpectedReport(value: ExpectedReport | null, by: string | null): Promise<void> {
+  if (value) {
+    await writeMemory(EXPECTED_KEY, value, by)
+    return
+  }
+  const row = await memoryRow(EXPECTED_KEY)
+  if (row) await prisma.agentMemory.delete({ where: { id: row.id } })
+}
+
+// ── Wall-clock time in a zone (pure) ──────────────────────────────────────────────────────────────
+
+/** How far a zone's wall clock is ahead of UTC at a moment, in ms. */
+function zoneOffsetMs(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(at)
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0)
+  const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'))
+  return wall - Math.floor(at.getTime() / 1000) * 1000
+}
+
+/** The calendar day of a moment in a zone. */
+function dayIn(at: Date, timeZone: string): { y: number; m: number; d: number } {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at).split('-').map(Number)
+  return { y, m, d }
+}
+
+/** The moment a wall-clock time on a calendar day has in a zone (a time a DST change skips lands an hour later). */
+export function zonedMoment(day: { y: number; m: number; d: number }, time: string, timeZone: string): Date {
+  const [hh, mm] = time.split(':').map(Number)
+  const wall = Date.UTC(day.y, day.m - 1, day.d, hh, mm)
+  const first = wall - zoneOffsetMs(new Date(wall), timeZone)
+  return new Date(wall - zoneOffsetMs(new Date(first), timeZone))
+}
+
+const shift = (day: { y: number; m: number; d: number }, days: number) => {
+  const at = new Date(Date.UTC(day.y, day.m - 1, day.d + days))
+  return { y: at.getUTCFullYear(), m: at.getUTCMonth() + 1, d: at.getUTCDate() }
+}
+
+/** How long before its due time a report counts for that day: a late report of the day before never does. */
+export const REPORT_LOOKBACK_MS = 12 * 3600_000
+
+/**
+ * The newest expected moment whose deadline (+ 30 min) has passed at `now`, and the one the day before. The report of
+ * `due` is one that arrived in the 12 hours before it or by its deadline (`since` → `deadline`), so a report that came
+ * late for the day before — after that deadline, alerted already — does not stand for this one.
+ */
+export function lastDeadline(now: Date, expected: ExpectedReport): { due: Date; previous: Date; deadline: Date; since: Date } {
+  const today = dayIn(now, expected.timeZone)
+  let day = today
+  let due = zonedMoment(day, expected.time, expected.timeZone)
+  if (due.getTime() + REPORT_GRACE_MS > now.getTime()) {
+    day = shift(today, -1)
+    due = zonedMoment(day, expected.time, expected.timeZone)
+  }
+  const previous = zonedMoment(shift(day, -1), expected.time, expected.timeZone)
+  const previousDeadline = previous.getTime() + REPORT_GRACE_MS
+  return { due, previous, deadline: new Date(due.getTime() + REPORT_GRACE_MS), since: new Date(Math.max(previousDeadline, due.getTime() - REPORT_LOOKBACK_MS)) }
+}
+
+const clock = (at: Date, timeZone: string) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at)
+
+// ── One tick, in one business ─────────────────────────────────────────────────────────────────────
+
+interface WatchdogState { missed: string[]; stuck: string[] }
+
+async function stateOf(): Promise<WatchdogState> {
+  const value = (await memoryRow(STATE_KEY))?.value as Partial<WatchdogState> | null
+  return { missed: Array.isArray(value?.missed) ? value.missed.map(String) : [], stuck: Array.isArray(value?.stuck) ? value.stuck.map(String) : [] }
+}
+
+/**
+ * Did a run report its end in this window? A finished or failed run does; a withdrawn one (cancelled) never does.
+ * report-ads-run records at once (a journal); where a business's own tool policy makes a report wait for a person, the
+ * request still waiting (or about to run) counts too — the run did report. Once it ran, its run record answers.
+ */
+async function reportArrived(since: Date, deadline: Date): Promise<boolean> {
+  const [ended, asked] = await Promise.all([
+    prisma.agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY, endedAt: { gt: since, lte: deadline }, status: { in: ['done', 'failed'] } } }),
+    prisma.agentApproval.count({
+      where: {
+        toolName: 'report-ads-run', status: { in: ['pending', 'scheduled', 'executing'] }, requestedAt: { gt: since, lte: deadline },
+        OR: [{ args: { path: ['op'], equals: 'finish' } }, { args: { path: ['op'], equals: 'fail' } }],
+      },
+    }),
+  ])
+  return ended + asked > 0
+}
+
+export interface WatchdogTick {
+  expected: ExpectedReport | null
+  missing: { due: string; alert: AlertOutcome } | null
+  /** The runs found started without an end this tick: ONE alert names them all. */
+  stuck: { runIds: string[]; alert: AlertOutcome } | null
+}
+
+/** One watchdog tick in the business the caller is in. Idempotent: each alert is raised once. */
+export async function runWatchdogOnce(now = new Date()): Promise<WatchdogTick> {
+  const [expected, state] = await Promise.all([readExpectedReport(), stateOf()])
+  const tick: WatchdogTick = { expected: expected ? { time: expected.time, timeZone: expected.timeZone } : null, missing: null, stuck: null }
+  const zone = expected?.timeZone ?? 'Europe/Rome'
+
+  // A run that started 2 hours ago or more and reported no end.
+  const stuck = await prisma.agentRun.findMany({
+    where: { agentKey: ADS_MANAGER_AGENT_KEY, status: 'running', createdAt: { lte: new Date(now.getTime() - STUCK_AFTER_MS), gte: new Date(now.getTime() - STUCK_LOOKBACK_MS) } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, createdAt: true },
+  })
+  const late = stuck.filter((r) => !state.stuck.includes(r.id))
+  if (late.length) {
+    const which = late.map((run) => `started at ${clock(run.createdAt, zone)} (${zone}), run ${run.id}`)
+    const alert = await alertBusiness({
+      type: WATCHDOG_NOTICE_TYPE,
+      title: late.length === 1 ? 'Claude ads: a daily run started and did not finish' : `Claude ads: ${late.length} daily runs started and did not finish`,
+      body: `${late.length === 1 ? 'A daily Claude ads run has' : `${late.length} daily Claude ads runs have`} reported no end in 2 hours: ${which.slice(0, 10).join('; ')}.\n`
+        + 'Open the run on claude.ai to read why. Anything it asked for that waits for a person is in Nexus Approvals.',
+      href: HREF,
+      meta: { runIds: late.map((run) => run.id), check: 'started-no-end' },
+    })
+    tick.stuck = { runIds: late.map((run) => run.id), alert }
+    state.stuck.push(...late.map((run) => run.id))
+  }
+
+  // No report by the expected time + 30 minutes. A setting newer than that deadline does not look back at it.
+  if (expected) {
+    const window = lastDeadline(now, expected)
+    const key = window.due.toISOString()
+    if (expected.setAt <= window.deadline && !state.missed.includes(key) && !(await reportArrived(window.since, window.deadline))) {
+      const alert = await alertBusiness({
+        type: WATCHDOG_NOTICE_TYPE,
+        title: 'Claude ads: the daily run did not report',
+        body: `Nexus expected the daily Claude ads run to report by ${expected.time} (${expected.timeZone}), with 30 minutes' grace; no report arrived.\n`
+          + 'Open the routine on claude.ai and press Run now. If the Claude connection was ended, reconnect it with your authenticator code.',
+        href: HREF,
+        meta: { due: key, check: 'no-report' },
+      })
+      tick.missing = { due: key, alert }
+      state.missed.push(key)
+    }
+  }
+
+  if (tick.missing || tick.stuck) {
+    await writeMemory(STATE_KEY, { missed: state.missed.slice(-14), stuck: state.stuck.slice(-50) }, 'Nexus')
+  }
+  return tick
+}

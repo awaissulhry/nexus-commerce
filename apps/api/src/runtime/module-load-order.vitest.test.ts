@@ -25,6 +25,8 @@ function importInOrder(...files: string[]): Promise<string> {
 const RUN_SERVICE = 'src/services/agents/ads-manager-run.service.ts'
 const TOOLS = 'src/services/agents/tools/ads-manager.tools.ts'
 const REGISTRY = 'src/services/agents/tool-registry.ts'
+const WATCHDOG = 'src/services/agents/ads-manager-watchdog.service.ts'
+const WATCHDOG_JOB = 'src/jobs/claude-ads-run-watchdog.job.ts'
 
 describe('W4 — the daily-run modules load whichever comes first (real Node ESM)', () => {
   it.each([
@@ -33,6 +35,11 @@ describe('W4 — the daily-run modules load whichever comes first (real Node ESM
     ['the tool registry first (the API\'s order)', [REGISTRY, RUN_SERVICE]],
     ['the OAuth server first', ['src/services/oauth/oauth-server.ts', REGISTRY]],
     ['the scheduler first', ['src/runtime/scheduler.ts', REGISTRY]],
+    // W4-2 — the scheduler imports the watchdog job early; the job's tick loads the watchdog service.
+    ['the watchdog job first, then the scheduler', [WATCHDOG_JOB, 'src/runtime/scheduler.ts', REGISTRY]],
+    ['the watchdog service first (what the tick loads)', [WATCHDOG, REGISTRY]],
+    ['the tool registry first, then the watchdog', [REGISTRY, WATCHDOG]],
+    ['the ads-manager tools first, then the watchdog', [TOOLS, WATCHDOG]],
   ])('%s', async (_label, files) => {
     expect(await importInOrder(...files)).toBe('IMPORT-OK')
   }, 240_000)

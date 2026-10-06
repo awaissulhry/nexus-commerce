@@ -936,6 +936,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // ADS AUTONOMY W4-1 — a run report: what it reports (start, finish, fail, withdraw) and the run it names, with whether
   // it is over: the same run reported or withdrawn since makes it a different report.
   'report-ads-run': ['op', 'run'],
+  // W4-2 — the expected report time from → to: someone else's change of it since makes this a different one.
+  'set-ads-report-time': ['changes'],
   'tune-ad-engine': ['changes', 'raises', 'basis'],
   'steer-fleet': ['steer', 'changes', 'basis'],
   'save-price-rule': ['changes', 'bounds', 'basis'],

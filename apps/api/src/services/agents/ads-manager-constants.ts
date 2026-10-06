@@ -17,3 +17,19 @@ export const RUNS_PER_DAY = 3
 export const DANGER_NOTICES_PER_DAY = 2
 /** A start is refused while a run that started within this time is still open. */
 export const OPEN_RUN_MS = 2 * 3600_000
+
+// ── W4-2: the watchdog ─────────────────────────────────────────────────────────────────────────────
+
+/** The watchdog's bell notices (a missed report, a run that never ended). */
+export const WATCHDOG_NOTICE_TYPE = 'claude-ads-watchdog'
+/** An expected report time: HH:MM, 24-hour (set-ads-report-time reads it while loading, for its input schema). */
+export const REPORT_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/** A time zone this runtime knows (Intl), as Intl names it, or null. */
+export function knownTimeZone(timeZone: string): string | null {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
+  } catch {
+    return null
+  }
+}

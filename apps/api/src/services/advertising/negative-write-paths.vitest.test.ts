@@ -251,3 +251,41 @@ describe('HV.9a — a create that comes back without an id is read back before i
     expect(await negativeCount()).toBe(before)
   })
 })
+
+/**
+ * PB-6a (L1) — a negative never blocks a keyword where it lands, whoever writes it: the rules, the harvest, n-grams,
+ * the funnel, Claude's tools, the screens (a person's own add included) and the bulk sheet all come through here. The
+ * fixture's c-it ad group holds the EXACT keyword "race jacket"; a product target is added for the product case.
+ */
+describe('PB-6a — a negative over a keyword of its own ad group is refused for every writer, by name', () => {
+  const svc = () => import('./ads-negative-kw.service.js')
+  const entries: Array<[string, () => Promise<{ refusal?: { deniedAt: string; reason: string } | null; denied?: { deniedAt: string; reason: string } | null }>]> = [
+    ['exact negative, ad group', async () => (await svc()).writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: 'g-c-it', keywordText: 'Race Jacket', matchType: 'EXACT' })],
+    ['phrase negative whose words the keyword holds', async () => (await svc()).writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: 'g-c-it', keywordText: 'jacket', matchType: 'PHRASE' })],
+    ['campaign scope', async () => (await svc()).writeNegativeKeyword({ scope: 'CAMPAIGN', campaignId: 'c-it', keywordText: 'race jacket', matchType: 'EXACT' })],
+    ['a person\'s own add from a screen', async () => (await svc()).writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: 'g-c-it', keywordText: 'race jacket', matchType: 'EXACT', manual: true, userId: 'user:test-person' })],
+    ['createNegative (add_negative_exact/phrase, sync, n-grams, funnel, route)', async () => (await svc()).createNegative({ profileId: 'P-IT-TEST', marketplace: 'IT', externalCampaignId: 'EXT-c-it', externalAdGroupId: 'EXT-g-c-it', keywordText: 'race jacket', matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP' })],
+    ['a negative product target over the product target of its ASIN', async () => (await svc()).writeNegativeProductTarget({ adGroupId: 'g-c-it', asin: 'B0TESTPOS1' })],
+  ]
+
+  beforeAll(async () => {
+    await inside(() => database.client.adTarget.create({ data: { id: 't-it-pt', adGroupId: 'g-c-it', kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0TESTPOS1', bidCents: 40, externalTargetId: 'EXT-t-it-pt' } }))
+  })
+
+  for (const [name, run] of entries) {
+    it(name, async () => {
+      const before = await negativeCount()
+      const r = await inside(run)
+      const refusal = r.refusal ?? r.denied
+      expect(refusal?.deniedAt).toBe('own_keyword')
+      expect(refusal?.reason).toMatch(/it would block your own (exact keyword "race jacket"|product target B0TESTPOS1) in ad group ".+"\. Remove or lower that keyword instead\.$/)
+      expect(amazonCalls(), 'an Amazon call was made').toBe(0)
+      expect(await negativeCount(), 'a local row was written').toBe(before)
+    })
+  }
+
+  it('a negative that blocks no keyword of its ad group still goes (an exact "race" is not "race jacket")', async () => {
+    const r = await inside(async () => (await svc()).writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: 'g-c-it', keywordText: 'race', matchType: 'EXACT' }))
+    expect(r).toMatchObject({ outcome: 'created', reachedAmazon: true })
+  })
+})
