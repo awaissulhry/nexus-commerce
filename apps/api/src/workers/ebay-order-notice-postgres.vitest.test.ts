@@ -30,6 +30,8 @@ const { recordInbound } = await import('../services/cx/ingress/ledger.js')
 const { runInboundRetrySweep } = await import('../jobs/inbound-retry.job.js')
 const { kickStoredEbayOrderNotice } = await import('../services/cx/ebay-order-notice-kick.js')
 const { processEbayOrderNoticeNow } = await import('./ebay-order-notice.worker.js')
+const { processEbayInbound } = await import('../services/cx/ingress/ebay-processing.js')
+const { runWorkspaceJob, scopeJobData } = await import('../lib/workspace-jobs.js')
 
 const OWNER = 'nexus_legacy_workspace'
 const inBusiness = <T>(workspaceId: string, work: () => Promise<T>) => withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -171,6 +173,25 @@ describe.skipIf(!concurrentDatabaseUrl())('run a stored eBay order notice now (w
     expect(await now(backedOff)).toEqual({ kind: 'not_claimed' })
     expect(reads('N-BACKOFF')).toBe(1)
     expect(await receipt(backedOff)).toMatchObject({ status: 'failed', attempts: 1 })
+  })
+
+  it('a job carries its business through runWorkspaceJob: another business\'s job claims nothing under row-level security; its own runs the receipt once', async () => {
+    const seller = await account(), a = await product('JOB', 5)
+    respond = url => url === orderUrl('N-JOB') ? json(fulfillmentOrder('N-JOB', a.sku)) : json({}, 500)
+    const { id } = await stored(seller, { user: { userId: seller }, order: { orderId: 'N-JOB' } })
+    const other = randomUUID()
+    await q('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Job business fixture\',\'test\',$1,now())', [other])
+    // The job as the kick queues it: the envelope WorkspaceQueue stamps (scopeJobData) inside the business, a timestamp.
+    const job = (workspaceId: string) => ({ data: withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, () => scopeJobData({ receiptId: id })), timestamp: Date.now() })
+    expect(await runWorkspaceJob(job(other), () => processEbayOrderNoticeNow(id))).toEqual({ kind: 'skipped', reason: 'not_an_order_notice' })
+    // Without the worker's own filter: row-level security on WebhookEvent hides the receipt from the claim itself.
+    expect(await runWorkspaceJob(job(other), () => processEbayInbound(id))).toEqual({ kind: 'not_claimed' })
+    expect(await receipt(id)).toMatchObject({ status: 'pending', attempts: 0, nextAttemptAt: null, leaseToken: null })
+    expect(calls).toEqual([])
+    expect(await runWorkspaceJob(job(OWNER), () => processEbayOrderNoticeNow(id))).toEqual({ kind: 'done' })
+    expect(await receipt(id)).toMatchObject({ status: 'done', attempts: 1 })
+    expect(reads('N-JOB')).toBe(1)
+    expect(await movements('N-JOB')).toEqual([{ productId: a.id, change: -1 }])
   })
 
   // Last: it leaves two pristine receipts that a later sweep would pick up.
