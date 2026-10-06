@@ -23,7 +23,9 @@ import { normaliseNegTerm } from './ads-protect-converting.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 
 export type PositiveMatch = 'EXACT' | 'PHRASE' | 'BROAD' | 'PRODUCT'
-export interface Positive { adTargetId: string; adGroupId: string; text: string; match: PositiveMatch; live: boolean }
+/** PB-10 — `waiting`: a keyword a playbook sync added at the floor that START has not given its planned bid yet (set by the
+ *  playbook's isolation loader, never here): a keyword for the lock, but no home a search can be sent to. */
+export interface Positive { adTargetId: string; adGroupId: string; text: string; match: PositiveMatch; live: boolean; waiting?: boolean }
 export type NegativeMatch = 'EXACT' | 'PHRASE' | 'PRODUCT'
 
 const KEYWORD_MATCHES = new Set(['EXACT', 'PHRASE', 'BROAD'])

@@ -28,7 +28,7 @@ export const PLAYBOOK_STOP_METRIC = 'playbook_stop'
 const isPlaybookStop = (evidence: unknown) => (evidence as { metric?: unknown } | null)?.metric === PLAYBOOK_STOP_METRIC
 
 /** One JSON text per value, keys sorted: a stored action (jsonb reorders keys) compares equal to the same compile. */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value && typeof value === 'object') {
     return `{${Object.keys(value as Record<string, unknown>).filter((k) => (value as Record<string, unknown>)[k] !== undefined).sort()
@@ -43,6 +43,11 @@ const compiledPart = (actions: unknown) => (Array.isArray(actions) ? actions.map
   const { startedAt: _mark, ...rest } = a as Record<string, unknown>
   return rest
 }) : actions)
+/** PB-10 — the action a compiled rule holds now, as its compile wrote it (this writer's start mark left out): what drift compares. */
+export function storedCompiledAction(actions: unknown): unknown {
+  const part = compiledPart(actions)
+  return Array.isArray(part) ? part[0] ?? null : null
+}
 const startOf = (actions: unknown): string | null => {
   const mark = Array.isArray(actions) ? (actions[0] as { startedAt?: unknown } | undefined)?.startedAt : null
   return typeof mark === 'string' ? mark : null

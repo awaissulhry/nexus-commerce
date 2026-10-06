@@ -73,6 +73,33 @@ export async function playbookLinks(playbookIds: readonly string[]) {
   })
 }
 
+/**
+ * PB-10 — every bid a sync of this playbook planned for a keyword or target it added at the floor (its version rows op
+ * sync, `sync.plannedBids`), the newest plan for each, by AdTarget.id. START gives them (ads-playbook/sync.ts).
+ */
+export async function plannedSyncBids(playbookId: string): Promise<Map<string, number>> {
+  const rows = await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync' }, orderBy: { version: 'asc' }, select: { changes: true } })
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    for (const c of (Array.isArray(r.changes) ? r.changes : []) as Array<{ field?: unknown; to?: unknown }>) {
+      if (c?.field !== 'sync.plannedBids' || !Array.isArray(c.to)) continue
+      for (const b of c.to as Array<{ adTargetId?: unknown; startBidCents?: unknown }>) if (typeof b?.adTargetId === 'string' && typeof b.startBidCents === 'number') out.set(b.adTargetId, b.startBidCents)
+    }
+  }
+  return out
+}
+
+/**
+ * PB-10 — the keywords and targets a sync of this playbook added at the floor that still bid it (START has not given
+ * them their planned bid): no home yet (isolation.ts).
+ */
+export async function waitingSyncedTargets(playbookId: string, floorCents: number): Promise<Set<string>> {
+  const planned = await plannedSyncBids(playbookId)
+  if (!planned.size) return new Set()
+  const rows = await prisma.adTarget.findMany({ where: { id: { in: [...planned.keys()] }, isNegative: false, bidCents: { lte: floorCents } }, select: { id: true } })
+  return new Set(rows.map((r) => r.id))
+}
+
 /** The names and states of linked campaigns, for the links a view shows. */
 export async function campaignNames(campaignIds: readonly string[]) {
   if (!campaignIds.length) return new Map<string, { name: string; status: string; marketplace: string | null }>()

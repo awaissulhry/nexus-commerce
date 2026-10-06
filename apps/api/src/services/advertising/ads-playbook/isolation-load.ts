@@ -19,7 +19,7 @@ import { loadProtectedTerms, type ProtectedTerm } from '../ads-negation-policy.j
 import { normaliseNegTerm } from '../ads-protect-converting.js'
 import { openTermsStrategy, strategyMarketOf } from '../ads-strategy/terms.js'
 import { familyOfProducts, familyOnly, positivesIn, standingNegativesIn, type Positive, type ProductFamily } from '../ads-winner-lock.js'
-import { playbookLinks } from './load.js'
+import { playbookLinks, waitingSyncedTargets } from './load.js'
 import type { IsolationAction, IsolationSlot, ScopeGroup } from './isolation.js'
 
 export interface Excluded { slot: string; campaignId: string; adGroupId: string | null; why: string }
@@ -34,6 +34,8 @@ export interface IsolationInputs {
   winners: Map<string, Set<string>>
   standing: Set<string>
   protections: Map<string, ProtectedTerm[]>
+  /** PB-10 — keywords a sync added at the floor, not given their bid yet (marked `waiting` in `positives`): no home. */
+  waiting: Set<string>
 }
 
 /** A hero (PB-6c: a winner's own campaign, link key `hero:<term>`) holds one exact keyword: an Exact slot. */
@@ -127,9 +129,10 @@ export async function loadIsolation(action: Pick<IsolationAction, 'playbookId' |
   const ids = scope.map((g) => g.adGroupId)
   const marketOf = new Map(campaigns.map((c) => [c.id, c.marketplace]))
   const campaignIds = [...new Set(scope.map((g) => g.campaignId))]
-  const [positives, standingNegatives, winners] = await Promise.all([positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids)])
+  const [positives, standingNegatives, winners, waiting] = await Promise.all([positivesIn(ids), standingNegativesIn(ids), scopeWinners(ids), waitingSyncedTargets(row.id, 2)])
+  if (waiting.size) for (const list of positives.values()) for (const p of list) if (waiting.has(p.adTargetId)) p.waiting = true
   // The protected terms that bind a negative in each campaign, as the write gate reads them (one read per campaign).
   const protections = new Map<string, ProtectedTerm[]>()
   for (const id of campaignIds) protections.set(id, await loadProtectedTerms({ marketplace: marketOf.get(id) ?? null, campaignId: id }))
-  return { inputs: { productId: row.scopeId, family, scope, excluded, positives, winners, standing: standingNegatives, protections } }
+  return { inputs: { productId: row.scopeId, family, scope, excluded, positives, winners, standing: standingNegatives, protections, waiting } }
 }

@@ -59,7 +59,7 @@ const adsPlaybook: AgentTool = {
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (IT, DE, FR, ES, UK; business-overview lists them); omit for every market with a playbook or a campaign. capture needs one'),
     view: z.enum(PLAYBOOK_VIEWS).default('effective')
-      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created); build: the builds of a product\'s playbook (market and productId or sku), or one build (applicationId); winners: one product\'s search terms in one market — winning where they run, declining or lost, and the next step for each (market and productId or sku)'),
+      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created); build: the builds of a product\'s playbook (market and productId or sku), or one build (applicationId); drift: where what is live differs from what a product\'s playbook compiles to (market and productId or sku; a market alone: every enrolled product counted); winners: one product\'s search terms in one market — winning where they run, declining or lost, and the next step for each (market and productId or sku)'),
     productId: ID.optional().describe('effective or history: one product (a variation or a parent), its Nexus id'),
     sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
     categoryId: ID.optional().describe('effective or history: one category, its Nexus id (catalog-structure)'),
@@ -95,7 +95,13 @@ const adsPlaybook: AgentTool = {
     + "terms the product's own other campaigns already buy (skipped or accepted, as the template says), the terms other "
     + "products' campaigns also buy (kept and only listed: different products may share a keyword), the monthly caps, "
     + "the portfolio, and the blueprint gate's blockers — nothing is created, saved or sent. view build follows the builds "
-    + 'apply-ads-playbook started (status, progress, the campaigns each made, what failed, what START will apply). view '
+    + 'apply-ads-playbook started (status, progress, the campaigns each made, what failed, what START will apply). view drift '
+    + "lists where what is live differs from what one product's playbook compiles to in one market — a slot with no "
+    + 'campaign, a campaign outside every slot, a child not advertised, a missing or misplaced keyword, a missing isolation, '
+    + 'source or product negative, a placement off the playbook where the hourly plans do not own it, a compiled rule or '
+    + 'hourly plan missing or changed, the portfolio, a name — each with what fixes it (apply-ads-playbook op sync, another '
+    + 'tool, or nothing) and, for a change a person made himself, keep (into the playbook) or revert; bids and budgets the '
+    + "engines moved are not drift, and the Owner's own hourly plans never are (a campaign they hold is listed as held). View "
     + "winners reads one product's search terms in its playbook campaigns in one market: winning where they run (kept there, "
     + 'nothing proposed), declining or lost, each with its next step in this order — bid (auto-bid already moves it toward '
     + 'the target), placement (a research slot or the term\'s own campaign, set-placement-multipliers), or a campaign of its '
