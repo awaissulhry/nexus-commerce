@@ -8,14 +8,17 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * campaign membership or spend. This service:
  *   1. syncPortfolios()      — pull listPortfolios per active connection, upsert AmazonAdsPortfolio
  *                              (name/state/lastSyncedAt). Idempotent; keyed (profileId, externalPortfolioId).
- *   2. getPortfolioOverview() — read the synced rows + roll up Campaign.{count,spend,sales} by
- *                              portfolioId (= externalPortfolioId), attach marketplaces, compute ACoS.
+ *   2. getPortfolioOverview() — read the synced rows + roll up campaign counts by portfolioId
+ *                              (= externalPortfolioId), attach marketplaces, and sum spend/sales from
+ *                              the daily reports for the picked window (AM-6), computing ACoS.
  *
  * Budgets (Decimal columns on the model) are intentionally NOT synced here — that needs the
  * Amazon v3 portfolios API and lands in P3. P1 delivers see + counts + spend.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { resolveRange } from '../ads-core/date-range.js'
+import { campaignWindowMoney } from './ads-campaign-window.js'
 import { adsMode, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO, type PortfolioBudgetInput } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
@@ -160,16 +163,29 @@ export async function syncPortfolios(opts: { marketplace?: string | null } = {})
   return { synced, errors: errorDetail.length, campaignsLinked, errorDetail }
 }
 
+/**
+ * AM-35 — the campaigns a portfolio row COUNTS, and whose spend it sums: the Ad Manager's default
+ * status filter (Enabled + Paused; Archived hidden until opted in). The Dashboard's campaign count
+ * uses the same two states. Archived members are reported separately, never silently dropped.
+ */
+export const PORTFOLIO_COUNTED_STATUSES = ['ENABLED', 'PAUSED'] as const
+
 export interface PortfolioOverview {
   portfolioId: string // externalPortfolioId
   name: string
   state: string | null
   marketplaces: string[]
+  /** Enabled + paused member campaigns (`PORTFOLIO_COUNTED_STATUSES`). */
   campaignCount: number
+  /** Enabled member campaigns. */
   activeCampaignCount: number
+  /** Archived member campaigns — NOT in `campaignCount`, spend or sales. */
+  archivedCampaignCount: number
+  /** CENTS, summed from the daily reports over `range` for the counted campaigns (AM-6). */
   spendCents: number
+  /** CENTS, ad-attributed sales over `range` for the counted campaigns. */
   salesCents: number
-  acos: number | null // fraction (spend / sales)
+  acos: number | null // FRACTION (spend / sales, 0.38 = 38 %); null when nothing sold
   // P3 — budget cap (read from Amazon v3; null policy/amount = no cap)
   budgetAmountCents: number | null
   budgetCurrencyCode: string | null
@@ -179,9 +195,29 @@ export interface PortfolioOverview {
   lastSyncedAt: string | null
 }
 
-/** Synced portfolio rows enriched with campaign membership + spend/sales rollup. */
-export async function getPortfolioOverview(opts: { marketplace?: string | null } = {}): Promise<{ portfolios: PortfolioOverview[]; lastSyncedAt: string | null }> {
+/** The window the overview's money covers, as the page prints it. */
+export interface PortfolioOverviewRange { startDate: string; endDate: string; preset: string; includesToday: boolean }
+
+/**
+ * Synced portfolio rows enriched with campaign membership + spend/sales for a date window.
+ *
+ * 🔴 AM-6 — spend and sales used to be the stored `Campaign.spend/sales`: an unlabelled ~30-day
+ * window, refreshed nightly, and never reset for a campaign that went idle (the nightly heal only
+ * visits campaigns with rows in its window), so a campaign idle for a month kept its last figure
+ * forever. They are now summed from `AmazonAdsDailyPerformance` with the Ad Manager list's own
+ * buckets (`campaignWindowMoney`) for the window the page picked — same params as
+ * `GET /advertising/campaigns` (`startDate`/`endDate`, or `preset`, or `windowDays`; default the
+ * last 7 days, as the Ad Manager opens) — and the window is returned so the page can print it.
+ */
+export async function getPortfolioOverview(opts: {
+  marketplace?: string | null
+  preset?: string
+  startDate?: string
+  endDate?: string
+  windowDays?: string
+} = {}): Promise<{ portfolios: PortfolioOverview[]; lastSyncedAt: string | null; range: PortfolioOverviewRange; countedStatuses: string[] }> {
   const mk = opts.marketplace && opts.marketplace !== 'all' ? opts.marketplace : null
+  const range = resolveRange({ preset: opts.preset, startDate: opts.startDate, endDate: opts.endDate, windowDays: opts.windowDays })
 
   // profileId -> marketplace (so a portfolio with no campaigns still shows its market)
   const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { profileId: true, marketplace: true } })
@@ -196,25 +232,31 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
   // Roll up campaigns by portfolioId (= externalPortfolioId). ~hundreds of rows → reduce in JS.
   const camps = await prisma.campaign.findMany({
     where: { portfolioId: { not: null }, ...(mk ? { marketplace: mk } : {}) },
-    select: { portfolioId: true, marketplace: true, status: true, spend: true, sales: true },
+    select: { id: true, externalCampaignId: true, portfolioId: true, marketplace: true, status: true },
   })
-  const roll = new Map<string, { count: number; active: number; spend: number; sales: number; markets: Set<string> }>()
+  const counted = new Set<string>(PORTFOLIO_COUNTED_STATUSES)
+  const money = await campaignWindowMoney(camps.filter((c) => counted.has(c.status)), { gte: range.since, lte: range.until })
+  const roll = new Map<string, { count: number; active: number; archived: number; spendCents: number; salesCents: number; markets: Set<string> }>()
   for (const c of camps) {
     const k = c.portfolioId as string
-    const r = roll.get(k) ?? { count: 0, active: 0, spend: 0, sales: 0, markets: new Set<string>() }
-    r.count++
-    if (c.status === 'ENABLED') r.active++
-    r.spend += Number(c.spend)
-    r.sales += Number(c.sales)
+    const r = roll.get(k) ?? { count: 0, active: 0, archived: 0, spendCents: 0, salesCents: 0, markets: new Set<string>() }
     if (c.marketplace) r.markets.add(c.marketplace)
+    if (c.status === 'ARCHIVED') r.archived++
+    if (counted.has(c.status)) {
+      r.count++
+      if (c.status === 'ENABLED') r.active++
+      const m = money.get(c.id)
+      r.spendCents += m?.spendCents ?? 0
+      r.salesCents += m?.salesCents ?? 0
+    }
     roll.set(k, r)
   }
 
   let last: number | null = null
   const portfolios: PortfolioOverview[] = rows.map((p) => {
     const r = roll.get(p.externalPortfolioId)
-    const spendCents = Math.round((r?.spend ?? 0) * 100)
-    const salesCents = Math.round((r?.sales ?? 0) * 100)
+    const spendCents = r?.spendCents ?? 0
+    const salesCents = r?.salesCents ?? 0
     const fromCampaigns = r && r.markets.size ? [...r.markets].sort() : null
     const fromConn = profMarket.get(p.profileId)
     if (p.lastSyncedAt) { const t = p.lastSyncedAt.getTime(); if (last == null || t > last) last = t }
@@ -225,6 +267,7 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
       marketplaces: fromCampaigns ?? (fromConn ? [fromConn] : []),
       campaignCount: r?.count ?? 0,
       activeCampaignCount: r?.active ?? 0,
+      archivedCampaignCount: r?.archived ?? 0,
       spendCents,
       salesCents,
       acos: salesCents > 0 ? spendCents / salesCents : null,
@@ -236,7 +279,12 @@ export async function getPortfolioOverview(opts: { marketplace?: string | null }
       lastSyncedAt: p.lastSyncedAt ? p.lastSyncedAt.toISOString() : null,
     }
   })
-  return { portfolios, lastSyncedAt: last != null ? new Date(last).toISOString() : null }
+  return {
+    portfolios,
+    lastSyncedAt: last != null ? new Date(last).toISOString() : null,
+    range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset, includesToday: range.includesToday },
+    countedStatuses: [...PORTFOLIO_COUNTED_STATUSES],
+  }
 }
 
 const POLICY_TO_DB: Record<string, string> = { monthlyRecurring: 'MONTHLY_RECURRING', dateRange: 'DATE_RANGE' }

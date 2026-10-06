@@ -148,8 +148,11 @@ export function ReportSummary({
     <div className={`rpt-summary${loading ? ' is-loading' : ''}`}>
       <div className="rpt-summary-hd">
         <span className="ttl">
+          {/* AM-16 — a change compares complete days on both sides; when the window runs into today, say so. */}
           {summary?.comparisonWindow
-            ? `Compared with ${summary.comparisonWindow.from} → ${summary.comparisonWindow.to}`
+            ? summary.comparedWindow?.todayLeftOut
+              ? `Change: ${summary.comparedWindow.from} → ${summary.comparedWindow.to} (complete days; today is not finished) compared with ${summary.comparisonWindow.from} → ${summary.comparisonWindow.to}`
+              : `Compared with ${summary.comparisonWindow.from} → ${summary.comparisonWindow.to}`
             : 'No comparison'}
         </span>
         <SegmentedControl

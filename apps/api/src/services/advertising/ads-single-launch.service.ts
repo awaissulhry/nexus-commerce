@@ -46,6 +46,14 @@ export interface SingleLaunchOptions {
   bornSuppressed?: { floorCents: number; by: AdsActor }
   /** The campaign's own currency (`Campaign.dailyBudgetCurrency`); the route leaves the schema default. */
   currency?: string
+  /**
+   * CC-7 — the screen's launch: the new campaign goes on the live-write allowlist the moment it exists, as every other
+   * builder's does (SP Super Wizard, Quick, Guided, AI Goal, Replicate). Without it the placement multipliers the
+   * builder sends were refused (`campaign_allowlist`) and dropped in silence, and so was every later bid edit.
+   * create-ad-campaign leaves it out: Claude's campaign is born off the list until a person approves
+   * set-campaign-live-writes.
+   */
+  allowlistAtBirth?: boolean
 }
 
 export interface SingleLaunchResult {
@@ -57,11 +65,17 @@ export interface SingleLaunchResult {
 export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: SingleLaunchOptions = {}): Promise<SingleLaunchResult> {
   const market = b.market || 'IT'
   const name = (b.name || '').trim()
-  if (!name) return { status: 400, body: { ok: false, error: 'campaign name required' } }
   const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
   const defaultBidEur = Number(b.defaultBidEur) || 0.75
   const budgetEur = Number(b.budgetEur) || 10
-  if (b.dryRun) return { status: 200, body: { ok: true, dryRun: true, plan: { market, name, products: products.length, keywords: (b.keywords ?? []).length } } }
+  // CC-13 / CC-14 / CC-21 — the checks the review step shows (dryRun), run again before anything is sent: no products,
+  // no keywords (or product targets), a name Amazon refuses or this market already uses, a bid or budget outside
+  // Amazon's range are refused here; his bid policies and spend ceilings are warnings only.
+  const { singleLaunchPlan, launchChecks } = await import('./ads-launch-checks.service.js')
+  const checks = await launchChecks(singleLaunchPlan(b))
+  if (b.dryRun) return { status: 200, body: { ok: true, dryRun: true, plan: { market, name, products: products.length, keywords: (b.keywords ?? []).length }, checks } }
+  if (!name) return { status: 400, body: { ok: false, error: 'campaign name required' } }
+  if (checks.refusals.length) return { status: 400, body: { ok: false, error: checks.refusals.join(' '), refusals: checks.refusals, warnings: checks.warnings } }
 
   const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('./ads-create.service.js')
   const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.biddingStrategy === 'updown' ? 'autoForSales' : b.biddingStrategy === 'fixed' ? 'manual' : 'legacyForSales'
@@ -95,14 +109,17 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
     return { status: 200, body: { ok: false, error: describeLaunch(launch), campaignId: camp.id, externalCampaignId: null, launch } }
   }
   try {
-    if (floor != null || opts.currency) {
+    if (floor != null || opts.currency || opts.allowlistAtBirth) {
       await prisma.campaign.update({ where: { id: camp.id }, data: {
+        // CC-7 — on the allowlist before the placement write below, which the allowlist binds.
+        ...(opts.allowlistAtBirth ? { liveBidWritesEnabled: true } : {}),
         ...(opts.currency ? { dailyBudgetCurrency: opts.currency } : {}),
         ...(floor != null ? { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.bornSuppressed!.by } : {}),
       } })
     }
     const adGroupName = (b.adGroupName || '').trim() || `${name} Ad Group`
-    const ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: startEur(defaultBidEur), userId })
+    // CM-20 — `creationFlow`: everything below belongs to the campaign created a moment ago.
+    const ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: startEur(defaultBidEur), userId, creationFlow: true })
       .catch((e: unknown) => { rec.adGroup(adGroupName, null, e); throw e })
     rec.adGroup(adGroupName, ag)
     const agId = ag.id as string
@@ -112,16 +129,29 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
     // keywords and product ads are, so they pass `creationFlow` (the allowlist binds every other negative).
     for (const nk of b.negKeywords ?? []) { const text = (nk?.text || '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = nk.matchType === 'PHRASE' ? 'PHRASE' : 'EXACT'; try { rec.negative('negative_keyword', `${text} (${mt.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, userId, creationFlow: true })) } catch (e) { rec.threw('negative_keyword', text, e) } }
     for (const np of b.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId, creationFlow: true })) } catch (e) { rec.threw('negative_product', asin, e) } }
-    for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true })) } catch (e) { rec.threw('product_ad', item, e) } }
+    for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) } catch (e) { rec.threw('product_ad', item, e) } }
     if ((b.targetMode ?? 'keyword') === 'product') {
-      for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { const t = await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: startEur(defaultBidEur), userId }); rec.productTarget(asin, t); if (floored(defaultBidEur) && t.id) await remember(t.id, defaultBidEur) } catch (e) { rec.threw('product_target', asin, e) } }
+      for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { const t = await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: startEur(defaultBidEur), userId, creationFlow: true }); rec.productTarget(asin, t); if (floored(defaultBidEur) && t.id) await remember(t.id, defaultBidEur) } catch (e) { rec.threw('product_target', asin, e) } }
     } else {
-      for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { const bid = Number(kw.bidEur) || defaultBidEur; const k = await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: startEur(bid), userId }); rec.keyword(`${text} (${mt.toLowerCase()})`, k); if (floored(bid) && !k.existed && k.id) await remember(k.id, bid) } catch (e) { rec.threw('keyword', text, e) } }
+      for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { const bid = Number(kw.bidEur) || defaultBidEur; const k = await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: startEur(bid), userId, creationFlow: true }); rec.keyword(`${text} (${mt.toLowerCase()})`, k); if (floored(bid) && !k.existed && k.id) await remember(k.id, bid) } catch (e) { rec.threw('keyword', text, e) } }
     }
     const pb = b.placementBids ?? {}
     const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
       .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
-    if (adjustments.length) { try { rec.placement(await updatePlacementBidding({ campaignId: camp.id, adjustments, userId })) } catch (e) { rec.threw('placement', 'Placement bid adjustments', e) } }
+    // CC-7 — what became of the placement multipliers is part of the answer, not only of the log.
+    // `mode`: live = Amazon took it; sandbox / local = saved in Nexus (no live account, or the campaign is not on Amazon).
+    // W2-A — and the launch answer lists a refused placement with its reason.
+    let placement: { mode: string; sent: boolean; reason?: string } | null = null
+    if (adjustments.length) {
+      try {
+        const r = await updatePlacementBidding({ campaignId: camp.id, adjustments, userId })
+        rec.placement(r)
+        placement = r.ok ? { mode: r.mode, sent: r.mode === 'live' } : { mode: r.mode, sent: false, reason: r.reason ?? r.error ?? 'not sent' }
+      } catch (e) {
+        rec.threw('placement', 'Placement bid adjustments', e)
+        placement = { mode: 'failed', sent: false, reason: (e as Error).message }; logger.warn('[single-launch] placement failed', { error: (e as Error).message })
+      }
+    }
 
     // #1/#3/#4 — persist Sponsored-Video opt-ins, Sites reach, and the video/AB/audience bid
     // boosts onto the campaign's dynamicBidding config (preserves the placementBidding just
@@ -188,7 +218,7 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
     // W2-A (CC-2) — `ok` only when the campaign and every part asked for reached Amazon; `launch` says what did.
     const launch = summariseLaunch([rec.result()])
     if (!launch.ok) logger.warn('[single-launch] launch did not fully reach Amazon', { market, summary: describeLaunch(launch) })
-    return { status: 200, body: { ok: launch.ok, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification, launch, ...(launch.ok ? {} : { error: describeLaunch(launch) }) } }
+    return { status: 200, body: { ok: launch.ok, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification, liveWrites: !!opts.allowlistAtBirth, placement, launch, ...(launch.ok ? {} : { error: describeLaunch(launch) }) } }
   } catch (e) {
     // The campaign exists (a later step threw): the answer still names it and what reached Amazon.
     logger.error('[single-launch] failed', { name, market, error: (e as Error).message })

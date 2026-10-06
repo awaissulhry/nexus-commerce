@@ -8,6 +8,7 @@
  * screen reads both through here, and shows the server's own reason.
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
 
 /** applied = written with nothing to send; queued = written and on its way to Amazon; refused / error = not changed. */
 export type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
@@ -101,14 +102,31 @@ export function readAdd(status: number, body: unknown): AddResult {
   return { added: false, savedOnly: false, reason: reasonText(said(b), status) }
 }
 
-/** POST one add and read its answer. Never throws. */
+/**
+ * CM-33 — the key slot of one add: the route and what is added. A press whose answer was lost keeps its key (sendCommand),
+ * so sending the same add again waits for it or replays its answer instead of adding it twice; a deliberate add of the
+ * same thing later is a new key once the first one answered.
+ */
+export const addSlotName = (path: string, body: Record<string, unknown>): string => `ads-add:${path}:${JSON.stringify(body)}`
+
+/** POST one add, as one keyed command, and read its answer. Never throws. */
 export async function adsAdd(path: string, body: Record<string, unknown>): Promise<AddResult> {
   try {
-    const r = await fetch(`${getBackendUrl()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    return readAdd(r.status, await r.json().catch(() => ({})))
+    const sent = await sendCommand(commandKeyFor(addSlotName(path, body)), `${getBackendUrl()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (sent.conflict) return { added: false, savedOnly: false, reason: commandConflictMessage(sent.conflict, 'add') }
+    return readAdd(sent.response.status, sent.body ?? {})
   } catch (e) {
     return { added: false, savedOnly: false, reason: e instanceof Error ? e.message : 'No answer from the server.' }
   }
+}
+
+/**
+ * CM-33 — the older console screens' adds, keyed like `adsAdd` (one key per add, kept while the answer is unknown) but
+ * answering the raw status and body those screens read. Throws when no answer arrived, as `fetch` does.
+ */
+export async function adsKeyedPost(path: string, body: Record<string, unknown>): Promise<{ ok: boolean; status: number; body: any }> {
+  const sent = await sendCommand(commandKeyFor(addSlotName(path, body)), `${getBackendUrl()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return { ok: sent.response.ok, status: sent.response.status, body: sent.body }
 }
 
 /** Many adds in one sentence: how many Amazon took, how many were saved in Nexus only, and why the rest were not. Pure. */

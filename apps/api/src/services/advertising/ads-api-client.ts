@@ -46,6 +46,7 @@ import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from 
 import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
 import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
 import { assertNegativeWriteAllowed } from './ads-negation-policy.js'
+import type { SdExpression } from './sd-target-expression.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -168,6 +169,13 @@ interface LiveCallOptions {
    * logged. Never set this to quieten a call that can fail meaningfully.
    */
   skipCallLog?: boolean
+  /**
+   * CC-25 — do not send this request again on a 5xx. A create Amazon may have made before it answered 502 or 504 must
+   * not go out blindly a second time (the second gets "duplicate" and the first stays live with no link to Nexus);
+   * `liveCreate` reads Amazon back first and sends again only when the entity is not there. 429 and 423 are still
+   * retried: Amazon refused those before doing anything.
+   */
+  noServerErrorRetry?: boolean
 }
 
 /**
@@ -348,7 +356,7 @@ const RETRYABLE_STATUS = new Set([429, 423])
 async function fetchWithRetry(
   url: string,
   opts: RequestInit,
-  ctx: { region: string; isWrite: boolean; connectionId: string | null },
+  ctx: { region: string; isWrite: boolean; connectionId: string | null; /** CC-25 — see LiveCallOptions.noServerErrorRetry. */ noServerErrorRetry?: boolean },
   maxAttempts = 3,
   maxLockAttempts = 5,
 ): Promise<Response> {
@@ -365,7 +373,7 @@ async function fetchWithRetry(
     const res = await send(url, opts)
     if (res.ok) return res
 
-    const retryable = RETRYABLE_STATUS.has(res.status) || res.status >= 500
+    const retryable = RETRYABLE_STATUS.has(res.status) || (res.status >= 500 && !ctx.noServerErrorRetry)
     if (!retryable) return res
 
     // 423 gets its own budget — see (3) above.
@@ -623,7 +631,7 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
       method: opts.method,
       headers,
       body: opts.body != null ? JSON.stringify(opts.body) : undefined,
-    }, { region: opts.region, isWrite: isMutatingCall(opts.method, opts.path), connectionId })
+    }, { region: opts.region, isWrite: isMutatingCall(opts.method, opts.path), connectionId, noServerErrorRetry: opts.noServerErrorRetry })
     if (!res.ok) {
       const text = await res.text()
       // ACR.0.6 — carry the status and body ON the error, not only inside the
@@ -662,6 +670,94 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
     doCall,
   )
 }
+
+// ── CC-25 — a create whose answer did not say whether it happened ────────────────────────────────────────────────────
+//
+// fetchWithRetry used to send a create again after any 5xx. When Amazon had made the campaign (ad group, keyword, …)
+// and then answered 502 or 504, the second POST was refused as a duplicate, no id came back, and the real entity stayed
+// live with no link to Nexus (for a product ad not even a local row). So a create is never sent again blindly: on a 5xx
+// or no answer at all, Amazon is read back first (through the gateway, like every call here) and a match is linked;
+// only when Amazon does not hold it is the create sent again. If the read itself fails, nothing is sent again — the
+// caller reports the create as failed, which is safe to retry by hand, rather than risk a second live entity.
+
+/** Where a create's id sits in Amazon's v3 answer, and how to find the entity on Amazon when the answer was lost. */
+export interface CreateLookup {
+  /** The v3 resource block of the answer (`campaigns`, `adGroups`, `keywords`, `productAds`, `targetingClauses`). */
+  resourceKey: string
+  /** The id field inside `success[]` (`campaignId`, `adGroupId`, …). */
+  idField: string
+  /** Amazon's id of the entity this create makes, read back from Amazon; null when Amazon does not hold it. */
+  find: () => Promise<string | null>
+}
+
+/** Attempts of one create in all, as fetchWithRetry allowed before. */
+const CREATE_ATTEMPTS = 3
+
+let createRetrySleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+/** Test seam: the wait between two attempts of a create. */
+export function setCreateRetrySleepForTests(sleep: ((ms: number) => Promise<void>) | null): void {
+  createRetrySleep = sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
+}
+
+/** A 5xx from Amazon (or the gateway), or no answer at all: the create may or may not have happened. */
+export function createOutcomeUnknown(error: unknown): boolean {
+  if ((error as { name?: unknown } | null)?.name === 'GatewayNoAnswer') return true
+  const status = (error as { statusCode?: unknown } | null)?.statusCode
+  return typeof status === 'number' && status >= 500
+}
+
+function createdId(response: unknown, lookup: CreateLookup): string | null {
+  const block = (response as Record<string, unknown> | null)?.[lookup.resourceKey] as { success?: Array<Record<string, unknown>> } | undefined
+  const id = block?.success?.[0]?.[lookup.idField]
+  return id == null || String(id) === '' ? null : String(id)
+}
+
+/** The create's own answer shape around an id that was found on Amazon, so every caller reads it unchanged. */
+function foundAnswer(id: string, lookup: CreateLookup): Record<string, unknown> {
+  return { [lookup.resourceKey]: { success: [{ index: 0, [lookup.idField]: id }], error: [] }, recoveredByReadBack: true }
+}
+
+/** One POST create through the gateway, never sent twice without first asking Amazon whether the first one landed. */
+export async function liveCreate<T>(opts: LiveCallOptions, lookup: CreateLookup): Promise<T> {
+  let unsure = false
+  for (let attempt = 1; ; attempt++) {
+    let response: T
+    try {
+      response = await liveCall<T>({ ...opts, noServerErrorRetry: true })
+    } catch (error) {
+      if (!createOutcomeUnknown(error)) throw error
+      unsure = true
+      let id: string | null
+      try {
+        id = await lookup.find()
+      } catch (readError) {
+        logger.warn('[CC-25] create outcome unknown and the read-back failed — not sent again', { path: opts.path, error: (error as Error).message.slice(0, 200), readError: (readError as Error).message.slice(0, 200) })
+        throw new Error(`Amazon did not confirm this create (${(error as Error).message.slice(0, 160)}), and Nexus could not read back whether it was made (${(readError as Error).message.slice(0, 160)}). It was not sent again, so it cannot exist twice: check Amazon's console before trying again.`)
+      }
+      if (id) {
+        logger.warn('[CC-25] create answered without confirmation, found on Amazon by read-back — linked, not sent again', { path: opts.path, attempt, externalId: id })
+        return foundAnswer(id, lookup) as T
+      }
+      if (attempt >= CREATE_ATTEMPTS) throw error
+      logger.warn('[CC-25] create answered without confirmation and not on Amazon — sending again', { path: opts.path, attempt })
+      await createRetrySleep(Math.min(1000 * 2 ** (attempt - 1), 8000))
+      continue
+    }
+    // A refusal right after an attempt whose outcome was unknown is most likely Amazon's "duplicate" for the entity that
+    // attempt made (a list can lag a create): ask once more before reporting it as refused.
+    if (unsure && !createdId(response, lookup)) {
+      const id = await lookup.find().catch(() => null)
+      if (id) {
+        logger.warn('[CC-25] retry refused, earlier attempt found on Amazon by read-back — linked', { path: opts.path, externalId: id })
+        return foundAnswer(id, lookup) as T
+      }
+    }
+    return response
+  }
+}
+
+const sameText = (a: unknown, b: unknown): boolean => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
+const LIVE_STATES = ['ENABLED', 'PAUSED'] as const
 
 // ── Public methods ─────────────────────────────────────────────────────
 
@@ -1667,7 +1763,15 @@ export async function createCampaign(ctx: ClientContext, input: CreateCampaignIn
     logger.info('[ADS-SANDBOX] createCampaign', { profileId: ctx.profileId, input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const response = await liveCall<{ campaigns?: { success?: Array<{ campaignId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' })
+  // CC-25 — read back by name (and targeting type) before a create is ever sent twice.
+  const response = await liveCreate<{ campaigns?: { success?: Array<{ campaignId: string }> } }>(
+    { ...ctx, method: 'POST', path: '/sp/campaigns', body: { campaigns: [v3] }, contentType: 'application/vnd.spCampaign.v3+json', acceptHeader: 'application/vnd.spCampaign.v3+json' },
+    { resourceKey: 'campaigns', idField: 'campaignId', find: async () => {
+      const live = await listCampaignsV3(ctx, { states: [...LIVE_STATES] })
+      const found = live.find((c) => sameText(c.name, input.name) && (!c.targetingType || sameText(c.targetingType, input.targetingType)))
+      return found?.campaignId ? String(found.campaignId) : null
+    } },
+  )
   // W2-A (CC-3) — ok only with Amazon's id; a 207 per-item error is Amazon's refusal, in its own words (it was `ok: true`
   // with no id and the reason thrown away, so a refused campaign was stored as a live one).
   const made = v3CreateResult(response, 'campaigns', 'campaignId')
@@ -1682,7 +1786,15 @@ export async function createAdGroup(ctx: ClientContext, input: CreateAdGroupInpu
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, name: input.name, defaultBid: input.defaultBid, state: (input.state ?? 'enabled').toUpperCase() }
-  const response = await liveCall<{ adGroups?: { success?: Array<{ adGroupId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/adGroups', body: { adGroups: [v3] }, contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json' })
+  // CC-25 — read back by name in its campaign before a create is ever sent twice.
+  const response = await liveCreate<{ adGroups?: { success?: Array<{ adGroupId: string }> } }>(
+    { ...ctx, method: 'POST', path: '/sp/adGroups', body: { adGroups: [v3] }, contentType: 'application/vnd.spAdGroup.v3+json', acceptHeader: 'application/vnd.spAdGroup.v3+json' },
+    { resourceKey: 'adGroups', idField: 'adGroupId', find: async () => {
+      const live = await listAdGroupsV3(ctx, { campaignIds: [input.externalCampaignId], states: LIVE_STATES })
+      const found = live.find((a) => sameText(a.name, input.name) && (!a.campaignId || String(a.campaignId) === input.externalCampaignId))
+      return found?.adGroupId ? String(found.adGroupId) : null
+    } },
+  )
   // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
   const made = v3CreateResult(response, 'adGroups', 'adGroupId')
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
@@ -2055,7 +2167,15 @@ export async function createKeyword(ctx: ClientContext, input: CreateKeywordInpu
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
-  const response = await liveCall<{ keywords?: { success?: Array<{ keywordId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/keywords', body: { keywords: [v3] }, contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json' })
+  // CC-25 — read back by text and match type in its ad group before a create is ever sent twice.
+  const response = await liveCreate<{ keywords?: { success?: Array<{ keywordId: string }> } }>(
+    { ...ctx, method: 'POST', path: '/sp/keywords', body: { keywords: [v3] }, contentType: 'application/vnd.spKeyword.v3+json', acceptHeader: 'application/vnd.spKeyword.v3+json' },
+    { resourceKey: 'keywords', idField: 'keywordId', find: async () => {
+      const live = await listKeywords(ctx, { campaignIds: [input.externalCampaignId], states: LIVE_STATES })
+      const found = live.find((k) => String(k.adGroupId ?? '') === input.externalAdGroupId && sameText(k.keywordText, input.keywordText) && sameText(k.matchType, input.matchType))
+      return found?.keywordId ? String(found.keywordId) : null
+    } },
+  )
   // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
   const made = v3CreateResult(response, 'keywords', 'keywordId')
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
@@ -2069,7 +2189,16 @@ export async function createProductAd(ctx: ClientContext, input: CreateProductAd
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3: Record<string, unknown> = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, state: (input.state ?? 'enabled').toUpperCase(), ...(input.sku ? { sku: input.sku } : {}), ...(input.asin ? { asin: input.asin } : {}) }
-  const response = await liveCall<{ productAds?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/productAds', body: { productAds: [v3] }, contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json' })
+  // CC-25 — read back by SKU (or ASIN) in its ad group before a create is ever sent twice.
+  const response = await liveCreate<{ productAds?: { success?: Array<{ adId: string }> } }>(
+    { ...ctx, method: 'POST', path: '/sp/productAds', body: { productAds: [v3] }, contentType: 'application/vnd.spProductAd.v3+json', acceptHeader: 'application/vnd.spProductAd.v3+json' },
+    { resourceKey: 'productAds', idField: 'adId', find: async () => {
+      const live = await listProductAds(ctx, { campaignIds: [input.externalCampaignId], states: LIVE_STATES })
+      const found = live.find((a) => String(a.adGroupId ?? '') === input.externalAdGroupId
+        && (input.sku ? sameText(a.sku, input.sku) : !!input.asin && sameText(a.asin, input.asin)))
+      return found?.adId ? String(found.adId) : null
+    } },
+  )
   // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
   const made = v3CreateResult(response, 'productAds', 'adId')
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
@@ -2117,10 +2246,10 @@ export async function createSdProductAd(ctx: ClientContext, input: CreateSdProdu
 }
 
 // ── Product / category / auto targeting (AX2.1) — v3 SP /sp/targets POST.
-// expression is the Amazon targeting clause: ASIN → [{type:'asinSameAs',
-// value}], category → [{type:'asinCategorySameAs', value}], auto →
-// [{type:'queryHighRelMatches'|'queryBroadRelMatches'|'asinSubstituteRelated'
-// |'asinAccessoryRelated'}]. ────────────────────────────────────────────
+// expression is the Amazon v3 targeting clause: ASIN → [{type:'ASIN_SAME_AS',
+// value}], category → [{type:'ASIN_CATEGORY_SAME_AS', value}]. (The camelCase
+// `asinSameAs` family is the v2 / Sponsored Display dialect — see
+// sd-target-expression.ts.) ─────────────────────────────────────────────
 export interface CreateTargetInput {
   externalCampaignId: string; externalAdGroupId: string
   expression: Array<{ type: string; value?: string }>
@@ -2133,7 +2262,17 @@ export async function createTarget(ctx: ClientContext, input: CreateTargetInput)
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expressionType: input.expressionType, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }
-  const response = await liveCall<{ targetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/targets', body: { targetingClauses: [v3] }, contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json' })
+  // CC-25 — read back by expression in its ad group before a create is ever sent twice.
+  const wanted = input.expression.map((e) => `${String(e.type ?? '').toUpperCase()}=${String(e.value ?? '').trim().toLowerCase()}`).sort().join('|')
+  const response = await liveCreate<{ targetingClauses?: { success?: Array<{ targetId: string }> } }>(
+    { ...ctx, method: 'POST', path: '/sp/targets', body: { targetingClauses: [v3] }, contentType: 'application/vnd.spTargetingClause.v3+json', acceptHeader: 'application/vnd.spTargetingClause.v3+json' },
+    { resourceKey: 'targetingClauses', idField: 'targetId', find: async () => {
+      const live = await listTargets(ctx, { campaignIds: [input.externalCampaignId], states: LIVE_STATES })
+      const found = live.find((t) => String(t.adGroupId ?? '') === input.externalAdGroupId
+        && (t.expression ?? []).map((e) => `${String(e.type ?? '').toUpperCase()}=${String(e.value ?? '').trim().toLowerCase()}`).sort().join('|') === wanted)
+      return found?.targetId ? String(found.targetId) : null
+    } },
+  )
   // CM-8 — ok only with Amazon's id; a per-item error is returned in Amazon's words.
   const made = v3CreateResult(response, 'targetingClauses', 'targetId')
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
@@ -2141,7 +2280,10 @@ export async function createTarget(ctx: ClientContext, input: CreateTargetInput)
 
 export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }
 export async function createNegativeProductTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
-  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'asinSameAs', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
+  // CC-18 — the v3 predicate type, as the positive /sp/targets path sends it. Amazon's SP 3.0 document
+  // (`SponsoredProductsCreateOrUpdateNegativeTargetingExpressionPredicateType`) allows only `ASIN_SAME_AS` and
+  // `ASIN_BRAND_SAME_AS`; the v2 `asinSameAs` sent here before is not in it. Needs one live confirmation.
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'ASIN_SAME_AS', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
   if (adsMode() === 'sandbox') {
     // 5a — sandbox refuses what liveCall would refuse.
     await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] } })
@@ -2172,24 +2314,55 @@ export async function createNegativeKeyword(ctx: ClientContext, input: CreateNeg
 }
 
 // ── Sponsored Display audience / contextual targeting (AX2.3) ───────────
-// SD /sd/targets. Audience targeting expressions: remarketing on
-// views/purchases, plus Amazon-built audiences (in-market / lifestyle /
-// interests) by audienceId. Contextual product/category reuse the same
-// asinSameAs / asinCategorySameAs clause shape as SP.
+// SD /sd/targets. CC-12 — SD's own dialect, from Amazon's SD 3.0 document (`CreateTargetingClause`): a bare array,
+// a NUMERIC adGroupId, `expressionType: 'manual'`, lowercase state, and SD predicate types (`asinSameAs`, nested
+// `views` / `purchases` with a lookback) built by `sdTargetExpression` (sd-target-expression.ts). It used to send the SP
+// shape (UPPERCASE state, string ids, `ASIN_SAME_AS`, no expressionType) and read `.success`, which SD never answers —
+// so even an accepted target came back without its id. Needs one live confirmation: no SD target create has run yet.
 export interface CreateSdTargetInput {
-  externalCampaignId: string; externalAdGroupId: string
-  expression: Array<{ type: string; value?: string }>
+  /** Not part of Amazon's create clause (a target belongs to its ad group); kept for the callers' logs. */
+  externalCampaignId?: string
+  externalAdGroupId: string
+  /** The SD-native expression — see `sdTargetExpression`. */
+  expression: SdExpression
   bid: number; state?: 'enabled' | 'paused'
+  dryRun?: boolean
 }
-export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+/** The `/sd/targets` create body for one target. Pure, so the shape is testable without a network. */
+export function sdTargetCreateBody(input: CreateSdTargetInput): Array<Record<string, unknown>> {
+  return [{
+    adGroupId: Number(input.externalAdGroupId),
+    expressionType: 'manual',
+    expression: input.expression,
+    bid: input.bid,
+    state: input.state ?? 'enabled',
+  }]
+}
+/**
+ * Read an SD create answer: a bare array of `{ code, description, targetId }` (HTTP 207). Only an id is a create; any
+ * other item is Amazon's refusal in its own words.
+ */
+export function sdCreateResult(response: unknown, idField: string): { externalId: string | null; error: string | null } {
+  const first = Array.isArray(response) ? (response[0] as Record<string, unknown> | undefined) : undefined
+  const id = first?.[idField]
+  if (id != null && String(id) !== '') return { externalId: String(id), error: null }
+  if (first && (first.code || first.description || first.details)) {
+    return { externalId: null, error: `Amazon refused it: ${[first.code, first.description ?? first.details].filter(Boolean).join(' — ')}`.slice(0, 300) }
+  }
+  return { externalId: null, error: CREATE_NO_ID }
+}
+export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error: string | null }> {
+  const body = sdTargetCreateBody(input)
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/targets', body } }, error: null }
   if (adsMode() === 'sandbox') {
     const externalId = `sb-sdtgt-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createSdTarget', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
-  const body = [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }]
-  const response = await liveCall<{ success?: Array<{ targetId: string }> }>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
-  return { ok: true, mode: 'live', externalId: response?.success?.[0]?.targetId ?? null, rawResponse: response }
+  const response = await liveCall<Array<{ code?: string; description?: string; targetId?: number | string }>>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
+  const made = sdCreateResult(response, 'targetId')
+  if (!made.externalId) logger.warn('[CC-12] createSdTarget returned no targetId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 // ── Sponsored Brands creative (AX2.9) — SB ads carry a brand creative

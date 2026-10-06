@@ -36,6 +36,9 @@ import './single.css'
 import { HeldLaunchReceipt } from '../LaunchReceipt'
 import { useLaunchReceipt } from '../useLaunchReceipt'
 import '../launch-receipt.css'
+import { useCommandKey } from '@/lib/command-key'
+import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
+import { LaunchChecksPanel } from '../LaunchChecksPanel'
 
 // SB.2 — Campaign Bidding Strategy options (verbatim Amazon copy from the recording).
 type BiddingStrategy = 'down' | 'updown' | 'fixed'
@@ -158,15 +161,9 @@ export function SingleCampaignBuilder() {
   // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
   const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
   const receipt = useLaunchReceipt(toCampaigns)
-  const launch = useCallback(async () => {
-    if (launching) return
-    if (!name.trim()) { setLaunchErr('Enter a campaign name (Campaign Details) before launching.'); return }
-    // Never guess the launch target — a silent fallback would send the campaign
-    // to the wrong country.
-    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
-    setLaunching(true); setLaunchErr('')
-    try {
-      const payload = {
+  // W2-B — the launch body, built once: the review step's checks (dryRun) and the launch send the same thing.
+  const launchUrl = `${getBackendUrl()}/api/advertising/campaign-builder/single/launch`
+  const payload = useMemo(() => ({
         market, name: name.trim(), adGroupName: adGroup.trim() || undefined, portfolioId: portfolioId || undefined,
         biddingStrategy, sites,
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
@@ -182,16 +179,34 @@ export function SingleCampaignBuilder() {
         addNegativeRule: campaignRules.some((r) => r.type === 'Negative Targeting'),
         attachRuleIds: campaignRules.filter((r) => r.ruleId).map((r) => r.ruleId as string),
         autoBidAdjust,
+  }), [market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust])
+  // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
+  const { checks, checking } = useLaunchChecks(step === 2 && market ? launchUrl : null, payload)
+  // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
+  const launchKey = useCommandKey()
+  const launch = useCallback(async () => {
+    if (launching) return
+    if (!name.trim()) { setLaunchErr('Enter a campaign name (Campaign Details) before launching.'); return }
+    // Never guess the launch target — a silent fallback would send the campaign
+    // to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    setLaunching(true); setLaunchErr('')
+    try {
+      const out = await sendLaunch<{ placement?: { sent?: boolean; reason?: string } | null }>(launchKey, launchUrl, payload)
+      if (!out.ok) throw new Error(out.error)
+      // W2-A — the launch answers `launch` (each campaign: live / partly made / not made, and why). Anything not live, or
+      // not read back as asked, stays on this screen with the receipt.
+      if (receipt.hold(out.body)) { setLaunching(false); return }
+      // CC-7 — a placement multiplier Amazon or Nexus refused is said here, not lost in a log.
+      const placement = out.body.placement
+      if (placement && placement.reason) {
+        setLaunchErr(`The campaign was created, but its placement multipliers were not set: ${placement.reason}`)
+        setLaunching(false)
+        return
       }
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/single/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json().catch(() => ({}))
-      // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why); only a launch
-      // that did not run at all is an error here. Anything not live, or not read back as asked, stays on this screen.
-      if (!j?.launch && (!r.ok || j?.ok === false)) throw new Error(j?.error || 'Launch failed')
-      if (receipt.hold(j)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust, router, receipt.hold])
+  }, [launching, market, name, launchKey, launchUrl, payload, router, receipt.hold])
   const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
   const boostChips = [bidMult.videoBoost && 'Video', bidMult.abBoost && 'Amazon Business', bidMult.audienceMod && 'Audience'].filter(Boolean) as string[]
@@ -480,6 +495,7 @@ export function SingleCampaignBuilder() {
             <h2>Review and Launch</h2>
             <p className="h10-spw-desc">Review your campaign before launching. Use <b>Edit</b> on any section to jump back and change it.</p>
 
+            <LaunchChecksPanel checks={checks} checking={checking} />
             {readiness.length > 0 && (
               <div className="h10-scb-review-warn" role="status">
                 <AlertTriangle size={16} />
@@ -505,6 +521,8 @@ export function SingleCampaignBuilder() {
                   <div className="f"><span className="l">Default Bid</span><span className="v">{defaultBid ? `€${defaultBid}` : <em className="miss">Not set</em>}</span></div>
                   <div className="f"><span className="l">Bid Strategy</span><span className="v">{bidLabel}{bidConfig.strategy === 'targetAcos' && bidConfig.targetAcos ? ` · ${bidConfig.targetAcos}% ACoS` : ''}</span></div>
                   <div className="f"><span className="l">Placement</span><span className="v">{placementParts.length ? placementParts.join(' · ') : 'No adjustments'}</span></div>
+                  {/* CC-7 — said before launch: the campaign is born on the live-write allowlist, like every builder's. */}
+                  <div className="f wide"><span className="l">Live writes</span><span className="v">Allowed from launch, like every builder&apos;s campaign, so its placement and later bid changes can reach Amazon.</span></div>
                   {boostChips.length > 0 && <div className="f wide"><span className="l">Bid Boosts</span><span className="chips">{boostChips.map((b) => <span key={b} className="chip">{b}</span>)}</span></div>}
                 </div>
               </section>
@@ -553,7 +571,8 @@ export function SingleCampaignBuilder() {
       <footer className="h10-spw-foot">
         {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
-        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching || (step === 2 && !!receipt.held)}>
+        {/* CC-21 — the readiness list is a gate now: a campaign with no products, budget, bid or targeting cannot serve. */}
+        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching || (step === 2 && (readiness.length > 0 || launchBlocked(checks) || !!receipt.held))}>
           {step < 2 ? 'Continue' : launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaign'}
         </Button>
       </footer>

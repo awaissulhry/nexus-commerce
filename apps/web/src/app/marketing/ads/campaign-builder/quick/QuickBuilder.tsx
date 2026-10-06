@@ -40,6 +40,9 @@ import './quick.css'
 import { HeldLaunchReceipt } from '../LaunchReceipt'
 import { useLaunchReceipt } from '../useLaunchReceipt'
 import '../launch-receipt.css'
+import { useCommandKey } from '@/lib/command-key'
+import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
+import { LaunchChecksPanel } from '../LaunchChecksPanel'
 
 type StepN = 1 | 2
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -140,12 +143,9 @@ export function QuickBuilder() {
   // Q.5 — gated launch via the SHARED SP-Super-Wizard endpoint: a fixed 4-campaign preset + a
   // harvest/negative rules matrix derived from the four toggles. Nothing hits Amazon until a
   // per-campaign write gate opens; the rules propose on the Suggestions page (control:'manual').
-  const launch = useCallback(async () => {
-    if (launching || !canNext) return
-    // Never guess the launch target — a silent fallback would send the campaign
-    // to the wrong country.
-    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
-    setLaunching(true); setLaunchErr('')
+  // W2-B — the launch body, built once: the review step's checks (dryRun) and the launch send the same thing.
+  const launchUrl = `${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`
+  const payload = useMemo(() => {
     const grp = productGroupName.trim()
     // Harvest sources are the discovery campaigns (Auto + Research): look for search terms (st),
     // graduate winners to exact (tE) — only Auto graduates converting ASINs to PAT (tBox) — and,
@@ -153,8 +153,7 @@ export function QuickBuilder() {
     const harvestRow = (graduateProduct: boolean) => ({ st: true, tB: false, tP: false, tE: toggles.promotion, tBox: graduateProduct && toggles.promotion, nP: false, nE: toggles.isolation, nBox: false })
     // Negative rule negates non-converting search terms (neg-exact) discovered in the same sources.
     const negRow = () => ({ st: true, tB: false, tP: false, tE: false, tBox: false, nP: false, nE: true, nBox: false })
-    try {
-      const payload = {
+    return {
         market,
         productGroupName: grp,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
@@ -177,16 +176,28 @@ export function QuickBuilder() {
         },
         automationMode: 'rule' as const,
         bidConfig: (toggles.bidAdjustment && bidConfig.strategy !== 'none') ? bidConfig : undefined,
-      }
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json().catch(() => ({}))
-      // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why); only a launch
-      // that did not run at all is an error here. Anything not live, or not read back as asked, stays on this screen.
-      if (!j?.launch && (!r.ok || j?.ok === false)) throw new Error(j?.error || 'Launch failed')
-      if (receipt.hold(j)) { setLaunching(false); return }
+    }
+  }, [market, productGroupName, products, campaigns, toggles, bidConfig, sugBid, sugBudget])
+  // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
+  const { checks, checking } = useLaunchChecks(step === 2 && market ? launchUrl : null, payload)
+  // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
+  const launchKey = useCommandKey()
+
+  const launch = useCallback(async () => {
+    if (launching || !canNext) return
+    // Never guess the launch target — a silent fallback would send the campaign
+    // to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    setLaunching(true); setLaunchErr('')
+    try {
+      const out = await sendLaunch(launchKey, launchUrl, payload)
+      if (!out.ok) throw new Error(out.error)
+      // W2-A — the launch answers `launch` (each campaign: live / partly made / not made, and why). Anything not live, or
+      // not read back as asked, stays on this screen with the receipt.
+      if (receipt.hold(out.body)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, canNext, productGroupName, products, campaigns, toggles, bidConfig, sugBid, sugBudget, router, receipt.hold])
+  }, [launching, market, canNext, launchKey, launchUrl, payload, router, receipt.hold])
 
   return (
     <div className="h10-spw h10-qcb">
@@ -277,6 +288,7 @@ export function QuickBuilder() {
 
         {step === 2 && (
           <div className="h10-qcb-review">
+            <LaunchChecksPanel checks={checks} checking={checking} />
             <section className="h10-spw-sec">
               <h2>Sponsored Product Campaigns</h2>
               <p className="h10-spw-desc">Quick generates this {campaigns.length}-campaign harvest funnel from your products. Fine-tune each bid &amp; budget below.</p>
@@ -327,7 +339,7 @@ export function QuickBuilder() {
         {step === 1 ? (
           <Button variant="primary" size="lg" onClick={goNext} disabled={!canNext}>Next</Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
+          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || launchBlocked(checks) || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>

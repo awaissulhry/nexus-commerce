@@ -150,6 +150,10 @@
       "types": "./dist/ads-market-limits.d.ts",
       "default": "./dist/ads-market-limits.js"
     },
+    "./ads-campaign-name": {
+      "types": "./dist/ads-campaign-name.d.ts",
+      "default": "./dist/ads-campaign-name.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

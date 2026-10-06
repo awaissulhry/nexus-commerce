@@ -18,12 +18,14 @@
  * PerformanceCriteria. Launch reuses the proven SPW endpoint (one additive `adProduct` field for
  * multi-type) — campaigns + AutomationRules created gated & local-first.
  *
- * SCOPE (SP backbone): SP is fully configured + launches; SB/SD are selectable with minimal
- * settings + launch as managed local shells. Full SB creative + the new DS image-upload component
- * arrive in the follow-up.
+ * SCOPE (SP backbone): SP is fully configured + launches. CC-10 — SB/SD are shown but not launchable
+ * here: this launch cannot send an SB creative or SD targets, so they were created on Amazon (paused) and
+ * could never serve. They are made in the Sponsored Brands / Display builder; the API refuses them here too.
+ * Their settings below stay in place for when Guided can send them.
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
@@ -48,6 +50,9 @@ import './guided.css'
 import { HeldLaunchReceipt } from '../LaunchReceipt'
 import { useLaunchReceipt } from '../useLaunchReceipt'
 import '../launch-receipt.css'
+import { useCommandKey } from '@/lib/command-key'
+import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
+import { LaunchChecksPanel } from '../LaunchChecksPanel'
 
 type StepN = 1 | 2 | 3 | 4
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -58,6 +63,8 @@ const STEPS: Array<{ n: StepN; label: string }> = [
 ]
 const SETUP_SUBS = ['Select Campaign Types', 'Campaign Settings']
 const EXIT_TO = '/marketing/ads/campaign-builder'
+/** CC-10 — formats Guided cannot launch (no SB creative, no SD targets); they are made in the SB/SD builder. */
+const NOT_IN_GUIDED: AdProduct[] = ['SB', 'SD']
 const CURRENCY = '€'
 const SUG_LOW = 0.73, SUG_HIGH = 1.27
 const FALLBACK_BID = 0.75, BUDGET_MULT = 50
@@ -202,19 +209,14 @@ export function GuidedBuilder() {
   }, [step, sub])
   const nextDisabled = (step === 1 && !canStep1) || (step === 2 && sub === 0 && !canTypes)
 
-  // G.6 — gated launch via the shared SPW endpoint with an additive per-campaign `adProduct`.
-  const launch = useCallback(async () => {
-    if (launching) return
-    // Never guess the launch target — a silent fallback would send the campaign
-    // to the wrong country.
-    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
-    setLaunching(true); setLaunchErr('')
+  // W2-B — the launch body, built once: the review step's checks (dryRun) and the launch send the same thing.
+  const launchUrl = `${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`
+  const payload = useMemo(() => {
     const grp = productGroupName.trim()
     // "Add Research Keywords" — every seeded keyword goes into the Research campaign(s) at its own
     // match type + bid; Performance stays empty (the harvest rules promote winners into it).
     const researchKeywords = keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidEur: Number(k.bidEur) || undefined }))
-    try {
-      const payload = {
+    return {
         market,
         productGroupName: grp,
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
@@ -234,16 +236,29 @@ export function GuidedBuilder() {
         },
         automationMode: 'rule' as const,
         bidConfig: bidConfig.strategy !== 'none' ? bidConfig : undefined,
-      }
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-builder/sp-super-wizard/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json().catch(() => ({}))
-      // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why); only a launch
-      // that did not run at all is an error here. Anything not live, or not read back as asked, stays on this screen.
-      if (!j?.launch && (!r.ok || j?.ok === false)) throw new Error(j?.error || 'Launch failed')
-      if (receipt.hold(j)) { setLaunching(false); return }
+    }
+  }, [market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget])
+  // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
+  const { checks, checking } = useLaunchChecks(step === 4 && market ? launchUrl : null, payload)
+  // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
+  const launchKey = useCommandKey()
+
+  // G.6 — gated launch via the shared SPW endpoint with an additive per-campaign `adProduct`.
+  const launch = useCallback(async () => {
+    if (launching) return
+    // Never guess the launch target — a silent fallback would send the campaign
+    // to the wrong country.
+    if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    setLaunching(true); setLaunchErr('')
+    try {
+      const out = await sendLaunch(launchKey, launchUrl, payload)
+      if (!out.ok) throw new Error(out.error)
+      // W2-A — the launch answers `launch` (each campaign: live / partly made / not made, and why). Anything not live, or
+      // not read back as asked, stays on this screen with the receipt.
+      if (receipt.hold(out.body)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget, router, receipt.hold])
+  }, [launching, market, launchKey, launchUrl, payload, router, receipt.hold])
 
   const typeCampaigns = (t: AdProduct) => campaigns.filter((c) => c.adProduct === t)
 
@@ -340,7 +355,13 @@ export function GuidedBuilder() {
             <section className="h10-spw-sec">
               <h2>Select Campaign Types</h2>
               <p className="h10-spw-desc">Select the campaign types you want to launch. You can add multiple campaign types.</p>
-              <CampaignTypeSelect value={types} onChange={setTypes} />
+              <CampaignTypeSelect value={types} onChange={setTypes} disabled={NOT_IN_GUIDED} disabledLabel="Not in Guided" />
+              <p className="h10-gcb-note">
+                Sponsored Brands and Sponsored Display are not launched from Guided: it cannot send their creative or
+                targets, so Amazon could not serve them. Create them in the{' '}
+                <Link href="/marketing/ads/campaign-builder/sb-sd?type=SB">Sponsored Brands builder</Link> or the{' '}
+                <Link href="/marketing/ads/campaign-builder/sb-sd?type=SD">Sponsored Display builder</Link>.
+              </p>
               {types.includes('SD') && (
                 <p className="h10-gcb-note">Sponsored Display launches as a Product Targeting campaign — configure its bids &amp; budget in the next step.</p>
               )}
@@ -419,6 +440,7 @@ export function GuidedBuilder() {
         {/* Step 4 — Review and Launch */}
         {step === 4 && (
           <div className="h10-gcb-col">
+            <LaunchChecksPanel checks={checks} checking={checking} />
             <section className="h10-spw-sec">
               <div className="h10-spw-card h10-spw-pgd">
                 <h3>Product Group Details</h3>
@@ -466,7 +488,7 @@ export function GuidedBuilder() {
         {step < 4 ? (
           <Button variant="primary" size="lg" onClick={goNext} disabled={nextDisabled}>Next</Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
+          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || launchBlocked(checks) || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>

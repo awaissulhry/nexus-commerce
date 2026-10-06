@@ -97,10 +97,11 @@ export async function applyPlan(input: ArchitectInput): Promise<ArchitectResult>
       const c = await createCampaignLocal({ name: pc.name, type: pc.type, marketplace: input.marketplace, targetingType: pc.targetingType, dailyBudgetEur: pc.dailyBudgetEur, portfolioId: input.portfolioId, userId: input.userId })
       created.campaigns++; campaignIds.push(c.id)
       for (const pg of pc.adGroups) {
-        const g = await createAdGroupLocal({ campaignId: c.id, name: pg.name, defaultBidEur: pg.defaultBidEur, userId: input.userId })
+        // CM-20 — `creationFlow`: the campaign was created just above, in this same apply.
+        const g = await createAdGroupLocal({ campaignId: c.id, name: pg.name, defaultBidEur: pg.defaultBidEur, userId: input.userId, creationFlow: true })
         created.adGroups++
-        if (input.productSku || input.productAsin) { await createProductAdLocal({ adGroupId: g.id, sku: input.productSku, asin: input.productAsin, userId: input.userId }); created.productAds++ }
-        for (const kw of pg.keywords) { await createKeywordLocal({ adGroupId: g.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidEur, userId: input.userId }); created.keywords++ }
+        if (input.productSku || input.productAsin) { await createProductAdLocal({ adGroupId: g.id, sku: input.productSku, asin: input.productAsin, userId: input.userId, creationFlow: true }); created.productAds++ }
+        for (const kw of pg.keywords) { await createKeywordLocal({ adGroupId: g.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidEur, userId: input.userId, creationFlow: true }); created.keywords++ }
       }
     }
     logger.info('[AX.6] architect applied', { strategy: input.strategy, created })

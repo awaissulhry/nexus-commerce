@@ -25,6 +25,7 @@ import {
   ALL_STATES, type AdsRegion,
 } from './ads-api-client.js'
 import { AUTO_CLAUSE_LABEL, autoClauseFromSpelling, autoClauseOf, type AutoClause } from '../ads-core/ads-blueprint.js'
+import { sdExpressionValue } from './sd-target-expression.js'
 import {
   verifyEntity, summarise, describeVerdict,
   type EntityPair, type LaunchEntityResult, type LaunchVerificationSummary,
@@ -352,7 +353,8 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
         entities.push(verifyEntity({
           entityType: 'TARGET', localId: t.id, externalId: t.externalTargetId, label,
           intended: { value: t.expressionValue, state: t.status, bid: centsToUnits(t.bidCents) },
-          observed: tg === undefined ? undefined : { value: tg.expression?.[0]?.value, state: tg.state, bid: tg.bid },
+          // CC-12 — an SD audience is nested (`views` → [exactProduct, lookback]); compare the text it names, as Nexus stores it.
+          observed: tg === undefined ? undefined : { value: fam === 'SD' ? sdExpressionValue(tg.expression) : tg.expression?.[0]?.value, state: tg.state, bid: tg.bid },
         }))
       }
     }

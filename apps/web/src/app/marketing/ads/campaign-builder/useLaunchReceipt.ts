@@ -22,7 +22,8 @@ export function useLaunchReceipt(onAllGood: () => void) {
   const [recheckError, setRecheckError] = useState('')
 
   /** Keep the answer when it needs the receipt (returns true: stay on the screen); false = all good, move on. */
-  const hold = useCallback((answer: LaunchAnswer): boolean => {
+  const hold = useCallback((body: unknown): boolean => {
+    const answer = (body ?? {}) as LaunchAnswer
     if (!needsReceipt(answer)) return false
     setHeld({ launch: answer.launch ?? null, verification: (answer.verification as LaunchVerification | null | undefined) ?? null, ids: recheckIds(answer) })
     setRecheckError('')

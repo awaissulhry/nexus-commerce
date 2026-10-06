@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Crosshair, RefreshCw, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -71,7 +72,7 @@ export function RankConquestMode() {
     try {
       let ok = 0
       for (const asin of validAsins) {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId, kind: 'PRODUCT', value: asin.toUpperCase(), bidEur: Number(bid) || 0.75 }) }).then((x) => x.ok).catch(() => false)
+        const r = await adsKeyedPost('/api/advertising/targets/create', { adGroupId, kind: 'PRODUCT', value: asin.toUpperCase(), bidEur: Number(bid) || 0.75 }).then((x) => x.ok).catch(() => false)
         if (r) ok++
       }
       setMsg(`Created ${ok}/${validAsins.length} conquesting target(s).${invalidAsins.length ? ` Skipped ${invalidAsins.length} invalid.` : ''}`)

@@ -13,6 +13,17 @@
  * the Rome calendar dates for the preset, then express them as UTC-midnight
  * Date objects for gte/lte filtering on that column. Back-compatible: with no
  * preset/dates, falls back to windowDays (default 7).
+ *
+ * 🔴 AM-16 — THE WINDOW RULE, the same on every ads screen (the web picker's
+ * `presetRange` follows it too):
+ *   · "Last N days" (last7/14/30/90 and the windowDays fallback) is the N COMPLETE
+ *     days ending YESTERDAY. Amazon's daily report for a day arrives the next
+ *     morning, so a window ending today held N−1 days of data and was compared
+ *     with N full days: every change was biased down by about 1/N.
+ *   · Ranges that name today (Today, week/month/quarter/year to date, Lifetime,
+ *     a custom range ending today) still include today; the Ad Manager and the
+ *     campaign page add today's spend from the hourly stream there.
+ *   · A comparison only ever uses complete days: `comparisonRanges` below.
  */
 
 const TZ = 'Europe/Rome'
@@ -68,10 +79,11 @@ export function resolveRange(
     switch (preset) {
       case 'today': sinceStr = today; untilStr = today; break
       case 'yesterday': sinceStr = addDaysStr(today, -1); untilStr = sinceStr; break
-      case 'last7': sinceStr = addDaysStr(today, -6); untilStr = today; break
-      case 'last14': sinceStr = addDaysStr(today, -13); untilStr = today; break
-      case 'last30': sinceStr = addDaysStr(today, -29); untilStr = today; break
-      case 'last90': sinceStr = addDaysStr(today, -89); untilStr = today; break
+      // AM-16 — N complete days ending yesterday (see the header).
+      case 'last7': sinceStr = addDaysStr(today, -7); untilStr = addDaysStr(today, -1); break
+      case 'last14': sinceStr = addDaysStr(today, -14); untilStr = addDaysStr(today, -1); break
+      case 'last30': sinceStr = addDaysStr(today, -30); untilStr = addDaysStr(today, -1); break
+      case 'last90': sinceStr = addDaysStr(today, -90); untilStr = addDaysStr(today, -1); break
       case 'wtd': { // week starts Monday (ISO)
         const dow = (atUtcMidnight(today).getUTCDay() + 6) % 7 // Mon=0
         sinceStr = addDaysStr(today, -dow); untilStr = today; break
@@ -95,9 +107,9 @@ export function resolveRange(
         sinceStr = `${y}-01-01`; untilStr = `${y}-12-31`; break
       }
       case 'lifetime': sinceStr = LIFETIME_START; untilStr = today; break
-      default: { // windowDays fallback (back-compat)
+      default: { // windowDays fallback (back-compat) — AM-16: complete days, ending yesterday
         const wd = Math.max(1, Math.min(730, Number(q.windowDays) || 7))
-        sinceStr = addDaysStr(today, -(wd - 1)); untilStr = today
+        sinceStr = addDaysStr(today, -wd); untilStr = addDaysStr(today, -1)
         preset = 'window'
       }
     }
@@ -135,6 +147,33 @@ export function priorRange(r: ResolvedRange): ResolvedRange {
     days: r.days,
     includesToday: false,
   }
+}
+
+/** The last complete Rome calendar day ('YYYY-MM-DD') — yesterday. */
+export function lastCompleteDay(now: Date = new Date()): string {
+  return addDaysStr(romeDateStr(now), -1)
+}
+
+/**
+ * AM-16 — what a "vs previous period" change compares, on every ads screen: COMPLETE DAYS ONLY.
+ *
+ * A window that ends before today is compared with the equal block before it (`priorRange`). A window that runs
+ * into today (week/month/year to date, a custom range ending today) is compared on its complete days — through
+ * yesterday — against the same number of days just before them: today is unfinished and has no daily report yet,
+ * so counting it on one side only biases every change down. `todayLeftOut` says so, for the label. A window of
+ * today alone has no complete day: null, and the screen shows no change rather than a made-up one.
+ */
+export function comparisonRanges(
+  r: ResolvedRange,
+  now: Date = new Date(),
+): { current: ResolvedRange; prior: ResolvedRange; todayLeftOut: boolean } | null {
+  const last = lastCompleteDay(now)
+  if (r.untilStr <= last) return { current: r, prior: priorRange(r), todayLeftOut: false }
+  if (r.sinceStr > last) return null
+  const current: ResolvedRange = {
+    ...r, until: atUtcMidnight(last), untilStr: last, days: daysBetween(r.sinceStr, last), includesToday: false,
+  }
+  return { current, prior: priorRange(current), todayLeftOut: true }
 }
 
 /** Adaptive chart bucket for a range — daily for short, weekly/monthly for long,

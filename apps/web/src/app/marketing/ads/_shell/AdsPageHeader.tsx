@@ -17,32 +17,13 @@ import Link from '@/lib/workspaces/Link'
 import { usePathname } from '@/lib/workspaces/navigation'
 import { RefreshCw, ChevronDown, History } from 'lucide-react'
 import { Button, Spinner } from '@/design-system/primitives'
-import { DateRangePicker } from './DateRangePicker'
+import { DateRangePicker, lastCompleteDays } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
 import type { AdsMarket } from './MarketplaceContext'
 
-// Kept for AdManagerGraph (preset → {start,end}); the header itself now uses the
-// full DateRangePicker. Safe to retire once the graph moves to an explicit range.
-export const RANGE_PRESETS: Array<{ key: string; label: string }> = [
-  { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last7', label: 'Last 7 Days' }, { key: 'last30', label: 'Last 30 Days' },
-  { key: 'thisMonth', label: 'This Month' }, { key: 'lastMonth', label: 'Last Month' },
-]
-const fmtMD = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
-export function rangeBounds(preset: string): { start: Date; end: Date } {
-  const end = new Date(); const start = new Date()
-  switch (preset) {
-    case 'today': break
-    case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); break
-    case 'last30': start.setDate(start.getDate() - 29); break
-    case 'thisMonth': start.setDate(1); break
-    case 'lastMonth': start.setMonth(start.getMonth() - 1, 1); end.setDate(0); break
-    case 'last7': default: start.setDate(start.getDate() - 6); break
-  }
-  return { start, end }
-}
-export function rangeLabel(preset: string): string { const { start, end } = rangeBounds(preset); return `${fmtMD(start)} - ${fmtMD(end)}` }
+// AM-10 — the preset path that fed the Ad Manager graph (`RANGE_PRESETS` / `rangeBounds`, always "last 7 days") is
+// gone: the graph now draws the range this header's picker holds.
 
 export interface HeaderAction { label: string; href?: string; onClick?: () => void }
 /** A single primary button rendered in place of the Action ▾ dropdown (e.g. the
@@ -133,7 +114,8 @@ export function AdsPageHeader({
   const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'
   const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
-  const [ownRange, setOwnRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+  // AM-16 — the default window is the 7 complete days ending yesterday (DateRangePicker's rule).
+  const [ownRange, setOwnRange] = useState(() => lastCompleteDays(7))
   // Controlled when the parent passes one, uncontrolled otherwise — see the `dateRange` prop doc.
   const shownRange = dateRange ?? ownRange
 
