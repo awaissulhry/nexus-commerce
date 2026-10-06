@@ -230,7 +230,8 @@ export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | '
 
 /**
  * AA-W2-4 — a watch verdict as Claude reads it: would it have run by rule, which check held it and why; a plan says how
- * many of its steps would have run (its recorded verdict holds each step: claude-activity, the Approvals page).
+ * many of its steps would have run (its recorded verdict holds each step: claude-activity, the Approvals page). W4-5 —
+ * `scope`: the connection has no nexus.run, so the verdict is judged as if it had (claude-trust.service.ts watchScopeOf).
  */
 function watchShown(verdict: WatchVerdict) {
   const steps = verdict.steps
@@ -238,6 +239,7 @@ function watchShown(verdict: WatchVerdict) {
     wouldRun: verdict.wouldRun,
     check: verdict.check,
     why: verdict.why,
+    ...(verdict.scope ? { scope: verdict.scope } : {}),
     ...(steps ? { steps: { total: steps.length, wouldRun: steps.filter((step) => step.wouldRun).length } } : {}),
   }
 }
