@@ -442,6 +442,8 @@
     "SqpReportRequest",
     "AdSpendCeiling",
     "AdBidPolicy",
+    "AdsStrategy",
+    "AdsStrategyVersion",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

@@ -9124,6 +9124,70 @@ CREATE TABLE "AdBidPolicy" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsStrategy" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'AMAZON',
+    "market" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "scopeId" TEXT NOT NULL DEFAULT '*',
+    "label" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "goal" TEXT,
+    "goalNote" TEXT,
+    "targetKind" TEXT,
+    "targetPct" INTEGER,
+    "monthlySpendCapCents" INTEGER,
+    "minBidCents" INTEGER,
+    "maxBidCents" INTEGER,
+    "maxChangePct" INTEGER,
+    "maxActionsPerRun" INTEGER,
+    "protect" BOOLEAN,
+    "harvestMinOrders" INTEGER,
+    "harvestMinClicks" INTEGER,
+    "harvestMaxAcosPct" INTEGER,
+    "harvestWindowDays" INTEGER,
+    "negateMinClicks" INTEGER,
+    "negateMinSpendCents" INTEGER,
+    "negateMaxOrders" INTEGER,
+    "negateWindowDays" INTEGER,
+    "stopMethod" TEXT,
+    "stopBidCents" INTEGER,
+    "claudeAutonomy" JSONB,
+    "reviewEveryDays" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsStrategy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsStrategyVersion" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "strategyId" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "market" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "scopeId" TEXT NOT NULL,
+    "version" INTEGER NOT NULL,
+    "op" TEXT NOT NULL,
+    "values" JSONB,
+    "changes" JSONB NOT NULL,
+    "direction" TEXT NOT NULL,
+    "via" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "actor" TEXT NOT NULL,
+    "actorUserId" TEXT,
+    "stepUpAt" TIMESTAMP(3),
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsStrategyVersion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -14675,6 +14739,24 @@ CREATE INDEX "AdBidPolicy_workspaceId_idx" ON "AdBidPolicy"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdBidPolicy_grain_scopeId_key" ON "AdBidPolicy"("workspaceId", "grain", "scopeId");
+
+-- CreateIndex
+CREATE INDEX "AdsStrategy_market_level_idx" ON "AdsStrategy"("market", "level");
+
+-- CreateIndex
+CREATE INDEX "AdsStrategy_workspaceId_idx" ON "AdsStrategy"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsStrategy_channel_market_level_scopeId_key" ON "AdsStrategy"("workspaceId", "channel", "market", "level", "scopeId");
+
+-- CreateIndex
+CREATE INDEX "AdsStrategyVersion_market_level_scopeId_createdAt_idx" ON "AdsStrategyVersion"("market", "level", "scopeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsStrategyVersion_workspaceId_idx" ON "AdsStrategyVersion"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsStrategyVersion_strategyId_version_key" ON "AdsStrategyVersion"("workspaceId", "strategyId", "version");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

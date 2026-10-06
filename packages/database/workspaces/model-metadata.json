@@ -6683,6 +6683,14 @@
       "fields": []
     },
     {
+      "name": "AdsStrategy",
+      "fields": []
+    },
+    {
+      "name": "AdsStrategyVersion",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },
