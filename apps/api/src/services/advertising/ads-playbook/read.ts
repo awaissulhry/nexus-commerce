@@ -17,6 +17,9 @@
  *              engine's gate — nothing is created, saved or sent
  *   build      PB-5a — the builds of a product's playbook (or one, by applicationId): status, progress, the campaigns
  *              each made (at Amazon or not, off the allowlist, at the floor), what failed, what START will apply
+ *   winners    PB-6c — one product's search terms in one market (winners.ts): winning where they run (kept there),
+ *              declining or lost, and the next step for each in the Owner's order — bid (auto-bid is on it), placement
+ *              (a research slot), or a campaign of its own (apply-ads-playbook op hero) — read-only
  *
  * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply
  * (PB-5a: apply-ads-playbook build and adopt; start, sync and phase come later); until then it is stored and shown only,
@@ -50,7 +53,7 @@ import {
   type TemplateRow,
 } from './resolve.js'
 
-export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build'] as const
+export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build', 'winners'] as const
 export type PlaybookViewName = (typeof PLAYBOOK_VIEWS)[number]
 
 export interface PlaybookReadArgs {
@@ -368,6 +371,26 @@ async function buildIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookRe
   }
 }
 
+// ── PB-6c — the winners ───────────────────────────────────────────────────────────────────────────
+
+const WINNERS_NOTE =
+  'A winning term stays where it runs (nothing is proposed for it). A declining or lost one gets the first step that '
+  + 'applies: bid (auto-bid already moves its bid toward the target), placement (a research slot or its own campaign: '
+  + 'set-placement-multipliers), or a campaign of its own (apply-ads-playbook op hero: born at the floor, off the '
+  + 'allowlist, waiting for a person; the term keeps running where it is until that campaign proves itself). An hourly '
+  + "plan's campaign and a performance slot are reported only. The bar is the ads strategy's harvest group, the target "
+  + "the one auto-bid steers by, the band the strategy's. Only this product's own campaigns are read."
+
+async function winnersIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookReadResult> {
+  if (!a.market) return fail(400, 'The winners are read for one product in one market: name the market.')
+  if (!a.productId && !a.sku) return fail(400, 'The winners are read for one product: name it (productId or sku).')
+  if (a.productId && a.sku) return fail(400, 'Name the product once: productId or sku, not both.')
+  const { winnerReview } = await import('./winners.js')
+  const out = await winnerReview({ market: a.market.trim().toUpperCase(), productId: a.productId, sku: a.sku })
+  if ('error' in out) return out
+  return { data: { channel, view: 'winners', ...out.data, note: WINNERS_NOTE } }
+}
+
 const linkOut = (l: { playbookId: string; kind: string; key: string; refId: string; adGroupId: string | null; origin: string; compiledVersion: number }) => ({
   playbookId: l.playbookId, kind: l.kind, key: l.key, refId: l.refId, adGroupId: l.adGroupId, origin: l.origin, compiledVersion: l.compiledVersion,
 })
@@ -388,6 +411,7 @@ export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookRead
     return previewBuild({ market: args.market, productId: args.productId, sku: args.sku, channel })
   }
   if (view === 'build') return buildIn(args, channel)
+  if (view === 'winners') return winnersIn(args, channel)
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 20), 1), 100)
   if (view === 'history' && args.templateId) {
     const versions = await playbookVersions({ kind: 'template', refId: args.templateId }, limit)

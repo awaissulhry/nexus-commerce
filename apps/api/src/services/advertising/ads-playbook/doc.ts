@@ -268,7 +268,8 @@ export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
  */
 export const PLAYBOOK_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
-  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents'].map((key) => [key, FIELDS.financialsAdspendView])),
+  // PB-6c — a term's ACoS in the winners view.
+  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents', 'acosPct'].map((key) => [key, FIELDS.financialsAdspendView])),
 }
 
 // ── Checks across sections ────────────────────────────────────────────────────────────────────────

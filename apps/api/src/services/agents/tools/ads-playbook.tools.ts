@@ -59,7 +59,7 @@ const adsPlaybook: AgentTool = {
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (IT, DE, FR, ES, UK; business-overview lists them); omit for every market with a playbook or a campaign. capture needs one'),
     view: z.enum(PLAYBOOK_VIEWS).default('effective')
-      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created); build: the builds of a product\'s playbook (market and productId or sku), or one build (applicationId)'),
+      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created); build: the builds of a product\'s playbook (market and productId or sku), or one build (applicationId); winners: one product\'s search terms in one market — winning where they run, declining or lost, and the next step for each (market and productId or sku)'),
     productId: ID.optional().describe('effective or history: one product (a variation or a parent), its Nexus id'),
     sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
     categoryId: ID.optional().describe('effective or history: one category, its Nexus id (catalog-structure)'),
@@ -95,7 +95,12 @@ const adsPlaybook: AgentTool = {
     + "terms the product's own other campaigns already buy (skipped or accepted, as the template says), the terms other "
     + "products' campaigns also buy (kept and only listed: different products may share a keyword), the monthly caps, "
     + "the portfolio, and the blueprint gate's blockers — nothing is created, saved or sent. view build follows the builds "
-    + 'apply-ads-playbook started (status, progress, the campaigns each made, what failed, what START will apply). No engine, '
+    + 'apply-ads-playbook started (status, progress, the campaigns each made, what failed, what START will apply). view '
+    + "winners reads one product's search terms in its playbook campaigns in one market: winning where they run (kept there, "
+    + 'nothing proposed), declining or lost, each with its next step in this order — bid (auto-bid already moves it toward '
+    + 'the target), placement (a research slot or the term\'s own campaign, set-placement-multipliers), or a campaign of its '
+    + 'own (apply-ads-playbook op hero) — with the bar (the strategy\'s harvest group), the target and the band it was judged '
+    + 'on; an hourly plan\'s campaign or a performance slot is reported only. No engine, '
     + 'rule or Claude change follows a playbook until an approved apply compiles it. Budgets, bids and targets are '
     + 'ad-spend money: hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

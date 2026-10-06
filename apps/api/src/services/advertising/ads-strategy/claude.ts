@@ -47,9 +47,10 @@ const treatedAs = new Map<string, ClaudeActionType>()
 /**
  * PB-5a — a tool whose ops are different kinds of ad action: the kind of each op (null: the strategy never narrows that
  * op — an adopt only writes Nexus links). An op not listed, or no args, is the tool's kind in CLAUDE_ACTION_TOOLS.
+ * PB-6c — a hero creates one campaign: a create, as a build.
  */
 export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | null>>>> = {
-  'apply-ads-playbook': { build: 'create', adopt: null },
+  'apply-ads-playbook': { build: 'create', adopt: null, hero: 'create' },
 }
 
 /** The kind of ad action a tool is (for these args: an op of OP_ACTIONS), or null: the strategy never narrows it. */
