@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Search, ChevronDown, RefreshCw, Plus, Ban, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Button, Input, ToolbarButton } from '@/design-system/primitives'
@@ -188,14 +189,14 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
     const key = `${r.query}:${r.campaignId}`; setBusy(key)
     try {
       const bidEur = r.cpc && r.cpc > 0 ? Math.max(0.1, Math.round(r.cpc * 100) / 100) : 0.5
-      const res = await fetch(`${getBackendUrl()}/api/advertising/search-terms/promote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: r.query, externalAdGroupId: r.adGroupId, matchType, bidEur }) })
+      const res = await adsKeyedPost('/api/advertising/search-terms/promote', { query: r.query, externalAdGroupId: r.adGroupId, matchType, bidEur })
       if (res.ok) setDone((d) => ({ ...d, [key]: matchType === 'EXACT' ? 'exact' : 'phrase' }))
     } finally { setBusy(null) }
   }
   const negate = async (r: ST) => {
     const key = `${r.query}:${r.campaignId}`; setBusy(key)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/advertising/negative-keywords`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId: r.campaignId, externalAdGroupId: r.adGroupId, keywordText: r.query, matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: r.marketplace }) })
+      const res = await adsKeyedPost('/api/advertising/negative-keywords', { externalCampaignId: r.campaignId, externalAdGroupId: r.adGroupId, keywordText: r.query, matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: r.marketplace })
       if (res.ok) setDone((d) => ({ ...d, [key]: 'neg' }))
     } finally { setBusy(null) }
   }

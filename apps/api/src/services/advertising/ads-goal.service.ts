@@ -68,12 +68,13 @@ export async function applyGoalPlan(plan: GoalPlan, userId?: string): Promise<{ 
     const c = await createCampaignLocal({ name: `${plan.goalName} - ${side}`, type: 'SP', marketplace: plan.marketplace, targetingType: 'MANUAL', dailyBudgetEur: cfg.dailyBudgetEur, biddingStrategy: 'autoForSales', userId })
     // Persist the side's target ACoS for the bid optimizer to honour.
     await prisma.campaign.update({ where: { id: c.id }, data: { dynamicBidding: { targetAcos: cfg.targetAcos, goal: plan.goalName, side } as never } }).catch(() => {})
-    const g = await createAdGroupLocal({ campaignId: c.id, name: `${plan.goalName} - ${side}`, defaultBidEur: 0.5, userId })
-    for (const asin of plan.asins) await createProductAdLocal({ adGroupId: g.id, asin, userId }).catch(() => {})
-    for (const sku of plan.skus ?? []) await createProductAdLocal({ adGroupId: g.id, sku, userId }).catch(() => {})
+    // CM-20 — `creationFlow`: the campaign was created just above, in this same apply.
+    const g = await createAdGroupLocal({ campaignId: c.id, name: `${plan.goalName} - ${side}`, defaultBidEur: 0.5, userId, creationFlow: true })
+    for (const asin of plan.asins) await createProductAdLocal({ adGroupId: g.id, asin, userId, creationFlow: true }).catch(() => {})
+    for (const sku of plan.skus ?? []) await createProductAdLocal({ adGroupId: g.id, sku, userId, creationFlow: true }).catch(() => {})
     let kw = 0
     for (const text of cfg.keywords.map((k) => k.trim()).filter(Boolean)) {
-      for (const mt of plan.matchTypes) { await createKeywordLocal({ adGroupId: g.id, keywordText: text, matchType: mt, bidEur: 0.5, userId }).catch(() => {}); kw++ }
+      for (const mt of plan.matchTypes) { await createKeywordLocal({ adGroupId: g.id, keywordText: text, matchType: mt, bidEur: 0.5, userId, creationFlow: true }).catch(() => {}); kw++ }
     }
     created.push({ side, campaignId: c.id, keywords: kw })
   }

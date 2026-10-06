@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { sendCommand, useCommandKey } from '@/lib/command-key'
 import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea, TokenChip } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -77,6 +78,8 @@ export function SbSdBuilder() {
   const [tactic, setTactic] = useState<'T00020' | 'T00030'>('T00020')
   const [startEnabled, setStartEnabled] = useState(false)
   const [preview, setPreview] = useState<unknown>(null)
+  // CC-24 — Create is one keyed command per press: an answer lost and re-sent never makes a second campaign.
+  const createKey = useCommandKey()
   const [busy, setBusy] = useState<'preview' | 'create' | null>(null)
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [verification, setVerification] = useState<Verification | null>(null)
@@ -356,11 +359,11 @@ export function SbSdBuilder() {
           return
         }
       }
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/create`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, dryRun }),
-      })
-      const j = await r.json()
+      const url = `${getBackendUrl()}/api/advertising/campaigns/create`
+      const init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, dryRun }) }
+      const sent = dryRun ? null : await sendCommand<Record<string, any>>(createKey, url, init)
+      const r = sent ? sent.response : await fetch(url, init)
+      const j = sent ? (sent.body ?? {}) : await r.json()
       if (!r.ok || j?.error) { setResult({ ok: false, msg: j?.error ?? `HTTP ${r.status}` }); return }
       if (dryRun) {
         /**
@@ -379,7 +382,11 @@ export function SbSdBuilder() {
         }
         setPreview((j?.dryRun as { wouldSend?: unknown })?.wouldSend ?? j?.dryRun)
       }
-      else await finishLaunch(j)
+      else {
+        await finishLaunch(j)
+        // CC-24 — the preview was for this create: Create stays off until a new preview, so it cannot be pressed twice.
+        setPreview(null)
+      }
     } catch (e) {
       setResult({ ok: false, msg: (e as Error).message })
     } finally { setBusy(null) }

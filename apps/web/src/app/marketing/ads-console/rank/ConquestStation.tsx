@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { Button, Input, Textarea } from '@/design-system/primitives'
 import { Listbox } from '@/design-system/components/Listbox'
 
@@ -51,7 +52,7 @@ export function ConquestStation({ campaignId, onChanged }: { campaignId: string;
     setBusy(true); setMsg('')
     let ok = 0
     for (const asin of parsed.valid) {
-      try { const r = await fetch(`${getBackendUrl()}/api/advertising/targets/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adGroupId, kind: 'PRODUCT', value: asin, bidEur: Number(bid) || 0.75 }) }).then(x => x.ok); if (r) ok += 1 } catch { /* continue */ }
+      try { const r = await adsKeyedPost('/api/advertising/targets/create', { adGroupId, kind: 'PRODUCT', value: asin, bidEur: Number(bid) || 0.75 }).then(x => x.ok); if (r) ok += 1 } catch { /* continue */ }
     }
     setMsg(`Created ${ok}/${parsed.valid.length} competitor target${parsed.valid.length === 1 ? '' : 's'} at €${(Number(bid) || 0.75).toFixed(2)}.`)
     setAsinsRaw(''); onChanged(); setBusy(false)

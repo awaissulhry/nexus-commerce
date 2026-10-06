@@ -62,6 +62,26 @@ const COMMAND_SCOPES: Record<string, string> = {
   // answer is lost and the row sends again (the row keeps its key while the outcome is unknown).
   '/api/catalog/products/:parentId/children': 'variation-create',
   '/api/products/:id/aliases': 'alias-create',
+  // CC-24 / CM-33 — one launch click, one set of Amazon campaigns. A launch runs every Amazon call inside its request;
+  // when the edge proxy drops the answer, the builder's retry (same key) waits for the run or replays its result
+  // instead of building the campaigns a second time.
+  '/api/advertising/campaign-builder/sp-super-wizard/launch': 'ads-spw-launch',
+  '/api/advertising/campaign-builder/single/launch': 'ads-single-launch',
+  '/api/advertising/campaign-builder/launch': 'ads-guided-launch',
+  '/api/advertising/blueprints/replicate': 'ads-replicate',
+  '/api/advertising/ai-goals': 'ads-goal-create',
+  '/api/advertising/ai-goals/:id/materialize': 'ads-goal-materialize',
+  // CM-33 — one add (campaign, ad group, keyword, product ad, target, negative, creative) per press, even when the
+  // answer is lost and the screen sends it again.
+  '/api/advertising/campaigns/create': 'ads-campaign-create',
+  '/api/advertising/adgroups/create': 'ads-adgroup-create',
+  '/api/advertising/keywords/create': 'ads-keyword-create',
+  '/api/advertising/product-ads/create': 'ads-product-ad-create',
+  '/api/advertising/targets/create': 'ads-target-create',
+  '/api/advertising/negative-targets/create': 'ads-negative-target-create',
+  '/api/advertising/negative-keywords': 'ads-negative-keyword-create',
+  '/api/advertising/sb-creatives/create': 'ads-sb-creative-create',
+  '/api/advertising/search-terms/promote': 'ads-search-term-promote',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */
