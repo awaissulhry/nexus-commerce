@@ -4,8 +4,9 @@
  *
  * The promises: an app registers only Claude's own redirect URIs; a person approves with a fresh,
  * single-use 2FA code for a business where they may use the assistant; the code is swapped once,
- * with its PKCE verifier; a refresh token works once, and a second use ends the connection; every
- * call on /mcp re-checks the token, the connection and the membership.
+ * with its PKCE verifier; a refresh token works once, and a second use ends the connection (W4-3: unless the same
+ * app retries within 2 minutes, before the first answer was used); every call on /mcp re-checks the token, the
+ * connection and the membership.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,7 +20,7 @@ vi.mock('../../db.js', () => ({
 }))
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
-import { generateToken } from '../../lib/auth/tokens.js'
+import { generateToken, hashToken } from '../../lib/auth/tokens.js'
 import { __clientTest, cimdUnreachable, registerClient, resolveClient } from './oauth-clients.js'
 import { mcpResourceFor } from './oauth-config.js'
 import { logger } from '../../utils/logger.js'
@@ -274,6 +275,7 @@ describe('MCP.5 — tokens', () => {
     const { tokens } = await connect()
     const next = await refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId })
     expect(await verifyAccessToken(next.access_token)).not.toBeNull()
+    // W4-3 — the new access token made a call, so the second use is no retry (that case is below).
     await expectOAuthError(
       refreshTokens({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId }),
       'invalid_grant',
@@ -477,5 +479,100 @@ describe('C4 — one connection per business: its own MCP URL', () => {
     } finally {
       vi.stubEnv('NEXUS_MCP_WORKSPACES', '')
     }
+  })
+})
+
+describe('W4-3 — a refresh presented again within seconds by the same app, before its answer was used', () => {
+  const refresh = (token: string, app = clientId) => refreshTokens({ grant_type: 'refresh_token', refresh_token: token, client_id: app })
+  const grantRow = () => database.client.oAuthGrant.findFirstOrThrow({ where: { userId, workspaceId: LEGACY_WORKSPACE_ID } })
+  const retries = async () => database.client.workspaceAudit.count({ where: { action: 'oauth.refresh_grace', targetId: (await grantRow()).id } })
+  /** Move a token's first use into the past, as if that many seconds went by. */
+  const usedSecondsAgo = (token: string, seconds: number) =>
+    database.client.oAuthToken.update({ where: { tokenHash: hashToken(token) }, data: { usedAt: new Date(Date.now() - seconds * 1000) } })
+
+  async function expectConnectionEnded(replay: Promise<unknown>, accessTokens: string[]) {
+    await expectOAuthError(replay, 'invalid_grant')
+    expect((await grantRow()).revokeReason).toBe('refresh_reuse')
+    for (const token of accessTokens) expect(await verifyAccessToken(token)).toBeNull()
+  }
+
+  it('gets a new pair: the unused pair of the first answer ends, the connection stays, and it is audited and logged', async () => {
+    const { tokens } = await connect()
+    const before = await retries()
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    try {
+      const lost = await refresh(tokens.refresh_token) // the answer that never reached the app
+      await usedSecondsAgo(tokens.refresh_token, 110)
+      const retried = await refresh(tokens.refresh_token)
+      expect(retried.refresh_token).not.toBe(lost.refresh_token)
+      expect(await verifyAccessToken(lost.access_token)).toBeNull()
+      expect(await verifyAccessToken(retried.access_token)).not.toBeNull()
+      expect((await grantRow()).revokedAt).toBeNull()
+      // The new pair goes on as usual; the ended one is refused.
+      expect(await verifyAccessToken((await refresh(retried.refresh_token)).access_token)).not.toBeNull()
+      await expectOAuthError(refresh(lost.refresh_token), 'invalid_grant')
+
+      const grantId = (await grantRow()).id
+      expect(await retries()).toBe(before + 1)
+      const audit = await database.client.workspaceAudit.findFirst({ where: { action: 'oauth.refresh_grace', targetId: grantId }, orderBy: { createdAt: 'desc' } })
+      expect(audit).toMatchObject({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, metadata: { reason: 'refresh_retry', ended: 2 } })
+      expect((audit?.metadata as { secondsAfterFirstUse: number }).secondsAfterFirstUse).toBeGreaterThanOrEqual(110)
+      expect(warn).toHaveBeenCalledWith(
+        '[oauth] a refresh token was presented again within the grace window: its unused tokens ended, a new pair was issued',
+        expect.objectContaining({ grantId, reason: 'refresh_retry', ended: 2 }),
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('after the first answer’s access token made a call, it is a stolen copy: the connection ends', async () => {
+    const { tokens } = await connect()
+    const first = await refresh(tokens.refresh_token)
+    expect(await verifyAccessToken(first.access_token)).not.toBeNull()
+    await expectConnectionEnded(refresh(tokens.refresh_token), [first.access_token])
+  })
+
+  it('after the first answer’s refresh token was used, it is a stolen copy: the connection ends', async () => {
+    const { tokens } = await connect()
+    const first = await refresh(tokens.refresh_token)
+    const second = await refresh(first.refresh_token)
+    await expectConnectionEnded(refresh(tokens.refresh_token), [first.access_token, second.access_token])
+  })
+
+  it('after the window, it is a stolen copy: the connection ends', async () => {
+    const { tokens } = await connect()
+    const first = await refresh(tokens.refresh_token)
+    await usedSecondsAgo(tokens.refresh_token, 121)
+    const before = await retries()
+    await expectConnectionEnded(refresh(tokens.refresh_token), [first.access_token])
+    expect(await retries()).toBe(before)
+  })
+
+  it('another app gets no second answer: refused before the retry check, as before W4-3', async () => {
+    const otherApp = String((await registerClient({ client_name: 'Claude', redirect_uris: [CALLBACK] })).client_id)
+    const { tokens } = await connect()
+    const first = await refresh(tokens.refresh_token)
+    const before = await retries()
+    await expectOAuthError(refresh(tokens.refresh_token, otherApp), 'invalid_grant')
+    expect(await retries()).toBe(before)
+    expect(await verifyAccessToken(first.access_token)).not.toBeNull()
+    // Its own app presenting it again now, after that call, is a stolen copy.
+    await expectConnectionEnded(refresh(tokens.refresh_token), [first.access_token])
+  })
+
+  it('a normal refresh is unchanged: a new pair from the spent token, and no retry record', async () => {
+    const { tokens } = await connect()
+    const before = await retries()
+    const next = await refresh(tokens.refresh_token)
+    const spent = await database.client.oAuthToken.findUniqueOrThrow({ where: { tokenHash: hashToken(tokens.refresh_token) } })
+    expect(spent.usedAt).not.toBeNull()
+    const child = await database.client.oAuthToken.findUniqueOrThrow({ where: { tokenHash: hashToken(next.refresh_token) } })
+    expect(child).toMatchObject({ parentId: spent.id, usedAt: null, revokedAt: null })
+    expect(await verifyAccessToken(next.access_token)).not.toBeNull()
+    expect(await verifyAccessToken(tokens.access_token)).not.toBeNull()
+    // The first call is kept on the access token: that is what closes the retry for its parent.
+    expect((await database.client.oAuthToken.findUniqueOrThrow({ where: { tokenHash: hashToken(next.access_token) } })).usedAt).not.toBeNull()
+    expect(await retries()).toBe(before)
   })
 })

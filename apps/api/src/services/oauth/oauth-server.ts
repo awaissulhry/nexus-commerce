@@ -6,7 +6,9 @@
  *              2FA code (consent). A one-time code goes back to Claude's redirect URI.
  *   token      Claude swaps the code and its PKCE verifier for an access token (1 hour) and a
  *              refresh token (30 days). A refresh token works once; presenting it again means a
- *              copy was stolen, so the whole connection is revoked (OAuth 2.1 §4.3.1).
+ *              copy was stolen, so the whole connection is revoked (OAuth 2.1 §4.3.1). W4-3 — except
+ *              the same app within 2 minutes, before anything the first answer bought was used (a
+ *              lost answer, two refreshes at once): those unused tokens end and it gets a new pair.
  *   /mcp       verifyAccessToken finds the person, the business and their permissions — fresh
  *              on every call, so a removed member or a changed role takes effect at once.
  *
@@ -28,6 +30,7 @@ import {
   ACCESS_TOKEN_SECONDS,
   CODE_SECONDS,
   MCP_SCOPES,
+  REFRESH_GRACE_SECONDS,
   REFRESH_TOKEN_SECONDS,
   mcpResource,
   mcpResourceTarget,
@@ -37,6 +40,7 @@ import {
   type McpScope,
 } from './oauth-config.js'
 import { clientRedirects, OAuthClientError, resolveClient, type OAuthClientRecord } from './oauth-clients.js'
+import { logger } from '../../utils/logger.js'
 
 const workspaces = createWorkspaceService(prisma)
 const LAST_USED_EVERY_MS = 5 * 60_000
@@ -352,6 +356,24 @@ export async function exchangeCode(form: Record<string, string | undefined>): Pr
   return response
 }
 
+/**
+ * W4-3 — a used refresh token presented again by its own app (client_id is checked before) within REFRESH_GRACE_SECONDS
+ * of its first use, while nothing it bought has been used (no call with its access token, no refresh with its refresh
+ * token): end those unused tokens, so the caller may answer once more. Null = treat it as a stolen copy.
+ */
+async function endUnusedChildren(tx: Tx, tokenId: string, now: Date): Promise<{ ended: number; seconds: number } | null> {
+  const token = await tx.oAuthToken.findUnique({ where: { id: tokenId }, select: { usedAt: true, revokedAt: true } })
+  if (!token?.usedAt || token.revokedAt) return null
+  const seconds = Math.round((now.getTime() - token.usedAt.getTime()) / 1000)
+  if (seconds > REFRESH_GRACE_SECONDS) return null
+  const children = await tx.oAuthToken.findMany({ where: { parentId: tokenId }, select: { id: true, usedAt: true, revokedAt: true } })
+  if (children.some((child) => child.usedAt)) return null
+  const live = children.filter((child) => !child.revokedAt).map((child) => child.id)
+  // Only rows still unused end here: a call or a refresh that lands meanwhile leaves the count short, and that is theft.
+  const ended = await tx.oAuthToken.updateMany({ where: { id: { in: live }, usedAt: null, revokedAt: null }, data: { revokedAt: now } })
+  return ended.count === live.length ? { ended: ended.count, seconds } : null
+}
+
 /** grant_type=refresh_token */
 export async function refreshTokens(form: Record<string, string | undefined>): Promise<TokenResponse> {
   const { refresh_token: raw, client_id: clientId } = form
@@ -379,6 +401,14 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.oAuthToken.updateMany({ where: { id: row.id, usedAt: null, revokedAt: null }, data: { usedAt: new Date() } })
     if (claimed.count === 0) {
+      const retry = await endUnusedChildren(tx, row.id, new Date())
+      if (retry) {
+        const metadata = { reason: 'refresh_retry', ended: retry.ended, secondsAfterFirstUse: retry.seconds }
+        await tx.workspaceAudit.create({
+          data: { workspaceId: row.grant.workspaceId, actorUserId: null, action: 'oauth.refresh_grace', targetId: row.grantId, metadata },
+        })
+        return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: metadata }
+      }
       // Used before: only a stolen copy is presented twice. End the whole connection.
       await endTokens(tx, row.grantId, new Date())
       await tx.oAuthGrant.updateMany({
@@ -390,10 +420,15 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
       })
       return null
     }
-    return issueTokens(tx, row.grant, asked, row.resource, row.id)
+    return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: null }
   }).then((issued) => {
     if (!issued) throw invalidGrant('refresh token already used; the connection was revoked')
-    return issued
+    if (issued.retry) {
+      logger.warn('[oauth] a refresh token was presented again within the grace window: its unused tokens ended, a new pair was issued', {
+        grantId: row.grantId, ...issued.retry,
+      })
+    }
+    return issued.tokens
   })
 }
 
@@ -457,6 +492,8 @@ export async function verifyAccessToken(raw: string | undefined, resource: strin
   if (allow && !allow.has(grant.workspaceId)) return null
   const access = await workspaces.membership(grant.userId, grant.workspaceId).catch(() => null)
   if (!access || !canConnect(access)) return null
+  // W4-3 — an access token's first call is kept: once it made one, the refresh token that bought it is never retried.
+  if (!row.usedAt) await prisma.oAuthToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: new Date() } })
   if (!grant.lastUsedAt || Date.now() - grant.lastUsedAt.getTime() > LAST_USED_EVERY_MS) {
     await prisma.oAuthGrant.update({ where: { id: grant.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined)
   }
