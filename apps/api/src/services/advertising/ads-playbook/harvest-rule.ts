@@ -297,6 +297,8 @@ export async function syncHarvestRule(playbookId: string, opts: { enabled: boole
   const saved = await ensureCompiledRule({
     playbookId, kind: 'harvestRule', key: 'harvest', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
     enabled: false, start: opts.enabled, compiledVersion: row.version, actor,
+    // The market the rule runs in: the kept slots' campaigns' own marketplace code (all of this market).
+    ...(links.size ? { scopeMarketplace: campaigns.get([...links.values()][0].campaignId)?.marketplace ?? null } : {}),
   })
   return { saved: true, ...saved, cadenceDays: compiled.cadenceDays, warnings: [...new Set(warnings)] }
 }

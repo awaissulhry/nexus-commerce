@@ -73,7 +73,7 @@ describe('PB-6b — syncHarvestRule', () => {
     expect(out.warnings.join('\n')).toMatch(/The slot "pat"'s campaign is archived: it is left out/)
     ruleId = out.ruleId
     const rule = await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: ruleId } }))
-    expect(rule).toMatchObject({ domain: 'advertising', trigger: 'SCHEDULE', enabled: false, dryRun: true, autonomyLevel: 'PROPOSE', maxExecutionsPerDay: 1, createdBy: 'user:test' })
+    expect(rule).toMatchObject({ domain: 'advertising', trigger: 'SCHEDULE', enabled: false, dryRun: true, autonomyLevel: 'PROPOSE', maxExecutionsPerDay: 1, createdBy: 'user:test', scopeMarketplace: 'IT' })
     const action = (rule.actions as Json[])[0]
     expect(action).toMatchObject({ type: 'harvest_and_negate', v: 2, control: 'manual', mode: 'both', playbookId: ids.row, market: 'IT', cadenceDays: 1 })
     expect(action).not.toHaveProperty('minOrders')
