@@ -18,7 +18,7 @@ import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
 import { Listbox, useToast } from '@/design-system/components'
-import { adsWriteMany, eachSummary, type EachResult } from '../../../../../_shared/adsWrite'
+import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
 
 interface AdRow {
   id: string; asin?: string | null; sku?: string | null; name?: string | null; photoUrl?: string | null
@@ -68,7 +68,7 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
     ],
     onApply: async (edits) => {
       const res = await adsWriteMany(edits.filter((e) => e.values.status).map((e) =>
-        ({ id: e.id, path: `/api/advertising/product-ads/${e.id}`, body: { status: e.values.status, applyImmediately: false, reason: 'Ads inline edit' } })))
+        ({ id: e.id, path: `/api/advertising/product-ads/${e.id}`, body: { status: e.values.status, ...SEND_NOW, reason: 'Ads inline edit' } })))
       onRefresh?.()
       report(res)
     },

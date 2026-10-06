@@ -320,7 +320,9 @@ describe('1e — his bulk sheet upload, while the account is halted', () => {
     gate.seen = []
     const r = await inside(() => applyPlan(contextualDb as never, 'job-person', rows('bulk-c') as never, { ...opts, actor: OWNER, manual: true }))
     expect(r.applied).toBe(2)
-    expect(gate.seen.map((c) => c.manual === true)).toEqual([true]) // the create asks the gate inline
+    // the edit asks the gate before writing (3A: a person's row past his own limits waits for "Send anyway"), and the
+    // create asks it inline — both as his
+    expect(gate.seen.map((c) => c.manual === true)).toEqual([true, true])
     expect(r.results.find((x) => x.rowIndex === 2)!.message).toContain('Created on Amazon (EXT-NEW-KW)')
     const { manual, rows: queued } = await drain()
     expect(manual).toEqual([true])

@@ -100,7 +100,7 @@ export function marketLimitsRefusal(args: {
   const row = marketLimitsOf(args.market)
   const shown = (args.market ?? '').trim() || 'this market'
   if (!row) {
-    return `Nexus does not change ads in ${shown}: it has no checked list of Amazon's currency, bid and budget limits there, so nothing was sent to Amazon. Nexus changes ads in ${listed(ADS_LIMIT_MARKETS)} only.`
+    return `Nexus does not change ads in ${shown}: Amazon's bid and budget limits for this market are not known yet, so nothing was sent to Amazon. They are known for ${listed(ADS_LIMIT_MARKETS)} only.`
   }
   const product = args.adProduct ?? SPONSORED_PRODUCTS
   const limits = row.adProducts[product]

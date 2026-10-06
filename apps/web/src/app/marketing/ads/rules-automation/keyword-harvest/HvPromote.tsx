@@ -52,6 +52,9 @@ import { AlertTriangle, ArrowRight, ExternalLink, Loader2, ShieldAlert, X } from
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
+import { useAdsMarketplaceOptional } from '../../_shell/MarketplaceContext'
+import { writeBlockFor } from '../../_shell/adsMarkets'
+import { WriteBlockedTip } from '../../_shell/WriteBlocked'
 
 interface PlanRow {
   candidateId: string
@@ -130,6 +133,10 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
       emitAdsChange('ads.negative.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }, [ids, scope, reload])
+
+  // Ads wave 4c — a promotion into a market Nexus only reads is not sent: the button is off and says why.
+  const adsCtx = useAdsMarketplaceOptional()
+  const blocked = writeBlockFor(adsCtx?.markets ?? [], (plan?.rows ?? []).filter((r) => r.promotable).map((r) => r.market))
 
   if (!ids?.length) return null
 
@@ -268,7 +275,8 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
 
             <div className="act">
               <Button size="sm" onClick={close}>Cancel</Button>
-              <Button variant="primary" size="sm" onClick={() => void write()} disabled={busy || plan.promotable === 0}>
+              <WriteBlockedTip reason={blocked} />
+              <Button variant="primary" size="sm" onClick={() => void write()} disabled={busy || plan.promotable === 0 || !!blocked}>
                 {busy ? <><Loader2 size={13} className="spin" /> Writing…</> : plan.promotable === 0 ? 'Nothing can be promoted' : `Promote ${num(plan.promotable)} and negate at source`}
               </Button>
             </div>
@@ -283,10 +291,14 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
  * The grid's selection bar. It writes the selection into the URL rather than into state, so the
  * confirm dialog it opens is a link — reviewable before anyone spends money (§4.11).
  */
-export function promoteSelectionActions(queue: (ids: string[]) => void) {
+export function promoteSelectionActions(queue: (ids: string[]) => void, blocked: string | null = null) {
+  // Ads wave 4c — `blocked`: the page's market is one Nexus only reads; the bar's button is off and says why.
   return (ids: string[], clear: () => void) => (
-    <button type="button" className="h10-hv-promote" onClick={() => { queue(ids); clear() }}>
-      Promote {ids.length} &amp; negate at source
-    </button>
+    <>
+      <button type="button" className="h10-hv-promote" disabled={!!blocked} onClick={() => { queue(ids); clear() }}>
+        Promote {ids.length} &amp; negate at source
+      </button>
+      <WriteBlockedTip reason={blocked} />
+    </>
   )
 }

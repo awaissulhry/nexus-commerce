@@ -129,8 +129,7 @@ export const SQP_QUERIES_PER_ASIN_CAP = 100
 /** How many recent periods define "a normal week here". A quarter of weekly history. */
 export const SQP_BASELINE_PERIODS = 12
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const KT_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+// Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 
 export type KtGrain = 'market' | 'line' | 'portfolio' | 'campaign'
 export type KtMeasuredFilter = 'all' | 'yes' | 'no'

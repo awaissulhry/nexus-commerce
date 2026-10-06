@@ -14,6 +14,8 @@
  * audit's standing verdict is that code written against AMC or DSP today is dead
  * code. See reference_amazon_stack_entitlements.
  */
+import { AdTypeMixLine } from './AdTypeMixLine'
+
 export default function Page() {
   return (
     <div className="h10-stub">
@@ -38,9 +40,8 @@ export default function Page() {
         </p>
         <p style={{ margin: '0 0 14px', color: '#5b6573' }}>
           <b style={{ color: '#1c2530' }}>2 · There is nothing to overlap.</b>{' '}
-          Every AMC view compares ad types against each other. This account runs{' '}
-          <b>4 Sponsored Brands and 15 Sponsored Display campaigns, and all 19 are paused</b>,
-          with no Sponsored TV. An instance provisioned today would draw a diagram of one circle.
+          {/* AM-33 — counted from the campaigns now; this was a fixed count measured on 20 Aug 2026 and shown undated. */}
+          <AdTypeMixLine />
         </p>
         <p style={{ margin: 0, color: '#5b6573' }}>
           <b style={{ color: '#1c2530' }}>What would light this up.</b> An AMC instance from

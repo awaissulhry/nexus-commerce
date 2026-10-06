@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -32,12 +33,13 @@ interface BudgetStrip {
   baselines: number; windowDays: number; pacerWrites7d: number; ruleWrites7d: number
 }
 
-const MARKETS = ['IT', 'DE', 'FR', 'ES']
 
 export function BudgetRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   /**
    * BUD-P4 — the strip. Server-censused (never recomposed from the grid's rows), and ABSENT on a
    * failed read rather than fabricated: a zero here would read as "nothing is at the floor" and
@@ -60,7 +62,7 @@ export function BudgetRulesClient() {
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('budget')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => {
           const next = new URLSearchParams(params.toString())

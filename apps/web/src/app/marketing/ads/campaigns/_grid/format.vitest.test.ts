@@ -131,12 +131,13 @@ describe('acosSortNumber — for grids that cannot sink blanks (DS DataGrid, han
 })
 
 /**
- * The sweep: no ads screen (the console and the old ads-console) may sort or filter a missing ACoS
+ * The sweep: no ads screen may sort or filter a missing ACoS
  * as -1, 0 or -Infinity again — each of those ranks "no ACoS" as the best one on "lowest first".
  * Scans sort/filter accessors only; chart series and rule thresholds are not sort keys.
  */
 describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', () => {
   const marketing = fileURLToPath(new URL('../../../', import.meta.url))
+  // The old ads-console it also swept is deleted (OC, 2026-10-06).
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
     const p = join(dir, n)
     return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
@@ -144,8 +145,8 @@ describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', 
   const ACCESSOR = /sortValue|filterValue|case 'acos'|kind: 'range'/
   // A measured ACoS / TACoS only: a Target ACoS is a setting, and "none set" may sort low.
   const SENTINEL = /(?<!target)acos\w*\)?\s*\?\?\s*(-1|0)\b|(?<!target)acos\w*\s*==\s*null\s*\?\s*Number\.NEGATIVE_INFINITY/i
-  it('finds none in app/marketing/ads and app/marketing/ads-console', () => {
-    const files = [...walk(join(marketing, 'ads')), ...walk(join(marketing, 'ads-console'))]
+  it('finds none in app/marketing/ads', () => {
+    const files = walk(join(marketing, 'ads'))
     expect(files.length).toBeGreaterThan(100)
     const hits = files.flatMap((f) => readFileSync(f, 'utf8').split('\n')
       .map((line, i) => ({ line, at: `${f.slice(marketing.length)}:${i + 1}` }))

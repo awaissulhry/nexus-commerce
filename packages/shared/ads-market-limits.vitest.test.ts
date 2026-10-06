@@ -27,7 +27,7 @@ describe('the table', () => {
 describe('marketLimitsRefusal', () => {
   it('🔴 refuses a market with no row, naming the markets Nexus changes', () => {
     expect(marketLimitsRefusal({ market: 'SE', field: 'bid', valueMinor: 50 })).toBe(
-      "Nexus does not change ads in SE: it has no checked list of Amazon's currency, bid and budget limits there, so nothing was sent to Amazon. Nexus changes ads in IT, DE, FR and ES only.",
+      "Nexus does not change ads in SE: Amazon's bid and budget limits for this market are not known yet, so nothing was sent to Amazon. They are known for IT, DE, FR and ES only.",
     )
     expect(marketLimitsRefusal({ market: null })).toMatch(/^Nexus does not change ads in this market:/)
   })

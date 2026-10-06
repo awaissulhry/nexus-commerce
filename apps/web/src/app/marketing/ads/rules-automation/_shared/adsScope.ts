@@ -56,9 +56,12 @@
  * not already have — which is the whole of "extraction preserves behaviour".
  */
 
-/** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and cannot be a scope. */
-export const MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
-export type Market = (typeof MARKETS)[number]
+/**
+ * Ads wave 4c (F3) — there is no market list here any more. A page passes the markets it can serve (the provider's
+ * `readMarkets`, from the connections) in its policy; without one, any Amazon marketplace code is taken as a market and
+ * the server, which checks the connections, answers for it.
+ */
+import { PREFERRED_MARKET, isAmazonMarketCode } from '../../_shell/adsMarkets'
 
 /**
  * 🔴 The market sentinel, and the only place in the section this string is a legal value.
@@ -80,12 +83,14 @@ export interface MarketPolicy {
   allowAll: boolean
   /** Must itself satisfy `allowAll`. A page passing `{allowAll:false, fallback:'all'}` is a bug. */
   fallback: string
+  /** The markets this page can serve (`readMarkets`). Absent: any Amazon marketplace code. */
+  markets?: readonly string[]
 }
 
 /** Seven of the nine pages. An account-wide view is a legitimate answer here. */
 export const MARKET_ANY: MarketPolicy = { allowAll: true, fallback: ALL_MARKETS }
 /** Keyword Tracker and Share of Voice. A market must exist before the page has a subject. */
-export const marketOne = (fallback: string = 'IT'): MarketPolicy => ({ allowAll: false, fallback })
+export const marketOne = (fallback: string = PREFERRED_MARKET): MarketPolicy => ({ allowAll: false, fallback })
 
 export interface SortPolicy {
   /** The only keys `?sort=` may hold. Anything else falls back to `key`. */
@@ -155,7 +160,8 @@ export function parseAdsScope(params: URLSearchParams, policy: AdsScopePolicy): 
   const rawMarket = params.get('market')
   const marketOk =
     rawMarket != null
-    && ((policy.market.allowAll && rawMarket === ALL_MARKETS) || (MARKETS as readonly string[]).includes(rawMarket))
+    && ((policy.market.allowAll && rawMarket === ALL_MARKETS)
+      || (policy.market.markets ? policy.market.markets.includes(rawMarket) : isAmazonMarketCode(rawMarket)))
   const market = marketOk ? rawMarket! : policy.market.fallback
 
   const campaign = grain(params.get('campaign'))
@@ -332,13 +338,13 @@ export function adsScopeNeedsNormalising(
  * a "Last 30 days" label**. Nothing errors and nothing looks wrong.
  *
  * Two further mismatches hide in names that look shared:
- *   · the picker's `thisWeek` starts **Sunday** (`s.setDate(s.getDate() - s.getDay())`); the
- *     server's `wtd` starts **Monday** (ISO). Same idea, different week.
+ *   · the picker's `thisWeek` started **Sunday**; the server's `wtd` starts **Monday** (ISO). Since AM-36
+ *     the picker's weeks start Monday too, and `thisWeek` still travels as the explicit days it drew.
  *   · the picker resolves in the browser's **local** time; the server anchors to **Europe/Rome**.
  *     For a Rome operator these agree, which is exactly why the divergence would ship.
  *
  * ⚠ **The spec's "the three with no equivalent" is wrong. Measured here: 7 of the 15 picker keys
- * map; EIGHT do not** — `thisWeek` (Sunday≠Monday), `lastWeek`, `last3m`, `last12m` (`last_year` is
+ * map; EIGHT do not** — `thisWeek` (was Sunday≠Monday), `lastWeek`, `last3m`, `last12m` (`last_year` is
  * the previous calendar YEAR, not a trailing twelve months), `last18m`, `last24m`, `lastQuarter`
  * and `latest60`. `null` here means "no server preset produces this window", and the honest
  * treatment is explicit dates — never the nearest-looking key.

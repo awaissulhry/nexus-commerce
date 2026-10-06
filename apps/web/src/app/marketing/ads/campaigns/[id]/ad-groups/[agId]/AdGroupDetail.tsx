@@ -24,6 +24,7 @@ import { TargetsTab } from './tabs/TargetsTab'
 import { AgSearchTermsTab } from './tabs/AgSearchTermsTab'
 import { AgNegativesTab } from './tabs/AgNegativesTab'
 import { AgAdsTab } from './tabs/AgAdsTab'
+import { useAdsMarketplace } from '../../../../_shell/MarketplaceContext'
 
 export interface AdGroupDetailData {
   id: string
@@ -94,7 +95,9 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
     router.replace(`/marketing/ads/campaigns/${campaignId}/ad-groups/${adGroupId}${q ? `?${q}` : ''}`, { scroll: false })
   }
 
-  const markets = useMemo(() => (ag?.campaign?.marketplace ? [ag.campaign.marketplace] : ['IT', 'DE', 'FR', 'ES']), [ag])
+  // Ads wave 4c — before the ad group loads, the markets Nexus reads (from the connections), not a fixed four.
+  const { readMarkets } = useAdsMarketplace()
+  const markets = useMemo(() => (ag?.campaign?.marketplace ? [ag.campaign.marketplace] : readMarkets), [ag, readMarkets])
   const backHref = `/marketing/ads/campaigns/${campaignId}?tab=ad-groups`
 
   return (

@@ -66,6 +66,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
 import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
@@ -77,7 +78,6 @@ import { useCursorPoll } from '../_shared/useCursorPoll'
 import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 /**
  * "All markets" is renderable here and refused on the Keyword Tracker. That page's numbers —
  * market volume, market rank, impression share — are per-marketplace quantities with no honest
@@ -249,7 +249,9 @@ export function PlacementClient() {
   // preference, so a link renders the same view for whoever opens it. Market is the one deliberate
   // exception in the substrate contract, and it is written into the URL the moment it is moved so
   // a shared link still means what it said.
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const scope: PlcScope = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -724,7 +726,7 @@ export function PlacementClient() {
       <AdsPageHeader
         title="Placement"
         subtitle={activeTab?.subtitle ?? 'Which lane your ads show in, what each one is worth, and who put the multiplier there'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '' })}
         showDataSync={false}

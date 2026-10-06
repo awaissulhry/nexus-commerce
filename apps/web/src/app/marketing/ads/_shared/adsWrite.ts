@@ -9,6 +9,15 @@
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
+import { askSendAnyway, confirmed, notSentPastLimits, readNeedsConfirmation, type OwnLimitLine } from './sendAnyway'
+
+/**
+ * CM-27 — one timing for a person's edit on every campaign-manager screen: sent to Amazon now (the ads drain picks it
+ * up within a minute), as the Campaigns grid and the campaign Details tab always did. The Ad Groups, Targets, Negatives
+ * and Ads tabs held theirs for a 5-minute grace window that no tray on those pages could cancel, so the same status or
+ * bid change reached Amazon at once from one page and five minutes later from the next.
+ */
+export const SEND_NOW = { applyImmediately: true } as const
 
 /** applied = written with nothing to send; queued = written and on its way to Amazon; refused / error = not changed. */
 export type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
@@ -46,14 +55,26 @@ export function readWrite(status: number, body: unknown): WriteResult {
   return { ok: false, outcome: status >= 500 && b.ok !== false && !b.reason ? 'error' : 'refused', reason }
 }
 
-/** PATCH (or POST) one ads write and read its answer. Never throws. */
-export async function adsWrite(path: string, body: Record<string, unknown>, method: 'PATCH' | 'POST' = 'PATCH'): Promise<WriteResult> {
+/** One PATCH (or POST), and the own limits it waits on (3A) when the server says so. Never throws. */
+async function sendWrite(path: string, body: Record<string, unknown>, method: 'PATCH' | 'POST'): Promise<{ result: WriteResult; waits: OwnLimitLine[] | null }> {
   try {
     const r = await fetch(`${getBackendUrl()}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    return readWrite(r.status, await r.json().catch(() => ({})))
+    const answer = await r.json().catch(() => ({}))
+    return { result: readWrite(r.status, answer), waits: readNeedsConfirmation(r.status, answer) }
   } catch (e) {
-    return { ok: false, outcome: 'error', reason: e instanceof Error ? e.message : 'No answer from the server.' }
+    return { result: { ok: false, outcome: 'error', reason: e instanceof Error ? e.message : 'No answer from the server.' }, waits: null }
   }
+}
+
+/**
+ * PATCH (or POST) one ads write and read its answer. Never throws. 3A — past his own limits it asks "Send anyway"
+ * (SendAnywayHost) and, when he says yes, sends the same body again with `confirmOwnLimits`.
+ */
+export async function adsWrite(path: string, body: Record<string, unknown>, method: 'PATCH' | 'POST' = 'PATCH'): Promise<WriteResult> {
+  const first = await sendWrite(path, body, method)
+  if (!first.waits) return first.result
+  if (!(await askSendAnyway(first.waits))) return { ok: false, outcome: 'refused', reason: notSentPastLimits(first.waits) }
+  return (await sendWrite(path, confirmed(body), method)).result
 }
 
 export interface EachResult { done: string[]; queued: number; failed: Array<{ id: string; reason: string }> }
@@ -109,10 +130,16 @@ export function readAdd(status: number, body: unknown): AddResult {
  */
 export const addSlotName = (path: string, body: Record<string, unknown>): string => `ads-add:${path}:${JSON.stringify(body)}`
 
-/** POST one add, as one keyed command, and read its answer. Never throws. */
+/** POST one add, as one keyed command, and read its answer. Never throws. 3A — past his own limits it asks "Send anyway". */
 export async function adsAdd(path: string, body: Record<string, unknown>): Promise<AddResult> {
   try {
-    const sent = await sendCommand(commandKeyFor(addSlotName(path, body)), `${getBackendUrl()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const send = (b: Record<string, unknown>) => sendCommand(commandKeyFor(addSlotName(path, b)), `${getBackendUrl()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+    let sent = await send(body)
+    const waits = readNeedsConfirmation(sent.response.status, sent.body)
+    if (waits) {
+      if (!(await askSendAnyway(waits))) return { added: false, savedOnly: false, reason: notSentPastLimits(waits) }
+      sent = await send(confirmed(body))
+    }
     if (sent.conflict) return { added: false, savedOnly: false, reason: commandConflictMessage(sent.conflict, 'add') }
     return readAdd(sent.response.status, sent.body ?? {})
   } catch (e) {

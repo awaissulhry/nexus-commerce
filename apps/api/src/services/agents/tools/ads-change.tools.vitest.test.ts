@@ -84,15 +84,19 @@ describe('A6 — set-campaign-budget', () => {
     expect(getTool('set-campaign-budget')).toMatchObject({ alwaysAsk: true, openWorld: true, reversibility: 'full', maxClaudeTrust: 'ask' })
   })
 
-  it('refuses the campaign\'s own bounds, the same value, a pin, a non-SP or unknown campaign — and live, the gate', async () => {
-    expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 400 })).error).toMatch(/below the campaign's own minimum budget \(EUR 5.00\)/)
-    expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 6000 })).error).toMatch(/above the campaign's own maximum budget \(EUR 50.00\)/)
+  it('refuses the same value, a non-SP or unknown campaign and what Amazon refuses — his own limits only warn (4A)', async () => {
     expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 2000 })).error).toMatch(/already EUR 20.00/)
-    expect((await preview('set-campaign-budget', { campaignId: 'c-pin', dailyBudgetCents: 2500 })).error).toMatch(/^authority pin/)
     expect((await preview('set-campaign-budget', { campaignId: 'c-sb', dailyBudgetCents: 2500 })).error).toMatch(/not a Sponsored Products campaign/)
     expect((await preview('set-campaign-budget', { campaignId: 'nope', dailyBudgetCents: 2500 })).error).toBe('campaign nope not found')
+    // 4A (Owner decided 2026-10-06) — it runs only once a person approves it, as his own click: a pin no longer refuses it.
+    expect((await preview('set-campaign-budget', { campaignId: 'c-pin', dailyBudgetCents: 2500 })).ok).toBe(true)
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    expect((await preview('set-campaign-budget', { campaignId: 'c-off', dailyBudgetCents: 2500 })).error).toMatch(/^Not queued: .*live-write allowlist/)
+    // …nor the live-write allowlist (c-off is off it)…
+    expect((await preview('set-campaign-budget', { campaignId: 'c-off', dailyBudgetCents: 2500 })).preview).toMatchObject({ reach: { reach: 'live' } })
+    // …and his own max budget is a WARNING on the card before he approves: approving sends it anyway.
+    const over = (await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 6000 })).preview as { reach: { pastOwnLimits?: unknown[] }; reachNote: string }
+    expect(over.reach.pastOwnLimits).toEqual(expect.arrayContaining([expect.objectContaining({ limit: 'entity_bounds' })]))
+    expect(over.reachNote).toMatch(/Warning — this goes past your own limits: .*Approving it sends it anyway\./)
     // The gate's own cap on one write (default 500.00): a budget above it is refused before it is queued.
     expect((await preview('set-campaign-budget', { campaignId: 'c-uk', dailyBudgetCents: 60_000 })).error).toMatch(/^Not queued: /)
     expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 2500 })).preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' } })
@@ -130,7 +134,8 @@ describe('A6 — set-placement-multipliers', () => {
       reach: { reach: 'sandbox' }, effect: expect.stringContaining('bids rise on top of search and product pages'),
     })
     expect((await preview('set-placement-multipliers', { campaignId: 'c-it', topOfSearchPct: 50 })).error).toMatch(/already has these placement adjustments/)
-    expect((await preview('set-placement-multipliers', { campaignId: 'c-pin', topOfSearchPct: 50 })).error).toMatch(/^authority pin/)
+    // 4A — a pin does not stop a change a person approves.
+    expect((await preview('set-placement-multipliers', { campaignId: 'c-pin', topOfSearchPct: 50 })).ok).toBe(true)
     expect((await preview('set-placement-multipliers', { campaignId: 'c-it' })).error).toMatch(/at least one of/)
   })
 
@@ -168,11 +173,12 @@ describe('A7 — bulk-ad-bid-change', () => {
     expect(r.ok, r.error).toBe(true)
     expect(r.preview).toMatchObject({
       mode: 'list',
-      totals: { asked: 8, changing: 2, excluded: { suppressed: 1, lowUnflagged: 1, pinned: 1, notSponsoredProducts: 1, notFound: 1, unchanged: 1 } },
-      byCurrency: { EUR: { targets: 1, deltaCents: 15 }, GBP: { targets: 1, deltaCents: 10 } },
+      // 4A — a pinned campaign's bid is no longer left out: the request runs only once a person approves it.
+      totals: { asked: 8, changing: 3, excluded: { suppressed: 1, lowUnflagged: 1, notSponsoredProducts: 1, notFound: 1, unchanged: 1 } },
+      byCurrency: { EUR: { targets: 2, deltaCents: 25 }, GBP: { targets: 1, deltaCents: 10 } },
       reach: { reach: 'sandbox' },
     })
-    expect((r.preview as Row).changes.map((c: Row) => [c.targetId, c.fromCents, c.toCents, c.currency])).toEqual([['t-it', 45, 60, 'EUR'], ['t-uk', 60, 70, 'GBP']])
+    expect((r.preview as Row).changes.map((c: Row) => [c.targetId, c.fromCents, c.toCents, c.currency])).toEqual([['t-it', 45, 60, 'EUR'], ['t-pin', 40, 50, 'EUR'], ['t-uk', 60, 70, 'GBP']])
   })
 
   it('a selection moved by a percent; never the whole account, never both forms, nothing to do is refused', async () => {
@@ -188,10 +194,12 @@ describe('A7 — bulk-ad-bid-change', () => {
 
   it('live: a campaign the gate refuses is left out with the gate\'s reason; alone, nothing is queued', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    const r = await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-it', bidCents: 50 }, { targetId: 't-off', bidCents: 40 }] })
-    expect(r.preview).toMatchObject({ totals: { changing: 1, excluded: { refusedByGate: 1 } }, reach: { reach: 'live', profileId: 'P-IT-TEST' } })
-    expect((r.preview as Row).excludedLines).toEqual([{ targetId: 't-off', why: expect.stringMatching(/write gate refuses its campaign: .*allowlist/) }])
-    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-off', bidCents: 40 }] })).error).toMatch(/^Nothing would change: 1 Amazon's write gate refuses its campaign/)
+    // 4A — the allowlist no longer refuses an approved request (t-off's campaign is off it); a market Nexus does not
+    // send to still is (UK has no checked Amazon limits row).
+    const r = await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-it', bidCents: 50 }, { targetId: 't-off', bidCents: 40 }, { targetId: 't-uk', bidCents: 70 }] })
+    expect(r.preview).toMatchObject({ totals: { changing: 2, excluded: { refusedByGate: 1 } }, reach: { reach: 'live', profileId: 'P-IT-TEST' } })
+    expect((r.preview as Row).excludedLines).toEqual([{ targetId: 't-uk', why: expect.stringMatching(/write gate refuses its campaign: .*does not change ads in UK/) }])
+    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-uk', bidCents: 70 }] })).error).toMatch(/^Nothing would change: 1 Amazon's write gate refuses its campaign/)
   })
 
   it('approved, every write (not only the 20 shown) carries the approval as its change set; undo reverses the set as one', async () => {
@@ -296,5 +304,40 @@ describe('A12 — set-campaign-live-writes (the allowlist, d2)', () => {
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: false })
     await inside(() => database.client.campaign.update({ where: { id: 'c-off' }, data: { liveBidWritesEnabled: false } }))
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: .*already off the live-write allowlist/) })
+  })
+})
+
+/**
+ * 4A (Owner decided 2026-10-06) — a Claude request the Owner approved counts as his own click: while ads automation is
+ * halted it still runs, carrying his manual mark (the queue row the worker judges says so). A request no person
+ * approved — one his standing rule approved (`decisionVia: 'auto'`) — is the machine's write and is refused as before.
+ */
+describe('4A — an approved request is his own click', () => {
+  const halt = (halted: boolean) => inside(() => database.client.adsAutomationState.upsert({
+    where: { id: 'singleton' }, create: { id: 'singleton', autonomy: 'AUTO', halted, haltReason: halted ? 'test halt' : null }, update: { halted, haltReason: halted ? 'test halt' : null },
+  }))
+  const cents = async (id: string) => Math.round(Number(await budgetOf(id)) * 100)
+  afterAll(async () => { await halt(false) })
+
+  it('approved by a person during a halt: it runs, as his own write', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    await halt(true)
+    const target = (await cents('c-it')) + 100
+    const asked = await ask('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: target, why: '4A halt' })
+    expect(asked.approvalId).toBeTruthy()
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await cents('c-it')).toBe(target)
+    const [row] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-it'])
+    expect(row.payload).toMatchObject({ manual: true, actor: 'user:u-approver' })
+  })
+
+  it('approved by his standing rule (not a person) during a halt: not run, nothing written', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    await halt(true)
+    const before = await cents('c-it')
+    const asked = await ask('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before + 100, why: '4A rule' })
+    await inside(() => database.client.agentApproval.update({ where: { id: asked.approvalId! }, data: { decisionVia: 'auto' } }))
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: .*(stopped|halt)/i) })
+    expect(await cents('c-it')).toBe(before)
   })
 })

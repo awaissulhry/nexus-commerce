@@ -405,7 +405,8 @@ export async function decideApproval(
       decider,
       ap.toolName,
       ap.args as Record<string, unknown>,
-      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun) },
+      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule.
+      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun), approvedByPerson: ap.decisionVia !== 'auto' },
     )
     await prisma.agentApproval.update({
       where: { id },

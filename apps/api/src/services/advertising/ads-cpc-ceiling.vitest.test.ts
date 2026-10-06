@@ -32,7 +32,7 @@ vi.mock('./ads-cache.js', () => ({
 // The audited mutation service is not under test here: it records what the route hands it.
 vi.mock('./ads-mutation.service.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  updateAdTargetWithSync: async (args: Record<string, unknown>) => ({ ok: true, received: { adTargetId: args.adTargetId, patch: args.patch } }),
+  updateAdTargetWithSync: async (args: Record<string, unknown>) => ({ ok: true, received: { adTargetId: args.adTargetId, patch: args.patch, ...(args.confirmOwnLimits ? { confirmOwnLimits: true } : {}), ...(args.evidence ? { evidence: args.evidence } : {}) } }),
   bulkUpdateAdTargetBids: async (args: Record<string, unknown>) => ({ updated: (args.entries as unknown[]).length, received: args.entries }),
 }))
 
@@ -100,20 +100,27 @@ describe('clampBidsByCeiling', () => {
   })
 })
 
-describe('the bid routes use it', () => {
-  it('PATCH /advertising/ad-targets/:id hands the clamped bid on and names the clamp', async () => {
-    const clamped = await app.inject({ method: 'PATCH', url: '/api/advertising/ad-targets/cpc-t1', payload: { bidCents: 150 } })
-    expect(clamped.json()).toEqual({ ok: true, received: { adTargetId: 'cpc-t1', patch: { bidCents: 100 } }, cpcClamp: { from: 150, to: 100, ceilingCents: 100 } })
+describe('the bid routes use it — 3A: his CPC ceiling warns, never clamps behind his back', () => {
+  it('PATCH /advertising/ad-targets/:id: a bid above his ceiling waits for "Send anyway" (409, nothing sent); confirmed, it goes as he set it', async () => {
+    const waits = await app.inject({ method: 'PATCH', url: '/api/advertising/ad-targets/cpc-t1', payload: { bidCents: 150 } })
+    expect(waits.statusCode).toBe(409)
+    expect(waits.json()).toMatchObject({ ok: false, needsConfirmation: { limits: [{ limit: 'cpc_ceiling', reason: 'a bid of 150¢ is above your CPC ceiling of 100¢' }] } })
+    const sent = await app.inject({ method: 'PATCH', url: '/api/advertising/ad-targets/cpc-t1', payload: { bidCents: 150, confirmOwnLimits: true } })
+    expect(sent.json()).toMatchObject({ ok: true, received: { adTargetId: 'cpc-t1', patch: { bidCents: 150 }, confirmOwnLimits: true, evidence: { sentPastOwnLimits: expect.stringMatching(/^sent past your CPC ceiling by /) } } })
     const kept = await app.inject({ method: 'PATCH', url: '/api/advertising/ad-targets/cpc-t2', payload: { bidCents: 150 } })
-    expect(kept.json()).toEqual({ ok: true, received: { adTargetId: 'cpc-t2', patch: { bidCents: 150 } } })
+    expect(kept.json()).toMatchObject({ ok: true, received: { adTargetId: 'cpc-t2', patch: { bidCents: 150 } } })
   })
 
-  it('POST /advertising/ad-targets/bulk-bid hands the clamped entries on and lists the clamps', async () => {
+  it('POST /advertising/ad-targets/bulk-bid: the rows above his ceiling wait and are listed; the others go; confirmed, they go as set', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/advertising/ad-targets/bulk-bid', payload: { entries: [{ adTargetId: 'cpc-t1', bidCents: 80 }, { adTargetId: 'cpc-t3', bidCents: 40 }, { adTargetId: 'cpc-t4', bidCents: 300 }] } })
-    expect(response.json()).toEqual({
-      ok: true, updated: 3,
-      received: [{ adTargetId: 'cpc-t1', bidCents: 80 }, { adTargetId: 'cpc-t3', bidCents: 5 }, { adTargetId: 'cpc-t4', bidCents: 300 }],
-      cpcClamps: [{ adTargetId: 'cpc-t3', from: 40, to: 5, ceilingCents: 5 }],
+    expect(response.json()).toMatchObject({
+      ok: true, updated: 2,
+      received: [{ adTargetId: 'cpc-t1', bidCents: 80 }, { adTargetId: 'cpc-t4', bidCents: 300 }],
+      cpcClamps: [],
+      needsConfirmation: [{ adTargetId: 'cpc-t3', limits: [{ limit: 'cpc_ceiling', reason: 'a bid of 40¢ is above your CPC ceiling of 5¢' }] }],
     })
+    const confirmed = await app.inject({ method: 'POST', url: '/api/advertising/ad-targets/bulk-bid', payload: { confirmOwnLimits: true, entries: [{ adTargetId: 'cpc-t3', bidCents: 40 }] } })
+    expect(confirmed.json()).toMatchObject({ ok: true, updated: 1, received: [{ adTargetId: 'cpc-t3', bidCents: 40 }] })
+    expect(confirmed.json().needsConfirmation).toBeUndefined()
   })
 })

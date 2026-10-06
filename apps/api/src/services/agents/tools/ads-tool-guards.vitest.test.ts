@@ -71,11 +71,14 @@ describe('live reach', () => {
     } finally {
       gate.answer = null
     }
+    // 4A (Owner decided 2026-10-06) — asked as the person who approves it: his manual mark, and his approval as his
+    // "Send anyway" past his own limits (the card shows them first).
+    const asPerson = { manual: true, confirmOwnLimits: true }
     expect(gate.seen).toEqual([
-      { marketplace: 'IT', campaignId: 'C1', field: 'bid', fields: ['bid'], intendedValueCents: 45, payloadValueCents: 45, isSuppression: false },
-      { marketplace: 'DE', campaignId: 'C1', field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: 2500, payloadValueCents: 2500, isSuppression: false },
+      { marketplace: 'IT', campaignId: 'C1', field: 'bid', fields: ['bid'], intendedValueCents: 45, payloadValueCents: 45, isSuppression: false, ...asPerson },
+      { marketplace: 'DE', campaignId: 'C1', field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: 2500, payloadValueCents: 2500, isSuppression: false, ...asPerson },
       // The bid is the bounded field the gate judges; the pins see every field; the value cap sees the largest.
-      { marketplace: 'IT', campaignId: 'C1', field: 'bid', fields: ['dailyBudget', 'bid'], intendedValueCents: 40, payloadValueCents: 2500, isSuppression: true },
+      { marketplace: 'IT', campaignId: 'C1', field: 'bid', fields: ['dailyBudget', 'bid'], intendedValueCents: 40, payloadValueCents: 2500, isSuppression: true, ...asPerson },
     ])
   })
 
@@ -173,5 +176,45 @@ describe('bound rules', () => {
       expect(await boundAutomationsFor('g-c2')).toEqual([{ kind: 'rule', id: 'g-r3', name: 'Other campaign rule', binding: 'budget' }])
       expect(await boundAutomationsFor('g-none')).toEqual([])
     })
+  })
+})
+
+/**
+ * 4A (Owner decided 2026-10-06) — who an approved request writes as. Approved by a person: his manual mark and his
+ * "Send anyway" (the card showed the limits first). Approved by his standing rule, or a write the rule itself makes:
+ * the machine's write, judged as one.
+ */
+describe('4A — an approved request is his own click; a rule\'s is not', () => {
+  const ctx = (approvedByPerson?: boolean) => ({ userId: 'u-approver', via: 'app', approvalId: 'ap-1', ...(approvedByPerson ? { approvedByPerson } : {}) }) as never
+
+  it('approvedRun carries his mark only when a person approved it', async () => {
+    const { approvedRun } = await import('./ads-change-kit.js')
+    expect(approvedRun(ctx(true), 'why')).toMatchObject({ actor: 'user:u-approver', manual: true, confirmOwnLimits: true })
+    expect(approvedRun(ctx(), 'why')).toMatchObject({ actor: 'user:u-approver', manual: false, confirmOwnLimits: false })
+  })
+
+  it('the re-check inside a rule-approved run, and a rule\'s own write, are asked without his mark', async () => {
+    const { runAsRuleApproved } = await import('../tool-types.js')
+    gate.answer = { allowed: true, mode: 'sandbox' }
+    gate.seen = []
+    try {
+      const intent = { campaignId: 'C1', marketplace: 'IT', changes: [{ field: 'bid', valueCents: 45 }] }
+      await checkLiveReach(intent)
+      await runAsRuleApproved(() => checkLiveReach(intent))
+      await checkLiveReach({ ...intent, byRule: true })
+    } finally {
+      gate.answer = null
+    }
+    expect(gate.seen.map((c) => [c.manual === true, c.confirmOwnLimits === true])).toEqual([[true, true], [false, false], [false, false]])
+  })
+
+  it('the limits the card warned about are part of what he approved: the same limits run, different ones are not run', async () => {
+    const { recheck } = await import('./ads-change-kit.js')
+    const past = [{ limit: 'entity_bounds', reason: 'bid 150¢ exceeds the 100¢ ceiling' }]
+    const approved = { reach: { reach: 'live', profileId: 'P1', pastOwnLimits: past }, value: 150 }
+    const at = { ...(ctx(true) as object), approvedPreview: approved } as never
+    expect(recheck(at, { ok: true, preview: approved }, ['value'])).toBeNull()
+    const more = { ...approved, reach: { ...approved.reach, pastOwnLimits: [...past, { limit: 'value_cap', reason: 'payload value over the cap' }] } }
+    expect(recheck(at, { ok: true, preview: more }, ['value'])).toMatch(/^Not run: the limits it goes past changed after you approved it\. .*payload value over the cap.* Ask for it again/)
   })
 })

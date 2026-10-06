@@ -288,6 +288,7 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       approvalId: ap.id,
       approvedPreview: step.preview ?? undefined,
       via: requestDoor(ap.agentRun),
+      approvedByPerson: !auto, // 4A — a plan a person approved; a plan run by his standing rule is not his click
     })
     if (!raw.ok) {
       const why = raw.error ?? 'the tool refused it'

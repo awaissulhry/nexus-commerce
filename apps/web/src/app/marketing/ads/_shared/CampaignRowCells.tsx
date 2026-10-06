@@ -35,6 +35,7 @@ import { HoverCard } from '../campaigns/FilterDropdown'
 import { Button, Pill } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { pillTone } from './pillTone'
+import { eur as eurMoney } from '../campaigns/_grid/format'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,8 @@ export const productBadge = (c: { adProduct?: string | null; type?: string | nul
 /** A(uto) / M(anual) — inferred from the name, because Amazon does not return it per campaign. */
 export const targetingLetter = (name: string): string => /(^|[^a-z])auto([^a-z]|$)/i.test(name) ? 'A' : 'M'
 
-const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
+// AM-30 — the console's one money rendering (€1,234.56); `toFixed(2)` printed €1234.56 with no thousands separator.
+const eur = (cents: number) => eurMoney(cents / 100)
 
 // ── the cells ───────────────────────────────────────────────────────────────────────────────────
 
@@ -206,7 +208,6 @@ export function AutomationCell({ managed, missing, pins, boundRuleNames, account
   }
   const shown = ([['placement', 'Plc'], ['bids', 'Bid'], ['budget', 'Bgt']] as const).filter(([k]) => pins?.[k])
   const bound = boundRuleNames ?? []
-  const eur = (c: number) => `€${(c / 100).toFixed(2)}`
   const tip = [
     managed
       ? 'Managed: automation may write to this campaign.'

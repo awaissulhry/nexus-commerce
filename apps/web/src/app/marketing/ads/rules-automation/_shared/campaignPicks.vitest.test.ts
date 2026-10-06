@@ -9,18 +9,26 @@ const c = (id: string, marketplace: string | null, adProduct = 'SP'): PickFacts 
 const ALL = [c('de-sp', 'DE'), c('it-sp', 'IT'), c('fr-sb', 'FR', 'SB'), c('de-sd', 'DE', 'SD'), c('es-sp', 'ES')]
 const ids = (xs: PickFacts[]) => xs.map((x) => x.id)
 
-describe('ruleMarketOptions — one list of markets (review 4.10)', () => {
-  it('offers All markets plus the four live Amazon Ads markets, and no NL/BE/SE/PL', () => {
-    const values = ruleMarketOptions().map((o) => o.value)
-    expect(values).toEqual(['all', 'IT', 'DE', 'ES', 'FR'])
-    expect(ruleMarketOptions().find((o) => o.value === 'DE')?.label).toBe('Germany (DE)')
+describe('ruleMarketOptions — one list of markets (review 4.10; 4c: from the connections)', () => {
+  // Today's account: IT, DE, ES, FR live with writes on; UK, NL, PL, SE, BE read only.
+  const WRITE = ['DE', 'ES', 'FR', 'IT']
+  const READ = [...WRITE, 'BE', 'NL', 'PL', 'SE', 'UK']
+
+  it('offers All markets plus the markets where a rule can act, and no read-only market', () => {
+    const values = ruleMarketOptions(null, WRITE, READ).map((o) => o.value)
+    expect(values).toEqual(['all', 'DE', 'ES', 'FR', 'IT'])
+    expect(ruleMarketOptions(null, WRITE).find((o) => o.value === 'DE')?.label).toBe('Germany (DE)')
   })
 
-  it('keeps a stored market outside the list on screen, named as not connected', () => {
-    const opts = ruleMarketOptions('NL')
-    expect(opts.at(-1)).toEqual({ value: 'NL', label: 'Netherlands (NL) — not connected' })
-    expect(ruleMarketOptions('DE')).toHaveLength(5)
-    expect(ruleMarketOptions('all')).toHaveLength(5)
+  it('keeps a stored market outside the list on screen, named for what it is', () => {
+    expect(ruleMarketOptions('NL', WRITE, READ).at(-1)).toEqual({ value: 'NL', label: 'Netherlands (NL) — reading only' })
+    expect(ruleMarketOptions('US', WRITE, READ).at(-1)).toEqual({ value: 'US', label: 'United States (US) — not connected' })
+    expect(ruleMarketOptions('DE', WRITE, READ)).toHaveLength(5)
+    expect(ruleMarketOptions('all', WRITE, READ)).toHaveLength(5)
+  })
+
+  it('🔴 4c — a market switched to writes tomorrow is offered with no code change', () => {
+    expect(ruleMarketOptions(null, [...WRITE, 'UK'], READ).map((o) => o.value)).toContain('UK')
   })
 })
 

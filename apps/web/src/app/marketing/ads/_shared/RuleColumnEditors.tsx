@@ -57,6 +57,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { readDailyBudget, readTargetAcosPercent } from './budgetInput'
+import { currencySymbol, formatMoney } from '../_shell/adsMarkets'
+import { eur as eurMoney } from '../campaigns/_grid/format'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -149,7 +151,7 @@ const RANGE_COPY = {
 } as const
 
 export function RangePopover({
-  kind, minCents, maxCents, anchor, busy, error, onApply, onClose,
+  kind, minCents, maxCents, anchor, busy, error, onApply, onClose, currency = 'EUR',
 }: {
   kind: keyof typeof RANGE_COPY
   minCents: number | null
@@ -159,8 +161,11 @@ export function RangePopover({
   error?: string | null
   onApply: (mm: { minCents: number | null; maxCents: number | null } | null) => void
   onClose: () => void
+  /** CM-32 — the campaign's market currency (ISO code). Null: unknown, the boxes show no symbol. */
+  currency?: string | null
 }) {
   const { title, rangeLabel, note, floorCents } = RANGE_COPY[kind]
+  const sym = currencySymbol(currency)
   const { ref, pos } = useClampedAnchor(anchor)
   const eur = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2))
   const [range, setRange] = useState(minCents != null || maxCents != null)
@@ -185,12 +190,13 @@ export function RangePopover({
         <label className="r"><input type="radio" name="rangepop" checked={range} onChange={() => setRange(true)} /> {rangeLabel}</label>
         {range && (
           <div className="mmrow">
-            <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Min" value={min} onChange={(e) => setMin(e.target.value)} aria-label="Min" /></span>
-            <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Max" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Max" /></span>
+            <span className="h10-bulk-inp">{sym && <span className="pf">{sym}</span>}<input inputMode="decimal" placeholder="Min" value={min} onChange={(e) => setMin(e.target.value)} aria-label="Min" /></span>
+            <span className="h10-bulk-inp">{sym && <span className="pf">{sym}</span>}<input inputMode="decimal" placeholder="Max" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Max" /></span>
           </div>
         )}
         <p className="n">{note}</p>
-        {bad && <p className="e" role="alert">Each end must be at least €{(floorCents / 100).toFixed(2)}, and Min must not exceed Max.</p>}
+        {/* AM-30 — euros in the console's one money format; CM-32 — another market in its own currency. */}
+        {bad && <p className="e" role="alert">Each end must be at least {currency === 'EUR' ? eurMoney(floorCents / 100) : formatMoney(floorCents / 100, currency)}, and Min must not exceed Max.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>
@@ -222,13 +228,14 @@ const VALUE_COPY = {
     note: 'Nexus\'s bid optimiser moves this campaign\'s bids toward it, unless a rule or a plan sets a target of its own. Leave blank and it uses the account\'s default target ACoS, else profit data, else its own 30% fallback — a fallback is not a setting, which is why the column reads a dash rather than 30%.',
   },
   dailyBudget: {
-    title: 'Daily Budget', prefix: '€', suffix: undefined as string | undefined, placeholder: '',
+    // CM-32 — the prefix is the campaign's own currency (see `currency` on ValuePopover); it was '€' for every market.
+    title: 'Daily Budget', prefix: undefined as string | undefined, suffix: undefined as string | undefined, placeholder: '',
     note: 'Amazon resets spend at midnight in the campaign\'s own marketplace timezone.',
   },
 } as const
 
 export function ValuePopover({
-  kind, initial, anchor, busy, error, onApply, onClose,
+  kind, initial, anchor, busy, error, onApply, onClose, currency = 'EUR', blockedReason = null,
 }: {
   kind: keyof typeof VALUE_COPY
   /** '' when unset — never the fallback value */
@@ -238,8 +245,13 @@ export function ValuePopover({
   error?: string | null
   onApply: (v: string) => void
   onClose: () => void
+  /** CM-32 — the campaign's market currency (ISO code) for a money box. Null: unknown, no symbol. */
+  currency?: string | null
+  /** Ads wave 4c — set when this change cannot be sent (a market Nexus only reads): Apply stays off and says why. */
+  blockedReason?: string | null
 }) {
-  const { title, prefix, suffix, placeholder, note } = VALUE_COPY[kind]
+  const { title, suffix, placeholder, note } = VALUE_COPY[kind]
+  const prefix = kind === 'dailyBudget' ? currencySymbol(currency) || undefined : VALUE_COPY[kind].prefix
   const { ref, pos } = useClampedAnchor(anchor)
   const [v, setV] = useState(initial)
   const read = kind === 'dailyBudget' ? readDailyBudget(v) : readTargetAcosPercent(v)
@@ -256,10 +268,11 @@ export function ValuePopover({
         </span>
         <p className="n">{note}</p>
         {problem && <p className="e" role="alert">{problem}</p>}
+        {blockedReason && <p className="e" role="alert">{blockedReason}</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="sm" disabled={busy || problem != null} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
+          <Button variant="primary" size="sm" disabled={busy || problem != null || !!blockedReason} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>
     </>

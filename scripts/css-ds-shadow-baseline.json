@@ -1,7 +1,7 @@
 {
   "note": "Selectors ending in a bare input/select/button/textarea inside a descendant chain \u2014 they shadow the DS primitive. This may only FALL. A file absent here is held at zero. See the script header for the two fixes and why they differ. Baselined from COMMITTED content: a working-tree scan captured another session's in-flight improvement to rules-automation.css (51 vs 54 at HEAD), which would have failed THEIR next push for work they had not done.",
   "updatedAt": "2026-08-25",
-  "total": 394,
+  "total": 306,
   "files": {
     "app/fleet/activity/activity.css": 1,
     "app/fleet/approvals/approvals.css": 4,
@@ -27,7 +27,6 @@
     "app/marketing/ads/rules-automation/control-room/control-room.css": 6,
     "app/marketing/ads/rules-automation/fleet/fleet-sections.css": 4,
     "app/marketing/ads/rules-automation/rules-automation.css": 54,
-    "app/marketing/ads/suggestions/suggestions.css": 5,
-    "app/marketing/ads-console/amazon.css": 88
+    "app/marketing/ads/suggestions/suggestions.css": 5
   }
 }

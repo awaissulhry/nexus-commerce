@@ -36,6 +36,7 @@ export interface BudgetPlanRow {
   autoPacing: boolean
   stopOverSpend: boolean
   calendar: Array<{ day: number; pct: number }>
+  /** CM-30 — campaigns in this market with their own Min/Max Budget (`Campaign.minBudgetCents` / `maxBudgetCents`). */
   campaignLimitCount: number
   // this month
   spendCents: number | null
@@ -107,7 +108,7 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
   const { start, end, daysInMonth, dayOfMonth, completeDays } = monthBounds(month, opts.now)
   const prev = monthBounds(prevMonth, opts.now)
 
-  const [plans, prevPlans, nextPlans, spendRows] = await Promise.all([
+  const [plans, prevPlans, nextPlans, spendRows, boundedRows] = await Promise.all([
     prisma.adBudgetPlan.findMany({ where: { month }, orderBy: [{ marketplace: 'asc' }, { tag: 'asc' }] }),
     prisma.adBudgetPlan.findMany({ where: { month: prevMonth } }),
     prisma.adBudgetPlan.findMany({ where: { month: nextMonth } }),
@@ -120,7 +121,14 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
       where: { entityType: 'CAMPAIGN', date: { gte: prev.start, lt: end }, ...EXCLUDE_AMS_DAILY },
       _sum: { costMicros: true },
     }),
+    // CM-30 — how many campaigns per market carry their own Min/Max Budget (the one store, see setCampaignLimit).
+    prisma.campaign.groupBy({
+      by: ['marketplace'],
+      where: { status: { not: 'ARCHIVED' }, OR: [{ minBudgetCents: { not: null } }, { maxBudgetCents: { not: null } }] },
+      _count: { _all: true },
+    }),
   ])
+  const boundedByMkt = new Map(boundedRows.map((r) => [r.marketplace ?? '', r._count._all]))
 
   // Build per-marketplace daily arrays for this + previous month.
   interface MktSpend { thisDaily: number[]; prevDaily: number[]; thisTotal: number; prevTotal: number }
@@ -161,7 +169,6 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
     const s = spend.get(marketplace)
     const monthlyBudgetCents = p?.monthlyBudgetCents ?? 0
     const calendar = ((p?.calendar as Array<{ day: number; pct: number }>) ?? [])
-    const limits = ((p?.campaignLimits as unknown as CampaignLimit[]) ?? [])
     const spendCents = s?.thisTotal ?? 0
     const pct = monthlyBudgetCents > 0 ? spendCents / monthlyBudgetCents : null
     const expectedPct = calendar.length
@@ -185,7 +192,7 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
       autoPacing: p?.autoPacing ?? false,
       stopOverSpend: p?.stopOverSpend ?? false,
       calendar,
-      campaignLimitCount: limits.length,
+      campaignLimitCount: boundedByMkt.get(marketplace) ?? 0,
       spendCents,
       pct,
       expectedPct,
@@ -217,7 +224,7 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
       id: p.id, marketplace: p.marketplace, tag: p.tag, month, monthlyBudgetCents: p.monthlyBudgetCents,
       autoPacing: p.autoPacing, stopOverSpend: p.stopOverSpend,
       calendar: ((p.calendar as Array<{ day: number; pct: number }>) ?? []),
-      campaignLimitCount: ((p.campaignLimits as unknown as CampaignLimit[]) ?? []).length,
+      campaignLimitCount: 0, // CM-30 — limits belong to campaigns, counted on the market row
       spendCents: null, pct: null, expectedPct: evenExpected, status: p.monthlyBudgetCents <= 0 ? 'no-budget' : 'on-track',
       daily: [], forecastSpendCents: null, projectedOverspend: false,
       lastMonth: { month: prevMonth, budgetCents: 0, spendCents: null, pct: null, daily: [] },
@@ -239,34 +246,106 @@ export async function analyzeBudgetManager(opts: { month?: string; now?: Date } 
 }
 
 // ── Per-marketplace campaign list + limits (the "More" view) ───────────────
+//
+// CM-30 — ONE store for a campaign's minimum and maximum daily budget: `Campaign.minBudgetCents` / `maxBudgetCents`, the
+// columns the Campaigns grid's Min/Max Budget cell writes (`PATCH /campaigns/:id/guardrails`) and the write gate
+// enforces. The Budget Manager kept its own copy per month in `AdBudgetPlan.campaignLimits` (JSON), read only by Auto
+// Pacing: a limit set on one screen did not appear on the other, and pacing could aim at a budget the gate then refused.
+// Both screens and the pacer now read and write the columns. The JSON is no longer read for limits; a value still held
+// there for a month (and not yet in the columns) is shown as `oldMonthLimit`, so nothing he set disappears unseen.
 
-export interface BmCampaignRow { id: string; name: string; status: string; dailyBudgetCents: number; minCents: number | null; maxCents: number | null }
+export interface BmCampaignRow {
+  id: string; name: string; status: string; dailyBudgetCents: number
+  /** The campaign's own Min/Max Budget (cents) — the same numbers as the Campaigns grid. */
+  minCents: number | null; maxCents: number | null
+  /** CM-30 — a limit saved only on this month's plan by the older Budget Manager, not in use; null when none. */
+  oldMonthLimit: { minCents: number | null; maxCents: number | null } | null
+}
 export async function listBudgetManagerCampaigns(opts: { marketplace: string; month: string }): Promise<{ marketplace: string; month: string; planId: string | null; campaigns: BmCampaignRow[] }> {
   const plan = await prisma.adBudgetPlan.findFirst({ where: { marketplace: opts.marketplace, month: opts.month, tag: null } })
-  const limByCamp = new Map(((plan?.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
+  const oldByCamp = new Map(((plan?.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
   const camps = await prisma.campaign.findMany({
     where: { marketplace: opts.marketplace, status: { not: 'ARCHIVED' } },
-    select: { id: true, name: true, status: true, dailyBudget: true },
+    select: { id: true, name: true, status: true, dailyBudget: true, minBudgetCents: true, maxBudgetCents: true },
     orderBy: { name: 'asc' },
   })
   return {
     marketplace: opts.marketplace, month: opts.month, planId: plan?.id ?? null,
     campaigns: camps.map((c) => {
-      const l = limByCamp.get(c.id)
-      return { id: c.id, name: c.name, status: c.status, dailyBudgetCents: Math.round(Number(c.dailyBudget ?? 0) * 100), minCents: l?.minCents ?? null, maxCents: l?.maxCents ?? null }
+      const old = oldByCamp.get(c.id)
+      const hasOwn = c.minBudgetCents != null || c.maxBudgetCents != null
+      const oldSet = old && (old.minCents != null || old.maxCents != null)
+      return {
+        id: c.id, name: c.name, status: c.status, dailyBudgetCents: Math.round(Number(c.dailyBudget ?? 0) * 100),
+        minCents: c.minBudgetCents ?? null, maxCents: c.maxBudgetCents ?? null,
+        oldMonthLimit: oldSet && !hasOwn ? { minCents: old.minCents ?? null, maxCents: old.maxCents ?? null } : null,
+      }
     }),
   }
 }
 
-/** Upsert a single campaign's min/max limit on the (marketplace, month) plan,
- *  creating the plan on demand so the operator can set limits before budget. */
-export async function setCampaignLimit(opts: { marketplace: string; month: string; campaignId: string; minCents: number | null; maxCents: number | null; createdBy?: string }) {
-  let plan = await prisma.adBudgetPlan.findFirst({ where: { marketplace: opts.marketplace, month: opts.month, tag: null } })
-  if (!plan) plan = await prisma.adBudgetPlan.create({ data: { marketplace: opts.marketplace, tag: null, month: opts.month, createdBy: opts.createdBy ?? null } })
-  const limits = ((plan.campaignLimits as unknown as CampaignLimit[]) ?? []).filter((l) => l.campaignId !== opts.campaignId)
-  if (opts.minCents != null || opts.maxCents != null) limits.push({ campaignId: opts.campaignId, minCents: opts.minCents, maxCents: opts.maxCents })
-  await prisma.adBudgetPlan.update({ where: { id: plan.id }, data: { campaignLimits: limits as never } })
-  return { ok: true, planId: plan.id, count: limits.length }
+/**
+ * CM-30 — the same rule the grid's Min/Max Budget cell answers to (`PATCH /campaigns/:id/guardrails`): each side empty
+ * or at least €1 (100 cents, Amazon's own minimum daily budget), and the minimum not above the maximum. Null = fine.
+ */
+export function budgetBoundsProblem(minCents: number | null, maxCents: number | null): string | null {
+  for (const [label, v] of [['minimum', minCents], ['maximum', maxCents]] as const) {
+    if (v != null && (!Number.isFinite(v) || v < 100)) return `The ${label} daily budget must be at least €1.00 (Amazon's own minimum), or empty for none.`
+  }
+  if (minCents != null && maxCents != null && minCents > maxCents) {
+    return `The minimum daily budget (€${(minCents / 100).toFixed(2)}) is above the maximum (€${(maxCents / 100).toFixed(2)}).`
+  }
+  return null
+}
+
+/**
+ * CM-30 — set one campaign's Min/Max Budget from the Budget Manager: the campaign's own columns, the store the grid
+ * writes and the gate enforces (and Auto Pacing keeps to). Audited as `set_campaign_budget_bounds`, like the grid's
+ * write. A limit the older Budget Manager kept on this month's plan for the campaign is removed with it, so the two can
+ * never disagree again. `month` names that plan only; the limit itself is not per month.
+ */
+export interface CampaignLimitResult {
+  ok: boolean
+  campaignId?: string; minCents?: number | null; maxCents?: number | null
+  /** When not ok: why, and the HTTP status the route answers with. */
+  error?: string; status?: 400 | 404
+}
+export async function setCampaignLimit(opts: { marketplace: string; month: string; campaignId: string; minCents: number | null; maxCents: number | null; createdBy?: string }): Promise<CampaignLimitResult> {
+  const minCents = opts.minCents == null ? null : Math.round(Number(opts.minCents))
+  const maxCents = opts.maxCents == null ? null : Math.round(Number(opts.maxCents))
+  const problem = budgetBoundsProblem(minCents, maxCents)
+  if (problem) return { ok: false, error: problem, status: 400 }
+  const c = await prisma.campaign.findUnique({ where: { id: opts.campaignId }, select: { id: true, marketplace: true, minBudgetCents: true, maxBudgetCents: true } })
+  if (!c || (c.marketplace && c.marketplace !== opts.marketplace)) return { ok: false, error: `Nexus holds no campaign ${opts.campaignId} in ${opts.marketplace}.`, status: 404 }
+  await prisma.campaign.update({ where: { id: c.id }, data: { minBudgetCents: minCents, maxBudgetCents: maxCents } })
+  await prisma.advertisingActionLog.create({
+    data: {
+      userId: opts.createdBy ?? 'user:budget-manager',
+      actionType: 'set_campaign_budget_bounds', entityType: 'CAMPAIGN', entityId: c.id,
+      payloadBefore: { minBudgetCents: c.minBudgetCents, maxBudgetCents: c.maxBudgetCents },
+      payloadAfter: { minBudgetCents: minCents, maxBudgetCents: maxCents }, amazonResponseStatus: 'SUCCESS',
+      evidence: { metric: 'operator_guardrail', note: 'Budget bounds set from the Budget Manager; the same columns as the Campaigns grid. Enforced at the write gate, kept to by Auto Pacing. Never pushed to Amazon.' },
+    },
+  }).catch(() => { /* an audit row must never fail the write it describes */ })
+  await forgetOldMonthLimits(c.id)
+  return { ok: true, campaignId: c.id, minCents, maxCents }
+}
+
+/**
+ * CM-30 — once a campaign's Min/Max Budget is set or cleared from either screen, the copies the older Budget Manager
+ * kept per month (`AdBudgetPlan.campaignLimits`) are dropped, so a cleared limit is not offered back as an "old" one.
+ * A few plan rows per market; only the ones naming the campaign are written.
+ */
+export async function forgetOldMonthLimits(campaignId: string): Promise<number> {
+  const plans = await prisma.adBudgetPlan.findMany({ select: { id: true, campaignLimits: true } })
+  let changed = 0
+  for (const p of plans) {
+    const old = ((p.campaignLimits as unknown as CampaignLimit[]) ?? [])
+    if (!Array.isArray(old) || !old.some((l) => l?.campaignId === campaignId)) continue
+    await prisma.adBudgetPlan.update({ where: { id: p.id }, data: { campaignLimits: old.filter((l) => l?.campaignId !== campaignId) as never } })
+    changed++
+  }
+  return changed
 }
 
 // ── Plan CRUD ──────────────────────────────────────────────────────────────
