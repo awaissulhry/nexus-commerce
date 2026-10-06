@@ -135,8 +135,11 @@ async function resolveDoc(req: ApplyRequest): Promise<{ doc: BlueprintDoc; name:
 /**
  * AX3.6 — the most recent replication of this product into this market that was
  * not rolled back. Feeds the "you have already done this" warning.
+ *
+ * PB-5a — `excludePlaybookId`: a playbook's own earlier build is not "a SECOND
+ * set": a re-build makes only the slots it is missing.
  */
-export async function priorRunFor(productToken: string, marketplace: string) {
+export async function priorRunFor(productToken: string, marketplace: string, opts: { excludePlaybookId?: string | null } = {}) {
   const row = await prisma.adBlueprintApplication.findFirst({
     where: {
       productToken: { equals: productToken, mode: 'insensitive' },
@@ -144,6 +147,7 @@ export async function priorRunFor(productToken: string, marketplace: string) {
       // PLANNED rows are dry runs — they created nothing, so they are not a
       // duplicate of anything.
       status: { in: ['APPLIED', 'PARTIAL'] },
+      ...(opts.excludePlaybookId ? { OR: [{ playbookId: null }, { playbookId: { not: opts.excludePlaybookId } }] } : {}),
     },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true, appliedAt: true, status: true, createdCampaignIds: true },

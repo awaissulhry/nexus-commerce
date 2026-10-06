@@ -44,9 +44,20 @@ const ACTION_OF: ReadonlyMap<string, ClaudeActionType> = new Map(
 /** Tests only: a tool treated as one kind of ad action (no ad tool may run by rule before W2). */
 const treatedAs = new Map<string, ClaudeActionType>()
 
-/** The kind of ad action a tool is, or null: the strategy never narrows it. */
-export function actionOfTool(toolName: string): ClaudeActionType | null {
+/**
+ * PB-5a — a tool whose ops are different kinds of ad action: the kind of each op (null: the strategy never narrows that
+ * op — an adopt only writes Nexus links). An op not listed, or no args, is the tool's kind in CLAUDE_ACTION_TOOLS.
+ */
+export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | null>>>> = {
+  'apply-ads-playbook': { build: 'create', adopt: null },
+}
+
+/** The kind of ad action a tool is (for these args: an op of OP_ACTIONS), or null: the strategy never narrows it. */
+export function actionOfTool(toolName: string, args?: unknown): ClaudeActionType | null {
   if ((BRAKE_TOOLS as readonly string[]).includes(toolName)) return null
+  const op = args && typeof args === 'object' ? (args as { op?: unknown }).op : undefined
+  const ops = OP_ACTIONS[toolName]
+  if (ops && typeof op === 'string' && Object.prototype.hasOwnProperty.call(ops, op)) return ops[op]
   return ACTION_OF.get(toolName) ?? treatedAs.get(toolName) ?? null
 }
 
@@ -211,7 +222,11 @@ async function adUndo(place: Place, args: Obj, preview: Obj | null) {
 
 /** AA-W2-12/13 — a status change: every campaign, ad group (a product ad's too) and target it names. */
 const byStatusArgs: PlaceReader = async (place, args) => {
-  const campaigns = strs(args.campaignIds)
+  // PB-5a — archive-ads buildRunId: the campaigns a playbook build made.
+  const buildRunId = str(args.buildRunId)
+  const built = buildRunId ? await (await import('../ads-playbook/build.js')).buildRunCreated(buildRunId) : null
+  if (buildRunId && !built) place.notPlaced('the playbook build it names was not found')
+  const campaigns = [...strs(args.campaignIds), ...(built ?? [])]
   const adGroups = [...strs(args.adGroupIds), ...list(args.productAds).map((ad) => str(obj(ad).adGroupId))].filter((id): id is string => !!id)
   const targets = strs(args.targetIds)
   if (campaigns.length) await place.campaignIds(campaigns)
@@ -259,6 +274,10 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     await suggestions(place, list(args.decisions).map((d) => str(obj(d).suggestionId)).filter((id): id is string => !!id))
   },
   'create-ad-campaign': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
+  // PB-5a — one product's playbook in one market: the product (by id, else by SKU).
+  'apply-ads-playbook': (place, args) => (str(args.productId)
+    ? place.productIds(marketOf(args.market), [str(args.productId)!])
+    : place.skus(marketOf(args.market), str(args.sku) ? [str(args.sku)!] : [])),
   'save-ad-rule': async (place, args) => {
     if (args.kind !== 'amazon-ads') { place.outside = true; return }
     const scope = obj(args.scope)
@@ -337,7 +356,7 @@ function strictestIn(view: StrategyView, action: ClaudeActionType, basis: 'marke
  * business's level.
  */
 export async function strategyLevelFor(toolName: string, args: unknown, preview?: unknown, memo: StrategyMemo = strategyMemo()): Promise<StrategyNarrowing | null> {
-  const action = actionOfTool(toolName)
+  const action = actionOfTool(toolName, args)
   if (!action) return null
   memo.speaking ??= prisma.adsStrategy.findMany({ where: { channel: 'AMAZON' }, select: { market: true, claudeAutonomy: true } })
   const speaking = new Map<string, string>()

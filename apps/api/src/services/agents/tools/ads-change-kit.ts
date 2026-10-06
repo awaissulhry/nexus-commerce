@@ -60,6 +60,18 @@ export function approvedRun(ctx: ToolContext, why: string): ApprovedRun | { refu
   return { actor: claudeActor(approver), reason, changeSetId: approvalId, manual: person, confirmOwnLimits: person }
 }
 
+/**
+ * The person who asked (the request's run); the approver when the request names nobody (a fleet run). A campaign born
+ * suppressed is flagged suppressed by them (create-ad-campaign, apply-ads-playbook).
+ */
+export async function requesterOf(ctx: ToolContext, fallback: AdsActor): Promise<AdsActor> {
+  const approval = ctx.approvalId
+    ? await prisma.agentApproval.findFirst({ where: { id: ctx.approvalId }, select: { agentRun: { select: { userId: true } } } })
+    : null
+  const asker = approval?.agentRun?.userId?.trim()
+  return asker ? claudeActor(asker) : fallback
+}
+
 // ── Live reach, stored with the preview ───────────────────────────────────────────────────────────
 
 /** Where an approved write lands, as the preview stores it: never a refusal (a refused request is not queued). */

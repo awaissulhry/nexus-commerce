@@ -114,6 +114,12 @@ describe('W1-8 — where each ad change lands', () => {
     expect(await level('create-ad-campaign', { market: 'UK', skus: ['TEST-W18-P1'] })).toBeNull()
   })
 
+  it('PB-5a — a playbook build: its product in its market (by id or SKU), a create; an adopt is not narrowed', async () => {
+    expect(await level('apply-ads-playbook', { op: 'build', market: 'IT', productId: ids.p1 })).toMatchObject({ action: 'create', level: 'ask', row: product })
+    expect(await level('apply-ads-playbook', { op: 'build', market: 'IT', sku: 'TEST-W18-P2' })).toMatchObject({ action: 'create', level: 'confirm', row: market })
+    expect(await level('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: ids.p1 })).toBeNull()
+  })
+
   it('an ads rule: its scope; a whole account, or an edit keeping its scope, the strictest row of the business', async () => {
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { campaignId: 'c-off' } })).toMatchObject({ action: 'rule', level: 'confirm' })
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { marketplace: 'IT', productId: ids.p1 } })).toMatchObject({ level: 'ask', basis: 'scope' })
