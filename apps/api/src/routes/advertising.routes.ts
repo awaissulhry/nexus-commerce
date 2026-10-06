@@ -1318,16 +1318,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       else if (c.kind === 'pat') dest.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
     }
     for (const [p, byMatch] of Object.entries(hostsByProduct)) for (const [mt, hosts] of Object.entries(byMatch)) if (hosts.length === 1) destinationsByProduct[p][mt] = hosts[0].adGroupId
-    const ownDestinations = (wid: string, p: string): Record<string, string | null> | null => {
-      const out: Record<string, string | null> = {}
+    // PB-6b — a source with no theme of its own (Auto) lands through the intent router when every host of that match type
+    // has a theme, none twice: a term holding one of the Brand campaigns' keywords as words goes to the Brand host, one
+    // holding a Competitor campaign's keyword to the Competitor host, the rest to Category. Else none, as before.
+    const { themedRouter } = await import('../services/advertising/ads-harvest-route.js')
+    const themeTerms = (p: string, theme: string) => campaigns
+      .filter((c) => c.id && idMap[c.id] && (c.adProduct ?? 'SP') === p && c.kind === 'keyword' && widTheme[c.id] === theme)
+      .flatMap((c) => (c.keywords ?? []).map((k) => (typeof k === 'string' ? k : k?.text ?? '').trim()).filter(Boolean))
+    type Dest = string | import('../services/advertising/ads-harvest-route.js').IntentRouter
+    const ownDestinations = (wid: string, p: string): Record<string, Dest | null> | null => {
+      const out: Record<string, Dest | null> = {}
       for (const [mt, hosts] of Object.entries(hostsByProduct[p] ?? {})) {
         if (hosts.length < 2) continue
         const mine = widTheme[wid] ? hosts.filter((h) => h.theme === widTheme[wid]) : []
-        out[mt] = mine.length === 1 ? mine[0].adGroupId : null
+        out[mt] = mine.length === 1 ? mine[0].adGroupId : widTheme[wid] ? null : themedRouter(hosts, { brand: themeTerms(p, 'brand'), competitor: themeTerms(p, 'competitor') })
       }
       return Object.keys(out).length ? out : null
     }
-    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean; destinations?: Record<string, string | null> }
+    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean; destinations?: Record<string, Dest | null> }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
       const allSources: RuleSrc[] = Object.entries(rcfg.rows ?? {})

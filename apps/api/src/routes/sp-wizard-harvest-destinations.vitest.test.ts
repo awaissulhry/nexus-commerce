@@ -7,6 +7,8 @@
  *   · one several host lands per source in the host of the source's theme (`theme`, else the theme word in its name);
  *   · a source whose theme cannot be told (Auto, a name without one) gets none for it — refused by name at graduation,
  *     never the last one written;
+ *   · PB-6b — unless every host of that match type has a theme, none twice: then the source (Auto) gets the intent router
+ *     over them, with the Brand and Competitor campaigns' keywords as its words (a brand term → the Brand host, …);
  *   · the rule is v2 (its ticks are literal) and names no constant bid.
  * Values are made up (public repo).
  */
@@ -88,7 +90,7 @@ async function launch(g: string, campaigns: Json[], rows: Record<string, Json>) 
 }
 
 describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', () => {
-  it('Advanced: Broad | Brand → Exact | Brand, Phrase | Competitor → Exact | Competitor; Auto has none; PAT stays rule-level', async () => {
+  it('Advanced: Broad | Brand → Exact | Brand, Phrase | Competitor → Exact | Competitor; Auto through the router; PAT stays rule-level', async () => {
     const g = 'TADV'
     const { action, agOf, sourceOf } = await launch(g, advanced(g), harvestRows(['w-auto', 'w-Broad-Brand', 'w-Broad-Competitor', 'w-Phrase-Competitor', 'w-Phrase-Category']))
     expect(action).toMatchObject({ type: 'harvest_and_negate', v: 2, mode: 'harvest', control: 'manual' })
@@ -99,8 +101,13 @@ describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', 
     expect(sourceOf(`${g}-SP-Keyword-Competitor-Broad`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
     expect(sourceOf(`${g}-SP-Keyword-Competitor-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
     expect(sourceOf(`${g}-SP-Keyword-Category-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Category-Exact`))
-    // Auto has no theme: refused by name at graduation, never sent to one of the three.
-    expect(sourceOf(`${g}-SP-Auto`).destinations.EXACT).toBeNull()
+    // PB-6b — Auto has no theme, but each Exact host has one: its winners go through the intent router, by their words.
+    expect(sourceOf(`${g}-SP-Auto`).destinations.EXACT).toEqual({
+      router: 'intent',
+      BRAND: agOf(`${g}-SP-Keyword-Brand-Exact`), COMPETITOR: agOf(`${g}-SP-Keyword-Competitor-Exact`), CATEGORY: agOf(`${g}-SP-Keyword-Category-Exact`),
+      brand: ['test brand jacket'], competitor: ['test competitor jacket'],
+    })
+    expect(sourceOf(`${g}-SP-Auto`).destinations.PHRASE).toMatchObject({ router: 'intent', BRAND: agOf(`${g}-SP-Keyword-Brand-Phrase`) })
     expect(sourceOf(`${g}-SP-Auto`)).toMatchObject({ graduate: ['EXACT'], negate: ['EXACT'], harvestFrom: true })
   })
 
