@@ -5,10 +5,12 @@
  *   match      asked (bind) first, then named as the playbook names it, then the one campaign of the slot's shape; two of
  *              one shape are ambiguous (bound only when bind names one); a campaign of no free slot is outside, with why
  *   candidates the market's SP campaigns advertising the product family's ASINs, in no playbook; another product's are not
- *   write      links only (origin adopted) and the shared portfolio, the row DRAFT → BUILT with a version row; nothing at a
+ *   write      links (origin adopted) and the shared portfolio, the row DRAFT → BUILT with a version row; nothing at a
  *              campaign changes (allowlist, bids, status); one campaign plays one slot of one playbook; unbind takes an
  *              adopted slot off again (never a built one); a slot whose built campaign was archived is adopted into (its
  *              stale link replaced); a portfolio another playbook holds is named and not linked
+ *   hourly     PB-8 — the playbook's own hourly plans follow the slots: one per rank role, switched off, its members the
+ *              adopted campaigns of that role; an unbind takes the campaign out of it again
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -136,7 +138,7 @@ describe('plan and apply an adopt', () => {
     expect(p).toMatchObject({ empty: ['broad-category', 'exact-brand', 'pat'], problems: [], portfolioId: 'pf-shared', playbook: { id: seeded.rowId, state: 'DRAFT' } })
   })
 
-  it('writes links only: the campaigns are as they were, the row BUILT with a version row; a second adopt finds nothing new', async () => {
+  it('writes links and the playbook\'s own hourly plans (off): the campaigns are as they were, the row BUILT with a version row; a second adopt finds nothing new', async () => {
     const before = await inA(() => db().campaign.findMany({ where: { id: { in: [ids.exact, ids.auto] } }, orderBy: { id: 'asc' }, select: { status: true, liveBidWritesEnabled: true, dailyBudget: true, bidsSuppressedAt: true } }))
     const out = await inA(() => planAdopt({ market: 'IT', productId: seeded.parent }))
     if ('error' in out) throw new Error(out.error)
@@ -152,6 +154,13 @@ describe('plan and apply an adopt', () => {
     const rules = links.filter((l) => l.kind === 'harvestRule' || l.kind === 'isolationRule')
     expect(rules.map((l) => [l.kind, l.key])).toEqual([['harvestRule', 'harvest'], ['isolationRule', 'isolation']])
     expect(await inA(() => db().automationRule.findMany({ where: { id: { in: rules.map((l) => l.refId) } }, select: { enabled: true } }))).toEqual([{ enabled: false }, { enabled: false }])
+    // PB-8 — one hourly plan per rank role, switched off with its schedules, its members the adopted campaigns of the role.
+    expect(links.filter((l) => l.kind === 'rankGroup').map((l) => [l.key, l.origin])).toEqual([['rank:performance', 'built'], ['rank:research', 'built']])
+    for (const [key, member] of [['rank:performance', ids.exact], ['rank:research', ids.auto]] as const) {
+      const groupId = links.find((l) => l.key === key)!.refId
+      expect(await inA(() => db().rankScheduleGroup.findUniqueOrThrow({ where: { id: groupId }, select: { enabled: true, portfolioId: true } }))).toEqual({ enabled: false, portfolioId: null })
+      expect(await inA(() => db().adSchedule.findMany({ where: { groupId }, select: { campaignId: true, enabled: true } }))).toEqual([{ campaignId: member, enabled: false }])
+    }
     expect(await inA(() => db().campaign.findMany({ where: { id: { in: [ids.exact, ids.auto] } }, orderBy: { id: 'asc' }, select: { status: true, liveBidWritesEnabled: true, dailyBudget: true, bidsSuppressedAt: true } }))).toEqual(before)
     const row = await inA(() => db().adsPlaybook.findUniqueOrThrow({ where: { id: seeded.rowId }, select: { state: true, version: true, compiledVersion: true } }))
     expect(row).toEqual({ state: 'BUILT', version: 2, compiledVersion: 2 })
@@ -172,6 +181,8 @@ describe('plan and apply an adopt', () => {
     expect(out.data.bindings).toEqual([])
     expect(await inA(() => applyAdopt(out.data, writer))).toEqual({ bound: 0, unbound: 1, errors: [] })
     expect((await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: seeded.rowId, kind: 'slot' }, select: { key: true } }))).map((l) => l.key)).toEqual(['exact-category'])
+    // PB-8 — the campaign taken off leaves the playbook's hourly plan (its own schedule row is gone).
+    expect(await inA(() => db().adSchedule.findFirst({ where: { campaignId: ids.auto } }))).toBeNull()
     await inA(() => db().adsPlaybookLink.updateMany({ where: { playbookId: seeded.rowId, key: 'exact-category' }, data: { origin: 'built' } }))
     const built = await inA(() => planAdopt({ market: 'IT', productId: seeded.parent, unbind: ['exact-category'] }))
     expect('data' in built && built.data.problems).toEqual([expect.stringMatching(/was built by the playbook, not adopted: archive its campaign instead/)])

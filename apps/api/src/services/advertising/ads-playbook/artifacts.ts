@@ -3,7 +3,7 @@
  * harvest rule (PB-6b) and the isolation rule (PB-7) are each an `ArtifactCompiler`, one import and one entry in
  * ARTIFACT_COMPILERS. The harvest and isolation rules are wired (`syncHarvestRule`, `syncIsolationRule`): each saves its
  * rule once and writes its own link (so the hook stores none for them); a build or an adopt compiles them born OFF, and
- * only START switches them on (PB-5b).
+ * only START switches them on (PB-5b). The hourly-plan groups (PB-8, rank.ts) return their links for the hook to store.
  *
  *   preview     every op's preview shows what each compiler would do (no writes)
  *   compile     after the slot links of a build or an adopt: each compiler creates (or updates) its artifacts DISABLED and
@@ -17,6 +17,7 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import type { TemplateDoc } from './doc.js'
 import { syncHarvestRule } from './harvest-rule.js'
 import { syncIsolationRule } from './isolation-run.js'
+import { rankGroupCompiler } from './rank.js'
 
 export type ArtifactKind = 'rankGroup' | 'harvestRule' | 'isolationRule'
 
@@ -104,6 +105,7 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
 export const ARTIFACT_COMPILERS: readonly ArtifactCompiler[] = [
   ruleCompiler('harvestRule', 'harvest', "the product's harvest rule", syncHarvestRule),
   ruleCompiler('isolationRule', 'isolation', "the product's isolation rule", syncIsolationRule),
+  rankGroupCompiler,
 ]
 
 /** An artifact link as the playbook stores it (AdsPlaybookLink of its kind). */
