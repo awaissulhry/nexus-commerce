@@ -14,8 +14,12 @@ let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../../db.js', () => ({
   default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
 }))
-const notify = vi.fn(async () => ({ created: 1, deduped: false, wouldHaveReached: 1 }))
-vi.mock('../advertising/ads-automation-notify.service.js', () => ({ notifyAutomationDetailed: notify, notifyAutomation: vi.fn(async () => 1) }))
+// Hoisted: the notify module is now loaded while the mocks are set up (ads-manager-run.service.ts imports a constant of it).
+const notify = vi.hoisted(() => vi.fn(async () => ({ created: 1, deduped: false, wouldHaveReached: 1 })))
+vi.mock('../advertising/ads-automation-notify.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../advertising/ads-automation-notify.service.js')>()),
+  notifyAutomationDetailed: notify, notifyAutomation: vi.fn(async () => 1),
+}))
 vi.mock('../../lib/queue.js', () => {
   const queue = { add: vi.fn(async () => ({})), addBulk: vi.fn(async () => []), getJob: vi.fn(async () => null), getJobCounts: vi.fn(async () => ({})) }
   return {

@@ -11,6 +11,7 @@ import { startReadinessPendingCron } from '../jobs/readiness-pending.job.js'
 import { startContentDriftCron } from '../jobs/content-drift.job.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { startTaxonomyRefreshCron } from "../jobs/taxonomy-refresh.job.js";
+import { startAdsRunWatchdogCron } from "../jobs/claude-ads-run-watchdog.job.js";
 import { startCxHeartbeatCron } from "../jobs/cx-heartbeat.job.js";
 import { startDlqMonitorCron } from "../jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "../services/amazon-notifications-boot.service.js";
@@ -291,6 +292,10 @@ export async function startScheduler(): Promise<void> {
   // On by default since P4; NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0 turns it off.
   startSchemaRefreshCron();
   startTaxonomyRefreshCron();
+
+  // ADS AUTONOMY W4-2 — the daily Claude ads run's watchdog: hourly, per business; a business with no expected report
+  // time and no started run does nothing. On by default; NEXUS_ENABLE_ADS_RUN_WATCHDOG_CRON=0 turns it off.
+  startAdsRunWatchdogCron();
 
   // Proactive eBay access-token refresh sweep. The reactive refresh
   // in EbayAuthService.getValidToken handles per-call refresh, but

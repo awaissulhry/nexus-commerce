@@ -243,8 +243,12 @@ function executedFor(actionTypes: string[], actions: unknown[]): Array<{ text: s
         : 'orders ≥ 2 · a 60-day window · spend ≥ €10.00 — every one a handler default',
       source: has ? 'stored in the ACTION, not in the criteria' : 'automation-action-handlers.ts:843 (defaults)',
     })
-    out.push({ text: `a fixed bid of €${Number(h.graduationBidEur ?? 0.5).toFixed(2)} on every keyword it creates`, source: h.graduationBidEur == null ? 'automation-action-handlers.ts:907 (default)' : 'stored on this rule' })
-    out.push({ text: 'negatives written at CAMPAIGN scope', source: 'ads-harvest.service.ts · negateCampaign' })
+    // PB-6a — a rule's starting bid: its own number, else its source's bid mode, else the term's CPC (no clicks: the
+    // strategy's lowest bid or the ad group's default), always held inside the ads strategy's bid band.
+    out.push(h.graduationBidEur == null
+      ? { text: 'each new keyword starts at its source\'s bid mode, else the term\'s own cost per click (no clicks: the ads strategy\'s lowest bid, else the ad group\'s default bid), held inside the strategy\'s bid band', source: 'ads-harvest.service.ts startBid' }
+      : { text: `a bid of €${Number(h.graduationBidEur).toFixed(2)} on every keyword it creates, held inside the ads strategy's bid band`, source: 'stored on this rule' })
+    out.push({ text: 'negatives written at ad-group scope (the default since HV.8a)', source: 'ads-harvest.service.ts applyHarvest negateScope' })
   }
   if (actionTypes.includes('sync_negatives_across_campaigns')) {
     out.push({ text: 'one term negated in EVERY enabled campaign in the marketplace, from a single firing', source: 'automation-action-handlers.ts:1081' })
