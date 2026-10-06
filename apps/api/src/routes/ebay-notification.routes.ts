@@ -36,6 +36,7 @@ import type { RawBodyRequest } from '../utils/webhook.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 import { ebayChallengeResponse } from '../services/cx/ingress/ebay-signature.js'
 import { receiveEbayNotice, EbayAdmissionError } from '../services/cx/ingress/ebay-admission.js'
+import { kickStoredEbayOrderNotice } from '../services/cx/ebay-order-notice-kick.js'
 
 // P2.3 — the Trading API helpers that stood here are gone.
 //
@@ -411,7 +412,11 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       }
       // A quarantine acknowledgement means only that the verified body is durable.
       // It does not claim erasure, lifecycle change or successful order ingestion.
-      return reply.status(200).send({ received: true })
+      reply.status(200).send({ received: true })
+      // Phase 4 — only after the 200, never awaited: a stored order notice is run by the worker now, not at the next
+      // minute. It never rejects, and if it does nothing the minute sweep runs the receipt (ebay-order-notice-kick.ts).
+      kickStoredEbayOrderNotice(result, rawBody).catch(() => undefined)
+      return reply
     } catch (error) {
       const reason = error instanceof EbayAdmissionError ? error.reason : 'storage_unavailable'
       logger.error('[eBay notification] durable admission failed', { reason })
