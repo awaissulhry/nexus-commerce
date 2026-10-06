@@ -10,6 +10,9 @@
  *           re-plans it and runs exactly what was approved, detached: it answers the run's id at once (view build).
  *   adopt   bind existing campaigns to the product's slots (ads-playbook/adopt.ts): Nexus only — nothing at Amazon, no
  *           allowlist, bid or rule moves; the playbook's own hourly plans follow the slots, switched off (PB-8, rank.ts).
+ *   sync    PB-10 — fix the product's drift (ads-playbook view drift), adding only (ads-playbook/sync.ts; the preview,
+ *           the check by rule and the undo in ads-playbook-sync.ts): never deletes, archives or pauses; what adds spend
+ *           waits for a person, a sync of negatives only may run by rule; a person's own change only when revert names it.
  *
  * Like every ad change tool (ads-change-kit.ts): the preview says where it lands and a refusal is not queued; it runs only
  * as an approved request, as the approver, and refuses when what was approved moved. Strategy-bound (ads-autonomy-kit.ts):
@@ -34,6 +37,7 @@ import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
+import { executeSync, syncPreview, syncRefusal, syncUndoCurrent, syncUndoRequest, type SyncAfter, type SyncArgsIn } from './ads-playbook-sync.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'apply-ads-playbook'
@@ -41,8 +45,8 @@ const ID = z.string().trim().min(1).max(64)
 const MAX_SLOTS = 30
 
 const input = z.object({
-  op: z.enum(['build', 'adopt'])
-    .describe('build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only)'),
+  op: z.enum(['build', 'adopt', 'sync'])
+    .describe('build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); sync: fix its drift (ads-playbook view drift), adding only'),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
@@ -52,6 +56,8 @@ const input = z.object({
     campaignId: ID.describe('the campaign that plays it, its Nexus id (campaignId in ad-campaigns)'),
   })).max(MAX_SLOTS).optional().describe('adopt: campaigns named for slots (the others are matched by name, then by shape)'),
   unbind: z.array(SLOT_KEY).max(MAX_SLOTS).optional().describe('adopt: slots whose adopted campaign is taken off the playbook again (the undo of an adopt)'),
+  fix: z.array(z.string().trim().min(1).max(200)).max(200).optional().describe('sync: only these drift items (their keys from ads-playbook view drift); default: every item sync fixes that no person made himself'),
+  revert: z.array(z.string().trim().min(1).max(200)).max(200).optional().describe('sync: changes a person made himself to put back (their keys, byPerson in view drift); sync never puts one back unless it is named here'),
   expectVersion: z.number().int().min(0).optional().describe('the product playbook row version you read (ads-playbook): refused when it moved since'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
@@ -247,6 +253,8 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
   const markets = (limits.markets as string[] | undefined) ?? []
   if (p.market && markets.length && !markets.includes(p.market)) return `this business lets a playbook apply run by rule only in ${markets.join(', ')}`
   if (p.op === 'adopt') return null
+  // PB-10 — a sync runs by rule only when it adds no spend (its negatives), inside the kit's limits.
+  if (p.op === 'sync') return syncRefusal(preview, limits)
   const common = commonRefusal(preview, limits)
   if (common) return common
   if (p.op !== 'build') return `op ${p.op} is not one this tool runs by rule; a person decides`
@@ -273,6 +281,7 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
 type ApplyAfter =
   | { op: 'build'; playbookId: string; applicationId: string }
   | { op: 'adopt'; playbookId: string; market: string; productId: string; bound: Array<{ slot: string; campaignId: string }>; unbound: Array<{ slot: string; campaignId: string }> }
+  | SyncAfter
 
 /** Undo: a build is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt. */
 export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
@@ -289,6 +298,7 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
       const has = (s: { slot: string; campaignId: string }) => links.some((l) => l.key === s.slot && l.refId === s.campaignId)
       return { ...after, bound: after.bound.filter(has), unbound: after.unbound.filter((u) => !has(u)) }
     }
+    if (after.op === 'sync') return syncUndoCurrent(after)
     return change.after
   },
   request(change) {
@@ -310,6 +320,7 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
         },
       }
     }
+    if (after.op === 'sync') return syncUndoRequest(after, change.id)
     return { refusal: 'This change does not record what it applied.' }
   },
 }
@@ -345,9 +356,17 @@ const applyAdsPlaybook: AgentTool = {
     + 'approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by '
     + 'default a build does not: maxCampaigns 0). Refused, and not queued, when the product is not enrolled, nothing is '
     + 'missing, the gate or Amazon\'s write gate refuses it, or a build of it is already running. Undo: a build is archived '
-    + '(archive-ads, permanent at Amazon); an adopt is reversed by the opposite adopt.',
+    + '(archive-ads, permanent at Amazon); an adopt is reversed by the opposite adopt. '
+    + 'op sync fixes the drift ads-playbook view drift lists, ADDING ONLY (it never deletes, archives or pauses): missing '
+    + 'isolation, source and product negatives (through the negative write service; only inside this product\'s own '
+    + 'campaigns), missing or misplaced keywords and competitor ASINs and missing product ads (at the 2-cent floor, the '
+    + 'planned bid remembered), missing slots (built as op build builds them), and compiled rules or hourly plans saved '
+    + 'again (Nexus only). A winning search term is never moved. A change a person made himself is never put back unless '
+    + 'revert names it (keep it with set-ads-playbook instead). What adds spend waits for a person; a sync of negatives '
+    + 'only may run by the business\'s rule inside its limits. Undo retires the negatives it added (undo-ad-change).',
   async handler(args, ctx) {
     const a = args as Args
+    if (a.op === 'sync') return (await syncPreview(a as SyncArgsIn, ctx)).result
     return a.op === 'adopt' ? (await adoptPreview(a)).result : (await buildPreview(a, ctx)).result
   },
   async execute(args, ctx) {
@@ -361,6 +380,7 @@ const applyAdsPlaybook: AgentTool = {
       approvalId: changeSetId,
       updatedBy: ctx.via === 'claude' ? `claude:${changeSetId}` : `user:${ctx.userId}`,
     })
+    if (a.op === 'sync') return executeSync(a as SyncArgsIn, ctx, writerOf)
 
     if (a.op === 'adopt') {
       const fresh = await adoptPreview(a)

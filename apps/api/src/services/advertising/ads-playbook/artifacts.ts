@@ -69,8 +69,16 @@ export interface ArtifactPreviewLine {
 export interface ArtifactExpectation {
   key: string
   refId: string | null
-  parts: Record<string, { expected: unknown; actual: unknown }>
+  /**
+   * `resave: false` — a re-save through `compile` does not set this part back (a plan's hours: the compile keeps them);
+   * `note` says what does.
+   */
+  parts: Record<string, { expected: unknown; actual: unknown; resave?: boolean; note?: string }>
   unknown?: string
+  /** Campaigns of this artifact held by something the playbook did not make (the Owner's own hourly plan): never drift. */
+  held?: Array<{ campaignId: string; name: string; by: string }>
+  /** The last change a person made to the artifact since the playbook last saved it (its own history), if any. */
+  changedBy?: { userId: string; at: string; action: string }
 }
 
 export interface ArtifactCompiler {
@@ -199,27 +207,28 @@ export type KindExpectation = ArtifactExpectation & { kind: ArtifactKind }
  * PB-10 — what each artifact the playbook owns should be, by its compiler's `expected` (no writes). A kind no compiler
  * handles, or whose compiler says nothing yet, is listed as not checked with why — never as "no drift".
  */
-export async function expectArtifacts(ctx: ArtifactContext, links: readonly StoredArtifactLink[], compilers: readonly ArtifactCompiler[] = ARTIFACT_COMPILERS): Promise<{ expectations: KindExpectation[]; notChecked: Array<{ kind: ArtifactKind; why: string }>; errors: string[] }> {
+export async function expectArtifacts(ctx: ArtifactContext, links: readonly StoredArtifactLink[], compilers: readonly ArtifactCompiler[] = ARTIFACT_COMPILERS): Promise<{
+  expectations: KindExpectation[]; notChecked: Array<{ kind: ArtifactKind; why: string }>; held: Array<{ kind: ArtifactKind; campaignId: string; name: string; by: string }>; errors: string[]
+}> {
   const expectations: KindExpectation[] = []
   const notChecked: Array<{ kind: ArtifactKind; why: string }> = []
+  const held: Array<{ kind: ArtifactKind; campaignId: string; name: string; by: string }> = []
   const errors: string[] = []
   const ranked = ctx.doc.structure.slots.some((s) => s.rankRole !== 'none')
   for (const kind of ARTIFACT_KINDS) {
     if (kind === 'rankGroup' && !ranked) continue
     const mine = compilers.filter((c) => c.kind === kind)
-    if (!mine.length) {
-      notChecked.push({ kind, why: kind === 'rankGroup' ? "the hourly plans per rank role are not compiled from the playbook in this release, so nothing says what they should be" : 'nothing compiles it in this release' })
-      continue
-    }
+    if (!mine.length) { notChecked.push({ kind, why: 'nothing compiles it in this release, so nothing says what it should be' }); continue }
     for (const c of mine) {
       if (!c.expected) { notChecked.push({ kind, why: 'its compiler does not say yet what its compiled version holds, so it is not compared' }); continue }
       try {
         for (const e of await c.expected(ctx, links.filter((l) => l.kind === kind))) {
+          held.push(...(e.held ?? []).map((h) => ({ kind, ...h })))
           if (e.unknown) notChecked.push({ kind, why: e.unknown })
           else expectations.push({ ...e, kind })
         }
       } catch (e) { errors.push(errorOf(kind, e)) }
     }
   }
-  return { expectations, notChecked, errors }
+  return { expectations, notChecked, held, errors }
 }

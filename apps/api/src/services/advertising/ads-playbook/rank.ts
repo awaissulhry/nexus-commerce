@@ -50,7 +50,7 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import type { RankScheduleGroupInput } from '../ads-create.service.js'
-import type { ArtifactCompiler, ArtifactContext, ArtifactLink, ArtifactPreviewLine } from './artifacts.js'
+import type { ArtifactCompiler, ArtifactContext, ArtifactExpectation, ArtifactLink, ArtifactPreviewLine } from './artifacts.js'
 import type { Phase, RankRole } from './doc.js'
 
 export const RANK_GROUP_KIND = 'rankGroup' as const
@@ -665,6 +665,55 @@ export async function applyRankPhase(ctx: ArtifactContext, rank: RankPhaseStates
   return { changed, errors }
 }
 
+const HOURS_NOTE = 'A re-save keeps a plan\'s hours as they are (a person paints them on Hourly Bids): sync never rewrites them. They are set back on Hourly Bids, by a phase switch, or kept as the playbook\'s own (keep).'
+const ON_MEMBERS_NOTE = 'The plan is on: a campaign joins it only at START and leaves it only at STOP, so a re-save does not change its members now.'
+
+/**
+ * PB-10 — each role's group as the playbook compiles it, against the group the playbook made (drift; no writes): its
+ * members (this product's linked campaigns of the role), and its hours and baseline (the phase's plan: full, or light).
+ * Only the playbook's own groups are compared. A role a campaign of which the Owner's own hourly plan holds (or another
+ * plan, or bids an earlier plan left) is not compared, and each such campaign is named as held: his plans are never
+ * drift. `changedBy`: the plan's last version a person saved after the playbook last saved it.
+ */
+async function rankExpected(ctx: ArtifactContext): Promise<ArtifactExpectation[]> {
+  const facts = await loadRankFacts(ctx)
+  const phase = await phaseRank(ctx)
+  const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: ctx.playbookId, kind: RANK_GROUP_KIND, origin: 'built' }, select: { key: true, updatedAt: true } })
+  const savedAt = new Map(links.map((l) => [l.key, l.updatedAt]))
+  const out: ArtifactExpectation[] = []
+  for (const role of ROLES) {
+    const plan = ctx.doc.rank.roles[role]
+    if (!plan) continue
+    const key = rankKey(role)
+    const owned = facts.owned.get(role)
+    const { members, refusal } = roleMembers(ctx, facts, role)
+    const held = members.filter((id) => facts.heldBy.has(id)).map((id) => ({ campaignId: id, name: facts.campaigns.get(id)?.name ?? id, by: facts.heldBy.get(id)! }))
+    if (refusal) {
+      out.push({
+        key, refId: owned?.groupId ?? null, parts: {},
+        unknown: held.length ? `the ${role} plan is not compared: ${plural(held.length, 'campaign')} of it ${held.length === 1 ? 'is' : 'are'} held by an hourly plan the playbook did not make (the Owner's own) — never drift` : `the ${role} plan is not compared: ${refusal}`,
+        ...(held.length ? { held } : {}),
+      })
+      continue
+    }
+    if (!members.length && !owned) continue
+    const parts: ArtifactExpectation['parts'] = {
+      members: { expected: [...members].sort(), actual: owned ? owned.members.map((m) => m.campaignId).sort() : null, ...(owned?.enabled ? { resave: false, note: ON_MEMBERS_NOTE } : {}) },
+    }
+    let changedBy: ArtifactExpectation['changedBy']
+    if (owned && !('error' in phase)) {
+      const hours = phase.rank[role] === 'light' && plan.light ? plan.light : plan
+      parts.windows = { expected: hours.windows, actual: owned.windows, resave: false, note: HOURS_NOTE }
+      parts.baseline = { expected: hours.baseline, actual: owned.defaultTargetKey, resave: false, note: HOURS_NOTE }
+      const since = savedAt.get(key)
+      const v = await prisma.rankScheduleVersion.findFirst({ where: { groupId: owned.groupId, changedBy: { startsWith: 'user:' }, ...(since ? { createdAt: { gt: since } } : {}) }, orderBy: { createdAt: 'desc' }, select: { changedBy: true, createdAt: true } })
+      if (v?.changedBy) changedBy = { userId: v.changedBy, at: v.createdAt.toISOString(), action: 'save_rank_schedule_group' }
+    }
+    out.push({ key, refId: owned?.groupId ?? null, parts, ...(changedBy ? { changedBy } : {}) })
+  }
+  return out
+}
+
 /** The playbook's hourly plans on the artifacts hook (artifacts.ts ARTIFACT_COMPILERS). */
 export const rankGroupCompiler: ArtifactCompiler = {
   kind: RANK_GROUP_KIND,
@@ -694,4 +743,5 @@ export const rankGroupCompiler: ArtifactCompiler = {
     const { changed, errors } = await runRankSteps(ctx, facts, planSwitch(ctx, facts, startSwitches(phase.phase, phase.rank), { follow: true }))
     return { changed, errors }
   },
+  expected: rankExpected,
 }

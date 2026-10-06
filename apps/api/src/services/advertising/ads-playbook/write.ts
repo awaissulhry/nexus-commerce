@@ -23,7 +23,7 @@
  *             AdsPlaybookVersion row (changes, direction, via, approvalId, actor, stepUpAt).
  *
  * Live effect: NONE at Amazon and none in any engine — nothing reads a playbook. It is compiled only by an approved
- * apply (build and adopt: apply-ads-playbook, PB-5a; start, sync and phase come later).
+ * apply (build and adopt: apply-ads-playbook, PB-5a; sync, PB-10; start and phase come later).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -737,7 +737,8 @@ export interface PlaybookApplyWriter {
 
 /** What an apply op made of the row: its state, and the row and template versions it compiled. */
 export interface PlaybookApplyRecord {
-  op: 'build' | 'adopt' | 'start' | 'stop'
+  /** PB-10 — a sync records itself too (what it added, in the reason). */
+  op: 'build' | 'adopt' | 'start' | 'stop' | 'sync'
   state: string
   /** The row version the op was planned (and approved) from. */
   compiledVersion: number

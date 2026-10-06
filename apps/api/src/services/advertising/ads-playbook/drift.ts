@@ -57,7 +57,13 @@ export type DriftFix =
   | { by: 'tool'; tool: string; args: Record<string, unknown>; addsSpend: boolean; note: string }
   | { by: 'none'; note: string }
 
-export interface PersonChange { userId: string; at: string; action: string }
+/** A change a person made himself (the ads audit): who, when, its action, and the fields it wrote (when the row says). */
+export interface PersonChange { userId: string; at: string; action: string; fields?: string[] }
+
+/** Which of a person's changes explains which drift: a status change, a placement, a rule's own settings (not its switch). */
+const STATUS_CHANGE = (c: PersonChange) => /archive|retire|pause|delete|state/i.test(c.action) || (c.fields ?? []).some((f) => f === 'status' || f === 'state')
+const PLACEMENT_CHANGE = (c: PersonChange) => c.action === 'update_placement_bidding'
+const RULE_EDIT = (c: PersonChange) => c.action === 'update_rule' && (c.fields ?? []).some((f) => f !== 'enabled' && f !== 'autonomyLevel')
 
 export interface DriftItem {
   /** Stable while the drift stands: what `fix` and `revert` of apply-ads-playbook op sync name. */
@@ -88,7 +94,7 @@ export interface DriftItem {
 export interface DriftReport {
   items: DriftItem[]
   /** What the playbook expects but is left alone on purpose (the lock, a protected term, a winner, a term held elsewhere). */
-  heldBack: Array<{ slot: string | null; term: string; why: string }>
+  heldBack: Array<{ slot: string | null; what: string; why: string }>
   notChecked: string[]
   counts: { items: number; bySync: number; addsSpend: number; byPerson: number; viaTool: number; none: number; warnOnly: number }
 }
@@ -131,6 +137,8 @@ export interface DriftFacts {
   campaigns: ReadonlyMap<string, DriftCampaign>
   /** Rule 3: the ad groups of the product's own scope (advertising nothing but this product). Only these get a write. */
   scope: ReadonlySet<string>
+  /** Slot ad groups that advertise no product at all: the product's own ads may be added there (nothing else). */
+  empty: ReadonlySet<string>
   positives: ReadonlyMap<string, readonly Positive[]>
   archived: {
     positives: ReadonlyMap<string, ReadonlyArray<{ id: string; text: string; match: string }>>
@@ -155,7 +163,12 @@ export interface DriftFacts {
   portfolioId: string | null
   /** The changes people made themselves, newest first, by entity id (not one of the playbook's own applies). */
   personal: ReadonlyMap<string, readonly PersonChange[]>
-  artifacts: { expectations: readonly KindExpectation[]; notChecked: ReadonlyArray<{ kind: string; why: string }> }
+  artifacts: {
+    expectations: readonly KindExpectation[]
+    notChecked: ReadonlyArray<{ kind: string; why: string }>
+    /** Campaigns an hourly plan the playbook did not make holds (the Owner's own): listed as held, never drift. */
+    held: ReadonlyArray<{ kind: string; campaignId: string; name: string; by: string }>
+  }
   notChecked: readonly string[]
 }
 
@@ -196,7 +209,7 @@ export function findDrift(f: DriftFacts): DriftReport {
     args: { kind: 'playbook', market: f.market, level: 'product', productId: f.playbook.scopeId, values, expectVersion: f.playbook.version, reason },
     note,
   })
-  const latest = (id: string | undefined | null, action?: string) => (id ? (f.personal.get(id) ?? []).find((c) => !action || c.action === action) : undefined)
+  const latest = (id: string | undefined | null, explains: (c: PersonChange) => boolean) => (id ? (f.personal.get(id) ?? []).find(explains) : undefined)
   const groupOf = (s: DriftSlotFacts) => s.link?.adGroupId ?? null
   const live = f.slots.filter((s) => s.link && f.campaigns.has(s.link.campaignId))
   const placementsDeferred = new Set<string>()
@@ -205,7 +218,7 @@ export function findDrift(f: DriftFacts): DriftReport {
   for (const s of f.slots) {
     const slot = s.slot
     if (!s.link) {
-      const person = s.lost ? latest(s.lost.campaignId) : undefined
+      const person = s.lost ? latest(s.lost.campaignId, STATUS_CHANGE) : undefined
       const fix: DriftFix = { by: 'sync', part: 'slots', addsSpend: true }
       items.push({
         key: keyOf('slot_missing', slot.key), kind: 'slot_missing', slot: slot.key,
@@ -228,7 +241,7 @@ export function findDrift(f: DriftFacts): DriftReport {
     if (!c) continue
     const base = { slot: slot.key, campaignId: c.id, ...(groupOf(s) ? { adGroupId: groupOf(s)! } : {}) }
     if (c.status === 'PAUSED') {
-      const person = latest(c.id)
+      const person = latest(c.id, STATUS_CHANGE)
       const fix: DriftFix = { by: 'tool', tool: 'enable-ads', args: { campaignIds: [c.id], why: `the playbook's slot ${slot.key} runs` }, addsSpend: true, note: 'A real pause is lifted by enable-ads (its own approval); sync never switches a campaign on.' }
       items.push({
         key: keyOf('slot_paused', slot.key), kind: 'slot_paused', ...base,
@@ -262,7 +275,7 @@ export function findDrift(f: DriftFacts): DriftReport {
       const want = doc.placements[slot.key] ?? { top: 0, productPage: 0, restOfSearch: 0 }
       const differs = PLACEMENT_KEYS.filter((k) => (want[k] ?? 0) !== (c.placements[k] ?? 0))
       if (differs.length) {
-        const person = latest(c.id, 'update_placement_bidding')
+        const person = latest(c.id, PLACEMENT_CHANGE)
         const fix: DriftFix = {
           by: 'tool', tool: 'set-placement-multipliers',
           args: { campaignId: c.id, topOfSearchPct: want.top, productPagesPct: want.productPage, restOfSearchPct: want.restOfSearch, why: `the playbook's placements for slot ${slot.key}` },
@@ -299,10 +312,10 @@ export function findDrift(f: DriftFacts): DriftReport {
   const inScope = (s: DriftSlotFacts) => { const g = groupOf(s); return g != null && f.scope.has(g) }
   for (const s of live) {
     const g = groupOf(s)
-    if (!g || !inScope(s)) continue
+    if (!g || (!inScope(s) && !f.empty.has(g))) continue
     const c = f.campaigns.get(s.link!.campaignId)!
     const base = { slot: s.slot.key, campaignId: c.id, adGroupId: g }
-    // Product ads: every child listed in the market.
+    // Product ads: every child listed in the market (also into a slot ad group that advertises nothing yet).
     const ads = f.productAds.get(g) ?? new Set<string>()
     const gone = f.archived.productAds.get(g) ?? new Set<string>()
     for (const ad of f.expectedAds) {
@@ -315,6 +328,7 @@ export function findDrift(f: DriftFacts): DriftReport {
       items.push({ key: keyOf('product_ad_missing', s.slot.key, asin), kind: 'product_ad_missing', ...base, asin, ...(ad.skus[0] ? { sku: ad.skus[0] } : {}), says: `${asin} (${ad.skus[0] ?? 'no SKU'}) is listed in ${f.market} but not advertised in "${c.name}".`, fix: { by: 'sync', part: 'productAds', addsSpend: true } })
     }
 
+    if (!inScope(s)) continue
     // Positives the product's terms feed into this slot.
     const positives = f.positives.get(g) ?? []
     const archived = f.archived.positives.get(g) ?? []
@@ -323,10 +337,10 @@ export function findDrift(f: DriftFacts): DriftReport {
     const archivedOf = (text: string, match: string) => archived.find((a) => norm(a.text) === norm(text) && a.match === match)
     for (const k of exp?.keywords ?? []) {
       if (has(k.text, k.match)) continue
-      if (k.gated && f.heldOutside.has(norm(k.text))) { heldBack.push({ slot: s.slot.key, term: k.text, why: 'This product\'s own campaign outside the playbook already buys it: it stays where it is (Owner rule 2).' }); continue }
+      if (k.gated && f.heldOutside.has(norm(k.text))) { heldBack.push({ slot: s.slot.key, what: k.text, why: 'This product\'s own campaign outside the playbook already buys it: it stays where it is (Owner rule 2).' }); continue }
       const gone = archivedOf(k.text, k.match)
       if (gone) {
-        const person = latest(gone.id)
+        const person = latest(gone.id, STATUS_CHANGE)
         const list = f.terms.brand.some((b) => norm(b) === norm(k.text)) ? 'brand' : f.terms.competitor.some((x) => norm(x) === norm(k.text)) ? 'competitor' : 'category'
         const terms = list === 'brand' ? { ...f.terms, brand: f.terms.brand.filter((b) => norm(b) !== norm(k.text)) }
           : list === 'competitor' ? { ...f.terms, competitor: f.terms.competitor.filter((x) => norm(x) !== norm(k.text)) }
@@ -394,7 +408,7 @@ export function findDrift(f: DriftFacts): DriftReport {
     if (seen.has(k)) return
     seen.add(k)
     const goneId = f.archived.negatives.get(k)
-    const person = goneId ? latest(goneId) : undefined
+    const person = goneId ? latest(goneId, STATUS_CHANGE) : undefined
     const fix: DriftFix = { by: 'sync', part: 'negatives', addsSpend: false }
     const keep: DriftItem['keep'] = of === 'product'
       ? keepArgs({ terms: { ...f.terms, negatives: f.terms.negatives.filter((x) => !(norm(x.text) === norm(n.text) && x.match === n.match)) } }, `Takes "${n.text}" (${n.match.toLowerCase()}) out of this product's negatives: no slot of it gets it again.`, `keep: negative ${n.text} lifted by a person`)
@@ -420,38 +434,47 @@ export function findDrift(f: DriftFacts): DriftReport {
     for (const n of f.terms.negatives) {
       if (f.standing.has(negativeKey(g, n.match, n.text))) continue
       const tooLong = negativeKeywordTextProblem(n.text, n.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT')
-      if (tooLong) { heldBack.push({ slot: s.slot.key, term: n.text, why: tooLong }); continue }
+      if (tooLong) { heldBack.push({ slot: s.slot.key, what: n.text, why: tooLong }); continue }
       const blocked = blockedPositive({ text: n.text, match: n.match }, positives)
-      if (blocked) { heldBack.push({ slot: s.slot.key, term: n.text, why: `It would block this slot's own keyword "${blocked.text}" (the lock): not negated here.` }); continue }
-      if (protectedTermHit(n.text, n.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT', f.protections.get(c.id) ?? [])) { heldBack.push({ slot: s.slot.key, term: n.text, why: 'A protected term: never negated.' }); continue }
+      if (blocked) { heldBack.push({ slot: s.slot.key, what: n.text, why: `It would block this slot's own keyword "${blocked.text}" (the lock): not negated here.` }); continue }
+      if (protectedTermHit(n.text, n.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT', f.protections.get(c.id) ?? [])) { heldBack.push({ slot: s.slot.key, what: n.text, why: 'A protected term: never negated.' }); continue }
       const winner = [...(f.winners.get(g) ?? [])].find((t) => negativeBlocksTerm({ text: n.text, match: n.match }, t))
-      if (winner) { heldBack.push({ slot: s.slot.key, term: n.text, why: `The search "${winner}" wins here (it meets the ads strategy's harvest bar): winners stay (Owner rule 2), so a person decides this negative.` }); continue }
+      if (winner) { heldBack.push({ slot: s.slot.key, what: n.text, why: `The search "${winner}" wins here (it meets the ads strategy's harvest bar): winners stay (Owner rule 2), so a person decides this negative.` }); continue }
       negativeItem('product', { text: n.text, match: n.match, adGroupId: g, campaignId: c.id, slot: s.slot.key, why: `The product's negative "${n.text}" (${n.match.toLowerCase()}) is not in "${c.name}".` })
     }
   }
 
   // ── Compiled artifacts ───────────────────────────────────────────────────────────────────────
+  const ARTIFACT_WORDS: Record<string, string> = { harvestRule: 'harvest rule', isolationRule: 'isolation rule', rankGroup: 'hourly plan' }
   for (const e of f.artifacts.expectations) {
-    const fix: DriftFix = { by: 'sync', part: 'artifacts', addsSpend: false }
+    const words = ARTIFACT_WORDS[e.kind] ?? e.kind
+    const resave: DriftFix = { by: 'sync', part: 'artifacts', addsSpend: false }
     if (!e.refId) {
-      items.push({ key: keyOf('artifact_missing', e.kind, e.key), kind: 'artifact_missing', slot: null, artifact: { kind: e.kind, refId: null, parts: Object.keys(e.parts) }, says: `The playbook's ${e.kind} "${e.key}" is missing (not linked, or deleted since).`, fix })
+      items.push({ key: keyOf('artifact_missing', e.kind, e.key), kind: 'artifact_missing', slot: null, artifact: { kind: e.kind, refId: null, parts: Object.keys(e.parts) }, says: `The playbook's ${words} "${e.key}" is missing (never made, or deleted since). Sync makes it again, switched off (Nexus only).`, fix: resave })
       continue
     }
-    const parts = Object.entries(e.parts).filter(([, p]) => canonical(p.expected) !== canonical(p.actual)).map(([name]) => name)
-    if (!parts.length) continue
-    const person = latest(e.refId, e.kind === 'rankGroup' ? undefined : 'update_rule')
+    const differing = Object.entries(e.parts).filter(([, p]) => canonical(p.expected) !== canonical(p.actual))
+    if (!differing.length) continue
+    const parts = differing.map(([name]) => name)
+    const resaved = differing.some(([, p]) => p.resave !== false)
+    const notes = [...new Set(differing.filter(([, p]) => p.resave === false && p.note).map(([, p]) => p.note!))]
+    const fix: DriftFix = resaved ? resave : { by: 'none', note: notes.join(' ') || 'A re-save does not set it back.' }
+    const person = e.changedBy ?? latest(e.refId, RULE_EDIT)
+    // A plan's hours a person painted can be kept as the playbook's own: written into the product row's rank section.
+    const role = e.kind === 'rankGroup' ? (e.key.split(':')[1] as 'performance' | 'research' | undefined) : undefined
+    const hours = role && doc.rank.roles[role] && (e.parts.windows || e.parts.baseline) && differing.some(([n]) => n === 'windows' || n === 'baseline')
+      ? keepArgs({ overrides: { rank: { ...doc.rank, roles: { ...doc.rank.roles, [role]: { ...doc.rank.roles[role]!, windows: e.parts.windows?.actual ?? doc.rank.roles[role]!.windows, baseline: e.parts.baseline?.actual ?? doc.rank.roles[role]!.baseline } } } } }, `Writes the plan's hours as they are into this product's playbook (overrides.rank, the ${role} role), so they are the playbook's from now on.`, `keep: ${role} hours as painted`)
+      : null
     items.push({
       key: keyOf('artifact_changed', e.kind, e.key), kind: 'artifact_changed', slot: null, artifact: { kind: e.kind, refId: e.refId, parts },
-      says: `The playbook's ${e.kind} "${e.key}" differs from what the playbook compiles now: ${parts.join(', ')}.`,
+      says: `The playbook's ${words} "${e.key}" differs from what the playbook compiles now: ${parts.join(', ')}.${resaved ? '' : ` ${fix.by === 'none' ? fix.note : ''}`}`,
       fix,
-      ...(person ? {
-        byPerson: person,
-        keep: { note: 'Nothing to write: a compiled artifact\'s own settings are no playbook part. It stays as you set it until a build, an adopt, a START or a sync that names it in revert compiles it again.' },
-        revert: fix,
-      } : {}),
+      ...(person ? { byPerson: person, ...(resaved ? { revert: resave } : {}) } : {}),
+      ...(hours ? { keep: hours } : person ? { keep: { note: 'Nothing to write: this artifact\'s own settings are no playbook part. It stays as you set it until a build, an adopt, a START or a sync that names it in revert compiles it again.' } } : {}),
     })
   }
   for (const n of f.artifacts.notChecked) notChecked.push(`${n.kind}: ${n.why}`)
+  for (const h of f.artifacts.held) heldBack.push({ slot: f.slots.find((x) => x.link?.campaignId === h.campaignId)?.slot.key ?? null, what: h.name, why: `Held by the Owner's plan — ${h.by}: his own hourly plan, never drift here; the playbook's plan for it is compared once he adopts it.` })
 
   const counts = {
     items: items.length,
