@@ -2133,9 +2133,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── GET /advertising/summary ────────────────────────────────────────
-  fastify.get('/advertising/summary', async (_request, reply) => {
+  fastify.get('/advertising/summary', async (request, reply) => {
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    // AM-15 — the Dashboard's market picker. Campaigns and true margin follow the chosen market, like Spend/Sales
+    // beside them; no marketplace = every market, as before. `agedSkusFlagged` (the Health page) stays account-wide.
+    const mp = (request.query as { marketplace?: string }).marketplace || null
+    const inMarket = mp ? { marketplace: mp } : {}
 
     /**
      * ACR.0.5 — the margin headline is computed over the rows that HAVE a profit, not over
@@ -2145,16 +2149,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      * "we measured this and it is zero". Null plus a coverage share instead.
      */
     const [campaignCount, agg, covered, estimatedRows, agedCritical] = await Promise.all([
-      prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] } } }),
+      prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] }, ...inMarket } }),
       prisma.productProfitDaily.aggregate({
-        where: { date: { gte: thirtyDaysAgo } },
+        where: { date: { gte: thirtyDaysAgo }, ...inMarket },
         _sum: {
           grossRevenueCents: true,
           advertisingSpendCents: true,
         },
       }),
       prisma.productProfitDaily.aggregate({
-        where: { date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null } },
+        where: { date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null }, ...inMarket },
         _sum: { grossRevenueCents: true, trueProfitCents: true },
         _count: true,
       }),
@@ -2163,7 +2167,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // confusion ACR.0.5 existed to remove — only now with a plausible number instead of a zero.
       prisma.productProfitDaily.count({
         where: {
-          date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null },
+          date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null }, ...inMarket,
           coverage: { path: ['costEstimated'], equals: true },
         },
       }).catch(() => 0),
@@ -7564,7 +7568,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as Record<string, string | undefined>
     const { getMomentum } = await import('../services/advertising/ads-momentum.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
-    return getMomentum({ date: q.date })
+    return getMomentum({ date: q.date, marketplace: q.marketplace || null })
   })
 
   // ── AX3.10: Budget Manager ──────────────────────────────────────────
