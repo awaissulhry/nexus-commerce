@@ -6,7 +6,7 @@
  *
  * `RawCell` is the shape returned by GET /advertising/dayparting/heatmap.
  */
-import type { MetricUnit } from './DaypartingHeatmap'
+import type { HeatCell, MetricUnit } from './DaypartingHeatmap'
 
 export interface RawCell {
   dow: number; hour: number
@@ -91,6 +91,17 @@ export function metricReading(m: string, c: RawCell): CellReading {
     default:
       return { value: metricVal(m).f(c) }
   }
+}
+
+/**
+ * AM-19 — one heatmap cell for metric `m`, read with `metricReading`: an hour with no value carries
+ * its reason in words (`empty`) and, for spend with no sales, `worst` — never a 0 that paints a
+ * no-sales hour as the best ACoS on the board. The schedule builder's heatmap builds its cells
+ * here; the Hourly Bids page maps the same `metricReading` the same way.
+ */
+export function heatCell(m: string, c: RawCell): HeatCell {
+  const r = metricReading(m, c)
+  return { dow: c.dow, hour: c.hour, value: r.value ?? 0, ...(r.value == null ? { empty: r.empty, worst: r.worst } : {}) }
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

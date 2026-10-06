@@ -42,6 +42,7 @@ import { runEtsyReceiptsPoll } from './etsy-receipts-poll.job.js'
 import { runAdsCredentialsArchive, runAdsCredentialsRestore } from './cx3b-ads-credentials-archive.job.js'
 import { runCredentialsRotate, runCredentialsStatus, runCredentialsPreflight } from './cx-credentials-rotate.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
+import { runStockPushHeal } from './stock-push-heal.job.js'
 import { runAutoPoCronOnce } from './auto-po-replenishment.job.js'
 import { runYesterdayIngest as runSalesReportIngest } from './sales-report-ingest.job.js'
 import { runForecastTick } from './forecast.job.js'
@@ -200,6 +201,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'cx-credentials-rotate': () => runCredentialsRotate(),
   'cx-credentials-status': () => runCredentialsStatus(),
   'sync-drift-detection': () => runSyncDriftDetection(),
+  'stock-push-heal': () => runStockPushHeal(),
   'auto-po': () => runAutoPoCronOnce(),
   'sales-report-ingest': () => runSalesReportIngest(),
   forecast: () => runForecastTick(),

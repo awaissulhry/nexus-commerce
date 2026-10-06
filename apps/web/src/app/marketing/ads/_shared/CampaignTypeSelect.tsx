@@ -7,7 +7,7 @@
  * formats (Guided today; recorded in the design system — see design-system/CHANGELOG.md +
  * studies/03-ads-campaigns.md). Each card carries a light ad-layout mock, a title, and Amazon's
  * format description, and toggles selection (checked = accent border + tick). `disabled` keys
- * render inert with a "Soon" pill (used while a format's full settings are still being built).
+ * render inert with a pill — "Soon" unless `disabledLabel` says why (Guided: "Not in Guided").
  */
 import { Check } from 'lucide-react'
 import './CampaignTypeSelect.css'
@@ -61,10 +61,12 @@ function TypeMock({ kind }: { kind: AdProduct }) {
   )
 }
 
-export function CampaignTypeSelect({ value, onChange, disabled = [] }: {
+export function CampaignTypeSelect({ value, onChange, disabled = [], disabledLabel = 'Soon' }: {
   value: AdProduct[]
   onChange: (v: AdProduct[]) => void
   disabled?: AdProduct[]
+  /** The pill on a disabled card. */
+  disabledLabel?: string
 }) {
   const sel = new Set(value)
   const off = new Set(disabled)
@@ -89,7 +91,7 @@ export function CampaignTypeSelect({ value, onChange, disabled = [] }: {
             onClick={() => toggle(m.key)}
           >
             {on && <span className="h10-cts-tick"><Check size={13} strokeWidth={3} /></span>}
-            {isOff && <span className="h10-cts-soon">Soon</span>}
+            {isOff && <span className="h10-cts-soon">{disabledLabel}</span>}
             <TypeMock kind={m.key} />
             <span className="h10-cts-ttl">{m.title}</span>
             <span className="h10-cts-desc">{m.desc}</span>

@@ -24,6 +24,7 @@ const ENV_KEYS = [
   'NEXUS_ENABLE_AMAZON_ADS_CRON', 'NEXUS_ADS_AUTOMATION_KILL', 'NEXUS_AMAZON_ADS_MODE', 'NEXUS_BUDGET_ENFORCE_APPLY', 'NEXUS_ENABLE_RANK_DEFEND',
   'NEXUS_ENABLE_EBAY_ADS_SYNC', 'NEXUS_MARKETING_WRITES_EBAY', 'NEXUS_ENABLE_REPRICING_EVALUATOR', 'NEXUS_REPRICER_LIVE', 'NEXUS_ENABLE_REVIEW_INGEST',
   'NEXUS_ENABLE_OUTBOUND_EMAILS', 'NEXUS_ENABLE_FLEET_SWEEP_CRON', 'NEXUS_AI_KILL_SWITCH', 'NEXUS_ENABLE_AUTOMATION_RULE_CRON', 'NODE_ENV',
+  'NEXUS_STOCK_PUSH_HEAL', 'NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON',
 ]
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]))
 function env(values: Record<string, string | undefined>) {
@@ -87,6 +88,27 @@ describe('R5 — the automation catalog', () => {
     // What the business set is still shown beside it: an AUTO rule, held by a dial never set (SUGGEST: it proposes).
     expect(all.A1.business).toEqual({ level: 'PROPOSE', reason: 'The account ads dial is SUGGEST (never set) — it proposes, nothing acts.' })
     expect(all.A1.sample?.[0]).toEqual({ id: ids.adsAuto, name: 'TEST auto rule', level: 'AUTO' })
+  })
+
+  it('N17 lists the stock push heal beside the drift job, at the level its switch gives; it sends to channels', async () => {
+    const { STOCK_PUSH_HEAL_DEFAULT_MODE } = await import('../../jobs/stock-push-heal-mode.js')
+    const levelOf = { on: 'AUTO', count: 'OBSERVE', off: 'OFF' } as const
+    const heal = async () => (await inside(() => getAutomationDetail(automationAdapter('N17')!))).rows!.find((r) => r.id === 'stock-push-heal')!
+    for (const [value, mode] of [[undefined, STOCK_PUSH_HEAL_DEFAULT_MODE], ['1', 'on'], ['count', 'count'], ['0', 'off']] as const) {
+      env({ NEXUS_STOCK_PUSH_HEAL: value })
+      expect(await heal(), String(value)).toMatchObject({ level: levelOf[mode], mode, env: { flag: 'NEXUS_STOCK_PUSH_HEAL', allows: mode !== 'off' } })
+    }
+    // Listed exactly like the drift job: a row of the detectors, its cron's runs read with theirs, switched by env only.
+    env({ NEXUS_STOCK_PUSH_HEAL: '1', NEXUS_ENABLE_SYNC_DRIFT_DETECTION_CRON: undefined })
+    const adapter = automationAdapter('detectors')!
+    expect(adapter.crons).toEqual(expect.arrayContaining(['sync-drift-detection', 'stock-push-heal']))
+    expect(adapter.levelSwitch).toBeUndefined()
+    expect(adapter.noSwitch).toContain('NEXUS_STOCK_PUSH_HEAL')
+    const n17 = (await catalog()).N17
+    expect(n17.level).toBe('AUTO') // the heal sends; the detectors only observe
+    expect(n17.writesTo).toEqual(['nexus', 'channels'])
+    env({ NEXUS_STOCK_PUSH_HEAL: 'count' })
+    expect((await catalog()).N17.level).toBe('OBSERVE')
   })
 
   it("A1 — the rules' own levels, held under the account dial; the dial's halt stops them", async () => {

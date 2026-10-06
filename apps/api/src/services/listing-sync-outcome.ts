@@ -10,7 +10,12 @@
  *   - `sent` (a real send, not SKIPPED): `lastSyncedAt` now; and when no other row of the listing still waits
  *     (PENDING or IN_PROGRESS), `IN_SYNC` / `SUCCESS` and the last error cleared — one waiting row keeps it PENDING;
  *   - `failed` (no retry left: dead-lettered): `FAILED` with the error — whatever else waits, the listing has a failure;
- *   - a skip, a retry or a deferral ahead records nothing: the row's own status says why.
+ *   - `skipped` (2026-10-06 — a skip that ENDS the listing's wait: nothing will send this row, and another lane or Publish
+ *     owns what it carried, e.g. an eBay Trading item's quantity that its shared stock sends): a listing still marked
+ *     `PENDING` reads `SKIPPED` with the reason — `<code>: <sentence>`, as the Amazon flat-file push lock writes it — when
+ *     no other row of it waits. Before, it read "Pending" for good. `syncStatus` and `lastSyncedAt` are untouched: nothing
+ *     was sent;
+ *   - any other skip, a retry or a deferral ahead records nothing: the row's own status says why.
  * Never the listing's `version`: these are status fields, and an open editor's compare-and-set must not see a conflict
  * each time a row is sent. Best effort: a failure here is logged and never fails the dispatch, which already happened.
  */
@@ -24,7 +29,7 @@ type Db = { channelListing: { updateMany: (args: { where: Prisma.ChannelListingW
 export interface ListingSyncOutcome {
   channelListingId: string | null | undefined
   productId?: string | null
-  outcome: 'sent' | 'failed'
+  outcome: 'sent' | 'failed' | 'skipped'
   error?: string | null
 }
 
@@ -47,6 +52,13 @@ export async function recordListingSyncOutcome(db: Db, input: ListingSyncOutcome
         // Another row of this listing still waits: the send is recorded, the listing stays PENDING.
         changed = (await db.channelListing.updateMany({ where: { id }, data: { lastSyncedAt: now } })).count
       }
+    } else if (input.outcome === 'skipped') {
+      // Only a listing still waiting on this row: a SUCCESS or FAILED it already reads is the truth, and another waiting
+      // row keeps it PENDING.
+      changed = (await db.channelListing.updateMany({
+        where: { id, lastSyncStatus: 'PENDING', outboundSyncQueue: { none: STILL_WAITING } },
+        data: { lastSyncStatus: 'SKIPPED', lastSyncError: (input.error ?? 'Nothing was sent.').slice(0, 2000) },
+      })).count
     } else {
       changed = (await db.channelListing.updateMany({
         where: { id },

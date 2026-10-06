@@ -163,6 +163,8 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
       writeBlockedReason: expect.stringContaining(`Not confirmed: Nexus holds Shopify product EXT-SHOPIFY-${ids.child}, but Shopify did not return it`) })
     // The listing wire carries the last channel read's verdict (Etsy MISSING), never as a time.
     expect(row(sheet, ids.child).listing).toHaveProperty('lastSyncStatus', null)
+    // E5 — the "Differs on Etsy" view is read for Etsy sheets only; every other sheet carries null.
+    expect(row(sheet, ids.child).listing).toHaveProperty('contentDrift', null)
   })
 
   it('the Shared sheet is unchanged: no stock or ASIN columns, no `stock` on the rows', async () => {

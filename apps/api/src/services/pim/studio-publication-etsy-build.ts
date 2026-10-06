@@ -67,7 +67,8 @@ const STYLE_WORDS = /^[\p{L}\p{Nd}\p{Zs}]+$/u
 const WHO_MADE: readonly string[] = etsyListingSchema.create.properties.who_made.enum
 const WHEN_MADE: readonly string[] = etsyListingSchema.create.properties.when_made.enum
 
-export const ETSY_ZERO_STOCK_NOTE = 'Etsy cannot sell at stock 0: the listing stays a draft; it can go live when you Publish with stock.'
+/** D2 — stock 0 at a create: Etsy refuses quantity 0 on createDraftListing (R1 §1), so the POST says 1 and the inventory PUT the real stock. */
+export const ETSY_ZERO_STOCK_NOTE = 'Stock is 0. Etsy cannot create a listing at 0, so Nexus creates the draft with quantity 1 and then sends each variation\'s real stock (0). Etsy cannot sell at 0: the listing can go live once it has stock.'
 export const ETSY_AUTO_RENEW_NOTE = 'Automatic renewal is on: Etsy renews the listing every 4 months and charges a renewal fee.'
 /** Etsy refuses an inventory where any offering has no processing profile (R1 §3, "All offerings need readiness state"). */
 export const ETSY_NEEDS_READINESS = 'Processing profile is not set. Etsy needs one for every variation: choose it on the main row (or on each row).'
@@ -270,6 +271,118 @@ export function etsyOnProperty(propertyIds: readonly number[], readiness: Readon
   const ids = [...propertyIds]
   const sameProfile = new Set(readiness).size <= 1
   return { price_on_property: [...ids], quantity_on_property: [...ids], sku_on_property: [...ids], readiness_state_on_property: sameProfile ? [] : [...ids] }
+}
+
+/** The four `*_on_property` keys, as Etsy names them (R1 §3). */
+export const ETSY_RULE_KEYS = ['price_on_property', 'quantity_on_property', 'sku_on_property', 'readiness_state_on_property'] as const
+export type EtsyRuleKey = typeof ETSY_RULE_KEYS[number]
+export type EtsyRules = Record<EtsyRuleKey, number[]>
+const ascending = (ids: readonly number[]) => [...new Set(ids)].sort((a, b) => a - b)
+const sameIds = (a: readonly number[], b: readonly number[]) => JSON.stringify(ascending(a)) === JSON.stringify(ascending(b))
+/** What each rule decides, in the review's words. */
+const RULE_WORDS: Readonly<Record<EtsyRuleKey, { what: string; field: 'price' | 'quantity' | 'sku' | 'readiness' }>> = {
+  price_on_property: { what: 'price', field: 'price' }, quantity_on_property: { what: 'stock number', field: 'quantity' },
+  sku_on_property: { what: 'SKU', field: 'sku' }, readiness_state_on_property: { what: 'processing profile', field: 'readiness' },
+}
+
+/** `etsyOnProperty`, ids ascending (the inventory structure's form). */
+export function etsyOwnRules(propertyIds: readonly number[], readiness: ReadonlyArray<number | null>): EtsyRules {
+  const own = etsyOnProperty(propertyIds, readiness)
+  return Object.fromEntries(ETSY_RULE_KEYS.map(key => [key, ascending(own[key])])) as EtsyRules
+}
+
+/**
+ * The `*_on_property` rules a listing that exists is sent with: Etsy's own, never Nexus's (E2 review B1: a stock number
+ * Etsy shares, sent as one per variation, multiplies the stock on Etsy). Mapped onto Nexus's variation properties: none
+ * stays none, every property stays every property, a few stay those few — refused when Nexus's variations no longer
+ * have one of them. A listing with no variation property on Etsy has no rule to keep: it takes Nexus's own (`own`).
+ * A rule Etsy did not state is `[]` (Etsy's default, as the price and stock pushes read it, etsy/inventory.ts).
+ */
+export function etsyKeptRules(etsy: Partial<Record<EtsyRuleKey, readonly number[] | undefined>>, etsyPropertyIds: readonly number[], nexusPropertyIds: readonly number[],
+  own: EtsyRules): { rules: EtsyRules } | { refusal: string } {
+  if (!etsyPropertyIds.length) return { rules: own }
+  const rules = {} as EtsyRules
+  for (const key of ETSY_RULE_KEYS) {
+    const ids = ascending(etsy[key] ?? [])
+    if (!ids.length) rules[key] = []
+    else if (sameIds(ids, etsyPropertyIds)) rules[key] = ascending(nexusPropertyIds)
+    else if (ids.every(id => nexusPropertyIds.includes(id))) rules[key] = ids
+    else return { refusal: `On Etsy this listing's ${RULE_WORDS[key].what} varies by a property its variations in Nexus no longer have, and Nexus does not change that rule. Change it on Etsy first, then review again.` }
+  }
+  return { rules }
+}
+
+/** Whether two rules name the same properties (order and repeats aside). */
+export const etsySameRule = (a: readonly number[] | undefined, b: readonly number[] | undefined) => sameIds(a ?? [], b ?? [])
+
+/** The variations grouped as a rule over `ids` groups them: same values (case ignored) for those properties, one group. */
+function ruleGroups<T extends { values: ReadonlyArray<{ property_id: number; values: readonly string[] }> }>(products: readonly T[], ids: readonly number[]): T[][] {
+  const groups = new Map<string, T[]>()
+  products.forEach((product, index) => {
+    const values = ids.map(id => product.values.find(value => value.property_id === id))
+    // A variation that states no value for one of the rule's properties cannot be placed: it is its own group.
+    const key = values.some(value => !value) ? `#${index}` : JSON.stringify(values.map(value => [...value!.values].map(text => text.trim().toLocaleLowerCase()).sort()))
+    groups.set(key, [...(groups.get(key) ?? []), product])
+  })
+  return [...groups.values()]
+}
+
+/**
+ * E2 review R2-n3 (Owner: refuse only what could not work) — processing profiles that differ inside a group Etsy keeps
+ * as one are not refused: the processing profile carries no price or stock, so Nexus widens that one rule to every
+ * variation property (its own rule). Etsy allows it only when each other rule is shared by all or varies by every
+ * property (R1 §3: with one rule on every property, the others are empty or every property); otherwise the rules stay
+ * as they are, and the conflict is refused by name.
+ */
+export function etsyFitReadiness(rules: EtsyRules, products: ReadonlyArray<{ values: ReadonlyArray<{ property_id: number; values: readonly string[] }>; readiness: number | null }>,
+  nexusPropertyIds: readonly number[]): { rules: EtsyRules; widened: boolean } {
+  const profiled = products.filter(product => product.readiness !== null)
+  const fits = ruleGroups(profiled, rules.readiness_state_on_property).every(group => new Set(group.map(product => product.readiness)).size < 2)
+  const every = ascending(nexusPropertyIds)
+  const allowed = (['price_on_property', 'quantity_on_property', 'sku_on_property'] as const).every(key => !rules[key].length || sameIds(rules[key], every))
+  return fits || !allowed || !every.length ? { rules, widened: false } : { rules: { ...rules, readiness_state_on_property: every }, widened: true }
+}
+
+/** One variation as the rules see it: its values, the four values the rules govern, and which of them Nexus sets on Etsy. */
+export interface EtsyRuleProduct {
+  sku: string
+  values: ReadonlyArray<{ property_id: number; values: readonly string[] }>
+  price: number
+  quantity: number
+  readiness: number | null
+  /** What this send sets on Etsy for it: everything for a variation Etsy does not hold; for one it holds, only a processing profile that changes. */
+  sets: { price: boolean; quantity: boolean; sku: boolean; readiness: boolean }
+}
+
+/**
+ * Every place where this send would break one of the listing's rules (R1 §3: products with the same values for a rule's
+ * properties share ONE value; with no property, every product shares it): a variation that brings its own price, stock,
+ * SKU or processing profile where Etsy keeps one. Nexus never changes the rule, so each is a refusal that names the SKUs
+ * and the rule. Only values this send sets are judged; what Etsy already holds is its own.
+ */
+export function etsyRuleConflicts(products: readonly EtsyRuleProduct[], rules: EtsyRules, propertyNames: ReadonlyMap<number, string>): string[] {
+  const sentences: string[] = []
+  const valueOf = (product: EtsyRuleProduct, field: EtsyRuleProduct['sets'] extends Record<infer K, boolean> ? K : never) =>
+    field === 'sku' ? product.sku : field === 'readiness' ? product.readiness : product[field]
+  for (const key of ETSY_RULE_KEYS) {
+    const ids = rules[key], { what, field } = RULE_WORDS[key]
+    for (const all of ruleGroups(products, ids)) {
+      // A variation with no processing profile is refused on its own (`ETSY_NEEDS_READINESS`), never as a rule.
+      const group = field === 'readiness' ? all.filter(product => product.readiness !== null) : all
+      const setters = group.filter(product => product.sets[field])
+      if (group.length < 2 || !setters.length || new Set(group.map(product => valueOf(product, field))).size < 2) continue
+      const names = andList(ids.map(id => propertyNames.get(id) ?? `property ${id}`))
+      const scope = ids.length ? `across variations with the same ${names}` : 'across its variations'
+      const others = [...new Set(group.filter(product => !product.sets[field]).map(product => String(valueOf(product, field))))]
+      const detail = field === 'sku' ? 'Nexus gives each variation its own SKU.'
+        : `Nexus holds ${andList(setters.map(product => `${valueOf(product, field) ?? 'none'} for ${product.sku}`))}${others.length
+          ? `; ${ids.length ? `the others with the same ${names} hold` : 'the listing holds'} ${andList(others)}` : ''}.`
+      // A processing profile still in conflict here is one Etsy would not let vary (`etsyFitReadiness`): said as such.
+      const rule = field === 'readiness' ? 'and Etsy does not let it vary beside this listing\'s price, stock and SKU rules' : 'and Nexus does not change that rule'
+      sentences.push(`${andList(setters.map(product => product.sku))}: this Etsy listing shares one ${what} ${scope}, ${rule}. ${detail} Change the rule on Etsy first, then review again.`)
+    }
+  }
+  return sentences
 }
 
 const bySku = <T extends { sku: string }>(a: T, b: T) => a.sku < b.sku ? -1 : a.sku > b.sku ? 1 : 0

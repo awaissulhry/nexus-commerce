@@ -11,7 +11,9 @@
  *                        when the store field list is cold, for the title (shared text), a field that cannot be edited,
  *                        a value the store's definition refuses, a listing setting; a partial save says what saved; undo
  *   listing-live-content the listing's account found from Nexus, the read without the provider's raw documents
- *   Etsy                 refused in words by every coordinate tool
+ *   Etsy                 (E5b) listing-live-content reads the Etsy listing with the Etsy account Nexus holds;
+ *                        product-content reads the Etsy sheet; set-listing-content is not refused for Etsy (its own
+ *                        suite runs it on the real sheet); Shopify still answered in words
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -308,11 +310,26 @@ describe('listing-live-content, and Etsy', { timeout: 30_000 }, () => {
     expect(await preview({ product: family.id, channel: 'AMAZON', market: 'DE' }, 'listing-live-content')).toMatchObject({ ok: false, error: 'TEST-SKU-T11 has no Amazon · DE listing to read.' })
   })
 
-  it('Etsy is refused in words by every coordinate tool', async () => {
-    const etsy = expect.stringMatching(/^Etsy publishing is not available yet/)
-    expect(await preview({ product: family.id, channel: 'ETSY', market: 'GLOBAL' }, 'listing-live-content')).toMatchObject({ ok: false, error: etsy })
-    expect(await preview({ product: family.id, coordinate: { channel: 'ETSY', market: 'GLOBAL' } }, 'product-content')).toMatchObject({ ok: false, error: etsy })
-    expect(await preview({ product: family.id, coordinate: { channel: 'etsy', market: 'GLOBAL' }, language: 'en', pin: { title: 'x' } }, 'set-listing-content')).toMatchObject({ ok: false, error: etsy })
+  it('Etsy: the live read goes to the Etsy reader with the Etsy account, product-content reads the Etsy sheet; Shopify is still answered in words', async () => {
+    // A fake Etsy shop and listing (the repo is public).
+    const etsyAccount = await inside(async () => {
+      const account = await db().channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 't11-etsy', isActive: true, isPrimary: true, externalAccountId: '90000001' } as never })
+      await db().channelListing.create({ data: { productId: family.id, channel: 'ETSY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'ETSY_GLOBAL', channelConnectionId: account.id,
+        aliasKey: '', listingStatus: 'ACTIVE', isPublished: true, externalListingId: '9000000001', syncPaused: false } as never })
+      return account.id
+    })
+    live.reads.length = 0
+    const data = await read('listing-live-content', { product: family.sku, channel: 'etsy', market: 'global' })
+    expect(live.reads).toEqual([{ productId: family.id, scope: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: etsyAccount } }])
+    expect(data).not.toHaveProperty('raw')
+    // product-content asks the product sheet for the Etsy scope (the stand-in answers with its one sheet).
+    shop.sheetCalls.length = 0
+    const content = await preview({ product: family.id, coordinate: { channel: 'ETSY', market: 'GLOBAL' } }, 'product-content')
+    expect(content, content.error).toMatchObject({ ok: true })
+    expect(shop.sheetCalls).toEqual([expect.objectContaining({ productId: family.id, scope: 'channel', channel: 'ETSY', market: 'GLOBAL' })])
+    // set-listing-content is no longer refused for Etsy in words (its own suite runs it on the real Etsy sheet).
+    const pin = await preview({ product: family.id, coordinate: { channel: 'etsy', market: 'GLOBAL' }, language: 'en', pin: { title: 'x' } }, 'set-listing-content')
+    expect(pin.error ?? '').not.toMatch(/Etsy publishing is not available/)
     expect(await preview({ product: family.id, coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' } }, 'product-content')).toMatchObject({ ok: false, error: expect.stringMatching(/shopify-content/) })
     expect(await preview({ product: family.id, coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' }, language: 'en', pin: { title: 'x' } }, 'set-listing-content'))
       .toMatchObject({ ok: false, error: expect.stringMatching(/set-shopify-content/) })

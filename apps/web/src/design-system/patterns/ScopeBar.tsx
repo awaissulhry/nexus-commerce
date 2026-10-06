@@ -7,6 +7,7 @@ import { InfoTip } from '../primitives/InfoTip'
 import { ListboxPanel, type ListboxPanelOption } from '../components/ListboxPanel'
 import { useClickAway } from '../components/useClickAway'
 import { usePopoverPosition } from '../components/usePopoverPosition'
+import { useHorizontalOverflow } from '../components/useHorizontalOverflow'
 
 /*
  * The scope vocabulary and its tone/label table are PES.2's, and there is exactly one of each
@@ -188,6 +189,9 @@ export function ScopeBar({
     observer.observe(selected)
     return () => observer.disconnect()
   }, [active, items])
+  // The chips track scrolls sideways: while it does, the bar keeps its scrollbar in a band under the chips
+  // (patterns.css), never over a chip or its focus ring.
+  useHorizontalOverflow(listRef, { enabled: variant !== 'menu' })
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {

@@ -35,16 +35,20 @@ export function AnomalyTab() {
     if (usable.length >= 5) {
       const last = usable[usable.length - 1]
       const prior = usable.slice(0, -1)
-      const checks: Array<{ metric: string; val: (r: Row) => number; latestFmt: (n: number) => string; good: 'up' | 'down'; up: number; down: number }> = [
+      const checks: Array<{ metric: string; val: (r: Row) => number | null; latestFmt: (n: number) => string; good: 'up' | 'down'; up: number; down: number }> = [
         { metric: 'Ad spend', val: (r) => r.adSpendCents, latestFmt: eur, good: 'down', up: 1.8, down: 0.4 },
         { metric: 'Ad sales', val: (r) => r.adSalesCents, latestFmt: eur, good: 'up', up: 1.8, down: 0.5 },
-        { metric: 'ACOS', val: (r) => r.acos ?? 0, latestFmt: (n) => `${n.toFixed(0)}%`, good: 'down', up: 1.5, down: 0.6 },
+        // AM-11 rule: a day with no sales has NO ACoS — never 0 % ("ACOS down 100 %, good" on the worst day).
+        { metric: 'ACOS', val: (r) => r.acos, latestFmt: (n) => `${n.toFixed(0)}%`, good: 'down', up: 1.5, down: 0.6 },
         { metric: 'Clicks', val: (r) => r.clicks, latestFmt: (n) => String(Math.round(n)), good: 'up', up: 2, down: 0.45 },
         { metric: 'CTR', val: (r) => r.ctr ?? 0, latestFmt: (n) => `${n.toFixed(2)}%`, good: 'up', up: 2, down: 0.5 },
         { metric: 'Orders', val: (r) => r.orders, latestFmt: (n) => String(Math.round(n)), good: 'up', up: 2.2, down: 0.4 },
       ]
       for (const c of checks) {
-        const base = mean(prior.map(c.val)); const lv = c.val(last)
+        const priorVals = prior.map(c.val).filter((v): v is number => v != null)
+        const lv = c.val(last)
+        if (lv == null || priorVals.length === 0) continue
+        const base = mean(priorVals)
         if (base <= 0) continue
         const ratio = lv / base
         if (ratio >= c.up || ratio <= c.down) {
@@ -58,13 +62,13 @@ export function AnomalyTab() {
     }
     // period-over-period headline (summary vs previous)
     if (summary && previous) {
-      const pop: Array<{ metric: string; cur: number; prev: number; fmt: (n: number) => string; good: 'up' | 'down' }> = [
+      const pop: Array<{ metric: string; cur: number | null; prev: number | null; fmt: (n: number) => string; good: 'up' | 'down' }> = [
         { metric: 'Spend (period)', cur: summary.spendCents, prev: previous.spendCents, fmt: eur, good: 'down' },
         { metric: 'Sales (period)', cur: summary.salesCents, prev: previous.salesCents, fmt: eur, good: 'up' },
-        { metric: 'ACOS (period)', cur: summary.acos ?? 0, prev: previous.acos ?? 0, fmt: (n) => `${n.toFixed(0)}%`, good: 'down' },
+        { metric: 'ACOS (period)', cur: summary.acos ?? null, prev: previous.acos ?? null, fmt: (n) => `${n.toFixed(0)}%`, good: 'down' },
       ]
       for (const p of pop) {
-        if (p.prev <= 0) continue
+        if (p.cur == null || p.prev == null || p.prev <= 0) continue
         const deltaPct = (p.cur / p.prev - 1) * 100
         if (Math.abs(deltaPct) >= 30) { const dir: 'up' | 'down' = deltaPct > 0 ? 'up' : 'down'; out.push({ metric: p.metric, dir, latest: p.fmt(p.cur), baseline: p.fmt(p.prev), deltaPct, good: dir === p.good, severity: Math.abs(deltaPct) > 80 ? 'high' : 'medium', note: `vs previous period: ${p.fmt(p.cur)} vs ${p.fmt(p.prev)}` }) }
       }

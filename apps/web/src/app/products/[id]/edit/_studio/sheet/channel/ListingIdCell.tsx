@@ -25,6 +25,10 @@
  *                   a warning pill, the id and the reason in the hover.
  *   draft           "Draft · not published".  No number recorded: live in Nexus without an id (a warning pill).
  *   none            a dash.
+ *   Differs on Etsy (E5, Etsy only) — on the MAIN row's id, a warning pill when Etsy's last content read compared and
+ *                   found fields that differ from Nexus (the server's `listing.contentDrift`, ChannelDrift 'etsy-content').
+ *                   The hover names when that read ran and the fields. Nothing when Etsy was never read, was read clean,
+ *                   or its last read could not compare; never on a variation row, a "Not confirmed" id or a draft.
  * On the family's MAIN row the cell is the control: Enter or a double-click opens it, Delete clears the id (a plain
  * confirm). One id carries the whole family, so a variation row is read-only and its hover says "Set on the main row"
  * (the server's sentence).
@@ -82,9 +86,38 @@ export const ITEM_ID_COPY = {
   noNumberHover: 'No number recorded: this listing reads live in Nexus, but Nexus holds no eBay Item ID for it. Enter or a double-click: type the Item ID to link it.',
 } as const
 
+/**
+ * What the "Differs on …" hover is told: when the last content read ran (`at`, already written for people), how many fields
+ * that read itself found different, and how many an EARLIER read found that the last one did not compare — each list
+ * already in words. An earlier find is never credited to the last read's time (E5a review MINOR-10).
+ */
+export interface DiffersWords { at: string; lastRead: number; lastReadLabels: string; earlier: number; earlierLabels: string }
+type DiffersHover = (words: DiffersWords) => string
+const fieldCount = (n: number) => `${n} ${n === 1 ? 'field' : 'fields'}`
+/**
+ * The hover's last sentence. It never says Publish sends Nexus's values: while Etsy publishing is off, or for a line the
+ * review refuses, it does not (E5a review MINOR-9). The publish review is where that is decided, so the hover points there.
+ */
+export const DIFFERS_WHERE_TO_LOOK = 'Read live… shows Etsy\'s values; the publish review shows what Publish would send.'
+/**
+ * A differing field Publish never sends to Etsy (the review's own words, `studio-publication-etsy.ts` ETSY_PHOTOS_LATER and
+ * `studio-publication-etsy-changes.ts` ETSY_STYLES_CREATE_ONLY): said after the hover's last sentence, so the hover names
+ * the fields no review can send.
+ */
+export const ETSY_DIFFERS_NOT_SENT: Readonly<Record<string, string>> = {
+  photo_count: 'Photos are not sent to Etsy yet.',
+  styles: 'Etsy takes styles only when a listing is created.',
+}
+/** The time of a content read in the hover, written as the Read live window writes its read time. */
+export const contentReadTime = (at: string): string => {
+  const time = Date.parse(at)
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : at
+}
+
 /** Etsy's Listing ID and Shopify's Product ID cells' words (eBay's are `ITEM_ID_COPY`; the API's `studio-stock.ts` says the same). */
 export const CHANNEL_ITEM_ID_COPY = {
-  EBAY: { ...ITEM_ID_COPY, missingHover: null as ((id: string) => string) | null, notReturnedHover: null as ((id: string) => string) | null },
+  EBAY: { ...ITEM_ID_COPY, missingHover: null as ((id: string) => string) | null, notReturnedHover: null as ((id: string) => string) | null,
+    differs: null as string | null, differsHover: null as DiffersHover | null },
   ETSY: {
     copy: (id: string) => `Copy Listing ID ${id}`,
     copyDetail: 'Ctrl+C on the cell copies it too.',
@@ -103,6 +136,14 @@ export const CHANNEL_ITEM_ID_COPY = {
     notReturnedHover: null as ((id: string) => string) | null,
     draftHover: (market: string) => `${draftChipDetail('ETSY', market)} Enter or a double-click links a listing that already sells on Etsy.`,
     noNumberHover: 'No number recorded: this listing reads live in Nexus, but Nexus holds no Etsy Listing ID for it. Enter or a double-click: type the Listing ID to link it.',
+    differs: 'Differs on Etsy' as string | null,
+    differsHover: ((w: DiffersWords) => {
+      const found = w.lastRead > 0 ? `Etsy's last read (${w.at}) differs from Nexus in ${fieldCount(w.lastRead)}${w.lastReadLabels ? `: ${w.lastReadLabels}` : ''}.` : ''
+      const earlier = w.earlier <= 0 ? ''
+        : w.lastRead > 0 ? `${w.earlier === 1 ? 'An earlier read found 1 more' : `Earlier reads found ${w.earlier} more`} that the last read did not compare${w.earlierLabels ? `: ${w.earlierLabels}` : ''}.`
+          : `Etsy's last read (${w.at}) did not compare ${fieldCount(w.earlier)} that ${w.earlier === 1 ? 'an earlier read' : 'earlier reads'} found different from Nexus${w.earlierLabels ? `: ${w.earlierLabels}` : ''}.`
+      return [found, earlier, DIFFERS_WHERE_TO_LOOK].filter(Boolean).join(' ')
+    }) as DiffersHover | null,
   },
   SHOPIFY: {
     copy: (id: string) => `Copy Product ID ${id}`,
@@ -122,6 +163,8 @@ export const CHANNEL_ITEM_ID_COPY = {
     notReturnedHover: (id: string) => `Not confirmed: Nexus holds Shopify product ${id}, but Shopify did not return it when the sheet opened. Enter or a double-click: Check asks Shopify, then Keep or Clear.`,
     draftHover: (market: string) => `${draftChipDetail('SHOPIFY', market)} Enter or a double-click links a product that is already in the store.`,
     noNumberHover: 'No number recorded: this listing reads live in Nexus, but Nexus holds no Shopify product for it. Enter or a double-click: type the Product ID to link it.',
+    differs: null as string | null,
+    differsHover: null as DiffersHover | null,
   },
 } as const
 /** Shopify's own status of a returned product, when it is not for sale (the row reads Inactive in Nexus). */
@@ -141,7 +184,7 @@ export type AsinCellModel =
 
 /** eBay, Etsy, Shopify: `editable` = this row's cell is the control (the main row with a listing). `note`: a Shopify product not for sale. */
 export type ItemIdCellModel =
-  | { kind: 'item'; itemId: string; url: string | null; ended: boolean; tooltip: string | null; editable: boolean; note?: string | null }
+  | { kind: 'item'; itemId: string; url: string | null; ended: boolean; tooltip: string | null; editable: boolean; note?: string | null; differs?: string | null }
   | { kind: 'notConfirmed'; itemId: string; label: string; tooltip: string | null; editable: boolean }
   | { kind: 'draft'; label: string; tooltip: string | null; editable: boolean }
   | { kind: 'noNumber'; label: string; tooltip: string | null; editable: boolean }
@@ -185,7 +228,25 @@ export function itemIdCellModel(row: Pick<ChannelSheetRow, 'parentId' | 'listing
     const ended = ch !== 'SHOPIFY' && status === 'ENDED'
     const url = ch === 'SHOPIFY' ? null : listingUrl(ch, market, value)
     const note = ch === 'SHOPIFY' ? SHOPIFY_STATUS_NOTE[text(listing.channelFactDetail?.shopifyStatus).toUpperCase()] ?? null : null
-    return { kind: 'item', itemId: value, url, ended, tooltip: served(ended ? copy.endedHover(value) : copy.live(value)), editable, ...(note ? { note } : {}) }
+    const base = ended ? copy.endedHover(value) : copy.live(value)
+    const drift = main ? listing.contentDrift : null
+    if (copy.differs && copy.differsHover && drift && drift.differing > 0) {
+      // E5 — Etsy's last content read differs (the server's view: only a read that compared and found differences). A field
+      // carries the time of the read that found it: the last read's own finds are said with its time, earlier ones apart.
+      const fields = drift.fields ?? []
+      const latest = fields.filter(f => f.foundAt === drift.checkedAt)
+      const older = fields.filter(f => f.foundAt !== drift.checkedAt)
+      const lastRead = Math.max(0, Math.min(drift.lastRead ?? latest.length, drift.differing))
+      const earlier = drift.differing - lastRead
+      const list = (names: string[], more: number) => `${names.join(', ')}${more > 0 && names.length ? ` and ${more} more` : ''}`
+      const words: DiffersWords = { at: contentReadTime(drift.checkedAt), lastRead, earlier,
+        lastReadLabels: list(latest.map(f => f.label), lastRead - latest.length),
+        earlierLabels: list(older.map(f => (f.foundAt ? `${f.label} (found ${contentReadTime(f.foundAt)})` : f.label)), earlier - older.length) }
+      const notSent = ch === 'ETSY' ? [...new Set(fields.flatMap(f => ETSY_DIFFERS_NOT_SENT[f.field] ? [ETSY_DIFFERS_NOT_SENT[f.field]] : []))] : []
+      const hover = [base, copy.differsHover(words), ...notSent].join(' ')
+      return { kind: 'item', itemId: value, url, ended, tooltip: served(hover), editable, differs: copy.differs, ...(note ? { note } : {}) }
+    }
+    return { kind: 'item', itemId: value, url, ended, tooltip: served(base), editable, ...(note ? { note } : {}) }
   }
   if (held) {
     const reason = ch === 'ETSY' && text(listing.lastSyncStatus).toUpperCase() === 'MISSING' ? copy.missingHover!(held)
@@ -352,6 +413,7 @@ export const ItemIdCell = memo(function ItemIdCell(p: ICellRendererParams<Channe
       <span className="nds-cell-value-text nds-projcell-detail">{model.itemId}</span>
       {model.ended && <Pill tone="neutral">{words.ended}</Pill>}
       {model.note && <Pill tone="neutral">{model.note}</Pill>}
+      {model.differs && <Pill tone="warning">{model.differs}</Pill>}
       <CellAction label={copied ? words.copied : words.copy(model.itemId)} description={words.copyDetail}
         icon={copied ? <Check size={13} /> : <Copy size={13} />} onFocusCell={focusCell} onActivate={() => copy(model.itemId)} />
       {model.url && <CellAction label={words.open} description={words.openDetail(p.market)} icon={<ExternalLink size={13} />}
@@ -363,6 +425,11 @@ export const ItemIdCell = memo(function ItemIdCell(p: ICellRendererParams<Channe
 
 /** The column is wide enough for a 12-digit Item ID and three cell actions. */
 export const ITEM_ID_COLUMN_MIN_WIDTH = 200
+/**
+ * E5 — Etsy's column also fits the "Differs on Etsy" pill beside a 10-digit Listing ID and the three cell actions (about
+ * 20 + 72 + 100 + 72 px): the pill does not shrink and the id does, so at 200 px the id would be cut to a few pixels.
+ */
+export const ETSY_LISTING_ID_COLUMN_MIN_WIDTH = 280
 
 /**
  * The channel id column's ColDef — spread LAST over the sheet's own column (like the stock columns): the renderer, the
@@ -374,7 +441,7 @@ export function listingIdColumnDef(col: SheetColumn, scope: Scope): ColDef<Chann
   const market = scope.marketplace
   const params: AsinCellParams & ItemIdCellParams = { market, channel: String(scope.channel).toUpperCase() }
   const textOf = (row: ChannelSheetRow | undefined) => listingIdCellText(row, scope)
-  const minWidth = amazon ? ASIN_COLUMN_MIN_WIDTH : ITEM_ID_COLUMN_MIN_WIDTH
+  const minWidth = amazon ? ASIN_COLUMN_MIN_WIDTH : params.channel === 'ETSY' ? ETSY_LISTING_ID_COLUMN_MIN_WIDTH : ITEM_ID_COLUMN_MIN_WIDTH
   return {
     colId: col.key,
     minWidth,

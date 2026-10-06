@@ -1,6 +1,7 @@
 import type { StudioPublishOverwrite } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import { DRIFT_FIELD_CAP } from '../channel-drift.service.js'
+import { ETSY_CONTENT_SOURCE } from '../channel-drift/etsy-content-compare.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -9,7 +10,10 @@ const timestamp = (value: unknown): string | null => typeof value === 'string' &
 
 /** Historical content evidence for the exact publication coordinate. This does not read a channel or compare today's draft. */
 export async function readPublicationOverwrite(facts: PublicationFacts): Promise<StudioPublishOverwrite> {
-  const source = facts.scope.channel === 'AMAZON' ? 'amazon-content' : facts.scope.channel === 'EBAY' ? 'ebay-content' : null
+  // E5a — Etsy's content read (the 4-hourly sweep) is recorded on the listing's main row, as eBay's is on the ItemID's
+  // owner: a variation's row has no record of its own and reads `not_read`.
+  const source = facts.scope.channel === 'AMAZON' ? 'amazon-content' : facts.scope.channel === 'EBAY' ? 'ebay-content'
+    : facts.scope.channel === 'ETSY' ? ETSY_CONTENT_SOURCE : null
   const included = new Set(facts.products.map(product => product.id))
   // readPublicationFacts already scoped these listings to the selected channel, account, market and alias.
   const existing = new Map(facts.listings.filter(listing => included.has(listing.productId) && listing.externalListingId)

@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { lastCompleteDays } from '../_shell/DateRangePicker'
 import '../dashboard/dashboard.css'
 import './ebay.css'
 import {
@@ -22,8 +23,8 @@ import { PacingCard } from './_dash/PacingCard'
 import { AlertsCard } from './_dash/AlertsCard'
 import { StatusCard } from './_dash/StatusCard'
 
-// matches AdsPageHeader's built-in DateRangePicker default (last 7 days)
-const headerDefaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } }
+// matches AdsPageHeader's built-in DateRangePicker default (AM-16: the 7 complete days ending yesterday)
+const headerDefaultRange = () => lastCompleteDays(7)
 
 export function EbayDashboard() {
   const [market, setMarket] = useState('all')

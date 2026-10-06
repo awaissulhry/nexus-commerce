@@ -52,7 +52,7 @@ import { AMAZON_FEED_MESSAGE_CAP } from './studio-publication-amazon-batch.js'
 
 /** One family has at most a few dozen destinations (markets × accounts × listings). */
 export const MAX_BATCH_DESTINATIONS = 25
-const SPARSE = new Set(['AMAZON', 'EBAY'])
+const SPARSE = new Set(['AMAZON', 'EBAY', 'ETSY'])
 /** Reviews a batch closed without sending them; they never become sendable again. */
 const CLOSED_UNSENT = new Set(['NOT_SENT', 'CANCELLED', 'BLOCKED'])
 
@@ -76,7 +76,7 @@ function parseRequest(body: unknown): BatchReviewInput[] {
 }
 
 /** "eBay · IT"; an alias adds its name: "eBay · IT · Racing edition" (Owner 2026-10-05). */
-const destinationLabel = (scope: Record<string, any>, aliasLabel?: string | null) => [scope?.channel === 'EBAY' ? 'eBay' : scope?.channel === 'AMAZON' ? 'Amazon' : scope?.channel === 'SHOPIFY' ? 'Shopify' : String(scope?.channel ?? ''), scope?.marketplace, aliasLabel].filter(Boolean).join(' · ')
+const destinationLabel = (scope: Record<string, any>, aliasLabel?: string | null) => [scope?.channel === 'EBAY' ? 'eBay' : scope?.channel === 'AMAZON' ? 'Amazon' : scope?.channel === 'SHOPIFY' ? 'Shopify' : scope?.channel === 'ETSY' ? 'Etsy' : String(scope?.channel ?? ''), scope?.marketplace, aliasLabel].filter(Boolean).join(' · ')
 
 /** Aliases (Owner 2026-10-05): the name of each alias id among `keys` ('' = the main listing, skipped). */
 async function aliasLabels(tx: Prisma.TransactionClient, keys: ReadonlyArray<string | null | undefined>): Promise<Map<string, string>> {

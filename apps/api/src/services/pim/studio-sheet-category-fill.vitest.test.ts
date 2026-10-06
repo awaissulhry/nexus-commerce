@@ -20,6 +20,8 @@ vi.mock('../../db.js', () => ({
     $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
     product: { findFirst: async () => ({ id: 'p_solo', parentId: null }), findMany: (...a: unknown[]) => productFindMany(...a) },
     channelListing: { findMany: (...a: unknown[]) => channelListingFindMany(...a) },
+    // E5 — the Etsy sheet's "Differs on Etsy" read (one query, `content-drift-view.ts`): nothing recorded here.
+    channelDrift: { findMany: async () => [] },
     // S11 — the first column's flat-file SKU read (`studio-sheet-sku.ts`, one statement): no snapshot here.
     $queryRaw: async () => [],
     // No family here is on the photo plan (images P3c reads it for the Product media cell).
@@ -102,6 +104,9 @@ describe('the mapped category fill', () => {
       platformAttributes: {}, translations: [], aliasKey: null }])
     getStudioColumns.mockResolvedValue({ coordinates: [{ channel: 'ETSY', marketplace: 'GLOBAL', label: 'Etsy · GLOBAL', inMarket: true, languages: ['it'] }],
       columns: [{ ...column('taxonomy_id'), kind: 'number' }] })
-    expect((await read('ETSY', 'GLOBAL')).rows[0].values.taxonomy_id).toMatchObject({ value: 177104, source: 'master' })
+    const sheet = await read('ETSY', 'GLOBAL')
+    expect(sheet.rows[0].values.taxonomy_id).toMatchObject({ value: 177104, source: 'master' })
+    // E5 — the drift store was read (nothing recorded): "no difference recorded" is null, never an absent (not computed) field.
+    expect(sheet.rows[0].listing).toHaveProperty('contentDrift', null)
   })
 })

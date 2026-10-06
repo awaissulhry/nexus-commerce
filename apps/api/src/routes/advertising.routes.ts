@@ -1206,6 +1206,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
     const campaigns = (b.campaigns ?? []).filter((c) => c && c.name)
     if (!campaigns.length) { reply.status(400); return { error: 'no campaigns to create' } }
+    // CC-10 — this launch cannot send a Sponsored Brands creative or Sponsored Display targets, so an SB/SD campaign made
+    // here would be created on Amazon and could never serve. Refused before anything is created.
+    if (campaigns.some((c) => c.adProduct === 'SB' || c.adProduct === 'SD')) {
+      reply.status(400)
+      return { error: 'Sponsored Brands and Sponsored Display campaigns are not created here: this launch cannot send their creative or targets, so Amazon could not serve them. Use the Sponsored Brands / Display builder.' }
+    }
     if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length } }
 
     const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
@@ -2166,6 +2172,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       adSpend30dCents: agg._sum.advertisingSpendCents ?? 0,
       grossRevenue30dCents: grossCents,
       trueProfit30dCents: trueProfitCents,
+      // PERCENT POINTS (31.2 = 31.2 %), negative on a loss — never a fraction (AM-7).
       trueProfitMargin30dPct: marginPct,
       // What share of 30d revenue the profit figure above actually covers. 0 means the
       // number is absent because no product has a cost price, not because profit is zero.
@@ -3397,6 +3404,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const ctr = (p._sum.impressions ?? 0) > 0
         ? ((p._sum.clicks ?? 0) / (p._sum.impressions ?? 1)) * 100 : null
 
+      // Units: `acos`, `tacos` and `ctr` are PERCENT POINTS (38.02 = 38.02 %), rounded to 2 dp,
+      // and null when the divisor is 0 (no sales / no revenue / no impressions) — never 0 %.
       return {
         date:             dateKey,
         impressions:      p._sum.impressions  ?? 0,
@@ -3415,6 +3424,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // rows already computed + one aggregate query over the immediately prior
     // equal-length window (same scope), so the detail page can render ▲/▼ vs
     // the previous period on each KPI tile.
+    // `acos` and `ctr` are PERCENT POINTS like the rows above; `roas` is a plain ratio.
     const summarize = (sp: number, sa: number, im: number, cl: number, or: number) => ({
       impressions: im, clicks: cl, orders: or, spendCents: sp, salesCents: sa,
       acos: sa > 0 ? Math.round((sp / sa) * 10000) / 100 : null,
@@ -3429,12 +3439,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       rows.reduce((s, r) => s + r.orders, 0),
     )
     let previous: ReturnType<typeof summarize> | null = null
-    if (query.compare === 'true' || query.compare === '1') {
-      const prevSince = new Date(since)
-      prevSince.setUTCDate(prevSince.getUTCDate() - windowDays)
+    // AM-16 — complete days only (ads-core/date-range.ts `comparisonRanges`). The prior window used to be N full
+    // days against a current window that ran into today, which has no daily report yet: every change read ~1/N low.
+    // A window ending today is now compared on its complete days with the same number of days before them; the
+    // daily rows hold nothing for today, so `summary` is already that complete-days figure. `compare` names both.
+    let compareWindows: { current: { startDate: string; endDate: string }; previous: { startDate: string; endDate: string }; todayLeftOut: boolean } | null = null
+    const { comparisonRanges } = await import('../services/ads-core/date-range.js')
+    const cmp = query.compare === 'true' || query.compare === '1' ? comparisonRanges(range) : null
+    if (cmp) {
+      compareWindows = {
+        current: { startDate: cmp.current.sinceStr, endDate: cmp.current.untilStr },
+        previous: { startDate: cmp.prior.sinceStr, endDate: cmp.prior.untilStr },
+        todayLeftOut: cmp.todayLeftOut,
+      }
       const prev = await prisma.amazonAdsDailyPerformance.aggregate({
         where: {
-          date: { gte: prevSince, lt: since },
+          date: { gte: cmp.prior.since, lte: cmp.prior.until },
           entityType: 'CAMPAIGN',
           ...campaignWhere,
           ...(query.marketplace ? { marketplace: query.marketplace } : {}),
@@ -3452,7 +3472,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
 
-    return { windowDays, count: rows.length, rows, summary: curSummary, previous, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
+    return { windowDays, count: rows.length, rows, summary: curSummary, previous, compare: compareWindows, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return result
@@ -6902,8 +6922,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as Record<string, unknown>
     if (!b?.adGroupId || !b?.kind || !b?.value || b?.bidEur == null) { reply.status(400); return { error: 'adGroupId, kind (PRODUCT|CATEGORY|AUTO|AUDIENCE), value, bidEur required' } }
     const { createTargetLocal } = await import('../services/advertising/ads-create.service.js')
+    const { SdTargetRefused } = await import('../services/advertising/sd-target-expression.js')
     // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
-    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CC-12 — a Sponsored Display target Amazon would refuse is a 400 with the reason; nothing was sent or stored.
+    try { return personAddReply(reply, await createTargetLocal({ ...(b as object), requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(e instanceof SdTargetRefused ? 400 : 500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/negative-targets/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
@@ -7044,11 +7066,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AX2.9: Sponsored Brands creative ────────────────────────────────
+  // CC-11 — `dryRun: true` (with `marketplace`, no ad group yet) only checks the creative and shows what would be sent:
+  // the SB builder asks it before it creates anything on Amazon. A creative Amazon would refuse is a 400 with the reason.
   fastify.post('/advertising/sb-creatives/create', async (request, reply) => {
     const b = request.body as Record<string, unknown>
-    if (!b?.adGroupId || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: 'adGroupId, brandName, headline, asins[] required' } }
-    const { createSbAdLocal } = await import('../services/advertising/ads-create.service.js')
-    try { return await createSbAdLocal(b as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    const dry = b?.dryRun === true
+    if ((dry ? !b?.marketplace : !b?.adGroupId) || !b?.brandName || !b?.headline || !Array.isArray(b?.asins)) { reply.status(400); return { error: `${dry ? 'marketplace' : 'adGroupId'}, brandName, headline, asins[] required` } }
+    const { createSbAdLocal, SbCreativeRefused } = await import('../services/advertising/ads-create.service.js')
+    // 1e — a person's own add from the builder (isPersonCreate).
+    try { return await createSbAdLocal({ ...(b as object), manual: true } as never) } catch (e) { reply.status(e instanceof SbCreativeRefused ? 400 : 500); return { error: (e as Error)?.message } }
   })
 
   // ── AX.6: Keyword-paste auto-architect ──────────────────────────────
@@ -7558,12 +7584,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
-  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend WOULD do (dry-run).
+  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend do on the next run. AM-8 — `engine` says whether
+  // that run applies (the engine's own gate + write mode + dial), so the Budget Manager never asserts it.
   fastify.get('/advertising/budget-manager/enforcement', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
-    const { computeBudgetEnforcement } = await import('../services/advertising/ads-budget-enforce.service.js')
+    const { computeBudgetEnforcement, budgetEnforceMode } = await import('../services/advertising/ads-budget-enforce.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    return computeBudgetEnforcement({ month: q.month })
+    const [result, engine] = await Promise.all([computeBudgetEnforcement({ month: q.month }), budgetEnforceMode()])
+    return { ...result, engine }
   })
 
   /**
@@ -9989,11 +10017,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // Portfolios P1 — synced rows enriched with campaign counts + spend/sales rollup (from our data).
+  // AM-6 — spend/sales cover a date window, taken exactly as GET /advertising/campaigns takes it
+  // (startDate + endDate, or preset, or windowDays; default the last 7 days); the answer names it.
   fastify.get('/advertising/portfolios/overview', async (request, reply) => {
-    const q = request.query as { marketplace?: string }
+    const q = request.query as { marketplace?: string; preset?: string; startDate?: string; endDate?: string; windowDays?: string }
     const { getPortfolioOverview } = await import('../services/advertising/ads-portfolio.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null }) }
+    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null, preset: q.preset, startDate: q.startDate, endDate: q.endDate, windowDays: q.windowDays }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 

@@ -17,6 +17,7 @@ import prisma from '../../db.js'
 import { auditLogService } from '../audit-log.service.js'
 import { object } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
+import { resolveEtsyCreateOnCheck } from './studio-publication-etsy-marker.js'
 import { IN_FLIGHT, OPEN_PUBLICATION, PUBLICATION_KIND, RECEIPT_DEADLINE_MS, announcePublication, checkedMark, json } from './studio-publication-settle.js'
 
 export const CHECK_NOTE_MAX = 500
@@ -80,10 +81,15 @@ export async function markPublicationChecked(productId: string, id: string, body
   if (note.length > CHECK_NOTE_MAX) throw new WorkspaceScopeError(`Keep the note to ${CHECK_NOTE_MAX} characters or fewer.`, 400)
 
   const { row, data } = await loadPublication(productId, id)
+  if (!checkedMark(row.summary)) refuseUnlessOpen(row, data, now)
+  // E3 — a create of a new Etsy listing whose answer was lost: before the mark, Nexus links the draft Etsy made (the id
+  // Etsy answered, or the one draft in this shop that matches and no other row holds), or clears the marker when Etsy
+  // holds none — 15 minutes after the create started at the earliest. Several matches, too early, or Etsy unreadable throw
+  // a 409 here: nothing is marked, the publication stays open and the person can retry.
+  const etsyNote = await resolveEtsyCreateOnCheck(id, data, now)
   if (checkedMark(row.summary)) return checkView(row, data, row.summary)
-  refuseUnlessOpen(row, data, now)
 
-  const mark = { checkedAt: now.toISOString(), checkedBy: userId, checkedNote: note || null }
+  const mark = { checkedAt: now.toISOString(), checkedBy: userId, checkedNote: [note, etsyNote].filter(Boolean).join(' ') || null }
   const summary = json({ ...object(row.summary), ...mark })
   const stored = await prisma.$transaction(async tx => {
     // The submit claim's own lock: a check and a new send to this destination never interleave.
@@ -103,7 +109,7 @@ export async function markPublicationChecked(productId: string, id: string, body
   announcePublication(id, row, data, row.status, { terminal: true })
   await auditLogService.write({ userId, entityType: 'BulkOperation', entityId: id, action: 'publication.mark_checked',
     before: { status: row.status, needsCheck: object(row.summary).needsCheck === true, completedAt: null },
-    after: { status: row.status, completedAt: now.toISOString(), note: note || null },
+    after: { status: row.status, completedAt: now.toISOString(), note: mark.checkedNote },
     metadata: { productId: row.productId, channel: row.channel, marketplace: row.marketplace, accountId: row.channelConnectionId, aliasKey: row.aliasKey } })
   return checkView({ id, status: row.status }, data, summary)
 }

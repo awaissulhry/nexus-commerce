@@ -20,6 +20,7 @@ import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
+import { acosSortNumber } from '../../ads/campaigns/_grid/format'
 
 interface Targ {
   id: string; text: string; kind: string; matchType: string; bidCents: number; status: string
@@ -71,7 +72,7 @@ const targetColumns = (ctx: {
     render: (t) => eur(t.clicks > 0 ? t.spendCents / t.clicks : null) },
   { key: 'orders', label: 'Orders', align: 'right', sortable: true, sortValue: (t) => t.orders, render: (t) => num(t.orders) },
   { key: 'salesCents', label: 'Sales', align: 'right', sortable: true, sortValue: (t) => t.salesCents, render: (t) => eur(t.salesCents) },
-  { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (t) => t.acos ?? -1, render: (t) => pct(t.acos) },
+  { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (t) => acosSortNumber(t.acos, t.spendCents, t.salesCents), render: (t) => pct(t.acos) },
   { key: 'roas', label: 'ROAS', align: 'right', sortable: true, sortValue: (t) => t.roas ?? -1, render: (t) => (t.roas == null ? '—' : `${t.roas.toFixed(1)}×`) },
 ]
 

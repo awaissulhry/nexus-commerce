@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { Prisma } from '@prisma/client'
 
 /**
  * Sheet publish parity, step 4 — D3 "Mark as checked" and "Publish failed products again…", on the real schema and
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * Retry selection: the failed products of a publication and the fields they carried (an Amazon PARTIAL feed; an eBay
  * refusal before anything was sent), refused while the result is not known.
  */
-const fixture = vi.hoisted(() => ({ database: null as any, facts: vi.fn(), readAmazon: vi.fn(), readEbay: vi.fn(), published: [] as any[] }))
+const fixture = vi.hoisted(() => ({ database: null as any, facts: vi.fn(), readAmazon: vi.fn(), readEbay: vi.fn(), published: [] as any[], drafts: vi.fn() }))
 
 vi.mock('@nexus/database', async () => {
   const { concurrentDatabase, concurrentDatabaseUrl } = await import('../../test-support/concurrent-database.js')
@@ -48,6 +49,8 @@ vi.mock('./studio-publication-amazon-changes.js', () => ({
   compileAmazonChanges: vi.fn(),
 }))
 vi.mock('./studio-publication-ebay-changes.js', () => ({ prepareEbayChanges: vi.fn(), compileEbayChanges: vi.fn() }))
+// E3 — Etsy's draft search is stubbed; the marker module and its SQL are real (they run on this database).
+vi.mock('../live-read/etsy.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../live-read/etsy.js')>()), findEtsyDrafts: fixture.drafts }))
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -57,6 +60,7 @@ import { previewStudioPublication } from './studio-publication.service.js'
 import { markPublicationChecked, publicationRetrySelection } from './studio-publication-check.service.js'
 import { reschedulePublication, storeResult } from './studio-publication-settle.js'
 import { runPublicationSettleTick } from '../../jobs/studio-publication-settle.job.js'
+import { claimEtsyCreate, markEtsyCreateUnknown } from './studio-publication-etsy-marker.js'
 
 const WORKSPACE_B = 'publication_check_workspace_b'
 const inside = <T>(workspaceId: string, work: () => Promise<T>) => withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -212,6 +216,106 @@ describe('mark as checked (D3)', () => {
     const final = await row('late-result')
     expect(final).toMatchObject({ status: 'ACCEPTED', nextCheckAt: null, summary: expect.objectContaining({ checkedAt: NOW.toISOString(), accepted: 1 }) })
     expect(final!.completedAt).toBeInstanceOf(Date)
+  })
+})
+
+describe('E3 — Mark as checked on a new Etsy listing whose answer was lost (the marker, on PostgreSQL)', () => {
+  /** The Etsy account (a real ChannelConnection row: the listing's account is a foreign key). */
+  let ETSY_ACCOUNT = ''
+  const LISTING = '9000000001'
+  beforeAll(async () => {
+    ETSY_ACCOUNT = await scoped(async () => (await prisma.channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 'check-etsy', isActive: true, isPrimary: true } as never })).id)
+  })
+  const where = () => ({ marketplace: 'IT', accountId: ETSY_ACCOUNT, aliasKey: '', ownerProductId: ids.root })
+  const etsyRows = () => scoped(() => prisma.channelListing.findMany({ where: { channel: 'ETSY', channelConnectionId: ETSY_ACCOUNT, aliasKey: '' },
+    select: { productId: true, externalListingId: true, listingStatus: true, isPublished: true, syncPaused: true, platformAttributes: true, version: true } }))
+  const mainRow = async () => (await etsyRows()).find(row => row.productId === ids.root)!
+  /** The family's Nexus drafts at the Etsy destination (as the claim's ensureDrafts leaves them), with the main row's bag. */
+  async function etsyDrafts() {
+    await scoped(async () => {
+      for (const productId of [ids.root, ids.s, ids.m]) await prisma.channelListing.create({ data: { productId, channel: 'ETSY', marketplace: 'IT', region: 'IT',
+        channelMarket: 'ETSY_IT', channelConnectionId: ETSY_ACCOUNT, aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true,
+        followMasterQuantity: true, followMasterPrice: true, ...(productId === ids.root ? { platformAttributes: { _etsyInformationLocales: ['it'] } } : {}) } as never })
+    })
+  }
+  const etsyData = () => ({ etsyCreate: true, scope: { channel: 'ETSY', marketplace: 'IT', accountId: ETSY_ACCOUNT }, changePlan: { publication: { ownerProductId: ids.root } } })
+
+  it('the claim, the unknown and the search run on PostgreSQL; "several" is a 409 that leaves the publication open; one draft is then linked before the mark, and the note says so', async () => {
+    await etsyDrafts()
+    await scoped(() => claimEtsyCreate(where(), { reviewId: 'etsy-create', title: 'Coat', skus: ['COAT-S', 'COAT-M'], userId: ids.publisher }))
+    await scoped(() => markEtsyCreateUnknown(where(), 'etsy-create', 'Etsy did not answer (timeout)'))
+    const claimed = await mainRow()
+    expect(claimed.platformAttributes).toEqual({ _etsyInformationLocales: ['it'], _etsyCreate: { v: 1, state: 'unknown', reviewId: 'etsy-create',
+      startedAt: expect.any(String), title: 'Coat', skus: ['COAT-S', 'COAT-M'], userId: ids.publisher, message: 'Etsy did not answer (timeout)' } })
+    expect(claimed.version).toBe(3)
+    // A second create of the listing is refused while the marker stands.
+    await expect(scoped(() => claimEtsyCreate(where(), { reviewId: 'etsy-create-2', title: 'Coat', skus: [], userId: null }))).rejects.toThrow('Nothing was sent.')
+
+    await scoped(() => publication('etsy-create', { status: 'UNVERIFIED', channel: 'ETSY', account: ETSY_ACCOUNT, submittedAt: minutesAgo(60),
+      data: etsyData() }))
+    fixture.drafts.mockReset().mockResolvedValue([{ listingId: LISTING, title: 'Coat', createdAt: null }, { listingId: '9000000002', title: 'Coat', createdAt: null }])
+    await expect(scoped(() => markPublicationChecked(ids.root, 'etsy-create', { note: 'Looked on Etsy' }, ids.checker, NOW)))
+      .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining(`Etsy holds 2 drafts that match this publish (listings ${LISTING}, 9000000002)`) })
+    expect(fixture.drafts).toHaveBeenCalledWith(ETSY_ACCOUNT, { title: 'Coat', since: (claimed.platformAttributes as any)._etsyCreate.startedAt, skus: ['COAT-S', 'COAT-M'] })
+    expect(await row('etsy-create')).toMatchObject({ status: 'UNVERIFIED', completedAt: null })
+    expect(await scoped(() => prisma.auditLog.count({ where: { entityId: 'etsy-create', action: 'publication.mark_checked' } }))).toBe(0)
+    expect(((await mainRow()).platformAttributes as any)._etsyCreate.reviewId).toBe('etsy-create')
+
+    fixture.drafts.mockResolvedValue([{ listingId: LISTING, title: 'Coat', createdAt: null }])
+    const checked = await scoped(() => markPublicationChecked(ids.root, 'etsy-create', { note: 'Looked on Etsy' }, ids.checker, NOW))
+    const note = `Looked on Etsy Nexus found the draft on Etsy (listing ${LISTING}) and linked it to this family; the next Publish sends what it still lacks.`
+    expect(checked).toMatchObject({ publicationId: 'etsy-create', status: 'UNVERIFIED', note })
+    expect(await row('etsy-create')).toMatchObject({ completedAt: NOW, summary: expect.objectContaining({ checkedNote: note }) })
+    const linked = await etsyRows()
+    expect(linked).toHaveLength(3)
+    for (const listing of linked) expect(listing).toMatchObject({ externalListingId: LISTING, listingStatus: 'DRAFT', isPublished: false, syncPaused: true })
+    expect((await mainRow()).platformAttributes).toEqual({ _etsyInformationLocales: ['it'] })
+    const audits = await scoped(() => prisma.auditLog.findMany({ where: { entityId: 'etsy-create', action: 'publication.mark_checked' } }))
+    expect(audits).toHaveLength(1)
+    expect(audits[0]).toMatchObject({ after: { note } })
+  })
+
+  it('none found (the only match is an alias\'s draft) → 409 until 15 minutes after the start, then cleared; a JSON null bag stays an object; another business cannot resolve it', async () => {
+    await scoped(async () => {
+      await prisma.channelListing.updateMany({ where: { channel: 'ETSY', channelConnectionId: ETSY_ACCOUNT }, data: { externalListingId: null } })
+      // NIT-1: a bag stored as JSON null (not SQL NULL) becomes an object with the marker, never an array.
+      await prisma.channelListing.updateMany({ where: { channel: 'ETSY', channelConnectionId: ETSY_ACCOUNT, productId: ids.root }, data: { platformAttributes: Prisma.JsonNull } })
+      // MAJOR-2: alias ALT1 of the same product, created seconds earlier with the same title and SKUs, holds draft 9000000003.
+      await prisma.channelListing.create({ data: { productId: ids.root, channel: 'ETSY', marketplace: 'IT', region: 'IT', channelMarket: 'ETSY_IT',
+        channelConnectionId: ETSY_ACCOUNT, aliasKey: 'ALT1', externalListingId: '9000000003', listingStatus: 'DRAFT', isPublished: false, syncPaused: true,
+        followMasterQuantity: true, followMasterPrice: true } as never })
+      await claimEtsyCreate(where(), { reviewId: 'etsy-create-none', title: 'Coat', skus: ['COAT-S'], userId: null })
+      await publication('etsy-create-none', { status: 'UNVERIFIED', channel: 'ETSY', account: ETSY_ACCOUNT, submittedAt: minutesAgo(60),
+        data: etsyData() })
+    })
+    const claimed = await mainRow()
+    expect(claimed.platformAttributes).toEqual({ _etsyCreate: expect.objectContaining({ reviewId: 'etsy-create-none', state: 'creating' }) })
+    const started = Date.parse((claimed.platformAttributes as any)._etsyCreate.startedAt)
+    fixture.drafts.mockReset().mockResolvedValue([{ listingId: '9000000003', title: 'Coat', createdAt: null }])
+    await expect(inside(WORKSPACE_B, () => markPublicationChecked(ids.root, 'etsy-create-none', {}, ids.checker, NOW))).rejects.toMatchObject({ statusCode: 404 })
+    expect(fixture.drafts).not.toHaveBeenCalled()
+
+    // MAJOR-1: a minute after the start Etsy may still be finishing the create — nothing is cleared, nothing marked.
+    await expect(scoped(() => markPublicationChecked(ids.root, 'etsy-create-none', {}, ids.checker, new Date(started + 60_000))))
+      .rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining('Etsy may still be finishing this create. Check again after') })
+    expect(((await mainRow()).platformAttributes as any)._etsyCreate.reviewId).toBe('etsy-create-none')
+    expect(await row('etsy-create-none')).toMatchObject({ completedAt: null })
+
+    const later = new Date(started + 16 * 60_000)
+    const checked = await scoped(() => markPublicationChecked(ids.root, 'etsy-create-none', {}, ids.checker, later))
+    expect(checked.note).toBe('Nexus looked in this shop\'s Etsy drafts and found none from this publish, so the next Publish creates the draft.')
+    const main = await mainRow()
+    expect(main.platformAttributes).toEqual({})
+    expect(main.externalListingId).toBeNull()
+    const alias = await scoped(() => prisma.channelListing.findFirst({ where: { channel: 'ETSY', channelConnectionId: ETSY_ACCOUNT, aliasKey: 'ALT1' }, select: { externalListingId: true } }))
+    expect(alias).toEqual({ externalListingId: '9000000003' })
+  })
+
+  it('an eBay (or any non-create) publication is checked exactly as before: Etsy is never asked', async () => {
+    fixture.drafts.mockReset()
+    await scoped(() => publication('ebay-unchanged', { status: 'UNVERIFIED', channel: 'EBAY', account: 'ebay-unchanged-account', submittedAt: minutesAgo(120) }))
+    await expect(scoped(() => markPublicationChecked(ids.root, 'ebay-unchanged', { note: 'Seen on eBay' }, ids.checker, NOW))).resolves.toMatchObject({ note: 'Seen on eBay' })
+    expect(fixture.drafts).not.toHaveBeenCalled()
   })
 })
 

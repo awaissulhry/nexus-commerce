@@ -19,7 +19,8 @@
  * holds `SHOPIFY:…`, reference_shopify_sheet_drops_metafields_on_cold_schema): the read then says the store fields are
  * missing, never empty, and a write is refused.
  *
- * Etsy: no tool here reads or writes Etsy text until the Etsy publish step (P5) exists (ETSY_NOT_YET).
+ * Etsy (E5b): listing-live-content reads an Etsy listing live (the Etsy live reader, read-only); its text and attributes
+ * in Nexus are read with product-content and changed with set-listing-content (the Etsy sheet).
  */
 
 import { createHash } from 'node:crypto'
@@ -33,7 +34,7 @@ import prisma from '../../../db.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 import {
-  cellOf, COORDINATE_CHANNELS, ETSY_NOT_YET, factsOf, languageArg, languageOf, liveProductByRef, sheetRefusal,
+  cellOf, COORDINATE_CHANNELS, factsOf, languageArg, languageOf, liveProductByRef, sheetRefusal,
   type Field, type RequiredCheck,
 } from './content.tools.js'
 import type { StudioRow, StudioSheet } from '../../pim/studio-sheet.service.js'
@@ -142,7 +143,7 @@ const shopifyContent: AgentTool = {
     + 'SEO title and description, title and description — with each value, whether it is a Nexus draft waiting to be '
     + 'synchronized (nexusDraft), whether it is required, and why it cannot be edited. Price, stock, status and sales '
     + 'channels are not read here. When Nexus has no copy of the store\'s field list, it says the metafields are missing, '
-    + 'never empty. Etsy is not available yet.',
+    + 'never empty. An Etsy listing is read with product-content (Nexus) and listing-live-content (Etsy).',
   async handler(args): Promise<ToolResult> {
     const a = args as z.infer<typeof shopifyContentInput>
     const named = await liveProductByRef(a.product)
@@ -437,8 +438,8 @@ const setShopifyContent: AgentTool = {
 
 const listingLiveInput = z.object({
   product: z.string().trim().min(1).max(191).describe('the product whose listing it is: a Nexus product id or a SKU'),
-  channel: z.preprocess(upper, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY or SHOPIFY (Etsy is not available yet)'),
-  market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Shopify'),
+  channel: z.preprocess(upper, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY, SHOPIFY or ETSY'),
+  market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Shopify and Etsy'),
   ...accountArgs,
 })
 
@@ -454,12 +455,11 @@ const listingLiveContent: AgentTool = {
   description:
     'What one listing holds on its channel right now, read live (one read per listing per 30 seconds; a repeat inside '
     + 'that window says cached): its text and attributes per variation, the revision, and what could not be read. '
-    + 'Compare it with product-content to see what a publish would change. Etsy is not available yet.',
+    + 'Compare it with product-content to see what a publish would change.',
   async handler(args): Promise<ToolResult> {
     const a = args as z.infer<typeof listingLiveInput>
     const named = await liveProductByRef(a.product)
     if (!named) return { ok: false, error: PRODUCT_NOT_FOUND }
-    if (a.channel === 'ETSY') return { ok: false, error: ETSY_NOT_YET }
     const where = `${channelLabel(a.channel)} · ${a.market}`
     // The family's listings on this coordinate name its account; one account, or the one asked for.
     const family = named.parentId ?? named.id

@@ -10,6 +10,9 @@
  * | content | `PATCH /shops/{shop}/listings/{id}` | **form-encoded**, partial |
  * | an image | `POST /shops/{shop}/listings/{id}/images` | **multipart** |
  * | an image | `DELETE /shops/{shop}/listings/{id}/images/{image}` | none |
+ * | an attribute (E2) | `PUT` / `DELETE /shops/{shop}/listings/{id}/properties/{property}` | **form-encoded** / none |
+ * | a translation (E2) | `POST` / `PUT /shops/{shop}/listings/{id}/translations/{language}` | **form-encoded** |
+ * | a new listing, as a draft (E3) | `POST /shops/{shop}/listings` | **form-encoded**, never repeated |
  *
  * A content write is **partial**, so unlike the inventory PUT it does not carry the
  * regional-pricing risk and does not need a read-back to be safe. It still refuses to send a
@@ -17,8 +20,9 @@
  * that cannot do anything useful can still fail, be rate-limited, or be misread as activity.
  */
 import { etsyWriter } from './write-client.js'
+import { EtsyReadError, etsyReader } from './read-client.js'
 import {
-  etsyListingContentFields, etsyListingStateFields,
+  etsyDraftListingFields, etsyListingContentFields, etsyListingStateFields,
   type EtsyListingContent, type EtsyListingStateChange,
 } from './listing-content.js'
 import type { GatewayRequest } from '../gateway/gateway.js'
@@ -147,4 +151,157 @@ export async function deleteEtsyListingImage(
     ledger: input.ledger,
     operation: 'DELETE /shops/:id/listings/:id/images/:id',
   })
+}
+
+// ── E2 — attributes and translations (R1 §4, §6) ─────────────────────────────────────────────────────────────────
+// The studio passes no push lock (D10): its content goes to a paused listing too, as eBay's studio send does; a caller
+// that passes one has it honoured by the gateway. Each write is one call; the studio journals its exact body first.
+
+/** E2 — one listing attribute (`updateListingProperty`), as the studio's review showed it. */
+export interface EtsyPropertyWrite { propertyId: number; valueIds: number[]; values: string[]; scaleId?: number | null }
+
+function assertPropertyId(propertyId: number): number {
+  if (!Number.isInteger(propertyId) || propertyId < 1) throw new Error('That is not an Etsy property id; nothing was sent.')
+  return propertyId
+}
+
+/**
+ * Set one attribute: `PUT /shops/{shop}/listings/{id}/properties/{property}`, form-encoded `value_ids`, `values` and
+ * `scale_id` (only when there is one). A PUT, so the write client may repeat it once after no answer.
+ */
+export async function setEtsyListingProperty(input: EtsyListingWriteInput & { property: EtsyPropertyWrite }): Promise<{ sent: true }> {
+  const listingId = assertListingId(input.listingId)
+  const { property } = input
+  const propertyId = assertPropertyId(property.propertyId)
+  if (!Array.isArray(property.valueIds) || property.valueIds.some((id) => !Number.isInteger(id) || id < 1)) {
+    throw new Error(`Etsy property ${propertyId}: a value id must be a positive whole number; nothing was sent.`)
+  }
+  if (!Array.isArray(property.values) || !property.values.length || property.values.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new Error(`Etsy property ${propertyId} needs at least one value, and none may be empty; nothing was sent.`)
+  }
+  // Etsy refuses ( and ) in a value a seller writes (a custom value, no value ids; R1 §3) — the review's own rule
+  // (studio-publication-etsy-build.ts), named here, not a 400 with no hint. A value that carries Etsy's value ids is
+  // Etsy's own choice and is sent exactly as Etsy names it.
+  const bracketed = property.valueIds.length ? undefined : property.values.find((value) => /[()]/.test(value))
+  if (bracketed !== undefined) throw new Error(`Etsy does not take ( or ) in a custom property value, and "${bracketed}" has one; nothing was sent.`)
+  const scaleId = property.scaleId ?? null
+  if (scaleId !== null && (!Number.isInteger(scaleId) || scaleId < 1)) throw new Error(`Etsy property ${propertyId}: the scale id must be a positive whole number; nothing was sent.`)
+
+  const writer = await etsyWriter(input.accountId)
+  await writer.send({
+    path: `/shops/${writer.shopId}/listings/${listingId}/properties/${propertyId}`,
+    method: 'PUT',
+    form: { value_ids: [...property.valueIds], values: [...property.values], ...(scaleId !== null ? { scale_id: scaleId } : {}) },
+    kind: 'write',
+    pushLock: input.pushLock,
+    ledger: input.ledger,
+    operation: 'PUT /shops/:id/listings/:id/properties/:id',
+  })
+  return { sent: true }
+}
+
+/** Remove one attribute: `DELETE /shops/{shop}/listings/{id}/properties/{property}` (Etsy answers 204). */
+export async function deleteEtsyListingProperty(input: EtsyListingWriteInput & { propertyId: number }): Promise<{ sent: true }> {
+  const listingId = assertListingId(input.listingId)
+  const propertyId = assertPropertyId(input.propertyId)
+  const writer = await etsyWriter(input.accountId)
+  await writer.send({
+    path: `/shops/${writer.shopId}/listings/${listingId}/properties/${propertyId}`,
+    method: 'DELETE',
+    kind: 'write',
+    pushLock: input.pushLock,
+    ledger: input.ledger,
+    operation: 'DELETE /shops/:id/listings/:id/properties/:id',
+  })
+  return { sent: true }
+}
+
+/** E2 — one listing translation, as the studio's review showed it. */
+export interface EtsyTranslationWrite { language: string; title: string; description: string; tags: string[] }
+
+/** An IETF tag as Etsy lists them (`de`, `en`, `pt-BR`…) — and nothing that could leave the path. */
+const TRANSLATION_LANGUAGE = /^[a-z]{2}(-[A-Za-z]{2,4})?$/
+
+/**
+ * Create or replace one translation (R1 §6). Etsy has `createListingTranslation` (POST) and `updateListingTranslation`
+ * (PUT) on one path and no delete; which one a send needs is decided by a GET just before it, through the read client:
+ * 200 → PUT, 404 → POST, any other answer → nothing is written (the error is thrown as it came). `beforeSend` gets the
+ * method and the exact form before the write; its throw sends nothing.
+ *
+ * 🔴 A POST is never repeated (write-client.ts): a create that got no answer is an unknown outcome, not a failure.
+ */
+export async function writeEtsyTranslation(input: EtsyListingWriteInput & { translation: EtsyTranslationWrite
+  beforeSend?: (method: 'POST' | 'PUT', form: Record<string, unknown>) => Promise<void> }): Promise<{ sent: true; method: 'POST' | 'PUT' }> {
+  const listingId = assertListingId(input.listingId)
+  const { translation } = input
+  const language = typeof translation.language === 'string' ? translation.language : ''
+  if (!TRANSLATION_LANGUAGE.test(language)) throw new Error(`"${language}" is not a language Etsy takes for a translation; nothing was sent.`)
+  if (typeof translation.title !== 'string' || !translation.title.trim()) throw new Error(`The ${language} translation needs a title; nothing was sent.`)
+  if (typeof translation.description !== 'string' || !translation.description.trim()) throw new Error(`The ${language} translation needs a description; nothing was sent.`)
+  if (!Array.isArray(translation.tags) || translation.tags.some((tag) => typeof tag !== 'string')) throw new Error(`The ${language} translation's tags must be a list of words; nothing was sent.`)
+
+  const reader = await etsyReader(input.accountId)
+  let method: 'POST' | 'PUT'
+  try {
+    await reader.get<unknown>(`/shops/${reader.shopId}/listings/${listingId}/translations/${language}`)
+    method = 'PUT'
+  } catch (error) {
+    if (!(error instanceof EtsyReadError && error.status === 404)) throw error
+    method = 'POST'
+  }
+  const form = { title: translation.title, description: translation.description, tags: [...translation.tags] }
+  const writer = await etsyWriter(input.accountId)
+  await input.beforeSend?.(method, form)
+  await writer.send({
+    path: `/shops/${writer.shopId}/listings/${listingId}/translations/${language}`,
+    method,
+    form,
+    kind: 'write',
+    pushLock: input.pushLock,
+    ledger: input.ledger,
+    operation: `${method} /shops/:id/listings/:id/translations/:language`,
+  })
+  return { sent: true, method }
+}
+
+// ── E3 — create a new listing as an Etsy draft (R1 §1) ───────────────────────────────────────────────────────────
+
+/**
+ * Etsy's listing id from its answer, as text: a safe whole number or a digit string, else null. Never a number JavaScript
+ * would round (ids are 64-bit since 2025-04-21, R1 §14): a rounded id names another listing.
+ */
+function etsyIdOf(value: unknown): string | null {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? String(value) : null
+  if (typeof value === 'string') return /^[1-9]\d*$/.test(value.trim()) ? value.trim() : null
+  return null
+}
+
+/**
+ * E3 — create a NEW listing on Etsy as a draft: `POST /shops/{shop}/listings` (createDraftListing), **form-encoded**, as
+ * this account (the shop id comes from the account's identity, never from a caller). The form is checked first
+ * (`etsyDraftListingFields`): a throw there sends nothing.
+ *
+ * 🔴 Never repeated. A POST has no idempotency key on Etsy, and a second one makes a second draft: the write client never
+ * retries a POST (`maxTransientRetries: 0`), and no caller may either — no answer (`GatewayNoAnswer`) is an UNKNOWN
+ * outcome, which the studio's "creating" marker holds until a person's Mark as checked finds the draft or finds none.
+ * No push lock: there is no listing to lock yet.
+ *
+ * Returns Etsy's listing id (null when the answer carried no usable one: the caller must treat that as unknown, never
+ * as "nothing made") and the state Etsy answered (`draft`), or null.
+ */
+export async function createEtsyDraftListing(input: { accountId: string; form: Record<string, unknown>; acceptAutoRenewCharge?: boolean
+  ledger?: GatewayRequest['ledger'] }): Promise<{ listingId: string | null; state: string | null }> {
+  const form = etsyDraftListingFields(input.form, input.acceptAutoRenewCharge)
+  const writer = await etsyWriter(input.accountId)
+  const answer = await writer.send<Record<string, unknown> | null>({
+    path: `/shops/${writer.shopId}/listings`,
+    method: 'POST',
+    form,
+    kind: 'write',
+    ledger: input.ledger,
+    operation: 'POST /shops/:id/listings',
+  })
+  const body = answer && typeof answer === 'object' && !Array.isArray(answer) ? answer : {}
+  const state = typeof body.state === 'string' && body.state.trim() ? body.state.trim() : null
+  return { listingId: etsyIdOf(body.listing_id), state }
 }

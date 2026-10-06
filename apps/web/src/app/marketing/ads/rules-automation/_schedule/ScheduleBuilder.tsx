@@ -16,7 +16,7 @@ import { HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'
 import { MetricSelect } from './MetricSelect'
 import { DaypartingHeatmap, type HeatCell } from './DaypartingHeatmap'
-import { metricVal, type RawCell } from './heatMetrics'
+import { heatCell, metricVal, type RawCell } from './heatMetrics'
 import { DaypartingChart, type ChartCell } from './DaypartingChart'
 import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, TIMEZONES, adjustmentsFor, CHART_WINDOW_DAYS, chartWindowLabel } from './scheduleConfig'
 // BSP-B5 — budget-only, and imported only for that branch. Dayparting has its own recommender
@@ -225,7 +225,8 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
   }, [campaignKey, timezone])
 
   // map raw cells → heatmap (single metric) / chart (two metrics)
-  const heatCells = useMemo<HeatCell[]>(() => { const g = metricVal(metric1).f; return rawCells.map((c) => ({ dow: c.dow, hour: c.hour, value: g(c) })) }, [rawCells, metric1])
+  // AM-19 — the honest reading: an hour that spent and sold nothing is a "spend, no sales" cell, never ACoS 0 %.
+  const heatCells = useMemo<HeatCell[]>(() => rawCells.map((c) => heatCell(metric1, c)), [rawCells, metric1])
   const chartCells = useMemo<ChartCell[]>(() => { const g1 = metricVal(metric1).f, g2 = metricVal(metric2).f; return rawCells.map((c) => ({ dow: c.dow, hour: c.hour, m1: g1(c), m2: g2(c) })) }, [rawCells, metric1, metric2])
 
   const addCampaign = (c: SchedCampaign) => setSelCampaigns((cur) => (cur.some((x) => x.id === c.id) ? cur : [...cur, c]))

@@ -20,8 +20,10 @@ import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Plus, Archive } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { useAdsMarketplace, ALL_MARKETS } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
+import { acosRank, acosFilterValue } from '../campaigns/_grid/format'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
 import { EmptyState } from '@/design-system/components/EmptyState'
@@ -96,7 +98,7 @@ export function AiAdvertisingDashboard() {
     goal: sp.get('goal'),
   }).current
 
-  const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } })
+  const [dateRange, setDateRange] = useState(() => lastCompleteDays(30)) // AM-16 — complete days, ending yesterday
   const [goals, setGoals] = useState<Goal[]>([])
   const [goalsLoading, setGoalsLoading] = useState(true)
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -231,7 +233,10 @@ export function AiAdvertisingDashboard() {
       total: (rows) => eur2(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.salesCents ?? 0), 0)),
     },
     {
-      key: 'acos', label: 'ACoS', metric: true, sortable: true, sortValue: (g) => perfByGoal.get(g.id)?.acosPct ?? -1, filterValue: (g) => perfByGoal.get(g.id)?.acosPct ?? 0,
+      // AM-11 — `acosPct` is PERCENT POINTS; spend with no sales sorts/filters as the WORST ACoS, never 0 %.
+      key: 'acos', label: 'ACoS', metric: true, sortable: true,
+      sortValue: (g) => { const p = perfByGoal.get(g.id); return p ? acosRank(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : null },
+      filterValue: (g) => { const p = perfByGoal.get(g.id); return p ? acosFilterValue(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : Number.NaN },
       render: (g) => { const p = perfByGoal.get(g.id); return p?.acosPct == null ? '—' : `${p.acosPct.toFixed(2)}%` },
     },
     {
@@ -255,7 +260,8 @@ export function AiAdvertisingDashboard() {
     { key: 'target', label: 'AI Target', kind: 'select', placeholder: 'All', value: (r) => (r as Goal).aiTarget, options: Object.entries(TARGET_LABEL).map(([value, label]) => ({ value, label })) },
     { key: 'mode', label: 'Budget Mode', kind: 'select', placeholder: 'All', value: (r) => (r as Goal).budgetMode, options: Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label })) },
     { key: 'spend', label: 'Spend', kind: 'range', unit: '€', value: (r) => (perfByGoal.get((r as Goal).id)?.spendCents ?? 0) / 100 },
-    { key: 'acos', label: 'ACoS', kind: 'range', unit: '%', value: (r) => perfByGoal.get((r as Goal).id)?.acosPct ?? 0 },
+    // AM-11 — this accessor wins over the column's filterValue, so it carries the same rule.
+    { key: 'acos', label: 'ACoS', kind: 'range', unit: '%', value: (r) => { const p = perfByGoal.get((r as Goal).id); return p ? acosFilterValue(p.acosPct != null ? p.acosPct / 100 : null, p.spendCents, p.salesCents) : Number.NaN } },
   ]
 
   const csv = () => {
