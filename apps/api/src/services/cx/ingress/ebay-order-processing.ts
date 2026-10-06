@@ -19,6 +19,16 @@ import { EbayOrderNoticeInvalid, parseEbayOrderNotice } from './ebay-order-notic
 import { MAX_INBOUND_ATTEMPTS } from './ledger.js'
 import type { EbayProcessingOutcome } from './ebay-processing.js'
 
+/**
+ * How long an order notice waits for its account's sign-in, measured on the database clock from the
+ * receipt's first arrival. A read held for sign-in gives its attempt back (a defer), so without this
+ * end the notice would be retried every 5 minutes for ever, writing a held call-ledger row each time.
+ * After it, the notice is dead-lettered: the 5-minute order check records the order after Reconnect.
+ */
+export const EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS = 6 * 60 * 60 * 1000
+const SIGNIN_END_REASON = 'The eBay account must be reconnected. Nexus stopped waiting for this order notice; after Reconnect the 5-minute eBay order check records the order.'
+const LAST_ATTEMPT_REASON = 'Nexus stopped retrying this eBay order notice. The 5-minute eBay order check still reads this order.'
+
 /** Static, owner-safe reasons: provider bodies and exception text never become the public error. */
 export function ebayOrderFailureOf(error: unknown): EbayInboundFailure {
   if (error instanceof EbayOrderNoticeInvalid && error.reason === 'seller_mismatch') {
@@ -42,6 +52,19 @@ export function ebayOrderFailureOf(error: unknown): EbayInboundFailure {
     reason: error instanceof EbayIdentityChanged
       ? 'The eBay seller authorization changed. The order will be read again.'
       : 'The eBay order could not be recorded yet. It will be read again.' }
+}
+
+/**
+ * The outcome actually recorded for this claim: a sign-in hold past its wait and a retry on the last
+ * allowed attempt both end in a dead letter, and their reason says so (never "will be read again").
+ */
+export async function ebayOrderClaimOutcome(claim: Pick<EbayInboundClaim, 'attempt' | 'createdAt'>, outcome: EbayInboundFailure): Promise<EbayInboundFailure> {
+  if (outcome.kind === 'defer' && outcome.code === 'AUTH_REQUIRED') {
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+    return clock.now.getTime() - claim.createdAt.getTime() >= EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS ? { kind: 'dead_letter', reason: SIGNIN_END_REASON } : outcome
+  }
+  if (outcome.kind === 'retry' && claim.attempt >= MAX_INBOUND_ATTEMPTS) return { kind: 'dead_letter', reason: LAST_ATTEMPT_REASON }
+  return outcome
 }
 
 /** Called by processEbayInbound with a claim it already owns. */
@@ -74,7 +97,7 @@ export async function processEbayOrderClaim(claim: EbayInboundClaim): Promise<Eb
     await afterEbayOrderCommit(completed.value!)
     return { kind: 'done' }
   } catch (error) {
-    const outcome = ebayOrderFailureOf(error)
+    const outcome = await ebayOrderClaimOutcome(claim, ebayOrderFailureOf(error))
     const saved = await finishEbayInbound(claim, outcome, raiseEbayFailureNotificationInTx)
     if (!saved) return { kind: 'not_claimed' }
     return { kind: outcome.kind === 'defer' ? 'deferred'

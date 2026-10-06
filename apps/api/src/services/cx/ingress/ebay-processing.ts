@@ -12,7 +12,12 @@ import { ebayInboundProcessingEnabled, ebayInboundProcessingReady, ebayOrderNoti
 
 export { ebayInboundProcessingEnabled, ebayInboundProcessingReady } from './ebay-processing-policy.js'
 
-/** Separate bounded selection prevents held/leased eBay rows starving other channels. */
+/**
+ * Separate bounded selection prevents held/leased eBay rows starving other channels. Within it, new
+ * receipts (never scheduled: `nextAttemptAt` NULL) come first, then the oldest due. Rows that keep
+ * coming due (a sign-in hold re-defers every 5 minutes) cannot starve a new revocation or a new
+ * order notice from another account, as PostgreSQL's default NULLS LAST ordering let them do.
+ */
 export async function dueEbayInboundEvents(limit = 4) {
   if (!ebayInboundProcessingReady()) return []
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
@@ -23,7 +28,7 @@ export async function dueEbayInboundEvents(limit = 4) {
     OR: [{ status: { in: ['pending', 'failed'] }, nextAttemptAt: { not: null, lte: clock.now },
       OR: [{ leaseToken: null }, { leaseUntil: { lte: clock.now } }],
     }, heldEbayInboundWhere()],
-  }, select: { id: true, workspaceId: true }, orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }], take: Math.max(1, Math.min(4, Math.floor(limit) || 4)) })
+  }, select: { id: true, workspaceId: true }, orderBy: [{ nextAttemptAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }], take: Math.max(1, Math.min(4, Math.floor(limit) || 4)) })
 }
 
 export type EbayProcessingOutcome =

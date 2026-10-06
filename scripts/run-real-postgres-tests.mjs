@@ -164,7 +164,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'shared stock by SKU end to end (no product share: connect by SKU, every listing, real-time wake under 2 s, D1 SKU lock, disconnect)', file: 'src/services/stock-pool/stock-pool-sku-e2e.vitest.test.ts', expect: 7 },
   { name: 'listing end times (Sync Control, the job, the database rule)', file: 'src/services/listing-end-times.vitest.test.ts', expect: 25 },
   { name: 'shared stock orders (sales, holds, cancellations, returns, repair, stock pages)', file: 'src/services/stock-pool/stock-pool-orders.vitest.test.ts', expect: 24 },
-  { name: 'transactional eBay order writer (atomic lines and stock, shortfalls, races, locks, attribution)', file: 'src/services/ebay-order-writer-postgres.vitest.test.ts', expect: 32 },
+  { name: 'transactional eBay order writer (atomic lines and stock, shortfalls, races, locks, attribution)', file: 'src/services/ebay-order-writer-postgres.vitest.test.ts', expect: 35 },
   { name: 'eBay mixed own and pool stock (global Product locks, durable cancellation retries)', file: 'src/services/ebay-order-pool-postgres.vitest.test.ts', expect: 12 },
   { name: 'eBay ORDER_CONFIRMATION execution (held until switched on; seller checked; one read, own account, atomic receipt)', file: 'src/services/cx/ingress/ebay-order-processing-postgres.vitest.test.ts', expect: 17 },
   { name: 'an eBay order notice racing the poll on one order (own and pool stock, both arrival orders, one notice per line): one order, each line once, stock once', file: 'src/services/cx/ingress/ebay-order-notice-race-postgres.vitest.test.ts', expect: 5 },
