@@ -130,6 +130,7 @@ import { MediaPickersExample } from './MediaPickersExample'
 import { ShopifyOptionsExample } from './ShopifyOptionsExample'
 import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
 import { DrawerFooterExample } from './DrawerFooterExample'
+import { StepUpModalExample } from './StepUpModalExample'
 import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
@@ -1086,6 +1087,7 @@ export function TokenCatalog() {
         <ShopifyOptionsExample />
         <EmbeddedDrawerExample />
         <DrawerFooterExample />
+        <StepUpModalExample />
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>

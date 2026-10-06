@@ -1,3 +1,20 @@
+## StepUpModal joins the patterns; EditModeBar can hold Apply alone — 2026-10-06
+
+Ads autonomy W1-4 (the Control Room's Strategy tab, the Approvals page's code box for a request that raises).
+
+- **`StepUpModal`** (`patterns`, promoted from `app/settings/ai/claude/StepUpModal.tsx`, its third user): the one
+  question before a raise — a sentence naming what rises, the 6-digit authenticator code, the API's answer. Same props
+  as before plus `confirmLabel` (say what happens: "Approve", "Save"). New: after a refused code the field takes the
+  focus again with the wrong code selected (the input is disabled while the code is checked, which dropped the focus;
+  found in the W1-4 keyboard check). Styles `.nds-stepup` / `.nds-stepup-note` in `patterns.css`. Settings › AI › Claude
+  and the Approvals page's "Automate this kind…" import it from here; nothing else changed for them. Catalog
+  `#step-up-modal-example`.
+- **`EditModeBar applyDisabled`**: holds Apply alone while a check runs or a problem is open; Discard stays. Mirrored
+  in Factory (the file is identical there).
+- **`.nds-actionbar` wraps** (EditModeBar, BulkActionBar): on a narrow screen the buttons go on a line under the
+  sentence instead of running past the edge (measured at 390 px: "Review 1 change…" sat 40 px off-screen and the
+  sentence squeezed to a 60 px column). Unchanged wherever the bar fits on one line.
+
 ## Scrolling strips: the scrollbar gets a band below the tabs, never over them — 2026-10-05
 
 Owner (the Publish window's market tabs): "the scrollbar appears above or is layered above the text or the tab buttons". A macOS overlay scrollbar takes no room and is drawn over the bottom of the scroll box — the labels, the active underline, the focus ring. Mirrored in Factory (`Tabs.tsx`, `ScopeBar.tsx`, `GridToolbar.tsx`, `MediaBoard.tsx`, `components/index.ts`, `grid.css`, the new hook and `lib/horizontal-overflow.ts`, the tab / scope / media-board rules, the catalog example).

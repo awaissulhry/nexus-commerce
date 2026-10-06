@@ -24,6 +24,8 @@
  *                                                         needs settings.security.manage and `code`, the person's fresh
  *                                                         authenticator code: 403 `mfa_required` (naming the raises),
  *                                                         400 `mfa_invalid`, 429 `mfa_locked`. A lowering saves at once.
+ *                                                         W1-4: the answer carries `undo`, the change that puts the
+ *                                                         previous version back (the Strategy tab's Undo sends it here).
  *
  * Both take ads.automation.manage (the manifest's advertising /automation rule) and the ad-spend money the strategy holds
  * (financials.adspend.view, checked here): a person who may not see the money does not set it.
@@ -34,7 +36,7 @@ import { financialPayloadCopy } from '../lib/auth/field-filter.js'
 import { hasPermission, type ResolvedPermissions } from '../lib/auth/rbac.js'
 import { STRATEGY_MONEY } from '../services/advertising/ads-strategy/fields.js'
 import { readStrategy, type StrategyViewName } from '../services/advertising/ads-strategy/read.js'
-import { applyStrategyPlan, planStrategyChange, STRATEGY_RAISE } from '../services/advertising/ads-strategy/write.js'
+import { applyStrategyPlan, planStrategyChange, STRATEGY_RAISE, undoArgsOf } from '../services/advertising/ads-strategy/write.js'
 import { requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import { mayRaise } from '../services/agents/claude-trust.service.js'
 
@@ -147,6 +149,9 @@ const advertisingStrategyRoutes: FastifyPluginAsync = async (fastify) => {
       changes: out.changes,
       summary: plan.preview.summary,
       liveEffect: plan.preview.liveEffect,
+      // W1-4 — the change that puts the previous version back (the Strategy tab's Undo), as set-ads-strategy's own undo
+      // writes it: previewed and saved through these same routes, so putting back a higher number asks for the code.
+      undo: undoArgsOf(out.before, out.after),
     }
   })
 }

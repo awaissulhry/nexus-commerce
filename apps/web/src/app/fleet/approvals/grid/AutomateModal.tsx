@@ -10,7 +10,7 @@
  *     in); the limits the settings page cannot edit either are shown, not changed;
  *   - a history test while the person edits (GET /api/claude/trust/:tool/simulate, 400 ms after the last change);
  *   - lowering, keeping, or only tightening saves at once; raising the level or loosening a limit first asks for the
- *     2FA code with the settings page's own StepUpModal (and so does any save the API answers with `mfa_required`);
+ *     2FA code with the DS StepUpModal (and so does any save the API answers with `mfa_required`);
  *   - "Also approve this one" is never ticked for the person: the PAGE approves the row after onSaved.
  * The API decides and refuses; its sentence is shown as it is, inside the modal.
  */
@@ -22,7 +22,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import Link from '@/lib/workspaces/Link'
 import { claudeApi, ClaudeApiError } from '@/app/settings/ai/claude/claudeApi'
 import { pauseSentence, raiseText, type Autonomy, type ClaudeRule, type Raise } from '@/app/settings/ai/claude/claudeWords'
-import { StepUpModal } from '@/app/settings/ai/claude/StepUpModal'
+import { StepUpModal } from '@/design-system/patterns'
 import type { AutomateModalProps } from './contracts'
 import {
   alwaysNeedsYouWords,

@@ -418,6 +418,31 @@ describe('resolveRequest — honesty', () => {
     const bare = resolveRequest('set-target-bid', { targetId: 'ctarget000000000000000009' }, {}, ctx)
     expect(bare.target).toMatchObject({ kind: 'ad-target', id: 'ctarget000000000000000009', name: null })
   })
+
+  it('W1-4 — a change of the ads strategy: money in the market\'s currency, groups in words, the scope as its target', () => {
+    const preview = {
+      summary: 'Raises the market strategy for Amazon IT: 4 settings; it raises Highest bid (cents).',
+      scope: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', label: 'IT market' },
+      changes: [
+        { field: 'maxBidCents', label: 'Highest bid (cents)', from: 150, to: 200, direction: 'raise' },
+        { field: 'target', label: 'Target', from: null, to: { targetKind: 'ACOS', targetPct: 25 }, direction: 'lower' },
+        { field: 'stop', label: 'Temporary stop', from: null, to: { stopMethod: 'LOW_BIDS', stopBidCents: null }, direction: 'same' },
+        { field: 'targetAcosPct', label: "Campaign's own target ACoS (%)", campaignId: 'c1', campaign: 'Test helmets', from: 28, to: null, direction: 'lower' },
+      ],
+    }
+    const out = resolveRequest('set-ads-strategy', {}, preview, ctx)
+    expect(out.changes).toEqual([
+      { label: 'Highest bid', from: '€1.50', to: '€2.00' },
+      { label: 'Target', from: 'not set', to: 'ACoS 25%' },
+      { label: 'Temporary stop', from: 'not set', to: 'low bids at the 2-cent floor' },
+      { label: 'Own target ACoS · Test helmets', from: '28%', to: 'not set' },
+    ])
+    expect(out.summary).toBe('Raises the market strategy for Amazon IT: 4 settings; it raises Highest bid.')
+    expect(out).toMatchObject({ channel: 'AMAZON', market: 'IT', target: { kind: 'other', name: 'Ads strategy · IT market', href: '/marketing/ads/rules-automation/control-room?tab=strategy&market=IT' } })
+    // A market Amazon's limits table does not know: cents, never a guessed currency.
+    const elsewhere = resolveRequest('set-ads-strategy', {}, { ...preview, scope: { ...preview.scope, market: 'ZZ', label: 'ZZ market' } }, ctx)
+    expect(elsewhere.changes[0]).toEqual({ label: 'Highest bid', from: '150 cents', to: '200 cents' })
+  })
 })
 
 describe('Where — a change to Nexus’s own record', () => {

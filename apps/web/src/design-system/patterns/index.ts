@@ -45,3 +45,5 @@ export type { SectionLayoutProps, SectionLayoutValue, SectionSpec, SectionWidth 
 export { emitPrefsChanged, onPrefsChanged } from './prefs-bus'
 
 export { WorkspaceSubheader, type WorkspaceSubheaderProps, type WorkspaceNavItem, type WorkspaceNavGroup } from './WorkspaceSubheader'
+// Ads autonomy W1-4 (2026-10-06) — the fresh authenticator code before a raise; promoted from Settings › AI › Claude.
+export { StepUpModal, type StepUpModalProps } from './StepUpModal'

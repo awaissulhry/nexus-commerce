@@ -34,6 +34,7 @@ import { GuardrailsTab } from './GuardrailsTab'
 import { ActivityTab } from './ActivityTab'
 import { TodayTab } from './TodayTab'
 import { ForesightTab } from './ForesightTab'
+import { StrategyTab } from './strategy/StrategyTab'
 import { LeverDrawer } from './LeverDrawer'
 import type { LeverControl } from './lever-control'
 import { accountStatus, dialMove, DIAL_LABEL, DIAL_LEVELS, isDial, type AccountGlobal } from './dialState'
@@ -74,12 +75,13 @@ const ago = (iso: string | null) => {
 export function ControlRoomClient() {
   const params = useSearchParams()
   const raw = params.get('tab')
-  const tab: 'today' | 'foresight' | 'levers' | 'guardrails' | 'activity' =
+  const tab: 'today' | 'strategy' | 'foresight' | 'levers' | 'guardrails' | 'activity' =
     raw === 'guardrails' ? 'guardrails'
       : raw === 'activity' ? 'activity'
         : raw === 'levers' ? 'levers'
           : raw === 'foresight' ? 'foresight'
-            : 'today'
+            : raw === 'strategy' ? 'strategy'
+              : 'today'
   const [engines, setEngines] = useState<Engine[] | null>(null)
   const [global, setGlobal] = useState<AccountGlobal | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -221,7 +223,9 @@ export function ControlRoomClient() {
       {/* Deep-linkable, like every other tab bar in this console: a tab you cannot bookmark
           or send to someone is a tab that only exists while you are looking at it. */}
       <nav className="acr-tabs" role="tablist" aria-label="Control Room views">
-        {(['today', 'foresight', 'levers', 'guardrails', 'activity'] as const).map((t) => (
+        {/* ADS AUTONOMY W1-4 — Strategy sits after Today (Owner decision 2026-10-06): the dial, the engines and the
+            guardrails it steers are its neighbours. */}
+        {(['today', 'strategy', 'foresight', 'levers', 'guardrails', 'activity'] as const).map((t) => (
           <Link
             key={t}
             href={`/marketing/ads/rules-automation/control-room?tab=${t}`}
@@ -230,12 +234,12 @@ export function ControlRoomClient() {
             className={`acr-tab ${tab === t ? 'on' : ''}`}
             scroll={false}
           >
-            {t === 'today' ? 'Today' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
+            {t === 'today' ? 'Today' : t === 'strategy' ? 'Strategy' : t === 'foresight' ? 'Foresight' : t === 'levers' ? 'Levers' : t === 'guardrails' ? 'Guardrails' : 'Activity'}
           </Link>
         ))}
       </nav>
 
-      {tab === 'today' ? <TodayTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
+      {tab === 'today' ? <TodayTab /> : tab === 'strategy' ? <StrategyTab /> : tab === 'foresight' ? <ForesightTab /> : tab === 'guardrails' ? <GuardrailsTab /> : tab === 'activity' ? <ActivityTab /> : <>
       <div className="acr-sec-head">
         <h2>Engines</h2>
         <span className="acr-sec-count">

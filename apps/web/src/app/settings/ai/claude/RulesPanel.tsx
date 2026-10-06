@@ -32,7 +32,7 @@ import {
   type ClaudeTrust,
   type Raise,
 } from './claudeWords'
-import { StepUpModal } from './StepUpModal'
+import { StepUpModal } from '@/design-system/patterns'
 
 interface RulesActions {
   busy: boolean
