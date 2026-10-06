@@ -1,7 +1,10 @@
 /**
- * Stored ORDER_CONFIRMATION execution. Admission routes a verified order notice to the business that
- * owns its seller id and stores it on that seller's account; this runs it only when
- * NEXUS_ENABLE_EBAY_ORDER_NOTICES=1 (ebay-processing-policy.ts), otherwise the receipt stays held.
+ * Stored ORDER_CONFIRMATION execution. Notices arrive for the sellers subscribed to the topic (the
+ * per-seller subscription is set up by cx/connectors/ebay/notifications.ts). Admission routes a verified
+ * order notice to the business that owns its seller id and stores it on that seller's account, unless
+ * the account needs Reconnect (then it is quarantined). This runs it only when
+ * NEXUS_ENABLE_EBAY_ORDER_NOTICES=1 (ebay-processing-policy.ts); otherwise the receipt stays held.
+ * A read held for sign-in ends as a dead letter after EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS.
  *
  * One receipt names one seller and one order on one account. A notice whose seller is not the
  * account's seller is refused before any read. The order is read back with THAT account's own
