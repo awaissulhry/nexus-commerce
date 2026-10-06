@@ -353,7 +353,9 @@ const decideSuggestions: AgentTool = {
     'suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is halted. An ' +
     'applied Amazon suggestion is written as its rule, under this request: undo-change puts its bids, budgets and placements ' +
     'back and retires the negatives it created (undo-ad-change of its changeSetId); keywords it created stay. One decided by ' +
-    'rule never takes a placement lane the hourly bid plans hold. restore puts dismissed Amazon suggestions back to waiting.',
+    'rule never takes a placement lane the hourly bid plans hold. One its rule passes over (such a lane, a protected product, ' +
+    'a campaign its picker leaves out …) writes nothing: it is said as skipped, with why, and keeps waiting. restore puts ' +
+    'dismissed Amazon suggestions back to waiting.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -397,7 +399,7 @@ const decideSuggestions: AgentTool = {
   async execute(args, ctx) {
     const decisions = args.decisions as Array<{ suggestionId: string; decide: 'apply' | 'dismiss' | 'restore' }>
     const kind = args.kind as DecideKind
-    let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null }>
+    let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null; skipped?: true }>
     let set: Pick<DecisionChange, 'changeSetId' | 'negatives'> | null = null
     if (kind === 'ebay-ads') {
       const crud = await import('../../marketing/ebay-ads-rule-crud.service.js')
@@ -426,7 +428,8 @@ const decideSuggestions: AgentTool = {
     if (!results.some((r) => r.ok)) return { ok: false, error: results.map((r) => `${r.suggestionId}: ${r.detail ?? 'refused'}`).join('; ') }
     return {
       ok: true,
-      data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok).length, ...(set ? { changeSetId: set.changeSetId } : {}) },
+      // AA-W2-10 — a suggestion its rule passed over is said as skipped (with why), never as decided.
+      data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok && !r.skipped).length, skipped: results.filter((r) => r.skipped).length, ...(set ? { changeSetId: set.changeSetId } : {}) },
       change: {
         before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })) },
         after: { kind, items: results.map((r) => ({ id: r.suggestionId, status: r.status })), ...(set ?? {}) },
