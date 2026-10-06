@@ -104,21 +104,24 @@ describe('A4 — set-target-bid previews what lands, where, in which currency', 
     expect(r.preview).toMatchObject({ proposedBidCents: 200, effectiveBidCents: 68, clampedBy: expect.stringContaining('max-change'), deltaCents: 23 })
   })
 
-  it('live: an allowlisted campaign lands on its Amazon Ads profile; one off the allowlist is refused and not queued', async () => {
+  it('live: it lands on the Amazon Ads profile; 4A — off the allowlist it lands too (an approved request is his click); a market Nexus does not send to is refused and not queued', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
     const ok = await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 50 })
     expect(ok.preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' }, reachNote: expect.stringContaining('P-IT-TEST') })
     const off = await preview('set-target-bid', { targetId: 't-off', proposedBidCents: 40 })
-    expect(off).toEqual({ ok: false, error: expect.stringMatching(/^Not queued: .*live-write allowlist.*set-campaign-live-writes/) })
+    expect(off.preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' } })
+    const uk = await preview('set-target-bid', { targetId: 't-uk', proposedBidCents: 70 })
+    expect(uk).toEqual({ ok: false, error: expect.stringMatching(/^Not queued: .*does not change ads in UK/) })
     const before = await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"')
-    const asked = await ask('set-target-bid', { targetId: 't-off', proposedBidCents: 40 })
-    expect(asked).toMatchObject({ ok: false, mode: 'error', error: expect.stringContaining('allowlist') })
+    const asked = await ask('set-target-bid', { targetId: 't-uk', proposedBidCents: 70 })
+    expect(asked).toMatchObject({ ok: false, mode: 'error', error: expect.stringContaining('UK') })
     expect(await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"')).toEqual(before)
   })
 
-  it('refuses the floor, a pin, a non-SP campaign, a negative, a raise of a suppressed or floored bid', async () => {
+  it('refuses the floor, a non-SP campaign, a negative, a raise of a suppressed or floored bid (a pin no longer, 4A)', async () => {
     expect((await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 4 })).error).toMatch(/below the 5c floor/)
-    expect((await preview('set-target-bid', { targetId: 't-pin', proposedBidCents: 50 })).error).toMatch(/^authority pin: .*held by hand for a test/)
+    // 4A — a pin no longer refuses a request a person approves (his own click).
+    expect((await preview('set-target-bid', { targetId: 't-pin', proposedBidCents: 50 })).ok).toBe(true)
     expect((await preview('set-target-bid', { targetId: 't-sb', proposedBidCents: 50 })).error).toMatch(/not a Sponsored Products campaign/)
     expect((await preview('set-target-bid', { targetId: 't-neg', proposedBidCents: 50 })).error).toMatch(/not found \(or is a negative\)/)
     expect((await preview('set-target-bid', { targetId: 't-sup', proposedBidCents: 30 })).error).toMatch(/is suppressed .*Restoring the campaign lifts it/)
@@ -246,10 +249,10 @@ describe('A5 — create-negative-keyword: ad-group negatives only, executed once
     await inside(() => database.client.adKeywordProtection.deleteMany({ where: { term: 'xavia gale' } }))
   })
 
-  it('live: off the allowlist it is refused and not queued; createNegative with the campaign binds the allowlist too', async () => {
+  it('live: 4A — off the allowlist an approved request still lands (his click); createNegative from an engine is bound by the allowlist', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-off', keywordText: 'cheap', externalAdGroupId: 'EXT-g-c-off' })).error)
-      .toMatch(/^Not queued: .*live-write allowlist/)
+    expect((await preview('create-negative-keyword', { externalCampaignId: 'EXT-c-off', keywordText: 'cheap', externalAdGroupId: 'EXT-g-c-off' })).preview)
+      .toMatchObject({ reach: { reach: 'live' } })
     const { createNegative } = await import('../../advertising/ads-negative-kw.service.js')
     const denied = await inside(() => createNegative({ profileId: 'P-IT-TEST', externalCampaignId: 'EXT-c-off', externalAdGroupId: 'EXT-g-c-off', keywordText: 'cheap', matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: 'IT', nexusCampaignId: 'c-off' }))
     expect(denied).toMatchObject({ ok: false, denied: { deniedAt: 'campaign_allowlist' } })
@@ -300,9 +303,10 @@ describe('A5 — graduate-keyword: into the named or resolved ad group, executed
     await inside(() => database.client.adsHarvestDestination.deleteMany({}))
   })
 
-  it('refuses no ad group to go to, a pin, an existing exact keyword, a non-SP destination', async () => {
+  it('refuses no ad group to go to, an existing exact keyword, a non-SP destination (a pin no longer, 4A)', async () => {
     expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it' })).error).toMatch(/^Name the ad group to add the keyword to/)
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-pin', destExternalAdGroupId: 'EXT-g-c-pin' })).error).toMatch(/^authority pin/)
+    // 4A — a pin no longer refuses a request a person approves.
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-pin', destExternalAdGroupId: 'EXT-g-c-pin' })).ok).toBe(true)
     expect((await preview('graduate-keyword', { query: 'race jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })).error).toMatch(/already exists/)
     expect((await preview('graduate-keyword', { query: 'x', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-sb', destExternalAdGroupId: 'EXT-g-c-sb' })).error).toMatch(/not a Sponsored Products campaign/)
   })

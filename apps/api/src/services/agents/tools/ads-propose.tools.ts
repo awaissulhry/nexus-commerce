@@ -18,7 +18,6 @@
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
  */
 import prisma from '../../../db.js'
-import { pinDenial } from '../../advertising/ads-authority-pins.js'
 import { negativeKeywordTextProblem, protectedNegativeRefusal } from '../../advertising/ads-negation-policy.js'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -251,6 +250,7 @@ const createNegativeKeyword: AgentTool = {
       matchType: p.matchType,
       profileId,
       userId: run.actor,
+      manual: run.manual, // 4A — a person approved it: his own click
     })
     if (made.refusal) return notRun(`Not run: Amazon's write gate refused it — ${made.refusal.reason}. Nothing changed.`)
     if (made.outcome === 'failed') return notRun(`Not run: the negative keyword did not reach Amazon — ${made.error}. Nothing changed.`)
@@ -316,13 +316,7 @@ async function graduationPreview(args: Record<string, unknown>): Promise<ToolRes
   let campaign = destNamed ? await campaignByExternalId(destExternalCampaignId) : source
   if (!campaign) return { ok: false, error: `campaign ${destExternalCampaignId} not found` }
 
-  // Creating a keyword sets a bid — the bids pin governs.
-  const pinned = (c: CampaignRow) => {
-    const denial = pinDenial(c, { dimensions: ['bids'] })
-    return denial ? `authority pin: ${denial.reason}${c.pinNote ? ` (${c.pinNote})` : ''}` : null
-  }
-  const destPin = pinned(campaign)
-  if (destPin) return { ok: false, error: destPin }
+  // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
 
   const existingIn = async (externalCampaignId: string) => prisma.adTarget.findMany({
     where: {
@@ -346,8 +340,6 @@ async function graduationPreview(args: Record<string, unknown>): Promise<ToolRes
     const resolvedCampaign = await prisma.campaign.findFirst({ where: { id: group.campaignId }, select: { externalCampaignId: true } })
     campaign = resolvedCampaign?.externalCampaignId ? await campaignByExternalId(resolvedCampaign.externalCampaignId) : null
     if (!campaign) return { ok: false, error: 'the resolved destination campaign was not found' }
-    const pin = pinned(campaign)
-    if (pin) return { ok: false, error: pin }
     if ((await existingIn(resolvedCampaign!.externalCampaignId!)).length > 0) {
       return { ok: false, error: `an EXACT keyword for "${query}" already exists in the destination campaign` }
     }
@@ -459,6 +451,8 @@ const graduateKeyword: AgentTool = {
       bidEur: p.suggestedBidCents / 100,
       userId: run.actor,
       evidence: { metric: 'claudeRequest', note: run.reason },
+      manual: run.manual, // 4A
+      confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
     if (made.existed) return notRun(`Not run: an EXACT keyword for "${p.query}" appeared in that ad group meanwhile. Nothing changed.`)
     const live = p.reach.reach === 'live'
@@ -531,13 +525,7 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
   const campaign = target.adGroup.campaign
   const notSp = spOnlyRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
-  const denial = pinDenial(campaign, { dimensions: ['bids'] })
-  if (denial) {
-    return {
-      ok: false,
-      error: `authority pin: ${denial.reason}${campaign.pinNote ? ` (${campaign.pinNote})` : ''}`,
-    }
-  }
+  // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
   const currentBidCents = target.bidCents ?? 0
   // The bid that lands: the CPC ceiling first (as the bid routes apply it), then the campaign's max-change guardrail.
   const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: target.id, bidCents: proposedBidCents }])
@@ -645,6 +633,8 @@ const setTargetBid: AgentTool = {
       actor: run.actor,
       reason: run.reason,
       changeSetId: run.changeSetId,
+      manual: run.manual, // 4A
+      confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
     if (!out.ok) return notRun(`Not run: the bid write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
     const written = await prisma.adTarget.findFirst({ where: { id: p.target.id }, select: { bidCents: true } })
