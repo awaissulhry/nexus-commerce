@@ -487,8 +487,8 @@ const tally = <T, K extends string>(xs: T[], f: (x: T) => K | null): Array<{ val
  * resolved for (ad group → campaign → portfolio → line → the market's own row), as the saved policy's grains do. Null
  * unless exactly one market is in view.
  */
-async function strategyHarvestOf(req: HvScopeRequest) {
-  const markets = parseMarketScope(req.market)
+async function strategyHarvestOf(req: HvScopeRequest, read: readonly string[]) {
+  const markets = parseMarketScope(req.market, read)
   if (markets.kind !== 'list' || markets.codes.length !== 1) return null
   const market = markets.codes[0]
   if (req.adGroup) return harvestForScope(market, { adGroupId: req.adGroup })
@@ -516,7 +516,8 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   // in force (fields.ts harvestStricter: a tie goes to the strategy), each WHOLE, never mixed field by field. The
   // strategy is set per market, so it applies when ONE market is in view — as a market's saved policy does not leak
   // into the account-wide view. The URL still overrides on top, for this view only.
-  const strategy = await strategyHarvestOf(req)
+  const readMarkets = await adsReadMarkets()
+  const strategy = await strategyHarvestOf(req, readMarkets)
   const strategyBinds = !!strategy && !harvestStricter(policy.criteria, strategy.group)
   const pc: HarvestCriteria = strategyBinds
     ? { minOrders: strategy!.group.minOrders, minClicks: strategy!.group.minClicks, maxAcosPct: strategy!.group.maxAcosPct, windowDays: strategy!.group.windowDays, excludeExactMatched: policy.criteria.excludeExactMatched }
@@ -550,7 +551,6 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
 
   // The fifth picker's universe: ad groups that hold a term in the window. Two steps, because
   // AmazonAdsSearchTerm carries EXTERNAL ids and AdGroup is keyed locally.
-  const readMarkets = await adsReadMarkets()
   const termAdGroups = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['adGroupId'],
     where: { date: { gte: since }, ...marketWhere(req.market, readMarkets) },

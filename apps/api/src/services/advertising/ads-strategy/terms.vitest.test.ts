@@ -80,6 +80,8 @@ beforeAll(async () => {
     ids.r = (await c.product.create({ data: { sku: 'TEST-T-R', name: 'Test plain', basePrice: '10.00', amazonAsin: 'B0TESTR001' } })).id
     await c.productCategory.create({ data: { productId: ids.parent, categoryId: ids.leaf, isPrimary: true } })
 
+    // The Keyword Harvest read serves the markets whose Amazon Ads account Nexus reads.
+    await c.amazonAdsConnection.create({ data: { profileId: 'P-TEST-IT', marketplace: 'IT', isActive: true } })
     const campaign = (name: string, marketplace: string, externalCampaignId: string) =>
       c.campaign.create({ data: { name, type: 'SP', marketplace, dailyBudget: '10.00', startDate: new Date(), externalCampaignId, targetingType: 'MANUAL', adProduct: 'SPONSORED_PRODUCTS' } as never })
     const adGroup = (campaignId: string, name: string, externalAdGroupId: string) => c.adGroup.create({ data: { campaignId, name, externalAdGroupId } as never })
