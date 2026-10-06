@@ -126,6 +126,19 @@ export async function unmuteRecommendations(ids: string[]): Promise<number> {
 }
 
 /**
+ * The change that carried these recommendations out was put back (undone): its settles go, so the feed offers them again
+ * at once. Only the settles of that request; a person's mute stays. Returns how many were removed.
+ */
+export async function unsettleRecommendations(ids: string[], approvalId: string): Promise<number> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (!unique.length || !approvalId) return 0
+  const { count } = await prisma.adsSuggestionMute.deleteMany({
+    where: { scope: RECOMMENDATION_SCOPE, entityType: RECOMMENDATION_ENTITY, entityId: { in: unique }, createdBy: `${SETTLED_BY}${approvalId}` },
+  })
+  return count
+}
+
+/**
  * A request carried these recommendations out: settle each, so the feed does not offer it again until the data moves.
  * A person's mute stays as it is. Returns how many were settled.
  */

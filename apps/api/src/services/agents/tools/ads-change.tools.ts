@@ -25,6 +25,8 @@
  *                                   a Claude request created (AA-W2-9)
  *   undo-ad-change (A10)   puts back an ad change: an approved request's whole change set (changeSetId = its approval
  *                          id) or one recorded change (actionLogId, from ad-changes), through the rollback service;
+ *                          W3-1 — or, with changeId, only what ONE recorded change of the request did (a step of a
+ *                          change plan: the writes and negatives that step recorded, not its siblings');
  *                          negatives the request created are retired (archived at Amazon — that removes a block, it
  *                          stops no ad). AA-W2-9 — its own writes carry its approval as their change set, so it can be
  *                          undone in turn (retired negatives are not created again).
@@ -55,7 +57,8 @@ import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, re
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
-import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, withSource, type AdChangeSource } from './ads-change-source.js'
+import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource } from './ads-change-source.js'
+import { afterUndone } from '../change-record.service.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -211,11 +214,14 @@ const rowOut = (log: { id: string; actionType: string; entityType: string; entit
   at: log.createdAt.toISOString(),
 })
 
-/** The negatives an approved request created (its recorded change), still standing — undo retires them. */
-async function negativesCreatedBy(changeSetId: string): Promise<UndoNegative[]> {
-  const change = await prisma.agentChange.findFirst({ where: { approvalId: changeSetId }, orderBy: { executedAt: 'desc' }, select: { after: true } })
-  const listed = ((change?.after ?? null) as { negatives?: Array<{ targetId?: unknown; keywordText?: unknown }> } | null)?.negatives ?? []
-  const ids = listed.map((n) => String(n.targetId ?? '')).filter(Boolean)
+/**
+ * The negatives an approved request created (its recorded changes), still standing — undo retires them. W3-1 — every
+ * change of the request (a change plan records one per step), or only the one named (`changeId`).
+ */
+async function negativesCreatedBy(changeSetId: string, changeId?: string): Promise<UndoNegative[]> {
+  const changes = await prisma.agentChange.findMany({ where: { approvalId: changeSetId, ...(changeId ? { id: changeId } : {}) }, select: { after: true } })
+  const listed = changes.flatMap((c) => ((c.after ?? null) as { negatives?: Array<{ targetId?: unknown; keywordText?: unknown }> } | null)?.negatives ?? [])
+  const ids = [...new Set(listed.map((n) => String(n.targetId ?? '')).filter(Boolean))]
   if (!ids.length) return []
   // 5f — status decides, as in retireNegatives: a stale `retiredAt` from a failed retire blocks nothing.
   const standing = await prisma.adTarget.findMany({
@@ -228,8 +234,13 @@ async function negativesCreatedBy(changeSetId: string): Promise<UndoNegative[]> 
 async function undoPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const changeSetId = typeof args.changeSetId === 'string' ? args.changeSetId.trim() : ''
   const actionLogId = typeof args.actionLogId === 'string' ? args.actionLogId.trim() : ''
+  const changeId = typeof args.changeId === 'string' ? args.changeId.trim() : ''
   if (!changeSetId && !actionLogId) {
     return { ok: false, error: 'Name the ad change to undo: changeSetId (the approvalId of an approved ad request) or actionLogId (undoActionLogId in ad-changes).' }
+  }
+  if (changeId) {
+    if (actionLogId) return { ok: false, error: 'Name one way: a changeId of the change set, or an actionLogId — not both.' }
+    return undoOneChange(changeSetId, changeId, ctx)
   }
   let setId = changeSetId
   if (actionLogId) {
@@ -258,6 +269,29 @@ async function undoPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext
     return { ok: false, error: known ? `Nothing of change set ${setId} is left to undo: it was undone already.` : 'Change set not found.' }
   }
   return finish({ mode: 'set', changeSetId: setId }, inWindow.map(rowOut), negatives, inWindow.length, ctx)
+}
+
+/**
+ * W3-1 — the undo of ONE recorded change of a request (a step of a change plan): only the writes it recorded
+ * (`before.actionLogIds`) and the negatives it created — never its siblings' writes, which share the plan's change set.
+ */
+async function undoOneChange(changeSetId: string, changeId: string, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
+  if (!changeSetId) return { ok: false, error: 'A changeId names a change of a change set: name that changeSetId too.' }
+  const change = await prisma.agentChange.findFirst({ where: { id: changeId, approvalId: changeSetId }, select: { before: true, undoneAt: true } })
+  if (!change) return { ok: false, error: 'That change is not found in that change set.' }
+  if (change.undoneAt) return { ok: false, error: 'Not undone: that change was undone already.' }
+  const recorded = (change.before as { actionLogIds?: unknown } | null)?.actionLogIds
+  const ids = Array.isArray(recorded) ? recorded.filter((id): id is string => typeof id === 'string') : []
+  const logs = ids.length
+    ? await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId, id: { in: ids }, rolledBackAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] })
+    : []
+  const inWindow = logs.filter((l) => l.createdAt.getTime() >= Date.now() - SET_WINDOW_MS)
+  const negatives = await negativesCreatedBy(changeSetId, changeId)
+  if (!inWindow.length && !negatives.length) {
+    if (logs.length) return { ok: false, error: `Not undone: that change is older than the 24-hour undo window for a change set. Ask for the opposite change instead.` }
+    return { ok: false, error: `Nothing of that change is left to undo: ${ids.length ? 'it was undone already' : 'it recorded no write of its own'}.` }
+  }
+  return finish({ mode: 'change', changeSetId, changeId }, inWindow.map(rowOut), negatives, inWindow.length, ctx)
 }
 
 async function finish(source: Record<string, unknown>, rows: UndoRow[], negatives: UndoNegative[], total: number, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
@@ -289,6 +323,13 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   }
 }
 
+/** W3-1 — the writes one recorded change made (`before.actionLogIds`, kept by the tools whose steps share a plan's set). */
+async function recordedWritesOf(changeId: string): Promise<string[]> {
+  const change = await prisma.agentChange.findUnique({ where: { id: changeId }, select: { before: true } })
+  const recorded = (change?.before as { actionLogIds?: unknown } | null)?.actionLogIds
+  return Array.isArray(recorded) ? recorded.filter((id): id is string => typeof id === 'string') : []
+}
+
 /** AA-W2-9 — the writes of an undo still standing (its change set, not reversed since). */
 async function undoWritesStanding(changeSetId: string): Promise<{ changeSetId: string; standing: number }> {
   const standing = await prisma.advertisingActionLog.count({ where: { executionId: changeSetId, rolledBackAt: null } })
@@ -318,6 +359,8 @@ const undoAdChange: AgentTool = {
       .describe('the change set to put back: the approvalId of an approved ad request (its writes carry it), or an import\'s change set'),
     actionLogId: z.string().trim().min(1).max(64).optional()
       .describe('one recorded change to put back (undoActionLogId in ad-changes); a change in a set reverses with its whole set'),
+    changeId: z.string().trim().min(1).max(64).optional()
+      .describe('with changeSetId: only what this recorded change of the request did (a step of a change plan; undo-change sets it)'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the approver and kept in the ads audit'),
   }),
   requires: [F.adsBidsEdit, F.adsBudgetsEdit, FIELDS.financialsAdspendView],
@@ -338,7 +381,8 @@ const undoAdChange: AgentTool = {
   undo: UNDO_AD_CHANGE_UNDO,
   description:
     'Put back an Amazon ad change: every write of an approved ad request (changeSetId = its approvalId) or one '
-    + 'recorded change (actionLogId from ad-changes). Bids, budgets and placements return to the values before them '
+    + 'recorded change (actionLogId from ad-changes), or — with changeId — only what one step of a change plan did. '
+    + 'Bids, budgets and placements return to the values before them '
     + 'through the rollback service (within 24 hours for a change set); negative keywords the request created are '
     + `retired. Nothing changes until it is approved. ${BY_RULE_WORDS}: each value it puts back no larger a move than its `
     + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
@@ -352,14 +396,18 @@ const undoAdChange: AgentTool = {
     const fresh = await undoPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['source', 'rows', 'negatives'])
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { source: { mode: 'set' | 'action'; changeSetId?: string; actionLogId?: string }; rows: UndoRow[]; negatives: UndoNegative[]; effect: string }
+    const p = fresh.preview as { source: { mode: 'set' | 'action' | 'change'; changeSetId?: string; actionLogId?: string; changeId?: string }; rows: UndoRow[]; negatives: UndoNegative[]; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     // AA-W2-9 — the reversal's own writes carry this request as their change set (F11): it can be undone in turn.
     const rollback = p.rows.length
-      ? p.source.mode === 'set'
-        ? await rollbackByChangeSetId({ changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
-        : await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
+      ? p.source.mode === 'action'
+        ? await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
+        // W3-1 — one change of the set: only the writes it recorded (the preview read them all, not only those shown).
+        : await rollbackByChangeSetId({
+          changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId,
+          ...(p.source.mode === 'change' ? { actionLogIds: await recordedWritesOf(p.source.changeId!) } : {}),
+        })
       : null
     let retired: { retired: number; refused: number; failed: number } | null = null
     if (p.negatives.length) {
@@ -367,12 +415,13 @@ const undoAdChange: AgentTool = {
       const out = await retireNegatives({ adTargetIds: p.negatives.map((n) => n.targetId), actor: run.actor, retireReason: run.reason })
       retired = { retired: out.summary.retired + out.summary.removedLocal, refused: out.summary.refused, failed: out.summary.failed }
     }
-    // The request this put back is undone now (also when it was asked for directly, not through undo-change).
-    if (p.source.mode === 'set' && p.source.changeSetId) {
-      await prisma.agentChange.updateMany({
-        where: { approvalId: p.source.changeSetId, undoneAt: null },
-        data: { undoneAt: new Date(), undoneByApprovalId: run.changeSetId },
-      })
+    // The request this put back is undone now (also when it was asked for directly, not through undo-change). W3-1 —
+    // one change of it only, when that is what was put back; and what each left outside its rows (settles) is tidied.
+    if (p.source.mode !== 'action' && p.source.changeSetId) {
+      const where = { approvalId: p.source.changeSetId, undoneAt: null, ...(p.source.mode === 'change' ? { id: p.source.changeId } : {}) }
+      const marked = await prisma.agentChange.findMany({ where, select: { id: true, toolName: true, before: true, after: true } })
+      await prisma.agentChange.updateMany({ where, data: { undoneAt: new Date(), undoneByApprovalId: run.changeSetId } })
+      await afterUndone(marked)
     }
     const failed = (rollback?.failed ?? 0) + (retired?.failed ?? 0) + (retired?.refused ?? 0)
     const data = {
@@ -495,6 +544,7 @@ export const SET_CAMPAIGN_BUDGET_UNDO: ToolUndo = {
     if (!before.campaignId || !(Number(before.dailyBudgetCents) > 0)) return { refusal: 'This change does not record the budget it replaced.' }
     return { tool: 'set-campaign-budget', args: { campaignId: before.campaignId, dailyBudgetCents: before.dailyBudgetCents, why: 'undo of an earlier budget change' } }
   },
+  undone: unsettleChange,
 }
 
 const setCampaignBudget: AgentTool = {
@@ -564,7 +614,7 @@ const setCampaignBudget: AgentTool = {
         note: 'Queued for Amazon: it is sent after the 5-minute cancel window. approval-status follows it.',
       },
       change: {
-        before: { campaignId: p.campaign.id, dailyBudgetCents: p.currentBudgetCents, changeSetId: run.changeSetId },
+        before: { campaignId: p.campaign.id, dailyBudgetCents: p.currentBudgetCents, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) },
         after: { campaignId: p.campaign.id, dailyBudgetCents: p.proposedBudgetCents },
       },
     }
@@ -930,7 +980,11 @@ const countBy = (list: Array<{ why: Exclusion }>) => {
   return out
 }
 
-/** C2 — undo of a bulk bid change: undo-ad-change reverses its change set as one (never a part of it). */
+/**
+ * C2 — undo of a bulk bid change: undo-ad-change reverses its writes as one (never a part of them). W3-1 — a change that
+ * recorded its own writes is named by its id, so only they are reversed (in a change plan every step shares the plan's
+ * set); an older record reverses the whole set, as before.
+ */
 export const BULK_BID_UNDO: ToolUndo = {
   async current(change) {
     const ids = Object.keys(((change.after as { bids?: Record<string, number> } | null)?.bids) ?? {})
@@ -940,8 +994,10 @@ export const BULK_BID_UNDO: ToolUndo = {
   request(change) {
     const changeSetId = (change.before as { changeSetId?: unknown } | null)?.changeSetId
     if (typeof changeSetId !== 'string' || !changeSetId) return { refusal: 'This change does not name the request that made it.' }
-    return { tool: 'undo-ad-change', args: { changeSetId, why: 'undo of a bulk bid change' } }
+    const own = change.id && Array.isArray((change.before as { actionLogIds?: unknown }).actionLogIds)
+    return { tool: 'undo-ad-change', args: { changeSetId, ...(own ? { changeId: change.id } : {}), why: 'undo of a bulk bid change' } }
   },
+  undone: unsettleChange,
 }
 
 const bulkAdBidChange: AgentTool = {
@@ -1018,7 +1074,12 @@ const bulkAdBidChange: AgentTool = {
       ...(out.failed ? { error: `Partly run: ${out.applied} queued, ${out.failed} refused by the bid write. Undo-change reverses what was queued.` } : {}),
       data: { applied: out.applied, skipped: out.skipped, failed: out.failed, reach: p.reach, changeSetId: run.changeSetId, note: 'Queued for Amazon: each bid is sent after the 5-minute cancel window. approval-status follows them.' },
       change: {
-        before: { changeSetId: run.changeSetId, bids: sorted(going.map((g) => ({ id: g.targetId, bidCents: g.fromCents }))) },
+        // W3-1 — the writes this change made (its undo reverses only them) and the recommendations it settled.
+        before: {
+          changeSetId: run.changeSetId, bids: sorted(going.map((g) => ({ id: g.targetId, bidCents: g.fromCents }))),
+          actionLogIds: out.outcomes.map((o) => o.actionLogId).filter((id): id is string => !!id),
+          ...sourcesRecord(going.filter((g, i) => out.outcomes[i]?.ok).map((g) => g.source)),
+        },
         after: { bids: sorted(now) },
       },
     }
@@ -1123,6 +1184,7 @@ const suppressCampaign: AgentTool = {
       const campaignId = (change.after as { campaignId?: unknown } | null)?.campaignId
       return typeof campaignId === 'string' && campaignId ? { tool: 'restore-campaign', args: { campaignId, why: 'undo of a suppression' } } : { refusal: 'This change does not name its campaign.' }
     },
+    undone: unsettleChange,
   },
   description:
     'Stop an Amazon Sponsored Products campaign the Nexus way: never paused — every keyword and target bid and every ad '
@@ -1152,7 +1214,7 @@ const suppressCampaign: AgentTool = {
     return {
       ok: true,
       data: { campaignId: p.campaign.id, moved, reach: p.reach, changeSetId: run.changeSetId, note: 'Bids floored and remembered; each lowered bid is sent to Amazon at once.' },
-      change: { before: { campaignId: p.campaign.id, suppressed: false, by: null, changeSetId: run.changeSetId }, after: now },
+      change: { before: { campaignId: p.campaign.id, suppressed: false, by: null, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) }, after: now },
     }
   },
 }

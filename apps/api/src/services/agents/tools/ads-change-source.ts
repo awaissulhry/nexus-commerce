@@ -13,21 +13,25 @@
  *              "from the bid optimizer".
  *   settled    once the write ran, the recommendation is settled (ads-recommendation-mutes.service.ts): the feed does
  *              not offer it again until the data the engines read is a day past the change. A settle that fails is
- *              logged, never a failed change: the write ran.
+ *              logged, never a failed change: the write ran. The change records the ids it settled (`before.sources`);
+ *              when the change is put back, its tool's `undo.undone` (`unsettleChange`) removes those settles, so the
+ *              recommendations are offered again at once.
  */
 import { z } from 'zod'
 import type { AdWriteEvidence } from '../../advertising/ads-evidence.js'
-import { familyOfRecommendationId, settleRecommendations } from '../../advertising/ads-recommendation-mutes.service.js'
+import { familyOfRecommendationId, settleRecommendations, unsettleRecommendations } from '../../advertising/ads-recommendation-mutes.service.js'
+import type { ToolChange } from '../tool-types.js'
 import { logger } from '../../../utils/logger.js'
 
 /** Who produced what a change carries out (W3-5 takes the last three). */
 export const SOURCE_KINDS = ['recommendation', 'rule', 'autopilot', 'tracker'] as const
 export type SourceKind = (typeof SOURCE_KINDS)[number]
-export interface AdChangeSource { kind: SourceKind; id: string }
+export interface AdChangeSource { kind: SourceKind; id: string; windowDays?: number }
 
 const sourceShape = z.object({
   kind: z.enum(SOURCE_KINDS).describe('recommendation: an engine\'s recommendation from ad-recommendations (the only kind taken today)'),
   id: z.string().trim().min(1).max(400).describe('its recommendationId from ad-recommendations, e.g. bid:<targetId>'),
+  windowDays: z.coerce.number().int().min(1).max(90).optional().describe('the window ad-recommendations was read over (its days), when not 30'),
 })
 
 /** The `source` argument of a change tool. */
@@ -80,6 +84,33 @@ export function sourceNote(source: AdChangeSource): string {
 /** The preview's keys for a source: nothing without one. */
 export function sourcePreview(source: AdChangeSource | null): { source?: AdChangeSource; sourceNote?: string } {
   return source ? { source, sourceNote: sourceNote(source) } : {}
+}
+
+/**
+ * Whether ad-recommendations offers this recommendation now (the same feed, over the window it was read): a sentence
+ * when it does not — the data moved, or it is muted or already carried out. Read only; the feed is computed live.
+ */
+export async function notOfferedRefusal(source: AdChangeSource): Promise<string | null> {
+  const { buildRecommendations } = await import('../../advertising/ads-recommendations.service.js')
+  const feed = await buildRecommendations({ windowDays: source.windowDays ?? 30 })
+  if (feed.recommendations.some((r) => r.id === source.id)) return null
+  return `the source names recommendation ${source.id}, which ad-recommendations does not offer now (the data moved, or it is muted or already carried out): read it again`
+}
+
+/** What a change records about the recommendations it settled (`before.sources`): nothing without one. */
+export function sourcesRecord(sources: ReadonlyArray<AdChangeSource | null | undefined>): { sources?: string[] } {
+  const ids = sources.filter((s): s is AdChangeSource => !!s && s.kind === 'recommendation').map((s) => s.id)
+  return ids.length ? { sources: [...new Set(ids)] } : {}
+}
+
+/**
+ * `undo.undone` of every tool here: the change was put back, so the recommendations it settled (`before.sources`, under
+ * the request it ran as, `before.changeSetId`) are offered again at once. A person's mute stays.
+ */
+export async function unsettleChange(change: ToolChange): Promise<void> {
+  const before = (change.before ?? {}) as { sources?: unknown; changeSetId?: unknown }
+  const ids = Array.isArray(before.sources) ? before.sources.filter((id): id is string => typeof id === 'string') : []
+  if (ids.length && typeof before.changeSetId === 'string') await unsettleRecommendations(ids, before.changeSetId)
 }
 
 /** The audit evidence of a write that carries a source out, on top of what the write already records. */

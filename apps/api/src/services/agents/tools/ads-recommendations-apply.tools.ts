@@ -153,7 +153,8 @@ async function waitingRequestsFor(ids: string[]): Promise<Map<string, string>> {
 interface Override { id: string; proposedBidCents?: number; proposedBudgetCents?: number }
 interface ApplyArgs { recommendationIds: string[]; overrides?: Override[]; days: number; why: string }
 
-const source = (id: string): AdChangeSource => ({ kind: 'recommendation', id })
+/** The source a step carries: the recommendation, and the window the feed was read over when it is not the default. */
+const sourceFor = (id: string, days: number): AdChangeSource => ({ kind: 'recommendation', id, ...(days !== 30 ? { windowDays: days } : {}) })
 const harvestOf = (r: Recommendation): HarvestCandidate | null => {
   const p = r.apply?.payload as { negatives?: HarvestCandidate[]; graduations?: HarvestCandidate[] } | undefined
   return p?.negatives?.[0] ?? p?.graduations?.[0] ?? null
@@ -265,6 +266,7 @@ export async function planRecommendations(a: ApplyArgs): Promise<{ ok: true; tit
   if (problems.length) return { ok: false, error: `Nothing was queued — ${problems.join('; ')}.` }
 
   const why = a.why.trim()
+  const source = (id: string) => sourceFor(id, a.days)
   const recs = engineIds.map((id) => feed.get(id)!)
   const of = (family: RecommendationFamily) => recs.filter((r) => families.get(r.id) === family)
   const steps: ToolRequest[] = []

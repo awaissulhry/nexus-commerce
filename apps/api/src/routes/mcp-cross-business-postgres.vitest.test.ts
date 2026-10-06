@@ -978,6 +978,9 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'bulk-ad-bid-change': { percent: 10 },
   // Ads autonomy W3-1 — unmute the recommendation of B's campaign that B muted (its label is B's).
   'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute' }),
+  // W3-1 — undo-ad-change names a recorded write (and its set); `changeId` (one step of a plan's set) is left out: the
+  // loop's changeId is another request's change.
+  'undo-ad-change': { changeId: undefined },
   // The loop's campaignId is the Amazon campaign: read the Amazon log and recommendations (1b aims the eBay ones).
   'ad-changes': { channel: 'amazon' },
   'ad-recommendations': { channel: 'amazon' },

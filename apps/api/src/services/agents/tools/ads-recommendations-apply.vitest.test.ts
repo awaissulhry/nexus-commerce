@@ -93,6 +93,19 @@ async function call(tool: string, args: Record<string, unknown>): Promise<{ isEr
   return { isError: !!result.isError, answer: JSON.parse((result.content as Array<{ text: string }>).map((b) => b.text).join('')) }
 }
 const stepsOf = (approvalId: string) => inside(() => db().agentPlanStep.findMany({ where: { approvalId }, orderBy: { position: 'asc' } }))
+/** A person approves it on the Approvals page, the window closes, and the sweep's commit runs it (a plan: the runner too). */
+async function approveAndRun(approvalId: string) {
+  const parked = await inside(() => decideFleetApproval({ id: approvalId, decision: 'approve', actor: person() }))
+  expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+  await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  const committed = await inside(() => commitScheduledApproval(approvalId))
+  if (committed.status === 'executing') return inside(() => runPlan(approvalId))
+  expect(committed, committed.error).toMatchObject({ ok: true })
+  return null
+}
+const standingNegatives = (text: string) => inside(() => db().adTarget.count({ where: { isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: text } }))
+const budgetOf = async (id: string) => Number((await inside(() => db().campaign.findUniqueOrThrow({ where: { id }, select: { dailyBudget: true } }))).dailyBudget)
+const stateOf = async (id: string) => (await inside(() => recommendationMuteStates([id])))[0].state
 const bidOf = async (id: string) => (await inside(() => db().adTarget.findUniqueOrThrow({ where: { id }, select: { bidCents: true } }))).bidCents
 
 // The engines' recommendations, in the feed's own shapes (ads-recommendations.service.ts).
@@ -238,6 +251,10 @@ describe('W3-1 — apply-ad-recommendations', { timeout: TIMEOUT }, () => {
       .toMatch(/a rule's suggestion is applied with decide-automation-suggestions/)
     expect((await dry('bulk-ad-bid-change', { bids: [{ targetId: 't-bb', bidCents: 50, source: { kind: 'recommendation', id: 'bid:t-it' } }] })).error)
       .toMatch(/^Not queued: target t-bb: the source names recommendation bid:t-it/)
+    // A graduation's source: the ad group it converted in belongs to its campaign, and the feed offers it now.
+    const graduation = (campaign: string, query: string) => ({ query, sourceExternalCampaignId: campaign, sourceExternalAdGroupId: 'EXT-g-c-it', source: { kind: 'recommendation', id: `grad:EXT-g-c-it:${query}` } })
+    expect((await dry('graduate-keyword', graduation('EXT-c-uk', 'race jacket xl'))).error).toBe('Not queued: the source\'s ad group EXT-g-c-it is not in campaign UK exact, where the term converted.')
+    expect((await dry('graduate-keyword', graduation('EXT-c-it', 'helmet bag'))).error).toMatch(/^Not queued: the source names recommendation grad:EXT-g-c-it:helmet bag, which ad-recommendations does not offer now/)
   })
 
   it('once run: the source is on each write\'s audit row, and each recommendation is settled until the data moves', async () => {
@@ -277,6 +294,61 @@ describe('W3-1 — apply-ad-recommendations', { timeout: TIMEOUT }, () => {
   })
 })
 
+describe('W3-1 — undo of what a plan of recommendations did', { timeout: TIMEOUT }, () => {
+  const changeOf = async (approvalId: string, tool: string) => (await stepsOf(approvalId)).find((s) => s.toolName === tool)!.changeId!
+
+  it('undo of the bid step puts back only its bids — not the budget, not the stop — and offers its recommendations again', async () => {
+    const bulk = await changeOf(ids.plan, 'bulk-ad-bid-change')
+    const { isError, answer } = await call('undo-change', { changeId: bulk })
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    const asked = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: answer.approvalId } }))
+    expect(asked).toMatchObject({ toolName: 'undo-ad-change', args: { changeSetId: ids.plan, changeId: bulk } })
+    expect((asked.preview as Answer).rows.map((r: Answer) => r.entityId).sort()).toEqual(['t-aa', 't-it'])
+    await approveAndRun(answer.approvalId)
+    expect([await bidOf('t-it'), await bidOf('t-aa')]).toEqual([45, 50])
+    // The plan's other steps stand: the budget, and the retail stop (its target still at the stop bid).
+    expect(await budgetOf('c-it')).toBe(25)
+    expect(await inside(() => db().campaign.findUniqueOrThrow({ where: { id: 'c-uk' }, select: { bidsSuppressedAt: true } }))).not.toMatchObject({ bidsSuppressedAt: null })
+    expect(await bidOf('t-uk')).toBe(2)
+    expect(await standingNegatives('cheap gloves')).toBe(1)
+    // Its recommendations are offered again at once; the budget's stays settled.
+    expect([await stateOf('bid:t-aa'), await stateOf('budget:c-it')]).toEqual(['shown', 'settled'])
+  })
+
+  it('undo of the negative step retires only its negative', async () => {
+    const negative = await changeOf(ids.plan, 'create-negative-keyword')
+    const { isError, answer } = await call('undo-change', { changeId: negative })
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    const asked = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: answer.approvalId } }))
+    expect(asked.preview).toMatchObject({ rows: [], negatives: [{ keywordText: 'cheap gloves' }] })
+    await approveAndRun(answer.approvalId)
+    expect(await standingNegatives('cheap gloves')).toBe(0)
+    expect(await budgetOf('c-it')).toBe(25)
+    expect(await bidOf('t-uk')).toBe(2)
+    expect(await stateOf('neg:EXT-g-c-it:cheap gloves')).toBe('shown')
+  })
+
+  it('undo of the whole plan puts back every step once, and offers every recommendation again', async () => {
+    feed.current.push(rec.bid('t-off', 27), rec.budget('c-off', 2200), rec.retail('c-pin'), rec.negative('winter gloves'))
+    const ids2 = ['bid:t-bb', 'bid:t-off', 'neg:EXT-g-c-it:winter gloves', 'budget:c-off', 'retail:c-pin']
+    const { isError, answer } = await call('apply-ad-recommendations', { recommendationIds: ids2, why: 'a second round' })
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    const ran = await approveAndRun(answer.approvalId)
+    expect(ran).toMatchObject({ finished: true, counts: { done: 4 } })
+    expect([await bidOf('t-bb'), await bidOf('t-off'), await budgetOf('c-off'), await bidOf('t-pin'), await standingNegatives('winter gloves')]).toEqual([54, 27, 22, 2, 1])
+    expect(await Promise.all(ids2.map(stateOf))).toEqual(ids2.map(() => 'settled'))
+
+    const undo = await call('undo-change', { approvalId: answer.approvalId })
+    expect(undo.isError, JSON.stringify(undo.answer)).toBe(false)
+    const back = await approveAndRun(undo.answer.approvalId)
+    const steps = await stepsOf(undo.answer.approvalId)
+    expect(back, JSON.stringify(steps.map((s) => [s.toolName, s.status, s.reason]))).toMatchObject({ finished: true, counts: { done: 4 } })
+    expect([await bidOf('t-bb'), await bidOf('t-off'), await budgetOf('c-off'), await bidOf('t-pin'), await standingNegatives('winter gloves')]).toEqual([60, 30, 20, 40, 0])
+    expect(await inside(() => db().campaign.findUniqueOrThrow({ where: { id: 'c-pin' }, select: { bidsSuppressedAt: true } }))).toMatchObject({ bidsSuppressedAt: null })
+    expect(await Promise.all(ids2.map(stateOf))).toEqual(ids2.map(() => 'shown'))
+  })
+})
+
 describe('W3-1 — mute-ad-recommendations', { timeout: TIMEOUT }, () => {
   const run = (args: Record<string, unknown>, approvalId: string, approvedPreview: unknown) =>
     inside(() => executeTool(person(), 'mute-ad-recommendations', args, { via: 'claude', approvalId, approvedPreview }))
@@ -302,6 +374,19 @@ describe('W3-1 — mute-ad-recommendations', { timeout: TIMEOUT }, () => {
     const undoPreview = (await inside(() => callTool(person(), back.tool, back.args))).raw.preview
     expect((await run({ ...back.args, days: 30 }, 'ap-undo-test', undoPreview)).raw).toMatchObject({ ok: true })
     expect(await offered()).toContain('bid:t-bb')
+  })
+
+  it('a person\'s mute over a settle makes it a real mute (the Recommendations tab\'s mute goes through the same service)', async () => {
+    const { muteRecommendations, settleRecommendations } = await import('../../advertising/ads-recommendation-mutes.service.js')
+    await inside(() => settleRecommendations(['bid:t-pin'], 'ap-settle-test'))
+    expect(await stateOf('bid:t-pin')).toBe('settled')
+    await inside(() => muteRecommendations([{ id: 'bid:t-pin', label: 'pinned jacket' }], 'operator', 'muted from the Recommendations tab'))
+    const row = await inside(() => db().adsSuggestionMute.findFirstOrThrow({ where: { entityId: 'bid:t-pin' } }))
+    expect(row).toMatchObject({ createdBy: 'operator', reason: 'muted from the Recommendations tab', entityName: 'pinned jacket' })
+    expect(await stateOf('bid:t-pin')).toBe('muted')
+    // A later settle of the same id leaves the person's mute as it is.
+    await inside(() => settleRecommendations(['bid:t-pin'], 'ap-settle-later'))
+    expect(await stateOf('bid:t-pin')).toBe('muted')
   })
 
   it('refused before anything waits: a rule\'s suggestion, an id not recommended now, one not muted; by rule within its limits', async () => {

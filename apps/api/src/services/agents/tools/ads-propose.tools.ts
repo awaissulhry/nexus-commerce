@@ -49,7 +49,7 @@ import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
-import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, withSource } from './ads-change-source.js'
+import { notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -351,7 +351,10 @@ function negativeRuleRefusal(preview: unknown, limits: Record<string, unknown>):
   return null
 }
 
-/** C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). */
+/**
+ * C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). W3-1 — named
+ * by its recorded change, so only THIS negative is retired (in a change plan every step shares the plan's set).
+ */
 export const CREATE_NEGATIVE_UNDO: ToolUndo = {
   async current(change) {
     const listed = ((change.after as { negatives?: Array<{ targetId?: unknown }> } | null)?.negatives ?? []).map((n) => String(n.targetId ?? ''))
@@ -365,8 +368,9 @@ export const CREATE_NEGATIVE_UNDO: ToolUndo = {
   request(change) {
     const changeSetId = (change.before as { changeSetId?: unknown } | null)?.changeSetId
     if (typeof changeSetId !== 'string' || !changeSetId) return { refusal: 'This change does not name the request that made it.' }
-    return { tool: 'undo-ad-change', args: { changeSetId, why: 'undo of a negative keyword' } }
+    return { tool: 'undo-ad-change', args: { changeSetId, ...(change.id ? { changeId: change.id } : {}), why: 'undo of a negative keyword' } }
   },
+  undone: unsettleChange,
 }
 
 const createNegativeKeyword: AgentTool = {
@@ -448,7 +452,7 @@ const createNegativeKeyword: AgentTool = {
         note: made.mode === 'live' ? 'Created at Amazon.' : 'Sandbox: recorded in Nexus only; nothing reached Amazon.',
       },
       change: {
-        before: { changeSetId: run.changeSetId, negatives: [] },
+        before: { changeSetId: run.changeSetId, negatives: [], ...sourcesRecord([sourceOf(args.source)]) },
         after: { negatives: [{ targetId: made.adTargetId }] },
       },
     }
@@ -511,6 +515,14 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
   const destNamed = typeof args.destExternalCampaignId === 'string' && args.destExternalCampaignId.trim() !== ''
   const source = await campaignByExternalId(sourceExternalCampaignId)
   if (!source) return { ok: false, error: `campaign ${sourceExternalCampaignId} not found` }
+  // W3-1 — a graduation that carries a recommendation names the ad group it converted in, of that campaign, and the
+  // feed offers that recommendation now: the source cannot ride on a term it did not judge.
+  if (changeSource) {
+    if (!sourceGroupId) return { ok: false, error: 'Not queued: a graduation that carries a recommendation names the ad group the term converted in (sourceExternalAdGroupId).' }
+    if (!(await adGroupInCampaign(sourceGroupId, source.id))) return { ok: false, error: `Not queued: the source's ad group ${sourceGroupId} is not in campaign ${source.name}, where the term converted.` }
+    const notOffered = await notOfferedRefusal(changeSource)
+    if (notOffered) return { ok: false, error: `Not queued: ${notOffered}.` }
+  }
   const destExternalCampaignId = String(args.destExternalCampaignId ?? sourceExternalCampaignId)
   let campaign = destNamed ? await campaignByExternalId(destExternalCampaignId) : source
   if (!campaign) return { ok: false, error: `campaign ${destExternalCampaignId} not found` }
@@ -674,6 +686,7 @@ export const GRADUATE_UNDO: ToolUndo = {
     if (typeof targetId !== 'string' || !targetId) return { refusal: 'This change does not name the keyword it created.' }
     return { tool: 'set-target-bid', args: { targetId, proposedBidCents: BID_FLOOR_CENTS, why: 'undo of a graduation: the keyword stays (Nexus never pauses or archives), its bid goes to the floor' } }
   },
+  undone: unsettleChange,
 }
 
 const graduateKeyword: AgentTool = {
@@ -754,7 +767,7 @@ const graduateKeyword: AgentTool = {
             : `Created in Nexus only: ${made.denied ? `Amazon's write gate refused it (${made.denied.reason})` : made.pushError ? `Amazon's answer was an error (${made.pushError})` : 'Amazon returned no id for it'}.`,
       },
       change: {
-        before: { changeSetId: run.changeSetId, keyword: null },
+        before: { changeSetId: run.changeSetId, keyword: null, ...sourcesRecord([sourceOf(args.source)]) },
         after: { targetId: made.id, bidCents: p.suggestedBidCents },
       },
     }
@@ -902,6 +915,7 @@ export const SET_TARGET_BID_UNDO: ToolUndo = {
     }
     return { tool: 'set-target-bid', args: { targetId: before.targetId, proposedBidCents: before.bidCents, why: 'undo of an earlier bid change' } }
   },
+  undone: unsettleChange,
 }
 
 const setTargetBid: AgentTool = {
@@ -981,7 +995,7 @@ const setTargetBid: AgentTool = {
         ? {}
         : {
             change: {
-              before: { targetId: p.target.id, bidCents: p.currentBidCents, changeSetId: run.changeSetId },
+              before: { targetId: p.target.id, bidCents: p.currentBidCents, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) },
               after: { targetId: p.target.id, bidCents: after },
             },
           }),
