@@ -549,6 +549,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   automation: 'turning ads automations up and tuning their settings',
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
+  archive: 'archiving ads (for good)',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

@@ -6,8 +6,9 @@
  * apply|dismiss|restore and POST /advertising/suggestions/bulk) so a Claude tool decides through the same code. The
  * routes answer byte for byte as before (automation-routes-parity.vitest.test.ts).
  *
- * Not here, on purpose: `/suggestions/:id/pause-target` — a person's click that pauses a target. Nothing Claude runs
- * may pause (Owner rule: lower bids, never pause), so that route keeps its logic to itself.
+ * Not here, on purpose: `/suggestions/:id/pause-target` — a person's click that pauses a target. A rule's suggestion is
+ * never applied as a pause (a temporary stop is lower bids; Claude's real pause is pause-ads, its own request), so that
+ * route keeps its logic to itself.
  *
  * Each helper returns a plain outcome instead of writing to `reply`, so the bulk decide can report per-row results and
  * the single routes can map the same outcome to an HTTP code. `httpStatus` is set only for the outcomes that are
@@ -310,7 +311,7 @@ export interface DecisionItem {
 
 /**
  * The dry run of a batch of decisions: every suggestion found here and still waiting (restore: one dismissed or
- * expired), and every apply allowed — never a pause, a switch-on or an archive (Owner rule: never pause; the
+ * expired), and every apply allowed — never a pause, a switch-on or an archive (a rule's change never is one; the
  * substitute is named), never a target held at the floor by no-pause suppression (applying would lift it: A3 guard),
  * never while ads automation is halted. Refused as a whole, naming each reason; nothing is written.
  */

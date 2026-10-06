@@ -248,6 +248,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   automation: 'turning ads automations up and tuning their settings',
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
+  archive: 'archiving ads (for good)',
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 
@@ -959,7 +960,8 @@ export interface RulePatch {
 /**
  * Set one tool's level and/or limits in this business. A level is refused above the tool's ceiling (floors cannot be
  * raised); limits are checked against the tool's own schema (unknown keys refused). Raising the level, or any change
- * of limits, needs a fresh 2FA code; lowering does not. Audited.
+ * of limits, needs a fresh 2FA code; lowering does not. For a tool that cannot be undone, raising the level and
+ * loosening the limits are two calls, so two codes (AA-W2-13). Audited.
  */
 export async function setClaudeRule(actor: TrustActor, toolName: string, patch: RulePatch): Promise<{ ok: true; rule: ClaudeToolRule } | TrustRefusal> {
   const tool = getTool(toolName)
@@ -993,6 +995,15 @@ export async function setClaudeRule(actor: TrustActor, toolName: string, patch: 
   // Tightening limits is a brake, like lowering a level; loosening them lets Claude do more, like raising one.
   const defaults = defaultsOf(tool)
   const loosening = limitsChanged && !limitsTighten(tool, current.limits ?? defaults, limits ? { ...defaults, ...limits } : defaults)
+  // ADS AUTONOMY AA-W2-13 — a kind that cannot be undone (archive-ads): what it may do alone is raised one step at a
+  // time, each with its own fresh code (a code is single use), so a permanent change never starts running by rule on
+  // one code. Lowering and tightening stay free.
+  if (raising && loosening && tool.reversibility === 'none') {
+    return {
+      ok: false, status: 400, code: 'second_code_required',
+      error: `${toolName} cannot be undone: raise its level and loosen its limits one at a time, each with its own authenticator code.`,
+    }
+  }
   if (raising || loosening) {
     const refused = await mayRaise(actor, patch.code)
     if (refused) return refused

@@ -106,8 +106,9 @@ describe('A11 — create-ad-campaign: the plan, and what refuses it', () => {
     })
     expect((await preview('create-ad-campaign', plan({ market: 'UK', name: 'UK targets', keywords: undefined, productTargets: ['B0TESTPT01'] }))).preview)
       .toMatchObject({ plan: { currency: 'GBP', productTargets: [{ asin: 'B0TESTPT01', bidCents: 60 }], keywords: [] }, effect: expect.stringContaining('GBP 15.00') })
+    // AA-W2-13 — undo archives it (in part: what it spent stays spent); it may run by rule inside the strategy and its limits.
     expect(getTool('create-ad-campaign')).toMatchObject({
-      alwaysAsk: true, maxClaudeTrust: 'ask', reversibility: 'none', openWorld: true, readOnly: false,
+      alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', reversibility: 'partial', openWorld: true, readOnly: false,
       requires: ['ads.campaigns.manage', 'ads.budgets.edit', FIELDS.financialsAdspendView],
     })
   })
@@ -154,7 +155,10 @@ describe('A11 — approved, it is born safe', () => {
     // The campaign, its ad group, 2 product ads, 2 keywords and 1 negative.
     const s = await status(asked.approvalId!)
     expect(s).toMatchObject({ status: 'executed', ads: { reach: 'sandbox', created: { total: 7, atAmazon: 0 } }, meaning: expect.stringMatching(/^Approved and written in Nexus \(7 created\)\. Sandbox/) })
-    expect(s.change).toMatchObject({ reversibility: 'none' })
+    expect(s.change).toMatchObject({ reversibility: 'partial' })
+    // AA-W2-13 — its undo archives the campaign: a new request a person approves, permanent at Amazon.
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'archive-ads', args: { campaignIds: [campaignId] } } })
+    expect((await preview('archive-ads', { campaignIds: [campaignId] })).preview).toMatchObject({ permanent: expect.stringMatching(/^PERMANENT: Amazon cannot switch an archived ad on again/) })
     // Asking again for the same campaign is refused: the name is taken now.
     expect((await preview('create-ad-campaign', plan())).error).toMatch(/already has a campaign named "Italy jackets launch"/)
 
@@ -183,3 +187,42 @@ describe('A11 — approved, it is born safe', () => {
     expect(await sql('SELECT name FROM "Campaign" WHERE name LIKE $1', ['Italy moved%'])).toEqual([])
   })
 })
+
+/**
+ * ADS AUTONOMY AA-W2-13 (D-W2-6 = A) — creating is a kind of its own: it may run by the business's rule only inside the
+ * ads strategy where its products are and Claude's limits for a new campaign (its daily budget: 0 by default), never as
+ * the first campaign of a market, and never with a planned bid above the strategy's highest bid. Allowlisting it and
+ * starting it are separate kinds (set-campaign-live-writes, restore-campaign).
+ */
+describe('AA-W2-13 — create-ad-campaign by rule: inside the strategy and its limits only', () => {
+  const judge = (p: unknown, limits: Record<string, unknown> = {}) => {
+    const t = getTool('create-ad-campaign')!
+    return t.withinLimits!(p, t.limits!.parse(limits) as Record<string, unknown>)
+  }
+
+  it('says undo archives it, for good; no strategy, the default budget limit 0, a new market or a bid above the band: a person decides', async () => {
+    const p = (await preview('create-ad-campaign', plan({ name: 'Italy rule launch' }))).preview as Row
+    expect(p).toMatchObject({ undoNote: expect.stringMatching(/Undo archives it \(archive-ads\), and that is permanent at Amazon/), plannedHighestBidCents: 90, limitFacts: { tool: 'create-ad-campaign', action: 'create' } })
+    expect(p.newMarket).toBeUndefined()
+    expect(judge(p, { maxDailyBudgetCents: 5000 })).toMatch(/there is no ads strategy for IT/)
+    const row = await inside(() => database.client.adsStrategy.create({ data: {
+      market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test',
+      claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 5000, maxBidCents: 100,
+    } }))
+    try {
+      const allowed = (await preview('create-ad-campaign', plan({ name: 'Italy rule launch' }))).preview
+      expect(judge(allowed)).toMatch(/its daily budget EUR 15\.00 is more than the EUR 0\.00 this tool's limits let a new campaign start with \(0: every new campaign waits for a person\)/)
+      expect(judge(allowed, { maxDailyBudgetCents: 1500 })).toBeNull()
+      expect(judge(allowed, { maxDailyBudgetCents: 1500, maxProducts: 1 })).toMatch(/advertises 2 products, more than the 1/)
+      await inside(() => database.client.adsStrategy.update({ where: { id: row.id }, data: { maxBidCents: 80, version: 2 } }))
+      expect(judge((await preview('create-ad-campaign', plan({ name: 'Italy rule launch' }))).preview, { maxDailyBudgetCents: 1500 }))
+        .toMatch(/its highest planned bid EUR 0\.90 is above the highest bid EUR 0\.80 \(ads strategy: Test market \(IT\)/)
+    } finally {
+      await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
+    // ES has a spend ceiling and no campaign yet: the first campaign of a market is a person's.
+    const es = (await preview('create-ad-campaign', plan({ market: 'ES', name: 'Spain first' }))).preview as Row
+    expect(es).toMatchObject({ newMarket: true, newMarketNote: 'NEW MARKET: the first campaign in ES.' })
+  })
+})
+

@@ -30,7 +30,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 const OPEN_WORLD = [
-  'add-photo-from-url', 'advance-purchase-order', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
+  'add-photo-from-url', 'advance-purchase-order', 'archive-ads', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
   'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
@@ -114,7 +114,7 @@ describe('C3 — the server and every change tool name the business', () => {
       'Never say a change ran until approval-status says so', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
       // AA-W2-12 (Owner 2026-10-06) — a temporary stop is low bids; a real pause only when meant; an archive is for good.
       'To stop an ad for a while, lower its bids', 'Pause an ad (pause-ads) only when the person means a real pause',
-      'An archived ad never serves again',
+      'Archive an ad (archive-ads) only when it is meant for good',
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets']) {
       expect(mcpInstructions(business), rule).toContain(rule)
