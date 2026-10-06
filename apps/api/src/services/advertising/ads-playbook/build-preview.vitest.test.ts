@@ -10,7 +10,7 @@
  *   linked       a slot linked to a live campaign is not built, and that campaign is neither a conflict nor a name clash
  *   money        a monthly cap the full-spend month would pass blocks, naming the cap (no amount in the words)
  *   gate         a market with no writable Amazon connection blocks, as a replication is blocked
- *   portfolio    one that exists by name is reused
+ *   portfolio    one that exists by name in the market's ads profile is reused (never a Nexus-only local-pf- one)
  *   nothing      no campaign, ad group, target, run or playbook row is written
  *   money keys   the read tool hides exactly the money from a person without ad-spend money
  */
@@ -63,6 +63,10 @@ beforeAll(async () => {
       updatedBy: 'user:test',
     } })
     await c.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test strategy (IT)', maxBidCents: 45, monthlySpendCapCents: 1_000_000, updatedBy: 'user:test' } })
+    // PB-5a — the portfolio is reused only from the market's own ads profile, and never a Nexus-only (local-pf-) one.
+    await c.amazonAdsConnection.create({ data: { profileId: 'test-profile', marketplace: 'IT', isActive: true, mode: 'sandbox' } })
+    await c.amazonAdsPortfolio.create({ data: { profileId: 'test-profile', externalPortfolioId: 'local-pf-test-profile-testpb4', name: 'Test TESTPB4 IT' } })
+    await c.amazonAdsPortfolio.create({ data: { profileId: 'other-profile', externalPortfolioId: 'test-pf-other', name: 'Test TESTPB4 IT' } })
     await c.amazonAdsPortfolio.create({ data: { profileId: 'test-profile', externalPortfolioId: 'test-pf-1', name: 'Test TESTPB4 IT' } })
     // Another product's live campaign buys "test coat" (a category term): kept and only listed (Owner rule 3).
     const other = await c.campaign.create({ data: { name: 'Other product | IT | Broad', type: 'SP', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date() } as never })

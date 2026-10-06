@@ -31,9 +31,8 @@ import { checkAdsWriteGate } from '../../advertising/ads-write-gate.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { campaignStructureCounts } from '../../advertising/ads-entity-lookup.service.js'
 import { marketCurrency } from '../../pim/market-currency.js'
-import type { AdsActor } from '../../advertising/ads-mutation.service.js'
-import { amountLabel, claudeActor, liveReachOf } from './ads-tool-guards.js'
-import { approvedRun, notRun, reachNote, reachRefusal, recheck, storedReach, type StoredReach } from './ads-change-kit.js'
+import { amountLabel, liveReachOf } from './ads-tool-guards.js'
+import { approvedRun, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -250,15 +249,6 @@ export const CREATE_CAMPAIGN_UNDO: ToolUndo = {
       ? { tool: 'archive-ads', args: { campaignIds: [campaignId], why: 'undo of a campaign Claude created: archived for good' } }
       : { refusal: 'This change does not name the campaign it created.' }
   },
-}
-
-/** The person who asked (the request's run); the approver when the request names nobody (a fleet run). */
-async function requesterOf(ctx: ToolContext, fallback: AdsActor): Promise<AdsActor> {
-  const approval = ctx.approvalId
-    ? await prisma.agentApproval.findFirst({ where: { id: ctx.approvalId }, select: { agentRun: { select: { userId: true } } } })
-    : null
-  const asker = approval?.agentRun?.userId?.trim()
-  return asker ? claudeActor(asker) : fallback
 }
 
 const createAdCampaign: AgentTool = {

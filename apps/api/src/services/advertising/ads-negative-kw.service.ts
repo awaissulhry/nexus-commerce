@@ -127,6 +127,8 @@ export interface WriteNegativeKeywordArgs {
   evidence?: AdWriteEvidence | null
   /** 1e — a person's own add from a screen or an upload (isPersonCreate). Set only by the routes. */
   manual?: boolean
+  /** PB-5 — the approval this write runs for: its AdvertisingActionLog row carries it (executionId). */
+  changeSetId?: string | null
 }
 
 export interface WriteNegativeProductTargetArgs {
@@ -142,6 +144,8 @@ export interface WriteNegativeProductTargetArgs {
    * confirmed. Honoured only with `manual` (a person's own add); an engine's is refused whatever it passes.
    */
   confirmOwnLimits?: boolean
+  /** PB-5 — see WriteNegativeKeywordArgs.changeSetId. */
+  changeSetId?: string | null
 }
 
 // ── Endpoint constants (legacy SP v3) ─────────────────────────────────
@@ -500,11 +504,12 @@ export async function mirrorNegativeRow(m: {
   return { id: t.id, created: true }
 }
 
-async function auditCreate(actionType: string, adTargetId: string, payloadAfter: Record<string, unknown>, userId?: string | null, evidence?: AdWriteEvidence | null) {
+async function auditCreate(actionType: string, adTargetId: string, payloadAfter: Record<string, unknown>, userId?: string | null, evidence?: AdWriteEvidence | null, changeSetId?: string | null) {
   await prisma.advertisingActionLog.create({
     data: {
       userId: userId ?? null, actionType, entityType: 'AD_TARGET', entityId: adTargetId, payloadBefore: {}, payloadAfter: payloadAfter as never,
       amazonResponseStatus: 'SUCCESS', evidence: (packEvidence(evidence) ?? undefined) as never,
+      ...(changeSetId ? { executionId: changeSetId } : {}),
     },
   }).catch(() => {})
 }
@@ -521,6 +526,7 @@ export async function mirrorNegativeKeyword(input: {
   mode?: 'sandbox' | 'live' | 'local'
   userId?: string | null
   evidence?: AdWriteEvidence | null
+  changeSetId?: string | null
 }): Promise<{ id: string; created: boolean }> {
   const row = await mirrorNegativeRow({
     adGroupId: input.adGroupId, campaignId: input.campaignId, kind: 'KEYWORD', level: input.scope,
@@ -530,7 +536,7 @@ export async function mirrorNegativeKeyword(input: {
     await auditCreate('create_negative_keyword', row.id, {
       keywordText: input.keywordText, matchType: input.matchType, scope: input.scope, externalTargetId: input.externalTargetId,
       reachedAmazon: input.externalTargetId != null, ...(input.mode ? { mode: input.mode } : {}),
-    }, input.userId, input.evidence)
+    }, input.userId, input.evidence, input.changeSetId)
   }
   return row
 }
@@ -583,7 +589,7 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   const externalTargetId = sent.kind === 'sent' ? sent.externalId : null
   const row = await mirrorNegativeKeyword({
     scope: args.scope, adGroupId: placement.adGroup!.id, campaignId: placement.campaign.id, keywordText: text, matchType,
-    externalTargetId, mode: recordMode, userId: args.userId, evidence: args.evidence,
+    externalTargetId, mode: recordMode, userId: args.userId, evidence: args.evidence, changeSetId: args.changeSetId,
   })
   return {
     outcome: sent.kind === 'draft' ? 'local' : 'created', mode: recordMode, externalTargetId, reachedAmazon: externalTargetId != null,
@@ -605,7 +611,7 @@ export async function writeNegativeProductTarget(args: WriteNegativeProductTarge
   const externalTargetId = sent.kind === 'sent' ? sent.externalId : null
   const row = await mirrorNegativeRow({ adGroupId: args.adGroupId, kind: 'PRODUCT', level: 'AD_GROUP', expressionType: 'ASIN', expressionValue: asin, externalTargetId })
   if (row.created) {
-    await auditCreate('create_negative_product_target', row.id, { asin, externalId: externalTargetId, reachedAmazon: externalTargetId != null, mode: recordMode }, args.userId, args.evidence)
+    await auditCreate('create_negative_product_target', row.id, { asin, externalId: externalTargetId, reachedAmazon: externalTargetId != null, mode: recordMode }, args.userId, args.evidence, args.changeSetId)
   }
   return {
     outcome: sent.kind === 'draft' ? 'local' : 'created', mode: recordMode, externalTargetId, reachedAmazon: externalTargetId != null,

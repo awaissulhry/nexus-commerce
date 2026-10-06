@@ -793,6 +793,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-campaign-target-acos': ['basis', 'totals'],
   // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
   'create-ad-campaign': ['plan', 'ceiling', 'reach'],
+  // PB-5a — the op, every campaign a build makes (or every binding of an adopt) with the row it is planned from, where it lands.
+  'apply-ads-playbook': ['op', 'basis', 'reach', 'bindings'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
   // and where it lands.
   'pause-ads': ['basis', 'reach'],

@@ -202,6 +202,22 @@ describe('refusals and business', () => {
     expect(await inA(() => readPlaybook({ channel: 'EBAY' }))).toMatchObject({ status: 400 })
   })
 
+  it('PB-5a — view build: one product in one market, or one run; this business\'s run is not found from another', async () => {
+    expect(await inA(() => readPlaybook({ view: 'build', productId: ids.v }))).toMatchObject({ status: 400 })
+    expect(await inA(() => readPlaybook({ view: 'build', market: 'IT' }))).toMatchObject({ status: 400 })
+    expect(await inA(() => readPlaybook({ view: 'build', market: 'IT', productId: ids.gone }))).toEqual({ status: 404, error: PRODUCT_NOT_FOUND })
+    expect(data(await inA(() => readPlaybook({ view: 'build', market: 'IT', productId: ids.v })))).toMatchObject({ view: 'build', runs: [], empty: 'No build of this playbook yet.' })
+    const run = await inA(() => db().adBlueprintApplication.create({ data: {
+      productToken: 'TESTTOKEN', marketplace: 'IT', status: 'APPLIED', plan: {}, playbookId: ids.vRow, createdCampaignIds: [ids.campaigns[0]], errors: [],
+      options: { source: 'playbook', changeSetId: 'ap-read', compiledVersion: 1, slots: ['auto'], deferredPlacements: [] },
+    } }))
+    const one = data(await inA(() => readPlaybook({ view: 'build', applicationId: run.id })))
+    expect(one.run).toMatchObject({ applicationId: run.id, status: 'APPLIED', changeSetId: 'ap-read', slots: ['auto'], created: [{ campaignId: ids.campaigns[0], atAmazon: expect.any(Boolean) }] })
+    expect(data(await inA(() => readPlaybook({ view: 'build', market: 'IT', productId: ids.v }))).runs.map((r: Data) => r.applicationId)).toEqual([run.id])
+    expect(await inB(() => readPlaybook({ view: 'build', applicationId: run.id }))).toMatchObject({ status: 404 })
+    await inA(() => db().adBlueprintApplication.delete({ where: { id: run.id } }))
+  })
+
   it('another business reads only its own playbook; this business\'s ids are not found there', async () => {
     await inB(async () => {
       expect(await readPlaybook({ productId: ids.v })).toEqual({ status: 404, error: PRODUCT_NOT_FOUND })

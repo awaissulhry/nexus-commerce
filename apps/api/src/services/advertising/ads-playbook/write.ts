@@ -23,7 +23,7 @@
  *             AdsPlaybookVersion row (changes, direction, via, approvalId, actor, stepUpAt).
  *
  * Live effect: NONE at Amazon and none in any engine — nothing reads a playbook. It is compiled only by an approved
- * apply (build, adopt, start, sync, phase), which later steps add.
+ * apply (build and adopt: apply-ads-playbook, PB-5a; start, sync and phase come later).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -576,7 +576,7 @@ function finish(p: {
   const summary = p.changes.length || p.op === 'remove'
     ? `${verb} ${where}: ${p.changes.length} change${p.changes.length === 1 ? '' : 's'}${raises.length ? `; it raises ${raises.join(', ')}` : ''}.`
     : `Nothing changes in ${where}: it already says this.`
-  const liveEffect = `Saved in Nexus only. Nothing reads a playbook yet: no engine, rule or Claude change follows it, and nothing at Amazon moves; an approved apply (build, adopt, start, sync, phase) compiles it in a later step.${p.extraNote ?? ''}`
+  const liveEffect = `Saved in Nexus only. No engine, rule or Claude change follows a playbook, and nothing at Amazon moves, until an approved apply (apply-ads-playbook) compiles it.${p.extraNote ?? ''}`
   const warnings = [...(p.capture?.warnings ?? []), ...(p.recipes?.notes ?? []), ...(p.beforeDocProblems ? ['The template as stored did not pass its checks; this change replaces it.'] : [])]
   const preview: PlaybookPreview = {
     action: 'set-ads-playbook',
@@ -722,6 +722,73 @@ export async function applyPlaybookPlan(plan: PlaybookPlan, writer: PlaybookWrit
   const before = plan.before
   const after = await playbookStateNow(before.kind === 'template' ? { ...before, templateId: id } : before)
   return { ok: true, id, version, direction: plan.direction, changes: plan.changes, before, after }
+}
+
+// ── PB-5a — an apply recorded on the product row ──────────────────────────────────────────────────
+
+/** Who applied it, for the row's version and the audit. */
+export interface PlaybookApplyWriter {
+  via: string
+  actor: string
+  actorUserId?: string | null
+  approvalId?: string | null
+  updatedBy: string
+}
+
+/** What an apply op made of the row: its state, and the row and template versions it compiled. */
+export interface PlaybookApplyRecord {
+  op: 'build' | 'adopt' | 'start' | 'stop'
+  state: string
+  /** The row version the op was planned (and approved) from. */
+  compiledVersion: number
+  compiledTemplateVersion: number | null
+  reason?: string | null
+}
+
+type Tx = Prisma.TransactionClient
+
+/**
+ * PB-5a — record an apply (build, adopt; start, stop in PB-5b) on the PRODUCT row: its state and what it compiled, with
+ * one AdsPlaybookVersion row (op = the apply's op; no money moves in the row, so it is `same`). Optimistic on the row's
+ * version: unmoved since the plan → `compiledVersion` = the new version; moved since → the new state only, and
+ * `compiledVersion` stays what was compiled (so the row honestly reads as newer than what was built). `tx`: inside the
+ * caller's transaction (an adopt writes its links and this together).
+ */
+export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRecord, writer: PlaybookApplyWriter, tx?: Tx): Promise<{ version: number; compiledVersion: number; moved: boolean } | null> {
+  const write = async (db: Tx) => {
+    const row = await db.adsPlaybook.findUnique({ where: { id: rowId }, select: PLAYBOOK_ROW_SELECT })
+    if (!row) return null
+    const moved = row.version !== record.compiledVersion
+    const version = row.version + 1
+    const compiledVersion = moved ? record.compiledVersion : version
+    const updated = await db.adsPlaybook.updateMany({
+      where: { id: row.id, version: row.version },
+      data: { state: record.state, compiledVersion, compiledTemplateVersion: record.compiledTemplateVersion, version, updatedBy: writer.updatedBy },
+    })
+    if (updated.count !== 1) throw new Moved()
+    const changes: PlaybookChange[] = [
+      ...(row.state !== record.state ? [{ field: 'state', label: 'State', from: row.state, to: record.state, direction: 'same' as Direction }] : []),
+      { field: 'compiledVersion', label: 'Compiled', from: row.compiledVersion, to: compiledVersion, direction: 'same' as Direction },
+    ]
+    await db.adsPlaybookVersion.create({
+      data: {
+        kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
+        values: rowValuesOf({ ...row, state: record.state }) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
+        direction: 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
+        stepUpAt: null, reason: record.reason ?? null,
+      },
+    })
+    return { version, compiledVersion, moved }
+  }
+  // One retry: a row another writer moved in between is read again (the op's state still lands, honestly versioned).
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return tx ? await write(tx) : await prisma.$transaction((t) => write(t))
+    } catch (error) {
+      if (attempt === 0 && !tx && (error instanceof Moved || (error as { code?: string } | null)?.code === 'P2002')) continue
+      throw error
+    }
+  }
 }
 
 // ── State and undo ────────────────────────────────────────────────────────────────────────────────

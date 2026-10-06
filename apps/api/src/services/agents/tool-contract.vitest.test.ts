@@ -68,6 +68,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   'archive-ads', 'create-ad-campaign',
   // W3-3 — giving an ad group's bids back once its stock returns (it adds spend).
   'restore-ad-bids-after-stock',
+  // PB-5a — a playbook build, the create kind: only at the floor and off the allowlist (nothing spends until START),
+  // by default never by rule (maxCampaigns 0); an adopt writes Nexus links only.
+  'apply-ads-playbook',
 ]
 
 /**
@@ -404,6 +407,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
         after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
       },
+      // PB-5a — a playbook build is archived (every campaign it made); an adopt is put back by the opposite adopt.
+      'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },

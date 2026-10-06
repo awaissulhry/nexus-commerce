@@ -421,9 +421,11 @@ export async function buildLimitFacts(input: {
   /** AA-W2-10, AA-W2-11 — rules or schedules C4 does not count as an engine that also moves it (a rule whose own
    *  suggestion is applied, the automation being turned up or saved). */
   exceptIds?: readonly string[]
+  /** PB-5a — the kind of this op of a tool with several (OP_ACTIONS, ads-strategy/claude.ts); absent: the tool's kind. */
+  action?: ClaudeActionType | null
   now?: Date
 }): Promise<LimitFacts> {
-  const action = actionOfTool(input.tool)
+  const action = input.action !== undefined ? input.action : actionOfTool(input.tool)
   const scopes = await resolveEntityScopes(input.items.map((i) => i.entity))
   const { markets: strategies, subjects } = await strategyForScopes(scopes.values(), action)
 

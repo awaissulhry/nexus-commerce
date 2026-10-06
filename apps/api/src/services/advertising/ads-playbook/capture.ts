@@ -131,7 +131,7 @@ interface Draft {
 }
 
 /** The slot a campaign plays: its targeting, match type and intent, from its name first, else from its keywords. */
-function slotShape(role: string, source: SourceCampaign, positives: Draft['positives'], warnings: string[], name: string) {
+export function slotShape(role: string, source: SourceCampaign, positives: Draft['positives'], warnings: string[], name: string) {
   const roleWords = words(role).map((w) => w.toLowerCase())
   const auto = (source.targetingType ?? '').toUpperCase() === 'AUTO' || source.adGroups.some((g) => g.targets.some((t) => !t.isNegative && autoClauseOf(t)))
   if (auto) return { targeting: 'AUTO' as const, intent: 'ANY' as const }
