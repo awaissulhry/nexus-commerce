@@ -48,6 +48,7 @@ import { Tabs, type TabItem } from '@/design-system/components/Tabs'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { dash, eur, AcosCell, RoasCell, ACOS_DOT_TIP, ROAS_DOT_TIP } from './cells'
+import { pct } from '../campaigns/_grid/format' // AM-30 — targetAcosPct is percent points; one ACoS rendering
 /**
  * SGX (2026-08-24) — this file held seven tabs in 2,447 lines. The payload shapes, the
  * presentational cells, the two drawers and the A.I. change readers are now their own modules,
@@ -894,7 +895,7 @@ function SuggestionsInner() {
     },
     proposed: { key: 'proposed', label: 'Proposed change', metric: false, sortable: true, sortValue: (s) => s.proposedAction?.type ?? '', render: (s) => <ProposedCell s={s} /> },
     impact: { key: 'impact', label: 'Impact', metric: true, sortable: true, tip: 'Daily € change (or keywords affected). Sort to triage the biggest moves first.', sortValue: impactScore, render: (s) => <ImpactCell s={s} /> },
-    tacos: { key: 'tacos', label: 'Target ACoS', tip: 'The campaign’s own target ACoS.', metric: true, sortable: true, sortValue: (s) => s.current?.targetAcosPct ?? null, render: (s) => s.current?.targetAcosPct != null ? <span className="h10-sug-num">{s.current.targetAcosPct.toFixed(0)}%</span> : dash('No target ACoS set on the campaign') },
+    tacos: { key: 'tacos', label: 'Target ACoS', tip: 'The campaign’s own target ACoS.', metric: true, sortable: true, sortValue: (s) => s.current?.targetAcosPct ?? null, render: (s) => s.current?.targetAcosPct != null ? <span className="h10-sug-num">{pct(s.current.targetAcosPct / 100)}</span> : dash('No target ACoS set on the campaign') },
     stake: {
       key: 'stake', label: '€ at stake', metric: true, sortable: true,
       tip: 'Trailing 30-day spend this action would redirect — not money saved. ♦ marks spend that produced no sales at all, the only case where cutting it is pure recovery.',

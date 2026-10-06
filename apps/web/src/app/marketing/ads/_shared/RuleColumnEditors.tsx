@@ -57,6 +57,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { readDailyBudget, readTargetAcosPercent } from './budgetInput'
+import { eur as eurMoney } from '../campaigns/_grid/format'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -190,7 +191,7 @@ export function RangePopover({
           </div>
         )}
         <p className="n">{note}</p>
-        {bad && <p className="e" role="alert">Each end must be at least €{(floorCents / 100).toFixed(2)}, and Min must not exceed Max.</p>}
+        {bad && <p className="e" role="alert">Each end must be at least {eurMoney(floorCents / 100)}, and Min must not exceed Max.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>

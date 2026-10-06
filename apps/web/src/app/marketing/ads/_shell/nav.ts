@@ -106,5 +106,7 @@ export const ADS_NAV: NavItem[] = [
   // here — the rail is kept short on purpose, and 99% of recorded changes come from one page.
   // The eBay rail keeps its own entry: that console has no equivalent header link.
   { label: 'Training & Resources', route: 'training', Icon: HelpCircle, external: 'https://advertising.amazon.com' },
-  { label: 'Settings', route: 'account-settings', Icon: Settings },
+  // AM-29 — the advertising settings (connections, read/write state) live at /settings/advertising; this row opened a
+  // "not built yet" stub. Following it leaves the console, like the Agent Fleet row. The old route redirects there.
+  { label: 'Settings', route: 'account-settings', href: '/settings/advertising', Icon: Settings },
 ]

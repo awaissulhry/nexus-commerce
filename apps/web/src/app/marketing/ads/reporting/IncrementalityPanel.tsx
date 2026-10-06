@@ -22,6 +22,7 @@ import { ChevronDown, Download, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, SegmentedControl } from '@/design-system/primitives'
 import { DataGrid } from '@/design-system/grid/datagrid'
+import { eur as eurMoney, roasText } from '../campaigns/_grid/format'
 
 interface Row {
   campaignId: string; name: string; marketplace: string | null; branded: boolean
@@ -35,8 +36,9 @@ interface Result {
 }
 
 const DAYS = [7, 14, 30, 60, 90]
-const eur = (c?: number | null) => (c == null ? '—' : `€${Math.round(c / 100).toLocaleString('en-IE')}`)
-const x2 = (n?: number | null) => (n == null || !Number.isFinite(n) ? '—' : `${n.toFixed(2)}×`)
+// AM-30 — the console's one money and ROAS rendering (€1,234.56 · 2.31); this printed whole euros and "2.31×".
+const eur = (c?: number | null) => (c == null ? '—' : eurMoney(c / 100))
+const x2 = (n?: number | null) => roasText(n)
 
 export function IncrementalityPanel() {
   const [open, setOpen] = useState(false)

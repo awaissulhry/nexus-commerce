@@ -2,7 +2,7 @@
 
 /**
  * CBN.2f — date-range picker, pixel-matched to the Helium 10 Ad Manager control:
- * a dual-month range calendar (Sunday-first) with ‹ › navigation on the left and a
+ * a dual-month range calendar (Monday-first, AM-36) with ‹ › navigation on the left and a
  * scrollable preset rail on the right. Selecting a start then an end commits the
  * range; presets commit immediately. Label renders MM/DD/YYYY - MM/DD/YYYY.
  *
@@ -11,11 +11,18 @@
  * the next morning, so a window ending today held one day fewer of data than the period it was compared with.
  * Today, This Week/Month/Quarter still include today. `latest7`/`latest30` map to the server's `last7`/`last30`
  * (`rules-automation/_shared/adsScope.ts`), so both sides move together.
+ *
+ * AM-36 — a week starts on MONDAY, as the server's `wtd` does (ISO weeks, Europe/Rome). "This Week" / "Last Week" and
+ * the calendar's columns started on Sunday here, so "This Week" on a Sunday was one day long in the picker and seven
+ * on the server.
  */
 import { useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { InfoTip } from '@/design-system/primitives'
 
-const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+/** AM-36 — days since Monday (Mon 0 … Sun 6), the ISO week the server uses. */
+const sinceMonday = (d: Date) => (d.getDay() + 6) % 7
 const fmt = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
 const sod = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x }
@@ -47,8 +54,8 @@ export function presetRange(key: string): { start: Date; end: Date } {
   switch (key) {
     case 'today': break
     case 'yesterday': s.setDate(s.getDate() - 1); e.setDate(e.getDate() - 1); break
-    case 'thisWeek': s.setDate(s.getDate() - s.getDay()); break
-    case 'lastWeek': s.setDate(s.getDate() - s.getDay() - 7); e.setDate(e.getDate() - e.getDay() - 1); break
+    case 'thisWeek': s.setDate(s.getDate() - sinceMonday(s)); break
+    case 'lastWeek': s.setDate(s.getDate() - sinceMonday(s) - 7); e.setDate(e.getDate() - sinceMonday(e) - 1); break
     case 'thisMonth': s.setDate(1); break
     case 'lastMonth': s.setMonth(s.getMonth() - 1, 1); e.setDate(0); break
     // AM-16 — rolling windows end yesterday (complete days).
@@ -67,11 +74,19 @@ export function presetRange(key: string): { start: Date; end: Date } {
 
 function monthDays(year: number, month: number): Date[] {
   const first = new Date(year, month, 1)
-  const start = new Date(first); start.setDate(1 - first.getDay()) // back to the Sunday on/before the 1st
+  const start = new Date(first); start.setDate(1 - sinceMonday(first)) // back to the Monday on/before the 1st
   return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
 }
 
-export function DateRangePicker({ value, onChange }: { value: { start: Date; end: Date }; onChange: (start: Date, end: Date) => void }) {
+export function DateRangePicker({ value, onChange, disabledReason }: {
+  value: { start: Date; end: Date }; onChange: (start: Date, end: Date) => void
+  /**
+   * AM-26 — the page cannot take a range from here yet. The control stays visible (placeholder controls are kept),
+   * shows the range the page is showing, does not open, and says why: on hover AND on keyboard focus (it stays
+   * focusable, `aria-disabled` rather than `disabled`, and the reason is part of its accessible name).
+   */
+  disabledReason?: string
+}) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => new Date(value.start.getFullYear(), value.start.getMonth(), 1))
   const [sel, setSel] = useState<{ start: Date; end: Date | null }>({ start: value.start, end: value.end })
@@ -91,12 +106,23 @@ export function DateRangePicker({ value, onChange }: { value: { start: Date; end
 
   const today = sod(new Date())
   const months = [view, addMonths(view, 1)]
+  const label = `${fmt(value.start)} - ${fmt(value.end)}`
+  // One trigger: with `disabledReason` it is focusable but inert (`aria-disabled`), its name carries the reason, and
+  // the InfoTip shows the reason on hover and keyboard focus.
+  const trigger = (
+    <button
+      type="button" className="h10-hbtn"
+      aria-disabled={disabledReason ? 'true' : undefined}
+      aria-label={disabledReason ? `${label}. ${disabledReason}` : undefined}
+      onClick={() => { if (!disabledReason) setOpen((o) => !o) }}
+    >
+      <Calendar size={14} /> {label} <ChevronDown size={13} />
+    </button>
+  )
   return (
     <div className="h10-hsel">
-      <button type="button" className="h10-hbtn" onClick={() => setOpen((o) => !o)}>
-        <Calendar size={14} /> {fmt(value.start)} - {fmt(value.end)} <ChevronDown size={13} />
-      </button>
-      {open && <>
+      {disabledReason ? <InfoTip tip={disabledReason}>{trigger}</InfoTip> : trigger}
+      {open && !disabledReason && <>
         <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setOpen(false)} />
         <div className="h10-dp" role="dialog" aria-label="Select date range">
           <div className="h10-dp-cal">

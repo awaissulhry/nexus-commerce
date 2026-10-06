@@ -6,6 +6,7 @@
  * one dash, one € reading, one ACoS/ROAS dot treatment). Moved verbatim from
  * SuggestionsClient.tsx; no behaviour change.
  */
+import { eur as eurMoney } from '../campaigns/_grid/format'
 
 /** SG.2 — trailing 30-day performance for the entity; null = no rows in the window ("—"). */
 export interface SuggestionMetrics {
@@ -22,7 +23,8 @@ export interface SuggestionMetrics {
 export const NO_PERF = 'No performance rows for this entity in the last 30 days'
 export const dash = (title = NO_PERF) => <span className="h10-sug-nd" title={title}>—</span>
 
-export const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
+/** AM-30 — the console's one money rendering (€1,234.56); `toFixed(2)` printed €1234.56 without the thousands comma. */
+export const eur = (cents: number) => eurMoney(cents / 100)
 
 /**
  * SG.2c/d — the ACoS traffic light, EXACTLY as H10 does it (operator's call, 2026-08-21:

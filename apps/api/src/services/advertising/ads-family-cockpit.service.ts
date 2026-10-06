@@ -25,6 +25,7 @@ import prisma from '../../db.js'
 import { getCoverageScoreboard, type CoverageScoreboard } from './ads-coverage.service.js'
 import { pricePendingProposals, type ProposalPricing } from './ads-proposal-pricing.service.js'
 import { pickChampion, type Contender } from './keyword-conflicts.service.js'
+import { PORTFOLIO_COUNTED_STATUSES } from './ads-portfolio.service.js'
 
 export interface FamilyCampaign {
   id: string
@@ -83,9 +84,14 @@ export interface FamilyCockpit {
   }
   campaigns: FamilyCampaign[]
   products: FamilyProduct[]
+  /**
+   * AM-35 — the Portfolios rule (`PORTFOLIO_COUNTED_STATUSES`): counts, spend and sales cover ENABLED + PAUSED campaigns,
+   * as the Ad Manager shows by default; archived members are counted apart in `archived`, never added in.
+   */
   totals: {
     campaigns: number
     enabled: number
+    archived: number
     allowlisted: number
     spend30dCents: number
     sales30dCents: number
@@ -103,6 +109,29 @@ export interface FamilyCockpit {
     notes: string[]
     schedulesEnabled: number
     schedulesTotal: number
+  }
+}
+
+/**
+ * AM-35 — the family's totals by the Portfolios rule: enabled + paused campaigns are counted and their 30-day spend and
+ * sales summed; archived ones are counted apart. The campaign list itself still shows every member, archived included.
+ * It used to count and sum every member, so the cockpit said more campaigns (and their old spend) than the Portfolios row
+ * one click before it and the Ad Manager filtered to the portfolio.
+ */
+export function familyTotals(campaigns: Array<Pick<FamilyCampaign, 'status' | 'liveWritesEnabled' | 'spend30dCents' | 'sales30dCents' | 'dailyBudgetEur'>>): FamilyCockpit['totals'] {
+  const counted = campaigns.filter((c) => (PORTFOLIO_COUNTED_STATUSES as readonly string[]).includes(c.status))
+  const spend = counted.reduce((a, c) => a + c.spend30dCents, 0)
+  const sales = counted.reduce((a, c) => a + c.sales30dCents, 0)
+  const enabled = counted.filter((c) => c.status === 'ENABLED')
+  return {
+    campaigns: counted.length,
+    enabled: enabled.length,
+    archived: campaigns.filter((c) => c.status === 'ARCHIVED').length,
+    allowlisted: counted.filter((c) => c.liveWritesEnabled).length,
+    spend30dCents: spend,
+    sales30dCents: sales,
+    acos30d: sales > 0 ? spend / sales : null,
+    dailyBudgetEur: enabled.reduce((a, c) => a + c.dailyBudgetEur, 0),
   }
 }
 
@@ -273,8 +302,7 @@ export async function getFamilyCockpit(externalPortfolioId: string): Promise<Fam
     ? await pricePendingProposals(10, { campaignIds }).catch(() => null)
     : null
 
-  const spend30 = familyCampaigns.reduce((a, c) => a + c.spend30dCents, 0)
-  const sales30 = familyCampaigns.reduce((a, c) => a + c.sales30dCents, 0)
+  const totals = familyTotals(familyCampaigns)
   const schedOn = familyCampaigns.reduce((a, c) => a + c.schedules, 0)
   const schedTotal = [...schedBy.values()].reduce((a, r) => a + r.total, 0)
 
@@ -291,15 +319,7 @@ export async function getFamilyCockpit(externalPortfolioId: string): Promise<Fam
     },
     campaigns: familyCampaigns,
     products,
-    totals: {
-      campaigns: familyCampaigns.length,
-      enabled: familyCampaigns.filter((c) => c.status === 'ENABLED').length,
-      allowlisted: familyCampaigns.filter((c) => c.liveWritesEnabled).length,
-      spend30dCents: spend30,
-      sales30dCents: sales30,
-      acos30d: sales30 > 0 ? spend30 / sales30 : null,
-      dailyBudgetEur: familyCampaigns.filter((c) => c.status === 'ENABLED').reduce((a, c) => a + c.dailyBudgetEur, 0),
-    },
+    totals,
     coverage,
     contests,
     proposals,

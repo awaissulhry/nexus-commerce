@@ -58,9 +58,10 @@ function noteRedisResult(ok: boolean): void {
 }
 
 /**
- * CM-34 — `refresh: true` skips both tiers' READ and stores the fresh answer: a screen that has just saved asks for it,
- * because the flush after a write runs on the instance that took the write, after its answer was sent, and another
- * instance's L1 can still hold the old values for the whole TTL.
+ * CM-34 / AM-34 — `refresh: true` skips both tiers' READ and stores the fresh answer, so the next ordinary read sees it.
+ *  · A screen that has just saved asks for it: the flush after a write runs on the instance that took the write, after
+ *    its answer was sent, and another instance's L1 can still hold the old values for the whole TTL.
+ *  · A screen's "Refresh view" asks for it: without it a refresh re-read an answer up to `ttlSec` old.
  */
 export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>, opts: { refresh?: boolean } = {}): Promise<T> {
   const k = cachePrefix() + key

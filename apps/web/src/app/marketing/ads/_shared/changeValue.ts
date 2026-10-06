@@ -17,6 +17,7 @@
  * change row goes through THIS map — a second copy is how the drawer and the account-wide
  * Change Log came to lie identically.
  */
+import { eur } from '../campaigns/_grid/format'
 
 const CENT_FIELDS = new Set(['bid', 'defaultBid'])
 const EUR_FIELDS = new Set(['dailyBudget'])
@@ -29,11 +30,11 @@ export function fmtChangeValue(v: string | null | undefined, field: string): str
     const n = Number(v)
     // A non-numeric string in a cents field is a data fault — print it verbatim rather than
     // inventing €NaN; verbatim is at least debuggable.
-    return Number.isFinite(n) ? `€${(n / 100).toFixed(2)}` : v
+    return Number.isFinite(n) ? eur(n / 100) : v // AM-30 — the console's one money rendering (€1,234.56)
   }
   if (EUR_FIELDS.has(field)) {
     const n = Number(v)
-    return Number.isFinite(n) ? `€${n.toFixed(2)}` : v
+    return Number.isFinite(n) ? eur(n) : v
   }
   return v
 }

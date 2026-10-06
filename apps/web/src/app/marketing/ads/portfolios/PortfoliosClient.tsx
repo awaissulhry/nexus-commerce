@@ -23,6 +23,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../_shared/AutomationDock'
 import { searchOptions } from '@/lib/option-search'
 import { eur, pct, intl } from '../_canvas/format'
+import { StatusCell } from '../_shared/CampaignRowCells'
 import { defaultPortfolioRange, portfolioWindowNote, ymd, type OverviewWindow } from './portfolioWindow'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -46,10 +47,6 @@ const budgetLabel = (r: PortfolioRow): string => {
   const amt = eurc(r.budgetAmountCents)
   const suffix = r.budgetPolicy === 'MONTHLY_RECURRING' ? '/mo' : r.budgetPolicy === 'DATE_RANGE' ? ' range' : ''
   return `${amt}${suffix}`
-}
-const stateClass = (s: string | null) => {
-  const v = (s ?? '').toUpperCase()
-  return v === 'ENABLED' ? 'pf-state--enabled' : v === 'PAUSED' ? 'pf-state--paused' : v === 'ARCHIVED' ? 'pf-state--archived' : ''
 }
 const ago = (iso: string | null) => {
   if (!iso) return '—'
@@ -264,7 +261,9 @@ function PortfoliosInner() {
                   {/* ACR.6 — the name opens the Family Cockpit: campaigns, coverage,
                       contested keywords and automation posture for THIS portfolio. */}
                   <Link href={`/marketing/ads/portfolios/${r.portfolioId}`} className="pf-name-main pf-name-link">{r.name}</Link>
-                  {r.state && <span className={`pf-state ${stateClass(r.state)}`}>{r.state}</span>}
+                  {/* AM-31 — the Ad Manager's own status pill (same word, same colour): this was a green raw-hex
+                      "ENABLED" chip beside the grid's blue "Enabled". */}
+                  {r.state && <StatusCell status={r.state.toUpperCase()} name={r.name} />}
                   <span className={`pf-src${r.source === 'local' ? ' pf-src--local' : ''}`}>{r.source}</span>
                 </span>
               ),

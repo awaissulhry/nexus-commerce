@@ -43,9 +43,10 @@
  */
 import { useEffect, useState } from 'react'
 import { Shuffle, Sparkles, User, Wallet } from 'lucide-react'
-import { pct as fractionPct } from '../campaigns/_grid/format'
+import { pct as fractionPct, eur as eurMoney } from '../campaigns/_grid/format'
 
-const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
+// AM-30 — the console's one money rendering (€1,234.56).
+const eur = (cents: number) => eurMoney(cents / 100)
 
 /**
  * ── C1 (2026-08-20) — ONE Bid Rule cell, carrying BOTH facts, on both grids ─────────────────────

@@ -263,6 +263,7 @@ function BulkInner() {
         title="Bulk operations"
         subtitle="Download your ad state, edit it in Excel or Numbers, and upload it back. Nothing is applied until you have seen exactly what it would do."
         markets={[]} market="all" onMarketChange={() => {}}
+        marketNotYet="Not here yet: choose the market in Export."
         showDataSync={false} showDateRange={false}
       />
 
