@@ -16,14 +16,15 @@
  *   actor / reason  `user:<approverId>`, `Claude request <approvalId>: <why>`.
  *   bound rules     the enabled rules bound to the campaign and its enabled schedules: they may change it again.
  */
-import { checkAdsWriteGate, type GateContext, type GateDecision, type GateDeniedAt } from '../../advertising/ads-write-gate.js'
+import { checkAdsWriteGate, type GateContext, type GateDecision, type GateDeniedAt, type OwnLimit } from '../../advertising/ads-write-gate.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { automationsBoundToCampaign } from '../../advertising/rule-campaign-binding.service.js'
+import { isRuleApprovedRun } from '../tool-types.js'
 
 // ── Live reach ──────────────────────────────────────────────────────────────────────────────────
 
 export type LiveReach =
-  | { reach: 'live'; profileId: string }
+  | { reach: 'live'; profileId: string; /** 4A + 3A — his own limits it goes past, for the card. */ pastOwnLimits?: OwnLimit[] }
   | { reach: 'sandbox' }
   | { reach: 'refused'; deniedAt: GateDeniedAt; reason: string }
 
@@ -39,6 +40,8 @@ export interface AdWriteIntent {
   /** A negative keyword: the term, so keyword protection binds. */
   keywordText?: string | null
   isNegation?: boolean
+  /** 4A — the write is a rule's, not the approver's (an applied automation suggestion): judged as a machine's write. */
+  byRule?: boolean
 }
 
 const BID_FIELDS = new Set(['bid', 'defaultBid'])
@@ -62,13 +65,20 @@ export function gateContextFor(intent: AdWriteIntent): GateContext {
     payloadValueCents: values.length ? Math.max(...values.map((v) => Math.round(v))) : 0,
     isSuppression: intent.isSuppression === true,
     ...(intent.isNegation ? { isNegation: true, keywordText: intent.keywordText ?? null } : {}),
+    // 4A (Owner decided 2026-10-06) — a change tool writes once a person approves it, and his approval counts as his
+    // own click: judged as his write (a halt, autonomy OFF, pins and the allowlist do not stop it), and past his own
+    // limits it says so (pastOwnLimits → the card's warning) because approving is his "Send anyway". A run a standing
+    // rule approved is the machine's write: its re-check is judged as one (isRuleApprovedRun).
+    ...(intent.byRule === true || isRuleApprovedRun() ? {} : { manual: true, confirmOwnLimits: true }),
   }
 }
 
 /** The gate's answer in the three words a preview shows. Pure. */
 export function liveReachOf(decision: GateDecision): LiveReach {
   if (decision.allowed === false) return { reach: 'refused', deniedAt: decision.deniedAt, reason: decision.reason }
-  return decision.mode === 'live' ? { reach: 'live', profileId: decision.profileId } : { reach: 'sandbox' }
+  if (decision.mode !== 'live') return { reach: 'sandbox' }
+  const past = (decision as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
+  return { reach: 'live', profileId: decision.profileId, ...(past?.length ? { pastOwnLimits: past } : {}) }
 }
 
 export function reachLabel(reach: LiveReach): string {

@@ -26,6 +26,13 @@ export interface ApprovedRun {
   actor: AdsActor
   reason: string
   changeSetId: string
+  /**
+   * 4A (Owner decided 2026-10-06) — a person approved it: the write carries his manual mark (passes a halt, autonomy
+   * OFF, pins and the allowlist, like his own click), and his approval is his "Send anyway" past his own limits — the
+   * card showed them before he approved (`ownLimitsNote`). False for a run a standing rule approved.
+   */
+  manual: boolean
+  confirmOwnLimits: boolean
 }
 
 /** The actor, the audit reason and the change set an approved run writes with — or why it may not run. */
@@ -38,23 +45,40 @@ export function approvedRun(ctx: ToolContext, why: string): ApprovedRun | { refu
   const reason = ctx.via === 'claude'
     ? claudeReason(approvalId, said)
     : `${ctx.via === 'fleet' ? 'Fleet request' : 'Approved request'} ${approvalId}: ${said}`
-  return { actor: claudeActor(approver), reason, changeSetId: approvalId }
+  const person = ctx.approvedByPerson === true
+  return { actor: claudeActor(approver), reason, changeSetId: approvalId, manual: person, confirmOwnLimits: person }
 }
 
 // ── Live reach, stored with the preview ───────────────────────────────────────────────────────────
 
 /** Where an approved write lands, as the preview stores it: never a refusal (a refused request is not queued). */
-export type StoredReach = { reach: 'live'; profileId: string } | { reach: 'sandbox' }
+export type StoredReach = ({ reach: 'live'; profileId: string } | { reach: 'sandbox' }) & {
+  /** 4A + 3A — his own limits this request goes past (shown on the card; approving sends it anyway). */
+  pastOwnLimits?: Array<{ limit: string; reason: string }>
+}
 
 export function storedReach(reach: Exclude<LiveReach, { reach: 'refused' }>): StoredReach {
-  return reach.reach === 'live' ? { reach: 'live', profileId: reach.profileId } : { reach: 'sandbox' }
+  const past = reach.reach === 'live' && reach.pastOwnLimits?.length ? { pastOwnLimits: reach.pastOwnLimits } : {}
+  return reach.reach === 'live' ? { reach: 'live', profileId: reach.profileId, ...past } : { reach: 'sandbox' }
 }
 
 /** The sentence the approver reads beside the change. */
 export function reachNote(reach: StoredReach): string {
-  return reach.reach === 'live'
+  const base = reach.reach === 'live'
     ? `live: after approval it is sent to Amazon (Amazon Ads profile ${reach.profileId}).`
     : 'sandbox: after approval it is recorded in Nexus only. Amazon ads writes are not live, so nothing reaches Amazon.'
+  const over = ownLimitsNote(reach)
+  return over ? `${base} ${over}` : base
+}
+
+/**
+ * 4A + 3A — the over-limit warning the approval card shows BEFORE he approves: the request goes past his own limits
+ * (bounds, bid policies, spend ceilings, the daily budget-move limit, the value cap), and approving it sends it anyway.
+ * Null when it passes none.
+ */
+export function ownLimitsNote(reach: { pastOwnLimits?: Array<{ reason: string }> }): string | null {
+  const past = reach.pastOwnLimits ?? []
+  return past.length ? `Warning — this goes past your own limits: ${past.map((l) => l.reason).join('; ')}. Approving it sends it anyway.` : null
 }
 
 /** What to do about a refusal, by the gate's own reason code. */
@@ -85,7 +109,11 @@ export function gateRefusal(reach: Extract<LiveReach, { reach: 'refused' }>): st
 export function approvedReachOf(approvedPreview: unknown): StoredReach | null {
   const reach = (approvedPreview as { reach?: unknown } | null | undefined)?.reach as StoredReach | undefined
   if (!reach || typeof reach !== 'object') return null
-  if (reach.reach === 'live' && typeof reach.profileId === 'string') return { reach: 'live', profileId: reach.profileId }
+  if (reach.reach === 'live' && typeof reach.profileId === 'string') {
+    // 4A + 3A — the own limits the card warned about are part of what he approved.
+    const past = Array.isArray(reach.pastOwnLimits) && reach.pastOwnLimits.length ? { pastOwnLimits: reach.pastOwnLimits } : {}
+    return { reach: 'live', profileId: reach.profileId, ...past }
+  }
   if (reach.reach === 'sandbox') return { reach: 'sandbox' }
   return null
 }
@@ -117,6 +145,12 @@ export function recheck(ctx: ToolContext, fresh: ToolResult, material: readonly 
   const now = (fresh.preview ?? {}) as Record<string, unknown>
   const before = (ctx.approvedPreview ?? {}) as Record<string, unknown>
   if (canonical(now.reach) !== canonical(approved)) {
+    // 4A + 3A — same destination, but the own limits it goes past are not the ones the card warned him about.
+    const where = (r: unknown) => canonical({ ...(r as StoredReach | undefined), pastOwnLimits: undefined })
+    if (where(now.reach) === where(approved)) {
+      const over = ownLimitsNote((now.reach ?? {}) as StoredReach)
+      return `Not run: the limits it goes past changed after you approved it.${over ? ` ${over.replace(' Approving it sends it anyway.', '')}` : ''} Ask for it again to see the warning first.`
+    }
     const said = (r: unknown) => ((r as StoredReach | undefined)?.reach === 'live' ? `live (profile ${(r as { profileId: string }).profileId})` : 'sandbox')
     return `Not run: it was approved as ${said(approved)}, and it would now be ${said(now.reach)}.`
   }

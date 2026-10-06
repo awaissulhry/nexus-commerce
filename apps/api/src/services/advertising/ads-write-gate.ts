@@ -56,11 +56,43 @@ export type GateDeniedAt =
   | 'ad_product_unsupported'
   // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
   | 'market_limits'
+  // 3A (Owner decided 2026-10-06) — a PERSON's own write goes past one of HIS limits: it waits for his "Send anyway".
+  | 'needs_confirmation'
+
+/**
+ * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
+ * (`entity_bounds`), his spend ceilings, the daily budget-move limit and the per-change value cap. An engine, rule,
+ * schedule or sweep past one is refused, as always. A person's own write past one is not refused: the gate answers
+ * `needs_confirmation` with every limit it passes, and the same write sent again with `confirmOwnLimits` goes through
+ * (`pastOwnLimits` says which, for the action log). Amazon's own limits, the kill switch, the connection's mode and
+ * writes switch are never his to pass.
+ */
+export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling'
+export interface OwnLimit { limit: OwnLimitKind; reason: string }
+export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
+  entity_bounds: 'your bid or budget limit',
+  spend_ceiling: 'your spend ceiling',
+  budget_day_move: 'the daily budget-move limit',
+  value_cap: 'the per-change value cap',
+  cpc_ceiling: 'your CPC ceiling',
+}
+
+/** The sentence a person reads when his own write goes past his limits. Pure. */
+export function ownLimitsSentence(limits: OwnLimit[]): string {
+  const names = [...new Set(limits.map((l) => OWN_LIMIT_LABEL[l.limit]))]
+  return `This goes past ${names.join(' and ')}: ${limits.map((l) => l.reason).join('; ')}. It is your own limit, so you can send it anyway.`
+}
+
+/** The action log's line for a write a person sent past his limits ("sent past <limit> by <person>"). Pure. */
+export function sentPastSentence(limits: OwnLimit[], actor: string | null | undefined): string {
+  const names = [...new Set(limits.map((l) => OWN_LIMIT_LABEL[l.limit]))]
+  return `sent past ${names.join(' and ')} by ${actor || 'an unrecorded person'}: ${limits.map((l) => l.reason).join('; ')}`
+}
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
-  | { allowed: true; mode: 'live'; profileId: string }
-  | { allowed: false; reason: string; deniedAt: GateDeniedAt }
+  | { allowed: true; mode: 'live'; profileId: string; /** 3A — the person's own limits this write was confirmed past. */ pastOwnLimits?: OwnLimit[] }
+  | { allowed: false; reason: string; deniedAt: GateDeniedAt; /** 3A — with `needs_confirmation`: every own limit it passes. */ ownLimits?: OwnLimit[] }
 
 export interface GateContext {
   marketplace: string | null
@@ -158,8 +190,15 @@ export interface GateContext {
    * bound and the value cap all still bind.
    * The create service sets it with `isPersonCreate` (the same test, for a bare person id), so a person's ADD is
    * judged exactly as his edit — at the screen's pre-check, in the worker and on the add itself.
+   * 3A (Owner decided 2026-10-06) — past one of HIS limits (OwnLimitKind) his write is not refused: it needs his
+   * confirmation (`needs_confirmation`), then passes with `confirmOwnLimits`.
    */
   manual?: boolean
+  /**
+   * 3A — "Send anyway": the person saw the over-limit warning and confirmed. Honoured ONLY with `manual` (a person's own
+   * write); an engine passing it is still refused. Carried on the queue row to the worker, like `manual`.
+   */
+  confirmOwnLimits?: boolean
 }
 
 /** Fields whose value is a bid in cents, and therefore subject to entity bid bounds. */
@@ -243,6 +282,13 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   const { getAutomationState } = await import('./ads-automation-state.service.js')
   const state = await getAutomationState()
   const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
+  // 3A — a person's write past one of his own limits is collected here instead of refused (see OwnLimitKind).
+  const own: OwnLimit[] = []
+  const ownOrRefuse = (d: Extract<GateDecision, { allowed: false }>): Extract<GateDecision, { allowed: false }> | null => {
+    if (ctx.manual !== true) return d
+    own.push({ limit: d.deniedAt as OwnLimitKind, reason: d.reason })
+    return null
+  }
   if (state.effectivelyStopped && !ctx.isSuppression && !personPasses) {
     const why = state.haltReason
       ? `halted: ${state.haltReason}`
@@ -407,7 +453,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       intendedValueCents: ctx.intendedValueCents,
       isSuppression: ctx.isSuppression,
     })
-    if (bounds) return bounds
+    if (bounds && ownOrRefuse(bounds)) return bounds
 
     /**
      * AUTO.A7 — per-SCOPE spend ceilings, at the one door every write passes.
@@ -437,7 +483,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         marketplace: campaign.marketplace,
         queueId: ctx.queueId ?? null,
       })
-      if (denial) return denial
+      if (denial && denial.allowed === false && ownOrRefuse(denial as Extract<GateDecision, { allowed: false }>)) return denial
     }
 
     /**
@@ -467,7 +513,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         queueId: ctx.queueId ?? null,
         marketplace: campaign.marketplace,
       })
-      if (denial) return denial
+      if (denial && denial.allowed === false && ownOrRefuse(denial as Extract<GateDecision, { allowed: false }>)) return denial
     }
 
     // WC — the campaign's maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
@@ -485,13 +531,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // through the gate sees only its slice.
   const cap = maxWriteValueCents()
   if (ctx.payloadValueCents > cap) {
-    return {
+    const overCap: Extract<GateDecision, { allowed: false }> = {
       allowed: false,
       reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
       deniedAt: 'value_cap',
     }
+    if (ownOrRefuse(overCap)) return overCap
   }
 
+  // 3A — a person's own write past his own limits: refused until he confirms; once he has, it goes, and says so.
+  if (own.length) {
+    if (ctx.confirmOwnLimits === true) return { allowed: true, mode: 'live', profileId: conn.profileId, pastOwnLimits: own }
+    return { allowed: false, reason: ownLimitsSentence(own), deniedAt: 'needs_confirmation', ownLimits: own }
+  }
   return { allowed: true, mode: 'live', profileId: conn.profileId }
 }
 

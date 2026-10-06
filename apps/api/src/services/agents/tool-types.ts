@@ -9,8 +9,19 @@
  * tool-contract.vitest.test.ts holds these rules for every registered tool.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { z } from 'zod'
 import type { FEATURES, FIELDS } from '@nexus/shared/permissions'
+
+/**
+ * 4A (Owner decided 2026-10-06) — set while `execute` carries out a request a standing rule approved (`decisionVia:
+ * 'auto'`), not a person. The ads change tools judge a request as the approver's own click (`gateContextFor`); inside
+ * such a run their re-check asks the write gate as a machine's write instead, so a halt, autonomy OFF, pins, the
+ * allowlist and his own limits refuse it exactly as before.
+ */
+const ruleApprovedRun = new AsyncLocalStorage<true>()
+export const runAsRuleApproved = <T>(work: () => Promise<T>): Promise<T> => ruleApprovedRun.run(true, work)
+export const isRuleApprovedRun = (): boolean => ruleApprovedRun.getStore() === true
 
 export type RiskTier = 'low' | 'medium' | 'high'
 
@@ -138,6 +149,13 @@ export interface ToolContext {
   via: ToolDoor
   /** C1 — `execute` (and the approval's staleness re-check): the approval this run carries out. */
   approvalId?: string
+  /**
+   * 4A (Owner decided 2026-10-06) — `execute` only: a PERSON approved this request (in Nexus, or with his code in
+   * Claude), not a standing rule (`decisionVia: 'auto'`). Such a run counts as his own click: an ads write carries his
+   * manual mark (it passes a halt, autonomy OFF, pins and the allowlist) and his approval counts as "Send anyway" past
+   * his own limits, which the card showed before he approved.
+   */
+  approvedByPerson?: boolean
   /**
    * C1 — `execute` only: the preview the person approved, raw, as the approval stores it. A tool may compare its
    * fresh dry run with it and refuse on a difference (the gate's staleness check runs just before, on the
