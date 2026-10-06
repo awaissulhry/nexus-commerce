@@ -164,7 +164,7 @@ async function undoItems(rows: UndoRow[], negatives: UndoNegative[]): Promise<{ 
       const now = ((campaign.get(r.entityId)?.dynamicBidding as { placementBidding?: Array<{ placement?: string; percentage?: number }> } | null)?.placementBidding) ?? []
       for (const a of back) {
         const from = now.find((n) => n.placement === a.placement)?.percentage ?? 0
-        if (typeof a.percentage === 'number' && a.percentage !== from) items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'placementPct', fromPct: from, toPct: a.percentage } })
+        if (typeof a.percentage === 'number' && a.percentage !== from) items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'placementPct', fromPct: from, toPct: a.percentage, ...(a.placement ? { placement: a.placement } : {}) } })
       }
       continue
     }
@@ -672,7 +672,7 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
   const raises = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) > (current[p.key] ?? 0)).map((p) => p.label)
   // AA-W2-8 — each adjustment that moves is one item, in points: a raise raises every bid there.
   const items: KitItem[] = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) !== (current[p.key] ?? 0))
-    .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0 } }))
+    .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0, placement: p.placement } }))
   const rule = await ruleFactsFor({ tool: 'set-placement-multipliers', limits: PLACEMENT_LIMITS, items, writes: [{ ...intent, label: `campaign "${c.name}"` }], approvalId: ctx?.approvalId })
   return {
     ok: true,

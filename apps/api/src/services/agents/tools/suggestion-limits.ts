@@ -226,7 +226,7 @@ export async function suggestionLimitFacts(items: readonly DecisionItem[], appro
       const from = c ? placementOf(c.dynamicBidding, placement) : null
       const to = from != null ? appliedPlacementPct(action, from) : null
       if (!c || from == null || to == null) { unjudged(item, 'Nexus cannot tell the placement it would set before it runs'); continue }
-      const change: KitChange = { field: 'placementPct', fromPct: from, toPct: to }
+      const change: KitChange = { field: 'placementPct', fromPct: from, toPct: to, placement }
       kit.push({ entity: { kind: 'campaign', id: c.id }, change })
       const m = measure(change)
       if (m.direction === 'raise') { facts.placements.raises++; facts.placements.largestRaisePoints = Math.max(facts.placements.largestRaisePoints, m.points ?? 0) }
