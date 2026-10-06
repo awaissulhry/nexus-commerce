@@ -123,6 +123,11 @@ describe('where a value comes from', () => {
     })
     // More than two: the first two by name, the rest counted; every one in full behind the info mark.
     expect(readByWords(['a: x', 'b (y)', 'c', 'd']).text).toBe('Read by a; b and 2 more')
+    // One engine named by two entries is one reader (the monthly cap: the market's and a product's, both the budget engine).
+    const cap = readByWords(['the budget engine (every 30 minutes): the market cap', 'the budget engine: a category or product cap'])
+    expect(cap.text).toBe('Read by the budget engine')
+    expect(cap.full).toBe('the budget engine (every 30 minutes): the market cap · the budget engine: a category or product cap')
+    expect(readByWords(['x (1)', 'x: 2', 'y', 'z']).text).toBe('Read by x; y and 1 more')
   })
 })
 

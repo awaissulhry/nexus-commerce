@@ -263,7 +263,8 @@ function capLine(entry: FieldEntry | undefined, scope: Scope, currency: string |
 export function readByWords(readBy: readonly string[] | undefined): { storedOnly: boolean; text: string; full: string | null } {
   if (!readBy?.length) return { storedOnly: true, text: 'Stored only — no engine reads this yet', full: null }
   // The registry's sentences name the reader first; the rest (after ":" or "(") explains it. The full text is one tap away.
-  const shorts = readBy.map((r) => r.split(/[:(]/)[0].trim()).filter(Boolean)
+  // Each reader once: two entries for one engine (the budget engine reads a market's cap and a product's) read as one.
+  const shorts = [...new Set(readBy.map((r) => r.split(/[:(]/)[0].trim()).filter(Boolean))]
   const shown = shorts.length > 2 ? `${shorts.slice(0, 2).join('; ')} and ${shorts.length - 2} more` : shorts.join('; ')
   return { storedOnly: false, text: `Read by ${shown}`, full: readBy.join(' · ') }
 }
