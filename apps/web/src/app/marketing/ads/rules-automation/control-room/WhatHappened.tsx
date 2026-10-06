@@ -18,9 +18,9 @@ import { ChangeValue } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import Link from '@/lib/workspaces/Link'
 import {
-  changeLine, changeMatches, changedOn, declinedNote, deliveryWords, digestSendImpact, digestSendResult, digestState, evidenceWords,
+  changeLine, changeMatches, changedOn, controlChangeWords, declinedNote, deliveryWords, digestSendImpact, digestSendResult, digestState, evidenceWords,
   makersOf, ruleLevelWord, spendLimitWords, undoImpact, undoResult, weekTiles, whoMade,
-  ALL_MAKERS, type Change, type ChangeFilter, type Digest, type DigestRule,
+  ALL_MAKERS, type Change, type ChangeFilter, type ControlChange, type Digest, type DigestRule,
 } from './historyWords'
 import { agoWords, whenWords } from './timeWords'
 import { tabHref } from './roomTabs'
@@ -31,6 +31,13 @@ const ACCENT: Record<Tone, string> = {
 }
 
 const dash = (n: number) => (n ? n.toLocaleString('en-IE') : '—')
+
+const CONTROL_COLUMNS: Array<Column<ControlChange>> = [
+  { key: 'when', label: 'When', render: (c) => <>{whenWords(c.at)}</> },
+  { key: 'who', label: 'Who', render: (c) => <>{c.by}</> },
+  { key: 'what', label: 'What', render: (c) => <>{c.what}</> },
+  { key: 'change', label: 'Change', render: (c) => <>{controlChangeWords(c)}</> },
+]
 
 const RULE_COLUMNS: Array<Column<DigestRule>> = [
   { key: 'rule', label: 'Rule', render: (r) => <>{r.name}</> },
@@ -97,6 +104,9 @@ export function WhatHappened() {
   const [results, setResults] = useState<ReadonlyMap<string, { ok: boolean; text: string }>>(new Map())
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<{ ok: boolean; text: string } | null>(null)
+  // CR — who moved the controls (levels, Stop, brakes, "Automation may change it"): a person's moves, not automation's.
+  const [controls, setControls] = useState<ControlChange[] | null>(null)
+  const [controlsErr, setControlsErr] = useState<string | null>(null)
   const confirm = useActionConfirm()
 
   const load = useCallback(async () => {
@@ -107,6 +117,13 @@ export function WhatHappened() {
       setRows(Array.isArray(j?.items) ? (j.items as Change[]) : [])
       setErr(null)
     } catch (e) { setErr((e as Error).message) }
+    try {
+      const c = await fetch(`${getBackendUrl()}/api/advertising/control-room/control-changes?days=7&limit=60`, { cache: 'no-store' })
+      if (!c.ok) throw new Error(`The changes to the controls could not be read (${c.status}).`)
+      const j = await c.json()
+      setControls(Array.isArray(j?.rows) ? (j.rows as ControlChange[]) : [])
+      setControlsErr(null)
+    } catch (e) { setControlsErr((e as Error).message) }
     // The summary is a separate read and fails soft: the change list must show whether or not the week can be summed.
     try {
       const w = await fetch(`${getBackendUrl()}/api/advertising/digest/weekly?mode=current`, { cache: 'no-store' })
@@ -233,6 +250,23 @@ export function WhatHappened() {
           </Card>
         )
       })()}
+
+      <Card
+        header="Changes to the controls"
+        description="Who moved a level, Stop now, the brakes or a campaign’s “Automation may change it” — the last 7 days."
+      >
+        {controlsErr
+          ? (
+            <Banner tone="danger" title="The changes to the controls could not be read" action={<Button size="sm" variant="secondary" onClick={() => void load()}>Try again</Button>}>
+              {controlsErr}
+            </Banner>
+          )
+          : !controls
+            ? <span className={styles.muted}>Reading…</span>
+            : controls.length === 0
+              ? <span className={styles.muted}>No one changed the controls in the last 7 days.</span>
+              : <DataGrid<ControlChange> ariaLabel="Changes to the controls" rows={controls} rowKey={(c) => c.id} columns={CONTROL_COLUMNS} />}
+      </Card>
 
       <Card
         header="What automation did"
