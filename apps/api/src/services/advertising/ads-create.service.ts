@@ -36,6 +36,7 @@ import { sdExpressionValue, sdTargetExpression } from './sd-target-expression.js
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
 import { checkAdsWriteGate, type GateContext, type GateDecision } from './ads-write-gate.js'
 import { createIdentity, withCreateClaim } from './ads-create-claim.js'
+import { adsAccountTimeZone } from './ads-market-time.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
@@ -241,10 +242,12 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
     const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
     if (gate.allowed || input.dryRun) {
       const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
+      // CC-26 — SB and SD send a start date: the day in the account's own time zone, not the UTC day.
+      const timeZone = input.type === 'SP' ? null : await startDateTimeZone(ctx.profileId, input.marketplace)
       const r = input.type === 'SD'
-        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020' })
+        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020', timeZone })
         : input.type === 'SB'
-          ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId! })
+          ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId!, timeZone })
           // AX-VT.1 — portfolioId travels with the create. It used to be collected by
           // every builder, stored on the local row below, and dropped right here.
           : await createCampaign(ctx, { ...common, targetingType: input.targetingType ?? 'MANUAL', biddingStrategy: input.biddingStrategy })
@@ -274,6 +277,9 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       ...(brandEntityId ? { brandEntityId } : {}),
       // CC-12 — an SD campaign keeps its tactic, so its ad group is created with the same one (see createAdGroupLocal).
       ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020' } : {}),
+      // CC-27 — the Sponsored Products targeting type this create asked Amazon for (the same value `createCampaign`
+      // sends). The list, the export and the receipt showed it blank until the settings sync read it back.
+      ...(input.type === 'SP' ? { targetingType: input.targetingType ?? 'MANUAL' } : {}),
       // W2-A (CC-3) — a campaign Amazon does not hold is marked FAILED with the reason (the delivery column shows it), not
       // PENDING as if a push were on its way: no path pushes a campaign that has no Amazon id.
       startDate: new Date(),
@@ -285,6 +291,13 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
   await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state, reachedAmazon: externalId != null, ...(externalId ? {} : { error: notSent ?? CAMPAIGN_NOT_ON_AMAZON }) }, input.userId, {}, externalId ? 'SUCCESS' : 'FAILED')
   logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state, ...(externalId ? {} : { notSent }) })
   return { id: campaign.id, externalCampaignId: externalId, mode, reason: externalId ? null : (notSent ?? CAMPAIGN_NOT_ON_AMAZON) }
+}
+
+/** CC-26 — the zone a Sponsored Brands / Display start date is computed in (see ads-market-time.ts); UTC when unknown, said in the log. */
+async function startDateTimeZone(profileId: string, marketplace: string): Promise<string | null> {
+  const found = await adsAccountTimeZone(profileId, marketplace)
+  if (!found) logger.warn('[CC-26] no time zone known for this ads account — start date sent as the UTC day', { profileId, marketplace })
+  return found?.timeZone ?? null
 }
 
 /**
@@ -854,6 +867,7 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
   if (!gate.allowed) { out.ok = false; out.errors.push('write-gate closed — allowlist the campaign first'); return out }
   const extC = campaign.externalCampaignId
   const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
+  const isSb = campaign.adProduct === 'SPONSORED_BRANDS'
   const adGroups = await prisma.adGroup.findMany({ where: { campaignId } })
   for (const ag of adGroups) {
     let extAg = ag.externalAdGroupId
@@ -889,6 +903,10 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
           const r = await createKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: t.expressionValue ?? '', matchType: (t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD') || 'BROAD', bid, state: 'enabled' })
           extId = r.externalId; if (extId) out.keywords++
           else out.errors.push('keyword "' + (t.expressionValue || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
+        } else if (isSb) {
+          // CC-31 — not to /sp/targets: Nexus has no Sponsored Brands targets path (see SB_TARGET_REFUSED).
+          out.errors.push('target "' + (t.expressionValue || '') + '": ' + SB_TARGET_REFUSED)
+          continue
         } else {
           const expression = [{ type: 'ASIN_SAME_AS', value: t.expressionValue ?? '' }]
           // CC-12 — an SD row is sent in SD's own dialect, rebuilt from what Nexus stored (kind, audience type, value).
@@ -1243,6 +1261,8 @@ export interface NewTarget {
   creationFlow?: boolean
 }
 type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string; /** W2-A — why it did not reach Amazon. */ notSent?: NotSent | null } & PersonAddResult
+/** CC-31 — why a product, category or audience target is not added to a Sponsored Brands campaign. */
+export const SB_TARGET_REFUSED = 'Nexus cannot add product, category or audience targets to a Sponsored Brands campaign yet: Amazon takes them on its Sponsored Brands targets endpoint, which Nexus does not send to. Nothing was created. Add them in the Amazon Ads console, or add keywords instead.'
 export async function createTargetLocal(input: NewTarget): Promise<TargetCreateResult> {
   // CM-33 — the dedupe below and the create are one step (see createKeywordLocal).
   return withCreateClaim(createIdentity('target', input.adGroupId, input.kind, input.value), () => createTargetOnce(input), () => {
@@ -1253,6 +1273,17 @@ export async function createTargetLocal(input: NewTarget): Promise<TargetCreateR
 async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
+  // CC-31 — a Sponsored Brands campaign's product / category / audience targets go to Amazon's Sponsored Brands targets
+  // endpoint, which Nexus has no path to. This sent them to the Sponsored Products one (`/sp/targets`), which knows
+  // nothing of an SB campaign. Refused before anything is written or sent, with the reason (a launch lists it, a
+  // person's add answers 403 with it).
+  if (adProductOf(ag.campaign) === 'SPONSORED_BRANDS') {
+    logger.warn('[CC-31] Sponsored Brands target refused — Nexus has no SB targets path', { adGroupId: input.adGroupId, kind: input.kind })
+    return {
+      id: null, externalTargetId: null, mode: 'local', notSent: { outcome: 'refused', reason: SB_TARGET_REFUSED },
+      ...(input.requireAmazon && !input.skipAmazon ? personAdd('refused', SB_TARGET_REFUSED) : {}),
+    }
+  }
   // CC-12 — a Sponsored Display target is built in SD's own dialect, first: one Amazon would refuse is refused before
   // anything is written, and a nested audience is stored (and matched below) by the text it names.
   const sdExpression = input.kind === 'AUDIENCE' || ag.campaign?.adProduct === 'SPONSORED_DISPLAY'

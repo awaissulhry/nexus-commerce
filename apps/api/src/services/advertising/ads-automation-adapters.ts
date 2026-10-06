@@ -383,7 +383,9 @@ const A4: AutomationAdapter = {
   explain: (opts: ExplainOptions) => engineExplain(['ads-auto-bid'], ['automation:auto-bid'], opts),
   async runPreview(): Promise<PreviewOutcome> {
     const { previewBidOptimization } = await import('./ads-bid-optimizer.service.js')
-    const out = await previewBidOptimization()
+    // W0 — with the run's own options: the bare call was the flat-30 % view, not the bids auto-bid would set.
+    const { AUTO_BID_OPTIMIZER_OPTIONS } = await import('./ads-auto-bid.service.js')
+    const out = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
     return { kind: 'saved', subject: null, result: { targetAcos: out.targetAcos, profitMode: out.profitMode, bayesian: out.bayesian, proposals: out.proposals.slice(0, 100), total: out.proposals.length } }
   },
   // R16 — its per-business switch, under the env and the account dial (A3).
@@ -724,7 +726,7 @@ const A12: AutomationAdapter = {
 
 const A13: AutomationAdapter = {
   id: 'A13', key: 'ads-guardrails', name: 'Ads guardrails',
-  what: 'Bid bounds and daily spend ceilings that bind every engine and rule, plus the live-write allowlist.',
+  what: 'Bid bounds and daily spend ceilings the write gate holds every Nexus ads write to (a spend ceiling caps a day\'s budget increases, not what Amazon spends), plus the live-write allowlist.',
   area: 'amazon-ads', writesTo: ['nexus'], view: FEATURES.adsView, claude: 'tune', preview: 'none',
   previewNote: 'Guardrails are brakes; the write gate applies them to every write.',
   crons: [], schedule: null,

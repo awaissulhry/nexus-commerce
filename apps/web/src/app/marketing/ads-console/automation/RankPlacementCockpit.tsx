@@ -1089,7 +1089,7 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           <span style={{ flex: 1 }} />
           {whenLoading && <span className="az-cockpit-status">Loading…</span>}
           {!whenLoading && family && family.campaigns.length > 0 && <span className="az-cockpit-status ok">{family.campaigns.length} campaign{family.campaigns.length === 1 ? '' : 's'} · {family.asins.length} ASIN{family.asins.length === 1 ? '' : 's'} in {market}</span>}
-          <a className="az-when-link" href={`/marketing/ads-console/automation?tab=dayparting&dpMarket=${market}`} title={`Open the full ${market} demand heatmap`}>Full heatmap →</a>
+          <a className="az-when-link" href="/marketing/ads/rules-automation/dayparting" title="Open the hourly heatmap on the Dayparting page">Full heatmap →</a>
         </div>
 
         <div className="az-when-sub">Demand by day &amp; hour ({market}, Europe/Rome) — the hours genuinely differ across days{family?.demand?.blended ? ` · accurate even where ${family.parentName ?? 'this product'} is thin (${family.demand.familyOrders} orders, ${family.demand.windowDays}d, market-blended)` : ''}</div>

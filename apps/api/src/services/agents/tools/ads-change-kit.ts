@@ -73,7 +73,12 @@ const UNBLOCK: Record<string, string> = {
 
 /** A refused request, said plainly: not queued, why, and what would unblock it. */
 export function reachRefusal(reach: Extract<LiveReach, { reach: 'refused' }>): string {
-  return `Not queued: Amazon's write gate refuses it — ${reach.reason}. ${UNBLOCK[reach.deniedAt] ?? ''}`.trim()
+  return `Not queued: ${gateRefusal(reach)}`
+}
+
+/** The gate's refusal and how to unblock it, as one sentence (a batch names several, each after its item). */
+export function gateRefusal(reach: Extract<LiveReach, { reach: 'refused' }>): string {
+  return `Amazon's write gate refuses it — ${reach.reason}. ${UNBLOCK[reach.deniedAt] ?? ''}`.trim()
 }
 
 /** The reach the person approved, from the stored preview; null for a request made before these tools could run. */

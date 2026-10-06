@@ -10,6 +10,14 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
 
+/**
+ * CM-27 — one timing for a person's edit on every campaign-manager screen: sent to Amazon now (the ads drain picks it
+ * up within a minute), as the Campaigns grid and the campaign Details tab always did. The Ad Groups, Targets, Negatives
+ * and Ads tabs held theirs for a 5-minute grace window that no tray on those pages could cancel, so the same status or
+ * bid change reached Amazon at once from one page and five minutes later from the next.
+ */
+export const SEND_NOW = { applyImmediately: true } as const
+
 /** applied = written with nothing to send; queued = written and on its way to Amazon; refused / error = not changed. */
 export type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
 export interface WriteResult { ok: boolean; outcome: WriteOutcome; reason: string | null }

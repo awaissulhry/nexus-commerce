@@ -47,9 +47,11 @@ const undoChange: AgentTool = {
   maxClaudeTrust: 'auto',
   description:
     'Undo a change that ran in Nexus: asks for the opposite change (the old price, the old text) as a NEW change '
-    + 'request, which waits for a person to approve it in Nexus like any change, then puts the old values back — and sends '
-    + 'them to the marketplaces again where the change reached them. Refused when the value changed again since (undo '
-    + 'would overwrite that), when an undo of it already waits, or when the change cannot be undone.',
+    + 'request of the tool that puts it back, decided as this business set that tool: a person approves it in Nexus, the '
+    + 'person who asked confirms it in Claude with their authenticator code, or it runs by the business\'s rule. It then '
+    + 'puts the old values back — and sends them to the marketplaces again where the change reached them. Refused when '
+    + 'the value changed again since (undo would overwrite that), when an undo of it already waits, or when the change '
+    + 'cannot be undone.',
   async handler(args): Promise<ToolResult> {
     const answer = await undoRequestFor({
       changeId: typeof args.changeId === 'string' ? args.changeId : undefined,

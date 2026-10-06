@@ -16,8 +16,9 @@ export const MAX_BID_CENTS_CEILING = 100_000
 
 /**
  * NOT handled here: target ACOS. `Campaign.targetAcosPct` was added in A1 and is a
- * mistake — `dynamicBidding.targetAcos` already exists and is read by five services
- * including ads-bid-optimizer. Wiring a second source of truth for the same number is
+ * mistake — `dynamicBidding.targetAcos` already exists: the screens and Claude write it,
+ * and the alerts, the suggestions, the grids and (since ads autonomy W0) the bid optimiser
+ * read it (ads-target-acos-resolver.ts). Wiring a second source of truth for the same number is
  * exactly the class of bug this programme keeps uncovering, so the column is left
  * deliberately unused pending a destructive migration to drop it.
  *

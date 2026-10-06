@@ -223,7 +223,7 @@ export function RangePopover({
 const VALUE_COPY = {
   targetAcos: {
     title: 'Target ACoS', prefix: undefined as string | undefined, suffix: '%', placeholder: 'unset',
-    note: 'Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting, which is why the column reads a dash rather than 30%.',
+    note: 'Nexus\'s bid optimiser moves this campaign\'s bids toward it, unless a rule or a plan sets a target of its own. Leave blank and it uses the account\'s default target ACoS, else profit data, else its own 30% fallback — a fallback is not a setting, which is why the column reads a dash rather than 30%.',
   },
   dailyBudget: {
     // CM-32 — the prefix is the campaign's own currency (see `currency` on ValuePopover); it was '€' for every market.

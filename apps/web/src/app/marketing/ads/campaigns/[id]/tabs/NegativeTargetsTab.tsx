@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP } from '../../../_shared/adsWrite'
+import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP, SEND_NOW } from '../../../_shared/adsWrite'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../_grid/AdsDataGrid'
 import { STATUS_PILL } from '../../_grid/format'
 import { StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
@@ -68,7 +68,7 @@ export function NegativeTargetsTab({ campaign }: { campaign: CampaignDetailData 
     ],
     onApply: async (edits) => {
       const res = await adsWriteMany(edits.filter((e) => e.values.status).map((e) =>
-        ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { status: e.values.status, applyImmediately: false, reason: 'Edit Negative Targets' } })))
+        ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { status: e.values.status, ...SEND_NOW, reason: 'Edit Negative Targets' } })))
       setBump((b) => b + 1)
       report(res)
     },

@@ -141,7 +141,8 @@ export function LimitsView({ scopeOptions, global }: {
           A ceiling binds <b>budget increases</b> at the write gate (campaign ⊂ line ⊂ portfolio ⊂ market — the
           tightest one refuses and the refusal names it) and keyword-bid commitments on the Keyword Tracker&rsquo;s
           apply path. It counts <b>our own ledger of today&rsquo;s authorisations</b> — Amazon&rsquo;s spend figure lags
-          ~2 days and cannot referee a refusal happening now.
+          ~2 days and cannot referee a refusal happening now. It does <b>not</b> cap what Amazon actually spends: a
+          budget cut never trips it, and elsewhere a bid or placement raise is not counted.
         </p>
         {err && <p className="h10-au-limiterr" role="alert"><AlertTriangle size={13} aria-hidden /> {err}</p>}
         {ceilings && ceilings.length === 0 && (

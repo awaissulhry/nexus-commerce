@@ -169,7 +169,12 @@ describe('R14 — tune-ad-engine', () => {
   })
 
   it('the account target ACOS and the breaker: lower is inside; higher, new or back to the default needs a person', async () => {
-    expect((await dry({ setting: 'account-target-acos', accountTargetAcos: { targetAcosPct: 30 } })).preview!.raises).toEqual(['target-ACOS bid rules without a target of their own start bidding to 30%'])
+    expect((await dry({ setting: 'account-target-acos', accountTargetAcos: { targetAcosPct: 30 } })).preview!.raises).toEqual([
+      'the bid optimiser (auto-bid, autopilot plans, "Optimise bids to target ACOS" rules) moves every campaign without a target ACOS of its own toward 30% (unless a rule or plan sets its own), instead of profit data or a flat 30%',
+      'target-ACOS bid rules without a target of their own start bidding to 30%',
+    ])
+    // W0 — a launch default above 100 % is a real choice: the optimiser reads it too.
+    expect((await dry({ setting: 'account-target-acos', accountTargetAcos: { targetAcosPct: 150 } })).preview!.raises).toHaveLength(2)
     const set = await run({ setting: 'account-target-acos', accountTargetAcos: { targetAcosPct: 30 } })
     expect(set.ok).toBe(true)
     expect((await dry({ setting: 'account-target-acos', accountTargetAcos: { targetAcosPct: 25 } })).preview).toMatchObject({ raises: [] })

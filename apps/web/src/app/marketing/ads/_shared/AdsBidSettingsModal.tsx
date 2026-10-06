@@ -15,9 +15,11 @@
  *     a bid that will actually land. Dry-run count first; the button carries the count.
  *   · Default ACoS target → `AdsAutomationState.defaultTargetAcosPct` (INTEGER percent — the
  *     0.3-vs-30 encoding trap is live in this codebase, so the field validates integers and
- *     the server rejects fractions). ONE reader: bid_apply's targetAcos/curBidTargetAcos ops,
- *     as fallback when the rule itself has no target. The copy names that reader exactly —
- *     a setting that doesn't say who reads it reads like it governs everything.
+ *     the server rejects fractions). TWO readers: the bid optimiser, for every campaign without
+ *     a target ACoS of its own and no rule or plan target (ads-target-acos-resolver.ts), and
+ *     bid_apply's targetAcos/curBidTargetAcos ops, as fallback when the rule itself has no
+ *     target. The copy names those readers exactly — a setting that doesn't say who reads it
+ *     reads like it governs everything.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
@@ -136,7 +138,7 @@ export function AdsBidSettingsModal({ open, onClose, markets: given }: {
       })
       if (!r.ok) { const j = await r.json().catch(() => null) as { error?: string } | null; toast(j?.error ?? 'Could not save', 'danger'); return }
       setSavedAcos(t)
-      toast(pct == null ? 'Default ACoS target cleared — target-ACoS rules without their own target will refuse again' : `Default ACoS target saved at ${pct}%`, 'success')
+      toast(pct == null ? 'Default ACoS target cleared — the bid optimiser goes back to profit data or 30%, and target-ACoS rules without their own target will refuse again' : `Default ACoS target saved at ${pct}%`, 'success')
     } finally { setBusy(false) }
   }
 
@@ -194,8 +196,10 @@ export function AdsBidSettingsModal({ open, onClose, markets: given }: {
         <section className="h10-bset-sec">
           <h4>Default ACoS target</h4>
           <p className="h10-bset-why">
-            <span>Read by <b>one</b>{' '}thing: a Bid rule&rsquo;s target-ACoS action, when the rule itself doesn&rsquo;t set a
-            target. Whole percent — 30 means 30%. With no default, such a rule refuses and says so.</span>
+            <span>Read by <b>two</b>{' '}things. Nexus&rsquo;s bid optimiser (auto-bid, autopilot plans, &ldquo;Optimise bids to
+            target ACOS&rdquo; rules) moves every campaign without a target ACoS of its own toward it, unless a rule or a plan
+            sets its own, before profit data or its flat 30%. And a Bid rule&rsquo;s target-ACoS action uses it when the rule itself
+            doesn&rsquo;t set a target. Whole percent — 30 means 30%. With no default, such a rule refuses and says so.</span>
           </p>
           <div className="h10-bset-acts">
             <Input suffix="%" inputMode="numeric" placeholder="none" aria-label="Default ACoS target percent"

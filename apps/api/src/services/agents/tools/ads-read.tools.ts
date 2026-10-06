@@ -108,6 +108,8 @@ const AD_MONEY = {
   maxBidCents: ADSPEND,
   minBudgetCents: ADSPEND,
   maxBudgetCents: ADSPEND,
+  // D11 — a campaign's CPC ceiling (a multiple of each target's average cost per click) caps its bids: money.
+  cpcCeiling: ADSPEND,
   targetAcos: ADSPEND,
   placementsPct: ADSPEND,
   placementPct: ADSPEND,
@@ -528,21 +530,30 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
   const positionOf = (c: Record<string, any>): CursorPosition => ({ values: [String(c.marketplace ?? ''), String(c.name ?? '')], id: String(c.id) })
   const page = keysetPage(rows, positionOf, size, scope, a.cursor)
   const ids = page.items.map((c) => String(c.id))
-  const [extra, fresh] = await Promise.all([
+  // D11 — the portfolio by Amazon's id (Campaign.portfolioId), named as Amazon names it.
+  const portfolioIds = [...new Set(page.items.map((c) => c.portfolioId).filter((p): p is string => typeof p === 'string' && p !== ''))]
+  const [extra, fresh, portfolios] = await Promise.all([
     ids.length
       ? prisma.campaign.findMany({
           where: { id: { in: ids } },
           select: {
             id: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
-            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true,
+            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true,
           },
         })
       : Promise.resolve([]),
     performanceAsOf(a.market ? [a.market] : []),
+    portfolioIds.length
+      ? prisma.amazonAdsPortfolio.findMany({ where: { externalPortfolioId: { in: portfolioIds } }, select: { externalPortfolioId: true, name: true } })
+      : Promise.resolve([]),
   ])
   const extraById = new Map(extra.map((c) => [c.id, c]))
+  const portfolioName = new Map(portfolios.map((p) => [p.externalPortfolioId, p.name]))
   const items = page.items.map((c) => {
     const x = extraById.get(String(c.id))
+    // D11 — the campaign's own bid guards, which move a bid Claude asks for (set-target-bid's clampedBy).
+    const guards = (x?.dynamicBidding ?? {}) as { maxBidChangePct?: unknown; cpcCeiling?: { enabled?: unknown; multiple?: unknown } }
+    const maxBidChangePct = Number(guards.maxBidChangePct)
     const spendCents = Math.round(num(c.spend) * 100)
     const salesCents = Math.round(num(c.sales) * 100)
     return {
@@ -564,6 +575,10 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
       maxBidCents: c.maxBidCents ?? null,
       minBudgetCents: c.minBudgetCents ?? null,
       maxBudgetCents: c.maxBudgetCents ?? null,
+      portfolio: c.portfolioId ? { id: String(c.portfolioId), name: portfolioName.get(String(c.portfolioId)) ?? null } : null,
+      maxBidChangePct: Number.isFinite(maxBidChangePct) && maxBidChangePct > 0 ? maxBidChangePct : null,
+      // As the clamp reads it (ads-cpc-ceiling.ts): on only when enabled, 1.5 × when no multiple is stored.
+      cpcCeiling: guards.cpcCeiling?.enabled === true ? { multiple: Number(guards.cpcCeiling.multiple ?? 1.5) } : null,
       liveWrites: x?.liveBidWritesEnabled ?? false,
       bidsSuppressed: x?.bidsSuppressedAt ? { since: iso(x.bidsSuppressedAt), by: x.bidsSuppressedBy ?? null } : null,
       pinned: x ? { bids: x.pinBids, budget: x.pinBudget, placement: x.pinPlacement } : null,
@@ -613,7 +628,9 @@ const adCampaigns: AgentTool = {
   description:
     'The Amazon campaigns, by market and name. Per campaign: campaignId (the Nexus id the other ad tools take) and '
     + 'externalCampaignId (Amazon\'s), name, market, ad product, status and delivery, currency, daily budget, bidding '
-    + 'strategy, target ACoS, placement adjustments, bid and budget bounds, whether live writes are allowed for it '
+    + 'strategy, target ACoS, placement adjustments, bid and budget bounds, its portfolio (Amazon\'s id and name), the '
+    + 'guards that move a bid asked for (maxBidChangePct: the most one bid change may move, in %; cpcCeiling: no bid above '
+    + 'that multiple of a target\'s average cost per click), whether live writes are allowed for it '
     + '(liveWrites), whether its bids are suppressed and by whom, pins, and impressions, clicks, orders, spend, sales, '
     + 'ACoS and ROAS over the window (the last 3 days provisional). Filter by market, status or name.'
     + ' eBay (channel ebay): per campaign its Nexus and eBay ids, market, funding model (cost per sale or per click), '

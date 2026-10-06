@@ -127,7 +127,9 @@ export async function runAutopilotOnce(): Promise<AutopilotTick> {
         const permit = guard.permit()
         const held = nothingHeld()
         if (!allowChange(true, permit, held, 'forward')) { guard.settle(permit, 0, held); continue }
-        const res = await applyPlanActions({ planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace, guardrails: merged, actions: acts, signals })
+        // W0 — a target the plan stores itself is explicit (wins over the campaign's); the merged default is not.
+        const planSetsTargetAcos = typeof ((plan.guardrails ?? {}) as Partial<Guardrails>).targetAcosPct === 'number'
+        const res = await applyPlanActions({ planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace, guardrails: merged, actions: acts, signals, planSetsTargetAcos })
         guard.settle(permit, appliedChanges(res.decisions), held)
         applied.push(...res.decisions)
       }

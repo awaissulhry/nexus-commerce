@@ -7,7 +7,7 @@ const mkBid = (over: Partial<BidProposal>): BidProposal => ({
   targetId: 't1', expression: 'giacca moto pelle', matchType: 'EXACT',
   currentBidCents: 34, proposedBidCents: 29, deltaCents: -5,
   acos: 0.45, spendCents: 1000, salesCents: 2200, clicks: 40, reason: 'x',
-  targetAcosUsed: 0.26, targetBasis: 'profit', ...over,
+  targetAcosUsed: 0.26, targetBasis: 'profit', targetSource: 'profit', ...over,
 })
 const emptyTos: DefendTosResult = { evaluated: 0, changed: 0, applied: 0, skippedNotAllowlisted: 0, dryRun: true, sample: [] }
 
@@ -26,6 +26,11 @@ describe('describeBidProposal', () => {
   it('uses sparse-data framing for a bayesian basis', () => {
     const a = describeBidProposal(mkBid({ targetBasis: 'bayesian' }))
     expect(a.summary.toLowerCase()).toContain('sparse')
+  })
+  it('W0 — names a target the Owner set as his: the campaign\'s own, or the account default', () => {
+    expect(describeBidProposal(mkBid({ targetBasis: 'campaign', targetSource: 'campaign' }))).toMatchObject({ summary: 'Lower bid on “giacca moto pelle” to move toward this campaign’s target ACOS.', basis: 'campaign' })
+    expect(describeBidProposal(mkBid({ targetBasis: 'account', targetSource: 'account' }))).toMatchObject({ summary: 'Lower bid on “giacca moto pelle” to move toward your account’s default target ACOS.', basis: 'account' })
+    expect(describeBidProposal(mkBid({ targetBasis: 'flat', targetSource: 'flat' })).summary).toContain('to move toward your ACOS target')
   })
 })
 

@@ -888,7 +888,7 @@ export function ApplyRulesClient() {
       key: 'tacos',
       label: 'Target ACoS',
       metric: false,
-      tip: 'The target ACoS set on this campaign. A dash means none is set: the bid optimiser then uses a flat 30%, which is a fallback, not a setting. The pencil sets it.',
+      tip: 'The target ACoS set on this campaign: Nexus\'s bid optimiser (auto-bid, autopilot plans, target-ACoS bid rules) moves its bids toward it, unless a rule or a plan sets a target of its own. A dash means none is set: the optimiser then uses the account\'s default target ACoS, else profit data, else a flat 30%, which is a fallback, not a setting. The pencil sets it.',
       sortValue: (r) => r.targetAcosPct ?? -1,
       // 🔴 The guardrail grid returns a PERCENTAGE (`targetAcosPct`); the shared cell takes the
       // FRACTION the campaigns payload stores. Converted here, once, rather than leaning on the
