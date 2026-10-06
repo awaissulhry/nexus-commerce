@@ -107,8 +107,8 @@ export function ProtectedTermsPanel() {
     <section id="protected-terms" className="h10-rb-sec">
       <h3>Protected terms</h3>
       <p className="h10-rb-desc">
-        The opposite of the rules above. A <b>protected</b> term can never be negated by any
-        automation. Enforced on every write to Amazon, so no engine can bypass it.
+        A <b>protected</b> term can never be negated by any automation. Enforced on every write
+        to Amazon, so no engine can bypass it.
       </p>
 
       {showNothingProtected(load) && (
