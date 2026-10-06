@@ -1,16 +1,18 @@
 /**
- * ADS PLAYBOOK PB-6a — "winners stay": the lock the harvest paths ask before they create or negate a search term.
+ * ADS PLAYBOOK PB-6a — "winners stay": the lock the harvest paths and the negative write service ask.
  *
- *   L1  A negative never lands where it blocks a positive of the same ad group: an exact negative blocks a positive
- *       EXACT keyword with the same text; a phrase negative blocks any positive keyword whose words hold the phrase's
- *       words, in order; a negative product target blocks the positive product target of the same ASIN.
+ *   L1  A negative never lands where it blocks a positive of the same ad group (campaign scope: of any ad group of the
+ *       campaign): an exact negative blocks a positive EXACT keyword with the same text; a phrase negative blocks any
+ *       positive keyword whose words hold the phrase's words, in order; a negative product target blocks the positive
+ *       product target of the same ASIN. Enforced for EVERY writer inside ads-negative-kw.service.ts (ownKeywordRefusal):
+ *       refused by name, with the keyword it would block, "remove or lower that keyword instead".
  *   L2  A term that already has a home (a positive EXACT keyword with its text, or for an ASIN a positive product
- *       target) in the product's scope is never created again in another ad group of that scope.
+ *       target) among the ad groups of the SAME product in its market is never created again in another of them.
  *
- * The scope is always named by the caller: a rule's own sources and destinations, a playbook's linked slots, the ad
- * groups advertising a product. Never account-wide: another product's keyword "x" never stops this product from
- * buying "x" (the Owner's rule 3). The thresholds a winner is judged on live with the harvest (ads-harvest.service.ts):
- * this module holds no number.
+ * The product: what the caller's own ad groups advertise, with its sibling variants of one parent (productFamilyOf),
+ * in one market (familyAdGroups). Never account-wide, never another product's: another product's keyword "x" never
+ * stops this product from buying "x" (the Owner's rule 3). The thresholds a winner is judged on live with the harvest
+ * (ads-harvest.service.ts): this module holds no number.
  *
  * positive  an AdTarget with isNegative false, kind KEYWORD (EXACT, PHRASE, BROAD) or PRODUCT, neither it nor its
  *           campaign archived. live = ENABLED with an Amazon id (a floor-suppressed keyword is live: it is the
@@ -123,32 +125,90 @@ export function homeOf(term: string, positives: Iterable<Positive>, match?: Excl
   return found
 }
 
-/** The words a refusal by L1 says, naming the keyword it protects. */
-export function blockedWords(p: Positive): string {
+/** The words a refusal by L1 says, naming the keyword it protects and where. */
+export function blockedWords(p: Positive, adGroupName?: string | null): string {
   const what = p.match === 'PRODUCT' ? `product target ${p.text}` : `${p.match.toLowerCase()} keyword "${p.text}"`
-  return `it would block your own ${what} in this ad group, which is${p.live ? '' : ' not yet'} live there. A winner is never negated where it is a keyword; to stop it, lower its bid.`
+  return `it would block your own ${what}${adGroupName ? ` in ad group "${adGroupName}"` : ' in its ad group'}${p.live ? '' : ' (not yet live at Amazon)'}. Remove or lower that keyword instead.`
 }
 
 /**
- * L2 for one keyword about to be created in `destAdGroupId` (graduate-keyword): the term's home for the products that ad
- * group advertises, in its market — a positive EXACT keyword in another ad group advertising one of them (the same
- * product id, or the same ASIN). A keyword another product holds is never a home here (rule 3).
+ * L1 at the one negative write service (ads-negative-kw.service.ts): the refusal for a negative that would block a
+ * positive where it lands — its ad group, or (campaign scope) any ad group of its campaign. Null: it blocks nothing.
+ * Every writer asks it: the rules, the harvest, n-grams, the funnel, Claude's tools, the screens and the bulk sheet.
  */
-export async function sameProductHome(query: string, destAdGroupId: string, marketplace: string | null): Promise<{ campaign: string; adGroup: string } | null> {
-  const ads = await prisma.adProductAd.findMany({ where: { adGroupId: destAdGroupId, status: { not: 'ARCHIVED' } }, select: { productId: true, asin: true } })
-  const productIds = [...new Set(ads.map((a) => a.productId).filter((id): id is string => !!id))]
-  const asins = [...new Set(ads.map((a) => a.asin?.trim()).filter((a): a is string => !!a))]
-  if (!productIds.length && !asins.length) return null
-  const same = [...(productIds.length ? [{ productId: { in: productIds } }] : []), ...(asins.length ? [{ asin: { in: asins } }] : [])]
+export async function ownKeywordRefusal(where: { scope: 'AD_GROUP' | 'CAMPAIGN'; adGroupId: string | null; campaignId: string }, text: string, match: NegativeMatch): Promise<{ deniedAt: string; reason: string } | null> {
+  const ids = where.scope === 'AD_GROUP'
+    ? (where.adGroupId ? [where.adGroupId] : [])
+    : (await prisma.adGroup.findMany({ where: { campaignId: where.campaignId }, select: { id: true } })).map((g) => g.id)
+  const own = blockedPositive({ text, match }, [...(await positivesIn(ids)).values()].flat())
+  if (!own) return null
+  const group = await prisma.adGroup.findUnique({ where: { id: own.adGroupId }, select: { name: true } })
+  const neg = match === 'PRODUCT' ? `A negative product target ${text.trim()}` : `A negative ${match.toLowerCase()} "${text.trim()}"`
+  return { deniedAt: 'own_keyword', reason: `${neg} was not added: ${blockedWords(own, group?.name)}` }
+}
+
+// ── L2 scope: the product's own ad groups ────────────────────────────────────────────────────────
+
+/** A product family: Product.ids (each product, its parent and the parent's other children) and their ASINs. */
+export interface ProductFamily { productIds: string[]; asins: string[] }
+
+const asinForms = (asins: Iterable<string>) => [...new Set([...asins].flatMap((a) => [a.toUpperCase(), a.toLowerCase()]))]
+
+/**
+ * The products these ad groups advertise, each with its sibling variants of one parent. A product ad Nexus cannot tie
+ * to a product counts by its own ASIN only. Only these ad groups' products: an ad group's own campaigns are the rule's.
+ */
+export async function productFamilyOf(adGroupIds: readonly string[]): Promise<ProductFamily> {
+  const ids = [...new Set(adGroupIds.filter(Boolean))]
+  if (!ids.length) return { productIds: [], asins: [] }
+  const ads = await prisma.adProductAd.findMany({ where: { adGroupId: { in: ids }, status: { not: 'ARCHIVED' } }, select: { productId: true, asin: true } })
+  const seedAsins = new Set(ads.map((a) => a.asin?.trim().toUpperCase()).filter((a): a is string => !!a))
+  const seedIds = new Set(ads.map((a) => a.productId).filter((id): id is string => !!id))
+  if (seedAsins.size) {
+    for (const p of await prisma.product.findMany({ where: { deletedAt: null, amazonAsin: { in: asinForms(seedAsins) } }, select: { id: true } })) seedIds.add(p.id)
+  }
+  if (!seedIds.size) return { productIds: [], asins: [...seedAsins] }
+  const seeds = await prisma.product.findMany({ where: { id: { in: [...seedIds] } }, select: { id: true, parentId: true } })
+  const roots = [...new Set(seeds.map((p) => p.parentId ?? p.id))]
+  const members = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ id: { in: roots } }, { parentId: { in: roots } }] }, select: { id: true, amazonAsin: true } })
+  return {
+    productIds: [...new Set([...seedIds, ...members.map((m) => m.id)])],
+    asins: [...new Set([...seedAsins, ...members.map((m) => m.amazonAsin?.trim().toUpperCase()).filter((a): a is string => !!a)])],
+  }
+}
+
+/** The ad groups of one market (campaign not archived) that advertise a product of this family — never another product's. */
+export async function familyAdGroups(family: ProductFamily, marketplace: string | null): Promise<string[]> {
+  const same = [
+    ...(family.productIds.length ? [{ productId: { in: family.productIds } }] : []),
+    ...(family.asins.length ? [{ asin: { in: asinForms(family.asins) } }] : []),
+  ]
+  if (!same.length) return []
   const groups = await prisma.adGroup.findMany({
-    where: { id: { not: destAdGroupId }, productAds: { some: { status: { not: 'ARCHIVED' }, OR: same } } },
-    select: { id: true, name: true, campaign: { select: { name: true, marketplace: true } } },
+    where: { campaign: { status: { not: 'ARCHIVED' } }, productAds: { some: { status: { not: 'ARCHIVED' }, OR: same } } },
+    select: { id: true, campaign: { select: { marketplace: true } } },
   })
   const market = strategyMarketOf(marketplace)
-  const inMarket = groups.filter((g) => strategyMarketOf(g.campaign?.marketplace) === market)
-  const home = homeOf(query, [...(await positivesIn(inMarket.map((g) => g.id))).values()].flat())
-  const where = home ? inMarket.find((g) => g.id === home.adGroupId) : null
-  return where ? { campaign: where.campaign?.name ?? '?', adGroup: where.name } : null
+  return groups.filter((g) => strategyMarketOf(g.campaign?.marketplace) === market).map((g) => g.id)
+}
+
+/**
+ * L2 for one keyword about to be created in `destAdGroupId` (graduate-keyword): the term's home for the product it
+ * converted for — the products of its source ad groups that the destination also advertises (else the destination's),
+ * with their sibling variants — in an ad group of the market. A keyword another product holds is never a home (rule 3).
+ */
+export async function sameProductHome(query: string, args: { destAdGroupId: string; source: { adGroupId?: string | null; campaignId: string }; marketplace: string | null }): Promise<{ campaign: string; adGroup: string } | null> {
+  const sourceAdGroupIds = args.source.adGroupId
+    ? [args.source.adGroupId]
+    : (await prisma.adGroup.findMany({ where: { campaignId: args.source.campaignId }, select: { id: true } })).map((g) => g.id)
+  const [dest, source] = await Promise.all([productFamilyOf([args.destAdGroupId]), productFamilyOf(sourceAdGroupIds)])
+  const shared: ProductFamily = { productIds: dest.productIds.filter((id) => source.productIds.includes(id)), asins: dest.asins.filter((a) => source.asins.includes(a)) }
+  const own = shared.productIds.length || shared.asins.length ? shared : dest
+  const scope = (await familyAdGroups(own, args.marketplace)).filter((id) => id !== args.destAdGroupId)
+  const home = homeOf(query, [...(await positivesIn(scope)).values()].flat())
+  if (!home) return null
+  const where = await prisma.adGroup.findUnique({ where: { id: home.adGroupId }, select: { name: true, campaign: { select: { name: true } } } })
+  return { campaign: where?.campaign?.name ?? '?', adGroup: where?.name ?? '?' }
 }
 
 /**

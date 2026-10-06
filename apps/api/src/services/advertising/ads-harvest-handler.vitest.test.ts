@@ -48,7 +48,9 @@ vi.mock('../../db.js', () => ({
     automationRuleExecution: { findMany: vi.fn() },
     adGroup: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     adTarget: { findFirst: vi.fn(), findMany: vi.fn() },
-    adProductAd: { count: vi.fn() },
+    adProductAd: { count: vi.fn(), findMany: vi.fn() },
+    product: { findMany: vi.fn() },
+    adsStrategy: { findMany: vi.fn(), findFirst: vi.fn() },
   },
 }))
 
@@ -87,8 +89,12 @@ beforeEach(() => {
   db.adGroup.findMany.mockResolvedValue([{ campaignId: 'c1' }] as never)
   db.adGroup.findUnique.mockImplementation(((args: { where: { id: string } }) => Promise.resolve(BY_ID[args.where.id] ?? { defaultBidCents: 35 })) as never)
   db.adTarget.findFirst.mockResolvedValue(null as never) // dedupe: nothing exists
-  db.adTarget.findMany.mockResolvedValue([] as never) // PB-6a — no positive in the source (L1)
+  db.adTarget.findMany.mockResolvedValue([] as never) // PB-6a — no keyword of the product holds the term yet (L2)
   db.adProductAd.count.mockResolvedValue(0 as never)
+  db.adProductAd.findMany.mockResolvedValue([] as never) // PB-6a — no product family: the scope is the source and destination
+  db.product.findMany.mockResolvedValue([] as never)
+  db.adsStrategy.findMany.mockResolvedValue([] as never) // no strategy: the harvest defaults are the bar
+  db.adsStrategy.findFirst.mockResolvedValue(null as never)
   h.createKeywordLocal.mockResolvedValue({ id: 't1', externalTargetId: 'ext-k1' })
   h.createTargetLocal.mockResolvedValue({ id: 'pt1', externalTargetId: 'ext-p1', mode: 'live' })
   h.resolveStoredDestinations.mockResolvedValue(new Map())
@@ -263,26 +269,45 @@ describe('5d — an ASIN becomes a product target', () => {
 })
 
 /**
- * 5d (review 7.3, Owner decision D4) — negate-in-source rides inside promote_to_exact: the source's isolation
- * negative is written only AFTER the term landed in ANOTHER ad group, and it skips the converting guard.
+ * 5d (review 7.3, Owner decision D4) — negate-in-source rides inside promote_to_exact and skips the converting guard.
+ * PB-6a (handover "proven") — it follows only a home elsewhere that meets the harvest bar there; a fresh landing keeps
+ * the term running in its source. `proven()` makes dst1 hold the term as a live exact keyword that sold 3 times there.
  */
-describe('5d — negate-in-source only after landing elsewhere', () => {
+describe('5d / PB-6a — negate-in-source only once the home proves itself', () => {
   const NEG = { ...ACT, negateInSource: true }
+  const proven = (query = 'giacca moto uomo', orders = 3) => {
+    db.adTarget.findMany.mockResolvedValue([{ id: 'home1', adGroupId: 'dst1', kind: query.startsWith('B0') ? 'PRODUCT' : 'KEYWORD', expressionType: query.startsWith('B0') ? 'ASIN' : 'EXACT', expressionValue: query, status: 'ENABLED', externalTargetId: 'x-home' }] as never)
+    db.adGroup.findMany.mockResolvedValue([{ id: 'dst1', campaignId: 'c1', externalAdGroupId: 'EXT-DST', campaign: MANUAL_SP }] as never)
+    db.amazonAdsSearchTerm.groupBy.mockResolvedValue([{ query: query.toLowerCase(), campaignId: 'EXT-C', adGroupId: 'EXT-DST', marketplace: 'IT', _sum: { impressions: 100, clicks: 10, costMicros: 5_000_000n, orders7d: orders, sales7dCents: 9000 } }] as never)
+  }
 
-  it('lands in another ad group → an EXACT negative in the source, converting guard skipped (and none without the switch)', async () => {
+  it('a fresh landing elsewhere: the keyword is created, the source is NOT negated yet (and nothing without the switch)', async () => {
     const r = await promote(NEG, CTX)
     expect(r.ok).toBe(true)
-    expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1)
-    expect(h.writeNegativeKeyword.mock.calls[0][0]).toMatchObject({ scope: 'AD_GROUP', adGroupId: 'src1', keywordText: 'giacca moto uomo', matchType: 'EXACT', protectConverting: null })
-    expect(r.output?.isolation).toMatchObject({ attempted: true, adGroupId: 'src1', reachedAmazon: true })
-
+    expect(h.createKeywordLocal).toHaveBeenCalled()
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.output?.isolation).toMatchObject({ attempted: false, reason: expect.stringMatching(/keeps running in its source until the new keyword meets the harvest bar/) })
     const off = await promote(ACT, CTX)
-    expect(off.ok).toBe(true)
-    expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1)
     expect(off.output).not.toHaveProperty('isolation')
   })
 
-  it('nothing landed → no negative', async () => {
+  it('L2 — at home in another ad group of the product: not created again; once that home meets the bar, the source is negated', async () => {
+    proven('giacca moto uomo', 1) // sold once: under the defaults' 2 orders
+    const waiting = await promote(NEG, CTX)
+    // The wire ticks PHRASE and EXACT: the EXACT is at home, so only the PHRASE is created.
+    expect(h.createKeywordLocal.mock.calls.map(([a]) => a.matchType)).toEqual(['PHRASE'])
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(waiting.output?.outcomes).toEqual(expect.arrayContaining([expect.objectContaining({ adGroupId: 'dst1', matchType: 'EXACT', skipped: 'already-home', homeAdGroupId: 'dst1' })]))
+
+    proven()
+    const handover = await promote(NEG, CTX)
+    expect(h.createKeywordLocal.mock.calls.map(([a]) => a.matchType)).toEqual(['PHRASE', 'PHRASE'])
+    expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1)
+    expect(h.writeNegativeKeyword.mock.calls[0][0]).toMatchObject({ scope: 'AD_GROUP', adGroupId: 'src1', keywordText: 'giacca moto uomo', matchType: 'EXACT', protectConverting: null })
+    expect(handover.output?.isolation).toMatchObject({ attempted: true, adGroupId: 'src1', reachedAmazon: true })
+  })
+
+  it('nothing landed and no home → no negative', async () => {
     h.createKeywordLocal.mockResolvedValue({ id: 't1', externalTargetId: null, denied: { deniedAt: 'campaign_allowlist', reason: 'not allowlisted' } })
     const r = await promote(NEG, CTX)
     expect(r.ok).toBe(false)
@@ -299,29 +324,36 @@ describe('5d — negate-in-source only after landing elsewhere', () => {
     expect(String((r.output?.isolation as { reason?: string }).reason)).toMatch(/only in the ad group it came from/)
   })
 
-  it('an ASIN that landed elsewhere gets a negative PRODUCT target in the source', async () => {
+  it('an ASIN whose product target elsewhere has proven itself gets a negative PRODUCT target in the source', async () => {
+    proven('B0ABCD1234')
     const act = { ...NEG, harvest: { ...WIRE, blocks: [{ look: ['src1'], create: [{ adGroupId: 'dst1', types: ['ASIN'] }] }] } }
     const r = await promote(act, { ...CTX, searchTerm: { ...CTX.searchTerm, query: 'B0ABCD1234' } })
     expect(r.ok).toBe(true)
+    expect(h.createTargetLocal).not.toHaveBeenCalled()
     expect(h.writeNegativeProductTarget).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'src1', asin: 'B0ABCD1234' }))
     expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
   })
 
-  it('a refusal (a protected term) is named, not a failure; a negative that did not land is a failure', async () => {
-    h.writeNegativeKeyword.mockResolvedValue({ outcome: 'refused', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: { deniedAt: 'keyword_protected', reason: 'protected term' }, error: null })
+  it('a refusal (a protected term, a keyword of the source) is named, not a failure; a negative that did not land is a failure', async () => {
+    proven()
+    h.writeNegativeKeyword.mockResolvedValue({ outcome: 'refused', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: { deniedAt: 'own_keyword', reason: 'it would block your own exact keyword' }, error: null })
     const refused = await promote(NEG, CTX)
     expect(refused.ok).toBe(true)
-    expect(String((refused.output?.isolation as { refused?: string }).refused)).toMatch(/keyword_protected/)
+    expect(String((refused.output?.isolation as { refused?: string }).refused)).toMatch(/^own_keyword: /)
     h.writeNegativeKeyword.mockResolvedValue({ outcome: 'failed', mode: 'live', externalTargetId: null, reachedAmazon: false, adTargetId: null, refusal: null, error: 'Amazon returned no id' })
     const failed = await promote(NEG, CTX)
     expect(failed.ok).toBe(false)
     expect(failed.error).toMatch(/negative in the source ad group did not reach Amazon/)
   })
 
-  it('the dry run previews it and writes nothing', async () => {
-    const r = await (ACTION_HANDLERS.promote_to_exact as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Record<string, unknown> }>)(NEG, CTX, { ...meta, dryRun: true })
-    expect(r.ok).toBe(true)
-    expect(r.output?.isolation).toMatchObject({ wouldNegate: true, adGroupId: 'src1', matchType: 'NEGATIVE_EXACT' })
+  it('the dry run says the source waits for a fresh landing, proposes the handover of a proven home, and writes nothing', async () => {
+    const dry = (ACTION_HANDLERS.promote_to_exact as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Record<string, unknown> }>)
+    const fresh = await dry(NEG, CTX, { ...meta, dryRun: true })
+    expect(fresh.output?.isolation).toMatchObject({ wouldNegate: false, adGroupId: 'src1', reason: expect.stringMatching(/keeps running in its source/) })
+    proven()
+    const handover = await dry(NEG, CTX, { ...meta, dryRun: true })
+    expect(handover.output?.isolation).toMatchObject({ wouldNegate: true, adGroupId: 'src1', matchType: 'NEGATIVE_EXACT', homeAdGroupId: 'dst1' })
+    expect(handover.output?.outcomes).toEqual(expect.arrayContaining([expect.objectContaining({ adGroupId: 'src1', wouldCreate: true, handover: true })]))
     expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
     expect(h.createKeywordLocal).not.toHaveBeenCalled()
   })
@@ -337,17 +369,6 @@ describe('HP1 — negate-in-source respects the same mapping', () => {
     expect(r.ok).toBe(true)
     expect(r.output?.skipped).toBe('source-ad-group-not-in-mappings')
     expect(h.createNegative).not.toHaveBeenCalled()
-  })
-})
-
-/** PB-6a (L1) — the source's isolation negative is never written over a keyword of the source itself. */
-describe('PB-6a — negate-in-source never over a positive of the source', () => {
-  it('a live EXACT keyword with the term in the source: the negative is refused by name, nothing sent', async () => {
-    db.adTarget.findMany.mockResolvedValue([{ id: 'own1', adGroupId: 'src1', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'Giacca moto uomo', status: 'ENABLED', externalTargetId: 'x-own' }] as never)
-    const r = await promote({ ...ACT, negateInSource: true }, CTX)
-    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
-    expect(r.ok).toBe(true)
-    expect(String((r.output?.isolation as { refused?: string }).refused)).toMatch(/^own_keyword: .*exact keyword "Giacca moto uomo"/)
   })
 })
 
@@ -367,12 +388,18 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
   const row = (query: string, orders: number, clicks: number, costMicros: bigint) =>
     ({ query, campaignId: 'EXT-C1', adGroupId: 'EXT-SRC', marketplace: 'IT', _sum: { impressions: 100, clicks, costMicros, orders7d: orders, sales7dCents: orders * 3000 } })
 
+  /** The account's ad groups: the automatic source and the exact destination. */
+  const GROUPS = [{ id: 'src1', externalAdGroupId: 'EXT-SRC', campaignId: 'c1', campaign: AUTO_SP }, { id: 'dst1', externalAdGroupId: 'EXT-DST', campaignId: 'c2', campaign: MANUAL_SP }]
+  /** Search-term rows, read per ad group as the service asks for them. */
+  let terms: ReturnType<typeof row>[] = []
+  const termsInWindow = ((args: { where: { adGroupId?: { in: string[] } } }) => Promise.resolve(terms.filter((t) => !args.where.adGroupId || args.where.adGroupId.in.includes(t.adGroupId)))) as never
   beforeEach(() => {
     db.automationRule.findUnique.mockResolvedValue(null as never) // not drag-bound
-    db.amazonAdsSearchTerm.groupBy.mockResolvedValue([row('giacca moto uomo', 3, 10, 8_000_000n), row('giacca economica', 0, 25, 20_000_000n)] as never)
-    db.adGroup.findMany.mockImplementation(((args: { where: { id?: unknown; externalAdGroupId?: unknown } }) => Promise.resolve(
-      args.where.id ? [{ id: 'src1', externalAdGroupId: 'EXT-SRC' }]
-        : args.where.externalAdGroupId ? [{ id: 'src1', externalAdGroupId: 'EXT-SRC', campaign: AUTO_SP }] : [],
+    terms = [row('giacca moto uomo', 3, 10, 8_000_000n), row('giacca economica', 0, 25, 20_000_000n)]
+    db.amazonAdsSearchTerm.groupBy.mockImplementation(termsInWindow)
+    db.adGroup.findMany.mockImplementation(((args: { where: { id?: { in: string[] }; externalAdGroupId?: { in: string[] } } }) => Promise.resolve(
+      args.where.id ? GROUPS.filter((g) => args.where.id!.in.includes(g.id))
+        : args.where.externalAdGroupId ? GROUPS.filter((g) => args.where.externalAdGroupId!.in.includes(g.externalAdGroupId)) : [],
     )) as never)
   })
 
@@ -383,7 +410,6 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
     expect(h.writeNegativeKeyword).not.toHaveBeenCalled() // no waste negative, and the source keeps the new winner (handover: proven)
 
     vi.clearAllMocks()
-    db.amazonAdsSearchTerm.groupBy.mockResolvedValue([row('giacca moto uomo', 3, 10, 8_000_000n), row('giacca economica', 0, 25, 20_000_000n)] as never)
     db.adTarget.findMany.mockResolvedValue([] as never)
     h.writeNegativeKeyword.mockResolvedValue({ outcome: 'created', mode: 'live', externalTargetId: 'neg-1', reachedAmazon: true, adTargetId: 'n1', refusal: null, error: null })
     const neg = await harvest({ ...RULE, mode: 'negative' })
@@ -438,5 +464,54 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
     db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'harvest_and_negate', ok: true, output: { noChange: true, cadenceHeld: true } }] }] as never)
     const swept = await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })
     expect(swept.output).toMatchObject({ noChange: false })
+  })
+
+  it('🔴 a Negative Targeting rule that names 0 orders still proposes its waste (the Single builder\'s and the wizard\'s stored shapes)', async () => {
+    const source = { adGroupId: 'src1', campaignId: 'c1', harvestFrom: true, graduate: [], negate: ['EXACT'] }
+    const single = { type: 'harvest_and_negate', control: 'manual', mode: 'negative', windowDays: 60, minSpendCents: 1000, minOrders: 0, sources: [source], destinations: {} }
+    const wizardV1 = { type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents: 1500, minOrders: 0, graduationBidEur: 0.5, sources: [source], destinations: { EXACT: 'dst1' }, mode: 'negative' }
+    for (const action of [single, wizardV1, { ...wizardV1, v: 2 }]) {
+      const dry = await harvest(action, { ...meta, dryRun: true })
+      expect(dry.output, JSON.stringify(action)).toMatchObject({ noChange: false, wouldNegate: 1, wouldGraduate: 0 })
+      expect(dry.output?.items).toEqual([{ kind: 'negative', query: 'giacca economica', externalAdGroupId: 'EXT-SRC', step: 'negate' }])
+    }
+  })
+
+  it('a winner the rule cannot place is listed with its reason, so the card is never empty while it waits', async () => {
+    const unrouted = { ...RULE, v: 2, mode: 'harvest', destinations: {}, sources: [{ ...RULE.sources[0], destinations: { EXACT: null } }] }
+    const dry = await harvest(unrouted, { ...meta, dryRun: true })
+    expect(dry.output).toMatchObject({ noChange: false, wouldGraduate: 0, wouldRefuse: 1, refused: 1 })
+    expect(dry.output?.items).toEqual([expect.objectContaining({ kind: 'graduation', query: 'giacca moto uomo', step: 'refused', why: expect.stringMatching(/could not be told/) })])
+    // Accepting it applies nothing, and says why.
+    const accepted = await harvest({ ...unrouted, ...dry.output })
+    expect(accepted.output).toMatchObject({ skipped: 'no-longer-due', notApplied: 1 })
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+  })
+
+  it('a fixed bid with no amount is refused by name, never a silent CPC', async () => {
+    const fixed = { ...RULE, mode: 'harvest', sources: [{ ...RULE.sources[0], bid: { mode: 'fixed' } }] }
+    const dry = await harvest(fixed, { ...meta, dryRun: true })
+    expect(dry.output?.items).toEqual([expect.objectContaining({ kind: 'graduation', step: 'refused', why: expect.stringMatching(/fixed-bid mode with no bid amount/) })])
+    await harvest(fixed)
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+  })
+
+  it('an accepted card re-checks each item\'s step: a create that would now be a source negation is not applied', async () => {
+    const dry = await harvest({ ...RULE, mode: 'harvest' }, { ...meta, dryRun: true })
+    expect(dry.output?.items).toEqual([{ kind: 'graduation', query: 'giacca moto uomo', externalAdGroupId: 'EXT-SRC', step: 'create' }])
+    // Since the card: the term became an exact keyword in dst1, and it sold 3 times there (it meets the bar).
+    db.adTarget.findMany.mockImplementation(((args: { where: { isNegative: boolean; adGroupId: { in: string[] } } }) => Promise.resolve(
+      !args.where.isNegative && args.where.adGroupId.in.includes('dst1')
+        ? [{ id: 'home1', adGroupId: 'dst1', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'giacca moto uomo', status: 'ENABLED', externalTargetId: 'x-home' }] : [],
+    )) as never)
+    terms = [...terms, { ...row('giacca moto uomo', 3, 10, 5_000_000n), adGroupId: 'EXT-DST' }]
+    const accepted = await harvest({ ...RULE, mode: 'harvest', ...dry.output })
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(accepted.output).toMatchObject({ skipped: 'no-longer-due', notApplied: 1 })
+    expect(accepted.output?.topNotApplied[0].why).toMatch(/proposed to create its keyword; on today's data the rule would negate it in its source/)
+    // A fresh run proposes the handover as its own card.
+    const next = await harvest({ ...RULE, mode: 'harvest' }, { ...meta, dryRun: true })
+    expect(next.output?.items).toEqual([{ kind: 'graduation', query: 'giacca moto uomo', externalAdGroupId: 'EXT-SRC', step: 'handover' }])
   })
 })
