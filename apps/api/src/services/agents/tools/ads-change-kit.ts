@@ -5,8 +5,9 @@
  *
  *   run as         an approved request only: `execute` needs the approval it carries out (`ToolContext.approvalId`),
  *                  writes as the person who approved it (`user:<approverId>`), names the request in the audit
- *                  (`Claude request <approvalId>: <why>`), and stamps every write with `changeSetId = approvalId` —
- *                  so delivery (approval-status) and undo find exactly its rows.
+ *                  (`Claude request <approvalId>: <why>`; AA-W2-8: `… (run by rule): …` when the business's rule
+ *                  decided it), and stamps every write with `changeSetId = approvalId` — so delivery (approval-status)
+ *                  and undo find exactly its rows.
  *   live reach     the preview stores where the write would land (live, on which Amazon Ads profile, or sandbox); a
  *                  refusal is not queued. `execute` checks again and refuses when the answer changed (d2 = A: live
  *                  only on a campaign already on the live-write allowlist — the gate's own default-deny).
@@ -16,8 +17,10 @@
  *   SP only        phase 1 changes Sponsored Products campaigns only.
  */
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
-import { boundAutomationsFor, claudeActor, claudeReason, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
+import { boundAutomationsFor, checkLiveReach, claudeActor, claudeReason, type AdWriteIntent, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
+import { buildLimitFacts, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
+import { logger } from '../../../utils/logger.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
 
@@ -43,9 +46,11 @@ export function approvedRun(ctx: ToolContext, why: string): ApprovedRun | { refu
   const approver = ctx.userId?.trim()
   if (!approver) return { refusal: 'an approved ad change runs as the person who approved it, and this run names no person' }
   const said = why.trim() || 'no reason given'
+  // AA-W2-8 — a request the business's rule decided says so in the audit (ToolContext.decidedVia).
+  const byRule = ctx.decidedVia === 'auto'
   const reason = ctx.via === 'claude'
-    ? claudeReason(approvalId, said)
-    : `${ctx.via === 'fleet' ? 'Fleet request' : 'Approved request'} ${approvalId}: ${said}`
+    ? claudeReason(approvalId, said, { byRule })
+    : `${ctx.via === 'fleet' ? 'Fleet request' : 'Approved request'} ${approvalId}${byRule ? ' (run by rule)' : ''}: ${said}`
   const person = ctx.approvedByPerson === true
   return { actor: claudeActor(approver), reason, changeSetId: approvalId, manual: person, confirmOwnLimits: person }
 }
@@ -81,6 +86,49 @@ export function ownLimitsNote(reach: { pastOwnLimits?: Array<{ reason: string }>
   const past = reach.pastOwnLimits ?? []
   return past.length ? `Warning — this goes past your own limits: ${past.map((l) => l.reason).join('; ')}. Approving it sends it anyway.` : null
 }
+
+// ── AA-W2-8 — the same write, made by the business's rule ─────────────────────────────────────────
+
+/**
+ * Where the write lands when the business's RULE decides it instead of a person, as a strategy-bound tool's preview
+ * stores it beside `reach`. The preview's own `reach` is the gate's answer for a person's approval (4A: his approval is
+ * his own click, which passes the allowlist, pins and a halt, and only warns past his own limits); a run by rule is the
+ * machine's write, which every one of those refuses. Its `withinLimits` reads this (`ruleReachRefusal`), so a change the
+ * gate would refuse is never scheduled to run by rule: it would only fail at commit and count towards the automatic pause.
+ */
+export type RuleReach = { reach: 'live' | 'sandbox' } | { reach: 'refused'; deniedAt: string; reason: string }
+
+export async function ruleReachOf(intent: AdWriteIntent): Promise<RuleReach> {
+  const reach = await checkLiveReach({ ...intent, byRule: true })
+  return reach.reach === 'refused' ? { reach: 'refused', deniedAt: reach.deniedAt, reason: reach.reason } : { reach: reach.reach }
+}
+
+/** Pure: why the write gate keeps this change from running by rule (the preview's `ruleReach`), or null. */
+export function ruleReachRefusal(preview: unknown): string | null {
+  const rule = (preview as { ruleReach?: RuleReach } | null | undefined)?.ruleReach
+  if (!rule || typeof rule !== 'object') return 'the preview does not say whether Amazon\'s write gate lets it through when it runs by rule; a person decides'
+  if (rule.reach !== 'refused') return null
+  return `run by rule, Amazon's write gate would refuse it — ${rule.reason}; a person decides (a person's approval is his own click)`
+}
+
+/**
+ * ADS AUTONOMY AA-W2-8 — what a strategy-bound change's preview carries, so its `withinLimits` judges it without a read
+ * (ads-autonomy-kit.ts): the ads strategy's facts where it lands (`limitFacts`) and the lines a person reads
+ * (`limitsNote`). `ctx.approvalId`: the request a re-check re-runs (not counted against itself). A strategy that cannot be
+ * read leaves the facts out: the change waits for a person as before and never runs by rule.
+ */
+export async function strategyFactsFor(tool: string, items: KitItem[], ctx?: Pick<ToolContext, 'approvalId'>): Promise<{ limitFacts?: LimitFacts; limitsNote: string[] }> {
+  try {
+    const facts = await buildLimitFacts({ tool, items, approvalId: ctx?.approvalId })
+    return { limitFacts: facts, limitsNote: limitsNote(facts) }
+  } catch (error) {
+    logger.warn('[agents/ads-change] the ads strategy could not be read for a change', { tool, error: error instanceof Error ? error.message : String(error) })
+    return { limitsNote: ['The ads strategy could not be read for this change: it does not run by rule; a person decides.'] }
+  }
+}
+
+/** The words every strategy-bound ad tool says about who decides (N3: honest about the rule, never "always a person"). */
+export const BY_RULE_WORDS = 'A person approves it in Nexus — unless this business lets it run by its rule inside its limits and the ads strategy'
 
 /** What to do about a refusal, by the gate's own reason code. */
 const UNBLOCK: Record<string, string> = {

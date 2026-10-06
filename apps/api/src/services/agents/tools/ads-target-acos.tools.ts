@@ -19,17 +19,22 @@
  *   audit     one AdvertisingActionLog row per campaign, `set_campaign_goal` as `PUT /campaigns/:id/goal` writes it, as
  *             the approver, with the request and its why in the note. Not stamped as a change set and no Amazon
  *             status: undo-ad-change has nothing to put back at Amazon. Undo is this tool, with the old values.
- *   trust     at most `confirm`: a Nexus record, fully reversible — but Nexus's auto-bid and the external engine bid
- *             toward it, so a higher target lets bids rise: it never runs by rule without a person (not `auto`).
+ *   trust     ADS AUTONOMY AA-W2-8 — strategy-bound, up to `auto`: a Nexus record, fully reversible — but Nexus's
+ *             auto-bid and the external engine bid toward it, so a higher target lets bids rise. By rule only inside the
+ *             tool's limits (each move in points; a raise is 0 points by default, so every raise waits for a person) and
+ *             the ads strategy where each campaign lands (ads-autonomy-kit.ts C1–C7), and a raise never past the ACoS
+ *             target the strategy sets there; a cleared or 0 % target (the optimiser falls back) never runs by rule.
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { FEATURES as F } from '@nexus/shared/permissions'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { setBidAutomation } from '../../advertising/campaign-settings.service.js'
 import { adsMode } from '../../advertising/ads-api-client.js'
-import { approvedRun, notRun } from './ads-change-kit.js'
-import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
+import { approvedRun, BY_RULE_WORDS, notRun, strategyFactsFor } from './ads-change-kit.js'
+import { adKitLimits, commonRefusal, LIMIT_FACTS_MONEY, limitFactsOf, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
+import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
+import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 /** The most campaigns one request sets (a list, or a market): the tool contract bounds every list to 250. */
 const MAX_CAMPAIGNS = 250
@@ -138,7 +143,7 @@ interface TargetWrite {
 }
 
 /** A request decided: its preview, and every write it makes. */
-async function decide(args: Record<string, unknown>): Promise<{ result: ToolResult; writes: TargetWrite[] }> {
+async function decide(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; writes: TargetWrite[] }> {
   const a = args as TargetArgs
   const read = await askedTargets(a)
   if ('refusal' in read) return { result: { ok: false, error: read.refusal }, writes: [] }
@@ -198,6 +203,11 @@ async function decide(args: Record<string, unknown>): Promise<{ result: ToolResu
 
   const line = (r: (typeof rows)[number]) => ({ campaignId: r.campaign.id, name: r.campaign.name, marketplace: r.campaign.marketplace, fromPct: r.fromPct, toPct: r.toPct })
   const writes = changing.map((r) => ({ campaignId: r.campaign.id, fromFraction: r.fromFraction, toFraction: fractionOf(r.toPct) }))
+  // AA-W2-8 — what a run by rule is judged on: each campaign's move in points (no target before reads as 0, so a first
+  // target is a raise of all of it), in Nexus only. A cleared or 0 % target is left out: targetRefusal holds it.
+  const items = changing.filter((r) => r.toPct != null && r.toPct > 0)
+    .map((r): KitItem => ({ entity: { kind: 'campaign', id: r.campaign.id }, change: { field: 'targetAcosPct', fromPct: r.fromPct, toPct: r.toPct as number }, nexusOnly: true }))
+  const facts = await strategyFactsFor(TOOL_NAME, items, ctx)
   return {
     writes,
     result: {
@@ -228,10 +238,39 @@ async function decide(args: Record<string, unknown>): Promise<{ result: ToolResu
         alsoChangedBy: rules,
         ...(rules.length ? { alsoChangedByNote: `${plural(rules.length, 'enabled ad rule')} can set a campaign's target ACoS (${RULE_ACTION}) and may change these again.` } : {}),
         ...(warnings.length ? { warnings } : {}),
+        ...facts,
         effect: summary,
       },
     },
   }
+}
+
+/**
+ * AA-W2-8 — the rows of a target change no run by rule may make (pure, on the preview's full `campaigns` list): a
+ * cleared or 0 % target (Nexus's optimiser then falls back to the business default, profit data or 30 %: what that does
+ * to the bids is not known here), and a raise past the ACoS target the ads strategy sets where the campaign lands (a
+ * campaign's own target comes before the strategy's in the engines' chain, so a higher one would let them bid past it).
+ */
+function targetRefusal(preview: unknown): string | null {
+  const rows = (preview as { campaigns?: unknown } | null | undefined)?.campaigns
+  if (!Array.isArray(rows) || !rows.length) return 'the preview does not list the campaigns it sets; a person decides'
+  const list = rows as Array<{ campaignId: string; name: string; fromPct: number | null; toPct: number | null }>
+  const cleared = list.find((r) => r.toPct == null || !(r.toPct > 0))
+  if (cleared) {
+    return `${cleared.name}: its target ACoS ${cleared.toPct == null ? 'is cleared' : 'becomes 0%'}, so Nexus's bid optimiser falls back to ${NO_TARGET_WORDS.replace(/^Nexus uses /, '')} — what that does to its bids is not judged by rule; a person decides`
+  }
+  const facts = limitFactsOf(preview)
+  if (!facts) return null // commonRefusal says it
+  for (const r of list) {
+    if (!((r.toPct as number) > (r.fromPct ?? 0))) continue
+    const scope = facts.scopes[facts.entityScopes[`campaign:${r.campaignId}`] ?? '']
+    const cap = scope?.limits.strategyTargetAcosPct
+    const source = scope?.sources.target
+    if (cap != null && source && (r.toPct as number) > cap) {
+      return `${r.name}: the new target ACoS ${r.toPct}% is above the ${cap}% the ads strategy sets there (${strategyWords(source)}), and a campaign's own target comes first for the bid engines; a person decides`
+    }
+  }
+  return null
 }
 
 /** C2 — undo of a target change: each campaign's earlier target (or none) put back, through this tool's list. */
@@ -250,8 +289,12 @@ export const SET_CAMPAIGN_TARGET_ACOS_UNDO: ToolUndo = {
   },
 }
 
+const TOOL_NAME = 'set-campaign-target-acos'
+const { targetAcosPct: _shownToWhoMaySetIt, ...FACTS_MONEY } = LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>
+const TARGET_TOOL_MONEY: Readonly<Record<string, FieldPermission>> = { ...FACTS_MONEY, limitsNote: FIELDS.financialsAdspendView }
+
 const setCampaignTargetAcos: AgentTool = {
-  name: 'set-campaign-target-acos',
+  name: TOOL_NAME,
   title: 'Set campaign target ACoS',
   input: z.object({
     campaignIds: z.array(z.string().trim().min(1).max(64).describe('Nexus campaign id (campaignId in ad-campaigns)'))
@@ -278,9 +321,16 @@ const setCampaignTargetAcos: AgentTool = {
   // Nexus only: nothing is sent to Amazon by it. Nexus's auto-bid and the external bidding engine bid toward it when they run.
   openWorld: false,
   reversibility: 'full',
-  // A Nexus record, put back in full by undo — but Nexus's auto-bid and the external engine bid toward it, so a higher
-  // target lets bids rise: the person who asked confirms it at least; it never runs by rule.
-  maxClaudeTrust: 'confirm',
+  // AA-W2-8 — a Nexus record, put back in full by undo — but Nexus's auto-bid and the external engine bid toward it, so
+  // a higher target lets bids rise: it may run by rule only inside its limits (a raise waits for a person until the
+  // business sets how many points one may be) and the ads strategy.
+  strategyBound: 'amazon-ads',
+  maxClaudeTrust: 'auto',
+  limits: adKitLimits({ maxItems: 50 }, STEP_POINT_LIMITS),
+  withinLimits: (preview, limits) => targetRefusal(preview) ?? commonRefusal(preview, limits),
+  // The ads strategy's facts and lines hold money (bid limits, budgets by rule, its ACoS target): hidden from a person
+  // without ad spend. Not its own targetAcosPct: anyone who may set a campaign's target sees it, as before.
+  restrictedFields: TARGET_TOOL_MONEY,
   undo: SET_CAMPAIGN_TARGET_ACOS_UNDO,
   description:
     'Set the target ACoS of Amazon campaigns: the campaigns named (campaignIds), or every campaign of a market (market) '
@@ -289,15 +339,17 @@ const setCampaignTargetAcos: AgentTool = {
     + 'this change, but Nexus\'s auto-bid now steers toward it: its bid optimiser (auto-bid, autopilot plans and the '
     + 'target-ACoS bid rules) moves the campaign\'s keyword bids toward this target, unless a rule or a plan sets its own, '
     + 'ahead of the business default and profit data, and writes them to Amazon on campaigns on the live-write allowlist; the external '
-    + 'bidding engine reads it too when it runs. Nothing changes until a person approves it '
-    + 'in Nexus, or the person who asked confirms it in Claude when the business allows that. The preview lists every '
-    + 'campaign from → to, what reads it, and warns when a higher target lets bids rise. Undo puts each earlier target back.',
-  async handler(args) {
-    return (await decide(args)).result
+    + 'bidding engine reads it too when it runs. Nothing changes until it is approved: the person who asked may confirm it '
+    + `in Claude when the business allows that. ${BY_RULE_WORDS}: a move no larger, in points, than its limits allow `
+    + '(a raise waits for a person until the business sets how large one may be), and never above the target ACoS the '
+    + 'ads strategy sets for the campaign. The preview lists every campaign from → to, what reads it, the ads strategy\'s '
+    + 'limits that apply, and warns when a higher target lets bids rise. Undo puts each earlier target back.',
+  async handler(args, ctx) {
+    return (await decide(args, ctx)).result
   },
   async execute(args, ctx) {
     // One decision: re-checked against what was approved (the basis fingerprints every campaign asked), then run in full.
-    const { result: fresh, writes } = await decide(args)
+    const { result: fresh, writes } = await decide(args, ctx)
     if (!fresh.ok) return notRun(`Not run: ${fresh.error}`)
     const p = fresh.preview as { basis: string; summary: string }
     const approved = (ctx.approvedPreview as { basis?: unknown } | undefined)?.basis

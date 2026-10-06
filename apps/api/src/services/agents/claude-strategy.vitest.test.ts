@@ -418,3 +418,107 @@ describe('AA-W2-4 — the strategy may hold a kind at watch (set-price stands in
     expect(rule).not.toHaveProperty('narrowedBy')
   })
 })
+
+/**
+ * AA-W2-8 — the first ad tools that may run by rule: a campaign's daily budget, its placement adjustments and campaign
+ * target ACoS. Each runs alone only inside its own limits (a raise waits for a person until the business sets how large
+ * one may be) and the ads strategy where it lands (C1–C7, the month for a budget raise, the strategy's own ACoS target
+ * for a target raise), and only where Amazon's write gate lets the rule's own write through.
+ */
+describe('AA-W2-8 — budgets, placements and target ACoS run by rule only inside the limits and the ads strategy', { timeout: TIMEOUT }, () => {
+  const room = { claudeMaxChangesPerDay: 20, claudeMaxRaisesPerDay: 5, claudeMaxBudgetIncreasePerDayCents: 1000 }
+  const market = (extra: Record<string, unknown> = {}) => inside(() => db().adsStrategy.create({
+    data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy: { budget: 'auto', placement: 'auto', target: 'auto' }, ...room, ...extra, updatedBy: 'user:test' },
+  }))
+  async function setLimits(tool: string, limits: Record<string, unknown>) {
+    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits, code: code() }))
+    expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
+  }
+  const budgetOf = async (id: string) => Math.round(Number((await inside(() => db().campaign.findUniqueOrThrow({ where: { id } }))).dailyBudget) * 100)
+  /** A change the rule scheduled, its undo window over: the sweep's commit. */
+  async function commitNow(approvalId: string) {
+    await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+    return inside(() => commitScheduledApproval(approvalId))
+  }
+
+  it('a budget cut runs by rule: the preview carries the strategy facts and the rule\'s own reach', async () => {
+    await setLevel('set-campaign-budget', 'auto')
+    await market()
+    const before = await budgetOf('c-it')
+    const parked = (await call('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before - 100, why: 'test cut' })).answer
+    expect(parked).toMatchObject({ status: 'runs_by_rule' })
+    const stored = (await approvalOf(parked.approvalId)).preview as Answer
+    expect(stored).toMatchObject({
+      ruleReach: { reach: 'sandbox' },
+      limitFacts: { tool: 'set-campaign-budget', action: 'budget', this: { markets: ['IT'], items: 1, raises: 0, cuts: 1, budgetIncreaseCents: 0 }, markets: { IT: { strategy: { version: expect.any(String) } } } },
+    })
+    expect(stored.limitsNote).toEqual(expect.arrayContaining([expect.stringMatching(/^IT: ads strategy version /)]))
+  })
+
+  it('a raise waits for a person until the business sets how large one may be; past the month\'s cap it waits; inside both it runs; never twice a day on one campaign', async () => {
+    await setLevel('set-campaign-budget', 'auto')
+    const row = await market({ monthlySpendCapCents: 100 })
+    const before = await budgetOf('c-it')
+    const byDefault = (await call('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before + 100 })).answer
+    expect(byDefault).toMatchObject({ status: 'waiting_for_approval' })
+    expect(byDefault.trust.why).toMatch(/its largest raise is [\d.]+ %, more than the 0 % this tool's limits let run without a person \(0: every raise waits for a person\)/)
+    await setLimits('set-campaign-budget', { maxRaisePct: 50 })
+    const pastCap = (await call('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before + 100 })).answer
+    expect(pastCap).toMatchObject({ status: 'waiting_for_approval' })
+    expect(pastCap.trust.why).toMatch(/IT: this month could reach EUR [\d.,]+ with this change — .* above the monthly cap EUR 1\.00 \(ads strategy: Test market \(IT\)/)
+    await inside(() => db().adsStrategy.update({ where: { id: row.id }, data: { monthlySpendCapCents: null, version: 2 } }))
+    const inside1 = (await call('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before + 100 })).answer
+    expect(inside1).toMatchObject({ status: 'runs_by_rule' })
+    const again = (await call('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: before + 200 })).answer
+    expect(again).toMatchObject({ status: 'waiting_for_approval' })
+    expect(again.trust.why).toMatch(/Claude already changed campaign "Italy exact" 1 time by rule in the last 24 hours, and this tool's limits allow 1 a day/)
+  })
+
+  it('the write gate binds a run by rule: off the live-write allowlist, a cut waits for a person (his own approval passes it)', async () => {
+    await setLevel('set-campaign-budget', 'auto')
+    await market()
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    try {
+      const answer = (await call('set-campaign-budget', { campaignId: 'c-off', dailyBudgetCents: (await budgetOf('c-off')) - 100 })).answer
+      expect(answer).toMatchObject({ status: 'waiting_for_approval' })
+      expect(answer.trust.why).toMatch(/run by rule, Amazon's write gate would refuse it — .*allowlist.*; a person decides \(a person's approval is his own click\)/)
+      expect(((await approvalOf(answer.approvalId)).preview as Answer).reach).toMatchObject({ reach: 'live' })
+    } finally {
+      vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'sandbox')
+    }
+  })
+
+  it('placements: a raise waits for a person by default; a cut runs by rule', async () => {
+    await setLevel('set-placement-multipliers', 'auto')
+    await market()
+    await inside(() => db().campaign.update({ where: { id: 'c-it' }, data: { dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] } } }))
+    const raise = (await call('set-placement-multipliers', { campaignId: 'c-it', topOfSearchPct: 60 })).answer
+    expect(raise).toMatchObject({ status: 'waiting_for_approval' })
+    expect(raise.trust.why).toMatch(/its largest raise is 10 points, more than the 0 points this tool's limits let run without a person/)
+    const cut = (await call('set-placement-multipliers', { campaignId: 'c-it', topOfSearchPct: 30 })).answer
+    expect(cut).toMatchObject({ status: 'runs_by_rule' })
+    expect(((await approvalOf(cut.approvalId)).preview as Answer).limitFacts.this).toMatchObject({ items: 1, cuts: 1, largestCutPoints: 20, raises: 0 })
+  })
+
+  it('target ACoS: a cut runs by rule; a raise past the strategy\'s target, a first target larger than the limits or a cleared one waits', async () => {
+    await setLevel('set-campaign-target-acos', 'auto')
+    await market({ targetKind: 'ACOS', targetPct: 30 })
+    await setLimits('set-campaign-target-acos', { maxRaisePoints: 10 })
+    for (const id of ['c-it', 'c-off']) await inside(() => db().campaign.update({ where: { id }, data: { dynamicBidding: { targetAcos: 0.25 } } }))
+    const cut = (await call('set-campaign-target-acos', { campaignIds: ['c-it'], targetAcosPct: 20, why: 'test cut' })).answer
+    expect(cut).toMatchObject({ status: 'runs_by_rule' })
+    // At commit it is judged again on a fresh dry run (AA-W2-3), runs, and the audit says the rule decided it.
+    expect(await commitNow(cut.approvalId)).toMatchObject({ ok: true })
+    expect((await inside(() => db().campaign.findUniqueOrThrow({ where: { id: 'c-it' } }))).dynamicBidding).toMatchObject({ targetAcos: 0.2 })
+    const log = await inside(() => db().advertisingActionLog.findFirstOrThrow({ where: { entityId: 'c-it', actionType: 'set_campaign_goal' }, orderBy: { createdAt: 'desc' } }))
+    expect(log).toMatchObject({ userId: `user:${ids.person}`, evidence: { note: `Claude request ${cut.approvalId} (run by rule): test cut — Nexus only: never sent to Amazon.` } })
+    const past = (await call('set-campaign-target-acos', { campaignIds: ['c-off'], targetAcosPct: 34 })).answer
+    expect(past).toMatchObject({ status: 'waiting_for_approval' })
+    expect(past.trust.why).toMatch(/Italy not allowlisted: the new target ACoS 34% is above the 30% the ads strategy sets there \(ads strategy: Test market \(IT\)/)
+    const cleared = (await call('set-campaign-target-acos', { targets: [{ campaignId: 'c-off', targetAcosPct: null }] })).answer
+    expect(cleared.trust.why).toMatch(/Italy not allowlisted: its target ACoS is cleared, so Nexus's bid optimiser falls back to the business default, profit data or 30%/)
+    const first = (await call('set-campaign-target-acos', { campaignIds: ['c-pin'], targetAcosPct: 25 })).answer
+    expect(first.trust.why).toMatch(/its largest raise is 25 points, more than the 10 points this tool's limits let run without a person/)
+    expect((await call('set-campaign-target-acos', { campaignIds: ['c-off'], targetAcosPct: 29 })).answer).toMatchObject({ status: 'runs_by_rule' })
+  })
+})

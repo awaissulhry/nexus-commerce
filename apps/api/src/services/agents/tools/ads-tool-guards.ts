@@ -166,11 +166,12 @@ export function claudeActor(approverId: string): AdsActor {
   return `user:${id}`
 }
 
-export function claudeReason(approvalId: string, why: string): string {
+/** AA-W2-8 — `byRule`: the business's rule decided it (no person), so the Change Log tells the two apart. */
+export function claudeReason(approvalId: string, why: string, opts: { byRule?: boolean } = {}): string {
   if (!approvalId.trim()) throw new Error('an approval id is required: a Claude ad change names the request it came from')
   const said = why.trim()
   if (!said) throw new Error('a reason is required: a Claude ad change says why')
-  return `Claude request ${approvalId.trim()}: ${said}`
+  return `Claude request ${approvalId.trim()}${opts.byRule ? ' (run by rule)' : ''}: ${said}`
 }
 
 // ── Bound rules ─────────────────────────────────────────────────────────────────────────────────
