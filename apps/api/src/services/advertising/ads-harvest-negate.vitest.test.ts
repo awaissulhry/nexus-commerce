@@ -25,7 +25,7 @@ const writeNegativeProductTarget = vi.fn()
 const createKeywordLocal = vi.fn()
 const createTargetLocal = vi.fn()
 const checkProtectConverting = vi.fn(async () => new Map())
-const findAdGroup = vi.fn(async () => ({ id: 'ag1', campaign: { targetingType: 'AUTO', adProduct: 'SPONSORED_PRODUCTS', type: 'SP' } }) as unknown)
+const findAdGroup = vi.fn(async () => ({ id: 'ag1', campaign: { targetingType: 'AUTO', adProduct: 'SPONSORED_PRODUCTS', type: 'SP', marketplace: 'IT' } }) as unknown)
 const createNegativeKeywordCampaignLocal = vi.fn(async () => ({ id: 'local-1', created: true }))
 const mirrorNegativeKeywordLocal = vi.fn(async () => ({ id: 'mirror-1', created: true }))
 
@@ -50,10 +50,15 @@ const findTargets = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 const searchTerms = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 const findAdGroups = vi.fn(async (args: { where?: Record<string, unknown> }) => {
   if (args?.where?.id) return homeGroups
+  if (args?.where?.productAds) return familyGroups // PB-6a — the ad groups of the product's family
   const r = await findAdGroup()
   return r ? [{ externalAdGroupId: 'EAG1', ...(r as object) }] : []
 })
 let homeGroups: unknown[] = []
+let familyGroups: unknown[] = []
+// PB-6a — the product family: the source's product ads, and the products they name.
+const findProductAds = vi.fn(async (..._a: unknown[]) => [] as unknown[])
+const findProducts = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 vi.mock('../../db.js', () => ({
   default: {
     campaign: { findFirst: vi.fn(async () => ({ id: 'c1', marketplace: 'IT' })) },
@@ -61,11 +66,13 @@ vi.mock('../../db.js', () => ({
     amazonAdsConnection: { findFirst: vi.fn(async () => ({ profileId: 'p-123' })) },
     amazonAdsSearchTerm: { groupBy: (...a: unknown[]) => searchTerms(...a) },
     adTarget: { findFirst: vi.fn(async () => null), findMany: (...a: unknown[]) => findTargets(...a) },
-    adsStrategy: { findFirst: vi.fn(async () => null) },
+    adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+    adProductAd: { findMany: (...a: unknown[]) => findProductAds(...a) },
+    product: { findMany: (...a: unknown[]) => findProducts(...a) },
   },
 }))
 
-const { applyHarvest, planList, planRuleHarvest } = await import('./ads-harvest.service.js')
+const { applyHarvest, planList, planRuleHarvest, previewHarvest } = await import('./ads-harvest.service.js')
 
 const candidate = {
   query: 'giacca moto',
@@ -96,6 +103,11 @@ beforeEach(() => {
   searchTerms.mockReset()
   searchTerms.mockResolvedValue([])
   homeGroups = []
+  familyGroups = []
+  findProductAds.mockReset()
+  findProductAds.mockResolvedValue([])
+  findProducts.mockReset()
+  findProducts.mockResolvedValue([])
 })
 
 describe('HV.8a — the wasteful negation reports what actually landed', () => {
@@ -349,17 +361,55 @@ describe('PB-6a — winners stay', () => {
     expect(findTargets.mock.calls.flatMap((c) => (c[0] as { where: { adGroupId: { in: string[] } } }).where.adGroupId.in)).not.toContain('other-product-ag')
   })
 
-  it('L1 — a waste negative is refused where it would block a keyword of its ad group, for every caller', async () => {
-    targets = [keyword('ag1', 'giacca moto')]
-    const exact = await applyHarvest({ negatives: [candidate] })
-    expect(writeNegativeKeyword).not.toHaveBeenCalled()
-    expect(exact.negativesAdded).toBe(0)
-    expect(exact.negativeOutcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'own_keyword' } })
+  it('L1 lives in the negative write service: its refusal over a keyword of the ad group is reported as it is', async () => {
+    writeNegativeKeyword.mockResolvedValue(result({ outcome: 'refused', refusal: { deniedAt: 'own_keyword', reason: 'A negative exact "giacca moto" was not added: it would block your own exact keyword "giacca moto" in ad group "G". Remove or lower that keyword instead.' } }))
+    const r = await applyHarvest({ negatives: [candidate] })
+    expect(r.negativesAdded).toBe(0)
+    expect(r.negativeOutcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'own_keyword', reason: expect.stringMatching(/Remove or lower that keyword instead/) } })
+  })
 
-    targets = [keyword('ag1', 'giacca moto uomo', 'BROAD')]
-    const phrase = await applyHarvest({ negatives: [candidate], plan: { EAG1: { negate: ['PHRASE'] } } })
-    expect(writeNegativeKeyword).not.toHaveBeenCalled()
-    expect(phrase.negativeOutcomes[0].refusal?.reason).toMatch(/broad keyword "giacca moto uomo"/)
+  it('🔴 a stored rule\'s home check covers every ad group of the SAME product (siblings too), not only its destinations; never another product\'s', async () => {
+    // The rule's source advertises a child of a parent; its sibling's ad group (Exact | Brand) holds the term, and the
+    // rule's own last-written Exact destination (dst-exact, Exact | Category) does not.
+    findProductAds.mockResolvedValue([{ productId: 'p-child-1', asin: 'B0TESTKID1' }])
+    findProducts.mockImplementation(async (a: unknown) => {
+      const where = (a as { where: Record<string, any> }).where
+      if (where.amazonAsin) return []
+      if (where.id?.in) return [{ id: 'p-child-1', parentId: 'p-parent' }]
+      return [{ id: 'p-parent', amazonAsin: null }, { id: 'p-child-1', amazonAsin: 'B0TESTKID1' }, { id: 'p-child-2', amazonAsin: 'B0TESTKID2' }]
+    })
+    familyGroups = [{ id: 'ag-brand-exact', campaign: { marketplace: 'IT' } }, { id: 'ag-de', campaign: { marketplace: 'DE' } }]
+    targets = [keyword('ag-brand-exact', 'giacca moto'), keyword('ag-de', 'giacca moto blu'), keyword('other-product-ag', 'giacca moto rossa')]
+    const stored = { ownAdGroups: ['ag1'], criteria: { windowDays: 60, minOrders: 2 } }
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, rule: stored })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'already_home' }, home: { adGroupId: 'ag-brand-exact' } })
+    // The family read asks for every child of the parent, and only one market's ad groups count.
+    expect(findAdGroups.mock.calls.some(([a]) => JSON.stringify(a).includes('B0TESTKID2'))).toBe(true)
+    // Another product's keyword (or the same product's in another market) is no home: the term is created.
+    for (const other of ['giacca moto rossa', 'giacca moto blu']) {
+      createKeywordLocal.mockClear()
+      await applyHarvest({ graduations: [{ ...(grad as object), query: other } as never], destinations: dest, rule: stored })
+      expect(createKeywordLocal, other).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'dst-exact', keywordText: other }))
+    }
+  })
+
+  it('a term with no clicks starts at the ad group\'s default bid (no strategy lowest bid here), never a hard-coded one; with neither it is refused', async () => {
+    const noClicks = { ...(candidate as object), orders: 1, clicks: 0, costCents: 0 } as never
+    await applyHarvest({ graduations: [noClicks], destinations: dest, rule })
+    expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ bidEur: 0.4 }))
+    const db = (await import('../../db.js')).default as unknown as { adGroup: { findUnique: { mockResolvedValueOnce: (v: unknown) => void } } }
+    db.adGroup.findUnique.mockResolvedValueOnce({ defaultBidCents: null, campaign: { marketplace: 'IT' } })
+    createKeywordLocal.mockClear()
+    const none = await applyHarvest({ graduations: [noClicks], destinations: dest, rule })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(none.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'bid', reason: expect.stringMatching(/no clicks/) } })
+  })
+
+  it('a fixed bid with no amount is refused by name, never a silent CPC', async () => {
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, plan: { EAG1: { bid: { mode: 'fixed' } } }, rule })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'bid', reason: expect.stringMatching(/fixed-bid mode with no bid amount/) } })
   })
 
   it('v2 lists are literal ([] = none); a v1 row reads [] as EXACT', async () => {
@@ -536,5 +586,16 @@ describe('PB-6b — a source that is never negated for its graduates', () => {
     writeNegativeProductTarget.mockClear()
     await applyHarvest({ ...args, plan: { EAG1: { graduateProduct: true, negateSource: false } } })
     expect(writeNegativeProductTarget).not.toHaveBeenCalled()
+  })
+})
+
+/** 🔴 PB-6a review — a rule that names 0 orders (a Negative Targeting rule's "Orders = 0") still finds its waste. */
+describe('previewHarvest — a term graduates only once it has sold', () => {
+  const row = (query: string, orders: number, costMicros: bigint) => ({ query, campaignId: 'EC1', adGroupId: 'EAG1', marketplace: 'IT', _sum: { impressions: 100, clicks: 20, costMicros, orders7d: orders, sales7dCents: orders * 3000 } })
+  it('minOrders 0: the zero-order spender is a negative, not a graduation; a term that sold graduates', async () => {
+    searchTerms.mockResolvedValue([row('waste term', 0, 20_000_000n), row('sold term', 2, 9_000_000n)])
+    const p = await previewHarvest({ windowDays: 60, minSpendCents: 1000, minOrders: 0 })
+    expect(p.negatives.map((c) => c.query)).toEqual(['waste term'])
+    expect(p.graduations.map((c) => c.query)).toEqual(['sold term'])
   })
 })

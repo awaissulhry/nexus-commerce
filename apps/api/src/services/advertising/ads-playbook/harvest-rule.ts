@@ -16,13 +16,13 @@
  *                 bar there; only then is it negated in the source — never, where an edge from it says `negateSource:
  *                 false`
  *   cadence       the strategy's goal at this product is the phase; its harvestCadence: daily → 1 day, weekly → 7, off →
- *                 the rule stays off
+ *                 no source is harvested from (`harvestFrom: false`: the rule proposes nothing) until the phase changes
  *
  * No numbers of its own (no window, spend or orders): the strategy's harvest and negate groups decide per ad group
  * (W1-7), and the lock judges a home on the same bar. Never another product's campaigns: only this product's links (the
  * Owner's rule 3) — a term another product buys is never a reason to skip one. Saved born disabled, as a dry run that
- * proposes only (PROPOSE): a person, or Claude inside his limits, decides each card. A re-save never touches the
- * autonomy level (the Owner's dial).
+ * proposes only (PROPOSE): a person, or Claude inside his limits, decides each card. The playbook's start switches it
+ * on (never over a person's switch-off); a re-sync never touches its switch or its autonomy level (rules.ts).
  */
 import prisma from '../../../db.js'
 import { openStrategy } from '../ads-strategy/effective.js'
@@ -58,7 +58,8 @@ export type HarvestBid = { mode: 'cpc' | 'cpcPlus' | 'adGroupDefault' | 'fixed';
 export interface HarvestRuleSource {
   adGroupId: string
   campaignId: string
-  harvestFrom: true
+  /** False in a phase that turns the harvest off: no search term is read from it, so nothing is proposed. */
+  harvestFrom: boolean
   graduate: Array<'EXACT' | 'PHRASE'>
   negate: Array<'EXACT'>
   graduateProduct: boolean
@@ -84,7 +85,7 @@ export interface HarvestRuleAction {
 
 export interface CompiledHarvestRule {
   name: string
-  /** False when the phase turns the harvest off; otherwise the playbook's start decides (syncHarvestRule `enabled`). */
+  /** False when the phase turns the harvest off (no source harvested from); otherwise the playbook's start decides. */
   enabled: boolean
   cadenceDays: 1 | 7 | null
   action: HarvestRuleAction
@@ -166,6 +167,14 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
   })
   for (const key of unlinkedSources) warnings.push(`The slot "${key}" has no campaign yet: it is no source until it does`)
 
+  // The phase's cadence.
+  const entry = input.phase ? input.doc.phases[input.phase] : undefined
+  const cadence = entry?.harvestCadence ?? null
+  const cadenceDays = cadence === 'daily' ? 1 : cadence === 'weekly' ? 7 : null
+  if (!input.phase) warnings.push('The ads strategy sets no goal (phase) for this product, so no harvest cadence applies: the rule sweeps at most once a day')
+  else if (!entry) warnings.push(`The playbook has no ${input.phase} phase, so no harvest cadence applies: the rule sweeps at most once a day`)
+  else if (cadence === 'off') warnings.push(`The ${input.phase} phase turns the harvest off: no source is harvested from, so the rule proposes nothing until the phase changes`)
+
   const sources: HarvestRuleSource[] = []
   for (const slot of input.doc.structure.slots) {
     const link = input.links.get(slot.key)
@@ -178,7 +187,7 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
     sources.push({
       adGroupId: link.adGroupId,
       campaignId: link.campaignId,
-      harvestFrom: true,
+      harvestFrom: cadence !== 'off',
       graduate: (['EXACT', 'PHRASE'] as const).filter((m) => a?.graduate.has(m)),
       negate: slot.targeting === 'PRODUCT' ? [] : ['EXACT'],
       graduateProduct: a?.graduateProduct ?? false,
@@ -191,14 +200,6 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
     })
   }
   if (!sources.length) problems.push('The product holds none of its playbook\'s slots yet: there is nothing to harvest from')
-
-  // The phase's cadence.
-  const entry = input.phase ? input.doc.phases[input.phase] : undefined
-  const cadence = entry?.harvestCadence ?? null
-  const cadenceDays = cadence === 'daily' ? 1 : cadence === 'weekly' ? 7 : null
-  if (!input.phase) warnings.push('The ads strategy sets no goal (phase) for this product, so no harvest cadence applies: the rule sweeps at most once a day')
-  else if (!entry) warnings.push(`The playbook has no ${input.phase} phase, so no harvest cadence applies: the rule sweeps at most once a day`)
-  else if (cadence === 'off') warnings.push(`The ${input.phase} phase turns the harvest off: the rule stays off until the phase changes`)
 
   return {
     name: `${input.nameToken} (${input.market}) — playbook harvest`.slice(0, 120),
@@ -215,13 +216,15 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
 }
 
 export type SyncHarvestRuleResult =
-  | { saved: true; ruleId: string; created: boolean; changed: boolean; enabled: boolean; cadenceDays: 1 | 7 | null; warnings: string[] }
+  | { saved: true; ruleId: string; created: boolean; changed: boolean; enabled: boolean; cadenceDays: 1 | 7 | null; keptOff?: string; warnings: string[] }
   | { saved: false; problems: string[]; warnings: string[] }
 
 /**
  * Compile one product's harvest rule from its playbook row and save it once (link kind 'harvestRule', key 'harvest').
- * `enabled`: the playbook's state asks for it on (start) or off (build, adopt, stop); a phase that turns the harvest off
- * keeps it off. The playbook's build and start call this (PB-5's artifact hook); it writes Nexus only, never Amazon.
+ * `enabled: true` is the playbook's START: the rule is switched on (born on), never over a switch-off a person made since
+ * the last start. `enabled: false` (build, adopt, a re-sync): a new rule is born off; an existing one keeps its own
+ * switch — nothing here switches a rule off (rules.ts). A phase that turns the harvest off never switches it on, and its
+ * sources harvest nothing. The playbook's build and start call this (PB-5's artifact hook); it writes Nexus only.
  */
 export async function syncHarvestRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<SyncHarvestRuleResult> {
   const actor = opts.actor ?? 'system:ads-playbook'
@@ -260,10 +263,9 @@ export async function syncHarvestRule(playbookId: string, opts: { enabled: boole
   const compiled = compileHarvestRule({ playbookId, market: row.market, nameToken, doc: resolved.doc, terms, links, phase, handover: HARVEST_HANDOVER })
   warnings.push(...compiled.warnings)
   if (compiled.problems.length) return { saved: false, problems: compiled.problems, warnings: [...new Set(warnings)] }
-  const enabled = opts.enabled && compiled.enabled
   const saved = await ensureCompiledRule({
     playbookId, kind: 'harvestRule', key: 'harvest', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
-    enabled, compiledVersion: row.version, actor,
+    enabled: false, start: opts.enabled && compiled.enabled, compiledVersion: row.version, actor,
   })
-  return { saved: true, ...saved, enabled, cadenceDays: compiled.cadenceDays, warnings: [...new Set(warnings)] }
+  return { saved: true, ...saved, cadenceDays: compiled.cadenceDays, warnings: [...new Set(warnings)] }
 }

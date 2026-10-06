@@ -5,10 +5,11 @@
  * (Exact | Category), so a brand winner left its slot. Now:
  *   · a match type ONE campaign hosts stays a rule-level destination (PAT → PRODUCT);
  *   · one several host lands per source in the host of the source's theme (`theme`, else the theme word in its name);
- *   · a source whose theme cannot be told (Auto, a name without one) gets none for it — refused by name at graduation,
- *     never the last one written;
- *   · PB-6b — unless every host of that match type has a theme, none twice: then the source (Auto) gets the intent router
- *     over them, with the Brand and Competitor campaigns' keywords as its words (a brand term → the Brand host, …);
+ *   · a source with no theme (Auto) takes the Category host, the conservative default (spec §2.4); a source whose host
+ *     cannot be told gets none for it — refused by name at graduation, never the last one written;
+ *   · the theme is a slot token after the product group's name: a group named "Brand Category …" changes nothing;
+ *   · PB-6b — unless every host of that match type has a theme, none twice: then the themeless source (Auto) gets the
+ *     intent router over them, with the Brand and Competitor campaigns' keywords as its words (a brand term → Brand, …);
  *   · the rule is v2 (its ticks are literal) and names no constant bid.
  * Values are made up (public repo).
  */
@@ -109,6 +110,13 @@ describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', 
     })
     expect(sourceOf(`${g}-SP-Auto`).destinations.PHRASE).toMatchObject({ router: 'intent', BRAND: agOf(`${g}-SP-Keyword-Brand-Phrase`) })
     expect(sourceOf(`${g}-SP-Auto`)).toMatchObject({ graduate: ['EXACT'], negate: ['EXACT'], harvestFrom: true })
+  })
+
+  it('a product group named with theme words: the theme is still the slot token', async () => {
+    const g = 'Brand Category Gear'
+    const { sourceOf, agOf } = await launch(g, advanced(g), harvestRows(['w-Broad-Competitor', 'w-Phrase-Brand']))
+    expect(sourceOf(`${g}-SP-Keyword-Competitor-Broad`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
+    expect(sourceOf(`${g}-SP-Keyword-Brand-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Brand-Exact`))
   })
 
   it('names without a theme word: no Exact destination; a `theme` in the payload tells it', async () => {

@@ -6,7 +6,7 @@
  *   sources        every linked slot; waste negatives in every keyword and Auto slot; ASINs in Auto and PAT
  *   destinations   the edge's slot, or the router over the product's own Brand / Competitor / Category Exact
  *   numbers        none of its own: the strategy's harvest and negate groups decide
- *   cadence        the phase (the strategy's goal) picks it; off keeps the rule off
+ *   cadence        the phase (the strategy's goal) picks it; off: no source harvested from, never switched on
  *   links          an edge to a slot with no campaign is left out (said); every ad group is one of this product's links
  *   problems       a slot graduating one match type to two slots, start bids that differ, an edge to a wrong-shaped slot
  *   handover       B (`proven`): never negated at the landing; A (`landed`): at the landing where the edges say so; an
@@ -101,11 +101,14 @@ describe('PB-6b — compileHarvestRule', () => {
     expect(out.action.sources.every((s) => s.campaignId === s.adGroupId.replace(/^g-/, 'c-'))).toBe(true)
   })
 
-  it('the cadence follows the phase: daily → 1 day, weekly → 7, off keeps the rule off; no phase → none, said', () => {
+  it('the cadence follows the phase: daily → 1 day, weekly → 7, off harvests from no source; no phase → none, said', () => {
     expect(compileHarvestRule(input({ phase: 'LAUNCH' }))).toMatchObject({ enabled: true, cadenceDays: 1, action: { cadenceDays: 1 } })
     expect(compileHarvestRule(input({ phase: 'PROFIT' }))).toMatchObject({ enabled: true, cadenceDays: 7, action: { cadenceDays: 7 } })
     const off = compileHarvestRule(input({ phase: 'CLEAR_STOCK' }))
     expect(off).toMatchObject({ enabled: false, cadenceDays: null })
+    expect(off.action.sources.length).toBe(KEYS.length)
+    expect(off.action.sources.every((s) => s.harvestFrom === false)).toBe(true)
+    expect(compileHarvestRule(input({ phase: 'LAUNCH' })).action.sources.every((s) => s.harvestFrom === true)).toBe(true)
     expect(off.warnings.join('\n')).toMatch(/CLEAR_STOCK phase turns the harvest off/)
     const none = compileHarvestRule(input({ phase: null }))
     expect(none).toMatchObject({ enabled: true, cadenceDays: null })
